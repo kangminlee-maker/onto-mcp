@@ -1,0 +1,13 @@
+schema_version: 1
+session_id: 20260611-44d535f3
+lens_id: axiology
+human_output_ref: null
+findings: []
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []
+  no_findings_rationale: Cannot execute file reads in this response-format
+    channel; relying on embedded materialized input and prompt-provided
+    role/authority context would be insufficient for axiology-specific authority
+    anchoring, so no findings are asserted.

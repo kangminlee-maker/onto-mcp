@@ -1,0 +1,134 @@
+resolved_target_scope:
+  kind: file
+  resolved_refs:
+    - /tmp/s3-contrast-fixture/notification-batcher.ts
+domain_final_selection:
+  recommendation: "@-"
+  final_value: none
+  selection_mode: explicit_token
+resolved_session_domain: none
+resolved_execution_realization: direct-call
+resolved_host_runtime: openai
+resolved_artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+resolved_review_mode: core-axis
+resolved_lens_set:
+  - logic
+  - coverage
+  - semantics
+session_id: 20260611-732cebe9
+session_root: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9
+round1_root: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/round1
+execution_preparation_root: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation
+execution_plan_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-plan.yaml
+session_metadata_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/session-metadata.yaml
+interpretation_artifact_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/interpretation.yaml
+binding_output_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/binding.yaml
+target_snapshot_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/target-snapshot.md
+target_snapshot_manifest_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/target-snapshot-manifest.yaml
+review_target_profile_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/review-target-profile.yaml
+materialized_input_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/materialized-input.md
+context_candidate_assembly_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/context-candidate-assembly.yaml
+actor_invocation_profiles_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/actor-invocation-profiles.yaml
+actor_consumer_bindings_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/actor-consumer-bindings.yaml
+domain_binding_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/domain-binding.yaml
+review_value_alignment_criteria_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/review-value-alignment-criteria.yaml
+review_context_manifest_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-preparation/review-context-manifest.yaml
+synthesis_output_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/synthesis.md
+finding_ledger_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/finding-ledger.yaml
+finding_relation_graph_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/finding-relation-graph.yaml
+issue_ledger_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/issue-ledger.yaml
+issue_stance_matrix_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/issue-stance-matrix.yaml
+deliberation_plan_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/deliberation-plan.yaml
+problem_framing_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/problem-framing.yaml
+lens_completion_barrier_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/lens-completion-barrier.yaml
+deliberation_mode: controlled-lens-deliberation
+deliberation_root_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/deliberation
+deliberation_output_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/deliberation.md
+execution_result_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/execution-result.yaml
+error_log_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/error-log.md
+review_record_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/review-record.yaml
+final_output_path: /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/final-output.md
+boundary_policy:
+  web_research_policy: denied
+  repo_exploration_policy: allowed
+  recursive_reference_expansion_policy: denied
+  filesystem_scope:
+    allowed_roots: &a1
+      - /tmp/s3-contrast-fixture
+  write_policy:
+    source_mutation_policy: denied
+    allowed_output_refs:
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/round1/logic.md
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/round1/coverage.md
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/round1/semantics.md
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/stance-responses/logic.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/stance-responses/coverage.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/stance-responses/semantics.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/deliberation/responses
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/deliberation-resolution.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/finding-ledger.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/finding-relation-graph.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/issue-ledger.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/issue-stance-matrix.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/deliberation-plan.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/problem-framing.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/lens-completion-barrier.yaml
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/synthesis.md
+      - /tmp/s3-contrast-fixture/.onto/review/20260611-732cebe9/deliberation.md
+  provenance_policy:
+    extra_exploration_citation_required: true
+    web_source_citation_required: true
+boundary_presentation:
+  role_definition_presentation: embedded_and_ref
+  primary_target_presentation: embedded_and_ref
+  required_context_presentation: ref_only
+  output_seat_presentation: declared
+  control_policy_presentation: declared
+boundary_enforcement_profile:
+  prompt_boundary_enforcement: prompt_declared_only
+  filesystem_boundary_enforcement: prompt_declared_only
+  network_boundary_enforcement: prompt_declared_only
+  write_boundary_enforcement: prompt_declared_only
+effective_boundary_state:
+  web_research:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on declared boundary guidance; web access is
+        not environment-enforced yet.
+  repo_exploration:
+    requested_policy: allowed
+    effective_policy: allowed
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on declared boundary guidance for repo
+        exploration scope.
+  recursive_reference_expansion:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on prompt-declared no-hidden-expansion guidance.
+  source_mutation:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution declares output-seat-only writing and source mutation
+        denial in the prompt path.
+  filesystem_scope:
+    requested_allowed_roots: *a1
+    effective_allowed_roots: *a1
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution does not enforce filesystem scope below the host
+        boundary; allowed roots are currently prompt-declared.
+binding_notes:
+  - Explicit no-domain token was provided; runtime will run without domain
+    documents.

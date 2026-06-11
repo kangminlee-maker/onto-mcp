@@ -1,0 +1,76 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: "Window-lifecycle time authority is split between an ambient Date.now() sample at enqueue (notification-batcher.ts:20) and a caller-injected now at flush (notification-batcher.ts:30-32), with no element of the bounded target - type surface, doc surface, or claim set - declaring or enforcing that both values come from the same clock; designating a single time authority for the window concept would dissolve all three findings."
+    root_confidence: high
+    surface_finding_ids: [finding-001, finding-005, finding-011]
+    relation_refs: [rel-001, rel-002]
+    raised_by_lens_ids: [logic, coverage, semantics]
+    issue_statement: "The window-closure decision compares timestamps from two independent, undeclared clocks: enqueue stamps windowStartedAt from the ambient Date.now() while flush judges closure against a caller-supplied now, and nothing on the type or doc surface requires the two values to share a time base; the logic lens proves the claim set {C3, C4, C5, C6} jointly unsatisfiable for permitted inputs, the coverage lens records the absent single time-authority concept across three parallel time sources, and the semantics lens shows the shared-clock promise carried by the now parameter is nowhere declared."
+    proposed_action: "Designate a single time authority for the window lifecycle: unify on caller time (accept now at both entry points or derive window start from item.enqueuedAt), or unify on internal time (drop the now parameter or inject one clock provider used by both enqueue and flush); at minimum document on flush that now must be epoch ms from the same clock as Date.now(), and state on the interface that enqueuedAt shares that authoritative clock basis."
+    affected_purpose: "Time-source semantics and correctness/verifiability of the window-closure contract - the declared review intent focus - under the declared review goals (correctness, verifiability, regression_risk)."
+    failure_condition: "Any caller that drives flush(now) - or fills enqueuedAt - from a clock other than the ambient Date.now() epoch-ms timeline used at enqueue: fake-timer tests, monotonic-clock origins, skewed or cached timestamps; all permitted inputs under the bare number type."
+    impact: "The closure predicate stops corresponding to 'the window has closed': across clocks the window can close immediately, late, or never - digest delay, premature emission, or flush returning [] forever - and the violation is silent because no surface exposes the shared-clock requirement; clock substitution in tests is blocked, degrading verifiability."
+    evidence_refs: [round1/logic.md#finding-l1, round1/coverage.md#f1, round1/semantics.md#sem-1]
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-002
+    root_cause_hypothesis: "The flush comment's carry-over guarantee for late-enqueued notifications (notification-batcher.ts:37-38) has no realizing mechanism anywhere in the bounded target: nothing snapshots or attributes window membership at the close instant, enqueue has no window-close-aware branch and records no per-item attribution, and flush drains and clears pending wholesale; implementing window-membership attribution or correcting the comment would resolve all three findings."
+    root_confidence: high
+    surface_finding_ids: [finding-002, finding-006, finding-012]
+    relation_refs: [rel-003, rel-004]
+    raised_by_lens_ids: [logic, coverage, semantics]
+    issue_statement: "The flush comment promises that notifications enqueued between the window-close check and the reset are carried into the next window, but the code cannot implement that contract: the declared interleaving interval is unreachable in single-threaded synchronous JS, and items arriving in the gap that does exist - after window close, before the flush poll - are emitted in the closing digest and destroyed by the unconditional wholesale clear; C7 and C8 are not jointly satisfiable for any item present at flush time, and the declared carry-over category is absent from the implementation space."
+    proposed_action: "Reconcile contract and behavior in one direction: implement carry-over via per-item window attribution (filter the digest by enqueue time against windowStartedAt + WINDOW_MS, retain post-window items in pending, re-seed windowStartedAt for the retained set), or rewrite the comment to actual behavior ('all notifications pending at flush time, including any enqueued after the window closed, are emitted in this digest; nothing carries over')."
+    affected_purpose: "Contract-vs-behavior consistency for late-enqueue boundary semantics - the only written late-arrival contract of the batcher - under the declared review goals (correctness, maintainability, regression_risk)."
+    failure_condition: "Any notification present in pending at flush time - in particular items enqueued after windowStartedAt + WINDOW_MS but before the poller calls flush - and any maintainer or consumer decision premised on the documented carry-over."
+    impact: "The sole written boundary-semantics statement asserts the inverse of observable behavior: late items join the closing digest and are destroyed, never carried over, so maintainers reason from a loss-safety guarantee that was never built and consumers mis-attribute digests to windows."
+    evidence_refs: [round1/logic.md#finding-l2, round1/coverage.md#f2, round1/semantics.md#sem-2]
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-003
+    root_cause_hypothesis: "No collect-vs-commit separation concept exists in the design: flush couples digest collection and state erasure into one synchronous step, so no recovery path for downstream delivery failure can exist on the type surface."
+    root_confidence: medium
+    surface_finding_ids: [finding-007]
+    relation_refs: []
+    raised_by_lens_ids: [coverage]
+    issue_statement: "flush returns the digest and erases all pending state in the same synchronous step, and no recovery concept for downstream delivery failure (ack/commit, requeue, at-least-once) exists anywhere on the type surface; the error-handling/recovery subdomain standard for a notification batcher is entirely unexpressed."
+    proposed_action: "Split flush into two phases (return digest, then erase state on commit/ack after successful delivery), or declare at-most-once semantics in the contract to place the absence explicitly out of scope."
+    affected_purpose: "Caller-facing failure-mode coverage required by material_kind_obligations; the delivery-guarantee subdomain of a notification batcher (correctness, regression_risk)."
+    failure_condition: "Downstream delivery of the returned digest fails after flush has returned - pending is already cleared at that point."
+    impact: "Notifications are irreversibly lost: no reconstruction or redelivery path exists on the type surface."
+    evidence_refs: [round1/coverage.md#f3]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Connected to issue-002 only through a shared mid-chain mechanism (rel-006: the unconditional wholesale erase inside flush), which the relation graph classifies as shared_cause_candidate with distinct roots - absence of a collect-vs-commit separation versus absence of a window-membership snapshot - so merging is forbidden; no same_root_candidate relation links finding-007 to any other finding."
+  - issue_id: issue-004
+    root_cause_hypothesis: "A timestamp that should be derived by the component at enqueue time is modeled as an independent caller-supplied input with no consumer: the batcher neither stamps, validates, nor reads enqueuedAt, so the documented meaning 'epoch ms when the notification entered the batch' is unenforced and free to drift."
+    root_confidence: medium
+    surface_finding_ids: [finding-013]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: "PendingNotification.enqueuedAt is documented as a fact about an event the batcher owns (entry into the batch), but it is populated by the caller before enqueue, never set, validated, or read by the batcher, and influences no behavior; the documented meaning can silently diverge from the actual enqueue moment, and the dead field misleads readers into assuming per-item time semantics exist."
+    proposed_action: "Have enqueue stamp the field itself (from the single time authority chosen for issue-001, or accept the item without the field and stamp internally), or remove the field until a consumer exists; if it must remain caller-supplied, re-document it as 'caller-asserted enqueue time' and state the clock contract."
+    affected_purpose: "Per-item time semantics and trustworthiness of the documented field meaning (time-source semantics, maintainability)."
+    failure_condition: "Callers pass any number for enqueuedAt (meaning unenforced), and any future logic - per-item age cutoffs, the carry-over partition from issue-002's fix - trusts the documented meaning."
+    impact: "Future consumers of the field inherit semantically false data because the value drifts freely from the actual event, meaningfully weakening the decision quality of future per-item time logic."
+    evidence_refs: [round1/semantics.md#sem-3]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "Connected to issue-002 only through a shared mid-chain cause (rel-005: per-item enqueue time is never stamped, validated, or read), which the relation graph classifies as shared_cause_candidate with distinct roots - a component-derived value modeled as caller input versus missing window-attribution state - so merging is forbidden; no same_root_candidate relation links finding-013 to any other finding."
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids: [issue-002, issue-004]
+    relation_refs: [rel-005]
+    rationale: "The batcher never stamps, validates, or reads any per-item enqueue timestamp - enqueuedAt is caller-filled and unconsumed - so no trustworthy per-item time exists on which window attribution could be built. The same non-consumption makes issue-002's carry-over partition unimplementable (finding-012.cause-003) and leaves issue-004's documented field meaning unenforced (finding-013.cause-002); the roots remain distinct - missing window-attribution state versus a component-derived value modeled as caller input - so the issues share a cause, not a root, and a fix establishing a trusted per-item timestamp serves both."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids: [issue-002, issue-003]
+    relation_refs: [rel-006]
+    rationale: "flush emits the entire pending map and erases all of it unconditionally in the same synchronous step (clear() plus windowStartedAt reset), so no pending state survives the call. This mid-chain mechanism both destroys the late-enqueued items issue-002's comment promises to carry over (finding-002.cause-002) and forecloses any reconstruction or redelivery after a downstream delivery failure in issue-003 (finding-007.cause-002); the roots differ - absence of a window-membership snapshot at the close instant versus absence of a collect-vs-commit separation concept - so the issues share a mechanism, not a root."
+validation:
+  unclustered_finding_ids: [finding-003, finding-004, finding-008, finding-009, finding-010, finding-014, finding-015]

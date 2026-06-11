@@ -1,0 +1,304 @@
+schema_version: 1
+session_id: 20260611-ca3c674b
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: "manufacturing-bom-ontology.yaml :: BomLine.scrap_rate"
+    evidence_anchor: 'manufacturing-bom-ontology.yaml
+      entities.BomLine.attributes.scrap_rate note: "생산계획팀 엑셀로 별도 관리되는 값을 복사해
+      둔다."; header comment: "PLM/MES 통합의 개념 기준 문서."'
+    claim: scrap_rate를 외부 엑셀 값의 사본으로 보유하는 설계는 '개념 기준 문서'라는 선언된 목적과 정면으로 어긋나는 목적
+      drift다.
+    what: 문서는 스스로를 PLM/MES 통합의 개념 기준(reference)으로 선언하면서, BomLine.scrap_rate는 생산계획팀
+      엑셀이 원본인 값을 동기화 계약 없이 '복사해 둔다'고 명시한다. rev·current_eco·acceptance_criteria처럼
+      외부 원본을 가리키기만 하는 필드와 달리, scrap_rate는 기준 문서가 비권위 사본을 자체 보유하는 형태다.
+    why: 기준 문서의 핵심 가치는 '어디가 진실인지'를 확정하는 것인데, 이 필드는 권위 없는 사본을 기준 문서 안에 제도화한다. PLM/MES
+      통합 시 양 시스템이 이 온톨로지의 scrap_rate를 기준으로 소비하면 엑셀 원본과의 괴리가 자재 소요량(MRP) 계산 오류로
+      직결되며, 사용자 요청 의도(품목·BOM 개념 정합성과 제조 운영 위험)의 중심 영역을 훼손한다. 국소 편의(값을 가까이 두기)가
+      전체 목적(단일 개념 기준)을 깎는 전형적 사례다.
+    how_to_fix: scrap_rate를 (a) 이 온톨로지가 원본 권위를 갖는 속성으로 승격해 엑셀을 폐기하거나, (b)
+      rev/acceptance_criteria처럼 '원본=생산계획 마스터, 본 문서는 참조만'으로 권위 소재와 동기화
+      계약(주기·책임자)을 명시하라. '복사해 둔다'는 무권위 사본 상태는 제거한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서의 단일 진실 권위 (target 헤더 선언 및
+        review-value-alignment-criteria user-request-intent)
+      failure_condition: MES/MRP가 온톨로지의 scrap_rate 사본을 소비하는 시점에 생산계획팀 엑셀 원본과 값이 달라져 있는 경우
+      impact: 자재 소요량·불량 보정 계산이 비권위 값 기반으로 수행되어 제조 운영 위험(과소/과다 발주)이 발생하고, 기준 문서에 대한 통합
+        양측의 신뢰가 깨진다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml
+          entities.BomLine.attributes.scrap_rate.note
+        - manufacturing-bom-ontology.yaml header comment 'PLM/MES 통합의 개념 기준 문서'
+        - review-value-alignment-criteria.yaml criterion user-request-intent
+    causal_path:
+      root_cause_candidate: 필드별 데이터 권위(authority) 소재를 문서 전체에서 일관되게 선언하는 원칙 없이, 운영 편의에
+        따라 일부 필드는 참조·일부 필드는 사본으로 임의 채택함
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: scrap_rate가 엑셀 원본의 사본으로 온톨로지에 보유된다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml
+              entities.BomLine.attributes.scrap_rate.note
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 동기화 계약이 없는 사본은 기준 문서와 원본 간 괴리를 허용한다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml
+              entities.BomLine.attributes.scrap_rate.note (동기화 주기·책임 미기재)
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 이 괴리 허용은 rev·acceptance_criteria 등 '원본 지시' 패턴과 달리 권위 선언 원칙이 부재함의 증상이다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.Part.attributes.rev.note
+            - manufacturing-bom-ontology.yaml
+              entities.InspectionPlan.attributes.acceptance_criteria.note
+      unresolved_beyond_evidence: 생산계획팀 엑셀의 실제 갱신 빈도와 MES가 어느 쪽 값을 실소비하는지는 경계 밖 증거라 확인 불가.
+  - candidate_id: axiology-candidate-002
+    target: "manufacturing-bom-ontology.yaml :: integrity_rules[2] (ECO
+      effective_date vs Part.rev 주간 배치 동기화)"
+    evidence_anchor: 'integrity_rules: "ECO.effective_date 이후 생산분은 신규 rev를 따른다. 단
+      Part.rev 갱신은 도면 관리대장 반영 후 주간 배치로 동기화한다."'
+    claim: 변경관리 정확성(즉시 발효)이라는 목적 약속을 주간 배치라는 운영 편의와 맞바꾼 숨겨진 트레이드오프가 정당화 없이 규칙 본문에
+      수용되어 있다.
+    what: 같은 무결성 규칙 안에서 '발효일 이후 생산분은 신규 rev를 따른다'는 약속과 'Part.rev는 최대 1주 늦게 갱신된다'는 운영
+      방식이 공존한다. 발효일과 배치 동기화 사이 구간에는 기준 문서상 Part.rev가 구버전인 채로 신규 rev 생산이 일어나는 창이
+      구조적으로 열린다.
+    why: "사용자 요청 의도는 변경관리 개념의 정합성과 제조 운영 위험을 명시적으로 묻는다. 이 규칙은 변경관리의 핵심 가치(어느 rev로
+      만들어야 하는지의 단일 답)를 주간 배치 비용 절감과 트레이드했으나, 그 창 동안의 책임 소재·판정 기준(예:
+      ECO.status=applied가 권위인지 Part.rev가 권위인지)을 정의하지 않는다. 정당화도 경계 조건도 없는 트레이드오프
+      수용은 목적 drift다."
+    how_to_fix: "창 구간의 권위를 명시하라: 'rev 판정의 원본은 ECO(approved/applied +
+      effective_date)이며 Part.rev는 지연 캐시'라고 선언하고, MES 생산 오더 생성 시 Part.rev가 아닌 ECO
+      발효 상태를 조회하도록 규칙을 고치거나, 주간 배치를 발효일 트리거 동기화로 바꾸는 결정을 명문화한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 변경관리(ECO) 개념 정합성 — 사용자 요청 의도의 명시 검토 축이자 PLM/MES 통합 기준 문서의 핵심 계약
+      failure_condition: ECO 발효일과 주간 배치 사이 구간에 생산 오더가 생성되어, 시스템 간(Part.rev vs ECO)에 서로
+        다른 rev 판정이 내려지는 경우
+      impact: 구버전 도면 생산·혼류 재고라는 직접적 제조 운영 위험을 만들고, 기준 문서가 변경관리 질문에 단일 답을 주지 못해 통합
+        기준으로서의 적합성이 약화된다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml integrity_rules[2]
+        - manufacturing-bom-ontology.yaml entities.Part.attributes.rev.note
+        - manufacturing-bom-ontology.yaml entities.ECO
+        - review-value-alignment-criteria.yaml criterion user-request-intent
+    causal_path:
+      root_cause_candidate: rev 권위의 소재(ECO 원본 vs Part.rev 캐시)를 확정하지 않은 채, 기존 수작업 운영
+        절차(도면 관리대장 → 주간 배치)를 개념 모델의 무결성 규칙으로 그대로 승격함
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: 발효일 이후 신규 rev 적용 약속과 주간 배치 지연이 한 규칙에 공존한다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[2]
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 이 공존은 발효~동기화 사이에 Part.rev가 구버전인 생산 창을 만든다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[2] (주간 배치 명시)
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 창 구간의 rev 판정 권위가 미정의인 것은 운영 절차를 정당화 없이 개념 규칙으로 수용한 결과다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.Part.attributes.rev.note
+              (도면 관리대장이 원본)
+            - manufacturing-bom-ontology.yaml
+              entities.Part.attributes.current_eco.note (ECO 시스템이 원본)
+      unresolved_beyond_evidence: 실제 MES가 오더 생성 시 Part.rev와 ECO 중 무엇을 조회하는지는 경계 밖이라 확인 불가.
+  - candidate_id: axiology-candidate-003
+    target: "manufacturing-bom-ontology.yaml :: integrity_rules[0] (BOM 비순환 예외)"
+    evidence_anchor: 'integrity_rules: "BOM은 비순환이어야 한다. 단, 재생 원료 회수 공정(스크랩 재투입)은
+      Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다."'
+    claim: 스크랩 재투입을 자기참조 BOM으로 모델링하는 국소 편의가 'BOM 비순환'이라는 전체 보증을 무효화하는, 정당화되지 않은
+      트레이드오프다.
+    what: 비순환 원칙을 선언한 직후 같은 문장에서 자기순환을 공식 모델링 패턴으로 허용한다. 재투입이라는 별개 개념(부산물/회수 흐름)을 새
+      개념으로 도입하는 대신 기존 BOM 구조에 욱여넣어 원칙 자체를 예외화했다.
+    why: 비순환 보증은 MES/MRP의 BOM 전개(explosion)와 원가 적산이 종료됨을 담보하는 목적-필수 불변식이다. 예외를 허용하면
+      통합 소비자는 '비순환'을 신뢰할 수 없고, 모든 전개 로직에 자기참조 특례 처리가 전파된다. 어떤 조건에서 순환이 허용되는지(깊이,
+      수량 부호 등) 경계도 없어, 국소 모델링 편의가 기준 문서의 보증 가치를 통째로 깎는다.
+    how_to_fix: "자기참조 예외를 폐기하고 회수 흐름을 별도 개념(예: ByproductLine 또는 recovery_output 관계,
+      음수 소요가 아닌 산출 방향 관계)으로 분리해 BOM 비순환 보증을 무예외로 복원하라."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 기준 문서가 제공해야 할 BOM 구조 보증(전개 가능성·종료성) 및 BOM 개념
+        정합성(사용자 요청 의도 명시 축)
+      failure_condition: MES/MRP가 비순환을 전제로 BOM 전개·원가 적산을 수행할 때 자기참조 Assembly를 만나는 경우
+      impact: 전개 무한루프 또는 임의 특례 로직의 시스템별 분기를 유발하며, 기준 문서의 무결성 규칙이 '예외 있는 보증'으로 격하되어 통합
+        계약으로서의 신뢰가 약화된다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml integrity_rules[0]
+        - manufacturing-bom-ontology.yaml entities.Assembly (is_a Part +
+          bom_lines)
+        - review-value-alignment-criteria.yaml criterion user-request-intent
+    causal_path:
+      root_cause_candidate: 회수/부산물 흐름이라는 별개 개념을 신설하는 비용을 피하려고 기존 BOM 포함 관계를 재사용한 모델링 결정
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: 비순환 원칙과 자기참조 허용 예외가 동일 규칙에 공존한다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[0]
+        - cause_id: axiology-candidate-003.cause-002
+          claim: 예외 허용은 BOM 전개 종료성 보증을 소비자가 신뢰할 수 없게 만든다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[0]
+            - manufacturing-bom-ontology.yaml relations (Assembly has_many
+              BomLine)
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 이는 회수 흐름에 적합한 별도 개념 부재의 증상이다 — 온톨로지에 부산물/회수 방향 관계가 존재하지 않는다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities (ByproductLine 류 부재)
+            - manufacturing-bom-ontology.yaml relations 목록
+      unresolved_beyond_evidence: 실제 MES 전개 엔진이 자기참조를 어떻게 처리하는지는 경계 밖 증거라 확인 불가.
+  - candidate_id: axiology-candidate-004
+    target: "manufacturing-bom-ontology.yaml :: notes[0] (누적 std_time 이중 권위)"
+    evidence_anchor: 'notes: "원가 계산용 누적 std_time은 MES가 Routing에서 계산하지만, 표준원가 시스템에도
+      수기 입력 필드가 있어 분기마다 대사한다."'
+    claim: 파생 가능한 값(누적 std_time)에 대해 계산 경로와 수기 입력이라는 이중 권위를 분기별 대사로 봉합하는 운영을 기준 문서가
+      정상 상태로 승인하고 있다.
+    what: 누적 std_time은 Routing의 Operation.std_time_min에서 결정론적으로 파생 가능한 값인데, 표준원가
+      시스템의 수기 입력 필드가 병존하고 분기 대사로 차이를 사후 수습한다는 사실이 기준 문서의 notes에 현상 기술로만 적혀 있다.
+      어느 쪽이 권위인지 선언이 없다.
+    why: 개념 기준 문서의 역할은 이런 이중 권위를 해소할 기준을 제시하는 것이다. 현상을 무비판적으로 기록만 하면 문서가 이 트레이드오프(수기
+      유연성 vs 원가 정합성)를 암묵 승인하는 효과를 내며, 분기 단위 괴리 동안 원가가 비권위 값으로 산출되는 위험이 목적(통합 기준)
+      아래 묻힌다.
+    how_to_fix: "notes의 현상 기술을 권위 선언으로 바꿔라: '누적 std_time의 원본은 Routing 파생값이며 표준원가 수기
+      필드는 마이그레이션 전 임시 경로'처럼 권위·지위·해소 방향을 명시한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 기준 문서로서 파생값의 권위 소재를 확정하는 역할 (target 헤더 선언)
+      failure_condition: 분기 대사 사이 기간에 수기 std_time과 Routing 파생값이 달라진 채 표준원가가 산출되는 경우
+      impact: 원가 왜곡이 최대 한 분기 동안 지속되며, 기준 문서가 이중 권위를 해소하지 않고 기록만 함으로써 통합 기준으로서의 규범력이
+        약화된다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml notes[0]
+        - manufacturing-bom-ontology.yaml
+          entities.Operation.attributes.std_time_min
+        - review-value-alignment-criteria.yaml criterion user-request-intent
+    causal_path:
+      root_cause_candidate: 기준 문서가 기존 시스템 현상(수기 필드 병존)을 규범 판단 없이 notes로 수용하여, 파생값 권위
+        확정이라는 문서 목적을 그 지점에서 포기함
+      root_cause_step_id: axiology-candidate-004.cause-002
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: 누적 std_time에 계산 경로와 수기 입력의 이중 권위가 존재하고 분기 대사로 수습된다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml notes[0]
+        - cause_id: axiology-candidate-004.cause-002
+          claim: 기준 문서가 권위 선언 없이 현상만 기록하여 이중 권위가 정상 상태로 제도화된다
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml notes[0] (권위 지정 문구 부재)
+      unresolved_beyond_evidence: 표준원가 시스템 수기 필드의 실제 사용 빈도와 대사 차이 규모는 경계 밖이라 확인 불가.
+  - candidate_id: axiology-candidate-005
+    target: "manufacturing-bom-ontology.yaml :: Part.uom 및 notes[1] (현장 환산)"
+    evidence_anchor: 'entities.Part.attributes.uom (enum: ea, kg, m); notes: "uom
+      변환(kg↔ea 등)은 품목별 환산계수 마스터가 없고, 필요 시 현장에서 환산한다."'
+    claim: uom을 개념 모델에 정식 도입해 놓고 그 변환 권위를 '현장 판단'에 위임한 것은, 정확성 책임을 가장 약한 이해관계자에게
+      전가하는 비정렬 트레이드오프다.
+    what: uom enum(ea/kg/m)은 모델의 1급 속성인데, 단위가 다른 품목 간 BomLine.qty_per 해석에 필요한 환산계수는
+      마스터 없이 현장 임기응변에 맡긴다고 notes가 명시한다.
+    why: 기준 문서가 개념(uom)을 도입하면 그 개념의 일관 해석 수단까지 책임지는 것이 목적 정합적이다. 환산을 현장에 위임하면 동일 BOM
+      라인이 작업자마다 다른 수량으로 해석될 수 있고, 그 오류 비용(자재 과부족·품질)은 현장과 후속 공정이 부담한다. 마스터 구축
+      비용을 아끼는 국소 최적화가 기준 문서의 일관성 가치와 현장 이해관계자를 동시에 불리하게 한다.
+    how_to_fix: "품목별 환산계수(예: Part.uom_conversions 또는 별도 UomConversion 엔티티)를 개념 모델에
+      추가하거나, 환산이 모델 범위 밖이라면 'BomLine.qty_per는 child의 uom 기준이며 교차 단위 라인은 금지'처럼 해석
+      규칙을 무결성 규칙으로 명시하라."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM 수량 개념의 일관 해석 — PLM/MES 통합 기준 문서의 품목·BOM 정합성 축
+        (review-value-alignment-criteria user-request-intent)
+      failure_condition: 단위가 다른 parent/child를 잇는 BomLine의 qty_per를 시스템 또는 작업자마다 다른 환산으로 해석하는 경우
+      impact: 동일 BOM에서 자재 소요량이 해석 주체에 따라 달라지는 제조 운영 위험이 생기고, 오류 책임이 환산계수 권위가 없는 현장으로
+        전가된다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml notes[1]
+        - manufacturing-bom-ontology.yaml entities.Part.attributes.uom
+        - manufacturing-bom-ontology.yaml entities.BomLine.attributes.qty_per
+    causal_path:
+      root_cause_candidate: uom 개념 도입 시 환산계수 마스터라는 부속 권위 데이터의 신설 비용을 회피하고 운영 관행(현장 환산)을 그대로 둔 결정
+      root_cause_step_id: axiology-candidate-005.cause-002
+      steps:
+        - cause_id: axiology-candidate-005.cause-001
+          claim: uom enum은 모델에 있으나 환산계수 마스터는 부재하고 현장 환산이 공식 경로다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml notes[1]
+            - manufacturing-bom-ontology.yaml entities.Part.attributes.uom
+        - cause_id: axiology-candidate-005.cause-002
+          claim: 환산 권위 부재는 qty_per의 교차 단위 해석을 비결정적으로 만든다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml
+              entities.BomLine.attributes.qty_per (단위 기준 미명시)
+      unresolved_beyond_evidence: 교차 단위 BomLine이 실데이터에 실제로 존재하는지는 경계 밖이라 확인 불가.
+  - candidate_id: axiology-candidate-006
+    target: "manufacturing-bom-ontology.yaml :: WorkCenter.capacity_per_shift"
+    evidence_anchor: 'entities.WorkCenter.attributes.capacity_per_shift note: "교대당
+      처리 능력. 단위는 작업장마다 다르다(개수 또는 시간)."'
+    claim: 단위가 작업장마다 다른 capacity 수치를 단일 number로 두는 것은 비교·집계라는 이 속성의 존재 목적과 정렬되지 않는다.
+    what: capacity_per_shift가 개수일 수도 시간일 수도 있다고 note로만 밝히고, 단위 식별 속성이 없다. 작업장 간 능력
+      비교나 부하 계산이라는 이 속성의 통상 용도가 모델 수준에서 성립하지 않는다.
+    why: 통합 기준 문서에서 의미가 비결정인 수치 속성은 소비 시스템마다 다른 가정을 유발한다. 다만 이 속성은 BOM·변경관리 핵심 축보다
+      주변부라 영향 범위가 제한적이다.
+    how_to_fix: "capacity_uom(또는 capacity_basis: enum [qty, time_min]) 속성을 추가해 단위를
+      데이터로 식별 가능하게 하라."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: axiology-candidate-007
+    target: "review session 20260611-ca3c674b :: active lens set (New Perspectives 제안)"
+    evidence_anchor: "manufacturing-bom-ontology.yaml 전반의 반복 패턴: Part.rev note(도면
+      관리대장 원본), Part.current_eco note(ECO 시스템 원본), BomLine.scrap_rate note(엑셀
+      사본), InspectionPlan.acceptance_criteria note(품질팀 SOP 원본), notes[0](수기 대사),
+      notes[1](현장 환산)"
+    claim: "[New Perspective 제안] 이 대상의 지배적 위험축은 '필드 단위 데이터 권위·스튜어드십(어느 시스템이 원본이고 동기화
+      계약이 무엇인가)'인데, 이를 1차 관할로 평가하는 관점이 현재 lens set에 없다."
+    what: "trigger condition: 외부 원본 지시·사본·수기 대사·현장 환산이 6곳 이상에서 반복되며, 이 문서의 적합성은 개념
+      구조보다 권위 배치의 일관성에 좌우된다. proposed perspective: 각 속성의 원본 시스템, 캐시/사본 지위, 동기화
+      계약, 책임 주체를 평가하는 data-authority/stewardship 관점. insufficiency argument:
+      logic/semantics/structure는 개념 내부 정합성을, evolution은 변경 경로를 보고, axiology는 목적
+      정렬 위반으로 개별 사례를 지적할 수 있을 뿐 권위 배치의 체계적 전수 평가를 1차 관할로 갖는 lens가 없다. intended
+      receiving seat: 본 리뷰의 synthesize 보존 + 후속 lens governance 검토."
+    why: 이 제안은 active lens set을 변경하지 않으며, 목적상 미커버 관찰을 보존하기 위한 axiology 전용 canonical
+      slot 출력이다. 본 대상처럼 다중 레거시 시스템 위에 기준 문서를 세우는 유형에서 권위 배치 평가 부재는 반복적 커버리지 공백이
+      된다.
+    how_to_fix: "synthesize가 이 제안을 New Perspectives로 보존하고, review process
+      governance에서 data-authority 관점의 기존 lens 보강(예: semantics 또는 axiology
+      sub-check) 여부를 검토한다."
+    upstream_evidence_required: false
+    severity_hint: info
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain=none이며 .onto/authority/core-lexicon.yaml 및 .onto/principles/*
+    권위 파일이 본 unit의 허용 경계(allowed root '.') 내에 존재하지 않아, 가치 판단의 권위 anchor로 (1) 대상
+    문서 자체의 선언된 목적('PLM/MES 통합의 개념 기준 문서' 헤더) 및 (2)
+    review-value-alignment-criteria.yaml의 user-request-intent criterion만 사용했다.
+    개인 가치관 기반 판단은 배제했다.
+  - 출력 스키마가 axiology 전용 필드(value_authority_anchor, value_type,
+    alignment_direction)를 허용하지 않으므로, 권위 anchor는 각 finding의
+    evidence_anchor/evidence_refs에, alignment 방향은 claim 본문에 내장했다. 모든 finding은
+    misaligned 방향이며 value_type은 순서대로
+    purpose/commitment/tradeoff/principle/stakeholder/purpose/(lens-set
+    coverage)다.
+  - PLM/MES 통합 기준 문서의 통상 소비 패턴(MRP 전개, 생산 오더 생성, 표준원가 산출)을 제조 도메인 일반 상식으로 가정했다.
+    전용 domain 문서는 사용하지 않았다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,373 @@
+schema_version: 1
+session_id: 20260611-49e15b58
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: clinical-lab-ontology.yaml entities.Test / entities.Assay / notes[0]
+    evidence_anchor: 'Test (test_code, requires_specimen_type enum) vs Assay
+      (assay_code, specimen_kind free string); notes: "현재 신규 항목은 두 곳 모두에 등록한다"'
+    claim: 검사 카탈로그가 Test/Assay 이중 구조여서 새 검사 항목 추가마다 두 곳 수정이 필요하고, 두 구조의 검체 타입 표현이 달라
+      통합 시 데이터 연속성이 깨진다.
+    what: "동일한 '검사 항목' 개념이 Test와 Assay 두 엔티티로 분리되어 있고, notes가 신규 항목의 이중 등록을 명시한다.
+      Test는 닫힌 enum(requires_specimen_type)을, Assay는 자유 문자열(specimen_kind: 'WB',
+      'Serum', 'Urine-random')을 쓴다."
+    why: 확장 단위(신규 검사 추가)가 단일 변경이 아니라 두 카탈로그의 동기 변경을 요구한다. 두 곳의 검체 타입 어휘가 이미 분기되어
+      있어(enum 4종 vs 임의 문자열) 시간이 지날수록 매핑 불가능한 항목이 누적되고, notes[0]이 예고한 '카탈로그 통합'
+      시점에 기존 데이터의 연속성이 깨진다. EMR/LIS 연동의 개념 권위 문서라면 주문 단위와 수행 단위의 관계(1:N 매핑인지 동일
+      개념인지)가 정의되어야 외부 시스템이 어느 코드를 권위로 쓸지 결정할 수 있다.
+    how_to_fix: Test를 권위 카탈로그 개념으로 두고 Assay를 Test의 수행 프로파일(Test에 대한 ref + 분석기별 속성)로
+      재정의하거나, 최소한 Assay에 test_ref를 추가해 두 카탈로그 간 매핑 관계를 온톨로지 안에서 명시한다. 검체 타입 어휘는
+      하나의 공유 enum/코드 체계로 통일한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: "EMR/LIS 연동 설계의 개념 권위 문서 역할 (헤더 주석: '개념 권위 문서로 사용 예정')"
+      failure_condition: 신규 검사 항목 추가 또는 카탈로그 통합 시, 두 카탈로그 간 매핑 규칙이 온톨로지에 없어 연동 시스템마다
+        자체 매핑을 만들고 기존 데이터의 항목 식별 연속성이 끊어진다.
+      impact: 권위 문서가 가장 빈번한 확장 시나리오(검사 항목 추가)에서 단일 진실을 제공하지 못하므로, 이 문서를 기준으로 만든 인터페이스가
+        통합 시점에 일괄 재작업된다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Test"
+        - "clinical-lab-ontology.yaml: entities.Assay.specimen_kind note"
+        - "clinical-lab-ontology.yaml: notes[0]"
+    causal_path:
+      root_cause_candidate: 주문 가능 단위(Test)와 분석기 수행 단위(Assay)를 별도 엔티티로 도입하면서 둘 사이의 관계를
+        온톨로지에 정의하지 않고 운영 관행(이중 등록 노트)으로 미룬 것.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 신규 검사 추가는 Test와 Assay 양쪽 등록을 요구하며, 두 레코드를 잇는 구조적 링크가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: notes[0]"
+            - "clinical-lab-ontology.yaml: relations (Test↔Assay 관계 부재)"
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 링크 부재는 Test/Assay 간 관계 미정의에서 비롯되며, 검체 타입 표현까지 서로 다른 체계(enum vs 자유 문자열)로
+            분기시켰다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Test.requires_specimen_type"
+            - "clinical-lab-ontology.yaml: entities.Assay.specimen_kind"
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 관계 미정의는 통합을 '카탈로그 정비 후 재검토'로 연기한 설계 결정이 원인이며, 그 사이 비호환 데이터가 누적되도록 허용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: notes[0]"
+      unresolved_beyond_evidence: 실제 LIS에서 Test와 Assay가 1:1인지 1:N인지(한 주문 항목이 여러 assay로
+        분해되는지)는 대상 파일만으로 확인 불가.
+  - candidate_id: evolution-candidate-002
+    target: clinical-lab-ontology.yaml entities.Order (priority, is_stat) /
+      entities.StatOrder
+    evidence_anchor: Order.priority enum [routine, urgent, stat], Order.is_stat
+      boolean, StatOrder is_a Order
+    claim: 긴급도가 enum 값, boolean 플래그, 하위 타입 세 가지 메커니즘으로 중복 인코딩되어 있어, 긴급도 체계 확장 시 세 곳을
+      동시 수정해야 하고 표현 간 모순 상태가 가능하다.
+    what: 동일한 'STAT 여부' 개념이 priority=stat, is_stat=true, StatOrder 타입 세 군데에 존재한다. 어느
+      것이 권위인지 규칙이 없다.
+    why: "새 긴급 등급(예: ASAP, timed) 추가 시 enum 수정 + boolean 의미 재해석 + 하위 타입 추가 여부 결정이 모두
+      필요하다. 또한 is_stat=true이면서 priority=routine인 인스턴스, StatOrder가 아니면서
+      priority=stat인 인스턴스를 막을 제약이 없어, 연동 시스템마다 다른 필드를 읽으면 동작이 갈라진다. 변경 내성 관점에서
+      '한 개념 한 표현' 원칙 위반은 모든 긴급도 관련 확장의 비용을 3배로 만든다."
+    how_to_fix: priority enum을 단일 권위로 지정하고 is_stat을 priority의 파생 투영(derived)으로 강등하거나
+      제거한다. StatOrder는 stat_reason 한 속성만 추가하므로 하위 타입을 없애고 stat_reason을 Order의
+      조건부 속성(priority=stat일 때 필수)으로 흡수한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 시 긴급도 판정의 단일 기준 제공
+      failure_condition: 긴급도 등급을 추가·변경하는 순간 세 표현 중 일부만 갱신되어, STAT 처리 경로(즉시 검사)가 시스템별로 다르게 트리거된다.
+      impact: 임상 워크플로에서 긴급도 오판은 STAT 검사 지연이라는 환자 안전 결과로 직결되며, 권위 문서가 모순 상태를 구조적으로 허용하면
+        연동 검증으로도 잡을 수 없다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Order.attributes.priority"
+        - "clinical-lab-ontology.yaml: entities.Order.attributes.is_stat note"
+        - "clinical-lab-ontology.yaml: entities.StatOrder"
+    causal_path:
+      root_cause_candidate: 긴급도라는 단일 개념을 권위 지정 없이 속성(enum), 플래그(boolean), 타입 계층(is_a)
+        세 모델링 수단에 병렬로 인코딩한 설계 결정.
+      root_cause_step_id: evolution-candidate-002.cause-002
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 긴급도 확장(새 등급 추가)은 priority enum, is_stat 의미, StatOrder 타입 체계 세 곳의 동기 수정을
+            요구한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Order.attributes"
+            - "clinical-lab-ontology.yaml: entities.StatOrder"
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 세 곳 수정 필요성은 동일 개념의 삼중 인코딩에서 비롯되며, is_stat의 note('priority와 함께 기록')는 중복을
+            인지하면서도 권위를 지정하지 않았음을 보여준다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Order.attributes.is_stat
+              note"
+      unresolved_beyond_evidence: 기존 EMR/LIS 구현이 세 표현 중 무엇을 실제로 읽는지는 대상 파일 범위 밖.
+  - candidate_id: evolution-candidate-003
+    target: clinical-lab-ontology.yaml entities.Result.status /
+      entities.Report.result_status / state_rules[1]
+    evidence_anchor: "Result.status [preliminary, final, corrected] vs
+      Report.result_status [prelim, finalized, amended]; state_rules: '동기화 배치는
+      야간 1회'"
+    claim: 결과 상태가 서로 다른 두 어휘로 이중 관리되고 야간 배치로만 동기화되므로, 상태 어휘 확장 시 두 enum과 매핑 규칙을 모두
+      수정해야 하고 변경 사이의 연속성 공백이 구조화되어 있다.
+    what: 같은 상태 개념이 Result.status(preliminary/final/corrected)와
+      Report.result_status(prelim/finalized/amended)로 철자가 다른 두 enum에 존재한다.
+      Result note는 'Report에도 동일 정보가 유지된다'고 하고, Report note는 자신을 '권위 값'이라 한다.
+      동기화는 야간 1회 배치다.
+    why: "새 결과 상태(예: cancelled, entered-in-error — HL7/FHIR 표준 결과 상태에 존재)를 수용하려면 두
+      enum 추가 + 암묵적 매핑(preliminary↔prelim 등) 갱신 + 배치 로직 수정이 모두 필요하다. 외부 표준(HL7
+      OBX-11, FHIR DiagnosticReport.status) 채택 시 어느 어휘를 매핑 기준으로 삼을지 결정 불가하다. 또한
+      corrected→amended 전파가 최대 하루 지연되는 동안 임상의가 '신뢰하라'고 명시된 Report 값이 구식이 되는 연속성
+      단절이 모델 자체에 내장되어 있다."
+    how_to_fix: 하나의 상태 어휘를 권위로 선언하고(Result.status 권장), Report.result_status를 그 파생
+      투영으로 정의하며 두 어휘를 단일 enum으로 통일한다. 동기화 지연이 불가피하면 Report에 status_as_of(동기화 기준
+      시각)를 추가해 지연을 모델에 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 임상의에게 전달되는 결과 상태의 신뢰성과 외부 표준(HL7/FHIR) 연동 시 상태 매핑의 단일 기준
+      failure_condition: Result.status가 corrected로 바뀐 뒤 다음 야간 배치까지, '임상의는 이 값을 신뢰한다'고
+        선언된 Report.result_status가 finalized로 남아 수정 전 값을 신뢰하게 된다. 상태 어휘 확장 시 두
+        enum 중 한쪽만 갱신되면 매핑 불능 상태가 생긴다.
+      impact: 수정된 검사 결과의 전달 지연은 임상 의사결정 오류로 직결되는 환자 안전 문제이며, 권위 문서가 이 지연을 정상 동작으로
+        명문화하고 있어 연동 설계자가 위험을 인지하지 못한 채 그대로 구현하게 된다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Result.attributes.status note"
+        - "clinical-lab-ontology.yaml: entities.Report.attributes.result_status
+          note"
+        - "clinical-lab-ontology.yaml: state_rules[1]"
+    causal_path:
+      root_cause_candidate: 결과 상태의 권위 위치를 Result(LIS 기록)와 Report(임상의 신뢰 값) 양쪽에 동시에
+        부여하고, 정합성을 모델 제약이 아닌 야간 배치라는 운영 절차에 위임한 설계 결정.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 상태 어휘가 두 enum으로 분기되어 있고 값 이름까지 달라(final vs finalized) 확장 시 두 곳 수정과 매핑 갱신이
+            필요하다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Result.attributes.status"
+            - "clinical-lab-ontology.yaml:
+              entities.Report.attributes.result_status"
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 이중 어휘는 Result note('동일 정보 유지')와 Report note('권위 값')가 서로 권위를 주장하는 이중 권위
+            선언의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Result.attributes.status
+              note"
+            - "clinical-lab-ontology.yaml:
+              entities.Report.attributes.result_status note"
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 이중 권위는 동기화를 야간 배치로 처리하는 운영 결정과 결합해, 최대 24시간의 상태 불일치 창을 모델이 허용하게 만든다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: state_rules[1]"
+      unresolved_beyond_evidence: 실제 배치 주기와 corrected 발생 빈도는 대상 파일 범위 밖이므로 불일치 창의 실측 위험도는 확인 불가.
+  - candidate_id: evolution-candidate-004
+    target: clinical-lab-ontology.yaml entities.Specimen.specimen_type /
+      entities.Test.requires_specimen_type
+    evidence_anchor: specimen_type enum [blood, urine, tissue, swab] (Specimen과
+      Test에 각각 닫힌 enum으로 중복 정의)
+    claim: 검체 타입이 두 엔티티에 각각 하드코딩된 닫힌 enum이어서, 새 검체 유형(CSF, 대변, 타액 등) 추가 시 최소 두 곳의
+      스키마 수정이 필요하고 Assay의 자유 문자열과는 매핑조차 없다.
+    what: "[blood, urine, tissue, swab] 4값 enum이 Specimen.specimen_type과
+      Test.requires_specimen_type에 별도로 정의되어 있고, 공유 타입이나 코드 체계 참조가 없다."
+    why: 임상검사실은 CSF, 대변, 객담, 골수 등 검체 유형이 일상적으로 추가되는 도메인이다. 닫힌 enum의 중복 정의는 새 유형 수용 시
+      두 정의의 동기 수정을 강제하고, 한쪽만 수정되면 Test가 요구하는 검체 타입을 Specimen이 표현할 수 없는 비대칭이 생긴다.
+      Assay.specimen_kind(자유 문자열)까지 합치면 같은 개념의 세 번째 표현이며 SNOMED/HL7 specimen
+      type 코드 채택 시 세 곳 모두 마이그레이션 대상이 된다.
+    how_to_fix: SpecimenType을 독립 카탈로그 개념(코드 + 표시명, 필요 시 외부 코드 체계 매핑 필드 포함)으로 승격하고
+      Specimen, Test, Assay가 모두 이를 ref로 참조하게 한다. 그러면 새 검체 유형 추가가 카탈로그 행 추가로 끝난다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: "새 검사·검체 유형을 기존 구조 수정 없이 수용하는 확장성 (검토 목표: scope_control)"
+      failure_condition: "4값 enum에 없는 검체(예: CSF)를 쓰는 검사를 카탈로그에 추가하는 순간, Specimen과 Test
+        양쪽의 enum 정의 변경 없이는 해당 주문·검체를 표현할 수 없다."
+      impact: 검체 유형 추가는 임상검사실의 통상 확장 시나리오인데 매번 권위 문서의 스키마 변경(및 이를 따르는 EMR/LIS 인터페이스
+        변경)을 유발하므로, 인스턴스 수준 확장이어야 할 작업이 스키마 마이그레이션이 된다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml:
+          entities.Specimen.attributes.specimen_type"
+        - "clinical-lab-ontology.yaml:
+          entities.Test.attributes.requires_specimen_type"
+        - "clinical-lab-ontology.yaml: entities.Assay.attributes.specimen_kind"
+    causal_path:
+      root_cause_candidate: 검체 타입을 참조 가능한 카탈로그 개념이 아니라 인라인 enum 리터럴로 모델링하고, 그 리터럴을 엔티티마다 복사한 것.
+      root_cause_step_id: evolution-candidate-004.cause-002
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 새 검체 유형 수용에 Specimen·Test 두 enum의 동기 스키마 수정이 필요하다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.Specimen.attributes.specimen_type"
+            - "clinical-lab-ontology.yaml:
+              entities.Test.attributes.requires_specimen_type"
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 이 수정 부담은 검체 타입이 공유 개념으로 승격되지 않고 인라인 enum으로 복제된 모델링 선택에서 비롯된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities (SpecimenType 개념 부재)"
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-005
+    target: clinical-lab-ontology.yaml entities.Test.test_code / entities.Patient
+    evidence_anchor: "test_code: { type: string } (코드 체계 식별 없음); Patient.patient_id와 mrn 병존"
+    claim: 식별자에 코드 체계(coding system) 차원이 없어, LOINC 등 외부 표준 코드 도입이나 타 기관 시스템 통합 시 기존
+      로컬 코드 데이터와의 연속성을 유지할 구조적 자리가 없다.
+    what: Test.test_code는 단순 문자열이며 어느 코드 체계의 코드인지 표현할 수 없다. Patient도 patient_id와 mrn
+      두 식별자의 권위·발급 체계 구분이 없다.
+    why: EMR/LIS 통합의 표준 관행은 검사 코드를 LOINC 등 표준 체계와 병행 매핑하는 것이다. 현재 구조에서 표준 코드를 도입하려면
+      test_code의 의미를 재정의(로컬→표준)하거나 속성을 추가해야 하고, 전자는 기존 Result.test_ref 데이터의 해석
+      연속성을 깨며 후자는 스키마 변경이다. 다기관 통합 시 동일 test_code 문자열이 다른 검사를 가리키는 충돌도 방지할 수 없다.
+    how_to_fix: 식별자를 (system, code) 쌍으로 표현할 수 있게 하거나, Test에 code_mappings(코드 체계별 코드
+      목록) 속성을 예약해 외부 표준 코드를 기존 구조 수정 없이 병기할 수 있는 확장점을 마련한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 및 외부 기관 시스템과의 통합 시 검사·환자 식별의 충돌 없는 매핑
+      failure_condition: 표준 코드 체계 도입 또는 타 시스템 통합 시점에, 코드 체계 차원이 없는 test_code로는 로컬 코드와
+        표준 코드를 구분할 수 없어 기존 데이터 재해석 또는 스키마 변경이 강제된다.
+      impact: 통합이 명시된 사용 목적(EMR/LIS 연동)인 문서에서 식별자 충돌 방지 구조가 없으면, 통합 범위가 한 기관·한 코드 체계를
+        넘는 순간 권위 문서 자체가 개정 대상이 된다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Test.attributes.test_code"
+        - "clinical-lab-ontology.yaml: entities.Patient.attributes"
+    causal_path:
+      root_cause_candidate: 식별자를 단일 기관·단일 코드 체계 전제의 불투명 문자열로 모델링하고, 코드 체계라는 차원을 개념화하지 않은 것.
+      root_cause_step_id: evolution-candidate-005.cause-002
+      steps:
+        - cause_id: evolution-candidate-005.cause-001
+          claim: 외부 표준 코드 도입 시 test_code의 의미 재정의 또는 스키마 변경이 필요해 기존 데이터 연속성이 위협받는다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Test.attributes.test_code"
+        - cause_id: evolution-candidate-005.cause-002
+          claim: 이는 식별자에 발급 체계 차원이 없다는 모델링 공백의 증상이며, Patient의 patient_id/mrn 이중 식별자에 권위
+            구분이 없는 것도 같은 공백의 다른 표면이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.Patient.attributes.patient_id"
+            - "clinical-lab-ontology.yaml: entities.Patient.attributes.mrn"
+      unresolved_beyond_evidence: 통합 대상 외부 시스템의 코드 체계 요구사항은 대상 파일 범위 밖.
+  - candidate_id: evolution-candidate-006
+    target: clinical-lab-ontology.yaml entities.CriticalValue
+    evidence_anchor: "CriticalValue: test_ref + lower_bound/upper_bound(단일 수치 범위),
+      notified boolean note '통보 시각과 수신자는 전화 기록 대장에 있다'"
+    claim: CriticalValue가 검사당 단일 수치 범위만 표현 가능하고 통보 이력의 핵심 정보가 온톨로지 밖(종이 대장)에 있어,
+      인구집단별 기준이나 비수치 위험값으로의 확장과 통보 감사 추적의 전산화를 기존 구조 수정 없이 수용할 수 없다.
+    what: "위험치 정의가 lower/upper 두 number로 고정되어 연령·성별별 기준, 정성 결과(예: 혈액배양 양성), 단위 차원을
+      표현할 자리가 없다. notified는 boolean 하나이고 시각·수신자라는 본질 정보는 모델 외부에 있다."
+    why: 위험치 기준의 인구집단별 세분화와 정성 검사 위험값은 임상검사실의 표준 요구다. 현재 구조로는 같은 test_ref에 여러
+      CriticalValue 인스턴스를 둘 적용 조건 속성이 없어 구분이 불가능하고, value가 string인 Result와
+      number 범위 비교라는 타입 불일치도 있다. 통보 이력이 종이 대장에 있는 한 EMR/LIS 통합 시 통보 워크플로를 전산화하려면
+      이 개념을 재설계해야 한다.
+    how_to_fix: "CriticalValue에 적용 조건(연령/성별 등) 속성 자리와 비수치 위험값 표현(예:
+      critical_flag_values)을 예약하고, notified boolean을
+      CriticalValueNotification(통보 시각·수신자·방법) 개념 또는 최소한 notified_at/notified_to
+      속성으로 승격한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 위험치 통보 워크플로의 EMR/LIS 전산화 시 개념 모델 재작업 없이 확장 가능해야 하는 권위 문서 역할
+      failure_condition: 인구집단별 위험치 기준 도입, 정성 검사 위험값 추가, 또는 통보 감사 추적 전산화 중 어느 하나라도 착수하면
+        CriticalValue 구조 자체의 개정이 필요하다.
+      impact: 위험치 통보는 환자 안전 규제(인증 요건상 통보 시각·수신자 기록 필수) 영역이라 전산화 요구가 확실시되는데, 현재 모델은 그
+        확장을 구조 변경 없이는 수용하지 못해 권위 문서로서의 수명이 짧다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.CriticalValue.attributes"
+        - "clinical-lab-ontology.yaml:
+          entities.CriticalValue.attributes.notified note"
+        - "clinical-lab-ontology.yaml: entities.Result.attributes.value (type:
+          string)"
+    causal_path:
+      root_cause_candidate: 위험치 개념을 현재 운영 관행(수치 범위 + 전화 대장)의 최소 스냅샷으로 모델링하고, 통보 사건을 독립
+        개념이 아닌 boolean 플래그로 축약한 것.
+      root_cause_step_id: evolution-candidate-006.cause-002
+      steps:
+        - cause_id: evolution-candidate-006.cause-001
+          claim: 인구집단별 기준·정성 위험값·통보 감사 확장이 모두 CriticalValue 구조 수정 없이는 불가능하다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.CriticalValue.attributes"
+        - cause_id: evolution-candidate-006.cause-002
+          claim: 이 확장 불가는 적용 조건 차원의 부재와 통보 사건의 boolean 축약이라는 두 모델링 결정의 결과이며, note가 핵심
+            정보(시각·수신자)의 외부 존재를 명시한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.CriticalValue.attributes.notified note"
+      unresolved_beyond_evidence: 병원의 위험치 통보 규정과 인증 요건의 구체 내용은 대상 파일 범위 밖.
+  - candidate_id: evolution-candidate-007
+    target: clinical-lab-ontology.yaml state_rules[0] / entities.Order.lifecycle
+    evidence_anchor: "state_rules: 'Order는 모든 Result가 final일 때 completed로 전이한다.';
+      Order.lifecycle에 completed 이후 재개 상태 없음"
+    claim: Order 완료 규칙이 add-on 검사(완료 후 항목 추가)와 corrected 결과를 고려하지 않아, 임상검사에서 흔한 두
+      시나리오를 수용하려면 lifecycle과 전이 규칙 양쪽의 수정이 필요하다.
+    what: completed는 '모든 Result가 final'로 정의되지만, completed 이후 검사 항목이 추가되거나(add-on
+      order) Result가 corrected로 바뀔 때 Order 상태가 어떻게 되는지에 대한 상태·규칙이 없다.
+    why: add-on 검사는 기존 검체에 검사를 추가하는 임상검사실의 일상 시나리오이고, corrected는 이 온톨로지 자신이 정의한 상태다.
+      현재 규칙으로는 corrected(≠final) Result가 생긴 completed Order가 규칙 위반 상태가 되는지,
+      completed에서 in_progress로 되돌아가는지 정의되지 않아, 연동 시스템이 각자 다른 해석을 구현하게 된다. 확장(새
+      시나리오 수용) 시 lifecycle enum과 state_rules를 함께 고쳐야 한다.
+    how_to_fix: "state_rules[0]에 corrected 발생 시와 ordered_tests 추가 시의 전이를 명시한다(예:
+      completed는 종결이 아니라 '현재 항목 기준 완료'로 재정의하고, 항목 추가 시 in_progress로 복귀). 최소 수정은
+      규칙 한 줄 추가다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Order 상태를 기준으로 동작하는 EMR/LIS 워크플로(주문 추적, 미결 주문 관리)의 일관된 구현
+      failure_condition: completed Order에 add-on 검사가 추가되거나 Result가 corrected로 변경되는 순간,
+        정의된 전이가 없어 시스템별로 상태 해석이 갈라진다.
+      impact: 두 시나리오 모두 실제 운영에서 확실히 발생하며, 권위 문서가 침묵하면 연동 시스템 간 주문 상태 불일치가 구조적으로 발생한다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: state_rules[0]"
+        - "clinical-lab-ontology.yaml: entities.Order.lifecycle"
+        - "clinical-lab-ontology.yaml: entities.Result.attributes.status
+          (corrected)"
+    causal_path:
+      root_cause_candidate: Order lifecycle을 단방향 종결형으로 설계하면서, 온톨로지 내부에 이미 존재하는 재개 유발
+        사건(corrected 상태, ordered_tests 변경 가능성)과의 상호작용을 정의하지 않은 것.
+      root_cause_step_id: evolution-candidate-007.cause-002
+      steps:
+        - cause_id: evolution-candidate-007.cause-001
+          claim: completed Order에 corrected Result 또는 add-on 항목이 생기면 적용 가능한 전이 규칙이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: state_rules[0]"
+            - "clinical-lab-ontology.yaml: entities.Order.lifecycle"
+        - cause_id: evolution-candidate-007.cause-002
+          claim: 이 공백은 completed를 '모든 Result final'이라는 시점 조건으로만 정의하고 그 조건이 사후에 거짓이 될 수
+            있음(corrected의 존재)을 반영하지 않은 규칙 설계의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Result.attributes.status
+              values"
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-008
+    target: clinical-lab-ontology.yaml notes[1] (TAT 계산)
+    evidence_anchor: "notes: 'turnaround_time(TAT)은 collected_at부터 released_at까지로
+      계산하며, 대시보드 팀이 자체 계산식을 유지한다.'"
+    claim: TAT 정의가 온톨로지에 서술만 되고 계산 권위는 외부 팀의 자체 계산식에 있어, 정의 변경 시 온톨로지와 실제 계산이 따로 진화할
+      수 있다.
+    what: TAT라는 파생 값의 정의(collected_at→released_at)는 notes에 있지만, 계산식의 권위는 대시보드 팀이 별도로
+      유지한다고 명시되어 있다.
+    why: "TAT 정의가 바뀌면(예: 접수 시각 기준으로 변경) 온톨로지 notes와 대시보드 계산식이 독립적으로 수정되어 분기할 수 있다.
+      파생 값의 정의와 권위가 분리된 전형적 진화 위험이지만, notes 수준의 서술이고 즉시 깨지는 구조는 아니다."
+    how_to_fix: "TAT를 온톨로지의 파생 속성(derived: released_at - collected_at)으로 정식 정의하고,
+      대시보드 계산식이 이 정의를 따른다는 권위 방향을 명시한다."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 임상검사실 도메인에서 검체 유형(CSF, 대변 등)과 검사 항목은 정기적으로 추가되는 확장 시나리오라고 가정함.
+  - EMR/LIS 통합에서 LOINC 등 표준 코드 체계 매핑과 add-on 주문, 결과 수정(corrected) 전파는 통상적
+    요구사항이라고 가정함.
+  - 위험치(critical value) 통보는 시각·수신자 기록이 요구되는 규제 영역이라는 일반적 임상검사실 관행을 가정함.
+validation:
+  unaddressable_candidates: []

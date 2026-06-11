@@ -1,0 +1,176 @@
+schema_version: 1
+session_id: 20260611-49e15b58
+planned_issues:
+  - issue_id: issue-002
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - coverage
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+    conflict_summary: STAT 삼중 표현(priority enum / is_stat boolean / StatOrder 하위 타입)
+      결함의 심각도에 대해 렌즈 간 실질 분기가 있다. axiology와 evolution은 환자 안전 직결 경로(응급 검사
+      오분류·지연)와 확장 시 동기 수정 강제를 근거로 high를 주장하고,
+      coverage·logic·semantics·structure는 모순 인스턴스 생성이라는 발현 전제 조건이 필요한 조건부 결함이며
+      동치 제약 1줄로 형식 모순이 해소 가능하다는 근거로 medium을 주장한다. 모든 렌즈가 결함 실재와 근본 원인(canonical
+      표현 미선언)에는 합의했으므로 분쟁 축은 순수하게 심각도 등급이다. 이 분쟁은 동일 STAT 결함의 렌즈별 중복 이슈인
+      issue-008, issue-014, issue-022, issue-026, issue-032에도 동일하게 존재하므로, 본 심의의
+      결론이 해당 클러스터 전체의 정본 심각도가 된다.
+    resolution_question: STAT 삼중 표현 결함의 정본 심각도는 high인가 medium인가 — 구체적으로, '모순 인스턴스가
+      생성되어야 발현되는 조건부 결함'이라는 완화 논거가 '권위 문서가 환자 안전상 가장 시간 민감한 판정의 분기를 스스로 내장하며 스키마
+      검증으로 걸러지지 않는다'는 가중 논거를 누르는가? 그리고 결정된 등급을 동일 결함
+      클러스터(issue-008/014/022/026/032)에 일괄 적용하는 것이 타당한가?
+  - issue_id: issue-024
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-024.semantics
+      - issue-stance-matrix.yaml#stances.issue-024.axiology
+      - issue-stance-matrix.yaml#stances.issue-024.coverage
+      - issue-stance-matrix.yaml#stances.issue-024.evolution
+    conflict_summary: Test/Assay 이중 카탈로그(동의어 미판정·매핑 부재) 결함의 심각도에 대해 렌즈 간 실질 분기가 있다.
+      semantics와 evolution은 가장 빈번한 확장 시나리오(검사 항목 추가)에서 권위 문서가 단일 진실을 제공하지 못하고
+      주문-수행-결과 의미 연결이 통합 시점에 구조적으로 끊긴다는 근거로 high를 주장하고, axiology와 coverage는 누적형
+      어휘 드리프트 위험으로서 명문화된 동기화 지연 창을 가진 결과 상태 계열의 직접 안전 경로와 동급으로 둘 수 없다는 근거로
+      medium을 주장한다. 결함 실재와 근본 원인(동의어 판정·매핑 연기 상태의 이중 등록 공식화)에는 전원 합의했다. 같은 심각도
+      분쟁이 동일 카탈로그 결함의 거울 이슈인 issue-004(evolution이 medium→high 상향 요구)와
+      issue-013(axiology·coverage가 high→medium 하향 요구)에도 존재하므로, 본 심의의 결론이 카탈로그
+      클러스터 전체의 정본 심각도가 된다.
+    resolution_question: Test/Assay 이중 카탈로그 결함의 정본 심각도는 high인가 medium인가 — 구체적으로, '즉시
+      발생하는 안전 사건 경로가 아닌 누적형 드리프트'라는 하향 논거가 '가장 빈번한 확장 단위에서 권위 기능이 정지하고 형식적으로 이행
+      불가능한 이중 등록 의무가 명문화되어 있다'는 유지 논거를 누르는가? 그리고 결정된 등급을 거울 이슈(issue-004,
+      issue-013)에 일괄 적용하는 것이 타당한가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: 여섯 렌즈 전원이 support/accepts/keeps로 수렴했고 runtime 충돌 신호가 없다. 심의 없이 high 유지가
+      확정 가능하다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 네 렌즈가 공동 제기하고 전원이 근본 원인(규칙/사건 분리)과 high 심각도에 합의했다. 충돌 신호가 없다.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: evolution의 상향(severity:raises) 신호는 Test/Assay 이중 카탈로그 클러스터의 동일 심각도 분쟁이며,
+      독립적인 추가 쟁점이 없다. 정본 심각도는 issue-024 심의에서 결정되어 본 이슈에 적용된다.
+  - issue_id: issue-005
+    reason_code: non_material_issue
+    reason: severity low, material_issue false. TAT 권위 양도는 표면 수준 사안이며 structure의
+      surface_only 입장도 결함 실재 자체는 인정하므로 심의 대상이 아니다.
+  - issue_id: issue-006
+    reason_code: non_material_issue
+    reason: severity info의 리뷰 경계 관찰(governance 제안)로 material 후보 경계 밖이다.
+      not_applicable 입장들은 렌즈 소관 표명일 뿐 반대가 아니다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 결과 상태 이중 권위 계열로 여섯 렌즈 전원이 high 유지에 수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: logic의 not_applicable은 소관 외 표명이고 나머지 다섯 렌즈가 medium 유지에 수렴했다. 실질 분쟁이 없다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: logic의 not_applicable 외 다섯 렌즈가 근본 원인과 high 유지에 수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: axiology의 narrow(시정의 1차 의무는 범위 결정의 명시적 기록)는 이미 제안 조치가 '단계적 도입 또는 의도적 범위
+      제외의 명시'라는 양 경로를 포함하므로 제안 범위 안에 흡수된다. 심각도(medium)도 전원 일치라 심의로 바뀔 결정이 없다.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: 여섯 렌즈 전원이 공유 근본 원인과 medium 심각도에 수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: axiology·coverage의 하향 신호는 Test/Assay 이중 카탈로그 클러스터의 동일 심각도 분쟁이며 독립 쟁점이
+      없다. 정본 심각도는 issue-024 심의 결론을 적용한다.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: 네 렌즈의 하향 신호는 STAT 삼중 표현 클러스터의 동일 심각도 분쟁(high vs medium)이며 독립 쟁점이 없다. 정본
+      심각도는 issue-002 심의 결론을 적용한다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 결과 상태 이중 권위 계열로 전원이 high 유지에 수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: 전원이 SpecimenType 통제 어휘 승격이라는 근본 가설과 medium에 수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: logic의 not_applicable 외 다섯 렌즈가 medium 유지에 수렴했다. 실질 분쟁이 없다.
+  - issue_id: issue-018
+    reason_code: no_material_conflict
+    reason: logic의 narrow는 자기 소관(타입 수준 평가 불가 축)만 지지한다는 렌즈 범위 한정이며, 심각도(medium)·시정
+      방향에 대한 반대가 아니다. 나머지 다섯 렌즈가 전부 support/keeps이므로 심의로 바뀔 실질 결정이 없다.
+  - issue_id: issue-019
+    reason_code: consistent_stances
+    reason: logic·evolution 공동 제기 이슈로 전원이 근본 원인(root_confidence high)과 high 심각도에
+      수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-020
+    reason_code: non_material_issue
+    reason: severity low, material_issue false. structure의 surface_only도 결함 실재와 low
+      유지에는 동의하므로 심의 대상이 아니다.
+  - issue_id: issue-021
+    reason_code: consistent_stances
+    reason: 전원이 가드 없는 규칙 저작이라는 근본 가설과 medium에 수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-022
+    reason_code: no_material_conflict
+    reason: axiology의 상향 신호는 STAT 삼중 표현 클러스터의 동일 심각도 분쟁이며 독립 쟁점이 없다. 정본 심각도는
+      issue-002 심의 결론을 적용한다.
+  - issue_id: issue-023
+    reason_code: non_material_issue
+    reason: severity low, material_issue false. logic이 '모순 아님'을 기록하고 semantics로
+      handoff한 표기 정리 사안으로 전원 합의 상태다.
+  - issue_id: issue-025
+    reason_code: consistent_stances
+    reason: semantics·logic 공동 제기 shared-root 이슈로 전원이 권위 좌석 단일화 가설과 high에 수렴했다. 충돌
+      신호가 없다.
+  - issue_id: issue-026
+    reason_code: no_material_conflict
+    reason: axiology의 상향 신호는 STAT 삼중 표현 클러스터의 동일 심각도 분쟁이며, OntoClean rigidity 논거는 동일
+      시정의 보강일 뿐 독립 쟁점이 아니다. 정본 심각도는 issue-002 심의 결론을 적용한다.
+  - issue_id: issue-027
+    reason_code: non_material_issue
+    reason: severity low, material_issue false. 관계 어휘 사전 정리 사안으로 전원 합의 상태다.
+  - issue_id: issue-028
+    reason_code: non_material_issue
+    reason: severity low, material_issue false. structure의 surface_only와 logic의
+      not_applicable 모두 low 평가와 충돌하지 않는다.
+  - issue_id: issue-029
+    reason_code: non_material_issue
+    reason: severity low, material_issue false. 표면 수준 식별자 의미 모호성으로 전원이 low에 동의한다.
+  - issue_id: issue-030
+    reason_code: consistent_stances
+    reason: logic의 not_applicable 외 다섯 렌즈가 검체-환자 직접 관계 부재의 high 심각도에 수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-031
+    reason_code: no_material_conflict
+    reason: logic의 surface_only/narrows와 semantics의 함께-처리 단서는 'Assay 고아 상태가 이중 카탈로그
+      결정의 증상이므로 카탈로그 정본·매핑 판정과 함께 해소해야 한다'는 시정 순서 의견이며, 심각도(medium 전원 일치)나 시정
+      방향과 충돌하지 않는다. 처리 순서는 issue-024 심의의 카탈로그 결론에 종속되므로 별도 심의가 불필요하다.
+  - issue_id: issue-032
+    reason_code: no_material_conflict
+    reason: axiology의 상향 신호는 STAT 삼중 표현 클러스터의 동일 심각도 분쟁이며 독립 쟁점이 없다. 정본 심각도는
+      issue-002 심의 결론을 적용한다.
+  - issue_id: issue-033
+    reason_code: consistent_stances
+    reason: 전원이 Specimen↔Test 조인 경로 부재 진단과 medium에 수렴했다. 충돌 신호가 없다.
+  - issue_id: issue-034
+    reason_code: non_material_issue
+    reason: severity low, material_issue false. 표기 규약 부재 사안으로 전원 합의 상태다.
+  - issue_id: issue-035
+    reason_code: non_material_issue
+    reason: severity low, material_issue false. 어휘-구조 불일치 수준의 개선 기회로 전원 합의 상태다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: axiology·evolution의 상향 신호는 STAT 삼중 표현 클러스터의 동일 심각도 분쟁(high vs medium)이며
+      독립 쟁점이 없다. 정본 심각도는 issue-002 심의 결론을 적용한다.

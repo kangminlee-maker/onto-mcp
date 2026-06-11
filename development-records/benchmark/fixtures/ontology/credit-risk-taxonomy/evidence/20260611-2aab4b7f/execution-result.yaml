@@ -1,0 +1,931 @@
+session_id: 20260611-2aab4b7f
+session_root: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f
+execution_realization: worker
+host_runtime: codex
+review_mode: core-axis
+execution_status: completed
+execution_started_at: 2026-06-11T05:45:32+09:00
+execution_completed_at: 2026-06-11T05:55:21+09:00
+total_duration_ms: 589448
+max_concurrent_lenses: 3
+observed_dispatch_width: 3
+planned_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 6
+synthesis_executed: true
+deliberation_status: performed
+halt_reason: null
+error_log_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/error-log.md
+lens_completion_barrier_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/lens-completion-barrier.yaml
+lens_execution_results:
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/round1/axiology.findings.yaml
+    status: completed
+    started_at: 2026-06-11T05:45:32+09:00
+    completed_at: 2026-06-11T05:46:32+09:00
+    duration_ms: 60642
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 26372
+    output_bytes: 12732
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/round1/coverage.findings.yaml
+    status: completed
+    started_at: 2026-06-11T05:45:33+09:00
+    completed_at: 2026-06-11T05:46:44+09:00
+    duration_ms: 70245
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 22626
+    output_bytes: 15983
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/round1/evolution.findings.yaml
+    status: completed
+    started_at: 2026-06-11T05:45:35+09:00
+    completed_at: 2026-06-11T05:46:24+09:00
+    duration_ms: 49296
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 21555
+    output_bytes: 12163
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/round1/logic.findings.yaml
+    status: completed
+    started_at: 2026-06-11T05:46:24+09:00
+    completed_at: 2026-06-11T05:46:54+09:00
+    duration_ms: 29905
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 26759
+    output_bytes: 6113
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/round1/semantics.findings.yaml
+    status: completed
+    started_at: 2026-06-11T05:46:32+09:00
+    completed_at: 2026-06-11T05:47:30+09:00
+    duration_ms: 57278
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 22232
+    output_bytes: 14199
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/round1/structure.findings.yaml
+    status: completed
+    started_at: 2026-06-11T05:46:44+09:00
+    completed_at: 2026-06-11T05:47:24+09:00
+    duration_ms: 40149
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 21096
+    output_bytes: 7749
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/finding-ledger.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/finding-ledger.yaml
+    status: completed
+    started_at: 2026-06-11T05:47:30+09:00
+    completed_at: 2026-06-11T05:47:30+09:00
+    duration_ms: 26
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 854
+    output_bytes: 73531
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/finding-relation-graph.yaml
+    status: completed
+    started_at: 2026-06-11T05:47:30+09:00
+    completed_at: 2026-06-11T05:48:38+09:00
+    duration_ms: 68461
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 85981
+    output_bytes: 12774
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/issue-ledger.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/issue-ledger.yaml
+    status: completed
+    started_at: 2026-06-11T05:48:38+09:00
+    completed_at: 2026-06-11T05:50:25+09:00
+    duration_ms: 106962
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 16419
+    output_bytes: 26593
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/issue-stance-matrix.yaml
+    status: completed
+    started_at: 2026-06-11T05:50:25+09:00
+    completed_at: 2026-06-11T05:51:37+09:00
+    duration_ms: 71879
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 726
+    output_bytes: 54442
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation-plan
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation-plan.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation-plan.yaml
+    status: completed
+    started_at: 2026-06-11T05:51:37+09:00
+    completed_at: 2026-06-11T05:52:02+09:00
+    duration_ms: 24557
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 106417
+    output_bytes: 6388
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: problem-framing
+    unit_kind: issue_artifact
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/problem-framing.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/problem-framing.yaml
+    status: completed
+    started_at: 2026-06-11T05:53:55+09:00
+    completed_at: 2026-06-11T05:54:30+09:00
+    duration_ms: 35257
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 114224
+    output_bytes: 9970
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+deliberation_execution_results:
+  - unit_id: deliberation:issue-010:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-010/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-010/semantics.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:02+09:00
+    completed_at: 2026-06-11T05:52:16+09:00
+    duration_ms: 13691
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19419
+    output_bytes: 2861
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-010:coverage
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-010/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-010/coverage.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:02+09:00
+    completed_at: 2026-06-11T05:52:13+09:00
+    duration_ms: 11581
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19421
+    output_bytes: 2290
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-010:evolution
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-010/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-010/evolution.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:02+09:00
+    completed_at: 2026-06-11T05:52:13+09:00
+    duration_ms: 10696
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19419
+    output_bytes: 2502
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-010:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-010/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-010/logic.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:13+09:00
+    completed_at: 2026-06-11T05:52:24+09:00
+    duration_ms: 10947
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19397
+    output_bytes: 2411
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-010:structure
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-010/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-010/structure.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:13+09:00
+    completed_at: 2026-06-11T05:52:26+09:00
+    duration_ms: 12056
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19431
+    output_bytes: 2420
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-010:axiology
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-010/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-010/axiology.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:16+09:00
+    completed_at: 2026-06-11T05:52:28+09:00
+    duration_ms: 12252
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19421
+    output_bytes: 2349
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-011/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-011/semantics.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:24+09:00
+    completed_at: 2026-06-11T05:52:36+09:00
+    duration_ms: 11990
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18119
+    output_bytes: 2270
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-011/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-011/logic.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:26+09:00
+    completed_at: 2026-06-11T05:52:39+09:00
+    duration_ms: 13440
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18093
+    output_bytes: 2145
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:structure
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-011/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-011/structure.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:28+09:00
+    completed_at: 2026-06-11T05:52:40+09:00
+    duration_ms: 11873
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18123
+    output_bytes: 2917
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:axiology
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-011/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-011/axiology.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:36+09:00
+    completed_at: 2026-06-11T05:52:46+09:00
+    duration_ms: 10673
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18113
+    output_bytes: 2111
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:coverage
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-011/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-011/coverage.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:39+09:00
+    completed_at: 2026-06-11T05:52:50+09:00
+    duration_ms: 11425
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18111
+    output_bytes: 2171
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-011:evolution
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-011/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-011/evolution.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:40+09:00
+    completed_at: 2026-06-11T05:52:52+09:00
+    duration_ms: 11791
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 18117
+    output_bytes: 2444
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-001:axiology
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-001/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-001/axiology.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:46+09:00
+    completed_at: 2026-06-11T05:52:56+09:00
+    duration_ms: 9962
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19251
+    output_bytes: 1790
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-001:evolution
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-001/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-001/evolution.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:50+09:00
+    completed_at: 2026-06-11T05:53:02+09:00
+    duration_ms: 11575
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19249
+    output_bytes: 2219
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-001:logic
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-001/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-001/logic.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:52+09:00
+    completed_at: 2026-06-11T05:53:03+09:00
+    duration_ms: 11876
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19229
+    output_bytes: 1915
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-001:coverage
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-001/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-001/coverage.yaml
+    status: completed
+    started_at: 2026-06-11T05:52:56+09:00
+    completed_at: 2026-06-11T05:53:08+09:00
+    duration_ms: 12165
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19249
+    output_bytes: 2462
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: deliberation:issue-001:semantics
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/deliberation/issue-001/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation/responses/issue-001/semantics.yaml
+    status: completed
+    started_at: 2026-06-11T05:53:02+09:00
+    completed_at: 2026-06-11T05:53:12+09:00
+    duration_ms: 10139
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 19261
+    output_bytes: 1877
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: controlled-deliberation
+    unit_kind: deliberation
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/teamlead.deliberation.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/deliberation-resolution.yaml
+    status: completed
+    started_at: 2026-06-11T05:53:12+09:00
+    completed_at: 2026-06-11T05:53:55+09:00
+    duration_ms: 42578
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 89577
+    output_bytes: 12650
+    executor_host_runtime: codex
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+synthesize_execution_result:
+  unit_id: synthesize
+  unit_kind: synthesize
+  packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis-work-items.yaml
+  output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis-ledger.yaml
+  status: completed
+  started_at: 2026-06-11T05:54:30+09:00
+  completed_at: 2026-06-11T05:55:21+09:00
+  duration_ms: 51046
+  timestamp_provenance: runner_wallclock
+  failure_message: null
+  failure_kind: null
+  attempt_count: 1
+  packet_bytes: 212843
+  output_bytes: 138088
+  executor_host_runtime: codex
+  child_result_count: 11
+  child_results:
+    - unit_id: synthesis:issue-002
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-002.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-002.yaml
+      status: completed
+      started_at: 2026-06-11T05:54:30+09:00
+      completed_at: 2026-06-11T05:54:46+09:00
+      duration_ms: 16148
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 49507
+      output_bytes: 3693
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-004
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-004.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-004.yaml
+      status: completed
+      started_at: 2026-06-11T05:54:30+09:00
+      completed_at: 2026-06-11T05:54:44+09:00
+      duration_ms: 13851
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 25873
+      output_bytes: 2694
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-011
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-011.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-011.yaml
+      status: completed
+      started_at: 2026-06-11T05:54:30+09:00
+      completed_at: 2026-06-11T05:54:44+09:00
+      duration_ms: 14091
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 27030
+      output_bytes: 3127
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-001
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-001.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-001.yaml
+      status: completed
+      started_at: 2026-06-11T05:54:44+09:00
+      completed_at: 2026-06-11T05:54:57+09:00
+      duration_ms: 12902
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 28878
+      output_bytes: 3098
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-003
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-003.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-003.yaml
+      status: completed
+      started_at: 2026-06-11T05:54:44+09:00
+      completed_at: 2026-06-11T05:54:56+09:00
+      duration_ms: 11679
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 27667
+      output_bytes: 2939
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-005
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-005.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-005.yaml
+      status: completed
+      started_at: 2026-06-11T05:54:46+09:00
+      completed_at: 2026-06-11T05:55:00+09:00
+      duration_ms: 13721
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 25656
+      output_bytes: 3073
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-006
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-006.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-006.yaml
+      status: completed
+      started_at: 2026-06-11T05:54:56+09:00
+      completed_at: 2026-06-11T05:55:09+09:00
+      duration_ms: 13055
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 24905
+      output_bytes: 3419
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-007
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-007.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-007.yaml
+      status: completed
+      started_at: 2026-06-11T05:54:57+09:00
+      completed_at: 2026-06-11T05:55:08+09:00
+      duration_ms: 10981
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 25126
+      output_bytes: 2921
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-009
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-009.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-009.yaml
+      status: completed
+      started_at: 2026-06-11T05:55:00+09:00
+      completed_at: 2026-06-11T05:55:11+09:00
+      duration_ms: 11422
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 26462
+      output_bytes: 2883
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-012
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-012.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-012.yaml
+      status: completed
+      started_at: 2026-06-11T05:55:08+09:00
+      completed_at: 2026-06-11T05:55:19+09:00
+      duration_ms: 11014
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 32852
+      output_bytes: 2957
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+    - unit_id: synthesis:issue-013
+      unit_kind: synthesize
+      packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/prompt-packets/synthesis/issue-013.prompt.md
+      output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-QVcNyX/.onto/review/20260611-2aab4b7f/synthesis/responses/issue-013.yaml
+      status: completed
+      started_at: 2026-06-11T05:55:09+09:00
+      completed_at: 2026-06-11T05:55:21+09:00
+      duration_ms: 12130
+      timestamp_provenance: runner_wallclock
+      failure_message: null
+      failure_kind: null
+      attempt_count: 1
+      packet_bytes: 27043
+      output_bytes: 2722
+      executor_host_runtime: codex
+      artifact_generation_realization: live
+      semantic_quality_evidence:
+        status: not_evaluated
+        applicability: real_semantic_path_only
+        reason: live semantic path output requires a separate semantic quality gate
+          before quality is claimed
+  artifact_generation_realization: live
+  semantic_quality_evidence:
+    status: not_evaluated
+    applicability: real_semantic_path_only
+    reason: live semantic path output requires a separate semantic quality gate
+      before quality is claimed
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000

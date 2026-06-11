@@ -1,0 +1,79 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+work_item_id: "synthesis:issue-003"
+issue_id: "issue-003"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-003"
+conclusion: >-
+  flush returns the digest and erases all pending state in the same
+  synchronous step (notification-batcher.ts:39-41), and no recovery concept
+  for downstream delivery failure (ack/commit, requeue, at-least-once) exists
+  anywhere on the type surface: the error-handling/delivery-guarantee
+  subdomain standard for a notification batcher is entirely unexpressed. If
+  delivery fails after flush returns, notifications are irreversibly lost.
+  Severity medium stands as raised with consistent stances and no deliberation
+  needed; the issue stands independent of issue-002 despite the shared
+  wholesale-clear mechanism, and a direction decision is owed before the next
+  stage.
+materiality_explanation: >-
+  The absence weakens the declared review goals of correctness and
+  regression_risk on caller-facing failure-mode coverage, which
+  material_kind_obligations require for this kind of component. The failure
+  condition is ordinary, not exotic: any downstream delivery failure occurring
+  after flush has returned finds pending already cleared, and the impact is
+  irreversible notification loss with no ack, requeue, or at-least-once
+  concept available to callers. Semantics independently confirms the
+  contract-side half: the at-most-once loss semantics the code actually has is
+  real but undeclared, hence invisible to callers. Medium severity is
+  consistent with an undeclared-but-real loss semantics that leaves the happy
+  path intact in the current target.
+root_cause_explanation: >-
+  The root cause is the absence of a collect-vs-commit separation concept in
+  the design: flush couples digest collection and state erasure into one
+  synchronous step, so no recovery path for downstream delivery failure can
+  exist on the type surface (root confidence medium). It is the starting point
+  because the loss is not a bug in any present code path but a structural
+  consequence of the missing concept - as long as collection and erasure are
+  one step, no ack/requeue/at-least-once surface can be expressed. Coverage,
+  which raised the issue, accepts this root, and the chain closes on
+  bounded-target evidence.
+causal_path_explanation: >-
+  The single coverage chain (finding-007) runs from observed exposure back to
+  the missing concept: if the caller's delivery fails right after flush
+  returns, the notifications are irreversibly lost (correctness and
+  regression_risk violation); that is caused by flush coupling digest
+  collection and state erasure into a single step with no reconstruction or
+  redelivery path on the type surface; which is rooted in the separation
+  concept between collect and commit being absent from the design. Logic
+  returns not_applicable under the logic/structure boundary rule - a pure
+  absence gap yields no claim pair to prove jointly unsatisfiable - so the
+  chain is owned by coverage and corroborated on the contract side by
+  semantics. The dep-002 relation to issue-002 shares only the mid-chain
+  mechanism (the unconditional wholesale erase), not the root, so the issues
+  remain unmerged.
+action_explanation: >-
+  Choose one of two directions before the next stage
+  (must_close_before_next_stage; candidates fix_before_release or accept_risk):
+  split flush into two phases - return the digest, then erase state on
+  commit/ack after successful delivery - or declare at-most-once semantics in
+  the contract to place the absence explicitly out of scope. Semantics
+  endorses the declare-at-most-once branch as the minimal semantic remedy; the
+  collect-vs-commit split is a structural decision. Logic's advisory
+  consistency obligation attaches to the split branch: if flush is split into
+  collect and commit phases, the C5 empty-array return protocol and the
+  window-restart rules must be redefined for the new uncommitted state,
+  otherwise the fix introduces a fresh contradiction adjacent to finding-l3's
+  sentinel overload. The dep-002 shared mechanism means the issue-002
+  direction decision touches the same wholesale clear, so the two decisions
+  should be made with awareness of each other while remaining separate issues.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-003"
+  - "problem-framing.yaml#issue-003"
+  - "deliberation-resolution.yaml#issue-003"
+  - "finding-ledger.yaml#finding-007"
+  - "issue-stance-matrix.yaml#stances.issue-003.logic"
+  - "issue-stance-matrix.yaml#stances.issue-003.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-003.semantics"
+  - "issue-ledger.yaml#dep-002"
+  - "finding-relation-graph.yaml#rel-006"

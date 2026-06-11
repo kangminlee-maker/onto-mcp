@@ -1,0 +1,18 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+issue_id: "issue-004"
+lens_id: "coverage"
+difference_explanation: "All three lenses accept the root hypothesis (a component-derivable enqueue timestamp modeled as an unenforced, unconsumed caller input). The sole disagreement is the severity boundary: logic rates low because within the bounded target the field is read nowhere and the inconsistency is latent, while coverage and semantics keep medium because dep-001 places the field on issue-002's remediation path, making the gap prerequisite-quality rather than dormant. The split crosses the material-severity boundary, so it decides whether issue-004 stays material."
+response_to_other_positions: "Coverage does not dispute logic's factual ground - the field has no current consumer and no present behavior depends on the false definition. But logic's own statement removes the force of the low rating for this deliberation: logic declares the forward-looking drift argument outside its assertion scope and explicitly does not contest it, and logic itself records that under dep-001 the carry-over fix for issue-002 (option a) would make the field load-bearing, at which point the latent divergence becomes an active contradiction and 'the low rating no longer holds'. Coverage's medium does not rest on speculation about arbitrary future consumers; it rests on a dependency already recorded in the ledger (dep-001, rel-005) that ties this field to the remediation of a high-severity issue inside the same bounded target. A standalone unconsumed field would be surface-level by coverage's round-1 discipline (compare F6); this one is a prerequisite input to issue-002's fix, so prerequisite-quality, not dormancy, is the correct frame. Semantics' position converges with coverage's on both root and severity, and its singleton reasoning (shared cause, distinct roots) is preserved."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "A timestamp that should be derived by the component at enqueue time is modeled as an independent caller-supplied input with no consumer: the batcher neither stamps, validates, nor reads enqueuedAt, so the documented meaning 'epoch ms when the notification entered the batch' is unenforced and free to drift."
+remaining_blocker: "The low-vs-medium decision cannot be closed inside any single lens: logic scopes its assertion to current consumers and does not contest the dep-001 ground, so resolution must rule whether a ledger-recorded remediation dependency (issue-002's carry-over fix requiring a trustworthy per-item timestamp) is severity-bearing within the bounded target. Coverage's position is that it is, and that the proposed_action (component-stamped timestamp from the issue-001 time authority, or field removal) resolves the issue on either reading."
+evidence_refs:
+  - "issue-ledger.yaml#issue-004"
+  - "issue-ledger.yaml#dep-001"
+  - "finding-relation-graph.yaml#rel-005"
+  - "round1/logic.md#finding-l4"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-004.coverage"

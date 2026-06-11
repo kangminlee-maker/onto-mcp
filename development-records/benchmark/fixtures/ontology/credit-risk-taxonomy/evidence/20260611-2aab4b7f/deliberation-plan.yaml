@@ -1,0 +1,129 @@
+schema_version: 1
+session_id: 20260611-2aab4b7f
+planned_issues:
+  - issue_id: issue-010
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - evolution
+      - logic
+      - structure
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+      - issue-stance-matrix.yaml#stances.issue-010.axiology
+    conflict_summary: Semantics and axiology support the high-severity combined
+      issue that Collateral-as-Exposure and independent/manual LTV make
+      collateral-risk meaning unstable, while coverage and evolution lower
+      severity by narrowing the issue to LTV provenance/history, logic supports
+      only derived-value under-specification, and structure reports only surface
+      evidence with insufficient support for the root or severity.
+    resolution_question: Should issue-010 remain a high-severity combined
+      semantic/type-boundary issue, or should it be narrowed and potentially
+      lowered to the LTV derivation/provenance/history subset supported outside
+      the semantics lens?
+  - issue_id: issue-011
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - logic
+      - structure
+      - axiology
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+    conflict_summary: Semantics, axiology, coverage, and evolution support the
+      high-severity issue over all three grade scales and mapping authority,
+      while logic narrows to mapping underdetermination and structure treats
+      only the Exposure.risk_grade to RiskRating.grade lineage omission as a
+      narrower structural symptom and lowers severity.
+    resolution_question: Should issue-011 be deliberated as the broad high-severity
+      three-grade semantic authority issue, or as a narrower lineage/mapping
+      issue that overlaps with issue-013 and may warrant lower severity?
+  - issue_id: issue-001
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - logic
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: Axiology, coverage, and semantics support the medium-severity
+      authority drift issue for manual risk_grade adjustment, while evolution
+      narrows it to temporalized adjustment history and logic both narrows the
+      root to formal under-specification and lowers severity.
+    resolution_question: Is the material issue the broader manual adjustment
+      authority and source-grade priority boundary, or only a lower-severity
+      formal/temporal under-specification of adjusted derived grades?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: The support and narrow stances are compatible lens-scope differences;
+      all applicable lenses keep high severity and agree that versioned
+      grade/mapping/taxonomy authority is needed.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Narrow stances isolate FX, time replay, or temporal-consistency subsets,
+      but they do not materially dispute the medium issue or proposed need for
+      common as_of/effective basis and FX authority.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: Logic and semantics narrow the evidentiary basis to formal or meaning
+      authority, while axiology, coverage, and evolution support the broader
+      authority concept; no participant materially rejects the high-severity
+      authority gap.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Logic narrows to manual changes as events for derived invariants, but
+      all applicable lenses keep medium severity and support event/provenance
+      modeling for manual inputs and adjustments.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: Axiology and evolution narrow the coverage issue to boundary references
+      used by risk classification, which is compatible with coverage and
+      semantics support; no material disagreement over medium severity remains.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: Logic narrows to determinate conversion basis, while other applicable
+      lenses support the FX version/replay authority issue; the narrower logic
+      stance does not materially conflict with medium severity.
+  - issue_id: issue-008
+    reason_code: non_material_issue
+    reason: The issue is marked non-material with low severity, so it is outside
+      planned material deliberation even though there are root-scope
+      differences.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Coverage narrows to snapshot/as_of coverage while other applicable
+      lenses support the invariant/modality conflict; all keep medium severity
+      and the stances are compatible.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: Coverage narrows to target/time/calculation-basis coverage, but
+      semantics, structure, logic, axiology, and evolution support the
+      assessment split; all applicable lenses keep medium severity.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: Evolution and logic narrow to lineage/replay or derivation traceability,
+      which is compatible with structure's direct relation-omission issue; all
+      applicable lenses keep medium severity.

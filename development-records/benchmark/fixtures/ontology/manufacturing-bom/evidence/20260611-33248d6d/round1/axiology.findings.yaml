@@ -1,0 +1,152 @@
+schema_version: 1
+session_id: 20260611-33248d6d
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml / ECO effectivity and Part revision
+      authority
+    evidence_anchor: materialized-input.md:20-21,69-75,95-96;
+      review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    claim: ECO 적용일 이후의 생산 기준을 선언하면서 Part.rev 동기화를 주간 배치로 늦추는 결정은 PLM/MES 통합 기준 문서라는
+      목적과 어긋납니다.
+    what: 온톨로지는 Part.rev의 원본을 도면 관리대장으로, current_eco의 원본을 ECO 시스템으로 둡니다. 동시에
+      ECO.effective_date 이후 생산분은 신규 rev를 따라야 한다고 하면서 Part.rev 갱신은 도면 관리대장 반영 후
+      주간 배치로 동기화한다고 둡니다. 이 조합은 생산 오더 생성 가능 여부가 Routing.status에만 닫혀 있는 상태에서, 적용일
+      이후에도 MES가 구 rev 값을 볼 수 있는 운영 공백을 목적상 허용합니다.
+    why: "리뷰의 확인된 목적은 이 파일이 'PLM/MES 통합의 개념 기준 문서'로 적절한지, 특히 변경관리 정합성과 제조 운영 위험을
+      중심으로 보는 것입니다. 해당 목적 기준에서 ECO 적용일은 생산 실행의 기준점이어야 하는데, 파일은 그 기준점과 Part.rev
+      가시성 사이의 주간 지연을 통합 계약으로 닫지 않습니다. 이는 단순 구조 결함을 넘어, 변경관리의 정확성을 우선해야 하는
+      PLM/MES 통합 목적보다 기존 도면대장 배치 동기화 편의를 우선하는 숨은 트레이드오프입니다. Value authority
+      anchor: {source:
+      .onto/review/20260611-33248d6d/execution-preparation/review-value-alignme\
+      nt-criteria.yaml, anchor: criterion_id=user-request-intent, excerpt:
+      'PLM/MES 통합의 개념 기준 문서로 적절한지... 변경관리 개념의 정합성과 제조 운영 위험을 중심으로.'};
+      value_type=purpose; alignment_direction=misaligned."
+    how_to_fix: ECO effectivity를 생산 실행의 canonical 기준으로 승격하고, Part.rev는 ECO/도면 rev의
+      유효기간 projection으로 모델링하십시오. ECO.effective_date 이후 신규 rev가 MES에 동기화되지 않은 경우
+      생산 오더 생성을 차단하거나, rev 해석을 ECO 적용 이력에서 직접 결정하도록 Routing release 조건에 포함시키는 것이
+      최소 수정입니다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 변경관리 정합성과 제조 운영 위험을 판단 가능하게 하는 목적.
+      failure_condition: ECO.effective_date가 지났지만 Part.rev가 주간 배치 전이라 구 rev로 남아 있는 생산 시점.
+      impact: 적용일 이후 생산분이 신규 rev를 따라야 한다는 운영 약속이 MES 실행 기준에서 닫히지 않아, 통합 기준 문서가 변경관리
+        위험을 줄이기보다 정상화합니다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:69-75
+        - materialized-input.md:95-96
+        - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    causal_path:
+      root_cause_candidate: 파일이 ECO effectivity와 Part.rev 동기화 지연 사이의 우선순위와 차단 조건을 통합 계약으로 닫지 않은 것.
+      root_cause_step_id: axiology-candidate-001.cause-004
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: Part.rev는 도면 관리대장이 원본이고 current_eco는 ECO 시스템이 원본으로 분리되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-21
+        - cause_id: axiology-candidate-001.cause-002
+          claim: ECO는 effective_date와 status를 가지며 Part를 변경하는 엔티티로 정의되어 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:90
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 무결성 규칙은 effective_date 이후 생산분은 신규 rev를 따른다고 하면서 Part.rev 갱신은 도면 관리대장 반영 후
+            주간 배치로 동기화한다고 둔다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: axiology-candidate-001.cause-004
+          claim: 생산 오더 생성 차단 규칙은 Routing.status released 여부만 언급하며 rev 동기화 지연 상태를 닫지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:95
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml / operational planning values in BOM,
+      capacity, costing, and UOM handling
+    evidence_anchor: materialized-input.md:35,67,99-100;
+      review-value-alignment-criteria.yaml criterion_id=user-request-intent;
+      review-target-profile.yaml review_goal
+    claim: 운영 핵심값을 복사·수기 입력·현장 환산으로 남겨 둔 설계는 PLM/MES 통합 기준 문서의 목적을 국소 업무 편의 쪽으로
+      드리프트시킵니다.
+    what: scrap_rate는 생산계획팀 엑셀 값을 복사해 두고, WorkCenter.capacity_per_shift는 작업장마다 단위가
+      다르며, 누적 std_time은 MES가 계산하지만 표준원가 시스템에도 수기 입력 필드가 있어 분기마다 대사합니다. 또한 kg↔ea
+      등 UOM 변환은 품목별 환산계수 마스터 없이 현장에서 환산한다고 되어 있습니다.
+    why: "이 리뷰의 목적은 BOM/공정 온톨로지를 PLM/MES 통합의 개념 기준 문서로 검토하는 것이며, target profile의
+      review_goal에는 precedence와 invalid_input_behavior가 포함됩니다. 그런데 파일은 계획, 원가,
+      용량, 단위 변환의 실제 운영값을 권위 있는 통합 개념으로 닫지 않고 외부 엑셀, 수기 필드, 현장 판단에 맡깁니다. 이는 여러
+      부서의 기존 로컬 운영을 보존하는 대신 통합 기준 문서가 제공해야 할 우선순위와 입력 실패 기준을 약화하는 가치상 트레이드오프입니다.
+      Value authority anchor: {source:
+      .onto/review/20260611-33248d6d/execution-preparation/review-value-alignme\
+      nt-criteria.yaml, anchor: criterion_id=user-request-intent, excerpt:
+      'PLM/MES 통합의 개념 기준 문서로 적절한지... 제조 운영 위험을 중심으로.'}; value_type=tradeoff;
+      alignment_direction=misaligned."
+    how_to_fix: scrap_rate, capacity_per_shift, 누적 std_time, UOM 변환을 각각 canonical
+      source, 단위, 유효기간, 동기화 주기, 충돌 시 우선순위, 누락/불일치 시 차단 또는 예외 처리 규칙으로 닫으십시오. 최소한
+      품목별 UOM 환산계수 마스터와 capacity 단위 enum 또는 dimension 모델을 추가하고, 복사값과 수기값은
+      derived/projection으로 격하해야 합니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 BOM·라우팅·운영값의 우선순위와 입력 실패 조건을 닫는 목적.
+      failure_condition: 생산계획 엑셀, MES 계산값, 표준원가 수기값, 현장 UOM 환산값이 서로 다르거나 누락된 상태에서
+        계획·원가·생산 실행이 진행되는 경우.
+      impact: 통합 기준 문서가 운영 위험을 제거하는 기준이 아니라 부서별 로컬 원천과 수기 보정을 합법화하는 문서가 되어, 제조 운영 위험
+        검토 목적의 신뢰성이 낮아집니다.
+      evidence_refs:
+        - materialized-input.md:35
+        - materialized-input.md:67
+        - materialized-input.md:99-100
+        - review-target-profile.yaml review_goal
+        - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    causal_path:
+      root_cause_candidate: 운영 핵심값의 authority, precedence, invalid input behavior를 대상
+        파일 안에서 canonical 개념으로 닫지 않은 것.
+      root_cause_step_id: axiology-candidate-002.cause-005
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: BOM scrap_rate는 생산계획팀 엑셀 값을 복사해 둔다고 되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+        - cause_id: axiology-candidate-002.cause-002
+          claim: WorkCenter capacity는 단위가 작업장마다 다르지만 공통 단위 체계나 dimension 기준이 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:67
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 누적 std_time은 MES 계산값과 표준원가 시스템 수기 입력값이 병존하며 분기 대사에 의존한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:99
+        - cause_id: axiology-candidate-002.cause-004
+          claim: UOM 변환은 품목별 환산계수 마스터 없이 현장 환산에 맡겨져 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:100
+        - cause_id: axiology-candidate-002.cause-005
+          claim: 리뷰 목표가 precedence와 invalid_input_behavior를 포함하지만, 이 값들의 충돌·누락·단위 불일치 처리
+            기준은 target 안에서 닫히지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-target-profile.yaml review_goal
+            - materialized-input.md:35,67,99-100
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no manufacturing-domain-specific rule document
+    was used.
+  - "The declared review intent itself is treated as the value authority for the
+    target's purpose: a PLM/MES integration concept baseline focused on item,
+    BOM, routing, change-management consistency, and manufacturing operational
+    risk."
+  - Because the sidecar output schema does not expose axiology-specific fields,
+    value_authority_anchor, value_type, and alignment_direction are preserved
+    inside the finding why fields rather than as separate top-level fields.
+validation:
+  unaddressable_candidates: []

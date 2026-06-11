@@ -19,7 +19,17 @@ import {
   requireString,
   writeLensSidecarArtifactFromPayload,
   writeRuntimeSubmitArtifactFromPayload,
+  type WorkerStructuredOutputState,
 } from "./worker-structured-output.js";
+import {
+  SALVAGE_INCOMPLETE_SENTINEL,
+  buildDeltaRowsSalvagePrompt,
+  buildTranscriptionSalvagePrompt,
+  classifySalvageMode,
+  mergeMissingStanceRows,
+  salvageInputPathFor,
+  type SalvageInput,
+} from "./submit-salvage.js";
 
 /**
  * Claude Code review unit executor — the `claude_code` adapter on the external
@@ -179,6 +189,143 @@ function extractClaudeMarkdown(stdout: string, label: string): string {
     return result;
   }
   throw new Error(`${label}: claude result contained no markdown text.`);
+}
+
+/**
+ * Salvage mode (opt-in, parent-invoked after retry exhaustion on
+ * output_contract): recover the frozen attempt's semantics without
+ * re-engaging the violating model. Path A transcribes the frozen content
+ * with the (cheap) transcription model under the invention guard; path B
+ * asks a fresh same-tier instance for ONLY the validator-named missing
+ * stance rows and merges in code. Either way the payload goes through the
+ * SAME validator/writer as a self-submitted payload.
+ */
+async function runSubmitSalvageMode(args: {
+  salvageFrom: string;
+  outputFormat: string;
+  submitSchema: { schema: unknown; state: WorkerStructuredOutputState };
+  boundedPrompt: string;
+  outputPath: string;
+  unitId: string;
+  unitKind: string;
+  projectRoot: string;
+  sessionRoot: string;
+  sandboxMode: string;
+  model: string | undefined;
+  reasoningEffort: string | undefined;
+  transcriptionModel: string | undefined;
+  timeoutMs: number | undefined;
+}): Promise<number> {
+  const frozen = JSON.parse(
+    await fs.readFile(args.salvageFrom, "utf8"),
+  ) as SalvageInput;
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = extractClaudeStructuredPayload(
+      frozen.stdout,
+      `salvage frozen payload ${args.unitId}`,
+    );
+  } catch {
+    payload = null;
+  }
+  let resultText: string | null = null;
+  try {
+    resultText = extractClaudeMarkdown(
+      frozen.stdout,
+      `salvage frozen text ${args.unitId}`,
+    );
+  } catch {
+    resultText = null;
+  }
+  const mode = classifySalvageMode({
+    outputFormat: args.outputFormat,
+    payload,
+    resultText,
+    error: frozen.error,
+  });
+  if (mode.mode === "unsalvageable") {
+    throw new Error(`submit salvage unsalvageable for ${args.unitId}: ${mode.reason}`);
+  }
+  process.stderr.write(
+    `[plan:executor] kind=claude_code unit_id=${args.unitId} salvage=${mode.mode}\n`,
+  );
+
+  const workerBase = {
+    projectRoot: args.projectRoot,
+    sandboxMode: args.sandboxMode,
+    unitId: args.unitId,
+    unitKind: args.unitKind,
+    sessionRoot: args.sessionRoot,
+    outputDir: path.dirname(args.outputPath),
+    timeoutMs: args.timeoutMs,
+  };
+
+  let salvagedPayload: Record<string, unknown>;
+  if (mode.mode === "delta_rows") {
+    const stdout = await runClaudeWorker({
+      ...workerBase,
+      boundedPrompt: appendSchemaToPrompt(
+        buildDeltaRowsSalvagePrompt({
+          boundedPrompt: args.boundedPrompt,
+          missingIssueIds: mode.missingIssueIds,
+        }),
+        args.submitSchema.schema,
+      ),
+      // delta completion is fresh semantic judgment — same-tier instance
+      // including the unit's configured reasoning effort.
+      model: args.model,
+      reasoningEffort: args.reasoningEffort,
+    });
+    const delta = extractClaudeStructuredPayload(
+      stdout,
+      `salvage delta ${args.unitId}`,
+    );
+    salvagedPayload = mergeMissingStanceRows(
+      payload as Record<string, unknown>,
+      delta,
+    );
+  } else {
+    const source = resultText ?? JSON.stringify(payload, null, 2);
+    const stdout = await runClaudeWorker({
+      ...workerBase,
+      boundedPrompt: appendSchemaToPrompt(
+        buildTranscriptionSalvagePrompt({ resultText: source, error: frozen.error }),
+        args.submitSchema.schema,
+      ),
+      // transcription is not semantic work — cheap tier when configured
+      // (falls back to the unit model; effort then follows the unit too).
+      model: args.transcriptionModel ?? args.model,
+      reasoningEffort:
+        args.transcriptionModel !== undefined ? undefined : args.reasoningEffort,
+    });
+    let salvageText: string | null = null;
+    try {
+      salvageText = extractClaudeMarkdown(stdout, `salvage guard ${args.unitId}`);
+    } catch {
+      salvageText = null;
+    }
+    if (salvageText && salvageText.includes(SALVAGE_INCOMPLETE_SENTINEL)) {
+      throw new Error(
+        `submit salvage aborted for ${args.unitId}: ${SALVAGE_INCOMPLETE_SENTINEL} (frozen output lacks required content; refusing to invent).`,
+      );
+    }
+    salvagedPayload = extractClaudeStructuredPayload(
+      stdout,
+      `salvage transcription ${args.unitId}`,
+    );
+  }
+
+  return args.submitSchema.state.outputFormat === "lens-sidecar"
+    ? writeLensSidecarArtifactFromPayload({
+        payload: salvagedPayload,
+        outputPath: args.outputPath,
+        state: args.submitSchema.state.lensSidecarState,
+      })
+    : writeRuntimeSubmitArtifactFromPayload({
+        payload: salvagedPayload,
+        outputPath: args.outputPath,
+        state: args.submitSchema.state.runtimeSubmitState,
+      });
 }
 
 async function runClaudeWorker(args: {
@@ -430,6 +577,8 @@ export async function runClaudeCodeReviewUnitExecutorCli(
       "output-format": { type: "string", default: "markdown" },
       "human-output-ref": { type: "string" },
       "timeout-ms": { type: "string" },
+      "salvage-from": { type: "string" },
+      "salvage-transcription-model": { type: "string" },
     },
     strict: true,
     allowPositionals: false,
@@ -508,43 +657,104 @@ export async function runClaudeCodeReviewUnitExecutorCli(
     throw new Error(`--timeout-ms must be a positive integer, got "${timeoutMsRaw}".`);
   }
 
-  const stdout = await runClaudeWorker({
-    projectRoot,
-    boundedPrompt,
-    model,
-    reasoningEffort,
-    sandboxMode,
-    unitId,
-    unitKind,
-    sessionRoot,
-    outputDir: path.dirname(outputPath),
-    timeoutMs,
-  });
+  const salvageFromRaw = values["salvage-from"];
+  const salvageFrom =
+    typeof salvageFromRaw === "string" && salvageFromRaw.length > 0
+      ? path.resolve(salvageFromRaw)
+      : undefined;
+  if (salvageFrom && outputFormat === "markdown") {
+    throw new Error("--salvage-from requires a structured --output-format.");
+  }
+  const transcriptionModel =
+    typeof values["salvage-transcription-model"] === "string" &&
+    values["salvage-transcription-model"].length > 0
+      ? values["salvage-transcription-model"]
+      : undefined;
 
   let structuredPayloadFields: number | undefined;
-  if (outputFormat !== "markdown") {
+  if (salvageFrom) {
     if (!submitSchema) {
       throw new Error(`Missing structured output state for ${outputFormat}.`);
     }
-    const payload = extractClaudeStructuredPayload(
-      stdout,
-      `Claude structured output ${unitId}`,
-    );
-    structuredPayloadFields =
-      submitSchema.state.outputFormat === "lens-sidecar"
-        ? await writeLensSidecarArtifactFromPayload({
-            payload,
-            outputPath,
-            state: submitSchema.state.lensSidecarState,
-          })
-        : await writeRuntimeSubmitArtifactFromPayload({
-            payload,
-            outputPath,
-            state: submitSchema.state.runtimeSubmitState,
-          });
+    structuredPayloadFields = await runSubmitSalvageMode({
+      salvageFrom,
+      outputFormat,
+      submitSchema,
+      boundedPrompt,
+      outputPath,
+      unitId,
+      unitKind,
+      projectRoot,
+      sessionRoot,
+      sandboxMode,
+      model,
+      reasoningEffort,
+      transcriptionModel,
+      timeoutMs,
+    });
   } else {
-    const markdown = extractClaudeMarkdown(stdout, `Claude markdown ${unitId}`);
-    await fs.writeFile(outputPath, `${markdown.trimEnd()}\n`, "utf8");
+    // Stale-freeze hygiene: the freeze file is the parent's STRUCTURAL
+    // salvage trigger, so its presence must mean "the LAST attempt failed
+    // structurally" — clear any leftover from an earlier attempt first.
+    if (outputFormat !== "markdown") {
+      await fs.rm(salvageInputPathFor(outputPath), { force: true });
+    }
+    const stdout = await runClaudeWorker({
+      projectRoot,
+      boundedPrompt,
+      model,
+      reasoningEffort,
+      sandboxMode,
+      unitId,
+      unitKind,
+      sessionRoot,
+      outputDir: path.dirname(outputPath),
+      timeoutMs,
+    });
+
+    if (outputFormat !== "markdown") {
+      if (!submitSchema) {
+        throw new Error(`Missing structured output state for ${outputFormat}.`);
+      }
+      try {
+        const payload = extractClaudeStructuredPayload(
+          stdout,
+          `Claude structured output ${unitId}`,
+        );
+        structuredPayloadFields =
+          submitSchema.state.outputFormat === "lens-sidecar"
+            ? await writeLensSidecarArtifactFromPayload({
+                payload,
+                outputPath,
+                state: submitSchema.state.lensSidecarState,
+              })
+            : await writeRuntimeSubmitArtifactFromPayload({
+                payload,
+                outputPath,
+                state: submitSchema.state.runtimeSubmitState,
+              });
+      } catch (error: unknown) {
+        // Freeze the failing attempt's evidence for the opt-in salvage path
+        // (parent re-invokes with --salvage-from after the retry budget is
+        // exhausted). The frozen stream is scratch, never the seat.
+        const frozen: SalvageInput = {
+          unit_id: unitId,
+          unit_kind: unitKind,
+          output_format: outputFormat,
+          stdout,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        await fs.writeFile(
+          salvageInputPathFor(outputPath),
+          JSON.stringify(frozen),
+          "utf8",
+        );
+        throw error;
+      }
+    } else {
+      const markdown = extractClaudeMarkdown(stdout, `Claude markdown ${unitId}`);
+      await fs.writeFile(outputPath, `${markdown.trimEnd()}\n`, "utf8");
+    }
   }
 
   console.log(

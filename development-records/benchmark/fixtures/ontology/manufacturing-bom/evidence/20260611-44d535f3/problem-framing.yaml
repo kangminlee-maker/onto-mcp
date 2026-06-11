@@ -1,0 +1,195 @@
+schema_version: 1
+session_id: 20260611-44d535f3
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 변경 적용성과 유효 버전 기준이 독립 개념으로 닫히지 않아 BOM·Routing·Operation의
+      과거/현재 생산 기준을 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여러 렌즈가 ECO.effective_date와 현재 Part.rev에 변경 적용성을 묶은 구조를 핵심 원인으로 수용했다.
+      PLM/MES 통합 기준 문서의 변경 전후 제조 기준 재구성 목적을 직접 약화하므로 현재 대상에서 닫아야 하는 root-level
+      consistency 문제다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-007
+  - issue_id: issue-002
+    problem_definition: 생산오더 실행 snapshot이 없어 릴리즈된 Part/BOM/Routing 기준이 MES 실행 단위에 고정되지 않는다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation은 넓은 생산오더 하위 영역 누락을 실행 snapshot/release-basis 부재로 좁혔다.
+      issue-001의 effectivity/version 문제와 공유 원인이 있으나, MES 실행 단위 커버리지 누락이 별도 사용자
+      목적을 막으므로 대상 내에서 수정이 필요하다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 승인·동기화·수동입력·대사 행위를 감사 이벤트로 남기지 않아 actor, timestamp, source,
+      근거, 전후값을 재구성할 수 없다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 상태와 값은 있으나 통제 행위 자체의 증거 개념이 없는 결함으로 렌즈들이 수렴했다. 변경관리와 제조 운영 위험 검토에서
+      책임성과 감사 가능성을 약화하므로 governance 문제로 즉시 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 품목 단위 환산과 WorkCenter 능력 단위/기준이 독립 기준정보로 모델링되지 않아 BOM 수량과 작업장
+      능력의 공통 해석 권위가 없다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 대부분 렌즈는 단위 환산과 capacity basis를 하나의 공통 기준정보 결손으로 유지했고, evolution은
+      WorkCenter capacity 쪽으로 좁혔다. 남은 이견은 범위 강조에 가깝지만 보존되어야 하므로 contested로 두며,
+      계산 정확성에 직접 영향을 주는 대상 내 수정 사항이다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: 스크랩률을 BomLine 복사값으로 고정해 공정·기간·버전·출처별 운영 파라미터의 변경 연속성을 잃는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 렌즈들이 변동성 있는 운영 파라미터를 BOM 구조 속성에 내장한 원인을 일관되게 수용했다. 향후 공정·기간·정책별 확장과
+      과거 계획/원가 재현성을 약화하므로 진화 가능성 관점의 root 문제다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: WorkCenter.capacity_per_shift가 값과 단위/기준을 분리하지 않아 작업장 유형 확장과
+      MES/APS 통합에서 예외 해석을 만든다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 이 이슈는 issue-004의 capacity 기준 결손을 WorkCenter 속성 계약 수준에서 드러내는 구체 증상이다.
+      구조 수정은 issue-004와 함께 다룰 수 있으므로 carry_forward로 분류하되, 다음 단계 통합 설계 전에는 해소되어야
+      한다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 스크랩 재투입 흐름을 BOM 자기참조 예외로 결합해 비순환 필수 규칙과 허용 예외가 동시에 성립한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation은 내부 규칙 충돌과 recovery/rework 입력 누락이 결합된 문제로 확정했다. 같은 BOM을
+      정상과 오류로 동시에 판정할 수 있어 검증·전개·생산오더 생성 기준의 correctness를 직접 깨므로 현재 대상에서 즉시 닫아야
+      한다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-008
+    problem_definition: AlternatePart의 대칭 서술, one_way 기본 direction, alternate_of
+      shortcut이 대체 부품 방향 의미를 일관되게 보존하지 못한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation은 issue-008을 issue-013과 병합하지 않고 방향 의미 계약 문제로 유지했다. 대체
+      가능성의 방향 해석이 흔들리면 승인되지 않은 대체 투입이나 계획 판단 오류로 이어질 수 있어 의미 consistency 문제로 닫아야
+      한다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-009
+    problem_definition: Part.rev가 품목/설계 리비전과 도면 문서 리비전을 함께 뜻해 ECO 적용 revision authority가 불명확하다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 revision authority 분리를 지지했다. 이 문제는 issue-001의 effectivity 판단
+      혼선을 가능하게 하는 의미적 전제이면서, 자체적으로도 PLM/MES 변경 적용 기준의 일관성을 약화한다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-010
+    problem_definition: InspectionPlan을 Operation 하위 유형으로 두어 검사 계획/사양 문서와 실행 공정 단계를
+      같은 존재론적 유형으로 취급한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 렌즈들은 계획/spec와 실행 Operation의 분리가 필요하다는 데 수렴했다. 라우팅 operations 해석, 작업장
+      배정, 표준시간, 품질 기준 적용에 잘못된 추론을 만들 수 있으므로 correctness 문제로 대상 내 수정이 필요하다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-011
+    problem_definition: BomLine.scrap_rate가 BOM 구조 수량과 공정 불량률 의미를 섞어 원천
+      공정·기간·authority 없는 독립 입력처럼 보인다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 이 이슈는 issue-005와 같은 scrap_rate 결함을 의미 경계 관점에서 표현한다. 중복 보정과 원천 드리프트
+      위험을 만들지만 구조적 조치는 issue-005의 정책/유효기간/출처 분리와 함께 처리할 수 있어 carry_forward로
+      분류한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: capacity_per_shift가 처리량 capacity와 시간 capacity를 한 속성에 담아
+      부하·생산가능수량 계산 의미를 충돌시킨다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 이 이슈는 issue-006 및 issue-004의 capacity 결손을 의미 충돌로 구체화한다. 계산 정확성에 영향을
+      주지만 capacity 기준 계약 정리와 함께 닫을 수 있는 하위 문제이므로 다음 단계에서 함께 처리하도록 분류한다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-013
+    problem_definition: AlternatePart 엔티티가 relations 계약에서 Part-to-Part shortcut으로
+      우회되어 primary_ref, alternate_ref, direction이 일급 관계로 탐색되지 않는다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 구조적 단절을 수용했고, issue-008의 방향 의미 보존 실패를 가능하게 하는 공유 구조 원인으로도
+      보존되었다. 통합 소비자가 대체부품 레코드를 교환·검증하기 어렵게 하므로 관계 계약의 사용 가능성 문제로 대상 내 수정이 필요하다.
+    related_surface_finding_ids:
+      - finding-014

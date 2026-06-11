@@ -1,0 +1,184 @@
+schema_version: 1
+session_id: 20260611-087267ec
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: Most lenses accept the broad versioned
+      classification-authority root for ratings, mappings, assignments,
+      overrides, and mutable code sets, while the structure lens supports only
+      the narrower graph-path symptom for RiskRating.grade to
+      Exposure.risk_grade. Deliberation is needed to decide whether the
+      structural derivation symptom remains inside this broad authority issue or
+      should be treated only through the narrower structural issue.
+    resolution_question: Should issue-001 retain the broad versioned
+      classification-authority scope including structural grade derivation
+      symptoms, or should the structural evidence be separated/narrowed to a
+      distinct graph-path issue while issue-001 covers only governed
+      classification concepts?
+  - issue_id: issue-003
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+    conflict_summary: Coverage, axiology, and semantics support the full
+      audit-evidence event root for manual inputs, approvals, and reporting
+      adjustments, while evolution narrows the root to reconstructable
+      value-change history fields such as source value, adjusted value, approval
+      state, and event time. The disagreement affects whether the required fix
+      is a full control-action audit event or a narrower temporal provenance
+      model.
+    resolution_question: Must issue-003 require full auditable control-action events
+      with actor, reason, evidence, source value, adjusted value, and approval
+      state, or is the material ontology gap limited to reconstructable
+      value-change history for temporal continuity?
+  - issue_id: issue-004
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - logic
+      - axiology
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: Coverage, axiology, evolution, and semantics support a broad
+      source-authority concept or registry for distributed values, reference
+      tables, FX sources, mapping versions, and reconciliation precedence. Logic
+      narrows the problem to determinacy for values that feed shared
+      calculations. This changes whether the action is a general
+      authority-boundary model or only calculation-specific source and
+      precedence metadata.
+    resolution_question: Should issue-004 be resolved as a broad distributed
+      source-authority registry across shared values, or narrowed to authority
+      metadata only where distributed values affect determinate shared
+      calculations?
+  - issue_id: issue-008
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - evolution
+      - logic
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+    conflict_summary: Semantics and axiology support the full root that exposure,
+      collateral asset/valuation, and derived LTV metric concepts are blurred.
+      Coverage narrows to missing secured-lending concept coverage, evolution
+      narrows to valuation/derived metric/override history and authority, and
+      logic narrows to LTV derivation determinacy. Deliberation is needed
+      because these scopes imply different canonical concept splits and may
+      combine two separable defects.
+    resolution_question: Should issue-008 remain one combined semantic issue
+      covering collateral-as-exposure and LTV authority, or should it be
+      split/narrowed into separate collateral type-boundary and derived-metric
+      authority issues?
+  - issue_id: issue-009
+    priority: 5
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+    conflict_summary: Structure frames RiskAppetite orphaning as a missing graph
+      edge, while coverage narrows it to an omitted assessment/evaluation
+      concept and other lenses connect it to broader assessment context,
+      threshold, as-of, and compliance semantics. This affects whether the fix
+      should be a direct relation or an assessment intermediary.
+    resolution_question: Should issue-009 be resolved by adding a direct graph
+      relation between RiskAppetite and ExposureAggregate, or by modeling an
+      assessment intermediary that owns compliance evaluation context?
+  - issue_id: issue-010
+    priority: 4
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.axiology
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+    conflict_summary: Structure directly supports the missing graph derivation path
+      from RiskRating.grade to Exposure.risk_grade, while coverage narrows it to
+      missing derivation/mapping concept coverage and other lenses connect it to
+      broader rating-authority and versioned mapping concerns. The material
+      question is whether this issue is an independent structural defect or a
+      narrower manifestation of the broader classification-authority issue.
+    resolution_question: Should issue-010 remain a separate structural graph-path
+      issue, or be folded into issue-001 as the graph-level manifestation of
+      versioned rating and grade-mapping authority?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: All applicable lenses support the need for an explicit
+      utilization/appetite assessment context; coverage and structure only
+      narrow their own evidence to calculation-event coverage and graph symptoms
+      without materially disputing the root, severity, or proposed
+      assessment-context action.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: The applicable lenses consistently support adding at least a minimal
+      default/delinquency lifecycle projection, and non-applicable lenses do not
+      introduce a competing root, scope, severity, or action.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: The narrow coverage and logic positions still support modeling a
+      canonical FX conversion policy/source with source, timestamp/version, and
+      calculation parameters; they limit lens ownership rather than creating a
+      material dispute with the evolution time-series continuity framing.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: Coverage narrows the issue to missing concept coverage for current total
+      versus batch snapshot, but that is compatible with the supported logic
+      root and proposed split/as-of freshness action; no lens offers a competing
+      material resolution.

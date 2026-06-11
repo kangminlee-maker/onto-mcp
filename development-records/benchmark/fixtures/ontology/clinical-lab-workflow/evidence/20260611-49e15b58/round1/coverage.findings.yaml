@@ -1,0 +1,311 @@
+schema_version: 1
+session_id: 20260611-49e15b58
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: Result.status vs Report.result_status (dual status authority)
+    evidence_anchor: clinical-lab-ontology.yaml — Result.status note
+      '...Report.result_status에도 동일 정보가 유지된다'; Report.result_status note '보고서에
+      표시되는 결과 상태의 권위 값'; state_rules '...동기화 배치는 야간 1회'
+    claim: 결과 상태가 Result와 Report 두 곳에 병행 표현되는데 단일 권위(원본) 지정이 없고, 두 enum 어휘마저 다르다.
+    what: 동일한 '결과 상태' 정보가 Result.status(preliminary/final/corrected)와
+      Report.result_status(prelim/finalized/amended)에 이중으로 보존되며, 동기화는 야간 배치 1회에
+      의존한다. 어느 쪽이 권위 원본인지 명시가 없다(Report 쪽 note는 '권위 값', Result 쪽 note는 'LIS가
+      기록').
+    why: coverage 차원에서 '복수 장부에 걸쳐 관리되는 값의 단일 권위 지정' 차원이 결손되어 있다. 개념 권위 문서로 쓰일 때
+      EMR/LIS 통합 구현자가 어느 필드를 신뢰할지 결정할 근거가 없고, 야간 배치 사이에는 Result가 corrected여도
+      Report는 finalized로 남아 임상의에게 전달되는 값이 실제 상태와 모순된다. enum 어휘
+      불일치(final↔finalized, corrected↔amended)는 매핑 규칙 부재까지 동반한다.
+    how_to_fix: "결과 상태의 단일 권위 위치(예: Result.status)를 명시하고 Report.result_status를 그 파생
+      투영(projection)으로 규정하거나, 권위를 Report로 둘 경우 Result.status를 비권위 캐시로 표기한다. 동시에
+      두 enum 간 정규 매핑 표를 온톨로지에 포함하고, 동기화 지연 중의 유효 상태 해석 규칙을 명문화한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서 — 임상의에게 전달되는 결과 상태의 신뢰 가능한 단일 출처 제공
+      failure_condition: Result.status가 corrected로 전이된 후 야간 동기화 배치 실행 전까지,
+        Report.result_status는 finalized로 남아 권위 값과 실제 상태가 불일치한다.
+      impact: 구현자가 어느 필드를 권위로 삼을지 결정할 근거가 없어 통합 설계가 분기되고, 정정된 위험 결과가 amended로 반영되지 않은
+        채 임상의에게 신뢰값으로 노출될 수 있다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Result.status.note
+        - clinical-lab-ontology.yaml — Report.result_status.note
+        - clinical-lab-ontology.yaml — state_rules[1] (동기화 배치는 야간 1회)
+    causal_path:
+      root_cause_candidate: 결과 상태라는 단일 개념이 두 엔티티에 권위 지정 없이 병행 표현되고 두 enum 어휘가 분리됨
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: Result.status와 Report.result_status가 동일 정보를 서로 다른 enum으로 이중 보존한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Result.status.note,
+              Report.result_status.note
+        - cause_id: coverage-candidate-001.cause-002
+          claim: 단일 권위 원본이 지정되지 않아 두 값이 충돌할 때 우선순위 해석 규칙이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — 두 note가 각각 '권위 값'/'LIS가 기록'으로 상충
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 동기화가 야간 배치 1회에 의존해 배치 사이 윈도우에서 두 값이 실제로 불일치한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml — state_rules[1]
+      unresolved_beyond_evidence: 실제 LIS/EMR 구현에서 어느 필드를 읽는지는 코드 경계 밖이라 확정 불가.
+  - candidate_id: coverage-candidate-002
+    target: STAT 주문 표현의 다중화 (priority / is_stat / StatOrder)
+    evidence_anchor: clinical-lab-ontology.yaml — Order.priority
+      enum(routine,urgent,stat), Order.is_stat boolean(note 'priority와 함께 기록'),
+      StatOrder is_a Order
+    claim: STAT 응급 여부가 priority enum, is_stat 불리언, StatOrder 하위타입 세 경로로 표현되며 권위 경로가
+      지정되지 않았다.
+    what: "동일 사실('STAT인가')이 Order.priority=stat, Order.is_stat=true, StatOrder 서브타입
+      세 곳에 중복 표현된다. 어느 것이 권위인지, 세 값이 불일치할 때(예: priority=routine이면서 is_stat=true)
+      해석 규칙이 없다."
+    why: coverage의 '단일 권위 지정 부재' 차원에 해당한다. 개념 권위 문서로서 STAT 판정의 정본 위치를 정의하지 않으면 통합
+      구현마다 다른 필드를 읽게 되고, 응급 검사 분류라는 안전 관련 속성이 모순값을 가질 수 있다.
+    how_to_fix: "STAT 여부의 단일 권위(예: priority enum)를 지정하고 is_stat과 StatOrder는 그
+      파생/제약으로 규정하거나 제거한다. 세 표현을 유지해야 한다면 일관성 불변식(priority=stat ⟺ is_stat=true ⟺
+      instance of StatOrder)을 명문화한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문 우선순위(특히 STAT 응급)의 권위 있는 단일 분류 — 워크플로 라우팅 및 TAT 목표 결정의 기준
+      failure_condition: 세 표현 중 하나만 갱신되어 priority, is_stat, 타입 정체성이 상호 모순되는 Order 인스턴스가 생성될 때.
+      impact: 구현자가 STAT 판정에 어느 필드를 쓸지 분기되고, 응급 분류 누락/오분류로 워크플로 우선순위가 잘못 적용될 수 있다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Order.priority
+        - clinical-lab-ontology.yaml — Order.is_stat
+        - clinical-lab-ontology.yaml — StatOrder
+    causal_path:
+      root_cause_candidate: STAT이라는 단일 분류 사실을 enum·불리언·서브타입 세 모델링 기법으로 동시에 표현하면서 정본을 정하지 않음
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: STAT 여부가 priority, is_stat, StatOrder 세 위치에 중복 인코딩된다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Order.priority, Order.is_stat,
+              StatOrder
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 권위 위치 미지정으로 세 값 간 일관성 불변식이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — is_stat.note 'priority와 함께 기록'(우선순위
+              미정의)
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: 시점 의존 임계값/참조구간의 유효기간·이력 부재 (CriticalValue, 참조범위)
+    evidence_anchor: clinical-lab-ontology.yaml — CriticalValue(lower_bound,
+      upper_bound, test_ref); Result에 reference range/flag 속성 없음
+    claim: 위험값 임계(CriticalValue)와 결과 참조구간이 유효기간·이력 없이 단일 현재값으로만 표현되어 과거 시점 기준을 재구성할
+      수 없다.
+    what: CriticalValue의 lower_bound/upper_bound는 시점 의존 값(검사실 정책·기기 변경에 따라 갱신됨)인데
+      effective_from/to나 버전 이력이 없다. 또한 정상 참조구간(reference range)·이상
+      플래그(H/L/critical) 개념 자체가 모델에 부재해, 결과가 어떤 기준으로 위험 판정되었는지 시점별로 재구성 불가하다.
+    why: coverage의 '시점 의존 값의 유효기간·이력' 차원 결손이다. 임상검사에서 과거 보고의 위험 판정 근거를 사후
+      재구성(감사·소송·정도관리)하려면 당시 적용된 임계값이 필요하다. 현재값만 보존하면 임계가 갱신된 뒤 과거 결과의 판정 맥락이
+      소실된다.
+    how_to_fix: CriticalValue에 effective_from/effective_to(또는 버전) 차원을 추가해 시점별 임계를
+      보존하고, Result가 생성 시점의 적용 임계/참조구간을 스냅샷으로 참조하도록 한다. 정상 참조구간과 이상 플래그를 1급 개념으로
+      도입한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 과거 시점의 위험/이상 판정 근거를 재구성 가능한 결과 해석 권위 모델
+      failure_condition: 검사실이 CriticalValue 임계를 갱신한 후 갱신 이전에 생성된 결과의 위험 판정 근거를 조회할 때,
+        당시 임계값이 보존되어 있지 않아 재구성 불가.
+      impact: 감사·정도관리·임상 사후검토에서 과거 결과의 판정 맥락을 입증할 수 없어, 권위 문서가 시점 정합 추적 요구를 충족하지 못한다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — CriticalValue(lower_bound/upper_bound,
+          유효기간 속성 없음)
+        - clinical-lab-ontology.yaml — Result(reference range/flag 속성 부재)
+    causal_path:
+      root_cause_candidate: 갱신되는 임계/참조 값을 시간 차원 없는 단일 현재값으로 모델링함
+      root_cause_step_id: coverage-candidate-003.cause-002
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: CriticalValue 임계가 유효기간/버전 없이 현재값만 가진다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — CriticalValue attributes
+        - cause_id: coverage-candidate-003.cause-002
+          claim: Result가 생성 시점 임계 스냅샷을 참조하지 않아 판정 근거가 임계 갱신 시 소실된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Result attributes에 참조구간/임계 참조 없음
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: Specimen/Order/Report lifecycle 종료 구간 미완결
+    evidence_anchor: clinical-lab-ontology.yaml — Specimen.lifecycle
+      [collected,received,in_analysis,analyzed]; Order.lifecycle
+      [draft,placed,in_progress,completed,cancelled]; Report에 lifecycle 없음;
+      state_rules[2] '보관/폐기 처리는 각 부서 내규를 따른다'
+    claim: 상태를 갖는 핵심 엔티티의 lifecycle이 종료 구간(보관·폐기, 검체 거부/재채취, 보고서 정정·재발행)을 커버하지 못한다.
+    what: Specimen lifecycle은 analyzed에서 끝나고 보관/폐기는 명시적으로 모델 밖(부서 내규)으로 위임된다.
+      Order에는 검체 부적합으로 인한 rejected/recollect 상태가 없다. Report는 lifecycle 자체가 정의되지
+      않아 amended(정정·재발행) 이후 종결 의미가 상태 모델로 표현되지 않는다.
+    why: coverage의 'lifecycle 도입~종료 전 구간 커버' 및 '종결 상태 이후 정정·재발행 수용' 차원 결손이다. 검체
+      보관/폐기는 검사실 추적성의 핵심이고, 검체 거부·재채취는 빈번한 실제 경로다. 권위 문서가 이 구간을 비워두면 통합 구현이 상태 외
+      임시 필드로 메우게 되어 모델 권위가 무너진다.
+    how_to_fix: Specimen lifecycle에 stored/disposed(및 rejected/recollected) 종료 상태를
+      추가하고, Order에 rejected 경로를 도입한다. Report에 명시
+      lifecycle(draft→released→amended/corrected→...)을 정의하고 종결 후 재발행 사건을 상태로
+      수용한다. 부서 내규 위임 항목은 최소한 상태 전이 자리표시자로라도 모델에 편입한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 검체·주문·보고서의 전체 lifecycle을 권위 있게 표현하는 EMR/LIS 통합 모델
+      failure_condition: 검체가 analyzed 이후 보관/폐기되거나 부적합으로 거부될 때, 또는 보고서가 발행 후 정정·재발행될 때,
+        해당 상태가 모델에 존재하지 않아 표현 불가.
+      impact: 추적성 핵심 구간이 모델 밖으로 새어나가 구현마다 비표준 임시 필드로 보완되고, 권위 문서가 운영 상태를 포괄하지 못해 통합
+        정합이 깨진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Specimen.lifecycle
+        - clinical-lab-ontology.yaml — state_rules[2]
+        - clinical-lab-ontology.yaml — Report(lifecycle 부재)
+    causal_path:
+      root_cause_candidate: lifecycle을 핵심 처리 구간까지만 모델링하고 종료·예외 구간을 부서 내규로 외부화함
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Specimen lifecycle이 analyzed에서 종료되고 보관/폐기가 명시적으로 모델 밖으로 위임된다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Specimen.lifecycle, state_rules[2]
+        - cause_id: coverage-candidate-004.cause-002
+          claim: Order에 검체 거부, Report에 lifecycle 자체가 없어 예외·정정 경로가 상태로 표현되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Order.lifecycle, Report
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 결과적으로 운영 상태가 모델 외 임시 수단으로 처리되어 권위 문서의 포괄성이 결손된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — state_rules[2] (부서 내규 위임)
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: 통제 행위의 감사 증거(행위자·시각·근거) 부재
+    evidence_anchor: clinical-lab-ontology.yaml — CriticalValue.notified(boolean,
+      note '통보 시각과 수신자는 전화 기록 대장에 있다'); Result.verified_by(ref만);
+      Order.lifecycle.cancelled; Report amended
+    claim: 통보·검증·취소·정정 등 통제가 필요한 행위에 행위자·시각·근거를 추적할 감사 개념이 결여되어 있다.
+    what: 위험값 통보는 notified 불리언뿐이고 통보 시각·수신자는 명시적으로 모델 밖(전화 기록 대장)에 있다. 결과 검증은
+      verified_by(누가)만 있고 검증 시각이 없다. Order 취소·Report 정정(amended)에도 행위자/시각/사유가
+      없다.
+    why: coverage의 '통제 행위의 감사 증거 부재' 차원 결손이다. 위험값 통보는 환자 안전·법적 책임 추적의 핵심으로
+      누가·언제·누구에게 통보했는지 입증 가능해야 한다. 불리언/단일 ref만으로는 감사 추적이 불가능하며, 외부 대장 위임은 권위 문서의
+      추적 책임을 회피한다.
+    how_to_fix: "통제 행위에 actor·timestamp·reason을 담는 감사 이벤트 개념(예:
+      NotificationEvent{notified_by, notified_at, recipient}, 검증/취소/정정 이벤트)을
+      도입하고, notified 불리언을 그 이벤트의 파생 상태로 규정한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 위험값 통보 등 통제 행위의 행위자·시각·근거를 추적 가능한 감사 모델
+      failure_condition: 위험값 통보 사실·시점·수신자를 사후 입증해야 할 때, 모델에는 notified 불리언만 있고 나머지는 외부
+        대장에 있어 권위 문서로 추적 불가.
+      impact: 환자 안전·법적 책임 추적이 모델 밖 비구조 기록에 의존하게 되어, 권위 문서가 통제 행위 감사 요구를 충족하지 못한다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — CriticalValue.notified.note
+        - clinical-lab-ontology.yaml — Result.verified_by(시각 없음)
+    causal_path:
+      root_cause_candidate: 통제 행위를 결과 상태 플래그로만 표현하고 행위자·시각·근거를 별도 감사 개념으로 모델링하지 않음
+      root_cause_step_id: coverage-candidate-005.cause-002
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: 위험값 통보가 notified 불리언으로만 표현되고 시각·수신자는 모델 밖에 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — CriticalValue.notified.note
+        - cause_id: coverage-candidate-005.cause-002
+          claim: 검증·취소·정정 행위도 시각/사유 없이 표현되어 동일 패턴으로 감사 차원이 결손된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Result.verified_by, Order.cancelled,
+              Report.amended
+      unresolved_beyond_evidence: 외부 전화 기록 대장의 구조·연계 여부는 모델 경계 밖이라 확인 불가.
+  - candidate_id: coverage-candidate-006
+    target: 정도관리(QC)·기기(Instrument)·시약/로트 하위 영역 부재
+    evidence_anchor: clinical-lab-ontology.yaml — Assay.definition '분석기에서 수행되는 검사
+      항목'(Instrument 엔티티 없음); QC/calibration/reagent 개념 전무
+    claim: 임상검사 도메인의 핵심 하위 영역인 정도관리(QC)·분석기기·시약/로트가 시스템에 전혀 표현되어 있지 않다.
+    what: Assay 정의는 '분석기에서 수행'이라 명시하나 Instrument/Analyzer 엔티티가 없다. 정도관리(QC run,
+      관리물질, 캘리브레이션)와 시약/로트 추적 개념도 전무하다. 결과 값의 유효성을 보증하는 QC 맥락이 모델에 부재하다.
+    why: "coverage의 '도메인 주요 하위 영역 미표현' 및 '참조 표준 대비 누락 범주' 차원이다. QC·기기·로트는 임상검사 인증(예:
+      검사실 표준) 필수 영역으로, 결과 신뢰성의 근거다. 권위 문서가 이를 비우면 EMR/LIS 통합 시 결과의 QC 맥락을 연계할 수
+      없다."
+    how_to_fix: Instrument 엔티티와 QcRun/Calibration/Reagent(Lot) 개념을 도입해 Assay·Result와
+      연결하고, 결과가 어느 기기·로트·QC 맥락에서 산출됐는지 추적 가능하게 한다. 우선순위에 따라 단계적 도입 범위를 notes에
+      명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 결과 신뢰성의 근거(QC·기기·로트 맥락)를 포괄하는 임상검사 권위 모델
+      failure_condition: 결과의 유효성을 QC/기기/로트 맥락과 연계해 검증·조회해야 할 때, 해당 개념이 모델에 없어 표현·연계 불가.
+      impact: 권위 문서가 검사실 도메인의 결과 신뢰성 보증 영역을 누락해, 통합 설계가 QC 추적을 모델 밖에서 처리하게 된다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Assay.definition('분석기에서 수행')
+        - clinical-lab-ontology.yaml — 엔티티 목록(Instrument/QC/Reagent 부재)
+    causal_path:
+      root_cause_candidate: 주문~보고 흐름(Order→Report)에 모델 범위를 한정하고 결과 품질 보증 하위 영역을 제외함
+      root_cause_step_id: coverage-candidate-006.cause-002
+      steps:
+        - cause_id: coverage-candidate-006.cause-001
+          claim: Assay가 분석기 수행을 전제하지만 Instrument 엔티티가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Assay.definition
+        - cause_id: coverage-candidate-006.cause-002
+          claim: QC·캘리브레이션·시약/로트 개념도 전무해 결과 신뢰성 맥락 영역 전체가 비어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml — entities 전체에 해당 개념 없음
+      unresolved_beyond_evidence: v0.3 draft의 의도된 범위 한정인지 단순 누락인지는 범위 정의 문서 부재로 확정 불가.
+  - candidate_id: coverage-candidate-007
+    target: Test/Assay 이중 카탈로그 권위 미지정
+    evidence_anchor: clinical-lab-ontology.yaml — Test('주문 가능한 카탈로그 단위'), Assay('검사
+      카탈로그의 수행 단위'); notes[0] '신규 항목은 두 곳 모두에 등록한다'
+    claim: 검사 카탈로그가 Test와 Assay 두 엔티티로 병행 유지되며 단일 권위가 없고 둘을 잇는 관계도 정의되지 않았다.
+    what: Test와 Assay가 사실상 같은 카탈로그 개념을 주문 단위/수행 단위로 분리 표현하나, 둘 사이 매핑 관계가 relations에
+      없고 신규 항목은 두 곳에 중복 등록된다(notes). 검체 종류도 Test.requires_specimen_type(enum)와
+      Assay.specimen_kind(free string)로 어휘가 갈린다.
+    why: coverage의 '단일 권위 지정 부재' 차원이다. 카탈로그는 주문·결과 라우팅의 기준 데이터로, 정본이 둘이고 연결이 없으면 통합
+      시 항목 식별·매핑이 구현마다 달라진다. 중복 등록은 두 카탈로그 간 드리프트를 보장한다.
+    how_to_fix: 카탈로그의 단일 권위 엔티티를 정하고 다른 하나는 그 역할/투영(orderable view ↔ performable
+      view)으로 규정하거나, 통합 전까지 Test↔Assay 매핑 관계와 specimen_type 어휘 정규화 규칙을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문·결과 라우팅의 기준이 되는 단일 권위 검사 카탈로그
+      failure_condition: 신규/변경 검사 항목이 Test와 Assay에 비일관적으로 등록되어 두 카탈로그가 드리프트하고, 매핑 관계
+        부재로 주문 항목을 수행 항목에 연결할 수 없을 때.
+      impact: 구현자가 어느 카탈로그를 정본으로 삼을지 분기되고, 항목 매핑이 비표준화되어 주문-결과 연계 정합이 깨진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Test, Assay definitions
+        - clinical-lab-ontology.yaml — notes[0]
+        - clinical-lab-ontology.yaml — relations(Test↔Assay 매핑 없음)
+    causal_path:
+      root_cause_candidate: 동일 카탈로그 개념을 통합 보류 상태로 두 엔티티에 병행 유지하고 정본·매핑을 정하지 않음
+      root_cause_step_id: coverage-candidate-007.cause-002
+      steps:
+        - cause_id: coverage-candidate-007.cause-001
+          claim: Test와 Assay가 같은 카탈로그를 주문/수행 단위로 분리 표현한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Test.definition, Assay.definition
+        - cause_id: coverage-candidate-007.cause-002
+          claim: 둘을 잇는 관계가 없고 신규 항목은 양쪽 중복 등록되어 드리프트 위험이 구조화된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — relations, notes[0]
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 domain document 없이 임상검사 일반 상식(QC·기기·로트·참조구간·위험값 통보가
+    검사실 도메인의 표준 하위 영역이라는 통념)을 보조 판단 근거로 사용했다.
+  - 이 온톨로지가 EMR/LIS 통합의 개념 권위 문서로 쓰일 의도라는 헤더 진술을 포괄 범위 기대치의 기준으로 삼았다.
+  - 검체 보관/폐기, 통보 시각·수신자, TAT 계산식 등 '모델 밖 위임' 진술을 포괄 범위 결손의 직접 증거로 해석했다.
+validation:
+  unaddressable_candidates: []

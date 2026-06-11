@@ -1,0 +1,60 @@
+schema_version: 1
+session_id: 20260611-087267ec
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml / ExposureAggregate.total_amount
+    evidence_anchor: credit-risk-ontology.yaml:64-70; credit-risk-ontology.yaml:89
+    claim: ExposureAggregate.total_amount의 정의와 저장/갱신 규칙은 일중 신규 여신이 존재하는 기간에 동시에 만족될
+      수 없다.
+    what: ExposureAggregate는 '모든 Exposure.amount의 합'으로 정의되지만, 같은 속성 설명은 월말 배치로 계산되어
+      일중 신규 여신이 다음 배치까지 미반영된다고 선언합니다. Limit 소진율도 이 total_amount를 직접 분자로 사용합니다.
+    why: "'모든 Exposure.amount의 합'이라는 필수 정의와 '일중 신규 여신 미반영'이라는 허용된 시간 상태는 신규
+      Exposure가 생긴 배치 전 구간에서 충돌합니다. 그 시점의 total_amount는 모든 Exposure.amount를 포함해야
+      하면서 동시에 일부 Exposure.amount를 제외한 저장값이어야 하므로 형식적으로 양립 불가능합니다."
+    how_to_fix: ExposureAggregate를 스냅숏 개념으로 재정의해 'as_of 시점에 배치가 반영한 Exposure.amount의
+      합'이라고 한정하거나, 실시간 총익스포저와 월말 배치 스냅숏을 별도 속성/엔티티로 분리하십시오. Limit 소진율 규칙도 어느 값을
+      사용할지 명시해야 합니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 여신 리스크 개념 기준, 특히 총익스포저와 Limit 소진율 산정 계약
+      failure_condition: 월말 배치 이후 일중 신규 여신이 생성되고 다음 배치 전까지
+        ExposureAggregate.total_amount 또는 Limit 소진율을 소비하는 경우
+      impact: 동일 ontology를 따르는 소비자가 total_amount를 완전 합계로 해석할 수도 있고 배치 스냅숏으로 해석할 수도 있어,
+        같은 차주/한도 상태에 대해 서로 다른 Limit 소진율과 보고 값을 산출할 수 있습니다.
+      evidence_refs:
+        - credit-risk-ontology.yaml:64-70
+        - credit-risk-ontology.yaml:89
+    causal_path:
+      root_cause_candidate: ExposureAggregate.total_amount가 완전 합계와 배치 스냅숏이라는 두 시간 양상을
+        하나의 속성 정의에 함께 부여한다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: ExposureAggregate.definition은 차주 단위 총익스포저를 모든 Exposure.amount의 합으로 정의한다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:64-65
+        - cause_id: logic-candidate-001.cause-002
+          claim: ExposureAggregate.total_amount 설명은 월말 배치 저장값이며 일중 신규 여신은 다음 배치까지 미반영된다고
+            선언한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:68-70
+        - cause_id: logic-candidate-001.cause-003
+          claim: Limit 소진율 규칙은 ExposureAggregate.total_amount를 계산 입력으로 사용하므로 충돌한
+            total_amount 계약이 소비 규칙까지 전파된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:89
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 금융 도메인별 총익스포저 산정 규칙은 사용하지 않았고, 문서 안의 명시 claim만으로 양립
+    가능성을 판단했습니다.
+  - "'모든 Exposure.amount의 합'은 현재 모델 범위의 모든 Exposure 인스턴스 금액을 포함해야 하는 필수 정의로
+    해석했습니다."
+validation:
+  unaddressable_candidates: []

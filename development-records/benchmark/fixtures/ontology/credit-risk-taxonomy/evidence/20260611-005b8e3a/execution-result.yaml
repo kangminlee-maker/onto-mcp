@@ -1,0 +1,185 @@
+session_id: 20260611-005b8e3a
+session_root: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a
+execution_realization: worker
+host_runtime: anthropic
+review_mode: core-axis
+execution_status: halted_partial
+execution_started_at: 2026-06-11T09:49:41+09:00
+execution_completed_at: 2026-06-11T11:55:07+09:00
+total_duration_ms: 7525649
+max_concurrent_lenses: 3
+observed_dispatch_width: 3
+planned_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+degraded_lens_ids:
+  - logic
+  - semantics
+  - structure
+excluded_lens_ids: []
+executed_lens_count: 3
+synthesis_executed: false
+deliberation_status: not_performed
+halt_reason: "Selected lens completion barrier failed: 3/6 planned lenses completed."
+halt_phase: lens_completion_barrier
+halt_unit_id: null
+halt_unit_kind: null
+halt_lens_id: null
+error_log_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/error-log.md
+lens_completion_barrier_ref: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/lens-completion-barrier.yaml
+lens_execution_results:
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/prompt-packets/axiology.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/round1/axiology.findings.yaml
+    status: completed
+    started_at: 2026-06-11T09:49:41+09:00
+    completed_at: 2026-06-11T09:52:34+09:00
+    duration_ms: 172365
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 26376
+    output_bytes: 25822
+    executor_host_runtime: anthropic
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/prompt-packets/coverage.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/round1/coverage.findings.yaml
+    status: completed
+    started_at: 2026-06-11T09:49:43+09:00
+    completed_at: 2026-06-11T09:52:27+09:00
+    duration_ms: 163701
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 22630
+    output_bytes: 29095
+    executor_host_runtime: anthropic
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/prompt-packets/evolution.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/round1/evolution.findings.yaml
+    status: completed
+    started_at: 2026-06-11T09:49:44+09:00
+    completed_at: 2026-06-11T09:51:56+09:00
+    duration_ms: 131302
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+    failure_kind: null
+    attempt_count: 1
+    packet_bytes: 21559
+    output_bytes: 22174
+    executor_host_runtime: anthropic
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/prompt-packets/logic.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/round1/logic.findings.yaml
+    status: failed
+    started_at: 2026-06-11T09:51:56+09:00
+    completed_at: 2026-06-11T11:55:07+09:00
+    duration_ms: 7391336
+    timestamp_provenance: runner_wallclock
+    failure_message: |-
+      [plan:executor] kind=claude_code unit_id=logic model=claude-fable-5 sandbox=read-only effort=medium
+      SessionEnd hook [/opt/homebrew/bin/node /Users/kangmin/.claude/hooks/collect-session.js] failed: Hook cancelled
+      [{"type":"system","subtype":"init","cwd":"/private/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","tools":["Task","AskUserQuestion","Bash","CronCreate","CronDelete","CronList","Edit","EnterPlanMode","EnterWorktree","ExitPlanMode","ExitWorktree","Glob","Grep","Monitor","NotebookEdit","PushNotification","Read","RemoteTrigger","ScheduleWakeup","SendMessage","Skill","TaskCreate","TaskGet","TaskList","TaskOutput","TaskStop","TaskUpdate","TeamCreate","TeamDelete","ToolSearch","WebFetch","WebSearch","Workflow","Write"],"mcp_servers":[],"model":"claude-fable-5","permissionMode":"bypassPermissions","slash_commands":["excel-workbook-editing","skill-creator","cs-critic","update-doc","deep-research","update-config","verify","debug","code-review","simplify","batch","fewer-permission-prompts","loop","schedule","claude-api","run","run-skill-generator","clear","compact","context","heapdump","init","reload-skills","review","security-review","usage-credits","extra-usage","usage","insights","goal","team-onboarding"],"apiKeySource":"none","claude_code_version":"2.1.172","output_style":"default","agents":["claude","Explore","general-purpose","Plan","statusline-setup"],"skills":["excel-workbook-editing","skill-creator","deep-research","update-config","verify","debug","code-review","simplify","batch","fewer-permission-prompts","loop","schedule","claude-api","run","run-skill-generator"],"plugins":[],"analytics_disabled":false,"product_feedback_disabled":false,"uuid":"47049030-5675-4b4b-b36a-bf1c531417bf","memory_paths":{"auto":"/Users/kangmin/.claude-1/projects/-private-var-folders-3h-5ml-qx851hsgcn3h6j6y2l5r0000gn-T-onto-ontology-eval-credit-risk-taxonomy-eshWhg/memory/"},"fast_mode_state":"off"},{"type":"system","subtype":"api_retry","attempt":1,"max_retries":10,"retry_delay_ms":551.8629777492275,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"fccd518a-ce0f-42c0-a495-f2598b40c0f1"},{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":1014.0444619121073,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"56f67e37-2fe5-48c5-8adc-69bc0d0c6c00"},{"type":"system","subtype":"api_retry","attempt":3,"max_retries":10,"retry_delay_ms":2385.729200476937,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"4d33e813-b202-4feb-ae4d-31a09ea49e7f"},{"type":"system","subtype":"api_retry","attempt":4,"max_retries":10,"retry_delay_ms":4306.69860279321,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"724cd97e-0222-4399-8cad-1fea0417e13d"},{"type":"system","subtype":"api_retry","attempt":5,"max_retries":10,"retry_delay_ms":9221.478513312222,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"213ff3b4-08fa-4f8c-b6b8-5d5eeb06ffbd"},{"type":"system","subtype":"api_retry","attempt":6,"max_retries":10,"retry_delay_ms":19692.10840137236,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"9cfe054f-5550-4ce3-86a4-23699c62c46e"},{"type":"system","subtype":"api_retry","attempt":7,"max_retries":10,"retry_delay_ms":33426.22656079227,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"82f03593-3f68-4427-b468-13140503b27c"},{"type":"system","subtype":"api_retry","attempt":8,"max_retries":10,"retry_delay_ms":38483.232354694555,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"9d6e2f6d-0154-4b1d-8bdc-99c924b88c0f"},{"type":"system","subtype":"api_retry","attempt":9,"max_retries":10,"retry_delay_ms":34602.794546291145,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"8d98c62b-1fda-42d5-b8d4-360c33d627da"},{"type":"system","subtype":"api_retry","attempt":10,"max_retries":10,"retry_delay_ms":34036.746454875414,"error_status":null,"error":"unknown","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"1ecffbf0-1fef-4eb2-9b6d-7b8dc2a662ec"},{"type":"assistant","message":{"id":"847a9df1-8806-4579-8001-114fadabc86c","container":null,"model":"<synthetic>","role":"assistant","stop_details":null,"stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":null,"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":null,"iterations":null,"speed":null},"content":[{"type":"text","text":"API Error: Unable to connect to API (ConnectionRefused)"}],"context_management":null},"parent_tool_use_id":null,"session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","uuid":"508cd28b-db2b-4ecc-8240-ac93ce9572f3","error":"unknown"},{"type":"result","subtype":"success","is_error":true,"api_error_status":null,"duration_ms":666095,"duration_api_ms":0,"num_turns":1,"result":"API Error: Unable to connect to API (ConnectionRefused)","stop_reason":"stop_sequence","session_id":"67c11d3e-744b-42bd-886f-be7c76c6e39c","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{},"permission_denials":[],"terminal_reason":"completed","fast_mode_state":"off","uuid":"367c9b5c-5fe1-4840-ac9b-16e6b9318683"}]
+    failure_kind: executor_exit
+    attempt_count: 3
+    packet_bytes: 26763
+    output_bytes: null
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/prompt-packets/semantics.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/round1/semantics.findings.yaml
+    status: failed
+    started_at: 2026-06-11T09:52:27+09:00
+    completed_at: 2026-06-11T11:53:57+09:00
+    duration_ms: 7290614
+    timestamp_provenance: runner_wallclock
+    failure_message: |-
+      [plan:executor] kind=claude_code unit_id=semantics model=claude-fable-5 sandbox=read-only effort=medium
+      SessionEnd hook [/opt/homebrew/bin/node /Users/kangmin/.claude/hooks/collect-session.js] failed: Hook cancelled
+      [{"type":"system","subtype":"init","cwd":"/private/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","tools":["Task","AskUserQuestion","Bash","CronCreate","CronDelete","CronList","Edit","EnterPlanMode","EnterWorktree","ExitPlanMode","ExitWorktree","Glob","Grep","Monitor","NotebookEdit","PushNotification","Read","RemoteTrigger","ScheduleWakeup","SendMessage","Skill","TaskCreate","TaskGet","TaskList","TaskOutput","TaskStop","TaskUpdate","TeamCreate","TeamDelete","ToolSearch","WebFetch","WebSearch","Workflow","Write"],"mcp_servers":[],"model":"claude-fable-5","permissionMode":"bypassPermissions","slash_commands":["excel-workbook-editing","skill-creator","cs-critic","update-doc","deep-research","update-config","verify","debug","code-review","simplify","batch","fewer-permission-prompts","loop","schedule","claude-api","run","run-skill-generator","clear","compact","context","heapdump","init","reload-skills","review","security-review","usage-credits","extra-usage","usage","insights","goal","team-onboarding"],"apiKeySource":"none","claude_code_version":"2.1.172","output_style":"default","agents":["claude","Explore","general-purpose","Plan","statusline-setup"],"skills":["excel-workbook-editing","skill-creator","deep-research","update-config","verify","debug","code-review","simplify","batch","fewer-permission-prompts","loop","schedule","claude-api","run","run-skill-generator"],"plugins":[],"analytics_disabled":false,"product_feedback_disabled":false,"uuid":"e532ba04-01e7-497a-b54c-6dfb4475f9d9","memory_paths":{"auto":"/Users/kangmin/.claude-1/projects/-private-var-folders-3h-5ml-qx851hsgcn3h6j6y2l5r0000gn-T-onto-ontology-eval-credit-risk-taxonomy-eshWhg/memory/"},"fast_mode_state":"off"},{"type":"system","subtype":"api_retry","attempt":1,"max_retries":10,"retry_delay_ms":521.110804315051,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"9fedcbde-7cd1-4ead-bad6-70356e1eb7bc"},{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":1191.3447671642698,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"a75e9116-a784-4c2a-b61c-fcb374ce5808"},{"type":"system","subtype":"api_retry","attempt":3,"max_retries":10,"retry_delay_ms":2048.8918884444456,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"46ac9928-5f03-42d6-9ffb-c66157832cf2"},{"type":"system","subtype":"api_retry","attempt":4,"max_retries":10,"retry_delay_ms":4364.525104756778,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"bade9e6e-fa22-4404-94be-7514281db433"},{"type":"system","subtype":"api_retry","attempt":5,"max_retries":10,"retry_delay_ms":8780.211158894754,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"e9ca56a3-e65f-4bfc-ac0a-c6c9bcfe5bfd"},{"type":"system","subtype":"api_retry","attempt":6,"max_retries":10,"retry_delay_ms":18259.807270738336,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"90082c25-7b61-4b7c-80f6-ba57613a8cf1"},{"type":"system","subtype":"api_retry","attempt":7,"max_retries":10,"retry_delay_ms":33654.19527636267,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"f84d2688-4171-4566-a4ef-b923885b699c"},{"type":"system","subtype":"api_retry","attempt":8,"max_retries":10,"retry_delay_ms":35869.010866679535,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"7935293b-f3de-46c9-882b-9f9cce0996b4"},{"type":"system","subtype":"api_retry","attempt":9,"max_retries":10,"retry_delay_ms":32417.86999045213,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"ecdea0e2-a93c-443c-80ad-a74df434df54"},{"type":"system","subtype":"api_retry","attempt":10,"max_retries":10,"retry_delay_ms":32528.183622838133,"error_status":null,"error":"unknown","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"fb911f81-d5c2-4eb4-8319-3ada4df74bce"},{"type":"assistant","message":{"id":"162a1614-9348-4b28-8f6f-f27b230c58ee","container":null,"model":"<synthetic>","role":"assistant","stop_details":null,"stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":null,"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":null,"iterations":null,"speed":null},"content":[{"type":"text","text":"API Error: Unable to connect to API (ConnectionRefused)"}],"context_management":null},"parent_tool_use_id":null,"session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","uuid":"95725a83-ae97-4452-b524-0fc40054d22f","error":"unknown"},{"type":"result","subtype":"success","is_error":true,"api_error_status":null,"duration_ms":675289,"duration_api_ms":0,"num_turns":1,"result":"API Error: Unable to connect to API (ConnectionRefused)","stop_reason":"stop_sequence","session_id":"fd52afc3-00da-40aa-aa98-098adc5f76e5","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{},"permission_denials":[],"terminal_reason":"completed","fast_mode_state":"off","uuid":"26642fbd-bb94-4c23-b160-e4715a5689f8"}]
+    failure_kind: executor_exit
+    attempt_count: 3
+    packet_bytes: 22236
+    output_bytes: null
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/prompt-packets/structure.prompt.md
+    output_path: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg/.onto/review/20260611-005b8e3a/round1/structure.findings.yaml
+    status: failed
+    started_at: 2026-06-11T09:52:34+09:00
+    completed_at: 2026-06-11T11:54:26+09:00
+    duration_ms: 7311812
+    timestamp_provenance: runner_wallclock
+    failure_message: |-
+      [plan:executor] kind=claude_code unit_id=structure model=claude-fable-5 sandbox=read-only effort=medium
+      SessionEnd hook [/opt/homebrew/bin/node /Users/kangmin/.claude/hooks/collect-session.js] failed: Hook cancelled
+      [{"type":"system","subtype":"init","cwd":"/private/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-eshWhg","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","tools":["Task","AskUserQuestion","Bash","CronCreate","CronDelete","CronList","Edit","EnterPlanMode","EnterWorktree","ExitPlanMode","ExitWorktree","Glob","Grep","Monitor","NotebookEdit","PushNotification","Read","RemoteTrigger","ScheduleWakeup","SendMessage","Skill","TaskCreate","TaskGet","TaskList","TaskOutput","TaskStop","TaskUpdate","TeamCreate","TeamDelete","ToolSearch","WebFetch","WebSearch","Workflow","Write"],"mcp_servers":[],"model":"claude-fable-5","permissionMode":"bypassPermissions","slash_commands":["excel-workbook-editing","skill-creator","cs-critic","update-doc","deep-research","update-config","verify","debug","code-review","simplify","batch","fewer-permission-prompts","loop","schedule","claude-api","run","run-skill-generator","clear","compact","context","heapdump","init","reload-skills","review","security-review","usage-credits","extra-usage","usage","insights","goal","team-onboarding"],"apiKeySource":"none","claude_code_version":"2.1.172","output_style":"default","agents":["claude","Explore","general-purpose","Plan","statusline-setup"],"skills":["excel-workbook-editing","skill-creator","deep-research","update-config","verify","debug","code-review","simplify","batch","fewer-permission-prompts","loop","schedule","claude-api","run","run-skill-generator"],"plugins":[],"analytics_disabled":false,"product_feedback_disabled":false,"uuid":"81b79e7a-079c-4396-9877-287a45e4ba2b","memory_paths":{"auto":"/Users/kangmin/.claude-1/projects/-private-var-folders-3h-5ml-qx851hsgcn3h6j6y2l5r0000gn-T-onto-ontology-eval-credit-risk-taxonomy-eshWhg/memory/"},"fast_mode_state":"off"},{"type":"system","subtype":"api_retry","attempt":1,"max_retries":10,"retry_delay_ms":543.3375048555099,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"cc07c3d2-644a-423a-9a6e-c135096d7a6b"},{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":1178.1333200547094,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"dce614b9-82ff-479b-b392-175ac7c66d13"},{"type":"system","subtype":"api_retry","attempt":3,"max_retries":10,"retry_delay_ms":2385.929125168582,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"dcb2fd34-8ab0-4560-aab2-fed042b97575"},{"type":"system","subtype":"api_retry","attempt":4,"max_retries":10,"retry_delay_ms":4663.688652613007,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"7cc67e0a-d517-4a0b-9f68-cd9ae37c329d"},{"type":"system","subtype":"api_retry","attempt":5,"max_retries":10,"retry_delay_ms":8296.956024874098,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"b98d2fff-db00-44ec-bba9-d728f6d9d5e5"},{"type":"system","subtype":"api_retry","attempt":6,"max_retries":10,"retry_delay_ms":19314.163288438078,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"f105bd88-a7d3-4142-a21a-ba30b22549fa"},{"type":"system","subtype":"api_retry","attempt":7,"max_retries":10,"retry_delay_ms":34727.273030032455,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"6bf4d518-8de9-46d0-adce-534e67587d7f"},{"type":"system","subtype":"api_retry","attempt":8,"max_retries":10,"retry_delay_ms":35763.59557956085,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"32ad8f30-4ef7-47ae-9f1c-0e43b127b6d4"},{"type":"system","subtype":"api_retry","attempt":9,"max_retries":10,"retry_delay_ms":34815.28722203499,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"e8308a0e-365a-4a2f-b919-f9118e029d08"},{"type":"system","subtype":"api_retry","attempt":10,"max_retries":10,"retry_delay_ms":36158.13705788251,"error_status":null,"error":"unknown","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"d8bd02d8-84d4-4c63-bd3f-5446ce726017"},{"type":"assistant","message":{"id":"7e4afab7-f5d4-491e-b5c5-b4fad01b9261","container":null,"model":"<synthetic>","role":"assistant","stop_details":null,"stop_reason":"stop_sequence","stop_sequence":"","type":"message","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":null,"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":null,"iterations":null,"speed":null},"content":[{"type":"text","text":"API Error: Unable to connect to API (ConnectionRefused)"}],"context_management":null},"parent_tool_use_id":null,"session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","uuid":"cca3860e-b9e8-4550-aea6-f3a48b8268a7","error":"unknown"},{"type":"result","subtype":"success","is_error":true,"api_error_status":null,"duration_ms":696613,"duration_api_ms":0,"num_turns":1,"result":"API Error: Unable to connect to API (ConnectionRefused)","stop_reason":"stop_sequence","session_id":"efae8c1e-fa75-426d-b6ac-ac6ab1d1db01","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{},"permission_denials":[],"terminal_reason":"completed","fast_mode_state":"off","uuid":"5e7581da-2e15-4400-82b5-02b251e22033"}]
+    failure_kind: executor_exit
+    attempt_count: 3
+    packet_bytes: 21100
+    output_bytes: null
+    artifact_generation_realization: live
+    semantic_quality_evidence:
+      status: not_evaluated
+      applicability: real_semantic_path_only
+      reason: live semantic path output requires a separate semantic quality gate
+        before quality is claimed
+synthesize_execution_result: null
+issue_artifact_execution_results: []
+deliberation_execution_results: []
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000

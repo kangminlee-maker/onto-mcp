@@ -1,0 +1,254 @@
+schema_version: 1
+session_id: 20260611-49e15b58
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: clinical-lab-ontology.yaml — Result.status / Report.result_status /
+      state_rules[1]
+    evidence_anchor: 'clinical-lab-ontology.yaml: Result.status
+      note("Report.result_status에도 동일 정보가 유지된다"), Report.result_status note("권위
+      값. 임상의는 이 값을 신뢰한다"), state_rules[1]("동기화 배치는 야간 1회")'
+    claim: 결과 상태의 권위 좌석이 둘로 선언되어 있고 야간 배치 동기화 지연이 정상 동작으로 명문화되어 있어, '개념 권위 문서'라는 선언된
+      목적과 임상의 신뢰 약속을 동시에 위반한다.
+    what: Result.status(preliminary/final/corrected)와
+      Report.result_status(prelim/finalized/amended)가 같은 사실을 서로 다른 enum 어휘로 이중
+      보관하며, Report 쪽 note는 자신을 '권위 값'으로 선언하고 Result 쪽 note는 LIS 기록을 원천으로 선언한다.
+      state_rules[1]은 corrected→amended 반영이 야간 1회 배치임을 명시한다.
+    why: "이 문서의 선언된 목적은 EMR/LIS 통합의 개념 권위 문서이다(파일 헤더 주석). 권위 문서가 동일 사실에 대해 두 개의
+      truth seat를 선언하고 그 사이에 최대 24시간의 비동기 창을 정상 규칙으로 수용하면, '임상의는 이 값을 신뢰한다'는 명시적
+      이해관계자 약속이 구조적으로 깨진다. corrected 결과가 나온 뒤에도 임상의가 보는 보고서는 하루 동안 finalized로
+      표시될 수 있는데, 이 트레이드오프(배치 비용 절감 vs 임상 신뢰)는 어떤 정당화도 없이 note와 state_rule에 암묵
+      수용되어 있다. 가치 유형: purpose+commitment, 정렬 방향: misaligned. 권위 앵커: 대상 문서 헤더의 목적
+      선언 및 review-value-alignment-criteria.yaml criterion user-request-intent."
+    how_to_fix: "결과 상태의 권위 좌석을 하나로 선언하고(권장: Result.status를 원천으로,
+      Report.result_status는 파생 projection으로 명시), enum 어휘를 단일화하며, corrected 발생 시
+      보고서 상태 반영의 허용 지연 한계를 임상 신뢰 약속에 맞게 명시적으로 정당화하거나 즉시 전파로 규정한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 결과 상태의 단일 진실을 제공하고 임상의 신뢰를 보장한다는 선언된 목적
+      failure_condition: Result.status가 corrected로 변경된 후 야간 배치 실행 전까지의 구간에서 EMR이
+        Report.result_status(권위 값으로 선언됨)를 조회하는 모든 경우
+      impact: 통합 설계자가 이 문서를 그대로 따르면 정정된 결과가 임상의에게 최대 24시간 미표시되는 동작이 '사양대로'가 되어, 권위 문서
+        자체가 환자 안전 관련 신뢰 약속 위반을 제도화한다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml Result.status note
+        - clinical-lab-ontology.yaml Report.result_status note
+        - clinical-lab-ontology.yaml state_rules[1]
+    causal_path:
+      root_cause_candidate: 결과 상태라는 단일 개념의 권위 좌석을 정하지 않은 채 LIS 기록 관행(Result)과 임상의 노출
+        관행(Report)을 각각 그대로 모델에 옮긴 설계 결정
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 임상의가 신뢰한다고 선언된 Report.result_status가 원천 상태(corrected)와 최대 24시간 불일치할 수 있다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 불일치는 동일 사실이 두 entity에 서로 다른 enum으로 이중 보관되고 동기화가 배치에 위임되었기 때문에 발생한다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml Result.status note
+            - clinical-lab-ontology.yaml Report.result_status note
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 이중 보관은 권위 좌석 단일화 없이 기존 운영 관행을 병기한 모델링 결정이 가능하게 했다
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml Result.status note("LIS가 기록하며"),
+              Report.result_status note("권위 값")
+      unresolved_beyond_evidence: 야간 배치라는 운영 제약이 외부 시스템의 실제 한계인지, 단순 관행인지는 본 경계 내 증거로 확인 불가
+  - candidate_id: axiology-candidate-002
+    target: clinical-lab-ontology.yaml — Order.priority / Order.is_stat / StatOrder
+    evidence_anchor: 'clinical-lab-ontology.yaml: Order.priority enum [routine,
+      urgent, stat], Order.is_stat note("priority와 함께 기록"), StatOrder(is_a:
+      Order, stat_reason)'
+    claim: 응급(STAT)이라는 단일 개념이 enum 값·boolean 속성·하위 타입의 세 가지 독립 표현으로 존재하며 우선순위 규칙이
+      없어, 권위 문서가 가장 시간 민감한 워크플로에서 단일 진실을 제공하지 못한다.
+    what: STAT 여부가 (1) priority=stat, (2) is_stat=true, (3) StatOrder 타입 인스턴스화라는 세
+      경로로 표현 가능하고, 세 표현 간 일관성 제약이나 어느 것이 판정 기준인지에 대한 규정이 없다.
+    why: "STAT 주문은 임상검사 워크플로에서 환자 안전상 가장 시간 민감한 경로이며, EMR/LIS 통합 설계자가 이 문서를 권위로 삼을 때
+      STAT 판정 로직이 시스템마다 다른 필드를 참조하게 될 위험을 문서 자체가 만들어낸다(예: priority=stat이지만
+      is_stat=false인 인스턴스의 의미가 미정의). 이는 표현 편의(기존 필드 유지 + 하위 타입 추가)라는 국소 선택이 '개념
+      권위'라는 전체 목적을 훼손하는 사례다. 가치 유형: purpose, 정렬 방향: misaligned. 권위 앵커: 대상 문서 헤더의
+      목적 선언 및 user-request-intent criterion."
+    how_to_fix: "STAT의 canonical 표현을 하나로 선언하고(권장: priority enum 단일 표현), is_stat은 파생
+      projection으로 강등하거나 제거하며, StatOrder 하위 타입은 stat_reason이 별도 lifecycle·검증·권한을
+      요구할 때만 유지하고 그렇지 않으면 stat_reason을 Order의 조건부 속성으로 흡수한다. 유지하는 경우 세 표현 간 일관성
+      제약을 명문화한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합 시스템들이 STAT 주문을 일관되게 식별·우선처리하도록 하는 개념 권위 제공
+      failure_condition: 통합되는 두 시스템이 STAT 판정에 서로 다른 표현(priority vs is_stat vs 타입)을
+        기준으로 채택하고, 세 표현이 불일치하는 인스턴스가 생성되는 경우
+      impact: 응급 검사가 일반 경로로 처리되거나 그 역이 발생할 수 있는 분기점을 권위 문서가 스스로 내장하므로, 문서의 적합성 판단(사용자
+        요청의 핵심)에 직접 영향을 준다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml Order.priority
+        - clinical-lab-ontology.yaml Order.is_stat
+        - clinical-lab-ontology.yaml StatOrder
+    causal_path:
+      root_cause_candidate: 기존 필드(priority, is_stat)를 정리하지 않은 채 StatOrder 하위 타입을 추가하는
+        누적식 모델 진화를 수용하고 canonical 표현 선언을 생략한 결정
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: STAT 여부의 판정 기준이 세 표현 중 무엇인지 미정의여서 통합 시스템 간 판정 분기가 가능하다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml Order.priority/is_stat/StatOrder 정의
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 분기 가능성은 세 표현 사이에 일관성 제약과 우선순위 규칙이 전혀 규정되지 않았기 때문에 발생한다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml relations/state_rules에 STAT 표현 간 제약 부재
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 제약 부재는 표현을 추가만 하고 통합하지 않는 모델 관리 방식이 가능하게 했다
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml is_stat note("priority와 함께 기록")
+      unresolved_beyond_evidence: "세 표현이 서로 다른 소스 시스템의 제약(예: 레거시 EMR 필드)을 반영한 것인지는 본 경계 내 증거로 확인 불가"
+  - candidate_id: axiology-candidate-003
+    target: clinical-lab-ontology.yaml — CriticalValue.notified
+    evidence_anchor: 'clinical-lab-ontology.yaml: CriticalValue.notified note("통보 완료
+      여부. 통보 시각과 수신자는 전화 기록 대장에 있다")'
+    claim: 환자 안전상 가장 중요한 추적 정보(위험치 통보의 시각·수신자)를 모델 경계 밖 종이 대장에 두는 트레이드오프가 정당화 없이
+      수용되어, EMR/LIS 통합 권위 문서로서의 목적과 환자 안전 이해관계자 약속을 불리하게 한다.
+    what: CriticalValue는 통보 여부를 boolean 하나로만 모델링하고, 통보 시각·수신자·확인(read-back) 같은 통보
+      증적은 '전화 기록 대장'이라는 시스템 외부 수단에 위임한다고 note에 명시한다.
+    why: "이 온톨로지의 목적은 EMR/LIS '통합'의 개념 권위인데, 위험치 통보는 그 통합이 디지털로 추적해야 할 가장
+      안전-critical한 흐름이다. boolean 단순화라는 국소 최적화가 '누가 언제 통보받았는가'라는 질문을 통합 시스템에서 영구히
+      답할 수 없게 만들며, 이 배제는 어떤 명시적 정당화나 후속 계획(notes 섹션에도 없음) 없이 note 한 줄로 수용되어 있다.
+      또한 CriticalValue가 '값 범위'(카탈로그 개념)와 '통보 사건'(인스턴스 개념)을 한 entity에 섞고 있어 통보
+      사건을 모델링할 자리 자체가 없다. 가치 유형: stakeholder+tradeoff, 정렬 방향: misaligned. 권위 앵커:
+      대상 문서 헤더의 목적 선언 및 user-request-intent criterion(운영 시 생길 위험 중심 검토 요청)."
+    how_to_fix: CriticalValue를 임계 범위 정의(카탈로그)와 CriticalValueNotification
+      사건(notified_at, notified_to, acknowledged 등)으로 분리하고, 전화 대장 위임을 유지하더라도 그것이
+      의도적 out-of-scope 결정임을 근거와 함께 notes에 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 운영 위험을 드러내고 안전-critical 흐름을 통합 시스템이 추적 가능하게 하는 개념 권위 제공
+      failure_condition: 위험치 통보의 증적(시각·수신자)을 EMR/LIS 통합 시스템에서 조회·감사해야 하는 모든 경우
+      impact: 권위 문서를 따르는 통합 설계는 안전-critical 감사 질문에 답할 수 없는 시스템을 만들게 되며, 이 배제가 의도적 결정인지
+        누락인지조차 문서로 판별할 수 없다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml CriticalValue.notified note
+    causal_path:
+      root_cause_candidate: 기존 종이 기반 운영 관행(전화 기록 대장)을 디지털 통합 목적에 맞게 재설계하지 않고 모델 경계 밖으로
+        그대로 둔 채 boolean 플래그만 도입한 결정
+      root_cause_step_id: axiology-candidate-003.cause-002
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: 통보 시각·수신자가 모델에 없어 통합 시스템이 위험치 통보 증적을 추적할 수 없다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml CriticalValue attributes
+        - cause_id: axiology-candidate-003.cause-002
+          claim: 추적 불가는 통보를 사건이 아닌 boolean 속성으로 축약하고 증적을 종이 대장에 위임한 모델링 선택의 결과다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml CriticalValue.notified note
+      unresolved_beyond_evidence: 전화 대장 유지가 규제·운영상 불가피한 제약인지 여부는 본 경계 내 증거로 확인 불가
+  - candidate_id: axiology-candidate-004
+    target: clinical-lab-ontology.yaml — Test/Assay 이중 카탈로그 및 notes[0]
+    evidence_anchor: "clinical-lab-ontology.yaml: Test(requires_specimen_type enum)
+      vs Assay(specimen_kind 자유 문자열 'WB','Serum','Urine-random'), notes[0](\"현재
+      신규 항목은 두 곳 모두 등록\")"
+    claim: 검사 카탈로그라는 단일 개념을 Test와 Assay로 이중 유지하고 신규 항목 이중 등록을 표준 운영으로 명문화한 것은, 통합 여부
+      재검토라는 연기 결정의 비용(어휘 분기·드리프트)을 정당화 없이 권위 문서에 전가한 숨은 트레이드오프다.
+    what: Test와 Assay가 사실상 같은 카탈로그 개념을 표현하면서 검체 종류를 한쪽은
+      enum(blood/urine/tissue/swab), 다른 쪽은 자유 문자열('WB','Serum')로 정의해 어휘가 이미
+      분기했고, notes[0]은 이중 등록을 현행 절차로 선언한다.
+    why: "권위 문서의 존재 이유는 통합 대상 시스템들에 단일 개념 어휘를 제공하는 것인데, 문서 스스로 동일 개념의 평행 어휘 두 벌과 그
+      사이의 매핑 부재를 표준으로 선언하면 권위 기능이 그 지점에서 정지한다. '카탈로그 정비 후 재검토'는 연기 결정 자체로는 정당할 수
+      있으나, 연기 기간 동안의 드리프트 위험(이중 등록 누락, enum-문자열 불일치)을 누가 어떻게 관리하는지에 대한 규정이 없어
+      트레이드오프가 암묵 수용 상태다. 가치 유형: tradeoff, 정렬 방향: misaligned. 권위 앵커: 대상 문서 헤더의 목적
+      선언 및 user-request-intent criterion."
+    how_to_fix: "통합 전까지의 임시 권위 규칙을 최소한으로 명시한다: 둘 중 어느 쪽이 canonical인지, Test↔Assay 대응
+      관계(매핑 필드), specimen 어휘 간 변환표, 이중 등록 불일치 발견 시 처리 주체. 가능하면
+      Assay.specimen_kind를 Test의 enum으로 정렬한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합 시스템에 단일 검사 카탈로그 어휘를 제공하는 개념 권위 기능
+      failure_condition: EMR이 Test 어휘를, LIS/분석기 연동이 Assay 어휘를 각각 채택해 검체 적합성 판정이나 항목
+        매칭이 두 어휘 사이에서 이루어지는 경우
+      impact: 이중 등록 누락이나 어휘 불일치가 검사 라우팅 오류로 이어질 수 있고, 권위 문서가 그 불일치의 중재 기준을 제공하지 못한다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml Test.requires_specimen_type
+        - clinical-lab-ontology.yaml Assay.specimen_kind note
+        - clinical-lab-ontology.yaml notes[0]
+    causal_path:
+      root_cause_candidate: 카탈로그 통합이라는 개념 정리 작업을 연기하면서, 연기 기간의 권위 규칙(canonical
+        지정·매핑·어휘 변환)을 정의하지 않은 결정
+      root_cause_step_id: axiology-candidate-004.cause-002
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: 동일 개념에 두 어휘가 병존하고 검체 종류 표현이 enum과 자유 문자열로 이미 분기했다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml Test/Assay 정의
+        - cause_id: axiology-candidate-004.cause-002
+          claim: 분기는 통합 연기 중 임시 권위 규칙 없이 이중 등록만 절차화한 notes[0]의 결정이 가능하게 했다
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml notes[0]
+      unresolved_beyond_evidence: Test/Assay 분리가 실제 시스템 경계(EMR 카탈로그 vs 분석기 카탈로그)를 반영한
+        의도적 설계인지는 본 경계 내 증거로 확인 불가
+  - candidate_id: axiology-candidate-005
+    target: clinical-lab-ontology.yaml — notes[1] (TAT 정의)
+    evidence_anchor: 'clinical-lab-ontology.yaml: notes[1]("turnaround_time(TAT)은
+      collected_at부터 released_at까지로 계산하며, 대시보드 팀이 자체 계산식을 유지한다")'
+    claim: 권위 문서가 TAT 정의를 선언하면서 동시에 '대시보드 팀이 자체 계산식을 유지한다'고 권위를 양도해, 운영 핵심 지표에 대한 권위
+      드리프트를 문서 스스로 허용한다.
+    what: TAT의 canonical 정의(collected_at→released_at)와 별도 팀의 자체 계산식 유지가 한 문장에 병기되어,
+      어느 쪽이 우선인지와 불일치 시 중재 기준이 없다.
+    why: "개념 권위 문서가 파생 지표의 정의를 선언했다면 그 정의가 단일 진실이어야 하는데, 외부 팀의 자체 계산식을 동격으로 인정하면 권위
+      선언이 형식화된다. 운영 지표 불일치는 STAT 성과 평가나 부서 비교 같은 의사결정을 왜곡할 수 있는 가벼운 목적 드리프트다. 가치
+      유형: principle(단일 권위), 정렬 방향: misaligned. 권위 앵커: 대상 문서 헤더의 목적 선언."
+    how_to_fix: TAT 정의를 본 문서의 canonical 정의로 선언하고 대시보드 계산식은 이 정의의 구현으로 종속시키거나, TAT
+      정의를 문서 범위 밖으로 명시적으로 제외한다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: axiology-candidate-006
+    target: clinical-lab-ontology.yaml — 리뷰 세션 lens set 대비 도메인 안전 관점 공백 (New
+      Perspectives 제안)
+    evidence_anchor: 'prompt packet session_domain: none; clinical-lab-ontology.yaml
+      전반(위험치 통보·STAT·정정 보고 등 환자 안전 흐름 포함); interpretation.yaml
+      domain_recommendation: "@-"'
+    claim: "[New Perspectives] 임상검사라는 안전-규제 도메인의 대상물을 도메인 바인딩 없이(core-axis,
+      session_domain=none) 검토하고 있어, 환자 안전·규제 추적성 관점의 purpose-critical 평가가 현재
+      lens set 경로로 충분히 커버되지 않는다."
+    what: "trigger condition: 대상 온톨로지가 위험치 통보, STAT 우선처리, 정정 결과 전파 등 환자 안전 직결 개념을 다수
+      포함하나 session_domain이 none으로 바인딩되어 도메인 가치 규정(순위 4 authority)이 부재하다.
+      proposed perspective: 임상 안전·규제 추적성(critical value 통보 증적, 정정 결과 전파 시한,
+      검체-결과 체인 무결성)을 도메인 가치 약속으로 평가하는 관점. insufficiency argument: 기존 6개 lens는 일반
+      관점이고 axiology의 순위 4 도메인 authority가 비어 있어, '이 모델이 임상 안전 규범을 만족하는가'를 권위 근거를
+      갖고 판정할 경로가 현재 실행에 없다(본 lens의 안전 관련 finding들도 대상 문서의 자기 선언 목적에만 앵커할 수 있었다).
+      intended receiving seat: 본 리뷰의 synthesize 보존 + 후속 실행 시 임상검사 도메인 문서
+      바인딩(.onto/domains/) 또는 도메인 CQ 보강."
+    why: "사용자 요청의 핵심이 '운영 시 생길 위험'인데, 그 위험의 상당 부분이 도메인 규범(통보 증적, 정정 전파)에 대한 판정을
+      요구한다. 도메인 authority 부재는 본 리뷰의 안전 관련 판정 신뢰도를 제한하는 구조적 공백이다. 이 제안은 현재 실행의
+      active lens set을 변경하지 않는다. 가치 유형: boundary, 정렬 방향: indeterminate."
+    how_to_fix: synthesize가 본 제안을 보존하고, 후속 governance에서 임상검사 도메인 문서 바인딩 또는 도메인 CQ 세트
+      추가를 검토한다.
+    upstream_evidence_required: true
+    severity_hint: info
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain=none이며 role 정의의 순위 1~3 canonical authority
+    파일(.onto/authority/core-lexicon.yaml, .onto/principles/*)이 본 unit의 allowed
+    read refs에 주입되지 않아, 모든 가치 판단은 (a) review-value-alignment-criteria.yaml의
+    user-request-intent criterion(rank 1, confirmed)과 (b) 대상 문서 자체의 목적
+    선언("EMR/LIS 연동 설계의 개념 권위 문서로 사용 예정")에 앵커했다.
+  - 임상검사 일반 상식(STAT의 시간 민감성, 위험치 통보의 안전 중요성)은 도메인 규칙 문서가 아닌 보조 맥락으로만 사용했으며, 규제
+    기준(CLIA/CAP 등) 인용은 web research denied 경계에 따라 수행하지 않았다.
+validation:
+  unaddressable_candidates: []

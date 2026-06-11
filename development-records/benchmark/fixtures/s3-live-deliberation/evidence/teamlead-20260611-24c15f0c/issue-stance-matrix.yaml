@@ -1,0 +1,530 @@
+schema_version: 1
+session_id: 20260611-24c15f0c
+issues:
+  - issue_id: issue-001
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "Round-1 logic finding-l1 derived this contradiction directly: C5's
+          consequent ('carried into the next window') requires membership in
+          pending after flush returns, which pending.clear() at line 39 makes
+          impossible in every execution where the antecedent holds. The issue's
+          root hypothesis is identical to the lens's traced starting cause
+          (reset-by-global-clear with no snapshot/swap step), and the proposed
+          action menu matches the lens remediation. Deliberation note: issue-004
+          and issue-009 carry the same contradiction observed by
+          coverage/semantics (duplicates rel-001/rel-002); logic's stance is
+          identical across the triplet and recommends treating them as one
+          decision unit via relations, without merging per the singleton
+          contract."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-001
+          - round1/logic.md#finding-l1
+      - lens_id: coverage
+        stance: support
+        rationale: logic 제기(finding-001)이나 coverage의 cov-2(finding-005, 현 issue-004)가 동일
+          결함을 독립 관찰했다(rel-001 duplicates). 문서 carry-over에 대응하는 보존
+          메커니즘(snapshot/swap)이 reset 경로에 처음부터 부재하다는 root는 coverage 인과 추적의 시작 원인과
+          일치하며, proposed_action의 양자택일도 cov-2 fix와 동일하다.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-001
+          - round1/coverage.md#cov-2
+      - lens_id: semantics
+        stance: support
+        rationale: "Semantics independently observed the same defect surface
+          (semantics-2): the comment-declared carry-over has no realized
+          counterpart and an interleaved enqueue would be lost, not carried.
+          Logic's unsatisfiability framing is consistent with this lens's
+          contract-vs-behavior reading, and the root hypothesis (whole-map clear
+          with no snapshot/swap step) matches this lens's traced starting cause.
+          Note as deliberation context: this issue, issue-004, and issue-009
+          carry the same underlying defect per duplicates rel-001/rel-002; merge
+          adjudication is outside this lens's scope."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-001
+          - round1/semantics.md#semantics-2
+  - issue_id: issue-002
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "This is round-1 logic finding-l3: the documented implication '[]
+          means the window is still open' is false in the reachable no-window
+          state (line 31 guard), so realized behavior is the strictly weaker
+          disjunction. Severity low is kept because the state invariant
+          (windowStartedAt === null iff pending.size === 0) lets callers
+          disambiguate via pendingUserCount(). Deliberation note: this doc
+          falsity and issue-012's signal overload plausibly share a deeper cause
+          (no distinct no-window signal was designed); recording a relation
+          between finding-003 and finding-014 may be worthwhile — an
+          observation, not a merge request."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-002
+          - round1/logic.md#finding-l3
+      - lens_id: coverage
+        stance: surface_only
+        rationale: 문서 등가 주장(C4)의 진리값 판정은 logic 렌즈의 단언 유형이며 coverage의 부재 진술 범위 밖이다. 다만
+          no-window 상태가 반환 계약에서 구별 표현을 갖지 못한다는 기저 결손은 대상 코드(windowStartedAt ===
+          null 가드의 [] 반환)에서 표면적으로 확인되므로, coverage는 surface 수준에서 확인하고 심층 판정은 제기
+          렌즈에 위임한다. low 유지에 이견 없다.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-002
+      - lens_id: semantics
+        stance: support
+        rationale: "Independently corroborated from the homonym angle (semantics-5): the
+          doc names only the window-still-open meaning of [] while the reachable
+          no-window state returns the same value, so the documented equivalence
+          is over-universal and realized behavior is the weaker disjunction. Low
+          severity holds: surface-only, and pendingUserCount() offers callers a
+          distinguishing probe. Note as deliberation context: issue-012 reads
+          the same overloaded signal through this lens's homonymy assertion
+          type; the graph records no same_root relation and merging is not this
+          lens's call."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-002
+          - round1/semantics.md#semantics-5
+  - issue_id: issue-003
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "The formal core is lens-verified by finding-l2 (currently
+          unclustered): windowStartedAt is stamped from the internal clock (line
+          20), now is caller-supplied (lines 30-32), and no claim in the target
+          designates the time authority, so the close predicate's soundness
+          rests on an unstated premise. The root hypothesis matches the lens
+          causal path (time authority split across enqueue and flush with no
+          declared common base), including counting the unused enqueuedAt as a
+          third origin. Logic returned insufficient evidence on actualized
+          unsatisfiability; severity adjudication above the formal gap (high vs
+          the lens's medium-if-confirmed) depends on the caller-context premise
+          marked upstream_evidence_required=true, so logic neither confirms nor
+          contests high."
+        root_hypothesis_position: accepts
+        severity_position: insufficient_evidence
+        evidence_refs:
+          - issue-ledger.yaml#issue-003
+          - round1/logic.md#finding-l2
+      - lens_id: coverage
+        stance: support
+        rationale: coverage 자체 finding(cov-1/finding-004)이다. 하나의 윈도 판정에 두(enqueuedAt 포함
+          세) 시간 원본이 혼입되는데 단일 시간 권위 지정 개념이 시스템에 부재하다 — '병행 관리 값의 단일 권위 지정 부재' 차원
+          결손 그 자체다. 영구 미flush(알림 무기한 적체) 경로와 결정적 검증 불가가 high를 정당화한다.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-003
+          - round1/coverage.md#cov-1
+      - lens_id: semantics
+        stance: support
+        rationale: "Semantics independently observed the same defect surface
+          (semantics-1): the window-close predicate subtracts across
+          independently produced time origins with no declared authority.
+          Coverage's absence framing (no single-time-source concept expressed in
+          the system) is consistent with this lens's split-authority reading,
+          and the inclusion of enqueuedAt as a third origin is supported by
+          semantics-3's observation that the field is stamped by no
+          component-owned clock. High severity holds on the session's requested
+          time-source focus. Note as deliberation context: issue-008 is the same
+          defect per duplicates rel-003; merge adjudication is outside this
+          lens's scope."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-003
+          - round1/semantics.md#semantics-1
+          - round1/semantics.md#semantics-3
+  - issue_id: issue-004
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "Same contradiction as issue-001 observed from the coverage absence
+          angle: finding-l1 establishes that pending.clear() makes the
+          documented carry-over impossible, which entails the absent
+          implementation concept this issue names (no
+          snapshot/differential-preservation path). Root hypothesis is
+          compatible with the lens's traced starting cause, and the proposed
+          action pair matches the lens remediation. Deliberation note:
+          duplicates rel-001 links this to issue-001; logic recommends one
+          decision unit across issue-001/004/009."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-004
+          - round1/logic.md#finding-l1
+      - lens_id: coverage
+        stance: support
+        rationale: coverage 자체 finding(cov-2/finding-005)이다. 문서가 선언한 carry-over 하위 동작에
+          대응하는 구현 요소(digest 스냅샷과 차분 보존의 구분)가 시스템에 부재하다는 부재 진술 그대로이며, 동기 실행에서 서술된
+          interleaving 자체가 불가능하다는 관찰도 동일하다. 유지보수자가 주석을 신뢰하고 async화하면 이월 대신 무경고
+          drop이 되는 regression_risk가 medium을 정당화한다.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-004
+          - round1/coverage.md#cov-2
+      - lens_id: semantics
+        stance: support
+        rationale: "Same defect surface as this lens's semantics-2: the documented
+          carry-over has no implementing path because pending.clear() empties
+          the whole map, and the described interleaving is vacuous in
+          synchronous execution. Coverage's missing-implementation-element
+          framing and the proposed
+          snapshot/differential-preservation-or-correct-the-comment menu
+          coincide with semantics-2's fix menu. Note as deliberation context:
+          duplicates rel-001/rel-002 link this to issue-001 and issue-009; merge
+          adjudication is outside this lens's scope."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-004
+          - round1/semantics.md#semantics-2
+  - issue_id: issue-005
+    stances:
+      - lens_id: logic
+        stance: not_applicable
+        rationale: "No declarative claim in the target promises delivery confirmation,
+          retry, or recovery, so no claim-set contradiction forms within the
+          logic boundary; absence-of-lifecycle concerns are coverage-owned per
+          boundary routing. The lens corroborates only the dependency context:
+          the destructive reset named in dep-002's shared cause is the same
+          mechanism traced as finding-l1's starting cause, supporting the
+          shared_cause_candidate link without making the issues one root."
+        root_hypothesis_position: not_applicable
+        severity_position: not_applicable
+        evidence_refs:
+          - issue-ledger.yaml#issue-005
+      - lens_id: coverage
+        stance: support
+        rationale: coverage 단독 제기 finding(cov-3/finding-006)이다. lifecycle이
+          enqueued→flushed에서 종결되고 전달 확인·실패·재시도·보관 구간이 표현되어 있지 않다는 lifecycle 미완결
+          부재 진술이다. 전달 자체는 bounded_partial 경계 밖이지만 상태 파괴가 반환보다 앞서는 구조는 대상 내부 증거로
+          닫힌다. 미선언 at-most-once는 regression_risk 목표에 실질적이므로 medium 유지가 적정하다.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-005
+          - round1/coverage.md#cov-3
+      - lens_id: semantics
+        stance: narrow
+        rationale: "From the semantics perspective only the contract dimension is
+          adjudicable: the realized at-most-once semantics is undeclared in
+          flush()'s contract, which this lens supports as a documented-meaning
+          gap — the 'declare the contract explicitly' arm of the proposed
+          action. The lifecycle-design arm (peek/commit, reinjection,
+          dead-letter) rests on reliability/coverage judgment outside this
+          lens's assertion type; semantics neither supports nor opposes that arm
+          and defers it to the raising lens."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-005
+  - issue_id: issue-006
+    stances:
+      - lens_id: logic
+        stance: not_applicable
+        rationale: "The claim set is formally consistent on window granularity: C1's
+          singular 'the batch window' co-exists with per-user collection without
+          contradiction, so no logic finding arises; purpose-fit of the global
+          granularity is coverage/pragmatics-owned. Nuance for deliberation: the
+          definite singular in the header arguably functions as a declaration of
+          global granularity, which weakens (without refuting) the root
+          hypothesis premise that 'no contract declares the global window as
+          intended'; that disambiguation question is semantics-routable."
+        root_hypothesis_position: not_applicable
+        severity_position: not_applicable
+        evidence_refs:
+          - issue-ledger.yaml#issue-006
+      - lens_id: coverage
+        stance: support
+        rationale: coverage 자체 surface-only finding(cov-4/finding-007)이다. window 개념의
+          per-user 하위 세분화 부재(또는 전역 윈도가 의도임을 선언하는 계약 부재)로, 종료 직전 합류 사용자의 배치 창이 0에
+          수렴해 per-user digest라는 배칭 목적과 어긋난다. 선언된 happy path는 달성 가능하므로 low 유지가
+          적정하다.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-006
+          - round1/coverage.md#cov-4
+      - lens_id: semantics
+        stance: narrow
+        rationale: "The semantics-adjudicable part — 'no contract declares the global
+          window as intended' — is weaker than stated: the class doc's singular
+          phrasing ('flushes them as one digest when the batch window closes')
+          already reads as one global window, so the contract is ambiguous
+          rather than silent, which narrows the root hypothesis's no-declaration
+          clause. The behavioral fit concern (late-joining user's effective
+          window converging to zero) is design-granularity analysis outside this
+          lens's assertion type. Semantics supports the doc-clarification arm of
+          the proposed action; the per-user-window design arm is out of lens
+          scope."
+        root_hypothesis_position: narrows
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-006
+  - issue_id: issue-007
+    stances:
+      - lens_id: logic
+        stance: not_applicable
+        rationale: enqueuedAt declared-but-unused forms no contradiction by itself
+          (round-1 scope note); loss of the time dimension in the digest
+          artifact is an absence/auditability concern owned by coverage. No
+          logic adjudication is available within boundary.
+        root_hypothesis_position: not_applicable
+        severity_position: not_applicable
+        evidence_refs:
+          - issue-ledger.yaml#issue-007
+      - lens_id: coverage
+        stance: support
+        rationale: coverage 자체 surface-only finding(cov-5/finding-008)이다. digest 산출물에서
+          시간 차원이 소실되어(enqueuedAt 선언만 있고 digest 생성에서 미사용) flush 이후 적재 시점 이력을 재구성할
+          수 없다 — 시점 의존 값의 이력 부재라는 차원 결손이다. 선언 목적을 불안전하게 만들지는 않으므로 low 유지.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-007
+          - round1/coverage.md#cov-5
+      - lens_id: semantics
+        stance: support
+        rationale: The premise — enqueuedAt declared but never consumed by digest
+          generation — is the same in-target observation semantics traced in
+          semantics-3 (no consumer reads the field; only userId and body reach
+          the digest). The proposed action (include it in the output or remove
+          the declaration) is the same declaration-vs-use alignment menu as
+          issue-010's. The auditability weighting of the impact is the raising
+          lens's judgment and this lens has no basis to contest it; low severity
+          holds.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-007
+          - round1/semantics.md#semantics-3
+  - issue_id: issue-008
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "Same phenomenon as issue-003 framed by semantics (duplicates
+          rel-003): the lens-verified formal core stands — internal stamp (line
+          20) vs caller-supplied now (lines 30-32) with no clock-domain identity
+          claim anywhere in the target (finding-l2). The signature-as-contract
+          interpretation ('caller-owned current-time authority') is
+          semantics-owned and logic defers to it, consistent with the boundary
+          handoff recorded in round 1. Severity high rests on whether callers
+          exercising the signature literally are a supported group — exactly the
+          premise logic marked upstream_evidence_required=true — so logic
+          neither confirms nor contests high. Deliberation note: logic
+          recommends one decision unit across issue-003/008."
+        root_hypothesis_position: accepts
+        severity_position: insufficient_evidence
+        evidence_refs:
+          - issue-ledger.yaml#issue-008
+          - round1/logic.md#finding-l2
+      - lens_id: coverage
+        stance: support
+        rationale: semantics 제기(finding-010)이나 coverage의 cov-1(finding-004, 현
+          issue-003)이 동일 술어(now - windowStartedAt < WINDOW_MS)의 동일 결함을 독립
+          관찰했다(rel-003 duplicates). 분리된 시간 권위와 미선언 clock-domain 동일성 제약이라는 root는
+          cov-1의 단일 권위 지정 부재 진술과 일치하며, 영구 미flush/조기 종료 impact도 동일하다. high 유지.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-008
+          - round1/coverage.md#cov-1
+      - lens_id: semantics
+        stance: support
+        rationale: "This is semantics' own issue (semantics-1): the flush(now) signature
+          asserts caller-owned current-time authority while windowStartedAt is
+          always system-clock-stamped, and no contract declares the required
+          clock-domain identity. The root hypothesis (authority split at the
+          design point) is this lens's traced starting cause verbatim. High
+          severity holds: the declared contract 'Flushes when the window has
+          closed' is violated without any surfaced error for any caller
+          exercising the injectable-clock contract literally, on the session's
+          explicitly requested time-source focus. Note as deliberation context:
+          issue-003 is the same defect per duplicates rel-003; merge
+          adjudication is outside this lens's scope."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-008
+          - round1/semantics.md#semantics-1
+  - issue_id: issue-009
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "Same contradiction as issue-001 framed by semantics (duplicates
+          rel-002): finding-l1 independently derived both halves of this issue
+          statement — the consequent is contradicted by pending.clear() whenever
+          the antecedent holds, and in the current synchronous single-threaded
+          model the antecedent is unreachable, so the comment presents a vacuous
+          scenario as a handled case. Root hypothesis and action menu match the
+          lens finding. Deliberation note: one decision unit across
+          issue-001/004/009 recommended."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-009
+          - round1/logic.md#finding-l1
+      - lens_id: coverage
+        stance: support
+        rationale: semantics 제기(finding-011)이나 coverage의 cov-2(finding-005, 현
+          issue-004)가 동일 결함을 독립 관찰했다(rel-002 duplicates). 주석이 선언한 carry-over
+          메커니즘에 대응하는 구현 부재, 동기 실행에서의 vacuous 시나리오 관찰, async 진화 시 무경고 손실
+          failure_condition 모두 cov-2와 동일하다. medium 유지.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-009
+          - round1/coverage.md#cov-2
+      - lens_id: semantics
+        stance: support
+        rationale: "This is semantics' own issue (semantics-2): the reset comment
+          asserts a carry-over mechanism the code does not implement —
+          pending.clear() drops every entry, a hypothetically interleaved
+          enqueue would be lost not carried, and the synchronous model makes the
+          described scenario vacuous. The root hypothesis (intended concurrency
+          contract never realized in the chosen reset strategy) is this lens's
+          traced starting cause verbatim. Medium severity holds for
+          regression_risk and maintainability. Note as deliberation context:
+          duplicates rel-001/rel-002 link this to issue-001 and issue-004; merge
+          adjudication is outside this lens's scope."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-009
+          - round1/semantics.md#semantics-2
+  - issue_id: issue-010
+    stances:
+      - lens_id: logic
+        stance: not_applicable
+        rationale: "A definition with no consumer is vacuously consistent — C6
+          contradicts no other claim, so logic has no formal basis to
+          adjudicate; enforcement-point and meaning-ownership defects are
+          semantics-owned. The field's only logic-relevant role was evidential:
+          the sole documented time base sitting on an unused field contributed
+          to finding-l2's missing-premise observation, consistent with dep-001's
+          shared-cause link to issue-003."
+        root_hypothesis_position: not_applicable
+        severity_position: not_applicable
+        evidence_refs:
+          - issue-ledger.yaml#issue-010
+      - lens_id: coverage
+        stance: support
+        rationale: "semantics 제기 issue이나 coverage 관점에서도 성립한다: cov-1이 이미 enqueuedAt을 권위
+          지정 없는 제3의 시간 기록으로 식별했고, 이 issue의 root(컴포넌트가 소유해야 할 이벤트 유래 값이 호출자 입력으로
+          모델링되어 stamping 권위·집행 지점이 부재)는 단일 권위 지정 부재라는 coverage 차원 결손의 해당 필드
+          발현이다. dep-001(issue-003과 shared_cause_candidate)이 시사하듯 주입 clock 하나가
+          양쪽을 함께 해소한다는 점도 동일 원인 가설을 지지한다."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-010
+          - round1/coverage.md#cov-1
+          - finding-relation-graph.yaml#rel-004
+      - lens_id: semantics
+        stance: support
+        rationale: "This is semantics' own issue (semantics-3): enqueuedAt's documented
+          event-derived meaning ('epoch ms when the notification entered the
+          batch') has no enforcement point — never stamped, never validated —
+          and no consumer, the derived-value-as-independent-input pattern. The
+          root hypothesis (field placed in the caller-facing input type instead
+          of being stamped by the component that owns the event) is this lens's
+          traced starting cause verbatim. Medium severity holds for the
+          verifiability and maintainability goals: drift between documented
+          meaning and stored values is unbounded and indistinguishable."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-010
+          - round1/semantics.md#semantics-3
+  - issue_id: issue-011
+    stances:
+      - lens_id: logic
+        stance: not_applicable
+        rationale: "Name-versus-contract disagreement is naming ambiguity: once 'flush'
+          is disambiguated by the doc text ('Callers poll this'), no formal
+          contradiction remains between the documented conditional behavior and
+          the code. Per the Logic-Semantics tie-breaker (contradiction
+          disappears when ambiguity is removed), the defect is semantics-owned."
+        root_hypothesis_position: not_applicable
+        severity_position: not_applicable
+        evidence_refs:
+          - issue-ledger.yaml#issue-011
+      - lens_id: coverage
+        stance: not_applicable
+        rationale: 메서드 이름과 계약 텍스트의 어휘 정합은 semantics 렌즈의 의미 일치 단언 유형이다. 누락된 도메인 하위 영역이나
+          차원 결손이 관여하지 않으므로 coverage 관점은 이 issue에 적용되지 않는다. 판정을 제기 렌즈에 위임한다.
+        root_hypothesis_position: not_applicable
+        severity_position: not_applicable
+        evidence_refs:
+          - issue-ledger.yaml#issue-011
+      - lens_id: semantics
+        stance: support
+        rationale: "This is semantics' own issue (semantics-4): flush names an
+          unconditional force-out in conventional API vocabulary while the
+          realized behavior is a conditional poll, and the doc comment ('Callers
+          poll this') admits the poll semantics, so name and contract text
+          disagree inside the same declaration. Root hypothesis matches the lens
+          finding; low severity holds — surface-only naming mismatch, declared
+          purpose remains achievable."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-011
+          - round1/semantics.md#semantics-4
+  - issue_id: issue-012
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "Logic finding-l3 independently establishes the factual core: flush
+          returns [] in two distinct reachable states (line 31 no-window guard
+          vs line 32 open-window guard) while the doc names only the second. The
+          homonym/interpretability framing is semantics-owned; logic
+          corroborates the facts and keeps low severity given the
+          pendingUserCount() disambiguation path. Same deliberation note as
+          issue-002: a shared deeper cause (no distinct no-window signal) links
+          the two []-issues; recording a finding-003/finding-014 relation may be
+          worthwhile, without merging."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-012
+          - round1/logic.md#finding-l3
+      - lens_id: coverage
+        stance: support
+        rationale: "semantics 제기 issue이나 root hypothesis 자체가 부재 진술이다: no-window 상태를 위한
+          구별 신호 개념이 설계되지 않아 []가 두 상태의 동음이의가 되었다. 상태 신호 개념의 부재는 coverage 단언 유형에
+          부합하며, 근거 코드(windowStartedAt === null 가드)는 round1에서 검토한 대상 내부 증거로 확인된다.
+          surface-only 성격과 low 유지에 동의한다."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-012
+      - lens_id: semantics
+        stance: support
+        rationale: "This is semantics' own issue (semantics-5): [] is a homonym for two
+          distinct states (no active window vs window open but not yet closed)
+          while the doc names only the second. Root hypothesis (no distinct
+          signal designed for the no-window state) matches the lens finding; low
+          severity holds. The lens notes the semantic affinity with issue-002 —
+          the same overloaded signal read through two assertion types (homonymy
+          here, false documented equivalence there) — as deliberation context
+          only; the graph records no same_root relation and merge decisions are
+          outside this lens's scope."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-012
+          - round1/semantics.md#semantics-5
+validation:
+  missing_stances: []

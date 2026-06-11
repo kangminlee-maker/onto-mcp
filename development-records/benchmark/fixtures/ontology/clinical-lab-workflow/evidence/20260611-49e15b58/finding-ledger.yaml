@@ -1,0 +1,2119 @@
+schema_version: 1
+session_id: 20260611-49e15b58
+findings:
+  - finding_id: finding-001
+    lens_id: axiology
+    source_ref: .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-001
+    target: clinical-lab-ontology.yaml — Result.status / Report.result_status /
+      state_rules[1]
+    evidence_anchor: 'clinical-lab-ontology.yaml: Result.status
+      note("Report.result_status에도 동일 정보가 유지된다"), Report.result_status note("권위
+      값. 임상의는 이 값을 신뢰한다"), state_rules[1]("동기화 배치는 야간 1회")'
+    claim: 결과 상태의 권위 좌석이 둘로 선언되어 있고 야간 배치 동기화 지연이 정상 동작으로 명문화되어 있어, '개념 권위 문서'라는 선언된
+      목적과 임상의 신뢰 약속을 동시에 위반한다.
+    lens_rationale_summary: "이 문서의 선언된 목적은 EMR/LIS 통합의 개념 권위 문서이다(파일 헤더 주석). 권위 문서가
+      동일 사실에 대해 두 개의 truth seat를 선언하고 그 사이에 최대 24시간의 비동기 창을 정상 규칙으로 수용하면, '임상의는
+      이 값을 신뢰한다'는 명시적 이해관계자 약속이 구조적으로 깨진다. corrected 결과가 나온 뒤에도 임상의가 보는 보고서는 하루
+      동안 finalized로 표시될 수 있는데, 이 트레이드오프(배치 비용 절감 vs 임상 신뢰)는 어떤 정당화도 없이 note와
+      state_rule에 암묵 수용되어 있다. 가치 유형: purpose+commitment, 정렬 방향: misaligned. 권위
+      앵커: 대상 문서 헤더의 목적 선언 및 review-value-alignment-criteria.yaml criterion
+      user-request-intent."
+    proposed_action: "결과 상태의 권위 좌석을 하나로 선언하고(권장: Result.status를 원천으로,
+      Report.result_status는 파생 projection으로 명시), enum 어휘를 단일화하며, corrected 발생 시
+      보고서 상태 반영의 허용 지연 한계를 임상 신뢰 약속에 맞게 명시적으로 정당화하거나 즉시 전파로 규정한다."
+    affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 결과 상태의 단일 진실을 제공하고 임상의 신뢰를 보장한다는 선언된 목적
+    failure_condition: Result.status가 corrected로 변경된 후 야간 배치 실행 전까지의 구간에서 EMR이
+      Report.result_status(권위 값으로 선언됨)를 조회하는 모든 경우
+    impact: 통합 설계자가 이 문서를 그대로 따르면 정정된 결과가 임상의에게 최대 24시간 미표시되는 동작이 '사양대로'가 되어, 권위 문서
+      자체가 환자 안전 관련 신뢰 약속 위반을 제도화한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-001
+      - clinical-lab-ontology.yaml Result.status note
+      - clinical-lab-ontology.yaml Report.result_status note
+      - clinical-lab-ontology.yaml state_rules[1]
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 결과 상태의 단일 진실을 제공하고 임상의 신뢰를 보장한다는 선언된 목적
+      failure_condition: Result.status가 corrected로 변경된 후 야간 배치 실행 전까지의 구간에서 EMR이
+        Report.result_status(권위 값으로 선언됨)를 조회하는 모든 경우
+      impact: 통합 설계자가 이 문서를 그대로 따르면 정정된 결과가 임상의에게 최대 24시간 미표시되는 동작이 '사양대로'가 되어, 권위 문서
+        자체가 환자 안전 관련 신뢰 약속 위반을 제도화한다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml Result.status note
+        - clinical-lab-ontology.yaml Report.result_status note
+        - clinical-lab-ontology.yaml state_rules[1]
+    causal_path:
+      root_cause_candidate: 결과 상태라는 단일 개념의 권위 좌석을 정하지 않은 채 LIS 기록 관행(Result)과 임상의 노출
+        관행(Report)을 각각 그대로 모델에 옮긴 설계 결정
+      root_cause_step_id: finding-001.cause-003
+      steps:
+        - cause_id: finding-001.cause-001
+          claim: 임상의가 신뢰한다고 선언된 Report.result_status가 원천 상태(corrected)와 최대 24시간 불일치할 수 있다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: finding-001.cause-002
+          claim: 불일치는 동일 사실이 두 entity에 서로 다른 enum으로 이중 보관되고 동기화가 배치에 위임되었기 때문에 발생한다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml Result.status note
+            - clinical-lab-ontology.yaml Report.result_status note
+        - cause_id: finding-001.cause-003
+          claim: 이중 보관은 권위 좌석 단일화 없이 기존 운영 관행을 병기한 모델링 결정이 가능하게 했다
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml Result.status note("LIS가 기록하며"),
+              Report.result_status note("권위 값")
+      unresolved_beyond_evidence: 야간 배치라는 운영 제약이 외부 시스템의 실제 한계인지, 단순 관행인지는 본 경계 내 증거로 확인 불가
+  - finding_id: finding-002
+    lens_id: axiology
+    source_ref: .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-002
+    target: clinical-lab-ontology.yaml — Order.priority / Order.is_stat / StatOrder
+    evidence_anchor: 'clinical-lab-ontology.yaml: Order.priority enum [routine,
+      urgent, stat], Order.is_stat note("priority와 함께 기록"), StatOrder(is_a:
+      Order, stat_reason)'
+    claim: 응급(STAT)이라는 단일 개념이 enum 값·boolean 속성·하위 타입의 세 가지 독립 표현으로 존재하며 우선순위 규칙이
+      없어, 권위 문서가 가장 시간 민감한 워크플로에서 단일 진실을 제공하지 못한다.
+    lens_rationale_summary: "STAT 주문은 임상검사 워크플로에서 환자 안전상 가장 시간 민감한 경로이며, EMR/LIS 통합
+      설계자가 이 문서를 권위로 삼을 때 STAT 판정 로직이 시스템마다 다른 필드를 참조하게 될 위험을 문서 자체가 만들어낸다(예:
+      priority=stat이지만 is_stat=false인 인스턴스의 의미가 미정의). 이는 표현 편의(기존 필드 유지 + 하위 타입
+      추가)라는 국소 선택이 '개념 권위'라는 전체 목적을 훼손하는 사례다. 가치 유형: purpose, 정렬 방향: misaligned.
+      권위 앵커: 대상 문서 헤더의 목적 선언 및 user-request-intent criterion."
+    proposed_action: "STAT의 canonical 표현을 하나로 선언하고(권장: priority enum 단일 표현),
+      is_stat은 파생 projection으로 강등하거나 제거하며, StatOrder 하위 타입은 stat_reason이 별도
+      lifecycle·검증·권한을 요구할 때만 유지하고 그렇지 않으면 stat_reason을 Order의 조건부 속성으로 흡수한다.
+      유지하는 경우 세 표현 간 일관성 제약을 명문화한다."
+    affected_purpose: EMR/LIS 통합 시스템들이 STAT 주문을 일관되게 식별·우선처리하도록 하는 개념 권위 제공
+    failure_condition: 통합되는 두 시스템이 STAT 판정에 서로 다른 표현(priority vs is_stat vs 타입)을
+      기준으로 채택하고, 세 표현이 불일치하는 인스턴스가 생성되는 경우
+    impact: 응급 검사가 일반 경로로 처리되거나 그 역이 발생할 수 있는 분기점을 권위 문서가 스스로 내장하므로, 문서의 적합성 판단(사용자
+      요청의 핵심)에 직접 영향을 준다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-002
+      - clinical-lab-ontology.yaml Order.priority
+      - clinical-lab-ontology.yaml Order.is_stat
+      - clinical-lab-ontology.yaml StatOrder
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합 시스템들이 STAT 주문을 일관되게 식별·우선처리하도록 하는 개념 권위 제공
+      failure_condition: 통합되는 두 시스템이 STAT 판정에 서로 다른 표현(priority vs is_stat vs 타입)을
+        기준으로 채택하고, 세 표현이 불일치하는 인스턴스가 생성되는 경우
+      impact: 응급 검사가 일반 경로로 처리되거나 그 역이 발생할 수 있는 분기점을 권위 문서가 스스로 내장하므로, 문서의 적합성 판단(사용자
+        요청의 핵심)에 직접 영향을 준다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml Order.priority
+        - clinical-lab-ontology.yaml Order.is_stat
+        - clinical-lab-ontology.yaml StatOrder
+    causal_path:
+      root_cause_candidate: 기존 필드(priority, is_stat)를 정리하지 않은 채 StatOrder 하위 타입을 추가하는
+        누적식 모델 진화를 수용하고 canonical 표현 선언을 생략한 결정
+      root_cause_step_id: finding-002.cause-003
+      steps:
+        - cause_id: finding-002.cause-001
+          claim: STAT 여부의 판정 기준이 세 표현 중 무엇인지 미정의여서 통합 시스템 간 판정 분기가 가능하다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml Order.priority/is_stat/StatOrder 정의
+        - cause_id: finding-002.cause-002
+          claim: 분기 가능성은 세 표현 사이에 일관성 제약과 우선순위 규칙이 전혀 규정되지 않았기 때문에 발생한다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml relations/state_rules에 STAT 표현 간 제약 부재
+        - cause_id: finding-002.cause-003
+          claim: 제약 부재는 표현을 추가만 하고 통합하지 않는 모델 관리 방식이 가능하게 했다
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml is_stat note("priority와 함께 기록")
+      unresolved_beyond_evidence: "세 표현이 서로 다른 소스 시스템의 제약(예: 레거시 EMR 필드)을 반영한 것인지는 본 경계 내 증거로 확인 불가"
+  - finding_id: finding-003
+    lens_id: axiology
+    source_ref: .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-003
+    target: clinical-lab-ontology.yaml — CriticalValue.notified
+    evidence_anchor: 'clinical-lab-ontology.yaml: CriticalValue.notified note("통보 완료
+      여부. 통보 시각과 수신자는 전화 기록 대장에 있다")'
+    claim: 환자 안전상 가장 중요한 추적 정보(위험치 통보의 시각·수신자)를 모델 경계 밖 종이 대장에 두는 트레이드오프가 정당화 없이
+      수용되어, EMR/LIS 통합 권위 문서로서의 목적과 환자 안전 이해관계자 약속을 불리하게 한다.
+    lens_rationale_summary: "이 온톨로지의 목적은 EMR/LIS '통합'의 개념 권위인데, 위험치 통보는 그 통합이 디지털로
+      추적해야 할 가장 안전-critical한 흐름이다. boolean 단순화라는 국소 최적화가 '누가 언제 통보받았는가'라는 질문을 통합
+      시스템에서 영구히 답할 수 없게 만들며, 이 배제는 어떤 명시적 정당화나 후속 계획(notes 섹션에도 없음) 없이 note 한 줄로
+      수용되어 있다. 또한 CriticalValue가 '값 범위'(카탈로그 개념)와 '통보 사건'(인스턴스 개념)을 한 entity에 섞고
+      있어 통보 사건을 모델링할 자리 자체가 없다. 가치 유형: stakeholder+tradeoff, 정렬 방향: misaligned.
+      권위 앵커: 대상 문서 헤더의 목적 선언 및 user-request-intent criterion(운영 시 생길 위험 중심 검토
+      요청)."
+    proposed_action: CriticalValue를 임계 범위 정의(카탈로그)와 CriticalValueNotification
+      사건(notified_at, notified_to, acknowledged 등)으로 분리하고, 전화 대장 위임을 유지하더라도 그것이
+      의도적 out-of-scope 결정임을 근거와 함께 notes에 명시한다.
+    affected_purpose: 운영 위험을 드러내고 안전-critical 흐름을 통합 시스템이 추적 가능하게 하는 개념 권위 제공
+    failure_condition: 위험치 통보의 증적(시각·수신자)을 EMR/LIS 통합 시스템에서 조회·감사해야 하는 모든 경우
+    impact: 권위 문서를 따르는 통합 설계는 안전-critical 감사 질문에 답할 수 없는 시스템을 만들게 되며, 이 배제가 의도적 결정인지
+      누락인지조차 문서로 판별할 수 없다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-003
+      - clinical-lab-ontology.yaml CriticalValue.notified note
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 운영 위험을 드러내고 안전-critical 흐름을 통합 시스템이 추적 가능하게 하는 개념 권위 제공
+      failure_condition: 위험치 통보의 증적(시각·수신자)을 EMR/LIS 통합 시스템에서 조회·감사해야 하는 모든 경우
+      impact: 권위 문서를 따르는 통합 설계는 안전-critical 감사 질문에 답할 수 없는 시스템을 만들게 되며, 이 배제가 의도적 결정인지
+        누락인지조차 문서로 판별할 수 없다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml CriticalValue.notified note
+    causal_path:
+      root_cause_candidate: 기존 종이 기반 운영 관행(전화 기록 대장)을 디지털 통합 목적에 맞게 재설계하지 않고 모델 경계 밖으로
+        그대로 둔 채 boolean 플래그만 도입한 결정
+      root_cause_step_id: finding-003.cause-002
+      steps:
+        - cause_id: finding-003.cause-001
+          claim: 통보 시각·수신자가 모델에 없어 통합 시스템이 위험치 통보 증적을 추적할 수 없다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml CriticalValue attributes
+        - cause_id: finding-003.cause-002
+          claim: 추적 불가는 통보를 사건이 아닌 boolean 속성으로 축약하고 증적을 종이 대장에 위임한 모델링 선택의 결과다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml CriticalValue.notified note
+      unresolved_beyond_evidence: 전화 대장 유지가 규제·운영상 불가피한 제약인지 여부는 본 경계 내 증거로 확인 불가
+  - finding_id: finding-004
+    lens_id: axiology
+    source_ref: .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-004
+    target: clinical-lab-ontology.yaml — Test/Assay 이중 카탈로그 및 notes[0]
+    evidence_anchor: "clinical-lab-ontology.yaml: Test(requires_specimen_type enum)
+      vs Assay(specimen_kind 자유 문자열 'WB','Serum','Urine-random'), notes[0](\"현재
+      신규 항목은 두 곳 모두 등록\")"
+    claim: 검사 카탈로그라는 단일 개념을 Test와 Assay로 이중 유지하고 신규 항목 이중 등록을 표준 운영으로 명문화한 것은, 통합 여부
+      재검토라는 연기 결정의 비용(어휘 분기·드리프트)을 정당화 없이 권위 문서에 전가한 숨은 트레이드오프다.
+    lens_rationale_summary: "권위 문서의 존재 이유는 통합 대상 시스템들에 단일 개념 어휘를 제공하는 것인데, 문서 스스로 동일
+      개념의 평행 어휘 두 벌과 그 사이의 매핑 부재를 표준으로 선언하면 권위 기능이 그 지점에서 정지한다. '카탈로그 정비 후 재검토'는
+      연기 결정 자체로는 정당할 수 있으나, 연기 기간 동안의 드리프트 위험(이중 등록 누락, enum-문자열 불일치)을 누가 어떻게
+      관리하는지에 대한 규정이 없어 트레이드오프가 암묵 수용 상태다. 가치 유형: tradeoff, 정렬 방향: misaligned. 권위
+      앵커: 대상 문서 헤더의 목적 선언 및 user-request-intent criterion."
+    proposed_action: "통합 전까지의 임시 권위 규칙을 최소한으로 명시한다: 둘 중 어느 쪽이 canonical인지,
+      Test↔Assay 대응 관계(매핑 필드), specimen 어휘 간 변환표, 이중 등록 불일치 발견 시 처리 주체. 가능하면
+      Assay.specimen_kind를 Test의 enum으로 정렬한다."
+    affected_purpose: EMR/LIS 통합 시스템에 단일 검사 카탈로그 어휘를 제공하는 개념 권위 기능
+    failure_condition: EMR이 Test 어휘를, LIS/분석기 연동이 Assay 어휘를 각각 채택해 검체 적합성 판정이나 항목
+      매칭이 두 어휘 사이에서 이루어지는 경우
+    impact: 이중 등록 누락이나 어휘 불일치가 검사 라우팅 오류로 이어질 수 있고, 권위 문서가 그 불일치의 중재 기준을 제공하지 못한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-004
+      - clinical-lab-ontology.yaml Test.requires_specimen_type
+      - clinical-lab-ontology.yaml Assay.specimen_kind note
+      - clinical-lab-ontology.yaml notes[0]
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합 시스템에 단일 검사 카탈로그 어휘를 제공하는 개념 권위 기능
+      failure_condition: EMR이 Test 어휘를, LIS/분석기 연동이 Assay 어휘를 각각 채택해 검체 적합성 판정이나 항목
+        매칭이 두 어휘 사이에서 이루어지는 경우
+      impact: 이중 등록 누락이나 어휘 불일치가 검사 라우팅 오류로 이어질 수 있고, 권위 문서가 그 불일치의 중재 기준을 제공하지 못한다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml Test.requires_specimen_type
+        - clinical-lab-ontology.yaml Assay.specimen_kind note
+        - clinical-lab-ontology.yaml notes[0]
+    causal_path:
+      root_cause_candidate: 카탈로그 통합이라는 개념 정리 작업을 연기하면서, 연기 기간의 권위 규칙(canonical
+        지정·매핑·어휘 변환)을 정의하지 않은 결정
+      root_cause_step_id: finding-004.cause-002
+      steps:
+        - cause_id: finding-004.cause-001
+          claim: 동일 개념에 두 어휘가 병존하고 검체 종류 표현이 enum과 자유 문자열로 이미 분기했다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml Test/Assay 정의
+        - cause_id: finding-004.cause-002
+          claim: 분기는 통합 연기 중 임시 권위 규칙 없이 이중 등록만 절차화한 notes[0]의 결정이 가능하게 했다
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml notes[0]
+      unresolved_beyond_evidence: Test/Assay 분리가 실제 시스템 경계(EMR 카탈로그 vs 분석기 카탈로그)를 반영한
+        의도적 설계인지는 본 경계 내 증거로 확인 불가
+  - finding_id: finding-005
+    lens_id: axiology
+    source_ref: .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-005
+    target: clinical-lab-ontology.yaml — notes[1] (TAT 정의)
+    evidence_anchor: 'clinical-lab-ontology.yaml: notes[1]("turnaround_time(TAT)은
+      collected_at부터 released_at까지로 계산하며, 대시보드 팀이 자체 계산식을 유지한다")'
+    claim: 권위 문서가 TAT 정의를 선언하면서 동시에 '대시보드 팀이 자체 계산식을 유지한다'고 권위를 양도해, 운영 핵심 지표에 대한 권위
+      드리프트를 문서 스스로 허용한다.
+    lens_rationale_summary: "개념 권위 문서가 파생 지표의 정의를 선언했다면 그 정의가 단일 진실이어야 하는데, 외부 팀의 자체
+      계산식을 동격으로 인정하면 권위 선언이 형식화된다. 운영 지표 불일치는 STAT 성과 평가나 부서 비교 같은 의사결정을 왜곡할 수
+      있는 가벼운 목적 드리프트다. 가치 유형: principle(단일 권위), 정렬 방향: misaligned. 권위 앵커: 대상 문서
+      헤더의 목적 선언."
+    proposed_action: TAT 정의를 본 문서의 canonical 정의로 선언하고 대시보드 계산식은 이 정의의 구현으로 종속시키거나,
+      TAT 정의를 문서 범위 밖으로 명시적으로 제외한다.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: "개념 권위 문서가 파생 지표의 정의를 선언했다면 그 정의가 단일 진실이어야 하는데, 외부 팀의 자체 계산식을 동격으로 인정하면
+      권위 선언이 형식화된다. 운영 지표 불일치는 STAT 성과 평가나 부서 비교 같은 의사결정을 왜곡할 수 있는 가벼운 목적 드리프트다.
+      가치 유형: principle(단일 권위), 정렬 방향: misaligned. 권위 앵커: 대상 문서 헤더의 목적 선언."
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-005
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-006
+    lens_id: axiology
+    source_ref: .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-006
+    target: clinical-lab-ontology.yaml — 리뷰 세션 lens set 대비 도메인 안전 관점 공백 (New
+      Perspectives 제안)
+    evidence_anchor: 'prompt packet session_domain: none; clinical-lab-ontology.yaml
+      전반(위험치 통보·STAT·정정 보고 등 환자 안전 흐름 포함); interpretation.yaml
+      domain_recommendation: "@-"'
+    claim: "[New Perspectives] 임상검사라는 안전-규제 도메인의 대상물을 도메인 바인딩 없이(core-axis,
+      session_domain=none) 검토하고 있어, 환자 안전·규제 추적성 관점의 purpose-critical 평가가 현재
+      lens set 경로로 충분히 커버되지 않는다."
+    lens_rationale_summary: "사용자 요청의 핵심이 '운영 시 생길 위험'인데, 그 위험의 상당 부분이 도메인 규범(통보 증적,
+      정정 전파)에 대한 판정을 요구한다. 도메인 authority 부재는 본 리뷰의 안전 관련 판정 신뢰도를 제한하는 구조적 공백이다.
+      이 제안은 현재 실행의 active lens set을 변경하지 않는다. 가치 유형: boundary, 정렬 방향:
+      indeterminate."
+    proposed_action: synthesize가 본 제안을 보존하고, 후속 governance에서 임상검사 도메인 문서 바인딩 또는 도메인
+      CQ 세트 추가를 검토한다.
+    affected_purpose: declared review purpose
+    failure_condition: upstream evidence outside the bounded lens context is
+      required to close this finding
+    impact: "사용자 요청의 핵심이 '운영 시 생길 위험'인데, 그 위험의 상당 부분이 도메인 규범(통보 증적, 정정 전파)에 대한 판정을
+      요구한다. 도메인 authority 부재는 본 리뷰의 안전 관련 판정 신뢰도를 제한하는 구조적 공백이다. 이 제안은 현재 실행의
+      active lens set을 변경하지 않는다. 가치 유형: boundary, 정렬 방향: indeterminate."
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/axiology.findings.yaml#axiology-candidate-006
+    severity: info
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-007
+    lens_id: coverage
+    source_ref: .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-001
+    target: Result.status vs Report.result_status (dual status authority)
+    evidence_anchor: clinical-lab-ontology.yaml — Result.status note
+      '...Report.result_status에도 동일 정보가 유지된다'; Report.result_status note '보고서에
+      표시되는 결과 상태의 권위 값'; state_rules '...동기화 배치는 야간 1회'
+    claim: 결과 상태가 Result와 Report 두 곳에 병행 표현되는데 단일 권위(원본) 지정이 없고, 두 enum 어휘마저 다르다.
+    lens_rationale_summary: coverage 차원에서 '복수 장부에 걸쳐 관리되는 값의 단일 권위 지정' 차원이 결손되어 있다.
+      개념 권위 문서로 쓰일 때 EMR/LIS 통합 구현자가 어느 필드를 신뢰할지 결정할 근거가 없고, 야간 배치 사이에는 Result가
+      corrected여도 Report는 finalized로 남아 임상의에게 전달되는 값이 실제 상태와 모순된다. enum 어휘
+      불일치(final↔finalized, corrected↔amended)는 매핑 규칙 부재까지 동반한다.
+    proposed_action: "결과 상태의 단일 권위 위치(예: Result.status)를 명시하고 Report.result_status를
+      그 파생 투영(projection)으로 규정하거나, 권위를 Report로 둘 경우 Result.status를 비권위 캐시로 표기한다.
+      동시에 두 enum 간 정규 매핑 표를 온톨로지에 포함하고, 동기화 지연 중의 유효 상태 해석 규칙을 명문화한다."
+    affected_purpose: EMR/LIS 통합의 개념 권위 문서 — 임상의에게 전달되는 결과 상태의 신뢰 가능한 단일 출처 제공
+    failure_condition: Result.status가 corrected로 전이된 후 야간 동기화 배치 실행 전까지,
+      Report.result_status는 finalized로 남아 권위 값과 실제 상태가 불일치한다.
+    impact: 구현자가 어느 필드를 권위로 삼을지 결정할 근거가 없어 통합 설계가 분기되고, 정정된 위험 결과가 amended로 반영되지 않은
+      채 임상의에게 신뢰값으로 노출될 수 있다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-001
+      - clinical-lab-ontology.yaml — Result.status.note
+      - clinical-lab-ontology.yaml — Report.result_status.note
+      - clinical-lab-ontology.yaml — state_rules[1] (동기화 배치는 야간 1회)
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서 — 임상의에게 전달되는 결과 상태의 신뢰 가능한 단일 출처 제공
+      failure_condition: Result.status가 corrected로 전이된 후 야간 동기화 배치 실행 전까지,
+        Report.result_status는 finalized로 남아 권위 값과 실제 상태가 불일치한다.
+      impact: 구현자가 어느 필드를 권위로 삼을지 결정할 근거가 없어 통합 설계가 분기되고, 정정된 위험 결과가 amended로 반영되지 않은
+        채 임상의에게 신뢰값으로 노출될 수 있다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Result.status.note
+        - clinical-lab-ontology.yaml — Report.result_status.note
+        - clinical-lab-ontology.yaml — state_rules[1] (동기화 배치는 야간 1회)
+    causal_path:
+      root_cause_candidate: 결과 상태라는 단일 개념이 두 엔티티에 권위 지정 없이 병행 표현되고 두 enum 어휘가 분리됨
+      root_cause_step_id: finding-007.cause-003
+      steps:
+        - cause_id: finding-007.cause-001
+          claim: Result.status와 Report.result_status가 동일 정보를 서로 다른 enum으로 이중 보존한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Result.status.note,
+              Report.result_status.note
+        - cause_id: finding-007.cause-002
+          claim: 단일 권위 원본이 지정되지 않아 두 값이 충돌할 때 우선순위 해석 규칙이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — 두 note가 각각 '권위 값'/'LIS가 기록'으로 상충
+        - cause_id: finding-007.cause-003
+          claim: 동기화가 야간 배치 1회에 의존해 배치 사이 윈도우에서 두 값이 실제로 불일치한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml — state_rules[1]
+      unresolved_beyond_evidence: 실제 LIS/EMR 구현에서 어느 필드를 읽는지는 코드 경계 밖이라 확정 불가.
+  - finding_id: finding-008
+    lens_id: coverage
+    source_ref: .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-002
+    target: STAT 주문 표현의 다중화 (priority / is_stat / StatOrder)
+    evidence_anchor: clinical-lab-ontology.yaml — Order.priority
+      enum(routine,urgent,stat), Order.is_stat boolean(note 'priority와 함께 기록'),
+      StatOrder is_a Order
+    claim: STAT 응급 여부가 priority enum, is_stat 불리언, StatOrder 하위타입 세 경로로 표현되며 권위 경로가
+      지정되지 않았다.
+    lens_rationale_summary: coverage의 '단일 권위 지정 부재' 차원에 해당한다. 개념 권위 문서로서 STAT 판정의 정본
+      위치를 정의하지 않으면 통합 구현마다 다른 필드를 읽게 되고, 응급 검사 분류라는 안전 관련 속성이 모순값을 가질 수 있다.
+    proposed_action: "STAT 여부의 단일 권위(예: priority enum)를 지정하고 is_stat과 StatOrder는 그
+      파생/제약으로 규정하거나 제거한다. 세 표현을 유지해야 한다면 일관성 불변식(priority=stat ⟺ is_stat=true ⟺
+      instance of StatOrder)을 명문화한다."
+    affected_purpose: 주문 우선순위(특히 STAT 응급)의 권위 있는 단일 분류 — 워크플로 라우팅 및 TAT 목표 결정의 기준
+    failure_condition: 세 표현 중 하나만 갱신되어 priority, is_stat, 타입 정체성이 상호 모순되는 Order 인스턴스가 생성될 때.
+    impact: 구현자가 STAT 판정에 어느 필드를 쓸지 분기되고, 응급 분류 누락/오분류로 워크플로 우선순위가 잘못 적용될 수 있다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-002
+      - clinical-lab-ontology.yaml — Order.priority
+      - clinical-lab-ontology.yaml — Order.is_stat
+      - clinical-lab-ontology.yaml — StatOrder
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 주문 우선순위(특히 STAT 응급)의 권위 있는 단일 분류 — 워크플로 라우팅 및 TAT 목표 결정의 기준
+      failure_condition: 세 표현 중 하나만 갱신되어 priority, is_stat, 타입 정체성이 상호 모순되는 Order 인스턴스가 생성될 때.
+      impact: 구현자가 STAT 판정에 어느 필드를 쓸지 분기되고, 응급 분류 누락/오분류로 워크플로 우선순위가 잘못 적용될 수 있다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Order.priority
+        - clinical-lab-ontology.yaml — Order.is_stat
+        - clinical-lab-ontology.yaml — StatOrder
+    causal_path:
+      root_cause_candidate: STAT이라는 단일 분류 사실을 enum·불리언·서브타입 세 모델링 기법으로 동시에 표현하면서 정본을 정하지 않음
+      root_cause_step_id: finding-008.cause-002
+      steps:
+        - cause_id: finding-008.cause-001
+          claim: STAT 여부가 priority, is_stat, StatOrder 세 위치에 중복 인코딩된다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Order.priority, Order.is_stat,
+              StatOrder
+        - cause_id: finding-008.cause-002
+          claim: 권위 위치 미지정으로 세 값 간 일관성 불변식이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — is_stat.note 'priority와 함께 기록'(우선순위
+              미정의)
+      unresolved_beyond_evidence: null
+  - finding_id: finding-009
+    lens_id: coverage
+    source_ref: .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-003
+    target: 시점 의존 임계값/참조구간의 유효기간·이력 부재 (CriticalValue, 참조범위)
+    evidence_anchor: clinical-lab-ontology.yaml — CriticalValue(lower_bound,
+      upper_bound, test_ref); Result에 reference range/flag 속성 없음
+    claim: 위험값 임계(CriticalValue)와 결과 참조구간이 유효기간·이력 없이 단일 현재값으로만 표현되어 과거 시점 기준을 재구성할
+      수 없다.
+    lens_rationale_summary: coverage의 '시점 의존 값의 유효기간·이력' 차원 결손이다. 임상검사에서 과거 보고의 위험
+      판정 근거를 사후 재구성(감사·소송·정도관리)하려면 당시 적용된 임계값이 필요하다. 현재값만 보존하면 임계가 갱신된 뒤 과거 결과의
+      판정 맥락이 소실된다.
+    proposed_action: CriticalValue에 effective_from/effective_to(또는 버전) 차원을 추가해 시점별
+      임계를 보존하고, Result가 생성 시점의 적용 임계/참조구간을 스냅샷으로 참조하도록 한다. 정상 참조구간과 이상 플래그를 1급
+      개념으로 도입한다.
+    affected_purpose: 과거 시점의 위험/이상 판정 근거를 재구성 가능한 결과 해석 권위 모델
+    failure_condition: 검사실이 CriticalValue 임계를 갱신한 후 갱신 이전에 생성된 결과의 위험 판정 근거를 조회할 때,
+      당시 임계값이 보존되어 있지 않아 재구성 불가.
+    impact: 감사·정도관리·임상 사후검토에서 과거 결과의 판정 맥락을 입증할 수 없어, 권위 문서가 시점 정합 추적 요구를 충족하지 못한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-003
+      - clinical-lab-ontology.yaml — CriticalValue(lower_bound/upper_bound, 유효기간
+        속성 없음)
+      - clinical-lab-ontology.yaml — Result(reference range/flag 속성 부재)
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 과거 시점의 위험/이상 판정 근거를 재구성 가능한 결과 해석 권위 모델
+      failure_condition: 검사실이 CriticalValue 임계를 갱신한 후 갱신 이전에 생성된 결과의 위험 판정 근거를 조회할 때,
+        당시 임계값이 보존되어 있지 않아 재구성 불가.
+      impact: 감사·정도관리·임상 사후검토에서 과거 결과의 판정 맥락을 입증할 수 없어, 권위 문서가 시점 정합 추적 요구를 충족하지 못한다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — CriticalValue(lower_bound/upper_bound,
+          유효기간 속성 없음)
+        - clinical-lab-ontology.yaml — Result(reference range/flag 속성 부재)
+    causal_path:
+      root_cause_candidate: 갱신되는 임계/참조 값을 시간 차원 없는 단일 현재값으로 모델링함
+      root_cause_step_id: finding-009.cause-002
+      steps:
+        - cause_id: finding-009.cause-001
+          claim: CriticalValue 임계가 유효기간/버전 없이 현재값만 가진다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — CriticalValue attributes
+        - cause_id: finding-009.cause-002
+          claim: Result가 생성 시점 임계 스냅샷을 참조하지 않아 판정 근거가 임계 갱신 시 소실된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Result attributes에 참조구간/임계 참조 없음
+      unresolved_beyond_evidence: null
+  - finding_id: finding-010
+    lens_id: coverage
+    source_ref: .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-004
+    target: Specimen/Order/Report lifecycle 종료 구간 미완결
+    evidence_anchor: clinical-lab-ontology.yaml — Specimen.lifecycle
+      [collected,received,in_analysis,analyzed]; Order.lifecycle
+      [draft,placed,in_progress,completed,cancelled]; Report에 lifecycle 없음;
+      state_rules[2] '보관/폐기 처리는 각 부서 내규를 따른다'
+    claim: 상태를 갖는 핵심 엔티티의 lifecycle이 종료 구간(보관·폐기, 검체 거부/재채취, 보고서 정정·재발행)을 커버하지 못한다.
+    lens_rationale_summary: coverage의 'lifecycle 도입~종료 전 구간 커버' 및 '종결 상태 이후 정정·재발행
+      수용' 차원 결손이다. 검체 보관/폐기는 검사실 추적성의 핵심이고, 검체 거부·재채취는 빈번한 실제 경로다. 권위 문서가 이 구간을
+      비워두면 통합 구현이 상태 외 임시 필드로 메우게 되어 모델 권위가 무너진다.
+    proposed_action: Specimen lifecycle에 stored/disposed(및 rejected/recollected) 종료
+      상태를 추가하고, Order에 rejected 경로를 도입한다. Report에 명시
+      lifecycle(draft→released→amended/corrected→...)을 정의하고 종결 후 재발행 사건을 상태로
+      수용한다. 부서 내규 위임 항목은 최소한 상태 전이 자리표시자로라도 모델에 편입한다.
+    affected_purpose: 검체·주문·보고서의 전체 lifecycle을 권위 있게 표현하는 EMR/LIS 통합 모델
+    failure_condition: 검체가 analyzed 이후 보관/폐기되거나 부적합으로 거부될 때, 또는 보고서가 발행 후 정정·재발행될 때,
+      해당 상태가 모델에 존재하지 않아 표현 불가.
+    impact: 추적성 핵심 구간이 모델 밖으로 새어나가 구현마다 비표준 임시 필드로 보완되고, 권위 문서가 운영 상태를 포괄하지 못해 통합
+      정합이 깨진다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-004
+      - clinical-lab-ontology.yaml — Specimen.lifecycle
+      - clinical-lab-ontology.yaml — state_rules[2]
+      - clinical-lab-ontology.yaml — Report(lifecycle 부재)
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 검체·주문·보고서의 전체 lifecycle을 권위 있게 표현하는 EMR/LIS 통합 모델
+      failure_condition: 검체가 analyzed 이후 보관/폐기되거나 부적합으로 거부될 때, 또는 보고서가 발행 후 정정·재발행될 때,
+        해당 상태가 모델에 존재하지 않아 표현 불가.
+      impact: 추적성 핵심 구간이 모델 밖으로 새어나가 구현마다 비표준 임시 필드로 보완되고, 권위 문서가 운영 상태를 포괄하지 못해 통합
+        정합이 깨진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Specimen.lifecycle
+        - clinical-lab-ontology.yaml — state_rules[2]
+        - clinical-lab-ontology.yaml — Report(lifecycle 부재)
+    causal_path:
+      root_cause_candidate: lifecycle을 핵심 처리 구간까지만 모델링하고 종료·예외 구간을 부서 내규로 외부화함
+      root_cause_step_id: finding-010.cause-003
+      steps:
+        - cause_id: finding-010.cause-001
+          claim: Specimen lifecycle이 analyzed에서 종료되고 보관/폐기가 명시적으로 모델 밖으로 위임된다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Specimen.lifecycle, state_rules[2]
+        - cause_id: finding-010.cause-002
+          claim: Order에 검체 거부, Report에 lifecycle 자체가 없어 예외·정정 경로가 상태로 표현되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Order.lifecycle, Report
+        - cause_id: finding-010.cause-003
+          claim: 결과적으로 운영 상태가 모델 외 임시 수단으로 처리되어 권위 문서의 포괄성이 결손된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — state_rules[2] (부서 내규 위임)
+      unresolved_beyond_evidence: null
+  - finding_id: finding-011
+    lens_id: coverage
+    source_ref: .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-005
+    target: 통제 행위의 감사 증거(행위자·시각·근거) 부재
+    evidence_anchor: clinical-lab-ontology.yaml — CriticalValue.notified(boolean,
+      note '통보 시각과 수신자는 전화 기록 대장에 있다'); Result.verified_by(ref만);
+      Order.lifecycle.cancelled; Report amended
+    claim: 통보·검증·취소·정정 등 통제가 필요한 행위에 행위자·시각·근거를 추적할 감사 개념이 결여되어 있다.
+    lens_rationale_summary: coverage의 '통제 행위의 감사 증거 부재' 차원 결손이다. 위험값 통보는 환자 안전·법적 책임
+      추적의 핵심으로 누가·언제·누구에게 통보했는지 입증 가능해야 한다. 불리언/단일 ref만으로는 감사 추적이 불가능하며, 외부 대장
+      위임은 권위 문서의 추적 책임을 회피한다.
+    proposed_action: "통제 행위에 actor·timestamp·reason을 담는 감사 이벤트 개념(예:
+      NotificationEvent{notified_by, notified_at, recipient}, 검증/취소/정정 이벤트)을
+      도입하고, notified 불리언을 그 이벤트의 파생 상태로 규정한다."
+    affected_purpose: 위험값 통보 등 통제 행위의 행위자·시각·근거를 추적 가능한 감사 모델
+    failure_condition: 위험값 통보 사실·시점·수신자를 사후 입증해야 할 때, 모델에는 notified 불리언만 있고 나머지는 외부
+      대장에 있어 권위 문서로 추적 불가.
+    impact: 환자 안전·법적 책임 추적이 모델 밖 비구조 기록에 의존하게 되어, 권위 문서가 통제 행위 감사 요구를 충족하지 못한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-005
+      - clinical-lab-ontology.yaml — CriticalValue.notified.note
+      - clinical-lab-ontology.yaml — Result.verified_by(시각 없음)
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 위험값 통보 등 통제 행위의 행위자·시각·근거를 추적 가능한 감사 모델
+      failure_condition: 위험값 통보 사실·시점·수신자를 사후 입증해야 할 때, 모델에는 notified 불리언만 있고 나머지는 외부
+        대장에 있어 권위 문서로 추적 불가.
+      impact: 환자 안전·법적 책임 추적이 모델 밖 비구조 기록에 의존하게 되어, 권위 문서가 통제 행위 감사 요구를 충족하지 못한다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — CriticalValue.notified.note
+        - clinical-lab-ontology.yaml — Result.verified_by(시각 없음)
+    causal_path:
+      root_cause_candidate: 통제 행위를 결과 상태 플래그로만 표현하고 행위자·시각·근거를 별도 감사 개념으로 모델링하지 않음
+      root_cause_step_id: finding-011.cause-002
+      steps:
+        - cause_id: finding-011.cause-001
+          claim: 위험값 통보가 notified 불리언으로만 표현되고 시각·수신자는 모델 밖에 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — CriticalValue.notified.note
+        - cause_id: finding-011.cause-002
+          claim: 검증·취소·정정 행위도 시각/사유 없이 표현되어 동일 패턴으로 감사 차원이 결손된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Result.verified_by, Order.cancelled,
+              Report.amended
+      unresolved_beyond_evidence: 외부 전화 기록 대장의 구조·연계 여부는 모델 경계 밖이라 확인 불가.
+  - finding_id: finding-012
+    lens_id: coverage
+    source_ref: .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-006
+    target: 정도관리(QC)·기기(Instrument)·시약/로트 하위 영역 부재
+    evidence_anchor: clinical-lab-ontology.yaml — Assay.definition '분석기에서 수행되는 검사
+      항목'(Instrument 엔티티 없음); QC/calibration/reagent 개념 전무
+    claim: 임상검사 도메인의 핵심 하위 영역인 정도관리(QC)·분석기기·시약/로트가 시스템에 전혀 표현되어 있지 않다.
+    lens_rationale_summary: "coverage의 '도메인 주요 하위 영역 미표현' 및 '참조 표준 대비 누락 범주' 차원이다.
+      QC·기기·로트는 임상검사 인증(예: 검사실 표준) 필수 영역으로, 결과 신뢰성의 근거다. 권위 문서가 이를 비우면 EMR/LIS
+      통합 시 결과의 QC 맥락을 연계할 수 없다."
+    proposed_action: Instrument 엔티티와 QcRun/Calibration/Reagent(Lot) 개념을 도입해
+      Assay·Result와 연결하고, 결과가 어느 기기·로트·QC 맥락에서 산출됐는지 추적 가능하게 한다. 우선순위에 따라 단계적 도입
+      범위를 notes에 명시한다.
+    affected_purpose: 결과 신뢰성의 근거(QC·기기·로트 맥락)를 포괄하는 임상검사 권위 모델
+    failure_condition: 결과의 유효성을 QC/기기/로트 맥락과 연계해 검증·조회해야 할 때, 해당 개념이 모델에 없어 표현·연계 불가.
+    impact: 권위 문서가 검사실 도메인의 결과 신뢰성 보증 영역을 누락해, 통합 설계가 QC 추적을 모델 밖에서 처리하게 된다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-006
+      - clinical-lab-ontology.yaml — Assay.definition('분석기에서 수행')
+      - clinical-lab-ontology.yaml — 엔티티 목록(Instrument/QC/Reagent 부재)
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 결과 신뢰성의 근거(QC·기기·로트 맥락)를 포괄하는 임상검사 권위 모델
+      failure_condition: 결과의 유효성을 QC/기기/로트 맥락과 연계해 검증·조회해야 할 때, 해당 개념이 모델에 없어 표현·연계 불가.
+      impact: 권위 문서가 검사실 도메인의 결과 신뢰성 보증 영역을 누락해, 통합 설계가 QC 추적을 모델 밖에서 처리하게 된다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Assay.definition('분석기에서 수행')
+        - clinical-lab-ontology.yaml — 엔티티 목록(Instrument/QC/Reagent 부재)
+    causal_path:
+      root_cause_candidate: 주문~보고 흐름(Order→Report)에 모델 범위를 한정하고 결과 품질 보증 하위 영역을 제외함
+      root_cause_step_id: finding-012.cause-002
+      steps:
+        - cause_id: finding-012.cause-001
+          claim: Assay가 분석기 수행을 전제하지만 Instrument 엔티티가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Assay.definition
+        - cause_id: finding-012.cause-002
+          claim: QC·캘리브레이션·시약/로트 개념도 전무해 결과 신뢰성 맥락 영역 전체가 비어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml — entities 전체에 해당 개념 없음
+      unresolved_beyond_evidence: v0.3 draft의 의도된 범위 한정인지 단순 누락인지는 범위 정의 문서 부재로 확정 불가.
+  - finding_id: finding-013
+    lens_id: coverage
+    source_ref: .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-007
+    target: Test/Assay 이중 카탈로그 권위 미지정
+    evidence_anchor: clinical-lab-ontology.yaml — Test('주문 가능한 카탈로그 단위'), Assay('검사
+      카탈로그의 수행 단위'); notes[0] '신규 항목은 두 곳 모두에 등록한다'
+    claim: 검사 카탈로그가 Test와 Assay 두 엔티티로 병행 유지되며 단일 권위가 없고 둘을 잇는 관계도 정의되지 않았다.
+    lens_rationale_summary: coverage의 '단일 권위 지정 부재' 차원이다. 카탈로그는 주문·결과 라우팅의 기준 데이터로,
+      정본이 둘이고 연결이 없으면 통합 시 항목 식별·매핑이 구현마다 달라진다. 중복 등록은 두 카탈로그 간 드리프트를 보장한다.
+    proposed_action: 카탈로그의 단일 권위 엔티티를 정하고 다른 하나는 그 역할/투영(orderable view ↔
+      performable view)으로 규정하거나, 통합 전까지 Test↔Assay 매핑 관계와 specimen_type 어휘 정규화
+      규칙을 명시한다.
+    affected_purpose: 주문·결과 라우팅의 기준이 되는 단일 권위 검사 카탈로그
+    failure_condition: 신규/변경 검사 항목이 Test와 Assay에 비일관적으로 등록되어 두 카탈로그가 드리프트하고, 매핑 관계
+      부재로 주문 항목을 수행 항목에 연결할 수 없을 때.
+    impact: 구현자가 어느 카탈로그를 정본으로 삼을지 분기되고, 항목 매핑이 비표준화되어 주문-결과 연계 정합이 깨진다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/coverage.findings.yaml#coverage-candidate-007
+      - clinical-lab-ontology.yaml — Test, Assay definitions
+      - clinical-lab-ontology.yaml — notes[0]
+      - clinical-lab-ontology.yaml — relations(Test↔Assay 매핑 없음)
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 주문·결과 라우팅의 기준이 되는 단일 권위 검사 카탈로그
+      failure_condition: 신규/변경 검사 항목이 Test와 Assay에 비일관적으로 등록되어 두 카탈로그가 드리프트하고, 매핑 관계
+        부재로 주문 항목을 수행 항목에 연결할 수 없을 때.
+      impact: 구현자가 어느 카탈로그를 정본으로 삼을지 분기되고, 항목 매핑이 비표준화되어 주문-결과 연계 정합이 깨진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml — Test, Assay definitions
+        - clinical-lab-ontology.yaml — notes[0]
+        - clinical-lab-ontology.yaml — relations(Test↔Assay 매핑 없음)
+    causal_path:
+      root_cause_candidate: 동일 카탈로그 개념을 통합 보류 상태로 두 엔티티에 병행 유지하고 정본·매핑을 정하지 않음
+      root_cause_step_id: finding-013.cause-002
+      steps:
+        - cause_id: finding-013.cause-001
+          claim: Test와 Assay가 같은 카탈로그를 주문/수행 단위로 분리 표현한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml — Test.definition, Assay.definition
+        - cause_id: finding-013.cause-002
+          claim: 둘을 잇는 관계가 없고 신규 항목은 양쪽 중복 등록되어 드리프트 위험이 구조화된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml — relations, notes[0]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-014
+    lens_id: evolution
+    source_ref: .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-001
+    target: clinical-lab-ontology.yaml entities.Test / entities.Assay / notes[0]
+    evidence_anchor: 'Test (test_code, requires_specimen_type enum) vs Assay
+      (assay_code, specimen_kind free string); notes: "현재 신규 항목은 두 곳 모두에 등록한다"'
+    claim: 검사 카탈로그가 Test/Assay 이중 구조여서 새 검사 항목 추가마다 두 곳 수정이 필요하고, 두 구조의 검체 타입 표현이 달라
+      통합 시 데이터 연속성이 깨진다.
+    lens_rationale_summary: 확장 단위(신규 검사 추가)가 단일 변경이 아니라 두 카탈로그의 동기 변경을 요구한다. 두 곳의 검체
+      타입 어휘가 이미 분기되어 있어(enum 4종 vs 임의 문자열) 시간이 지날수록 매핑 불가능한 항목이 누적되고, notes[0]이
+      예고한 '카탈로그 통합' 시점에 기존 데이터의 연속성이 깨진다. EMR/LIS 연동의 개념 권위 문서라면 주문 단위와 수행 단위의
+      관계(1:N 매핑인지 동일 개념인지)가 정의되어야 외부 시스템이 어느 코드를 권위로 쓸지 결정할 수 있다.
+    proposed_action: Test를 권위 카탈로그 개념으로 두고 Assay를 Test의 수행 프로파일(Test에 대한 ref + 분석기별
+      속성)로 재정의하거나, 최소한 Assay에 test_ref를 추가해 두 카탈로그 간 매핑 관계를 온톨로지 안에서 명시한다. 검체 타입
+      어휘는 하나의 공유 enum/코드 체계로 통일한다.
+    affected_purpose: "EMR/LIS 연동 설계의 개념 권위 문서 역할 (헤더 주석: '개념 권위 문서로 사용 예정')"
+    failure_condition: 신규 검사 항목 추가 또는 카탈로그 통합 시, 두 카탈로그 간 매핑 규칙이 온톨로지에 없어 연동 시스템마다
+      자체 매핑을 만들고 기존 데이터의 항목 식별 연속성이 끊어진다.
+    impact: 권위 문서가 가장 빈번한 확장 시나리오(검사 항목 추가)에서 단일 진실을 제공하지 못하므로, 이 문서를 기준으로 만든 인터페이스가
+      통합 시점에 일괄 재작업된다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-001
+      - "clinical-lab-ontology.yaml: entities.Test"
+      - "clinical-lab-ontology.yaml: entities.Assay.specimen_kind note"
+      - "clinical-lab-ontology.yaml: notes[0]"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "EMR/LIS 연동 설계의 개념 권위 문서 역할 (헤더 주석: '개념 권위 문서로 사용 예정')"
+      failure_condition: 신규 검사 항목 추가 또는 카탈로그 통합 시, 두 카탈로그 간 매핑 규칙이 온톨로지에 없어 연동 시스템마다
+        자체 매핑을 만들고 기존 데이터의 항목 식별 연속성이 끊어진다.
+      impact: 권위 문서가 가장 빈번한 확장 시나리오(검사 항목 추가)에서 단일 진실을 제공하지 못하므로, 이 문서를 기준으로 만든 인터페이스가
+        통합 시점에 일괄 재작업된다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Test"
+        - "clinical-lab-ontology.yaml: entities.Assay.specimen_kind note"
+        - "clinical-lab-ontology.yaml: notes[0]"
+    causal_path:
+      root_cause_candidate: 주문 가능 단위(Test)와 분석기 수행 단위(Assay)를 별도 엔티티로 도입하면서 둘 사이의 관계를
+        온톨로지에 정의하지 않고 운영 관행(이중 등록 노트)으로 미룬 것.
+      root_cause_step_id: finding-014.cause-003
+      steps:
+        - cause_id: finding-014.cause-001
+          claim: 신규 검사 추가는 Test와 Assay 양쪽 등록을 요구하며, 두 레코드를 잇는 구조적 링크가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: notes[0]"
+            - "clinical-lab-ontology.yaml: relations (Test↔Assay 관계 부재)"
+        - cause_id: finding-014.cause-002
+          claim: 링크 부재는 Test/Assay 간 관계 미정의에서 비롯되며, 검체 타입 표현까지 서로 다른 체계(enum vs 자유 문자열)로
+            분기시켰다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Test.requires_specimen_type"
+            - "clinical-lab-ontology.yaml: entities.Assay.specimen_kind"
+        - cause_id: finding-014.cause-003
+          claim: 관계 미정의는 통합을 '카탈로그 정비 후 재검토'로 연기한 설계 결정이 원인이며, 그 사이 비호환 데이터가 누적되도록 허용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: notes[0]"
+      unresolved_beyond_evidence: 실제 LIS에서 Test와 Assay가 1:1인지 1:N인지(한 주문 항목이 여러 assay로
+        분해되는지)는 대상 파일만으로 확인 불가.
+  - finding_id: finding-015
+    lens_id: evolution
+    source_ref: .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-002
+    target: clinical-lab-ontology.yaml entities.Order (priority, is_stat) /
+      entities.StatOrder
+    evidence_anchor: Order.priority enum [routine, urgent, stat], Order.is_stat
+      boolean, StatOrder is_a Order
+    claim: 긴급도가 enum 값, boolean 플래그, 하위 타입 세 가지 메커니즘으로 중복 인코딩되어 있어, 긴급도 체계 확장 시 세 곳을
+      동시 수정해야 하고 표현 간 모순 상태가 가능하다.
+    lens_rationale_summary: "새 긴급 등급(예: ASAP, timed) 추가 시 enum 수정 + boolean 의미 재해석 +
+      하위 타입 추가 여부 결정이 모두 필요하다. 또한 is_stat=true이면서 priority=routine인 인스턴스,
+      StatOrder가 아니면서 priority=stat인 인스턴스를 막을 제약이 없어, 연동 시스템마다 다른 필드를 읽으면 동작이
+      갈라진다. 변경 내성 관점에서 '한 개념 한 표현' 원칙 위반은 모든 긴급도 관련 확장의 비용을 3배로 만든다."
+    proposed_action: priority enum을 단일 권위로 지정하고 is_stat을 priority의 파생 투영(derived)으로
+      강등하거나 제거한다. StatOrder는 stat_reason 한 속성만 추가하므로 하위 타입을 없애고 stat_reason을
+      Order의 조건부 속성(priority=stat일 때 필수)으로 흡수한다.
+    affected_purpose: EMR/LIS 연동 시 긴급도 판정의 단일 기준 제공
+    failure_condition: 긴급도 등급을 추가·변경하는 순간 세 표현 중 일부만 갱신되어, STAT 처리 경로(즉시 검사)가 시스템별로 다르게 트리거된다.
+    impact: 임상 워크플로에서 긴급도 오판은 STAT 검사 지연이라는 환자 안전 결과로 직결되며, 권위 문서가 모순 상태를 구조적으로 허용하면
+      연동 검증으로도 잡을 수 없다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-002
+      - "clinical-lab-ontology.yaml: entities.Order.attributes.priority"
+      - "clinical-lab-ontology.yaml: entities.Order.attributes.is_stat note"
+      - "clinical-lab-ontology.yaml: entities.StatOrder"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 시 긴급도 판정의 단일 기준 제공
+      failure_condition: 긴급도 등급을 추가·변경하는 순간 세 표현 중 일부만 갱신되어, STAT 처리 경로(즉시 검사)가 시스템별로 다르게 트리거된다.
+      impact: 임상 워크플로에서 긴급도 오판은 STAT 검사 지연이라는 환자 안전 결과로 직결되며, 권위 문서가 모순 상태를 구조적으로 허용하면
+        연동 검증으로도 잡을 수 없다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Order.attributes.priority"
+        - "clinical-lab-ontology.yaml: entities.Order.attributes.is_stat note"
+        - "clinical-lab-ontology.yaml: entities.StatOrder"
+    causal_path:
+      root_cause_candidate: 긴급도라는 단일 개념을 권위 지정 없이 속성(enum), 플래그(boolean), 타입 계층(is_a)
+        세 모델링 수단에 병렬로 인코딩한 설계 결정.
+      root_cause_step_id: finding-015.cause-002
+      steps:
+        - cause_id: finding-015.cause-001
+          claim: 긴급도 확장(새 등급 추가)은 priority enum, is_stat 의미, StatOrder 타입 체계 세 곳의 동기 수정을
+            요구한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Order.attributes"
+            - "clinical-lab-ontology.yaml: entities.StatOrder"
+        - cause_id: finding-015.cause-002
+          claim: 세 곳 수정 필요성은 동일 개념의 삼중 인코딩에서 비롯되며, is_stat의 note('priority와 함께 기록')는 중복을
+            인지하면서도 권위를 지정하지 않았음을 보여준다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Order.attributes.is_stat
+              note"
+      unresolved_beyond_evidence: 기존 EMR/LIS 구현이 세 표현 중 무엇을 실제로 읽는지는 대상 파일 범위 밖.
+  - finding_id: finding-016
+    lens_id: evolution
+    source_ref: .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-003
+    target: clinical-lab-ontology.yaml entities.Result.status /
+      entities.Report.result_status / state_rules[1]
+    evidence_anchor: "Result.status [preliminary, final, corrected] vs
+      Report.result_status [prelim, finalized, amended]; state_rules: '동기화 배치는
+      야간 1회'"
+    claim: 결과 상태가 서로 다른 두 어휘로 이중 관리되고 야간 배치로만 동기화되므로, 상태 어휘 확장 시 두 enum과 매핑 규칙을 모두
+      수정해야 하고 변경 사이의 연속성 공백이 구조화되어 있다.
+    lens_rationale_summary: "새 결과 상태(예: cancelled, entered-in-error — HL7/FHIR 표준 결과
+      상태에 존재)를 수용하려면 두 enum 추가 + 암묵적 매핑(preliminary↔prelim 등) 갱신 + 배치 로직 수정이 모두
+      필요하다. 외부 표준(HL7 OBX-11, FHIR DiagnosticReport.status) 채택 시 어느 어휘를 매핑 기준으로
+      삼을지 결정 불가하다. 또한 corrected→amended 전파가 최대 하루 지연되는 동안 임상의가 '신뢰하라'고 명시된
+      Report 값이 구식이 되는 연속성 단절이 모델 자체에 내장되어 있다."
+    proposed_action: 하나의 상태 어휘를 권위로 선언하고(Result.status 권장), Report.result_status를 그
+      파생 투영으로 정의하며 두 어휘를 단일 enum으로 통일한다. 동기화 지연이 불가피하면 Report에 status_as_of(동기화
+      기준 시각)를 추가해 지연을 모델에 명시한다.
+    affected_purpose: 임상의에게 전달되는 결과 상태의 신뢰성과 외부 표준(HL7/FHIR) 연동 시 상태 매핑의 단일 기준
+    failure_condition: Result.status가 corrected로 바뀐 뒤 다음 야간 배치까지, '임상의는 이 값을 신뢰한다'고
+      선언된 Report.result_status가 finalized로 남아 수정 전 값을 신뢰하게 된다. 상태 어휘 확장 시 두 enum
+      중 한쪽만 갱신되면 매핑 불능 상태가 생긴다.
+    impact: 수정된 검사 결과의 전달 지연은 임상 의사결정 오류로 직결되는 환자 안전 문제이며, 권위 문서가 이 지연을 정상 동작으로
+      명문화하고 있어 연동 설계자가 위험을 인지하지 못한 채 그대로 구현하게 된다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-003
+      - "clinical-lab-ontology.yaml: entities.Result.attributes.status note"
+      - "clinical-lab-ontology.yaml: entities.Report.attributes.result_status
+        note"
+      - "clinical-lab-ontology.yaml: state_rules[1]"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 임상의에게 전달되는 결과 상태의 신뢰성과 외부 표준(HL7/FHIR) 연동 시 상태 매핑의 단일 기준
+      failure_condition: Result.status가 corrected로 바뀐 뒤 다음 야간 배치까지, '임상의는 이 값을 신뢰한다'고
+        선언된 Report.result_status가 finalized로 남아 수정 전 값을 신뢰하게 된다. 상태 어휘 확장 시 두
+        enum 중 한쪽만 갱신되면 매핑 불능 상태가 생긴다.
+      impact: 수정된 검사 결과의 전달 지연은 임상 의사결정 오류로 직결되는 환자 안전 문제이며, 권위 문서가 이 지연을 정상 동작으로
+        명문화하고 있어 연동 설계자가 위험을 인지하지 못한 채 그대로 구현하게 된다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Result.attributes.status note"
+        - "clinical-lab-ontology.yaml: entities.Report.attributes.result_status
+          note"
+        - "clinical-lab-ontology.yaml: state_rules[1]"
+    causal_path:
+      root_cause_candidate: 결과 상태의 권위 위치를 Result(LIS 기록)와 Report(임상의 신뢰 값) 양쪽에 동시에
+        부여하고, 정합성을 모델 제약이 아닌 야간 배치라는 운영 절차에 위임한 설계 결정.
+      root_cause_step_id: finding-016.cause-003
+      steps:
+        - cause_id: finding-016.cause-001
+          claim: 상태 어휘가 두 enum으로 분기되어 있고 값 이름까지 달라(final vs finalized) 확장 시 두 곳 수정과 매핑 갱신이
+            필요하다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Result.attributes.status"
+            - "clinical-lab-ontology.yaml:
+              entities.Report.attributes.result_status"
+        - cause_id: finding-016.cause-002
+          claim: 이중 어휘는 Result note('동일 정보 유지')와 Report note('권위 값')가 서로 권위를 주장하는 이중 권위
+            선언의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Result.attributes.status
+              note"
+            - "clinical-lab-ontology.yaml:
+              entities.Report.attributes.result_status note"
+        - cause_id: finding-016.cause-003
+          claim: 이중 권위는 동기화를 야간 배치로 처리하는 운영 결정과 결합해, 최대 24시간의 상태 불일치 창을 모델이 허용하게 만든다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: state_rules[1]"
+      unresolved_beyond_evidence: 실제 배치 주기와 corrected 발생 빈도는 대상 파일 범위 밖이므로 불일치 창의 실측 위험도는 확인 불가.
+  - finding_id: finding-017
+    lens_id: evolution
+    source_ref: .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-004
+    target: clinical-lab-ontology.yaml entities.Specimen.specimen_type /
+      entities.Test.requires_specimen_type
+    evidence_anchor: specimen_type enum [blood, urine, tissue, swab] (Specimen과
+      Test에 각각 닫힌 enum으로 중복 정의)
+    claim: 검체 타입이 두 엔티티에 각각 하드코딩된 닫힌 enum이어서, 새 검체 유형(CSF, 대변, 타액 등) 추가 시 최소 두 곳의
+      스키마 수정이 필요하고 Assay의 자유 문자열과는 매핑조차 없다.
+    lens_rationale_summary: 임상검사실은 CSF, 대변, 객담, 골수 등 검체 유형이 일상적으로 추가되는 도메인이다. 닫힌
+      enum의 중복 정의는 새 유형 수용 시 두 정의의 동기 수정을 강제하고, 한쪽만 수정되면 Test가 요구하는 검체 타입을
+      Specimen이 표현할 수 없는 비대칭이 생긴다. Assay.specimen_kind(자유 문자열)까지 합치면 같은 개념의 세 번째
+      표현이며 SNOMED/HL7 specimen type 코드 채택 시 세 곳 모두 마이그레이션 대상이 된다.
+    proposed_action: SpecimenType을 독립 카탈로그 개념(코드 + 표시명, 필요 시 외부 코드 체계 매핑 필드 포함)으로
+      승격하고 Specimen, Test, Assay가 모두 이를 ref로 참조하게 한다. 그러면 새 검체 유형 추가가 카탈로그 행 추가로
+      끝난다.
+    affected_purpose: "새 검사·검체 유형을 기존 구조 수정 없이 수용하는 확장성 (검토 목표: scope_control)"
+    failure_condition: "4값 enum에 없는 검체(예: CSF)를 쓰는 검사를 카탈로그에 추가하는 순간, Specimen과 Test
+      양쪽의 enum 정의 변경 없이는 해당 주문·검체를 표현할 수 없다."
+    impact: 검체 유형 추가는 임상검사실의 통상 확장 시나리오인데 매번 권위 문서의 스키마 변경(및 이를 따르는 EMR/LIS 인터페이스
+      변경)을 유발하므로, 인스턴스 수준 확장이어야 할 작업이 스키마 마이그레이션이 된다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-004
+      - "clinical-lab-ontology.yaml: entities.Specimen.attributes.specimen_type"
+      - "clinical-lab-ontology.yaml:
+        entities.Test.attributes.requires_specimen_type"
+      - "clinical-lab-ontology.yaml: entities.Assay.attributes.specimen_kind"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "새 검사·검체 유형을 기존 구조 수정 없이 수용하는 확장성 (검토 목표: scope_control)"
+      failure_condition: "4값 enum에 없는 검체(예: CSF)를 쓰는 검사를 카탈로그에 추가하는 순간, Specimen과 Test
+        양쪽의 enum 정의 변경 없이는 해당 주문·검체를 표현할 수 없다."
+      impact: 검체 유형 추가는 임상검사실의 통상 확장 시나리오인데 매번 권위 문서의 스키마 변경(및 이를 따르는 EMR/LIS 인터페이스
+        변경)을 유발하므로, 인스턴스 수준 확장이어야 할 작업이 스키마 마이그레이션이 된다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml:
+          entities.Specimen.attributes.specimen_type"
+        - "clinical-lab-ontology.yaml:
+          entities.Test.attributes.requires_specimen_type"
+        - "clinical-lab-ontology.yaml: entities.Assay.attributes.specimen_kind"
+    causal_path:
+      root_cause_candidate: 검체 타입을 참조 가능한 카탈로그 개념이 아니라 인라인 enum 리터럴로 모델링하고, 그 리터럴을 엔티티마다 복사한 것.
+      root_cause_step_id: finding-017.cause-002
+      steps:
+        - cause_id: finding-017.cause-001
+          claim: 새 검체 유형 수용에 Specimen·Test 두 enum의 동기 스키마 수정이 필요하다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.Specimen.attributes.specimen_type"
+            - "clinical-lab-ontology.yaml:
+              entities.Test.attributes.requires_specimen_type"
+        - cause_id: finding-017.cause-002
+          claim: 이 수정 부담은 검체 타입이 공유 개념으로 승격되지 않고 인라인 enum으로 복제된 모델링 선택에서 비롯된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities (SpecimenType 개념 부재)"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-018
+    lens_id: evolution
+    source_ref: .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-005
+    target: clinical-lab-ontology.yaml entities.Test.test_code / entities.Patient
+    evidence_anchor: "test_code: { type: string } (코드 체계 식별 없음); Patient.patient_id와 mrn 병존"
+    claim: 식별자에 코드 체계(coding system) 차원이 없어, LOINC 등 외부 표준 코드 도입이나 타 기관 시스템 통합 시 기존
+      로컬 코드 데이터와의 연속성을 유지할 구조적 자리가 없다.
+    lens_rationale_summary: EMR/LIS 통합의 표준 관행은 검사 코드를 LOINC 등 표준 체계와 병행 매핑하는 것이다. 현재
+      구조에서 표준 코드를 도입하려면 test_code의 의미를 재정의(로컬→표준)하거나 속성을 추가해야 하고, 전자는 기존
+      Result.test_ref 데이터의 해석 연속성을 깨며 후자는 스키마 변경이다. 다기관 통합 시 동일 test_code 문자열이
+      다른 검사를 가리키는 충돌도 방지할 수 없다.
+    proposed_action: 식별자를 (system, code) 쌍으로 표현할 수 있게 하거나, Test에 code_mappings(코드
+      체계별 코드 목록) 속성을 예약해 외부 표준 코드를 기존 구조 수정 없이 병기할 수 있는 확장점을 마련한다.
+    affected_purpose: EMR/LIS 및 외부 기관 시스템과의 통합 시 검사·환자 식별의 충돌 없는 매핑
+    failure_condition: 표준 코드 체계 도입 또는 타 시스템 통합 시점에, 코드 체계 차원이 없는 test_code로는 로컬 코드와
+      표준 코드를 구분할 수 없어 기존 데이터 재해석 또는 스키마 변경이 강제된다.
+    impact: 통합이 명시된 사용 목적(EMR/LIS 연동)인 문서에서 식별자 충돌 방지 구조가 없으면, 통합 범위가 한 기관·한 코드 체계를
+      넘는 순간 권위 문서 자체가 개정 대상이 된다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-005
+      - "clinical-lab-ontology.yaml: entities.Test.attributes.test_code"
+      - "clinical-lab-ontology.yaml: entities.Patient.attributes"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 및 외부 기관 시스템과의 통합 시 검사·환자 식별의 충돌 없는 매핑
+      failure_condition: 표준 코드 체계 도입 또는 타 시스템 통합 시점에, 코드 체계 차원이 없는 test_code로는 로컬 코드와
+        표준 코드를 구분할 수 없어 기존 데이터 재해석 또는 스키마 변경이 강제된다.
+      impact: 통합이 명시된 사용 목적(EMR/LIS 연동)인 문서에서 식별자 충돌 방지 구조가 없으면, 통합 범위가 한 기관·한 코드 체계를
+        넘는 순간 권위 문서 자체가 개정 대상이 된다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Test.attributes.test_code"
+        - "clinical-lab-ontology.yaml: entities.Patient.attributes"
+    causal_path:
+      root_cause_candidate: 식별자를 단일 기관·단일 코드 체계 전제의 불투명 문자열로 모델링하고, 코드 체계라는 차원을 개념화하지 않은 것.
+      root_cause_step_id: finding-018.cause-002
+      steps:
+        - cause_id: finding-018.cause-001
+          claim: 외부 표준 코드 도입 시 test_code의 의미 재정의 또는 스키마 변경이 필요해 기존 데이터 연속성이 위협받는다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Test.attributes.test_code"
+        - cause_id: finding-018.cause-002
+          claim: 이는 식별자에 발급 체계 차원이 없다는 모델링 공백의 증상이며, Patient의 patient_id/mrn 이중 식별자에 권위
+            구분이 없는 것도 같은 공백의 다른 표면이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.Patient.attributes.patient_id"
+            - "clinical-lab-ontology.yaml: entities.Patient.attributes.mrn"
+      unresolved_beyond_evidence: 통합 대상 외부 시스템의 코드 체계 요구사항은 대상 파일 범위 밖.
+  - finding_id: finding-019
+    lens_id: evolution
+    source_ref: .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-006
+    target: clinical-lab-ontology.yaml entities.CriticalValue
+    evidence_anchor: "CriticalValue: test_ref + lower_bound/upper_bound(단일 수치 범위),
+      notified boolean note '통보 시각과 수신자는 전화 기록 대장에 있다'"
+    claim: CriticalValue가 검사당 단일 수치 범위만 표현 가능하고 통보 이력의 핵심 정보가 온톨로지 밖(종이 대장)에 있어,
+      인구집단별 기준이나 비수치 위험값으로의 확장과 통보 감사 추적의 전산화를 기존 구조 수정 없이 수용할 수 없다.
+    lens_rationale_summary: 위험치 기준의 인구집단별 세분화와 정성 검사 위험값은 임상검사실의 표준 요구다. 현재 구조로는 같은
+      test_ref에 여러 CriticalValue 인스턴스를 둘 적용 조건 속성이 없어 구분이 불가능하고, value가 string인
+      Result와 number 범위 비교라는 타입 불일치도 있다. 통보 이력이 종이 대장에 있는 한 EMR/LIS 통합 시 통보
+      워크플로를 전산화하려면 이 개념을 재설계해야 한다.
+    proposed_action: "CriticalValue에 적용 조건(연령/성별 등) 속성 자리와 비수치 위험값 표현(예:
+      critical_flag_values)을 예약하고, notified boolean을
+      CriticalValueNotification(통보 시각·수신자·방법) 개념 또는 최소한 notified_at/notified_to
+      속성으로 승격한다."
+    affected_purpose: 위험치 통보 워크플로의 EMR/LIS 전산화 시 개념 모델 재작업 없이 확장 가능해야 하는 권위 문서 역할
+    failure_condition: 인구집단별 위험치 기준 도입, 정성 검사 위험값 추가, 또는 통보 감사 추적 전산화 중 어느 하나라도 착수하면
+      CriticalValue 구조 자체의 개정이 필요하다.
+    impact: 위험치 통보는 환자 안전 규제(인증 요건상 통보 시각·수신자 기록 필수) 영역이라 전산화 요구가 확실시되는데, 현재 모델은 그
+      확장을 구조 변경 없이는 수용하지 못해 권위 문서로서의 수명이 짧다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-006
+      - "clinical-lab-ontology.yaml: entities.CriticalValue.attributes"
+      - "clinical-lab-ontology.yaml: entities.CriticalValue.attributes.notified
+        note"
+      - "clinical-lab-ontology.yaml: entities.Result.attributes.value (type:
+        string)"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 위험치 통보 워크플로의 EMR/LIS 전산화 시 개념 모델 재작업 없이 확장 가능해야 하는 권위 문서 역할
+      failure_condition: 인구집단별 위험치 기준 도입, 정성 검사 위험값 추가, 또는 통보 감사 추적 전산화 중 어느 하나라도 착수하면
+        CriticalValue 구조 자체의 개정이 필요하다.
+      impact: 위험치 통보는 환자 안전 규제(인증 요건상 통보 시각·수신자 기록 필수) 영역이라 전산화 요구가 확실시되는데, 현재 모델은 그
+        확장을 구조 변경 없이는 수용하지 못해 권위 문서로서의 수명이 짧다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.CriticalValue.attributes"
+        - "clinical-lab-ontology.yaml:
+          entities.CriticalValue.attributes.notified note"
+        - "clinical-lab-ontology.yaml: entities.Result.attributes.value (type:
+          string)"
+    causal_path:
+      root_cause_candidate: 위험치 개념을 현재 운영 관행(수치 범위 + 전화 대장)의 최소 스냅샷으로 모델링하고, 통보 사건을 독립
+        개념이 아닌 boolean 플래그로 축약한 것.
+      root_cause_step_id: finding-019.cause-002
+      steps:
+        - cause_id: finding-019.cause-001
+          claim: 인구집단별 기준·정성 위험값·통보 감사 확장이 모두 CriticalValue 구조 수정 없이는 불가능하다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.CriticalValue.attributes"
+        - cause_id: finding-019.cause-002
+          claim: 이 확장 불가는 적용 조건 차원의 부재와 통보 사건의 boolean 축약이라는 두 모델링 결정의 결과이며, note가 핵심
+            정보(시각·수신자)의 외부 존재를 명시한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.CriticalValue.attributes.notified note"
+      unresolved_beyond_evidence: 병원의 위험치 통보 규정과 인증 요건의 구체 내용은 대상 파일 범위 밖.
+  - finding_id: finding-020
+    lens_id: evolution
+    source_ref: .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-007
+    target: clinical-lab-ontology.yaml state_rules[0] / entities.Order.lifecycle
+    evidence_anchor: "state_rules: 'Order는 모든 Result가 final일 때 completed로 전이한다.';
+      Order.lifecycle에 completed 이후 재개 상태 없음"
+    claim: Order 완료 규칙이 add-on 검사(완료 후 항목 추가)와 corrected 결과를 고려하지 않아, 임상검사에서 흔한 두
+      시나리오를 수용하려면 lifecycle과 전이 규칙 양쪽의 수정이 필요하다.
+    lens_rationale_summary: add-on 검사는 기존 검체에 검사를 추가하는 임상검사실의 일상 시나리오이고, corrected는
+      이 온톨로지 자신이 정의한 상태다. 현재 규칙으로는 corrected(≠final) Result가 생긴 completed Order가
+      규칙 위반 상태가 되는지, completed에서 in_progress로 되돌아가는지 정의되지 않아, 연동 시스템이 각자 다른 해석을
+      구현하게 된다. 확장(새 시나리오 수용) 시 lifecycle enum과 state_rules를 함께 고쳐야 한다.
+    proposed_action: "state_rules[0]에 corrected 발생 시와 ordered_tests 추가 시의 전이를
+      명시한다(예: completed는 종결이 아니라 '현재 항목 기준 완료'로 재정의하고, 항목 추가 시 in_progress로 복귀).
+      최소 수정은 규칙 한 줄 추가다."
+    affected_purpose: Order 상태를 기준으로 동작하는 EMR/LIS 워크플로(주문 추적, 미결 주문 관리)의 일관된 구현
+    failure_condition: completed Order에 add-on 검사가 추가되거나 Result가 corrected로 변경되는 순간,
+      정의된 전이가 없어 시스템별로 상태 해석이 갈라진다.
+    impact: 두 시나리오 모두 실제 운영에서 확실히 발생하며, 권위 문서가 침묵하면 연동 시스템 간 주문 상태 불일치가 구조적으로 발생한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-007
+      - "clinical-lab-ontology.yaml: state_rules[0]"
+      - "clinical-lab-ontology.yaml: entities.Order.lifecycle"
+      - "clinical-lab-ontology.yaml: entities.Result.attributes.status
+        (corrected)"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Order 상태를 기준으로 동작하는 EMR/LIS 워크플로(주문 추적, 미결 주문 관리)의 일관된 구현
+      failure_condition: completed Order에 add-on 검사가 추가되거나 Result가 corrected로 변경되는 순간,
+        정의된 전이가 없어 시스템별로 상태 해석이 갈라진다.
+      impact: 두 시나리오 모두 실제 운영에서 확실히 발생하며, 권위 문서가 침묵하면 연동 시스템 간 주문 상태 불일치가 구조적으로 발생한다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: state_rules[0]"
+        - "clinical-lab-ontology.yaml: entities.Order.lifecycle"
+        - "clinical-lab-ontology.yaml: entities.Result.attributes.status
+          (corrected)"
+    causal_path:
+      root_cause_candidate: Order lifecycle을 단방향 종결형으로 설계하면서, 온톨로지 내부에 이미 존재하는 재개 유발
+        사건(corrected 상태, ordered_tests 변경 가능성)과의 상호작용을 정의하지 않은 것.
+      root_cause_step_id: finding-020.cause-002
+      steps:
+        - cause_id: finding-020.cause-001
+          claim: completed Order에 corrected Result 또는 add-on 항목이 생기면 적용 가능한 전이 규칙이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: state_rules[0]"
+            - "clinical-lab-ontology.yaml: entities.Order.lifecycle"
+        - cause_id: finding-020.cause-002
+          claim: 이 공백은 completed를 '모든 Result final'이라는 시점 조건으로만 정의하고 그 조건이 사후에 거짓이 될 수
+            있음(corrected의 존재)을 반영하지 않은 규칙 설계의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Result.attributes.status
+              values"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-021
+    lens_id: evolution
+    source_ref: .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-008
+    target: clinical-lab-ontology.yaml notes[1] (TAT 계산)
+    evidence_anchor: "notes: 'turnaround_time(TAT)은 collected_at부터 released_at까지로
+      계산하며, 대시보드 팀이 자체 계산식을 유지한다.'"
+    claim: TAT 정의가 온톨로지에 서술만 되고 계산 권위는 외부 팀의 자체 계산식에 있어, 정의 변경 시 온톨로지와 실제 계산이 따로 진화할
+      수 있다.
+    lens_rationale_summary: "TAT 정의가 바뀌면(예: 접수 시각 기준으로 변경) 온톨로지 notes와 대시보드 계산식이
+      독립적으로 수정되어 분기할 수 있다. 파생 값의 정의와 권위가 분리된 전형적 진화 위험이지만, notes 수준의 서술이고 즉시 깨지는
+      구조는 아니다."
+    proposed_action: "TAT를 온톨로지의 파생 속성(derived: released_at - collected_at)으로 정식
+      정의하고, 대시보드 계산식이 이 정의를 따른다는 권위 방향을 명시한다."
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: "TAT 정의가 바뀌면(예: 접수 시각 기준으로 변경) 온톨로지 notes와 대시보드 계산식이 독립적으로 수정되어 분기할 수
+      있다. 파생 값의 정의와 권위가 분리된 전형적 진화 위험이지만, notes 수준의 서술이고 즉시 깨지는 구조는 아니다."
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/evolution.findings.yaml#evolution-candidate-008
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-022
+    lens_id: logic
+    source_ref: .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-001
+    target: "clinical-lab-ontology.yaml: state_rules[0] (Order completion rule) ×
+      entities.Result.attributes.status"
+    evidence_anchor: clinical-lab-ontology.yaml state_rules[0] "Order는 모든 Result가
+      final일 때 completed로 전이한다."; entities.Result.attributes.status enum
+      [preliminary, final, corrected]
+    claim: Order의 종결 판정 규칙이 가역적 상태(Result.status)에 의존하여, 모델이 스스로 허용하는 후속
+      사건(corrected 전이)과 시간 전개 경로상 모순을 형성한다.
+    lens_rationale_summary: 이 문서는 EMR/LIS 연동의 개념 권위 문서로 선언되어 있다(파일 헤더 주석). EMR/LIS
+      통합에서 결과 정정(corrected)은 모델 자신이 1급 사건으로 선언한 정상 경로인데, 종결 규칙이 그 사건과 양립 불가능하면
+      구현 팀마다 임의 해석(completed 고정 vs in_progress 복귀 vs 별도 amended 상태)을 하게 되어 권위 문서
+      역할이 무너진다. 이는 명시된 claim 집합의 동시 만족 불가능 문제이므로 logic 소유이다.
+    proposed_action: "종결 규칙의 시점 의존성을 명시한다: (a) completed를 '판정 시점에 모든 Result가 final
+      또는 corrected'로 재정의하고 corrected 발생 시 Order 상태 처리 규칙(유지+amended 플래그, 또는 재개
+      전이)을 1문장 추가하거나, (b) lifecycle에 completed→(정정 발생 시) 전이를 명시한다. 둘 중 하나만 선택해도
+      모순은 해소된다."
+    affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 Order 상태 모델이 통합 양측에서 동일하게 해석되어야 한다는
+      선언된 목적(파일 헤더 주석).
+    failure_condition: Report 발행 후 Result가 corrected로 정정되는 정상 운영 사건이 발생하는 모든
+      경우(state_rules[1]이 이 사건을 명시적으로 전제).
+    impact: 종결 상태의 의미가 미정의가 되어 EMR과 LIS가 동일 주문에 대해 서로 다른 Order 상태를 보고할 수 있고, 권위 문서를
+      근거로 한 인터페이스 검증이 불가능해진다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-001
+      - clinical-lab-ontology.yaml state_rules[0]
+      - clinical-lab-ontology.yaml state_rules[1]
+      - clinical-lab-ontology.yaml entities.Result.attributes.status
+      - clinical-lab-ontology.yaml entities.Order.lifecycle
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 Order 상태 모델이 통합 양측에서 동일하게 해석되어야 한다는
+        선언된 목적(파일 헤더 주석).
+      failure_condition: Report 발행 후 Result가 corrected로 정정되는 정상 운영 사건이 발생하는 모든
+        경우(state_rules[1]이 이 사건을 명시적으로 전제).
+      impact: 종결 상태의 의미가 미정의가 되어 EMR과 LIS가 동일 주문에 대해 서로 다른 Order 상태를 보고할 수 있고, 권위 문서를
+        근거로 한 인터페이스 검증이 불가능해진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml state_rules[0]
+        - clinical-lab-ontology.yaml state_rules[1]
+        - clinical-lab-ontology.yaml entities.Result.attributes.status
+        - clinical-lab-ontology.yaml entities.Order.lifecycle
+    causal_path:
+      root_cause_candidate: 종결 판정 규칙(state_rules[0])이 가역적 속성(Result.status)을 비가역 전제처럼
+        사용하면서, 모델이 동시에 선언한 정정 사건(corrected)과의 상호작용 규칙을 정의하지 않은 것.
+      root_cause_step_id: finding-022.cause-003
+      steps:
+        - cause_id: finding-022.cause-001
+          claim: state_rules[0]은 '모든 Result가 final'을 Order→completed 조건으로 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[0]
+        - cause_id: finding-022.cause-002
+          claim: Result.status enum과 state_rules[1]은 final 이후 corrected 전이를 정상 사건으로 허용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Result.attributes.status
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: finding-022.cause-003
+          claim: Order.lifecycle에는 completed로부터의 복귀·재개 전이가 없어, corrected 발생 후 completed 판정
+            전제가 거짓인 상태와 completed 상태가 공존한다 — 경로상 동시 만족 불가능.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Order.lifecycle
+      unresolved_beyond_evidence: "corrected 발생 시 Order를 어떻게 처리하는 것이 임상적으로 옳은지는 도메인
+        규칙(예: CLIA/검사실 운영 규정)에 의존하며 본 boundary 내 문서에는 없다."
+  - finding_id: finding-023
+    lens_id: logic
+    source_ref: .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-002
+    target: "clinical-lab-ontology.yaml: state_rules[1] ×
+      entities.Report.attributes.result_status.note ×
+      entities.Result.attributes.status.note"
+    evidence_anchor: state_rules[1] "Result.status가 corrected로 바뀌면
+      Report.result_status는 amended가 되어야 한다(동기화 배치는 야간 1회)";
+      Report.result_status.note "권위 값. 임상의는 이 값을 신뢰한다"; Result.status.note
+      "Report.result_status에도 동일 정보가 유지된다"
+    claim: state_rules[1]은 즉시형 의무(amended가 되어야 한다)와 그 의무를 매번 위반하게 만드는 이행 메커니즘(야간 1회
+      배치)을 한 규칙 안에 선언하여, '동일 정보 유지'·'권위 값' claim들과 함께 동시 만족 불가능한 집합을 이룬다.
+    lens_rationale_summary: 문서가 스스로 Report.result_status를 임상의가 신뢰하는 권위 값으로 선언했기 때문에,
+      권위 값이 원천(Result.status)과 정의상 불일치하는 구간을 모델이 보장한다는 것은 권위 선언 자체와의 형식 모순이다. 이는
+      단일 규칙 내부의 modality 구분 오류(의무를 선언하면서 충족 가능 조건을 제거)이므로 logic 소유이며, EMR/LIS 통합
+      시 임상의가 stale finalized를 신뢰하는 위험이 모델 수준에서 정당화된다.
+    proposed_action: "의무의 modality를 메커니즘과 일치시킨다: (a) 즉시 동기화를 요구한다면 '야간 배치' 단서를 제거하고
+      corrected 이벤트 기반 즉시 갱신을 규칙으로 선언하거나, (b) 지연을 허용한다면 '되어야 한다'를 '다음 동기화 주기 내에
+      amended가 된다'로 바꾸고 그 지연 구간 동안의 권위를 Result.status로 명시 이전한다(권위 값 note 수정 동반).
+      두 경로 모두 '동일 정보가 유지된다' note를 '주기적으로 동기화된다'로 수정해야 한다."
+    affected_purpose: 임상의에게 전달되는 결과 상태의 단일 권위(Report.result_status "임상의는 이 값을
+      신뢰한다")와 Result↔Report 상태 동일성 계약.
+    failure_condition: Result.status가 corrected로 전이된 시점부터 다음 야간 배치까지의 모든 구간 — 모델이
+      명시한 정상 경로상 매 정정 사건마다 발생.
+    impact: 권위 문서가 '신뢰하라'고 선언한 값이 원천과 불일치하는 구간을 문서 자신이 보장하므로, 이 문서를 계약으로 삼는 EMR/LIS
+      구현은 검증 기준 자체가 자기모순이 되고, 임상의가 정정 전 값을 최종으로 오신뢰하는 경로가 개념 모델 수준에서 승인된다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-002
+      - clinical-lab-ontology.yaml state_rules[1]
+      - clinical-lab-ontology.yaml entities.Report.attributes.result_status.note
+      - clinical-lab-ontology.yaml entities.Result.attributes.status.note
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 임상의에게 전달되는 결과 상태의 단일 권위(Report.result_status "임상의는 이 값을
+        신뢰한다")와 Result↔Report 상태 동일성 계약.
+      failure_condition: Result.status가 corrected로 전이된 시점부터 다음 야간 배치까지의 모든 구간 — 모델이
+        명시한 정상 경로상 매 정정 사건마다 발생.
+      impact: 권위 문서가 '신뢰하라'고 선언한 값이 원천과 불일치하는 구간을 문서 자신이 보장하므로, 이 문서를 계약으로 삼는 EMR/LIS
+        구현은 검증 기준 자체가 자기모순이 되고, 임상의가 정정 전 값을 최종으로 오신뢰하는 경로가 개념 모델 수준에서 승인된다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml state_rules[1]
+        - clinical-lab-ontology.yaml
+          entities.Report.attributes.result_status.note
+        - clinical-lab-ontology.yaml entities.Result.attributes.status.note
+    causal_path:
+      root_cause_candidate: 동기화 의무의 modality(즉시 obligatory)와 이행 메커니즘의 능력(야간 1회 배치)을
+        구분하지 않고 한 규칙에 합쳐 선언한 것 — obligatory/possible 구분 오류.
+      root_cause_step_id: finding-023.cause-003
+      steps:
+        - cause_id: finding-023.cause-001
+          claim: state_rules[1]은 corrected 발생 시 Report.result_status가 amended"가 되어야 한다"는
+            의무를 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: finding-023.cause-002
+          claim: 같은 규칙이 이행 수단을 야간 1회 배치로 한정하여, 의무가 충족되지 않는 구간(최대 약 24시간)을 구조적으로 보장한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: finding-023.cause-003
+          claim: 그 구간 동안 Result.status.note의 '동일 정보 유지' claim과 Report.result_status.note의
+            '권위 값/신뢰' claim이 동시에 참일 수 없어 claim 집합이 경로상 만족 불가능해진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Result.attributes.status.note
+            - clinical-lab-ontology.yaml
+              entities.Report.attributes.result_status.note
+      unresolved_beyond_evidence: 야간 배치가 실제 운영에서 즉시 트리거로 보완되는지 여부는 본 문서 밖의 구현 사실이며 boundary 내 증거가 없다.
+  - finding_id: finding-024
+    lens_id: logic
+    source_ref: .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-003
+    target: "clinical-lab-ontology.yaml: state_rules[0] × entities.Order.lifecycle
+      (cancelled) — 공허 충족 및 취소 주문과의 충돌"
+    evidence_anchor: state_rules[0] "Order는 모든 Result가 final일 때 completed로 전이한다.";
+      entities.Order.lifecycle [draft, placed, in_progress, completed,
+      cancelled]
+    claim: completed 전이 규칙이 보편 양화의 공허 충족과 cancelled 상태에 대한 예외를 정의하지 않아, 취소된(또는 결과가
+      0건인) Order에 대해 completed 전이가 형식적으로 성립하여 cancelled 상태와 충돌한다.
+    lens_rationale_summary: 권위 문서의 상태 규칙은 통합 구현에서 자동 전이 로직으로 직역될 가능성이 높다. 공허 충족과
+      cancelled 예외 부재는 문면 그대로 구현하면 취소 주문이 completed로 보고되는 결함을 낳고, 구현자가 암묵 보정하면
+      문서와 구현이 갈라진다 — 어느 쪽이든 권위 문서 목적이 손상된다.
+    proposed_action: '규칙에 적용 전제 두 가지를 추가한다: "in_progress 상태이고 Result가 1건 이상 존재하며 모든
+      Result가 final일 때 completed로 전이한다. cancelled 상태에서는 이 규칙을 적용하지 않는다." 부분 취소
+      시의 우선순위(cancelled가 completed에 우선하는지)도 1문장으로 명시한다.'
+    affected_purpose: Order 상태 전이 규칙이 EMR/LIS 양측에서 결정적으로 동일하게 평가되어야 한다는 권위 문서 목적.
+    failure_condition: 결과 0건 주문 또는 부분 취소 후 잔여 결과가 모두 final인 주문이 존재하는 경우 — 임상검사 운영에서
+      통상적으로 발생 가능한 인스턴스 형상.
+    impact: 동일 인스턴스에 completed와 cancelled가 동시에 지시되어 상태 모델의 단일 값 전제가 깨지고, 구현별 임의 보정으로
+      통합 양측 상태 불일치가 생긴다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-003
+      - clinical-lab-ontology.yaml state_rules[0]
+      - clinical-lab-ontology.yaml entities.Order.lifecycle
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Order 상태 전이 규칙이 EMR/LIS 양측에서 결정적으로 동일하게 평가되어야 한다는 권위 문서 목적.
+      failure_condition: 결과 0건 주문 또는 부분 취소 후 잔여 결과가 모두 final인 주문이 존재하는 경우 — 임상검사 운영에서
+        통상적으로 발생 가능한 인스턴스 형상.
+      impact: 동일 인스턴스에 completed와 cancelled가 동시에 지시되어 상태 모델의 단일 값 전제가 깨지고, 구현별 임의 보정으로
+        통합 양측 상태 불일치가 생긴다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml state_rules[0]
+        - clinical-lab-ontology.yaml entities.Order.lifecycle
+    causal_path:
+      root_cause_candidate: 전이 규칙을 작성할 때 적용 가능 상태(가드)와 양화 범위(결과 존��� 전제)를 명시하지 않은 것.
+      root_cause_step_id: finding-024.cause-002
+      steps:
+        - cause_id: finding-024.cause-001
+          claim: state_rules[0]은 현재 상태 가드 없이 ' 모든 Result가 final'만을 completed 전이 조건으로 둔다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[0]
+        - cause_id: finding-024.cause-002
+          claim: 결과 0건 또는 부분 취소 인스턴스에서 조건이 (공허하게) 충족되어 cancelled 상태 유지 의도와 completed 전이
+            지시가 동시에 성립한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Order.lifecycle
+      unresolved_beyond_evidence: 부분 취소(검사 항목 단위 취소)가 실제 운영에서 허용되는지는 문서에 명시가 없어 도메인 확인이 필요하다.
+  - finding_id: finding-025
+    lens_id: logic
+    source_ref: .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-004
+    target: "clinical-lab-ontology.yaml: entities.Order.attributes.priority /
+      entities.Order.attributes.is_stat / entities.StatOrder — STAT 3중 표현 간 일관성
+      제약 부재"
+    evidence_anchor: entities.Order.attributes.priority enum [routine, urgent,
+      stat]; entities.Order.attributes.is_stat "STAT 주문 여부. priority와 함께 기록.";
+      entities.StatOrder is_a Order
+    claim: STAT 여부가 priority enum 값, is_stat boolean, StatOrder 하위 타입의 세 곳에 독립 선언되고
+      상호 제약이 없어, 모델이 상호 모순적 인스턴스(priority=stat ∧ is_stat=false ∧ ¬StatOrder 등)를
+      유효한 것으로 허용한다.
+    lens_rationale_summary: STAT 판정은 응급 검사 우선처리라는 안전 관련 분기 조건이다. EMR이 is_stat을, LIS가
+      priority를 읽도록 구현되면 동일 주문이 한쪽에서는 응급, 다른 쪽에서는 일반으로 처리되는 상태를 이 모델이 형식적으로
+      승인한다. 권위 문서가 모순 인스턴스를 배제하지 못하면 통합 검증 기준으로 기능하지 못한다.
+    proposed_action: "권위를 한 곳으로 지정한다(권장: priority enum). is_stat은 'priority=stat의 파생
+      투영'으로 선언하거나 제거하고, StatOrder는 'priority=stat인 Order'와의 동치 제약을 명시하거나 하위 타입을
+      제거한다. 최소 수정은 제약 1줄 추가: \"is_stat = (priority == stat)이며 StatOrder 인스턴스는
+      priority=stat을 필수로 한다.\""
+    affected_purpose: 응급(STAT) 주문 판정이 통합 양측에서 단일하게 결정되어야 한다는 개념 권위 문서의 목적.
+    failure_condition: 세 표현 중 둘 이상을 서로 다른 시스템·코드 경로가 각각 읽는 경우 — 세 표현이 모두 공식 스키마에
+      있으므로 발생 개연성이 구조적으로 내재됨.
+    impact: "모순 인스턴스(예: priority=stat인데 is_stat=false)가 스키마상 유효하므로 검증으로 걸러지지 않고, 응급
+      검사 우선처리 누락이라는 환자 안전 영향 경로로 이어질 수 있다."
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-004
+      - clinical-lab-ontology.yaml entities.Order.attributes.priority
+      - clinical-lab-ontology.yaml entities.Order.attributes.is_stat
+      - clinical-lab-ontology.yaml entities.StatOrder
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 응급(STAT) 주문 판정이 통합 양측에서 단일하게 결정되어야 한다는 개념 권위 문서의 목적.
+      failure_condition: 세 표현 중 둘 이상을 서로 다른 시스템·코드 경로가 각각 읽는 경우 — 세 표현이 모두 공식 스키마에
+        있으므로 발생 개연성이 구조적으로 내재됨.
+      impact: "모순 인스턴스(예: priority=stat인데 is_stat=false)가 스키마상 유효하므로 검증으로 걸러지지 않고, 응급
+        검사 우선처리 누락이라는 환자 안전 영향 경로로 이어질 수 있다."
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Order.attributes.priority
+        - clinical-lab-ontology.yaml entities.Order.attributes.is_stat
+        - clinical-lab-ontology.yaml entities.StatOrder
+    causal_path:
+      root_cause_candidate: STAT 개념을 도입할 때 기존 표현(priority enum)을 확장하는 대신 boolean과 하위
+        타입을 병행 추가하면서 표현 간 동치 공리를 선언하지 않은 것.
+      root_cause_step_id: finding-025.cause-002
+      steps:
+        - cause_id: finding-025.cause-001
+          claim: STAT 여부가 priority, is_stat, StatOrder 세 곳에 독립 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Order.attributes.priority
+            - clinical-lab-ontology.yaml entities.Order.attributes.is_stat
+            - clinical-lab-ontology.yaml entities.StatOrder
+        - cause_id: finding-025.cause-002
+          claim: 세 표현의 일치를 강제하는 제약이 문서 어디에도 없어 모순 조합이 유효 인스턴스로 만족 가능하다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities (제약 선언 부재 — 문서 전체에 constraint
+              절 없음)
+      unresolved_beyond_evidence: 세 표현 중 어느 것이 실제 운영에서 권위로 쓰이는지는 문서 밖 구현 사실이다.
+  - finding_id: finding-026
+    lens_id: logic
+    source_ref: .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-005
+    target: "clinical-lab-ontology.yaml:
+      entities.Test.attributes.requires_specimen_type ×
+      entities.Assay.attributes.specimen_kind × notes[0]"
+    evidence_anchor: "Test.requires_specimen_type enum [blood, urine, tissue, swab];
+      Assay.specimen_kind string (예: 'WB', 'Serum', 'Urine-random'); notes[0]
+      \"현재 신규 항목은 두 곳 모두에 등록한다\""
+    claim: 동일 카탈로그 항목을 Test와 Assay 두 곳에 등록하라는 운영 claim이, 검체 요건 속성의 양립 불가능한 타입·값공간(닫힌
+      enum 4값 vs 자유 문자열, 예시 어휘 'Serum' 등은 enum으로 표현 불가)과 결합하여 일관된 이중 등록을 형식적으로
+      불가능하게 만든다.
+    lens_rationale_summary: 검체 적합성 판정(이 검체로 이 검사가 가능한가)은 LIS의 핵심 검증 로직이며,
+      Result.derived_from Specimen 관계를 통해 결과 무결성과 직결된다. enum 측과 string 측이 다른 답을
+      주는 항목이 존재할 수 있는 모델은 검체 적합성의 단일 진실을 제공하지 못하므로 권위 문서 목적에 반한다.
+    proposed_action: "검체 종류의 정규 어휘를 한 곳에 정의하고(예: Specimen.specimen_type enum을 정규로
+      승격), Assay.specimen_kind를 그 정규 어휘로의 사상이 정의된 코드체계로 바꾸거나 정규 enum + 세부 한정자(예:
+      blood + serum)로 분해한다. 통합 전 최소 수정은 notes[0]에 '두 속성 간 사상표 유지 의무'를 명시하는 것이다."
+    affected_purpose: 검사 카탈로그의 검체 요건이 EMR(주문 검증)과 LIS(수행 검증)에서 동일하게 판정되어야 한다는 권위 문서 목적.
+    failure_condition: enum 4값으로 표현 불가능한 검체 요건('Serum', 'Urine-random' 등 — 문서가 스스로
+      예시로 명시)을 가진 항목을 이중 등록하는 모든 경우.
+    impact: 같은 검사 항목의 검체 요건이 두 표현에서 다른 답을 주어 주문 시점 검증과 수행 시점 검증이 갈라지고, 부적합 검체 진행 또는
+      적합 검체 거부가 모델 수준에서 걸러지지 않는다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-005
+      - clinical-lab-ontology.yaml
+        entities.Test.attributes.requires_specimen_type
+      - clinical-lab-ontology.yaml entities.Assay.attributes.specimen_kind
+      - clinical-lab-ontology.yaml notes[0]
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 검사 카탈로그의 검체 요건이 EMR(주문 검증)과 LIS(수행 검증)에서 동일하게 판정되어야 한다는 권위 문서 목적.
+      failure_condition: enum 4값으로 표현 불가능한 검체 요건('Serum', 'Urine-random' 등 — 문서가 스스로
+        예시로 명시)을 가진 항목을 이중 등록하는 모든 경우.
+      impact: 같은 검사 항목의 검체 요건이 두 표현에서 다른 답을 주어 주문 시점 검증과 수행 시점 검증이 갈라지고, 부적합 검체 진행 또는
+        적합 검체 거부가 모델 수준에서 걸러지지 않는다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml
+          entities.Test.attributes.requires_specimen_type
+        - clinical-lab-ontology.yaml entities.Assay.attributes.specimen_kind
+        - clinical-lab-ontology.yaml notes[0]
+    causal_path:
+      root_cause_candidate: Test와 Assay라는 중복 카탈로그 개념을 통합 보류한 채(notes[0]) 각자 다른 타입 체계로
+        같은 속성을 선언하고 사상 규칙을 정의하지 않은 것.
+      root_cause_step_id: finding-026.cause-002
+      steps:
+        - cause_id: finding-026.cause-001
+          claim: 같은 개념적 속성(요구 검체 종류)이 Test에서는 닫힌 enum, Assay에서는 자유 문자열로 선언되어 있고 예시 어휘가
+            enum과 비정합이다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml
+              entities.Test.attributes.requires_specimen_type
+            - clinical-lab-ontology.yaml entities.Assay.attributes.specimen_kind
+        - cause_id: finding-026.cause-002
+          claim: notes[0]의 이중 등록 지시가 두 비정합 타입 선언을 동일 항목에 동시에 적용시켜, 사상 규칙 없이는 일관된 등록이 만족
+            불가능해진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml notes[0]
+      unresolved_beyond_evidence: 실제 카탈로그에 enum 비정합 검체 요건 항목이 몇 건 존재하는지는 문서 밖 데이터이다.
+  - finding_id: finding-027
+    lens_id: logic
+    source_ref: .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-006
+    target: "clinical-lab-ontology.yaml: relations — Result↔Report, Result↔Specimen
+      중복 역방향 쌍"
+    evidence_anchor: "relations: {Result→Report aggregated_into} + {Report→Result
+      contains}; {Result→Specimen derived_from} + {Specimen→Result produces}"
+    claim: 동일 관계의 역방향 쌍이 서로 다른 kind 명칭(aggregated_into/contains,
+      derived_from/produces)으로 이중 선언되어 있으나, 역관계 동치 선언이 없어 형식상 4개의 독립 관계로 읽힌다 — 현
+      시점 모순은 아니므로 logic 관점에서는 pass에 가깝고 명명 정리는 semantics 소유.
+    lens_rationale_summary: logic lens의 boundary routing 규칙상 모호 제거로 사라지는 문제는
+      semantics 소유이다. 본 finding은 logic 관점에서 '모순 아님'을 명시적으로 기록하고 semantics로의
+      handoff 근거를 남기기 위한 low 등재이다.
+    proposed_action: "각 쌍에 inverse 동치를 선언하거나(예: contains는 aggregated_into의 역관계) 한
+      방향만 정규로 남기고 역방향은 파생 투영으로 표시한다."
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: logic lens의 boundary routing 규칙상 모호 제거로 사라지는 문제는 semantics 소유이다. 본
+      finding은 logic 관점에서 '모순 아님'을 명시적으로 기록하고 semantics로의 handoff 근거를 남기기 위한 low
+      등재이다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/logic.findings.yaml#logic-candidate-006
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-028
+    lens_id: semantics
+    source_ref: .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-001
+    target: clinical-lab-ontology.yaml entities.Test / entities.Assay
+    evidence_anchor: "clinical-lab-ontology.yaml: entities.Test, entities.Assay,
+      notes[0] ('현재 신규 항목은 두 곳 모두에 등록한다')"
+    claim: Test와 Assay는 동일한 '검사 카탈로그 항목' 개념의 동의어이나 통합도 명시적 매핑도 없이 병렬 등록되고 있다.
+    lens_rationale_summary: "EMR/LIS 통합의 개념 권위 문서라면 '주문 가능 항목'과 '수행 항목'이 같은 개념인지, 별개
+      개념이면 어떤 매핑 관계인지를 문서가 결정해 줘야 한다. 현재는 동의어 후보 두 개가 매핑 없이 공존하면서 이중 등록 운영을
+      요구하므로, 두 카탈로그가 독립적으로 드리프트하고(예: Test에는 있는데 Assay에는 없는 항목, code 불일치) 그 불일치를
+      탐지할 의미적 기준도 없다."
+    proposed_action: "두 개념이 동의어인지(→ 단일 개념으로 표기) 아니면 '주문 단위 1:N 수행 단위' 같은 구분된 개념인지 권위
+      문서에서 판정하고, 구분 유지 시 Test↔Assay 간 명시적 매핑 관계(예: Test implemented_by Assay)와
+      code 대응 규칙을 정의한다. 통합/병합 실행 여부 결정 자체는 본 lens 범위 밖이므로 의미 판정과 매핑 선언까지를 최소
+      수정으로 본다."
+    affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 카탈로그의 단일 의미 기준 제공
+    failure_condition: EMR(주문, Test 기준)과 LIS/분석기(수행, Assay 기준)가 각자 다른 엔티티를 카탈로그 권위로
+      삼아 통합 인터페이스를 설계할 때
+    impact: 같은 검사 항목이 두 코드 체계로 분기되고 Result→Assay 연결 경로가 없어, 주문-수행-결과 의미 연결이 통합 시점에
+      깨진다. 권위 문서가 권위를 행사하지 못하는 지점이다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-001
+      - "clinical-lab-ontology.yaml: entities.Test"
+      - "clinical-lab-ontology.yaml: entities.Assay"
+      - "clinical-lab-ontology.yaml: entities.Result.attributes.test_ref"
+      - "clinical-lab-ontology.yaml: notes[0]"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 카탈로그의 단일 의미 기준 제공
+      failure_condition: EMR(주문, Test 기준)과 LIS/분석기(수행, Assay 기준)가 각자 다른 엔티티를 카탈로그 권위로
+        삼아 통합 인터페이스를 설계할 때
+      impact: 같은 검사 항목이 두 코드 체계로 분기되고 Result→Assay 연결 경로가 없어, 주문-수행-결과 의미 연결이 통합 시점에
+        깨진다. 권위 문서가 권위를 행사하지 못하는 지점이다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Test"
+        - "clinical-lab-ontology.yaml: entities.Assay"
+        - "clinical-lab-ontology.yaml: entities.Result.attributes.test_ref"
+        - "clinical-lab-ontology.yaml: notes[0]"
+    causal_path:
+      root_cause_candidate: 카탈로그 개념이 주문 관점(Test)과 수행 관점(Assay)에서 각각 도입된 뒤, 동의어 판정과 매핑
+        정의를 'notes의 추후 재검토'로 연기한 채 이중 등록 운영을 공식화함
+      root_cause_step_id: finding-028.cause-003
+      steps:
+        - cause_id: finding-028.cause-001
+          claim: Test와 Assay가 동일 의미 영역(검사 카탈로그 항목)을 서로 다른 이름·코드·검체표현으로 중복 정의하고 있다
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Test"
+            - "clinical-lab-ontology.yaml: entities.Assay"
+        - cause_id: finding-028.cause-002
+          claim: 두 엔티티 간 관계가 relations에 전혀 선언되지 않아 의미적 대응을 표현할 공식 경로가 없다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: relations (Test↔Assay 항목 부재)"
+        - cause_id: finding-028.cause-003
+          claim: notes[0]이 통합 판정을 미루고 이중 등록을 운영 규칙으로 명시하여, 미통합 동의어 상태가 의도된 현상태로 고착된다
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: notes[0]"
+      unresolved_beyond_evidence: 실제 LIS에서 Test와 Assay가 1:1인지 1:N(하나의 주문 항목이 여러 분석으로
+        분해)인지 여부는 본 문서 범위 밖의 운영 데이터가 필요하다.
+  - finding_id: finding-029
+    lens_id: semantics
+    source_ref: .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-002
+    target: clinical-lab-ontology.yaml Result.status / Report.result_status
+    evidence_anchor: "clinical-lab-ontology.yaml:
+      entities.Result.attributes.status.note,
+      entities.Report.attributes.result_status.note, state_rules[1]"
+    claim: "'결과 상태'라는 하나의 의미에 대해 두 속성이 서로 다른 enum 어휘로 존재하고, 양쪽 note가 각각 권위를 주장하여 의미적
+      권위 소재가 모순된다."
+    lens_rationale_summary: 권위 문서의 핵심 역할은 '어느 값이 진실인가'를 한 곳으로 고정하는 것이다. 현재 Result 쪽
+      note는 동일 정보 유지(즉 Result가 원천)를 함의하고 Report 쪽 note는 자신이 권위 값이라고 선언하여 권위가 양립
+      불가능하게 이중 선언되어 있다. 게다가 corrected→amended 전파가 야간 배치이므로, '임상의가 신뢰하라'고 선언된 값이
+      최대 하루 동안 원천(LIS의 corrected)과 다른 의미를 표시한다. 임상 맥락에서 corrected 결과의 표시 지연은 잘못된
+      값 기반 의사결정으로 직결된다.
+    proposed_action: 결과 상태의 단일 권위를 Result.status로 선언하고, Report.result_status는
+      Result.status의 파생 투영(derived projection)으로 재정의한다. 두 enum 어휘를 하나로 통일하거나 명시적
+      1:1 매핑 표(preliminary↔prelim, final↔finalized, corrected↔amended)를 권위 문서에
+      기재하고, '동기화 배치 야간 1회'라는 운영 제약은 파생값의 신선도 보장(전파 지연 한계)으로 명시적으로 문서화한다.
+    affected_purpose: EMR/LIS 통합 시 결과 상태의 단일 진실 소재(authority) 결정
+    failure_condition: Result.status가 corrected로 변경된 후 야간 배치 이전에 임상의가
+      Report.result_status(권위 값으로 선언됨)를 조회하는 모든 구간
+    impact: 권위로 선언된 값이 원천과 불일치하는 시간창이 설계상 내장되어 있고, 두 note의 권위 주장이 모순되어 통합 구현자가 어느 쪽을
+      기준으로 동기화 방향을 잡을지 문서로 결정할 수 없다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-002
+      - "clinical-lab-ontology.yaml: entities.Result.attributes.status.note"
+      - "clinical-lab-ontology.yaml:
+        entities.Report.attributes.result_status.note"
+      - "clinical-lab-ontology.yaml: state_rules[1]"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합 시 결과 상태의 단일 진실 소재(authority) 결정
+      failure_condition: Result.status가 corrected로 변경된 후 야간 배치 이전에 임상의가
+        Report.result_status(권위 값으로 선언됨)를 조회하는 모든 구간
+      impact: 권위로 선언된 값이 원천과 불일치하는 시간창이 설계상 내장되어 있고, 두 note의 권위 주장이 모순되어 통합 구현자가 어느 쪽을
+        기준으로 동기화 방향을 잡을지 문서로 결정할 수 없다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Result.attributes.status.note"
+        - "clinical-lab-ontology.yaml:
+          entities.Report.attributes.result_status.note"
+        - "clinical-lab-ontology.yaml: state_rules[1]"
+    causal_path:
+      root_cause_candidate: 하나의 의미(결과 상태)를 LIS 내부 표현과 임상의 대면 표현이라는 두 시점에서 각각 독립 속성으로
+        모델링하면서, 파생 관계와 권위 방향을 선언하지 않음
+      root_cause_step_id: finding-029.cause-003
+      steps:
+        - cause_id: finding-029.cause-001
+          claim: 같은 의미의 상태가 Result.status와 Report.result_status에 서로 다른 enum 어휘로 이중 정의되어 있다
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Result.attributes.status"
+            - "clinical-lab-ontology.yaml:
+              entities.Report.attributes.result_status"
+        - cause_id: finding-029.cause-002
+          claim: 양쪽 note가 각각 원천성(LIS 기록·동일 정보 유지)과 권위성('권위 값')을 주장하여 권위 소재가 문서 내에서 모순된다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.Result.attributes.status.note"
+            - "clinical-lab-ontology.yaml:
+              entities.Report.attributes.result_status.note"
+        - cause_id: finding-029.cause-003
+          claim: 동기화가 야간 배치 1회로 선언되어, 권위로 선언된 Report 값이 원천과 불일치하는 시간창이 설계에 내장된다
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: state_rules[1]"
+      unresolved_beyond_evidence: 실제 EMR 화면이 Report.result_status 외에 Result.status를 직접
+        노출하는지는 본 문서 밖의 구현 정보가 필요하다.
+  - finding_id: finding-030
+    lens_id: semantics
+    source_ref: .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-003
+    target: clinical-lab-ontology.yaml CriticalValue
+    evidence_anchor: "clinical-lab-ontology.yaml: entities.CriticalValue
+      (definition, lower_bound/upper_bound, notified)"
+    claim: CriticalValue는 이름·정의·속성이 세 가지 서로 다른 존재론적 유형(개별 위험 값, 임계 범위 규칙, 통보 이벤트)을 한
+      엔티티에 혼합하고 있다.
+    lens_rationale_summary: 존재론적 유형 분류 오류의 전형이다. 임계 범위 정의는 검사당 1개의 지속적 규칙이고, 통보는 결과당
+      0~N회의 사건이다. 두 유형을 합치면 notified의 의미가 결정 불가능해진다(어느 결과에 대한 통보인가?). 임상 위험치 통보는
+      환자안전 핵심 워크플로이므로, 이 모델대로 EMR/LIS를 구현하면 통보 추적이 결과 단위로 불가능해지고, note가 인정하듯 통보
+      시각·수신자가 모델 밖(전화 기록 대장)에만 존재하게 된다.
+    proposed_action: "개념을 둘로 분리한다: (1) CriticalRange(또는 CriticalValuePolicy) —
+      test_ref, lower_bound, upper_bound를 갖는 카탈로그 수준 규칙; (2)
+      CriticalValueNotification — result_ref, notified_at, notified_to를 갖는 결과 수준
+      이벤트. 이름도 각 존재론적 유형에 맞게 부여한다."
+    affected_purpose: 위험 결과 통보 워크플로를 EMR/LIS에서 결과 단위로 추적 가능하게 하는 개념 기반 제공
+    failure_condition: 동일 검사에서 두 번째 이상의 위험치 결과가 발생하거나, 특정 결과에 대한 통보 여부·시각·수신자를 조회해야 하는 모든 경우
+    impact: 규칙 수준 엔티티에 이벤트 속성이 붙어 있어 결과별 통보 상태를 표현할 수 없고, 통보 증적이 모델 외부(전화 대장)에 남아 통합
+      시스템이 환자안전 핵심 정보를 다루지 못한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-003
+      - "clinical-lab-ontology.yaml: entities.CriticalValue.definition"
+      - "clinical-lab-ontology.yaml:
+        entities.CriticalValue.attributes.notified.note"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 위험 결과 통보 워크플로를 EMR/LIS에서 결과 단위로 추적 가능하게 하는 개념 기반 제공
+      failure_condition: 동일 검사에서 두 번째 이상의 위험치 결과가 발생하거나, 특정 결과에 대한 통보 여부·시각·수신자를 조회해야 하는 모든 경우
+      impact: 규칙 수준 엔티티에 이벤트 속성이 붙어 있어 결과별 통보 상태를 표현할 수 없고, 통보 증적이 모델 외부(전화 대장)에 남아 통합
+        시스템이 환자안전 핵심 정보를 다루지 못한다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.CriticalValue.definition"
+        - "clinical-lab-ontology.yaml:
+          entities.CriticalValue.attributes.notified.note"
+    causal_path:
+      root_cause_candidate: "'critical value'라는 도메인 관용어를 그대로 엔티티 이름으로 채택하면서, 그 용어가 실제로
+        지칭하는 세 층위(개별 값/임계 규칙/통보 사건)를 분리하지 않고 하나의 엔티티로 모델링함"
+      root_cause_step_id: finding-030.cause-003
+      steps:
+        - cause_id: finding-030.cause-001
+          claim: 이름은 값, 정의·속성은 범위 규칙, notified는 이벤트로, 한 엔티티 안에서 이름과 존재론적 유형이 서로 어긋난다
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.CriticalValue"
+        - cause_id: finding-030.cause-002
+          claim: 규칙 수준(검사당 1개) 엔티티에 이벤트 수준(결과당 0~N회) 속성 notified가 붙어 결과별 통보 상태가 표현 불가능하다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.CriticalValue.attributes.notified"
+        - cause_id: finding-030.cause-003
+          claim: 표현 불가능한 통보 증적(시각·수신자)이 모델 밖 전화 기록 대장으로 밀려나, 통합 대상 정보가 온톨로지 권위 밖에 존재하게 된다
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.CriticalValue.attributes.notified.note"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-031
+    lens_id: semantics
+    source_ref: .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-004
+    target: clinical-lab-ontology.yaml Order.priority / Order.is_stat / StatOrder
+    evidence_anchor: "clinical-lab-ontology.yaml:
+      entities.Order.attributes.priority, entities.Order.attributes.is_stat,
+      entities.StatOrder"
+    claim: "'응급(STAT)'이라는 하나의 의미가 priority enum 값, is_stat boolean, StatOrder 하위 타입의
+      세 가지 표현으로 중복 인코딩되어 있고, 하위 타입화는 OntoClean Rigidity 관점에서도 부적절하다."
+    lens_rationale_summary: 긴급도는 주문의 속성이지 주문 인스턴스의 본질(rigid property)이 아니다. 운영상 STAT
+      주문이 routine으로 하향 조정될 수 있다면 StatOrder 타입 소속은 인스턴스에 필수적이지 않아 rigid subtype으로
+      부적절하다(OntoClean anti-rigidity). 또한 같은 의미의 세 표현은 EMR/LIS 통합 시 어떤 필드를 STAT
+      판정 기준으로 쓸지에 대한 비결정성을 만들고, 세 값이 어긋난 레코드의 의미를 해석할 규칙이 없다.
+    proposed_action: priority enum을 STAT 여부의 단일 권위로 선언하고, is_stat은 제거하거나
+      priority=stat의 파생 투영으로 명시한다. StatOrder는 rigid 하위 타입 대신 stat_reason을 Order의
+      조건부 속성(priority=stat일 때 요구)으로 흡수하는 방향을 권고한다.
+    affected_purpose: 주문 긴급도의 단일 판정 기준 제공(STAT 라우팅은 검사실 운영의 핵심 분기)
+    failure_condition: "세 표현 중 일부만 갱신된 주문(예: priority=stat인데 is_stat=false)을 EMR과
+      LIS가 서로 다른 필드로 판정할 때"
+    impact: STAT 판정 불일치는 응급 검사 지연 또는 비응급 검사의 잘못된 우선 처리로 이어지며, 권위 문서가 판정 기준을 결정해 주지 못한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-004
+      - "clinical-lab-ontology.yaml: entities.Order.attributes.priority"
+      - "clinical-lab-ontology.yaml: entities.Order.attributes.is_stat.note"
+      - "clinical-lab-ontology.yaml: entities.StatOrder"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 주문 긴급도의 단일 판정 기준 제공(STAT 라우팅은 검사실 운영의 핵심 분기)
+      failure_condition: "세 표현 중 일부만 갱신된 주문(예: priority=stat인데 is_stat=false)을 EMR과
+        LIS가 서로 다른 필드로 판정할 때"
+      impact: STAT 판정 불일치는 응급 검사 지연 또는 비응급 검사의 잘못된 우선 처리로 이어지며, 권위 문서가 판정 기준을 결정해 주지
+        못한다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: entities.Order.attributes.priority"
+        - "clinical-lab-ontology.yaml: entities.Order.attributes.is_stat.note"
+        - "clinical-lab-ontology.yaml: entities.StatOrder"
+    causal_path:
+      root_cause_candidate: 긴급도라는 비본질적(non-rigid) 속성을 속성·플래그·하위타입 세 층위에서 각각 모델링하고, 단일
+        권위 표현과 파생 규칙을 선언하지 않음
+      root_cause_step_id: finding-031.cause-002
+      steps:
+        - cause_id: finding-031.cause-001
+          claim: STAT이라는 하나의 의미가 priority, is_stat, StatOrder 세 표현으로 중복 존재하고 is_stat note가
+            이중 기록을 명시한다
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Order.attributes"
+            - "clinical-lab-ontology.yaml: entities.StatOrder"
+        - cause_id: finding-031.cause-002
+          claim: 세 표현 간 일관성 제약이 없어 모순 인스턴스(priority=routine인 StatOrder)가 모델상 유효하다
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: entities.Order"
+            - "clinical-lab-ontology.yaml: state_rules (관련 제약 부재)"
+      unresolved_beyond_evidence: 운영상 STAT 지정이 사후 변경 가능한지(rigidity 판정의 확정 근거)는 병원 운영 규정이 필요하다.
+  - finding_id: finding-032
+    lens_id: semantics
+    source_ref: .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-005
+    target: clinical-lab-ontology.yaml Test.requires_specimen_type /
+      Assay.specimen_kind
+    evidence_anchor: "clinical-lab-ontology.yaml:
+      entities.Test.attributes.requires_specimen_type,
+      entities.Assay.attributes.specimen_kind,
+      entities.Specimen.attributes.specimen_type"
+    claim: "'검체 종류'라는 하나의 의미가 통제 enum(blood/urine/tissue/swab)과 자유 문자열('WB',
+      'Serum', 'Urine-random')의 두 비호환 어휘로 표현되어 있고 매핑이 없다."
+    lens_rationale_summary: "'Serum'과 'WB'는 둘 다 enum의 'blood'에 대응하지만 임상적으로는 호환 불가능한
+      검체다(혈청 검사에 전혈을 쓸 수 없다). enum이 이 구분을 표현하지 못하므로, Test 수준의 검체 적합성
+      판정(requires_specimen_type=blood)이 Assay 수준에서 요구되는 실제 적합성('Serum' 필요)을 보장하지
+      못한다. 매핑 부재는 검체-검사 매칭이라는 검사실 핵심 검증을 온톨로지가 지원하지 못하게 한다."
+    proposed_action: 검체 종류를 단일 통제 어휘로 정의하되 계층 구조(blood > whole_blood, serum,
+      plasma)를 부여하고, specimen_kind 자유 문자열을 그 어휘에 대한 코드 매핑으로 교체하거나 최소한 enum↔kind
+      대응 표를 권위 문서에 추가한다.
+    affected_purpose: 검체-검사 적합성 검증을 위한 단일 검체 분류 어휘 제공
+    failure_condition: enum 수준에서는 적합(blood=blood)하지만 kind 수준에서는 부적합(전혈 vs 혈청)인 검체가 분석 단계로 라우팅될 때
+    impact: 검체 부적합은 재채취·결과 지연·오류 결과로 이어지는데, 현재 모델은 이 판정에 필요한 어휘 정밀도와 매핑을 제공하지 못한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-005
+      - "clinical-lab-ontology.yaml:
+        entities.Assay.attributes.specimen_kind.note"
+      - "clinical-lab-ontology.yaml: entities.Specimen.attributes.specimen_type"
+      - "clinical-lab-ontology.yaml:
+        entities.Test.attributes.requires_specimen_type"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 검체-검사 적합성 검증을 위한 단일 검체 분류 어휘 제공
+      failure_condition: enum 수준에서는 적합(blood=blood)하지만 kind 수준에서는 부적합(전혈 vs 혈청)인 검체가 분석 단계로 라우팅될 때
+      impact: 검체 부적합은 재채취·결과 지연·오류 결과로 이어지는데, 현재 모델은 이 판정에 필요한 어휘 정밀도와 매핑을 제공하지 못한다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml:
+          entities.Assay.attributes.specimen_kind.note"
+        - "clinical-lab-ontology.yaml:
+          entities.Specimen.attributes.specimen_type"
+        - "clinical-lab-ontology.yaml:
+          entities.Test.attributes.requires_specimen_type"
+    causal_path:
+      root_cause_candidate: 주문 관점(거친 4값 enum)과 분석기 관점(세분화된 자유 문자열)의 검체 분류가 각각 도입되고, 두
+        어휘를 잇는 통제 어휘·매핑이 정의되지 않음
+      root_cause_step_id: finding-032.cause-002
+      steps:
+        - cause_id: finding-032.cause-001
+          claim: 같은 의미(검체 종류)가 enum과 자유 문자열이라는 두 비호환 표현으로 공존한다
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.Specimen.attributes.specimen_type"
+            - "clinical-lab-ontology.yaml:
+              entities.Assay.attributes.specimen_kind"
+        - cause_id: finding-032.cause-002
+          claim: enum의 granularity가 임상적으로 필요한 구분(전혈/혈청)을 아래로 뭉개므로, enum 기반 적합성 판정이 실제 적합성을
+            보장하지 못한다
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml:
+              entities.Assay.attributes.specimen_kind.note ('WB', 'Serum' 예시)"
+      unresolved_beyond_evidence: 실제 운영에서 specimen_kind에 어떤 값들이 쓰이는지 전수 목록은 본 문서 밖 데이터가 필요하다.
+  - finding_id: finding-033
+    lens_id: semantics
+    source_ref: .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-006
+    target: clinical-lab-ontology.yaml relations
+    evidence_anchor: "clinical-lab-ontology.yaml: relations
+      ({Order,produces,Report}, {Specimen,produces,Result},
+      {Result,aggregated_into,Report}, {Report,contains,Result})"
+    claim: 관계 어휘에서 'produces'가 서로 다른 두 의미로 쓰이는 동음이의어이고, 'aggregated_into'와
+      'contains'는 같은 의미의 미통합 동의어 쌍이다.
+    lens_rationale_summary: 관계 어휘는 온톨로지의 술어 사전이다. 동음이의 produces는 쿼리·추론 시 '무엇이 무엇을
+      생산하는가'의 의미를 모호하게 하고, 미통합 동의어 쌍(aggregated_into/contains, 그리고
+      Result.derived_from Specimen vs Specimen produces Result도 역방향 중복)은 같은 사실이
+      두 이름으로 존재해 한쪽만 갱신되는 드리프트를 허용한다.
+    proposed_action: "관계 어휘 사전을 정리한다: produces를 의미별로 분리(예: Order yields_report
+      Report / Specimen yields_result Result 또는 derived_from 단일 사용),
+      aggregated_into·contains·derived_from/produces 역방향 쌍은 정방향 하나를 정본으로 선언하고
+      역방향은 inverse_of로 표기한다."
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: 관계 어휘는 온톨로지의 술어 사전이다. 동음이의 produces는 쿼리·추론 시 '무엇이 무엇을 생산하는가'의 의미를 모호하게
+      하고, 미통합 동의어 쌍(aggregated_into/contains, 그리고 Result.derived_from Specimen
+      vs Specimen produces Result도 역방향 중복)은 같은 사실이 두 이름으로 존재해 한쪽만 갱신되는 드리프트를
+      허용한다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-006
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-034
+    lens_id: semantics
+    source_ref: .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-007
+    target: clinical-lab-ontology.yaml notes[1] (turnaround_time)
+    evidence_anchor: "clinical-lab-ontology.yaml: notes[1],
+      entities.Specimen.attributes.collected_at,
+      entities.Report.attributes.released_at"
+    claim: TAT는 모델 내 원천 속성(collected_at, released_at)에서 산식으로 정의되는 파생값인데, 산식 권위가 모델
+      밖(대시보드 팀 자체 계산식)에 있어 파생값-원천 드리프트 위험이 있다.
+    lens_rationale_summary: "산식으로 정의되는 용어의 원천 속성들이 모델에 공존하면, 산식 정의를 모델이 소유하지 않을 때 외부
+      계산식이 조용히 달라져도(예: received_at 기준으로 변경) 권위 문서와 대시보드 수치가 다른 의미를 갖게 된다. 이
+      lens의 파생값-입력 점검 기준에 해당하지만, TAT가 모델 속성으로 독립 입력화된 것은 아니므로 표면 수준 위험으로 본다."
+    proposed_action: TAT를 온톨로지의 파생 정의(derived term)로 승격해 산식(다중 검체 시 기준 포함)을 권위 문서에
+      고정하고, 대시보드 계산식은 이 정의의 구현임을 명시한다.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: "산식으로 정의되는 용어의 원천 속성들이 모델에 공존하면, 산식 정의를 모델이 소유하지 않을 때 외부 계산식이 조용히
+      달라져도(예: received_at 기준으로 변경) 권위 문서와 대시보드 수치가 다른 의미를 갖게 된다. 이 lens의 파생값-입력
+      점검 기준에 해당하지만, TAT가 모델 속성으로 독립 입력화된 것은 아니므로 표면 수준 위험으로 본다."
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-007
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-035
+    lens_id: semantics
+    source_ref: .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-008
+    target: clinical-lab-ontology.yaml Patient.patient_id / Patient.mrn
+    evidence_anchor: "clinical-lab-ontology.yaml: entities.Patient.attributes"
+    claim: patient_id와 mrn의 의미 구분이 정의되어 있지 않아 동일 식별자 의미의 잠재 동의어 또는 미정의 이중 식별 체계다.
+    lens_rationale_summary: EMR/LIS 통합에서 환자 식별자 의미의 모호성은 매칭 오류의 원천이다. 두 필드가 동의어라면 통합
+      대상이고, 다른 의미라면 각자의 발급 권위와 범위를 정의해야 한다. 다만 현 문서만으로는 어느 쪽인지 판정할 수 없는 표면 수준
+      모호성이다.
+    proposed_action: patient_id의 발급 권위와 식별 범위(시스템 내부 키 vs 기관 간 식별자)를 정의에 명시하고, mrn과의
+      관계(별개 의미임)를 한 줄로 기재한다.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: EMR/LIS 통합에서 환자 식별자 의미의 모호성은 매칭 오류의 원천이다. 두 필드가 동의어라면 통합 대상이고, 다른 의미라면
+      각자의 발급 권위와 범위를 정의해야 한다. 다만 현 문서만으로는 어느 쪽인지 판정할 수 없는 표면 수준 모호성이다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/semantics.findings.yaml#semantics-candidate-008
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-036
+    lens_id: structure
+    source_ref: .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-001
+    target: clinical-lab-ontology.yaml entities.Patient / relations
+    evidence_anchor: "clinical-lab-ontology.yaml: relations 목록(11개 항목)에 Patient가
+      from/to 어디에도 등장하지 않음; Patient 연결은 Order.patient_ref 속성 한 곳뿐이며 Specimen에는
+      환자 참조가 전혀 없음"
+    claim: Patient가 관계 그래프에서 고아이며, 특히 Specimen→Patient 필수 연결이 누락되어 있다.
+    lens_rationale_summary: EMR/LIS 통합의 개념 권위 문서에서 검체-환자 식별은 핵심 무결성 경로다. 검체 식별은 채취
+      시점에 환자 단위로 이루어지는데(용기 바코드 라벨링), 온톨로지가 이 연결을 Order 경유로만 허용하면 주문 변경·취소·재라벨링 시
+      검체의 환자 귀속을 검증할 구조적 근거가 사라진다. 검체 뒤바뀜(specimen mix-up)을 모델 차원에서 탐지할 수 없게 된다.
+    proposed_action: "Specimen에 patient_ref 속성 또는 relations에 { from: Specimen, to:
+      Patient, kind: collected_from } 관계를 추가하고, Patient를 relations 그래프에 명시적으로
+      연결한다(예: Patient→Order has_many)."
+    affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검체-환자 식별 무결성 보장
+    failure_condition: 주문이 수정·취소되거나 한 환자의 검체가 다른 주문으로 재배정될 때, Specimen의 환자 귀속을 Order
+      경유 외에는 검증할 수 없는 경우
+    impact: 환자 식별이 단일 간접 경로에 의존하므로 LIS 구현이 이 모델을 따르면 검체-환자 교차 검증 로직을 만들 개념적 근거가 없고,
+      검체 뒤바뀜 위험이 모델 수준에서 비가시화된다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-001
+      - clinical-lab-ontology.yaml entities.Specimen attributes (patient 참조 부재)
+      - clinical-lab-ontology.yaml relations (Patient 미등장)
+      - clinical-lab-ontology.yaml entities.Order.attributes.patient_ref
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검체-환자 식별 무결성 보장
+      failure_condition: 주문이 수정·취소되거나 한 환자의 검체가 다른 주문으로 재배정될 때, Specimen의 환자 귀속을 Order
+        경유 외에는 검증할 수 없는 경우
+      impact: 환자 식별이 단일 간접 경로에 의존하므로 LIS 구현이 이 모델을 따르면 검체-환자 교차 검증 로직을 만들 개념적 근거가 없고,
+        검체 뒤바뀜 위험이 모델 수준에서 비가시화된다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Specimen attributes (patient 참조 부재)
+        - clinical-lab-ontology.yaml relations (Patient 미등장)
+        - clinical-lab-ontology.yaml entities.Order.attributes.patient_ref
+    causal_path:
+      root_cause_candidate: 관계 그래프가 Order 중심으로만 작성되어 Patient가 속성 참조(patient_ref)로만
+        표현되고 relations 섹션의 1급 노드로 승격되지 않음
+      root_cause_step_id: finding-036.cause-003
+      steps:
+        - cause_id: finding-036.cause-001
+          claim: Patient는 relations 섹션의 어떤 관계에도 등장하지 않고, Specimen에는 환자 참조 속성이 없다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml relations
+            - clinical-lab-ontology.yaml entities.Specimen
+        - cause_id: finding-036.cause-002
+          claim: 그 결과 Specimen의 환자 귀속은 Specimen→Order→Patient 단일 간접 경로에만 의존한다
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Order.attributes.patient_ref
+            - "clinical-lab-ontology.yaml relations: Specimen belongs_to Order"
+        - cause_id: finding-036.cause-003
+          claim: 이 구조는 관계 그래프를 Order 중심으로만 설계하고 Patient 연결을 속성 수준에 남겨둔 설계 선택의 증상이다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml relations 전체(주문-검체-결과-보고 축만 존재)
+      unresolved_beyond_evidence: 실제 LIS 구현이 검체-환자 검증을 별도 시스템에서 수행하는지는 이 파일 범위 밖이다.
+  - finding_id: finding-037
+    lens_id: structure
+    source_ref: .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-002
+    target: clinical-lab-ontology.yaml entities.Assay
+    evidence_anchor: "clinical-lab-ontology.yaml: Assay 정의는 존재하나 relations 섹션과 다른
+      엔티티의 ref 속성 어디에서도 Assay를 참조하지 않음; notes 첫 항목이 Test/Assay 이중 등록을 인정"
+    claim: Assay는 어떤 관계·참조에도 연결되지 않은 고아 엔티티다.
+    lens_rationale_summary: notes에 '신규 항목은 두 곳 모두에 등록한다'고 명시되어 있어 Assay가 실제 운영
+      카탈로그임은 분명한데, 온톨로지 그래프상 Assay는 주문→결과→보고 경로 어디에도 도달할 수 없다. 분석기 결과(Assay 단위)를
+      Result(Test 단위)로 매핑하는 연결이 모델에 없으므로, LIS 통합 시 이 매핑이 각 구현체의 암묵 규칙으로 흩어지게 된다.
+    proposed_action: "최소 수정으로 { from: Test, to: Assay, kind: realized_by } 관계(또는
+      Test.assay_ref 속성)를 추가해 Assay를 그래프에 연결하거나, 통합 재검토 전까지 Assay를 온톨로지 본문에서
+      제외하고 notes로 강등한다."
+    affected_purpose: 검사 카탈로그의 주문 단위(Test)와 수행 단위(Assay) 간 대응을 개념 권위 문서가 정의하는 것
+    failure_condition: 분석기 인터페이스가 Assay 코드로 결과를 보내고 EMR이 Test 코드로 결과를 받을 때, 둘 사이 매핑을
+      온톨로지가 답하지 못하는 경우
+    impact: 수행 단위와 주문 단위의 매핑이 모델 밖 암묵 지식이 되어, 통합 구현마다 다른 매핑 테이블이 생기고 권위 문서로서의 효력이 깨진다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-002
+      - clinical-lab-ontology.yaml entities.Assay
+      - clinical-lab-ontology.yaml relations (Assay 미등장)
+      - clinical-lab-ontology.yaml notes[0]
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 검사 카탈로그의 주문 단위(Test)와 수행 단위(Assay) 간 대응을 개념 권위 문서가 정의하는 것
+      failure_condition: 분석기 인터페이스가 Assay 코드로 결과를 보내고 EMR이 Test 코드로 결과를 받을 때, 둘 사이 매핑을
+        온톨로지가 답하지 못하는 경우
+      impact: 수행 단위와 주문 단위의 매핑이 모델 밖 암묵 지식이 되어, 통합 구현마다 다른 매핑 테이블이 생기고 권위 문서로서의 효력이
+        깨진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Assay
+        - clinical-lab-ontology.yaml relations (Assay 미등장)
+        - clinical-lab-ontology.yaml notes[0]
+    causal_path:
+      root_cause_candidate: Test/Assay 통합 결정을 보류한 상태(notes[0])에서 Assay를 그래프에 연결하지 않은 채 엔티티만 선등록함
+      root_cause_step_id: finding-037.cause-002
+      steps:
+        - cause_id: finding-037.cause-001
+          claim: Assay는 relations와 모든 ref 속성에서 참조되지 않는 고아 엔티티다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml relations
+            - "clinical-lab-ontology.yaml entities (ref 속성 전수: 모두
+              Test/Patient/Department/Staff/Order/Report 대상)"
+        - cause_id: finding-037.cause-002
+          claim: 이는 Test/Assay 통합 여부 결정을 보류하면서 연결 관계 정의도 함께 보류한 결과다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml notes[0]: '카탈로그 정비 후 통합 여부를 재검토한다'"
+      unresolved_beyond_evidence: 운영 중인 실제 Test↔Assay 매핑 테이블이 별도 시스템에 존재하는지는 이 파일 범위 밖이다.
+  - finding_id: finding-038
+    lens_id: structure
+    source_ref: .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-003
+    target: clinical-lab-ontology.yaml entities.CriticalValue
+    evidence_anchor: "clinical-lab-ontology.yaml: CriticalValue는 test_ref 속성만 있고
+      relations에 미등장; Result·Staff·Report와의 관계 없음; notified 속성 note가 '통보 시각과
+      수신자는 전화 기록 대장에 있다'고 모델 외부를 지시"
+    claim: CriticalValue가 평가 대상(Result)과 통보 경로(Staff/임상의)에 구조적으로 연결되어 있지 않다.
+    lens_rationale_summary: 임계값 통보는 임상검사에서 환자 안전과 규제(인증 심사) 모두에 걸리는 필수 경로다. 권위 문서가 이
+      경로를 Test 참조 하나와 boolean으로만 표현하면, EMR/LIS 통합 시 임계값 판정·통보 추적을 시스템 간 누구가
+      소유하는지 모델이 답하지 못하고, 통보 증적은 영구히 모델 밖 종이 대장에 남는다.
+    proposed_action: "{ from: Result, to: CriticalValue, kind: flagged_by } 관계와 통보
+      이벤트(최소한 notified_to: ref→Staff, notified_at: datetime 속성)를 추가해 판정 대상과 통보
+      경로를 그래프 안으로 끌어들인다."
+    affected_purpose: 임계값(critical value) 판정과 통보 추적을 EMR/LIS 통합이 의존할 수 있는 개념 경로로 정의하는 것
+    failure_condition: 위험 결과가 발생했을 때 어떤 Result가 어떤 CriticalValue 규칙에 걸렸고 누구에게 언제
+      통보됐는지를 모델 기반 시스템이 표현·조회할 수 없는 경우
+    impact: 환자 안전 직결 경로가 모델 밖(전화 기록 대장)에 존재하므로, 이 온톨로지를 권위로 삼는 통합 설계는 임계값 통보 감사 추적을
+      구현할 개념적 근거가 없다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-003
+      - clinical-lab-ontology.yaml
+        entities.CriticalValue.attributes.notified.note
+      - clinical-lab-ontology.yaml relations (CriticalValue 미등장)
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 임계값(critical value) 판정과 통보 추적을 EMR/LIS 통합이 의존할 수 있는 개념 경로로 정의하는 것
+      failure_condition: 위험 결과가 발생했을 때 어떤 Result가 어떤 CriticalValue 규칙에 걸렸고 누구에게 언제
+        통보됐는지를 모델 기반 시스템이 표현·조회할 수 없는 경우
+      impact: 환자 안전 직결 경로가 모델 밖(전화 기록 대장)에 존재하므로, 이 온톨로지를 권위로 삼는 통합 설계는 임계값 통보 감사 추적을
+        구현할 개념적 근거가 없다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml
+          entities.CriticalValue.attributes.notified.note
+        - clinical-lab-ontology.yaml relations (CriticalValue 미등장)
+    causal_path:
+      root_cause_candidate: 기존 수기 운영 절차(전화 기록 대장)를 그대로 둔 채 CriticalValue를 범위 정의 엔티티로만
+        모델링하고, 판정·통보를 관계로 승격하지 않음
+      root_cause_step_id: finding-038.cause-003
+      steps:
+        - cause_id: finding-038.cause-001
+          claim: CriticalValue는 Result·Staff와 어떤 관계도 없고 notified boolean만 가진다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.CriticalValue
+            - clinical-lab-ontology.yaml relations
+        - cause_id: finding-038.cause-002
+          claim: 그 결과 임계값 판정 대상과 통보 수신자·시각이 모델에서 표현 불가능하다
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.CriticalValue.attributes
+              (notified_to/notified_at 부재)
+        - cause_id: finding-038.cause-003
+          claim: 이는 통보 증적을 전화 기록 대장이라는 모델 외부 시스템에 두기로 한 기존 운영 관행을 온톨로지가 그대로 수용한 증상이다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - clinical-lab-ontology.yaml
+              entities.CriticalValue.attributes.notified.note
+      unresolved_beyond_evidence: 전화 기록 대장을 전산화할 계획이 있는지는 이 파일 범위 밖이다.
+  - finding_id: finding-039
+    lens_id: structure
+    source_ref: .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-004
+    target: clinical-lab-ontology.yaml entities.StatOrder
+    evidence_anchor: "clinical-lab-ontology.yaml: StatOrder는 is_a Order 외에 어떤
+      관계·ref에서도 참조되지 않으며, Order에 priority enum(stat 포함)과 is_stat boolean이 별도로
+      존재"
+    claim: StatOrder 하위 타입이 그래프에서 참조되지 않는 미사용 분기이며, STAT 표현이 세 곳(StatOrder,
+      priority, is_stat)으로 분산되어 있다.
+    lens_rationale_summary: 세 경로 중 어느 것이 권위인지 구조가 답하지 못한다. 통합 구현체 A는 StatOrder 타입
+      검사로, B는 priority로, C는 is_stat으로 STAT을 판정하면 동일 주문이 시스템마다 다르게 분류될 수 있다. 미참조
+      하위 타입은 설계 의도(서브타이핑)와 실제 연결 구조(enum/boolean 사용)의 불일치다.
+    proposed_action: "하나를 권위로 선언하고 나머지를 제거하거나 파생값으로 강등한다. 최소 수정: StatOrder를 제거하고
+      stat_reason을 Order의 선택 속성으로 옮긴 뒤 priority를 단일 권위로 선언, is_stat은
+      priority=stat의 파생 투영으로 명시."
+    affected_purpose: STAT(응급) 주문 판정의 단일 권위 경로를 권위 문서가 제공하는 것
+    failure_condition: 통합되는 시스템들이 서로 다른 STAT 판정 경로(타입/priority/is_stat)를 선택해 동일 주문의
+      응급 여부가 시스템 간 불일치하는 경우
+    impact: 응급 검사 우선처리 누락 또는 비응급 검사의 오분류로 이어질 수 있는 판정 분기이며, 권위 문서가 분기를 만들어낸 당사자가 된다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-004
+      - clinical-lab-ontology.yaml entities.StatOrder
+      - clinical-lab-ontology.yaml entities.Order.attributes.priority
+      - clinical-lab-ontology.yaml entities.Order.attributes.is_stat
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: STAT(응급) 주문 판정의 단일 권위 경로를 권위 문서가 제공하는 것
+      failure_condition: 통합되는 시스템들이 서로 다른 STAT 판정 경로(타입/priority/is_stat)를 선택해 동일 주문의
+        응급 여부가 시스템 간 불일치하는 경우
+      impact: 응급 검사 우선처리 누락 또는 비응급 검사의 오분류로 이어질 수 있는 판정 분기이며, 권위 문서가 분기를 만들어낸 당사자가 된다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.StatOrder
+        - clinical-lab-ontology.yaml entities.Order.attributes.priority
+        - clinical-lab-ontology.yaml entities.Order.attributes.is_stat
+    causal_path:
+      root_cause_candidate: STAT 개념을 서브타입으로 분리하려는 시도와 속성(enum/boolean)으로 표현하려는 시도가 정리되지 않고 셋 다 잔존함
+      root_cause_step_id: finding-039.cause-002
+      steps:
+        - cause_id: finding-039.cause-001
+          claim: StatOrder는 어떤 관계·참조에서도 사용되지 않고, Order에 priority(stat)와 is_stat이 병존한다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.StatOrder
+            - clinical-lab-ontology.yaml entities.Order.attributes
+        - cause_id: finding-039.cause-002
+          claim: 이 병존은 STAT 판정 권위를 셋 중 어디에도 확정하지 않은 모델링 미결정의 증상이다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "clinical-lab-ontology.yaml
+              entities.Order.attributes.is_stat.note: 'priority와 함께 기록'(권위 미선언)"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-040
+    lens_id: structure
+    source_ref: .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-005
+    target: clinical-lab-ontology.yaml relations / entities.Test.requires_specimen_type
+    evidence_anchor: "clinical-lab-ontology.yaml: relations에 Specimen↔Test 관계가 없고,
+      Order.ordered_tests는 속성으로만 존재하며 relations 섹션에 Order→Test 관계도 없음"
+    claim: Specimen과 Test를 잇는 관계가 누락되어 Test.requires_specimen_type 제약을 검증할 구조적 경로가 없다.
+    lens_rationale_summary: requires_specimen_type은 검체 적합성 검증을 위해 존재하는 제약인데, 검증을 수행할
+      조인 경로가 그래프에 없으면 죽은 제약이 된다. 혈액+소변이 한 주문에 묶인 경우(흔한 사례) 모델상 어떤 검체-검사 짝도 적합성
+      판정을 할 수 없다.
+    proposed_action: "{ from: Specimen, to: Test, kind: collected_for } 관계(또는
+      Specimen.intended_tests 속성)를 추가해 검체-검사 적합성 검증이 가능한 경로를 만든다."
+    affected_purpose: 검체 적합성(specimen suitability) 검증을 가능하게 하는 검체-검사 연결 정의
+    failure_condition: 하나의 Order에 복수 검체와 복수 검사가 묶였을 때 검체-검사 대응이 모델상 비결정적이 되는 경우
+    impact: requires_specimen_type 제약이 실행 불가능한 장식이 되고, 부적합 검체로 검사가 진행되는 것을 모델 기반으로
+      막을 수 없다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-005
+      - clinical-lab-ontology.yaml
+        entities.Test.attributes.requires_specimen_type
+      - "clinical-lab-ontology.yaml relations: Order has_many Specimen"
+      - clinical-lab-ontology.yaml entities.Order.attributes.ordered_tests
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 검체 적합성(specimen suitability) 검증을 가능하게 하는 검체-검사 연결 정의
+      failure_condition: 하나의 Order에 복수 검체와 복수 검사가 묶였을 때 검체-검사 대응이 모델상 비결정적이 되는 경우
+      impact: requires_specimen_type 제약이 실행 불가능한 장식이 되고, 부적합 검체로 검사가 진행되는 것을 모델 기반으로
+        막을 수 없다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml
+          entities.Test.attributes.requires_specimen_type
+        - "clinical-lab-ontology.yaml relations: Order has_many Specimen"
+        - clinical-lab-ontology.yaml entities.Order.attributes.ordered_tests
+    causal_path:
+      root_cause_candidate: 검체-검사 대응을 Order 수준 묶음으로 충분하다고 가정하고 Specimen-Test 직접 관계를 생략함
+      root_cause_step_id: finding-040.cause-002
+      steps:
+        - cause_id: finding-040.cause-001
+          claim: Specimen과 Test 사이에 직접 관계가 없고 Order 경유 간접 경로만 존재한다
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml relations
+        - cause_id: finding-040.cause-002
+          claim: 복수 검체·복수 검사 주문에서 검체-검사 대응이 비결정적이 되어 requires_specimen_type 검증이 불가능해진다
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml relations: Order→Specimen has_many"
+            - "clinical-lab-ontology.yaml
+              entities.Order.attributes.ordered_tests: list"
+      unresolved_beyond_evidence: 실무에서 주문이 항상 단일 검체로 발행되는 운영 규칙이 있는지는 이 파일 범위 밖이다.
+  - finding_id: finding-041
+    lens_id: structure
+    source_ref: .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-006
+    target: clinical-lab-ontology.yaml relations (Result↔Report, Result↔Specimen 중복 쌍)
+    evidence_anchor: "clinical-lab-ontology.yaml relations: Result→Report
+      aggregated_into와 Report→Result contains, Result→Specimen derived_from과
+      Specimen→Result produces, Order→Report produces와 Report→Order belongs_to가
+      각각 병존"
+    claim: 동일 연결이 서로 다른 kind 어휘로 중복 선언되어 정방향·역방향 중 어느 것이 정규 관계인지 불명확하다.
+    lens_rationale_summary: 권위 문서를 스키마·코드로 투영할 때 어느 방향을 정규 외래키/소유 관계로 삼을지 구현마다 갈릴 수
+      있다. 다만 현 단계에서는 의미 충돌보다는 표기 중복이므로 영향은 제한적이다.
+    proposed_action: "관계 표기 규약을 정한다: 정방향 하나만 선언하고 역방향은 inverse_of로 표시하거나, 역관계 쌍의
+      kind 명칭을 대칭 규칙으로 통일한다."
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: 권위 문서를 스키마·코드로 투영할 때 어느 방향을 정규 외래키/소유 관계로 삼을지 구현마다 갈릴 수 있다. 다만 현 단계에서는
+      의미 충돌보다는 표기 중복이므로 영향은 제한적이다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-006
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-042
+    lens_id: structure
+    source_ref: .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-007
+    target: clinical-lab-ontology.yaml entities.Specimen /
+      entities.Staff.role(phlebotomist)
+    evidence_anchor: "clinical-lab-ontology.yaml: Specimen에 collected_at은 있으나
+      채취자(collected_by) 참조가 없고, Staff.role enum에 phlebotomist가 정의되어 있음"
+    claim: phlebotomist 역할은 정의되어 있으나 이를 사용하는 관계가 없어 채취 행위자 연결이 누락되었다.
+    lens_rationale_summary: 역할 어휘는 존재하는데 그 역할이 수행하는 행위가 그래프에 없으면, 설계 의도(채취 책임 추적)와
+      연결 구조가 불일치한다. 검체 추적성 요구가 있는 통합에서는 채취자 기록이 필요해질 가능성이 높다.
+    proposed_action: "Specimen에 collected_by: { type: ref, target: Staff } 속성을 추가한다."
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: 역할 어휘는 존재하는데 그 역할이 수행하는 행위가 그래프에 없으면, 설계 의도(채취 책임 추적)와 연결 구조가 불일치한다. 검체
+      추적성 요구가 있는 통합에서는 채취자 기록이 필요해질 가능성이 높다.
+    evidence_refs:
+      - .onto/review/20260611-49e15b58/round1/structure.findings.yaml#structure-candidate-007
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+validation:
+  unaddressable_findings: []

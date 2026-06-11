@@ -1,0 +1,52 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+planned_issues:
+  - issue_id: issue-003
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids: [coverage, logic]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+    conflict_summary: "Severity adjudication is split on the split-time-authority defect: coverage (raising lens) keeps high, citing the permanent never-flush path (notifications accumulate indefinitely) plus loss of deterministic verifiability, while logic's severity_position is insufficient_evidence — the formal core is lens-verified (finding-l2: windowStartedAt stamped from internal Date.now(), now caller-supplied, no claim designating the time authority), but adjudicating high versus the lens's medium-if-confirmed reading depends on the caller-context premise marked upstream_evidence_required=true. Semantics also keeps high; the unresolved claim pair is coverage's keeps versus logic's abstention. Same underlying defect as issue-008 per duplicates rel-003; logic recommends treating issue-003/008 as one decision unit."
+    resolution_question: "Can the premise that callers or tests whose flush(now) time source diverges from the internal Date.now() stamp constitute a supported execution condition be settled from in-session evidence (including the session's explicitly requested time-source focus), and accordingly does issue-003 severity stay high or reduce to medium? Adjudicate as one decision unit with issue-008 per rel-003."
+  - issue_id: issue-008
+    priority: 20
+    conflict_type: action_or_severity
+    participating_lens_ids: [semantics, logic]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+    conflict_summary: "Same time-authority defect as issue-003 (duplicates rel-003) framed as a signature contract: semantics (raising lens) keeps high — the externalized flush(now) signature asserts caller-owned current-time authority, so the declared 'Flushes when the window has closed' contract is violated without any surfaced error for callers using a non-system clock — while logic's severity_position is insufficient_evidence: high rests on whether callers exercising the visible signature literally are a supported group, exactly the premise logic flagged upstream_evidence_required=true. Coverage keeps high; the unresolved claim pair is semantics' keeps versus logic's abstention."
+    resolution_question: "Is the premise that callers honoring the visible flush(now) signature with a non-system clock (frozen test clock, simulated or logical time) are a supported user group established by session evidence, and does issue-008 severity stay high or reduce accordingly — resolved consistently with issue-003 as one decision unit per rel-003?"
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: "All three lenses support with root hypothesis accepted and medium kept; no runtime conflict signals. Cross-issue decision-unit notes (duplicates rel-001/rel-002 with issue-004/issue-009) are deliberation context, not a stance conflict."
+  - issue_id: issue-002
+    reason_code: non_material_issue
+    reason: "material_issue is false (severity low). Coverage's surface_only stance is boundary-routed deference to the raising lens rather than a contested claim, and non-material issues do not enter planned deliberation."
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: "All three lenses support with root accepted and medium kept; no runtime conflict signals. Duplicate links to issue-001/issue-009 are context only."
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: "Material issue, but the runtime stance_conflict candidate does not materialize into conflicting claims: semantics' narrow stance explicitly defers the lifecycle-design arm to the raising lens (neither supports nor opposes it) while supporting the declare-the-contract arm, logic is not_applicable by boundary routing, and all applicable lenses accept the root and keep medium. The proposed-action arms are alternatives offered by the raising lens itself, so there is no claim pair for deliberation to resolve."
+  - issue_id: issue-006
+    reason_code: non_material_issue
+    reason: "material_issue is false (severity low). Semantics' narrows position (contract ambiguous rather than silent on global window granularity) refines a non-material issue and can be carried into synthesis without deliberation."
+  - issue_id: issue-007
+    reason_code: non_material_issue
+    reason: "material_issue is false (severity low); applicable lens stances are aligned (support, root accepted, low kept) with no conflict signals."
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: "All three lenses support with root accepted and medium kept; no runtime conflict signals. Duplicate links (rel-001/rel-002) to issue-001/issue-004 are context only."
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: "Applicable lenses (coverage, semantics) support with root accepted and medium kept; logic is not_applicable by boundary routing and offers corroborative context only. No runtime conflict signals."
+  - issue_id: issue-011
+    reason_code: non_material_issue
+    reason: "material_issue is false (severity low); logic and coverage route ownership to semantics as not_applicable and the raising lens keeps low. No conflict signals."
+  - issue_id: issue-012
+    reason_code: non_material_issue
+    reason: "material_issue is false (severity low); all three lenses support and keep low with no conflict signals."

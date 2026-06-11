@@ -1,0 +1,169 @@
+schema_version: 1
+session_id: 20260611-43359fc2
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml entities.ECO / relations 블록 (변경관리 연결 구조)
+    evidence_anchor: manufacturing-bom-ontology.yaml:64-70, 79-86
+      (ECO.affected_parts는 Part만 참조, relations에 ECO→Part changes만 존재)
+    claim: ECO에서 BomLine/Routing으로 가는 변경 전파 경로가 그래프에 존재하지 않아, 설계변경이 BOM 구조·공정에 미치는
+      영향을 추적할 수 있는 필수 관계가 누락되어 있다.
+    what: "ECO는 affected_parts(Part 목록)와 changes 관계(ECO→Part)로만 연결되어 있다. 그러나 설계변경의
+      실제 효과 대상인 BOM 구성(BomLine: qty_per, child 교체)과 공정(Routing/Operation)으로 향하는
+      관계는 엔티티 속성에도 relations 블록에도 전혀 없다. BomLine과 Routing 어디에도 rev나 ECO에 대한 참조가
+      없어, '어느 ECO가 어느 BOM 줄/라우팅을 바꿨는가'라는 경로가 그래프 상에서 끊어져 있다."
+    why: 이 문서는 PLM/MES 통합의 개념 기준 문서이고 요청 요지가 변경관리 개념의 정합성 검토다. integrity_rules 3번은
+      'ECO.effective_date 이후 생산분은 신규 rev를 따른다'고 선언하지만, ECO→Part 관계만으로는 생산분이 따라야
+      할 신규 BOM 구성·라우팅을 그래프로 도출할 수 없다. 선언된 변경관리 의도와 실제 연결 구조가 불일치하며, 통합 구현 시 각
+      시스템이 임의의 암묵 경로(part_no 매칭 등)로 보완하게 되어 기준 문서 역할이 무너진다.
+    how_to_fix: "최소 수정으로 ECO의 영향 범위를 구조에 명시한다: (1) ECO에 affected_bom_lines 또는
+      BomLine/Routing 수준의 effectivity 참조를 추가하거나, (2) BomLine·Routing에
+      effective_from_eco(type: ref, target: ECO) 속성과 대응 relation을 추가해 ECO→BOM/공정
+      경로를 닫는다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 변경관리(ECO) 개념의 정합성 보장
+      failure_condition: ECO가 BOM 구성이나 공정 변경을 수반할 때(수량 변경, 부품 교체, 공정 추가), 그래프 상에서 변경
+        대상 BomLine/Routing을 식별할 수 없어 effective_date 기준 신·구 BOM 적용을 시스템이 판정하지
+        못한다.
+      impact: 통합 대상 시스템(PLM, MES)이 변경 전파를 각자 암묵 규칙으로 구현하게 되어, 신·구 BOM 혼용 생산·구버전 라우팅으로의
+        오더 생성 같은 제조 운영 위험이 기준 문서 수준에서 차단되지 않는다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:64-70
+        - manufacturing-bom-ontology.yaml:79-86
+        - manufacturing-bom-ontology.yaml:91
+    causal_path:
+      root_cause_candidate: 변경관리 모델링이 ECO→Part 입자(품목 단위)에서 멈췄고, 변경의 실제 효과 단위인 BOM
+        구성/라우팅 수준의 effectivity 개념이 온톨로지에 도입되지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: ECO에서 BomLine/Routing으로 가는 경로가 relations와 엔티티 속성 어디에도 없다(표면 관찰).
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:79-86
+            - manufacturing-bom-ontology.yaml:24-30
+            - manufacturing-bom-ontology.yaml:50-56
+        - cause_id: structure-candidate-001.cause-002
+          claim: 이 경로 부재는 ECO의 영향 범위가 affected_parts(Part 목록)로만 정의된 데서 비롯된다 — 변경 효과를 받는
+            구조물(BOM 줄, 라우팅)이 영향 범위 표현에 포함되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:68
+        - cause_id: structure-candidate-001.cause-003
+          claim: integrity_rules 3번이 'effective_date 이후 신규 rev 적용'을 선언하면서도 rev/ECO가
+            BomLine·Routing에 연결되지 않은 것은, effectivity를 품목 단위 속성(Part.rev,
+            Part.current_eco)으로만 다루는 모델링 선택이 원인이다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:15-16
+            - manufacturing-bom-ontology.yaml:91
+      unresolved_beyond_evidence: 실제 PLM/ECO 시스템이 BOM 수준 effectivity를 별도로 보유하는지는 본 문서
+        범위 밖이다. 다만 본 문서가 '개념 기준 문서'를 자임하므로 외부 시스템 보유 여부와 무관하게 기준 문서 내 경로 부재는
+        성립한다.
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml entities.AlternatePart / relations의
+      alternate_of
+    evidence_anchor: manufacturing-bom-ontology.yaml:32-40, 86
+    claim: AlternatePart 엔티티가 relations 그래프에서 고아 상태다 — 어떤 relation도 AlternatePart를
+      출발점이나 도착점으로 연결하지 않고, alternate_of가 Part→Part 직접 관계로 이를 우회한다.
+    what: AlternatePart는 primary_ref/alternate_ref/direction 속성을 가진 관계
+      구체화(reification) 엔티티지만, relations 블록에는 AlternatePart→Part 관계가 한 건도 선언되지
+      않았다. 대신 86행이 Part→Part alternate_of를 'AlternatePart를 통해 표현되는 관계의 단축 표기'라고
+      선언해, 동일 관계가 두 가지 표현(엔티티 경유, 직접 관계)으로 존재하면서 정작 엔티티 쪽은 그래프에 연결되어 있지 않다.
+    why: "구체화 엔티티가 관계 그래프에 미연결이면 direction(one_way/bidirectional) 같은 관계 속성이 선언된 관계
+      경로(alternate_of)로는 도달 불가능한 정보가 된다. PLM/MES가 alternate_of만 따라가도록 구현하면 단방향
+      대체를 양방향으로 오해하는 경로가 열리고(예: 구자재를 신자재 자리에 투입), AlternatePart를 따라가도록 구현하면
+      relations 블록과 불일치한다. 단축 표기라는 설계 의도와 실제 연결 구조가 일치하지 않는다."
+    how_to_fix: "relations에 { from: AlternatePart, to: Part, kind: primary } / {
+      from: AlternatePart, to: Part, kind: alternate } 두 건을 추가해 구체화 엔티티를 그래프에
+      연결하고, alternate_of 항목의 note에 'AlternatePart.direction이 one_way인 경우 역방향 추론
+      금지'를 명시해 단축 표기가 direction 정보를 잃지 않게 한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목 대체 관계의 정합성 — PLM/MES가 대체 자재 전개 시 따라야 할 단일 기준 경로 제공
+      failure_condition: 소비 시스템이 relations 블록(alternate_of)만으로 대체 관계를 전개할 때, 그래프에 미연결된
+        AlternatePart.direction을 누락하여 one_way 대체를 양방향으로 적용하는 경우.
+      impact: 잘못된 방향의 자재 대체 투입은 직접적 제조 운영 위험이며, 동일 관계의 이중 표현은 두 통합 시스템이 서로 다른 경로를 진실로
+        삼는 분기를 만든다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:32-40
+        - manufacturing-bom-ontology.yaml:86
+    causal_path:
+      root_cause_candidate: 대체 관계를 구체화 엔티티(AlternatePart)로 승격하면서 relations 블록을 함께 갱신하지
+        않고, 기존 직접 관계(alternate_of)를 '단축 표기'로 남겨둔 이중 표현 설계.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: "relations 블록에 AlternatePart를 연결하는 항목이 없다(표면 관찰: 79-86행의 7개 관계 중
+            AlternatePart 출현 0건)."
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:79-86
+        - cause_id: structure-candidate-002.cause-002
+          claim: 이 미연결은 alternate_of(Part→Part)가 AlternatePart의 단축 표기로 선언되어 관계 그래프가 직접 관계
+            쪽으로만 닫혔기 때문이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:86
+        - cause_id: structure-candidate-002.cause-003
+          claim: 단축 표기에는 direction 속성을 투영할 자리가 없으므로, 이중 표현 채택이 방향 정보의 그래프 도달 불가능성을 만든 출발
+            원인이다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:37-40
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: manufacturing-bom-ontology.yaml Part.current_eco 속성과 relations 블록의 불일치
+    evidence_anchor: manufacturing-bom-ontology.yaml:16, 79-86
+    claim: Part.current_eco(Part→ECO 참조)에 대응하는 relation 선언이 relations 블록에 없다.
+    what: Part는 current_eco로 ECO를 참조하지만 relations에는 역방향인 ECO→Part(changes)만 있다. 속성
+      수준 참조와 relations 블록의 관계 목록이 일치하지 않는다.
+    why: relations 블록을 관계의 전수 목록으로 소비하는 시스템은 Part에서 ECO로 가는 경로를 인식하지 못한다. 영향은 제한적이지만
+      기준 문서의 속성-관계 일관성을 깬다.
+    how_to_fix: "relations에 { from: Part, to: ECO, kind: current_change } 항목을 추가하거나,
+      relations 블록이 전수 목록이 아니라는 범위 주석을 문서에 명시한다."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: structure-candidate-004
+    target: manufacturing-bom-ontology.yaml Assembly↔BomLine 양방향 중복 보관
+    evidence_anchor: manufacturing-bom-ontology.yaml:22, 27, 80
+    claim: Assembly.bom_lines(부모→줄)와 BomLine.parent_ref(줄→부모)가 같은 연결을 양쪽에 중복 보관하며,
+      relations에는 한 방향(has_many)만 선언되어 어느 쪽이 권위인지 불명확하다.
+    what: 동일한 부모-자식 연결이 Assembly.bom_lines 목록과 BomLine.parent_ref 두 곳에 저장된다. 두 값이
+      어긋날 때의 우선순위나 파생 규칙이 없다.
+    why: 개념 기준 문서에서 이중 보관은 통합 시스템 간 동기화 어긋남(목록에는 있는데 parent_ref가 다른 Assembly를 가리키는
+      줄)의 여지를 남긴다. 한쪽을 파생 투영으로 선언하면 제거되는 위험이다.
+    how_to_fix: BomLine.parent_ref를 원본으로 두고 Assembly.bom_lines를 파생(derived) 투영으로
+      표시하거나 그 반대로 명시한다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: structure-candidate-005
+    target: manufacturing-bom-ontology.yaml entities.InspectionPlan의 그래프 내 도달 경로
+    evidence_anchor: manufacturing-bom-ontology.yaml:72-77, 55, 83
+    claim: InspectionPlan은 어떤 관계나 속성에서도 직접 참조되지 않으며, is_a Operation 상속을 통해서만 그래프에 도달
+      가능하다.
+    what: "Routing.operations와 has_ordered 관계는 Operation만 대상으로 하고, InspectionPlan을
+      명시적으로 참조하는 곳은 없다. 검사 공정 포함을 강제하거나 식별하는 구조적 장치(예: 검사 필요 품목→InspectionPlan
+      관계)는 없다."
+    why: is_a 다형성으로 도달은 가능하므로 엄밀한 고아는 아니지만, 검사 파라미터가 필요한 품목과 InspectionPlan을 잇는 경로가
+      없어 '이 품목에 검사 계획이 존재하는가'를 그래프로 답할 수 없다. 표면 수준 관찰로 기록한다.
+    how_to_fix: 검사 의무가 개념 모델의 요구라면 Part 또는 Routing에서 InspectionPlan으로 가는 명시 관계를
+      추가하고, 아니라면 다형 포함이 의도임을 relations note로 명시한다.
+    upstream_evidence_required: false
+    severity_hint: info
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - BOM/라우팅 온톨로지의 일반 관행상 relations 블록을 시스템 통합 시 관계 전개의 기준 목록으로 소비한다고 가정했다.
+  - 설계변경(ECO)이 품목 속성뿐 아니라 BOM 구성과 공정 변경을 수반하는 것이 제조 변경관리의 일반적 범위라고 가정했다.
+validation:
+  unaddressable_candidates: []

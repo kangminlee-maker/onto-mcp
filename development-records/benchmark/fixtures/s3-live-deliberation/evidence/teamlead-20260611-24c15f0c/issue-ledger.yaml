@@ -1,0 +1,196 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: "The flush() reset was implemented as whole-map pending.clear() plus windowStartedAt nulling with no snapshot/swap step that could realize the documented carry-over, so the comment-declared invariant never had a realizing mechanism."
+    root_confidence: medium
+    surface_finding_ids: [finding-001]
+    relation_refs: []
+    raised_by_lens_ids: [logic]
+    issue_statement: "The documented invariant 'notifications enqueued between the window close check and this reset are carried into the next window' is logically incompatible with the realized reset semantics: pending.clear() unconditionally removes every entry, digests are built from the same live map that is then cleared, and no path snapshots or re-enqueues, so the claim set is unsatisfiable in every execution where the carry-over antecedent holds."
+    proposed_action: "Make exactly one claim true: realize the carry-over by swapping the map before building digests (build from the old map so late enqueues land in the fresh map), or correct the comment to state actual behavior (in-between enqueues are impossible in single-threaded synchronous use and would not be carried)."
+    affected_purpose: "Contract-vs-behavior consistency of the documented flush() carry-over invariant (correctness, regression_risk review goals)"
+    failure_condition: "Any execution model where the carry-over antecedent becomes reachable — reentrancy, a future await insertion between the close check and the reset, shared-state usage — entered by a maintainer trusting the documented guarantee"
+    impact: "The doc asserts a necessary outcome the code makes impossible; maintainers trusting the documented carry-over will introduce silent notification loss when the execution model changes, changing trust in the documented contract for the declared review purpose"
+    evidence_refs: [round1/logic.md#finding-l1]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "No same_root_candidate relation exists in the relation graph. finding-001's graph links are duplicates rel-001 (to finding-005), which is not merge evidence, and shared_cause_candidate rel-005 (to finding-006), which is dependency context owned by issue_dependencies, so no merge is permitted."
+  - issue_id: issue-002
+    root_cause_hypothesis: "The C4 return-contract comment was written over-universally — asserting that an empty array means the window is still open — without accounting for the reachable no-window state (fresh instance, or immediately after a successful flush) that shares the same return value."
+    root_confidence: low
+    surface_finding_ids: [finding-003]
+    relation_refs: []
+    raised_by_lens_ids: [logic]
+    issue_statement: "flush()'s documented equivalence 'an empty array means the window is still open' is false in the no-window state: the windowStartedAt === null guard also returns [], so realized behavior is the strictly weaker disjunction."
+    proposed_action: "Weaken the doc claim to 'an empty array means the window is still open or no window has started', or return a discriminated result instead of overloading []."
+    affected_purpose: "Trustworthiness of the flush() return-value contract for polling callers"
+    failure_condition: "No-window state: fresh instance or immediately after a successful flush"
+    impact: "A caller following C4 literally concludes from [] that a digest is eventually coming, which is false in the no-window state until a new enqueue occurs"
+    evidence_refs: [round1/logic.md#finding-l3]
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: "Surface-only finding with no relation in the graph connecting it to any other finding; no same_root_candidate relation to finding-014's []-homonym finding exists, so merging the two []-overload findings is not permitted."
+  - issue_id: issue-003
+    root_cause_hypothesis: "The API design is asymmetric — flush receives time as a caller parameter while enqueue stamps windowStartedAt from ambient Date.now() and enqueuedAt arrives as unvalidated caller input — with no injected clock or shared single-time-source concept designated anywhere in the component."
+    root_confidence: medium
+    surface_finding_ids: [finding-004]
+    relation_refs: []
+    raised_by_lens_ids: [coverage]
+    issue_statement: "The window-close predicate now - windowStartedAt < WINDOW_MS mixes two different time origins (internal wall clock vs caller-supplied now; three counting enqueuedAt), and no concept expressed in the system designates which time source is the authority."
+    proposed_action: "Designate one time authority: inject a clock in the constructor and derive windowStartedAt, enqueuedAt defaults, and the flush judgment from it, or pass the same source to enqueue as to flush (enqueue(item, now)); declare the single-time-source contract in the doc comment."
+    affected_purpose: "Correctness and verifiability of window-close behavior (declared review goals; requested time-source semantics focus)"
+    failure_condition: "Any caller or test whose time source for flush(now) differs from the internal Date.now() wall clock (fake timer in tests, monotonic-derived value, cached timestamp)"
+    impact: "Cross-origin skew makes the window-open predicate permanently true (flush returns [] forever and notifications accumulate indefinitely) or closes the window prematurely; without clock control the window behavior cannot be verified deterministically"
+    evidence_refs: [round1/coverage.md#cov-1]
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: "No same_root_candidate relation exists in the relation graph. finding-004's graph links are duplicates rel-003 (to finding-010), which is not merge evidence, and shared_cause_candidate rel-004 (to finding-012), which is dependency context owned by issue_dependencies, so no merge is permitted."
+  - issue_id: issue-004
+    root_cause_hypothesis: "An implementation concept matching the documented carry-over — a distinction between digest snapshot and differential preservation — was never present in the reset path, so the comment states an unrealizable behavior as contract."
+    root_confidence: medium
+    surface_finding_ids: [finding-005]
+    relation_refs: []
+    raised_by_lens_ids: [coverage]
+    issue_statement: "The comment-declared carry-over ('notifications enqueued between the window-close judgment and the reset are carried into the next window') has no corresponding implementation element: pending.clear() unconditionally empties the whole map, no path separates digest snapshot from differential preservation, and in current synchronous single-threaded execution the described interleaving cannot occur at all."
+    proposed_action: "Align doc and behavior: remove only the entries emitted as digests (snapshot then differential preservation) to implement the carry as documented, or correct the comment to actual behavior (everything is cleared; in-between enqueues are impossible in synchronous execution)."
+    affected_purpose: "Contract-vs-behavior consistency of the flush reset contract (regression_risk, maintainability review goals)"
+    failure_condition: "A maintainer trusts the comment and makes flush async or inserts an await between the close judgment and the reset"
+    impact: "Notifications enqueued in between are dropped without warning instead of carried over — the documented guarantee inverts into silent loss, weakening trust in the documented contract for the declared review purpose"
+    evidence_refs: [round1/coverage.md#cov-2]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "No same_root_candidate relation exists in the relation graph. finding-005's graph links are duplicates rel-001 (to finding-001) and rel-002 (to finding-011); duplicates is not merge evidence, so the finding stands as its own issue."
+  - issue_id: issue-005
+    root_cause_hypothesis: "The notification lifecycle was designed one-way with state destruction ahead of delivery confirmation: flush clears pending and nulls the window before returning digests, and no post-flushed lifecycle concept (ack, commit, reinjection, dead-letter) exists in the component."
+    root_confidence: medium
+    surface_finding_ids: [finding-006]
+    relation_refs: []
+    raised_by_lens_ids: [coverage]
+    issue_statement: "flush() destroys all pending state before the caller can confirm delivery, making the component structurally at-most-once without declaring it: any delivery failure after return loses the whole window's notifications with no recovery path."
+    proposed_action: "Introduce a two-phase interface (peek/commit separating digest production from state removal) or a failure-reinjection API to represent lifecycle completion; if at-most-once is the intended semantics, declare that contract explicitly in the doc comment."
+    affected_purpose: "Reliability of notification delivery semantics within the declared correctness and regression_risk goals"
+    failure_condition: "Caller fails while delivering the returned digests (process crash, send API error) after flush has already cleared state"
+    impact: "Whole-window notification loss is unrecoverable and the at-most-once property is undeclared, meaningfully weakening trust and decision quality for the declared purpose"
+    evidence_refs: [round1/coverage.md#cov-3]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "No same_root_candidate relation links finding-006 to any other finding; its only graph link is shared_cause_candidate rel-005 to finding-001, which is dependency context owned by issue_dependencies and must not merge issues."
+  - issue_id: issue-006
+    root_cause_hypothesis: "The window concept lacks per-user sub-granularity: a single global windowStartedAt is started by any user's first enqueue while collection and digests are per-user, and no contract declares the global window as intended."
+    root_confidence: low
+    surface_finding_ids: [finding-007]
+    relation_refs: []
+    raised_by_lens_ids: [coverage]
+    issue_statement: "windowStartedAt is one global value started by any user's first enqueue while collection and digest are per-user, so the effective batch window of a user who joins shortly before the global close converges to zero."
+    proposed_action: "Introduce a per-user window, or declare in the contract (doc comment) that a global window is the intended granularity."
+    affected_purpose: "Fit between the batching purpose (per-user digest) and the realized global window granularity"
+    failure_condition: "A user whose first enqueue lands shortly before the global window closes"
+    impact: "That user's effective batching window converges to zero, conflicting with the per-user digest intent, though the declared happy path remains achievable"
+    evidence_refs: [round1/coverage.md#cov-4]
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: "Surface-only absence finding; no relation in the graph connects it to any other finding."
+  - issue_id: issue-007
+    root_cause_hypothesis: "The digest artifact design dropped the time dimension: enqueuedAt is declared on the input type but never used in digest generation, so per-notification enqueue timing is unreconstructable after flush."
+    root_confidence: low
+    surface_finding_ids: [finding-008]
+    relation_refs: []
+    raised_by_lens_ids: [coverage]
+    issue_statement: "The time dimension is lost in the digest output: enqueuedAt is declared but unused by the digest body join, so after flush no consumer can reconstruct when each notification entered the batch."
+    proposed_action: "Include enqueuedAt in the digest output, or remove the enqueuedAt declaration to align the contract with actual use if the time dimension is unneeded."
+    affected_purpose: "Auditability of when each notification entered the batch"
+    failure_condition: "Any post-flush consumer needing per-notification enqueue time"
+    impact: "Per-notification timing cannot be reconstructed after flush; an improvement opportunity that does not make the result unsafe for its declared purpose"
+    evidence_refs: [round1/coverage.md#cov-5]
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: "Surface-only absence finding; no relation in the graph connects it to any other finding (no same_root_candidate relation to finding-012's enqueuedAt contract finding exists, so merging is not permitted)."
+  - issue_id: issue-008
+    root_cause_hypothesis: "The time authority was split at the design point: enqueue independently stamps windowStartedAt from Date.now() while flush externalizes the clock as a caller parameter, and no contract text declares the required clock-domain identity."
+    root_confidence: medium
+    surface_finding_ids: [finding-010]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: "The window-close predicate compares values from two different time authorities — windowStartedAt is always stamped from the system clock while now is caller-supplied — and the parameter name and externalized signature assert caller-owned current-time authority while the behavior only holds under an unstated same-epoch-ms-system-clock constraint."
+    proposed_action: "Unify the time authority: drop the now parameter and use Date.now() in flush as well, or accept the clock externally everywhere (enqueue(item, now) or constructor-injected clock) and stamp windowStartedAt from that same source; document the single clock domain on the class contract."
+    affected_purpose: "Correctness of the declared contract 'Flushes when the window has closed' under the session's time-source semantics focus"
+    failure_condition: "A supported caller group honoring the visible signature contract with a non-system clock (logical clock, simulated time, frozen test clock)"
+    impact: "With now far below real epoch ms the window never closes and notifications are never delivered; with now above real time the window closes immediately — the declared contract is violated without any error surfacing to the caller"
+    evidence_refs: [round1/semantics.md#semantics-1]
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: "No same_root_candidate relation exists in the relation graph. finding-010's only graph link is duplicates rel-003 (to finding-004), which is not merge evidence, so the finding stands as its own issue."
+  - issue_id: issue-009
+    root_cause_hypothesis: "The comment encodes an intended concurrency contract (carry-over of late enqueues) that was never realized in the chosen reset strategy of building digests from the live pending map and then clearing the whole map."
+    root_confidence: medium
+    surface_finding_ids: [finding-011]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: "The reset comment asserts a carry-over mechanism the code does not implement: pending.clear() unconditionally drops every entry, so if the described interleaving could occur those notifications would be silently lost, not carried over; in synchronous single-threaded JS the interleaving cannot occur at all, so the comment also describes a vacuous scenario as if it were a handled case."
+    proposed_action: "Either correct the comment to state actual behavior (everything pending at flush time is emitted and cleared; no carry-over path exists; flush is synchronous so no interleaving is possible), or implement the stated contract: snapshot the digested entries and delete only those keys/items, leaving later enqueues in pending."
+    affected_purpose: "Contract-vs-behavior consistency of the documented reset/carry-over semantics (regression_risk, maintainability review goals)"
+    failure_condition: "A maintainer later makes flush async or adds an await before the reset while trusting the documented carry-over guarantee"
+    impact: "Silent notification loss — the failure mode the comment claims is already handled — making the result appear trustworthy on a contract it does not honor"
+    evidence_refs: [round1/semantics.md#semantics-2]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "No same_root_candidate relation exists in the relation graph. finding-011's only graph link is duplicates rel-002 (to finding-005), which is not merge evidence, so the finding stands as its own issue."
+  - issue_id: issue-010
+    root_cause_hypothesis: "enqueuedAt was placed in the caller-facing input type instead of being stamped by the component that owns the enqueue event, so its documented event-derived meaning ('epoch ms when the notification entered the batch') has no enforcement point and no consumer."
+    root_confidence: medium
+    surface_finding_ids: [finding-012]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: "enqueuedAt is documented as a batcher-owned event-derived value but modeled as unverified independent caller input — never stamped, never validated, and never read by any consumer in the component: the derived-value-as-independent-input pattern."
+    proposed_action: "Have enqueue stamp the timestamp itself (accept {userId, body} and construct the pending record internally from the unified clock), or remove the field from the contract if genuinely unused, or re-document it as caller-asserted creation time that does not affect batching."
+    affected_purpose: "Verifiability and maintainability of the PendingNotification contract within the bounded target"
+    failure_condition: "Any caller supplying a value that drifts from the documented meaning — indistinguishable from a correct value because no enforcement point or consumer exists"
+    impact: "The field's truth depends entirely on caller discipline with unbounded drift, and the type contract misleads readers into assuming per-notification time semantics that batching decisions do not have"
+    evidence_refs: [round1/semantics.md#semantics-3]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: "No same_root_candidate relation links finding-012 to any other finding; its only graph link is shared_cause_candidate rel-004 to finding-004, which is dependency context owned by issue_dependencies and must not merge issues."
+  - issue_id: issue-011
+    root_cause_hypothesis: "The method name was chosen from conventional flush vocabulary (unconditional force-out) while the realized behavior is a conditional poll, and the doc comment admits the poll semantics, leaving name and contract text in disagreement inside the same declaration."
+    root_confidence: low
+    surface_finding_ids: [finding-013]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: "flush names an unconditional operation but behaves as a conditional poll that returns [] and does nothing while the window is open; the contract text ('Callers poll this') and the name disagree inside the same declaration."
+    proposed_action: "Rename to poll() / tryFlush() / flushIfClosed(), or keep flush as a true force-flush and move the window check to the caller side."
+    affected_purpose: "Name-contract alignment for readers of the flush API"
+    failure_condition: "Readers relying on conventional flush vocabulary without reading the doc comment"
+    impact: "Misleading name increases misuse risk, but the declared purpose remains achievable; improvement opportunity"
+    evidence_refs: [round1/semantics.md#semantics-4]
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: "Surface-only naming finding; no relation in the graph connects it to any other finding."
+  - issue_id: issue-012
+    root_cause_hypothesis: "The [] return value was overloaded across two distinct component states (no active window vs window open but not yet closed) while the doc names only the second, because no distinct signal was designed for the no-window state."
+    root_confidence: low
+    surface_finding_ids: [finding-014]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: "[] is a homonym for two distinct states — no active window (windowStartedAt === null) and window open but not yet closed — while the doc names only the second; a polling caller cannot distinguish 'nothing was ever enqueued' from 'wait longer'."
+    proposed_action: "Document both meanings of [], or expose the state distinctly (return null when no window is active, or add a windowOpen() accessor)."
+    affected_purpose: "Interpretability of the flush return signal for polling callers"
+    failure_condition: "Polling caller in the no-active-window state interpreting [] per the documented single meaning"
+    impact: "Callers may wait for a digest that is not coming, but the declared purpose remains achievable; improvement opportunity"
+    evidence_refs: [round1/semantics.md#semantics-5]
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: "Surface-only finding; no same_root_candidate relation connects it to finding-003's return-contract finding, so merging is not permitted despite the shared surface."
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids: [issue-003, issue-010]
+    relation_refs: [rel-004]
+    rationale: "Distinct roots (window-close correctness under split time authority vs unverifiable event-derived field contract) share one cause: time values that must share one axis (windowStartedAt, flush now, enqueuedAt) are produced independently by ambient Date.now() and unvalidated caller input, because no single time-authority concept owned by the component exists to stamp or bind them; one injected clock that stamps enqueuedAt internally and drives windowStartedAt and the flush judgment would resolve both issues without making them the same root."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids: [issue-001, issue-005]
+    relation_refs: [rel-005]
+    rationale: "Distinct failure surfaces (a false documented carry-over claim about late enqueues vs unrecoverable whole-window loss on delivery failure) share one cause: flush() resets by destroying the whole pending state in place (pending.clear() plus windowStartedAt = null) with no intermediate concept separating digest production from state removal — no snapshot/swap step and no commit/ack boundary; decoupling digest construction from wholesale state destruction addresses both issues without making them the same root."
+validation:
+  unclustered_finding_ids: [finding-002, finding-009]

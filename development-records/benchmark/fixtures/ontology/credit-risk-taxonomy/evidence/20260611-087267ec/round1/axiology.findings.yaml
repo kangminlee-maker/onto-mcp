@@ -1,0 +1,176 @@
+schema_version: 1
+session_id: 20260611-087267ec
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: credit-risk-ontology.yaml classification_rules and rating notes
+    evidence_anchor: "materialized-input.md:6-8 declares the ontology as a shared
+      concept authority for the risk engine and reporting system;
+      review-value-alignment-criteria.yaml:6-11 makes that purpose
+      authority_rank 1. Target evidence: materialized-input.md:31-35, 48-56,
+      92-98 allow Exposure.risk_grade manual reporting adjustment and leave
+      three rating-scale conversions to each consuming system."
+    claim: Rating authority is delegated back to consumers despite the ontology's
+      declared shared-authority purpose.
+    what: The ontology presents itself as the concept authority shared by the risk
+      engine and reporting system, but the rating model keeps separate
+      Borrower.internal_rating, RiskRating.grade, and Exposure.risk_grade
+      scales, says mapping is outside the ontology, and allows the reporting
+      team to manually adjust Exposure.risk_grade by market conditions.
+    why: "A shared concept authority should give both consumers the same governed
+      basis for classification. Here, the engine grade is not the final
+      reporting grade, the conversion table is external, and consumers perform
+      conversions themselves. That accepts an ungoverned tradeoff: local
+      flexibility for reporting/history over a single authoritative
+      classification basis. For a risk engine/reporting shared ontology, this
+      weakens review trust because materially different ratings can be produced
+      without an ontology-level precedence, provenance, or override contract."
+    how_to_fix: Make one canonical rating concept authoritative in the ontology,
+      define versioned mappings among legacy scales inside the target or as
+      explicitly governed referenced artifacts, and model reporting overrides as
+      controlled records with allowed reasons, precedence over engine output,
+      effective time, approver/provenance, and downstream visibility.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: The declared purpose that this ontology is the shared concept
+        authority for risk engine and reporting system classification.
+      failure_condition: When RiskRating.grade, Borrower.internal_rating, and
+        Exposure.risk_grade differ, or the reporting team manually adjusts
+        risk_grade, the ontology provides no bounded precedence or canonical
+        conversion authority inside the target.
+      impact: Risk engine and reports can diverge while both appear
+        ontology-compliant, making the artifact unsuitable as a shared concept
+        standard for classification decisions.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - review-value-alignment-criteria.yaml:6-11
+        - materialized-input.md:31-35
+        - materialized-input.md:48-56
+        - materialized-input.md:92-98
+    causal_path:
+      root_cause_candidate: The ontology preserves historical/local rating scales and
+        manual reporting flexibility without promoting a governed canonical
+        rating authority.
+      root_cause_step_id: axiology-candidate-001.cause-004
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: The target declares a shared concept-authority purpose for risk engine
+            and reporting system use.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:6-8
+            - review-value-alignment-criteria.yaml:6-11
+        - cause_id: axiology-candidate-001.cause-002
+          claim: RiskRating.grade is engine-produced but its mapping to
+            Borrower.internal_rating is external to the ontology.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:48-56
+        - cause_id: axiology-candidate-001.cause-003
+          claim: Exposure.risk_grade is a separate report-used scale and can be manually
+            adjusted by the reporting team.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:31-35
+            - materialized-input.md:92-93
+        - cause_id: axiology-candidate-001.cause-004
+          claim: The notes explicitly leave conversion across the three scales to each
+            consuming system.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:97-98
+      unresolved_beyond_evidence: The external risk-team wiki may contain a mapping,
+        but the bounded target does not make that mapping part of the ontology
+        authority or precedence contract.
+  - candidate_id: axiology-candidate-002
+    target: credit-risk-ontology.yaml ExposureAggregate and Limit utilization rule
+    evidence_anchor: "materialized-input.md:6-8 declares the ontology as a shared
+      concept authority; review-value-alignment-criteria.yaml:6-11 asks for
+      authority and temporality risks. Target evidence:
+      materialized-input.md:69-76 stores ExposureAggregate as month-end batch
+      with intraday exposures omitted until the next batch;
+      materialized-input.md:92-95 uses each system's daily FX table for
+      cross-currency limit utilization."
+    claim: Temporal and currency valuation authority is fragmented for limit
+      utilization.
+    what: ExposureAggregate.total_amount is defined as the sum of all
+      Exposure.amount, but its stored value is only a month-end batch snapshot
+      and excludes intraday new exposures until the next batch. The
+      limit-utilization rule also lets each system use its own daily
+      exchange-rate table when currencies differ.
+    why: "The user's declared review criterion focuses on concept defects and
+      operational risk around authority and temporality. This design accepts a
+      hidden tradeoff: simpler batch/storage and system-local FX lookup at the
+      cost of a single as-of and valuation basis. For a shared risk/reporting
+      ontology, that means a utilization or appetite status can differ by system
+      or time of day without violating the written rules."
+    how_to_fix: "Define a canonical valuation context for utilization:
+      calculation_as_of timestamp, exposure inclusion cutoff, batch-vs-intraday
+      status, canonical FX source/table version and rate timestamp, and rules
+      for reporting stale or partial aggregates."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology's purpose as a shared concept basis for risk
+        engine and reporting, especially for temporality and operational-risk
+        review criteria.
+      failure_condition: When intraday exposures exist or currencies differ, systems
+        can compute different utilization values because one rule permits stale
+        month-end aggregates and another delegates FX conversion to each
+        system's own table.
+      impact: Limit utilization and appetite breach reporting can drift across systems
+        while remaining consistent with the ontology text, reducing
+        actionability as a common operational control basis.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - review-value-alignment-criteria.yaml:6-11
+        - materialized-input.md:69-76
+        - materialized-input.md:92-95
+    causal_path:
+      root_cause_candidate: The ontology does not make time-of-calculation and
+        valuation-source authority part of the canonical utilization concept.
+      root_cause_step_id: axiology-candidate-002.cause-004
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: The review purpose requires checking authority and temporality risks for
+            a shared risk/reporting concept standard.
+          relation_to_previous: null
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-11
+        - cause_id: axiology-candidate-002.cause-002
+          claim: ExposureAggregate is defined as all Exposure.amount but persisted as a
+            month-end batch value that omits intraday new lending until the next
+            batch.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:69-76
+        - cause_id: axiology-candidate-002.cause-003
+          claim: Cross-currency utilization delegates exchange-rate selection to each
+            system's daily FX table.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:92-95
+        - cause_id: axiology-candidate-002.cause-004
+          claim: The combination allows different systems or run times to produce
+            different utilization/breach conclusions without a target-level
+            precedence or freshness contract.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:69-76
+            - materialized-input.md:92-95
+      unresolved_beyond_evidence: The bounded target does not show whether downstream
+        systems reconcile these differences elsewhere; under the packet
+        boundary, that external reconciliation cannot be assumed.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none; no domain-specific document was used.
+  - Value-authority anchors used inside the boundary are the target's own
+    declared purpose in materialized-input.md and the confirmed user-request
+    intent in review-value-alignment-criteria.yaml.
+  - Axiology-specific value fields are not present in the submit schema, so the
+    authority anchors, value type, and misalignment rationale are encoded in
+    evidence_anchor/why rather than additional output fields.
+validation:
+  unaddressable_candidates: []

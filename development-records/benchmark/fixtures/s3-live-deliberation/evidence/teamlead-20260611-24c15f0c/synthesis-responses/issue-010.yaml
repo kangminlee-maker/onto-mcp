@@ -1,0 +1,22 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+work_item_id: "synthesis:issue-010"
+issue_id: "issue-010"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-010"
+conclusion: "PendingNotification.enqueuedAt in notification-batcher.ts is documented as a batcher-owned event-derived value ('epoch ms when the notification entered the batch') but is modeled as unverified independent caller input: enqueue never stamps it, nothing validates it, and no consumer in the component reads it — the digest uses only userId and body. This is the derived-value-as-independent-input pattern. Applicable lenses (coverage, semantics) accept the ledgered root and keep severity medium; logic is not_applicable by boundary routing; deliberation status is no-deliberation-needed, and closure requires choosing the field's contract among the ledgered arms."
+materiality_explanation: "The declared purpose is verifiability and maintainability of the PendingNotification contract within the bounded target, and this issue defeats both: because the documented event-derived meaning has no enforcement point and no consumer, any caller-supplied value — correct or drifted — is indistinguishable, so contract truth is unverifiable and drift is unbounded, depending entirely on caller discipline. The type contract additionally misleads readers into assuming per-notification time semantics that batching decisions do not actually have."
+root_cause_explanation: "The accepted root (finding-012.cause-003, medium confidence) is that enqueuedAt was placed in the caller-facing input type instead of being stamped by the component that owns the enqueue event. Ownership placement is the starting point because it is what removes the enforcement point — the batcher never binds the value to the event it documents — and leaves the field without any internal reader, so the documented event-derived meaning ('epoch ms when the notification entered the batch') has nothing in the component that guarantees or consumes it."
+causal_path_explanation: "The causal path from finding-012 (semantics) runs in three accepted steps: first, the doc asserts event-derived meaning, but enqueue performs the event without binding the value to it and no internal reader exists (digest uses only userId and body); this causes the second step — the field's documented semantics have no enforcement point and no consumer, so any caller-supplied value, correct or not, is indistinguishable; which traces to the root — the field was placed in the caller-facing input type instead of being stamped by the component that owns the enqueue event. The chain moves from directly observable never-stamped/never-validated/never-read facts to the ownership-placement root that explains them, with nothing unresolved beyond evidence."
+action_explanation: "The ledgered action menu offers three arms: have enqueue stamp the timestamp itself (accept {userId, body} and construct the pending record internally from the unified clock), or remove the field from the contract if genuinely unused, or re-document it as caller-asserted creation time that does not affect batching. Problem framing classifies this needs_decision with closure obligation must_close_before_next_stage: the field's contract must be chosen among these arms before further evolution. Dependency ordering matters: dep-001 (shared_cause_candidate with issue-003, via rel-004) identifies one missing time-authority concept behind both issues — a single injected clock that stamps enqueuedAt internally and drives windowStartedAt and the flush judgment would resolve both without merging them — so the stamp-internally arm should ride issue-003's single-clock remediation rather than introducing a second time mechanism."
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-010"
+  - "problem-framing.yaml#issue-010"
+  - "deliberation-resolution.yaml#issue-010"
+  - "finding-ledger.yaml#finding-012"
+  - "issue-stance-matrix.yaml#stances.issue-010.logic"
+  - "issue-stance-matrix.yaml#stances.issue-010.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-010.semantics"
+  - "issue-ledger.yaml#dep-001"
+  - "finding-relation-graph.yaml#rel-004"

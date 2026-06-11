@@ -1,0 +1,78 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+lens_id: "semantics"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "Semantics independently observed the same defect surface (semantics-2): the comment-declared carry-over has no realized counterpart and an interleaved enqueue would be lost, not carried. Logic's unsatisfiability framing is consistent with this lens's contract-vs-behavior reading, and the root hypothesis (whole-map clear with no snapshot/swap step) matches this lens's traced starting cause. Note as deliberation context: this issue, issue-004, and issue-009 carry the same underlying defect per duplicates rel-001/rel-002; merge adjudication is outside this lens's scope."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-001, round1/semantics.md#semantics-2]
+  - issue_id: issue-002
+    stance: support
+    rationale: "Independently corroborated from the homonym angle (semantics-5): the doc names only the window-still-open meaning of [] while the reachable no-window state returns the same value, so the documented equivalence is over-universal and realized behavior is the weaker disjunction. Low severity holds: surface-only, and pendingUserCount() offers callers a distinguishing probe. Note as deliberation context: issue-012 reads the same overloaded signal through this lens's homonymy assertion type; the graph records no same_root relation and merging is not this lens's call."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-002, round1/semantics.md#semantics-5]
+  - issue_id: issue-003
+    stance: support
+    rationale: "Semantics independently observed the same defect surface (semantics-1): the window-close predicate subtracts across independently produced time origins with no declared authority. Coverage's absence framing (no single-time-source concept expressed in the system) is consistent with this lens's split-authority reading, and the inclusion of enqueuedAt as a third origin is supported by semantics-3's observation that the field is stamped by no component-owned clock. High severity holds on the session's requested time-source focus. Note as deliberation context: issue-008 is the same defect per duplicates rel-003; merge adjudication is outside this lens's scope."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-003, round1/semantics.md#semantics-1, round1/semantics.md#semantics-3]
+  - issue_id: issue-004
+    stance: support
+    rationale: "Same defect surface as this lens's semantics-2: the documented carry-over has no implementing path because pending.clear() empties the whole map, and the described interleaving is vacuous in synchronous execution. Coverage's missing-implementation-element framing and the proposed snapshot/differential-preservation-or-correct-the-comment menu coincide with semantics-2's fix menu. Note as deliberation context: duplicates rel-001/rel-002 link this to issue-001 and issue-009; merge adjudication is outside this lens's scope."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-004, round1/semantics.md#semantics-2]
+  - issue_id: issue-005
+    stance: narrow
+    rationale: "From the semantics perspective only the contract dimension is adjudicable: the realized at-most-once semantics is undeclared in flush()'s contract, which this lens supports as a documented-meaning gap — the 'declare the contract explicitly' arm of the proposed action. The lifecycle-design arm (peek/commit, reinjection, dead-letter) rests on reliability/coverage judgment outside this lens's assertion type; semantics neither supports nor opposes that arm and defers it to the raising lens."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-005]
+  - issue_id: issue-006
+    stance: narrow
+    rationale: "The semantics-adjudicable part — 'no contract declares the global window as intended' — is weaker than stated: the class doc's singular phrasing ('flushes them as one digest when the batch window closes') already reads as one global window, so the contract is ambiguous rather than silent, which narrows the root hypothesis's no-declaration clause. The behavioral fit concern (late-joining user's effective window converging to zero) is design-granularity analysis outside this lens's assertion type. Semantics supports the doc-clarification arm of the proposed action; the per-user-window design arm is out of lens scope."
+    root_hypothesis_position: narrows
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-006]
+  - issue_id: issue-007
+    stance: support
+    rationale: "The premise — enqueuedAt declared but never consumed by digest generation — is the same in-target observation semantics traced in semantics-3 (no consumer reads the field; only userId and body reach the digest). The proposed action (include it in the output or remove the declaration) is the same declaration-vs-use alignment menu as issue-010's. The auditability weighting of the impact is the raising lens's judgment and this lens has no basis to contest it; low severity holds."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-007, round1/semantics.md#semantics-3]
+  - issue_id: issue-008
+    stance: support
+    rationale: "This is semantics' own issue (semantics-1): the flush(now) signature asserts caller-owned current-time authority while windowStartedAt is always system-clock-stamped, and no contract declares the required clock-domain identity. The root hypothesis (authority split at the design point) is this lens's traced starting cause verbatim. High severity holds: the declared contract 'Flushes when the window has closed' is violated without any surfaced error for any caller exercising the injectable-clock contract literally, on the session's explicitly requested time-source focus. Note as deliberation context: issue-003 is the same defect per duplicates rel-003; merge adjudication is outside this lens's scope."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-008, round1/semantics.md#semantics-1]
+  - issue_id: issue-009
+    stance: support
+    rationale: "This is semantics' own issue (semantics-2): the reset comment asserts a carry-over mechanism the code does not implement — pending.clear() drops every entry, a hypothetically interleaved enqueue would be lost not carried, and the synchronous model makes the described scenario vacuous. The root hypothesis (intended concurrency contract never realized in the chosen reset strategy) is this lens's traced starting cause verbatim. Medium severity holds for regression_risk and maintainability. Note as deliberation context: duplicates rel-001/rel-002 link this to issue-001 and issue-004; merge adjudication is outside this lens's scope."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-009, round1/semantics.md#semantics-2]
+  - issue_id: issue-010
+    stance: support
+    rationale: "This is semantics' own issue (semantics-3): enqueuedAt's documented event-derived meaning ('epoch ms when the notification entered the batch') has no enforcement point — never stamped, never validated — and no consumer, the derived-value-as-independent-input pattern. The root hypothesis (field placed in the caller-facing input type instead of being stamped by the component that owns the event) is this lens's traced starting cause verbatim. Medium severity holds for the verifiability and maintainability goals: drift between documented meaning and stored values is unbounded and indistinguishable."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-010, round1/semantics.md#semantics-3]
+  - issue_id: issue-011
+    stance: support
+    rationale: "This is semantics' own issue (semantics-4): flush names an unconditional force-out in conventional API vocabulary while the realized behavior is a conditional poll, and the doc comment ('Callers poll this') admits the poll semantics, so name and contract text disagree inside the same declaration. Root hypothesis matches the lens finding; low severity holds — surface-only naming mismatch, declared purpose remains achievable."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-011, round1/semantics.md#semantics-4]
+  - issue_id: issue-012
+    stance: support
+    rationale: "This is semantics' own issue (semantics-5): [] is a homonym for two distinct states (no active window vs window open but not yet closed) while the doc names only the second. Root hypothesis (no distinct signal designed for the no-window state) matches the lens finding; low severity holds. The lens notes the semantic affinity with issue-002 — the same overloaded signal read through two assertion types (homonymy here, false documented equivalence there) — as deliberation context only; the graph records no same_root relation and merge decisions are outside this lens's scope."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-012, round1/semantics.md#semantics-5]
+validation:
+  missing_issues: []

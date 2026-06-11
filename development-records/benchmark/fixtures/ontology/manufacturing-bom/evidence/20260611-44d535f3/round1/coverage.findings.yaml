@@ -1,0 +1,187 @@
+schema_version: 1
+session_id: 20260611-44d535f3
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: manufacturing-bom-ontology.yaml / BOM·Routing·Operation·ECO temporal
+      coverage
+    evidence_anchor: manufacturing-bom-ontology.yaml:24-30, 42-56, 64-70, 88-91
+    claim: BOM과 라우팅의 시점별 유효성·이력 차원이 누락되어 있다.
+    what: ECO에는 effective_date가 있지만, BomLine, Routing, Operation.std_time_min,
+      BomLine.scrap_rate에는 적용 시작/종료, 리비전별 버전, 변경 이력, 폐기/대체 시점 같은 시점 의존 개념이 없다.
+      Routing 상태도 draft/released만 있어 과거 특정 생산시점의 BOM·공정 기준을 재구성할 수 없다.
+    why: 문서는 PLM/MES 통합의 개념 기준을 표방하고, ECO.effective_date 이후 생산분이 신규 rev를 따른다고 규정한다.
+      그러나 BOM 구성, 라우팅 순서, 표준시간, 스크랩률이 어느 rev 또는 어느 기간에 유효했는지 표현하지 못하면 ECO 적용 전후
+      생산분의 기준정보를 구분할 수 없어 변경관리와 제조 실행 기준이 약해진다.
+    how_to_fix: BomLine, Routing, Operation 또는 별도 Revision/Effectivity 엔티티에
+      effective_from, effective_to, revision/version, superseded_by,
+      history/audit reference를 추가하고 ECO 적용 결과가 어떤 BOM·Routing 버전을 생성·종료하는지 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목·BOM·라우팅·변경관리 기준을 제공하는 목적.
+      failure_condition: ECO 적용 전후 또는 과거 생산일 기준으로 어떤 BOM 라인, 라우팅, 표준시간, 스크랩률이 유효했는지 판정해야 하는 경우.
+      impact: MES 생산오더와 PLM 변경관리 사이에서 동일 품목의 과거/현재 제조 기준을 재구성할 수 없어 변경 적용, 추적, 원가·품질
+        판단의 신뢰가 떨어진다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:24-30
+        - manufacturing-bom-ontology.yaml:42-56
+        - manufacturing-bom-ontology.yaml:64-70
+        - manufacturing-bom-ontology.yaml:88-91
+    causal_path:
+      root_cause_candidate: 온톨로지가 현재 상태 중심 엔티티와 단일 값 속성만 두고, BOM·Routing·Operation 값의
+        effectivity/history 하위 개념을 모델링하지 않았다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: ECO만 effective_date를 갖고 BOM 라인과 라우팅에는 유효기간 또는 리비전별 버전 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:24-30
+            - manufacturing-bom-ontology.yaml:50-56
+            - manufacturing-bom-ontology.yaml:64-70
+        - cause_id: coverage-candidate-001.cause-002
+          claim: 표준시간과 스크랩률도 단일 숫자 속성으로만 표현되어 변경 전후 값을 보존할 차원이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:42-48
+            - manufacturing-bom-ontology.yaml:24-30
+        - cause_id: coverage-candidate-001.cause-003
+          claim: ECO.effective_date 이후 신규 rev를 따른다는 규칙은 있으나, 그 rev가 어떤 BOM·Routing 버전을
+            지시하는지 닫히지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:88-91
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: manufacturing-bom-ontology.yaml / MES execution coverage
+    evidence_anchor: manufacturing-bom-ontology.yaml:50-56, 88-91
+    claim: 생산오더 및 실행 기준을 표현하는 하위 영역이 빠져 있다.
+    what: 무결성 규칙은 released 라우팅인 품목만 생산 오더를 생성할 수 있다고 하지만, ProductionOrder 또는 제조 실행
+      대상, 주문별 선택된 Part rev/BOM/Routing, 주문 생성 시점, 오더 상태를 나타내는 개념이 없다.
+    why: PLM/MES 통합에서는 릴리즈된 기준정보가 실제 생산 실행 단위에 고정되어야 한다. 현재 모델은 라우팅이 released인지 여부만
+      말하고, 어떤 생산오더가 어떤 기준 BOM·Routing으로 생성되었는지 표현하지 않아 통합 기준 문서로서 운영 접점을 덮지 못한다.
+    how_to_fix: ProductionOrder 또는 ManufacturingOrder 엔티티를 추가하고 part_ref,
+      selected_part_rev, bom_version/routing_version, order_qty, created_at,
+      status, release_basis 같은 속성과 Routing/Part/ECO와의 관계를 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM 기준정보와 MES 생산 실행을 연결하는 개념 기준 제공.
+      failure_condition: 라우팅 릴리즈 여부를 근거로 생산오더를 생성하거나, 생성된 오더가 어떤 변경 기준을 사용했는지 추적해야 하는 경우.
+      impact: 문서 내부 규칙이 언급하는 생산오더 개념이 모델에 없어 PLM 변경 기준이 MES 실행 단위로 어떻게 고정되는지 검증·감사할 수
+        없다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:50-56
+        - manufacturing-bom-ontology.yaml:88-91
+    causal_path:
+      root_cause_candidate: 온톨로지가 기준정보 마스터(Part/BOM/Routing)에는 엔티티를 두었지만 MES 실행 단위인
+        생산오더 하위 영역을 포함하지 않았다.
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Routing은 part_ref, operations, status만 갖고 생산 실행 인스턴스와의 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:50-56
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 무결성 규칙은 생산오더 생성을 명시하지만 생산오더 엔티티나 속성은 entities 목록에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:7-77
+            - manufacturing-bom-ontology.yaml:88-91
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: manufacturing-bom-ontology.yaml / controlled actions and copied/manual
+      values
+    evidence_anchor: manufacturing-bom-ontology.yaml:15-16, 30, 64-70, 72-77, 91-95
+    claim: 승인·수동입력·복사·대사 행위의 감사 증거 개념이 누락되어 있다.
+    what: ECO.status에는 approved가 있고, Part.rev는 주간 배치로 동기화되며, scrap_rate는 생산계획팀 엑셀 값을
+      복사하고, 표준원가 시스템에는 누적 std_time 수기 입력 필드가 있다고 서술한다. 하지만 승인자, 수행자, 수행시각, 근거
+      문서, 대사 결과를 담는 Approval/AuditEvent/Reconciliation 같은 개념이 없다.
+    why: 통제가 필요한 행위는 행위자·시각·근거를 남길 수 있어야 한다. 현재 모델은 외부 원본과 수동/복사 행위를 인정하면서도 그 행위 증거를
+      표현하지 않아, 값 불일치나 변경 적용 오류가 발생했을 때 어느 시스템 값이 언제 누구에 의해 반영되었는지 추적하기 어렵다.
+    how_to_fix: ApprovalEvent, SyncEvent, ManualAdjustment, ReconciliationRecord 같은
+      공통 감사 이벤트 개념을 추가하고 actor, occurred_at, source_system, source_reference,
+      reason, before_value/after_value, evidence_uri를 ECO 승인, Part.rev 동기화,
+      scrap_rate 복사, 표준원가 대사에 연결한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 변경관리와 제조 운영 위험 중심의 PLM/MES 통합 기준.
+      failure_condition: ECO 승인, 도면 리비전 동기화, 스크랩률 복사, 표준원가 수기 입력/대사 결과의 책임과 근거를 추적해야 하는 경우.
+      impact: 통제 행위의 증거 모델이 없어 운영상 불일치가 발생해도 원인, 책임, 적용 시점을 재구성하기 어렵다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:15-16
+        - manufacturing-bom-ontology.yaml:30
+        - manufacturing-bom-ontology.yaml:64-70
+        - manufacturing-bom-ontology.yaml:91-95
+    causal_path:
+      root_cause_candidate: 상태와 값은 모델링했지만, 그 상태·값을 변경하거나 외부에서 복사·대사하는 행위 자체를 별도 감사 개념으로 모델링하지 않았다.
+      root_cause_step_id: coverage-candidate-003.cause-002
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: ECO.status에는 approved가 있지만 승인자·승인시각·근거 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:64-70
+        - cause_id: coverage-candidate-003.cause-002
+          claim: Part.rev 동기화, scrap_rate 복사, 표준원가 수기 입력/대사가 서술되지만 각각의 수행 이벤트나 증거 엔티티가 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:15-16
+            - manufacturing-bom-ontology.yaml:30
+            - manufacturing-bom-ontology.yaml:91-95
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: manufacturing-bom-ontology.yaml / UOM and capacity normalization coverage
+    evidence_anchor: manufacturing-bom-ontology.yaml:14, 58-62, 93-95
+    claim: 단위 환산과 생산능력 단위의 기준 마스터가 누락되어 있다.
+    what: Part.uom은 ea/kg/m enum만 있고, WorkCenter.capacity_per_shift는 작업장마다 개수 또는
+      시간으로 다르다고 되어 있으며, notes는 품목별 환산계수 마스터가 없고 현장에서 환산한다고 명시한다. 그러나
+      UnitConversion 또는 CapacityUnit 같은 기준 개념이 없다.
+    why: BOM 수량, 생산능력, 계획·실적 비교는 단위가 맞아야 의미가 있다. 단위 환산을 현장 임의 처리로 남기면 PLM/MES 간 BOM
+      수량과 작업장 능력을 공통 기준으로 해석하기 어렵다.
+    how_to_fix: 품목별 UnitConversionFactor 마스터를 추가하고 from_uom, to_uom, factor,
+      valid_from/to, authority/source를 정의한다. WorkCenter.capacity_per_shift에는
+      capacity_unit 또는 capacity_basis를 분리해 수량 기반/시간 기반 능력을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM·라우팅 기준을 MES 계획/실행 계산에 사용할 수 있게 하는 통합 개념 기준.
+      failure_condition: kg↔ea 등 단위가 다른 BOM 소요량이나 작업장별 capacity_per_shift를 생산계획·소요량
+        산정에 사용해야 하는 경우.
+      impact: 단위 환산 권위와 능력 단위가 모델에 없어 동일 숫자가 시스템마다 다르게 해석될 수 있고, 수량·능력 계산의 신뢰가 약해진다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:14
+        - manufacturing-bom-ontology.yaml:58-62
+        - manufacturing-bom-ontology.yaml:93-95
+    causal_path:
+      root_cause_candidate: 온톨로지가 단위 값을 enum/number로만 두고, 단위 변환과 능력 기준을 독립된 기준정보 개념으로 포함하지 않았다.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Part.uom은 제한된 enum으로만 표현되고 환산계수 속성이나 엔티티가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:14
+        - cause_id: coverage-candidate-004.cause-002
+          claim: WorkCenter.capacity_per_shift는 숫자지만 단위가 작업장마다 다르다고 되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:58-62
+        - cause_id: coverage-candidate-004.cause-003
+          claim: notes가 품목별 환산계수 마스터 부재와 현장 환산을 명시해, 기준 개념 누락이 문서 내부에서 확인된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:93-95
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았다.
+  - PLM/MES 통합 기준 문서는 변경 전후 기준정보를 생산 실행 시점별로 재구성할 수 있어야 한다는 일반 제조 기준정보 관점을 적용했다.
+  - 통제가 필요한 승인, 동기화, 복사, 수기 입력, 대사 행위는 행위자·시각·근거 추적 개념을 가져야 한다는 coverage lens의
+    관점을 적용했다.
+validation:
+  unaddressable_candidates: []

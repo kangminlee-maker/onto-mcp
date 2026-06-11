@@ -740,6 +740,14 @@ export interface ReviewUnitExecutionResult {
   failure_message?: string | null;
   failure_kind?: ReviewUnitFailureKind | null;
   attempt_count?: number;
+  /**
+   * Attempt-level recovery marker. `salvaged_submit`: the unit's regular
+   * attempts exhausted on `output_contract` and this completed result came
+   * from the opt-in submit-salvage path (the exhausted original failure is
+   * preserved in `child_results` for audit). Absent for self-submitted
+   * completions — benchmark surfaces can split self-submitted vs salvaged.
+   */
+  recovery?: "salvaged_submit" | null;
   packet_bytes?: number | null;
   output_bytes?: number | null;
   input_tokens?: number | null;

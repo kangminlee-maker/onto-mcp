@@ -1,0 +1,57 @@
+schema_version: 1
+session_id: 20260611-33248d6d
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules[0]
+    evidence_anchor: manufacturing-bom-ontology.yaml:75
+    claim: BOM 비순환 필수 규칙과 자기 하위 포함 모델링 예외가 동일 규칙 안에서 양립 불가능합니다.
+    what: 첫 번째 무결성 규칙은 `BOM은 비순환이어야 한다`고 선언하면서, 같은 문장에서 재생 원료 회수 공정은 `Assembly가 자기
+      하위에 자신을 포함하는 형태`로 모델링한다고 선언합니다. 자기 자신을 하위로 포함하는 것은 길이 1의 순환이므로, 비순환 필수조건과
+      동시에 만족될 수 없습니다.
+    why: 도메인 문서가 없는 상태에서도 형식 구조만으로 판정 가능한 intra-claim 모순입니다. `비순환이어야 한다`는
+      necessary/obligatory 제약이고, `자기 하위에 자신을 포함`은 동일 대상에 순환을 허용/요구하는
+      possible/obligatory 예외입니다. 이 상태에서는 검증기가 BOM acyclic 조건을 적용하면 허용 사례를 거부하고,
+      예외를 허용하면 선언된 acyclic 조건을 위반하게 되어 PLM/MES 통합 기준의 무결성 규칙으로 사용할 수 없습니다.
+    how_to_fix: "재생 원료 회수 공정을 BOM 계층 순환으로 표현하지 말고 별도 relation/entity(예:
+      `RecoveredMaterialInput`, `ProcessYieldReturn`)로 분리하거나, 규칙을 `일반 BOM 구성 관계는
+      비순환이며, 스크랩 재투입은 BOM parent-child 관계가 아닌 공정 투입/산출 관계로 모델링한다`처럼 수정하십시오."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서에서 BOM 무결성 규칙을 일관되게 제공하는 목적
+      failure_condition: 재생 원료 회수 공정을 포함한 Assembly BOM을 검증하거나 생산/공정 데이터로 전달할 때 acyclic
+        필수 규칙과 self-child 모델링 예외를 동시에 적용해야 하는 경우
+      impact: 동일 BOM이 한 규칙 아래서는 유효하고 다른 해석 아래서는 무효가 되어, BOM 검증·전개·생산오더 생성 전 단계의 기준 신뢰가
+        깨집니다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:75
+    causal_path:
+      root_cause_candidate: 무결성 규칙이 acyclic BOM 제약과 self-reference 예외를 같은 parent-child
+        관계 위에 동시에 선언했습니다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 규칙은 BOM이 비순환이어야 한다고 필수 조건을 선언합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:75
+        - cause_id: logic-candidate-001.cause-002
+          claim: 같은 규칙은 재생 원료 회수 공정을 Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다고 선언합니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:75
+        - cause_id: logic-candidate-001.cause-003
+          claim: 자기 하위 포함은 순환이므로, 동일 BOM 관계에 대해 비순환 필수조건과 순환 허용/요구 조건을 동시에 만족할 수 없습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:75
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 제조 도메인 규칙 없이, 명시된 claim 집합의 형식적 양립 가능성만 판정했습니다.
+  - 대상 입력은 prompt packet에 포함된 materialized input의
+    `manufacturing-bom-ontology.yaml` 내용을 권위 입력으로 사용했습니다.
+validation:
+  unaddressable_candidates: []

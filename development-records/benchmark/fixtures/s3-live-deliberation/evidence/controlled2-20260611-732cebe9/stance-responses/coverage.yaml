@@ -1,0 +1,42 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+lens_id: "coverage"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "Coverage raised finding-005 as exactly this absence: three parallel time sources (internal Date.now() at enqueue, caller-injected now at flush, caller-filled enqueuedAt) with no concept designating the authoritative clock. The root hypothesis names the missing single-time-authority concept itself, and designating one authority dissolves the dimension gap, so coverage accepts it as the starting cause. High severity holds: the window-close judgment compares values across undeclared clocks, hitting the declared request focus (time-source semantics) and the goals correctness and verifiability inside the bounded target."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-001
+      - round1/coverage.md#f1
+      - finding-relation-graph.yaml#rel-001
+  - issue_id: issue-002
+    stance: support
+    rationale: "The issue is real from the coverage perspective: the declared carry-over category has no realizing mechanism anywhere in the implementation space (finding-006), so the only written late-arrival contract is unbacked by any code path. Coverage accepts the root hypothesis (no window-membership attribution; implement attribution or correct the comment). On severity, coverage maintains its round-1 position of medium rather than high: the unexpressed category misleads maintainers (maintainability, regression_risk) but the present behavior is internally coherent for every represented category, no data is lost in normal operation, and the absence is fully closable by a one-line contract correction - the cost of this gap is bounded below the cross-clock correctness break of issue-001, and two of three lens-level findings (logic, coverage) also rated it medium."
+    root_hypothesis_position: accepts
+    severity_position: lowers
+    evidence_refs:
+      - issue-ledger.yaml#issue-002
+      - round1/coverage.md#f2
+      - finding-relation-graph.yaml#rel-003
+  - issue_id: issue-003
+    stance: support
+    rationale: "Coverage raised this issue (finding-007) and maintains it: the error-handling/recovery subdomain standard for a notification batcher is entirely unexpressed because flush couples digest collection and state erasure into one synchronous step. The collect-vs-commit separation absence is the precise missing concept, so coverage accepts the root. The singleton reasoning is correct: rel-006 is a shared mid-chain mechanism (unconditional wholesale erase) with a root distinct from issue-002, so the issues must remain separate. Medium severity holds under material_kind_obligations (caller-facing failure modes) within the bounded_partial scope; either the two-phase collect/commit split or an explicit at-most-once declaration closes the absence."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-003
+      - round1/coverage.md#f3
+      - finding-relation-graph.yaml#rel-006
+  - issue_id: issue-004
+    stance: support
+    rationale: "Coverage did not raise this finding, but the absence passes coverage's own dimension test: a per-item time value managed in parallel between caller assertion and component reality has no single-authority designation, and the batcher neither stamps nor validates it - an enforcement-concept absence, the same dimension class as issue-001. Standing alone, a field with no current consumer would be surface-level by coverage's round-1 severity discipline (compare F6), but dep-001 places the field on the remediation path of issue-002: a carry-over fix requires a trustworthy per-item timestamp, which this unenforced meaning cannot supply. That dependency makes the gap prerequisite-quality rather than dormant, so coverage keeps medium and accepts the derived-value-modeled-as-input root."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-004
+      - issue-ledger.yaml#dep-001
+      - finding-relation-graph.yaml#rel-005
+validation:
+  missing_issues: []

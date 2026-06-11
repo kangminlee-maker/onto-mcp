@@ -1,0 +1,210 @@
+schema_version: 1
+session_id: 20260611-b43f0db6
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Production-effective truth is not anchored to immutable
+      effectivity and baseline records, so ECO, revision, BOM, and routing
+      values can diverge by production date.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The resolved issue identifies a shared underlying modeling cause
+      across ECO effectivity, Part revision, and BOM/routing parameters. Because
+      the target is a PLM/MES concept baseline, unresolved production-date
+      authority would undermine downstream integration decisions.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-004
+      - finding-009
+  - issue_id: issue-002
+    problem_definition: Operational authority, reconciliation, audit evidence, and
+      lifecycle-transition validity are under-modeled for copied/manual values
+      and lifecycle states.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Controlled deliberation narrowed the problem to governed authority
+      and validity predicates rather than a broad governance theme. It is a root
+      framing issue because it defines the missing authority layer needed before
+      operational values can be trusted.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-006
+      - finding-007
+  - issue_id: issue-003
+    problem_definition: WorkCenter capacity has no explicit unit or measurement
+      basis, leaving cross-center scheduling semantics dependent on local
+      interpretation.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is directly observed in the capacity attribute semantics,
+      but it is a narrower manifestation of the broader capacity-dimension
+      problem also captured by issue-010. It should be carried forward with that
+      related capacity-contract work.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: The model references production-order creation without
+      modeling the execution object that would consume released BOM/routing
+      baselines.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: This is a concrete missing concept in the PLM/MES integration
+      baseline. It is independent of the effectivity problems because even
+      corrected baselines still need an execution object for traceability.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-005
+    problem_definition: Units and item-specific conversions are not governed
+      concepts, making quantity meaning brittle as UOM needs expand.
+    issue_role: enabler
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The UOM issue enables future integration and quantity-consistency
+      failures rather than blocking every current happy-path interpretation. It
+      should be carried forward as an evolvability and governance improvement
+      tied to quantity semantics.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-006
+    problem_definition: AlternatePart lacks one authoritative relationship contract
+      because symmetric, directional, and shortcut interpretations coexist.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The resolution preserves a clustered contract defect while noting
+      scoped disagreements from coverage and structure. The core problem is
+      conflicting interpretations that require a decision on the authoritative
+      alternate-part contract.
+    related_surface_finding_ids:
+      - finding-010
+      - finding-012
+  - issue_id: issue-007
+    problem_definition: BOM traversal and validation do not have one canonical graph
+      because self-inclusion exceptions and relation/attribute projections are
+      mixed.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue affects validation, traversal, requirements explosion, and
+      impact analysis. Its high severity and broad graph-authority effect make
+      it a next-stage blocker for using the ontology as an integration baseline.
+    related_surface_finding_ids:
+      - finding-011
+      - finding-018
+  - issue_id: issue-008
+    problem_definition: AlternatePart assigns incompatible symmetry semantics
+      through its definition and one-way direction default.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: This is a directly observed semantic contradiction and a narrower
+      surface of the broader alternate-part contract defect in issue-006. It
+      should be resolved as part of that carried-forward contract normalization.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-009
+    problem_definition: Inspection criteria records can inherit or satisfy routable
+      Operation semantics unless the model separates or constrains those roles.
+    issue_role: conflicting_interpretation
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation narrowed the issue from categorical inheritance removal
+      to preventing criteria artifacts from being consumed as execution steps.
+      The remaining problem is a role-interpretation decision that affects
+      routing and quality semantics.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-010
+    problem_definition: capacity_per_shift mixes count and time dimensions under one
+      numeric attribute, preventing a single safe calculation contract.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: This is the underlying capacity-dimension defect behind unsafe
+      scheduling and feasibility calculations. It should drive the capacity
+      remedy rather than only treating the broader unit/basis symptom in
+      issue-003.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-011
+    problem_definition: Part.current_eco conflates latest design change with
+      production-effective ECO and revision authority.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is a narrower manifestation of the effectivity/baseline
+      root in issue-001. It is directly evidenced and should be carried forward
+      as a specific acceptance criterion for separating latest-change pointers
+      from production-effective authority.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-012
+    problem_definition: The relations graph exposes alternate_of as a direct
+      Part-to-Part shortcut without preserving AlternatePart.direction and
+      future condition attributes.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: This is a structural facet of the broader alternate-part contract
+      problem in issue-006. It should be carried forward as a concrete
+      graph-projection requirement when normalizing the authoritative
+      relationship contract.
+    related_surface_finding_ids:
+      - finding-017

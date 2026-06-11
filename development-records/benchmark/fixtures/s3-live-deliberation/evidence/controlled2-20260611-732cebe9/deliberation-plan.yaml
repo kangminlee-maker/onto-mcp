@@ -1,0 +1,72 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+planned_issues:
+  - issue_id: issue-002
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids: [logic, coverage, semantics]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+    conflict_summary: "All three lenses accept the root hypothesis (no
+      window-membership attribution mechanism exists; the flush comment
+      describes a design that was never built), but severity splits 2-vs-1.
+      Logic and coverage lower to medium: the harm path is reliance-mediated
+      (a maintainer or consumer must act on the falsified comment), the code's
+      actual emit-all-then-clear behavior is internally coherent absent the
+      comment, no data is lost in normal operation, and the gap is closable by
+      a one-line contract correction. Semantics keeps high: the sole written
+      late-arrival boundary contract asserts the inverse of observable
+      behavior, a first-order contract-vs-behavior failure under the declared
+      review goals (correctness, maintainability, regression_risk). The
+      severity classification of a high-ledger-severity material issue is
+      contested, so deliberation is required."
+    resolution_question: "Should issue-002 carry severity high or medium: does
+      the only written late-arrival contract asserting the inverse of actual
+      behavior constitute a failure of the declared purpose for a supported
+      consumer/maintainer path (high), or a reliance-mediated weakening of
+      trust and maintainability over an internally coherent happy path
+      (medium)?"
+  - issue_id: issue-004
+    priority: 20
+    conflict_type: action_or_severity
+    participating_lens_ids: [logic, coverage, semantics]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: "All three lenses accept the root hypothesis (a
+      component-derivable timestamp modeled as an unenforced, unconsumed
+      caller input), but logic lowers severity to low: within the bounded
+      target the field is read nowhere, the inconsistency is latent, and the
+      forward-looking drift argument lies outside logic's assertion scope.
+      Semantics and coverage keep medium: the documented meaning is free to
+      drift, and dep-001 places the field on issue-002's remediation path —a
+      carry-over fix requires a trustworthy per-item timestamp— making the gap
+      prerequisite-quality rather than dormant. The low-vs-medium split
+      crosses the material-severity candidate boundary (medium is material,
+      low is not), so the outcome decides whether issue-004 remains a material
+      issue. Coverage is included beyond the runtime suggestion because its
+      dep-001 prerequisite argument is the direct counter to logic's
+      no-current-consumer ground."
+    resolution_question: "Does the dep-001 coupling (issue-002's carry-over
+      remediation requires a trustworthy per-item timestamp) justify keeping
+      issue-004 at medium severity within the bounded target, or is the
+      unenforced, unconsumed enqueuedAt field a latent low-severity
+      observation until an actual consumer exists?"
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: "All three lenses (logic, coverage, semantics) support the issue,
+      accept the split-time-authority root hypothesis, and keep high severity;
+      no runtime conflict signals were raised, so there is no material
+      conflict to deliberate."
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: "Coverage and semantics support the issue, accept the
+      collect-vs-commit absence root, and keep medium severity; logic returns
+      not_applicable under the logic/structure boundary rule (a pure absence
+      gap yields no claim pair to contradict) and raises only an advisory
+      consistency obligation on the proposed fix, opposing nothing. No
+      conflict signals exist, so no deliberation is needed."

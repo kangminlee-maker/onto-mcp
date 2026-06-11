@@ -1,0 +1,143 @@
+schema_version: 1
+session_id: 20260611-5161a370
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: Axiology frames the defect as a shared authority and
+      auditability failure caused by engine and report-adjusted grades sharing
+      `Exposure.risk_grade`, while logic and structure narrow the root to the
+      unresolved predicate/attribute ambiguity and missing structural separation
+      of source grade, adjusted grade, lineage, and precedence. The deliberation
+      must decide whether governance metadata such as approval and audit status
+      is part of this issue's root/action or only a downstream/control concern
+      handled elsewhere.
+    resolution_question: Should issue-001 retain the broader authority/governance
+      root and action for `Exposure.risk_grade`, or be narrowed to the
+      structural and logical separation of engine grade, report-adjusted grade,
+      lineage, and precedence?
+  - issue_id: issue-002
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - semantics
+      - coverage
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+    conflict_summary: Most lenses support a high-severity issue covering rating
+      scales plus broader extensible classification lifecycle, mapping, code-set
+      authority, and versioning. Semantics narrows the root to rating meaning
+      and mapping authority and lowers severity, treating broader
+      lifecycle/code-set governance as evolution or coverage territory. This
+      affects both the admitted scope of the issue and whether the severity
+      remains high.
+    resolution_question: Should issue-002 remain a high-severity issue spanning
+      rating scales and extensible classification lifecycle/code-set authority,
+      or be narrowed and lowered to the semantic rating-scale and
+      mapping-authority ambiguity only?
+  - issue_id: issue-007
+    priority: 8
+    conflict_type: domain_constraint
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+    conflict_summary: Coverage, semantics, and structure support the issue as a
+      missing default/delinquency status connection, while axiology, evolution,
+      and logic narrow the root to an external boundary-reference contract
+      rather than fully modeling default status inside the ontology. The
+      conflict is material because the action may either bring DefaultStatus
+      into scope or define a minimal external status reference with owner, key,
+      timing, authority, and freshness.
+    resolution_question: For issue-007, should the ontology model DefaultStatus as
+      an internal risk-state concept, or should the material fix be limited to
+      an ExternalRiskStatusReference boundary contract for externally owned
+      default/delinquency status?
+  - issue_id: issue-009
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - logic
+      - structure
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+    conflict_summary: Semantics presents issue-009 as a medium semantic
+      type-confusion issue, while logic and structure treat it as the same
+      modeling error as issue-008 and raise the severity to the high operational
+      type-contract risk already captured there. Axiology also narrows it as
+      near-duplicate scope. The material question is whether issue-009 should
+      remain separate, be merged into issue-008, or be retained only as a
+      semantic facet of the same root.
+    resolution_question: "Should issue-009 be admitted as a separate material issue,
+      merged into issue-008 as the same `Collateral.is_a: Exposure` root, or
+      retained only as a semantic subfacet with severity inherited from
+      issue-008?"
+skipped_issues:
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: All participating lenses support the same root hypothesis and keep
+      medium severity; no material conflict requires deliberation.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: All participating lenses support the rating assignment/history root and
+      keep high severity; no material conflict requires deliberation.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Logic narrows the framing to override provenance needed for valid
+      derivation, but all applicable lenses support modeling manual adjustment
+      as a separate event/evidence concept and keep high severity; the narrowing
+      does not create a material dispute over admission or action.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All participating lenses support the shared authority, precedence,
+      timestamp, version, FX, and aggregation-basis root and keep high severity;
+      no material conflict requires deliberation.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: "Coverage is not applicable, and all applicable lenses support the
+      `Collateral.is_a: Exposure` contradiction and removal action; no material
+      conflict requires deliberation."
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: All participating lenses support the derived
+      LTV/formula/source-input/basis-time root and keep medium severity; no
+      material conflict requires deliberation.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All participating lenses support the missing
+      RiskAppetite-to-ExposureAggregate evaluation edge root and keep medium
+      severity; no material conflict requires deliberation.

@@ -1,0 +1,389 @@
+schema_version: 1
+session_id: 20260611-284c5e2e
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml entities.Collateral (definition vs is_a)
+    evidence_anchor: credit-risk-ontology.yaml:35-36, 20, 82
+    claim: 'Collateral의 definition("익스포저를 담보하는 자산")과 is_a: Exposure("차주에 대한 신용
+      익스포저") 선언은 동시 만족 불가능하다 — verdict: fail; conflict_pair:
+      credit-risk-ontology.yaml:35 ↔ credit-risk-ontology.yaml:36;
+      satisfiability_note: intra-claim(동일 엔티티 내 정의 vs 분류 선언) +
+      inter-claim(relation :82 secured_by와의 상호작용); modality_note: necessary(is_a
+      분류는 필연 양상인데 정의가 이를 부정).'
+    what: "Collateral은 정의상 '익스포저를 담보하는 자산'(담보물)인데 is_a: Exposure로 선언되어 모든 Collateral
+      인스턴스가 동시에 '차주에 대한 신용 익스포저'여야 한다. 또한 relation :82(Exposure secured_by
+      Collateral)와 결합하면 담보물이 자기 자신과 같은 범주의 신용 익스포저를 담보하는 구조가 된다. is_a 상속으로
+      Collateral이 Exposure의 amount, risk_grade, ltv, borrower_ref, product_type을
+      모두 보유해야 하는데, 예금·부동산 담보물에는 risk_grade(AAA~CCC)나 product_type(term_loan 등)이
+      적용될 수 없다."
+    why: "형식적으로 '∀x Collateral(x) → 담보자산(x)'과 '∀x Collateral(x) → 신용익스포저(x)'가 공존하며,
+      두 정의(:35의 자산, :20의 신용 익스포저)는 서로 배타적 범주다. 모호성 제거 후에도 모순이 잔존하므로 logic 소유
+      결함이다. 리스크 엔진이 is_a를 따라 Collateral을 Exposure로 집계하면 ExposureAggregate(:65
+      '모든 Exposure.amount의 합')에 담보 가치가 익스포저로 이중 산입되는 만족 불가능한 집계 의미가 발생한다.
+      boundary_handoff_note: 분류 계층 자체의 재배치는 structure lens 범위와 겹치나, 모순 판정 자체는 명시
+      claim 간 양립 불가에 근거하므로 logic primary."
+    how_to_fix: "is_a: Exposure를 제거하고 Collateral을 독립 최상위 엔티티로 선언한다. Exposure와의 연결은
+      기존 relation :82(secured_by)만으로 충분하다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서(:1-3)로서의 분류체계 일관성
+      failure_condition: 어느 소비 시스템이든 is_a 계층을 기계적으로 따라 Exposure 타입 질의·집계에 Collateral을
+        포함하는 순간, 정의(:35)를 따르는 시스템과 분류(:36)를 따르는 시스템의 익스포저 집합이 달라진다
+      impact: 동일 차주 총익스포저가 시스템별로 달라져 공유 개념 기준이라는 선언된 목적이 무효화된다; 담보 가치가 익스포저로 이중 산입될 수
+        있다
+      evidence_refs:
+        - credit-risk-ontology.yaml:35
+        - credit-risk-ontology.yaml:36
+        - credit-risk-ontology.yaml:20
+        - credit-risk-ontology.yaml:65
+        - credit-risk-ontology.yaml:82
+    causal_path:
+      root_cause_candidate: 담보(자산) 개념을 익스포저 분류 계층 안에 is_a로 배치한 모델링 결정(:36)이 정의(:35) 및
+        Exposure 정의(:20)와 형식 모순을 형성
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: Collateral 인스턴스는 정의상 담보자산이면서 is_a에 의해 신용 익스포저여야 하는 양립 불가 의무를 진다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:35
+            - credit-risk-ontology.yaml:36
+        - cause_id: logic-candidate-001.cause-002
+          claim: is_a 상속이 Exposure의 amount·risk_grade·product_type을 Collateral에 강제하나 담보
+            유형(real_estate, deposit, securities)에는 만족 가능한 값 배정이 없다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:24-29
+            - credit-risk-ontology.yaml:39
+        - cause_id: logic-candidate-001.cause-003
+          claim: ExposureAggregate의 '모든 Exposure.amount의 합' 정의가 Collateral 포함 여부에 따라 두 개의
+            상이한 값으로 해석 가능해져 공유 집계 기준이 비결정적이 된다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:65
+            - credit-risk-ontology.yaml:36
+      unresolved_beyond_evidence: 실제 리스크 엔진·보고서 시스템이 is_a를 집계에 반영하는지는 본 문서 경계 밖이다(구현 코드 미제공).
+  - candidate_id: logic-candidate-002
+    target: credit-risk-ontology.yaml classification_rules[0] (risk_grade 도출 규칙)
+    evidence_anchor: credit-risk-ontology.yaml:88, 28, 50
+    claim: "'Exposure.risk_grade는 RiskRating.grade에서 도출' 규칙은 (a) 두 enum 값 공간(R1~R5
+      vs AAA~CCC)을 잇는 매핑이 문서 내에 없어 문서 내 claim만으로 만족 불가능하고, (b) 도출 의무와 수동 조정 허용이
+      우선순위 규칙 없이 공존하여 조정 발생 시점부터 도출 규칙과 모순된다 — verdict: fail; conflict_pair:
+      credit-risk-ontology.yaml:88 ↔ credit-risk-ontology.yaml:28+50;
+      satisfiability_note: inter-claim(도출 규칙이 서로 disjoint한 두 enum 정의를 연결);
+      modality_note: mixed — obligatory(도출하되) modality와 possible(수동 조정할 수 있다)
+      modality가 충돌 해소 규칙 없이 동일 속성값에 대해 선언됨."
+    what: 규칙 :88은 risk_grade를 RiskRating.grade에서 '도출'하라고 선언하지만, RiskRating.grade의
+      치역은 {R1..R5}(:50)이고 Exposure.risk_grade의 치역은 {AAA..CCC}(:28)로 교집합이 없으며 변환
+      함수는 문서 밖('리스크팀 위키' :51, '각 소비 시스템이 수행' :93)에 위임되어 있다. 동시에 같은 규칙이 보고서 팀의 수동
+      조정을 허용하는데, 조정된 값은 정의상 도출값과 다르므로 조정 시점 이후 도출 규칙은 위반 상태가 되고, 어느 값이 권위인지 판정할
+      우선순위·기록 규칙이 없다.
+    why: "형식적으로 'risk_grade = f(grade)'라는 함수적 제약과 'risk_grade는 f(grade)와 다를 수 있다'(수동
+      조정)는 허용이 동일 속성에 무조건적으로 공존하면, 조정이 1회라도 발생한 상태 전개 경로에서 제약 집합은 만족 불가능하다. 조건부
+      우선순위('조정 시 조정값이 우선하며 사유를 기록한다' 등)가 명시되어야 양립 가능해진다. review_goal의 precedence
+      항목에 직접 해당한다. 또한 f 자체가 문서 내에 부재하여 규칙 :88은 본 문서의 claim만으로는 평가 불가능한 외부 의존
+      제약이다. boundary_handoff_note: 3개 등급 스케일 병존의 명명·의미 혼란은 semantics lens 범위이나,
+      모순(도출 의무 vs 조정 허용의 무우선순위 공존)은 스케일 의미가 명확해져도 잔존하므로 logic primary."
+    how_to_fix: "규칙을 조건부 우선순위 형태로 재기술한다: (1) 기본값은 합의된 매핑 함수(매핑 테이블을 본 문서나 버전 고정 부속
+      문서로 편입)로 도출, (2) 수동 조정 시 조정값이 우선하되 override 플래그·사유·조정자를 기록, (3) 재도출 시
+      override 유지/소멸 규칙 명시."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진(RiskRating 산출)과 보고서 시스템(risk_grade 사용)이 같은 등급 개념 기준을
+        공유한다는 문서 목적(:1-3) 및 review_goal의 precedence
+      failure_condition: 보고서 팀이 risk_grade를 수동 조정한 뒤 리스크 엔진이 RiskRating을 갱신하면, 도출 규칙과
+        조정값 중 어느 쪽이 유효한지 문서가 답하지 못한다
+      impact: 두 시스템이 동일 익스포저에 서로 다른 등급을 권위로 주장할 수 있고, 매핑이 외부 위키에 있어 문서만으로는 정합 검증이 불가능하다
+      evidence_refs:
+        - credit-risk-ontology.yaml:88
+        - credit-risk-ontology.yaml:28
+        - credit-risk-ontology.yaml:50
+        - credit-risk-ontology.yaml:51
+        - credit-risk-ontology.yaml:93
+    causal_path:
+      root_cause_candidate: 도출(obligatory)과 수동 조정(possible)이라는 상이한 양상의 제약을 우선순위·기록 규칙
+        없이 한 문장에 결합하고, 도출 함수(스케일 매핑)를 문서 권위 밖에 둔 규칙 설계(:88)
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: risk_grade에 대해 도출 규칙과 조정 허용이 동시에 선언되어 있으나 충돌 해소 규칙이 없다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:88
+        - cause_id: logic-candidate-002.cause-002
+          claim: 수동 조정이 발생한 상태에서는 'risk_grade는 grade에서 도출된다'는 제약이 위반되어 제약 집합이 상태 전개 경로상 만족
+            불가능해진다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:88
+        - cause_id: logic-candidate-002.cause-003
+          claim: 도출의 치역·정의역이 disjoint enum(R1~R5 vs AAA~CCC)이고 매핑이 문서 외부에 있어, 문서 내
+            claim만으로는 도출 규칙의 만족 여부 자체를 판정할 수 없다
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:28
+            - credit-risk-ontology.yaml:50
+            - credit-risk-ontology.yaml:51
+      unresolved_beyond_evidence: 리스크팀 위키의 매핑 테이블 내용은 boundary 밖이므로, 매핑 자체의 일관성(전사 함수
+        여부, 충돌 여부)은 본 검토에서 판정 불가.
+  - candidate_id: logic-candidate-003
+    target: credit-risk-ontology.yaml entities.ExposureAggregate (definition vs
+      total_amount note)
+    evidence_anchor: credit-risk-ontology.yaml:65, 70
+    claim: "ExposureAggregate의 정의('모든 Exposure.amount의 합')와 total_amount note('월말 배치
+      계산, 일중 신규 여신 미반영')는 모델이 허용하는 사건(일중 신규 여신 발생) 경로에서 동시 만족 불가능하다 — verdict:
+      fail; conflict_pair: credit-risk-ontology.yaml:65 ↔
+      credit-risk-ontology.yaml:70; satisfiability_note: intra-claim(동일 엔티티 내 정의
+      vs 운영 주석); modality_note: necessary(정의의 보편 양화 '모든')를 운영 주석이 부정하는 양상 구분 오류
+      — 정의는 필연 invariant로, 주석은 정기 위반을 허용하는 가능 양상으로 기술됨."
+    what: 정의는 total_amount가 '모든 Exposure.amount의 합'이라고 보편 양화로 선언하지만, 같은 엔티티의 note는
+      일중 신규 Exposure가 다음 배치까지 미포함된다고 명시한다. 신규 여신은 모델이 명시적으로 허용하는 사건이므로, 그 사건이
+      발생한 순간부터 다음 월말 배치까지 정의는 항상 거짓이다.
+    why: 스냅숏 시점이 아니라 상태 전개 경로 위에서 만족 가능성을 보면, '모든 합' invariant와 '미반영 허용'은 신규 여신 1건
+      발생만으로 모순을 형성한다. as_of 속성(:71)이 존재하므로 정의를 'as_of 시점 기준 합'으로 한정하면 모순이 해소되는데
+      현재 정의는 무시점 보편 진술이다. 이 모순은 RiskAppetite 위반 판정(:74)이 total_amount에 의존하므로 단순
+      표기 문제가 아니라 판정 결과의 진리값에 영향을 준다.
+    how_to_fix: 정의를 'as_of 시점 기준, 해당 시점까지 반영된 모든 Exposure.amount의 합(스냅숏)'으로 한정하고,
+      실시간 합계가 필요한 소비처(한도 소진율, RiskAppetite 판정)가 이 스냅숏을 써도 되는지의 신선도 계약(staleness
+      contract)을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 차주 단위 총익스포저라는 공유 집계 개념의 정의 정확성과, 이를 입력으로 쓰는 한도
+        소진율(:89)·RiskAppetite 위반 판정(:74)의 신뢰성
+      failure_condition: 월중 신규 여신 실행 직후부터 다음 월말 배치 전까지의 모든 시점 — 정의를 신뢰한 소비 시스템은 실제보다
+        작은 총익스포저로 한도·성향 판정을 수행한다
+      impact: 한도 소진율과 RiskAppetite compliance가 체계적으로 과소평가되는 기간이 매월 반복되며, 정의만 읽은 시스템과
+        note까지 읽은 시스템의 해석이 갈린다
+      evidence_refs:
+        - credit-risk-ontology.yaml:65
+        - credit-risk-ontology.yaml:70
+        - credit-risk-ontology.yaml:89
+        - credit-risk-ontology.yaml:74
+    causal_path:
+      root_cause_candidate: 집계 개념을 시점 한정 없는 보편 invariant로 정의하면서 산출 주기는 월배치로 둔 정의-구현 양상
+        불일치(:65 vs :70)
+      root_cause_step_id: logic-candidate-003.cause-003
+      steps:
+        - cause_id: logic-candidate-003.cause-001
+          claim: 정의(:65)는 시점 무관 보편 합을 선언하고 note(:70)는 일중 미반영을 허용한다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:65
+            - credit-risk-ontology.yaml:70
+        - cause_id: logic-candidate-003.cause-002
+          claim: 모델이 허용하는 신규 여신 사건이 발생하면 다음 배치까지 정의가 거짓인 구간이 필연적으로 생긴다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:70
+        - cause_id: logic-candidate-003.cause-003
+          claim: 이 구간 동안 total_amount를 입력으로 쓰는 한도 소진율·RiskAppetite 판정의 결과가 정의 기준 참값과 달라진다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:89
+            - credit-risk-ontology.yaml:74
+      unresolved_beyond_evidence: 소비 시스템이 실제로 실시간 판정에 total_amount를 쓰는지 또는 자체 재계산하는지는 문서 경계 밖이다.
+  - candidate_id: logic-candidate-004
+    target: credit-risk-ontology.yaml entities.RiskAppetite (definition +
+      compliance_status)
+    evidence_anchor: credit-risk-ontology.yaml:74, 77-78, 70
+    claim: "RiskAppetite 위반 정의는 (a) '위반 여부는 준수 상태로 정의된다'는 순환 정의이고, (b)
+      'ExposureAggregate가 RiskAppetite를 초과'는 수치(total_amount)와
+      엔티티(RiskAppetite)의 비교라는 타입 오류이며, (c) compliance_status는 가역적·지연 갱신되는
+      total_amount에 의존하는 저장된 판정 상태여서 허용된 후속 사건(일중 신규 여신)과 모순을 형성한다 — verdict:
+      fail; conflict_pair: credit-risk-ontology.yaml:74 ↔
+      credit-risk-ontology.yaml:74(intra) 및 :78 ↔ :70(inter);
+      satisfiability_note: intra-claim(정의 자체의 순환·타입 오류) + inter-claim(판정 상태와 입력
+      신선도의 시간 전개 충돌); modality_note: mixed — 판정 조건이 necessary invariant처럼 저장되나 그
+      입력은 가역(possible) 상태임을 모델 스스로 인정."
+    what: 정의 :74는 '초과하면 위반이며, 위반 여부는 준수 상태로 정의된다'로 끝나 위반→준수상태→(정의 없음)으로 순환하고,
+      compliance_status의 독립적 진리 조건이 문서에 없다. 비교 대상도 'ExposureAggregate(엔티티)가
+      RiskAppetite(엔티티)를 초과'로 기술되어 threshold(:77)와 total_amount(:68) 간 수치 비교임이
+      형식화되어 있지 않다. 또한 compliant/breached는 저장 enum인데 그 근거인 total_amount는 월배치
+      지연값(:70)이므로, 'compliant'로 판정된 후 신규 여신으로 실제 초과가 발생해도 다음 배치까지 판정 상태는 모순된 채
+      유지된다.
+    why: 순환 정의는 위반 여부의 진리값을 문서 내 어떤 claim으로도 도출 불가능하게 만들어, 리스크 엔진과 보고서 시스템이 같은 정의에서
+      다른 판정을 내려도 문서가 중재하지 못한다. 타입 비형식화는 threshold가 어떤 양(통화, 총액 vs 비율)과 비교되는지
+      미정으로 남긴다. 시간 전개 관점에서는 판정 상태(종결성 주장)가 가역 입력에 의존하는 본 lens의 핵심 점검 항목에 해당한다 —
+      모델이 허용하는 후속 사건이 이미 기록된 compliant 상태와 모순을 만든다.
+    how_to_fix: "정의를 'compliance_status = (ExposureAggregate.total_amount as_of t) >
+      threshold ? breached : compliant, 판정 기준 시점 t를 함께 기록'처럼 비순환·타입 명시 형태로
+      재기술하고, compliance_status를 독립 저장값이 아닌 total_amount·threshold로부터의 도출값(파생
+      속성)으로 선언하며, 입력 지연(:70)에 따른 판정 유효 구간을 명시한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 성향 한도 위반이라는 핵심 통제 개념의 판정 가능성 — 본 문서가 권위를 자임하는 판정 규칙(:1-3)
+      failure_condition: "compliance_status를 조회하는 어떤 시점에서든: 순환 정의 때문에 값의 산출 근거를 문서로
+        검증할 수 없고, 월배치 지연 때문에 'compliant' 표시와 실제 초과가 동시에 참인 구간이 존재한다"
+      impact: 위반 판정이라는 가장 통제 민감한 개념이 문서 기준으로 검증 불가능해, 엔진과 보고서가 서로 다른 위반 목록을 산출해도 어느 쪽이
+        옳은지 결정 불가
+      evidence_refs:
+        - credit-risk-ontology.yaml:74
+        - credit-risk-ontology.yaml:77
+        - credit-risk-ontology.yaml:78
+        - credit-risk-ontology.yaml:70
+    causal_path:
+      root_cause_candidate: 위반 개념을 도출 규칙(수치 비교 + 기준 시점)이 아니라 자기 참조 서술과 독립 저장 enum으로 정의한 설계(:74, :78)
+      root_cause_step_id: logic-candidate-004.cause-003
+      steps:
+        - cause_id: logic-candidate-004.cause-001
+          claim: 정의 :74가 위반을 준수 상태로, 준수 상태를 다시 위반 여부로 가리키는 순환을 형성하여 독립적 진리 조건이 없다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:74
+        - cause_id: logic-candidate-004.cause-002
+          claim: 비교식이 엔티티 대 엔티티로 기술되어 threshold와 total_amount 간 수치 비교라는 의도가 형식화되지 않았고, 판정의
+            기준 시점도 없다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml:74
+            - credit-risk-ontology.yaml:77
+        - cause_id: logic-candidate-004.cause-003
+          claim: compliance_status가 독립 저장 enum이므로 입력(total_amount)의 월배치 지연(:70)과 결합하면, 허용된
+            후속 사건(신규 여신) 발생 시 기록된 compliant 상태와 실제 상태가 모순되는 구간이 필연적으로 발생한다
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:78
+            - credit-risk-ontology.yaml:70
+      unresolved_beyond_evidence: compliance_status를 갱신하는 주체·주기가 문서에 없어, 모순 구간의 실제 길이는
+        배치 주기 외 요인으로 더 길어질 수 있다.
+  - candidate_id: logic-candidate-005
+    target: credit-risk-ontology.yaml classification_rules[1] (Limit 소진율 통화 환산)
+    evidence_anchor: credit-risk-ontology.yaml:89, 62, 66-71
+    claim: "'Limit 소진율 = total_amount / approved_amount'라는 단일 함수 정의와 '환산은 각 시스템의 당일
+      환율 테이블을 사용한다'는 시스템별 위임은, 동일 입력에 대해 서로 다른 소진율 값을 모두 규칙 준수로 만들어 정의의 함수성(단일
+      값)과 모순된다 — verdict: fail; conflict_pair: credit-risk-ontology.yaml:89 전반부
+      ↔ :89 후반부; satisfiability_note: intra-claim(한 규칙 문장 내 정의부와 절차부의 충돌);
+      modality_note: necessary(등식 정의) vs possible(시스템 재량 환율) 혼합 — 결정적이어야 할 정의에
+      비결정적 절차를 결합한 양상 오류."
+    what: 규칙 :89는 소진율을 등식으로 정의하면서 통화 환산 기준을 '각 시스템의' 환율 테이블에 위임한다. 두 시스템이 모두 규칙을
+      준수해도 환율 테이블이 다르면 같은 차주의 소진율이 다른 값이 되며, 문서는 어느 값이 권위인지 답하지 못한다. 또한 분자인
+      ExposureAggregate에는 통화 속성이 없고(:66-71) 분모인 Limit에만 currency(:62)가 있어, '통화가
+      다른 경우'라는 조건 자체를 분자 측에서 판정할 수 없다.
+    why: "공유 개념 권위 문서에서 등식 정의는 단일 값을 함의하는데, 절차 조항이 시스템 수만큼의 상이한 값을 허용하므로 정의의 유일성 주장과
+      절차의 비결정성이 한 문장 안에서 충돌한다. 이는 해석 차이가 아니라 규칙 자체가 비결정성을 내장한 형식 결함이다.
+      boundary_handoff_note: ExposureAggregate의 currency 속성 부재는 구조 부재로 인한 판정
+      불가이므로 structure lens primary로 routing하며, logic은 규칙 문장 내부의 정의-절차 충돌만 fail로
+      소유한다."
+    how_to_fix: "환산 기준을 단일 권위로 고정한다(예: '기준 통화 KRW, 환율은 한도관리 시스템의 당일 고시 환율 테이블을 정본으로
+      사용'). 아울러 ExposureAggregate에 통화 또는 기준통화 환산 여부 속성을 추가해 '통화가 다른 경우' 조건을 판정
+      가능하게 한다(후자는 structure 소관)."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 한도 소진율이라는 공유 파생 지표의 단일 정의 — 리스크 엔진과 보고서 시스템이 같은 값을 산출해야 한다는 문서 목적(:1-3)
+      failure_condition: 외화 익스포저 또는 외화 한도가 존재하고 두 소비 시스템의 당일 환율 테이블이 다른 모든 영업일
+      impact: 두 시스템이 모두 '규칙 준수' 상태로 서로 다른 소진율을 보고할 수 있어, 한도 초과 여부 판정이 시스템 선택에 의존하게 된다
+      evidence_refs:
+        - credit-risk-ontology.yaml:89
+        - credit-risk-ontology.yaml:62
+        - credit-risk-ontology.yaml:66-71
+    causal_path:
+      root_cause_candidate: 공유 지표의 정의에 환산 권위를 단일화하지 않고 소비 시스템 재량으로 위임한 규칙 설계(:89 후반부)
+      root_cause_step_id: logic-candidate-005.cause-003
+      steps:
+        - cause_id: logic-candidate-005.cause-001
+          claim: 규칙 :89가 등식(단일 값)과 시스템별 환율(다중 값 허용)을 한 문장에 결합한다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:89
+        - cause_id: logic-candidate-005.cause-002
+          claim: 환율 테이블이 다른 두 시스템이 동일 입력에서 서로 다른 소진율을 산출해도 양쪽 모두 규칙 준수가 되어 정의의 함수성이 깨진다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:89
+        - cause_id: logic-candidate-005.cause-003
+          claim: 분자(ExposureAggregate)에 통화 속성이 없어 '통화가 다른 경우' 조건의 성립 여부조차 문서 내 claim으로 판정
+            불가하다
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:66-71
+            - credit-risk-ontology.yaml:62
+      unresolved_beyond_evidence: 각 시스템의 환율 테이블이 실제로 동일 출처를 쓰는지는 문서 경계 밖이며, 동일하다면 실무상 발산은 잠재 위험으로만 남는다.
+  - candidate_id: logic-candidate-006
+    target: credit-risk-ontology.yaml Exposure.ltv (심사 시점 고정) vs
+      classification_rules[2] (재평가)
+    evidence_anchor: credit-risk-ontology.yaml:30-32, 90, 40-41
+    claim: "ltv를 '심사 시점에 입력'하는 1회성 값으로 두면서 규칙 :90이 담보 재평가(appraised_value 변경)를 의무화하는
+      것은, 재평가 사건 발생 시 저장된 ltv가 자신의 구성 요소(담보 가치)와 모순되는 상태를 모델이 스스로 허용하는 시간 전개
+      충돌이다 — verdict: fail; conflict_pair: credit-risk-ontology.yaml:32 ↔
+      credit-risk-ontology.yaml:90; satisfiability_note: inter-claim(속성의 1회 기록
+      의미와 재평가 의무 규칙의 상호작용); modality_note: mixed — ltv 기록은 1회성(스냅숏) 양상, 재평가는
+      obligatory 양상으로, 파생값의 재계산 의무가 누락된 양상 구분 오류."
+    what: ltv(담보인정비율)는 정의상 담보 가치에 의존하는 파생 비율인데, note :32는 심사 시점 1회 입력만 규정하고 갱신 규칙이
+      없다. 한편 규칙 :90은 appraised_value의 1년 경과 시 재평가를 요구하여 담보 가치가 변한다는 것을 모델이 명시적으로
+      전제한다. 재평가로 appraised_value가 갱신되면(:40-41) 저장된 ltv는 더 이상 현재 담보 가치와 정합하지 않으나,
+      모델에는 이 모순을 해소할 재계산·무효화 규칙이 없다.
+    why: "본 lens의 시간 전개 점검 기준에 해당한다: 판정·파생 값(ltv)이 가역 상태(appraised_value)에 의존하는데,
+      모델이 허용·의무화하는 후속 사건(재평가)이 발생하면 기록된 값과 입력 간 모순이 생긴다. 재평가 규칙(:90)이 존재한다는 사실
+      자체가 '심사 시점 ltv가 계속 유효하다'는 암묵 전제와 충돌하므로, 이는 운영 환경 가정이 아니라 문서 내 claim 간
+      충돌이다."
+    how_to_fix: "ltv에 기준 시점 속성을 추가해 '심사 시점 LTV(origination LTV)'로 의미를 한정하거나, 재평가 시
+      ltv 재계산을 규칙 :90의 후속 의무로 명시한다(예: 'appraised_value 갱신 시 해당 Exposure의 현재 LTV를
+      재산출한다')."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 담보 기반 리스크 측정 입력(ltv)의 시간적 정합성 — 재평가 규칙(:90)이 보장하려는 담보 가치 최신성과 동일한 목적
+      failure_condition: 담보 재평가가 1회 이상 수행된 모든 Exposure — 재평가 직후부터 저장 ltv와 현재 담보 가치가 불일치한다
+      impact: 재평가 제도를 둔 목적(담보 가치 최신화)이 ltv 소비처에는 전달되지 않아, 리스크 엔진과 보고서가 갱신 전 비율로 담보
+        커버리지를 판단할 수 있다
+      evidence_refs:
+        - credit-risk-ontology.yaml:30-32
+        - credit-risk-ontology.yaml:90
+        - credit-risk-ontology.yaml:40-41
+    causal_path:
+      root_cause_candidate: 파생 비율(ltv)을 입력값 갱신 의무(:90)와 분리된 1회 입력 스냅숏으로 모델링한 설계(:32)
+      root_cause_step_id: logic-candidate-006.cause-003
+      steps:
+        - cause_id: logic-candidate-006.cause-001
+          claim: ltv는 담보 가치 의존 파생값인데 심사 시점 1회 입력으로만 규정되어 갱신 경로가 없다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:30-32
+        - cause_id: logic-candidate-006.cause-002
+          claim: 규칙 :90이 appraised_value의 주기적 변경(재평가)을 의무화하여, ltv의 입력이 가역적임을 모델이 명시한다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:90
+            - credit-risk-ontology.yaml:40-41
+        - cause_id: logic-candidate-006.cause-003
+          claim: 재평가 사건 발생 시 저장 ltv와 현재 담보 가치가 모순되는 상태가 규칙 위반 없이 성립한다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:32
+            - credit-risk-ontology.yaml:90
+      unresolved_beyond_evidence: ltv의 분자(여신액 vs 한도액)와 분모(감정가 vs 담보인정가) 산식이 문서에 없어, 모순의 정량적 크기는 판정 불가.
+  - candidate_id: logic-candidate-007
+    target: credit-risk-ontology.yaml Borrower.internal_rating (type vs note)
+    evidence_anchor: credit-risk-ontology.yaml:15-17
+    claim: "internal_rating은 type: string으로 선언되나 note는 '1~10 숫자 등급 체계'를 기술하여 선언 타입과
+      문서화된 값 공간이 불일치한다 — verdict: fail(경미); conflict_pair:
+      credit-risk-ontology.yaml:16 ↔ credit-risk-ontology.yaml:17;
+      satisfiability_note: intra-claim; modality_note: necessary(타입 선언) — 값 공간
+      제약을 타입으로 강제하지 않은 약타입 선언."
+    what: 숫자 1~10 등급이라면 정수형 또는 enum이어야 값 공간이 닫히는데 string으로 선언되어 '07', '7', 'seven' 등
+      비교 불가능한 표현이 모두 타입 적합하다. 다른 두 등급(risk_grade, RiskRating.grade)은 enum으로 닫혀
+      있어 동일 문서 내 등급 표현 규율이 비대칭적이다.
+    why: 타입 선언은 형식 제약이고 note는 의미 제약인데 둘이 다른 값 공간을 기술하므로 경미한 형식 불일치다. 등급 비교·매핑(:93에서
+      소비 시스템이 변환 수행)이 문자열 사전순으로 수행되면 '10' < '2' 같은 오류 여지가 있으나, 직접적 동시 만족 불가는
+      아니므로 low로 분류한다.
+    how_to_fix: "type을 enum(values: [1..10]) 또는 integer(range 1~10)로 변경해 note의 값 공간을
+      타입으로 강제한다."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 여신 도메인에서 담보(collateral)와 신용 익스포저(exposure)는 상호 배타적 범주라는 일반 금융 통념을 전제했다 (도메인
+    문서 부재, session_domain=none).
+  - LTV(담보인정비율)는 담보 가치를 분모 요소로 갖는 파생 비율이라는 일반 정의를 전제했다.
+  - 등급 스케일 R1~R5와 AAA~CCC 사이에 표준 변환이 존재하지 않으며 기관별 매핑 테이블이 필요하다는 일반 관행을 전제했다.
+validation:
+  unaddressable_candidates: []

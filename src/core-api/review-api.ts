@@ -3503,13 +3503,50 @@ function reviewRetrySettingsFromUnknown(value: unknown): ReviewRetrySettings | n
     retry_initial_delay_ms: record.retry_initial_delay_ms,
   };
   if (
-    Object.values(retry).every(
+    !Object.values(retry).every(
       (item) => typeof item === "number" && Number.isInteger(item) && item >= 0,
     )
   ) {
-    return retry as ReviewRetrySettings;
+    return null;
   }
-  return null;
+  // Round-trip the salvage policy so a halted run resumed via continue keeps
+  // its stamped opt-in (artifacts stamped before the salvage field existed
+  // resume with salvage disabled — conservative).
+  const salvageRecord =
+    record.salvage &&
+    typeof record.salvage === "object" &&
+    !Array.isArray(record.salvage)
+      ? (record.salvage as Record<string, unknown>)
+      : undefined;
+  const transcriptionRecord =
+    salvageRecord?.transcription_llm &&
+    typeof salvageRecord.transcription_llm === "object" &&
+    !Array.isArray(salvageRecord.transcription_llm)
+      ? (salvageRecord.transcription_llm as Record<string, unknown>)
+      : undefined;
+  const transcriptionProvider =
+    transcriptionRecord?.provider === "anthropic" ||
+    transcriptionRecord?.provider === "openai"
+      ? transcriptionRecord.provider
+      : undefined;
+  const transcription:
+    | { provider?: "anthropic" | "openai" | undefined; model: string }
+    | undefined =
+    typeof transcriptionRecord?.model === "string" &&
+    transcriptionRecord.model.length > 0
+      ? {
+          ...(transcriptionProvider !== undefined
+            ? { provider: transcriptionProvider }
+            : {}),
+          model: transcriptionRecord.model,
+        }
+      : undefined;
+  const salvage: ReviewRetrySettings["salvage"] = {
+    enabled: salvageRecord?.enabled === true,
+    ...(transcription !== undefined ? { transcription_llm: transcription } : {}),
+    delta_completion: "unit_llm",
+  };
+  return { ...retry, salvage } as ReviewRetrySettings;
 }
 
 function reviewExecutionProfileFromManifest(

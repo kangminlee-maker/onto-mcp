@@ -240,6 +240,7 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
       deliberation_max_retries: 0,
       synthesis_max_retries: 0,
       retry_initial_delay_ms: 500,
+      salvage: { enabled: false, delta_completion: "unit_llm" },
     });
   });
 
@@ -264,6 +265,7 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
       deliberation_max_retries: 2,
       synthesis_max_retries: 2,
       retry_initial_delay_ms: 3000,
+      salvage: { enabled: false, delta_completion: "unit_llm" },
     });
   });
 

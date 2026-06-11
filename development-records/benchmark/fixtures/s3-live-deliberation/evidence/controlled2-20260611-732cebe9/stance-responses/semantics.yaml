@@ -1,0 +1,37 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+lens_id: "semantics"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "The issue root is verbatim-aligned with this lens's terminal cause for SEM-1: one concept (elapsed window time) is measured across two undeclared clocks, and the now parameter carries an implicit shared-clock promise declared nowhere on the type or doc surface. The semantic defect is authority placement, not arithmetic: the window-age concept has no designated time authority, so the closure predicate's meaning is undefined for permitted inputs. The lens also confirms the dissolution claim: a single declared time authority removes the semantic mismatch this lens found, and the same authority should be named as the clock basis for enqueuedAt (issue-004 coupling)."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-001
+      - round1/semantics.md#sem-1
+  - issue_id: issue-002
+    stance: support
+    rationale: "Matches SEM-2 exactly: the flush comment is the only written late-arrival contract and asserts the inverse of observable behavior - post-close enqueues join the closing digest and are destroyed, never carried over, and the described check-to-reset interleave is unreachable in synchronous JS. The root (no window-membership attribution mechanism anywhere in the target) is the same terminal cause this lens traced: enqueue records no per-item attribution and uses no enqueuedAt, so the carried-into-next-window claim is unimplementable from the state the code keeps. Severity stays high from this lens despite the logic lens's medium on finding-002: a sole written boundary contract stating the inverse of behavior is a first-order contract-vs-behavior failure under the declared review goals."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-002
+      - round1/semantics.md#sem-2
+  - issue_id: issue-003
+    stance: support
+    rationale: "From the semantics surface the name flush honestly conveys destructive emission - emit-and-erase, i.e. at-most-once - so this lens found no name-vs-behavior mismatch here in Round 1 and raises no objection to coverage's framing as an absence. What this lens can independently confirm is the contract-side half of the issue: no element of the doc surface declares any delivery guarantee at all, so the at-most-once meaning the code actually has is an undeclared meaning, invisible to callers. The lens therefore endorses the issue and specifically the declare-at-most-once branch of the proposed action as the minimal semantic remedy; the collect-vs-commit split is a structural decision outside this lens's assertion scope. Medium severity is consistent with an undeclared-but-real loss semantics."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-003
+  - issue_id: issue-004
+    stance: support
+    rationale: "This lens's own SEM-3: enqueuedAt is documented as a fact about an event the batcher owns (entry into the batch) but is modeled as an unenforced, unconsumed caller input - a derived-value-vs-input mismatch in which documented authority and actual authority diverge, leaving the field meaning free to drift. The lens also affirms the singleton reasoning: the shared cause with issue-002 (per-item enqueue time never stamped or read, dep-001) is a common mechanism, not a common root - misplaced value authority versus missing window-attribution state - so the issues must stay separate, while one fix (a component-stamped timestamp from the issue-001 time authority) serves both."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-004
+      - round1/semantics.md#sem-3
+validation:
+  missing_issues: []

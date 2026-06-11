@@ -1,0 +1,18 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+issue_id: "issue-003"
+lens_id: "coverage"
+difference_explanation: "쟁점은 split-time-authority 결함의 severity 판정이었다: coverage(제기 렌즈)는 high 유지(영구 미flush 경로 + 결정적 검증 불가), logic은 formal core(finding-l2)는 검증했으나 'flush(now)의 시간원이 내부 Date.now() stamp와 어긋나는 호출자/테스트가 supported execution condition인가'라는 caller-context premise가 upstream_evidence_required라며 severity_position=insufficient_evidence로 보류했다. 교환에서 수렴: bounded_partial closure 하에서 'supported'의 권위 표면은 관측되지 않은 상류 호출자가 아니라 exported API 계약 자체이며, review-target-profile의 material_kind_obligations가 가능성 기반('CAN violate the declared review goal inside the bounded target') 판정을 지시하므로, 제약 없는 시그니처를 준수하는 발산 시간원 호출자는 within-contract = supported로 in-session에서 도출적으로 확정된다. logic이 이 reductio(경계 밖 호출자 관측을 요구하면 모든 caller-facing 계약 결함이 판정 불능)를 수용하고 보류를 해제하여 severity HIGH를 수락했다."
+response_to_other_positions: "logic의 수렴 응답에 대해 coverage는 다음을 수용·기록한다. (1) logic의 calibration refinement 수용: population framing('a supported caller group')에서는 caller premise가 실제로 하중 지지 전제였고 contract framing에서 corollary로 환원된다 — coverage opening의 '하중 지지 전제가 아님' 진술은 contract framing 하로 한정된다. (2) issue-003의 ledger failure_condition은 이미 contract-level('Any caller or test whose time source for flush(now) differs from the internal Date.now() wall clock')이어서 logic의 E2 기록 조건을 자연 충족하며, 단일 결정 단위 resolution에서 issue-008의 population-framed failure_condition을 issue-003의 contract-level 형식으로 정렬하자는 logic 제안에 동의한다. (3) verifiability 다리는 caller premise 없이 in-target 증거만으로 닫힌다는 점을 logic이 독립 확인했다(API 입력 공간 내 어떤 caller-controllable 입력 할당도 window-close predicate를 결정하지 못함; windowStartedAt은 ambient Date.now()에 결박). (4) impact는 silent-unbounded 극단(영구 [] 반환이 문서상 'window still open'과 구별 불가, finding-l3의 과보편 주장 관찰과 정합). 종착: rel-003에 따라 issue-003/008 단일 결정 단위, 양 렌즈 support, severity HIGH, 양측 반박권 미사용 소멸."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "ledger 그대로 수용: API 설계가 비대칭이다 — flush는 시간을 호출자 매개변수로 받는 반면 enqueue는 ambient Date.now()로 windowStartedAt을 스탬프하고 enqueuedAt은 미검증 호출자 입력으로 도착하며, 컴포넌트 어디에도 주입된 clock 또는 공유 단일 시간원 개념이 지정되어 있지 않다(enqueuedAt을 제3의 미결박 시간원으로 포함, finding-l2 증거 주석과 일치)."
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-003"
+  - "round1/coverage.md#cov-1"
+  - "round1/logic.md#finding-l2"
+  - "finding-relation-graph.yaml#rel-003"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-003.coverage"

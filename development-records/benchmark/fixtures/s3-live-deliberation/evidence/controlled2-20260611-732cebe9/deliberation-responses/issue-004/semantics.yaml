@@ -1,0 +1,19 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+issue_id: "issue-004"
+lens_id: "semantics"
+difference_explanation: "All three lenses accept the root hypothesis (a component-derivable timestamp modeled as an unenforced, unconsumed caller input); the sole disagreement is the low-vs-medium severity boundary. Logic rates low because no executed behavior currently reads the field, making the proven inconsistency latent; semantics and coverage keep medium - semantics on the ground that the documented meaning is unenforced and already false in permitted states, coverage on the ground that dep-001 places the field on issue-002's remediation path."
+response_to_other_positions: "To logic: semantics accepts the latency observation as true of executed behavior, but the severity claim semantics makes is about documented-meaning integrity, and logic's own finding-l4 supplies the present-tense ground - the caller-supplied enqueuedAt and the internally sampled windowStartedAt are two recordings purporting to denote the same instant with no reconciliation rule, so the documented definition is false in permitted states today. The medium rating therefore does not rest solely on the forward-looking drift argument logic scopes out; the semantic defect is already instantiated, and logic states it does not contest semantics' ground while conceding that on the dep-001 remediation path the low rating no longer holds. To coverage: semantics accepts and incorporates the prerequisite framing - dep-001's rationale records the same non-consumption as a cause of issue-002's unimplementable carry-over (finding-012.cause-003), giving the medium rating an independent consumer-side leg that complements semantics' authority-mismatch leg. The singleton reasoning is preserved on all sides: rel-005 is a shared cause, not a shared root, so issue-004 stays separate from issue-002 while one fix (a component-stamped timestamp from the issue-001 time authority) serves both."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "A timestamp that should be derived by the component at enqueue time is modeled as an independent caller-supplied input with no consumer: the batcher neither stamps, validates, nor reads enqueuedAt, so the documented meaning 'epoch ms when the notification entered the batch' is unenforced and free to drift - a derived-value-vs-input mismatch in which documented authority and actual authority diverge."
+remaining_blocker: "Only the cross-lens severity ruling: resolution must decide whether present-tense semantic falsity (finding-l4) plus the recorded dep-001 prerequisite coupling are jointly severity-bearing within the bounded target. Semantics holds that they are. The action choice within proposed_action is sequenced on neighboring decisions: the component-stamped option depends on issue-001's single time authority, and whether the field must become trustworthy (rather than removed or re-documented) depends on issue-002's remediation direction."
+evidence_refs:
+  - "issue-ledger.yaml#issue-004"
+  - "round1/semantics.md#sem-3"
+  - "round1/logic.md#finding-l4"
+  - "issue-ledger.yaml#dep-001"
+  - "finding-relation-graph.yaml#rel-005"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-004.semantics"

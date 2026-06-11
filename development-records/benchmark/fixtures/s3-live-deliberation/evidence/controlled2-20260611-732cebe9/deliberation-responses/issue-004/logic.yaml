@@ -1,0 +1,18 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+issue_id: "issue-004"
+lens_id: "logic"
+difference_explanation: "All three lenses accept the root hypothesis; the conflict is solely the severity boundary. Logic's recorded position rated low on the premise that within the bounded target the field is read nowhere, so the proven definitional contradiction (finding-l4: enqueuedAt and windowStartedAt purport to denote the same instant with no reconciliation rule) is behaviorally latent. Coverage and semantics keep medium on the dep-001 prerequisite ground. The precise disagreement point is whether the dep-001 coupling is severity-bearing inside the bounded target or only a future-consumer forecast."
+response_to_other_positions: "Logic still does not adopt semantics' forward-looking drift argument - claims about what future consumers will inherit remain outside logic's assertion scope. But coverage's prerequisite argument is answerable on logic's own ground, and it survives scrutiny: dep-001's recorded rationale states that the absence of any stamped, validated, or read per-item timestamp is already a cause of issue-002's unimplementable carry-over partition (finding-012.cause-003). That falsifies the load-bearing premise of the low rating - 'influences no behavior' holds for executed code paths, but within the bounded target's issue graph the defect presently participates in the causal chain of an accepted high-severity issue. Logic's own round-1 stance had already derived the conditional: on the dep-001 remediation path the field becomes load-bearing and the low rating no longer holds. Coverage's deliberation contribution shows that path is not hypothetical - it is the recorded remediation dependency of issue-002. A severity rating that is falsified by the recorded remediation path of an accepted high-severity issue in the same session is not a stable rating, so logic yields the severity boundary to medium."
+updated_stance: support
+changed: true
+change_reason: "Severity position revised from lowers (low) to accepting medium. The round-1 low rested on the premise that the inconsistency is behaviorally inert within the bounded target; dep-001's rationale, verifiable in the session artifacts, records the same non-consumption as a present cause of issue-002's unimplementable carry-over (finding-012.cause-003), and logic had itself proven that on that path the low rating fails. The concession is made on logic's own bounded-target ground (a present causal dependency), not by adopting the out-of-scope forward-looking drift argument."
+accepted_root_hypothesis: "A timestamp that should be derived by the component at enqueue time is modeled as an independent caller-supplied input with no consumer: the batcher neither stamps, validates, nor reads enqueuedAt, so the documented meaning 'epoch ms when the notification entered the batch' is unenforced and free to drift - accepted as the deeper framing of finding-l4's unreconciled conflict pair."
+remaining_blocker: "The medium rating is contingent on issue-002's remediation direction: if issue-002 is resolved by correcting the comment rather than implementing window-membership attribution, the prerequisite ground evaporates and only the unenforced-meaning ground remains, at which point a re-rating toward low would be legitimate. Resolution should therefore sequence issue-004's action choice (component-stamped timestamp vs field removal vs re-documentation) after, or jointly with, issue-002's remediation decision."
+evidence_refs:
+  - "issue-ledger.yaml#issue-004"
+  - "issue-ledger.yaml#dep-001"
+  - "finding-relation-graph.yaml#rel-005"
+  - "round1/logic.md#finding-l4"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-004.logic"

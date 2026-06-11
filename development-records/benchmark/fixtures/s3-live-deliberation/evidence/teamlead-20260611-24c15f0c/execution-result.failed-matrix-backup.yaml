@@ -1,0 +1,146 @@
+session_id: 20260611-24c15f0c
+session_root: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c
+execution_realization: direct-call
+host_runtime: openai
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+review_mode: core-axis
+execution_status: halted_partial
+execution_started_at: 2026-06-11T05:33:55+09:00
+execution_completed_at: 2026-06-11T05:33:55+09:00
+total_duration_ms: 0
+max_concurrent_lenses: 3
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000
+planned_lens_ids:
+  - logic
+  - coverage
+  - semantics
+participating_lens_ids: []
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 0
+synthesis_executed: false
+error_log_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/error-log.md
+lens_execution_results:
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/logic.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/round1/logic.md
+    status: completed
+    started_at: 2026-06-11T05:33:55+09:00
+    completed_at: 2026-06-11T05:33:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/coverage.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/round1/coverage.md
+    status: completed
+    started_at: 2026-06-11T05:33:55+09:00
+    completed_at: 2026-06-11T05:33:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/semantics.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/round1/semantics.md
+    status: completed
+    started_at: 2026-06-11T05:33:55+09:00
+    completed_at: 2026-06-11T05:33:55+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/finding-ledger.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/finding-ledger.yaml
+    status: completed
+    started_at: 2026-06-11T05:44:52+09:00
+    completed_at: 2026-06-11T05:44:52+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/finding-relation-graph.yaml
+    status: completed
+    started_at: 2026-06-11T05:49:31+09:00
+    completed_at: 2026-06-11T05:49:31+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/issue-ledger.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/issue-ledger.yaml
+    status: completed
+    started_at: 2026-06-11T05:54:53+09:00
+    completed_at: 2026-06-11T05:54:53+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-stance:logic
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/issue-stance/logic.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/stance-responses/logic.yaml
+    status: completed
+    started_at: 2026-06-11T05:58:21+09:00
+    completed_at: 2026-06-11T05:58:21+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-stance:coverage
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/issue-stance/coverage.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/stance-responses/coverage.yaml
+    status: completed
+    started_at: 2026-06-11T05:58:21+09:00
+    completed_at: 2026-06-11T05:58:21+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-stance:semantics
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/issue-stance/semantics.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/stance-responses/semantics.yaml
+    status: completed
+    started_at: 2026-06-11T05:58:21+09:00
+    completed_at: 2026-06-11T05:58:21+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /tmp/s3-teamlead-fixture/.onto/review/20260611-24c15f0c/issue-stance-matrix.yaml
+    status: failed
+    started_at: 2026-06-11T05:58:21+09:00
+    completed_at: 2026-06-11T05:58:21+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: "issue-ledger.issues[0].surface_finding_ids must be connected
+      by same_root_candidate relation_refs before they can be merged.
+      Unsupported findings: finding-005, finding-011"
+    failure_kind: output_contract

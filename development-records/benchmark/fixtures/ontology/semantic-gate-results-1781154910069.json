@@ -1,0 +1,344 @@
+[
+  {
+    "fixture": "clinical-lab-workflow",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/clinical-lab-workflow/evidence/20260611-49e15b58",
+    "gate": {
+      "status": "passed",
+      "fixture_id": "clinical-lab-ontology-v1",
+      "scope": "fixture_specific",
+      "fixture_target_anchor": "clinical-lab-ontology.yaml",
+      "applicability": "real_model_only",
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed",
+          "evidence": [
+            "material_issue_count=25, material_issues.length=25",
+            "non_material_finding_count=10, non_material_findings.length=10"
+          ]
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "material_issue_count=25",
+            "expected target truth: CLW-1 Test/Assay 분열 + CLW-2 상태 권위 이원화 + CLW-3 enum 파편화 + CLW-4 STAT 삼중 표현 + CLW-5 lifecycle 단절 + CLW-7 검체-검사 관계 부재 + CLW-9 통보 감사 추적 불가"
+          ]
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "Final Review Result chars=287857",
+            "expected final explanation to preserve CLW-1 Test/Assay 분열 + CLW-2 상태 권위 이원화 + CLW-3 enum 파편화 + CLW-4 STAT 삼중 표현 + CLW-5 lifecycle 단절 + CLW-7 검체-검사 관계 부재 + CLW-9 통보 감사 추적 불가"
+          ]
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed",
+          "evidence": [
+            "boundary-sensitive uncertainty terms must be disclosed with boundary context when they are not admitted material issues: ",
+            "non_material_finding_count=10",
+            "boundary_notes_chars=161"
+          ]
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed",
+          "evidence": [
+            "Boundary Notes chars=161",
+            "expected: compact note preserving  uncertainty"
+          ]
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed",
+          "evidence": [
+            "finding_count=42",
+            "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-018,finding-019,finding-020,finding-022,finding-023,finding-024,finding-025,finding-026,finding-028,finding-029,finding-030,finding-031,finding-032,finding-036,finding-037,finding-038,finding-039,finding-040",
+            "non_material_finding_ids=finding-005,finding-006,finding-021,finding-027,finding-033,finding-034,finding-035,finding-041,finding-042"
+          ]
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "ledger_material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-018,finding-019,finding-020,finding-022,finding-023,finding-024,finding-025,finding-026,finding-028,finding-029,finding-030,finding-031,finding-032,finding-036,finding-037,finding-038,finding-039,finding-040",
+            "expected artifact truth: CLW-1 Test/Assay 분열 + CLW-2 상태 권위 이원화 + CLW-3 enum 파편화 + CLW-4 STAT 삼중 표현 + CLW-5 lifecycle 단절 + CLW-7 검체-검사 관계 부재 + CLW-9 통보 감사 추적 불가"
+          ]
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed",
+          "evidence": [
+            "declared_non_material_finding_count=10",
+            "preserved_non_material_ids=finding-005,finding-006,finding-021,finding-027,finding-033,finding-034,finding-035,finding-041,finding-042,issue-011,issue-005,issue-020,issue-023,issue-027,issue-028,issue-029,issue-034,issue-035,issue-006",
+            "non-material findings must preserve target-specific boundary uncertainty and remain outside relation coverage"
+          ]
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed",
+          "evidence": [
+            "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-018,finding-019,finding-020,finding-022,finding-023,finding-024,finding-025,finding-026,finding-028,finding-029,finding-030,finding-031,finding-032,finding-036,finding-037,finding-038,finding-039,finding-040",
+            "relation_covered_ids=finding-001,finding-007,finding-016,finding-029,finding-023,finding-002,finding-008,finding-015,finding-025,finding-031,finding-039,finding-004,finding-013,finding-014,finding-028,finding-037,finding-026,finding-032,finding-017,finding-020,finding-022,finding-024,finding-010,finding-012,finding-003,finding-011,finding-038,finding-030,finding-019,finding-009,finding-036,finding-040,finding-018",
+            "shared_cause_relation_ids=rel-016,rel-018,rel-019,rel-020,rel-024,rel-025,rel-026,rel-027,rel-028"
+          ]
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed",
+          "evidence": [
+            "shared_cause_relation_ids=rel-016,rel-018,rel-019,rel-020,rel-024,rel-025,rel-026,rel-027,rel-028",
+            "issue_relation_refs=rel-021,rel-022,rel-023,rel-014,rel-015,rel-017,rel-004",
+            "dependency_relation_refs=rel-016,rel-018,rel-019,rel-020,rel-024,rel-025,rel-026,rel-027,rel-028"
+          ]
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed",
+          "evidence": [
+            "material_action_candidates=fix_now,fix_before_release,accept_risk,follow_up",
+            "expected final output to include a concrete remediation path"
+          ]
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed",
+          "evidence": [
+            "material issue must preserve lens/artifact refs",
+            "material issue must preserve target anchor clinical-lab-ontology.yaml"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "fixture": "credit-risk-taxonomy",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/credit-risk-taxonomy/evidence/20260611-284c5e2e",
+    "gate": {
+      "status": "passed",
+      "fixture_id": "credit-risk-ontology-v1",
+      "scope": "fixture_specific",
+      "fixture_target_anchor": "credit-risk-ontology.yaml",
+      "applicability": "real_model_only",
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed",
+          "evidence": [
+            "material_issue_count=23, material_issues.length=23",
+            "non_material_finding_count=8, non_material_findings.length=8"
+          ]
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "material_issue_count=23",
+            "expected target truth: CRT-1 등급 스케일 파편화 + CRT-2 담보 is-a 오류 + CRT-3 LTV 파생값 승격 + CRT-4 등급 시간성 부재 + CRT-5 한도 권위 이원화 + CRT-7 집계 staleness + CRT-8 통화 단위 무결성 부재 + CRT-10 부실 범위 제외"
+          ]
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "Final Review Result chars=289661",
+            "expected final explanation to preserve CRT-1 등급 스케일 파편화 + CRT-2 담보 is-a 오류 + CRT-3 LTV 파생값 승격 + CRT-4 등급 시간성 부재 + CRT-5 한도 권위 이원화 + CRT-7 집계 staleness + CRT-8 통화 단위 무결성 부재 + CRT-10 부실 범위 제외"
+          ]
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed",
+          "evidence": [
+            "boundary-sensitive uncertainty terms must be disclosed with boundary context when they are not admitted material issues: ",
+            "non_material_finding_count=8",
+            "boundary_notes_chars=261"
+          ]
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed",
+          "evidence": [
+            "Boundary Notes chars=261",
+            "expected: compact note preserving  uncertainty"
+          ]
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed",
+          "evidence": [
+            "finding_count=43",
+            "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-019,finding-020,finding-021,finding-022,finding-023,finding-025,finding-026,finding-027,finding-028,finding-029,finding-030,finding-032,finding-033,finding-034,finding-035,finding-036,finding-037,finding-039,finding-040,finding-041,finding-042",
+            "non_material_finding_ids=finding-007,finding-008,finding-009,finding-018,finding-024,finding-031,finding-038,finding-043"
+          ]
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "ledger_material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-019,finding-020,finding-021,finding-022,finding-023,finding-025,finding-026,finding-027,finding-028,finding-029,finding-030,finding-032,finding-033,finding-034,finding-035,finding-036,finding-037,finding-039,finding-040,finding-041,finding-042",
+            "expected artifact truth: CRT-1 등급 스케일 파편화 + CRT-2 담보 is-a 오류 + CRT-3 LTV 파생값 승격 + CRT-4 등급 시간성 부재 + CRT-5 한도 권위 이원화 + CRT-7 집계 staleness + CRT-8 통화 단위 무결성 부재 + CRT-10 부실 범위 제외"
+          ]
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed",
+          "evidence": [
+            "declared_non_material_finding_count=8",
+            "preserved_non_material_ids=finding-007,finding-008,finding-009,finding-018,finding-024,finding-031,finding-038,finding-043,issue-004,issue-005,issue-010,issue-015,issue-021,issue-026,issue-031,issue-006",
+            "non-material findings must preserve target-specific boundary uncertainty and remain outside relation coverage"
+          ]
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed",
+          "evidence": [
+            "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-019,finding-020,finding-021,finding-022,finding-023,finding-025,finding-026,finding-027,finding-028,finding-029,finding-030,finding-032,finding-033,finding-034,finding-035,finding-036,finding-037,finding-039,finding-040,finding-041,finding-042",
+            "relation_covered_ids=finding-001,finding-034,finding-019,finding-013,finding-026,finding-041,finding-021,finding-002,finding-035,finding-012,finding-022,finding-025,finding-040,finding-032,finding-020,finding-005,finding-003,finding-029,finding-037,finding-023,finding-016,finding-042,finding-004,finding-027,finding-028,finding-036,finding-039,finding-017,finding-006,finding-010,finding-011,finding-014,finding-015,finding-030,finding-033",
+            "shared_cause_relation_ids=rel-004,rel-005,rel-006,rel-009,rel-010,rel-017,rel-020,rel-024,rel-030"
+          ]
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed",
+          "evidence": [
+            "shared_cause_relation_ids=rel-004,rel-005,rel-006,rel-009,rel-010,rel-017,rel-020,rel-024,rel-030",
+            "issue_relation_refs=rel-002,rel-003,rel-016,rel-018,rel-021,rel-027,rel-028,rel-029,rel-007,rel-008,rel-025,rel-014",
+            "dependency_relation_refs=rel-004,rel-005,rel-006,rel-009,rel-010,rel-017,rel-020,rel-024,rel-030"
+          ]
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed",
+          "evidence": [
+            "material_action_candidates=fix_now,fix_before_release,follow_up",
+            "expected final output to include a concrete remediation path"
+          ]
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed",
+          "evidence": [
+            "material issue must preserve lens/artifact refs",
+            "material issue must preserve target anchor credit-risk-ontology.yaml"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "fixture": "manufacturing-bom",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/manufacturing-bom/evidence/20260611-43359fc2",
+    "gate": {
+      "status": "passed",
+      "fixture_id": "manufacturing-bom-ontology-v1",
+      "scope": "fixture_specific",
+      "fixture_target_anchor": "manufacturing-bom-ontology.yaml",
+      "applicability": "real_model_only",
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed",
+          "evidence": [
+            "material_issue_count=32, material_issues.length=32",
+            "non_material_finding_count=12, non_material_findings.length=12"
+          ]
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "material_issue_count=32",
+            "expected target truth: MBO-1 순환 모순 + MBO-2 rev 권위 분산 + MBO-3 대체 방향 모순 + MBO-5 scrap_rate 복사 권위 + MBO-6 능력 단위 모호 + MBO-7 검사계획 is-a 오류 + MBO-9 std_time 이중 기록 + MBO-10 유효기간 부재"
+          ]
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "Final Review Result chars=290696",
+            "expected final explanation to preserve MBO-1 순환 모순 + MBO-2 rev 권위 분산 + MBO-3 대체 방향 모순 + MBO-5 scrap_rate 복사 권위 + MBO-6 능력 단위 모호 + MBO-7 검사계획 is-a 오류 + MBO-9 std_time 이중 기록 + MBO-10 유효기간 부재"
+          ]
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed",
+          "evidence": [
+            "boundary-sensitive uncertainty terms must be disclosed with boundary context when they are not admitted material issues: ",
+            "non_material_finding_count=12",
+            "boundary_notes_chars=485"
+          ]
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed",
+          "evidence": [
+            "Boundary Notes chars=485",
+            "expected: compact note preserving  uncertainty"
+          ]
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed",
+          "evidence": [
+            "finding_count=45",
+            "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-016,finding-017,finding-018,finding-019,finding-020,finding-021,finding-022,finding-023,finding-026,finding-027,finding-028,finding-029,finding-031,finding-032,finding-033,finding-034,finding-035,finding-036,finding-037,finding-038,finding-041,finding-042",
+            "non_material_finding_ids=finding-006,finding-013,finding-014,finding-015,finding-024,finding-025,finding-030,finding-039,finding-040,finding-043,finding-044,finding-045"
+          ]
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "ledger_material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-016,finding-017,finding-018,finding-019,finding-020,finding-021,finding-022,finding-023,finding-026,finding-027,finding-028,finding-029,finding-031,finding-032,finding-033,finding-034,finding-035,finding-036,finding-037,finding-038,finding-041,finding-042",
+            "expected artifact truth: MBO-1 순환 모순 + MBO-2 rev 권위 분산 + MBO-3 대체 방향 모순 + MBO-5 scrap_rate 복사 권위 + MBO-6 능력 단위 모호 + MBO-7 검사계획 is-a 오류 + MBO-9 std_time 이중 기록 + MBO-10 유효기간 부재"
+          ]
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed",
+          "evidence": [
+            "declared_non_material_finding_count=12",
+            "preserved_non_material_ids=finding-006,finding-013,finding-014,finding-015,finding-024,finding-025,finding-030,finding-039,finding-040,finding-043,finding-044,finding-045,issue-006,issue-013,issue-014,issue-015,issue-023,issue-024,issue-029,issue-038,issue-039,issue-042,issue-043,issue-044",
+            "non-material findings must preserve target-specific boundary uncertainty and remain outside relation coverage"
+          ]
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed",
+          "evidence": [
+            "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-016,finding-017,finding-018,finding-019,finding-020,finding-021,finding-022,finding-023,finding-026,finding-027,finding-028,finding-029,finding-031,finding-032,finding-033,finding-034,finding-035,finding-036,finding-037,finding-038,finding-041,finding-042",
+            "relation_covered_ids=finding-016,finding-002,finding-026,finding-033,finding-023,finding-004,finding-027,finding-031,finding-042,finding-018,finding-003,finding-028,finding-034,finding-029,finding-007,finding-001,finding-010,finding-019,finding-032,finding-038,finding-017,finding-041,finding-009,finding-011,finding-005,finding-020,finding-035,finding-022,finding-021,finding-008,finding-012,finding-036,finding-037",
+            "shared_cause_relation_ids=rel-007,rel-011,rel-019,rel-020,rel-024,rel-025"
+          ]
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed",
+          "evidence": [
+            "shared_cause_relation_ids=rel-007,rel-011,rel-019,rel-020,rel-024,rel-025",
+            "issue_relation_refs=rel-022",
+            "dependency_relation_refs=rel-007,rel-011,rel-019,rel-020,rel-024,rel-025"
+          ]
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed",
+          "evidence": [
+            "material_action_candidates=fix_now,fix_before_release,follow_up",
+            "expected final output to include a concrete remediation path"
+          ]
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed",
+          "evidence": [
+            "material issue must preserve lens/artifact refs",
+            "material issue must preserve target anchor manufacturing-bom-ontology.yaml"
+          ]
+        }
+      ]
+    }
+  }
+]

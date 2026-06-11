@@ -1,0 +1,39 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+lens_id: "logic"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "The issue restates the unsatisfiability the logic lens proved in finding-l1: the closure predicate now - windowStartedAt presumes an inter-clock identity that no claim in the bounded target declares or enforces, so {C3, C4, C5, C6} are jointly violated for permitted inputs (any number). The root hypothesis matches finding-l1's causal trace verbatim — split time authority across the two mutating entry points is the starting cause. Logic additionally confirms the dissolution claim from its own ledger: the single-time-authority fix also collapses logic's unassigned finding-l4 (two unreconciled recordings of the batch-entry instant), since one designated clock authority leaves no second recording to diverge. The modality error (a necessary same-clock precondition granted only possible status by the declared surface) survives semantic disambiguation of the now parameter, so logic co-owns this issue rather than deferring it to semantics."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-001
+      - round1/logic.md#finding-l1
+      - round1/logic.md#finding-l4
+  - issue_id: issue-002
+    stance: support
+    rationale: "Logic proved in finding-l2 that C7 and C8 are not jointly satisfiable for any item present at flush time: the literal interleaving interval is empty under synchronous execution (vacuous obligation), and the reachable reading inverts the guarantee — late items are emitted into the closing digest and destroyed by the unconditional clear. The root hypothesis (no mechanism snapshots or attributes window membership at the close instant; the comment describes a design that was not built) is exactly finding-l2's terminal cause, so logic accepts it. On severity, logic takes its round-1 position: medium, not high. The contradiction is formally certain, but within the bounded target its harm path is reliance-mediated — it requires a maintainer or consumer to act on the falsified comment — rather than an unconditional runtime fault; the code's actual behavior (emit-all-then-clear) is internally consistent absent the comment. Logic does not contest that semantics' contract-trust framing can justify high from its own perspective, but the formal-consistency assessment is medium."
+    root_hypothesis_position: accepts
+    severity_position: lowers
+    evidence_refs:
+      - issue-ledger.yaml#issue-002
+      - round1/logic.md#finding-l2
+  - issue_id: issue-003
+    stance: not_applicable
+    rationale: "The issue is a pure absence gap: no declared claim in the bounded target asserts delivery guarantees, ack/commit semantics, or at-least-once behavior, so there is no claim pair for logic to prove jointly unsatisfiable — the happy-path claim set remains internally consistent on this dimension. Per the Logic <-> Structure boundary rule, unsatisfiability arising from structural absence is owned by the structure/coverage perspective, and logic returns no verdict where present claims alone cannot form a contradiction. Logic neither corroborates nor opposes the gap assessment or its medium severity. One advisory consistency obligation on the proposed action: if flush is split into collect and commit phases, the C5 empty-array return protocol and the window-restart rules must be redefined for the new uncommitted state, otherwise the fix introduces a fresh contradiction adjacent to finding-l3's sentinel overload."
+    root_hypothesis_position: not_applicable
+    severity_position: not_applicable
+    evidence_refs:
+      - issue-ledger.yaml#issue-003
+      - round1/logic.md#finding-l3
+  - issue_id: issue-004
+    stance: support
+    rationale: "Logic independently observed the same phenomenon in finding-l4: the caller-supplied enqueuedAt and the internally sampled windowStartedAt are two recordings purporting to denote the same instant with no reconciliation rule, so C2's definition is false in permitted states. The semantics root hypothesis (a component-derivable timestamp modeled as an unconsumed caller input, leaving the documented meaning unenforced and free to drift) explains why the divergence logic proved is permitted, so logic accepts it as the deeper framing of finding-l4's conflict pair. On severity, logic takes its round-1 position: low, not medium. Within the bounded target the inconsistency is latent — the field is read nowhere, so no current behavior depends on the false definition; the medium rating rests on semantics' forward-looking drift argument about future consumers, which lies outside logic's assertion scope and which logic does not contest on its own ground. Logic also notes the cross-issue coupling already recorded in dep-001: the carry-over fix for issue-002 (option a) would make this field load-bearing, at which point the latent divergence becomes an active contradiction and the low rating no longer holds."
+    root_hypothesis_position: accepts
+    severity_position: lowers
+    evidence_refs:
+      - issue-ledger.yaml#issue-004
+      - round1/logic.md#finding-l4
+validation:
+  missing_issues: []

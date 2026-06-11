@@ -1,0 +1,18 @@
+[
+  {
+    "fixture": "credit-risk-taxonomy",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-EYrFzh/.onto/review/20260611-087267ec",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/credit-risk-taxonomy/evidence/20260611-087267ec",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-EYrFzh",
+    "elapsed_sec": 648
+  },
+  {
+    "fixture": "manufacturing-bom",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-kfEKNr/.onto/review/20260611-b43f0db6",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/manufacturing-bom/evidence/20260611-b43f0db6",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-kfEKNr",
+    "elapsed_sec": 615
+  }
+]

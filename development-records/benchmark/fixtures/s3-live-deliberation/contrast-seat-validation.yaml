@@ -1,0 +1,19 @@
+purpose: instance-level deliberation seat contrast — same deep validator over
+  final bytes of all three arms
+validator: validateIssueDeliberationResponseObject
+arms:
+  - arm: live(flat+peer)
+    seats: 12
+    pass: 12
+    fail: 0
+    changed_true: 6
+  - arm: live(flat+teamlead+peer)
+    seats: 4
+    pass: 4
+    fail: 0
+    changed_true: 2
+  - arm: controlled(packet-embed)
+    seats: 6
+    pass: 6
+    fail: 0
+    changed_true: 1

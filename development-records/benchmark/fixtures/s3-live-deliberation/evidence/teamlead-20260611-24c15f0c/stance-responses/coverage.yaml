@@ -1,0 +1,78 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+lens_id: "coverage"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "logic 제기(finding-001)이나 coverage의 cov-2(finding-005, 현 issue-004)가 동일 결함을 독립 관찰했다(rel-001 duplicates). 문서 carry-over에 대응하는 보존 메커니즘(snapshot/swap)이 reset 경로에 처음부터 부재하다는 root는 coverage 인과 추적의 시작 원인과 일치하며, proposed_action의 양자택일도 cov-2 fix와 동일하다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-001, round1/coverage.md#cov-2]
+  - issue_id: issue-002
+    stance: surface_only
+    rationale: "문서 등가 주장(C4)의 진리값 판정은 logic 렌즈의 단언 유형이며 coverage의 부재 진술 범위 밖이다. 다만 no-window 상태가 반환 계약에서 구별 표현을 갖지 못한다는 기저 결손은 대상 코드(windowStartedAt === null 가드의 [] 반환)에서 표면적으로 확인되므로, coverage는 surface 수준에서 확인하고 심층 판정은 제기 렌즈에 위임한다. low 유지에 이견 없다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-002]
+  - issue_id: issue-003
+    stance: support
+    rationale: "coverage 자체 finding(cov-1/finding-004)이다. 하나의 윈도 판정에 두(enqueuedAt 포함 세) 시간 원본이 혼입되는데 단일 시간 권위 지정 개념이 시스템에 부재하다 — '병행 관리 값의 단일 권위 지정 부재' 차원 결손 그 자체다. 영구 미flush(알림 무기한 적체) 경로와 결정적 검증 불가가 high를 정당화한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-003, round1/coverage.md#cov-1]
+  - issue_id: issue-004
+    stance: support
+    rationale: "coverage 자체 finding(cov-2/finding-005)이다. 문서가 선언한 carry-over 하위 동작에 대응하는 구현 요소(digest 스냅샷과 차분 보존의 구분)가 시스템에 부재하다는 부재 진술 그대로이며, 동기 실행에서 서술된 interleaving 자체가 불가능하다는 관찰도 동일하다. 유지보수자가 주석을 신뢰하고 async화하면 이월 대신 무경고 drop이 되는 regression_risk가 medium을 정당화한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-004, round1/coverage.md#cov-2]
+  - issue_id: issue-005
+    stance: support
+    rationale: "coverage 단독 제기 finding(cov-3/finding-006)이다. lifecycle이 enqueued→flushed에서 종결되고 전달 확인·실패·재시도·보관 구간이 표현되어 있지 않다는 lifecycle 미완결 부재 진술이다. 전달 자체는 bounded_partial 경계 밖이지만 상태 파괴가 반환보다 앞서는 구조는 대상 내부 증거로 닫힌다. 미선언 at-most-once는 regression_risk 목표에 실질적이므로 medium 유지가 적정하다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-005, round1/coverage.md#cov-3]
+  - issue_id: issue-006
+    stance: support
+    rationale: "coverage 자체 surface-only finding(cov-4/finding-007)이다. window 개념의 per-user 하위 세분화 부재(또는 전역 윈도가 의도임을 선언하는 계약 부재)로, 종료 직전 합류 사용자의 배치 창이 0에 수렴해 per-user digest라는 배칭 목적과 어긋난다. 선언된 happy path는 달성 가능하므로 low 유지가 적정하다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-006, round1/coverage.md#cov-4]
+  - issue_id: issue-007
+    stance: support
+    rationale: "coverage 자체 surface-only finding(cov-5/finding-008)이다. digest 산출물에서 시간 차원이 소실되어(enqueuedAt 선언만 있고 digest 생성에서 미사용) flush 이후 적재 시점 이력을 재구성할 수 없다 — 시점 의존 값의 이력 부재라는 차원 결손이다. 선언 목적을 불안전하게 만들지는 않으므로 low 유지."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-007, round1/coverage.md#cov-5]
+  - issue_id: issue-008
+    stance: support
+    rationale: "semantics 제기(finding-010)이나 coverage의 cov-1(finding-004, 현 issue-003)이 동일 술어(now - windowStartedAt < WINDOW_MS)의 동일 결함을 독립 관찰했다(rel-003 duplicates). 분리된 시간 권위와 미선언 clock-domain 동일성 제약이라는 root는 cov-1의 단일 권위 지정 부재 진술과 일치하며, 영구 미flush/조기 종료 impact도 동일하다. high 유지."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-008, round1/coverage.md#cov-1]
+  - issue_id: issue-009
+    stance: support
+    rationale: "semantics 제기(finding-011)이나 coverage의 cov-2(finding-005, 현 issue-004)가 동일 결함을 독립 관찰했다(rel-002 duplicates). 주석이 선언한 carry-over 메커니즘에 대응하는 구현 부재, 동기 실행에서의 vacuous 시나리오 관찰, async 진화 시 무경고 손실 failure_condition 모두 cov-2와 동일하다. medium 유지."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-009, round1/coverage.md#cov-2]
+  - issue_id: issue-010
+    stance: support
+    rationale: "semantics 제기 issue이나 coverage 관점에서도 성립한다: cov-1이 이미 enqueuedAt을 권위 지정 없는 제3의 시간 기록으로 식별했고, 이 issue의 root(컴포넌트가 소유해야 할 이벤트 유래 값이 호출자 입력으로 모델링되어 stamping 권위·집행 지점이 부재)는 단일 권위 지정 부재라는 coverage 차원 결손의 해당 필드 발현이다. dep-001(issue-003과 shared_cause_candidate)이 시사하듯 주입 clock 하나가 양쪽을 함께 해소한다는 점도 동일 원인 가설을 지지한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-010, round1/coverage.md#cov-1, finding-relation-graph.yaml#rel-004]
+  - issue_id: issue-011
+    stance: not_applicable
+    rationale: "메서드 이름과 계약 텍스트의 어휘 정합은 semantics 렌즈의 의미 일치 단언 유형이다. 누락된 도메인 하위 영역이나 차원 결손이 관여하지 않으므로 coverage 관점은 이 issue에 적용되지 않는다. 판정을 제기 렌즈에 위임한다."
+    root_hypothesis_position: not_applicable
+    severity_position: not_applicable
+    evidence_refs: [issue-ledger.yaml#issue-011]
+  - issue_id: issue-012
+    stance: support
+    rationale: "semantics 제기 issue이나 root hypothesis 자체가 부재 진술이다: no-window 상태를 위한 구별 신호 개념이 설계되지 않아 []가 두 상태의 동음이의가 되었다. 상태 신호 개념의 부재는 coverage 단언 유형에 부합하며, 근거 코드(windowStartedAt === null 가드)는 round1에서 검토한 대상 내부 증거로 확인된다. surface-only 성격과 low 유지에 동의한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-012]
+validation:
+  missing_issues: []

@@ -1,0 +1,50 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-005
+    relation: duplicates
+    root_hypothesis: "The flush() reset was implemented as whole-map pending.clear() plus window nulling with no snapshot/swap or selective-preservation step, so the comment-declared carry-over invariant has no realizing mechanism."
+    shared_cause: null
+    rationale: "Logic finding-l1 and coverage cov-2 report the same defect on the same target (notification-batcher.ts flush() reset block): the comment claims notifications enqueued between the window-close check and the reset are carried into the next window, while pending.clear() unconditionally removes every entry and no path snapshots or re-enqueues. The anchors differ only in numbering base (logic cites the 48-line embedded snippet, coverage the full file) but name the same comment-vs-clear() pair. Causal paths end at the same root (reset designed without a preservation mechanism) and proposed actions are the same menu: implement the carry via snapshot/swap or correct the comment to actual behavior."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-005
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: "The comment encodes an intended carry-over/concurrency contract that the chosen reset strategy (unconditional pending.clear()) never implemented."
+    shared_cause: null
+    rationale: "Coverage cov-2 and semantics semantics-2 are near-identical reports: both state that the comment-declared carry-over between the close judgment and the reset has no implementing path because pending.clear() empties the whole map, both observe that the described interleaving is vacuous in synchronous single-threaded execution so the comment presents an unrealizable scenario as a handled case, and both propose the same fix pair (snapshot/differential preservation to realize the carry, or correcting the comment to actual behavior). Same target lines (carry-over comment vs clear()), same failure condition (future async/await evolution under trust in the documented guarantee), same impact (silent notification loss)."
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-004
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: "The time authority was split at the API design point: enqueue stamps windowStartedAt from ambient Date.now() while flush externalizes time as a caller-supplied parameter, with no single-clock concept designated."
+    shared_cause: null
+    rationale: "Coverage cov-1 and semantics semantics-1 report the same defect on the same predicate (now - windowStartedAt < WINDOW_MS): the window-close judgment subtracts a caller-supplied now from an internally Date.now()-stamped windowStartedAt, so any supported caller honoring the visible signature with a non-system clock (fake test timer, logical or simulated time) gets permanent non-flush or premature close with no surfaced error. Root-cause steps match almost verbatim (cross-authority subtraction, no declared clock-domain identity, asymmetric enqueue-internal vs flush-external design) and proposed actions coincide (unify on one injected or shared clock and document the single time source). finding-004 additionally counts enqueuedAt as a third independent time origin and adds the deterministic-verifiability impact, but the central claim is the same issue."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-004
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: "A single missing component-owned time-authority concept explains both the mixed-authority window predicate and the unstamped, unverifiable enqueuedAt field; one injected clock that stamps enqueuedAt internally and drives windowStartedAt and the flush judgment would resolve both findings."
+    shared_cause:
+      cause_claim: "Time values that must share one axis (windowStartedAt, flush now, enqueuedAt) are produced independently by ambient Date.now() and unvalidated caller input, because no single time-authority concept owned by the component exists to stamp or bind them."
+      from_cause_ref: finding-004.cause-002
+      to_cause_ref: finding-012.cause-003
+    rationale: "finding-004's causal path explicitly lists enqueuedAt among three independently produced time records with no single-authority designation (finding-004.cause-002), and finding-012's root cause is the same ownership gap surfacing on that field: enqueuedAt sits in the caller-facing input type instead of being stamped by the component that owns the enqueue event (finding-012.cause-003), leaving its documented event-derived meaning without enforcement point or consumer. The issues are distinct (window-close correctness and verifiability vs field-contract truth and maintainability), so this is shared cause rather than duplication; finding-012's proposed action itself defers to the unified clock proposed for the time-authority finding, supporting the common-cause hypothesis."
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: "One reset design choice — undifferentiated in-place destruction of the entire pending state inside flush — both falsifies the documented carry-over invariant and forecloses delivery-failure recovery; separating digest production from state removal (snapshot/swap or peek/commit) would address both findings."
+    shared_cause:
+      cause_claim: "flush() resets by destroying the whole pending state in place (pending.clear() plus windowStartedAt = null) with no intermediate concept separating digest production from state removal — no snapshot/swap step and no commit/ack boundary."
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-006.cause-001
+    rationale: "finding-001 shows the whole-map clear() with no snapshot/swap makes the documented carry-over impossible (finding-001.cause-003); finding-006 shows the same destructive reset, executed before the caller can confirm delivery, makes the component structurally at-most-once with no ack, reinjection, or dead-letter recovery (finding-006.cause-001). The failure surfaces are distinct (a false contract claim about late enqueues vs unrecoverable whole-window loss on delivery failure), so this is shared cause rather than duplication, but both trace to the same reset mechanism on the same lines and both proposed actions converge on decoupling digest construction from wholesale state destruction."
+    confidence: medium
+singleton_findings: []

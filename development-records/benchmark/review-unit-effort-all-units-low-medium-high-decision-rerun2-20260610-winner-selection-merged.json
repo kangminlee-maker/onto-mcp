@@ -1,0 +1,1576 @@
+{
+  "source_report": "development-records/benchmark/review-unit-effort-all-units-low-medium-high-decision-rerun2-20260610.json",
+  "supplemental_report": "development-records/benchmark/review-unit-effort-deliberation-issue-stance-supplement-20260610.partial.json",
+  "generated_at": "2026-06-10T03:38:44.782Z",
+  "status": "decision-grade",
+  "decision_gate": {
+    "required_min_runs_per_case_fixture": 3,
+    "required_min_fixture_count": 2,
+    "actual_runs_per_case_fixture": 3,
+    "actual_fixture_count": 2,
+    "comparison_conclusion_allowed": true
+  },
+  "selection_policy": "quality/stability gate first; all requested levels require decision-grade fixture/run observations; direct-unit timing is required only for otherwise quality-stable levels; rank eligible levels by end-to-end command_duration_ms, then direct_unit_duration_ms, then effort order",
+  "boundary_uncertainty_vocab_audit": {
+    "retained_as_fixture_anchored_false_positive_correction": [
+      "telemetryLabel",
+      "telemetry label",
+      "debugRetryState",
+      "debug retry state",
+      "debug export",
+      "debug/telemetry export(s)"
+    ],
+    "removed_from_gate_acceptance_as_reviewer_coined_or_too_abstract": [
+      "telemetry/debug label",
+      "telemetry/debug surface",
+      "static debug-state projection",
+      "debug-state projection",
+      "retry lifecycle states"
+    ]
+  },
+  "supplemental_status": {
+    "completed_run_count": 5,
+    "expected_run_count": 6,
+    "halt_reason": "stop rule: status=failed;"
+  },
+  "selections": [
+    {
+      "unit_id": "deliberation_plan",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 16996,
+          "command_duration_ms_mean": 286718,
+          "total_unit_duration_ms_mean": 473859.83
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 11889.67,
+            "command_duration_ms_mean": 383778.5,
+            "total_unit_duration_ms_mean": 552591.17
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 16996,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 29087.5,
+            "command_duration_ms_mean": 269340,
+            "total_unit_duration_ms_mean": 410563
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 383778.5,
+            "stdev": 198846.09,
+            "min": 193140,
+            "max": 768284,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 11889.67,
+            "stdev": 3447.66,
+            "min": 7785,
+            "max": 17716,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 16996,
+            "stdev": 5421.92,
+            "min": 5882,
+            "max": 20829,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 269340,
+            "stdev": 56003.17,
+            "min": 179619,
+            "max": 358091,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 29087.5,
+            "stdev": 19043.39,
+            "min": 15104,
+            "max": 64741,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "lens_findings": 1
+          }
+        }
+      ]
+    },
+    {
+      "unit_id": "deliberation_resolution",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report",
+      "winner": {
+        "status": "selected",
+        "effort": "low",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 5131.17,
+          "command_duration_ms_mean": 217276.5,
+          "total_unit_duration_ms_mean": 352036.33
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 5131.17,
+            "command_duration_ms_mean": 217276.5,
+            "total_unit_duration_ms_mean": 352036.33
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 16787.67,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 6173.33,
+            "command_duration_ms_mean": 240458.83,
+            "total_unit_duration_ms_mean": 371439.83
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 217276.5,
+            "stdev": 50388.86,
+            "min": 154170,
+            "max": 274647,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 5131.17,
+            "stdev": 7252.99,
+            "min": 3,
+            "max": 15733,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 16787.67,
+            "stdev": 7714.03,
+            "min": 3,
+            "max": 22808,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 240458.83,
+            "stdev": 58172.81,
+            "min": 174875,
+            "max": 316205,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 6173.33,
+            "stdev": 8724.07,
+            "min": 4,
+            "max": 18705,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 0.67,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 2,
+          "first_failed_stage_counts": {
+            "final_output": 2
+          }
+        }
+      ]
+    },
+    {
+      "unit_id": "deliberation_response",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report_plus_targeted_supplement",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 125987.67,
+          "command_duration_ms_mean": 292513.38,
+          "total_unit_duration_ms_mean": 471408.75
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable",
+              "direct_unit_observation_missing"
+            ],
+            "direct_unit_duration_ms_mean": 142102.5,
+            "command_duration_ms_mean": 276412.5,
+            "total_unit_duration_ms_mean": 451821.83
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 125987.67,
+            "command_duration_ms_mean": 292513.38,
+            "total_unit_duration_ms_mean": 471408.75
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 151424,
+            "command_duration_ms_mean": 314783,
+            "total_unit_duration_ms_mean": 509174.75
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 276412.5,
+            "stdev": 34361.93,
+            "min": 225984,
+            "max": 338089,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 142102.5,
+            "stdev": 51181.12,
+            "min": 56042,
+            "max": 187740,
+            "n": 4
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 4,
+            "missing_run_count": 2
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "lens_findings": 1
+          }
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 8,
+          "completed_count": 8,
+          "command_duration_ms": {
+            "mean": 292513.38,
+            "stdev": 64606.8,
+            "min": 162307,
+            "max": 395381,
+            "n": 8
+          },
+          "direct_unit_duration_ms": {
+            "mean": 125987.67,
+            "stdev": 49308.72,
+            "min": 66660,
+            "max": 214778,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 2
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 8,
+          "completed_count": 8,
+          "command_duration_ms": {
+            "mean": 314783,
+            "stdev": 88181.91,
+            "min": 138395,
+            "max": 446972,
+            "n": 8
+          },
+          "direct_unit_duration_ms": {
+            "mean": 151424,
+            "stdev": 46715.52,
+            "min": 88800,
+            "max": 233227,
+            "n": 7
+          },
+          "semantic_quality_pass_rate": 0.88,
+          "stage_semantic_quality_pass_rate": 0.88,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 7,
+            "missing_run_count": 1
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "lens_findings": 1
+          }
+        }
+      ]
+    },
+    {
+      "unit_id": "finding_ledger",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 13.33,
+          "command_duration_ms_mean": 286718,
+          "total_unit_duration_ms_mean": 473859.83
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 12.83,
+            "command_duration_ms_mean": 277881,
+            "total_unit_duration_ms_mean": 477701.83
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 13.33,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 13.5,
+            "command_duration_ms_mean": 251502.5,
+            "total_unit_duration_ms_mean": 418948
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 277881,
+            "stdev": 80217.6,
+            "min": 176551,
+            "max": 391903,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 12.83,
+            "stdev": 0.37,
+            "min": 12,
+            "max": 13,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "final_output": 1
+          }
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 13.33,
+            "stdev": 1.25,
+            "min": 11,
+            "max": 15,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 251502.5,
+            "stdev": 73470.17,
+            "min": 161432,
+            "max": 364545,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 13.5,
+            "stdev": 1.71,
+            "min": 12,
+            "max": 17,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "final_output": 1
+          }
+        }
+      ]
+    },
+    {
+      "unit_id": "finding_relation_graph",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 19170.83,
+          "command_duration_ms_mean": 286718,
+          "total_unit_duration_ms_mean": 473859.83
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 15119.83,
+            "command_duration_ms_mean": 276624.83,
+            "total_unit_duration_ms_mean": 432907.17
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 19170.83,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 33383.67,
+            "command_duration_ms_mean": 288190.33,
+            "total_unit_duration_ms_mean": 471615
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 276624.83,
+            "stdev": 112060.88,
+            "min": 183117,
+            "max": 515133,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 15119.83,
+            "stdev": 2903,
+            "min": 11734,
+            "max": 19167,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.67,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 2,
+          "first_failed_stage_counts": {
+            "final_output": 2
+          }
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 19170.83,
+            "stdev": 3683.59,
+            "min": 15917,
+            "max": 27174,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 288190.33,
+            "stdev": 68631.48,
+            "min": 152179,
+            "max": 360519,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 33383.67,
+            "stdev": 28805.49,
+            "min": 18930,
+            "max": 97762,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        }
+      ]
+    },
+    {
+      "unit_id": "issue_ledger",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 36514.17,
+          "command_duration_ms_mean": 286718,
+          "total_unit_duration_ms_mean": 473859.83
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 37094.17,
+            "command_duration_ms_mean": 250134.5,
+            "total_unit_duration_ms_mean": 392775.17
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 36514.17,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 48276.5,
+            "command_duration_ms_mean": 273947.17,
+            "total_unit_duration_ms_mean": 448822.5
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 250134.5,
+            "stdev": 30144.56,
+            "min": 204308,
+            "max": 287281,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 37094.17,
+            "stdev": 9447.14,
+            "min": 30269,
+            "max": 56116,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "final_output": 1
+          }
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 36514.17,
+            "stdev": 6527.27,
+            "min": 25513,
+            "max": 44091,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 273947.17,
+            "stdev": 70001.1,
+            "min": 155472,
+            "max": 345825,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 48276.5,
+            "stdev": 12337.34,
+            "min": 33059,
+            "max": 73374,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.5,
+          "stage_semantic_quality_pass_rate": 0.5,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 3,
+          "stage_semantic_failed_count": 3,
+          "first_failed_stage_counts": {
+            "final_output": 3
+          }
+        }
+      ]
+    },
+    {
+      "unit_id": "issue_stance_response",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report_reprojected_with_issue_stance_direct_mapping",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 40518,
+          "command_duration_ms_mean": 286718,
+          "total_unit_duration_ms_mean": 473859.83
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 27939.83,
+            "command_duration_ms_mean": 218964.33,
+            "total_unit_duration_ms_mean": 364908.5
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 40518,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 36008.83,
+            "command_duration_ms_mean": 256437.5,
+            "total_unit_duration_ms_mean": 388149.5
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 218964.33,
+            "stdev": 46335.04,
+            "min": 154364,
+            "max": 302543,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 27939.83,
+            "stdev": 7091.63,
+            "min": 15094,
+            "max": 36099,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "final_output": 1
+          }
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 40518,
+            "stdev": 13992.33,
+            "min": 17080,
+            "max": 64928,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 256437.5,
+            "stdev": 87398.08,
+            "min": 152097,
+            "max": 416564,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 36008.83,
+            "stdev": 12830.82,
+            "min": 18488,
+            "max": 51461,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.67,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 2,
+          "first_failed_stage_counts": {
+            "lens_findings": 2
+          }
+        }
+      ]
+    },
+    {
+      "unit_id": "lens",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 195891.33,
+          "command_duration_ms_mean": 286718,
+          "total_unit_duration_ms_mean": 473859.83
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 207867.5,
+            "command_duration_ms_mean": 292840.5,
+            "total_unit_duration_ms_mean": 463420.17
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 195891.33,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 317964.33,
+            "command_duration_ms_mean": 366543.83,
+            "total_unit_duration_ms_mean": 617482.67
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 292840.5,
+            "stdev": 91556.93,
+            "min": 176819,
+            "max": 446566,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 207867.5,
+            "stdev": 103006.85,
+            "min": 129070,
+            "max": 435062,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.67,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 2,
+          "first_failed_stage_counts": {
+            "final_output": 2
+          }
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 195891.33,
+            "stdev": 13280.13,
+            "min": 181044,
+            "max": 219083,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 366543.83,
+            "stdev": 117905.94,
+            "min": 225125,
+            "max": 593297,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 317964.33,
+            "stdev": 26216.67,
+            "min": 288029,
+            "max": 371125,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "lens_findings": 1
+          }
+        }
+      ]
+    },
+    {
+      "unit_id": "problem_framing",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 16479.67,
+          "command_duration_ms_mean": 286718,
+          "total_unit_duration_ms_mean": 473859.83
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 13434.5,
+            "command_duration_ms_mean": 262614.5,
+            "total_unit_duration_ms_mean": 435550.83
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 16479.67,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 25783.33,
+            "command_duration_ms_mean": 308359.83,
+            "total_unit_duration_ms_mean": 498918.33
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 262614.5,
+            "stdev": 78408.81,
+            "min": 157322,
+            "max": 384986,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 13434.5,
+            "stdev": 4896.01,
+            "min": 7501,
+            "max": 20487,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "lens_findings": 1
+          }
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 16479.67,
+            "stdev": 3141.6,
+            "min": 12288,
+            "max": 20801,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 308359.83,
+            "stdev": 131770.3,
+            "min": 161505,
+            "max": 530145,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 25783.33,
+            "stdev": 14923.25,
+            "min": 12894,
+            "max": 54329,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 0.67,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 2,
+          "first_failed_stage_counts": {
+            "lens_findings": 2
+          }
+        }
+      ]
+    },
+    {
+      "unit_id": "synthesis_response",
+      "baseline_effort": "medium",
+      "evidence_source": "decision_report",
+      "winner": {
+        "status": "selected",
+        "effort": "medium",
+        "rationale": "Selected the fastest end-to-end command duration among decision-grade levels with complete runs, semantic pass rate 1.0, stage semantic pass rate 1.0, and complete direct unit timing observations; direct unit duration is used as the first tie-breaker.",
+        "decision_gate": {
+          "required_min_runs_per_case_fixture": 3,
+          "required_min_fixture_count": 2
+        },
+        "selected_metrics": {
+          "direct_unit_duration_ms_mean": 19074.83,
+          "command_duration_ms_mean": 286718,
+          "total_unit_duration_ms_mean": 473859.83
+        },
+        "candidates": [
+          {
+            "effort": "low",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": false,
+            "rejection_reasons": [
+              "semantic_quality_not_stable",
+              "stage_semantic_quality_not_stable"
+            ],
+            "direct_unit_duration_ms_mean": 16935.33,
+            "command_duration_ms_mean": 246711,
+            "total_unit_duration_ms_mean": 423749.67
+          },
+          {
+            "effort": "medium",
+            "source_role": "baseline",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 19074.83,
+            "command_duration_ms_mean": 286718,
+            "total_unit_duration_ms_mean": 473859.83
+          },
+          {
+            "effort": "high",
+            "source_role": "candidate",
+            "decision_observed": true,
+            "eligible": true,
+            "rejection_reasons": [],
+            "direct_unit_duration_ms_mean": 27567.33,
+            "command_duration_ms_mean": 320538.33,
+            "total_unit_duration_ms_mean": 506612.33
+          }
+        ]
+      },
+      "levels": [
+        {
+          "effort": "low",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 246711,
+            "stdev": 63565.42,
+            "min": 133058,
+            "max": 336291,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 16935.33,
+            "stdev": 6403.24,
+            "min": 11164,
+            "max": 27710,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 0.83,
+          "stage_semantic_quality_pass_rate": 0.83,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 1,
+          "stage_semantic_failed_count": 1,
+          "first_failed_stage_counts": {
+            "final_output": 1
+          }
+        },
+        {
+          "effort": "medium",
+          "source_role": "baseline",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 286718,
+            "stdev": 70616.57,
+            "min": 162307,
+            "max": 395381,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 19074.83,
+            "stdev": 5998.95,
+            "min": 12591,
+            "max": 26095,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        },
+        {
+          "effort": "high",
+          "source_role": "candidate",
+          "fixture_count": 2,
+          "run_count": 6,
+          "completed_count": 6,
+          "command_duration_ms": {
+            "mean": 320538.33,
+            "stdev": 91527.01,
+            "min": 186996,
+            "max": 407240,
+            "n": 6
+          },
+          "direct_unit_duration_ms": {
+            "mean": 27567.33,
+            "stdev": 15213.63,
+            "min": 14965,
+            "max": 58229,
+            "n": 6
+          },
+          "semantic_quality_pass_rate": 1,
+          "stage_semantic_quality_pass_rate": 1,
+          "completion_rate": 1,
+          "direct_unit_observation": {
+            "observed_run_count": 6,
+            "missing_run_count": 0
+          },
+          "semantic_quality_failed_count": 0,
+          "stage_semantic_failed_count": 0,
+          "first_failed_stage_counts": {}
+        }
+      ]
+    }
+  ]
+}

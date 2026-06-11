@@ -90,6 +90,19 @@ export const REVIEW_EXECUTION_UNIT_IDS = [
 ] as const;
 const ReviewExecutionUnitIdSchema = z.enum(REVIEW_EXECUTION_UNIT_IDS);
 const ReviewToolModeSchema = z.enum(["auto", "native", "inline"]);
+const ReviewSubmitSalvageSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    transcription_llm: z
+      .object({
+        provider: z.enum(["anthropic", "openai"]).optional(),
+        model: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+    delta_completion: z.literal("unit_llm").optional(),
+  })
+  .strict();
 const ReviewRetrySettingsSchema = z
   .object({
     lens_max_retries: z.number().int().min(0).optional(),
@@ -97,6 +110,7 @@ const ReviewRetrySettingsSchema = z
     deliberation_max_retries: z.number().int().min(0).optional(),
     synthesis_max_retries: z.number().int().min(0).optional(),
     retry_initial_delay_ms: z.number().int().min(0).optional(),
+    salvage: ReviewSubmitSalvageSettingsSchema.optional(),
   })
   .strict();
 const ReviewUnitExecutionSettingsSchema = z
@@ -143,7 +157,9 @@ const DEFAULT_REVIEW_RETRY_SETTINGS = {
   deliberation_max_retries: 2,
   synthesis_max_retries: 2,
   retry_initial_delay_ms: 3000,
-} as const;
+  // opt-in: 벤치마크 재현성 보호 — 활성화는 settings로만.
+  salvage: { enabled: false, delta_completion: "unit_llm" },
+} as const satisfies ReviewRetrySettings;
 
 const DEFAULT_REVIEW_UNIT_TIMEOUT_MS = 240000;
 const DEFAULT_REVIEW_SHORT_LLM_UNIT_TIMEOUT_MS = 180000;
@@ -511,8 +527,31 @@ export interface ReviewExecutionSettings {
   lens?: ReviewActorSettings;
   synthesize?: ReviewActorSettings;
   deliberation?: ReviewDeliberation;
-  retry?: ReviewRetrySettings;
+  retry?: ReviewRetrySettingsInput;
   units?: ReviewExecutionUnits;
+}
+
+/**
+ * Submit salvage recovery (opt-in): after a structured-submit unit exhausts
+ * its regular retries with `output_contract`, recover the already-produced
+ * semantics without re-engaging the violating model. The original failure
+ * stays recorded; the salvage attempt carries `recovery: "salvaged_submit"`.
+ * Contract: development-records/design/submit-salvage-recovery-design.md.
+ */
+export interface ReviewSubmitSalvageSettingsInput {
+  enabled?: boolean | undefined;
+  /** Path A (transcription) model — cheap tier; the unit's OWN adapter runs it
+   * (anthropic -> claude CLI, openai -> codex CLI); provider mismatch with the
+   * unit adapter falls back to the unit model. */
+  transcription_llm?: { provider?: "anthropic" | "openai" | undefined; model: string } | undefined;
+  /** Path B (missing-rows delta) executor — fixed: fresh same-tier instance. */
+  delta_completion?: "unit_llm" | undefined;
+}
+
+export interface ReviewSubmitSalvageSettings {
+  enabled: boolean;
+  transcription_llm?: { provider?: "anthropic" | "openai" | undefined; model: string };
+  delta_completion: "unit_llm";
 }
 
 export interface ReviewRetrySettingsInput {
@@ -521,6 +560,7 @@ export interface ReviewRetrySettingsInput {
   deliberation_max_retries?: number | undefined;
   synthesis_max_retries?: number | undefined;
   retry_initial_delay_ms?: number | undefined;
+  salvage?: ReviewSubmitSalvageSettingsInput | undefined;
 }
 
 export interface ReviewRetrySettings {
@@ -529,6 +569,7 @@ export interface ReviewRetrySettings {
   deliberation_max_retries: number;
   synthesis_max_retries: number;
   retry_initial_delay_ms: number;
+  salvage: ReviewSubmitSalvageSettings;
 }
 
 export interface ReviewArtifactSettings {
@@ -731,9 +772,34 @@ function definedReviewArtifacts(
 
 function definedReviewRetry(
   retry: ReviewRetrySettingsInput | undefined,
-): ReviewRetrySettings | undefined {
+): ReviewRetrySettingsInput | undefined {
   if (!retry) return undefined;
-  return completeReviewRetrySettings(retry);
+  const out: ReviewRetrySettingsInput = {};
+  if (retry.lens_max_retries !== undefined) out.lens_max_retries = retry.lens_max_retries;
+  if (retry.issue_artifact_max_retries !== undefined) {
+    out.issue_artifact_max_retries = retry.issue_artifact_max_retries;
+  }
+  if (retry.deliberation_max_retries !== undefined) {
+    out.deliberation_max_retries = retry.deliberation_max_retries;
+  }
+  if (retry.synthesis_max_retries !== undefined) {
+    out.synthesis_max_retries = retry.synthesis_max_retries;
+  }
+  if (retry.retry_initial_delay_ms !== undefined) {
+    out.retry_initial_delay_ms = retry.retry_initial_delay_ms;
+  }
+  if (retry.salvage !== undefined) {
+    const salvage: ReviewSubmitSalvageSettingsInput = {};
+    if (retry.salvage.enabled !== undefined) salvage.enabled = retry.salvage.enabled;
+    if (retry.salvage.transcription_llm !== undefined) {
+      salvage.transcription_llm = retry.salvage.transcription_llm;
+    }
+    if (retry.salvage.delta_completion !== undefined) {
+      salvage.delta_completion = retry.salvage.delta_completion;
+    }
+    out.salvage = salvage;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function definedReviewUnitExecutionSettings(
@@ -769,7 +835,7 @@ function definedReviewUnits(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function completeReviewRetrySettings(
+export function completeReviewRetrySettings(
   retry: ReviewRetrySettingsInput | undefined,
 ): ReviewRetrySettings {
   return {
@@ -787,6 +853,15 @@ function completeReviewRetrySettings(
     retry_initial_delay_ms:
       retry?.retry_initial_delay_ms ??
       DEFAULT_REVIEW_RETRY_SETTINGS.retry_initial_delay_ms,
+    salvage: {
+      enabled: retry?.salvage?.enabled ?? DEFAULT_REVIEW_RETRY_SETTINGS.salvage.enabled,
+      ...(retry?.salvage?.transcription_llm !== undefined
+        ? { transcription_llm: retry.salvage.transcription_llm }
+        : {}),
+      delta_completion:
+        retry?.salvage?.delta_completion ??
+        DEFAULT_REVIEW_RETRY_SETTINGS.salvage.delta_completion,
+    },
   };
 }
 
@@ -1019,12 +1094,22 @@ function mergeReviewArtifactSettings(
 }
 
 function mergeReviewRetrySettings(
-  userRetry: ReviewRetrySettings | undefined,
-  projectRetry: ReviewRetrySettings | undefined,
+  userRetry: ReviewRetrySettingsInput | undefined,
+  projectRetry: ReviewRetrySettingsInput | undefined,
 ): ReviewRetrySettings {
-  const merged = {
+  const merged: ReviewRetrySettingsInput = {
     ...(userRetry ?? {}),
     ...(projectRetry ?? {}),
+    // salvage merges deep: a project layer that omits (or partially sets)
+    // salvage must not clobber an inherited user-level opt-in.
+    ...(userRetry?.salvage !== undefined || projectRetry?.salvage !== undefined
+      ? {
+          salvage: {
+            ...(userRetry?.salvage ?? {}),
+            ...(projectRetry?.salvage ?? {}),
+          },
+        }
+      : {}),
   };
   return completeReviewRetrySettings(merged);
 }
@@ -1359,7 +1444,10 @@ export function defaultReviewExecution(): ResolvedReviewExecutionSettings {
 }
 
 export function defaultReviewRetrySettings(): ReviewRetrySettings {
-  return { ...DEFAULT_REVIEW_RETRY_SETTINGS };
+  return {
+    ...DEFAULT_REVIEW_RETRY_SETTINGS,
+    salvage: { ...DEFAULT_REVIEW_RETRY_SETTINGS.salvage },
+  };
 }
 
 function validateActorLlmRefs(settings: OntoSettings): void {

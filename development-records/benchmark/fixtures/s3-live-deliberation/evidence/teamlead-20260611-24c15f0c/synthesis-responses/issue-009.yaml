@@ -1,0 +1,20 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+work_item_id: "synthesis:issue-009"
+issue_id: "issue-009"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-009"
+conclusion: "The flush() reset comment in notification-batcher.ts asserts a carry-over mechanism the code does not implement: digests are built by iterating the live pending map and pending.clear() then unconditionally drops every entry, so an interleaved enqueue would be silently lost, not carried over — and because flush is synchronous single-threaded JS, the described interleaving cannot occur at all, making the comment a vacuous scenario presented as a handled case. All three lenses (logic, coverage, semantics) accept the ledgered root and keep severity medium; deliberation status is no-deliberation-needed."
+materiality_explanation: "This issue is material against the declared regression_risk and maintainability review goals: the comment documents a reset/carry-over contract the code does not honor, so maintainers trusting the documented guarantee inherit a false safety claim. The danger arms precisely when flush evolves — if flush becomes async or an await lands before the reset, evolution guided by the documented contract produces silent notification loss, which is exactly the failure mode the comment claims is already handled, meaningfully weakening trust in the result for the declared review purpose."
+root_cause_explanation: "The accepted root (finding-011.cause-003, medium confidence) is that the comment encodes an intended concurrency contract — carry-over of late enqueues into the next window — that was never realized in the chosen reset strategy of building digests from the live pending map and then clearing the whole map. It is the starting point because both observable halves of the defect follow from it: documenting the intended design rather than the implemented one yields a consequent contradicted by pending.clear() whenever the antecedent holds, and an antecedent that is unreachable in the synchronous execution model."
+causal_path_explanation: "The causal path from finding-011 (semantics) runs in three accepted steps: first, the comment declares carry-over semantics while digests are built by iterating pending and the reset is a full pending.clear() with no snapshot/delete-flushed-keys distinction; this causes the second step — no code path exists in which an entry survives flush into the next window, so the documented mechanism has no implementation; which traces to the root — the comment encodes an intended concurrency contract that was never realized in the chosen reset strategy. Each step is anchored to the same semantics-lens evidence, and the chain ends exactly at the observed documented-contract-vs-actual-behavior mismatch, with nothing unresolved beyond evidence."
+action_explanation: "The ledgered action menu offers two arms: either correct the comment to state actual behavior (everything pending at flush time is emitted and cleared; no carry-over path exists; flush is synchronous so no interleaving is possible), or implement the stated contract by snapshotting the digested entries and deleting only those keys, leaving later enqueues in pending. Problem framing classifies this fix_now with closure obligation must_close_before_next_stage, since contract truth gates any future async/await evolution of flush. Ordering matters: duplicate links rel-001/rel-002 tie this issue to issue-001 and issue-004 as the same root defect, and the logic stance recommends adjudicating issue-001/004/009 as one decision unit so the comment correction and the reset-strategy choice land once and consistently rather than as three divergent edits."
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-009"
+  - "problem-framing.yaml#issue-009"
+  - "deliberation-resolution.yaml#issue-009"
+  - "finding-ledger.yaml#finding-011"
+  - "issue-stance-matrix.yaml#stances.issue-009.logic"
+  - "issue-stance-matrix.yaml#stances.issue-009.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-009.semantics"

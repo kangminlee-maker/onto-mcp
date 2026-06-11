@@ -247,6 +247,83 @@ describe("resolveSettingsChain", () => {
       deliberation_max_retries: 5,
       synthesis_max_retries: 1,
       retry_initial_delay_ms: 250,
+      salvage: { enabled: false, delta_completion: "unit_llm" },
+    });
+  });
+
+  it("parses opt-in submit salvage settings with a transcription model", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      salvage: {
+        enabled: true,
+        transcription_llm: { model: "claude-haiku-4-5-20251001" },
+      },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry?.salvage).toEqual({
+      enabled: true,
+      transcription_llm: { model: "claude-haiku-4-5-20251001" },
+      delta_completion: "unit_llm",
+    });
+  });
+
+  it("keeps user-level salvage opt-in and numerics when a project layer sets partial retry", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const userSettings = v3ReviewSettings();
+    userSettings.review.execution.retry = {
+      lens_max_retries: 7,
+      salvage: {
+        enabled: true,
+        transcription_llm: { model: "claude-haiku-4-5-20251001" },
+      },
+    };
+    const projectSettings = v3ReviewSettings();
+    projectSettings.review.execution.retry = {
+      synthesis_max_retries: 1,
+    };
+    writeJson(userSettingsPath(), userSettings);
+    writeJson(projectSettingsPath(projectRoot), projectSettings);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    // A project layer that only sets one retry field must not clobber the
+    // inherited user-level opt-in (or the user-level numeric overrides) with
+    // per-layer defaults.
+    expect(settings.review?.execution?.retry).toEqual({
+      lens_max_retries: 7,
+      issue_artifact_max_retries: 2,
+      deliberation_max_retries: 2,
+      synthesis_max_retries: 1,
+      retry_initial_delay_ms: 3000,
+      salvage: {
+        enabled: true,
+        transcription_llm: { model: "claude-haiku-4-5-20251001" },
+        delta_completion: "unit_llm",
+      },
+    });
+  });
+
+  it("parses an openai-provider salvage transcription model (codex adapter)", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      salvage: {
+        enabled: true,
+        transcription_llm: { provider: "openai", model: "gpt-5.5-mini" },
+      },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry?.salvage).toEqual({
+      enabled: true,
+      transcription_llm: { provider: "openai", model: "gpt-5.5-mini" },
+      delta_completion: "unit_llm",
     });
   });
 
@@ -266,6 +343,7 @@ describe("resolveSettingsChain", () => {
       deliberation_max_retries: 2,
       synthesis_max_retries: 2,
       retry_initial_delay_ms: 3000,
+      salvage: { enabled: false, delta_completion: "unit_llm" },
     });
   });
 

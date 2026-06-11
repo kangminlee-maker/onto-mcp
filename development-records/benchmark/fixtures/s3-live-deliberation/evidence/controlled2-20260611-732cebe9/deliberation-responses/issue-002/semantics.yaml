@@ -1,0 +1,64 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+issue_id: "issue-002"
+lens_id: "semantics"
+difference_explanation: "Convergence is complete on facts, root, and action:
+  all three lenses accept that the flush comment's carry-over guarantee has
+  no realizing mechanism (the described check-to-reset interleave is
+  unreachable in synchronous JS, late items are emitted into the closing
+  digest and destroyed by the wholesale clear) and accept the bidirectional
+  fix. The single open point is severity: logic and coverage classify medium
+  on the ground that the harm path is reliance-mediated over an internally
+  coherent happy path, while this lens keeps high on the ground that the
+  sole written late-arrival boundary contract asserting the inverse of
+  observable behavior is a first-order contract-vs-behavior failure under
+  the declared review goals (correctness, maintainability, regression_risk)."
+response_to_other_positions: "Both peer positions re-weigh facts this lens
+  already weighed in SEM-2; neither introduces a new fact about meaning or
+  behavior. To logic's reliance-mediation argument: from the
+  contract-semantics standpoint, reliance on a written contract is not an
+  exotic contingency that discounts severity - it is the supported
+  maintainer and consumer path, the very function of a documented
+  guarantee. The issue's own failure_condition names 'any maintainer or
+  consumer decision premised on the documented carry-over' as in-scope
+  failure, so the reliance path is part of the declared purpose, not a
+  mitigation of it. A loss-safety guarantee that is false is materially
+  worse than no guarantee, because it actively licenses the unsafe decision
+  it claims to protect against. To coverage's calibration argument
+  (bounded below issue-001's cross-clock break): severity here classifies
+  failure against the declared review goals, not ordinal rank among sibling
+  issues; the existence of a more catastrophic issue does not reclassify an
+  inversion of the only written boundary contract. The one-line closability
+  point speaks to fix cost, not to present severity. Logic explicitly
+  concedes the contract-trust framing can justify high from this lens's
+  perspective, and no peer disputes any semantic fact, so this lens finds
+  no ground to lower; high stands."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "No window-membership attribution mechanism exists
+  anywhere in the bounded target - nothing snapshots or attributes window
+  membership at the close instant, enqueue records no per-item attribution
+  and consumes no enqueuedAt, and flush drains and clears pending wholesale
+  - so the carried-into-next-window claim is unimplementable from the state
+  the code keeps; implementing attribution or correcting the comment
+  resolves finding-002, finding-006, and finding-012. Shared-cause context
+  preserved: issue-004's unconsumed caller-filled enqueuedAt (dep-001)
+  explains why no trusted per-item time exists for attribution, and
+  issue-003's missing collect-vs-commit separation (dep-002) is the
+  wholesale-clear mechanism that destroys the promised carry-over items;
+  shared cause and shared mechanism respectively, with distinct roots."
+remaining_blocker: "The severity classification remains contested 2-vs-1
+  (logic and coverage at medium, semantics at high) after genuine
+  re-evaluation; the disagreement is a value-frame question - whether
+  inversion of the sole written late-arrival contract is failure of
+  declared purpose or reliance-mediated trust damage - and must be ruled by
+  the synthesizer. Root hypothesis and proposed action are fully agreed and
+  unblocked."
+evidence_refs:
+  - "issue-ledger.yaml#issue-002"
+  - "round1/semantics.md#sem-2"
+  - "round1/logic.md#finding-l2"
+  - "round1/coverage.md#f2"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-002.semantics"

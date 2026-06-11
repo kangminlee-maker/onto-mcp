@@ -1,0 +1,267 @@
+schema_version: 1
+session_id: 20260611-005b8e3a
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml — Borrower.internal_rating / RiskRating.grade
+      / Exposure.risk_grade
+    evidence_anchor: 'credit-risk-ontology.yaml: Borrower.internal_rating note("1~10
+      숫자 등급 체계"), RiskRating.grade note("매핑 테이블은 리스크팀 위키 참조"),
+      Exposure.risk_grade values [AAA..CCC], notes[0]("3개 스케일은 역사적 이유로 병존한다. 변환은
+      각 소비 시스템이 수행한다")'
+    claim: 등급 스케일 3종의 변환 권위가 온톨로지 밖(위키·각 소비 시스템)에 있어, 어느 한 스케일이 변경되면 기존 데이터와 규칙의
+      연속성이 시스템마다 다르게 깨진다.
+    what: 차주 등급이 internal_rating(1~10), RiskRating(R1~R5), risk_grade(AAA~CCC) 세
+      스케일로 병존하는데, 스케일 간 매핑이 온톨로지에 정의되지 않고 '리스크팀 위키'와 '각 소비 시스템'에 위임되어 있다.
+    why: "등급 체계 개편(예: R5를 R5/R6로 세분화, 내부등급 10→12단계 확장)은 신용리스크 모형에서 주기적으로 발생하는 변경이다.
+      매핑이 공유 권위 문서 밖에 있으므로 스케일 변경 시 각 소비 시스템이 독립적으로 변환 로직을 수정해야 하고, 수정 시점·해석이
+      어긋나면 동일 차주가 엔진과 보고서에서 다른 등급으로 나타난다. classification_rules[0]의 'risk_grade는
+      RiskRating.grade에서 도출' 규칙도 매핑 없이는 기계적으로 적용 불가능해, 이 문서가 표방하는 '공유 개념 권위' 역할이
+      스케일 변경 첫 회차에 무너진다."
+    how_to_fix: 세 스케일 중 하나를 정본(canonical) 등급으로 지정하고, 나머지 둘을 정본으로부터의 명시적 매핑 테이블(버전
+      포함)로 온톨로지 안에 정의한다. 매핑 테이블에 유효기간(valid_from/valid_to)을 두어 스케일 개정 시 기존 데이터의
+      재해석 경로를 보존한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서 역할(헤더 주석에 명시)
+      failure_condition: 세 스케일 중 어느 하나라도 개정되는 순간(등급 세분화·통합·기준 변경) 각 소비 시스템의 사적 변환 로직이 비동기적으로 갈라진다.
+      impact: 동일 차주의 등급이 엔진·보고서 간 불일치하게 되어 공유 기준으로서의 신뢰가 깨지고, 규제 보고 정합성 리스크가 발생한다.
+      evidence_refs:
+        - credit-risk-ontology.yaml notes[0]
+        - credit-risk-ontology.yaml RiskRating.grade.note
+        - credit-risk-ontology.yaml classification_rules[0]
+    causal_path:
+      root_cause_candidate: 등급 스케일 간 변환 권위를 온톨로지가 보유하지 않고 외부(위키)와 소비 시스템에 분산 위임한 설계 결정
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 스케일 변경 시 엔진과 보고서가 동일 차주에 대해 다른 등급을 산출할 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml notes[0]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 변환 로직이 각 소비 시스템에 사적으로 존재하므로 변경 반영 시점과 해석이 시스템별로 다를 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml notes[0] '변환은 각 소비 시스템이 수행한다'
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 온톨로지가 매핑 테이블을 정의하지 않고 위키 참조로 위임했기 때문에 변환의 공유 권위가 존재하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml RiskRating.grade.note
+      unresolved_beyond_evidence: 리스크팀 위키의 실제 매핑 테이블 내용과 갱신 프로세스는 본 경계 밖이라 확인 불가.
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml — Collateral 엔티티
+    evidence_anchor: "credit-risk-ontology.yaml: Collateral.is_a: Exposure,
+      relations[1] { from: Exposure, to: Collateral, kind: secured_by }"
+    claim: Collateral이 Exposure의 하위 타입(is_a)으로 선언되어 있어, 새 담보 유형·담보 공유 구조를 추가하려면 분류 축
+      자체를 재구축해야 한다.
+    what: 담보(자산)가 익스포저(신용 노출)의 is_a 하위 타입으로 모델링되어 있다. 동시에 relations에서는 Exposure가
+      Collateral에 secured_by로 연결되어, 같은 개념이 '익스포저의 일종'이면서 '익스포저를 담보하는 별개 자산'이라는 두
+      역할을 가진다.
+    why: is_a 선언에 따르면 Collateral은 amount, risk_grade, ltv, borrower_ref 등 Exposure의
+      모든 속성을 상속하는데, 이는 담보 자산의 의미와 맞지 않는다. 이 구조에서는 (1) 하나의 담보가 여러 익스포저를 공동 담보하는
+      흔한 확장(포괄담보·공동담보), (2) 차주와 무관한 제3자 담보, (3) 담보 유형 추가 시 익스포저 분류와의 독립적 진화가 모두
+      막힌다. 새 담보 시나리오를 수용하려면 is_a를 제거하고 상속된 속성 의미를 전부 재정의해야 하므로, 확장이 '추가'가 아니라
+      '기존 구조 수정'을 강제한다.
+    how_to_fix: "Collateral.is_a: Exposure를 삭제하고 Collateral을 독립 엔티티로 승격한다. 익스포저-담보
+      관계는 이미 존재하는 secured_by 관계만으로 표현하고, 다대다 확장이 필요하면 secured_by에 카디널리티를 명시한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 담보 평가의 기본 단위로서의 Collateral 정의와, 새 담보 구조를 수용할 수 있는 분류체계의 확장성
+      failure_condition: 공동담보·제3자담보 등 새 담보 구조를 추가하거나, 담보 속성을 익스포저와 독립적으로 진화시키려는 시점
+      impact: "타입 계층이 잘못 고정되어 있어 확장 시 상속 의미 전체를 깨는 마이그레이션이 필요하고, 그 전까지는 소비 시스템이
+        Collateral을 Exposure로 잘못 집계(예: ExposureAggregate가 담보를 익스포저 합산에 포함)할 위험이
+        있다."
+      evidence_refs:
+        - credit-risk-ontology.yaml Collateral.is_a
+        - credit-risk-ontology.yaml relations[1]
+        - credit-risk-ontology.yaml ExposureAggregate.definition '모든
+          Exposure.amount의 합'
+    causal_path:
+      root_cause_candidate: "'담보가 익스포저에 속한 데이터'라는 운영 화면 관점을 타입 계층(is_a)으로 잘못 승격한 모델링 결정"
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 새 담보 구조(공동담보 등) 추가 시 기존 타입 계층을 수정하지 않고는 표현이 불가능하다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml Collateral.is_a
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Collateral이 Exposure 속성을 상속하므로 담보의 독립적 의미(자산 평가 단위)와 충돌하고, 익스포저 집계 정의('모든
+            Exposure.amount의 합')에 담보가 포섭될 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml Collateral.is_a
+            - credit-risk-ontology.yaml ExposureAggregate.definition
+        - cause_id: evolution-candidate-002.cause-003
+          claim: is_a와 secured_by가 동일 쌍에 동시에 선언되어 분류 축(타입 계층)과 관계 축이 뒤섞인 것이 시작 원인이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml Collateral.is_a
+            - credit-risk-ontology.yaml relations[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: credit-risk-ontology.yaml — notes[1] (연체/부실 범위 제외) 및 Exposure.risk_grade
+      enum
+    evidence_anchor: 'credit-risk-ontology.yaml: notes[1] "연체/부실(default) 상태는 별도
+      시스템(연체관리)에서 다루므로 이 온톨로지의 범위 밖이다", Exposure.risk_grade values [AAA..CCC]'
+    claim: 부실(default) 상태를 범위 밖으로 선언하면서 등급 체계에 부실 단계(D 등급 등)를 위한 자리를 남기지 않아, 부실 개념을
+      통합하는 시점에 등급 enum과 분류 규칙의 재구축이 필요하다.
+    what: risk_grade는 CCC에서 끝나고 RiskRating은 R5에서 끝나며, 부실 상태로의 전이를 표현할 개념(상태, 등급,
+      관계)이 전혀 없다. 부실은 별도 시스템 소관으로만 선언되어 있다.
+    why: 여신 리스크 분류에서 정상→연체→부실 전이는 익스포저 등급·한도·충당금 계산의 핵심 입력이다. 리스크 엔진과 보고서가 이 온톨로지를
+      공유 기준으로 쓰는 한, 부실 익스포저를 어떻게 분류할지는 결국 이 분류체계로 들어올 수밖에 없다. 현재 enum이 닫혀
+      있고(default 단계 부재) 연체관리 시스템과의 개념 접점(상태 참조, 매핑 관계)도 정의되어 있지 않아, 통합 시 enum 값
+      추가가 아니라 등급 의미 체계와 classification_rules 전반의 수정이 필요하다. 이는 '범위 밖' 선언이 확장 경로
+      없이 이루어진 경우다.
+    how_to_fix: "범위 제외를 유지하더라도 접점을 미리 정의한다: Exposure에 default 여부(또는 연체관리 시스템의 상태 참조)
+      자리표시 속성을 두고, risk_grade/RiskRating enum에 부실 단계(D/R-default)를 예약하거나 'enum은
+      부실 단계 추가로 확장될 수 있다'는 확장 규약을 명시한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 여신 리스크 분류 기준으로서의 완결성과 향후 통합 수용성
+      failure_condition: 부실 익스포저를 보고서·엔진이 분류해야 하는 시점(규제 보고, 충당금 산출)에 연체관리 시스템과의 통합이 요구될 때
+      impact: 닫힌 enum과 접점 부재로 인해 통합이 단순 확장이 아닌 등급 체계 재정의가 되며, 그 동안 부실 익스포저는 두 시스템에서
+        비일관하게 분류된다.
+      evidence_refs:
+        - credit-risk-ontology.yaml notes[1]
+        - credit-risk-ontology.yaml Exposure.risk_grade.values
+        - credit-risk-ontology.yaml RiskRating.grade.values
+    causal_path:
+      root_cause_candidate: 부실 도메인을 범위 밖으로 선언하면서 통합 접점(상태 참조·등급 확장 규약)을 정의하지 않은 경계 설계
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 부실 상태 통합 시 등급 enum과 분류 규칙의 광범위한 수정이 필요하다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml Exposure.risk_grade.values
+        - cause_id: evolution-candidate-003.cause-002
+          claim: enum이 부실 단계 없이 닫혀 있고 연체관리 시스템과의 개념 매핑이 존재하지 않기 때문이다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml notes[1]
+            - credit-risk-ontology.yaml RiskRating.grade.values
+      unresolved_beyond_evidence: 연체관리 시스템이 자체 등급/상태 체계를 어떻게 정의하는지는 본 경계 밖이라 확인 불가.
+  - candidate_id: evolution-candidate-004
+    target: credit-risk-ontology.yaml — classification_rules[1] (통화 환산)
+    evidence_anchor: 'credit-risk-ontology.yaml: classification_rules[1] "통화가 다른 경우
+      환산은 각 시스템의 당일 환율 테이블을 사용한다", Limit.currency, Exposure.amount(통화 속성 없음)'
+    claim: 환율 권위를 '각 시스템의 당일 환율 테이블'로 분산해 두어, 새 시스템·새 통화가 추가될 때마다 한도 소진율 계산이 시스템 수만큼
+      갈라진다.
+    what: Limit에는 currency가 있지만 Exposure.amount에는 통화 속성이 없고, 통화 환산 기준은 단일 환율 권위가 아니라
+      각 소비 시스템의 자체 테이블에 위임되어 있다.
+    why: 공유 개념 문서가 계산 규칙(한도 소진율)을 정의하면서 그 입력(환율, 그리고 익스포저 통화 자체)을 시스템별 사적 자원에 위임하면,
+      동일 차주의 소진율이 시스템마다 다른 값이 되는 것이 규칙상 허용된다. 새 시스템이 통합되거나 새 통화 상품이 추가될 때마다 불일치
+      표면이 늘어나며, '어느 시스템 값이 맞는가'를 판정할 기준이 온톨로지 안에 없다. Exposure에 통화 속성이 없는 것은 다통화
+      익스포저라는 흔한 확장조차 현재 구조로 표현 불가능함을 뜻한다.
+    how_to_fix: "Exposure에 currency 속성을 추가하고, classification_rules[1]의 환산 기준을 단일
+      권위(예: '기준 환율 소스 X의 as_of 환율')로 교체한다. 시스템별 테이블 사용을 허용해야 한다면 기준 소스와의 허용 편차를
+      명시한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 한도 소진율이라는 공유 계산 규칙의 시스템 간 재현 가능성
+      failure_condition: 둘 이상의 시스템이 서로 다른 환율 테이블로 같은 차주의 소진율을 계산하는 모든 다통화 케이스, 그리고 새
+        통화/새 시스템 추가 시점
+      impact: 한도 위반 판정이 시스템에 따라 달라질 수 있어 한도 관리·RiskAppetite 판정의 공유 기준 역할이 약화된다.
+      evidence_refs:
+        - credit-risk-ontology.yaml classification_rules[1]
+        - credit-risk-ontology.yaml Limit.currency
+        - credit-risk-ontology.yaml Exposure.amount
+    causal_path:
+      root_cause_candidate: 환산 권위와 익스포저 통화 개념을 온톨로지 밖(각 시스템)에 남겨둔 채 계산 규칙만 공유한 설계
+      root_cause_step_id: evolution-candidate-004.cause-002
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 동일 차주의 한도 소진율이 시스템마다 다르게 계산될 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml classification_rules[1]
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 규칙이 환율 권위를 '각 시스템의 당일 환율 테이블'로 명시적으로 분산했고, Exposure에는 통화 속성조차 없어 환산 필요
+            여부도 판정할 수 없기 때문이다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml classification_rules[1]
+            - credit-risk-ontology.yaml Exposure attributes
+      unresolved_beyond_evidence: 각 시스템 환율 테이블의 실제 편차 크기는 본 경계 밖이라 확인 불가.
+  - candidate_id: evolution-candidate-005
+    target: credit-risk-ontology.yaml — segment/product_type/collateral_type 등 닫힌
+      enum과 버전 정책 부재
+    evidence_anchor: 'credit-risk-ontology.yaml: version "1.1", Borrower.segment
+      values [retail,sme,corporate], Exposure.product_type values
+      [term_loan,revolving,guarantee], Collateral.collateral_type values
+      [real_estate,deposit,securities]'
+    claim: 모든 분류 축이 닫힌 enum으로 선언되어 있고 enum 확장·폐기 시 기존 데이터 처리 규약이 없어, 새 상품·담보·세그먼트
+      추가가 매번 공유 문서 개정과 전 소비 시스템 동시 수정을 요구한다.
+    what: segment, product_type, collateral_type이 각각 3개 값의 닫힌 enum이며, version 필드만 있을
+      뿐 enum 값 추가 시의 하위 호환 규칙(미지 값 처리, deprecated 값 매핑)이 정의되어 있지 않다.
+    why: "여신 도메인에서 새 상품 유형(예: 프로젝트금융, 신디케이션)이나 새 담보 유형(보증서, 동산담보)의 추가는 통상적인 변경이다. 미지
+      enum 값에 대한 소비자 행동 규약이 없으면, enum에 값을 하나 추가하는 순간 구버전 스키마로 검증하는 시스템에서는 기존에
+      유효하던 파이프라인이 invalid input으로 실패하거나 데이터를 무단 폐기한다. 이는 review goal에 명시된
+      invalid_input_behavior 관점에서, 정상적 진화가 곧 입력 계약 위반이 되는 구조다."
+    how_to_fix: "enum 확장 규약을 notes 또는 별도 섹션에 추가한다: (1) 값 추가는 minor 버전 증가로 하위 호환, (2)
+      소비 시스템은 미지 값을 거부 대신 'unclassified'로 격리 처리, (3) 값 폐기는 deprecated 표시 후 매핑
+      제공. 필요 시 각 enum에 other 또는 확장 네임스페이스를 예약한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: "새 상품·담보·세그먼트를 수용하면서도 기존 소비 시스템의 입력 계약을 깨지 않는 진화 가능성(review
+        goal: scope_control, invalid_input_behavior)"
+      failure_condition: 어느 한 enum에 새 값이 추가되어 일부 소비 시스템만 갱신된 비대칭 배포 구간
+      impact: 공유 권위 문서의 개정이 곧 소비 시스템 장애 또는 데이터 무단 폐기로 이어질 수 있어, 문서 개정 자체가 기피되고 비공식
+        우회(자유 텍스트, 사이드 채널 분류)가 늘어난다.
+      evidence_refs:
+        - credit-risk-ontology.yaml Borrower.segment
+        - credit-risk-ontology.yaml Exposure.product_type
+        - credit-risk-ontology.yaml Collateral.collateral_type
+        - credit-risk-ontology.yaml version
+    causal_path:
+      root_cause_candidate: 버전 필드만 있고 버전 간 호환 규약(미지 값 처리, deprecated 매핑)이 없는 진화 정책 공백
+      root_cause_step_id: evolution-candidate-005.cause-002
+      steps:
+        - cause_id: evolution-candidate-005.cause-001
+          claim: enum 값 추가 시 미갱신 소비 시스템에서 기존에 유효하던 입력이 invalid로 처리될 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml Exposure.product_type
+        - cause_id: evolution-candidate-005.cause-002
+          claim: 닫힌 enum에 대해 미지 값 처리·폐기 매핑 규약이 어디에도 정의되어 있지 않기 때문이다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml version
+            - credit-risk-ontology.yaml notes
+      unresolved_beyond_evidence: 소비 시스템들의 실제 미지 enum 값 처리 동작은 본 경계 밖이라 확인 불가.
+  - candidate_id: evolution-candidate-006
+    target: credit-risk-ontology.yaml — ExposureAggregate.total_amount 및
+      Limit.approved_amount의 외부 시스템 결합 주석
+    evidence_anchor: 'credit-risk-ontology.yaml: ExposureAggregate.total_amount.note
+      "월말 배치로 계산해 저장. 일중 신규 여신은 다음 배치까지 미반영", Limit.approved_amount.note "영업점
+      CRM의 available_limit과 합산 관리"'
+    claim: 개념 정의에 특정 구현 주기(월말 배치)와 특정 외부 시스템(영업점 CRM)이 박혀 있어, 집계 주기 변경이나 CRM 교체 같은
+      인프라 변경이 곧 개념 권위 문서의 의미 변경이 된다.
+    what: ExposureAggregate의 정의는 '모든 Exposure.amount의 합'인데 속성 주석은 월말 배치 산출값으로 의미를
+      좁히고, Limit.approved_amount는 온톨로지 밖 CRM 필드와의 합산 관리를 전제한다.
+    why: 개념(차주 총익스포저)과 그 구현(월말 배치)이 한 속성에 묶여 있으면, 실시간 집계로 전환하는 순간 total_amount의 의미
+      자체가 바뀌어 이 문서를 기준으로 작성된 기존 규칙(한도 소진율, RiskAppetite 위반 판정)의 해석 연속성이 깨진다.
+      마찬가지로 CRM 교체·필드 개명 시 approved_amount의 관리 의미가 문서 개정 없이는 추적 불가능해진다. 외부 시스템
+      이름과 배치 주기는 개념 권위가 아니라 운영 문서에 속할 정보다.
+    how_to_fix: "total_amount에서 산출 주기를 분리해 as_of가 의미를 전담하게 하고(정의: 'as_of 시점 기준 합'),
+      배치 주기·CRM 합산 같은 운영 사실은 notes 또는 별도 운영 문서로 옮긴다."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 여신 도메인에서 등급 체계 개편, 신상품/신담보 유형 추가, 부실 상태 통합, 집계 실시간화는 통상적으로 발생하는 변경 시나리오라고
+    가정했다.
+  - 리스크 엔진과 보고서 시스템 외에 추가 소비 시스템이 향후 통합될 수 있다고 가정했다.
+validation:
+  unaddressable_candidates: []

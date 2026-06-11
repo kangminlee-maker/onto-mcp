@@ -1,0 +1,185 @@
+schema_version: 1
+session_id: 20260611-2aab4b7f
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-002
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: 세 등급 스케일의 의미·변환·권위가 온톨로지 내부에서 닫히지 않고 소비 시스템으로 위임되어 공유 등급 기준이 분기된다.
+    shared_cause: null
+    rationale: 두 finding 모두 Borrower.internal_rating, RiskRating.grade,
+      Exposure.risk_grade의 병존과 소비자별 변환 위임을 같은 핵심 결함으로 지적한다. axiology는 목적 정렬 실패를,
+      semantics는 등급 의미와 권위 미폐쇄를 강조하지만 실패 조건과 영향이 실질적으로 같은 등급 매핑 권위 부재에 수렴한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-002
+    to_finding_id: finding-005
+    relation: symptom_of
+    root_hypothesis: 병행 관리되는 핵심 값에 단일 권위·우선순위·버전 개념이 없다는 더 넓은 권위 결함이 등급 변환 위임으로 나타난다.
+    shared_cause: null
+    rationale: finding-005는 등급, 한도, 환율 전반의 복수 원천과 소비자별 해석을 포괄한다. finding-002는 그중 등급
+      스케일 변환이 각 소비 시스템으로 분산된 구체 사례이므로 더 넓은 권위 모델 부재의 증상으로 볼 수 있다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-010
+    to_finding_id: finding-005
+    relation: symptom_of
+    root_hypothesis: 복수 원천 값의 권위·버전·충돌 기준 부재가 환율 변환 영역에서는 시스템별 일일 FX 테이블 위임으로 나타난다.
+    shared_cause: null
+    rationale: finding-010은 통화 변환 권위가 각 시스템의 FX 테이블에 위임되어 재현성과 연속성이 깨지는 문제를 지적한다.
+      finding-005는 이 패턴을 등급·한도·환율 전체의 단일 권위 개념 부재로 일반화하므로 finding-010은 그 환율 특화
+      증상이다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-008
+    to_finding_id: finding-002
+    relation: same_root_candidate
+    root_hypothesis: 등급 스케일과 매핑을 온톨로지 내부의 버전 있는 권위 개념으로 모델링하지 않고 소비자별 변환에 맡긴 것이 현재
+      의미 불일치와 향후 진화 불연속을 동시에 만든다.
+    shared_cause: null
+    rationale: finding-002는 현재 3개 등급 스케일의 소비자별 변환 위임이 공유 분류 기준 목적을 훼손한다고 보고,
+      finding-008은 같은 구조가 등급 스케일 변경 시 버전 관리와 역사적 연속성을 깨뜨린다고 본다. 시간 축은 다르지만 공통
+      root는 내부 canonical mapping/version authority 부재다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-009
+    to_finding_id: finding-008
+    relation: same_root_candidate
+    root_hypothesis: 확장 가능한 분류 체계를 속성/enum 표면에 고정하고 별도 버전·수명주기·호환성 메타데이터를 두지 않은 것이
+      등급 매핑 진화와 일반 taxonomy 확장을 모두 어렵게 한다.
+    shared_cause: null
+    rationale: finding-008은 등급 스케일·매핑 변화가 외부 소비자 변경으로 전이되는 문제이고, finding-009는
+      segment/product/collateral/risk grade 같은 분류값 확장이 스키마 변경이 되는 문제다. 둘 다
+      governed vocabulary 또는 versioned taxonomy 개념 부재라는 공통 진화 결함을 공유한다.
+    confidence: medium
+  - relation_id: rel-006
+    from_finding_id: finding-018
+    to_finding_id: finding-014
+    relation: symptom_of
+    root_hypothesis: 등급 의미와 매핑 권위가 온톨로지 내부에 정의되지 않아 Exposure.risk_grade와
+      RiskRating.grade 사이의 구조적 계보 관계도 빠졌다.
+    shared_cause: null
+    rationale: finding-014는 세 등급 스케일의 의미 분리와 매핑 권위 미정의를 지적한다. finding-018은 그 결과 도출
+      규칙은 있으나 Exposure와 RiskRating을 직접 연결하는 관계가 없어 등급 계보가 그래프 안에서 닫히지 않는 구조적 표현
+      결함을 지적한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: 수동 개입이 등급/리스크 값을 바꿀 수 있는데 이를 권위 있는 이벤트와 감사 증거로 모델링하지 않아 권위와 추적성이 함께 약해진다.
+    shared_cause:
+      cause_claim: 보고서 팀 risk_grade 조정과 심사역 ltv 입력 같은 수동 행위를 값 변경 이벤트가 아니라 속성 값 또는 주석
+        수준으로 둔다.
+      from_cause_ref: finding-001.cause-004
+      to_cause_ref: finding-006.cause-003
+    rationale: finding-001은 수동 등급 조정의 권위·우선순위 부재로 공유 등급 기준이 분기된다고 보고, finding-006은
+      수동 입력·조정의 행위자·시각·근거·승인 증거 부재로 감사 추적성이 약해진다고 본다. 둘 다 수동 행위의 권위와 provenance를
+      닫지 않은 같은 모델링 결함에서 나온다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-001
+    to_finding_id: finding-004
+    relation: shared_cause_candidate
+    root_hypothesis: 등급이 파생·수동조정될 수 있는 시점 의존 값인데 현재 속성처럼 모델링되어 원천 권위와 과거 재현성이 모두 불안정하다.
+    shared_cause:
+      cause_claim: Exposure.risk_grade가 RiskRating.grade에서 도출되고 수동 조정될 수 있으나 조정 권위,
+        이력, 유효시점이 모델 안에 없다.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-004.cause-002
+    rationale: finding-001은 조정 권위와 우선순위 결여를 강조하고, finding-004는 등급 유효기간·산출시점·이력 부재로
+      과거 재구성이 불가능하다고 본다. risk_grade가 변경 가능한 파생/조정 값이라는 동일 원인 단계가 두 결함을 연결한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: same_root_candidate
+    root_hypothesis: 등급 값과 등급 매핑을 effective time/version이 있는 이력 개념으로 분리하지 않아 과거 등급
+      재현과 향후 등급 체계 변경 연속성이 모두 깨진다.
+    shared_cause: null
+    rationale: finding-004는 현재 등급 속성에 이력·유효기간이 없어 과거 기준일의 등급을 재구성할 수 없다고 한다.
+      finding-008은 등급 스케일과 매핑에 버전·유효일자가 없어 변화 시 역사적 해석이 분기된다고 한다. 둘은 등급 영역의
+      temporal/versioned authority 부재라는 같은 root를 공유한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-003
+    to_finding_id: finding-010
+    relation: shared_cause_candidate
+    root_hypothesis: 한도 소진율 계산에 쓰이는 통화 변환 기준을 공통 기준시각과 권위 있는 FX source/version으로 닫지
+      않아 시스템별·시점별 결과가 달라질 수 있다.
+    shared_cause:
+      cause_claim: 통화가 다른 경우 Limit 소진율 계산을 각 시스템의 당일 환율 테이블에 맡기며 적용 시각·소스·버전 권위가 없다.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-010.cause-002
+    rationale: finding-003은 월말 집계와 당일/시스템별 환율이 결합되어 시간 일관적 판단이 약해진다고 보고,
+      finding-010은 시스템별 FX 테이블 위임이 진화와 재현성을 깨뜨린다고 본다. 둘 모두 FX 변환 권위와 기준시각 미정의가
+      직접 원인이다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-012
+    to_finding_id: finding-003
+    relation: enables
+    root_hypothesis: ExposureAggregate.total_amount가 현재 총액과 배치 스냅샷을 동시에 의미하는 논리 충돌이
+      Limit/RiskAppetite 계산의 시간 기준 불일치를 가능하게 한다.
+    shared_cause: null
+    rationale: finding-012는 total_amount가 모든 Exposure.amount의 합이라는 invariant와 일중 신규
+      여신 미반영 배치값이라는 설명이 동시에 성립하지 않는다고 지적한다. finding-003은 바로 이 월말 배치/일중 미반영 값이 한도
+      소진율 및 RiskAppetite 판단에 쓰일 때 시간 일관성이 약해진다고 보므로, finding-012의 개념 충돌이
+      finding-003의 운영 판단 결함을 가능하게 한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-016
+    to_finding_id: finding-017
+    relation: same_root_candidate
+    root_hypothesis: RiskAppetite 준수 판정을 별도 assessment 관계/엔티티로 모델링하지 않아 정책 기준, 계산
+      결과, 적용 대상이 모두 닫히지 않는다.
+    shared_cause: null
+    rationale: finding-016은 RiskAppetite가 정책 threshold와 compliance_status라는 파생 판정을 한
+      개념에 섞는다고 보고, finding-017은 RiskAppetite가 relation 그래프에서 고아라 적용 대상
+      aggregate나 차주 범위를 구조적으로 찾을 수 없다고 본다. 둘 다 RiskAppetite 평가 결과를 대상·시점과 연결한 별도
+      개념으로 분리하지 않은 root를 공유한다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-003
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: ExposureAggregate 기반 위반/준수 판단이 as_of, 계산 기준, 산출 결과 개념으로 분리되지 않아
+      시간별 RiskAppetite 판단의 의미가 불명확하다.
+    shared_cause:
+      cause_claim: RiskAppetite 준수 여부가 ExposureAggregate 초과 여부로 정의되지만 aggregate는
+        월말/as_of 배치 산출값이어서 평가 시점과 계산 basis가 별도 결과로 닫혀야 한다.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-016.cause-003
+    rationale: finding-003은 월말 집계와 환율 기준이 섞여 RiskAppetite 준수 상태가 시점별로 달라질 수 있다고 보고,
+      finding-016은 compliance_status가 정책 개념 안에 섞여 특정 시점 산출 결과임을 구분하지 못한다고 본다. 공통
+      원인은 aggregate 기반 준수 판정의 기준시각과 평가 결과를 명시적으로 모델링하지 않은 것이다.
+    confidence: medium
+  - relation_id: rel-014
+    from_finding_id: finding-006
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: LTV가 수동 입력값으로 남아 있고 산정 근거·시각·원천값 연결이 없어 의미 검증과 감사 추적이 동시에 약해진다.
+    shared_cause:
+      cause_claim: Exposure.ltv는 비율 성격의 값인데 심사역 수동 입력으로 정의되며 계산식, 산정 시점, 근거 이벤트가 모델에 없다.
+      from_cause_ref: finding-006.cause-001
+      to_cause_ref: finding-015.cause-002
+    rationale: finding-006은 수동 ltv 입력의 행위자·시각·근거·승인 증거 부재를 감사 추적성 문제로 본다.
+      finding-015는 같은 ltv가 원천 금액에서 파생되어야 할 비율인데 독립 입력값이라 의미 드리프트가 난다고 본다. 둘 다 수동
+      LTV 값의 source/provenance/derivation 모델 부재를 공유한다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-013
+    to_finding_id: finding-015
+    relation: same_root_candidate
+    root_hypothesis: Exposure와 Collateral의 역할 경계 및 관계 의미가 충분히 분리되지 않아 담보 기반 파생 리스크
+      값의 의미가 불안정해진다.
+    shared_cause: null
+    rationale: finding-013은 Collateral을 Exposure 하위 유형으로 둬 담보 자산과 신용 익스포저의 타입 의미가
+      섞인다고 한다. finding-015는 Exposure.amount와 Collateral.appraised_value를 이용해야 할
+      ltv가 독립 입력값이라 원천 담보 선택과 계산 의미를 검증할 수 없다고 한다. 둘은 담보와 익스포저의 관계/역할을 명확히 닫지 못한
+      의미 모델링 결함으로 연결된다.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-007
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

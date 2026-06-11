@@ -1,0 +1,18 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+issue_id: "issue-008"
+lens_id: "semantics"
+difference_explanation: "Initial conflict (deliberation-plan conflict_type: action_or_severity): semantics (raising lens) kept severity HIGH on contract grounds, while logic's severity_position was insufficient_evidence — high seemed to rest on whether callers exercising the visible flush(now) signature literally with a non-system clock are a supported user group, the premise logic had marked upstream_evidence_required=true (finding-l2). Convergence point reached in live exchange: the premise is not an open empirical fact but a corollary of the signature-as-contract interpretation that logic had deferred to semantics — within a bounded code review the supported caller is defined by the published API surface, and the absence of a clock-domain restriction claim is itself the undocumented-meaning defect, not a missing premise. Logic discharged its abstention via E1 (in-session meaning authority: semantics' adjudication of the exported signature supplies the awaited upstream evidence from inside the session) and E3 (in-boundary verifiability formalization: no caller-controllable input assignment determines the window-close predicate because windowStartedAt binds to ambient Date.now() outside the API input space, so deterministic verification is impossible through the declared contract surface — sustaining material severity with zero caller-population assumptions). End-state: both lenses support, root hypothesis accepted as ledgered, severity HIGH."
+response_to_other_positions: "Semantics accepts logic's discharge path E1+E3 in full and adopts E3's formalization as shared ground (a strictly stronger statement of this lens's verifiability arm). E2 recording condition accepted without reservation — it records this lens's own offer: failure_condition is recorded contract-level as 'any caller honoring the visible signature contract with a non-system clock, incl. test clocks' (frozen/fake test clock, simulated or logical time), replacing the population claim 'a supported caller group' which bounded_partial closure with session_domain=none can never establish in-session. Alignment accepted per logic's recommendation (coverage concurring): since issue-003's ledger failure_condition is already contract-level, the issue-008 phrasing aligns to issue-003's existing format with the E2 wording retained as the substantive content. One decision unit reconfirmed: issue-003 and issue-008 resolve identically per duplicates rel-003 — both lenses support, severity HIGH, consistently across both issues. Both rebuttal slots expired unused; the exchange was declared CLOSED by delib-teamlead before this seat was written."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "Accepted as ledgered (unchanged): the time authority was split at the design point — enqueue independently stamps windowStartedAt from Date.now() while flush externalizes the clock as a caller parameter, and no contract text declares the required clock-domain identity."
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-008"
+  - "round1/semantics.md#semantics-1"
+  - "round1/logic.md#finding-l2"
+  - "finding-relation-graph.yaml#rel-003"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-008.semantics"

@@ -1,0 +1,175 @@
+schema_version: 1
+session_id: 20260611-33248d6d
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml entities.Assembly.attributes.bom_lines /
+      relations
+    evidence_anchor: "Embedded Materialized Input: Assembly.attributes.bom_lines
+      targets BomLine; relations include Assembly -> BomLine has_many and
+      BomLine -> Part references_child, but no relation from BomLine to
+      Assembly/parent_ref."
+    claim: BomLine.parent_ref의 상위 조립품 연결이 relations에 누락되어 BOM 줄의 양방향 구조가 닫히지 않습니다.
+    what: BomLine 엔티티는 parent_ref로 Assembly를 참조한다고 선언하지만, relations 목록에는 Assembly가
+      BomLine을 가진다는 관계와 BomLine이 child Part를 참조한다는 관계만 있고 BomLine에서 parent
+      Assembly로 가는 명시 관계가 없습니다.
+    why: 구조 lens 기준에서는 이미 선언된 구성요소 사이의 필수 연결 완결성이 핵심입니다. BOM 한 줄은 '상위 품목이 하위 품목을 얼마나
+      쓰는지'라는 정의와 parent_ref/child_ref 쌍으로 성립하는데, relations의 공식 관계 그래프에서는
+      child_ref만 BomLine -> Part로 닫혀 있고 parent_ref는 속성에만 남아 있습니다. PLM/MES 통합 기준
+      문서에서 관계 목록이 주요 구조 기준이라면 BOM 라인의 상위 추적, 부모별 BOM 전개, orphan BomLine 검출 기준이
+      약해집니다.
+    how_to_fix: "relations에 `{ from: BomLine, to: Assembly, kind: references_parent
+      }`를 추가하거나, Assembly -> BomLine 관계가 BomLine.parent_ref의 역관계임을 명시해
+      parent_ref가 관계 그래프에 포함되도록 정리하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 BOM 구조를 일관된 관계 그래프로 제공하는 목적
+      failure_condition: 관계 목록을 기준으로 BOM 연결성을 검증하거나 전개할 때 BomLine의 parent_ref 연결이 공식
+        관계 그래프에서 누락되는 경우
+      impact: 상위 Assembly 없는 BomLine 또는 부모-자식 BOM 경로의 구조 완결성 검증이 불완전해져 BOM 기준 문서의
+        actionability가 낮아집니다.
+      evidence_refs:
+        - "Embedded Materialized Input: BomLine.attributes.parent_ref targets
+          Assembly"
+        - "Embedded Materialized Input: BomLine.attributes.child_ref targets
+          Part"
+        - "Embedded Materialized Input: relations list includes Assembly ->
+          BomLine and BomLine -> Part, but not BomLine -> Assembly"
+    causal_path:
+      root_cause_candidate: relations 목록이 속성 ref 중 child_ref만 BomLine 발신 관계로 투영하고
+        parent_ref는 공식 관계로 투영하지 않은 비대칭 모델링
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: BomLine에는 parent_ref와 child_ref가 모두 구조적 ref 속성으로 선언되어 있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: BomLine.attributes.parent_ref"
+            - "Embedded Materialized Input: BomLine.attributes.child_ref"
+        - cause_id: structure-candidate-001.cause-002
+          claim: relations에는 child_ref에 대응하는 BomLine -> Part 관계는 있지만 parent_ref에 대응하는
+            BomLine -> Assembly 관계는 없습니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: relations: { from: BomLine, to:
+              Part, kind: references_child }"
+            - "Embedded Materialized Input: relations list"
+        - cause_id: structure-candidate-001.cause-003
+          claim: 그 결과 BOM 줄의 상위 조립품 연결은 관계 그래프에서 닫히지 않습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: BomLine.definition"
+            - "Embedded Materialized Input: Assembly.attributes.bom_lines"
+            - "Embedded Materialized Input: relations list"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml entities.AlternatePart / relations
+    evidence_anchor: "Embedded Materialized Input: AlternatePart has primary_ref and
+      alternate_ref to Part; relations only include Part -> Part alternate_of
+      with note 'AlternatePart를 통해 표현되는 관계의 단축 표기'."
+    claim: AlternatePart 엔티티가 관계 그래프에 직접 연결되지 않아 대체부품 관계의 구조적 기준이 우회 표기에 의존합니다.
+    what: AlternatePart는 primary_ref, alternate_ref, direction을 가진 독립 엔티티로 정의되어 있지만
+      relations에는 AlternatePart에서 Part로 가는 관계가 없고 Part -> Part alternate_of 단축
+      표기만 있습니다.
+    why: 이미 존재하는 엔티티가 어떤 관계에도 직접 참여하지 않으면 구조적으로 고아에 가깝습니다. 특히 direction 속성은
+      AlternatePart 엔티티에만 있는데 공식 relations는 Part -> Part alternate_of 단축 표기라서
+      direction을 가진 대체관계 레코드와 실제 Part 간 연결을 관계 그래프에서 검증하기 어렵습니다.
+    how_to_fix: "relations에 `{ from: AlternatePart, to: Part, kind: primary }` 및 `{
+      from: AlternatePart, to: Part, kind: alternate }` 같은 직접 관계를 추가하고, Part ->
+      Part alternate_of는 derived/shortcut 관계임을 명확히 구분하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 대체부품 구조를 검증 가능한 기준 관계로 제공하는 목적
+      failure_condition: 대체부품 마스터를 AlternatePart 레코드로 관리하거나 direction을 검증해야 하는 경우
+      impact: AlternatePart 레코드가 공식 관계 그래프에서 고아처럼 남아 대체부품의 유효성, 방향성, 참조 무결성 검증 기준이
+        약해집니다.
+      evidence_refs:
+        - "Embedded Materialized Input: AlternatePart.attributes.primary_ref"
+        - "Embedded Materialized Input: AlternatePart.attributes.alternate_ref"
+        - "Embedded Materialized Input: relations: Part -> Part alternate_of
+          note"
+    causal_path:
+      root_cause_candidate: AlternatePart를 엔티티로 정의하면서 relations에는 엔티티 관계가 아닌 Part 간 단축
+        관계만 둔 구조 투영 불일치
+      root_cause_step_id: structure-candidate-002.cause-004
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: AlternatePart는 두 Part 참조와 direction 속성을 가진 엔티티로 선언되어 있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: AlternatePart.attributes"
+        - cause_id: structure-candidate-002.cause-002
+          claim: relations 목록에는 AlternatePart가 from 또는 to로 등장하지 않습니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: relations list"
+        - cause_id: structure-candidate-002.cause-003
+          claim: 대신 Part -> Part alternate_of만 있으며 이 관계는 AlternatePart를 통한 단축 표기라고 설명됩니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: relations: Part -> Part alternate_of
+              note"
+        - cause_id: structure-candidate-002.cause-004
+          claim: 따라서 direction을 포함한 AlternatePart 구조 자체의 연결 무결성은 relations 기준으로 검증되지 않습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: AlternatePart.attributes.direction"
+            - "Embedded Materialized Input: relations list"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: manufacturing-bom-ontology.yaml entities.Part.current_eco / relations
+    evidence_anchor: "Embedded Materialized Input: Part.attributes.current_eco
+      targets ECO; relations include ECO -> Part changes, but no Part ->
+      ECO/current_eco relation."
+    claim: Part.current_eco 참조가 relations에 반영되지 않아 품목에서 최신 ECO로 가는 구조 경로가 누락되어 있습니다.
+    what: Part 엔티티는 current_eco 속성으로 ECO를 참조하지만, relations 목록에는 ECO가 Part를 변경한다는 방향만
+      있고 Part에서 ECO를 참조하는 관계는 없습니다.
+    why: 변경관리 연결은 ECO -> affected Parts와 Part -> current ECO라는 두 접근 경로가 모두 선언되어
+      있습니다. 그러나 공식 relations에는 ECO -> Part만 있어 Part.current_eco의 참조 무결성이나 최신 변경
+      추적 경로가 관계 그래프에서 닫히지 않습니다. 구조 관점에서는 선언된 ref 속성이 관계 구조에 빠진 누락입니다.
+    how_to_fix: "relations에 `{ from: Part, to: ECO, kind: current_change }`를 추가하거나
+      current_eco가 ECO -> Part changes에서 파생되는 역조회/캐시임을 명시해 관계 그래프와 속성 ref의 권위를
+      맞추십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목과 변경관리 개념을 PLM/MES 통합 기준에서 추적 가능한 구조로 연결하는 목적
+      failure_condition: 품목 기준으로 최신 ECO를 조회하거나 Part.current_eco의 참조 무결성을 검증하는 경우
+      impact: 품목에서 변경 지시로 가는 공식 경로가 누락되어 변경관리 연결성 검증과 통합 매핑의 신뢰가 낮아집니다.
+      evidence_refs:
+        - "Embedded Materialized Input: Part.attributes.current_eco targets ECO"
+        - "Embedded Materialized Input: ECO.attributes.affected_parts targets
+          Part"
+        - "Embedded Materialized Input: relations: ECO -> Part changes"
+    causal_path:
+      root_cause_candidate: Part.current_eco 속성 참조를 공식 relations 그래프에 투영하지 않은 변경관리 관계 누락
+      root_cause_step_id: structure-candidate-003.cause-003
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: Part.current_eco는 ECO를 target으로 하는 ref 속성입니다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Part.attributes.current_eco"
+        - cause_id: structure-candidate-003.cause-002
+          claim: relations에는 ECO -> Part changes만 있고 Part -> ECO 관계는 없습니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: relations list"
+            - "Embedded Materialized Input: relations: ECO -> Part changes"
+        - cause_id: structure-candidate-003.cause-003
+          claim: 따라서 품목에서 최신 ECO로 향하는 선언된 참조 경로가 관계 그래프에서 닫히지 않습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: Part.attributes.current_eco"
+            - "Embedded Materialized Input: relations list"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서 없이 prompt packet에 포함된 materialized input과
+    review target profile만 사용했습니다.
+  - relations 목록은 온톨로지의 공식 구조 그래프이며, ref 타입 속성은 구조적 연결로 검증 가능해야 한다고 보았습니다.
+validation:
+  unaddressable_candidates: []

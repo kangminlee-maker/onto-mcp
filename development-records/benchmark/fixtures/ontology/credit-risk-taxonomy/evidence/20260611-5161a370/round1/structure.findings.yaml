@@ -1,0 +1,78 @@
+schema_version: 1
+session_id: 20260611-5161a370
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml entities.RiskAppetite / relations
+    evidence_anchor: credit-risk-ontology.yaml:73-85, credit-risk-ontology.yaml:87-90
+    claim: RiskAppetite is structurally orphaned despite being used as a compliance
+      concept.
+    what: "`RiskAppetite` is defined as the threshold whose breach is determined by
+      `ExposureAggregate`, but the `relations` list contains no edge to or from
+      `RiskAppetite`. The only relation involving `ExposureAggregate` is
+      `ExposureAggregate -> Borrower`, so the compliance concept cannot be
+      reached from the exposure, borrower, limit, or aggregate graph."
+    why: "The ontology states that it is a shared concept authority for risk engine
+      and reporting, and `RiskAppetite` defines a compliance status based on
+      `ExposureAggregate` exceeding the appetite threshold. Because the required
+      structural connection is absent, consumers cannot determine from the
+      ontology which aggregate is evaluated against which appetite threshold or
+      traverse from borrower exposure totals to appetite compliance. This is a
+      structural completeness defect, not merely a naming issue: an entity that
+      participates in a stated rule has no graph relation supporting that rule."
+    how_to_fix: "Add an explicit relation connecting `ExposureAggregate` to
+      `RiskAppetite`, for example `{ from: ExposureAggregate, to: RiskAppetite,
+      kind: evaluated_against }` or `{ from: RiskAppetite, to:
+      ExposureAggregate, kind: applies_to }`, and define any required scope key
+      such as segment, borrower group, currency, or product if the appetite is
+      not global."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: A bounded ontology intended as the shared concept authority
+        for a risk engine and reporting system.
+      failure_condition: When a consumer needs to determine or report `RiskAppetite`
+        compliance from borrower-level exposure aggregates, the target graph has
+        no relation linking the compliance threshold concept to the aggregate it
+        evaluates.
+      impact: The risk engine and reporting system can implement different joins or
+        assumptions for appetite compliance because the ontology does not close
+        the stated compliance path in the target artifact.
+      evidence_refs:
+        - credit-risk-ontology.yaml:73-78
+        - credit-risk-ontology.yaml:80-85
+        - credit-risk-ontology.yaml:87-90
+    causal_path:
+      root_cause_candidate: The relations section omits a required edge for a
+        rule-bearing entity that is defined in terms of another entity.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: "`RiskAppetite` is defined through a comparison with `ExposureAggregate`
+            and owns the resulting `compliance_status`."
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:73-78
+        - cause_id: structure-candidate-001.cause-002
+          claim: The `relations` section lists five edges, none of which include
+            `RiskAppetite`.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:80-85
+        - cause_id: structure-candidate-001.cause-003
+          claim: The rule-bearing entity is therefore disconnected from the graph path
+            used to compute or report its stated compliance status.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:73-85
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific structure spec was used.
+  - The review used the embedded materialized target as authoritative input and
+    target line reads only for evidence anchoring.
+  - The structure lens is limited to connection completeness and graph
+    reachability, not broader domain coverage or relation-direction correctness.
+validation:
+  unaddressable_candidates: []

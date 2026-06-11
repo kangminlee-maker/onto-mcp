@@ -1,0 +1,218 @@
+schema_version: 1
+session_id: 20260611-5161a370
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-005
+    to_finding_id: finding-001
+    relation: causes
+    root_hypothesis: If manual risk-grade adjustment is modeled as a controlled
+      event with original value, actor, reason, timestamp, approval, and
+      source-rating reference, the reported authority conflict in
+      Exposure.risk_grade should be materially reduced.
+    shared_cause: null
+    rationale: finding-005 identifies the missing override evidence concept for
+      report-team manual adjustment, while finding-001 describes the resulting
+      authority failure when adjusted report values and engine-derived grades
+      are consumed through the same risk_grade authority field without lineage
+      or precedence.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: same_root_candidate
+    root_hypothesis: The shared root is that the three rating scales are not
+      governed by an ontology-owned, versioned mapping authority; instead,
+      conversion is delegated to external/wiki or consumer-system
+      implementations.
+    shared_cause: null
+    rationale: Both findings target the same rating-scale transformation gap.
+      finding-002 frames it as a shared-concept authority problem between
+      systems, while finding-008 frames the same defect as an evolution and
+      continuity risk when mappings or grade versions change.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-002
+    to_finding_id: finding-014
+    relation: same_root_candidate
+    root_hypothesis: The shared root is that rating concepts in the same semantic
+      family are not separated by scale, authority, derivation path, and
+      adjustment state inside the ontology.
+    shared_cause: null
+    rationale: finding-002 focuses on conversion responsibility being pushed to
+      consumers; finding-014 focuses on the resulting semantic instability of
+      internal_rating, grade, and risk_grade. Both depend on the same missing
+      internal distinction among rating scale, authority, and transformation
+      rules.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-002
+    to_finding_id: finding-006
+    relation: symptom_of
+    root_hypothesis: The rating-scale conversion issue is a concrete instance of the
+      broader missing source-of-authority and precedence model for parallel
+      values and transformations.
+    shared_cause: null
+    rationale: "finding-006 generalizes the authority gap across rating scales,
+      CRM/approval limits, and FX conversion. finding-002 is the rating-specific
+      manifestation: multiple grade scales exist, but canonical conversion
+      authority and versioning are absent."
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: Both findings should be mitigated if rating assignments and
+      grade mappings are modeled as versioned, effective-dated history concepts
+      rather than current attributes plus external conversion practice.
+    shared_cause:
+      cause_claim: Rating values and their transformations are time-dependent, but the
+        ontology lacks versioned assignment/mapping history that records which
+        grade or mapping applied at a given time.
+      from_cause_ref: finding-004.cause-003
+      to_cause_ref: finding-008.cause-004
+    rationale: finding-004 says past rating/report values cannot be reconstructed
+      because ratings and transformations are current-only. finding-008 says new
+      rating or mapping versions break continuity because the applied mapping
+      version is not closed inside the ontology.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-005
+    to_finding_id: finding-004
+    relation: enables
+    root_hypothesis: If manual adjustment events are not captured with actor,
+      timestamp, evidence, approval, and original value, the broader
+      rating-history reconstruction gap becomes harder to close.
+    shared_cause: null
+    rationale: "finding-005 is narrower: it identifies the missing evidence model
+      for manual risk-grade override. That missing event record enables the
+      broader failure in finding-004, where historical reported grades and
+      adjusted values cannot be reconstructed after grade or adjustment
+      changes."
+    confidence: medium
+  - relation_id: rel-007
+    from_finding_id: finding-010
+    to_finding_id: finding-008
+    relation: same_root_candidate
+    root_hypothesis: The shared root is treating evolving classification values as
+      inline fixed values rather than governed code or mapping concepts with
+      lifecycle, version, status, and replacement metadata.
+    shared_cause: null
+    rationale: finding-010 covers schema-level brittleness from closed enums for
+      expanding classification axes, including risk_grade. finding-008 covers
+      rating-scale continuity when grade mappings change. Both point to absent
+      lifecycle governance for classification values, though finding-008 is
+      rating-mapping specific.
+    confidence: medium
+  - relation_id: rel-008
+    from_finding_id: finding-006
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: The shared root is that calculation inputs for shared risk
+      metrics are distributed across systems without ontology-owned authority,
+      precedence, timestamp, and version concepts.
+    shared_cause: null
+    rationale: finding-006 identifies missing authority for parallel rating, limit,
+      and FX values. finding-009 focuses on the evolution impact for limit
+      utilization when FX tables, aggregation timing, and approved-limit sources
+      vary by system.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-003
+    to_finding_id: finding-015
+    relation: same_root_candidate
+    root_hypothesis: The shared root is that ExposureAggregate.total_amount is
+      modeled and named as a total/current basis while its actual value is a
+      month-end batch snapshot with no closed freshness or stale-value
+      semantics.
+    shared_cause: null
+    rationale: finding-003 describes the operational risk of using a stale month-end
+      aggregate for compliance decisions. finding-015 describes the semantic
+      naming and definition problem that makes the same stale snapshot look like
+      a current total exposure value.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: shared_cause_candidate
+    root_hypothesis: Both findings should be reduced if limit-utilization and
+      compliance calculations explicitly model aggregation time, inclusion
+      cutoff, FX authority, and calculation ownership.
+    shared_cause:
+      cause_claim: Limit utilization and compliance depend on ExposureAggregate, but
+        the ontology does not close the calculation basis for time, freshness,
+        and system-owned valuation inputs.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-009.cause-005
+    rationale: finding-003 focuses on stale exposure aggregates causing compliance
+      misclassification. finding-009 adds FX and multi-system limit-source
+      evolution risks, but both are rooted in under-specified calculation
+      authority for shared utilization/compliance metrics.
+    confidence: medium
+  - relation_id: rel-011
+    from_finding_id: finding-003
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: Both findings depend on the ontology stating RiskAppetite
+      compliance in terms of ExposureAggregate while failing to fully close that
+      compliance path as a governed graph/calculation contract.
+    shared_cause:
+      cause_claim: RiskAppetite compliance is defined through ExposureAggregate, but
+        the ontology leaves important closure work for that link outside the
+        explicit model.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-016.cause-001
+    rationale: finding-003 identifies missing temporal/freshness policy for the
+      aggregate used in compliance. finding-016 identifies the absent relation
+      edge connecting RiskAppetite to the aggregate. They are distinct defects
+      sharing the same under-modeled compliance dependency.
+    confidence: medium
+  - relation_id: rel-012
+    from_finding_id: finding-011
+    to_finding_id: finding-012
+    relation: duplicates
+    root_hypothesis: "Both findings identify the same modeling error: Collateral is
+      incorrectly declared as an Exposure subtype while also being the asset
+      that secures an Exposure through a separate relation."
+    shared_cause: null
+    rationale: "The logic and semantics lenses use different framing, but their
+      evidence, failure condition, and proposed action align: remove
+      Collateral.is_a Exposure and preserve the secured_by relation between
+      distinct concepts."
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-013
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: Both findings should be reduced by modeling derived financial
+      measures with explicit source inputs, formula, basis time, and refresh
+      semantics rather than ambiguous standalone values.
+    shared_cause:
+      cause_claim: A calculated risk measure is represented as an independent or
+        overbroad value without sufficient derivation and time-basis semantics.
+      from_cause_ref: finding-013.cause-004
+      to_cause_ref: finding-015.cause-002
+    rationale: finding-013 concerns LTV drifting from Exposure.amount and
+      Collateral.appraised_value because it is an independent input. finding-015
+      concerns total_amount being read as current total despite being a
+      month-end stored value. Both are semantic drift risks for derived
+      measures.
+    confidence: medium
+  - relation_id: rel-014
+    from_finding_id: finding-006
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: Both findings would be mitigated by explicit boundary authority
+      concepts for externally owned or parallel system values, including owner,
+      reference key, as-of/imported time, precedence, and freshness rules.
+    shared_cause:
+      cause_claim: The ontology leaves important multi-system or external-state
+        authority outside the model without enough reference, precedence, and
+        freshness metadata for shared interpretation.
+      from_cause_ref: finding-006.cause-003
+      to_cause_ref: finding-007.cause-003
+    rationale: finding-006 addresses parallel system values for ratings, limits, and
+      FX. finding-007 addresses default/delinquency state excluded to another
+      system without an external status reference contract. The domains differ,
+      but both are authority-boundary coverage gaps.
+    confidence: medium
+singleton_findings: []

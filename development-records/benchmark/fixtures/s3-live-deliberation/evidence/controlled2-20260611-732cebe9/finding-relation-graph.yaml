@@ -1,0 +1,58 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-005
+    relation: same_root_candidate
+    root_hypothesis: "Window-lifecycle time authority is split between an ambient Date.now() sample at enqueue (notification-batcher.ts:20) and a caller-injected now at flush (notification-batcher.ts:30-32), with no element of the bounded target declaring or enforcing that both values come from the same clock; designating a single time authority for the window concept would dissolve both findings."
+    shared_cause: null
+    rationale: "Both findings cite the same two code sites and the same undeclared same-clock constraint. finding-001 closes on split time authority across the two mutating entry points with no inter-clock identity constraint (finding-001.cause-003), and finding-005 closes on the absence of a single time-authority concept designating which parallel time source is authoritative (finding-005.cause-003). The logic lens reports it as inter-claim unsatisfiability of {C3, C4, C5, C6}; the coverage lens reports the identical defect as a missing-concept gap."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: "Window-lifecycle time authority is split between an ambient Date.now() sample at enqueue and a caller-injected now at flush, with no declared shared-clock contract anywhere on the type or doc surface; unifying the clock authority (single injected clock, or internal-only clock) would dissolve both findings."
+    shared_cause: null
+    rationale: "The semantics lens finds that flush(now) carries an implicit shared-clock promise that is nowhere declared - exactly the undeclared necessary constraint the logic lens derives to make {C3, C4, C5, C6} satisfiable. The terminal causes align nearly verbatim: finding-001.cause-003 (time authority split between enqueue and flush with no declared or enforced inter-clock identity constraint) and finding-011.cause-003 (time authority for the batch-window concept split between component and caller with no declared shared-clock contract). Same root defect, two lens framings."
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-002
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: "The flush comment's carry-over guarantee for late-enqueued notifications (notification-batcher.ts:37-38) has no realizing mechanism anywhere in the bounded target: nothing snapshots or attributes window membership, enqueue has no window-close-aware branch, and flush drains and clears pending wholesale; either implementing window-membership attribution or correcting the comment would resolve both findings."
+    shared_cause: null
+    rationale: "The logic lens proves C7 and C8 jointly unsatisfiable for every item present at flush time, and the coverage lens records the declared carry-over category as absent from the implementation space. Both chains terminate on the same unbuilt mechanism: finding-002.cause-003 (no mechanism snapshots window membership at the close instant) and finding-006.cause-003 (the carry-over concept declared by the comment has no realizing mechanism anywhere in the system), at the same evidence anchors (lines 34-40, 37-38/37-40)."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-002
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: "The flush comment asserts a carry-over contract the code cannot implement because no state attributes items to windows: the declared interleaving interval is unreachable in synchronous single-threaded JS, and items arriving in the real post-close pre-flush gap are emitted in the closing digest and destroyed; adding per-item window attribution or rewriting the comment would resolve both findings."
+    shared_cause: null
+    rationale: "The semantics lens reports the identical comment-vs-behavior inversion the logic lens proves as a contradiction: late items land in the closing digest, never the next window, and the literal intra-call reading is vacuous. Its terminal cause - enqueue records no per-item window attribution, so the state the code keeps makes the carried-into-next-window claim unimplementable (finding-012.cause-003) - is the same missing mechanism logic names as the absent window-membership snapshot at the close instant (finding-002.cause-003)."
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-012
+    to_finding_id: finding-013
+    relation: shared_cause_candidate
+    root_hypothesis: null
+    shared_cause:
+      cause_claim: "The batcher never stamps, validates, or reads any per-item enqueue timestamp - enqueuedAt is caller-filled and unconsumed - so no trustworthy per-item time exists on which window attribution could be built."
+      from_cause_ref: finding-012.cause-003
+      to_cause_ref: finding-013.cause-002
+    rationale: "finding-012's chain terminates on enqueue recording no per-item window attribution, explicitly including 'no enqueuedAt use' (finding-012.cause-003), and finding-013's chain passes through the batcher neither stamping nor reading the field (finding-013.cause-002). The same non-consumption of per-item enqueue time both makes the comment's carry-over partition unimplementable (012) and leaves the documented field meaning unenforced and free to drift (013). The roots remain distinct - missing window-attribution state versus a component-derived value modeled as caller input - so this is a shared cause, not a common root."
+    confidence: medium
+  - relation_id: rel-006
+    from_finding_id: finding-002
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: null
+    shared_cause:
+      cause_claim: "flush emits the entire pending map and erases all of it unconditionally in the same synchronous step (clear() plus windowStartedAt reset), so no pending state survives the call."
+      from_cause_ref: finding-002.cause-002
+      to_cause_ref: finding-007.cause-002
+    rationale: "The unconditional wholesale erase inside flush is a mid-chain cause in both findings: it destroys late-enqueued items the comment promises to carry into the next window (finding-002.cause-002) and it forecloses any reconstruction or redelivery after a downstream delivery failure (finding-007.cause-002). The roots differ - absence of a window-membership snapshot at the close instant versus absence of a collect-vs-commit separation concept - so the findings share a mechanism, not a root."
+    confidence: medium
+singleton_findings: []

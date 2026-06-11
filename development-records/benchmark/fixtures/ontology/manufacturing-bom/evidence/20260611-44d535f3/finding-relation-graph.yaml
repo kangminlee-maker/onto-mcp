@@ -1,0 +1,110 @@
+schema_version: 1
+session_id: 20260611-44d535f3
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: 변경 적용성을 독립된 effectivity/version 개념으로 모델링하지 않고
+      ECO.effective_date와 현재 rev 값에 묶어 둔 것이 BOM·Routing 이력 누락과 ECO 확장성 부족을 함께
+      만든다.
+    shared_cause: null
+    rationale: finding-001은 ECO 이후 어떤 BOM·Routing 버전이 유효한지 닫히지 않는다고 보고, finding-007은
+      ECO 적용성이 단일 날짜와 Part.rev 동기화 규칙에 내장되어 날짜 외 적용 기준이나 BOM/Routing 동시 변경을 확장하기
+      어렵다고 본다. 둘 다 변경 적용 결과를 별도 유효성/버전 객체로 해소하지 못한 같은 설계 결함을 가리킨다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-007
+    to_finding_id: finding-010
+    relation: enables
+    root_hypothesis: Part.rev가 도면 리비전과 생산 적용 리비전을 겸하면 ECO 적용 판단이 Part.rev 동기화 상태에 의존하게 된다.
+    shared_cause: null
+    rationale: finding-010의 원인은 Part.rev 단일 속성이 도면 문서 리비전과 생산 적용 리비전을 함께 의미한다는 점이다.
+      이 혼동은 finding-007에서 지적한 ECO.effective_date 이후 신규 rev 적용 판단과 주간 배치 동기화 지연
+      문제가 발생할 수 있는 의미적 전제 조건이 된다.
+    confidence: medium
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-002
+    relation: shared_cause_candidate
+    root_hypothesis: PLM 기준정보와 MES 실행 인스턴스 사이에 release/effectivity snapshot 개념이 없어서
+      기준 버전 이력과 생산오더 고정 기준이 함께 비어 있다.
+    shared_cause:
+      cause_claim: 기준정보 마스터는 존재하지만 생산 실행 시점에 선택된 BOM·Routing·Part revision을 고정하는 실행
+        snapshot/production order 개념이 없다.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-002.cause-002
+    rationale: finding-001은 ECO가 어떤 BOM·Routing 버전을 생성·종료하는지 연결되지 않는다고 하고,
+      finding-002는 생산오더 엔티티가 없어 어떤 기준 BOM·Routing으로 오더가 생성되었는지 추적할 수 없다고 한다. 둘은
+      변경 기준이 MES 실행 단위에 고정되는 개념 부재를 공유한다.
+    confidence: medium
+  - relation_id: rel-004
+    from_finding_id: finding-003
+    to_finding_id: finding-005
+    relation: shared_cause_candidate
+    root_hypothesis: 외부 원본에서 복사·수동 반영되는 운영 값을 감사 가능한 이벤트/출처/유효기간 개념으로 승격하지 않아 증거
+      추적성과 변경 연속성이 함께 약해진다.
+    shared_cause:
+      cause_claim: 복사·수동·대사 행위를 값 속성으로만 남기고 source, actor, timestamp,
+        version/effectivity를 갖는 감사 이벤트나 정책 개념으로 모델링하지 않았다.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-005.cause-002
+    rationale: finding-003은 Part.rev 동기화, scrap_rate 복사, 표준원가 수기 입력/대사 행위의 감사 증거가
+      없다고 보고, finding-005는 scrap_rate가 외부 엑셀 복사값으로 BomLine에 고정되어
+      원본·적용범위·유효기간·버전을 표현하지 못한다고 본다. 특히 scrap_rate 복사값 문제에서 원인이 직접 겹친다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-005
+    to_finding_id: finding-012
+    relation: duplicates
+    root_hypothesis: BomLine.scrap_rate를 공정/계획 파라미터가 아니라 BOM 라인의 단일 복사 속성으로 둔 것이
+      확장성과 의미 경계 문제를 동시에 만든다.
+    shared_cause: null
+    rationale: finding-005와 finding-012는 모두 BomLine.scrap_rate가 생산계획팀 엑셀 복사값이며 원천
+      공정, 적용 범위, 기준 기간, authority 없이 BOM 라인 독립 속성으로 놓인 점을 문제 삼는다. 차이는 evolution은
+      변경 연속성, semantics는 의미 경계와 원천 혼동을 강조한다는 정도다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-004
+    to_finding_id: finding-006
+    relation: duplicates
+    root_hypothesis: WorkCenter.capacity_per_shift가 숫자만 갖고 단위/기준을 분리하지 않아 작업장별 능력
+      해석과 통합 확장이 불안정하다.
+    shared_cause: null
+    rationale: finding-004는 단위 환산과 capacity 단위 기준 마스터 누락을 지적하며
+      WorkCenter.capacity_per_shift의 단위가 작업장마다 다르다는 점을 포함한다. finding-006도 같은 속성이
+      number이고 단위가 개수 또는 시간으로 다르다는 점 때문에 작업장 유형 확장과 MES/APS 통합에서 충돌한다고 본다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-006
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: 작업장 능력이라는 하나의 속성에 처리량 capacity와 시간 capacity를 구분 없이 담아 단위 의미 충돌이 생긴다.
+    shared_cause: null
+    rationale: finding-006과 finding-013은 모두 WorkCenter.capacity_per_shift가 number이고
+      작업장마다 개수 또는 시간 단위가 될 수 있다는 동일 증거를 근거로 한다. evolution 관점은 확장성, semantics 관점은
+      동음이의적 의미 혼합을 강조하지만 실질 결함은 같다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-009
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: AlternatePart의 방향성 있는 관계 객체를 canonical relation graph에 명시하지 않고
+      Part-to-Part shortcut으로 축약한 것이 방향 의미 모순과 구조적 단절을 함께 만든다.
+    shared_cause:
+      cause_claim: AlternatePart가 primary_ref, alternate_ref, direction을 담지만 relations
+        목록은 이를 표면화하지 않고 Part -> Part alternate_of 단축 관계만 둔다.
+      from_cause_ref: finding-009.cause-003
+      to_cause_ref: finding-014.cause-002
+    rationale: finding-009는 alternate_of 단축 관계가 direction 의미를 드러내지 않아
+      one_way/bidirectional 의미가 모호해진다고 보고, finding-014는 같은 단축 관계 때문에
+      AlternatePart 엔티티가 relation graph에서 단절된다고 본다. 구조적 shortcut이 의미와 탐색 가능성 양쪽
+      문제의 공유 원인이다.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-008
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-011
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

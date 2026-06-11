@@ -1,0 +1,217 @@
+schema_version: 1
+session_id: 20260611-087267ec
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-005
+    relation: symptom_of
+    root_hypothesis: If the ontology lacks an internal authority model for
+      distributed and derived values, rating conversion and reporting override
+      authority will be delegated to consuming systems instead of governed by
+      the shared ontology.
+    shared_cause: null
+    rationale: "finding-005 states the broader missing source-authority concept for
+      values spread across systems and reference tables. finding-001 is a
+      concrete rating-specific manifestation: three rating scales, external
+      mapping, and reporting adjustment can diverge while still appearing
+      ontology-compliant."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-002
+    to_finding_id: finding-005
+    relation: symptom_of
+    root_hypothesis: If source, precedence, and version authority are not modeled
+      for distributed reference data, limit utilization will fragment across
+      system-local exposure and FX bases.
+    shared_cause: null
+    rationale: finding-002 describes temporal and FX valuation fragmentation for
+      utilization. finding-005 generalizes the same authority gap across
+      parallel/derived values, including each system's FX table and distributed
+      limit/rating interpretation.
+    confidence: medium
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: The ontology fails to separate rating concepts by target unit,
+      scale, derivation authority, and override authority, causing both semantic
+      ambiguity and delegated classification authority.
+    shared_cause: null
+    rationale: "finding-001 focuses on the governance consequence of
+      consumer-managed rating conversion and overrides. finding-013 identifies
+      the semantic root: Borrower.internal_rating, RiskRating.grade, and
+      Exposure.risk_grade look like related grades but their scales and
+      authorities are not modeled as distinct governed concepts."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: Grade mapping authority is externalized and unversioned, so
+      consumers rather than the ontology determine how engine ratings, reporting
+      ratings, and legacy scales remain authoritative over time.
+    shared_cause: null
+    rationale: "finding-001 and finding-007 both rely on the same rating-scale
+      evidence: external wiki mapping, consumer-side conversions, and reporting
+      manual adjustment. finding-001 frames the current authority failure;
+      finding-007 frames the evolution and historical-continuity failure."
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-003
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: Rating values and mappings are modeled as current attributes
+      rather than effective-dated assignment and mapping-version concepts,
+      preventing authoritative reconstruction across time.
+    shared_cause: null
+    rationale: finding-003 identifies the missing effective-period/history model for
+      ratings. finding-007 identifies the missing versioned grade-scale mapping
+      model. Both point to the same temporal authority gap for rating
+      assignments and conversion rules.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-016
+    to_finding_id: finding-001
+    relation: symptom_of
+    root_hypothesis: If rating authority is delegated to text, external mappings,
+      and consumer logic, the graph will omit a bounded derivation dependency
+      from RiskRating.grade to Exposure.risk_grade.
+    shared_cause: null
+    rationale: "finding-016 is the structural graph symptom of the broader authority
+      problem in finding-001: the ontology says Exposure.risk_grade is derived
+      from RiskRating.grade, but no relation or governed mapping path makes that
+      derivation authoritative."
+    confidence: medium
+  - relation_id: rel-007
+    from_finding_id: finding-004
+    to_finding_id: finding-001
+    relation: shared_cause_candidate
+    root_hypothesis: Reporting-grade overrides are permitted as value changes
+      without being promoted to governed control events, weakening both rating
+      authority and audit evidence.
+    shared_cause:
+      cause_claim: Exposure.risk_grade can be manually adjusted by the reporting team,
+        but the ontology does not model the adjustment as a controlled event
+        with actor, reason, provenance, source value, adjusted value, and
+        precedence.
+      from_cause_ref: finding-004.cause-001
+      to_cause_ref: finding-001.cause-003
+    rationale: finding-001 treats manual reporting adjustment as part of the
+      ungoverned rating authority problem. finding-004 treats the same
+      adjustment pattern as a missing audit/control-action concept. The shared
+      cause is the unmodeled override event behind the final risk_grade value.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-002
+    to_finding_id: finding-009
+    relation: shared_cause_candidate
+    root_hypothesis: Cross-currency utilization lacks a canonical FX source,
+      version, and as-of policy, so system-local FX tables can produce
+      non-reproducible utilization histories.
+    shared_cause:
+      cause_claim: Cross-currency limit utilization delegates exchange-rate selection
+        to each system's daily FX table instead of a governed, versioned FX
+        authority with rate timestamp and policy.
+      from_cause_ref: finding-002.cause-003
+      to_cause_ref: finding-009.cause-002
+    rationale: finding-002 identifies fragmented valuation authority for limit
+      utilization. finding-009 is the evolution-specific consequence for FX
+      table changes and time-series continuity. Both depend on the same
+      system-local FX delegation.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-002
+    to_finding_id: finding-010
+    relation: shared_cause_candidate
+    root_hypothesis: ExposureAggregate is not cleanly scoped as either a complete
+      current sum or a batch snapshot with freshness metadata, so utilization
+      consumers can read the same field under incompatible temporal contracts.
+    shared_cause:
+      cause_claim: ExposureAggregate.total_amount is tied to all Exposure.amount while
+        also being persisted as a month-end batch value that omits intraday
+        lending until the next batch.
+      from_cause_ref: finding-002.cause-002
+      to_cause_ref: finding-010.cause-002
+    rationale: finding-002 frames the stale aggregate as a temporal authority
+      problem for utilization. finding-010 frames it as a logical
+      incompatibility in the total_amount contract. The common cause is the same
+      unsplit aggregate/snapshot definition.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-015
+    to_finding_id: finding-014
+    relation: symptom_of
+    root_hypothesis: If appetite compliance is not modeled as a separate assessment
+      linking RiskAppetite, ExposureAggregate, borrower/context, and as_of, the
+      relation graph will leave RiskAppetite unreachable from the aggregate it
+      evaluates.
+    shared_cause: null
+    rationale: "finding-014 identifies the semantic modeling error: RiskAppetite
+      mixes threshold and compliance result. finding-015 is the structural
+      symptom: no relation connects RiskAppetite to ExposureAggregate even
+      though compliance depends on that comparison."
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-008
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: Business classifications that change over time are represented
+      as fixed or external value lists rather than versioned code-set or mapping
+      concepts with effective periods and continuity rules.
+    shared_cause: null
+    rationale: finding-008 concerns fixed enums for product, collateral, and segment
+      categories. finding-007 concerns unversioned rating-scale mappings. Both
+      are reference-data evolution failures caused by not modeling mutable
+      classification schemes as versioned authoritative concepts.
+    confidence: medium
+  - relation_id: rel-012
+    from_finding_id: finding-004
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: Reviewer-entered risk values are modeled as final attributes
+      rather than as controlled input or override events distinct from derived
+      metrics.
+    shared_cause:
+      cause_claim: Manual assessment input is allowed for LTV-like values, but the
+        ontology does not separate the entered value, its actor/evidence, and
+        any derived ratio authority.
+      from_cause_ref: finding-004.cause-001
+      to_cause_ref: finding-012.cause-002
+    rationale: finding-004 flags missing audit evidence for manual inputs and
+      adjustments, including LTV input. finding-012 flags that ltv is a
+      ratio-like concept but modeled as an examiner-entered number. The common
+      cause is treating manual input as the authoritative metric without a
+      control-event layer.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-011
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: The ontology does not cleanly separate exposure, collateral
+      asset/valuation, and derived secured-lending metrics, causing both type
+      inheritance confusion and LTV authority ambiguity.
+    shared_cause: null
+    rationale: finding-011 shows Collateral incorrectly inherits Exposure semantics
+      while also being a secured_by target. finding-012 depends on the proper
+      distinction between Exposure.amount and Collateral.appraised_value for an
+      LTV-like ratio. Both arise from blurred exposure-collateral modeling
+      boundaries.
+    confidence: medium
+  - relation_id: rel-014
+    from_finding_id: finding-002
+    to_finding_id: finding-014
+    relation: same_root_candidate
+    root_hypothesis: Utilization and appetite breach status lack an explicit
+      assessment context that binds aggregate value, threshold, valuation basis,
+      and as-of time into one authoritative calculation event.
+    shared_cause: null
+    rationale: finding-002 shows utilization/breach conclusions can drift because
+      aggregate freshness and FX valuation context are not canonical.
+      finding-014 shows compliance_status is stored on RiskAppetite rather than
+      as a contextual assessment result. Both weaken the same operational
+      control path for appetite compliance.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-006
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

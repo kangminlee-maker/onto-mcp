@@ -1,0 +1,516 @@
+schema_version: 1
+session_id: 20260611-284c5e2e
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 단일 원본 권위 지정을 온톨로지 책임으로 보지 않은 설계 입장이 등급 매핑(위키)·환율(시스템별 당일
+      테이블)·한도(CRM) 세 지점의 권위 분산을 만들어, 두 소비 시스템이 같은 차주에 대해 다른 소진율·등급을 산출해도 어느 값이
+      권위인지 판정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 6개 lens 전원이 수용한 공유 root이며 issue-014/024/019 등 다수 표면 결함의 발생 지점이다. 권위
+      분산이라는 설계 입장 자체는 세 증거 지점에서 귀납된 추론(root_confidence medium)이므로 inferred. 공유
+      개념 권위 문서라는 선언 목적의 핵심(시스템 간 단일 의미)이 현재 상태에서 깨져 있어 high·current_blocker이고,
+      매핑·환율·한도 권위의 온톨로지 1급 편입은 대상 문서 안에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-019
+      - finding-013
+      - finding-003
+      - finding-037
+  - issue_id: issue-002
+    problem_definition: ExposureAggregate 정의는 시점 무한정 보편 집계('모든 Exposure.amount의
+      합')인데 산출은 월말 배치 스냅숏이어서, 일중 신규 여신 미반영 구간 동안 정의와 실제 값이 모순되고 리스크 성향 한도 통제가 최대
+      한 달 지연된 사후 보고로 격하된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 정의문(:65)과 운영 주석(:70)의 양상 불일치가 문서 내부 증거만으로 직접 확인된 형식
+      모순(root_confidence high)이므로 observed. compliance_status가 사실과 다른 값을 갖는 구간이
+      구조적으로 존재해 정확성 손상이 핵심이다. as_of 한정과 신선도 계약 명시는 정의 한 곳의 수정으로 대상 내에서 닫을 수 있고
+      high이므로 fix_now·must_close_in_target.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-027
+  - issue_id: issue-003
+    problem_definition: 조직 경계(연체관리 시스템 소유권)를 개념 경계로 오인해 default 하위 도메인을 정당화 없이 범위
+      제외한 boundary 결정으로, 두 소비 시스템 모두가 분류·보고해야 하는 부실 세그먼트 전체에 공유 의미가 부재하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 범위 제외 선언(notes[1])이 문서에 직접 존재하고, deliberation에서 치유 비용은 격하 사유가 아니라는
+      판단으로 high 확정·issue-007과 단일 클러스터화되었다. 이 issue가 boundary 결정이라는 뿌리와 정본
+      치유안(DefaultStatus 외부 권위 참조 개념 + 관계 정의)을 보유하므로 root_cause이며, 경계 개념 선언은 대상
+      문서에서 닫혀야 한다. review_goal의 scope_control 축에 직결된다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-004
+    problem_definition: Limit.approved_amount의 '영업점 CRM available_limit과 합산 관리' 서술이
+      무정의로 남아 한도 개념의 권위 경계가 불완전하다(비고 수준, 핵심 규칙 미참조).
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: issue-001이 명명한 권위 미지정 설계 입장의 한도 지점 표면이다(finding-013의 세 지점 중 하나).
+      note가 문서에 직접 존재하므로 observed이나 material failure condition이 경계 증거로 제시되지 않은
+      low이므로 비물질 개선 항목으로 이월한다. 참조 개념 선언 또는 note 제거는 issue-026/031과 같은 note를 다루므로
+      묶어서 후속 처리하는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-005
+    problem_definition: 파생 가능한 비율(ltv)을 심사 시점 수동 입력으로 권위화하면서 담보 재평가 규칙과의 시간 정렬 비용을
+      문서에 명시하지 않은 조용한 트레이드오프(axiology 고유의 좁은 프레임).
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 결함의 의미 본체는 issue-023(high)이 보유하고 이 issue는 '트레이드오프 비용 미명시'라는 좁은 가치
+      프레임만 담당한다(low 유지가 결의로 확정). ltv 파생 속성 재정의가 issue-020/023 수정 계열로 진행되면 함께
+      소멸하므로 별도 수정 없이 기록 유지가 적절하고, 닫힘은 그 수정 계열에 동반될 수 있다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-006
+    problem_definition: 리뷰 실행 경계 내에 canonical authority 파일(core-lexicon,
+      principles)이 없어 조직 수준 원칙 인용이 필요한 판단들이 insufficient access로 남은 증거 경계 관찰 —
+      대상 결함 주장이 아니다.
+    issue_role: evidence_gap
+    judgment_state: outside_boundary
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: needs_evidence
+    closure_obligation: out_of_scope
+    domain_axes: {}
+    rationale: 대상 온톨로지의 결함이 아니라 리뷰 실행 경계의 증거 가용성 기록(info)이다. 필요한 증거가 경계 밖에 있으므로
+      outside_boundary·needs_evidence이며, 해소는 대상 수정이 아니라 향후 리뷰 경계에 authority 파일을
+      materialize하는 실행 준비 변경이므로 본 대상 기준 out_of_scope다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: default/연체 하위 영역 전체 제외로 등급 스케일이 부실 인접 값(CCC, R5)을 포함함에도 부실
+      구간의 등급·익스포저 분류에 공유 의미가 정의되지 않아, 두 시스템이 다른 수치를 산출해도 온톨로지로 판정할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-003과 동일 결함의 coverage 측 표면으로 단일 클러스터·단일 high 심각도가 결의되었고, 정본 치유안은
+      issue-003이 보유하므로 본 row는 그 결과 결손(부실 세그먼트 커버리지 부재)을 분류한다. notes[1]과 enum 값
+      공간에서 직접 확인되는 observed 결손이며, 경계 개념 추가로 대상 내에서 함께 닫힌다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-008
+    problem_definition: risk_grade 수동 조정이 규칙 산문으로만 허용되고 행위자·시각·근거를 기록할 일급 사건
+      개념(GradeOverride)이 없어 조정이 흔적 없이 일어나며, 도출 규칙 위반과 정당한 조정을 구분할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: classification_rules[0]의 조정 허용과 entities 목록의 증거 개념 부재가 문서에서 직접
+      확인된다(root_confidence high). 이중 권위 문제(issue-017)와 구분되는 별도 뿌리로 유지가 결의되었고,
+      우선순위 규칙이 추가되어도 감사 증거 부재는 잔존하므로 root_cause다. 등급 데이터의 출처 신뢰·감사 가능성이라는 거버넌스
+      가치가 익스포저 단위로 무너지는 high이므로 대상 내 필수 닫힘이다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-009
+    problem_definition: 통화 차원이 Limit에만 부분 도입되고
+      Exposure.amount·ExposureAggregate.total_amount에는 없어,
+      classification_rules[1]의 '통화가 다른 경우' 조건 자체를 문서 내부에서 판정할 수 없다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 관계 그래프상 finding-029를 enable하는 결손(rel-019)으로, 환산 권위 결함(issue-001/019)이
+      작동하기 위한 더 깊은 전제를 제공하므로 enabler가 정확하다. 속성 부재는 문서에서 직접 관찰된다. medium 물질 결함으로
+      통화 차원 일관 도입은 issue-019/030의 피연산자 형식화와 함께 다음 단계 진입 전 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-010
+    problem_definition: product_type에 guarantee가 존재하는데 보증 관계를 표현할
+      개념(Guarantor/Guarantee)이 없고, PD/LGD/EAD·충당금 계열 부재가 의도된 범위 축소인지 누락인지 문서로
+      판별할 수 없다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: 관계 그래프에 연결이 없는 독립 커버리지 관찰이다. 보증 개념 공백은 직접 관찰되나 파라미터 계열 부재의 의도 여부는 도메인
+      확인이 필요해(required_follow_up_evidence) needs_evidence로 분류한다. low 개선 기회이므로 후속
+      단계로 계획 이월이 적절하다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-011
+    problem_definition: Collateral is_a Exposure 오분류로 공동담보·교차담보·담보 풀 등 표준 담보 구조 확장이
+      표현 불가능하고, 수용 시 분류 축 자체의 파괴적 재구축이 강제된다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-028이 보유한 is_a 오분류 공유 root의 진화 비용 표면이다(issue-011/016/022/028 동일
+      결함 클러스터 결의). 오분류는 :35-36에서 직접 관찰된다. 두 소비 시스템이 구조를 흡수하기 전인 지금이 가장 싼 수정
+      시점이라는 점이 본 issue 고유의 기여이며, is_a 한 줄 제거로 클러스터 전체와 함께 대상 내에서 닫힌다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-012
+    problem_definition: 닫힌 enum(segment, product_type, collateral_type)과 버전 간
+      호환성·enum 진화 규약 부재의 결합으로, 모든 어휘 확장이 양 시스템 동시 배포를 강제하거나 비관리 분기를 유발한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 닫힌 enum과 규약 부재는 문서에서 직접 관찰되나 결함 발현은 어휘 확장 사건 조건부이므로 현재 차단이 아닌 다음 변경
+      시점 차단이다. 변경 거버넌스 부재라는 별도 뿌리로 유지가 결의되었고(issue-001과 공유 원인만 보유), enum 확장
+      규칙·호환 규약은 issue-001의 매핑 버전 관리와 한 거버넌스 규약으로 묶어 어휘 변경이 발생하기 전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-013
+    problem_definition: 엔터티를 현재 상태 스냅샷으로만 모델링하고 시점 의존 값(등급·점수·LTV·담보평가)과 생애주기 상태에 시간
+      유효성·이력·사건 차원을 전역 규약으로 도입하지 않아, 과거 기준일 리스크 상태 재구성과 보고 재현이 개념적으로 불가능하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 4개 surface finding을 단일 수정 계열로 닫는 전역 설계 차원 결손이며 issue-005/020 등 시간성
+      결함들의 공통 기반이므로 root_cause다. 시간 속성 부재(RiskRating 등)와 as_of의 산발 존재는 문서에서 직접
+      관찰된다. 보고 시스템이 의존할 기준일 기반 상태 정의라는 핵심 deliverable이 현재 부재한 high이므로 전역 시간성
+      규약·Appraisal 사건 개념은 대상 내에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-022
+      - finding-011
+      - finding-014
+      - finding-015
+  - issue_id: issue-014
+    problem_definition: 공유 파생 개념(소진율·한도)의 입력 권위를 각 시스템 로컬 자원(당일 환율 테이블, CRM
+      available_limit)에 위임해, 새 통화·새 소비 시스템 추가 시마다 권위 분기가 누적되고 정합성 회복 비용이 증가한다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: issue-001의 권위 분산 root가 시간 축에서 발현되는 진화 비용 표면이다(dep-006 공유 원인). 분기 누적은
+      확장 시나리오에 대한 전향 투영이므로 inferred. issue-001의 권위 단일화 수정이 선행되면 대부분 함께 해소되므로 별도
+      fix가 아닌 그 수정 계열에 동반 이월한다.
+    related_surface_finding_ids:
+      - finding-023
+  - issue_id: issue-015
+    problem_definition: 부실 경계 인터페이스 계약 부재와 ExposureAggregate 정의-운영 시맨틱 혼재가 결합되어,
+      연체관리 통합·실시간 한도 관리라는 예측 가능한 확장 시 범위 경계와 시간 모델을 동시에 재협상해야 하는 진화 취약점.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: defer_watch
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: issue-003/007(경계)과 issue-002(시간 모델) 두 root의 결합 결과로, 그 수정이 선행되면 대부분 함께
+      해소된다는 stance가 기록되어 있다. 현재 material failure condition이 없는 forward-looking
+      관찰(low)이므로 통합·실시간 요구가 가시화될 때까지 감시 상태로 두는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-024
+  - issue_id: issue-016
+    problem_definition: "Collateral의 definition('익스포저를 담보하는 자산', :35)과 is_a:
+      Exposure(:36)가 배타 범주를 필연 양상으로 동시 주장해 동시 만족 불가능하며, 계층을 따르는 시스템과 정의를 따르는
+      시스템의 익스포저 집합이 달라진다."
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-028 공유 root(is_a 오분류)의 logic 형식화 표면이다(동일 결함 클러스터 결의).
+      satisfiability fail 판정이 문서 라인(:35↔:36)에서 직접 확인되므로 observed. 시스템 간 익스포저 집합
+      분기라는 일관성 손상이 핵심이며 is_a 제거 한 줄로 클러스터와 함께 대상 내에서 닫힌다.
+    related_surface_finding_ids:
+      - finding-025
+  - issue_id: issue-017
+    problem_definition: classification_rules[0]이 엔진 도출(obligatory)과 보고팀 수동
+      조정(possible)이라는 상이한 양상의 권위를 우선순위·조건·기록 규칙 없이 단일 risk_grade 필드에 결합해, 등급의 단일
+      진실 위치가 사라진다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 규칙 문장 자체에서 직접 확인되는 이중 권위 설계 결함이며(root_confidence high),
+      finding-002/026/035 세 표면을 함께 닫는 규칙 설계 root다. 동일 익스포저의 등급이 시스템별로 합법적으로 달라질
+      수 있어 공유 의미 목적이 깨지는 high이므로, GradeOverride 분리·우선순위 명시는 대상 내 필수 닫힘이다.
+      review_goal의 precedence 축에 직결된다.
+    related_surface_finding_ids:
+      - finding-026
+      - finding-002
+      - finding-035
+  - issue_id: issue-018
+    problem_definition: RiskAppetite 위반 정의가 순환적이고(:74), 수치-엔티티 비교라는 타입 오류를 포함하며,
+      compliance_status가 가역·지연 갱신 입력에 의존하는 독립 저장 판정 상태여서 'compliant 기록과 실제 초과의
+      동시 참' 구간이 구조적으로 존재한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 순환·타입 오류·시간 충돌 세 결함이 문서 라인(:74, :78, :70)에서 직접 판정되었고, issue-025 병합
+      결의로 이 issue가 순환정의/저장파생 결함의 canonical 보유자가 되어 비순환 산식·scope 관계·파생 투영 선언 처방을
+      흡수했다. 가장 통제 민감한 위반 판정 개념이 문서 기준으로 검증 불가능한 high 정확성 결함이므로 대상 내 필수 닫힘이다.
+    related_surface_finding_ids:
+      - finding-028
+  - issue_id: issue-019
+    problem_definition: 규칙 :89 한 문장 안에서 소진율 등식 정의부(necessary, 단일 값 함의)와 환산
+      절차부(possible, 시스템 재량 환율)가 충돌해, 동일 입력에 대해 서로 다른 소진율 값이 모두 규칙 준수가 된다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: issue-001의 환산 권위 분산 root가 규칙 수준에서 발현된 표면이다(dep-006 계열). 결함 존재는 6개
+      lens 전원이 인정하나 심각도에 axiology의 standing dissent(high 상향 논거)가 결의로 보존되어 있어
+      contested로 분류해 이견을 구조적으로 유지한다. 결의가 부과한 순서 제약상 issue-030의 피연산자 형식화와 공동
+      적용되어야만 닫힘 판정이 가능하므로 단독 fix_now가 아닌 결합 이월이며, medium-vs-high를 가를 운영 빈도 증거가
+      후속 요구로 남아 있다.
+    related_surface_finding_ids:
+      - finding-029
+  - issue_id: issue-020
+    problem_definition: ltv 1회 입력 스냅숏(:32)과 담보 재평가 의무(:90)의 결합으로, 모델이 의무화한 사건(재평가)
+      발생 시 저장 ltv가 자신의 구성 요소(담보 가치)와 모순되는 상태를 모델 스스로 허용한다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-023이 보유한 root(산식 용어의 독립 입력 승격)의 시간 양상 모순 표면이며, 결의에서 high로 상향되어
+      issue-023과 단일 수정 계열로 정렬되었다. 충돌은 문서 라인 간(:32↔:90)에서 직접 확인된다. 재평가가
+      obligatory 양상이므로 failure condition이 모델이 보장하는 도달 상태라는 점이 상향 근거였고, 양자택일
+      수정(origination LTV 한정 또는 재산출 의무)으로 대상 내에서 닫힌다.
+    related_surface_finding_ids:
+      - finding-030
+  - issue_id: issue-021
+    problem_definition: Borrower.internal_rating의 선언 타입(string)과 문서화된 값 공간(1~10 숫자
+      등급)이 불일치하는 약타입 선언으로, 문자열 사전순 비교 시 '10' < '2' 같은 오류 여지를 남긴다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: 관계 그래프에 연결이 없는 독립적 경미 형식 결함이다. 타입-값 공간 불일치는 :15-17에서 직접 관찰되나 material
+      failure condition이 제시되지 않은 low이므로 비물질 개선 항목으로 후속 이월한다. enum/integer 타입
+      강제라는 저비용 수정 방향이 합의되어 있다.
+    related_surface_finding_ids:
+      - finding-031
+  - issue_id: issue-022
+    problem_definition: Collateral is_a Exposure 선언이 OntoClean rigidity를 위반한다 —
+      Exposure의 본질 속성(amount, risk_grade)이 담보 자산 인스턴스에 필수적이지 않으며, 자체 정의와
+      secured_by 관계가 별개 자산임을 말해 내부 모순이다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-028 공유 root의 semantics(OntoClean) 표면으로 동일 결함 클러스터 결의에 포함된다.
+      정의·관계·계층의 내부 불일치는 문서에서 직접 관찰된다. 소비 시스템이 is_a를 신뢰하면 집계·등급 로직에 담보가 혼입되어 시스템
+      간 해석이 분기하므로 일관성 손상이 핵심이며, is_a 제거로 클러스터와 함께 닫힌다.
+    related_surface_finding_ids:
+      - finding-032
+  - issue_id: issue-023
+    problem_definition: 심사 업무 화면의 입력 필드를 그대로 개념화해 도메인 산식 용어(LTV)를 파생 개념이 아닌 독립 수동 입력
+      속성으로 승격시켜, 이름이 약속하는 의미(현재 담보인정비율)와 실제 값(갱신 없는 심사 시점 스냅샷)이 분리된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: ltv 결함 클러스터(issue-005/020/023)의 모델링 결정 root를 보유한다. 원천 속성(amount,
+      appraised_value)의 모델 내 공존과 재평가 규칙의 존재로 드리프트가 모델 내부 증거만으로 예견되어
+      observed·high다. 담보 충분성 판단과 보고 수치의 체계적 왜곡이라는 정확성 손상이 핵심이며, 파생 속성 재정의(필요 시
+      ltv_at_underwriting 분리)로 대상 내에서 닫힌다.
+    related_surface_finding_ids:
+      - finding-033
+  - issue_id: issue-024
+    problem_definition: "'등급' 개념이 3개 스케일(1~10, R1~R5, AAA~CCC)로 동의어성 병존하는데 스케일 간 매핑
+      의미가 온톨로지 밖(버전 관리 없는 위키, 각 시스템)에 위임되어 등급 개념의 공유 권위가 성립하지 않는다."
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-001 root의 등급 매핑 지점에 대한 semantics 표면이다(finding-034는 finding-001과
+      그래프 확인 duplicate). 외부 위임은 notes[0]·grade.note에서 직접 관찰된다. 동일 차주의 등급이 시스템 간
+      불일치해도 판정 불가능한 일관성 손상이 핵심이며, 온톨로지 내 정합 매핑/정규 스케일 편입이라는 issue-001과 동일한 수정으로
+      대상 내에서 닫힌다.
+    related_surface_finding_ids:
+      - finding-034
+  - issue_id: issue-025
+    problem_definition: RiskAppetite 위반 정의의 순환성과 compliance_status의 파생값-독립 저장 혼재 —
+      issue-018과 그래프 확인된 동일 결함(rel-023 duplicates)으로, 결의에 따라 issue-018으로 병합되어
+      duplicate로 닫는다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: document_only
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation 결의로 issue-018에 병합·high 정렬되었고 semantics 고유 기여(비순환 산식,
+      scope 관계, 파생 투영 선언)는 issue-018 치유안에 흡수되었다. 본 row에 남는 작업은 duplicate 닫음이라는
+      ledger 기록뿐이므로 document_only이며, 결함 자체의 닫힘 의무는 issue-018을 통해 대상 내에서 이행된다. 별도
+      수정을 시작해서는 안 된다.
+    related_surface_finding_ids:
+      - finding-036
+  - issue_id: issue-026
+    problem_definition: 도메인 의미가 다른 두 개념(approved_amount 승인 한도, available_limit 가용
+      한도)이 매핑 정의 없이 '합산 관리'라는 모호한 외부 참조로 연결되어 한도 개념의 의미 경계가 흐려지는 note 수준 표면 결함.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: issue-001이 명명한 권위 미지정 입장의 한도 지점에 대한 semantics 표면이며(깊은 권위 패턴은
+      issue-001이 보유), note는 직접 관찰된다. 핵심 규칙이 직접 참조하지 않는 low 비물질 결함이므로
+      issue-004/031과 같은 note를 한 번에 묶어 후속 단계에서 처리하는 것이 효율적이다.
+    related_surface_finding_ids:
+      - finding-038
+  - issue_id: issue-027
+    problem_definition: RiskAppetite가 관계 그래프에 전혀 연결되지 않은 고아 엔터티이고 적용 범위·기간·위반 사건 차원이
+      없어, 위반 판정의 피연산자 연결(어떤 집계와 어느 범위 기준으로 비교하는가)이 구조적으로 부재하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 단일 임계값 레코드로의 과소 모델링이라는 구조 root(root_confidence high)로, issue-018의 타입
+      오류가 성립하는 구조적 전제를 제공한다(dep-008 공유 원인이되 별도 결함 유지). relations 목록의
+      RiskAppetite 부재는 직접 관찰된다. 위반 판정 게이트의 피연산자가 미정의인 high 결손이므로 constrains
+      관계·scope·기간/사건 차원 도입은 대상 내 필수 닫힘이다.
+    related_surface_finding_ids:
+      - finding-039
+      - finding-017
+  - issue_id: issue-028
+    problem_definition: Collateral is_a 오분류라는 단일 구조 결함이 뿌리이며, 그 결과로 리스크 증가 요인(익스포저)과
+      경감 요인(담보)이 반대 부호임에도 같은 분류 축에 놓여 권위 문서를 충실히 따를수록 총익스포저와 리스크 측정이 왜곡되는 역설이
+      생긴다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: issue-011/016/022/028 동일 결함 클러스터의 shared-root 보유 issue다(finding-040
+      구조 진단 + finding-005 가치 결과 평가의 병합). is_a 선언과 정의·secured_by의 불일치는 문서에서 직접
+      관찰된다. ExposureAggregate에 담보 평가액이 혼입되어 총익스포저가 과대 계상될 수 있는 high 정확성 결함이며,
+      is_a 한 줄 제거로 클러스터 전체가 대상 내에서 닫힌다.
+    related_surface_finding_ids:
+      - finding-040
+      - finding-005
+  - issue_id: issue-029
+    problem_definition: risk_grade 도출 규칙이 요구하는 Exposure↔RiskRating 연결 관계가 relations에
+      없고 스케일 변환 매핑도 외부 위키에 있어, 도출 경로가 검증 불가능한 산문으로만 존재하고 엔진 등급-보고서 등급의 추적 가능성이
+      끊긴다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 매핑 외부화(issue-001/024)와 공유 원인만 갖는 구조 고유 결손(관계 부재)으로 분리 유지가 결의되었다 —
+      canonical 매핑이 편입되어도 graded_from 관계는 여전히 부재하므로 독립 결함이다. 관계 부재는 직접 관찰된다. 등급
+      불일치 시 권위 판정·감사 추적이 불가능해지는 medium 거버넌스 손상이며, issue-001의 매핑 편입과 함께 수정하면 매핑
+      버전 참조를 관계에 실을 수 있어 그 수정 계열에 결합 이월한다.
+    related_surface_finding_ids:
+      - finding-041
+  - issue_id: issue-030
+    problem_definition: 소진율 규칙의 분자(ExposureAggregate, 차주 단위)와 분모(Limit, 차주/상품별)를 잇는
+      조인 경로가 관계 그래프에 없고 집계 단위가 어긋나, 규칙이 구조적으로 평가 불가능하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: classification_rules[1]의 피연산자 미형식화라는 구조 root로, issue-019 결의가 부과한 순서
+      제약상 본 issue의 피연산자 형식화(utilization_measured_against 관계, 단위 정합화)가 canonical
+      환율 권위 고정과 공동 적용되거나 선행되어야 issue-019가 닫힐 수 있다. 조인 경로 부재와 단위 불일치는 직접 관찰되는
+      medium 결손이며, 환산 수정 단계 전에 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-042
+  - issue_id: issue-031
+    problem_definition: approved_amount의 의미가 온톨로지에 존재하지 않는 외부 개념(CRM
+      available_limit)과의 합산에 의존한다고 선언되어, 참조 대상 없는 끊어진 의존이 남아 한도의 실효 의미를 문서로 결정할
+      수 없다(note 수준 표면 결함).
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: issue-004/026과 같은 note에 대한 structure(참조 무결성) 표면으로, 권위 미지정 입장의 발현이되
+      그래프 근거 없는 병합은 회피되었다. 끊어진 외부 의존은 note에서 직접 관찰되나 핵심 규칙이 직접 참조하지 않는 low 비물질
+      결함이므로, available_limit 명시 도입 또는 범위 밖 선언 이동을 같은 note의 두 issue와 묶어 후속 처리한다.
+    related_surface_finding_ids:
+      - finding-043
