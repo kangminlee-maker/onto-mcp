@@ -62,5 +62,10 @@ src/core-runtime/
 - Provider-specific execution stays in bounded runtime adapters under
   `src/core-runtime/cli` and `src/core-runtime/llm` until a separate provider
   layer is justified by distinct ownership.
+- Layering direction: `cli/` (execution layer) imports `review/` (semantic
+  layer), not the reverse. Known exception:
+  `review/review-invocation-runner.ts` imports cli entrypoints and forms a
+  cycle with `cli/review-invoke.ts` — it is functionally an execution-layer
+  facade and is a relocation candidate; do not add new review→cli imports.
 - External host integration should be treated as provider evidence, not the
   canonical `onto` implementation.
