@@ -1,0 +1,123 @@
+review_record_id: 20260611-005b8e3a
+session_id: 20260611-005b8e3a
+entrypoint: review
+record_status: halted_partial
+created_at: 2026-06-11T09:49:41+09:00
+updated_at: 2026-06-11T11:55:07+09:00
+request_text: 이 여신 리스크 분류 온톨로지가 리스크 엔진과 보고 시스템이 공유할 개념 기준으로 적절한지 검토해 달라.
+  분류체계·권위·시간성 관점의 개념 결함과 운영 위험을 중심으로.
+review_target_scope_ref: .onto/review/20260611-005b8e3a/binding.yaml
+interpretation_ref: .onto/review/20260611-005b8e3a/interpretation.yaml
+binding_ref: .onto/review/20260611-005b8e3a/binding.yaml
+domain_final_selection_ref: .onto/review/20260611-005b8e3a/binding.yaml
+resolved_review_mode: core-axis
+resolved_execution_realization: worker
+resolved_host_runtime: anthropic
+resolved_artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+resolved_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+execution_result_ref: .onto/review/20260611-005b8e3a/execution-result.yaml
+session_metadata_ref: .onto/review/20260611-005b8e3a/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260611-005b8e3a/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260611-005b8e3a/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260611-005b8e3a/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260611-005b8e3a/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  axiology: .onto/review/20260611-005b8e3a/round1/axiology.findings.yaml
+  coverage: .onto/review/20260611-005b8e3a/round1/coverage.findings.yaml
+  evolution: .onto/review/20260611-005b8e3a/round1/evolution.findings.yaml
+lens_output_schema_version: 2
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+excluded_lens_ids: []
+degraded_lens_ids:
+  - logic
+  - semantics
+  - structure
+degradation_notes_ref: .onto/review/20260611-005b8e3a/degradation-summary.yaml
+per_lens_provenance:
+  axiology:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain=none이므로 순위 4 domain 가치 규정은 바인딩되지 않았다.
+      - axiology 권위 체인 순위 1~2 파일(.onto/authority/core-lexicon.yaml 및
+        .onto/principles/*)은 본 unit boundary의 allowed read refs에 포함되지 않아 앵커로 사용할
+        수 없었다. 따라서 모든 가치 판단의 권위 앵커는 경계 내에서 가용한 순위 3
+        권위(review-value-alignment-criteria.yaml의 criterion user-request-intent)와
+        대상 아티팩트의 자기선언 목적(credit-risk-ontology.yaml 헤더 주석 '리스크 엔진과 보고서 시스템이 공유하는
+        개념 권위 문서를 지향한다')에 한정했다. 개인 가치관에 기반한 판단은 사용하지 않았다.
+      - 출력 스키마가 axiology 전용 필드(value_authority_anchor, value_type,
+        alignment_direction)를 허용하지 않아(additionalProperties:false), 해당 정보는 각
+        finding의 why 본문 끝에 '앵커/value_type/alignment_direction' 표기로 보존했다.
+      - 대상이 공유 개념 기준으로 실제 채택·운영 중인지 여부는 확인 불가하며, 판단은 문서가 선언한 지향 목적 기준으로 수행했다.
+  coverage:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - 여신 리스크 관리의 일반 관행(시점 기준 보고, 등급 override 통제, 다통화 환산, 리스크 성향 체계의 차원 세분화,
+        PD/LGD/EAD류 파라미터)을 평가 기준으로 사용했다. 웹 리서치가 금지되어 Basel 등 특정 표준 문서를 직접 인용하지
+        않고 일반 도메인 지식 수준으로만 적용했다.
+      - "'리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향한다'는 헤더 선언과 요청 요약을 이 온톨로지의 선언된 목적으로
+        간주했다."
+  evolution:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - 여신 도메인에서 등급 체계 개편, 신상품/신담보 유형 추가, 부실 상태 통합, 집계 실시간화는 통상적으로 발생하는 변경
+        시나리오라고 가정했다.
+      - 리스크 엔진과 보고서 시스템 외에 추가 소비 시스템이 향후 통합될 수 있다고 가정했다.
+finding_ledger_ref: null
+finding_relation_graph_ref: null
+issue_ledger_ref: null
+issue_stance_matrix_ref: null
+deliberation_plan_ref: null
+problem_framing_ref: null
+issue_resolution_summary: []
+result_classification_summary:
+  highest_severity: null
+  finding_count: 0
+  issue_count: 0
+  finding_severity_counts: &a1
+    blocker: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  issue_severity_counts:
+    blocker: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 0
+  non_material_finding_count: 0
+  material_issues: []
+  non_material_findings: []
+  action_candidates:
+    - issue_id: runtime-halt
+      candidates:
+        - retry_execution
+        - continue_review
+      derivation_refs:
+        - execution-result.yaml
+      rationale: "Selected lens completion barrier failed: 3/6 planned lenses completed."
+synthesis_result_ref: null
+synthesis_result_sha256: null
+synthesis_output_sha256: null
+deliberation_status: not_performed
+deliberation_result_ref: null
+deliberation_result_sha256: null
+final_output_ref: .onto/review/20260611-005b8e3a/final-output.md
+final_output_sha256: 15d295b7cc151b533624670ce5a03c1b35954485c8b3279a2d10e59b5db9ca24
+shared_phenomenon_summary: []

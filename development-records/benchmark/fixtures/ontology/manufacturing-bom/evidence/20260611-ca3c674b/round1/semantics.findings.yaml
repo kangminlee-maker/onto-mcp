@@ -1,0 +1,258 @@
+schema_version: 1
+session_id: 20260611-ca3c674b
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: manufacturing-bom-ontology.yaml > entities.AlternatePart
+    evidence_anchor: AlternatePart.definition ("A의 대체가 B이면 B의 대체도 A다") vs
+      AlternatePart.attributes.direction (enum [one_way, bidirectional], note
+      "기본은 one_way")
+    claim: AlternatePart의 정의는 대칭(상호 대체) 관계를 선언하지만 속성 구조는 기본값 one_way의 방향성 관계를 정의하여,
+      이름·정의와 실제 의미가 정면으로 모순된다.
+    what: 엔티티 정의 문장은 대체 관계를 무조건 대칭이라고 명시하는데, 같은 엔티티의 direction 속성은 one_way를 기본값으로 하는
+      방향성 enum을 제공한다. relations의 alternate_of는 이 엔티티의 단축 표기로 선언되어 있어 모순이 관계 계층까지
+      전파된다.
+    why: "PLM/MES 통합의 개념 기준 문서에서 정의 문장과 속성 계약이 상반되면, 구현 시스템마다 다른 해석(항상 대칭 vs 방향 존중)을
+      택할 수 있다. 제조 운영에서 일방향 대체(예: 상위 등급 부품으로만 대체 허용)를 양방향으로 오해하면 부적합 부품이 투입되는 실질적
+      품질 위험이 된다. 이는 의미 진술 차원의 명백한 이름-의미 불일치다."
+    how_to_fix: 정의 문장을 "direction이 bidirectional일 때만 대칭"으로 수정하거나, 대칭 관계만 허용한다면
+      direction 속성을 제거한다. relations.alternate_of 노트에도 방향 의미를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 대체 부품 관계의 단일 해석 제공
+      failure_condition: 한 소비 시스템은 정의 문장(항상 대칭)을, 다른 시스템은 direction 속성(기본 one_way)을 따라
+        구현할 때 대체 가능 판정이 시스템 간 불일치
+      impact: 일방향만 허용된 대체를 역방향으로 적용하면 부적합 부품 투입·품질 사고로 이어질 수 있어, 기준 문서로서의 신뢰가 직접 훼손된다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml entities.AlternatePart.definition
+        - manufacturing-bom-ontology.yaml
+          entities.AlternatePart.attributes.direction
+        - manufacturing-bom-ontology.yaml relations[alternate_of]
+    causal_path:
+      root_cause_candidate: 대칭 관계로 처음 정의된 AlternatePart에 방향성 요구가 추가되면서 direction 속성만
+        도입되고 정의 문장이 갱신되지 않음
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: AlternatePart의 정의 문장과 direction 속성이 상반된 의미(무조건 대칭 vs 기본 one_way)를 동시에
+            선언한다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.AlternatePart
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 정의 문장이 속성 구조 변경(direction 도입)을 반영하지 못한 채 남아 있는 정의-구조 드리프트가 모순의 직접 원인이다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml
+              entities.AlternatePart.attributes.direction.note "기본은 one_way"
+      unresolved_beyond_evidence: 어느 쪽(대칭 vs 방향성)이 실제 현장 운영 규칙인지는 대상 파일만으로 확정할 수 없다
+  - candidate_id: semantics-candidate-002
+    target: manufacturing-bom-ontology.yaml > entities.BomLine.attributes.scrap_rate
+    evidence_anchor: 'BomLine.scrap_rate note: "공정 불량 감안 계수. 생산계획팀 엑셀로 별도 관리되는 값을 복사해 둔다."'
+    claim: scrap_rate는 이름이 '율(rate)'인 도메인 파생·관리 값인데, 외부 원본(생산계획팀 엑셀)의 복사본을 독립 입력
+      속성으로 모델링하여 원천 드리프트 위험을 내장하고 있다.
+    what: scrap_rate는 공정 불량 실적에서 도출·관리되는 계수이며 노트 스스로 원본이 별도 엑셀임을 인정한다. 그럼에도 온톨로지는 이를
+      BomLine의 일반 number 입력 속성으로 정의하고, 원본과의 동기화 규칙이나 파생/사본임을 나타내는 구조적 표식이 없다.
+    why: semantics 관점의 점검 항목인 '산식·율 용어 속성의 파생값-입력 불일치'에 정확히 해당한다. MRP 소요량 계산은
+      qty_per와 scrap_rate에 직접 의존하므로, 엑셀 원본이 갱신되고 사본이 갱신되지 않으면 자재 소요량이 조용히 틀어진다.
+      rev나 current_eco는 노트에 원본 시스템을 명시하고 동기화 규칙(주간 배치)이라도 선언했지만 scrap_rate는 동기화
+      계약 자체가 없다.
+    how_to_fix: "scrap_rate를 파생/사본 값으로 명시(type: ref 또는 source_authority·sync_policy
+      메타데이터 추가)하거나, 환산계수 마스터처럼 원본 권위를 온톨로지 내 개념으로 승격하고 BomLine은 그것을 참조하게 한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: BOM 소요량 계산의 개념 기준으로서 scrap_rate의 권위와 신선도 보장
+      failure_condition: 생산계획팀 엑셀의 계수가 변경되었으나 BomLine 사본이 갱신되지 않은 상태에서 MES/MRP가 사본을
+        사용해 소요량을 계산하는 경우
+      impact: 자재 과소/과다 발주와 라인 결품으로 직결되는 수치가 무계약 사본으로 모델에 들어가 있어, 이 문서를 기준으로 통합하면 드리프트가
+        표준화된다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml
+          entities.BomLine.attributes.scrap_rate.note
+    causal_path:
+      root_cause_candidate: 원천 권위(생산계획팀 엑셀)를 온톨로지 개념으로 승격하지 않고 값 복사로 통합을 대체한 모델링 결정
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: scrap_rate가 동기화 계약 없는 외부 원본의 사본으로 정의되어 있다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml
+              entities.BomLine.attributes.scrap_rate.note
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 환산계수 마스터 부재 노트와 마찬가지로, 운영 계수류의 원본을 모델 외부에 두는 패턴이 반복되고 있어 개별 속성 차원이 아닌 모델링
+            방침 차원의 원인으로 추정된다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml notes[uom 변환]
+            - manufacturing-bom-ontology.yaml notes[누적 std_time 수기 입력]
+      unresolved_beyond_evidence: 엑셀→온톨로지 복사의 실제 주기·절차는 대상 파일 범위 밖이다
+  - candidate_id: semantics-candidate-003
+    target: manufacturing-bom-ontology.yaml >
+      entities.WorkCenter.attributes.capacity_per_shift
+    evidence_anchor: 'capacity_per_shift note: "교대당 처리 능력. 단위는 작업장마다 다르다(개수 또는 시간)."'
+    claim: capacity_per_shift는 하나의 이름 아래 서로 다른 의미(수량 능력 vs 시간 능력)를 담는 동음이의 속성으로, 의미
+      구분 없이 단일 number로 모델링되어 있다.
+    what: 같은 속성명이 작업장에 따라 '교대당 생산 개수'를 뜻하기도 하고 '교대당 가용 시간'을 뜻하기도 한다. 단위
+      차원(dimension)을 구분하는 속성이나 하위 타입이 없다.
+    why: 동음이의어 미구분의 전형이다. 능력 소요 계산(CRP)에서 Operation.std_time_min(시간 차원)과 대조할 때 개수
+      차원의 capacity와 시간 차원의 capacity는 산식이 다른데, 모델은 이를 구별할 수단을 제공하지 않아 작업장 간 능력
+      비교·합산이 의미적으로 무효가 된다.
+    how_to_fix: "capacity_uom(또는 capacity_kind: enum [qty_per_shift,
+      minutes_per_shift]) 속성을 추가해 차원을 명시하거나, 시간 기준으로 단위를 통일하고 정의 문장에 고정한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: MES 능력 계획에서 WorkCenter 능력 값의 일관된 해석
+      failure_condition: 통합 시스템이 capacity_per_shift를 단일 차원으로 가정하고 작업장 간 부하율을 비교·집계하는 경우
+      impact: 개수 차원과 시간 차원 값이 섞인 채 계산되면 부하율·일정 산출이 무의미해지며, 노트의 경고는 기계가 소비할 수 없는 비정형
+        텍스트라 통합 시 소실된다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml
+          entities.WorkCenter.attributes.capacity_per_shift.note
+        - manufacturing-bom-ontology.yaml
+          entities.Operation.attributes.std_time_min
+    causal_path:
+      root_cause_candidate: 작업장별 현장 관리 단위의 이질성을 모델 차원에서 정규화하지 않고 노트로만 기록한 결정
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: 동일 속성명이 작업장에 따라 다른 차원의 값을 담는다고 노트가 명시한다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml
+              entities.WorkCenter.attributes.capacity_per_shift.note
+        - cause_id: semantics-candidate-003.cause-002
+          claim: 차원 식별 속성의 부재가 이 동음이의를 기계 판독 불가능하게 만들며, uom 환산계수 마스터 부재 노트와 같은 '단위 정규화
+            미해결' 패턴의 한 사례다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml notes[uom 변환]
+      unresolved_beyond_evidence: 각 작업장이 실제 어느 단위를 쓰는지의 분포는 대상 파일 범위 밖이다
+  - candidate_id: semantics-candidate-004
+    target: manufacturing-bom-ontology.yaml > entities.InspectionPlan
+    evidence_anchor: 'InspectionPlan.definition ("검사 계획... Operation의 검사 파라미터 확장이다")
+      + is_a: Operation'
+    claim: "'InspectionPlan(계획)'이라는 이름의 개념이 Operation(공정 단계)의 하위 타입으로 정의되어, 이름이 가리키는
+      존재론적 유형(계획=제도적 명세)과 모델상 유형(라우팅의 실행 단계)이 불일치한다."
+    what: "이름과 정의 첫 문장은 '검사 계획'이라는 명세 문서/규정 성격의 개념을 가리키지만, is_a: Operation으로 라우팅의 한
+      공정 단계로 분류된다. 정의 후반부도 스스로 '검사 파라미터 확장'이라며 계획이 아님을 시인한다."
+    why: 계획(sampling_rule, acceptance_criteria를 담는 명세)은 제도적 구성물이고 Operation은 라우팅 내
+      실행 단계로, 존재론적 유형이 다르다. 하나의 검사 계획이 여러 라우팅·여러 공정에 재사용되는 제조 현실에서 이 모델은 계획 1개당
+      Operation 1개를 강제하며, '계획 개정'과 '공정 변경'이라는 서로 다른 변경관리 대상을 한 개념에 묶는다. 이름을 믿고
+      통합하는 품질 시스템(계획 관리)과 MES(공정 실행)가 같은 엔티티를 다른 의미로 소비하게 된다.
+    how_to_fix: 최소 수정으로는 이름을 InspectionOperation(또는 InspectionStep)으로 바꿔 실제 의미와
+      일치시킨다. 검사 계획의 독립 재사용·개정 관리가 요구라면 InspectionPlan을 별도 명세 엔티티로 분리하고
+      Operation이 이를 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM(검사 계획 관리)과 MES(공정 실행) 간 검사 개념의 공통 기준 제공
+      failure_condition: 품질 시스템이 '계획' 의미로, MES가 '공정 단계' 의미로 같은 엔티티를 매핑하여 계획 개정 이력과 공정
+        실행 이력이 한 객체에 뒤섞이는 경우
+      impact: 검사 계획의 개정(제도적 변경)과 라우팅 공정 변경(실행 구조 변경)의 변경관리 경로가 구분 불가능해져, 요청의 핵심 관심사인
+        변경관리 정합성이 약화된다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml entities.InspectionPlan.definition
+        - manufacturing-bom-ontology.yaml entities.InspectionPlan.is_a
+    causal_path:
+      root_cause_candidate: "'검사도 하나의 Operation'이라는 실행 관점 단순화를 채택하면서 기존 명칭
+        'InspectionPlan'을 그대로 유지한 결정"
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: 이름·정의 전반부(계획)와 is_a 분류(공정 단계)가 다른 존재론적 유형을 가리킨다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.InspectionPlan
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 정의 문장 스스로 '본 엔티티는 Operation의 검사 파라미터 확장'이라고 재정의하고 있어, 개념 통합 시 이름을 갱신하지 않은
+            것이 불일치의 직접 원인이다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.InspectionPlan.definition
+      unresolved_beyond_evidence: 검사 계획의 독립 개정·재사용 요구가 실제로 존재하는지는 대상 파일 범위 밖이다
+  - candidate_id: semantics-candidate-005
+    target: manufacturing-bom-ontology.yaml > integrity_rules[0]
+    evidence_anchor: 'integrity_rules[0]: "단, 재생 원료 회수 공정(스크랩 재투입)은 Assembly가 자기 하위에
+      자신을 포함하는 형태로 모델링한다"'
+    claim: "BOM 부모-자식 구성 관계(BomLine)가 '스크랩 재투입'이라는 물질 흐름을 표현하는 데 전용되어, 관계의 이름·의미(구성:
+      ~로 만들어진다)와 실제 표현 대상(회수: ~에서 회수된다)이 불일치한다."
+    what: BomLine은 '상위 품목이 하위 품목을 얼마나 쓰는지'라는 구성(composition) 의미로 정의되어 있는데, 예외 규칙은 자기
+      포함 BomLine으로 재생 원료 회수라는 공정 산출 흐름을 표현하라고 지시한다. 'Assembly가 자신을 구성 부품으로
+      포함한다'는 진술은 구성 의미론으로는 거짓이다.
+    why: 구성 관계와 부산물/회수 흐름은 제조 도메인에서 구별되는 의미(소요 vs 산출)다. 이를 한 관계에 겹쳐 쓰면 BomLine
+      소비자(소요량 전개, 원가 적산)가 자기 참조 라인을 만났을 때 그것이 구성인지 회수인지 판별할 수단이 없고, qty_per의
+      의미(투입량인가 회수량인가)도 라인마다 달라진다. 동일 관계명에 두 의미가 실리는 동음이의 문제다.
+    how_to_fix: "회수 흐름을 별도 관계/개념(예: ByproductLine 또는 BomLine에 line_kind: enum
+      [component, recovered_input])으로 구분하고, BOM 비순환 규칙은 예외 없이 유지한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM 전개·원가 적산이 의존하는 BomLine 구성 의미의 단일성
+      failure_condition: MRP/원가 시스템이 모든 BomLine을 구성 소요로 해석하여 자기 참조 라인을 소요량 전개에 포함시키는
+        경우(무한 전개 또는 잘못된 소요 증폭)
+      impact: 관계 의미의 이중성이 소요량·원가 계산의 정확성을 직접 위협하며, 예외가 자연어 규칙에만 존재해 기계적으로 식별 불가능하다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml integrity_rules[0]
+        - manufacturing-bom-ontology.yaml entities.BomLine.definition
+    causal_path:
+      root_cause_candidate: 부산물/회수 흐름이라는 별도 개념을 도입하는 대신 기존 BomLine 구성 관계를 재활용해 예외로 처리한 모델링 결정
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: 비순환 원칙에 자기 포함 예외가 자연어로만 선언되어 있고, 그 자기 포함이 구성이 아닌 회수 흐름을 의미한다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[0]
+        - cause_id: semantics-candidate-005.cause-002
+          claim: BomLine 정의가 구성 의미만 선언하고 라인 종류 구분 속성이 없어, 두 의미를 한 관계에 싣는 선택이 구조적으로 고착되었다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.BomLine
+      unresolved_beyond_evidence: 실제 스크랩 재투입 공정의 회계·계획 처리 방식은 대상 파일 범위 밖이다
+  - candidate_id: semantics-candidate-006
+    target: manufacturing-bom-ontology.yaml > entities.Part.definition vs
+      entities.Assembly
+    evidence_anchor: 'Part.definition: "최소 관리 단위 품목" + Assembly.is_a: Part'
+    claim: Part의 정의가 '최소 관리 단위'를 본질로 선언하는데 Assembly(하위 구조를 가진 조립품)가 그 하위 타입이어서, 상위
+      개념의 정의가 하위 타입 인스턴스에 대해 거짓이 된다.
+    what: Assembly는 bom_lines로 분해되는 품목이므로 '최소' 단위가 아니다. is_a 계층에서 하위 타입은 상위 정의를 만족해야
+      하는데 Assembly는 Part 정의의 핵심 한정어(최소)를 위반한다.
+    why: OntoClean 관점에서 '최소 관리 단위'가 Part의 rigid한 본질 속성이라면 Assembly는 Part일 수 없고, 본질이
+      아니라면 정의에서 빼야 한다. 정의 문장만 고치면 해소되는 표면적 불일치라 심각도는 낮다.
+    how_to_fix: "Part 정의를 \"구매 또는 제조되는 관리 단위 품목(Item)\"으로 수정하고, '더 분해되지 않는 품목'이 필요하면
+      별도 하위 개념(예: PurchasedPart/LeafPart)으로 둔다."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: semantics-candidate-007
+    target: manufacturing-bom-ontology.yaml > entities.Part.attributes.current_eco /
+      rev
+    evidence_anchor: current_eco note "최신 설계변경" + integrity_rules[2] "Part.rev 갱신은
+      ... 주간 배치로 동기화" + ECO.status [open, approved, applied]
+    claim: "'current_eco'와 'rev'는 이름이 현재성(current/현행 리비전)을 주장하지만, 선언된 운영 규칙상 최대 1주
+      지연·상태 모호성이 있어 이름과 실제 의미(지연 사본)가 어긋난다."
+    what: current_eco가 가리키는 '최신'이 ECO.status 중 어느 단계(open/approved/applied) 기준인지
+      정의되지 않았고, rev는 주간 배치 동기화로 effective_date 이후에도 구 값을 보일 수 있음을
+      integrity_rules가 스스로 인정한다.
+    why: "'current'라는 이름은 소비자에게 실시간 현행 값을 약속하지만 모델이 선언한 동작은 지연 사본이다. 이름-의미의 시간적
+      불일치이며, 다만 원본 시스템이 노트에 명시되어 있어 표면 수준 경고로 충분하다."
+    how_to_fix: "속성 정의에 기준 상태(예: 'status=applied인 최신 ECO')와 동기화 지연 가능성을 명시하거나, 이름을
+      last_synced_eco/synced_rev처럼 실제 의미에 맞게 조정한다."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - "BOM/라우팅 용어(qty_per, scrap_rate, routing, work center, ECO)는 제조 PLM/MES 표준
+    관행(예: MRP 소요량 전개, CRP 능력 계획)의 통상 의미로 해석했다."
+  - 검사 계획이 여러 라우팅에 재사용될 수 있다는 점은 일반 제조 품질관리 관행에 근거한 가정이다.
+  - session_domain=none이므로 도메인 문서 없이 lens 자체 도메인 지식으로 판단했다.
+validation:
+  unaddressable_candidates: []

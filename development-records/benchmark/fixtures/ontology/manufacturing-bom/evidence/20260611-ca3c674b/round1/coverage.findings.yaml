@@ -1,0 +1,371 @@
+schema_version: 1
+session_id: 20260611-ca3c674b
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: manufacturing-bom-ontology.yaml — BomLine / Part.rev / ECO
+    evidence_anchor: entities.BomLine attributes (parent_ref, child_ref, qty_per,
+      scrap_rate only); entities.Part.rev (single string); integrity_rules[2]
+      (rev 갱신은 주간 배치 동기화)
+    claim: BOM 구조와 품목 리비전에 유효기간·이력(effectivity) 차원이 전혀 없어 과거 시점 BOM을 재구성할 수 없다.
+    what: BomLine에는 effective_from/effective_to 또는 ECO 연계 유효성 속성이 없고, Part.rev는 단일
+      문자열로 현재값만 보유하며 리비전 이력 개념이 없다. ECO.effective_date가 유일한 시간 개념이지만 BOM 라인 단위와
+      연결되지 않는다.
+    why: PLM/MES 통합 기준 문서라면 '특정 생산 시점에 어떤 BOM/rev가 유효했는가'가 핵심 질의인데, 현 모델로는 ECO
+      effective_date 전후의 BOM 상태 전환을 표현할 수 없다. integrity_rules가 'effective_date
+      이후 생산분은 신규 rev를 따른다'고 규정하면서도 그 규칙을 지탱할 시간 차원이 모델에 없어 규칙 자체가 검증 불가능하다.
+    how_to_fix: BomLine에 effectivity(effective_from/to 또는 도입·폐기 ECO ref) 속성을 추가하고,
+      Part의 리비전을 이력 가능한 하위 개념(PartRevision)으로 분리해 ECO와 연결한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 변경관리(ECO)와 BOM 정합성 보장
+      failure_condition: ECO effective_date를 걸친 생산 시점에서 어느 BOM 구성·rev가 유효한지 시스템 간 합의가 필요할 때
+      impact: 시점별 BOM 재구성이 불가능하면 PLM과 MES가 서로 다른 BOM 스냅샷으로 동작해도 모델 차원에서 검출할 수 없어, 통합
+        기준 문서의 핵심 효용이 무력화된다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml entities.BomLine
+        - manufacturing-bom-ontology.yaml entities.Part.rev
+        - manufacturing-bom-ontology.yaml integrity_rules[2]
+    causal_path:
+      root_cause_candidate: 온톨로지가 BOM을 '현재 상태 스냅샷'으로만 개념화하고 변경관리를 별도 엔티티(ECO)로 외부화하면서,
+        둘을 잇는 시간 유효성 차원을 설계에서 누락함
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: BomLine과 Part.rev에 유효기간·이력 속성이 존재하지 않는다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.BomLine
+            - manufacturing-bom-ontology.yaml entities.Part.rev
+        - cause_id: coverage-candidate-001.cause-002
+          claim: 그 결과 integrity_rules[2]의 'effective_date 이후 신규 rev' 규칙을 모델 내부에서 표현·검증할 수
+            없다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[2]
+        - cause_id: coverage-candidate-001.cause-003
+          claim: rev 갱신이 주간 배치 동기화로 서술된 것은 시간 차원이 모델 밖(도면 관리대장)에만 존재함을 시인하는 증거다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.Part.rev note
+            - manufacturing-bom-ontology.yaml integrity_rules[2]
+      unresolved_beyond_evidence: 도면 관리대장·ECO 시스템 측에 이력이 충분히 존재하는지는 본 파일 범위 밖이라 확인 불가
+  - candidate_id: coverage-candidate-002
+    target: manufacturing-bom-ontology.yaml — 전체 엔티티 집합 (EBOM/MBOM 구분)
+    evidence_anchor: 헤더 주석 'PLM/MES 통합의 개념 기준 문서'; entities에 BOM 유형/뷰 개념 부재
+    claim: PLM/MES 통합 기준 문서를 표방하면서 설계 BOM(EBOM)과 제조 BOM(MBOM)의 구분 개념이 없다.
+    what: BomLine/Assembly는 단일 BOM 구조만 표현한다. PLM(설계 구조)과 MES(제조 소비 구조)는 통상 서로 다른 BOM
+      뷰를 가지며 그 변환·대응이 통합의 핵심인데, BOM 유형(usage/view) 차원이 어디에도 없다.
+    why: EBOM/MBOM 구분이 없으면 두 시스템이 같은 BomLine 개념을 서로 다른 의미(설계 구성 vs 제조 투입)로 해석하게 되고,
+      통합 기준 문서가 가장 빈번한 PLM-MES 불일치 원천을 다루지 못한다. scrap_rate(제조 관점 계수)가 설계 구조인
+      BomLine에 직접 붙어 있는 것이 두 관점이 이미 한 개념에 뒤섞여 있다는 증거다.
+    how_to_fix: BOM 헤더 또는 BomLine에 bom_usage(engineering/manufacturing) 차원을 추가하거나,
+      단일 BOM 정책을 채택했다면 그 결정과 적용 조건을 integrity_rules/notes에 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 시 양 시스템 BOM 의미의 공통 기준 제공
+      failure_condition: PLM의 설계 구조와 MES의 제조 투입 구조가 달라지는 품목(공정 분할, 중간 조립 생략, 포장재 추가 등)을 통합할 때
+      impact: 기준 문서가 구분을 제공하지 않으면 각 시스템이 자체 해석으로 매핑하여 자재 소요·원가 산출 불일치가 모델 외부에서 발생한다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml 헤더 주석
+        - manufacturing-bom-ontology.yaml entities.BomLine.scrap_rate
+    causal_path:
+      root_cause_candidate: 온톨로지가 BOM을 단일 관점 구조로 가정하고 설계/제조 관점 분리라는 도메인 표준 하위 영역을 개념 공간에서 누락함
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: entities/relations 어디에도 BOM 유형·용도 차원이 없다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities
+            - manufacturing-bom-ontology.yaml relations
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 제조 관점 계수(scrap_rate)가 구분 없이 BomLine에 직접 부착되어 설계/제조 의미가 한 개념에 혼재한다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.BomLine.scrap_rate
+      unresolved_beyond_evidence: 해당 조직이 의도적으로 단일 BOM 정책을 운영하는지는 본 파일에 서술이 없어 판단 불가
+  - candidate_id: coverage-candidate-003
+    target: manufacturing-bom-ontology.yaml — Part / Routing.status / ECO.status
+    evidence_anchor: entities.Part (lifecycle 상태 속성 없음); entities.Routing.status
+      values [draft, released]; entities.ECO.status values [open, approved,
+      applied]
+    claim: "상태를 갖는 핵심 요소들의 lifecycle이 도입~종료 전 구간을 커버하지 못한다: Part에는 lifecycle 자체가 없고,
+      Routing과 ECO는 종결·취소 구간이 없다."
+    what: Part에 신규/양산/단종(obsolete) 등 lifecycle 상태가 없다. Routing.status는
+      draft/released 두 값뿐으로 폐기·대체(superseded/obsolete) 상태가 없다. ECO.status는
+      open/approved/applied뿐으로 반려(rejected)·취소(cancelled) 경로가 없다.
+    why: 단종 품목 개념이 없으면 단종 부품이 BOM에 잔존해도 생산 오더 생성을 막을 근거가 모델에 없다. released 이후 상태가 없으면
+      신규 라우팅 출시 시 구 라우팅의 의미가 미정의가 된다. ECO에 반려 상태가 없으면 승인 게이트가 실질적으로 단방향 통과 절차가
+      되어 변경관리 통제가 약화된다.
+    how_to_fix: "Part에 lifecycle_status(예: preliminary/active/phase_out/obsolete)를
+      추가하고, Routing.status에 obsolete 또는 superseded를, ECO.status에
+      rejected/cancelled를 추가한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 품목·라우팅·변경관리 개념의 정합성(요청 명시 검토 축) 및 생산 오더 생성 게이트의 신뢰성
+      failure_condition: 품목 단종, 라우팅 개정 교체, ECO 반려가 실제로 발생하는 통상 운영 시점
+      impact: 도입~종료 중 종료 구간이 통째로 비어 있어, 단종품 오발주·구 라우팅 오사용을 모델이 막을 수 없고 ECO 승인 게이트가
+        형식화된다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml entities.Part
+        - manufacturing-bom-ontology.yaml entities.Routing.status
+        - manufacturing-bom-ontology.yaml entities.ECO.status
+        - manufacturing-bom-ontology.yaml integrity_rules[1]
+    causal_path:
+      root_cause_candidate: 모델이 '현재 양산 중' 정상 경로만 개념화하고 종료·예외 경로(단종, 폐기, 반려)를 lifecycle 설계에서 체계적으로 제외함
+      root_cause_step_id: coverage-candidate-003.cause-002
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Part에 lifecycle 상태 속성이 없고 Routing/ECO의 enum에 종결·취소 값이 없다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.Part
+            - manufacturing-bom-ontology.yaml entities.Routing.status
+            - manufacturing-bom-ontology.yaml entities.ECO.status
+        - cause_id: coverage-candidate-003.cause-002
+          claim: released만 게이트로 쓰는 integrity_rules[1]은 출시 이후 라우팅을 무효화할 수단이 모델에 없음을 드러낸다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[1]
+      unresolved_beyond_evidence: 단종·반려가 외부 시스템(PLM 등)에서 별도 관리되는지는 본 파일 범위 밖
+  - candidate_id: coverage-candidate-004
+    target: manufacturing-bom-ontology.yaml — scrap_rate / std_time / rev /
+      acceptance_criteria의 권위 지정
+    evidence_anchor: entities.BomLine.scrap_rate note (엑셀 값을 복사); notes[0] (std_time
+      MES 계산 + 표준원가 수기 입력, 분기 대사); entities.Part.rev note + integrity_rules[2]
+      (주간 배치 동기화)
+    claim: 복수 시스템·장부에 걸쳐 관리된다고 스스로 서술한 값들(scrap_rate, std_time, rev)에 단일 원본(권위) 지정
+      개념이 없다.
+    what: scrap_rate는 생산계획팀 엑셀이 사실상 원본이고 온톨로지 값은 복사본이다. 누적 std_time은 MES 계산값과 표준원가
+      시스템 수기 입력값이 병존하며 분기마다 대사한다. Part.rev는 도면 관리대장이 원본이고 주간 배치로 동기화된다. 그러나 모델에는
+      어느 값이 권위이고 사본은 어떤 동기화 보장을 갖는지 표현할 개념(authority/source-of-truth 지정, 동기화
+      상태)이 없다.
+    why: 기준 문서의 존재 이유가 시스템 간 권위 합의인데, 정작 문서가 열거한 모든 이중 장부 값에 권위 지정이 note 수준 산문으로만
+      존재한다. 복사·수기·배치 구간에서 값이 갈라져도 모델 차원에서 어느 쪽이 옳은지 판정할 근거가 없어, 분기 대사·주간 배치 사이의
+      불일치 기간이 구조적으로 방치된다.
+    how_to_fix: 각 시점 의존 속성에 authoritative_source(시스템/장부 식별)와 sync_policy(주기, 방향)를 일급
+      메타 속성으로 추가하고, 사본 속성임을 모델 차원에서 표시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 시 값 불일치 발생 때 판정 기준 제공이라는 기준 문서의 핵심 역할
+      failure_condition: 엑셀 갱신~복사 사이, 수기 입력~분기 대사 사이, 도면대장 반영~주간 배치 사이에 시스템 간 값이 다른 모든 기간
+      impact: 권위 미지정 상태에서는 불일치 발견 시 어느 값으로 정정할지가 매번 사람 판단에 맡겨져, 자재
+        소요량(scrap_rate)·표준원가(std_time)·생산 rev 적용이 비결정적으로 흔들린다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml entities.BomLine.scrap_rate note
+        - manufacturing-bom-ontology.yaml notes[0]
+        - manufacturing-bom-ontology.yaml entities.Part.rev note
+        - manufacturing-bom-ontology.yaml integrity_rules[2]
+    causal_path:
+      root_cause_candidate: 기존 분산 장부 운영 관행을 온톨로지가 note 산문으로 기술만 하고, 권위·동기화를 일급 개념으로 승격하지 않음
+      root_cause_step_id: coverage-candidate-004.cause-002
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: scrap_rate·std_time·rev 세 값 모두 모델 외부 장부가 원본임이 note/integrity_rules에 명시되어
+            있다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.BomLine.scrap_rate note
+            - manufacturing-bom-ontology.yaml notes[0]
+            - manufacturing-bom-ontology.yaml entities.Part.rev note
+        - cause_id: coverage-candidate-004.cause-002
+          claim: 권위 지정이 산문에만 있고 개념 구조에 없으므로 통합 시스템이 기계적으로 참조할 단일 진실 규칙이 존재하지 않는다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities (authority 관련 속성 부재)
+      unresolved_beyond_evidence: 분기 대사·주간 배치에서 실제 불일치가 얼마나 발생하는지는 운영 데이터 없이는 확인 불가
+  - candidate_id: coverage-candidate-005
+    target: manufacturing-bom-ontology.yaml — uom / 환산계수
+    evidence_anchor: entities.Part.uom values [ea, kg, m]; notes[1] '품목별 환산계수 마스터가
+      없고, 필요 시 현장에서 환산한다'
+    claim: UoM 환산계수라는 필수 하위 영역이 의도적으로 비워져 있고, 그 공백이 현장 임의 환산으로 메워지고 있음을 문서가 자인한다.
+    what: uom이 ea/kg/m 세 값으로 존재하고 BomLine.qty_per가 단위 의존 수량인데, 단위 간
+      환산계수(UomConversion) 개념이 없다. notes[1]이 환산을 현장 재량에 맡긴다고 명시한다.
+    why: kg 관리 원자재를 ea 단위 조립품에 투입하는 BOM 전개·자재 소요 계산은 환산 없이는 정의되지 않는다. 환산이 모델 밖 현장
+      재량이면 같은 BOM이 작업자마다 다른 투입량으로 해석될 수 있어, 이는 개념 공백이 직접 제조 운영 위험(요청에서 명시한 검토
+      축)으로 이어지는 사례다.
+    how_to_fix: 품목별 UomConversion(from_uom, to_uom, factor, 품목 ref) 엔티티를 추가하고
+      BomLine 전개 시 환산 규칙 적용을 integrity_rules에 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: BOM 기반 자재 소요·생산 지시 수량의 결정성(제조 운영 위험 축)
+      failure_condition: 상위/하위 품목의 uom이 다른 모든 BomLine의 소요량 계산 시
+      impact: 환산이 비결정적이면 MES 자재 소요와 실제 투입이 어긋나고, PLM/MES가 같은 BOM에서 다른 수량을 산출해도 기준 문서가
+        중재할 수 없다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml entities.Part.uom
+        - manufacturing-bom-ontology.yaml notes[1]
+    causal_path:
+      root_cause_candidate: 환산계수 마스터 부재라는 기존 운영 공백을 온톨로지가 개념으로 보강하지 않고 notes로 현상 기술만 함
+      root_cause_step_id: coverage-candidate-005.cause-002
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: 복수 uom이 정의되어 있으나 환산 개념이 entities에 없다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.Part.uom
+            - manufacturing-bom-ontology.yaml entities
+        - cause_id: coverage-candidate-005.cause-002
+          claim: notes[1]이 그 공백을 현장 임의 환산으로 메우고 있음을 명시한다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml notes[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-006
+    target: manufacturing-bom-ontology.yaml — ECO ��인 및 수동 조정 행위의 감사 증거
+    evidence_anchor: entities.ECO.status (approved 값만 존재, 승인자·시각 속성 없음); notes[0]
+      (표준원가 수기 입력·분기 대사); entities.BomLine.scrap_rate note (엑셀 값 복사)
+    claim: 통제가 필요한 행위(ECO 승인, 표준원가 수기 입력, scrap_rate 복사)에 행위자·시각·근거를 추적할 감사 증거 개념이
+      전혀 없다.
+    what: ECO는 approved 상태값만 있고 누가·언제·무슨 근거로 승인했는지 담을 속성이 없다. 수기 입력과 엑셀 복사라는 수동 조정
+      행위도 문서에 서술만 되고 행위 기록 개념이 없다.
+    why: 설계변경 승인은 제조업에서 대표적 통제 행위인데 승인 증거가 없으면 변경관리 정합성(요청 검토 축)을 사후 검증할 수 없다. 수기
+      입력·복사 구간은 오류 발생 시 원인 추적이 불가능해 분기 대사가 발견한 차이의 책임 소재를 가릴 수 없다.
+    how_to_fix: ECO에 approved_by/approved_at(또는 ApprovalRecord ref)을 추가하고, 수동 조정 값에는
+      최소한 entered_by/entered_at/source_ref를 갖는 조정 기록 개념을 도입한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 변경관리(ECO) 통제의 사후 검증 가능성과 수동 조정 값의 추적성
+      failure_condition: 잘못된 ECO 적용 또는 수기 입력 오류가 발견되어 원인·책임 추적이 필요한 시점
+      impact: 감사 증거 개념이 없으면 승인 게이트와 분기 대사가 발견한 문제를 행위 단위로 소급할 수 없어 통제가 명목화된다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml entities.ECO
+        - manufacturing-bom-ontology.yaml notes[0]
+        - manufacturing-bom-ontology.yaml entities.BomLine.scrap_rate note
+    causal_path:
+      root_cause_candidate: 모델이 상태 결과(approved)만 개념화하고 상태를 만든 행위(승인 사건)를 개념 공간에서 누락함
+      root_cause_step_id: coverage-candidate-006.cause-002
+      steps:
+        - cause_id: coverage-candidate-006.cause-001
+          claim: ECO에 승인 행위자·시각·근거 속성이 없고 수동 조정 행위에도 기록 개념이 없다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.ECO
+            - manufacturing-bom-ontology.yaml notes[0]
+        - cause_id: coverage-candidate-006.cause-002
+          claim: 그 결과 approved 상태는 검증 불가능한 자기 선언이 된다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.ECO.status
+      unresolved_beyond_evidence: 승인 기록이 외부 ECO 시스템에 존재할 가능성은 본 파일 범위 밖
+  - candidate_id: coverage-candidate-007
+    target: manufacturing-bom-ontology.yaml — ECO 영향 범위 및 재고 처분 개념
+    evidence_anchor: entities.ECO.affected_parts (Part 목록만); integrity_rules[1] ('생산
+      오더' 언급, 엔티티 미정의)
+    claim: ECO의 영향 범위가 Part 수준에 그치고(BOM 라인·라우팅 영향 미표현), 변경 시 기존 재고·재공
+      처분(use-up/scrap/rework) 개념과 integrity_rules가 참조하는 '생산 오더' 개념이 누락되었다.
+    what: ECO.affected_parts는 Part 참조 목록뿐이어서 어떤 BomLine이 추가·삭제·수량 변경되는지, 라우팅이 어떻게
+      바뀌는지 표현할 수 없다. 설계변경 시 표준 관행인 기존 재고 처분 지시(disposition)가 없다. 또한
+      integrity_rules[1]이 '생산 오더'를 게이트 대상으로 규정하지만 해당 개념이 온톨로지에 정의되어 있지 않다.
+    why: 변경관리 정합성 검토 축에서, 변경 내용을 Part 단위로만 기술하면 PLM의 변경 상세와 MES의 적용 단위(BOM 라인·공정)가
+      매핑되지 않는다. 무결성 규칙이 미정의 개념에 의존하면 기준 문서로서 규칙의 적용 범위가 외부 해석에 맡겨진다.
+    how_to_fix: "ECO에 변경 상세(EcoChangeLine: 대상 BomLine/Routing, 변경 유형) 개념과
+      disposition 속성을 추가하고, ProductionOrder를 최소한 stub 엔티티로 정의해 integrity_rules의
+      참조를 닫는다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 변경관리 개념의 정합성과 integrity_rules의 자기완결성
+      failure_condition: ECO가 BOM 라인 수준 변경을 수반하거나 기존 재고 처분 결정이 필요한 통상적 설계변경 적용 시
+      impact: 변경 상세가 모델에 없어 PLM 변경 내용을 MES 적용 단위로 옮기는 작업이 전부 모델 외부 해석이 되고, 미정의 '생산 오더'
+        참조는 규칙의 검증 가능성을 깨뜨린다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml entities.ECO.affected_parts
+        - manufacturing-bom-ontology.yaml integrity_rules[1]
+    causal_path:
+      root_cause_candidate: 변경관리 하위 영역을 ECO 헤더 한 개념으로 축약하면서 변경 상세·처분·적용 대상(생산 오더) 등 인접 개념의 세분화를 생략함
+      root_cause_step_id: coverage-candidate-007.cause-002
+      steps:
+        - cause_id: coverage-candidate-007.cause-001
+          claim: ECO의 영향 표현이 affected_parts(Part 목록) 하나뿐이다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities.ECO.affected_parts
+        - cause_id: coverage-candidate-007.cause-002
+          claim: integrity_rules[1]은 미정의 개념(생산 오더)에 의존해 규칙이 모델 내부에서 닫히지 않는다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[1]
+      unresolved_beyond_evidence: 생산 오더가 의도적으로 MES 측 개념으로 위임된 것인지 여부는 본 파일에 서술이 없음
+  - candidate_id: coverage-candidate-008
+    target: manufacturing-bom-ontology.yaml — 스크랩 재투입 모델링과 부산물 개념
+    evidence_anchor: integrity_rules[0] '재생 원료 회수 공정(스크랩 재투입)은 Assembly가 자기 하위에 자신을
+      포함하는 형태로 모델링한다'
+    claim: 부산물/회수 원료(by-product, recycled material flow)라는 하위 영역이 없어, 그 공백을 BOM 비순환
+      원칙을 깨는 자기참조 예외로 메우고 있다.
+    what: 스크랩 재투입을 표현할 별도 개념(부산물 산출, 회수 원료 품목, 회수율) 없이 Assembly가 자기 자신을 하위로 포함하는 순환
+      구조를 공식 모델링 방식으로 규정했다.
+    why: 이 예외는 BOM 전개·소요량 계산·원가 적산 알고리즘이 전제하는 비순환성을 시스템 간 합의 없이 깨뜨린다. 도메인 표준 관행은 회수
+      원료를 별도 품목과 부산물 관계(negative quantity 또는 by-product line)로 표현하는 것이며, 개념 부재가
+      무결성 규칙 자체를 자기모순으로 만든 사례다.
+    how_to_fix: 회수 원료를 별도 Part로 두고 BomLine에 line_type(component/by_product) 차원을 추가해
+      자기참조 예외 조항을 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM 비순환 무결성과 BOM 전개 알고리즘의 결정성
+      failure_condition: 스크랩 재투입 품목에 대해 MES/PLM이 BOM 전개·소요량 계산을 수행할 때
+      impact: 자기참조 BOM은 전개 알고리즘마다 무한루프 방지 처리가 달라 시스템별 상이한 소요량을 낳을 수 있고, 기준 문서가 이를 공식
+        방식으로 승인하고 있다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml integrity_rules[0]
+    causal_path:
+      root_cause_candidate: 부산물·회수 원료 하위 영역의 개념 누락이 자기참조 예외라는 구조 변칙으로 보상됨
+      root_cause_step_id: coverage-candidate-008.cause-002
+      steps:
+        - cause_id: coverage-candidate-008.cause-001
+          claim: 스크랩 재투입을 표현할 부산물 개념이 entities에 없다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml entities
+        - cause_id: coverage-candidate-008.cause-002
+          claim: 그 공백을 메우기 위해 integrity_rules[0]이 비순환 원칙에 자기참조 예외를 도입했다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml integrity_rules[0]
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-009
+    target: manufacturing-bom-ontology.yaml — WorkCenter.capacity_per_shift
+    evidence_anchor: entities.WorkCenter.capacity_per_shift note '단위는 작업장마다 다르다(개수 또는 시간)'
+    claim: 능력 값에 단위 차원이 없어 작업장 간 능력 비교·합산이 정의되지 않는다.
+    what: capacity_per_shift가 단위 명시 속성 없이 숫자만 보유하며, note가 단위가 작업장마다 다름을 인정한다.
+    why: MES의 능력 계획에서 단위가 모델에 없으면 값의 해석이 작업장별 암묵지에 의존한다. 다만 단일 작업장 내 사용은 가능하므로 표면
+      결손으로 분류한다.
+    how_to_fix: "capacity_uom(예: pieces, minutes) 속성을 추가한다."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: coverage-candidate-010
+    target: manufacturing-bom-ontology.yaml — BOM 하위 세분화 (phantom, 라인 수준 대체, 참조 지시자)
+    evidence_anchor: entities.BomLine / entities.AlternatePart (품목 수준 대체만 존재)
+    claim: BOM 도메인의 통상 하위 세분화(phantom assembly, BOM 라인 수준 대체, find number/위치 지시자,
+      공정-자재 소비 연결)가 부족하다.
+    what: 대체 관계가 품목 전역(AlternatePart)에만 있고 특정 상위 품목 맥락에서만 허용되는 라인 수준 대체가 없다. phantom
+      구분, 라인 식별자, 어느 Operation이 어느 자재를 소비하는지(불출/백플러시 지점) 연결도 없다.
+    why: v2.0 개념 기준 문서로서는 이들 부재가 즉시 오류를 만들지는 않으나, MES 자재 불출 설계 시 추가 개념 도입이 필요해질
+      영역이므로 사전 인지가 유용하다.
+    how_to_fix: BomLine에 line_no와 선택적 operation_ref를 추가하는 최소 확장을 검토하고, 라인 수준 대체 필요
+      여부를 운영 부서와 확인한다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 제조 BOM/라우팅 도메인의 일반 관행(EBOM/MBOM 구분, BOM effectivity,
+    부산물 라인, ECO disposition, UoM 환산 마스터)을 비공식 참조 기준으로 사용했다. 웹 조사는 금지되어 모델 내장 지식에
+    의존했다.
+  - 대상 파일이 자칭하는 용도(PLM/MES 통합의 개념 기준 문서)를 커버리지 판정의 기준 목적으로 채택했다.
+  - scrap_rate·std_time·rev의 외부 장부(엑셀, 표준원가 시스템, 도면 관리대장)는 본 검토 경계 밖에 있어 그 내부
+    이력·권위 체계는 확인하지 못했다.
+validation:
+  unaddressable_candidates: []
