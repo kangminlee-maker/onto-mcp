@@ -79,19 +79,22 @@ Output formats are shared: `lens-sidecar`, `issue-artifact`,
   payload from `structured_output` or the `result` text. A clean exit with no
   result event, `is_error`, or a non-success subtype fails loud.
 
-### 3.3 Submit salvage recovery (opt-in, claude_code)
+### 3.3 Submit salvage recovery (opt-in, both adapters)
 
 settings `review.execution.retry.salvage.enabled`(기본 false)로만 활성화되는
-계약-위반 회수 경로다. fail-loud는 불변: 구조적 제출 실패는 그대로
-`output_contract`로 기록되고, 정규 재시도 예산이 **소진된 뒤에만** 러너가
-executor를 `--salvage-from`으로 1회 재호출한다.
+계약-위반 회수 경로다(`codex_cli`/`claude_code` 공통). fail-loud는 불변:
+구조적 제출 실패는 그대로 기록되고, 정규 재시도 예산이 **소진된 뒤에만**
+러너가 executor를 `--salvage-from`으로 1회 재호출한다. 발동 신호는 메시지
+분류가 아니라 **동결 파일의 존재**(executor가 attempt 시작마다 stale 동결을
+제거하므로, 존재 ⟺ 마지막 attempt가 구조적 제출 실패)다.
 
 1. **동결**: 구조적 제출 실패 시 executor가 해당 attempt의 stream을
    `<seat>.salvage-input.json`(runtime-owned scratch — seat가 아님)에 동결한다.
 2. **분류** (`cli/submit-salvage.ts`): 부분 제출(validator가 누락 stance 행을
    명명) → **경계-한정 보완**(동일 등급 새 인스턴스가 누락 행만 산출, 병합은
    코드 소유, 부분 payload가 중복 시 우선); 그 외(산문-만/필드 위반) →
-   **전사**(`salvage.transcription_llm` 저비용 모델, 발명 금지 —
+   **전사**(`salvage.transcription_llm` 저비용 모델 — 유닛의 adapter가
+   실행하므로 provider 가족이 어긋나면 유닛 모델로 폴백; 발명 금지 —
    `SALVAGE_INCOMPLETE` sentinel 시 회수 포기). 위반 모델은 재관여하지 않는다.
 3. **동일 검증**: 회수 payload도 §3의 동일 submit tool을 통과해야만 seat가
    된다. 출력 통로는 불변, 제출자만 추가다.

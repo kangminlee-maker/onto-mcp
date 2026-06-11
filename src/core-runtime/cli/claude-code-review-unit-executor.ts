@@ -687,6 +687,12 @@ export async function runClaudeCodeReviewUnitExecutorCli(
       timeoutMs,
     });
   } else {
+    // Stale-freeze hygiene: the freeze file is the parent's STRUCTURAL
+    // salvage trigger, so its presence must mean "the LAST attempt failed
+    // structurally" — clear any leftover from an earlier attempt first.
+    if (outputFormat !== "markdown") {
+      await fs.rm(salvageInputPathFor(outputPath), { force: true });
+    }
     const stdout = await runClaudeWorker({
       projectRoot,
       boundedPrompt,

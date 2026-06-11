@@ -271,6 +271,26 @@ describe("resolveSettingsChain", () => {
     });
   });
 
+  it("parses an openai-provider salvage transcription model (codex adapter)", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      salvage: {
+        enabled: true,
+        transcription_llm: { provider: "openai", model: "gpt-5.5-mini" },
+      },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry?.salvage).toEqual({
+      enabled: true,
+      transcription_llm: { provider: "openai", model: "gpt-5.5-mini" },
+      delta_completion: "unit_llm",
+    });
+  });
+
   it("materializes partial review retry settings into an effective policy", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     const settingsDoc = v3ReviewSettings();

@@ -95,7 +95,7 @@ const ReviewSubmitSalvageSettingsSchema = z
     enabled: z.boolean().optional(),
     transcription_llm: z
       .object({
-        provider: z.enum(["anthropic"]).optional(),
+        provider: z.enum(["anthropic", "openai"]).optional(),
         model: z.string().min(1),
       })
       .strict()
@@ -540,15 +540,17 @@ export interface ReviewExecutionSettings {
  */
 export interface ReviewSubmitSalvageSettingsInput {
   enabled?: boolean | undefined;
-  /** Path A (transcription) model — cheap tier; claude CLI `--model` value. */
-  transcription_llm?: { provider?: "anthropic" | undefined; model: string } | undefined;
+  /** Path A (transcription) model — cheap tier; the unit's OWN adapter runs it
+   * (anthropic -> claude CLI, openai -> codex CLI); provider mismatch with the
+   * unit adapter falls back to the unit model. */
+  transcription_llm?: { provider?: "anthropic" | "openai" | undefined; model: string } | undefined;
   /** Path B (missing-rows delta) executor — fixed: fresh same-tier instance. */
   delta_completion?: "unit_llm" | undefined;
 }
 
 export interface ReviewSubmitSalvageSettings {
   enabled: boolean;
-  transcription_llm?: { provider?: "anthropic" | undefined; model: string };
+  transcription_llm?: { provider?: "anthropic" | "openai" | undefined; model: string };
   delta_completion: "unit_llm";
 }
 

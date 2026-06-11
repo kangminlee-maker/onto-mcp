@@ -1592,7 +1592,12 @@ function failureKindFromMessage(message: string): ReviewUnitFailureKind {
     normalized.includes("boundary_notes") ||
     normalized.includes("schema_version") ||
     normalized.includes("work_item_id") ||
-    normalized.includes("issue_id")
+    normalized.includes("issue_id") ||
+    // structured-submit extraction failures (claude: no result payload;
+    // both adapters: unparseable submit JSON) are contract violations, not
+    // executor transport failures.
+    normalized.includes("contained no structured payload") ||
+    normalized.includes("structured output json")
   ) {
     return "output_contract";
   }
@@ -3557,15 +3562,18 @@ async function runSingleDispatchWithRetries(args: {
   };
 
   // Opt-in submit salvage (design: submit-salvage-recovery-design.md): the
-  // regular budget is exhausted on output_contract — recover the frozen
-  // attempt's semantics via the executor's salvage mode. The exhausted
-  // failure stays loudly recorded as a child result; salvage failure falls
-  // through to the unchanged failure return.
+  // regular budget is exhausted — recover the frozen attempt's semantics via
+  // the executor's salvage mode. The trigger is STRUCTURAL, not heuristic:
+  // the freeze file exists iff the LAST attempt failed inside the structured
+  // extract/validate/write block (executors clear stale freezes per attempt),
+  // so message-classification gaps in failure_kind cannot suppress or
+  // mis-fire salvage. The exhausted failure stays loudly recorded as a child
+  // result; salvage failure falls through to the unchanged failure return.
   const salvageSettings = reviewExecutionProfile?.retry?.salvage;
+  const salvageAdapter = reviewExecutionProfile?.worker_executor;
   if (
     salvageSettings?.enabled === true &&
-    failure.failure_kind === "output_contract" &&
-    reviewExecutionProfile?.worker_executor === "claude_code" &&
+    (salvageAdapter === "claude_code" || salvageAdapter === "codex") &&
     dispatch.output_format !== undefined &&
     dispatch.output_format !== "markdown"
   ) {
@@ -3584,7 +3592,15 @@ async function runSingleDispatchWithRetries(args: {
           [
             "--salvage-from",
             salvageInputPath,
-            ...(salvageSettings.transcription_llm?.model
+            // The transcription model runs on the unit's own adapter, so it
+            // is forwarded only when its provider family matches (mismatch
+            // falls back to the unit model inside the executor).
+            ...(salvageSettings.transcription_llm?.model &&
+            ((salvageAdapter === "claude_code" &&
+              (salvageSettings.transcription_llm.provider ?? "anthropic") ===
+                "anthropic") ||
+              (salvageAdapter === "codex" &&
+                salvageSettings.transcription_llm.provider === "openai"))
               ? ["--salvage-transcription-model", salvageSettings.transcription_llm.model]
               : []),
           ],

@@ -19,10 +19,128 @@ import {
   writeLensSidecarArtifactFromPayload,
   writeOutputSchemaFile,
   writeRuntimeSubmitArtifactFromPayload,
+  type WorkerStructuredOutputState,
 } from "./worker-structured-output.js";
+import {
+  SALVAGE_INCOMPLETE_SENTINEL,
+  buildDeltaRowsSalvagePrompt,
+  buildTranscriptionSalvagePrompt,
+  classifySalvageMode,
+  mergeMissingStanceRows,
+  salvageInputPathFor,
+  type SalvageInput,
+} from "./submit-salvage.js";
 
 async function removeFileIfPresent(filePath: string): Promise<void> {
   await fs.rm(filePath, { force: true });
+}
+
+/**
+ * Salvage mode (opt-in, parent-invoked after retry exhaustion): codex
+ * counterpart of the claude executor's salvage — recover the frozen
+ * attempt's semantics without re-engaging the violating model. Schema
+ * enforcement rides the normal `--output-schema` file; the salvaged payload
+ * goes through the SAME validator/writer as a self-submitted payload.
+ */
+async function runCodexSubmitSalvageMode(args: {
+  salvageFrom: string;
+  outputFormat: string;
+  structuredOutput: { schemaPath: string; state: WorkerStructuredOutputState };
+  boundedPrompt: string;
+  outputPath: string;
+  unitId: string;
+  unitKind: string;
+  projectRoot: string;
+  sessionRoot: string;
+  sandboxMode: string | boolean | undefined;
+  model: string | boolean | undefined;
+  transcriptionModel: string | undefined;
+  configOverrides: string[];
+  timeoutMs: number | undefined;
+}): Promise<number> {
+  const frozen = JSON.parse(
+    await fs.readFile(args.salvageFrom, "utf8"),
+  ) as SalvageInput;
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = coerceStructuredPayload(
+      frozen.stdout,
+      `salvage frozen payload ${args.unitId}`,
+    );
+  } catch {
+    payload = null;
+  }
+  const resultText =
+    payload === null && frozen.stdout.trim().length > 0 ? frozen.stdout : null;
+  const mode = classifySalvageMode({
+    outputFormat: args.outputFormat,
+    payload,
+    resultText,
+    error: frozen.error,
+  });
+  if (mode.mode === "unsalvageable") {
+    throw new Error(`submit salvage unsalvageable for ${args.unitId}: ${mode.reason}`);
+  }
+  process.stderr.write(
+    `[plan:executor] kind=codex unit_id=${args.unitId} salvage=${mode.mode}\n`,
+  );
+
+  const salvageRawPath = `${args.outputPath}.codex-salvage-output.json`;
+  const prompt =
+    mode.mode === "delta_rows"
+      ? buildDeltaRowsSalvagePrompt({
+          boundedPrompt: args.boundedPrompt,
+          missingIssueIds: mode.missingIssueIds,
+        })
+      : buildTranscriptionSalvagePrompt({
+          resultText: resultText ?? JSON.stringify(payload, null, 2),
+          error: frozen.error,
+        });
+  await runCodexWorker(
+    args.projectRoot,
+    prompt,
+    salvageRawPath,
+    // delta completion is fresh semantic judgment — same-tier instance;
+    // transcription may use the configured cheap model.
+    mode.mode === "delta_rows" ? args.model : args.transcriptionModel ?? args.model,
+    args.sandboxMode,
+    undefined,
+    args.configOverrides,
+    args.unitId,
+    args.unitKind,
+    args.sessionRoot,
+    args.structuredOutput.schemaPath,
+    args.timeoutMs,
+  );
+  const rawText = await fs.readFile(salvageRawPath, "utf8");
+  if (rawText.includes(SALVAGE_INCOMPLETE_SENTINEL)) {
+    throw new Error(
+      `submit salvage aborted for ${args.unitId}: ${SALVAGE_INCOMPLETE_SENTINEL} (frozen output lacks required content; refusing to invent).`,
+    );
+  }
+  const salvageOutput = coerceStructuredPayload(
+    rawText,
+    `salvage output ${args.unitId}`,
+  );
+  const salvagedPayload =
+    mode.mode === "delta_rows"
+      ? mergeMissingStanceRows(payload as Record<string, unknown>, salvageOutput)
+      : salvageOutput;
+  const fields =
+    args.structuredOutput.state.outputFormat === "lens-sidecar"
+      ? await writeLensSidecarArtifactFromPayload({
+          payload: salvagedPayload,
+          outputPath: args.outputPath,
+          state: args.structuredOutput.state.lensSidecarState,
+        })
+      : await writeRuntimeSubmitArtifactFromPayload({
+          payload: salvagedPayload,
+          outputPath: args.outputPath,
+          state: args.structuredOutput.state.runtimeSubmitState,
+        });
+  await removeFileIfPresent(salvageRawPath);
+  await removeFileIfPresent(args.structuredOutput.schemaPath);
+  return fields;
 }
 
 async function runCodexWorker(
@@ -289,6 +407,8 @@ export async function runCodexReviewUnitExecutorCli(
       "output-format": { type: "string", default: "markdown" },
       "human-output-ref": { type: "string" },
       "timeout-ms": { type: "string" },
+      "salvage-from": { type: "string" },
+      "salvage-transcription-model": { type: "string" },
     },
     strict: true,
     allowPositionals: false,
@@ -366,49 +486,107 @@ export async function runCodexReviewUnitExecutorCli(
     throw new Error(`--timeout-ms must be a positive integer, got "${timeoutMsRaw}".`);
   }
 
-  await runCodexWorker(
-    projectRoot,
-    boundedPrompt,
-    rawOutputPath,
-    values.model,
-    sandboxMode,
-    values["reasoning-effort"],
-    values["config-override"],
-    unitId,
-    unitKind,
-    sessionRoot,
-    structuredOutput?.schemaPath,
-    timeoutMs,
-  );
+  const salvageFromRaw = values["salvage-from"];
+  const salvageFrom =
+    typeof salvageFromRaw === "string" && salvageFromRaw.length > 0
+      ? path.resolve(salvageFromRaw)
+      : undefined;
+  if (salvageFrom && outputFormat === "markdown") {
+    throw new Error("--salvage-from requires a structured --output-format.");
+  }
+  const transcriptionModel =
+    typeof values["salvage-transcription-model"] === "string" &&
+    values["salvage-transcription-model"].length > 0
+      ? values["salvage-transcription-model"]
+      : undefined;
 
   let structuredPayloadFields: number | undefined;
-  if (outputFormat !== "markdown") {
+  if (salvageFrom) {
     if (!structuredOutput) {
       throw new Error(`Missing structured output state for ${outputFormat}.`);
     }
-    const rawText = await fs.readFile(rawOutputPath, "utf8");
-    const payload = coerceStructuredPayload(
-      rawText,
-      `Codex structured output ${rawOutputPath}`,
-    );
-    structuredPayloadFields =
-      structuredOutput.state.outputFormat === "lens-sidecar"
-        ? await writeLensSidecarArtifactFromPayload({
-            payload,
-            outputPath,
-            state: structuredOutput.state.lensSidecarState,
-          })
-        : await writeRuntimeSubmitArtifactFromPayload({
-            payload,
-            outputPath,
-            state: structuredOutput.state.runtimeSubmitState,
-          });
-    await removeFileIfPresent(rawOutputPath);
-    await removeFileIfPresent(structuredOutput.schemaPath);
+    structuredPayloadFields = await runCodexSubmitSalvageMode({
+      salvageFrom,
+      outputFormat,
+      structuredOutput,
+      boundedPrompt,
+      outputPath,
+      unitId,
+      unitKind,
+      projectRoot,
+      sessionRoot,
+      sandboxMode,
+      model: values.model,
+      transcriptionModel,
+      configOverrides: values["config-override"],
+      timeoutMs,
+    });
   } else {
-    const outputText = await fs.readFile(outputPath, "utf8");
-    if (outputText.trim().length === 0) {
-      throw new Error(`Codex executor produced empty output: ${outputPath}`);
+    // Stale-freeze hygiene: freeze presence is the parent's structural
+    // salvage trigger and must reflect the LAST attempt only.
+    if (outputFormat !== "markdown") {
+      await fs.rm(salvageInputPathFor(outputPath), { force: true });
+    }
+    await runCodexWorker(
+      projectRoot,
+      boundedPrompt,
+      rawOutputPath,
+      values.model,
+      sandboxMode,
+      values["reasoning-effort"],
+      values["config-override"],
+      unitId,
+      unitKind,
+      sessionRoot,
+      structuredOutput?.schemaPath,
+      timeoutMs,
+    );
+
+    if (outputFormat !== "markdown") {
+      if (!structuredOutput) {
+        throw new Error(`Missing structured output state for ${outputFormat}.`);
+      }
+      const rawText = await fs.readFile(rawOutputPath, "utf8");
+      try {
+        const payload = coerceStructuredPayload(
+          rawText,
+          `Codex structured output ${rawOutputPath}`,
+        );
+        structuredPayloadFields =
+          structuredOutput.state.outputFormat === "lens-sidecar"
+            ? await writeLensSidecarArtifactFromPayload({
+                payload,
+                outputPath,
+                state: structuredOutput.state.lensSidecarState,
+              })
+            : await writeRuntimeSubmitArtifactFromPayload({
+                payload,
+                outputPath,
+                state: structuredOutput.state.runtimeSubmitState,
+              });
+      } catch (error: unknown) {
+        // Freeze the failing attempt's evidence for the opt-in salvage path.
+        const frozen: SalvageInput = {
+          unit_id: unitId,
+          unit_kind: unitKind,
+          output_format: outputFormat,
+          stdout: rawText,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        await fs.writeFile(
+          salvageInputPathFor(outputPath),
+          JSON.stringify(frozen),
+          "utf8",
+        );
+        throw error;
+      }
+      await removeFileIfPresent(rawOutputPath);
+      await removeFileIfPresent(structuredOutput.schemaPath);
+    } else {
+      const outputText = await fs.readFile(outputPath, "utf8");
+      if (outputText.trim().length === 0) {
+        throw new Error(`Codex executor produced empty output: ${outputPath}`);
+      }
     }
   }
 
