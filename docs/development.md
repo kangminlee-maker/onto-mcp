@@ -6,18 +6,9 @@ entrypoints. The public interface is the MCP server (see the
 
 ## Repository map
 
-| Path | Role |
-|---|---|
-| `.onto/authority/` | canonical ontology data and runtime registries |
-| `.onto/processes/shared/` | cross-process target and runtime contracts |
-| `.onto/processes/review/` | review contracts |
-| `.onto/processes/reconstruct/` | reconstruct contracts and source profiles |
-| `.onto/domains/` | bundled domain documents |
-| `src/core-runtime/` | TypeScript runtime |
-| `src/core-api/` | library facade used by MCP |
-| `src/mcp/` | MCP tool surface |
-| `development-records/` | development records and archived material |
-| `IMPLEMENTATION_MAP.html` | visual architecture and roadmap map |
+The repo-layout SSOT is
+[architecture/repo-layout.md](architecture/repo-layout.md): folder roles,
+`src/core-runtime/` internal structure, and placement rules live there.
 
 ## Verification
 
