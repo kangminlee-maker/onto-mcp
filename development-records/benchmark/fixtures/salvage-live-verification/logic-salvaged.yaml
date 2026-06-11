@@ -1,0 +1,382 @@
+schema_version: 1
+session_id: 20260611-ca3c674b
+lens_id: logic
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: 논리 관점에서 무권위 사본은 동일 속성에 대해 두 개의 잠재적으로 상이한 진리값(엑셀 원본 vs 온톨로지 사본)을 허용하는
+      구조로, 문서 내부 모순은 아니지만 시스템 간 단언 불일치를 구조적으로 보장하지 못한다. 이슈 진술과 근거가 정합적이다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml
+        entities.BomLine.attributes.scrap_rate.note
+      - manufacturing-bom-ontology.yaml header comment 'PLM/MES 통합의 개념 기준 문서'
+  - issue_id: issue-002
+    stance: support
+    rationale: logic 렌즈의 finding-027이 동일 지점(integrity_rules[2])에서 형식적 동시 만족 불가능(즉시
+      발효 의무 vs 주간 배치 지연 허용)을 독립적으로 확인했다(rel-006 duplicates). axiology의 트레이드오프
+      프레임은 이 형식 모순의 가치 측면 표현으로, 권위 소재 명시라는 해소 방향도 일치한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml integrity_rules[2]
+      - .onto/review/20260611-ca3c674b/round1/axiology.findings.yaml#axiology-candidate-002
+      - manufacturing-bom-ontology.yaml entities.ECO
+  - issue_id: issue-003
+    stance: support
+    rationale: 파생값에 대한 이중 권위(계산 경로 vs 수기 입력)는 동일 양에 두 개의 독립 진리 조건을 부여하는 구조로, 대사 사이
+      기간에 상호 모순된 값이 동시에 유효로 취급된다. 형식 모순으로 확정되진 않으나 비결정성의 논리적 근원이 명확하다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml notes[0]
+      - manufacturing-bom-ontology.yaml
+        entities.Operation.attributes.std_time_min
+  - issue_id: issue-004
+    stance: support
+    rationale: 교차 단위 BomLine에서 qty_per의 해석 함수가 모델 내에 정의되지 않아 수량 의미가
+      비결정(underdetermined)이다. 모순은 아니지만 동일 입력에 대해 상이한 결론이 모두 허용되는 해석 비결정성으로, 논리
+      관점에서 결함이 실재한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml notes[1]
+      - manufacturing-bom-ontology.yaml entities.BomLine.attributes.qty_per
+  - issue_id: issue-005
+    stance: support
+    rationale: 단위 식별 차원이 없는 단일 number는 값의 의미가 작업장별 암묵지에 의존하는 해석 비결정 상태다. 모순이 아닌 의미
+      미정의이므로 low 심각도와 capacity_uom/basis 추가라는 근원 가설 모두 논리적으로 타당하다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - 'entities.WorkCenter.attributes.capacity_per_shift note: "교대당 처리 능력. 단위는
+        작업장마다 다르다(개수 또는 시간)."'
+  - issue_id: issue-006
+    stance: not_applicable
+    rationale: 대상 결함이 아닌 리뷰 프로세스 거버넌스 제안으로, logic 렌즈가 진위·정합성을 판정할 대상 claim이 없다. 보존
+      처리에 이견 없음.
+    root_hypothesis_position: not_applicable
+    severity_position: not_applicable
+    evidence_refs:
+      - .onto/review/20260611-ca3c674b/round1/axiology.findings.yaml#axiology-candidate-007
+  - issue_id: issue-007
+    stance: support
+    rationale: "시간/유효성 차원 부재는 logic이 발견한 integrity_rules[2]의 시간 전개 모순(finding-027)의
+      구조적 전제다: rev 정보가 Part.rev 단일 필드뿐이어서 의무(신규 rev 준수)를 만족할 표현 수단 자체가
+      없다(rel-008 symptom_of). effectivity 도입은 그 모순의 해소 수단을 제공하므로 강하게 지지한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.BomLine
+      - manufacturing-bom-ontology.yaml integrity_rules[2]
+      - .onto/review/20260611-ca3c674b/round1/logic.findings.yaml
+  - issue_id: issue-008
+    stance: support
+    rationale: 한 개념(BomLine)에 설계 구성과 제조 투입이라는 두 해석이 병존하면 동일 단언이 시스템마다 다른 의미로 평가되는 해석
+      다의성이 생긴다. 형식 모순은 아니나 scrap_rate가 설계 구조에 붙어 있다는 증거가 혼재를 입증하므로 이슈가 성립한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.BomLine.scrap_rate
+      - manufacturing-bom-ontology.yaml 헤더 주석
+  - issue_id: issue-009
+    stance: support
+    rationale: 종료·예외 상태가 enum에 없으면 해당 상태를 전제로 한 규칙(생산 오더 게이트 등)이 부분 함수가 되어 통상 운영
+      사건(단종·반려)에 대해 판정 불능이 된다. 정상 경로만 개념화했다는 근원 가설은 증거(상태값 목록)와 정확히 부합한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.Routing.status
+      - manufacturing-bom-ontology.yaml entities.ECO.status
+      - manufacturing-bom-ontology.yaml integrity_rules[1]
+  - issue_id: issue-010
+    stance: support
+    rationale: "권위·동기화 계약의 미승격은 logic의 finding-027과 공통 원인을 공유한다(rel-005: 주간 배치 동기화
+      창이 integrity_rules[2] 자체에 내장된 충돌). 동기화 계약을 일급 개념으로 승격하면 logic이 확인한 시간 전개
+      모순의 원인 단계가 함께 제거되므로 단일 근원 가설을 지지한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml integrity_rules[2]
+      - manufacturing-bom-ontology.yaml entities.Part.rev note
+      - manufacturing-bom-ontology.yaml notes[0]
+  - issue_id: issue-011
+    stance: support
+    rationale: 환산계수가 모델에 없으면 교차 단위 BomLine의 소요량 전개 함수가 정의되지 않아 동일 BOM에 대해 상이한 결과가 모두
+      허용된다. 결정성 부재라는 논리 결함이 명확하고 문서가 공백을 자인하므로 지지한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.Part.uom
+      - manufacturing-bom-ontology.yaml notes[1]
+  - issue_id: issue-012
+    stance: support
+    rationale: 감사 증거 부재는 모순을 만들지는 않으나, 승인·입력 행위에 대한 술어(누가·언제)가 모델에 없어 통제 규칙의 사후 검증
+      명제가 평가 불가능해진다. 상태 결과만 개념화하고 행위를 누락했다는 근원 진단은 증거와 정합한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.ECO
+      - manufacturing-bom-ontology.yaml notes[0]
+  - issue_id: issue-013
+    stance: support
+    rationale: integrity_rules[1]이 미정의 개념('생산 오더')을 참조하는 것은 규칙이 자유 변수 위에 선언된 것과 같아
+      평가 자체가 정의되지 않는다 — 논리 관점에서 규칙의 검증 가능성을 직접 깨뜨리는 결함이므로 지지한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml integrity_rules[1]
+      - manufacturing-bom-ontology.yaml entities.ECO.affected_parts
+  - issue_id: issue-014
+    stance: support
+    rationale: "부산물 개념 공백이 자기참조 예외의 원인이라는 인과(rel-011: finding-015 causes
+      finding-025)는 logic이 확인한 비순환 규칙 모순의 발생 경로와 일치한다. 회수 흐름을 별도 개념으로 분리하면
+      모순(issue-022)도 함께 해소되므로 지지한다. 형식 모순 자체는 issue-022에서 high로 다뤄지므로 본 이슈의
+      medium 유지에 동의한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml integrity_rules[0]
+      - .onto/review/20260611-ca3c674b/round1/logic.findings.yaml
+  - issue_id: issue-015
+    stance: support
+    rationale: 단위 차원 부재로 작업장 간 비교·합산 연산이 정의되지 않는다는 진술은 정확하다. 모순이 아닌 표면 결손이며 단일 작업장 내
+      사용은 가능하므로 low 유지가 타당하다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - entities.WorkCenter.capacity_per_shift note '단위는 작업장마다 다르다(개수 또는 시간)'
+  - issue_id: issue-016
+    stance: support
+    rationale: 통상 하위 세분화 부족은 논리적 모순이나 비결정성을 만들지 않는 범위 한계 관찰이다. 진술이 증거와 일치하고 low 분류가 적절하다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - entities.BomLine / entities.AlternatePart (품목 수준 대체만 존재)
+  - issue_id: issue-017
+    stance: support
+    rationale: issue-007과 동일하게, effectivity 차원 부재는 ECO 규칙(integrity_rules[2])이 구조
+      차원에서 평가 불가능한 선언으로 남는 근원이며 logic의 finding-027 모순이 그 증상이다. 시간 차원을 모델링하지 않은
+      설계 선택이라는 근원 가설을 수용한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.BomLine.attributes
+      - manufacturing-bom-ontology.yaml integrity_rules[2]
+  - issue_id: issue-018
+    stance: support
+    rationale: 닫힌 enum과 모델 밖 환산 규칙의 조합은 모순이 아니라 표현력·결정성 한계이나, 같은 BomLine이 시스템마다 다르게
+      해석될 수 있다는 비결정성 지적은 논리적으로 타당하다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.Part.attributes.uom
+      - manufacturing-bom-ontology.yaml notes[1]
+  - issue_id: issue-019
+    stance: support
+    rationale: InspectionPlan을 is_a Operation으로 고정하면 'Part는 구매 또는 제조된다'는 정의와 결합해 구매품
+      검사가 표현 불가능한 영역이 필연적으로 생긴다 — 표현 불완전성이 모델 적용 범위 내에서 확정적으로 발생하므로 근원 가설(과도한
+      특수화)을 수용한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.InspectionPlan.is_a
+      - manufacturing-bom-ontology.yaml entities.Part.definition ("구매 또는 제조되는")
+  - issue_id: issue-020
+    stance: support
+    rationale: BOM 헤더 부재로 품목당 단일 BOM/라우팅이 암묵 공리가 되어, 복수 BOM이 필요한 사례가 등장하는 즉시 스키마 수정
+      없이는 표현 불가능하다. 구조 선택이 다중성 차원의 자리를 제거했다는 근원 진단은 증거와 부합한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.Assembly.attributes.bom_lines
+      - manufacturing-bom-ontology.yaml entities.Routing.attributes.part_ref
+  - issue_id: issue-022
+    stance: support
+    rationale: "본 렌즈의 finding-025가 이 이슈의 핵심이다: integrity_rules[0]은 비순환을 necessary
+      규칙으로, 자기포함 예외를 possible로 같은 술어에 부정 관계로 공존시켜 intra-claim 동시 만족 불가능이다. 회수
+      흐름을 비순환 검증 대상 그래프 밖의 별도 개념으로 분리하면 finding-003(가치 훼손)·finding-023(외부 통합
+      충돌)도 동시에 해소되므로 공유 근원 가설을 수용한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - .onto/review/20260611-ca3c674b/round1/logic.findings.yaml#logic-candidate-001
+      - manufacturing-bom-ontology.yaml integrity_rules[0]
+  - issue_id: issue-023
+    stance: support
+    rationale: "본 렌즈의 finding-026 그대로다: 정의는 대칭성을 necessary로 선언하고 direction 속성은
+      one_way를 기본값으로 허용하는 inter-claim 모순으로, direction=one_way 인스턴스가 존재하는 즉시 동시
+      만족 불가능이 확정된다. 두 표현의 병존을 정합화하지 않았다는 근원 가설과 high 심각도를 유지한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - .onto/review/20260611-ca3c674b/round1/logic.findings.yaml#logic-candidate-002
+      - manufacturing-bom-ontology.yaml entities.AlternatePart.definition
+      - manufacturing-bom-ontology.yaml
+        entities.AlternatePart.attributes.direction
+  - issue_id: issue-024
+    stance: support
+    rationale: "본 렌즈의 finding-027 그대로다: 동일 규칙 문장 내에서 즉시 발효 의무(obligatory)와 구버전 rev
+      잔존 허용(possible)을 같은 시구간에 부여한 intra-claim 시간 전개 모순으로, 발효~배치 동기화 구간의 생산 오더
+      생성 시 어느 조항을 따라도 다른 조항을 위반한다. rev 판정 권위를 시구간별로 지정하지 않은 규칙 설계라는 근원 가설을
+      수용한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - .onto/review/20260611-ca3c674b/round1/logic.findings.yaml#logic-candidate-003
+      - manufacturing-bom-ontology.yaml integrity_rules[2]
+      - manufacturing-bom-ontology.yaml entities.ECO.attributes.effective_date
+  - issue_id: issue-025
+    stance: support
+    rationale: "본 렌즈의 finding-028이다: manufactured_by를 necessary로 읽으면 구매 품목 존재와 모순되고
+      possible로 읽어야만 만족 가능한 양상 미구분 상태다. 확정 모순이 아닌 잠재 충돌이므로 low 심각도와 양상
+      명시/make-buy 조건화라는 해소 조건을 유지한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - .onto/review/20260611-ca3c674b/round1/logic.findings.yaml#logic-candidate-004
+      - 'manufacturing-bom-ontology.yaml relations[2]: { from: Part, to:
+        Routing, kind: manufactured_by } / entities.Part.definition: "구매 또는 제조되는
+        최소 관리 단위 품목."'
+  - issue_id: issue-026
+    stance: support
+    rationale: finding-029는 본 렌즈의 finding-026과 동일 모순(rel-015 duplicates)의 의미론 프레임이며,
+      finding-038은 그 모순이 정본 경로 미지정으로 그래프 표면까지 전파됨을 보인다. 대체 관계의 중복 도입·미정합화라는 단일
+      근원으로 두 발견이 함께 해소된다는 가설은 logic의 모순 분석과 정합하므로 지지한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.AlternatePart.definition
+      - manufacturing-bom-ontology.yaml
+        entities.AlternatePart.attributes.direction
+      - manufacturing-bom-ontology.yaml relations[alternate_of]
+  - issue_id: issue-027
+    stance: support
+    rationale: issue-001과 동일 결함(scrap_rate 무계약 사본, rel-001 duplicates)의 의미론 프레임이다.
+      논리 관점에서 동일 속성에 두 진리 원천이 병존하는 구조이며, 권위 승격 또는 사본 명시라는 해소 방향이 issue-001과
+      일관되므로 지지한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml
+        entities.BomLine.attributes.scrap_rate.note
+  - issue_id: issue-028
+    stance: support
+    rationale: 수량 차원과 시간 차원 값을 같은 number 속성에 담으면 작업장 간 비교·합산 술어가 형식적으로
+      무효(ill-typed)가 된다 — 차원 불일치는 논리 관점에서도 명확한 결함이다. 차원 식별 속성 추가라는 해소 조건을 수용한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml
+        entities.WorkCenter.attributes.capacity_per_shift.note
+      - manufacturing-bom-ontology.yaml
+        entities.Operation.attributes.std_time_min
+  - issue_id: issue-029
+    stance: support
+    rationale: 이름이 가리키는 유형(명세)과 모델상 유형(실행 단계)의 불일치는 모순은 아니지만 변경관리 대상 분류 술어를 한 개념에
+      중첩시켜 판별 불가능하게 만든다. is_a 결정과 명칭 미갱신이라는 근원 진단이 증거와 부합한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml entities.InspectionPlan.definition
+      - manufacturing-bom-ontology.yaml entities.InspectionPlan.is_a
+  - issue_id: issue-030
+    stance: support
+    rationale: 구성 관계에 회수 의미를 싣는 동음이의는 logic이 issue-022에서 확인한 자기참조 모순과 같은 결정에서 나온 의미
+      결함이다. line_kind 분리로 qty_per 의미 단일성이 복원되면 비순환 규칙도 무예외로 복원되므로 두 이슈의 해소가
+      정합한다. 지지한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - manufacturing-bom-ontology.yaml integrity_rules[0]
+      - manufacturing-bom-ontology.yaml entities.BomLine.definition
+  - issue_id: issue-031
+    stance: support
+    rationale: 상위 개념의 정의('최소 관리 단위')가 하위 타입(Assembly) 인스턴스에 대해 거짓이 되는 것은 포섭 관계의 형식적
+      비정합으로, logic 관점에서 실재하는 정의-계층 모순이다. 다만 정의 문장 수정으로 해소되는 국소 결함이므로 low 유지에
+      동의한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - 'Part.definition: "최소 관리 단위 품목" + Assembly.is_a: Part'
+  - issue_id: issue-032
+    stance: support
+    rationale: 이름이 주장하는 현재성과 선언된 운영(최대 1주 지연)의 불일치는 모순이 아닌 명명-의미 어긋남이며, 원본이 노트에 명시되어
+      있어 low 표면 경고로 충분하다는 판단에 동의한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - current_eco note "최신 설계변경" + integrity_rules[2] "Part.rev 갱신은 ... 주간 배치로
+        동기화" + ECO.status [open, approved, applied]
+  - issue_id: issue-033
+    stance: support
+    rationale: BomLine과 Operation을 잇는 관계가 그래프에 없어 '어느 공정에서 어떤 자재가 투입되는가'라는 질의가 모델
+      내에서 도출 불가능하다 — 모순이 아닌 표현 불완전성이지만 필수 질의의 비도출성이 확정적이므로 high 유지와 근원 가설(접점을
+      Part로만 둔 설계)을 수용한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "manufacturing-bom-ontology.yaml: BomLine.attributes
+        (parent_ref/child_ref/qty_per/scrap_rate만 존재)"
+      - "manufacturing-bom-ontology.yaml: relations 목록 (BomLine↔Operation 간 관계
+        부재)"
+  - issue_id: issue-034
+    stance: support
+    rationale: ECO가 Part에만 연결되어 effective_date 규칙이 구조적 근거 없는 선언으로 남는다는 지적은 logic의
+      finding-027(같은 규칙의 시간 전개 모순)과 공통 원인을 공유한다(dep-002). 규칙이 집행 가능하려면
+      ECO→BomLine/Routing 경로와 effectivity가 필요하다는 근원 가설을 수용한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "manufacturing-bom-ontology.yaml: relations 'ECO→Part changes' (유일한 변경
+        관계)"
+      - "manufacturing-bom-ontology.yaml: integrity_rules 3번째 항목 (effective_date
+        규칙)"
+  - issue_id: issue-035
+    stance: support
+    rationale: 이중 선언 자체는 현재 모순을 만들지 않으나 정본 미지정은 두 경로가 분기할 때 어느 쪽이 참인지 판정 기준이 없는 상태다.
+      정본 선언 한 줄로 해소되는 표면 문제라는 분류와 low 심각도에 동의한다.
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - Assembly.bom_lines vs relations 'Assembly→BomLine has_many';
+        ECO.affected_parts vs 'ECO→Part changes'; Routing.part_ref vs
+        'Part→Routing manufactured_by'
+  - issue_id: issue-036
+    stance: support
+    rationale: "make/buy 구분 부재는 logic의 finding-028(issue-025, manufactured_by 양상
+      미구분)과 같은 공백의 구조 측 표현이다: 구분 속성이 없으면 '제조 품목만 Routing을 가진다'는 조건부 필수성을 형식화할 수
+      없어 관련 무결성 규칙의 존재 검사가 정의되지 않는다. low 유지에 동의한다."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "Routing.attributes.part_ref { type: ref, target: Part } 및 Assembly 정의
+        'is_a: Part'"
+  - issue_id: issue-021
+    stance: support
+    rationale: "From the logic lens, neither the pair-only AlternatePart
+      representation nor the unit-less capacity_per_shift constitutes a formal
+      contradiction: both claim sets are simultaneously satisfiable as declared,
+      so no satisfiability failure exists today. However, the logic lens
+      corroborates the latent-inconsistency mechanism: a pair-based encoding of
+      substitute groups cannot guarantee transitive coherence (A↔B and B↔C
+      declared without A↔C yields instance-level judgments that diverge across
+      consumers), and a dimension-less number admits multiple incompatible
+      interpretations that only surface as contradictions at aggregation time.
+      This is consistent with the logic-lens treatment of AlternatePart in
+      finding-026: the direction semantics already carry formal tension, and
+      group/priority extension on a pair-only base would multiply the surfaces
+      where such modality conflicts can arise. The issue is correctly framed as
+      a potential-extension cost rather than a present inconsistency, so low
+      severity is appropriate."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - .onto/review/20260611-ca3c674b/round1/evolution.findings.yaml#evolution-candidate-007
+      - manufacturing-bom-ontology.yaml — AlternatePart(primary/alternate 쌍 +
+        direction enum), WorkCenter.capacity_per_shift note "단위는 작업장마다 다르다(개수 또는
+        시간)"
+      - .onto/review/20260611-ca3c674b/round1/logic.findings.yaml#logic-candidate-002
+validation:
+  missing_issues: []

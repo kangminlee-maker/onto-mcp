@@ -85,3 +85,16 @@ redesign 트리거: P1에서 부분 payload 동결이 기존 실패 경로 계�
 1. settings: `review.execution.retry.salvage { enabled: false 기본(opt-in), transcription_llm, delta_completion: "unit_llm" }` — 스키마 추가 사용자 승인됨.
 2. 경로 B 회수자: **동일 등급 새 인스턴스** 확정.
 3. recovery 토큰: **attempt-level `salvaged_submit`** 확정.
+
+## 6. Live 검증 (2026-06-11 — 실 LLM·실 packet·실 validator)
+
+vehicle: 실측 실패 세션(bom `ca3c674b`)의 **원본 issue-stance:logic packet**(36-이슈 projection, tmp 생존)에 executor를 직접 호출. 동결 입력은 live attempt #1(실 fable 36/36 제출 성공)의 실제 payload를 외과 변형 + **실제 validator의 거부 텍스트**로 구성(합성 요소는 변형 1곳뿐 — 라벨 명시). evidence: `fixtures/salvage-live-verification/`(스크립트·동결 입력·산출 seat).
+
+| 케이스 | live 결과 |
+|---|---|
+| 경로 B — delta (S2, 실측 케이스형: `missing issue_id(s): issue-021`) | **성공** — 분류 `delta_rows` → 실 fable micro-call이 누락 1행만 산출(packet evidence allowlist 내 refs) → 코드 병합 35+1 → 실 validator 통과·seat 기록 |
+| 경로 A — 전사 (S3 unknown-field: `unsupported field confidence_note`) | **성공** — haiku 전사가 36/36 행 의미 보존(rationale·stance 동일) + 미지 필드 드랍 → validator 통과 |
+| 경로 A — 전사 (S3 enum near-miss: `strongly_support`) | **보수적 포기** — haiku가 enum 정정을 해석으로 판단, `SALVAGE_INCOMPLETE` 선언 → 회수 실패 → 기존 실패 종단. 가드 우선·fail-loud 유지(의도된 안전 동작); enum near-miss류는 회수율이 낮을 수 있음(한계 데이터) |
+| 발명 가드 (36행 중 3행만 있는 prose) | **발동** — `SALVAGE_INCOMPLETE` abort, seat 미기록 |
+
+미경유(명시 한계): parent의 소진-후 트리거는 본 검증에서 executor 직접 호출로 우회 — 그 로직은 결정론 suite가 커버하며, 완전 유기적 발동은 salvage enabled 벤치마크에서 관찰 예정.
