@@ -100,13 +100,21 @@ async function main(): Promise<void> {
   const realHome = process.env.HOME ?? os.homedir();
   const isolatedHome = await fs.mkdtemp(path.join(os.tmpdir(), "onto-ontology-eval-home-"));
   // 격리 대상은 settings(~/.onto)뿐이다 — worker 자격증명($HOME/.codex,
-  // $HOME/.claude)은 경로 탐지에 필요하므로 실제 홈으로 연결한다. 없으면
-  // 런타임이 자체적으로 경로 해소 실패를 보고한다.
-  for (const credentialDir of [".codex", ".claude"]) {
+  // $HOME/.claude 디렉토리, claude CLI 로그인 상태 파일 $HOME/.claude.json,
+  // 그리고 macOS Keychain($HOME/Library/Keychains — claude OAuth 토큰 저장소,
+  // HOME 기반으로 해석됨: 실측)은 경로 탐지·인증에 필요하므로 실제 홈으로
+  // 연결한다. 없으면 런타임이 자체적으로 경로 해소 실패를 보고한다.
+  await fs.mkdir(path.join(isolatedHome, "Library"), { recursive: true });
+  for (const credentialPath of [
+    ".codex",
+    ".claude",
+    ".claude.json",
+    "Library/Keychains",
+  ]) {
     try {
       await fs.symlink(
-        path.join(realHome, credentialDir),
-        path.join(isolatedHome, credentialDir),
+        path.join(realHome, credentialPath),
+        path.join(isolatedHome, credentialPath),
       );
     } catch {
       // 실제 홈에 해당 자격증명이 없는 환경: 연결 생략

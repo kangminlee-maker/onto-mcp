@@ -1,0 +1,60 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+issue_id: "issue-002"
+lens_id: "coverage"
+difference_explanation: "All three lenses accept the root hypothesis - no
+  window-membership attribution mechanism exists anywhere in the bounded
+  target, so the flush comment describes a design that was never built - and
+  all three accept the proposed bidirectional fix. The sole remaining
+  disagreement is severity classification: coverage and logic classify medium
+  because the harm path is reliance-mediated over an internally coherent
+  happy path, while semantics keeps high because the sole written
+  late-arrival boundary contract asserts the inverse of observable behavior,
+  which it treats as a first-order contract-vs-behavior failure under the
+  declared review goals."
+response_to_other_positions: "Logic's position independently corroborates
+  coverage's medium from a different ground: finding-l2 proves the
+  contradiction formally (C7 and C8 not jointly satisfiable), yet logic still
+  classifies the harm as reliance-mediated because emit-all-then-clear is
+  internally consistent absent the comment - which matches coverage's own
+  observation that every category actually represented in the implementation
+  space behaves coherently. Semantics' high is acknowledged as a valid
+  framing from the contract-trust perspective, and coverage agrees the fact
+  that this is the only written late-arrival contract raises the
+  maintainability cost of the gap. But from the coverage standpoint the
+  defect is an absent category, not a misbehaving one: no data is lost in
+  normal operation, no represented path malfunctions, and the unexpressed
+  carry-over category is fully closable by a one-line contract correction.
+  An absence whose entire harm requires a maintainer or consumer to act on
+  the falsified comment remains bounded below an unconditional runtime
+  fault, and below the cross-clock correctness break of issue-001 that
+  anchors high for this session. The peer positions therefore do not supply
+  a coverage-relevant reason to move; the 2-of-3 medium assessment is
+  reinforced, not weakened, by deliberation."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "No window-membership attribution mechanism exists
+  anywhere in the bounded target: nothing snapshots or attributes window
+  membership at the close instant, enqueue has no window-close-aware branch
+  and records no per-item attribution, and flush drains and clears pending
+  wholesale; implementing window-membership attribution or correcting the
+  comment to actual behavior would resolve finding-002, finding-006, and
+  finding-012 together. The shared-cause context with issue-004 (dep-001) is
+  preserved: no trustworthy per-item timestamp exists on which attribution
+  could be built, so a fix establishing one serves both issues without
+  merging their distinct roots."
+remaining_blocker: "The severity split persists at 2-vs-1 (coverage and
+  logic at medium, semantics at high) on principled per-lens grounds rather
+  than misunderstanding; resolution requires the synthesizer to decide
+  whether a sole-written-contract inversion under the declared review goals
+  outranks the reliance-mediated harm classification. No blocker remains on
+  root hypothesis or proposed action."
+evidence_refs:
+  - "issue-ledger.yaml#issue-002"
+  - "round1/coverage.md#f2"
+  - "round1/logic.md#finding-l2"
+  - "round1/semantics.md#sem-2"
+  - "finding-relation-graph.yaml#rel-003"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-002.coverage"

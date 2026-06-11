@@ -1,0 +1,369 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+findings:
+  - finding_id: finding-001
+    lens_id: logic
+    source_ref: round1/logic.md#finding-l1
+    target: "notification-batcher.ts flush() reset block"
+    evidence_anchor: "notification-batcher.ts:37-38 (claim C5) vs notification-batcher.ts:39-40 (realized reset)"
+    claim: "The documented invariant 'notifications enqueued between the window close check and this reset are carried into the next window' is logically incompatible with the realized reset semantics; the claim set {C5, behavior of lines 39-40} is unsatisfiable in every execution where C5's antecedent holds."
+    lens_rationale_summary: "Logic lens found the doc contract and realized behavior not co-satisfiable: pending.clear() unconditionally removes every entry and no path snapshots or re-enqueues, so the asserted carry-over is impossible; contradiction is independent of pragmatic interpretation and hits the session's contract-vs-behavior focus."
+    proposed_action: "Make exactly one claim true: (a) realize C5 by swapping the map before building digests (build from the old map, late enqueues land in the fresh map), or (b) correct the comment to state actual behavior (in-between enqueues impossible in single-threaded synchronous use; would be included in the current digest or dropped, not carried)."
+    affected_purpose: "Contract-vs-behavior consistency of the documented flush() carry-over invariant (correctness, regression_risk review goals)"
+    failure_condition: "Any execution model where enqueue can interleave between the close check and the reset (reentrancy, a future await insertion, shared-state usage); in the current synchronous model the claim is dead, documenting a mechanism that does not exist"
+    impact: "The doc asserts a necessary outcome the code makes impossible; maintainers trusting the documented carry-over will introduce silent notification loss when the execution model changes"
+    evidence_refs: [round1/logic.md#finding-l1]
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Contract-vs-behavior consistency of the documented flush() carry-over invariant (correctness, regression_risk review goals)"
+      failure_condition: "Any execution model where the C5 antecedent becomes reachable (reentrancy, future await between check and reset); today the claim is a dead claim describing a nonexistent mechanism"
+      impact: "False safety claim in the contract: notifications the doc says are carried are in fact included in the current digest or silently dropped, changing trust in the documented contract for the declared review purpose"
+      evidence_refs: [round1/logic.md#finding-l1]
+    causal_path:
+      root_cause_candidate: "Reset-by-global-clear with no snapshot/swap step that could realize the documented carry-over"
+      root_cause_step_id: finding-001.cause-003
+      steps:
+        - cause_id: finding-001.cause-001
+          claim: "The doc claims late enqueues are carried into the next window, but flush executes this.pending.clear() unconditionally, removing every entry including any such enqueue"
+          relation_to_previous: null
+          evidence_refs: [round1/logic.md#finding-l1]
+        - cause_id: finding-001.cause-002
+          claim: "Digests are built from the same live map that is then cleared, so no mechanism separates the flushed set from a carry set"
+          relation_to_previous: causes
+          evidence_refs: [round1/logic.md#finding-l1]
+        - cause_id: finding-001.cause-003
+          claim: "The reset was implemented as whole-map clear() plus window nulling with no snapshot/swap step that could realize the documented carry-over"
+          relation_to_previous: causes
+          evidence_refs: [round1/logic.md#finding-l1]
+      unresolved_beyond_evidence: "Whether callers can actually drive the check-to-reset interleaving (concurrency/usage model of the poll loop) is pragmatics scope outside this lens boundary; the formal claim-vs-mechanism contradiction is independent of that question."
+  - finding_id: finding-002
+    lens_id: logic
+    source_ref: round1/logic.md#finding-l2
+    target: "notification-batcher.ts window timing rule (enqueue/flush pair)"
+    evidence_anchor: "notification-batcher.ts:20 (Date.now() sets windowStartedAt) vs notification-batcher.ts:30-32 (caller-supplied now adjudicates closure); notification-batcher.ts:8-9 (only documented time base, enqueuedAt, never read)"
+    claim: "Whether the window-close contract (C3/C4) is satisfiable cannot be adjudicated from the present claim set: window start is stamped from the internal clock while closure is judged against a caller-supplied now whose unit, epoch, and clock are fixed by no claim in the target. Lens marked this insufficient evidence (severity medium if confirmed) with upstream_evidence_required=true."
+    lens_rationale_summary: "Logic lens found one window timeline governed by two time authorities; the adjudicating premise (now is epoch ms from the same clock as Date.now()) is not formalized anywhere in the boundary, so the lens returned insufficient evidence instead of asserting a verdict, and routed primary ownership of the underlying undocumented-meaning defect to semantics."
+    proposed_action: "Unify the time authority: (i) drop the now parameter and compute Date.now() inside flush; or (ii) inject one clock used by both enqueue and flush; or (iii) keep the signature and add the explicit doc claim that now is epoch ms from the same clock as Date.now(). Final action conditional on the intended caller contract supplied upstream."
+    affected_purpose: "Soundness of the window-close judgment (C3/C4) under the session's declared time-source semantics focus"
+    failure_condition: "A caller supplying a time base other than epoch ms from the same clock as Date.now() (e.g. a monotonic-relative value such as performance.now())"
+    impact: "Evidence gap, not yet an issue: if the unstated shared-base premise fails, now - windowStartedAt is a cross-base difference, the guard can hold permanently, flush never emits, and C4 reports window-still-open forever; this cannot be confirmed within the boundary because no domain document or caller-context claim is available (upstream_evidence_required=true)"
+    evidence_refs: [round1/logic.md#finding-l2]
+    severity: info
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-003
+    lens_id: logic
+    source_ref: round1/logic.md#finding-l3
+    target: "notification-batcher.ts flush() return-value contract"
+    evidence_anchor: "notification-batcher.ts:28 (claim C4) vs notification-batcher.ts:31 (no-window guard returns [])"
+    claim: "C4 asserts that an empty array means the window is still open, but flush also returns [] when windowStartedAt === null, a reachable state (fresh instance, or immediately after any successful flush) in which no window exists; the documented equivalence is false in that state and realized behavior is the strictly weaker disjunction."
+    lens_rationale_summary: "Logic lens found the doc equivalence over-universal versus the no-window guard; rated low because the state invariant lets callers distinguish the two [] cases via pendingUserCount(), so the defect is surface-only."
+    proposed_action: "Weaken the doc claim to 'an empty array means the window is still open or no window has started', or return a discriminated result instead of overloading []."
+    affected_purpose: "Trustworthiness of the flush() return-value contract for polling callers"
+    failure_condition: "No-window state: fresh instance or immediately after a successful flush"
+    impact: "A caller following C4 literally concludes from [] that a digest is eventually coming, which is false in the no-window state until a new enqueue occurs"
+    evidence_refs: [round1/logic.md#finding-l3]
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-004
+    lens_id: coverage
+    source_ref: round1/coverage.md#cov-1
+    target: "notification-batcher.ts window time computation (enqueue/flush/enqueuedAt)"
+    evidence_anchor: "notification-batcher.ts line 96 (this.windowStartedAt = Date.now()), lines 106-108 (flush(now) judgment), line 85 (caller-supplied enqueuedAt)"
+    claim: "하나의 윈도 판정(now - windowStartedAt < WINDOW_MS)에 서로 다른 두 시간 원본이 혼입되며, 어느 쪽이 권위인지 지정하는 개념이 시스템에 표현되어 있지 않다; enqueuedAt까지 포함하면 시간 원본이 3개 병존한다."
+    lens_rationale_summary: "Coverage lens absence finding: time values that must share one axis are produced independently in three places with no single time-authority concept, directly on the session's declared time-source semantics focus and the correctness/verifiability review goals."
+    proposed_action: "시간 권위를 하나로 지정: (a) 생성자에 clock 주입 후 windowStartedAt, enqueuedAt 기본값, flush 판정을 모두 그 clock에서 파생하거나, (b) enqueue(item, now)로 flush(now)와 동일 원본을 받게 하고, 단일 시간 원본 계약을 doc comment에 명시한다. Lens closure obligation proposal: must_close_in_target."
+    affected_purpose: "Correctness and verifiability of window-close behavior (declared review goals; requested time-source semantics focus)"
+    failure_condition: "Caller supplies a time source different from the internal wall clock (fake timer in tests, monotonic-derived value, cached timestamp); or tests cannot control Date.now()"
+    impact: "now < windowStartedAt makes the window-open predicate permanently true, flush returns [] forever, and notifications accumulate indefinitely (correctness violation); the opposite skew closes the window early; without clock control the window behavior cannot be verified deterministically"
+    evidence_refs: [round1/coverage.md#cov-1]
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Correctness and verifiability of window-close behavior (declared review goals; requested time-source semantics focus)"
+      failure_condition: "Any caller or test whose time source for flush(now) differs from the internal Date.now() wall clock"
+      impact: "Permanent non-flush (indefinite notification accumulation) or premature window close, plus non-deterministic verifiability of window behavior — a supported execution path cannot achieve the declared batching purpose"
+      evidence_refs: [round1/coverage.md#cov-1]
+    causal_path:
+      root_cause_candidate: "Asymmetric API design: flush receives time as a parameter while enqueue uses ambient Date.now(), with no concept designating a single time source"
+      root_cause_step_id: finding-004.cause-003
+      steps:
+        - cause_id: finding-004.cause-001
+          claim: "The window-close predicate now - this.windowStartedAt < WINDOW_MS computes the difference between authority A (internal wall clock) and authority B (caller time source)"
+          relation_to_previous: null
+          evidence_refs: [round1/coverage.md#cov-1]
+        - cause_id: finding-004.cause-002
+          claim: "Three time records (enqueuedAt, windowStartedAt, flush now) are produced independently with no single-authority designation expressed in the system"
+          relation_to_previous: causes
+          evidence_refs: [round1/coverage.md#cov-1]
+        - cause_id: finding-004.cause-003
+          claim: "API design is asymmetric — flush takes time as a parameter while enqueue uses ambient authority Date.now() with no injected clock or shared parameter concept; the absent single-time-source concept is the starting point"
+          relation_to_previous: causes
+          evidence_refs: [round1/coverage.md#cov-1]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-005
+    lens_id: coverage
+    source_ref: round1/coverage.md#cov-2
+    target: "notification-batcher.ts flush() reset path vs carry-over comment"
+    evidence_anchor: "notification-batcher.ts lines 113-114 (carry-over comment) vs line 115 (this.pending.clear())"
+    claim: "주석이 선언하는 'window close 판정과 reset 사이에 enqueue된 알림은 다음 윈도로 이월된다'에 대응하는 구현 요소(선별 보존 경로)가 시스템에 없다; pending.clear()는 무조건 전체를 비운다."
+    lens_rationale_summary: "Coverage lens found the documented carry-over sub-behavior unrepresented in the implementation: no path separates digest snapshot from differential preservation, so the comment states an unrealizable behavior as contract — a contract-vs-behavior mismatch on the requested focus."
+    proposed_action: "doc-behavior를 일치시킨다: (a) digest로 내보낸 항목만 제거(스냅샷 후 차분 보존)하여 주석대로 carry를 구현하거나, (b) 주석을 실제 동작(전부 비워진다; 동기 실행에서는 사이 enqueue가 불가능하다)으로 수정한다. Lens closure obligation proposal: must_close_in_target (최소 (b) 문서 수정)."
+    affected_purpose: "Contract-vs-behavior consistency of the flush reset contract (regression_risk, maintainability review goals)"
+    failure_condition: "A maintainer trusts the comment and makes flush async or inserts an await between the close judgment and the reset"
+    impact: "Notifications enqueued in between are dropped without warning instead of carried over — the documented guarantee inverts into silent loss (regression risk)"
+    evidence_refs: [round1/coverage.md#cov-2]
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Contract-vs-behavior consistency of the flush reset contract (regression_risk, maintainability review goals)"
+      failure_condition: "Future evolution that introduces an interleaving point (async flush, await before reset) while the comment is trusted as a contract"
+      impact: "The documented carry-over guarantee becomes silent notification drop, weakening trust in the documented contract for the declared review purpose"
+      evidence_refs: [round1/coverage.md#cov-2]
+    causal_path:
+      root_cause_candidate: "The implementation concept corresponding to the documented carry-over was absent from the start — no element distinguishes digest snapshot from differential preservation"
+      root_cause_step_id: finding-005.cause-003
+      steps:
+        - cause_id: finding-005.cause-001
+          claim: "The comment declares carry-over between the close judgment and the reset, but line 115 pending.clear() unconditionally empties the whole map with no carry path"
+          relation_to_previous: null
+          evidence_refs: [round1/coverage.md#cov-2]
+        - cause_id: finding-005.cause-002
+          claim: "In current synchronous single-threaded execution no enqueue can interleave between judgment and reset, so the comment describes an unrealizable behavior as if it were contract"
+          relation_to_previous: causes
+          evidence_refs: [round1/coverage.md#cov-2]
+        - cause_id: finding-005.cause-003
+          claim: "An implementation concept matching the documented carry-over (snapshot vs differential preservation distinction) was never present"
+          relation_to_previous: causes
+          evidence_refs: [round1/coverage.md#cov-2]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-006
+    lens_id: coverage
+    source_ref: round1/coverage.md#cov-3
+    target: "notification-batcher.ts notification lifecycle (flush state destruction)"
+    evidence_anchor: "notification-batcher.ts lines 115-117 (pending.clear() and windowStartedAt = null before return)"
+    claim: "lifecycle이 enqueued → flushed에서 끝나며, 전달 확인·실패·재시도·보관에 해당하는 구간이 시스템에 표현되어 있지 않다; 상태 파괴가 반환보다 먼저 일어나 구조적으로 at-most-once다."
+    lens_rationale_summary: "Coverage lens lifecycle-absence finding: flush destroys state before the caller can confirm delivery, and no ack/reinjection/dead-letter concept exists; delivery itself is outside the bounded_partial closure but the destruction-before-return structure closes on in-target evidence."
+    proposed_action: "2단계 인터페이스(peek/commit: digest 생성과 상태 제거 분리) 또는 실패 시 재주입 API를 도입해 lifecycle 종결 구간을 표현한다; 의도적 at-most-once라면 그 계약을 doc comment에 명시한다. Lens closure obligation proposal: may_close_during_next_stage (최소한의 계약 명시는 must_close_before_next_stage)."
+    affected_purpose: "Reliability of notification delivery semantics within the declared correctness and regression_risk goals"
+    failure_condition: "Caller fails while delivering the returned digests (process crash, send API error) after flush has already cleared state"
+    impact: "All notifications of that window are lost with no recovery concept (ack, reinjection, dead-letter); the component is structurally at-most-once without declaring it"
+    evidence_refs: [round1/coverage.md#cov-3]
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Reliability of notification delivery semantics within the declared correctness and regression_risk goals"
+      failure_condition: "Any delivery failure after flush returns, since state destruction precedes delivery confirmation"
+      impact: "Whole-window notification loss is unrecoverable and the at-most-once property is undeclared, meaningfully weakening trust and decision quality for the declared purpose"
+      evidence_refs: [round1/coverage.md#cov-3]
+    causal_path:
+      root_cause_candidate: "One-way lifecycle design in which state destruction precedes delivery confirmation — no concept for the post-flushed segment exists"
+      root_cause_step_id: finding-006.cause-003
+      steps:
+        - cause_id: finding-006.cause-001
+          claim: "flush destroys state (pending.clear(), windowStartedAt = null) before returning digests to the caller"
+          relation_to_previous: null
+          evidence_refs: [round1/coverage.md#cov-3]
+        - cause_id: finding-006.cause-002
+          claim: "No ack, reinjection, or dead-letter concept exists to recover when the caller's delivery fails after return"
+          relation_to_previous: causes
+          evidence_refs: [round1/coverage.md#cov-3]
+        - cause_id: finding-006.cause-003
+          claim: "The lifecycle was designed one-way with destruction ahead of confirmation; a post-flushed lifecycle segment concept was absent from the start"
+          relation_to_previous: causes
+          evidence_refs: [round1/coverage.md#cov-3]
+      unresolved_beyond_evidence: "Whether at-most-once is the intended product semantics is a design decision beyond target evidence; delivery itself is outside the bounded_partial closure."
+  - finding_id: finding-007
+    lens_id: coverage
+    source_ref: round1/coverage.md#cov-4
+    target: "notification-batcher.ts window granularity (global windowStartedAt)"
+    evidence_anchor: "notification-batcher.ts line 92 (global windowStartedAt), line 96 (any user's first enqueue starts window), lines 91 and 110 (per-user collection/digest)"
+    claim: "window 개념에 per-user 하위 세분화가 부재하다: windowStartedAt은 전역 단일 값이고 어느 사용자든 첫 enqueue가 시작시키는 반면 수집·digest는 per-user여서, 윈도 종료 직전 합류한 사용자의 배치 창은 0에 수렴한다 (surface-only)."
+    lens_rationale_summary: "Coverage lens surface-only absence: per-user window (or an explicit contract that a global window is intended) is missing, so late-joining users get a near-zero batch window, diverging from the per-user digest batching purpose."
+    proposed_action: "per-user window를 도입하거나, 전역 윈도가 의도임을 계약(doc comment)에 명시한다."
+    affected_purpose: "Fit between the batching purpose (per-user digest) and the realized global window granularity"
+    failure_condition: "A user whose first enqueue lands shortly before the global window closes"
+    impact: "That user's effective batching window converges to zero, conflicting with the per-user digest intent, though the declared happy path remains achievable"
+    evidence_refs: [round1/coverage.md#cov-4]
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-008
+    lens_id: coverage
+    source_ref: round1/coverage.md#cov-5
+    target: "notification-batcher.ts digest output (time dimension)"
+    evidence_anchor: "notification-batcher.ts line 85 (enqueuedAt declared) vs line 111 (digest body join does not use it)"
+    claim: "digest 산출물에서 시간 차원이 소실된다: enqueuedAt은 선언만 되고 digest 생성에서 사용되지 않아, flush 이후에는 각 알림이 언제 적재됐는지 재구성할 수 없다 (surface-only)."
+    lens_rationale_summary: "Coverage lens surface-only absence: the temporal evidence of each notification is dropped from the artifact, leaving no history for time-dependent values after flush."
+    proposed_action: "digest 생성 시 enqueuedAt을 산출물에 포함하거나, 시간 차원이 불필요하다면 enqueuedAt 선언을 제거해 계약을 실제 사용과 일치시킨다."
+    affected_purpose: "Auditability of when each notification entered the batch"
+    failure_condition: "Any post-flush consumer needing per-notification enqueue time"
+    impact: "Per-notification timing cannot be reconstructed after flush; an improvement opportunity that does not make the result unsafe for its declared purpose"
+    evidence_refs: [round1/coverage.md#cov-5]
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-009
+    lens_id: coverage
+    source_ref: round1/coverage.md#cov-6
+    target: "notification-batcher.ts pending accumulation (bounds/backpressure)"
+    evidence_anchor: "notification-batcher.ts pending map growth when flush is not polled; pendingUserCount() exposes user count only"
+    claim: "pending 적재에 상한·backpressure 개념이 부재하다: flush가 폴링되지 않으면 pending이 무한 성장하며, 운영 차원의 상한/경보 개념이 없고 pendingUserCount()는 사용자 수만 노출한다 (observation)."
+    lens_rationale_summary: "Coverage lens operational observation: no cap, alert, or backpressure concept exists and item-count visibility is missing; recorded as an observation rather than an adjudicated issue."
+    proposed_action: "운영 상한/경보 또는 건수 노출(예: pending 건수 카운터) 도입을 검토한다."
+    affected_purpose: "Operational observability and resource bounding of the pending store"
+    failure_condition: "Deployment where flush polling stops or lags while enqueues continue"
+    impact: "Observation, not yet an issue: unbounded growth is possible in principle, but no in-target evidence adjudicates an operational threshold (session_domain=none)"
+    evidence_refs: [round1/coverage.md#cov-6]
+    severity: info
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-010
+    lens_id: semantics
+    source_ref: round1/semantics.md#semantics-1
+    target: "notification-batcher.ts time authority (flush(now) vs enqueue Date.now())"
+    evidence_anchor: "notification-batcher.ts line 95 (this.windowStartedAt = Date.now()), lines 105-107 (flush(now: number), now - this.windowStartedAt < WINDOW_MS)"
+    claim: "Split time authority: the window-close predicate compares values from two different time authorities — windowStartedAt is always stamped from the system clock while now is caller-supplied — and the parameter name and externalized signature assert caller-owned current-time authority while the behavior only holds under an unstated same-epoch-ms-system-clock constraint."
+    lens_rationale_summary: "Semantics lens found the visible signature contract ('the caller owns the current-time authority') diverging from actual meaning, which silently changes the close predicate's meaning for any caller exercising the injectable-clock contract literally; the session request explicitly targets time-source semantics and the review goal includes correctness."
+    proposed_action: "Unify the time authority: (a) drop the now parameter and use Date.now() in flush as well, or (b) accept the clock externally everywhere (enqueue(item, now) or constructor-injected clock) and stamp windowStartedAt from that same source; document the single clock domain on the class contract."
+    affected_purpose: "Correctness of the declared contract 'Flushes when the window has closed' under the session's time-source semantics focus"
+    failure_condition: "Any caller that exercises the injectable-clock contract literally (logical clock, simulated time, frozen test clock)"
+    impact: "With now far below real epoch ms the window never closes and notifications are never delivered; with now above real time the window closes immediately — the declared contract is violated without any error surfacing to the caller"
+    evidence_refs: [round1/semantics.md#semantics-1]
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Correctness of the declared flush contract under the session's time-source semantics focus"
+      failure_condition: "A supported caller group honoring the visible signature contract with a non-system clock (logical, simulated, frozen test clock)"
+      impact: "Never-flush or always-flush behavior with no surfaced error means that caller group cannot achieve the declared batching purpose"
+      evidence_refs: [round1/semantics.md#semantics-1]
+    causal_path:
+      root_cause_candidate: "The time authority was split at the design point where enqueue kept an internal clock while flush adopted an external one"
+      root_cause_step_id: finding-010.cause-003
+      steps:
+        - cause_id: finding-010.cause-001
+          claim: "The close predicate subtracts across two authorities (caller-supplied now minus system-clock-stamped windowStartedAt), so its intended meaning 'at least 30s elapsed since window start' holds only under clock-domain identity"
+          relation_to_previous: null
+          evidence_refs: [round1/semantics.md#semantics-1]
+        - cause_id: finding-010.cause-002
+          claim: "No contract text declares the clock-domain identity requirement while the parameter name now and the externalized signature assert caller-owned time authority"
+          relation_to_previous: causes
+          evidence_refs: [round1/semantics.md#semantics-1]
+        - cause_id: finding-010.cause-003
+          claim: "The time authority was split at the design point: enqueue independently stamps windowStartedAt from Date.now() while flush externalizes the clock as a parameter"
+          relation_to_previous: causes
+          evidence_refs: [round1/semantics.md#semantics-1]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-011
+    lens_id: semantics
+    source_ref: round1/semantics.md#semantics-2
+    target: "notification-batcher.ts flush() reset comment vs reset behavior"
+    evidence_anchor: "notification-batcher.ts lines 112-113 (carry-over comment), lines 109-115 (digest build then this.pending.clear())"
+    claim: "The reset comment asserts a carry-over mechanism the code does not implement: pending.clear() unconditionally drops every entry, so if the described interleaving could occur those notifications would be silently lost, not carried over; in synchronous single-threaded JS the interleaving cannot occur at all, so the comment also describes a vacuous scenario as if it were a handled case."
+    lens_rationale_summary: "Semantics lens asserted this strictly as a documented-contract-vs-actual-behavior mismatch on exactly the axis the request asks about; the review goal includes regression_risk and maintainability for maintainers trusting the documented guarantee."
+    proposed_action: "Either correct the comment to state actual behavior (everything pending at flush time is emitted and cleared; no carry-over path exists; flush is synchronous so no interleaving is possible), or implement the stated contract: snapshot the digested entries and delete only those keys/items, leaving later enqueues in pending."
+    affected_purpose: "Contract-vs-behavior consistency of the documented reset/carry-over semantics (regression_risk, maintainability review goals)"
+    failure_condition: "A maintainer later makes flush async or adds an await before the reset while trusting the documented carry-over guarantee"
+    impact: "Silent notification loss — the failure mode the comment claims is already handled — making the result appear trustworthy on a contract it does not honor"
+    evidence_refs: [round1/semantics.md#semantics-2]
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Contract-vs-behavior consistency of the documented reset/carry-over semantics (regression_risk, maintainability review goals)"
+      failure_condition: "Future async/await evolution of flush under trust in the documented carry-over guarantee"
+      impact: "The documented mechanism has no implementation, so evolution guided by the contract produces silent loss, meaningfully weakening trust for the declared review purpose"
+      evidence_refs: [round1/semantics.md#semantics-2]
+    causal_path:
+      root_cause_candidate: "The comment encodes an intended concurrency contract that was never realized in the reset strategy"
+      root_cause_step_id: finding-011.cause-003
+      steps:
+        - cause_id: finding-011.cause-001
+          claim: "The comment declares carry-over semantics while digests are built by iterating pending and the reset is a full pending.clear() with no snapshot/delete-flushed-keys distinction"
+          relation_to_previous: null
+          evidence_refs: [round1/semantics.md#semantics-2]
+        - cause_id: finding-011.cause-002
+          claim: "No code path exists in which an entry survives flush into the next window, so the documented mechanism has no implementation"
+          relation_to_previous: causes
+          evidence_refs: [round1/semantics.md#semantics-2]
+        - cause_id: finding-011.cause-003
+          claim: "The comment encodes an intended concurrency contract that was never realized in the chosen reset strategy"
+          relation_to_previous: causes
+          evidence_refs: [round1/semantics.md#semantics-2]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-012
+    lens_id: semantics
+    source_ref: round1/semantics.md#semantics-3
+    target: "notification-batcher.ts PendingNotification.enqueuedAt field semantics"
+    evidence_anchor: "notification-batcher.ts lines 83-84 (doc: Epoch ms when the notification entered the batch), lines 94-99 (enqueue neither stamps nor validates), lines 109-111 (only userId and body are read)"
+    claim: "enqueuedAt is documented as an event-derived value (the moment of entering the batch, owned by the batcher) but is modeled as unverified independent caller input — never stamped, never validated, never read by any consumer in the component: the derived-value-as-independent-input pattern."
+    lens_rationale_summary: "Semantics lens found the field's documented meaning unguaranteed by the owning component and the type contract signaling per-notification time semantics the batching logic does not have, degrading the verifiability and maintainability goals within the bounded target."
+    proposed_action: "Have enqueue stamp the timestamp itself (accept {userId, body} and construct the pending record internally, sourcing time from the unified clock of semantics-1), or remove the field from the contract if genuinely unused, or rename/re-document it as caller-asserted creation time that does not affect batching."
+    affected_purpose: "Verifiability and maintainability of the PendingNotification contract within the bounded target"
+    failure_condition: "Any caller supplying a value that drifts from the documented meaning — indistinguishable from a correct value because no enforcement point or consumer exists"
+    impact: "The field's truth depends entirely on caller discipline with unbounded drift, and readers are misled into assuming per-notification time semantics in batching decisions that actually key off first-enqueue only"
+    evidence_refs: [round1/semantics.md#semantics-3]
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: "Verifiability and maintainability of the PendingNotification contract within the bounded target"
+      failure_condition: "Caller-supplied enqueuedAt diverging from the documented event-derived meaning, with no stamping, validation, or consumer to detect it"
+      impact: "Documented semantics have no enforcement point and no consumer, so contract truth is unverifiable and the type contract misleads about how batching decisions are made"
+      evidence_refs: [round1/semantics.md#semantics-3]
+    causal_path:
+      root_cause_candidate: "The field was placed in the caller-facing input type instead of being stamped by the component that owns the event"
+      root_cause_step_id: finding-012.cause-003
+      steps:
+        - cause_id: finding-012.cause-001
+          claim: "The doc asserts event-derived meaning, but enqueue performs the event without binding the value to it and no internal reader exists (digest uses only userId and body)"
+          relation_to_previous: null
+          evidence_refs: [round1/semantics.md#semantics-3]
+        - cause_id: finding-012.cause-002
+          claim: "The field's documented semantics have no enforcement point and no consumer, so any caller-supplied value, correct or not, is indistinguishable"
+          relation_to_previous: causes
+          evidence_refs: [round1/semantics.md#semantics-3]
+        - cause_id: finding-012.cause-003
+          claim: "The field was placed in the caller-facing input type instead of being stamped by the component that owns the enqueue event"
+          relation_to_previous: causes
+          evidence_refs: [round1/semantics.md#semantics-3]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-013
+    lens_id: semantics
+    source_ref: round1/semantics.md#semantics-4
+    target: "notification-batcher.ts flush() naming vs poll behavior"
+    evidence_anchor: "notification-batcher.ts lines 101-107"
+    claim: "flush names an unconditional operation (conventional meaning: force pending contents out now) but behaves as a conditional poll that returns [] and does nothing while the window is open; the doc comment ('Callers poll this') admits the poll semantics, so the contract text and the name disagree inside the same declaration (surface-only)."
+    lens_rationale_summary: "Semantics lens surface-only naming mismatch between conventional API vocabulary and realized conditional-poll behavior."
+    proposed_action: "Rename to poll() / tryFlush() / flushIfClosed(), or keep flush as a true force-flush and move the window check to the caller side."
+    affected_purpose: "Name-contract alignment for readers of the flush API"
+    failure_condition: "Readers relying on conventional flush vocabulary without reading the doc comment"
+    impact: "Misleading name increases misuse risk, but the declared purpose remains achievable; improvement opportunity"
+    evidence_refs: [round1/semantics.md#semantics-4]
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+  - finding_id: finding-014
+    lens_id: semantics
+    source_ref: round1/semantics.md#semantics-5
+    target: "notification-batcher.ts flush() empty-array return signal"
+    evidence_anchor: "notification-batcher.ts line 104 (doc: an empty array means window still open), lines 106-107 (two distinct early returns)"
+    claim: "[] is a homonym for two distinct states — no active window (windowStartedAt === null) and window open but not yet closed — while the doc names only the second; a polling caller cannot distinguish 'nothing was ever enqueued' from 'wait longer' (surface-only)."
+    lens_rationale_summary: "Semantics lens surface-only finding: two component states share one return signal and the documented meaning is narrower than the behavior."
+    proposed_action: "Document both meanings of [], or expose the state distinctly (e.g., return null when no window is active, or add a windowOpen() accessor)."
+    affected_purpose: "Interpretability of the flush return signal for polling callers"
+    failure_condition: "Polling caller in the no-active-window state interpreting [] per the documented single meaning"
+    impact: "Callers may wait for a digest that is not coming, but the declared purpose remains achievable; improvement opportunity"
+    evidence_refs: [round1/semantics.md#semantics-5]
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+validation:
+  unaddressable_findings: []

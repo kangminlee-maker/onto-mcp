@@ -1,0 +1,85 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+work_item_id: "synthesis:issue-001"
+issue_id: "issue-001"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-001"
+conclusion: >-
+  The window-closure decision compares timestamps from two independent,
+  undeclared clocks: enqueue stamps windowStartedAt from the ambient Date.now()
+  (notification-batcher.ts:20) while flush judges closure against a
+  caller-supplied now (notification-batcher.ts:30-32), and nothing on the type
+  surface, doc surface, or claim set requires the two values to share a time
+  base. All three lenses (logic, coverage, semantics) independently converged
+  on the same defect, severity high stands unanimously, and the required
+  closure is to designate a single time authority for the window lifecycle in
+  the current target.
+materiality_explanation: >-
+  The defect sits exactly on the declared review focus - time-source semantics
+  - and breaks the declared review goals of correctness, verifiability, and
+  regression_risk. The failure condition needs no exotic input: any caller
+  that drives flush(now) or fills enqueuedAt from a clock other than the
+  ambient Date.now() epoch-ms timeline (fake-timer tests, monotonic-clock
+  origins, skewed or cached timestamps) is a permitted input under the bare
+  number type. Under such inputs the closure predicate stops corresponding to
+  "the window has closed": the window can close immediately, late, or never -
+  digest delay, premature emission, or flush returning [] forever - and the
+  violation is silent because no surface exposes the shared-clock requirement.
+  Clock substitution in tests is blocked, directly degrading verifiability.
+root_cause_explanation: >-
+  The root cause is that window-lifecycle time authority is split between an
+  ambient Date.now() sample at enqueue and a caller-injected now at flush,
+  with no element of the bounded target declaring or enforcing that both
+  values come from the same clock (root confidence high). This is the starting
+  point rather than a mere symptom because every observed misbehavior is
+  derivable from it: the logic lens proved the claim set {C3, C4, C5, C6}
+  jointly unsatisfiable precisely because the necessary same-clock
+  precondition is granted only possible status by the declared surface; the
+  coverage lens located the same fact as the absence of a single
+  time-authority concept across three parallel time sources (Date.now() at
+  enqueue, caller now at flush, caller-filled enqueuedAt); and the semantics
+  lens found the now parameter carrying an implicit shared-clock promise that
+  is nowhere declared. Designating one time authority dissolves all three
+  findings at once - the test of a true root.
+causal_path_explanation: >-
+  Each lens traced the same three-step chain from observed failure back to the
+  root. Logic (finding-001): for permitted numeric inputs flush returns []
+  forever or closes the window early, jointly violating C4 and C5; this is
+  caused by the closure check now - windowStartedAt subtracting a
+  caller-chosen number from an ambient Date.now() sample under a presumed but
+  undeclared shared clock; which is caused by the split time authority across
+  the two mutating entry points with no declared inter-clock identity
+  constraint. Coverage (finding-005): cross-source windows close early or stay
+  open forever, caused by the direct comparison of an internally stamped value
+  against a caller-injected value with no expressed same-clock contract,
+  rooted in the absent single time-authority concept. Semantics (finding-011):
+  window closure is semantically undefined for callers on a different time
+  source, caused by the cross-clock subtraction, rooted in the split authority
+  for the batch-window concept. All three chains terminate inside the bounded
+  target on the same root, which is why the issue carries issue_role
+  root_cause with judgment_state observed.
+action_explanation: >-
+  Designate a single time authority for the window lifecycle. Either unify on
+  caller time (accept now at both entry points, or derive window start from
+  item.enqueuedAt) or unify on internal time (drop the now parameter from
+  flush, or inject one clock provider used by both enqueue and flush - the
+  injectable-clock option preserves testability). The weakest acceptable
+  closure is documentation: state on flush that now MUST be epoch ms from the
+  same clock as Date.now(), and state on the interface that enqueuedAt shares
+  that authoritative clock basis. Closure obligation is must_close_in_target
+  with action candidate fix_now: this is a current blocker on the declared
+  review focus, and the chosen clock authority also supplies the clock basis
+  that issue-004's action depends on, so this decision should land first.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-001"
+  - "problem-framing.yaml#issue-001"
+  - "deliberation-resolution.yaml#issue-001"
+  - "finding-ledger.yaml#finding-001"
+  - "finding-ledger.yaml#finding-005"
+  - "finding-ledger.yaml#finding-011"
+  - "finding-relation-graph.yaml#rel-001"
+  - "finding-relation-graph.yaml#rel-002"
+  - "issue-stance-matrix.yaml#stances.issue-001.logic"
+  - "issue-stance-matrix.yaml#stances.issue-001.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-001.semantics"

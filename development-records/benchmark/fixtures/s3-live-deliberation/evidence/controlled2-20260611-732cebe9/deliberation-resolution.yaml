@@ -1,0 +1,155 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+issues:
+  - issue_id: issue-001
+    status: no-deliberation-needed
+    final_root_cause: >-
+      Window-lifecycle time authority is split between an ambient Date.now()
+      sample at enqueue (notification-batcher.ts:20) and a caller-injected now
+      at flush (notification-batcher.ts:30-32), with no element of the bounded
+      target - type surface, doc surface, or claim set - declaring or enforcing
+      that both values come from the same clock; designating a single time
+      authority for the window concept dissolves finding-001, finding-005, and
+      finding-011 together.
+    final_claim: >-
+      The window-closure decision compares timestamps from two independent,
+      undeclared clocks: the claim set {C3, C4, C5, C6} is jointly
+      unsatisfiable for permitted inputs, the single time-authority concept is
+      absent across three parallel time sources, and the shared-clock promise
+      carried by the now parameter is nowhere declared. Severity high stands
+      as raised unanimously.
+    surface_finding_ids: [finding-001, finding-005, finding-011]
+    accepted_by_lens_ids: [logic, coverage, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped by the deliberation plan with reason_code consistent_stances:
+      all three lenses support the issue, accept the split-time-authority
+      root hypothesis, and keep high severity; no runtime conflict signals
+      were raised and no provided artifact shows a remaining blocker, so
+      no-deliberation-needed applies.
+    required_follow_up_evidence: []
+  - issue_id: issue-002
+    status: narrowed
+    final_root_cause: >-
+      The flush comment's carry-over guarantee for late-enqueued notifications
+      (notification-batcher.ts:37-38) has no realizing mechanism anywhere in
+      the bounded target: nothing snapshots or attributes window membership at
+      the close instant, enqueue has no window-close-aware branch and records
+      no per-item attribution, and flush drains and clears pending wholesale.
+      All three deliberation seats re-accepted this root verbatim, including
+      the dep-001/dep-002 shared-cause context (unconsumed enqueuedAt; missing
+      collect-vs-commit separation) with distinct roots preserved.
+    final_claim: >-
+      The sole written late-arrival boundary contract of the batcher asserts
+      the inverse of observable behavior: the declared check-to-reset
+      interleaving interval is unreachable in synchronous JS, items enqueued
+      after window close but before the flush poll are emitted in the closing
+      digest and destroyed by the unconditional wholesale clear, and C7 and C8
+      are not jointly satisfiable for any item present at flush time.
+      Adjudicated severity: high (ledger severity retained). The
+      bidirectional proposed_action stands as accepted by all three lenses:
+      implement per-item window-membership attribution, or rewrite the comment
+      to actual emit-all-then-clear behavior.
+    surface_finding_ids: [finding-002, finding-006, finding-012]
+    accepted_by_lens_ids: [logic, coverage, semantics]
+    remaining_disagreement_lens_ids: [logic, coverage]
+    reason: >-
+      Deliberation narrowed the planned action_or_severity conflict to a pure
+      severity value-frame question: root hypothesis and proposed action are
+      fully converged across all three seats, and every seat marks them
+      unblocked. The persisting 2-vs-1 severity split (logic and coverage at
+      medium, semantics at high) is adjudicated to high on the seat contents:
+      (1) the medium position's load-bearing premise - reliance-mediated harm
+      as a severity discount - is defeated by the issue's own recorded
+      failure_condition, which names any maintainer or consumer decision
+      premised on the documented carry-over as an in-scope failure path, so
+      reliance on the written contract is the supported path, not a mitigating
+      contingency; neither medium seat rebuts this. (2) The recorded
+      affected_purpose is contract-vs-behavior consistency of the only written
+      late-arrival contract under the declared review goals (correctness,
+      maintainability, regression_risk), and against that purpose the failure
+      is total - the contract asserts the inverse of behavior. (3) Coverage's
+      calibration ground (bounded below issue-001's cross-clock break) is
+      ordinal rank among sibling issues, not goal-relative classification, and
+      one-line closability speaks to fix cost, not present severity; semantics'
+      counters to both stand unrebutted. (4) Logic explicitly concedes the
+      contract-trust frame can justify high and introduces no new formal
+      premise; its conditional-vs-unconditional distinction is neutralized by
+      (1). Logic and coverage retain a principled medium position on the
+      reliance-mediation frame, recorded here as the remaining disagreement;
+      it does not block the root, the action, or this severity ruling.
+    required_follow_up_evidence: []
+  - issue_id: issue-003
+    status: no-deliberation-needed
+    final_root_cause: >-
+      No collect-vs-commit separation concept exists in the design: flush
+      couples digest collection and state erasure into one synchronous step,
+      so no recovery path for downstream delivery failure can exist on the
+      type surface.
+    final_claim: >-
+      flush returns the digest and erases all pending state in the same
+      synchronous step, and no recovery concept for downstream delivery
+      failure (ack/commit, requeue, at-least-once) exists anywhere on the type
+      surface; on delivery failure after flush returns, notifications are
+      irreversibly lost. Severity medium stands as raised; the dep-002
+      shared-mechanism relation to issue-002 (wholesale clear) preserves
+      distinct roots, so the issues remain unmerged.
+    surface_finding_ids: [finding-007]
+    accepted_by_lens_ids: [coverage, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped by the deliberation plan with reason_code consistent_stances:
+      coverage and semantics support the issue, accept the collect-vs-commit
+      absence root, and keep medium severity; logic returns not_applicable
+      under the logic/structure boundary rule (a pure absence gap yields no
+      claim pair to contradict) and raises only an advisory consistency
+      obligation on the proposed fix, opposing nothing. No conflict signals
+      and no remaining blocker exist in the provided artifacts.
+    required_follow_up_evidence: []
+  - issue_id: issue-004
+    status: resolved
+    final_root_cause: >-
+      A timestamp that should be derived by the component at enqueue time is
+      modeled as an independent caller-supplied input with no consumer: the
+      batcher neither stamps, validates, nor reads enqueuedAt, so the
+      documented meaning 'epoch ms when the notification entered the batch' is
+      unenforced and free to drift. Accepted by all three seats, with logic
+      adopting it as the deeper framing of finding-l4's unreconciled conflict
+      pair.
+    final_claim: >-
+      PendingNotification.enqueuedAt is documented as a fact about an event
+      the batcher owns but is populated by the caller and never set,
+      validated, or read; the documented meaning is presently false in
+      permitted states (finding-l4: enqueuedAt and windowStartedAt purport to
+      denote the same instant with no reconciliation rule), and dep-001 places
+      the field on issue-002's remediation path, making the gap
+      prerequisite-quality rather than dormant. Final severity: medium,
+      unanimous after deliberation; the issue remains a material issue. The
+      proposed_action stands: have enqueue stamp the field from the issue-001
+      time authority, or remove the field until a consumer exists, or
+      re-document it as caller-asserted with an explicit clock contract.
+    surface_finding_ids: [finding-013]
+    accepted_by_lens_ids: [logic, coverage, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      The planned low-vs-medium conflict dissolved inside deliberation: logic
+      revised its severity position (changed: true) on its own bounded-target
+      ground, accepting that dep-001's recorded rationale shows the same
+      non-consumption presently participating in the causal chain of accepted
+      high-severity issue-002 (finding-012.cause-003), which falsifies the
+      'influences no behavior' premise of the round-1 low rating without
+      adopting the out-of-scope forward-looking drift argument. Coverage's
+      prerequisite ground and semantics' present-tense semantic-falsity ground
+      converge on medium, so all three seats now carry medium and no
+      disagreement remains.
+    required_follow_up_evidence:
+      - >-
+        Record of issue-002's chosen remediation direction (window-membership
+        attribution vs comment correction): logic's medium is contingent on
+        the dep-001 prerequisite ground, so if issue-002 is remediated by
+        comment correction alone, issue-004's severity should be re-evaluated
+        toward low and its action choice (component-stamped timestamp vs field
+        removal vs re-documentation) sequenced after, or jointly with, that
+        decision.
+validation:
+  missing_issue_ids: []

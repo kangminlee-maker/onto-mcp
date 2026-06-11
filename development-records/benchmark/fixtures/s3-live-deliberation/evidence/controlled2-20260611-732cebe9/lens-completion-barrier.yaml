@@ -1,0 +1,19 @@
+schema_version: "1"
+session_id: 20260611-732cebe9
+created_at: 2026-06-11T09:09:10+09:00
+observed_dispatch_width: 3
+minimum_participating_lenses: 3
+planned_lens_ids:
+  - logic
+  - coverage
+  - semantics
+completed_lens_ids:
+  - logic
+  - coverage
+  - semantics
+failed_lens_ids: []
+missing_lens_ids: []
+degraded_lens_ids: []
+status: passed
+downstream_allowed: true
+downstream_reason: selected lens completion threshold satisfied

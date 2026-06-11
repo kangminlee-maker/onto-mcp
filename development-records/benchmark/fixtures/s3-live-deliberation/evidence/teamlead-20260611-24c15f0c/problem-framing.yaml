@@ -1,0 +1,141 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: "custom:problem_framing_profile"
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: "The flush() reset destroys the whole pending state in place (pending.clear() plus windowStartedAt nulling) with no snapshot/swap step, so the comment-declared carry-over invariant has no realizing mechanism and is unsatisfiable in every execution where its antecedent holds."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "All three lenses support with root accepted and medium kept (no-deliberation-needed, consistent_stances). The contradiction is demonstrated directly from in-target text (comment vs unconditional pending.clear()), so the judgment is observed. The missing realizing mechanism sits at root level: it anchors the carry-over decision unit with issue-004/issue-009 (duplicates rel-001/rel-002) and shares the destructive-reset cause with issue-005 (dep-002). Doc and code disagree inside one declaration (consistency); the silent-loss event arms only when the execution model evolves (async/await insertion, reentrancy), so it gates the next evolution step and closes by making exactly one of the two ledgered claims true."
+    related_surface_finding_ids: [finding-001]
+  - issue_id: issue-002
+    problem_definition: "flush()'s documented equivalence 'an empty array means the window is still open' is over-universal: the reachable no-window state (windowStartedAt === null) returns the same [], so realized behavior is the strictly weaker disjunction."
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: "Non-material (severity low kept; pendingUserCount() gives callers a disambiguation probe). The false equivalence is directly demonstrated by the no-window guard, so observed. The graph records no relation to any other finding — the noted affinity with issue-012's []-homonym is synthesis context only per the singleton_reason — so it stands as an independent doc-truth defect. The minimal closing arm is a documentation correction (the discriminated-result arm remains optional), and it can ride any next change without gating."
+    related_surface_finding_ids: [finding-003]
+  - issue_id: issue-003
+    problem_definition: "One window-close judgment mixes independently produced time origins — windowStartedAt stamped from ambient Date.now(), now caller-supplied, enqueuedAt unbound caller input — and no concept expressed in the system designates the single time authority."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "Deliberation resolved this as one decision unit with issue-008 (duplicates rel-003): severity HIGH confirmed and logic's abstention discharged — under bounded_partial closure the exported flush(now) signature itself defines the supported caller, so cross-origin skew (permanent never-flush with indefinite accumulation, or premature close) is within-contract, and the verifiability loss is verified in-boundary with no caller-population assumptions. The split-authority condition is directly readable in-target (observed). It is root-level: the missing single-time-authority concept also underlies issue-010 via shared_cause_candidate dep-001. It blocks the session's explicitly requested time-source focus and deterministic verification now, so closure belongs in-target."
+    related_surface_finding_ids: [finding-004]
+  - issue_id: issue-004
+    problem_definition: "The reset path contains no implementation element corresponding to the comment-declared carry-over — no separation of digest snapshot from differential preservation — and in synchronous single-threaded execution the described interleaving cannot occur at all."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "Coverage's absence framing of the same root defect as issue-001/issue-009 (duplicates rel-001/rel-002): all three lenses support, root accepted, medium kept, no-deliberation-needed. Classified identically to its decision-unit peers. The unconditional whole-map clear is in-target observable (observed); the harm is doc-vs-behavior disagreement (consistency); the documented guarantee inverts into silent loss when a maintainer makes flush async while trusting the comment, so it gates the next evolution step."
+    related_surface_finding_ids: [finding-005]
+  - issue_id: issue-005
+    problem_definition: "The notification lifecycle ends at flushed with state destruction ahead of delivery confirmation: no post-flushed concept (ack, commit, reinjection, dead-letter) exists, making the component structurally at-most-once without declaring it."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "Material (medium kept) with no claim pair to deliberate: coverage supports, semantics supports the declare-the-contract arm while deferring the lifecycle-design arm to the raising lens, logic is not_applicable by boundary routing. The clear-before-return structure is in-target observable (observed). Its root is distinct from issue-001's though they share the destructive-reset cause (dep-002), so it stands as its own root-level lifecycle gap (completeness). Whether at-most-once is the intended contract or a post-flush lifecycle is required is a product-semantics decision that must be settled before consumers depend on delivery guarantees; the loss path (delivery failure after flush) is reachable in current operation but does not block the declared happy path."
+    related_surface_finding_ids: [finding-006]
+  - issue_id: issue-006
+    problem_definition: "One global windowStartedAt is started by any user's first enqueue while collection and digests are per-user, and the contract is ambiguous rather than silent about whether global granularity is intended — a late-joining user's effective batch window converges to zero."
+    issue_role: conflicting_interpretation
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: "Non-material (severity low kept; declared happy path achievable). Semantics narrowed the root — the class doc's singular phrasing already reads as one global window, so the granularity contract is ambiguous rather than silent — and that narrowing is carried into synthesis. The live core is an unresolved intent question (per-user digest purpose vs global-window declaration and behavior), hence conflicting_interpretation, and the purpose-fit judgment is inferred (root_confidence low, intent-level reasoning over observed code). Closure is the granularity decision itself, schedulable at a later design pass."
+    related_surface_finding_ids: [finding-007]
+  - issue_id: issue-007
+    problem_definition: "The digest artifact drops the time dimension: enqueuedAt is declared on the input type but never used in digest generation, so per-notification enqueue timing is unreconstructable after flush."
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: "Non-material (low kept); applicable lenses aligned (coverage and semantics support), logic not_applicable by boundary routing. Declared-but-unused is directly observable in-target (observed); the graph connects it to no other finding and the singleton_reason explicitly bars merging with finding-012, so independent. The cost is an output completeness gap against auditability (post-flush consumers cannot reconstruct entry time); closing it requires deciding whether the time dimension belongs in the digest output or should leave the declaration, a contract choice separate from the clock-authority remediation."
+    related_surface_finding_ids: [finding-008]
+  - issue_id: issue-008
+    problem_definition: "The exported flush(now) signature asserts caller-owned current-time authority while windowStartedAt is always system-clock-stamped, and no contract text declares the required clock-domain identity, so the declared 'Flushes when the window has closed' contract is violated silently for any caller honoring the visible signature with a non-system clock."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "Resolved identically with issue-003 as one decision unit (duplicates rel-003): severity HIGH confirmed; the supported-caller premise was discharged in-session as a corollary of the signature-as-contract adjudication owned by semantics, and the failure_condition is recorded contract-level (any caller honoring the visible signature with a non-system clock). The split stamp-vs-parameter condition is directly readable in-target (observed). With skewed now the window never closes or closes immediately with no surfaced error (correctness), blocking the requested time-source focus now; closure belongs in-target alongside issue-003."
+    related_surface_finding_ids: [finding-010]
+  - issue_id: issue-009
+    problem_definition: "The reset comment asserts a carry-over mechanism the code does not implement — interleaved enqueues would be silently lost, and in synchronous single-threaded JS the described interleaving is vacuous — so an intended concurrency contract was never realized in the chosen reset strategy."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "Semantics' framing of the same root defect as issue-001/issue-004 (duplicates rel-001/rel-002): all three lenses support, root accepted, medium kept, no-deliberation-needed. Classified identically to its decision-unit peers. Both halves of the claim are demonstrated from in-target text (observed): the consequent is contradicted by pending.clear() whenever the antecedent holds, and the synchronous model makes the antecedent unreachable — a vacuous scenario presented as a handled case (consistency). The danger arms when flush becomes async or an await lands before the reset, so contract truth gates that evolution."
+    related_surface_finding_ids: [finding-011]
+  - issue_id: issue-010
+    problem_definition: "enqueuedAt is documented as a batcher-owned event-derived value but modeled as unverified independent caller input — never stamped, never validated, never read by any consumer — so its documented meaning has no enforcement point and no consumer (derived-value-as-independent-input pattern)."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "Applicable lenses (coverage, semantics) support with root accepted and medium kept; logic not_applicable (a definition with no consumer is vacuously consistent). Never-stamped/never-validated/never-read is directly observable (observed). The issue owns its root — the field was placed in the caller-facing input type instead of being stamped by the event owner — and shares the missing-time-authority cause with issue-003 via dep-001 without merging, so root_cause rather than symptom. Documented event-derived meaning and realized unverified-input modeling disagree (consistency) with unbounded, indistinguishable drift; closure requires choosing the field's contract among the ledgered arms, a decision dep-001 indicates can ride the single-clock remediation, gated before further evolution."
+    related_surface_finding_ids: [finding-012]
+  - issue_id: issue-011
+    problem_definition: "The method name flush asserts an unconditional force-out in conventional API vocabulary while the realized behavior is a conditional poll, and the doc text ('Callers poll this') admits the poll semantics — name and contract text disagree inside the same declaration."
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: defer_watch
+    closure_class: carry_forward
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: "Non-material (low kept); logic and coverage route ownership to semantics as not_applicable — per the Logic-Semantics tie-breaker the contradiction disappears once the naming ambiguity is removed, marking this as a vocabulary-level interpretation mismatch rather than a behavioral defect (conflicting_interpretation). The disagreement is directly readable inside the declaration (observed). The declared purpose remains achievable and misuse risk is bounded to readers skipping the doc, so it is carried forward to the next intentional API revision rather than gating anything."
+    related_surface_finding_ids: [finding-013]
+  - issue_id: issue-012
+    problem_definition: "[] is a homonym for two distinct reachable states — no active window and window open but not yet closed — while the doc names only the second, because no distinct signal was designed for the no-window state; a polling caller cannot distinguish 'nothing was ever enqueued' from 'wait longer'."
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: "Non-material (low kept); all three lenses support with low kept. Both return sites are in-target observable (no-window guard vs open-window guard), so observed. No same_root_candidate relation connects it to issue-002 — the shared deeper cause (no distinct no-window signal) stays synthesis context per the resolution — so it stands independently. The cost falls on polling callers' signal interpretation (callers may wait for a digest that is not coming): usability. The minimal closing arm documents both meanings of [], so it can close without gating while the distinct-signal design arm remains optional."
+    related_surface_finding_ids: [finding-014]

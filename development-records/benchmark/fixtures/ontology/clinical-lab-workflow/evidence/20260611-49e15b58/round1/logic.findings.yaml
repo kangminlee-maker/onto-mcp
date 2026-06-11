@@ -1,0 +1,348 @@
+schema_version: 1
+session_id: 20260611-49e15b58
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: "clinical-lab-ontology.yaml: state_rules[0] (Order completion rule) ×
+      entities.Result.attributes.status"
+    evidence_anchor: clinical-lab-ontology.yaml state_rules[0] "Order는 모든 Result가
+      final일 때 completed로 전이한다."; entities.Result.attributes.status enum
+      [preliminary, final, corrected]
+    claim: Order의 종결 판정 규칙이 가역적 상태(Result.status)에 의존하여, 모델이 스스로 허용하는 후속
+      사건(corrected 전이)과 시간 전개 경로상 모순을 형성한다.
+    what: 'state_rules[0]은 "모든 Result가 final"을 Order→completed 전이 조건으로 선언한다. 그러나
+      Result.status enum은 final 이후의 corrected 값을 명시적으로 허용한다(state_rules[1]도
+      corrected 전이를 정상 사건으로 전제). Result가 corrected로 바뀌는 순간 completed 판정의 전제(모든
+      Result가 final)는 거짓이 되는데, Order lifecycle [draft, placed, in_progress,
+      completed, cancelled]에는 completed에서의 복귀 전이나 재개 상태가 정의되어 있지 않다. 스냅숏 시점에는 각
+      규칙이 개별 만족 가능하지만, 상태 전개 경로 위에서는 {completed 판정 규칙, corrected 허용, 복귀 전이 부재}가
+      동시 만족 불가능하다. [logic 보충:
+      conflict_pair=state_rules[0]↔entities.Result.status;
+      satisfiability_note=inter-claim(종결 규칙과 결과 정정 허용의 시간적 상호작용);
+      modality_note=necessary 조건처럼 쓰인 전이 규칙이 가역적 possible 사건과 충돌 — modality 축
+      mixed; boundary_handoff_note=completed 이후 재개/정정 전이의 구조적 부재 자체는 structure
+      lens 범위와 겹침(전이 그래프 누락), 그러나 명시 claim 간 모순이 잔존하므로 logic primary.]'
+    why: 이 문서는 EMR/LIS 연동의 개념 권위 문서로 선언되어 있다(파일 헤더 주석). EMR/LIS 통합에서 결과
+      정정(corrected)은 모델 자신이 1급 사건으로 선언한 정상 경로인데, 종결 규칙이 그 사건과 양립 불가능하면 구현 팀마다 임의
+      해석(completed 고정 vs in_progress 복귀 vs 별도 amended 상태)을 하게 되어 권위 문서 역할이 무너진다.
+      이는 명시된 claim 집합의 동시 만족 불가능 문제이므로 logic 소유이다.
+    how_to_fix: "종결 규칙의 시점 의존성을 명시한다: (a) completed를 '판정 시점에 모든 Result가 final 또는
+      corrected'로 재정의하고 corrected 발생 시 Order 상태 처리 규칙(유지+amended 플래그, 또는 재개 전이)을
+      1문장 추가하거나, (b) lifecycle에 completed→(정정 발생 시) 전이를 명시한다. 둘 중 하나만 선택해도 모순은
+      해소된다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 Order 상태 모델이 통합 양측에서 동일하게 해석되어야 한다는
+        선언된 목적(파일 헤더 주석).
+      failure_condition: Report 발행 후 Result가 corrected로 정정되는 정상 운영 사건이 발생하는 모든
+        경우(state_rules[1]이 이 사건을 명시적으로 전제).
+      impact: 종결 상태의 의미가 미정의가 되어 EMR과 LIS가 동일 주문에 대해 서로 다른 Order 상태를 보고할 수 있고, 권위 문서를
+        근거로 한 인터페이스 검증이 불가능해진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml state_rules[0]
+        - clinical-lab-ontology.yaml state_rules[1]
+        - clinical-lab-ontology.yaml entities.Result.attributes.status
+        - clinical-lab-ontology.yaml entities.Order.lifecycle
+    causal_path:
+      root_cause_candidate: 종결 판정 규칙(state_rules[0])이 가역적 속성(Result.status)을 비가역 전제처럼
+        사용하면서, 모델이 동시에 선언한 정정 사건(corrected)과의 상호작용 규칙을 정의하지 않은 것.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: state_rules[0]은 '모든 Result가 final'을 Order→completed 조건으로 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[0]
+        - cause_id: logic-candidate-001.cause-002
+          claim: Result.status enum과 state_rules[1]은 final 이후 corrected 전이를 정상 사건으로 허용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Result.attributes.status
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: logic-candidate-001.cause-003
+          claim: Order.lifecycle에는 completed로부터의 복귀·재개 전이가 없어, corrected 발생 후 completed 판정
+            전제가 거짓인 상태와 completed 상태가 공존한다 — 경로상 동시 만족 불가능.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Order.lifecycle
+      unresolved_beyond_evidence: "corrected 발생 시 Order를 어떻게 처리하는 것이 임상적으로 옳은지는 도메인
+        규칙(예: CLIA/검사실 운영 규정)에 의존하며 본 boundary 내 문서에는 없다."
+  - candidate_id: logic-candidate-002
+    target: "clinical-lab-ontology.yaml: state_rules[1] ×
+      entities.Report.attributes.result_status.note ×
+      entities.Result.attributes.status.note"
+    evidence_anchor: state_rules[1] "Result.status가 corrected로 바뀌면
+      Report.result_status는 amended가 되어야 한다(동기화 배치는 야간 1회)";
+      Report.result_status.note "권위 값. 임상의는 이 값을 신뢰한다"; Result.status.note
+      "Report.result_status에도 동일 정보가 유지된다"
+    claim: state_rules[1]은 즉시형 의무(amended가 되어야 한다)와 그 의무를 매번 위반하게 만드는 이행 메커니즘(야간 1회
+      배치)을 한 규칙 안에 선언하여, '동일 정보 유지'·'권위 값' claim들과 함께 동시 만족 불가능한 집합을 이룬다.
+    what: "세 claim이 동시에 선언되어 있다: (1) corrected 발생 시 Report.result_status는 amended\"가
+      되어야 한다\"(즉시형 의무), (2) 그 의무의 이행 메커니즘은 야간 1회 배치(최대 약 24시간 지연을 구조적으로 허용), (3)
+      Report.result_status는 임상의가 신뢰하는 권위 값이며 Result.status와 \"동일 정보가 유지된다\".
+      corrected 발생 시점부터 다음 배치까지의 구간에서는 (1)의 의무가 충족되지 않은 상태가 모델 자체에 의해 보장되므로, '동일
+      정보 유지' claim과 '권위 값' claim은 그 구간 동안 거짓이다. 즉 이 claim 집합은 시간 전개 경로 위에서 동시 만족
+      불가능하며, 모순이 예외 상황이 아니라 설계된 정상 경로에서 매번 발생한다. [logic 보충:
+      conflict_pair=state_rules[1] 전반부(즉시 의무)↔state_rules[1] 괄호(야간 배치) 및
+      ↔Result.status.note(동일 정보 유지);
+      satisfiability_note=intra-claim(state_rules[1] 단일 규칙 내부에 의무와 그 의무를 위반하는
+      메커니즘이 공존) + inter-claim(권위/동일성 note들과의 충돌); modality_note=obligatory(\"되어야
+      한다\")를 충족 불가능하게 만드는 메커니즘이 같은 문장에 선언됨 — obligatory vs possible 구분 오류;
+      boundary_handoff_note=enum 어휘 불일치(final/finalized, corrected/amended,
+      preliminary/prelim)로 '동일 정보'의 의미 자체가 모호한 부분은 semantics lens 소유 — 다만 어휘를
+      통일해도 배치 지연으로 인한 의무 위반 구간 모순은 잔존하므로 logic primary.]"
+    why: 문서가 스스로 Report.result_status를 임상의가 신뢰하는 권위 값으로 선언했기 때문에, 권위 값이
+      원천(Result.status)과 정의상 불일치하는 구간을 모델이 보장한다는 것은 권위 선언 자체와의 형식 모순이다. 이는 단일 규칙
+      내부의 modality 구분 오류(의무를 선언하면서 충족 가능 조건을 제거)이므로 logic 소유이며, EMR/LIS 통합 시
+      임상의가 stale finalized를 신뢰하는 위험이 모델 수준에서 정당화된다.
+    how_to_fix: "의무의 modality를 메커니즘과 일치시킨다: (a) 즉시 동기화를 요구한다면 '야간 배치' 단서를 제거하고
+      corrected 이벤트 기반 즉시 갱신을 규칙으로 선언하거나, (b) 지연을 허용한다면 '되어야 한다'를 '다음 동기화 주기 내에
+      amended가 된다'로 바꾸고 그 지연 구간 동안의 권위를 Result.status로 명시 이전한다(권위 값 note 수정 동반).
+      두 경로 모두 '동일 정보가 유지된다' note를 '주기적으로 동기화된다'로 수정해야 한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 임상의에게 전달되는 결과 상태의 단일 권위(Report.result_status "임상의는 이 값을
+        신뢰한다")와 Result↔Report 상태 동일성 계약.
+      failure_condition: Result.status가 corrected로 전이된 시점부터 다음 야간 배치까지의 모든 구간 — 모델이
+        명시한 정상 경로상 매 정정 사건마다 발생.
+      impact: 권위 문서가 '신뢰하라'고 선언한 값이 원천과 불일치하는 구간을 문서 자신이 보장하므로, 이 문서를 계약으로 삼는 EMR/LIS
+        구현은 검증 기준 자체가 자기모순이 되고, 임상의가 정정 전 값을 최종으로 오신뢰하는 경로가 개념 모델 수준에서 승인된다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml state_rules[1]
+        - clinical-lab-ontology.yaml
+          entities.Report.attributes.result_status.note
+        - clinical-lab-ontology.yaml entities.Result.attributes.status.note
+    causal_path:
+      root_cause_candidate: 동기화 의무의 modality(즉시 obligatory)와 이행 메커니즘의 능력(야간 1회 배치)을
+        구분하지 않고 한 규칙에 합쳐 선언한 것 — obligatory/possible 구분 오류.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: state_rules[1]은 corrected 발생 시 Report.result_status가 amended"가 되어야 한다"는
+            의무를 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: logic-candidate-002.cause-002
+          claim: 같은 규칙이 이행 수단을 야간 1회 배치로 한정하여, 의무가 충족되지 않는 구간(최대 약 24시간)을 구조적으로 보장한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[1]
+        - cause_id: logic-candidate-002.cause-003
+          claim: 그 구간 동안 Result.status.note의 '동일 정보 유지' claim과 Report.result_status.note의
+            '권위 값/신뢰' claim이 동시에 참일 수 없어 claim 집합이 경로상 만족 불가능해진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Result.attributes.status.note
+            - clinical-lab-ontology.yaml
+              entities.Report.attributes.result_status.note
+      unresolved_beyond_evidence: 야간 배치가 실제 운영에서 즉시 트리거로 보완되는지 여부는 본 문서 밖의 구현 사실이며 boundary 내 증거가 없다.
+  - candidate_id: logic-candidate-003
+    target: "clinical-lab-ontology.yaml: state_rules[0] × entities.Order.lifecycle
+      (cancelled) — 공허 충족 및 취소 주문과의 충돌"
+    evidence_anchor: state_rules[0] "Order는 모든 Result가 final일 때 completed로 전이한다.";
+      entities.Order.lifecycle [draft, placed, in_progress, completed,
+      cancelled]
+    claim: completed 전이 규칙이 보편 양화의 공허 충족과 cancelled 상태에 대한 예외를 정의하지 않아, 취소된(또는 결과가
+      0건인) Order에 대해 completed 전이가 형식적으로 성립하여 cancelled 상태와 충돌한다.
+    what: "state_rules[0]은 전이 규칙의 적용 조건에 Order의 현재 상태 제약이 없다. (1) Result가 0건인
+      Order(draft 단계, 채취 전 취소 등)는 '모든 Result가 final'을 공허하게 충족하므로 규칙 문면상
+      completed 전이 대상이 된다. (2) 일부 결과가 final이 된 뒤 잔여 검사가 취소된 Order에서, 존재하는 모든
+      Result가 final이면 규칙은 completed 전이를 지시하지만 lifecycle은 그 주문을 cancelled로 두려 한다
+      — 한 인스턴스에 두 상태가 동시에 지시되며 completed와 cancelled는 단일 lifecycle 값으로 상호 배타적이다.
+      [logic 보충:
+      conflict_pair=state_rules[0]↔entities.Order.lifecycle(cancelled);
+      satisfiability_note=inter-claim(전이 규칙과 상태 집합 정의의 상호작용);
+      modality_note=\"전이한다\"의 modality(necessary 자동 전이인지 obligatory 절차인지) 미구분이
+      충돌의 직접 원인 — mixed; boundary_handoff_note=부분 취소·검사별 취소 개념의 부재는
+      coverage/structure 범위와 겹치지만, 현재 명시된 두 claim만으로 모순이 형성되므로 logic primary.]"
+    why: 권위 문서의 상태 규칙은 통합 구현에서 자동 전이 로직으로 직역될 가능성이 높다. 공허 충족과 cancelled 예외 부재는 문면
+      그대로 구현하면 취소 주문이 completed로 보고되는 결함을 낳고, 구현자가 암묵 보정하면 문서와 구현이 갈라진다 — 어느 쪽이든
+      권위 문서 목적이 손상된다.
+    how_to_fix: '규칙에 적용 전제 두 가지를 추가한다: "in_progress 상태이고 Result가 1건 이상 존재하며 모든
+      Result가 final일 때 completed로 전이한다. cancelled 상태에서는 이 규칙을 적용하지 않는다." 부분 취소
+      시의 우선순위(cancelled가 completed에 우선하는지)도 1문장으로 명시한다.'
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Order 상태 전이 규칙이 EMR/LIS 양측에서 결정적으로 동일하게 평가되어야 한다는 권위 문서 목적.
+      failure_condition: 결과 0건 주문 또는 부분 취소 후 잔여 결과가 모두 final인 주문이 존재하는 경우 — 임상검사 운영에서
+        통상적으로 발생 가능한 인스턴스 형상.
+      impact: 동일 인스턴스에 completed와 cancelled가 동시에 지시되어 상태 모델의 단일 값 전제가 깨지고, 구현별 임의 보정으로
+        통합 양측 상태 불일치가 생긴다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml state_rules[0]
+        - clinical-lab-ontology.yaml entities.Order.lifecycle
+    causal_path:
+      root_cause_candidate: 전이 규칙을 작성할 때 적용 가능 상태(가드)와 양화 범위(결과 존��� 전제)를 명시하지 않은 것.
+      root_cause_step_id: logic-candidate-003.cause-002
+      steps:
+        - cause_id: logic-candidate-003.cause-001
+          claim: state_rules[0]은 현재 상태 가드 없이 ' 모든 Result가 final'만을 completed 전이 조건으로 둔다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml state_rules[0]
+        - cause_id: logic-candidate-003.cause-002
+          claim: 결과 0건 또는 부분 취소 인스턴스에서 조건이 (공허하게) 충족되어 cancelled 상태 유지 의도와 completed 전이
+            지시가 동시에 성립한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Order.lifecycle
+      unresolved_beyond_evidence: 부분 취소(검사 항목 단위 취소)가 실제 운영에서 허용되는지는 문서에 명시가 없어 도메인 확인이 필요하다.
+  - candidate_id: logic-candidate-004
+    target: "clinical-lab-ontology.yaml: entities.Order.attributes.priority /
+      entities.Order.attributes.is_stat / entities.StatOrder — STAT 3중 표현 간 일관성
+      제약 부재"
+    evidence_anchor: entities.Order.attributes.priority enum [routine, urgent,
+      stat]; entities.Order.attributes.is_stat "STAT 주문 여부. priority와 함께 기록.";
+      entities.StatOrder is_a Order
+    claim: STAT 여부가 priority enum 값, is_stat boolean, StatOrder 하위 타입의 세 곳에 독립 선언되고
+      상호 제약이 없어, 모델이 상호 모순적 인스턴스(priority=stat ∧ is_stat=false ∧ ¬StatOrder 등)를
+      유효한 것으로 허용한다.
+    what: "같은 사실(이 주문은 STAT이다)이 세 개의 독립 자유도로 표현된다. 문서에는 세 값의 일치를 요구하는 제약이 없으므로,
+      형식적으로 2^3 조합 중 일관된 2개를 제외한 6개의 자기모순 조합이 모두 만족 가능한(유효한) 인스턴스가 된다. 이는 claim
+      간 unsatisfiability가 아니라 그 반대 방향의 논리 결함 — 모순을 배제하는 공리의 부재로 모순 상태가
+      satisfiable — 이다. is_stat의 note(\"priority와 함께 기록\")는 일치 의무인지 단순 병기인지
+      modality가 불명확하다. [logic 보충:
+      conflict_pair=entities.Order.attributes.priority↔entities.Order.attribute\
+      s.is_stat↔entities.StatOrder(3항 중복); satisfiability_note=inter-claim — 세
+      선언 자체는 양립하나 일관성 공리 부재로 모순 인스턴스가 허용됨; modality_note=note의 '함께 기록'이
+      necessary 일치 제약인지 possible 병기인지 미구분 — modality 구분 오류;
+      boundary_handoff_note=동일 개념의 3중 명명 자체는 semantics lens 소유(개념 중복), 하위 타입 구조
+      선택은 structure lens 소유 — logic은 '일치 제약 부재로 모순 인스턴스가 유효해진다'는 형식 결함만 소유.]"
+    why: STAT 판정은 응급 검사 우선처리라는 안전 관련 분기 조건이다. EMR이 is_stat을, LIS가 priority를 읽도록 구현되면
+      동일 주문이 한쪽에서는 응급, 다른 쪽에서는 일반으로 처리되는 상태를 이 모델이 형식적으로 승인한다. 권위 문서가 모순 인스턴스를
+      배제하지 못하면 통합 검증 기준으로 기능하지 못한다.
+    how_to_fix: "권위를 한 곳으로 지정한다(권장: priority enum). is_stat은 'priority=stat의 파생
+      투영'으로 선언하거나 제거하고, StatOrder는 'priority=stat인 Order'와의 동치 제약을 명시하거나 하위 타입을
+      제거한다. 최소 수정은 제약 1줄 추가: \"is_stat = (priority == stat)이며 StatOrder 인스턴스는
+      priority=stat을 필수로 한다.\""
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 응급(STAT) 주문 판정이 통합 양측에서 단일하게 결정되어야 한다는 개념 권위 문서의 목적.
+      failure_condition: 세 표현 중 둘 이상을 서로 다른 시스템·코드 경로가 각각 읽는 경우 — 세 표현이 모두 공식 스키마에
+        있으므로 발생 개연성이 구조적으로 내재됨.
+      impact: "모순 인스턴스(예: priority=stat인데 is_stat=false)가 스키마상 유효하므로 검증으로 걸러지지 않고, 응급
+        검사 우선처리 누락이라는 환자 안전 영향 경로로 이어질 수 있다."
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Order.attributes.priority
+        - clinical-lab-ontology.yaml entities.Order.attributes.is_stat
+        - clinical-lab-ontology.yaml entities.StatOrder
+    causal_path:
+      root_cause_candidate: STAT 개념을 도입할 때 기존 표현(priority enum)을 확장하는 대신 boolean과 하위
+        타입을 병행 추가하면서 표현 간 동치 공리를 선언하지 않은 것.
+      root_cause_step_id: logic-candidate-004.cause-002
+      steps:
+        - cause_id: logic-candidate-004.cause-001
+          claim: STAT 여부가 priority, is_stat, StatOrder 세 곳에 독립 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Order.attributes.priority
+            - clinical-lab-ontology.yaml entities.Order.attributes.is_stat
+            - clinical-lab-ontology.yaml entities.StatOrder
+        - cause_id: logic-candidate-004.cause-002
+          claim: 세 표현의 일치를 강제하는 제약이 문서 어디에도 없어 모순 조합이 유효 인스턴스로 만족 가능하다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities (제약 선언 부재 — 문서 전체에 constraint
+              절 없음)
+      unresolved_beyond_evidence: 세 표현 중 어느 것이 실제 운영에서 권위로 쓰이는지는 문서 밖 구현 사실이다.
+  - candidate_id: logic-candidate-005
+    target: "clinical-lab-ontology.yaml:
+      entities.Test.attributes.requires_specimen_type ×
+      entities.Assay.attributes.specimen_kind × notes[0]"
+    evidence_anchor: "Test.requires_specimen_type enum [blood, urine, tissue, swab];
+      Assay.specimen_kind string (예: 'WB', 'Serum', 'Urine-random'); notes[0]
+      \"현재 신규 항목은 두 곳 모두에 등록한다\""
+    claim: 동일 카탈로그 항목을 Test와 Assay 두 곳에 등록하라는 운영 claim이, 검체 요건 속성의 양립 불가능한 타입·값공간(닫힌
+      enum 4값 vs 자유 문자열, 예시 어휘 'Serum' 등은 enum으로 표현 불가)과 결합하여 일관된 이중 등록을 형식적으로
+      불가능하게 만든다.
+    what: "notes[0]은 신규 검사 항목을 Test와 Assay 양쪽에 등록할 것을 지시한다. 그러나 같은 개념적 속성(요구 검체 종류)이
+      Test에서는 닫힌 enum(blood/urine/tissue/swab), Assay에서는 자유 문자열('WB', 'Serum',
+      'Urine-random')로 선언되어 있고 두 값공간 사이의 사상(mapping)이 정의되어 있지 않다.
+      'Serum'·'Urine-random'처럼 enum의 어떤 값과도 1:1 대응이 성립하지 않는 값(혈청은 blood의 파생이지만
+      동일하지 않고, urine-random은 urine의 세분)이 예시로 명시되어 있으므로, '두 곳에 동일 항목을 등록한다'는
+      claim과 '두 속성이 같은 사실을 표현한다'는 전제는 사상 규칙 없이는 동시 만족 불가능하다. [logic 보충:
+      conflict_pair=entities.Test.attributes.requires_specimen_type↔entities.As\
+      say.attributes.specimen_kind(notes[0]이 충돌을 활성화);
+      satisfiability_note=inter-claim — 이중 등록 운영 규칙이 두 타입 선언을 같은 인스턴스에 적용시키는 맥락;
+      modality_note=necessary 타입 제약 간 충돌(방향 무관 본질적 type 모순 — enum vs 비정합 어휘의
+      string); boundary_handoff_note=Test/Assay 개념 중복 자체와 'WB'/'Serum' 어휘 의미는
+      semantics lens 소유, Specimen.specimen_type과의 3중 어휘 분기는 coverage/semantics
+      소유 — logic은 타입·값공간 비정합으로 인한 이중 등록 claim의 만족 불가능성만 소유.]"
+    why: 검체 적합성 판정(이 검체로 이 검사가 가능한가)은 LIS의 핵심 검증 로직이며, Result.derived_from Specimen
+      관계를 통해 결과 무결성과 직결된다. enum 측과 string 측이 다른 답을 주는 항목이 존재할 수 있는 모델은 검체 적합성의
+      단일 진실을 제공하지 못하므로 권위 문서 목적에 반한다.
+    how_to_fix: "검체 종류의 정규 어휘를 한 곳에 정의하고(예: Specimen.specimen_type enum을 정규로 승격),
+      Assay.specimen_kind를 그 정규 어휘로의 사상이 정의된 코드체계로 바꾸거나 정규 enum + 세부 한정자(예:
+      blood + serum)로 분해한다. 통합 전 최소 수정은 notes[0]에 '두 속성 간 사상표 유지 의무'를 명시하는 것이다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 검사 카탈로그의 검체 요건이 EMR(주문 검증)과 LIS(수행 검증)에서 동일하게 판정되어야 한다는 권위 문서 목적.
+      failure_condition: enum 4값으로 표현 불가능한 검체 요건('Serum', 'Urine-random' 등 — 문서가 스스로
+        예시로 명시)을 가진 항목을 이중 등록하는 모든 경우.
+      impact: 같은 검사 항목의 검체 요건이 두 표현에서 다른 답을 주어 주문 시점 검증과 수행 시점 검증이 갈라지고, 부적합 검체 진행 또는
+        적합 검체 거부가 모델 수준에서 걸러지지 않는다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml
+          entities.Test.attributes.requires_specimen_type
+        - clinical-lab-ontology.yaml entities.Assay.attributes.specimen_kind
+        - clinical-lab-ontology.yaml notes[0]
+    causal_path:
+      root_cause_candidate: Test와 Assay라는 중복 카탈로그 개념을 통합 보류한 채(notes[0]) 각자 다른 타입 체계로
+        같은 속성을 선언하고 사상 규칙을 정의하지 않은 것.
+      root_cause_step_id: logic-candidate-005.cause-002
+      steps:
+        - cause_id: logic-candidate-005.cause-001
+          claim: 같은 개념적 속성(요구 검체 종류)이 Test에서는 닫힌 enum, Assay에서는 자유 문자열로 선언되어 있고 예시 어휘가
+            enum과 비정합이다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml
+              entities.Test.attributes.requires_specimen_type
+            - clinical-lab-ontology.yaml entities.Assay.attributes.specimen_kind
+        - cause_id: logic-candidate-005.cause-002
+          claim: notes[0]의 이중 등록 지시가 두 비정합 타입 선언을 동일 항목에 동시에 적용시켜, 사상 규칙 없이는 일관된 등록이 만족
+            불가능해진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml notes[0]
+      unresolved_beyond_evidence: 실제 카탈로그에 enum 비정합 검체 요건 항목이 몇 건 존재하는지는 문서 밖 데이터이다.
+  - candidate_id: logic-candidate-006
+    target: "clinical-lab-ontology.yaml: relations — Result↔Report, Result↔Specimen
+      중복 역방향 쌍"
+    evidence_anchor: "relations: {Result→Report aggregated_into} + {Report→Result
+      contains}; {Result→Specimen derived_from} + {Specimen→Result produces}"
+    claim: 동일 관계의 역방향 쌍이 서로 다른 kind 명칭(aggregated_into/contains,
+      derived_from/produces)으로 이중 선언되어 있으나, 역관계 동치 선언이 없어 형식상 4개의 독립 관계로 읽힌다 — 현
+      시점 모순은 아니므로 logic 관점에서는 pass에 가깝고 명명 정리는 semantics 소유.
+    what: "Result와 Report 사이, Result와 Specimen 사이에 각각 방향만 다른 관계 쌍이 별도 항목으로 선언되어 있다.
+      두 쌍이 같은 관계의 inverse인지 독립 관계인지에 대한 선언이 없다. 현재 선언만으로는 동시 만족 가능하므로(독립 관계로
+      해석해도 모순 없음) logic verdict는 fail이 아니다. 다만 inverse 동치가 선언되지 않은 상태에서 한쪽만 갱신되는
+      해석이 허용되므로, 향후 제약 추가 시 모순의 잠복 지점이다. [logic 보충: satisfiability_note=현 claim
+      집합은 양립 가능 — 관찰된 모순 없음(pass on this pair);
+      boundary_handoff_note=aggregated_into/contains, derived_from/produces의 명명
+      중복·의미 구분은 semantics lens primary로 routing — 모호 제거(inverse 동치 선언) 시 logic
+      쟁점은 소멸하므로 Logic↔Semantics 판정 기준상 semantics 소유.]"
+    why: logic lens의 boundary routing 규칙상 모호 제거로 사라지는 문제는 semantics 소유이다. 본 finding은
+      logic 관점에서 '모순 아님'을 명시적으로 기록하고 semantics로의 handoff 근거를 남기기 위한 low 등재이다.
+    how_to_fix: "각 쌍에 inverse 동치를 선언하거나(예: contains는 aggregated_into의 역관계) 한 방향만 정규로
+      남기고 역방향은 파생 투영으로 표시한다."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 결과 정정(corrected)과 보고서 수정(amended)은 보고서 발행 이후에도 발생할 수 있는 정상 운영 사건이다 — 이는 외부
+    도메인 지식이 아니라 대상 문서 자신의 enum 값과 state_rules[1]이 전제하는 바를 그대로 따른 것이다.
+  - "'야간 1회' 배치는 corrected 발생과 동기화 사이에 0이 아닌 지연 구간을 보장한다고 해석했다(문구의 직설적 독해)."
+  - "'Serum'과 'Urine-random'은 enum 값 blood/urine과 1:1 동치가 아닌 세분·파생 개념이라는 일반 상식
+    수준의 해석을 사용했다(임상검사 도메인 규칙 문서 없이 판정 가능한 범위)."
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,101 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+work_item_id: "synthesis:issue-002"
+issue_id: "issue-002"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-002"
+conclusion: >-
+  The flush comment (notification-batcher.ts:37-38) - the only written
+  late-arrival contract of the batcher - promises that notifications enqueued
+  between the window-close check and the reset are carried into the next
+  window, but the code cannot implement that contract: the declared
+  interleaving interval is unreachable in single-threaded synchronous JS, and
+  items arriving in the gap that does exist (after window close, before the
+  flush poll) are emitted in the closing digest and destroyed by the
+  unconditional wholesale clear. C7 and C8 are not jointly satisfiable for any
+  item present at flush time. All three lenses accepted the root and the
+  bidirectional action; deliberation adjudicated the 2-vs-1 severity split to
+  high, with logic and coverage retaining a recorded medium position that
+  blocks nothing.
+materiality_explanation: >-
+  The issue strikes contract-vs-behavior consistency - a declared review goal
+  alongside correctness, maintainability, and regression_risk - at its most
+  load-bearing point: the comment is the sole written statement of the
+  batcher's boundary semantics for late-arriving notifications, and it asserts
+  the inverse of observable behavior. Maintainers reason from a loss-safety
+  guarantee that was never built, and consumers mis-attribute digests to
+  windows. Deliberation made the materiality frame explicit: the issue's own
+  recorded failure_condition names any maintainer or consumer decision
+  premised on the documented carry-over as an in-scope failure path, so
+  reliance on the written contract is the supported path, not a mitigating
+  contingency, and against the recorded affected_purpose the failure is total.
+root_cause_explanation: >-
+  The root cause is that the comment's carry-over guarantee has no realizing
+  mechanism anywhere in the bounded target: nothing snapshots or attributes
+  window membership at the close instant, enqueue has no window-close-aware
+  branch and records no per-item attribution, and flush drains and clears
+  pending wholesale (root confidence high). It is the starting point because
+  every lens's chain terminates on it - the comment describes a design that
+  was not built - and because either resolving direction (implement
+  attribution or correct the comment) dissolves all three findings
+  (finding-002, finding-006, finding-012) together. All three deliberation
+  seats re-accepted this root verbatim, including the dep-001/dep-002
+  shared-cause context (unconsumed enqueuedAt; missing collect-vs-commit
+  separation) with distinct roots preserved.
+causal_path_explanation: >-
+  The three lenses converge through parallel chains. Logic (finding-002):
+  under the literal reading the check-to-reset interval admits no enqueues, so
+  C7 is vacuous; under the only reachable reading, late items are emitted in
+  the closing digest and destroyed - caused by the digest loop iterating the
+  whole pending map with no enqueuedAt filter while clear() and the
+  windowStartedAt reset run unconditionally in the same synchronous body -
+  rooted in the absence of any window-membership snapshot at the close
+  instant. Coverage (finding-006): late items land in the closing digest
+  contrary to the comment, caused by enqueue checking only windowStartedAt ===
+  null with no close-aware branch, rooted in the declared carry-over category
+  being absent from the implementation space. Semantics (finding-012): the
+  described interleave cannot occur and the real gap behaves oppositely,
+  caused by flush draining pending wholesale, rooted in enqueue recording no
+  per-item window attribution, which makes the carried-into-next-window claim
+  unimplementable from the state the code keeps.
+action_explanation: >-
+  Reconcile contract and behavior in one direction, as accepted by all three
+  lenses. Either implement carry-over via per-item window attribution (filter
+  the digest by enqueue time against windowStartedAt + WINDOW_MS, retain
+  post-window items in pending, re-seed windowStartedAt for the retained set)
+  or rewrite the comment to actual behavior ("all notifications pending at
+  flush time, including any enqueued after the window closed, are emitted in
+  this digest; nothing carries over"). Closure class is needs_decision with
+  obligation must_close_in_target and candidates fix_now or accept_risk: the
+  direction must be chosen first. Ordering matters - the decision also
+  sequences issue-004 via dep-001 (the implement branch needs a trusted
+  batcher-stamped per-item timestamp, which enqueuedAt today is not) and
+  touches the dep-002 mechanism shared with issue-003 (the unconditional
+  wholesale clear), while the roots of those issues remain distinct.
+unresolved_disagreement_note: >-
+  A recorded severity disagreement remains: logic and coverage retain a
+  principled medium position on the reliance-mediation frame (harm requires a
+  maintainer or consumer to act on the falsified comment, the present
+  emit-all-then-clear behavior is internally coherent absent the comment, and
+  the gap is closable by a one-line contract correction). Deliberation
+  adjudicated severity to high - the recorded failure_condition makes reliance
+  on the documented carry-over the supported path rather than a discount, and
+  against the affected_purpose the failure is total - and the remaining
+  medium position of logic and coverage does not block the root, the action,
+  or the severity ruling.
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-002"
+  - "problem-framing.yaml#issue-002"
+  - "deliberation-resolution.yaml#issue-002"
+  - "finding-ledger.yaml#finding-002"
+  - "finding-ledger.yaml#finding-006"
+  - "finding-ledger.yaml#finding-012"
+  - "finding-relation-graph.yaml#rel-003"
+  - "finding-relation-graph.yaml#rel-004"
+  - "issue-stance-matrix.yaml#stances.issue-002.logic"
+  - "issue-stance-matrix.yaml#stances.issue-002.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-002.semantics"
+  - "issue-ledger.yaml#dep-001"
+  - "finding-relation-graph.yaml#rel-005"
+  - "issue-ledger.yaml#dep-002"
+  - "finding-relation-graph.yaml#rel-006"

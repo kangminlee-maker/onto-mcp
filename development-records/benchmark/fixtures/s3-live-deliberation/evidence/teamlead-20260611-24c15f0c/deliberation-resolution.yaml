@@ -1,0 +1,113 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+issues:
+  - issue_id: issue-001
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: the flush() reset was implemented as whole-map pending.clear() plus windowStartedAt nulling with no snapshot/swap step that could realize the documented carry-over, so the comment-declared invariant never had a realizing mechanism."
+    final_claim: "The documented carry-over invariant is logically incompatible with the realized reset semantics — the claim set is unsatisfiable in every execution where the carry-over antecedent holds. Severity medium kept."
+    surface_finding_ids: [finding-001]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Consistent stances: all three lenses support with root accepted and medium kept (issue-stance-matrix); no runtime conflict signals. Cross-issue decision-unit notes (duplicates rel-001/rel-002 with issue-004/issue-009, shared_cause_candidate dep-002 with issue-005) are synthesis context, not stance conflicts."
+    required_follow_up_evidence: []
+  - issue_id: issue-002
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: the C4 return-contract comment was written over-universally — asserting that an empty array means the window is still open — without accounting for the reachable no-window state that shares the same return value."
+    final_claim: "flush()'s documented equivalence is false in the no-window state (the windowStartedAt === null guard also returns []); realized behavior is the strictly weaker disjunction. Severity low kept; non-material improvement opportunity."
+    surface_finding_ids: [finding-003]
+    accepted_by_lens_ids: [logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Non-material issue (severity low). Logic (raising) and semantics support with root accepted and low kept; coverage's surface_only stance is boundary-routed deference to the raising lens with root accepted and severity kept, not a contested claim. Non-material issues do not enter planned deliberation."
+    required_follow_up_evidence: []
+  - issue_id: issue-003
+    status: resolved
+    final_root_cause: "Accepted as ledgered by both participants: the API design is asymmetric — flush receives time as a caller parameter while enqueue stamps windowStartedAt from ambient Date.now() and enqueuedAt arrives as unvalidated caller input — with no injected clock or shared single-time-source concept designated anywhere in the component (enqueuedAt counted as a third unbound origin, matching finding-l2's evidence note that the only documented time base sits on a field no logic consumes)."
+    final_claim: "Severity HIGH confirmed. The window-close predicate now - windowStartedAt < WINDOW_MS mixes time origins with no concept in the system designating the authority. The resolution question is answered affirmatively from in-session evidence: under bounded_partial closure the authority surface for 'supported execution condition' is the exported API contract itself — material_kind_obligations' possibility-based criterion ('can violate the declared review goal inside the bounded target', with exported signatures/documented contracts as the named evidence base) makes a divergent-time-source caller honoring the unrestricted flush(now) signature within-contract, hence supported by derivation rather than empirical caller observation. The verifiability arm closes on in-target evidence alone (verified in-boundary by logic: no caller-controllable input assignment determines the close predicate; windowStartedAt binds to ambient Date.now(), outside the API input space), and the impact is in-target maximal and silent (permanent [] indistinguishable from the documented 'window still open'). The ledger failure_condition is already contract-level and stands. Resolved as one decision unit with issue-008 per duplicates rel-003."
+    surface_finding_ids: [finding-004]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Deliberation seats converged. coverage: support, changed=false — high kept, with logic's calibration refinement accepted (under a population framing the caller premise was load-bearing; under the contract framing it reduces to a corollary). logic: support, changed=true — severity abstention discharged (insufficient_evidence -> high confirmed) via E1 (semantics' in-session meaning adjudication of the flush(now) signature, the exact boundary_handoff finding-l2 requested, plus the possibility-based materiality criterion), E3 (verifiability loss verified in-boundary with zero caller-population assumptions), E4 (the session's explicitly requested time-source-semantics focus). Logic accepted coverage's reductio head-on: demanding out-of-target caller observation would render every caller-facing contract defect unadjudicable under bounded_partial closure, contradicting material_kind_obligations. Semantics concurs from the stance matrix (support, root accepted, high kept). Both rebuttal slots expired unused; the E2 recording condition from the issue-008 exchange is natively satisfied here because issue-003's ledger failure_condition is already contract-level."
+    required_follow_up_evidence: []
+  - issue_id: issue-004
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: an implementation concept matching the documented carry-over — a distinction between digest snapshot and differential preservation — was never present in the reset path, so the comment states an unrealizable behavior as contract."
+    final_claim: "The comment-declared carry-over has no corresponding implementation element; in current synchronous single-threaded execution the described interleaving cannot occur at all. Severity medium kept."
+    surface_finding_ids: [finding-005]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Consistent stances: all three lenses support with root accepted and medium kept; no runtime conflict signals. Duplicate links rel-001/rel-002 to issue-001/issue-009 are context only."
+    required_follow_up_evidence: []
+  - issue_id: issue-005
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: the notification lifecycle was designed one-way with state destruction ahead of delivery confirmation, and no post-flushed lifecycle concept (ack, commit, reinjection, dead-letter) exists in the component."
+    final_claim: "flush() destroys all pending state before the caller can confirm delivery, making the component structurally at-most-once without declaring it. Severity medium kept. The proposed-action arms (two-phase interface vs declare at-most-once) are alternatives offered by the raising lens itself."
+    surface_finding_ids: [finding-006]
+    accepted_by_lens_ids: [coverage, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Material issue, but no claim pair materialized: semantics' narrow stance supports the declare-the-contract arm while explicitly deferring the lifecycle-design arm to the raising lens (neither supporting nor opposing it), logic is not_applicable by boundary routing, and all applicable lenses accept the root and keep medium. shared_cause_candidate dep-002 (with issue-001) is dependency context owned by issue_dependencies."
+    required_follow_up_evidence: []
+  - issue_id: issue-006
+    status: no-deliberation-needed
+    final_root_cause: "Accepted with semantics' narrowing carried to synthesis: the window concept lacks per-user sub-granularity — a single global windowStartedAt is started by any user's first enqueue while collection and digests are per-user — and the contract is ambiguous rather than silent on the global window granularity."
+    final_claim: "The effective batch window of a user who joins shortly before the global close converges to zero, conflicting with the per-user digest intent; the declared happy path remains achievable. Severity low kept; non-material improvement opportunity."
+    surface_finding_ids: [finding-007]
+    accepted_by_lens_ids: [coverage, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Non-material issue (severity low). Coverage (raising) supports; semantics narrows the root (contract ambiguous rather than silent) while keeping low — a refinement carried into synthesis without deliberation; logic is not_applicable by boundary routing."
+    required_follow_up_evidence: []
+  - issue_id: issue-007
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: the digest artifact design dropped the time dimension — enqueuedAt is declared on the input type but never used in digest generation, so per-notification enqueue timing is unreconstructable after flush."
+    final_claim: "The time dimension is lost in the digest output; no post-flush consumer can reconstruct when each notification entered the batch. Severity low kept; improvement opportunity that does not make the result unsafe for its declared purpose."
+    surface_finding_ids: [finding-008]
+    accepted_by_lens_ids: [coverage, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Non-material issue (severity low); applicable lens stances are aligned (coverage and semantics support, root accepted, low kept); logic is not_applicable by boundary routing. No conflict signals."
+    required_follow_up_evidence: []
+  - issue_id: issue-008
+    status: resolved
+    final_root_cause: "Accepted as ledgered by both participants: the time authority was split at the design point — enqueue independently stamps windowStartedAt from Date.now() while flush externalizes the clock as a caller parameter, and no contract text declares the required clock-domain identity."
+    final_claim: "Severity HIGH confirmed. The exported flush(now) signature asserts caller-owned current-time authority while windowStartedAt is always system-clock-stamped, so the declared contract 'Flushes when the window has closed' is violated without any surfaced error for callers exercising the signature with a non-system clock. The resolution question is answered affirmatively: the 'supported caller' premise is established in-session as a corollary of the signature-as-contract adjudication owned by semantics (the very boundary handoff finding-l2 routed there) — within a bounded review the supported caller is defined by the published API surface, and the absence of a clock-domain restriction claim is itself the undocumented-meaning defect. E2 recording condition adopted in this resolution: the failure_condition is recorded contract-level — 'any caller honoring the visible signature contract with a non-system clock (frozen/fake test clock, simulated or logical time)' — replacing the population claim 'a supported caller group', aligning issue-008's wording with issue-003's already-contract-level form. Resolved identically with issue-003 as one decision unit per duplicates rel-003."
+    surface_finding_ids: [finding-010]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Deliberation seats converged. semantics: support, changed=false — high kept; accepted logic's discharge path E1+E3 in full, adopted E3's in-boundary formalization as shared ground, and accepted E2 without reservation (it records semantics' own offered restatement). logic: support, changed=true — severity abstention discharged (insufficient_evidence -> high confirmed) via E1 (semantics, the owner lens designated by finding-l2's boundary_handoff, supplied the awaited in-session meaning adjudication), E2 (the contract-level restatement removes the population framing that bounded_partial closure with session_domain=none could never establish, making the severity ground derivable from in-target evidence alone), E3 (verifiability loss verified in-boundary with zero caller-population assumptions), E4 (session's explicit time-source-semantics focus). Logic accepted the undischargeable-calibration reductio: requiring caller-corpus evidence would cap every exported-API contract defect below high by construction — a closure artifact, not a severity judgment. Coverage concurs from the stance matrix (support, root accepted, high kept) and agreed to the wording alignment. Both rebuttal slots expired unused."
+    required_follow_up_evidence: []
+  - issue_id: issue-009
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: the comment encodes an intended concurrency contract (carry-over of late enqueues) that was never realized in the chosen reset strategy of building digests from the live pending map and then clearing the whole map."
+    final_claim: "The reset comment asserts a carry-over mechanism the code does not implement, and in synchronous single-threaded JS the described interleaving cannot occur at all — a vacuous scenario presented as a handled case. Severity medium kept."
+    surface_finding_ids: [finding-011]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Consistent stances: all three lenses support with root accepted and medium kept; no runtime conflict signals. Duplicate links rel-001/rel-002 to issue-001/issue-004 are context only."
+    required_follow_up_evidence: []
+  - issue_id: issue-010
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: enqueuedAt was placed in the caller-facing input type instead of being stamped by the component that owns the enqueue event, so its documented event-derived meaning has no enforcement point and no consumer."
+    final_claim: "enqueuedAt is documented as a batcher-owned event-derived value but modeled as unverified independent caller input — never stamped, never validated, never read by any consumer in the component. Severity medium kept."
+    surface_finding_ids: [finding-012]
+    accepted_by_lens_ids: [coverage, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Consistent stances among applicable lenses: coverage and semantics support with root accepted and medium kept; logic is not_applicable by boundary routing (a definition with no consumer is vacuously consistent) and offers corroborative context only. shared_cause_candidate dep-001 (with issue-003: one injected clock would resolve both) is dependency context owned by issue_dependencies and is carried to synthesis without merging."
+    required_follow_up_evidence: []
+  - issue_id: issue-011
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: the method name was chosen from conventional flush vocabulary (unconditional force-out) while the realized behavior is a conditional poll, and the doc comment admits the poll semantics, leaving name and contract text in disagreement inside the same declaration."
+    final_claim: "flush names an unconditional operation but behaves as a conditional poll; the contract text ('Callers poll this') and the name disagree inside the same declaration. Severity low kept; improvement opportunity."
+    surface_finding_ids: [finding-013]
+    accepted_by_lens_ids: [semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Non-material issue (severity low); logic and coverage route ownership to semantics as not_applicable (per the Logic-Semantics tie-breaker, the contradiction disappears once the naming ambiguity is removed, so the defect is semantics-owned) and the raising lens keeps low. No conflict signals."
+    required_follow_up_evidence: []
+  - issue_id: issue-012
+    status: no-deliberation-needed
+    final_root_cause: "Accepted as ledgered: the [] return value was overloaded across two distinct component states (no active window vs window open but not yet closed) while the doc names only the second, because no distinct signal was designed for the no-window state."
+    final_claim: "[] is a homonym for two distinct states and a polling caller cannot distinguish 'nothing was ever enqueued' from 'wait longer'. Severity low kept; improvement opportunity."
+    surface_finding_ids: [finding-014]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Non-material issue (severity low); all three lenses support and keep low with no conflict signals. The shared deeper cause with issue-002 (no distinct no-window signal) is noted as synthesis context without merging, since no same_root_candidate relation exists."
+    required_follow_up_evidence: []
+validation:
+  missing_issue_ids: []

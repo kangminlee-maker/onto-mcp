@@ -1,0 +1,138 @@
+schema_version: 1
+session_id: "20260611-732cebe9"
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: "custom:problem_framing_profile"
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: >-
+      Window-lifecycle time authority is split: enqueue stamps windowStartedAt
+      from the ambient Date.now() while flush judges closure against a
+      caller-supplied now, and no element of the bounded target - type surface,
+      doc surface, or claim set - declares or enforces that the two values share
+      a clock, so the window-closure predicate is undefined for permitted
+      inputs.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: >-
+      Unanimous high severity with no deliberation needed: the logic lens
+      proved {C3, C4, C5, C6} jointly unsatisfiable for permitted inputs,
+      coverage and semantics independently located the same absent
+      single-time-authority concept, and designating one authority dissolves
+      findings 001/005/011 together and supplies the clock basis issue-004's
+      action depends on. The defect sits exactly on the declared review focus
+      (time-source semantics) and breaks the correctness and verifiability
+      goals on the current target, so it blocks now and is owed closure in
+      target.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-005
+      - finding-011
+  - issue_id: issue-002
+    problem_definition: >-
+      The flush comment's carry-over guarantee - the only written late-arrival
+      contract of the batcher - asserts the inverse of observable behavior:
+      the declared check-to-reset interleaving interval is unreachable in
+      synchronous JS, items enqueued after window close but before the flush
+      poll are emitted in the closing digest and destroyed by the
+      unconditional wholesale clear, and no window-membership attribution
+      mechanism exists anywhere in the bounded target to realize the promise.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: >-
+      All three lenses accepted the root (the comment describes a design that
+      was never built; C7 and C8 are not jointly satisfiable for any item
+      present at flush time), and deliberation adjudicated the planned 2-vs-1
+      severity split to high: the issue's own failure_condition names reliance
+      on the documented carry-over as the supported path, so
+      reliance-mediation is not a discount, and against the recorded
+      affected_purpose (contract-vs-behavior consistency under correctness,
+      maintainability, regression_risk) the failure is total. Closure requires
+      choosing a direction first - implement per-item window-membership
+      attribution or rewrite the comment to emit-all-then-clear behavior - and
+      that decision also sequences issue-004 via dep-001 and touches the
+      dep-002 mechanism, so the close path is a decision owed in the current
+      target. Logic and coverage retain a recorded medium position on the
+      reliance-mediation frame that does not block root, action, or the
+      severity ruling.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-006
+      - finding-012
+  - issue_id: issue-003
+    problem_definition: >-
+      flush couples digest collection and state erasure into one synchronous
+      step, and no recovery concept for downstream delivery failure
+      (ack/commit, requeue, at-least-once) exists anywhere on the type
+      surface: the error-handling/delivery-guarantee subdomain of a
+      notification batcher is entirely unexpressed, so notifications are
+      irreversibly lost if delivery fails after flush returns.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: >-
+      A pure absence gap with consistent stances: coverage raised and
+      maintains it, semantics confirms the at-most-once meaning the code
+      actually has is real but undeclared and invisible to callers, and logic
+      returns not_applicable under the logic/structure boundary rule, opposing
+      nothing. rel-006/dep-002 connect it to issue-002 only through a shared
+      mid-chain mechanism (the unconditional wholesale erase) with distinct
+      roots, so it stands as an independent issue and merging is forbidden.
+      Medium severity leaves the happy path intact in the current target, but
+      the batcher cannot be relied on downstream until a direction is chosen -
+      split flush into collect and commit phases or declare at-most-once
+      semantics explicitly - so the decision must land before the next stage;
+      logic's advisory obligation (redefine the C5 empty-array protocol and
+      window-restart rules if flush is split) attaches to that decision.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-004
+    problem_definition: >-
+      PendingNotification.enqueuedAt is documented as a fact about an event
+      the batcher owns (epoch ms when the notification entered the batch) but
+      is modeled as a caller-supplied input that the batcher never stamps,
+      validates, or reads: documented authority and actual authority diverge,
+      the field's meaning is unenforced and presently false in permitted
+      states, and the value is free to drift from the actual enqueue moment.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: >-
+      Deliberation dissolved the planned low-vs-medium conflict to unanimous
+      medium: dep-001's recorded rationale shows the same non-consumption
+      presently participating in the causal chain of accepted high-severity
+      issue-002 (finding-012.cause-003), which falsifies the
+      'influences no behavior' premise of the round-1 low rating, and a
+      carry-over remediation of issue-002 requires a trustworthy per-item
+      timestamp this unenforced field cannot supply - the gap is an enabling
+      condition of prerequisite quality rather than a dormant observation,
+      and it blocks issue-002's attribution-direction remediation. Closure is
+      contingent on the recorded required_follow_up_evidence: the record of
+      issue-002's chosen remediation direction decides whether this field is
+      component-stamped from the issue-001 time authority alongside that fix,
+      removed, or re-documented as caller-asserted - and whether severity is
+      re-evaluated toward low under comment-correction - so it may close
+      during the next stage together with that decision.
+    related_surface_finding_ids:
+      - finding-013

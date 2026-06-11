@@ -1,0 +1,592 @@
+schema_version: 1
+session_id: 20260611-49e15b58
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 결과 상태의 권위 좌석이 Result.status와 Report.result_status 두 곳에 선언되고
+      야간 배치 동기화 지연이 정상 동작으로 명문화되어, 정정된 결과가 최대 24시간 권위 값으로 미반영되는 동작을 권위 문서가
+      제도화한다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여섯 렌즈 만장일치로 high가 확정된 결과 상태 이중 권위 계열의 axiology 표면이다. 공유 설계 결정(권위 좌석
+      미단일화 + 동기화의 운영 절차 위임)은 issue-025가 정본 뿌리로 다루므로 본 이슈는 그 증상으로 분류한다. 정정 결과 미표시
+      구간이 임상 신뢰·환자 안전에 직결되므로 safety_risk이고, 개념 권위 문서라는 선언된 용도 자체를 막는 결함이므로 대상 문서
+      내에서 즉시 시정되어야 한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: STAT 응급 여부가 priority enum, is_stat boolean, StatOrder 하위 타입
+      세 표현으로 canonical 지정 없이 중복 인코딩되어 모순 인스턴스(priority=stat ∧ is_stat=false ∧
+      ¬StatOrder)가 스키마상 유효하다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: STAT 삼중 표현 클러스터(issue-008/014/022/026/032)의 정본 심의가 이루어진 canonical 이슈로
+      root_cause로 분류한다. 결함 실재와 근본 원인은 전원 합의이나 심의 후에도 axiology·evolution이 high
+      입장을 유지해 disagreement가 명시 보존되었으므로 judgment_state는 contested로 기록한다. 정본
+      medium(조건부 발현 모순)이되 클러스터 내 최상위 수정 우선순위가 부여되었으므로, 문서가 통합 단계로 넘어가기 전 동치
+      제약·단일 권위 선언으로 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: CriticalValue가 카탈로그 수준 임계 규칙과 결과 수준 통보 사건이라는 서로 다른 존재론적 유형을
+      한 엔티티에 혼합해 결과별 통보 상태를 표현할 자리가 구조적으로 없고, 안전-critical 통보 증적(시각·수신자)이 모델 밖 종이
+      대장에 위임되어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 네 렌즈가 공동 제기하고 여섯 렌즈 전원이 high와 근본 원인(규칙/사건 분리, root_confidence high)에
+      합의한 공유 뿌리 이슈다. notified boolean의 referent 결정 불가능성과 CriticalValue의 관계 그래프
+      미등장이 문서 자체에서 직접 관찰된다. 위험치 통보라는 환자 안전 감사 질문에 답할 구조적 자리가 없는 표현 능력 결손이 핵심이므로
+      completeness로 분류하며, CriticalRange/CriticalValueNotification 분리는 권위 문서 채택 전
+      대상 내에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-011
+      - finding-038
+      - finding-030
+  - issue_id: issue-004
+    problem_definition: 검사 카탈로그를 Test와 Assay로 이중 유지하고 신규 항목 이중 등록을 표준 운영으로 명문화하면서,
+      연기 기간의 권위 규칙(canonical 지정·매핑·어휘 변환·불일치 처리 주체)을 정의하지 않아 드리프트 비용이 권위 문서에
+      전가되어 있다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Test/Assay 이중 카탈로그 클러스터의 거울 이슈로, 정본 심의는 issue-024에서 이루어졌고 그 high 등급이
+      일괄 적용되었으므로 symptom으로 분류한다. 임시 권위 규칙 부재 자체는 notes[0]과 매핑 관계 부재로 직접 관찰된다. 시정
+      경로(단일 개념 통합 vs implemented_by 매핑)는 Test/Assay 동의어 여부에 대한 도메인 권위 판정에 종속되므로
+      needs_decision이며, 그 판정 후 권위 규칙 명시가 대상 문서 내에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: notes[1]이 TAT 정의를 선언하면서 대시보드 팀의 자체 계산식 유지를 동격으로 인정해, 운영 핵심
+      지표의 정의 권위 드리프트를 권위 문서 스스로 허용한다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: severity low의 표면 수준 사안으로 전원 합의되었고 관계 그래프상 다른 발견과 same_root 연결이 없는 단독
+      이슈다. 즉시 깨지는 구조가 아닌 단일 권위 원칙의 형식화 문제이므로 governance_value이며, TAT 정의의
+      canonical 선언 또는 명시적 범위 제외라는 문서화 수준 시정으로 닫히는 사안이라
+      document_only/planned_later로 분류한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 임상검사라는 안전-규제 도메인의 대상물을 도메인 authority 바인딩
+      없이(session_domain=none) 검토하고 있어, 통보 증적·정정 전파 등 안전 관련 판정의 신뢰도가 리뷰 구조 차원에서
+      제한된다는 경계 관찰이다.
+    issue_role: evidence_gap
+    judgment_state: outside_boundary
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: out_of_scope
+    domain_axes: {}
+    rationale: 대상 문서의 결함이 아니라 리뷰 세션 구성에 대한 New Perspectives 거버넌스 제안(severity
+      info)이다. 안전 판정의 도메인 규범 근거가 현 리뷰 경계 안에 없다는 증거 공백을 지적하므로 evidence_gap이고, 판정
+      대상이 본 리뷰 경계 밖의 세션 governance이므로 outside_boundary다. synthesize 단계에서 보존하고 후속
+      governance에서 도메인 바인딩을 검토하는 것이 처리 경로이므로 대상 문서 기준으로는 out_of_scope다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 결과 상태가 Result와 Report에 병행 표현되는데 단일 권위 지정이 없고 두 enum
+      어휘(final/finalized, corrected/amended)마저 분리되어, 야간 배치 전 구간에서 권위 선언 값과 실제
+      상태가 불일치한다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 결과 상태 이중 권위 계열의 coverage 표면으로, 공유 설계 결정은 issue-025(정본 뿌리)가 소유하므로
+      symptom으로 분류한다. 두 note의 권위 주장과 state_rules[1]의 야간 배치 단서가 문서에서 직접 관찰되며 여섯
+      렌즈 전원이 high에 수렴했다. 권위 값과 원천 값의 구조화된 불일치 창이 핵심이므로 consistency이고, 단일 권위 선언 +
+      파생 투영 재정의로 대상 내에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: STAT 응급 여부가 priority enum, is_stat 불리언, StatOrder 하위타입 세 경로로
+      표현되며 STAT 판정의 권위 경로가 지정되지 않아 구현 시스템 간 판정 분기가 가능하다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: STAT 삼중 표현 클러스터의 coverage 거울 이슈로, 정본 심의(issue-002)의 medium 결론이 일괄
+      적용되었으므로 symptom으로 분류한다. axiology·evolution의 high 측 disagreement가 클러스터 전체에
+      보존되었으므로 contested로 기록한다. 시정은 issue-002의 단일 권위 선언과 동일 작업으로 닫히며, 통합 다음 단계 전
+      완료가 요구된다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 위험값 임계(CriticalValue)와 결과 참조구간이 유효기간·버전 차원 없이 단일 현재값으로만
+      표현되어, 임계 갱신 후 과거 보고의 위험 판정 근거를 감사·정도관리에서 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 시간 차원 부재라는 독자적 모델링 결정이 근본 원인으로 다섯 렌즈가 합의했고(logic은 소관 외),
+      CriticalValue 속성 구조에서 직접 관찰된다. issue-018과 shared_cause_candidate로만 연결된 별도
+      뿌리 이슈이므로 root_cause로 분류한다. 시점 정합 추적이라는 표현 능력 결손이 핵심이므로 completeness이며,
+      medium 정본 등급에 따라 다음 단계 전 유효기간/스냅샷 참조 도입으로 닫는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: Specimen lifecycle이 analyzed에서 끝나 보관/폐기·거부/재채취가 표현 불가하고,
+      Order에 거부 경로가 없으며, Report에 lifecycle 자체가 없어 발행 후 정정·재발행을 상태로 수용하지 못한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: lifecycle을 정상 경로의 단방향 종결로만 설계하고 종결·예외 구간을 부서 내규로 외부화한 설계 방침이라는 독자적 근본
+      원인을 다섯 렌즈가 합의했고 high가 확정되었다. 추적성 핵심 구간(보관/폐기, 거부/재채취, 정정·재발행)이 모델 밖으로
+      새어나가는 운영 상태 커버리지 결손이므로 completeness이며, 권위 문서가 운영 상태를 포괄하지 못하면 통합 정합이 깨지므로
+      대상 내 시정이 요구된다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: 정도관리(QC)·분석기기(Instrument)·시약/로트가 모델에 전혀 표현되지 않아 Assay가 분석기
+      수행을 전제함에도 결과의 QC 맥락을 연계할 개념이 없고, 이 공백이 의도적 범위 제외인지 누락인지 문서로 판별할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 범위 외부화 결정이라는 독자적 원인의 medium 이슈로 전원 합의되었다. 공백 자체는 엔티티 목록에서 직접 관찰되므로
+      observed이나, v0.3에서 의도적 범위 제외였는지의 설계 의도 확인이 required_follow_up_evidence로 남아
+      있어 closure는 needs_evidence다. 해소 경로가 단계적 편입과 의도적 제외의 명시적 기록 양쪽을 포함하므로, 최소한
+      범위 결정의 명문화는 다음 단계 전 이루어져야 한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: 검체 종류라는 단일 의미가 통제 enum(4값)과 자유 문자열 두 비호환 어휘로 분기되고 사상이 없어,
+      notes[0]의 이중 등록 의무가 형식적으로 이행 불가능하고 전혈/혈청 구분 등 적합성 판정에 필요한 의미 정밀도가 소실된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: finding-013/026/032를 묶는 shared-root 이슈로 여섯 렌즈 전원이 공유 근본 원인과 medium에
+      수렴했다. 이중 등록 의무와 비호환 값공간의 결합이 만족 불가능한 claim 집합을 이룬다는 형식 모순이 문서에서 직접 관찰되므로
+      observed/consistency다. 단일 통제 어휘 + 사상표라는 구체 시정이 합의되어 있어 fix_now이며, 카탈로그
+      클러스터 시정과 함께 다음 단계 전 닫는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-013
+      - finding-026
+      - finding-032
+  - issue_id: issue-013
+    problem_definition: 검사 카탈로그가 Test/Assay 이중 구조여서 가장 빈번한 확장 시나리오(신규 검사 항목 추가)마다 두
+      곳의 동기 수정이 필요하고, 두 구조의 검체 타입 표현이 달라 통합 시 데이터 연속성이 깨진다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Test/Assay 이중 카탈로그 클러스터의 evolution 거울 이슈로, 정본 심의는 issue-024에서 이루어져
+      high가 확정·일괄 적용되었으므로 symptom으로 분류한다(하향 신호는 심의에서 철회되어 분쟁 소멸). 확장 단위마다 권위 기능이
+      정지하는 진화 비용이 핵심이므로 maintainability_evolvability이며, 시정 경로 확정이 Test/Assay 동의어
+      여부의 도메인 권위 판정에 종속되어 needs_decision이다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-014
+    problem_definition: 긴급도가 enum 값, boolean 플래그, 하위 타입 세 메커니즘으로 중복 인코딩되어 긴급도 체계 확장
+      시 세 곳의 동시 수정이 강제되고 표현 간 모순 상태가 구조적으로 가능하다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: STAT 삼중 표현 클러스터의 evolution 거울 이슈로, issue-002 심의 결론(medium, 클러스터 최상위
+      수정 우선순위)이 적용되어 기존 high에서 하향되었으므로 symptom으로 분류한다. axiology·evolution의 high
+      측 disagreement가 보존되어 contested다. 확장 시 동기 수정 강제라는 진화 비용 축이 본 이슈의 고유 관점이므로
+      maintainability_evolvability로 분류한다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-015
+    problem_definition: 결과 상태가 서로 다른 두 enum 어휘로 이중 관리되고 야간 배치로만 동기화되어, 상태 어휘 확장 시 두
+      enum과 매핑을 모두 수정해야 하고 변경 사이의 연속성 공백(corrected→amended 지연 창)이 구조화되어 있다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 결과 상태 이중 권위 계열의 evolution 표면으로, 공유 설계 결정은 issue-025가 정본 뿌리로 소유하므로
+      symptom으로 분류한다. 여섯 렌즈 전원이 high에 수렴했다. 어휘 확장 시 매핑 불능과 HL7/FHIR 연동 기준 미결정이라는
+      진화 비용 축이 본 이슈의 고유 관점이므로 maintainability_evolvability이며, 단일 권위 선언 +
+      status_as_of 명시로 대상 내에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-016
+    problem_definition: 검체 타입이 Specimen과 Test에 각각 하드코딩된 닫힌 enum으로 중복 정의되어, 새 검체
+      유형(CSF 등) 추가 시 최소 두 곳의 스키마 수정이 필요하고 한쪽만 수정되면 표현 비대칭이 생긴다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 검체 타입을 참조 가능한 통제 어휘(SpecimenType)로 승격하지 않고 인라인 enum 리터럴을 복제한 독자적 모델링
+      결정으로, 여섯 렌즈 전원이 근본 가설과 medium에 수렴했다. issue-012와는 shared_cause_candidate로만
+      연결된 별도 뿌리다. 통상 확장(검체 유형 추가)이 매번 스키마 변경이 되는 확장성 결함이므로
+      maintainability_evolvability이며, 통제 어휘 승격이라는 합의된 시정으로 다음 단계 전 닫는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-017
+    problem_definition: test_code 등 식별자에 코드 체계(coding system) 차원이 없어 LOINC 등 외부 표준
+      코드 도입이나 타 기관 통합 시 로컬 코드와의 연속성을 유지할 구조적 자리가 없고, Patient의 patient_id/mrn 이중
+      식별자에도 권위 구분이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 식별자를 단일 기관·단일 코드 체계 전제의 불투명 문자열로 모델링한 독자적 결정으로, 관계 그래프상 다른 발견과 연결되지
+      않은 단독 뿌리 이슈다(다섯 렌즈 medium 수렴, logic 소관 외). 실패 조건이 표준 코드 도입·다기관 통합이라는 미래
+      시점에 발현되는 확장성 결함이므로 planned_follow_up이며, (system, code) 쌍 또는 code_mappings
+      확장점 예약은 다음 단계 중 닫아도 권위 문서의 현재 용도를 막지 않는다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-018
+    problem_definition: CriticalValue가 검사당 단일 수치 범위만 표현 가능하고 통보 이력 핵심 정보가 모델 밖(종이
+      대장)에 있어, 인구집단별 기준·비수치 위험값 확장과 통보 감사 추적 전산화를 구조 개정 없이 수용할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: CriticalValue를 현재 운영 관행의 최소 스냅샷으로 모델링한 결정이 근본 원인으로 전원 수렴했고(logic의
+      narrow는 타입 수준 평가 불가 축에 대한 소관 한정), issue-003·009와 shared_cause_candidate로만
+      연결된 별도 뿌리다. 발현 시점이 확장 착수(인구집단 기준, 통보 전산화)라는 미래 사건이므로 planned_follow_up이며,
+      차원 예약·notified 승격은 issue-003의 규칙/사건 분리 시정과 함께 다음 단계 중 처리 가능하다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-019
+    problem_definition: state_rules[0]의 Order 종결 판정이 가역적 상태(corrected)에 의존하면서 모델 스스로
+      1급 사건으로 선언한 후속 사건과 시간 전개 경로상 모순을 형성하고, add-on 검사 추가에 침묵해 completed 상태의 의미가
+      미정의다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: logic·evolution이 공동 제기하고 여섯 렌즈 전원이 근본 원인(시점 조건 미명시 규칙 설계,
+      root_confidence high)과 high에 수렴했다. 규칙과 모델 자신의 정상 사건 사이의 형식 모순이
+      state_rules[0]·[1] 문면에서 직접 관찰되므로 observed/consistency다. EMR/LIS가 동일 주문에 다른
+      상태를 보고하게 되는 권위 기능 붕괴 지점이므로 대상 내 즉시 시정이 요구된다.
+    related_surface_finding_ids:
+      - finding-020
+      - finding-022
+  - issue_id: issue-020
+    problem_definition: TAT 정의가 notes 서술에 머물고 계산 권위는 대시보드 팀 자체 계산식에 있어, 정의 변경 시
+      온톨로지와 실제 계산이 독립적으로 진화(드리프트)할 수 있다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: severity low의 표면 수준 사안으로 전원 합의되었고(structure의 surface_only도 결함 실재 인정),
+      관계 그래프상 TAT 주제의 다른 발견들과 same_root 연결이 없는 단독 이슈다. 파생 지표의 정의-계산 권위 분리라는 거버넌스
+      사안이므로 governance_value이며, TAT의 derived 정의 승격이라는 문서화 수준 시정으로 닫히는 사안이라
+      document_only/planned_later다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-021
+    problem_definition: completed 전이 규칙이 적용 상태 가드·존재 양화·cancelled 예외 없이 작성되어, 결과 0건
+      주문에서 보편 양화가 공허 충족되고 취소된 Order에 completed 전이가 형식적으로 성립해 단일 상태 전제와 충돌한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 가드 없는 단문 규칙 저작 방식이라는 독자적 원인으로 여섯 렌즈 전원이 medium에 수렴했다. issue-019와 동일
+      규칙(state_rules[0])을 대상으로 하나 관계 그래프가 shared_cause_candidate로만 연결해 별도 뿌리로
+      유지되었다. 통상 발생 가능한 인스턴스 형상(결과 0건, 부분 취소)에서 규칙이 잘못된 상태를 지시하는 평가 결과의 오류이므로
+      correctness이며, 가드·예외 추가라는 합의 시정으로 다음 단계 전 닫는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-024
+  - issue_id: issue-022
+    problem_definition: STAT 여부가 세 곳(priority, is_stat, StatOrder)에 독립 선언되고 상호 동치
+      제약이 없어, 모델이 상호 모순적 인스턴스를 스키마상 유효한 것으로 허용해 검증으로 걸러지지 않는다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: STAT 삼중 표현 클러스터의 logic 거울 이슈로, issue-002 심의 결론(medium, 최상위 수정 우선순위)이
+      일괄 적용되었으므로 symptom으로 분류한다. 클러스터 차원의 axiology·evolution high 측
+      disagreement가 보존되어 contested다. 동치 공리 부재로 모순 인스턴스가 형식적으로 유효하다는 정합성 결함이 고유
+      관점이므로 consistency이며, 최소 시정(동치 제약 1줄)이 합의되어 fix_now다.
+    related_surface_finding_ids:
+      - finding-025
+  - issue_id: issue-023
+    problem_definition: Result↔Report, Result↔Specimen의 역방향 관계 쌍이 서로 다른 kind 명칭으로 이중
+      선언되어 형식상 4개의 독립 관계로 읽히나, 현 시점 형식 모순은 아닌 표기 정리 사안이다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: logic이 '모순 아님'을 공식 기록하고 semantics로 handoff한 severity low 표기 정리 사안으로
+      전원 합의 상태다. 관계 그래프상 다른 역관계 발견들과 same_root 연결이 없는 단독 이슈다. 같은 사실의 이중 명명이
+      드리프트를 허용하는 경미한 정합성 위생 문제이므로 consistency이되, inverse 동치 선언이라는 표기 규약 수준 시정으로
+      닫히므로 document_only/planned_later다.
+    related_surface_finding_ids:
+      - finding-027
+  - issue_id: issue-024
+    problem_definition: Test와 Assay가 동일 '검사 카탈로그 항목' 개념의 후보 동의어임에도 동의어 판정도 명시적 매핑도
+      없이 병렬 등록되어, 가장 빈번한 확장 단위에서 권위 기능이 정지하고 Result→Assay 의미 연결이 현재 시점에 이미 부재하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Test/Assay 카탈로그 클러스터(issue-004/013/031)의 정본 심의가 이루어진 canonical 이슈로
+      root_cause로 분류한다. 심의에서 axiology·coverage가 하향 입장을 철회해 참여 4개 렌즈가 high에 만장일치
+      수렴했으므로 observed다. Result.test_ref가 Test만 참조해 주문-수행-결과 연결이 현재형으로 끊긴 구조 공백이
+      핵심이므로 completeness이며, 시정 경로(단일 개념 통합 vs implemented_by 매핑)가 도메인 권위의 동의어
+      판정에 종속되어 needs_decision이고 그 판정 후 대상 내에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-028
+  - issue_id: issue-025
+    problem_definition: 결과 상태 권위 좌석을 단일화하지 않은 채 동기화를 야간 배치라는 운영 절차에 위임한 단일 설계 결정이
+      state_rules[1]의 modality 모순(즉시 의무 vs 야간 배치 이행)과 두 note의 권위 주장 모순을 함께 낳아,
+      권위로 선언된 값이 원천과 불일치하는 시간창을 문서 스스로 보장한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: semantics·logic이 공동 제기한 shared-root 이슈로, 결과 상태 이중 권위
+      계열(issue-001/007/015)의 공유 설계 결정을 직접 소유하므로 클러스터의 정본 뿌리로 분류한다. 여섯 렌즈 전원이
+      high에 수렴했고, '권위 값'·'동일 정보 유지'·'야간 배치' claim들의 동시 만족 불가능성이 문서 문면에서 직접 관찰된다.
+      권위 단일화 + modality 정합 재선언이라는 합의 시정으로 대상 내에서 즉시 닫혀야 하며, 이 시정이 거울 이슈들을 함께
+      해소한다.
+    related_surface_finding_ids:
+      - finding-029
+      - finding-023
+  - issue_id: issue-026
+    problem_definition: "'응급(STAT)'이라는 하나의 의미가 세 가지 표현으로 중복 인코딩되어 있고,
+      비본질적(anti-rigid) 속성인 긴급도의 rigid 하위 타입화는 OntoClean Rigidity 관점에서도 부적절하다."
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: STAT 삼중 표현 클러스터의 semantics 거울 이슈로, issue-002 심의 결론(medium)이 일괄
+      적용되었으므로 symptom으로 분류한다. OntoClean rigidity 논거는 독립 쟁점이 아닌 동일 시정(StatOrder
+      하위 타입 해소)의 보강 근거로 보존되었다. 클러스터 차원의 axiology·evolution disagreement가 보존되어
+      contested이며, 시정은 클러스터 단일 권위 선언과 함께 다음 단계 전 닫는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-031
+  - issue_id: issue-027
+    problem_definition: 관계 어휘에서 produces가 서로 다른 두 의미(Order→Report, Specimen→Result)로
+      쓰이는 동음이의어이고, aggregated_into와 contains는 같은 의미의 미통합 동의어 쌍이다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: severity low의 관계 어휘 사전 정리 사안으로 전원 합의 상태이며, 관계 그래프상 다른 표기 발견들과
+      same_root 연결이 없는 단독 이슈다. 동음이의 술어는 쿼리·추론 시 의미 해석을 모호하게 하는 사용성 위생 문제이므로
+      usability로 분류하고, 의미별 분리 + 정방향 정본화라는 어휘 사전 수준 시정으로 닫히므로
+      document_only/planned_later다.
+    related_surface_finding_ids:
+      - finding-033
+  - issue_id: issue-028
+    problem_definition: TAT는 모델 내 원천 속성(collected_at, released_at)에서 산식으로 정의되는 파생값인데
+      산식 권위가 모델 밖(대시보드 팀)에 있어, 외부 계산식이 조용히 달라져도 권위 문서와 대시보드 수치가 다른 의미를 갖게 된다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: severity low의 표면 수준 위험으로 확정되었고(logic not_applicable, structure
+      surface_only 모두 비충돌), TAT 주제의 다른 발견들과 same_root 연결이 없는 단독 이슈다. 파생값 산식 권위의
+      소재라는 거버넌스 사안이므로 governance_value이며, TAT의 derived term 승격이라는 문서화 수준 시정으로
+      닫히므로 document_only/planned_later다.
+    related_surface_finding_ids:
+      - finding-034
+  - issue_id: issue-029
+    problem_definition: patient_id와 mrn 두 환자 식별자의 의미 구분(발급 권위, 식별 범위)이 정의되어 있지 않아,
+      동일 식별자 의미의 잠재 동의어인지 구분된 이중 식별 체계인지 현 문서로는 판정할 수 없다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: completeness
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: severity low로 전원 합의된 표면 수준 모호성이다. 결함의 본질이 '현 문서만으로 동의어 여부를 판정할 수 없다'는
+      정의 정보의 공백이므로 issue_role은 evidence_gap, judgment_state는
+      insufficient_evidence로 분류해 불확실성을 명시 보존한다. 발급 권위·식별 범위를 정의에 한 줄 명시하는 문서화
+      시정으로 닫히므로 document_only/planned_later다.
+    related_surface_finding_ids:
+      - finding-035
+  - issue_id: issue-030
+    problem_definition: Patient가 관계 그래프에서 고아이고 Specimen에 환자 참조가 전혀 없어, 검체의 환자 귀속이
+      Specimen→Order→Patient 단일 간접 경로에만 의존하고 검체 뒤바뀜(specimen mix-up)을 모델 차원에서
+      탐지·교차 검증할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 관계 그래프를 Order 중심 단일 축으로만 작성한 독자적 설계 선택이 근본 원인으로 다섯 렌즈가 high에
+      수렴했다(logic 소관 외). relations 어디에도 Patient가 등장하지 않는다는 구조 증거가 직접 관찰된다. 검체
+      뒤바뀜이라는 가장 직접적인 환자 안전 위험이 모델 수준에서 비가시화되므로 safety_risk이며, collected_from 직접
+      관계 추가라는 합의 시정으로 대상 내에서 즉시 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-036
+  - issue_id: issue-031
+    problem_definition: Assay가 어떤 관계·참조에도 연결되지 않은 고아 엔티티로 남아, 분석기 수행 단위와 주문 단위의 매핑이 모델 밖 암묵 지식이 된다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 전원이 medium에 합의했으나 logic의 surface_only/narrows와 semantics 단서가 명시하듯
+      Assay 고아 상태는 Test/Assay 이중 카탈로그 결정(issue-024)의 구조적 증상이며, 카탈로그 정본·매핑이 선언되면
+      별도 조치 없이 소멸한다. 따라서 symptom으로 분류하고, 시정 순서가 issue-024의 동의어 판정에 종속되므로 독립 패치
+      대신 carry_forward로 카탈로그 시정과 함께 다음 단계 전 닫는다.
+    related_surface_finding_ids:
+      - finding-037
+  - issue_id: issue-032
+    problem_definition: StatOrder 하위 타입이 is_a 외 어떤 관계·참조에서도 사용되지 않는 미사용 분기이며, STAT
+      표현이 세 곳(StatOrder, priority, is_stat)으로 분산되어 권위 판정 경로 분기를 권위 문서가 스스로
+      만들어낸다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: STAT 삼중 표현 클러스터의 structure 거울 이슈로, issue-002 심의 결론(medium)이 일괄
+      적용되었으므로 symptom으로 분류한다. 클러스터 차원의 axiology·evolution disagreement가 보존되어
+      contested다. 미참조 분기의 잔존이라는 모델 위생·정리 축이 고유 관점이므로
+      maintainability_evolvability이며, StatOrder 제거 + priority 단일 권위라는 클러스터 시정과
+      함께 닫힌다.
+    related_surface_finding_ids:
+      - finding-039
+  - issue_id: issue-033
+    problem_definition: Specimen과 Test를 잇는 관계가 없어 Test.requires_specimen_type 제약을
+      검증할 구조적 조인 경로가 부재하고, 복수 검체·복수 검사 주문(흔한 사례)에서 검체-검사 대응이 모델상 비결정적이어서 제약이 실행
+      불가능한 장식이 된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 검체-검사 대응을 Order 수준 묶음으로 충분하다고 가정한 독자적 결정이 근본 원인으로 여섯 렌즈 전원이 medium에
+      수렴했다(issue-030과는 shared_cause_candidate로만 연결된 별도 뿌리). 선언된 적합성 제약이 어떤 인스턴스
+      형상에서도 평가 불가능해 부적합 검체 진행을 모델 기반으로 막을 수 없는 판정 능력 결함이므로 correctness이며,
+      collected_for 관계 추가라는 합의 시정으로 다음 단계 전 닫는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-040
+  - issue_id: issue-034
+    problem_definition: Result↔Report, Result↔Specimen, Order↔Report의 동일 연결이 서로 다른
+      kind 어휘의 역방향 쌍으로 중복 선언되어, 정방향·역방향 중 어느 것이 정규 관계인지 불명확하다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: severity low의 표기 규약 부재 사안으로 전원 합의 상태이며, 같은 역관계 주제의 다른 발견들과 same_root
+      연결이 없는 단독 이슈다. 스키마·코드 투영 시 정규 외래키 선택이 구현마다 갈릴 수 있는 유지보수 위생 문제이므로
+      maintainability_evolvability이고, 정방향 정본 + inverse_of 표기 규약 정립이라는 문서화 수준
+      시정으로 닫히므로 document_only/planned_later다.
+    related_surface_finding_ids:
+      - finding-041
+  - issue_id: issue-035
+    problem_definition: Staff.role enum에 phlebotomist가 정의되어 있으나 이를 사용하는 관계가 없고
+      Specimen에 채취자(collected_by) 참조가 없어, 역할 어휘가 전제하는 채취 행위의 책임 추적 연결이 그래프에 누락되어
+      있다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: defer_watch
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: severity low의 어휘-구조 불일치 개선 기회로 전원 합의 상태이며, 관계 그래프상 어떤 발견과도 연결되지 않은 단독
+      이슈다. 채취자 추적이라는 표현 자리의 경미한 결손이므로 completeness이고, 검체 추적성 요구가 통합 요건으로 구체화될 때
+      collected_by 속성 추가로 닫으면 충분하므로 watch/planned_later로 분류한다.
+    related_surface_finding_ids:
+      - finding-042

@@ -1,0 +1,366 @@
+schema_version: 1
+session_id: 20260611-49e15b58
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: 두 발견은 동일 결함(Result.status/Report.result_status 이중 권위 선언 + 야간 배치
+      동기화로 인한 최대 24시간 불일치 창)을 각각 axiology와 coverage 렌즈에서 보고한 것이다. 한쪽의 시정(권위 좌석
+      단일화 및 동기화 규칙 명시)이 다른 쪽 발견도 함께 해소하면 참이다.
+    shared_cause: null
+    rationale: 두 발견 모두 동일 evidence anchor(Result.status note, Report.result_status
+      note, state_rules[1])를 인용하고, 동일한 failure_condition(corrected 전이 후 야간 배치 전
+      구간)과 동일한 proposed_action(단일 권위 지정 + projection 강등)을 제시한다. 렌즈 관점 차이(가치 정렬
+      vs 권위 차원 결손)만 다를 뿐 대상 결함이 같다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-016
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: finding-016은 finding-007과 동일한 이중 결과 상태 권위 결함을 evolution(확장 비용)
+      관점에서 재서술한 것이며, 단일 권위 선언과 enum 통일이라는 동일 시정으로 함께 해소된다.
+    shared_cause: null
+    rationale: 동일 대상(Result.status vs Report.result_status, state_rules[1]), 동일 모순(두
+      note의 상충하는 권위 주장), 동일 불일치 창(야간 배치)을 다루며, evolution 고유 추가분(HL7/FHIR 어휘 확장
+      비용)은 동일 결함의 파생 결과이지 독립 결함이 아니다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-029
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: finding-029(semantics)와 finding-007(coverage)은 결과 상태의 의미적 권위 소재
+      모순이라는 동일 결함을 보고하며, Result.status를 단일 권위로 선언하고 Report.result_status를 파생
+      투영으로 재정의하면 둘 다 해소된다.
+    shared_cause: null
+    rationale: "두 발견의 causal_path가 사실상 동일하다: 이중 enum 정의 → 권위 미지정/모순 주장 → 야간 배치로 불일치
+      창 내장. evidence refs와 proposed_action(권위 단일화, enum 매핑 표, 동기화 지연 명시)도 일치한다."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-023
+    to_finding_id: finding-029
+    relation: same_root_candidate
+    root_hypothesis: state_rules[1]의 modality 모순(즉시 의무 vs 야간 배치 이행)과 두 note의 권위 주장
+      모순은 모두 '결과 상태 권위 좌석을 단일화하지 않은 채 동기화를 운영 절차에 위임한 동일 설계 결정'에서 나온다. 권위 좌석을
+      단일화하고 지연 허용 여부를 modality에 맞게 재선언하면 두 발견이 동시에 해소된다.
+    shared_cause: null
+    rationale: finding-023.cause-003은 '동일 정보 유지'·'권위 값' claim들의 동시 만족 불가능을 지적하는데 이는
+      finding-029.cause-002(양쪽 note의 권위 주장 모순)와 같은 사실을 형식 논리 관점에서 본 것이다. 다만 023은
+      규칙 내부의 의무-이행수단 modality 구분 오류라는 고유 진단을 추가하므로 완전 중복이 아닌 동일 뿌리 후보로 분류한다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: finding-002(axiology)와 finding-008(coverage)은 STAT의 삼중
+      표현(priority/is_stat/StatOrder)과 권위 미지정이라는 동일 결함을 보고하며, canonical 표현 단일화로
+      함께 해소된다.
+    shared_cause: null
+    rationale: 동일 대상(Order.priority, Order.is_stat, StatOrder), 동일
+      failure_condition(표현 간 불일치 인스턴스로 인한 시스템별 STAT 판정 분기), 사실상 동일한
+      proposed_action(priority를 단일 권위로, is_stat 파생 강등, StatOrder 흡수 또는 제약 명문화)을
+      제시한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-015
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: finding-015는 finding-008과 동일한 STAT 삼중 인코딩 결함을 evolution(확장 시 3곳
+      동시 수정 비용) 관점에서 재서술한 것이다.
+    shared_cause: null
+    rationale: 동일 evidence anchor와 동일 root cause(단일 개념의 삼중 인코딩 + 권위 미지정)를 공유하며, 확장
+      비용 논점은 동일 결함의 추가 영향 서술이다. proposed_action도 동일(priority 단일 권위, is_stat 강등,
+      StatOrder 흡수)하다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-025
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: finding-025(logic)는 finding-008과 동일한 STAT 삼중 표현 결함을 모순 인스턴스의
+      형식적 만족 가능성 관점에서 보고한 것이며, 동치 제약 1줄 추가 또는 권위 단일화로 함께 해소된다.
+    shared_cause: null
+    rationale: "두 발견의 causal_path가 동일 구조다: 세 위치 중복 인코딩 → 일관성 제약 부재 → 모순 인스턴스 유효. 대상
+      필드, 영향 경로(응급 우선처리 누락), 시정 방향이 모두 일치한다."
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-031
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: finding-031(semantics)은 finding-008과 동일한 STAT 중복 인코딩 결함을 보고하며,
+      OntoClean rigidity 논거는 동일 시정(StatOrder 흡수)의 추가 정당화일 뿐 별도 결함이 아니다.
+    shared_cause: null
+    rationale: 동일 대상과 동일 root cause(비본질 속성의 삼중 모델링 + 권위 미선언)를 공유하고 proposed_action이
+      finding-008과 실질 동일하다. rigidity 분석은 같은 결함에 대한 의미론적 근거 보강이다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-039
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: finding-039(structure)는 finding-008과 동일한 STAT 표현 분산 결함을
+      StatOrder의 그래프 미참조라는 구조 증거로 보고한 것이며, 권위 단일화 시 함께 해소된다.
+    shared_cause: null
+    rationale: 동일한 세 표현 병존과 권위 미확정을 root cause로 지목하고(finding-039.cause-002),
+      proposed_action(StatOrder 제거, priority 단일 권위, is_stat 파생 강등)이 finding-008과
+      일치한다. 미참조 서브타입이라는 구조 관찰은 동일 결함의 구조적 표면이다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-004
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: finding-004(axiology)와 finding-013(coverage)은 Test/Assay 이중
+      카탈로그의 정본·매핑 미지정이라는 동일 결함을 보고하며, canonical 지정 + 매핑 관계 정의로 함께 해소된다.
+    shared_cause: null
+    rationale: 동일 대상(Test, Assay, notes[0]), 동일 failure_condition(두 어휘 채택 분기와 드리프트),
+      실질 동일한 proposed_action(임시 권위 규칙·매핑·어휘 정렬 명시)을 제시한다. axiology의 '숨은 트레이드오프'
+      프레임은 동일 결함의 가치 해석이다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-014
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: finding-014(evolution)는 finding-013과 동일한 이중 카탈로그 결함을 신규 항목 추가
+      비용과 통합 시 데이터 연속성 관점에서 재서술한 것이다.
+    shared_cause: null
+    rationale: 동일 root cause(관계 미정의 상태의 이중 등록 공식화, notes[0])와 동일 evidence를 공유하며,
+      proposed_action(Test 권위화 + Assay 매핑 ref, 검체 어휘 통일)이 finding-013의 시정과 동일
+      방향이다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-028
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: finding-028(semantics)은 finding-013과 동일한 Test/Assay 동의어 미판정·매핑
+      부재 결함을 보고하며, 의미 판정과 매핑 선언이라는 동일 최소 시정으로 함께 해소된다.
+    shared_cause: null
+    rationale: "causal_path 구조가 동일하다: 중복 정의 → relations 부재 → notes[0]의 통합 연기 고착.
+      evidence refs(Test, Assay, notes[0], relations 부재)와 proposed_action이
+      일치한다."
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-037
+    to_finding_id: finding-013
+    relation: symptom_of
+    root_hypothesis: Assay가 관계 그래프에서 고아인 것은 Test/Assay 통합 판정과 매핑 정의를 보류한 이중 카탈로그 결정의
+      구조적 증상이다. 이중 카탈로그가 정리되어 매핑 관계가 선언되면 Assay 고아 문제는 별도 조치 없이 소멸한다.
+    shared_cause: null
+    rationale: finding-037.cause-002가 스스로 '통합 여부 결정 보류(notes[0])로 연결 관계 정의도 함께 보류된
+      결과'라고 진단하며, 이는 finding-013의 root cause(정본·매핑 미지정 상태의 병행 유지)와 인과적으로 종속된다.
+      037의 시정(realized_by 관계 추가)은 013 시정의 부분집합이다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-026
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: 이중 등록의 형식적 불가능성(enum 4값 vs 자유 문자열 비호환)은 Test/Assay 통합을 보류한 채 사상
+      규칙 없이 병행 유지한 동일 결정에서 나온다. 카탈로그 정본 지정과 검체 어휘 사상이 정의되면 finding-026의 모순도
+      해소된다.
+    shared_cause: null
+    rationale: finding-026의 root_cause_candidate가 'Test/Assay 중복 카탈로그를 통합 보류한
+      채(notes[0]) 각자 다른 타입 체계로 같은 속성을 선언'으로, finding-013의 root cause와 동일 결정을
+      지목한다. 다만 026은 검체 타입 비호환이라는 고유한 형식 모순을 추가 입증하므로 중복이 아닌 동일 뿌리 후보다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-026
+    to_finding_id: finding-032
+    relation: same_root_candidate
+    root_hypothesis: 두 발견은 '검체 종류라는 단일 의미가 통제 enum과 자유 문자열 두 비호환 어휘로 분기되고 사상이 없다'는
+      동일 어휘 결함을 각각 형식 모순(이중 등록 불가능)과 의미 정밀도(전혈/혈청 구분 소실) 관점에서 보고한다. 단일 통제 어휘 +
+      사상표 도입으로 둘 다 해소된다.
+    shared_cause: null
+    rationale: 동일 대상 속성(Test.requires_specimen_type vs Assay.specimen_kind)과 동일 예시
+      어휘('WB','Serum','Urine-random')를 근거로 하며 proposed_action이 수렴한다(정규 어휘 정의 +
+      사상). 026은 notes[0]과 결합한 만족 불가능성, 032는 granularity 손실이라는 보완적 진단을 제공한다.
+    confidence: high
+  - relation_id: rel-016
+    from_finding_id: finding-017
+    to_finding_id: finding-032
+    relation: shared_cause_candidate
+    root_hypothesis: 검체 종류가 참조 가능한 공유 카탈로그 개념(통제 어휘)으로 승격되지 않고 엔티티별 인라인 표현으로 복제·분기된
+      것이 두 발견의 공통 원인이다. SpecimenType을 1급 통제 어휘로 승격하면 닫힌 enum 중복(017)과 enum-문자열
+      비호환(032)이 함께 해소된다.
+    shared_cause:
+      cause_claim: 검체 종류 개념이 단일 통제 어휘로 승격되지 않은 채 엔티티마다 다른 인라인 표현(닫힌 enum 복제, 자유 문자열)으로 산재됨
+      from_cause_ref: finding-017.cause-002
+      to_cause_ref: finding-032.cause-001
+    rationale: finding-017.cause-002는 '공유 개념으로 승격되지 않고 인라인 enum으로 복제된 모델링 선택'을,
+      finding-032.cause-001은 'enum과 자유 문자열 두 비호환 표현의 공존'을 지목한다. 두 증상(확장 시 다중 수정
+      부담, 적합성 판정 정밀도 손실)은 다르지만 SpecimenType 개념 부재라는 동일 원인을 공유하며, 양쪽
+      proposed_action이 모두 단일 어휘 승격으로 수렴한다.
+    confidence: high
+  - relation_id: rel-017
+    from_finding_id: finding-020
+    to_finding_id: finding-022
+    relation: same_root_candidate
+    root_hypothesis: completed를 '모든 Result가 final'이라는 시점 조건으로만 정의하고 그 조건이 사후에 거짓이 될
+      수 있음(corrected, add-on)을 반영하지 않은 동일 규칙 설계가 두 발견의 공통 뿌리다. state_rules[0]에
+      corrected/add-on 시 전이 규칙을 추가하면 둘 다 해소된다.
+    shared_cause: null
+    rationale: finding-022는 corrected와 completed의 형식 모순을, finding-020은 corrected에
+      add-on 시나리오를 더해 같은 규칙 공백을 보고한다. 두 causal_path 모두 state_rules[0]의 시점 조건화
+      누락을 root로 지목하고 proposed_action이 동일 지점(state_rules[0] 재정의)을 겨냥한다.
+    confidence: high
+  - relation_id: rel-018
+    from_finding_id: finding-024
+    to_finding_id: finding-022
+    relation: shared_cause_candidate
+    root_hypothesis: state_rules[0]을 적용 가드(현재 상태 전제, 결과 존재 양화, 시점 한정) 없이 단문으로 작성한 동일
+      규칙 저작 방식이 공허 충족/cancelled 충돌(024)과 corrected 모순(022)을 모두 낳았다. 규칙에 가드와 시점
+      의존성을 명시하는 단일 재작성으로 두 발견이 함께 해소된다.
+    shared_cause:
+      cause_claim: state_rules[0]이 적용 가능 상태 가드·양화 범위·시점 의존성 없이 '모든 Result가 final'만을
+        completed 전이 조건으로 선언함
+      from_cause_ref: finding-024.cause-001
+      to_cause_ref: finding-022.cause-001
+    rationale: 두 발견은 같은 규칙(state_rules[0])의 서로 다른 결함 표면(공허 충족·cancelled 예외 부재 vs 가역
+      상태 의존 모순)을 보고하지만, 원인은 동일하게 전제 없는 규칙 작성이다. 시정도 같은 규칙 한 곳의 재작성으로 수렴하므로 공유 원인
+      후보가 성립한다.
+    confidence: high
+  - relation_id: rel-019
+    from_finding_id: finding-010
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: lifecycle을 정상 처리의 단방향 종결형으로만 설계하고 종결 이후 사건(정정·재발행·보관/폐기·재개)을
+      상태로 수용하지 않은 동일 설계 방침이 두 발견의 공통 원인이다. 종결 후 전이를 lifecycle에 도입하면 양쪽 공백이 함께
+      줄어든다.
+    shared_cause:
+      cause_claim: 핵심 엔티티의 lifecycle이 정상 경로의 단방향 종결로만 설계되어 종결 이후 사건(정정, 재발행, add-on,
+        보관/폐기)이 상태로 표현될 자리가 없음
+      from_cause_ref: finding-010.cause-002
+      to_cause_ref: finding-020.cause-002
+    rationale: finding-010.cause-002(Report lifecycle 부재로 정정·재발행 경로 미표현)와
+      finding-020.cause-002(completed가 사후에 거짓이 될 수 있음을 미반영)는 모두 '종결 상태 이후를 모델링하지
+      않음'이라는 같은 설계 방침의 표현이다. 다만 010은 Specimen 보관/폐기 등 더 넓은 범위를 다루므로 중복이 아닌 공유 원인
+      관계다.
+    confidence: medium
+  - relation_id: rel-020
+    from_finding_id: finding-010
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: 모델 범위를 주문→보고 happy path에 한정하고 주변 운영 영역(종료/예외 구간, QC·기기·시약)을 모델
+      밖으로 외부화한 동일 범위 결정이 두 결손의 공통 원인이다. 범위 정의를 명시하고 외부화 항목을 단계적으로 편입하면 두 발견이 같은
+      방향으로 해소된다.
+    shared_cause:
+      cause_claim: 온톨로지 범위를 주문~보고 핵심 흐름에 한정하고 그 밖의 운영 영역을 부서 내규·외부 시스템으로 외부화한 범위 설정 결정
+      from_cause_ref: finding-010.cause-003
+      to_cause_ref: finding-012.cause-002
+    rationale: finding-010.cause-003(보관/폐기를 부서 내규로 위임해 운영 상태가 모델 외부로 유출)과
+      finding-012.cause-002(QC·캘리브레이션·시약 영역 전체 공백)는 둘 다 happy-path 중심 범위 한정의
+      결과다. 다만 012는 의도된 v0.3 범위 한정일 가능성이 미해소로 남아 있어 확신도는 중간이다.
+    confidence: medium
+  - relation_id: rel-021
+    from_finding_id: finding-003
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 통제 행위(통보·검증·취소·정정)를 행위자·시각·근거를 갖는 사건이 아니라 boolean/단일 ref 플래그로
+      축약한 동일 모델링 패턴이 두 발견의 공통 뿌리다. 감사 이벤트 개념(NotificationEvent 등)을 도입하면 003의 위험치
+      통보 증적 부재와 011의 일반화된 감사 차원 결손이 함께 해소된다.
+    shared_cause: null
+    rationale: finding-003은 CriticalValue.notified의 boolean 축약과 종이 대장 위임을,
+      finding-011은 같은 패턴이 verified_by·cancelled·amended까지 반복됨을 보고한다.
+      finding-011.cause-002가 명시적으로 '동일 패턴'이라고 진단하며, 011의 proposed_action(감사 이벤트
+      도입 + notified 파생 강등)이 003의 시정을 포함한다.
+    confidence: high
+  - relation_id: rel-022
+    from_finding_id: finding-003
+    to_finding_id: finding-038
+    relation: same_root_candidate
+    root_hypothesis: 기존 수기 운영 관행(전화 기록 대장)을 재설계 없이 모델 경계 밖에 그대로 두고 boolean 플래그만 도입한
+      동일 결정이 두 발견의 공통 뿌리다. 통보를 사건/관계로 모델에 편입하면 둘 다 해소된다.
+    shared_cause: null
+    rationale: "두 발견의 root_cause_candidate가 거의 동일한 문장이다(003: '종이 기반 운영 관행을 재설계하지 않고
+      모델 경계 밖에 둔 채 boolean만 도입', 038: '수기 운영 절차를 그대로 둔 채 판정·통보를 관계로 승격하지 않음').
+      evidence anchor(CriticalValue.notified note)도 같다. 다만 038은 Result·Staff와의
+      관계 부재라는 구조적 표면을 추가로 입증하므로 동일 뿌리 후보로 분류한다."
+    confidence: high
+  - relation_id: rel-023
+    from_finding_id: finding-038
+    to_finding_id: finding-030
+    relation: same_root_candidate
+    root_hypothesis: CriticalValue가 임계 규칙(카탈로그 수준)과 통보 사건(결과 수준)이라는 서로 다른 존재론적 유형을 한
+      엔티티에 혼합한 것이 공통 뿌리이며, 그 혼합 때문에 통보 사건을 Result·Staff에 연결할 자리가 구조적으로 없다.
+      CriticalRange/CriticalValueNotification 분리로 두 발견이 함께 해소된다.
+    shared_cause: null
+    rationale: finding-030.cause-002~003은 규칙 수준 엔티티에 이벤트 속성이 붙어 결과별 통보가 표현 불가능해지고
+      증적이 모델 밖으로 밀려난다고 진단하는데, 이것이 finding-038이 관찰한 관계 부재(Result·Staff 미연결)의 의미론적
+      설명이다. 두 proposed_action(개념 분리 + 통보 이벤트 도입)이 동일 시정으로 수렴한다.
+    confidence: high
+  - relation_id: rel-024
+    from_finding_id: finding-019
+    to_finding_id: finding-030
+    relation: shared_cause_candidate
+    root_hypothesis: 통보 사건을 독립 개념이 아닌 boolean 플래그로 축약한 동일 모델링 결정이, 019의 확장 불가(통보
+      전산화에 구조 개정 필요)와 030의 존재론적 유형 혼합(규칙 엔티티에 이벤트 속성)을 모두 낳았다. 통보를 독립 사건 개념으로
+      승격하면 두 발견의 해당 축이 함께 해소된다.
+    shared_cause:
+      cause_claim: 위험치 통보 사건이 독립 개념(이벤트)으로 모델링되지 않고 CriticalValue의 boolean 속성으로 축약됨
+      from_cause_ref: finding-019.cause-002
+      to_cause_ref: finding-030.cause-002
+    rationale: finding-019.cause-002는 '통보 사건의 boolean 축약'을 확장 불가의 원인으로,
+      finding-030.cause-002는 같은 축약을 유형 혼합의 증상으로 지목한다. 다만 019는 인구집단별 기준·비수치
+      위험값이라는 별도 확장 축도 포함하므로 부분적 공유 원인 관계다.
+    confidence: high
+  - relation_id: rel-025
+    from_finding_id: finding-009
+    to_finding_id: finding-019
+    relation: shared_cause_candidate
+    root_hypothesis: CriticalValue를 현재 운영 관행의 최소 스냅샷(시간 차원·적용 조건 차원 없는 단일 현재값)으로
+      모델링한 동일 결정이, 009의 과거 시점 판정 근거 재구성 불가와 019의 인구집단별/비수치 확장 불가를 모두 낳았다.
+      CriticalValue에 차원 구조(유효기간, 적용 조건)를 도입하면 두 발견이 함께 해소된다.
+    shared_cause:
+      cause_claim: CriticalValue가 차원 구조(유효기간/버전, 적용 조건) 없이 검사당 단일 현재값 스냅샷으로 모델링됨
+      from_cause_ref: finding-009.cause-001
+      to_cause_ref: finding-019.cause-002
+    rationale: "finding-009.cause-001(유효기간/버전 없는 현재값)과 finding-019의 root cause(현재 운영
+      관행의 최소 스냅샷 모델링)는 같은 축약 결정의 두 결과 축이다: 시간 차원 부재는 이력 재구성을, 조건 차원 부재는 세분화 확장을
+      막는다. 시정이 동일 엔티티의 차원 추가로 수렴한다."
+    confidence: medium
+  - relation_id: rel-026
+    from_finding_id: finding-036
+    to_finding_id: finding-040
+    relation: shared_cause_candidate
+    root_hypothesis: relations 그래프를 Order 중심 단일 축(주문-검체-결과-보고)으로만 작성하고 교차 검증에 필요한 직접
+      관계(Specimen↔Patient, Specimen↔Test)를 속성·간접 경로에 남겨둔 동일 설계 방식이 두 발견의 공통
+      원인이다. 관계 그래프를 검증 질의 기준으로 재작성하면 두 누락이 함께 해소된다.
+    shared_cause:
+      cause_claim: 관계 그래프가 Order 중심 경로로만 설계되어 안전·적합성 교차 검증에 필요한 직접 관계가 그래프에 승격되지 않음
+      from_cause_ref: finding-036.cause-003
+      to_cause_ref: finding-040.cause-001
+    rationale: finding-036.cause-003은 '관계 그래프를 Order 중심으로만 설계하고 Patient 연결을 속성 수준에
+      남겨둔 설계 선택'을 명시하고, finding-040은 Specimen-Test 직접 관계 생략(Order 묶음으로 충분하다는
+      가정)을 지목한다. 두 누락 모두 동일한 Order-중심 그래프 작성 방식의 산물이며, 결과적으로 검체 뒤바뀜 검증(036)과 검체
+      적합성 검증(040)이라는 안전 검증 경로가 같은 이유로 막혀 있다.
+    confidence: medium
+  - relation_id: rel-027
+    from_finding_id: finding-007
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: 동일 사실을 복수 위치/표현에 중복 인코딩하면서 단일 권위 좌석과 표현 간 일관성 제약을 선언하지 않는 모델 관리
+      방식이 결과 상태 이중화(007)와 STAT 삼중화(008)의 공통 원인이다. '복수 표현 존재 시 권위 1곳 지정 + 나머지 파생
+      선언'이라는 단일 모델링 규율을 도입하면 두 계열이 같은 방식으로 해소된다.
+    shared_cause:
+      cause_claim: 동일 개념의 복수 표현을 허용하면서 단일 권위 원본 지정과 표현 간 일관성 제약을 선언하지 않는 모델링 방식
+      from_cause_ref: finding-007.cause-002
+      to_cause_ref: finding-008.cause-002
+    rationale: finding-007.cause-002(단일 권위 미지정으로 충돌 시 우선순위 규칙 부재)와
+      finding-008.cause-002(권위 위치 미지정으로 일관성 불변식 부재)는 대상 개념만 다를 뿐 동일한 결손 패턴이다. 두
+      발견의 proposed_action이 모두 '권위 1곳 지정 + 파생 강등' 형태로 동형이라는 점이 공통 원인 가설을 지지한다. 다만
+      두 결함은 대상과 영향 경로가 달라 별개 이슈로 유지되어야 한다.
+    confidence: medium
+  - relation_id: rel-028
+    from_finding_id: finding-008
+    to_finding_id: finding-013
+    relation: shared_cause_candidate
+    root_hypothesis: 단일 개념의 복수 표현/장부를 정본 지정 없이 병존시키는 동일 모델 관리 방식이 STAT 삼중 표현(008)과
+      Test/Assay 이중 카탈로그(013)의 공통 원인이다. 권위 좌석 지정 규율이 도입되면 두 계열이 같은 패턴으로 해소된다.
+    shared_cause:
+      cause_claim: 동일 개념의 복수 표현·장부를 canonical 지정과 매핑/일관성 규칙 없이 병존시키는 모델 관리 방식
+      from_cause_ref: finding-008.cause-002
+      to_cause_ref: finding-013.cause-002
+    rationale: finding-008.cause-002(권위 미지정으로 불변식 부재)와 finding-013.cause-002(정본·매핑
+      미지정으로 드리프트 구조화)는 '권위 미지정 병존'이라는 동일 결손 패턴의 두 사례다. 결과 상태(007)까지 포함하면 이 패턴이
+      문서 전반의 반복 결함임을 보여주는 메타 수준 공통 원인 가설이며, 개별 이슈의 독립성은 유지된다.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-018
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

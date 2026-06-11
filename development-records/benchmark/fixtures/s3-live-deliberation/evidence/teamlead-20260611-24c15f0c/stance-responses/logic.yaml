@@ -1,0 +1,97 @@
+schema_version: 1
+session_id: "20260611-24c15f0c"
+lens_id: "logic"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "Round-1 logic finding-l1 derived this contradiction directly: C5's consequent ('carried into the next window') requires membership in pending after flush returns, which pending.clear() at line 39 makes impossible in every execution where the antecedent holds. The issue's root hypothesis is identical to the lens's traced starting cause (reset-by-global-clear with no snapshot/swap step), and the proposed action menu matches the lens remediation. Deliberation note: issue-004 and issue-009 carry the same contradiction observed by coverage/semantics (duplicates rel-001/rel-002); logic's stance is identical across the triplet and recommends treating them as one decision unit via relations, without merging per the singleton contract."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-001
+      - round1/logic.md#finding-l1
+  - issue_id: issue-002
+    stance: support
+    rationale: "This is round-1 logic finding-l3: the documented implication '[] means the window is still open' is false in the reachable no-window state (line 31 guard), so realized behavior is the strictly weaker disjunction. Severity low is kept because the state invariant (windowStartedAt === null iff pending.size === 0) lets callers disambiguate via pendingUserCount(). Deliberation note: this doc falsity and issue-012's signal overload plausibly share a deeper cause (no distinct no-window signal was designed); recording a relation between finding-003 and finding-014 may be worthwhile — an observation, not a merge request."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-002
+      - round1/logic.md#finding-l3
+  - issue_id: issue-003
+    stance: support
+    rationale: "The formal core is lens-verified by finding-l2 (currently unclustered): windowStartedAt is stamped from the internal clock (line 20), now is caller-supplied (lines 30-32), and no claim in the target designates the time authority, so the close predicate's soundness rests on an unstated premise. The root hypothesis matches the lens causal path (time authority split across enqueue and flush with no declared common base), including counting the unused enqueuedAt as a third origin. Logic returned insufficient evidence on actualized unsatisfiability; severity adjudication above the formal gap (high vs the lens's medium-if-confirmed) depends on the caller-context premise marked upstream_evidence_required=true, so logic neither confirms nor contests high."
+    root_hypothesis_position: accepts
+    severity_position: insufficient_evidence
+    evidence_refs:
+      - issue-ledger.yaml#issue-003
+      - round1/logic.md#finding-l2
+  - issue_id: issue-004
+    stance: support
+    rationale: "Same contradiction as issue-001 observed from the coverage absence angle: finding-l1 establishes that pending.clear() makes the documented carry-over impossible, which entails the absent implementation concept this issue names (no snapshot/differential-preservation path). Root hypothesis is compatible with the lens's traced starting cause, and the proposed action pair matches the lens remediation. Deliberation note: duplicates rel-001 links this to issue-001; logic recommends one decision unit across issue-001/004/009."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-004
+      - round1/logic.md#finding-l1
+  - issue_id: issue-005
+    stance: not_applicable
+    rationale: "No declarative claim in the target promises delivery confirmation, retry, or recovery, so no claim-set contradiction forms within the logic boundary; absence-of-lifecycle concerns are coverage-owned per boundary routing. The lens corroborates only the dependency context: the destructive reset named in dep-002's shared cause is the same mechanism traced as finding-l1's starting cause, supporting the shared_cause_candidate link without making the issues one root."
+    root_hypothesis_position: not_applicable
+    severity_position: not_applicable
+    evidence_refs:
+      - issue-ledger.yaml#issue-005
+  - issue_id: issue-006
+    stance: not_applicable
+    rationale: "The claim set is formally consistent on window granularity: C1's singular 'the batch window' co-exists with per-user collection without contradiction, so no logic finding arises; purpose-fit of the global granularity is coverage/pragmatics-owned. Nuance for deliberation: the definite singular in the header arguably functions as a declaration of global granularity, which weakens (without refuting) the root hypothesis premise that 'no contract declares the global window as intended'; that disambiguation question is semantics-routable."
+    root_hypothesis_position: not_applicable
+    severity_position: not_applicable
+    evidence_refs:
+      - issue-ledger.yaml#issue-006
+  - issue_id: issue-007
+    stance: not_applicable
+    rationale: "enqueuedAt declared-but-unused forms no contradiction by itself (round-1 scope note); loss of the time dimension in the digest artifact is an absence/auditability concern owned by coverage. No logic adjudication is available within boundary."
+    root_hypothesis_position: not_applicable
+    severity_position: not_applicable
+    evidence_refs:
+      - issue-ledger.yaml#issue-007
+  - issue_id: issue-008
+    stance: support
+    rationale: "Same phenomenon as issue-003 framed by semantics (duplicates rel-003): the lens-verified formal core stands — internal stamp (line 20) vs caller-supplied now (lines 30-32) with no clock-domain identity claim anywhere in the target (finding-l2). The signature-as-contract interpretation ('caller-owned current-time authority') is semantics-owned and logic defers to it, consistent with the boundary handoff recorded in round 1. Severity high rests on whether callers exercising the signature literally are a supported group — exactly the premise logic marked upstream_evidence_required=true — so logic neither confirms nor contests high. Deliberation note: logic recommends one decision unit across issue-003/008."
+    root_hypothesis_position: accepts
+    severity_position: insufficient_evidence
+    evidence_refs:
+      - issue-ledger.yaml#issue-008
+      - round1/logic.md#finding-l2
+  - issue_id: issue-009
+    stance: support
+    rationale: "Same contradiction as issue-001 framed by semantics (duplicates rel-002): finding-l1 independently derived both halves of this issue statement — the consequent is contradicted by pending.clear() whenever the antecedent holds, and in the current synchronous single-threaded model the antecedent is unreachable, so the comment presents a vacuous scenario as a handled case. Root hypothesis and action menu match the lens finding. Deliberation note: one decision unit across issue-001/004/009 recommended."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-009
+      - round1/logic.md#finding-l1
+  - issue_id: issue-010
+    stance: not_applicable
+    rationale: "A definition with no consumer is vacuously consistent — C6 contradicts no other claim, so logic has no formal basis to adjudicate; enforcement-point and meaning-ownership defects are semantics-owned. The field's only logic-relevant role was evidential: the sole documented time base sitting on an unused field contributed to finding-l2's missing-premise observation, consistent with dep-001's shared-cause link to issue-003."
+    root_hypothesis_position: not_applicable
+    severity_position: not_applicable
+    evidence_refs:
+      - issue-ledger.yaml#issue-010
+  - issue_id: issue-011
+    stance: not_applicable
+    rationale: "Name-versus-contract disagreement is naming ambiguity: once 'flush' is disambiguated by the doc text ('Callers poll this'), no formal contradiction remains between the documented conditional behavior and the code. Per the Logic-Semantics tie-breaker (contradiction disappears when ambiguity is removed), the defect is semantics-owned."
+    root_hypothesis_position: not_applicable
+    severity_position: not_applicable
+    evidence_refs:
+      - issue-ledger.yaml#issue-011
+  - issue_id: issue-012
+    stance: support
+    rationale: "Logic finding-l3 independently establishes the factual core: flush returns [] in two distinct reachable states (line 31 no-window guard vs line 32 open-window guard) while the doc names only the second. The homonym/interpretability framing is semantics-owned; logic corroborates the facts and keeps low severity given the pendingUserCount() disambiguation path. Same deliberation note as issue-002: a shared deeper cause (no distinct no-window signal) links the two []-issues; recording a finding-003/finding-014 relation may be worthwhile, without merging."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-012
+      - round1/logic.md#finding-l3
+validation:
+  missing_issues: []
