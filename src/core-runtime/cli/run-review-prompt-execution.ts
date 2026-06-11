@@ -2166,6 +2166,11 @@ function allUnitExecutionResults(
   const flattened: ReviewUnitExecutionResult[] = [];
   const visit = (result: ReviewUnitExecutionResult): void => {
     flattened.push(result);
+    // A recovered unit's child_results are audit-only attempt records (the
+    // exhausted failure preserved by submit salvage), not constituent units:
+    // they are neither continuation-preservation targets nor degradation
+    // evidence, so the flatten stops at the recovered parent.
+    if (result.recovery === "salvaged_submit") return;
     for (const child of result.child_results ?? []) {
       visit(child);
     }
@@ -2174,7 +2179,25 @@ function allUnitExecutionResults(
   return flattened;
 }
 
-function outcomeFromPreviousResult(
+/**
+ * Continuation preservation index: unit_id → prior result. Parents are
+ * authoritative over same-id audit children (a fallback-completed unit
+ * preserves its failed attempt in child_results under the same unit_id;
+ * salvaged units' audit children are already excluded by the flatten);
+ * allUnitExecutionResults visits parents before children, so first-wins keeps
+ * the completed parent from being shadowed by its failed audit child.
+ */
+export function buildPreviousResultsByUnitId(
+  artifact: ReviewExecutionResultArtifact | null,
+): Map<string, ReviewUnitExecutionResult> {
+  const byUnitId = new Map<string, ReviewUnitExecutionResult>();
+  for (const result of allUnitExecutionResults(artifact)) {
+    if (!byUnitId.has(result.unit_id)) byUnitId.set(result.unit_id, result);
+  }
+  return byUnitId;
+}
+
+export function outcomeFromPreviousResult(
   result: ReviewUnitExecutionResult,
 ): ExecutionOutcome {
   const startedAtMs = Date.parse(result.started_at);
@@ -2203,6 +2226,12 @@ function outcomeFromPreviousResult(
       : {}),
     ...(result.attempt_count !== undefined
       ? { attemptCount: result.attempt_count }
+      : {}),
+    // Preserved salvaged completions must keep their recovery marker, or a
+    // continuation rewrite would re-count the audit failure as degradation
+    // and drop the unit from the salvaged-unit reporting.
+    ...(result.recovery !== undefined && result.recovery !== null
+      ? { recovery: result.recovery }
       : {}),
     ...(result.packet_bytes !== undefined ? { packetBytes: result.packet_bytes } : {}),
     ...(result.output_bytes !== undefined ? { outputBytes: result.output_bytes } : {}),
@@ -2281,6 +2310,11 @@ function deriveExecutionStatus(params: {
 }
 
 function failedChildOutcomeCount(outcome: ExecutionOutcome): number {
+  // A recovered unit's childOutcomes are audit-only attempt records (the
+  // exhausted failure preserved by submit salvage); the unit's content is a
+  // full validator-passing completion, unlike fallback completions whose
+  // failed children mark genuinely degraded sub-units.
+  if (outcome.recovery !== undefined) return 0;
   return (outcome.childOutcomes ?? []).reduce(
     (total, child) =>
       total + (child.success ? 0 : 1) + failedChildOutcomeCount(child),
@@ -4589,6 +4623,10 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
     attemptCount: 1,
     packetBytes: await fileSizeIfPresent(seat.packet_path),
     outputBytes: await fileSizeIfPresent(seat.output_path),
+    // map/reduce audit trail: per-lens stance results (including salvaged
+    // completions with their exhausted-failure child_results) fold under the
+    // collection row, mirroring the deliberation aggregate.
+    childOutcomes: completedOutcomes,
   };
 }
 
@@ -6022,11 +6060,8 @@ export async function executeReviewPromptExecution(
           executionPlan.execution_result_path,
         )
       : null;
-  const previousResultsByUnitId = new Map(
-    allUnitExecutionResults(previousExecutionResult).map((result) => [
-      result.unit_id,
-      result,
-    ]),
+  const previousResultsByUnitId = buildPreviousResultsByUnitId(
+    previousExecutionResult,
   );
   const shouldRunUnit = (unitId: string): boolean =>
     !continuationMode || continuationRunUnitIds.has(unitId);

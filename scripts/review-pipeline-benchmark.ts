@@ -76,12 +76,14 @@ interface UnitResult {
   failure_kind?: string | null;
   failure_message?: string | null;
   attempt_count?: number | null;
+  recovery?: string | null;
   packet_bytes?: number | null;
   output_bytes?: number | null;
   input_tokens?: number | null;
   output_tokens?: number | null;
   tool_calls?: number | null;
   tool_iterations?: number | null;
+  child_results?: UnitResult[];
 }
 
 interface ReviewExecutionResult {
@@ -197,6 +199,8 @@ interface BenchmarkRunSummary {
   synthesize_output_bytes?: number | null;
   final_output_bytes?: number | null;
   total_attempt_count?: number;
+  salvaged_unit_count?: number;
+  salvaged_unit_ids?: string[];
   failure_kind_counts?: Record<string, number>;
   unit_summaries?: BenchmarkUnitSummary[];
   review_profile?: ReviewRunManifest["review_execution_profile"];
@@ -219,6 +223,7 @@ interface BenchmarkUnitSummary {
   duration_ms?: number;
   failure_kind?: string | null;
   attempt_count?: number | null;
+  recovery?: string | null;
   packet_bytes?: number | null;
   output_bytes?: number | null;
   input_tokens?: number | null;
@@ -258,6 +263,7 @@ interface BenchmarkCaseSummary {
   average_final_output_bytes: number | null;
   average_total_attempt_count: number | null;
   average_failed_unit_count: number | null;
+  total_salvaged_unit_count: number;
   metric_stats: Record<string, NumericStats | null>;
   semantic_quality_passed_count: number;
   semantic_quality_failed_count: number;
@@ -1157,16 +1163,53 @@ function semanticGateExecutionRoute(args: {
 }
 
 function unitsFromExecution(execution: ReviewExecutionResult): UnitResult[] {
-  return [
+  const roots = [
     ...(execution.lens_execution_results ?? []),
     ...(execution.issue_artifact_execution_results ?? []),
     ...(execution.deliberation_execution_results ?? []),
     ...(execution.synthesize_execution_result ? [execution.synthesize_execution_result] : []),
   ];
+  // One flattened constituent-unit list feeds both the aggregate metrics and
+  // the self-submitted-vs-salvaged split, so the split denominators stay
+  // coherent. An aggregate parent's duration/attempts/bytes span its
+  // map/reduce children (issue-stance-matrix over the per-lens stance
+  // dispatches, synthesis over per-issue responses), so the parent is
+  // replaced by those children to avoid double-counting; same-id children
+  // are attempt-level audit records (salvage/fallback trails) and are
+  // excluded. Rows without constituent children — every historical
+  // execution-result — pass through unchanged.
+  const flattened: UnitResult[] = [];
+  const visit = (unit: UnitResult): void => {
+    const constituentChildren = (unit.child_results ?? []).filter(
+      (child) => child.unit_id !== unit.unit_id,
+    );
+    // Only completed aggregates are replaced by their children: a failed
+    // aggregate (e.g. its reduce step threw after child work succeeded)
+    // stays visible to failed_unit_count / failure_kind_counts alongside
+    // its children.
+    if (constituentChildren.length === 0 || unit.status !== "completed") {
+      flattened.push(unit);
+    }
+    for (const child of constituentChildren) visit(child);
+  };
+  for (const unit of roots) visit(unit);
+  return flattened;
 }
 
 function sumNumbers(values: Array<number | null | undefined>): number {
   return values.reduce((sum, value) => sum + (typeof value === "number" ? value : 0), 0);
+}
+
+/**
+ * Self-submitted vs salvaged split over the flattened constituent-unit list
+ * from unitsFromExecution: the `recovery: salvaged_submit` marker sits on the
+ * completed unit itself, so the salvaged ids are always a subset of the unit
+ * totals. Self-submitted completions = completed units minus these.
+ */
+function salvagedUnitIds(units: UnitResult[]): string[] {
+  return units
+    .filter((unit) => unit.recovery === "salvaged_submit" && unit.unit_id)
+    .map((unit) => unit.unit_id as string);
 }
 
 function failureKindCounts(units: UnitResult[]): Record<string, number> {
@@ -1186,6 +1229,7 @@ function unitSummary(unit: UnitResult): BenchmarkUnitSummary {
     duration_ms: unit.duration_ms,
     failure_kind: unit.failure_kind,
     attempt_count: unit.attempt_count,
+    recovery: unit.recovery ?? null,
     packet_bytes: unit.packet_bytes,
     output_bytes: unit.output_bytes,
     input_tokens: unit.input_tokens,
@@ -1302,6 +1346,9 @@ function summarizeCases(
         completedRuns.map((run) => run.total_attempt_count),
       ),
       average_failed_unit_count: average(caseRuns.map((run) => run.failed_unit_count)),
+      total_salvaged_unit_count: sumNumbers(
+        caseRuns.map((run) => run.salvaged_unit_count),
+      ),
       metric_stats: stats,
       semantic_quality_passed_count: completedRuns.filter(
         (run) => run.semantic_quality_gate?.status === "passed",
@@ -1471,6 +1518,7 @@ async function collectRunSummary(args: {
     path.join(args.sessionRoot, "review-record.yaml"),
   );
   const units = unitsFromExecution(execution);
+  const salvaged = salvagedUnitIds(units);
   const packetBytes = units.map((unit) => unit.packet_bytes);
   const outputBytes = units.map((unit) => unit.output_bytes);
   const maxPacketBytes = Math.max(0, ...packetBytes.map((value) => value ?? 0));
@@ -1509,6 +1557,8 @@ async function collectRunSummary(args: {
     synthesize_output_bytes: synthesize?.output_bytes ?? null,
     final_output_bytes: await fileSize(finalOutputPath),
     total_attempt_count: sumNumbers(units.map((unit) => unit.attempt_count)),
+    salvaged_unit_count: salvaged.length,
+    salvaged_unit_ids: salvaged,
     failure_kind_counts: failureKindCounts(units),
     unit_summaries: units.map(unitSummary),
     review_profile: manifest.review_execution_profile,

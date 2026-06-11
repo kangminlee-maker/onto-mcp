@@ -53,6 +53,43 @@ const EVIDENCE_ARTIFACTS = [
   "deliberation-plan.yaml",
 ];
 
+/**
+ * 자력/회수 분리 보고: execution-result에서 recovery: salvaged_submit 마커를
+ * 재귀로 센다(salvaged stance 결과는 issue-stance-matrix 행의 child_results
+ * 아래에 접힌다). 자력 제출 완료 = 완료 unit − 이 목록.
+ */
+async function collectSalvagedUnitIds(sessionRoot: string): Promise<string[]> {
+  const { parse } = await import("yaml");
+  let doc: Record<string, unknown>;
+  try {
+    doc = parse(
+      await fs.readFile(path.join(sessionRoot, "execution-result.yaml"), "utf8"),
+    ) as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  const ids: string[] = [];
+  const walk = (unit: unknown): void => {
+    if (typeof unit !== "object" || unit === null) return;
+    const row = unit as {
+      recovery?: string;
+      unit_id?: string;
+      child_results?: unknown[];
+    };
+    if (row.recovery === "salvaged_submit" && row.unit_id) ids.push(row.unit_id);
+    for (const child of row.child_results ?? []) walk(child);
+  };
+  for (const key of [
+    "lens_execution_results",
+    "issue_artifact_execution_results",
+    "deliberation_execution_results",
+  ]) {
+    for (const row of (doc[key] as unknown[] | undefined) ?? []) walk(row);
+  }
+  walk(doc.synthesize_execution_result);
+  return ids;
+}
+
 async function persistEvidence(fixtureId: string, sessionRoot: string): Promise<string> {
   const dst = path.join(FIXTURES_ROOT, fixtureId, "evidence", path.basename(sessionRoot));
   await fs.mkdir(dst, { recursive: true });
@@ -157,8 +194,9 @@ async function main(): Promise<void> {
       });
       const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
       const evidenceDir = await persistEvidence(id, run.sessionRoot);
+      const salvagedUnitIds = await collectSalvagedUnitIds(run.sessionRoot);
       console.log(
-        `[${id}] status=${run.status} session=${run.sessionRoot} evidence=${evidenceDir} (${elapsedSec}s)`,
+        `[${id}] status=${run.status} session=${run.sessionRoot} evidence=${evidenceDir} salvaged=${salvagedUnitIds.length} (${elapsedSec}s)`,
       );
       results.push({
         fixture: id,
@@ -167,6 +205,8 @@ async function main(): Promise<void> {
         evidence_dir: path.relative(REPO_ROOT, evidenceDir),
         project_root: projectRoot,
         elapsed_sec: elapsedSec,
+        salvaged_unit_count: salvagedUnitIds.length,
+        salvaged_unit_ids: salvagedUnitIds,
       });
     } catch (error) {
       console.error(`[${id}] FAILED:`, (error as Error).message.slice(0, 400));
