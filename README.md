@@ -285,6 +285,7 @@ Unsupported settings stop during profile resolution.
 | Document | Contents |
 |---|---|
 | [docs/reconstruct-runtime-reference.md](docs/reconstruct-runtime-reference.md) | reconstruct run path, artifact/gate catalog, authority model |
-| [docs/development.md](docs/development.md) | repository map and verification harnesses |
+| [docs/development.md](docs/development.md) | verification harnesses and development workflow |
+| [docs/architecture/repo-layout.md](docs/architecture/repo-layout.md) | repository layout SSOT: folder roles and placement rules |
 | [docs/architecture/](docs/architecture/) | architecture notes |
 | [docs/roadmap.md](docs/roadmap.md) | staged roadmap |

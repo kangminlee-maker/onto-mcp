@@ -75,22 +75,10 @@
 
 ### 폴더 구조
 
-| 폴더 | 역할 |
-|---|---|
-| `.onto/authority/` | 개념 SSOT, runtime-facing lens registry, diagnostic code registry |
-| `.onto/principles/` | rank 2~4 개발 규범 |
-| `.onto/domains/` | 선택 가능한 domain 문서와 domain-specific profile |
-| `.onto/processes/` | shared/review/reconstruct/future process contracts |
-| `.onto/roles/` | review lens와 synthesize role definition |
-| `src/core-runtime/` | executable review/reconstruct runtime |
-| `src/core-api/` | MCP와 harness가 호출하는 Core API facade |
-| `src/mcp/` | MCP tool schema와 server entrypoint |
-| `docs/architecture/` | 현재 architecture, continuation, operational notes |
-| `docs/decisions/` | accepted direction과 architecture decision |
-| `development-records/` | 개발 이력, 감사, 설계, handoff 기록 |
-
-`.onto/review/*`는 실행 세션 산출물이다. 세션 artifact 자체를 조사하는 작업이 아니라면
-runtime naming, code audit, docs audit, migration 대상 검색에서 항상 제외한다.
+폴더 구조·배치 원칙의 SSOT는
+[docs/architecture/repo-layout.md](docs/architecture/repo-layout.md)다.
+top-level 역할 표, `src/core-runtime/` 내부 구조, `.onto/review/*` 세션 산출물
+제외 규칙을 그 문서가 소유한다. 여기 재서술하지 않는다.
 
 target material 관련 작업 시 추가로 읽을 문서:
 

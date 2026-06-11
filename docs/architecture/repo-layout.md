@@ -1,43 +1,54 @@
 # Repository Layout
 
-This repository is the TS-first home for the MCP-native `onto-mcp` direction.
-The active runtime lives here and must run without reaching into another `onto`
-checkout.
+This document is the repo-layout SSOT: folder roles, runtime-internal
+structure, and placement rules live here. `AGENTS.md`, `CLAUDE.md`, and
+`docs/development.md` reference this file instead of restating it.
+
+This repository is the TS-first home for the MCP-native `onto-mcp` runtime.
+The active runtime lives here and must run without reaching into another
+`onto` checkout.
+
+## Top-level layout
+
+| Path | Role |
+|---|---|
+| `.onto/authority/` | concept SSOT (`core-lexicon.yaml`), runtime-facing lens registry, diagnostic code registry |
+| `.onto/principles/` | rank 2–4 development norm documents (not shipped) |
+| `.onto/domains/` | selectable domain documents and domain-specific profiles |
+| `.onto/processes/shared/` | cross-process target and runtime contracts |
+| `.onto/processes/review/` | review contracts |
+| `.onto/processes/reconstruct/` | reconstruct contracts, contract registry, source profiles |
+| `.onto/roles/` | review lens and synthesize role definitions |
+| `src/core-runtime/` | executable review/reconstruct runtime |
+| `src/core-api/` | Core API facade called by MCP and repository harnesses |
+| `src/mcp/` | MCP tool schemas and server entrypoint |
+| `scripts/` | repository-local verification, conformance, and benchmark harnesses |
+| `docs/architecture/` | current architecture, continuation, operational notes |
+| `docs/decisions/` | accepted direction and architecture decisions |
+| `development-records/` | development history, audits, designs, handoff records — outside the authority hierarchy; `development-records/archive/` isolates retired CLI/process/learning/govern/evolve material |
+| `IMPLEMENTATION_MAP.html` | visual architecture and roadmap dashboard |
+
+`.onto/review/*` and `.onto/reconstruct/*` are execution session outputs, not
+source. Exclude them from runtime naming, code audits, docs audits, and
+migration searches unless the task is about session artifacts themselves.
+
+## src/core-runtime internal structure
 
 ```text
-.onto/
-  authority/      language-neutral IDs and concept contracts
-  domains/        selectable domain documents
-  processes/      shared process contracts, review contracts, and future-process design contracts
-  roles/          lens and synthesize role definitions
-
 src/core-runtime/
-  executable review runtime
-
-src/core-api/
-  library-facing facade over the core runtime
-
-src/mcp/
-  MCP tool schemas and server entrypoint
-
-docs/decisions/
-  accepted direction and architecture decisions
-
-docs/architecture/
-  current architecture and migration notes
+├── cli/          review bounded step entrypoints + provider unit executors
+├── discovery/    settings chain, onto home, lens registry, host detection
+├── llm/          provider/model switcher + LLM call wrappers
+├── review/       review artifact types, materializers, deliberation, route policy
+└── logger.ts     shared logger
 ```
 
-## Local Workspace Roles
+- `review/` owns the productized review semantics: context-isolated lenses,
+  controlled deliberation, synthesize, and the `ReviewRecord`.
+- `llm/` is the runtime boundary that simplifies API-key / OAuth / local
+  provider selection.
 
-```text
-/Users/kangmin/cowork/onto-mcp
-  New product direction: TS core + MCP-native tool surface.
-
-/Users/kangmin/cowork/onto-mcp
-  Primary workspace for MCP-native product work.
-```
-
-## Rule Of Thumb
+## Placement rules
 
 - Product semantics go in `.onto/` contracts and `src/core-runtime/`.
 - Cross-process process contracts live under `.onto/processes/shared/`.
