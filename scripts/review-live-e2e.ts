@@ -92,7 +92,7 @@ async function main(): Promise<void> {
   );
 
   const args = [
-    path.join(PROJECT_ROOT, "src", "core-runtime", "cli", "review-invoke.ts"),
+    path.join(PROJECT_ROOT, "src", "core-runtime", "cli", "review-invocation-runner.ts"),
     targetPath,
     "Run the live E2E review path without mock, fake, replay, or prepare-only bypass.",
     "--project-root",

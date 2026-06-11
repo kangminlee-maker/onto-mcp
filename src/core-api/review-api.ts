@@ -75,7 +75,7 @@ import {
   prepareReviewInvocationRequest,
   runReviewInvocation,
   type ReviewInvocationProgressEvent,
-} from "../core-runtime/review/review-invocation-runner.js";
+} from "../core-runtime/cli/review-invocation-runner.js";
 import { completeReviewSession } from "../core-runtime/cli/complete-review-session.js";
 import {
   buildExecutorConfigFromRealization,

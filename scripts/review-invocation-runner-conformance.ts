@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolveSettingsChain } from "../src/core-runtime/discovery/settings-chain.js";
 import {
   prepareReviewInvocationArgv,
-} from "../src/core-runtime/review/review-invocation-runner.js";
+} from "../src/core-runtime/cli/review-invocation-runner.js";
 import { resolveReviewExecutionProfile } from "../src/core-runtime/review/review-execution-profile.js";
 import { buildReviewExecutionRoute } from "../src/core-runtime/review/review-execution-route.js";
 

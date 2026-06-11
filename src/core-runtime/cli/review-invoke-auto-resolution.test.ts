@@ -12,8 +12,8 @@ import { readYamlDocument } from "../review/review-artifact-utils.js";
 import {
   ensureProviderRouteReadyForDispatch,
   resolveExecutionRealizationHandoff,
-  reviewPrepareOnly,
 } from "./review-invoke.js";
+import { reviewPrepareOnly } from "./review-invocation-runner.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
 import {
   REVIEW_MOCK_REALIZATION_ENV,

@@ -143,7 +143,7 @@ runtime은 아래만 한다.
 
 현재 TS core bounded step은 host-facing command가 아니라 Core API가 호출하는
 내부 runtime step이다. Canonical product entrypoint는 `onto_review`이며,
-prompt execution dispatch는 `src/core-runtime/review/review-invocation-runner.ts`
+prompt execution dispatch는 `src/core-runtime/cli/review-invocation-runner.ts`
 에서 `src/core-runtime/cli/run-review-prompt-execution.ts`로 전달된다.
 
 옵션:
