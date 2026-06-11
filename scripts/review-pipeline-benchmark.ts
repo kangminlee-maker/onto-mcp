@@ -1183,9 +1183,12 @@ function unitsFromExecution(execution: ReviewExecutionResult): UnitResult[] {
     const constituentChildren = (unit.child_results ?? []).filter(
       (child) => child.unit_id !== unit.unit_id,
     );
-    if (constituentChildren.length === 0) {
+    // Only completed aggregates are replaced by their children: a failed
+    // aggregate (e.g. its reduce step threw after child work succeeded)
+    // stays visible to failed_unit_count / failure_kind_counts alongside
+    // its children.
+    if (constituentChildren.length === 0 || unit.status !== "completed") {
       flattened.push(unit);
-      return;
     }
     for (const child of constituentChildren) visit(child);
   };
