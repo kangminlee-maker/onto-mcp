@@ -1,8 +1,8 @@
 # Submit Salvage Recovery — 설계 초안 (fail-loud but safe)
 
-> 상태: **설계 초안 (승인 대기, 구현 비착수)**. 기준 코드: `feat/phase2-followups` (main `4e713bb` 이후).
+> 상태: **구현 완료 (P1~P4 + 계약)** — 미결정 3건 제안대로 확정(① settings `review.execution.retry.salvage`, 기본 opt-in=false ② 경로 B = 동일 등급 새 인스턴스 ③ attempt-level `salvaged_submit`). 구현: settings 스키마/해소(`settings-chain.ts`) + `recovery` 필드(`artifact-types.ts`) + 순수 로직(`cli/submit-salvage.ts`: 분류·병합·프롬프트·sentinel) + executor 동결/`--salvage-from` 모드(claude 변형) + 러너 소진-후 트리거(child_results 감사 보존) + 계약 §3.3(`external-oauth-worker-contract.md`). 검증: salvage 단위 10케이스(실측 S2를 실제 validator로 재현 — 부분 거부→병합 수락), settings 23, stamp/golden 갱신, 전체 940 passed. P5 잔여: 벤치 표면의 자력/회수 분리 *보고*(데이터 필드는 존재 — 소비자 추가는 후속), live S2 재현 검증(다음 fable 벤치에서 salvage enabled로). lexicon: 신규 top 개념 없음(필드 enum — 계약 문서가 소유)으로 bump 불요 판단. 기준 코드: `feat/phase2-followups`.
 > 동기 실측: fable 벤치마크 bom run `20260611-ca3c674b` — `issue-stance:logic`이 `output_contract`로 재시도 소진(`submit_issue_stance_response is missing issue_id(s): issue-021`), 상류 2시간 의미 작업(lens 6 + ledger 3 유닛 완주)이 폐기됨.
-> 적용 시점 제약: 진행 중인 fable 벤치마크 종결 후(INV-EXP-1 — 벤치 도중 회수 경로 추가는 변수 오염).
+> 적용 시점 제약 해소 근거: salvage는 opt-in(`enabled: false` 기본)이라 settings로 활성화하지 않는 한 실행 행동이 불변 — 진행 중인 fable 벤치마크(이미 로드된 장수 프로세스이기도 함)와 변수 비충돌(INV-EXP-1 유지).
 
 ## 1. 목표
 
@@ -80,8 +80,8 @@
 
 redesign 트리거: P1에서 부분 payload 동결이 기존 실패 경로 계약과 충돌하면(예: 실패 시 산출물 부재를 가정하는 소비자 발견) 중단 후 재설계. 검증 완료 기준: S1-prose/S2/S3 각 1 케이스가 mock으로 결정론 재현되고, salvage 표시가 record까지 투영되며, 회수 실패 시 기존 실패 종단과 byte-동일.
 
-## 5. 미결정 (사용자 확인 필요)
+## 5. 확정 (사용자 결정, 2026-06-11)
 
-1. settings 키 형태·기본값(opt-in 제안) — 보호 항목.
-2. 경로 B의 회수 모델: 동일 등급 새 인스턴스(제안) vs 저모델 허용(품질 리스크 수용 여부).
-3. `salvaged_submit` 토큰의 위치: attempt-level(제안) vs unit-level status 변형(비추천 — status enum 오염).
+1. settings: `review.execution.retry.salvage { enabled: false 기본(opt-in), transcription_llm, delta_completion: "unit_llm" }` — 스키마 추가 사용자 승인됨.
+2. 경로 B 회수자: **동일 등급 새 인스턴스** 확정.
+3. recovery 토큰: **attempt-level `salvaged_submit`** 확정.

@@ -242,6 +242,8 @@ export interface ExecutionOutcome {
   childOutcomes?: ExecutionOutcome[];
   artifactGenerationRealization?: ReviewArtifactGenerationRealization;
   semanticQualityEvidence?: ReviewSemanticQualityEvidence;
+  /** Attempt-level recovery marker (opt-in submit salvage). */
+  recovery?: "salvaged_submit";
 }
 
 function errorMessage(error: unknown): string {
@@ -1858,6 +1860,8 @@ async function invokeExecutor(
   dispatch: ExecutionDispatchResult,
   timeoutMs: number = DEFAULT_REVIEW_UNIT_TIMEOUT_MS,
   reviewExecutionProfile?: ReviewExecutionProfile | undefined,
+  /** Extra executor argv (e.g. submit-salvage re-invocation flags). */
+  extraArgs: string[] = [],
 ): Promise<ReviewExecutorRunMetadata | undefined> {
   const effectiveExecutorConfig = executorConfigWithUnitSettings({
     executorConfig,
@@ -1898,6 +1902,7 @@ async function invokeExecutor(
       "--output-path",
       dispatch.output_path,
       ...extraDispatchArgs,
+      ...extraArgs,
     ],
     {
       cwd: projectRoot,
@@ -2102,6 +2107,7 @@ function toUnitExecutionResult(
           child_results: outcome.childOutcomes.map(toUnitExecutionResult),
         }
       : {}),
+    ...(outcome.recovery !== undefined ? { recovery: outcome.recovery } : {}),
   };
 }
 
@@ -3549,6 +3555,93 @@ async function runSingleDispatchWithRetries(args: {
     message: lastError instanceof Error ? lastError.message : String(lastError),
     failure_kind: failureKindFromError(lastError),
   };
+
+  // Opt-in submit salvage (design: submit-salvage-recovery-design.md): the
+  // regular budget is exhausted on output_contract — recover the frozen
+  // attempt's semantics via the executor's salvage mode. The exhausted
+  // failure stays loudly recorded as a child result; salvage failure falls
+  // through to the unchanged failure return.
+  const salvageSettings = reviewExecutionProfile?.retry?.salvage;
+  if (
+    salvageSettings?.enabled === true &&
+    failure.failure_kind === "output_contract" &&
+    reviewExecutionProfile?.worker_executor === "claude_code" &&
+    dispatch.output_format !== undefined &&
+    dispatch.output_format !== "markdown"
+  ) {
+    const salvageInputPath = `${dispatch.output_path}.salvage-input.json`;
+    if (await fileExists(salvageInputPath)) {
+      try {
+        const salvageStartedAtMs = Date.now();
+        const executorMetadata = await invokeExecutor(
+          executorConfig,
+          projectRoot,
+          sessionRoot,
+          executionPlan,
+          dispatch,
+          retryTimeoutMs(effectiveUnitTimeoutMs, 0),
+          reviewExecutionProfile,
+          [
+            "--salvage-from",
+            salvageInputPath,
+            ...(salvageSettings.transcription_llm?.model
+              ? ["--salvage-transcription-model", salvageSettings.transcription_llm.model]
+              : []),
+          ],
+        );
+        console.log(
+          `[review runner] salvaged ${dispatch.unit_kind}: ${dispatch.unit_id} (submit salvage)`,
+        );
+        await appendExecutionProgress(
+          executionPlan.error_log_path,
+          `runner dispatch salvaged: ${dispatch.unit_id}`,
+          [
+            `unit_id: ${dispatch.unit_id}`,
+            `recovery: salvaged_submit`,
+            `exhausted_attempts: ${attemptsUsed}`,
+          ],
+        );
+        const failedOutcome: ExecutionOutcome = {
+          dispatch,
+          success: false,
+          startedAtMs,
+          completedAtMs,
+          attemptCount: attemptsUsed,
+          failure,
+          artifactGenerationRealization,
+          semanticQualityEvidence,
+        };
+        return {
+          dispatch,
+          success: true,
+          startedAtMs,
+          completedAtMs: Date.now(),
+          attemptCount: attemptsUsed + 1,
+          recovery: "salvaged_submit",
+          childOutcomes: [failedOutcome],
+          ...(executorMetadata !== undefined ? { executorMetadata } : {}),
+          artifactGenerationRealization:
+            executorMetadata?.artifact_generation_realization ??
+            artifactGenerationRealization,
+          semanticQualityEvidence:
+            executorMetadata?.semantic_quality_evidence ?? semanticQualityEvidence,
+          packetBytes: await fileSizeIfPresent(dispatch.packet_path),
+          outputBytes: await fileSizeIfPresent(dispatch.output_path),
+        };
+      } catch (salvageError: unknown) {
+        const salvageMessage =
+          salvageError instanceof Error
+            ? salvageError.message
+            : String(salvageError);
+        await appendExecutionProgress(
+          executionPlan.error_log_path,
+          `runner dispatch salvage failed: ${dispatch.unit_id}`,
+          [`error: ${salvageMessage.slice(0, 200)}`],
+        );
+      }
+    }
+  }
+
   const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
   const outputBytes = await fileSizeIfPresent(dispatch.output_path);
   await removeFileIfExists(dispatch.output_path);

@@ -90,6 +90,19 @@ export const REVIEW_EXECUTION_UNIT_IDS = [
 ] as const;
 const ReviewExecutionUnitIdSchema = z.enum(REVIEW_EXECUTION_UNIT_IDS);
 const ReviewToolModeSchema = z.enum(["auto", "native", "inline"]);
+const ReviewSubmitSalvageSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    transcription_llm: z
+      .object({
+        provider: z.enum(["anthropic"]).optional(),
+        model: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+    delta_completion: z.literal("unit_llm").optional(),
+  })
+  .strict();
 const ReviewRetrySettingsSchema = z
   .object({
     lens_max_retries: z.number().int().min(0).optional(),
@@ -97,6 +110,7 @@ const ReviewRetrySettingsSchema = z
     deliberation_max_retries: z.number().int().min(0).optional(),
     synthesis_max_retries: z.number().int().min(0).optional(),
     retry_initial_delay_ms: z.number().int().min(0).optional(),
+    salvage: ReviewSubmitSalvageSettingsSchema.optional(),
   })
   .strict();
 const ReviewUnitExecutionSettingsSchema = z
@@ -143,7 +157,9 @@ const DEFAULT_REVIEW_RETRY_SETTINGS = {
   deliberation_max_retries: 2,
   synthesis_max_retries: 2,
   retry_initial_delay_ms: 3000,
-} as const;
+  // opt-in: 벤치마크 재현성 보호 — 활성화는 settings로만.
+  salvage: { enabled: false, delta_completion: "unit_llm" },
+} as const satisfies ReviewRetrySettings;
 
 const DEFAULT_REVIEW_UNIT_TIMEOUT_MS = 240000;
 const DEFAULT_REVIEW_SHORT_LLM_UNIT_TIMEOUT_MS = 180000;
@@ -515,12 +531,34 @@ export interface ReviewExecutionSettings {
   units?: ReviewExecutionUnits;
 }
 
+/**
+ * Submit salvage recovery (opt-in): after a structured-submit unit exhausts
+ * its regular retries with `output_contract`, recover the already-produced
+ * semantics without re-engaging the violating model. The original failure
+ * stays recorded; the salvage attempt carries `recovery: "salvaged_submit"`.
+ * Contract: development-records/design/submit-salvage-recovery-design.md.
+ */
+export interface ReviewSubmitSalvageSettingsInput {
+  enabled?: boolean | undefined;
+  /** Path A (transcription) model — cheap tier; claude CLI `--model` value. */
+  transcription_llm?: { provider?: "anthropic" | undefined; model: string } | undefined;
+  /** Path B (missing-rows delta) executor — fixed: fresh same-tier instance. */
+  delta_completion?: "unit_llm" | undefined;
+}
+
+export interface ReviewSubmitSalvageSettings {
+  enabled: boolean;
+  transcription_llm?: { provider?: "anthropic" | undefined; model: string };
+  delta_completion: "unit_llm";
+}
+
 export interface ReviewRetrySettingsInput {
   lens_max_retries?: number | undefined;
   issue_artifact_max_retries?: number | undefined;
   deliberation_max_retries?: number | undefined;
   synthesis_max_retries?: number | undefined;
   retry_initial_delay_ms?: number | undefined;
+  salvage?: ReviewSubmitSalvageSettingsInput | undefined;
 }
 
 export interface ReviewRetrySettings {
@@ -529,6 +567,7 @@ export interface ReviewRetrySettings {
   deliberation_max_retries: number;
   synthesis_max_retries: number;
   retry_initial_delay_ms: number;
+  salvage: ReviewSubmitSalvageSettings;
 }
 
 export interface ReviewArtifactSettings {
@@ -787,6 +826,15 @@ function completeReviewRetrySettings(
     retry_initial_delay_ms:
       retry?.retry_initial_delay_ms ??
       DEFAULT_REVIEW_RETRY_SETTINGS.retry_initial_delay_ms,
+    salvage: {
+      enabled: retry?.salvage?.enabled ?? DEFAULT_REVIEW_RETRY_SETTINGS.salvage.enabled,
+      ...(retry?.salvage?.transcription_llm !== undefined
+        ? { transcription_llm: retry.salvage.transcription_llm }
+        : {}),
+      delta_completion:
+        retry?.salvage?.delta_completion ??
+        DEFAULT_REVIEW_RETRY_SETTINGS.salvage.delta_completion,
+    },
   };
 }
 
@@ -1359,7 +1407,10 @@ export function defaultReviewExecution(): ResolvedReviewExecutionSettings {
 }
 
 export function defaultReviewRetrySettings(): ReviewRetrySettings {
-  return { ...DEFAULT_REVIEW_RETRY_SETTINGS };
+  return {
+    ...DEFAULT_REVIEW_RETRY_SETTINGS,
+    salvage: { ...DEFAULT_REVIEW_RETRY_SETTINGS.salvage },
+  };
 }
 
 function validateActorLlmRefs(settings: OntoSettings): void {

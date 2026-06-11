@@ -247,6 +247,27 @@ describe("resolveSettingsChain", () => {
       deliberation_max_retries: 5,
       synthesis_max_retries: 1,
       retry_initial_delay_ms: 250,
+      salvage: { enabled: false, delta_completion: "unit_llm" },
+    });
+  });
+
+  it("parses opt-in submit salvage settings with a transcription model", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      salvage: {
+        enabled: true,
+        transcription_llm: { model: "claude-haiku-4-5-20251001" },
+      },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry?.salvage).toEqual({
+      enabled: true,
+      transcription_llm: { model: "claude-haiku-4-5-20251001" },
+      delta_completion: "unit_llm",
     });
   });
 
@@ -266,6 +287,7 @@ describe("resolveSettingsChain", () => {
       deliberation_max_retries: 2,
       synthesis_max_retries: 2,
       retry_initial_delay_ms: 3000,
+      salvage: { enabled: false, delta_completion: "unit_llm" },
     });
   });
 
