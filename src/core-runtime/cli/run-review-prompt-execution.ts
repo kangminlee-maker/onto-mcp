@@ -4589,6 +4589,10 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
     attemptCount: 1,
     packetBytes: await fileSizeIfPresent(seat.packet_path),
     outputBytes: await fileSizeIfPresent(seat.output_path),
+    // map/reduce audit trail: per-lens stance results (including salvaged
+    // completions with their exhausted-failure child_results) fold under the
+    // collection row, mirroring the deliberation aggregate.
+    childOutcomes: completedOutcomes,
   };
 }
 

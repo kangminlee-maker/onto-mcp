@@ -1,6 +1,6 @@
 # Submit Salvage Recovery — 설계 초안 (fail-loud but safe)
 
-> 상태: **구현 완료 (P1~P4 + 계약)** — 미결정 3건 제안대로 확정(① settings `review.execution.retry.salvage`, 기본 opt-in=false ② 경로 B = 동일 등급 새 인스턴스 ③ attempt-level `salvaged_submit`). 구현: settings 스키마/해소(`settings-chain.ts`) + `recovery` 필드(`artifact-types.ts`) + 순수 로직(`cli/submit-salvage.ts`: 분류·병합·프롬프트·sentinel) + executor 동결/stale-제거/`--salvage-from` 모드(**claude·codex 양 adapter**) + 러너 소진-후 트리거(발동 신호 = 동결 파일 존재 — failure_kind 메시지 휴리스틱의 분류 갭(S1 "no structured payload"가 executor_exit로 분류되던 문제)을 구조적으로 우회; child_results 감사 보존) + 계약 §3.3(`external-oauth-worker-contract.md`). 검증: salvage 단위 10케이스(실측 S2를 실제 validator로 재현 — 부분 거부→병합 수락), settings 23, stamp/golden 갱신, 전체 940 passed. P5 잔여: 벤치 표면의 자력/회수 분리 *보고*(데이터 필드는 존재 — 소비자 추가는 후속), live S2 재현 검증(다음 fable 벤치에서 salvage enabled로). lexicon: 신규 top 개념 없음(필드 enum — 계약 문서가 소유)으로 bump 불요 판단. 기준 코드: `feat/phase2-followups`.
+> 상태: **구현 완료 (P1~P4 + 계약)** — 미결정 3건 제안대로 확정(① settings `review.execution.retry.salvage`, 기본 opt-in=false ② 경로 B = 동일 등급 새 인스턴스 ③ attempt-level `salvaged_submit`). 구현: settings 스키마/해소(`settings-chain.ts`) + `recovery` 필드(`artifact-types.ts`) + 순수 로직(`cli/submit-salvage.ts`: 분류·병합·프롬프트·sentinel) + executor 동결/stale-제거/`--salvage-from` 모드(**claude·codex 양 adapter**) + 러너 소진-후 트리거(발동 신호 = 동결 파일 존재 — failure_kind 메시지 휴리스틱의 분류 갭(S1 "no structured payload"가 executor_exit로 분류되던 문제)을 구조적으로 우회; child_results 감사 보존) + 계약 §3.3(`external-oauth-worker-contract.md`). 검증: salvage 단위 10케이스(실측 S2를 실제 validator로 재현 — 부분 거부→병합 수락), settings 23, stamp/golden 갱신, 전체 940 passed. P5 종결: 벤치 표면의 자력/회수 분리 보고 + 트리거 결정론 E2E(§7). 잔여: 유기적 live 발동 관찰(salvage-enabled fable 벤치 — quota 리셋 6/15 후, §7 ①). lexicon: 신규 top 개념 없음(필드 enum — 계약 문서가 소유)으로 bump 불요 판단. 기준 코드: `feat/phase2-followups`.
 > 동기 실측: fable 벤치마크 bom run `20260611-ca3c674b` — `issue-stance:logic`이 `output_contract`로 재시도 소진(`submit_issue_stance_response is missing issue_id(s): issue-021`), 상류 2시간 의미 작업(lens 6 + ledger 3 유닛 완주)이 폐기됨.
 > 적용 시점 제약 해소 근거: salvage는 opt-in(`enabled: false` 기본)이라 settings로 활성화하지 않는 한 실행 행동이 불변 — 진행 중인 fable 벤치마크(이미 로드된 장수 프로세스이기도 함)와 변수 비충돌(INV-EXP-1 유지).
 
@@ -97,4 +97,10 @@ vehicle: 실측 실패 세션(bom `ca3c674b`)의 **원본 issue-stance:logic pac
 | 경로 A — 전사 (S3 enum near-miss: `strongly_support`) | **보수적 포기** — haiku가 enum 정정을 해석으로 판단, `SALVAGE_INCOMPLETE` 선언 → 회수 실패 → 기존 실패 종단. 가드 우선·fail-loud 유지(의도된 안전 동작); enum near-miss류는 회수율이 낮을 수 있음(한계 데이터) |
 | 발명 가드 (36행 중 3행만 있는 prose) | **발동** — `SALVAGE_INCOMPLETE` abort, seat 미기록 |
 
-미경유(명시 한계): parent의 소진-후 트리거는 본 검증에서 executor 직접 호출로 우회 — 그 로직은 결정론 suite가 커버하며, 완전 유기적 발동은 salvage enabled 벤치마크에서 관찰 예정.
+미경유(명시 한계): parent의 소진-후 트리거는 본 검증에서 executor 직접 호출로 우회 — 그 로직은 결정론 suite가 커버하며(§7 ①의 dispatch-레벨 E2E 포함), 완전 유기적 발동은 salvage enabled 벤치마크에서 관찰 예정.
+
+## 7. 후속 2건 처리 (2026-06-11)
+
+**① 트리거 결정론 검증 + 유기적 관찰 연기.** parent의 소진-후 트리거를 실제 dispatch 루프로 통과시키는 결정론 E2E 추가(`src/core-api/runtime-pipeline-salvage.test.ts`): stub executor가 stance unit 1개를 구조적으로 실패시키고(동결 파일 기록 후 exit 1), 정규 예산 소진 → 러너가 `--salvage-from`으로 재호출 → 회수 완료가 `recovery: salvaged_submit` + 소진 실패 `child_results` 보존으로 기록됨을 단언. disabled 쌍둥이는 기존 실패 종단 불변을 단언. 이 과정에서 감사 갭 1건 수정: A의 issue-stance-matrix collection dispatch가 per-lens 결과를 폐기하고 있어 salvage 감사 흔적이 execution-result에 남지 않던 문제 — deliberation aggregate 전례대로 per-lens 결과를 matrix 행의 `child_results`로 접도록 수정(golden 갱신). **유기적 live 관찰은 연기**: salvage-enabled fable 벤치 재실행이 claude-1 주간 quota(6/15 9am KST 리셋)로 차단 — fixture `settings-claude-fable-salvage.json` 준비 완료, 리셋 후 실행.
+
+**② 벤치 자력/회수 분리 보고.** `scripts/review-pipeline-benchmark.ts`: run summary에 `salvaged_unit_count`/`salvaged_unit_ids`(child_results 재귀 수집), unit summary에 `recovery`, case summary에 `total_salvaged_unit_count` 추가. `development-records/benchmark/fixtures/ontology/run-ontology-review.mts`: fixture별 결과 JSON에 동일 분리 필드 추가. 자력 제출 완료 = 완료 unit − salvaged 목록.

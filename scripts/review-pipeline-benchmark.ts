@@ -76,12 +76,14 @@ interface UnitResult {
   failure_kind?: string | null;
   failure_message?: string | null;
   attempt_count?: number | null;
+  recovery?: string | null;
   packet_bytes?: number | null;
   output_bytes?: number | null;
   input_tokens?: number | null;
   output_tokens?: number | null;
   tool_calls?: number | null;
   tool_iterations?: number | null;
+  child_results?: UnitResult[];
 }
 
 interface ReviewExecutionResult {
@@ -197,6 +199,8 @@ interface BenchmarkRunSummary {
   synthesize_output_bytes?: number | null;
   final_output_bytes?: number | null;
   total_attempt_count?: number;
+  salvaged_unit_count?: number;
+  salvaged_unit_ids?: string[];
   failure_kind_counts?: Record<string, number>;
   unit_summaries?: BenchmarkUnitSummary[];
   review_profile?: ReviewRunManifest["review_execution_profile"];
@@ -219,6 +223,7 @@ interface BenchmarkUnitSummary {
   duration_ms?: number;
   failure_kind?: string | null;
   attempt_count?: number | null;
+  recovery?: string | null;
   packet_bytes?: number | null;
   output_bytes?: number | null;
   input_tokens?: number | null;
@@ -258,6 +263,7 @@ interface BenchmarkCaseSummary {
   average_final_output_bytes: number | null;
   average_total_attempt_count: number | null;
   average_failed_unit_count: number | null;
+  total_salvaged_unit_count: number;
   metric_stats: Record<string, NumericStats | null>;
   semantic_quality_passed_count: number;
   semantic_quality_failed_count: number;
@@ -1169,6 +1175,23 @@ function sumNumbers(values: Array<number | null | undefined>): number {
   return values.reduce((sum, value) => sum + (typeof value === "number" ? value : 0), 0);
 }
 
+/**
+ * Self-submitted vs salvaged split: collect every result carrying the
+ * `recovery: salvaged_submit` audit marker. Walks `child_results` because
+ * salvaged per-lens stance results fold under the issue-stance-matrix
+ * collection row (and deliberation children under their aggregate).
+ * Self-submitted completions = completed units minus these.
+ */
+function salvagedUnitIds(units: UnitResult[]): string[] {
+  const ids: string[] = [];
+  const walk = (unit: UnitResult): void => {
+    if (unit.recovery === "salvaged_submit" && unit.unit_id) ids.push(unit.unit_id);
+    for (const child of unit.child_results ?? []) walk(child);
+  };
+  for (const unit of units) walk(unit);
+  return ids;
+}
+
 function failureKindCounts(units: UnitResult[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const unit of units) {
@@ -1186,6 +1209,7 @@ function unitSummary(unit: UnitResult): BenchmarkUnitSummary {
     duration_ms: unit.duration_ms,
     failure_kind: unit.failure_kind,
     attempt_count: unit.attempt_count,
+    recovery: unit.recovery ?? null,
     packet_bytes: unit.packet_bytes,
     output_bytes: unit.output_bytes,
     input_tokens: unit.input_tokens,
@@ -1302,6 +1326,9 @@ function summarizeCases(
         completedRuns.map((run) => run.total_attempt_count),
       ),
       average_failed_unit_count: average(caseRuns.map((run) => run.failed_unit_count)),
+      total_salvaged_unit_count: sumNumbers(
+        caseRuns.map((run) => run.salvaged_unit_count),
+      ),
       metric_stats: stats,
       semantic_quality_passed_count: completedRuns.filter(
         (run) => run.semantic_quality_gate?.status === "passed",
@@ -1471,6 +1498,7 @@ async function collectRunSummary(args: {
     path.join(args.sessionRoot, "review-record.yaml"),
   );
   const units = unitsFromExecution(execution);
+  const salvaged = salvagedUnitIds(units);
   const packetBytes = units.map((unit) => unit.packet_bytes);
   const outputBytes = units.map((unit) => unit.output_bytes);
   const maxPacketBytes = Math.max(0, ...packetBytes.map((value) => value ?? 0));
@@ -1509,6 +1537,8 @@ async function collectRunSummary(args: {
     synthesize_output_bytes: synthesize?.output_bytes ?? null,
     final_output_bytes: await fileSize(finalOutputPath),
     total_attempt_count: sumNumbers(units.map((unit) => unit.attempt_count)),
+    salvaged_unit_count: salvaged.length,
+    salvaged_unit_ids: salvaged,
     failure_kind_counts: failureKindCounts(units),
     unit_summaries: units.map(unitSummary),
     review_profile: manifest.review_execution_profile,
