@@ -1,12 +1,18 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+// 검증 당시의 실측 세션(tmp) — 다른 환경에서 재현 시 SALVAGE_SESSION_ROOT로 지정.
+const SESSION_ROOT = process.env.SALVAGE_SESSION_ROOT ??
+  "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-ffqgHx/.onto/review/20260611-ca3c674b";
 import fs from "node:fs/promises";
-import { buildWorkerSubmitSchema, writeRuntimeSubmitArtifactFromPayload } from "/Users/kangmin/cowork/onto-mcp-claude/src/core-runtime/cli/worker-structured-output.ts";
+const { buildWorkerSubmitSchema, writeRuntimeSubmitArtifactFromPayload } = await import(path.join(REPO_ROOT, "src/core-runtime/cli/worker-structured-output.ts"));
 
-const S = "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-ffqgHx/.onto/review/20260611-ca3c674b";
+const S = SESSION_ROOT;
 const frozen = JSON.parse(await fs.readFile("/tmp/salvage-live/s2.salvage-input.json", "utf8"));
 const stream = JSON.parse(frozen.stdout);
 const full = structuredClone(stream[0].structured_output);
 // 35행 partial에 issue-021을 빼고 만든 것이므로, A-1은 완전 36행 기준이 필요 — attempt1 seat에서 재구성
-import YAML from "/Users/kangmin/cowork/onto-mcp-claude/node_modules/yaml/dist/index.js";
+const YAML = (await import(path.join(REPO_ROOT, "node_modules/yaml/dist/index.js"))).default;
 const seat = YAML.parse(await fs.readFile("/tmp/salvage-live/logic-attempt1.yaml", "utf8"));
 const rows = seat.stances.map((r) => ({
   issue_id: r.issue_id, stance: r.stance, rationale: r.rationale,

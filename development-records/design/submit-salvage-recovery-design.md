@@ -88,7 +88,7 @@ redesign 트리거: P1에서 부분 payload 동결이 기존 실패 경로 계�
 
 ## 6. Live 검증 (2026-06-11 — 실 LLM·실 packet·실 validator)
 
-vehicle: 실측 실패 세션(bom `ca3c674b`)의 **원본 issue-stance:logic packet**(36-이슈 projection, tmp 생존)에 executor를 직접 호출. 동결 입력은 live attempt #1(실 fable 36/36 제출 성공)의 실제 payload를 외과 변형 + **실제 validator의 거부 텍스트**로 구성(합성 요소는 변형 1곳뿐 — 라벨 명시). evidence: `fixtures/salvage-live-verification/`(스크립트·동결 입력·산출 seat).
+vehicle: 실측 실패 세션(bom `ca3c674b`)의 **원본 issue-stance:logic packet**(36-이슈 projection, tmp 생존)에 executor를 직접 호출. 동결 입력은 live attempt #1(실 fable 36/36 제출 성공)의 실제 payload를 외과 변형 + **실제 validator의 거부 텍스트**로 구성(합성 요소는 변형 1곳뿐 — 라벨 명시). evidence: `fixtures/salvage-live-verification/`(repo-상대 스크립트·동결 입력·산출 seat·**네거티브 케이스 transcript**(`a1/a2.transcript.txt`: sentinel 오류·exit 1·seat 부재) — 재현 시 `SALVAGE_SESSION_ROOT`로 세션 지정). enum near-miss 보수적 거부는 재실행에서도 재현(2/2 일관).
 
 | 케이스 | live 결과 |
 |---|---|

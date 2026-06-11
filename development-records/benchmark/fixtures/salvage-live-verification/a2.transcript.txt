@@ -1,0 +1,4 @@
+[plan:executor] kind=claude_code unit_id=issue-stance:logic salvage=transcription
+Error: submit salvage aborted for issue-stance:logic: SALVAGE_INCOMPLETE (frozen output lacks required content; refusing to invent).
+EXIT_CODE=1
+seat_written: no
