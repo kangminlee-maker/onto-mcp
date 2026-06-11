@@ -527,7 +527,7 @@ export interface ReviewExecutionSettings {
   lens?: ReviewActorSettings;
   synthesize?: ReviewActorSettings;
   deliberation?: ReviewDeliberation;
-  retry?: ReviewRetrySettings;
+  retry?: ReviewRetrySettingsInput;
   units?: ReviewExecutionUnits;
 }
 
@@ -772,9 +772,34 @@ function definedReviewArtifacts(
 
 function definedReviewRetry(
   retry: ReviewRetrySettingsInput | undefined,
-): ReviewRetrySettings | undefined {
+): ReviewRetrySettingsInput | undefined {
   if (!retry) return undefined;
-  return completeReviewRetrySettings(retry);
+  const out: ReviewRetrySettingsInput = {};
+  if (retry.lens_max_retries !== undefined) out.lens_max_retries = retry.lens_max_retries;
+  if (retry.issue_artifact_max_retries !== undefined) {
+    out.issue_artifact_max_retries = retry.issue_artifact_max_retries;
+  }
+  if (retry.deliberation_max_retries !== undefined) {
+    out.deliberation_max_retries = retry.deliberation_max_retries;
+  }
+  if (retry.synthesis_max_retries !== undefined) {
+    out.synthesis_max_retries = retry.synthesis_max_retries;
+  }
+  if (retry.retry_initial_delay_ms !== undefined) {
+    out.retry_initial_delay_ms = retry.retry_initial_delay_ms;
+  }
+  if (retry.salvage !== undefined) {
+    const salvage: ReviewSubmitSalvageSettingsInput = {};
+    if (retry.salvage.enabled !== undefined) salvage.enabled = retry.salvage.enabled;
+    if (retry.salvage.transcription_llm !== undefined) {
+      salvage.transcription_llm = retry.salvage.transcription_llm;
+    }
+    if (retry.salvage.delta_completion !== undefined) {
+      salvage.delta_completion = retry.salvage.delta_completion;
+    }
+    out.salvage = salvage;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function definedReviewUnitExecutionSettings(
@@ -810,7 +835,7 @@ function definedReviewUnits(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function completeReviewRetrySettings(
+export function completeReviewRetrySettings(
   retry: ReviewRetrySettingsInput | undefined,
 ): ReviewRetrySettings {
   return {
@@ -1069,12 +1094,22 @@ function mergeReviewArtifactSettings(
 }
 
 function mergeReviewRetrySettings(
-  userRetry: ReviewRetrySettings | undefined,
-  projectRetry: ReviewRetrySettings | undefined,
+  userRetry: ReviewRetrySettingsInput | undefined,
+  projectRetry: ReviewRetrySettingsInput | undefined,
 ): ReviewRetrySettings {
-  const merged = {
+  const merged: ReviewRetrySettingsInput = {
     ...(userRetry ?? {}),
     ...(projectRetry ?? {}),
+    // salvage merges deep: a project layer that omits (or partially sets)
+    // salvage must not clobber an inherited user-level opt-in.
+    ...(userRetry?.salvage !== undefined || projectRetry?.salvage !== undefined
+      ? {
+          salvage: {
+            ...(userRetry?.salvage ?? {}),
+            ...(projectRetry?.salvage ?? {}),
+          },
+        }
+      : {}),
   };
   return completeReviewRetrySettings(merged);
 }

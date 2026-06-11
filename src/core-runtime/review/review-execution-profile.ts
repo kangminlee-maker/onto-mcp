@@ -11,6 +11,7 @@ import type { ReviewArtifactGenerationRealization } from "./artifact-types.js";
 import {
   REVIEW_EXECUTION_UNIT_IDS,
   defaultReviewExecution,
+  completeReviewRetrySettings,
 } from "../discovery/settings-chain.js";
 import {
   detectClaudeBinaryAvailable,
@@ -155,7 +156,7 @@ function settingsExecution(settings: OntoSettings): ResolvedReviewExecutionSetti
       ...defaults.synthesize,
       ...(execution.synthesize ?? {}),
     },
-    retry: execution.retry ?? defaults.retry,
+    retry: completeReviewRetrySettings(execution.retry),
     units: mergeReviewExecutionUnits(defaults.units, execution.units),
   };
 }

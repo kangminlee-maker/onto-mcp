@@ -43,6 +43,7 @@ import {
   type OntoSettings,
   type ReviewLlmRef,
   type ResolvedReviewExecutionSettings,
+  completeReviewRetrySettings,
 } from "../discovery/settings-chain.js";
 import {
   ensureDirectory,
@@ -211,6 +212,7 @@ function resolveReviewExecutionSettingsForArtifacts(
   return {
     ...defaults,
     ...execution,
+    retry: completeReviewRetrySettings(execution.retry),
     teamlead: {
       ...defaults.teamlead,
       ...(execution.teamlead ?? {}),
@@ -876,8 +878,9 @@ export async function bootstrapInvocationBindingArtifacts(
     // Durable, immutable stamp of the resolved retry policy (same resolution
     // the A-path profile carries). Host advances read it for auditable
     // execution-result/ReviewRecord retry reporting.
-    retry_policy:
-      ontoConfig?.review?.execution?.retry ?? defaultReviewRetrySettings(),
+    retry_policy: completeReviewRetrySettings(
+      ontoConfig?.review?.execution?.retry,
+    ),
     interpretation_artifact_path: interpretationArtifactPath,
     binding_output_path: bindingOutputPath,
     session_metadata_path: sessionMetadataPath,

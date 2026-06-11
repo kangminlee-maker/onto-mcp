@@ -54,6 +54,7 @@ async function runCodexSubmitSalvageMode(args: {
   sessionRoot: string;
   sandboxMode: string | boolean | undefined;
   model: string | boolean | undefined;
+  reasoningEffort: string | boolean | undefined;
   transcriptionModel: string | undefined;
   configOverrides: string[];
   timeoutMs: number | undefined;
@@ -104,7 +105,11 @@ async function runCodexSubmitSalvageMode(args: {
     // transcription may use the configured cheap model.
     mode.mode === "delta_rows" ? args.model : args.transcriptionModel ?? args.model,
     args.sandboxMode,
-    undefined,
+    // delta completion is same-tier incl. the unit's reasoning effort; a
+    // configured transcription model runs at its own default effort.
+    mode.mode === "delta_rows" || args.transcriptionModel === undefined
+      ? args.reasoningEffort
+      : undefined,
     args.configOverrides,
     args.unitId,
     args.unitKind,
@@ -517,6 +522,7 @@ export async function runCodexReviewUnitExecutorCli(
       sessionRoot,
       sandboxMode,
       model: values.model,
+      reasoningEffort: values["reasoning-effort"],
       transcriptionModel,
       configOverrides: values["config-override"],
       timeoutMs,

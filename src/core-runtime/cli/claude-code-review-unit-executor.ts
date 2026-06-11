@@ -212,6 +212,7 @@ async function runSubmitSalvageMode(args: {
   sessionRoot: string;
   sandboxMode: string;
   model: string | undefined;
+  reasoningEffort: string | undefined;
   transcriptionModel: string | undefined;
   timeoutMs: number | undefined;
 }): Promise<number> {
@@ -251,7 +252,6 @@ async function runSubmitSalvageMode(args: {
 
   const workerBase = {
     projectRoot: args.projectRoot,
-    reasoningEffort: undefined,
     sandboxMode: args.sandboxMode,
     unitId: args.unitId,
     unitKind: args.unitKind,
@@ -271,8 +271,10 @@ async function runSubmitSalvageMode(args: {
         }),
         args.submitSchema.schema,
       ),
-      // delta completion is fresh semantic judgment — same-tier instance.
+      // delta completion is fresh semantic judgment — same-tier instance
+      // including the unit's configured reasoning effort.
       model: args.model,
+      reasoningEffort: args.reasoningEffort,
     });
     const delta = extractClaudeStructuredPayload(
       stdout,
@@ -290,8 +292,11 @@ async function runSubmitSalvageMode(args: {
         buildTranscriptionSalvagePrompt({ resultText: source, error: frozen.error }),
         args.submitSchema.schema,
       ),
-      // transcription is not semantic work — cheap tier when configured.
+      // transcription is not semantic work — cheap tier when configured
+      // (falls back to the unit model; effort then follows the unit too).
       model: args.transcriptionModel ?? args.model,
+      reasoningEffort:
+        args.transcriptionModel !== undefined ? undefined : args.reasoningEffort,
     });
     let salvageText: string | null = null;
     try {
@@ -683,6 +688,7 @@ export async function runClaudeCodeReviewUnitExecutorCli(
       sessionRoot,
       sandboxMode,
       model,
+      reasoningEffort,
       transcriptionModel,
       timeoutMs,
     });
