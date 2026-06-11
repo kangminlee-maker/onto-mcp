@@ -8,6 +8,7 @@ import { readYamlDocument } from "../core-runtime/review/review-artifact-utils.j
 import {
   buildPreviousResultsByUnitId,
   executeReviewPromptExecution,
+  outcomeFromPreviousResult,
 } from "../core-runtime/cli/run-review-prompt-execution.js";
 import {
   REVIEW_MOCK_REALIZATION_ENV,
@@ -225,8 +226,19 @@ describe("submit salvage trigger (deterministic dispatch-level)", () => {
     // Continuation preservation must keep the completed salvaged parent
     // authoritative over its same-id failed audit child.
     const preserved = buildPreviousResultsByUnitId(executionResult);
-    expect(preserved.get("issue-stance:logic")?.status).toBe("completed");
-    expect(preserved.get("issue-stance:logic")?.recovery).toBe("salvaged_submit");
+    const preservedUnit = preserved.get("issue-stance:logic");
+    expect(preservedUnit?.status).toBe("completed");
+    expect(preservedUnit?.recovery).toBe("salvaged_submit");
+    // Continuation rehydration must carry the recovery marker so a rewrite
+    // neither degrades the status nor drops the unit from salvage reporting.
+    expect(outcomeFromPreviousResult(preservedUnit!).recovery).toBe(
+      "salvaged_submit",
+    );
+    // The audit failure is not degradation evidence: a clean salvaged run
+    // must not produce a degradation summary.
+    await expect(
+      fs.access(path.join(session.sessionRoot, "degradation-summary.yaml")),
+    ).rejects.toThrow();
   });
 
   it("keeps the unchanged failure path when salvage is disabled", async () => {

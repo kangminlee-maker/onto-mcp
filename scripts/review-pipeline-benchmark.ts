@@ -1171,16 +1171,23 @@ function unitsFromExecution(execution: ReviewExecutionResult): UnitResult[] {
   ];
   // One flattened constituent-unit list feeds both the aggregate metrics and
   // the self-submitted-vs-salvaged split, so the split denominators stay
-  // coherent. Different-id children are real constituent units (per-lens
-  // stance results folded under the issue-stance-matrix row); same-id
-  // children are attempt-level audit records (salvage/fallback trails) and
-  // are excluded from unit metrics.
+  // coherent. An aggregate parent's duration/attempts/bytes span its
+  // map/reduce children (issue-stance-matrix over the per-lens stance
+  // dispatches, synthesis over per-issue responses), so the parent is
+  // replaced by those children to avoid double-counting; same-id children
+  // are attempt-level audit records (salvage/fallback trails) and are
+  // excluded. Rows without constituent children — every historical
+  // execution-result — pass through unchanged.
   const flattened: UnitResult[] = [];
   const visit = (unit: UnitResult): void => {
-    flattened.push(unit);
-    for (const child of unit.child_results ?? []) {
-      if (child.unit_id !== unit.unit_id) visit(child);
+    const constituentChildren = (unit.child_results ?? []).filter(
+      (child) => child.unit_id !== unit.unit_id,
+    );
+    if (constituentChildren.length === 0) {
+      flattened.push(unit);
+      return;
     }
+    for (const child of constituentChildren) visit(child);
   };
   for (const unit of roots) visit(unit);
   return flattened;
