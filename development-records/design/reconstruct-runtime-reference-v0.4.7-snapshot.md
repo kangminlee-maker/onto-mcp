@@ -1,13 +1,19 @@
-# Reconstruct Runtime Reference
+# Reconstruct Runtime Reference — v0.4.7 snapshot
 
-This is the deep reference for the reconstruct run path: what the runtime does,
-which artifacts it writes, and which validation gates own each claim. The active
-artifact and gate catalog authority is
-`.onto/processes/reconstruct/reconstruct-contract-registry.yaml`; this document
-is a non-authoritative map for readers.
+> **Point-in-time snapshot (2026-06-12, v0.4.7).** This document is a
+> hand-written reader's map and is NOT maintained against runtime changes.
+> The active authorities are
+> `.onto/processes/reconstruct/reconstruct-contract-registry.yaml` (machine-
+> readable authority graph) and the prose contracts under
+> `.onto/processes/reconstruct/`. When this snapshot and the registry or
+> contracts disagree, the registry and contracts win.
+
+This is the deep reference for the reconstruct run path as of v0.4.7: what the
+runtime does, which artifacts it writes, and which validation gates own each
+claim.
 
 For the product-level summary and the minimal MCP call shape, see the
-[README](../README.md).
+[README](../../README.md).
 
 ## Run path
 

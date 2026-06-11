@@ -130,8 +130,12 @@ Minimal MCP call shape:
 }
 ```
 
-The full run path, artifact/gate catalog, and authority model are documented in
-[docs/reconstruct-runtime-reference.md](docs/reconstruct-runtime-reference.md).
+The artifact and gate catalog authority is the machine-readable
+[reconstruct contract registry](.onto/processes/reconstruct/reconstruct-contract-registry.yaml);
+semantics and rationale live in the prose contracts under
+[`.onto/processes/reconstruct/`](.onto/processes/reconstruct/). A readable
+point-in-time map (v0.4.7 snapshot, not maintained) is kept at
+[development-records/design/reconstruct-runtime-reference-v0.4.7-snapshot.md](development-records/design/reconstruct-runtime-reference-v0.4.7-snapshot.md).
 
 ## MCP tools
 
@@ -284,7 +288,7 @@ Unsupported settings stop during profile resolution.
 
 | Document | Contents |
 |---|---|
-| [docs/reconstruct-runtime-reference.md](docs/reconstruct-runtime-reference.md) | reconstruct run path, artifact/gate catalog, authority model |
+| [reconstruct contract registry](.onto/processes/reconstruct/reconstruct-contract-registry.yaml) | active reconstruct artifact/gate authority graph (prose contracts alongside) |
 | [docs/development.md](docs/development.md) | verification harnesses and development workflow |
 | [docs/architecture/repo-layout.md](docs/architecture/repo-layout.md) | repository layout SSOT: folder roles and placement rules |
 | [docs/architecture/](docs/architecture/) | architecture notes |
