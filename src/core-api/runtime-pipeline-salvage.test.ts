@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ReviewExecutionProfile } from "../core-runtime/review/review-execution-profile.js";
 import type { ReviewExecutionResultArtifact } from "../core-runtime/review/artifact-types.js";
 import { readYamlDocument } from "../core-runtime/review/review-artifact-utils.js";
-import { executeReviewPromptExecution } from "../core-runtime/cli/run-review-prompt-execution.js";
+import {
+  buildPreviousResultsByUnitId,
+  executeReviewPromptExecution,
+} from "../core-runtime/cli/run-review-prompt-execution.js";
 import {
   REVIEW_MOCK_REALIZATION_ENV,
   setTemporaryEnv,
@@ -212,6 +215,18 @@ describe("submit salvage trigger (deterministic dispatch-level)", () => {
     expect(unit.attempt_count).toBe(2);
     expect(unit.child_results?.length).toBe(1);
     expect(unit.child_results?.[0]?.status).toBe("failed");
+
+    const executionResult = await readYamlDocument<ReviewExecutionResultArtifact>(
+      path.join(session.sessionRoot, "execution-result.yaml"),
+    );
+    // The audit-only failed attempt under the salvaged unit must not degrade
+    // the run status — salvage produced a full validator-passing completion.
+    expect(executionResult.execution_status).toBe("completed");
+    // Continuation preservation must keep the completed salvaged parent
+    // authoritative over its same-id failed audit child.
+    const preserved = buildPreviousResultsByUnitId(executionResult);
+    expect(preserved.get("issue-stance:logic")?.status).toBe("completed");
+    expect(preserved.get("issue-stance:logic")?.recovery).toBe("salvaged_submit");
   });
 
   it("keeps the unchanged failure path when salvage is disabled", async () => {

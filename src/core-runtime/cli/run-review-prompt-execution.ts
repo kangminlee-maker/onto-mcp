@@ -2174,6 +2174,23 @@ function allUnitExecutionResults(
   return flattened;
 }
 
+/**
+ * Continuation preservation index: unit_id → prior result. Parents are
+ * authoritative over same-id audit children (a salvaged or fallback-completed
+ * unit preserves its failed attempt in child_results under the same unit_id);
+ * allUnitExecutionResults visits parents before children, so first-wins keeps
+ * the completed parent from being shadowed by its failed audit child.
+ */
+export function buildPreviousResultsByUnitId(
+  artifact: ReviewExecutionResultArtifact | null,
+): Map<string, ReviewUnitExecutionResult> {
+  const byUnitId = new Map<string, ReviewUnitExecutionResult>();
+  for (const result of allUnitExecutionResults(artifact)) {
+    if (!byUnitId.has(result.unit_id)) byUnitId.set(result.unit_id, result);
+  }
+  return byUnitId;
+}
+
 function outcomeFromPreviousResult(
   result: ReviewUnitExecutionResult,
 ): ExecutionOutcome {
@@ -2281,6 +2298,11 @@ function deriveExecutionStatus(params: {
 }
 
 function failedChildOutcomeCount(outcome: ExecutionOutcome): number {
+  // A recovered unit's childOutcomes are audit-only attempt records (the
+  // exhausted failure preserved by submit salvage); the unit's content is a
+  // full validator-passing completion, unlike fallback completions whose
+  // failed children mark genuinely degraded sub-units.
+  if (outcome.recovery !== undefined) return 0;
   return (outcome.childOutcomes ?? []).reduce(
     (total, child) =>
       total + (child.success ? 0 : 1) + failedChildOutcomeCount(child),
@@ -6026,11 +6048,8 @@ export async function executeReviewPromptExecution(
           executionPlan.execution_result_path,
         )
       : null;
-  const previousResultsByUnitId = new Map(
-    allUnitExecutionResults(previousExecutionResult).map((result) => [
-      result.unit_id,
-      result,
-    ]),
+  const previousResultsByUnitId = buildPreviousResultsByUnitId(
+    previousExecutionResult,
   );
   const shouldRunUnit = (unitId: string): boolean =>
     !continuationMode || continuationRunUnitIds.has(unitId);

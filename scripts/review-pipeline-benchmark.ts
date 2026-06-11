@@ -1163,12 +1163,27 @@ function semanticGateExecutionRoute(args: {
 }
 
 function unitsFromExecution(execution: ReviewExecutionResult): UnitResult[] {
-  return [
+  const roots = [
     ...(execution.lens_execution_results ?? []),
     ...(execution.issue_artifact_execution_results ?? []),
     ...(execution.deliberation_execution_results ?? []),
     ...(execution.synthesize_execution_result ? [execution.synthesize_execution_result] : []),
   ];
+  // One flattened constituent-unit list feeds both the aggregate metrics and
+  // the self-submitted-vs-salvaged split, so the split denominators stay
+  // coherent. Different-id children are real constituent units (per-lens
+  // stance results folded under the issue-stance-matrix row); same-id
+  // children are attempt-level audit records (salvage/fallback trails) and
+  // are excluded from unit metrics.
+  const flattened: UnitResult[] = [];
+  const visit = (unit: UnitResult): void => {
+    flattened.push(unit);
+    for (const child of unit.child_results ?? []) {
+      if (child.unit_id !== unit.unit_id) visit(child);
+    }
+  };
+  for (const unit of roots) visit(unit);
+  return flattened;
 }
 
 function sumNumbers(values: Array<number | null | undefined>): number {
@@ -1176,20 +1191,15 @@ function sumNumbers(values: Array<number | null | undefined>): number {
 }
 
 /**
- * Self-submitted vs salvaged split: collect every result carrying the
- * `recovery: salvaged_submit` audit marker. Walks `child_results` because
- * salvaged per-lens stance results fold under the issue-stance-matrix
- * collection row (and deliberation children under their aggregate).
- * Self-submitted completions = completed units minus these.
+ * Self-submitted vs salvaged split over the flattened constituent-unit list
+ * from unitsFromExecution: the `recovery: salvaged_submit` marker sits on the
+ * completed unit itself, so the salvaged ids are always a subset of the unit
+ * totals. Self-submitted completions = completed units minus these.
  */
 function salvagedUnitIds(units: UnitResult[]): string[] {
-  const ids: string[] = [];
-  const walk = (unit: UnitResult): void => {
-    if (unit.recovery === "salvaged_submit" && unit.unit_id) ids.push(unit.unit_id);
-    for (const child of unit.child_results ?? []) walk(child);
-  };
-  for (const unit of units) walk(unit);
-  return ids;
+  return units
+    .filter((unit) => unit.recovery === "salvaged_submit" && unit.unit_id)
+    .map((unit) => unit.unit_id as string);
 }
 
 function failureKindCounts(units: UnitResult[]): Record<string, number> {
