@@ -32,6 +32,15 @@ import {
   runReconstruct,
   type ReconstructRunResult,
 } from "../core-runtime/reconstruct/run.js";
+// Explicit reconstruct mock realization switch point (INV-MOCK-1 boundary;
+// allowlisted in scripts/check-import-boundary.ts). Active only when
+// ONTO_LLM_MOCK=1; mock runs record mock actor ids in the run manifest.
+import {
+  RECONSTRUCT_MOCK_AUTHOR_ID,
+  RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+  callReconstructMockLlm,
+  isReconstructMockLlmRealizationEnabled,
+} from "../core-runtime/reconstruct/mock-llm-realization.js";
 import {
   resolveSettingsChain,
   resolveReconstructActorLlmSettings,
@@ -558,19 +567,34 @@ export function createOntoReconstructCoreApi(
             ),
           },
         });
+      const mockRealizationEnabled = isReconstructMockLlmRealizationEnabled();
       const directiveAuthor =
         createDirectCallReconstructDirectiveAuthor({
           llmConfig: semanticAuthorLlmConfig,
+          ...(mockRealizationEnabled
+            ? {
+              llmCall: callReconstructMockLlm,
+              authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+            }
+            : {}),
         });
       const confirmationProvider =
         createDirectCallReconstructConfirmationProvider({
           llmConfig: confirmationProviderLlmConfig,
+          ...(mockRealizationEnabled
+            ? {
+              llmCall: callReconstructMockLlm,
+              providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+            }
+            : {}),
         });
       appendRuntimeStatusEventSync({
         pipeline: "reconstruct",
         sessionRoot,
         sourceLabel: "onto_reconstruct",
-        message: "reconstruct session starting",
+        message: mockRealizationEnabled
+          ? "reconstruct session starting (mock realization: ONTO_LLM_MOCK=1, semantic outputs are deterministic mock payloads)"
+          : "reconstruct session starting",
         stageId: "start",
       });
       const watcherResult = spawnRuntimeWatcherPane(

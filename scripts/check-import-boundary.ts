@@ -24,6 +24,8 @@ const SRC_ROOT = path.join(PROJECT_ROOT, "src");
 const MOCK_REALIZATION_IMPORT_ALLOWLIST = new Set([
   "src/core-runtime/llm/llm-caller.ts",
   "src/core-runtime/llm/llm-tool-loop.ts",
+  // reconstruct mock realization 스위치 지점 (ONTO_LLM_MOCK=1 게이트).
+  "src/core-api/reconstruct-api.ts",
 ]);
 
 interface Violation {

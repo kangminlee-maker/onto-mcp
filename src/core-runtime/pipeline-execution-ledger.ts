@@ -20,6 +20,62 @@ export type PipelineExecutionTrustStatus =
   | "untrusted"
   | "blocked_by_upstream";
 
+export type PipelineExecutionAttemptKind =
+  | "initial"
+  | "parse_repair"
+  | "semantic_repair"
+  | "timeout_recovery";
+
+export type PipelineExecutionFailureClass =
+  | "malformed_json"
+  | "parse_repair_failure"
+  | "schema_validation_failure"
+  | "timeout"
+  | "provider_error";
+
+export interface PipelineExecutionAttempt {
+  attempt: number;
+  kind: PipelineExecutionAttemptKind;
+  status: "succeeded" | "failed";
+  failure_class: PipelineExecutionFailureClass | null;
+  failure_message: string | null;
+  duration_ms: number;
+}
+
+/**
+ * Runtime-owned per-unit execution telemetry recorded at the LLM call
+ * boundary. `prompt_chars`/`output_chars` are the canonical size measure
+ * (always available across providers and mock); provider token usage is a
+ * supplemental fact only.
+ */
+export interface PipelineUnitExecutionTelemetry {
+  unit_id: string;
+  llm_call_count: number;
+  duration_ms: number;
+  prompt_chars: number;
+  output_chars: number;
+  provider_tokens_in: number | null;
+  provider_tokens_out: number | null;
+  provider_route: string | null;
+  model_id: string | null;
+  effort: string | null;
+  /** Source-layer identity: hash of the unit's first initial system prompt. */
+  prompt_policy_sha256: string | null;
+  /**
+   * Runtime-owned source-layer identity refs for metric attribution. Each ref
+   * is a `<kind>:<value>` string, currently `prompt_policy_sha256:<hash>` and
+   * one `authored_artifact:<name>` per distinct authored-artifact variant the
+   * unit executed (initial / repair / recovery artifact names carry the
+   * payload-contract seat). Run-level identities (registry, contract, source
+   * profile, validator snapshots) remain owned by the run manifest's
+   * governing snapshot.
+   */
+  source_identity_refs: string[];
+  attempt_count: number;
+  attempts: PipelineExecutionAttempt[];
+  batch_count: number | null;
+}
+
 export interface PipelineExecutionLedger {
   schemaVersion: typeof PIPELINE_EXECUTION_LEDGER_SCHEMA_VERSION;
   pipeline: PipelineId;
@@ -45,6 +101,12 @@ export interface PipelineExecutionLedgerUnitEntry {
   lastFailureMessage: string | null;
   upstreamUnitIds: string[];
   downstreamUnitIds: string[];
+  /**
+   * Per-unit execution telemetry projected from the producing pipeline's
+   * run records when available. Currently populated by the reconstruct
+   * pipeline only.
+   */
+  executionTelemetry?: PipelineUnitExecutionTelemetry | null;
 }
 
 export async function fileSha256IfPresent(
