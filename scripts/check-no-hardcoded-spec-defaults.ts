@@ -106,10 +106,16 @@ const WAIVERS: Waiver[] = [
 
 const MODEL_LITERAL_RE =
   /["'](gpt-[0-9][\w.-]*|claude-(?:opus|sonnet|haiku|fable|mythos)[\w.-]*|gemini-[0-9][\w.-]*|o[134](?:-mini|-pro)?)["']/;
-const EFFORT_DEFAULT_RE =
-  /(?:effort\w*|reasoning_effort)\s*(?:=|\?\?|:)\s*["'](?:minimal|low|medium|high|xhigh)["']/;
-const AUTH_DEFAULT_RE =
-  /(?:\bauth\w*\s*(?:=|\?\?|:)\s*["'](?:oauth|api_key|local)["']|return\s+["'](?:oauth|api_key|local)["'])/;
+// 할당형(`=`/`??`)은 타입 유니언이 같은 라인에 있어도 기본값이다
+// (예: `const effort: "low" | "medium" = cfg.effort ?? "medium"`). 유니언
+// 문맥 제외는 object-literal/타입 표기 형태(`:`)에만 적용한다.
+const EFFORT_ASSIGN_RE =
+  /(?:effort\w*|reasoning_effort)\s*(?:=|\?\?)\s*["'](?:minimal|low|medium|high|xhigh)["']/;
+const EFFORT_OBJECT_RE =
+  /(?:effort\w*|reasoning_effort)\s*:\s*["'](?:minimal|low|medium|high|xhigh)["']/;
+const AUTH_ASSIGN_RE =
+  /(?:\bauth\w*\s*(?:=|\?\?)\s*["'](?:oauth|api_key|local)["']|return\s+["'](?:oauth|api_key|local)["'])/;
+const AUTH_OBJECT_RE = /\bauth\w*\s*:\s*["'](?:oauth|api_key|local)["']/;
 /** 타입 유니언 문맥(`"a" | "b"`)은 vocabulary 정의지 기본값이 아니다. */
 const TYPE_UNION_CONTEXT_RE = /["']\s*\||\|\s*["']/;
 const RETRY_DEFAULT_RE =
@@ -150,8 +156,18 @@ async function main(): Promise<void> {
         detections.push({ file: relPath, line: index + 1, text: text.trim(), kind });
       if (MODEL_LITERAL_RE.test(text)) push("model_literal");
       const isTypeUnionContext = TYPE_UNION_CONTEXT_RE.test(text);
-      if (!isTypeUnionContext && EFFORT_DEFAULT_RE.test(text)) push("effort_default");
-      if (!isTypeUnionContext && AUTH_DEFAULT_RE.test(text)) push("auth_default");
+      if (
+        EFFORT_ASSIGN_RE.test(text) ||
+        (!isTypeUnionContext && EFFORT_OBJECT_RE.test(text))
+      ) {
+        push("effort_default");
+      }
+      if (
+        AUTH_ASSIGN_RE.test(text) ||
+        (!isTypeUnionContext && AUTH_OBJECT_RE.test(text))
+      ) {
+        push("auth_default");
+      }
       if (RETRY_DEFAULT_RE.test(text)) push("retry_default");
     });
   }

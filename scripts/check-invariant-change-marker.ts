@@ -43,14 +43,18 @@ const PROTECTED_TARGETS: ProtectedTarget[] = [
     invariants: ["INV-MATERIAL-1"],
   },
   {
+    // auth 리터럴이 닿는 모든 라인 — 정규화 return뿐 아니라 주변 provider
+    // 조건 변경(어느 provider가 OAuth 기본인지)도 보호한다.
     file: "src/core-runtime/llm/model-switcher.ts",
-    linePattern: /return\s+"(oauth|api_key|local)"/,
+    linePattern: /"(oauth|api_key|local)"/,
     invariants: ["INV-AUTH-1"],
   },
   {
-    // INVARIANTS.md가 지정한 runtime predicate owner — material 판정 어휘 변경.
+    // INVARIANTS.md가 지정한 runtime predicate owner — material 판정 어휘
+    // (snake/camel/UPPER 표기 전부: REVIEW_MATERIAL_SEVERITIES,
+    // REVIEW_MATERIAL_ADMISSION_DISQUALIFIERS, isReviewMaterialAdmissionDisqualified).
     file: "src/core-runtime/review/review-result-classification.ts",
-    linePattern: /MATERIAL_SEVERIT|admission_disqualified/,
+    linePattern: /MATERIAL_SEVERIT|admission.?disqualif/i,
     invariants: ["INV-MATERIAL-1"],
   },
   {
