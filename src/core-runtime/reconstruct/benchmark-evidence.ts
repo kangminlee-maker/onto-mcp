@@ -12,8 +12,11 @@ export const BENCHMARK_DECISION_GRADE_STATUS = "decision-grade";
 
 export interface BenchmarkEvidenceInput {
   repetitions: number;
+  /** Distinct requested fixture ids. */
   fixtureCount: number;
   scoredQualityRunCount: number;
+  /** Distinct fixtures that contributed scored quality results. */
+  scoredQualityFixtureCount: number;
   rejectedQualityRunCount: number;
 }
 
@@ -31,9 +34,10 @@ export function gradeBenchmarkEvidence(
   const performanceEvidenceMet = input.repetitions >= 3 && input.fixtureCount >= 2;
   const decisionGrade = performanceEvidenceMet &&
     input.rejectedQualityRunCount === 0 &&
-    input.scoredQualityRunCount > 0;
+    input.scoredQualityRunCount > 0 &&
+    input.scoredQualityFixtureCount >= 2;
   const statusReason = decisionGrade
-    ? "runs>=3 and fixtures>=2, scored quality evidence present, no quality-evidence rejection"
+    ? "runs>=3 and >=2 distinct fixtures with scored quality evidence, no quality-evidence rejection"
     : [
       ...(performanceEvidenceMet
         ? []
@@ -45,6 +49,11 @@ export function gradeBenchmarkEvidence(
         : []),
       ...(input.scoredQualityRunCount === 0
         ? ["no scored quality evidence (every quality gate was not_applicable)"]
+        : []),
+      ...(input.scoredQualityRunCount > 0 && input.scoredQualityFixtureCount < 2
+        ? [
+          `scored quality evidence covers ${input.scoredQualityFixtureCount} distinct fixture(s); INV-BENCH-1 needs >=2`,
+        ]
         : []),
     ].join("; ");
   return {

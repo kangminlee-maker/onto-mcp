@@ -263,6 +263,48 @@ describe("reconstruct golden semantic quality gate", () => {
     expect(result.source_field_rejections.length).toBeGreaterThan(0);
   });
 
+  it("detects dropped questions masked by duplicate or unknown assessment ids", () => {
+    const args = happyArgs();
+    // Same row count as authored questions, but cq-claim-4 is never assessed:
+    // a duplicate assessment id must not mask the drop.
+    args.competencyQuestionAssessment = {
+      assessments: [
+        { question_id: "cq-claim-1", answer_status: "answerable" },
+        { question_id: "cq-claim-2", answer_status: "answerable" },
+        { question_id: "cq-claim-3", answer_status: "answerable" },
+        { question_id: "cq-claim-3", answer_status: "answerable" },
+      ],
+    } as unknown as ReconstructCompetencyQuestionAssessmentArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.status).toBe("failed");
+    expect(result.q3?.dropped_question_count).toBe(1);
+    expect(result.q3?.dropped_question_ids).toEqual(["cq-claim-4"]);
+  });
+
+  it("requires a distinct authored question per expected CQ row", () => {
+    const args = happyArgs();
+    // One broad question referencing every expected concept must not satisfy
+    // the whole expected population.
+    args.competencyQuestions = {
+      questions: [
+        {
+          question_id: "cq-claim-1",
+          question:
+            "Can the Seed explain object-fixture-service, actor-fixture-user, action-explain-fixture, and binding-fixture-source?",
+          linked_claim_ids: HAPPY_CLAIM_IDS,
+          seed_ref_refs: HAPPY_CLAIM_IDS,
+        },
+      ],
+    } as unknown as ReconstructCompetencyQuestionsArtifact;
+    args.competencyQuestionAssessment = assessmentsFor(1);
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.status).toBe("failed");
+    expect(result.q2?.supported_count).toBe(1);
+    expect(
+      result.q2?.rows.filter((row) => row.matched_question_id === null).length,
+    ).toBe(3);
+  });
+
   it("reports not_applicable for mock runs against live-only fixtures", () => {
     const args = happyArgs();
     const result = evaluateReconstructGoldenQualityGate({

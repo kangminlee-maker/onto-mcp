@@ -279,6 +279,7 @@ export interface ReconstructQualityGateResult {
     authored_question_count: number;
     assessed_question_count: number;
     dropped_question_count: number;
+    dropped_question_ids: string[];
     batch_count: number | null;
   } | null;
 }
@@ -496,12 +497,15 @@ export function evaluateReconstructGoldenQualityGate(
 
   // Q2 — support rate over the fixed expected CQ population. A question
   // matches an expected row when its id, text, claim refs, or seed refs
-  // reference the linked expected concept.
+  // reference the linked expected concept. Each expected row must be covered
+  // by a DISTINCT authored question: one broad question mentioning several
+  // expected concepts cannot satisfy multiple population rows.
   const assessmentByQuestionId = new Map(
     args.competencyQuestionAssessment.assessments.map(
       (assessment) => [assessment.question_id, assessment],
     ),
   );
+  const usedQuestionIds = new Set<string>();
   const q2Rows: ReconstructQualityGateQ2Row[] = spec.expected_cq.map((expected) => {
     const concept = spec.expected_concepts.find(
       (candidate) => candidate.concept_key === expected.linked_concept_key,
@@ -512,6 +516,7 @@ export function evaluateReconstructGoldenQualityGate(
       );
     }
     const question = args.competencyQuestions.questions.find((candidate) => {
+      if (usedQuestionIds.has(candidate.question_id)) return false;
       const haystack = normalizeName(
         [
           candidate.question_id,
@@ -524,6 +529,7 @@ export function evaluateReconstructGoldenQualityGate(
         haystack.includes(normalizeName(alternate))
       );
     });
+    if (question) usedQuestionIds.add(question.question_id);
     const assessment = question
       ? assessmentByQuestionId.get(question.question_id) ?? null
       : null;
@@ -544,19 +550,28 @@ export function evaluateReconstructGoldenQualityGate(
     rows: q2Rows,
   };
 
-  // Q3 — no dropped questions: every authored question is assessed.
+  // Q3 — no dropped questions: every authored question id must appear in the
+  // assessments. Identity-based set difference, so a duplicate assessment or
+  // an assessment for an unknown question id cannot mask a dropped question.
   const assessmentStep = args.runManifest.steps.find(
     (step) => step.step_id === "competency_question_assessment",
   );
-  const authoredQuestionCount = args.competencyQuestions.questions.length;
-  const assessedQuestionCount = args.competencyQuestionAssessment.assessments.length;
-  const q3 = {
-    authored_question_count: authoredQuestionCount,
-    assessed_question_count: assessedQuestionCount,
-    dropped_question_count: Math.max(
-      0,
-      authoredQuestionCount - assessedQuestionCount,
+  const authoredQuestionIds = new Set(
+    args.competencyQuestions.questions.map((question) => question.question_id),
+  );
+  const assessedQuestionIds = new Set(
+    args.competencyQuestionAssessment.assessments.map(
+      (assessment) => assessment.question_id,
     ),
+  );
+  const droppedQuestionIds = [...authoredQuestionIds].filter(
+    (questionId) => !assessedQuestionIds.has(questionId),
+  );
+  const q3 = {
+    authored_question_count: authoredQuestionIds.size,
+    assessed_question_count: assessedQuestionIds.size,
+    dropped_question_count: droppedQuestionIds.length,
+    dropped_question_ids: droppedQuestionIds,
     batch_count: assessmentStep?.execution_telemetry?.batch_count ?? null,
   };
 

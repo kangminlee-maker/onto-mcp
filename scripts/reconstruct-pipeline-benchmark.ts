@@ -150,6 +150,7 @@ function parseOptions(argv: string[]): HarnessOptions {
   if (options.fixtureIds.length === 0) {
     options.fixtureIds = [...RECONSTRUCT_QUALITY_GATE_FIXTURE_IDS];
   }
+  options.fixtureIds = [...new Set(options.fixtureIds)];
   return options;
 }
 
@@ -467,6 +468,9 @@ async function main(): Promise<void> {
     repetitions: options.runs,
     fixtureCount: options.fixtureIds.length,
     scoredQualityRunCount: qualityRuns.length,
+    scoredQualityFixtureCount: new Set(
+      qualityRuns.map((run) => run.fixture_id),
+    ).size,
     rejectedQualityRunCount: rejectedQualityRuns.length,
   });
   const report = {
