@@ -1,4 +1,13 @@
-# Onto MCP Roadmap
+# Onto MCP Roadmap (completed — isolated record)
+
+> Isolated from `docs/roadmap.md` on 2026-06-12 (v0.4.8). Every stage below is
+> complete: Stage 1–2 (core API + MCP server) shipped with the 16-tool surface,
+> Stage 3 execution profiles cover codex/claude_code workers + direct-call +
+> local, Stage 4/4.5 (controlled deliberation, continuation) and Stage 4.6
+> (reconstruct post-seed loop) are live, and Stage 5 cleanup landed with the
+> public README and repo-layout SSOT. Current-state authority:
+> `IMPLEMENTATION_MAP.html` and `docs/architecture/`.
+
 
 ## Current State
 

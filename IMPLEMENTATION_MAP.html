@@ -1,780 +1,285 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>onto-mcp Implementation Map</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --ink: #172026;
-      --muted: #5b6773;
-      --line: #d8dee6;
-      --panel: #ffffff;
-      --wash: #f6f8fb;
-      --blue: #1967a3;
-      --green: #1f7a4d;
-      --amber: #9a6400;
-      --red: #b63b3b;
-      --violet: #6952a3;
-      --teal: #12736d;
-      --code: #eef2f6;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      color: var(--ink);
-      background: #fbfcfe;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.48;
-    }
-
-    main {
-      width: min(1320px, calc(100% - 40px));
-      margin: 0 auto;
-      padding: 28px 0 40px;
-    }
-
-    h1, h2, h3, p { margin: 0; }
-    h1 { font-size: 30px; letter-spacing: 0; }
-    h2 { margin-top: 28px; font-size: 19px; letter-spacing: 0; }
-    h3 { font-size: 15px; letter-spacing: 0; }
-    p { color: var(--muted); }
-    code {
-      padding: 1px 5px;
-      border-radius: 4px;
-      background: var(--code);
-      color: #1e2b36;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.92em;
-    }
-
-    .top {
-      display: grid;
-      grid-template-columns: 1.4fr 0.8fr;
-      gap: 18px;
-      align-items: stretch;
-    }
-
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      padding: 18px;
-    }
-
-    .lede {
-      margin-top: 10px;
-      max-width: 860px;
-      font-size: 15px;
-    }
-
-    .meta-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .metric {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 10px;
-      background: var(--wash);
-    }
-
-    .metric b {
-      display: block;
-      margin-bottom: 2px;
-      color: var(--ink);
-      font-size: 13px;
-    }
-
-    .metric span {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .badge-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 4px 9px;
-      background: #fff;
-      font-size: 12px;
-      font-weight: 650;
-    }
-
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--muted);
-    }
-
-    .active .dot { background: var(--green); }
-    .progress .dot { background: var(--amber); }
-    .dev .dot { background: var(--blue); }
-    .retired .dot { background: var(--red); }
-
-    .section-note {
-      margin: 6px 0 12px;
-      max-width: 980px;
-      font-size: 14px;
-    }
-
-    .architecture {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(170px, 1fr));
-      gap: 10px;
-      align-items: stretch;
-    }
-
-    .lane {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      min-height: 430px;
-      overflow: hidden;
-    }
-
-    .lane header {
-      padding: 12px;
-      color: #fff;
-      font-weight: 750;
-      font-size: 14px;
-    }
-
-    .lane:nth-child(1) header { background: var(--teal); }
-    .lane:nth-child(2) header { background: var(--violet); }
-    .lane:nth-child(3) header { background: var(--blue); }
-    .lane:nth-child(4) header { background: var(--green); }
-    .lane:nth-child(5) header { background: var(--amber); }
-
-    .lane-body {
-      display: grid;
-      gap: 9px;
-      padding: 12px;
-    }
-
-    .node {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 10px;
-      background: #fff;
-    }
-
-    .node strong {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 13px;
-    }
-
-    .node small {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .flow {
-      display: grid;
-      grid-template-columns: repeat(9, minmax(96px, 1fr));
-      gap: 8px;
-      align-items: stretch;
-    }
-
-    .step {
-      position: relative;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px;
-      background: #fff;
-      min-height: 104px;
-    }
-
-    .step::after {
-      content: "→";
-      position: absolute;
-      right: -12px;
-      top: 38px;
-      color: var(--muted);
-      font-weight: 800;
-    }
-
-    .step:last-child::after { content: ""; }
-
-    .step b {
-      display: block;
-      margin-bottom: 5px;
-      font-size: 13px;
-    }
-
-    .step span {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .swimlanes {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-
-    .swimlane {
-      display: grid;
-      grid-template-columns: 170px 1fr;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
-      background: #fff;
-    }
-
-    .swimlane-label {
-      display: flex;
-      align-items: center;
-      padding: 12px;
-      background: var(--wash);
-      border-right: 1px solid var(--line);
-      font-weight: 750;
-      font-size: 13px;
-    }
-
-    .swimlane-items {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 10px;
-    }
-
-    .pill {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 5px 9px;
-      background: #fff;
-      color: var(--ink);
-      font-size: 12px;
-    }
-
-    .split {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    th, td {
-      border-bottom: 1px solid var(--line);
-      padding: 9px 10px;
-      text-align: left;
-      vertical-align: top;
-      font-size: 13px;
-    }
-
-    th {
-      background: var(--wash);
-      color: #26323d;
-      font-weight: 750;
-    }
-
-    tr:last-child td { border-bottom: 0; }
-
-    .status {
-      display: inline-block;
-      min-width: 82px;
-      border-radius: 999px;
-      padding: 3px 8px;
-      color: #fff;
-      text-align: center;
-      font-size: 12px;
-      font-weight: 750;
-    }
-
-    .status.active { background: var(--green); }
-    .status.progress { background: var(--amber); }
-    .status.dev { background: var(--blue); }
-    .status.retired { background: var(--red); }
-    .status.blocked { background: var(--red); }
-    .status.design { background: var(--violet); }
-
-    .artifact-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(160px, 1fr));
-      gap: 10px;
-    }
-
-    .artifact {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 11px;
-      background: #fff;
-    }
-
-    .artifact b {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 13px;
-    }
-
-    .artifact span {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .callout {
-      border-left: 5px solid var(--blue);
-      border-radius: 6px;
-      padding: 12px 14px;
-      background: #f2f7fb;
-    }
-
-    .callout strong {
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    @media (max-width: 980px) {
-      main { width: min(100% - 24px, 1320px); }
-      .top, .split { grid-template-columns: 1fr; }
-      .architecture { grid-template-columns: 1fr; }
-      .flow { grid-template-columns: 1fr; }
-      .step::after {
-        content: "↓";
-        right: 50%;
-        top: auto;
-        bottom: -15px;
-      }
-      .artifact-grid { grid-template-columns: 1fr; }
-      .swimlane { grid-template-columns: 1fr; }
-      .swimlane-label { border-right: 0; border-bottom: 1px solid var(--line); }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>onto-mcp Implementation Map</title>
+<style>
+  :root{
+    --blue:#2563eb; --green:#16a34a; --amber:#d97706; --slate:#475569;
+    --purple:#7c3aed; --red:#dc2626; --cyan:#0891b2; --orange:#ea580c;
+    --bg:#f8fafc; --card:#ffffff; --line:#e2e8f0; --ink:#0f172a; --sub:#64748b;
+  }
+  body{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+       margin:0;background:var(--bg);color:var(--ink);line-height:1.5;}
+  main{max-width:1240px;margin:0 auto;padding:28px 24px 64px;}
+  h1{font-size:24px;margin:0 0 4px;}
+  h2{font-size:17px;margin:36px 0 12px;border-bottom:1px solid var(--line);padding-bottom:6px;}
+  .stamp{color:var(--sub);font-size:13px;margin-bottom:20px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .card h3{margin:0 0 6px;font-size:13px;color:var(--sub);font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+  .card p{margin:0;font-size:14px;}
+  .ok{color:var(--green);font-weight:600;}
+  .warn{color:var(--orange);font-weight:600;}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--card);}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top;}
+  th{background:#f1f5f9;font-weight:600;}
+  code{background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:12.5px;}
+  .svgwrap{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;overflow-x:auto;margin-top:8px;}
+  ul{margin:6px 0;padding-left:20px;font-size:14px;}
+</style>
 </head>
 <body>
 <main>
-  <section class="top">
-    <div class="panel">
-      <h1>onto-mcp 구현 현황 아키텍처</h1>
-      <p class="lede">
-        현재 제품 방향은 <code>.onto</code>의 authority/process/domain 문서를 정본으로 두고,
-        TypeScript core runtime이 review와 reconstruct를 실행하며, MCP server가 LLM host에 얇은 tool surface를 노출하는 구조입니다.
-        지금 가장 성숙한 기능은 <code>onto_review</code>이고, reconstruct는 run-control, promoted resume, registry verification, source-purpose 기반 seeding, source-safety prompt gating, material-admission closure, pre-seed authoring readiness, post-seed prompt projection, M1-M4 maturation projection, source-delta judgment, final re-question convergence, proof-authority boundary까지 활성화되었습니다.
-      </p>
-      <div class="badge-row" aria-label="status badges">
-        <span class="badge active"><span class="dot"></span>review MCP path active</span>
-        <span class="badge active"><span class="dot"></span>controlled deliberation active</span>
-        <span class="badge active"><span class="dot"></span>LLM presentation prompts active</span>
-        <span class="badge active"><span class="dot"></span>structured failures active</span>
-        <span class="badge active"><span class="dot"></span>manifest packet guard active</span>
-        <span class="badge active"><span class="dot"></span>provider preflight active</span>
-        <span class="badge active"><span class="dot"></span>runtime hardening harness active</span>
-        <span class="badge active"><span class="dot"></span>MCP disclosure guard active</span>
-        <span class="badge active"><span class="dot"></span>review run handle active</span>
-        <span class="badge active"><span class="dot"></span>bounded result projections active</span>
-        <span class="badge active"><span class="dot"></span>review cancellation active</span>
-        <span class="badge active"><span class="dot"></span>runtime stream observation active</span>
-        <span class="badge active"><span class="dot"></span>lens progress projection active</span>
-        <span class="badge active"><span class="dot"></span>stance enum validation active</span>
-        <span class="badge active"><span class="dot"></span>controlled-high-effort settings active</span>
-        <span class="badge active"><span class="dot"></span>Boundary Notes contract active</span>
-        <span class="badge active"><span class="dot"></span>semantic benchmark gate active</span>
-        <span class="badge active"><span class="dot"></span>review lens sidecar path active</span>
-        <span class="badge retired"><span class="dot"></span>review npm scripts removed</span>
-        <span class="badge active"><span class="dot"></span>public binary is MCP-only</span>
-        <span class="badge active"><span class="dot"></span>reconstruct run-control gate active</span>
-        <span class="badge active"><span class="dot"></span>reconstruct registry-verification gate active</span>
-        <span class="badge active"><span class="dot"></span>reconstruct source-purpose authority active</span>
-        <span class="badge active"><span class="dot"></span>reconstruct source-safety gate active</span>
-        <span class="badge active"><span class="dot"></span>reconstruct material-admission gate active</span>
-        <span class="badge active"><span class="dot"></span>reconstruct seed-authoring readiness gate active</span>
-        <span class="badge active"><span class="dot"></span>reconstruct post-seed prompt projections active</span>
-        <span class="badge active"><span class="dot"></span>reconstruct claim-projection gate active</span>
-        <span class="badge active"><span class="dot"></span>maturation M1-M4 projection active</span>
-        <span class="badge active"><span class="dot"></span>reconstruct promoted resume active</span>
-        <span class="badge active"><span class="dot"></span>proof-authority boundary active</span>
-        <span class="badge retired"><span class="dot"></span>command docs archived</span>
-        <span class="badge retired"><span class="dot"></span>retired runtime dirs isolated</span>
-      </div>
-    </div>
 
-    <aside class="panel">
-      <div class="meta-grid">
-        <div class="metric"><b>Snapshot</b><span>2026-06-05</span></div>
-        <div class="metric"><b>Primary feature</b><span><code>review</code>, <code>reconstruct</code></span></div>
-        <div class="metric"><b>Public direction</b><span><code>onto mcp</code> + MCP tools</span></div>
-        <div class="metric"><b>Project model</b><span><code>gpt-5.5</code>, <code>xhigh</code>, <code>fast</code></span></div>
-        <div class="metric"><b>Current base commit</b><span><code>2f75a4e</code></span></div>
-        <div class="metric"><b>Live review proof</b><span><code>20260526-54627475</code></span></div>
-        <div class="metric"><b>MCP proof</b><span><code>20260526-e794681e</code></span></div>
-      </div>
-    </aside>
-  </section>
+<h1>onto-mcp Implementation Map</h1>
+<p class="stamp">기준: v0.4.8 (main <code>ae127b3</code>, 2026-06-12) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
 
-  <h2>1. Layer Architecture</h2>
-  <p class="section-note">
-    의미론은 <code>.onto</code>와 core runtime이 소유하고, MCP 계층은 schema와 stdio server만 소유합니다.
-    provider 차이는 실행 능력으로만 흡수합니다.
-  </p>
-  <section class="architecture" aria-label="layer architecture">
-    <article class="lane">
-      <header>Authority / Contracts</header>
-      <div class="lane-body">
-        <div class="node"><strong><code>.onto/authority</code></strong><small>core lexicon and lens registry only</small></div>
-        <div class="node"><strong><code>.onto/processes/review</code></strong><small>review prompt/runtime contracts</small></div>
-        <div class="node"><strong><code>.onto/domains</code></strong><small>domain background and problem framing profiles</small></div>
-        <div class="node"><strong><code>.onto/settings.json</code></strong><small>project-local settings chain source</small></div>
-      </div>
-    </article>
+<!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
+<div class="grid">
+  <div class="card"><h3>현재 목표</h3>
+    <p>v0.4.8 출하 완료. review(두 orchestration 모드)·reconstruct·구조 가드가 제품 경로에서 가동 중.</p></div>
+  <div class="card"><h3>Phase</h3>
+    <p>Phase 2(host orchestration) <span class="ok">종결</span> — staged roadmap 전 단계 완료(기록: development-records/plan/).</p></div>
+  <div class="card"><h3>Health</h3>
+    <p><span class="ok">vitest 85 files / 948 passed</span> · 정적 체크 9종 green · CI(invariant-guards) PR마다 가동 · drift <span class="ok">no_drift</span></p></div>
+  <div class="card"><h3>다음 결정</h3>
+    <p>유기적 salvage 관찰 결과(6/15 09:12 자동 실행) 반영 → salvage 회수율 기록. 이후 트랙 선택(evolve 활성화 여부 등).</p></div>
+  <div class="card"><h3>주요 리스크</h3>
+    <p><span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift 리포트).</p></div>
+</div>
 
-    <article class="lane">
-      <header>TS Core Runtime</header>
-      <div class="lane-body">
-        <div class="node"><strong><code>src/core-runtime/review</code></strong><small>artifact types, lens sidecars, materializers, failures, issue runtime, deliberation</small></div>
-        <div class="node"><strong><code>src/core-runtime/reconstruct</code></strong><small>source-purpose seeding, seed validation, maturation baseline, frontier, support, expansion, continuation</small></div>
-        <div class="node"><strong><code>src/core-runtime/cli/review-invoke.ts</code></strong><small>canonical dev harness for full review path</small></div>
-        <div class="node"><strong><code>run-review-prompt-execution.ts</code></strong><small>all selected lenses in parallel, then deliberation and synthesize</small></div>
-        <div class="node"><strong>executors</strong><small><code>codex</code>, <code>ts_inline_http</code>; no review workflow test-double executor</small></div>
-      </div>
-    </article>
+<!-- ───────── 서비스 블루프린트 ───────── -->
+<h2>서비스 블루프린트 — 요청이 어떻게 검증된 산출물이 되는가, 게이트는 어디에 있는가</h2>
+<div class="svgwrap">
+<svg width="1860" height="940" viewBox="0 0 1860 940" role="img" aria-labelledby="bp-title bp-desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="bp-title">onto-mcp 서비스 블루프린트 (v0.4.8)</title>
+  <desc id="bp-desc">MCP 요청이 runtime과 LLM 작업을 거쳐 canonical artifact와 투영으로 나뉘고, 게이트·품질 체크·연기 작업이 어디에 있는지 보여준다.</desc>
+  <defs>
+    <marker id="a-slate" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#475569"/></marker>
+    <marker id="a-green" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#16a34a"/></marker>
+    <marker id="a-amber" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#d97706"/></marker>
+    <marker id="a-red" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#dc2626"/></marker>
+    <marker id="a-gray" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#94a3b8"/></marker>
+  </defs>
+  <style>
+    .lane{fill:#f8fafc;stroke:#e2e8f0;}
+    .lanet{font:600 13px sans-serif;fill:#64748b;}
+    .n-in{fill:#eff6ff;stroke:#2563eb;}
+    .n-rt{fill:#f0fdf4;stroke:#16a34a;}
+    .n-llm{fill:#fffbeb;stroke:#d97706;}
+    .n-art{fill:#f1f5f9;stroke:#475569;}
+    .n-view{fill:#f5f3ff;stroke:#7c3aed;}
+    .n-gate{fill:#fef2f2;stroke:#dc2626;}
+    .n-q{fill:#ecfeff;stroke:#0891b2;}
+    .n-post{fill:#fff7ed;stroke:#ea580c;}
+    .t{font:600 12.5px sans-serif;fill:#0f172a;}
+    .s{font:11.5px sans-serif;fill:#334155;}
+    .m{font:11px ui-monospace,monospace;fill:#475569;}
+    .leg{font:11.5px sans-serif;fill:#334155;}
+    .fl{stroke-width:1.6;fill:none;}
+  </style>
 
-    <article class="lane">
-      <header>Core API Facade</header>
-      <div class="lane-body">
-        <div class="node"><strong><code>src/core-api/review-api.ts</code></strong><small>library-like API over runtime scripts</small></div>
-        <div class="node"><strong><code>prepareReview</code></strong><small>materializes session and execution plan</small></div>
-        <div class="node"><strong><code>runReview</code></strong><small>returns completed result or timeout-safe running handle</small></div>
-        <div class="node"><strong><code>llmPresentation</code></strong><small>bounded prompt/input pairs for host-rendered explanations</small></div>
-        <div class="node"><strong><code>getReviewStatus/result</code></strong><small>latest-session recovery, run-control, compact/full projections</small></div>
-        <div class="node"><strong><code>cancelReview</code></strong><small>cooperative cancellation request artifact</small></div>
-      </div>
-    </article>
+  <!-- 범례 -->
+  <g transform="translate(24,16)">
+    <rect width="1812" height="34" fill="#ffffff" stroke="#e2e8f0" rx="6"/>
+    <rect x="12" y="9" width="14" height="14" class="n-in" rx="3"/><text class="leg" x="32" y="21">입력</text>
+    <rect x="84" y="9" width="14" height="14" class="n-rt" rx="3"/><text class="leg" x="104" y="21">runtime/tools (결정적)</text>
+    <rect x="268" y="9" width="14" height="14" class="n-llm" rx="3"/><text class="leg" x="288" y="21">LLM 의미 작업</text>
+    <rect x="408" y="9" width="14" height="14" class="n-art" rx="3"/><text class="leg" x="428" y="21">canonical artifact</text>
+    <rect x="572" y="9" width="14" height="14" class="n-view" rx="3"/><text class="leg" x="592" y="21">투영/뷰</text>
+    <rect x="672" y="9" width="14" height="14" class="n-gate" rx="3"/><text class="leg" x="692" y="21">차단 게이트</text>
+    <rect x="782" y="9" width="14" height="14" class="n-q" rx="3"/><text class="leg" x="802" y="21">비차단 품질</text>
+    <rect x="896" y="9" width="14" height="14" class="n-post" rx="3"/><text class="leg" x="916" y="21">연기/관찰 대기</text>
+    <text class="leg" x="1030" y="21">화살표: 회색=데이터 흐름 · 초록=runtime 소유 · 호박=LLM 제출 · 빨강=게이트 · 점선=투영</text>
+  </g>
 
-    <article class="lane">
-      <header>MCP Surface</header>
-      <div class="lane-body">
-        <div class="node"><strong><code>src/mcp/server.ts</code></strong><small>stdio JSON-RPC server</small></div>
-        <div class="node"><strong><code>src/mcp/tool-schemas.ts</code></strong><small>Zod schemas and tool names</small></div>
-        <div class="node"><strong><code>onto_review</code></strong><small>main user-facing review tool</small></div>
-        <div class="node"><strong>read/list tools</strong><small>status/latest recovery, result projections, lenses, domains</small></div>
-      </div>
-    </article>
+  <!-- 레인 -->
+  <g>
+    <rect class="lane" x="24" y="66" width="280" height="560" rx="8"/>
+    <text class="lanet" x="40" y="90">입력 (MCP 호스트)</text>
+    <rect class="lane" x="324" y="66" width="420" height="560" rx="8"/>
+    <text class="lanet" x="340" y="90">runtime / tools</text>
+    <rect class="lane" x="764" y="66" width="330" height="560" rx="8"/>
+    <text class="lanet" x="780" y="90">LLM 의미 작업</text>
+    <rect class="lane" x="1114" y="66" width="330" height="560" rx="8"/>
+    <text class="lanet" x="1130" y="90">canonical artifacts</text>
+    <rect class="lane" x="1464" y="66" width="372" height="560" rx="8"/>
+    <text class="lanet" x="1480" y="90">투영 · 게이트 · 품질 / 연기</text>
+  </g>
 
-    <article class="lane">
-      <header>Host / Provider</header>
-      <div class="lane-body">
-        <div class="node"><strong>Codex OAuth</strong><small>current primary live path, <code>service_tier</code> supported</small></div>
-        <div class="node"><strong>API key providers</strong><small>OpenAI, Anthropic, Grok</small></div>
-        <div class="node"><strong>Local provider</strong><small>LM Studio path exists as switcher target</small></div>
-        <div class="node"><strong>Future hosts</strong><small>must satisfy context-isolated worker contract through explicit adapters</small></div>
-      </div>
-    </article>
-  </section>
+  <!-- 입력 레인 -->
+  <rect class="n-in" x="44" y="116" width="240" height="92" rx="8"/>
+  <text class="t" x="58" y="138">MCP tool call (16종)</text>
+  <text class="s" x="58" y="156">onto_review / _round / _advance</text>
+  <text class="s" x="58" y="172">onto_reconstruct / observe / validate</text>
+  <text class="m" x="58" y="192">src/mcp (schema) → core-api</text>
 
-  <h2>2. Review Execution Flow</h2>
-  <p class="section-note">
-    review는 하나의 호출을 interpretation/binding으로 고정한 뒤, lens를 분리된 context에서 실행하고,
-    모든 issue에 대한 stance와 이견을 보존한 상태로 controlled deliberation을 수행합니다.
-    명시적 단일 lens selection도 지원하며, 이 경우 cross-lens disagreement는 적용되지 않는 bounded single-lens evidence로 기록됩니다.
-  </p>
-  <section class="flow" aria-label="review execution flow">
-    <div class="step"><b>1. MCP Call</b><span><code>onto_review</code> receives target, intent, optional domain and lens controls.</span></div>
-    <div class="step"><b>2. Core API</b><span><code>review-api.ts</code> captures runtime facts and returns structured refs plus <code>llmPresentation</code> prompts.</span></div>
-    <div class="step"><b>3. Invocation</b><span>interpretation and binding are materialized as runtime-owned artifacts.</span></div>
-    <div class="step"><b>4. Preparation</b><span>pre-dispatch gates, execution plan, review context manifest, packet refs, and packet hashes are written.</span></div>
-    <div class="step"><b>5. Isolated Lens</b><span>selected lens set runs through worker seats only after manifest and packet guards pass; sidecar mode writes validated <code>round1/{lens}.findings.yaml</code>, with causal traces planned for material candidates.</span></div>
-    <div class="step"><b>6. Issue Closure</b><span>sidecar runs project <code>finding-ledger.yaml</code> deterministically first; schema-validated structured issue-artifact LLM steps submit semantic payloads through runtime tools, and runtime writes/validates YAML artifacts before downstream use.</span></div>
-    <div class="step"><b>7. Deliberation</b><span>contested positions are revisited by participating lens contexts under teamlead control.</span></div>
-    <div class="step"><b>8. Synthesize</b><span>synthesis consumes issue artifacts and deliberation result, writes issue-scoped responses plus <code>synthesis-ledger.yaml</code>, and projects per-issue lens stance/acceptance counts for final output.</span></div>
-    <div class="step"><b>9. Record</b><span><code>ReviewRecord</code>, manifest, final output, and MCP result overview are produced.</span></div>
-  </section>
+  <rect class="n-in" x="44" y="240" width="240" height="80" rx="8"/>
+  <text class="t" x="58" y="262">settings chain</text>
+  <text class="s" x="58" y="280">{project}/.onto + ~/.onto</text>
+  <text class="m" x="58" y="298">settings.json/v3 (유일 권위)</text>
 
-  <h2>2A. Reconstruct Seeding And Maturation Flow</h2>
-  <p class="section-note">
-    reconstruct는 source material에서 목적 authority를 먼저 확보한 뒤 seed를 만들고, seed를 바로 action-ready로 주장하지 않습니다.
-    현재 활성 구현은 seeding S1-S4와 maturation M1-M4 projection이며, final re-question과 proof-boundary는 runtime authority로 기록됩니다.
-  </p>
-  <section class="flow" aria-label="reconstruct seeding and maturation flow">
-    <div class="step"><b>1. Control &amp; Verify Registry</b><span><code>reconstruct-run-control.yaml</code> atomically admits the session owner or a promoted resume attempt with matching provenance, then <code>registry-verification-evidence.yaml</code> proves the current active registry subjects before runtime profiles target material or consumes semantic artifacts.</span></div>
-    <div class="step"><b>2. Purpose</b><span>LLM authors <code>source-purpose-candidates.yaml</code>; runtime validates evidence, P1-P5 strength, mixed lineage, and confirmation need.</span></div>
-    <div class="step"><b>3. Confirm</b><span><code>purpose-confirmation-validation.yaml</code> gates inferred or limitation-backed purpose before seed readiness projection.</span></div>
-    <div class="step"><b>4. Seed</b><span>candidate inventory, disposition, <code>ontology-seed.yaml</code>, material-admission validation, claim realization, seed confirmation, and competency checks run against validated purpose authority.</span></div>
-    <div class="step"><b>5. Handoff</b><span>pre-handoff manifest and handoff validation decide seed iteration readiness without claiming action-ready ontology.</span></div>
-    <div class="step"><b>6. Baseline</b><span><code>maturation-baseline.yaml</code> projects purpose elements across static, kinetic, dynamic surfaces and maturity dimensions from the validated seeding record ref/hash.</span></div>
-    <div class="step"><b>7. Matrix</b><span><code>actionability-matrix.yaml</code> marks rows closed, limitation-backed, or frontier-required from validated baseline evidence.</span></div>
-    <div class="step"><b>8. Frontier</b><span><code>maturation-question-frontier.yaml</code> exposes material unanswered rows as concrete next questions.</span></div>
-    <div class="step"><b>9. Support</b><span><code>maturation-closure-frontier.yaml</code>, <code>source-observation-lineage-index.yaml</code>, <code>source-observation-lineage-index-validation.yaml</code>, <code>maturation-authority-response.yaml</code>, and <code>answer-support-ledger.yaml</code> separate next evidence requests from batch-scoped validated lineage and consumption-scoped source-safety-validated answer support. Direct-call answer support receives a bounded closure-prioritized prompt-visible source-observation catalog ordered by global closure hint, all requested source, all member source, then all cross-material source refs, and fails closed when prioritized evidence would overflow the catalog.</span></div>
-    <div class="step"><b>10. Expand</b><span><code>maturation-answer-claims.yaml</code> and <code>ontology-expansion.yaml</code> project supported answers as overlay changes without rewriting <code>ontology-seed.yaml</code>.</span></div>
-    <div class="step"><b>11. Continue</b><span><code>maturation-source-delta.yaml</code> records source impact, <code>maturation-convergence-ledger.yaml</code> records final re-question status, and <code>maturation-continuation-decision.yaml</code> projects continue, ask user, blocked, actionable limited, or actionable ready from validated state.</span></div>
-    <div class="step"><b>12. Publish</b><span>Pre-publication <code>claim-projection.yaml</code> is derived from runtime authorities and the immutable run-control checkpoint first; <code>final-output.md</code> then cites claim authority refs and is validated as a consumer.</span></div>
-  </section>
+  <rect class="n-in" x="44" y="352" width="240" height="76" rx="8"/>
+  <text class="t" x="58" y="374">target + intent</text>
+  <text class="s" x="58" y="392">material kind 분류 후 처리</text>
+  <text class="m" x="58" y="410">code/document/… (계약 소유)</text>
 
-  <h2>3. Runtime Seats And Context Isolation</h2>
-  <section class="swimlanes" aria-label="runtime seats">
-    <div class="swimlane">
-      <div class="swimlane-label">Main</div>
-      <div class="swimlane-items">
-        <span class="pill">resolve settings</span>
-        <span class="pill">select execution profile</span>
-        <span class="pill">own interpretation/binding</span>
-        <span class="pill">coordinate artifacts</span>
-        <span class="pill">emit presentation prompt inputs</span>
-        <span class="pill">return bounded manifest</span>
-      </div>
-    </div>
-    <div class="swimlane">
-      <div class="swimlane-label">Teamlead</div>
-      <div class="swimlane-items">
-        <span class="pill">controlled deliberation authority</span>
-        <span class="pill">reads issue ledger</span>
-        <span class="pill">reads issue-scoped deliberation responses</span>
-        <span class="pill">writes <code>deliberation-resolution.yaml</code></span>
-      </div>
-    </div>
-    <div class="swimlane">
-      <div class="swimlane-label">Lens Workers</div>
-      <div class="swimlane-items">
-        <span class="pill">context-isolated reasoning unit</span>
-        <span class="pill">contracted input only</span>
-        <span class="pill">markdown or sidecar output</span>
-        <span class="pill">structured sidecar validated</span>
-      </div>
-    </div>
-    <div class="swimlane">
-      <div class="swimlane-label">Synthesize</div>
-      <div class="swimlane-items">
-        <span class="pill">no new independent lens</span>
-        <span class="pill">consumes deliberation result</span>
-        <span class="pill">preserves unresolved disagreement</span>
-        <span class="pill">projects lens position summary</span>
-        <span class="pill">explains final review result</span>
-        <span class="pill">preserves compact Boundary Notes</span>
-        <span class="pill">renders final output</span>
-      </div>
-    </div>
-  </section>
+  <!-- runtime 레인 -->
+  <rect class="n-rt" x="344" y="116" width="380" height="100" rx="8"/>
+  <text class="t" x="358" y="138">review 준비·바인딩·플랜</text>
+  <text class="s" x="358" y="156">해석 → 바인딩 → execution-plan + prompt packets</text>
+  <text class="s" x="358" y="172">orchestration locus 각인: runtime(A) | host(B)</text>
+  <text class="m" x="358" y="192">core-runtime/cli + review (cli→review 단방향)</text>
 
-  <h2>4. Artifact Truth</h2>
-  <p class="section-note">
-    실행의 truth는 main context가 아니라 세션 디렉터리의 artifact입니다. MCP 응답은 그 artifact에 대한 bounded manifest에 가깝습니다.
-  </p>
-  <section class="artifact-grid" aria-label="artifact truth">
-    <div class="artifact"><b>Session Root</b><span><code>.onto/review/{session_id}/</code></span></div>
-    <div class="artifact"><b>Invocation</b><span><code>interpretation.yaml</code>, <code>binding.yaml</code>, <code>session-metadata.yaml</code></span></div>
-    <div class="artifact"><b>Pre-Dispatch</b><span>actor profiles, actor/consumer bindings, domain binding, target profile, value criteria</span></div>
-    <div class="artifact"><b>Preparation</b><span><code>execution-plan.yaml</code>, <code>execution-preparation/</code>, static and runtime-generated prompt packets with refs and hashes</span></div>
-    <div class="artifact"><b>Lens Evidence</b><span><code>round1/{lens}.md</code> in markdown mode; <code>round1/{lens}.findings.yaml</code> plus optional deterministic markdown projection in sidecar mode; sidecar output records all surface findings and requires materiality basis plus causal path for material-severity candidates.</span></div>
-    <div class="artifact"><b>Issue Closure</b><span><code>finding-ledger.yaml</code>, <code>finding-relation-graph.yaml</code>, <code>issue-ledger.yaml</code>, stance responses, stance matrix; sidecar runs write the finding ledger as a runtime projection, relation coverage is limited to causal-analysis findings, non-material surface findings remain in the ledger, relation-graph workers submit only accepted semantic relations while runtime assigns <code>relation_id</code> values and completes <code>singleton_findings</code>, and <code>issue_dependencies</code> preserves shared-cause context without forcing issue merges. <code>issue-ledger</code> consumes the ledger and relation graph without Round 1 lens read refs; runtime now dispatches fresh <code>issue-stance:{lens}</code> workers after <code>issue-ledger.yaml</code>, gives each worker the compact stance projection plus only its own Round 1 lens ref as supplemental read authority, accepts stance payloads through <code>submit_issue_stance_response</code>, validates <code>stance-responses/{lens}.yaml</code>, and merges them into <code>issue-stance-matrix.yaml</code>.</span></div>
-    <div class="artifact"><b>Deliberation</b><span><code>deliberation-plan.yaml</code>, issue-scoped response YAML under <code>deliberation/responses/{issue_id}/{lens}.yaml</code>, machine truth <code>deliberation-resolution.yaml</code>, and runtime markdown projection <code>deliberation.md</code>; structured issue-scoped responses and final structured resolution are submitted through runtime tools so YAML serialization and envelope fields remain runtime-owned.</span></div>
-    <div class="artifact"><b>Record</b><span><code>execution-result.yaml</code>, <code>review-run-manifest.yaml</code>, <code>review-record.yaml</code></span></div>
-    <div class="artifact"><b>Human Output</b><span><code>final-output.md</code> includes the comprehensive <code>Final Review Result</code>, per-material-issue lens stance agreement/disagreement and resolution acceptance from <code>synthesis-ledger.yaml</code>, plus compact <code>Boundary Notes</code> for non-material evidence gaps and scope limits</span></div>
-    <div class="artifact"><b>Presentation Inputs</b><span>MCP results expose <code>llmPresentation.openingBrief</code>, <code>llmPresentation.progress</code> with polling <code>liveness</code> and <code>unit_progress</code>, <code>llmPresentation.halt</code> when halted, and <code>llmPresentation.finalResult</code>; polling hosts use <code>onto_review_status</code>, while callers that pass <code>_meta.progressToken</code> on <code>onto_review</code> also receive native <code>notifications/progress</code></span></div>
-    <div class="artifact"><b>Operational Recovery</b><span><code>onto_review</code> can return <code>status=running</code> with a durable <code>runHandle</code>; <code>onto_review_status latest=true</code> recovers sessions by target/domain/canonical request hash; run-control lifecycle facts block duplicate continuation and prevent orphan cancellation requests.</span></div>
-    <div class="artifact"><b>Validation Guards</b><span>issue stance enum fields fail-loud when explanation text leaks into token fields</span></div>
-    <div class="artifact"><b>Failure Truth</b><span><code>failures/*.yaml</code>, MCP <code>structuredContent.failure</code>, and API <code>failureRefs</code></span></div>
-    <div class="artifact"><b>Execution Contract</b><span><code>review-run-manifest.execution_contract</code> stores step ids, audit-only resume token, and duplicate policy; <code>review_continue</code> refuses active duplicate dispatch; cancellation closes through <code>execution-result.yaml</code> with <code>halt_phase=cancellation</code>.</span></div>
-    <div class="artifact"><b>Packet Provenance</b><span>every worker packet path in <code>review-run-manifest.worker_units</code> is registered in <code>review-context-manifest.packet_refs</code> before dispatch</span></div>
-    <div class="artifact"><b>Lens Completion</b><span><code>minimum_participating_lenses</code> equals the selected lens count; one selected lens is a valid complete review</span></div>
-    <div class="artifact"><b>Context Admission</b><span>domain docs are admitted by consumer purpose; <code>problem_framing_profile</code> is projected into a compact axis catalog plus profile Rules for <code>issue-artifact:problem-framing</code> instead of being reopened as raw LLM input by default</span></div>
-    <div class="artifact"><b>Target Profile</b><span><code>review-target-profile.yaml</code> records target input kind, artifact roles, closure level, closure-obligation policy, target refs, and hashes</span></div>
-    <div class="artifact"><b>Operational Warnings</b><span><code>environment-warnings.yaml</code> records runner-scoped non-fatal worker warnings as operational facts, separate from review findings; status/result expose target material support, with code supported and document/mixed material visibly partial.</span></div>
-    <div class="artifact"><b>Runtime Stream Observation</b><span><code>runtime-events.ndjson</code> is the cross-pipeline terminal stream projection for review, review continuation, and reconstruct runs. Runtime-owned events tag pipeline, session, source label, optional unit/stage/process id, stream kind, and message; <code>scripts/onto-runtime-watch.sh</code> renders it in a terminal pane, with automatic attach support for tmux, Codex Desktop via configured launcher path, Warp, Cursor, iTerm2, Apple Terminal, and host-provided launcher commands.</span></div>
-    <div class="artifact"><b>Live Lens Observation</b><span><code>onto_review_status</code> derives per-lens pending/running/retrying/stale/completed/failed state from existing runtime files; the local watcher script is a terminal-only projection over <code>execution-plan.yaml</code>, <code>error-log.md</code>, per-lens running logs, lens outputs, and <code>execution-result.yaml</code>.</span></div>
-    <div class="artifact"><b>Issue Artifact Registry</b><span><code>ISSUE_ARTIFACT_REGISTRY</code> owns artifact ids, filenames, prompt packet filenames, ref keys, phases, and progress labels</span></div>
-    <div class="artifact"><b>Axiology Lens Identity</b><span><code>axiology</code> is modeled as <code>lens:axiology</code>, not as a standalone consumer or actor route.</span></div>
-    <div class="artifact"><b>Route Visibility</b><span><code>routeVisibility</code> is derived from <code>execution-plan</code>, <code>actor-invocation-profiles</code>, <code>review-run-manifest</code>, or failure refs as artifact-backed visibility; top-level provider/auth fields are populated only when actor profiles agree, and <code>actorRoute</code> exposes single vs mixed dispatch truth.</span></div>
-    <div class="artifact"><b>Derived Route Projection</b><span><code>buildReviewExecutionRoute</code> derives route visibility from <code>ReviewExecutionProfile</code>; user-facing authority remains in settings, execution profile, and artifacts.</span></div>
-    <div class="artifact"><b>Benchmark Quality Gate</b><span><code>scripts/review-pipeline-benchmark.ts</code> records deterministic <code>semantic_quality_gate</code> results for the bundled review fixture, including artifact-backed causal/materiality/dependency checks when issue artifacts are present.</span></div>
-  </section>
+  <rect class="n-rt" x="344" y="248" width="380" height="108" rx="8"/>
+  <text class="t" x="358" y="270">dispatch 루프 (frontier engine)</text>
+  <text class="s" x="358" y="288">A: runtime이 unit 실행 · B: host가 round/advance로 실행</text>
+  <text class="s" x="358" y="304">retry 예산 → 소진 시 opt-in submit salvage</text>
+  <text class="s" x="358" y="320">(동결 파일 트리거 · 동일 validator · recovery 감사)</text>
+  <text class="m" x="358" y="340">provider switcher: oauth(codex·claude_code)/api/local</text>
 
-  <h2>5. Settings And Provider Switcher</h2>
-  <section class="split">
-    <div class="panel">
-      <h3>Settings Chain</h3>
-      <p class="section-note">
-        project/user settings are parsed as JSON and merged into a narrow runtime profile.
-        Current project settings use <code>settings.json/v3</code> only:
-        <code>teamlead</code>, <code>lens</code>, and <code>synthesize</code> each carry a full
-        actor-owned route LLM block, while <code>review.execution.units</code> carries
-        per-stage model, effort, token, tool-mode, timeout, retry, and output-size execution policy.
-        Lens concurrency is not a user-facing setting: the runtime dispatches every selected lens in parallel.
-        <code>review.artifacts.lens_output_format</code> selects markdown versus sidecar lens output, and
-        <code>review.artifacts.write_lens_markdown</code> controls whether sidecar runs also render a human markdown projection.
-        <code>review.execution.actors.teamlead.llm</code>, <code>actors.lens.llm</code>, and
-        <code>actors.synthesize.llm</code> are separate full actor route settings; unit <code>llm</code>
-        blocks are partial overrides applied on top of the owning actor route.
-      </p>
-      <table>
-        <tr><th>Source</th><th>Runtime consequence</th></tr>
-        <tr><td><code>~/.onto/settings.json</code></td><td>User default layer.</td></tr>
-        <tr><td><code>{project}/.onto/settings.json</code></td><td>Project-local override and current canonical config seat.</td></tr>
-        <tr><td><code>resolveSettingsChain</code></td><td>Schema validation and fail-loud normalized switcher config.</td></tr>
-        <tr><td><code>ReviewExecutionProfile</code></td><td>Concrete runtime descriptor for actor seats, actor LLM refs, and unit execution overrides; route-derived visibility is projected internally from this profile.</td></tr>
-        <tr><td><code>review.artifacts</code></td><td>Optional lens artifact profile. <code>lens_output_format=sidecar</code> is the default; Codex worker and direct-call routes both serialize structured lens findings through runtime submit contracts, then keep only canonical <code>round1/{lens}.findings.yaml</code> unless markdown projection is explicitly enabled.</td></tr>
-      </table>
-    </div>
+  <rect class="n-rt" x="344" y="388" width="380" height="84" rx="8"/>
+  <text class="t" x="358" y="410">seat 검증·기록·조립</text>
+  <text class="s" x="358" y="428">validator → execution-result upsert → ReviewRecord 조립</text>
+  <text class="m" x="358" y="448">mock/live 동일 검증 경로 (realization은 provenance)</text>
 
-    <div class="panel">
-      <h3>Provider Matrix</h3>
-      <table>
-        <tr><th>Auth</th><th>Provider</th><th>Status</th><th>Notes</th></tr>
-        <tr><td><code>oauth</code></td><td><code>openai</code></td><td><span class="status active">active</span></td><td>Codex path. <code>service_tier</code> is valid here.</td></tr>
-        <tr><td><code>api_key</code></td><td><code>openai</code></td><td><span class="status active">preflighted</span></td><td>Model and credential env are checked before dispatch.</td></tr>
-        <tr><td><code>api_key</code></td><td><code>anthropic</code></td><td><span class="status active">preflighted</span></td><td>Model and credential env are checked before dispatch.</td></tr>
-        <tr><td><code>api_key</code></td><td><code>grok</code></td><td><span class="status active">preflighted</span></td><td>xAI/Grok model and credential env are checked before dispatch.</td></tr>
-        <tr><td><code>local</code></td><td><code>lmstudio</code></td><td><span class="status active">preflighted</span></td><td>Model and local base URL shape are checked before dispatch.</td></tr>
-      </table>
-    </div>
-  </section>
+  <rect class="n-rt" x="344" y="504" width="380" height="96" rx="8"/>
+  <text class="t" x="358" y="526">reconstruct 러너</text>
+  <text class="s" x="358" y="544">run-control 원자 admission → 관찰/안전/계보 게이트</text>
+  <text class="s" x="358" y="560">→ seed 검증·성숙 루프 → claim projection</text>
+  <text class="m" x="358" y="580">core-runtime/reconstruct (registry가 권위 그래프)</text>
 
-  <h2>6. MCP Tool Surface</h2>
-  <table>
-    <tr><th>Tool</th><th>Implemented behavior</th><th>Primary output</th></tr>
-    <tr><td><code>onto_review</code></td><td>Runs the full review path with isolated lens execution, issue closure, controlled deliberation, synthesize, and record assembly; accepts single file, directory, explicit bundle, and git diff target inputs; structured runtime failures are returned as MCP error content; emits native <code>notifications/progress</code> when the caller supplies <code>_meta.progressToken</code>; returns a running handle when the bounded MCP wait window closes before final artifacts are ready.</td><td>session id, status, run handle, artifact refs, failure refs, route visibility, summary, LLM presentation prompts, optional progress notifications</td></tr>
-    <tr><td><code>onto_prepare_review</code></td><td>Materializes a review session, target profile, context manifest, and prompt packets without executing lens workers.</td><td>session root, execution plan, route visibility, opening brief prompt</td></tr>
-    <tr><td><code>onto_review_status</code></td><td>Reads structured status, known artifact refs including <code>degradation-summary.yaml</code> when present, route visibility, structured failures, run-control lifecycle facts, material support, environment warnings, per-lens <code>unitProgress</code>, and versioned <code>llmPresentation.progress</code>/<code>halt</code> presentation inputs. It also supports <code>latest=true</code> recovery by target/domain/canonical request hash after MCP project-boundary disclosure validation.</td><td>status plus route, artifact, failure refs, run control, unit progress, latest matches, and progress presentation</td></tr>
-    <tr><td><code>onto_review_continue</code></td><td><span class="status active">active</span> Artifact-backed continuation surface. It consumes the shared <code>PipelineExecutionLedger</code> projection that marks artifact trust boundaries, reuses completed trusted units, runs the ledger-derived untrusted frontier and downstream units, rejects target selections that skip the current frontier, validates session-owned execution-plan refs before dispatch, preserves per-attempt provenance under the same session, and returns <code>already_running</code> when an active attempt owns the requested frontier.</td><td>continuation decision, plan, attempt refs, backed-up artifact refs, updated status and artifact refs</td></tr>
-    <tr><td><code>onto_review_cancel</code></td><td><span class="status active">active</span> Writes a session-local <code>review-cancel-request.yaml</code> only for an active cancellable review. Prepared, terminal, failed, or stale sessions return current run-control facts without writing orphan cancellation artifacts. The prompt execution runner observes accepted requests at cancellation checkpoints and writes a structured halted result with <code>halt_phase=cancellation</code>.</td><td>cancellation decision, optional request artifact ref, updated status, run-control facts, and artifact refs</td></tr>
-    <tr><td><code>onto_review_result</code></td><td>Reads compact, standard, or full projection over validated <code>review-record.yaml</code>, rendered <code>final-output.md</code>, route visibility, material support, warning facts, artifact refs, and failure refs after MCP project-boundary disclosure validation. Compact and standard projections return count-and-signal classification summaries and bounded presentation inputs; only full reads and returns final output text and the complete ReviewRecord. Resolved <code>final_output_ref</code> paths are rechecked through the shared lexical/realpath boundary primitive before content is returned.</td><td>projection-level result, bounded classification summary, optional ReviewRecord/final text, route visibility, and bounded refs</td></tr>
-    <tr><td><code>onto_list_lenses</code></td><td>Lists canonical full and core-axis lens sets.</td><td>lens id arrays</td></tr>
-    <tr><td><code>onto_list_domains</code></td><td>Lists project/user/install domain ids.</td><td>domain id array</td></tr>
-  </table>
+  <!-- LLM 레인 -->
+  <rect class="n-llm" x="784" y="116" width="290" height="96" rx="8"/>
+  <text class="t" x="798" y="138">context-isolated lenses</text>
+  <text class="s" x="798" y="156">관점별 독립 컨텍스트 finding 생성</text>
+  <text class="s" x="798" y="172">→ structured submit tool로만 제출</text>
+  <text class="m" x="798" y="192">worker: codex CLI | claude CLI</text>
 
-  <h2>7. Live Verification Snapshot</h2>
-  <p class="section-note">
-    아래 검증은 2026-06-05 현재 구현 상태를 기준으로 한 최신 스냅샷입니다.
-    <code>software-engineering</code>이 AI-era engineering의 canonical domain이며,
-    retired domain token은 더 이상 자동 정규화되지 않습니다. 이전 Codex OAuth 검증은
-    두 도메인 분리 상태에서 통과했고, 현재 변경은 TS 검증과 live default-path E2E로 canonical domain과
-    domain listing 경계를 재확인합니다.
-  </p>
-  <table>
-    <tr><th>Verification</th><th>Result</th><th>Evidence</th></tr>
-    <tr><td>Actual Codex full review</td><td><span class="status active">passed</span></td><td><code>.onto/review/20260524-d7d97fd4</code>, selected lenses completed, deliberation performed</td></tr>
-    <tr><td>Domain-sensitive plan reviews</td><td><span class="status active">passed</span></td><td><code>.onto/review/20260523-0ae42804</code> none, <code>.onto/review/20260523-ab9a6130</code> software-engineering, <code>.onto/review/20260523-bc77ac6a</code> strengthened software-engineering, <code>.onto/review/20260523-47cf305e</code> strengthened re-review; current runtime keeps <code>software-engineering</code> as the canonical AI-era engineering domain</td></tr>
-    <tr><td>Pre-dispatch contracts</td><td><span class="status active">closed</span></td><td><code>.onto/processes/review/pre-dispatch-contracts.md</code> fixes failure/lifecycle boundary, value dispatch gate, manifest/packet boundary, lens completion barrier, and retired entry policy</td></tr>
-    <tr><td>Pre-manifest runtime contracts</td><td><span class="status active">passed</span></td><td>Runtime writes actor profiles, actor/consumer bindings, domain binding, value criteria, context manifest, packet hashes, and lens completion barrier before dispatch.</td></tr>
-    <tr><td>All-selected-lens parallelism</td><td><span class="status active">passed</span></td><td><code>.onto/review/20260523-bfab07c9</code>, core-axis 6/6 lenses, <code>observed_dispatch_width=6</code></td></tr>
-    <tr><td>Single-lens review</td><td><span class="status active">passed</span></td><td><code>.onto/review/20260524-6a3d8eb3</code>, explicit <code>lensIds=[logic]</code>, <code>minimum_participating_lenses=1</code>, deliberation performed, ReviewRecord assembled</td></tr>
-    <tr><td>MCP target profile</td><td><span class="status active">passed</span></td><td><code>.onto/review/20260525-a19a6ce0</code>, <code>review-target-profile.yaml</code> generated for single-file review; conformance also covers explicit bundle refs/hashes, structured target shape mismatch, structured bundle boundary rejection, and active-session <code>git_diff</code> profiling</td></tr>
-    <tr><td>Generated packet provenance</td><td><span class="status active">passed</span></td><td><code>.onto/review/20260524-88512060</code>, <code>review-context-manifest.packet_refs</code> includes 21 packet refs covering lens, issue-artifact, deliberation, and synthesize units</td></tr>
-    <tr><td>Domain context least privilege</td><td><span class="status active">passed</span></td><td><code>.onto/review/20260524-c8c8edf1</code>, <code>domain:problem_framing_profile</code> is <code>domain_problem_framing_profile</code> and excluded from <code>lens:logic</code> prompt refs</td></tr>
-    <tr><td>Issue artifact registry</td><td><span class="status active">passed</span></td><td><code>ISSUE_ARTIFACT_REGISTRY</code> now drives issue-artifact packet seats, progress labels, consumer ids, and manifest issue artifact refs</td></tr>
-    <tr><td>Axiology lens identity</td><td><span class="status active">passed</span></td><td><code>actor-consumer-bindings.yaml</code> uses <code>consumer_id=lens:axiology</code>, <code>consumer_kind=lens</code>, and no standalone <code>axiology</code> consumer id</td></tr>
-    <tr><td>Route visibility lifecycle</td><td><span class="status active">passed</span></td><td><code>routeVisibility</code> is exposed from prepare/review/status/result and structured MCP failure content; completed sessions derive from <code>review-run-manifest</code>, prepared/failed sessions derive from <code>execution-plan</code></td></tr>
-    <tr><td>Structured hardening fixtures</td><td><span class="status active">passed</span></td><td>MCP malformed-output fixture returns <code>ONTO_REVIEW_MALFORMED_OUTPUT</code>; E2E covers unknown consumer context admission and <code>artifact_write</code> failure records</td></tr>
-    <tr><td>Issue stance enum repair</td><td><span class="status active">passed</span></td><td><code>issue-stance-matrix.yaml</code> accepted <code>not_applicable</code> / <code>insufficient_evidence</code> as explicit tokens</td></tr>
-    <tr><td>MCP conformance</td><td><span class="status active">passed</span></td><td><code>npm run test:mcp:review</code>, latest representative session <code>.onto/review/20260526-db400dda</code>, includes versioned <code>llmPresentation.openingBrief</code>, <code>progress</code> with polling <code>liveness</code>, native <code>notifications/progress</code> token boundary coverage, final progress/status agreement with polling status, halted malformed-output <code>halt</code>, final-result envelope, <code>resultClassificationSummary</code>, execution contract, actor route truth, route visibility, manifest/runtime-route consistency, required target profile refs, explicit bundle prepare, structured target shape mismatch, structured bundle boundary guard, active-session git diff profile, single-lens completion, generated packet refs, domain competency admission, axiology lens identity, structured malformed-output/settings/retired failures, relative sessionRoot canonicalization, and security-disclosure assertions</td></tr>
-    <tr><td>Repository E2E</td><td><span class="status active">passed</span></td><td><code>npm run test:e2e</code>, 58/58, includes diff-range, diff+bundle conflict rejection, single-lens completion, value confirmation allow-path, Codex actor route mismatch, direct-call provider preflight, packet hash, schema, matrix, unknown consumer, artifact_write, and context eligibility guards</td></tr>
-    <tr><td>Review runtime route check</td><td><span class="status active">passed</span></td><td><code>npm run check:review:route</code> verifies default route readiness and workflow surface assumptions without dispatching an LLM call.</td></tr>
-    <tr><td>Review pipeline benchmark harness</td><td><span class="status active">passed</span></td><td><code>npm run benchmark:review:pipeline</code> records packet/output bytes, unit summaries, review quality proxy, and deterministic <code>semantic_quality_gate</code> results. The gate receives <code>finding-ledger.yaml</code>, <code>finding-relation-graph.yaml</code>, and <code>issue-ledger.yaml</code> when present so real runs can check materiality shape, non-material preservation, causal relation coverage, endpoint-owned shared-cause refs, and dependency preservation.</td></tr>
-    <tr><td>Review lens sidecar path</td><td><span class="status active">passed</span></td><td>Live Codex/OAuth default-path E2E verifies <code>review.artifacts.lens_output_format=sidecar</code> through execution-plan sidecar seats, sidecar lens dispatch, deterministic <code>finding-ledger.yaml</code>, sidecar-backed ReviewRecord provenance, and synthesize/final-output artifact refs.</td></tr>
-    <tr><td>Boundary Notes synthesis contract</td><td><span class="status active">passed</span></td><td>Targeted vitest covers synthesize output contract failure when <code>Boundary Notes</code> is missing, inline/tool-native synthesize fixtures use the current heading set, and final rendering projects compact boundary notes into <code>final-output.md</code>.</td></tr>
-    <tr><td>Semantic quality gate</td><td><span class="status active">passed</span></td><td><code>src/core-runtime/review/semantic-quality-gate.test.ts</code> verifies material issue recall, boundary-sensitive material admission, boundary uncertainty preservation, non-material finding preservation, causal materiality shape, causal relation correctness including endpoint-owned shared-cause refs, dependency preservation, actionability, and grounding. The gate supports fixture-specific target truth, with the bundled <code>review-pipeline-target-v1</code> and an additional <code>retry-policy-target-v1</code> fixture exercising the same quality axes on a different target shape.</td></tr>
-    <tr><td>Concept surface simplification review</td><td><span class="status active">passed with bounded follow-up</span></td><td><code>.onto/review/20260526-54627475</code> completed with 9/9 lenses, controlled deliberation, and synthesize. It found only wording/documentation precision issues after the closure fixes; stale retry wording and timeout truth wording were narrowed without adding public concepts.</td><td>structural retry evidence remains a later design choice if consumers need attempt counts</td></tr>
-    <tr><td>Reconstruct live E2E</td><td><span class="status active">passed by artifact evidence</span></td><td><code>/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-reconstruct-live-pFaHHw/.onto/reconstruct/live-small</code> reached <code>reconstruct-record.yaml</code> <code>record_stage=completed</code>; post-publication manifest, competency-question, claim-projection, and continuation validation artifacts are valid. The live decision honestly ended with a blocked maturation continuation rather than an action-ready overclaim.</td><td>next live run should measure the post-seed answer-support projection and target remaining prompt-size hotspots that can still exceed 50k input tokens</td></tr>
-    <tr><td>Static checks</td><td><span class="status active">passed</span></td><td><code>check:ts-core</code>, focused sidecar bridge/materializer/semantic-quality vitest, MCP live E2E, review runtime route check, and <code>git diff --check</code>. The 2026-06-08 live MCP E2E verifies top-level and per-unit <code>artifact_generation_realization=live</code> provenance. Legacy multi-agent fixture checks are removed from the active workflow.</td></tr>
-  </table>
+  <rect class="n-llm" x="784" y="248" width="290" height="96" rx="8"/>
+  <text class="t" x="798" y="270">stance · deliberation · synthesis</text>
+  <text class="s" x="798" y="288">issue별 입장 → 통제 심의 → 보수적 종합</text>
+  <text class="m" x="798" y="308">submit schema = spine 단일 source</text>
+  <text class="m" x="798" y="324">(G3 invariant 테스트가 고정)</text>
 
-  <h2>8. Implementation Status</h2>
-  <table>
-    <tr><th>Area</th><th>Status</th><th>Current state</th><th>Next verification</th></tr>
-    <tr><td>Review MCP path</td><td><span class="status active">active</span></td><td><code>src/mcp</code> calls <code>src/core-api</code>, which drives the TS review runtime.</td><td><code>npm run test:mcp:review</code></td></tr>
-    <tr><td>Review invocation runner</td><td><span class="status active">shared runner active</span></td><td><code>docs/architecture/review-invocation-runner.md</code> defines one typed shared runner under <code>src/core-runtime/review</code>. <code>src/core-runtime/review/review-invocation-runner.ts</code> now owns typed request mapping, artifact-ref collection, adapter JSON output parsing, coarse typed progress/failure events, equivalence projection, and the prepare/execute/complete orchestration used by Core API <code>onto_review</code>. The argv adapter remains an internal harness, and <code>scripts/review-invocation-runner-conformance.ts</code> compares adapter/Core API/MCP artifact truth for representative file and bundle requests without exposing review npm scripts.</td><td><code>npm run test:review:invocation-runner</code>; continue shrinking adapter helper ownership out of <code>src/core-runtime/cli/review-invoke.ts</code> when touching planning internals</td></tr>
-    <tr><td>Codex/direct-call live path</td><td><span class="status active">active</span></td><td>Project config resolves live review execution from actor route LLM blocks plus unit-level execution overrides. Codex OAuth routes can control model, effort, and service tier; direct-call routes additionally enforce structured tool mode, max tokens, timeout, retry, and output-size settings per unit.</td><td>repeat live smoke when route or unit execution policy changes</td></tr>
-    <tr><td>Controlled deliberation</td><td><span class="status active">active</span></td><td>Runner projects <code>deliberation-plan.yaml</code> into issue-scoped work items, dispatches only planned <code>deliberation:{issue_id}:{lens_id}</code> response workers, carries compact <code>related_issue_context</code> for dependency/shared-cause context, requires runtime submit-tool output for structured issue responses and final structured resolution on live direct-call routes, validates YAML response artifacts, writes validated <code>deliberation-resolution.yaml</code> as machine truth, and renders <code>deliberation.md</code> as a deterministic markdown projection before synthesize. Timeout and output-contract failures are hard halts: synthesize does not run, execution artifacts preserve <code>halt_phase=controlled_lens_deliberation</code>, failed unit id/kind, lens id when applicable, and per-unit failure message.</td><td>rerun live direct-call review after the next artifact-pipeline optimization stage</td></tr>
-    <tr><td>Nested actor LLM split</td><td><span class="status blocked">blocked by contract</span></td><td><code>nested-workers</code> remains a profile concept, but active dispatch fails before execution because the existing nested bridge does not enforce sidecar structured output, read-only lens execution, or settings-owned bounded dispatch.</td><td>Re-enable only by routing inner lens workers through the same structured runner contract.</td></tr>
-    <tr><td>Controlled-high-effort settings</td><td><span class="status active">active</span></td><td><code>.onto/settings.json</code> is the sole authority for reasoning effort and review execution knobs and must declare <code>settings.json/v3</code>. <code>teamlead</code>, <code>lens</code>, and <code>synthesize</code> carry full actor-owned route LLM blocks; <code>review.execution.max_concurrent_lenses</code> controls bounded dispatch and is persisted into <code>execution-plan.yaml</code>; <code>review.execution.artifact_generation_realization</code> records whether artifact generation was <code>live</code>, <code>semantic_mock</code>, <code>boundary_stub</code>, or <code>fixture</code>, and mock/fixture semantic quality remains non-completion evidence; <code>review.execution.units</code> can override stage model/effort, <code>timeout_ms</code>, <code>max_retries</code>, <code>retry_initial_delay_ms</code>, and <code>max_output_bytes</code> on all routes. <code>max_tokens</code> and <code>tool_mode</code> are direct-call/inline HTTP knobs only; Codex OAuth worker routes fail loudly if those unsupported knobs are set. Root LLM defaults, inherited actor settings, and code-level effort defaults are retired and fail settings loading when supplied.</td><td>settings parse, route preview, live MCP E2E, and MCP conformance</td></tr>
-    <tr><td>Review lens sidecar artifacts</td><td><span class="status active">active</span></td><td><code>review.artifacts.lens_output_format=sidecar</code> writes validated <code>round1/{lens}.findings.yaml</code> through structured runtime submit contracts on Codex worker and direct-call routes. The bridge passes parsed structured JSON directly to submit tools; wrappers and runtime-owned fields fail before artifact write. Runtime can render optional <code>round1/{lens}.md</code>, projects <code>finding-ledger.yaml</code> deterministically when all lens outputs are sidecars, and passes sidecar refs to issue artifacts, controlled deliberation, synthesize, ReviewRecord, and citation audit.</td><td>Codex sidecar bridge test plus live OAuth default-path E2E</td></tr>
-    <tr><td>Review causal finding contract</td><td><span class="status active">active</span></td><td>The review artifact tuning plan separates surface finding, materiality, and causality. Sidecar lens findings preserve all findings; material-severity candidates require <code>materiality_basis</code> and <code>causal_path</code>, while clear <code>low</code>/<code>info</code> findings stay as compact ledger rows. Finding ledger rows now carry <code>lens_rationale_summary</code> as the compact lens-perspective carrier. Relation graph compares causal paths for <code>same_root_candidate</code> and <code>shared_cause_candidate</code>; LLM submit payloads contain only accepted semantic relations, while runtime mints stable <code>relation_id</code> values and writes <code>singleton_findings</code> for uncovered causal-analysis findings. Unrelated causal-analysis findings are represented through <code>singleton_findings</code>, not <code>independent</code> relation rows. Issue clusters must assign every relation-graph-covered finding exactly once, multi-finding clusters must be connected by <code>same_root_candidate</code> relation refs, and issue evidence/lens provenance must be projected from the assigned finding rows. <code>issue-ledger</code> read authority is limited to prior issue artifacts plus target profile. <code>issue-stance-matrix</code> is now runtime-merged from per-lens <code>stance-responses/{lens}.yaml</code>; stance workers receive compact action/dependency judgment context plus finding-level lens rationale summaries, only the requested lens's Round 1 output is opened as a supplemental read, non-participating lens stances are rejected, and stance evidence refs are bounded to issue/lens provenance. <code>deliberation-plan</code> consumes a runtime conflict-candidate projection and validates material conflict coverage; controlled deliberation then consumes only planned issue/stance slices and produces validated resolution truth. <code>problem-framing.yaml</code> now receives a compact runtime projection from issue ledger, stance matrix, deliberation plan/resolution, review target profile, domain-axis catalog, and domain profile Rules; raw Round 1 outputs, issue-scoped deliberation responses, and raw domain profile docs are excluded from default read authority. The LLM submits only semantic <code>classifications</code>; runtime fills <code>classification_context</code> and issue-ledger-derived <code>related_surface_finding_ids</code>, validates exact surface-finding coverage, rejects classification-context drift, and rejects undeclared <code>domain_axes</code> names/values.</td><td>current follow-up is tracked in <code>development-records/plans/20260607-review-pipeline-remaining-work-order.md</code></td></tr>
-    <tr><td>Review synthesis map-reduce</td><td><span class="status active">active</span></td><td>The broad final synthesize unit has been replaced by issue-scoped synthesis work items and responses. Runtime writes <code>synthesis-work-items.yaml</code>, preserves <code>deliberation_participating_lens_ids</code> for resolution denominator truth, dispatches bounded <code>synthesis:{issue_id}</code> units, validates <code>synthesis/responses/{issue_id}.yaml</code>, merges <code>synthesis-ledger.yaml</code> as canonical synthesis truth, adds runtime-owned <code>lens_position_summary</code> to each material issue, and renders <code>synthesis.md</code> plus <code>final-output.md</code> from the ledger and result classification summary. Final output reads this ledger projection for issue stance agreement/disagreement, not-applicable/evidence-gap lens lists, resolution acceptance, remaining disagreement, and raised-by lenses without reopening raw stance or deliberation artifacts. <code>ReviewRecord.synthesis_result_ref</code> points to <code>synthesis-ledger.yaml</code>, and completed records carry independent digests for <code>synthesis-ledger.yaml</code>, <code>synthesis.md</code>, <code>deliberation-resolution.yaml</code>, and <code>final-output.md</code>, so mutable <code>review-run-manifest.yaml</code> co-tamper cannot make terminal artifacts trusted. <code>halted_partial</code> validation now proves absent synthesis/deliberation terminal refs and digests remain null when deliberation was not performed.</td><td><code>npm run test:e2e</code></td></tr>
-    <tr><td>Review context manifest</td><td><span class="status active">active</span></td><td>Runtime writes <code>execution-preparation/review-context-manifest.yaml</code> with source hashes, canonical <code>allowed_consumers</code>, derived matrix, packet refs, packet hashes, and lifecycle state; run dispatch validates schema, source hashes, packet refs, packet consumers, packet hashes, derived matrix, consumed refs, and forbidden refs before lens execution.</td><td>keep fixture coverage with future manifest schema changes</td></tr>
-    <tr><td>Review target profile</td><td><span class="status active">active</span></td><td>Runtime writes required <code>execution-preparation/review-target-profile.yaml</code> for single-file, directory, explicit bundle, git-diff, and generated-packet target inputs. MCP exposes <code>targetScopeKind</code>, <code>primaryRef</code>, <code>memberRefs</code>, <code>bundleKind</code>, and <code>diffRange</code>; explicit shape mismatches fail, bundle refs must stay inside declared filesystem roots, and git diff targets are materialized under the active session root.</td><td><code>.onto/processes/review/review-target-profile-contract.md</code></td></tr>
-    <tr><td>Resolved actor invocation profile</td><td><span class="status active">active</span></td><td>Runtime writes <code>actor-invocation-profiles.yaml</code> for teamlead, lens, and synthesize. Deliberation is a process mode, not an actor profile. Effective worker route truth is persisted per profile for Codex OAuth and API/local direct-call routes. Prepared and completed top-level route visibility is filled only when actor profiles agree; actor-divergent provider/auth facts stay in <code>actorProfiles</code> and <code>actorRoute.mode=mixed</code>.</td><td><code>npm run check:review:route</code>; <code>npm run test:e2e</code> for live MCP route evidence</td></tr>
-    <tr><td>Actor/consumer binding registry</td><td><span class="status active">active</span></td><td>Runtime writes <code>actor-consumer-bindings.yaml</code> separating actor profile ids from consumers: teamlead, lens consumers including <code>lens:axiology</code>, per-lens deliberation, controlled deliberation, issue artifacts, and synthesize. Per-lens deliberation consumers are lens-bound; teamlead controls the consolidated deliberation result.</td><td>keep unknown-consumer fixture with future manifest schema changes</td></tr>
-    <tr><td>Execution route projection</td><td><span class="status active">active</span></td><td><code>src/core-runtime/review/review-execution-route.ts</code> centralizes route-derived visibility as an internal projection. Codex OAuth resolves to <code>resolved_provider=codex</code>, API/local direct calls resolve to their configured model provider, and preparation derives actor provider/auth from actor LLM selection plus executor mode.</td><td><code>src/core-runtime/review/review-execution-route.test.ts</code>, actor route materializer tests, plus MCP/e2e conformance</td></tr>
-    <tr><td>Domain/value pre-gates</td><td><span class="status active">active</span></td><td>Prompt materialization writes <code>domain-binding.yaml</code> and <code>review-value-alignment-criteria.yaml</code> before packets; invalid domain binding and unconfirmed ambiguous value criteria write structured failure records and halt; explicit user confirmation allows dispatch with provenance. When no explicit or configured review domain exists, the review invocation runtime infers a domain from target path/content/intent and available domain documents, then records the selected domain and reason in preview, <code>binding_notes</code>, opening brief input, and final output. Retired domain tokens are not listed or auto-normalized; callers must use the canonical domain id.</td><td>expand criteria sources beyond invocation intent when axiology setup grows</td></tr>
-    <tr><td>Structured failure surface</td><td><span class="status active">active</span></td><td>Runtime writes common failure envelopes for domain binding, value alignment, manifest/packet validation, retired config files, retired review flags, actor route preflight, malformed unit output, artifact write failure, and MCP security disclosure; MCP errors expose the same records plus route visibility through <code>structuredContent</code>. Stalled unit timeout and issue-artifact execution failure close through halted <code>execution-result.yaml</code>, <code>degradation-summary.yaml</code>, and <code>review-run-manifest.yaml</code>; deliberation timeout additionally records <code>deliberation_status=not_performed</code>, <code>halt_phase=controlled_lens_deliberation</code>, failed unit identity, failed per-unit result, produced issue-stage refs, and nullable absent output refs in ReviewRecord. Packet-declared <code>Tools: required</code> now remains a hard native boundary under auto mode.</td><td><code>npm run check:review:route</code> for provider and tool-boundary preflight; <code>npm run test:e2e</code> for live MCP route evidence</td></tr>
-    <tr><td>Software-engineering domain redesign</td><td><span class="status active">active docs rewritten</span></td><td>Active domain docs define the lens-first, case-backed, CQ-ready software-engineering domain. They include axiology input, AI governance/risk ownership, output zero-trust, RAG/vector boundaries, agent agency minimization, provenance, case-backed guideline cards, and CQ-G value/provenance questions.</td><td>run a live bounded software-engineering review over the changed domain docs when domain retuning resumes</td></tr>
-    <tr><td>Route visibility lifecycle</td><td><span class="status active">active</span></td><td><code>src/core-runtime/review/route-visibility.ts</code> derives one route view from existing artifacts and exposes it through prepare/review/status/result and structured MCP failure content.</td><td>keep as derived view; do not introduce a second route-summary authority</td></tr>
-    <tr><td>Pipeline execution ledger</td><td><span class="status design">shared contract</span></td><td><code>.onto/processes/shared/pipeline-execution-ledger-contract.md</code> defines <code>PipelineExecutionLedger</code> as the cross-pipeline artifact trust/provenance projection for review, reconstruct, future evolve, and later onto pipelines. Review continuation is one consumer, not the ledger's primary purpose.</td><td><code>.onto/processes/shared/pipeline-execution-ledger-contract.md</code></td></tr>
-    <tr><td>Runtime stream observation</td><td><span class="status active">active</span></td><td><code>src/core-runtime/observability/runtime-stream-observation.ts</code> appends session-local <code>runtime-events.ndjson</code>; review/review_continue/reconstruct start a generic terminal watcher via <code>spawnRuntimeWatcherPane</code>; review worker subprocess stdout/stderr and reconstruct model-call/Codex streams are tagged at the source. Automatic attach covers tmux, Codex Desktop through <code>ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER</code>, Warp launch configurations, Cursor integrated terminal, iTerm2, Apple Terminal, and <code>ONTO_RUNTIME_WATCHER_COMMAND</code> launcher templates.</td><td><code>runtime-stream-observation.test.ts</code>, watcher smoke, TypeScript check, review invocation conformance</td></tr>
-    <tr><td>Execution contract / continuation</td><td><span class="status active">active</span></td><td><code>review-run-manifest.yaml</code> records canonical execution step ids and progress total from the shared runtime progress contract, plus audit-only resume token, session-id idempotency key, duplicate-dispatch policy, and route truth. <code>docs/architecture/review-continuation-surface.md</code> describes the active <code>onto_review_continue</code> path: ledger-derived frontier selection, alias normalization, session-boundary path validation, session-level artifact backup, failed-attempt restore, and attempt route provenance. <code>onto_review_cancel</code> writes a cancellation request artifact and the runner closes at the next checkpoint through <code>execution-result.yaml</code>.</td><td><code>npm run test:mcp:review</code> plus focused continuation-plan/Core API tests</td></tr>
-        <tr><td>Review UX</td><td><span class="status active">active</span></td><td><code>.onto/processes/review/review-execution-ux-contract.md</code> defines the whole-run decision-ready UX: opening brief with non-secret model/profile facts, stepwise/progress-bar style updates, bounded liveness updates, interim signal labels for non-final findings, setup, pre-dispatch, lens execution, issue construction, controlled deliberation, synthesize, and halted partial presentation. It also defines patch-loop eligibility as a host LLM operational judgement, not a runtime artifact or deterministic schema gate: first reviews can only mark an initial candidate, while second-and-later reviews compare target, intent, boundary, patch lineage, and issue trend before continuing. Runtime exposes versioned <code>llmPresentation.progress</code> from <code>onto_review_status</code> with polling <code>liveness</code>, native MCP <code>notifications/progress</code> for <code>onto_review</code> calls that provide <code>_meta.progressToken</code>, <code>llmPresentation.halt</code> when halted, and <code>llmPresentation.finalResult</code> for completed result rendering; all progress step labels/ids come from the shared runtime progress contract. Issue artifacts now validate the blocker/high/medium/low/info severity contract; <code>result_classification_summary</code> derives highest severity, severity counts, material issue grouping, non-material findings, and action candidates from <code>finding-ledger.yaml</code>, <code>issue-ledger.yaml</code>, <code>problem-framing.yaml</code>, and runtime halt state. <code>review-record-validation.ts</code> is shared by record assembly and API/MCP result reads. Material issue status is derived by the canonical <code>.onto/processes/review/material-issue-contract.md</code> predicate; action candidates are projections from problem-framing closure fields and runtime halt state, not lens/finding-source truth. Domain threshold fixtures cover ontology, software-engineering, and spreadsheet/accounting-style thresholds as severity explanations.</td><td>keep live provider output quality aligned with the active prompt contract; no separate HTML/UI path</td></tr>
-    <tr><td>Issue stance schema</td><td><span class="status active">active</span></td><td>Enum-valued stance fields use exact tokens; explanatory prose belongs in <code>rationale</code>.</td><td>keep validator fail-loud on enum drift</td></tr>
-    <tr><td>Provider parity</td><td><span class="status design">later</span></td><td>Switcher shape and fail-loud pre-dispatch route guarantees exist for API/local providers; live provider quality/performance guarantees remain separate because they require real credentials/endpoints.</td><td>per-provider live conformance tasks with explicit credentials/endpoints</td></tr>
-    <tr><td>Public binary boundary</td><td><span class="status active">active</span></td><td>Public binary exposes <code>onto mcp</code> and <code>onto register</code>; review and reconstruct product execution are exposed through MCP tools only. Repository-local harnesses call TypeScript entrypoints directly and are not npm product scripts.</td><td>package/docs/tests alignment and TS check</td></tr>
-    <tr><td>MCP self-documentation</td><td><span class="status active">active</span></td><td>The server advertises <code>tools</code>, <code>resources</code>, and <code>prompts</code> capabilities. Resource <code>onto://usage</code> (markdown) documents provider setup, the review/reconstruct workflows, the running-handle polling pattern, and output-size guidance; prompts <code>review_target</code> and <code>reconstruct_seed</code> expand into ready-to-run instructions. Tool names use the strict host pattern <code>^[a-zA-Z0-9_-]{1,64}$</code> (underscores, e.g. <code>onto_review</code>) so strict hosts like Claude Desktop accept the tool list; operational provenance labels such as <code>source_tool</code> also use the same underscore names to avoid host-facing ambiguity. <code>onto_review_status</code> takes <code>projectionLevel</code> (compact/standard/full) to bound payload size.</td><td><code>npm run test:mcp:review</code> asserts resources/prompts presence and the tool-name pattern</td></tr>
-    <tr><td>Host registration (<code>onto register</code>)</td><td><span class="status active">active</span></td><td><code>src/core-runtime/onboard/</code> registers the onto MCP server into Claude Code, Codex, Claude Desktop, and Cursor. CLI-backed hosts prefer the official CLI (<code>claude mcp add -s user</code>, <code>codex mcp add</code>) and fall back to printed manual instructions when the CLI is absent. The CLI path pins per-host environment (Claude Code honors <code>--claude-config-dir</code>/<code>CLAUDE_CONFIG_DIR</code> so multi-profile setups land in the right config dir) and re-probes after <code>mcp add</code>, reporting <code>failed</code> instead of a false <code>registered</code> when an aliased/wrapper CLI or wrong profile accepts the command without listing the server. JSON hosts edit <code>mcpServers.&lt;name&gt;</code> directly, preserving sibling servers and staying idempotent (re-run reports <code>skipped</code>). Interactive host selection over Node <code>readline</code> when stdin is a TTY; otherwise flag-driven (<code>--hosts</code>/<code>--all</code>) and refuses to write without <code>--yes</code> (write-before-confirm, product-locality §5.3 spirit). Writes only host-owned config, never <code>{product}/.onto/</code>. No new dependencies; <code>scripts/postinstall-hint.js</code> prints a non-interactive next-step hint.</td><td><code>npx vitest run src/core-runtime/onboard</code>; <code>node bin/onto register --list</code></td></tr>
-    <tr>
-      <td>reconstruct</td>
-      <td><span class="status active">seeding and M1-M4 maturation</span></td>
-      <td>Active reconstruct contracts define <code>OntologySeed</code> and <code>OntologyMaturation</code>. Runtime now emits run-control, promoted resume rows for same-request attempts with matching provenance, registry-verification, target-material-profile validation, source-safety, latest-current <code>source-scout-pack.yaml</code>/<code>source-scout-pack-validation.yaml</code>, immutable pre-seed and post-maturation SourceScoutPack snapshots, post-maturation gate projection validation, source-observation delta/re-entry, <code>source-observation-lineage-index.yaml</code>, <code>source-observation-lineage-index-validation.yaml</code>, material-admission, <code>seed-authoring-readiness.yaml</code>/<code>seed-authoring-readiness-validation.yaml</code>, seed, handoff, M1-M4 maturation with separate baseline/current actionability matrices, source-delta impact judgment, convergence with final re-question projection, continuation, proof-authority boundary artifacts, claim-projection, final-output provenance, manifest, and record artifacts. Code and document profiles are partially wired; spreadsheet and database remain contract-active but runtime-planned. Material admission separates active <code>pre_seed_purpose_element</code> rows from future literal material-value rows. Seed authoring readiness blocks only deterministic pre-seed states outside <code>seed_ready</code> and <code>limited_seed_possible</code>; semantic adequacy remains owned by seed authoring and downstream validators. The readiness validator now records <code>deterministic_gate_scope: pre_seed_closure_only</code>, validates <code>max_round_exhaustion_interpretation</code> and <code>source_sufficiency_state</code> against recomputed deterministic classification, treats exhausted open frontier as <code>insufficient_for_claim_scope</code>, treats ontology-domain category rows as diagnostic unless selected-purpose closure resolves to that category, and rejects readiness artifacts that omit the semantic-authority boundary notes. Seed authoring now receives compact prompt payloads, including <code>source_purpose_projection</code> for the selected validated purpose candidate instead of the full ranked <code>source-purpose-candidates.yaml</code> body, and downstream frontier/purpose/candidate-inventory prompts receive compact <code>exploration_synthesis</code> projections without full evidence-ref objects. Post-seed answer-support authoring now receives a bounded <code>maturation_answer_support_bounded_catalog</code> source-observation projection: closure-prioritized source refs are materialized in global closure-hint, all requested, all member, then all cross-material category order before supplemental rows, supplemental rows are capped, excerpts are shortened, closure-prioritized overflow fails closed before LLM authoring, and evidence ids outside the prompt-visible catalog fail loudly instead of silently reusing hidden source context. Competency-question assessment authoring now receives a versioned compact projection with non-truncated question text, evidence observation ids/source basenames, deterministic prompt-budget batching, and body-sensitive projection contract hash in authored-artifact reuse provenance matching; runtime still derives <code>required_seed_refs</code>, <code>linked_claim_ids</code>, <code>evidence_refs</code>, and <code>downstream_effect</code> from the canonical question artifact and answer status. Final-output authoring now receives <code>final_output_compact_summary_projection</code> with included/omitted/partial metadata for every sliced collection and runtime-computed <code>actionability_claim_counts</code>; deterministic runtime append sections still add seed answerability, claim projection, artifact truth, provenance footer, and provenance bindings. Direct-call integral prompt-size checks assert final-output and CQ-assessment prompts stay below 50k chars in the fixture path. Timeout recovery is staged: source-purpose retries through a minimal LLM kernel, seed authoring retries through a minimal kernel and fails closed if the minimal seed also times out, and competency-question timeout recovery projects coverage questions from allowed claims/domain rows for validator review. If the first seed fails validation, runtime preserves <code>ontology-seed-repair-1.input*.yaml</code>, sends a focused repair payload containing only the previous seed, validation summary, and validation-derived repair sections, then revalidates the repaired seed before maturation. Authored-artifact resume provenance binds request/source/profile/domain/provider match plus source-safety, scout, lineage, seed-readiness validation hashes, and CQ assessment projection contract version/body hash as they become available; run-control <code>resume_rows[]</code> starts at <code>resume_pending_provenance</code> and finalizer/validator authority promotes it to <code>resume_allowed</code> only after valid post-publication manifest validation and provenance-matched completion. SourceScoutPack validation compares lineage validation refs and sha256 snapshots; pre-seed source-purpose/candidate-inventory/seed-readiness consumers use <code>source-scout-pack.pre-seed.yaml</code> and <code>source-scout-pack-validation.pre-seed.yaml</code>, while the live path emits <code>source-scout-pack.post-maturation.yaml</code> after maturation lineage updates and then writes <code>post-maturation-gate-projection-validation.yaml</code> before final-output and record consumption. SourceScoutPack phase checks require concrete same-session sibling refs, so copied same-basename snapshots do not satisfy pre-seed or post-maturation authority boundaries. The registry now models latest, pre-seed, and post-maturation scout validations as distinct active gate/validator authority outputs, and seed-readiness consumes the pre-seed validation snapshot. Answer-support validation resolves frontier-added evidence through validated lineage index rows and requires observation-specific source-safety proof sufficiency, replay authority, material-claim permission, and public-output permission, so prompt visibility alone is not material answer support. Pre-publication <code>claim-projection.yaml</code>/<code>claim-projection-validation.yaml</code> bind public status/result/API/MCP claim values from validated runtime authorities, validated material profile support, and an immutable run-control checkpoint before <code>final-output.md</code> cites those canonical refs as a consumer. Continuation validation allows <code>actionable_ready</code> only when convergence-ledger final re-question status is <code>no_new_material_question</code>; proof authorities currently emit explicit <code>not_claimed</code> boundaries unless runtime proof rows are actually claimed.</td>
-      <td>next: continue broader maturation prompt input/output optimization, then rerun real-provider/repository conformance</td>
-    </tr>
-    <tr>
-      <td>reconstruct actor-action-state scout</td>
-      <td><span class="status active">phase-1 + pre-seed gate</span></td>
-      <td>Runtime implements source-profile scout guidance, a source-safety-filtered non-semantic <code>SourceScoutPack</code>, and a runtime <code>SeedAuthoringReadiness</code> projection. The runtime writes and validates <code>source-scout-pack.yaml</code> before source observation directive authoring, refreshes it with lineage validation ref/hash before source-purpose authoring, writes immutable <code>source-scout-pack.pre-seed.yaml</code> snapshots for source-purpose/candidate-inventory/seed-readiness consumers, passes compact scout projections to source-observation directive, source-purpose, candidate-inventory, and round-1 source-frontier authoring, writes and validates <code>seed-authoring-readiness.yaml</code> before <code>ontology-seed.yaml</code>, exposes all scout snapshots through manifest/record refs, and uses compact prompt-visible scout/readiness/source-purpose signals without making semantic decisions. Round-1 source frontier now receives actor/action/state gap candidates and may be runtime-augmented with up to three unobserved inventory refs when the author returns an empty frontier. Mixed composite scout scope is recorded as a limitation with zero signal rows until member-scoped scout support is promoted. Focused seed repair is now active for validation-failed seeds without re-opening source exploration.</td>
-      <td>next: broader member-scoped scout support, broader prompt I/O optimization, and real-provider/repository conformance runs</td>
-    </tr>
-    <tr><td>future evolve</td><td><span class="status design">design contract</span></td><td><code>.onto/processes/evolve/material-kind-adapter-contract.md</code> keeps future brownfield evolve target handling material-aware: adapter dispatch starts from <code>target_material_kind</code>, non-code targets do not fall through to a code-product adapter, and runtime owns observations/refs while the host LLM and user-mediated flow own design inquiry and specification content. No active evolve runtime or MCP tool is wired.</td><td>design evolve core API and MCP surface only after review/reconstruct stabilize</td></tr>
-    <tr><td>learn / govern</td><td><span class="status retired">archived</span></td><td>Retired runtime code and process docs are outside the current product runtime and are isolated outside runtime authority. Learn/govern have no active wired productized path; review is the most mature active path and reconstruct is wired under its bounded ontology-seeding scope.</td><td>separate MCP design after review/reconstruct stabilize</td></tr>
-  </table>
+  <rect class="n-llm" x="784" y="380" width="290" height="92" rx="8"/>
+  <text class="t" x="798" y="402">reconstruct 의미 저작</text>
+  <text class="s" x="798" y="420">lens judgment · purpose · seed · 답변 클러스터</text>
+  <text class="m" x="798" y="440">direct_call (semantic_author 액터)</text>
 
-  <h2>9. Current Design Risks</h2>
-  <table>
-    <tr><th>Risk</th><th>Current reading</th><th>Next action</th></tr>
-    <tr><td>Contract ordering</td><td>Pre-dispatch contract is closed; runtime writes actor profiles, consumer bindings, domain binding, value criteria, manifest, and packet refs before dispatch.</td><td>Keep future tools on the same artifact order.</td></tr>
-    <tr><td>Failure record shape</td><td>Structured failure envelope is active for domain binding, value alignment, manifest/packet validation, retired config files, retired review flags, actor route, malformed output, artifact write, and MCP security disclosure. Issue-artifact execution failure additionally closes through halted execution-result and degradation-summary artifacts.</td><td>Keep provider preflight in <code>check:review:route</code>; use live MCP E2E for completion evidence.</td></tr>
-    <tr><td>Actor route authority</td><td>Actor invocation profile and actor/consumer binding artifacts are written during preparation and included in MCP/API artifact refs; direct-call routes preflight before dispatch; Codex worker routes fail before dispatch when an actor selects API/local provider settings. Actor provider/auth values are derived from each actor LLM selection, while route summary values are projected from <code>ReviewExecutionProfile</code>. Prepared-session summaries no longer copy the first actor profile as top-level route truth when actor profiles diverge.</td><td>Continue narrowing route vocabulary only where a real runtime responsibility differs.</td></tr>
-    <tr><td>Manifest proof model</td><td>Runtime manifest uses <code>context_sources[].allowed_consumers</code> as canonical authority and stores the matrix as a derived validated view; schema, stale hashes, matrix drift, and context eligibility drift now fail before lens dispatch.</td><td>Keep schema-version migration explicit if v2 is introduced.</td></tr>
-    <tr><td>Review target profiling</td><td>Target profile is now runtime-owned, required, and deterministic. The latest full software-engineering review (<code>.onto/review/20260525-f6a9c762</code>) accepted the backbone but raised authority, exact diff identity, closure-token ownership, generated-packet coverage, MCP option-contract, and heuristic authority issues.</td><td>Use <code>.onto/processes/review/review-target-profile-contract.md</code> and MCP option-contract fixtures as the active design authority.</td></tr>
-    <tr><td>Live deliberation latency</td><td>Past Codex re-review <code>.onto/review/20260526-1e6159f0</code> completed lens and issue-artifact stages, then halted during controlled deliberation after a long unit timeout. Current defaults now use shorter unit timeout/retry fallbacks and settings-owned per-unit overrides. Product policy keeps stalled contested deliberation as a hard halt: no synthesize result is produced, execution artifacts carry the failed deliberation unit and timeout message, <code>degradation-summary.yaml</code> is the structured degraded/halted source, and ReviewRecord records only current-run produced artifact refs.</td><td>Repeat live review after route or unit execution policy changes; keep deterministic timeout fixtures as the regression gate.</td></tr>
-    <tr><td>Speed-quality tuning</td><td>2026-06-05 benchmark records support controlled-high-effort as the default tuning direction, but speed work must preserve material issue recall, boundary-sensitive material admission, boundary uncertainty, actionability, grounding, and recorded non-material surface findings. The active runtime now includes projection-first issue artifacts, issue-scoped controlled deliberation, synthesis map-reduce, runtime-rendered final output, and ReviewRecord terminal digest authority. The deterministic semantic gate covers two fixture-specific target truths, halted terminal-null contracts are covered by ReviewRecord validation tests, and the current live default-path E2E completes sidecar Codex/OAuth review without degraded lenses.</td><td>Use <code>npm run test:e2e</code> as the default live path regression; add provider-specific API/local live conformance only when intentionally testing those routes.</td></tr>
-    <tr><td>Review value-alignment lifecycle</td><td>Dispatch decision table is fixed in <code>pre-dispatch-contracts.md</code>; runtime persists explicit invocation intent, blocks unconfirmed ambiguous criteria, and allows explicitly confirmed criteria.</td><td>Design richer multi-criteria confirmation UX when review setup becomes interactive.</td></tr>
-    <tr><td>MCP execution contract</td><td>MCP review/status/result share artifact refs and failure refs; runtime failures return structured MCP error content; <code>review-run-manifest</code> records step ids and an audit-only resume token. Review continuation closes the first-pass replay, stale artifact, partial worker, and duplicate-dispatch semantics; cancellation is cooperative and eligibility-gated; result content reads are session-boundary checked through <code>src/core-runtime/path-boundary.ts</code>. Core API continuation and direct prompt execution both validate plan-owned refs through <code>src/core-runtime/review/execution-plan-boundary.ts</code> before consuming outputs.</td><td>Keep conformance fixtures for early handle, latest recovery, active duplicate guard, cancellation eligibility, result projections, and boundary disclosure.</td></tr>
-    <tr><td>Observability and idempotency</td><td>Run manifest records worker hashes, synthesis provenance, canonical step ids, resume token, session-id idempotency key, and duplicate-dispatch policy.</td><td>Add per-attempt correlation ids if retry analytics become a product requirement.</td></tr>
-    <tr><td>Security and disclosure</td><td>MCP status/result reads are project-boundary checked and violations return <code>security_disclosure</code> failures; credential references remain env-name only.</td><td>Add artifact sensitivity classes if external artifact sharing is introduced.</td></tr>
-    <tr><td>Retired config versus runtime coordination</td><td>Retired entry policy is closed: runtime records <code>observed_dispatch_width</code> from selected lenses and rejects retired user inputs before authority binding; MCP conformance verifies structured <code>retired_config</code> output.</td><td>Continue pruning archived documentation that implies old entry points are active.</td></tr>
-    <tr><td>Claude host route</td><td>Claude-specific orchestration is not a wired onto-mcp runtime path.</td><td>Add a future adapter only through the same context-isolated worker contract.</td></tr>
-    <tr><td>Route visibility lifecycle</td><td>Prepare/review/status/result and structured failure content share a derived <code>routeVisibility</code> model backed by existing route artifacts.</td><td>Keep the model derived from artifacts; avoid new route authority files.</td></tr>
-    <tr><td>Provider vocabulary authority</td><td>Provider extension documentation must not become a second enum authority.</td><td>Keep any G-MCP7-style document as ownership map and extension checklist only.</td></tr>
-    <tr><td>Per-unit stalled worker handling</td><td>Latest completed full concept-economy recheck <code>.onto/review/20260526-54627475</code> passed the previous coverage-deliberation stall point. Runtime bounds each unit with timeout handling; stalled deliberation and issue-artifact failure paths write halted execution-result state and do not proceed to synthesize.</td><td>Keep timeout closure on execution-result/run-manifest unless MCP consumers require a structured failure record.</td></tr>
-  </table>
+  <rect class="n-llm" x="784" y="504" width="290" height="84" rx="8"/>
+  <text class="t" x="798" y="526">salvage 회수 LLM</text>
+  <text class="s" x="798" y="544">delta: 동급 새 인스턴스 · 전사: 저가 모델</text>
+  <text class="m" x="798" y="564">발명 가드 SALVAGE_INCOMPLETE</text>
 
-  <h2>10. Boundary Decisions</h2>
-  <section class="split">
-    <div class="callout">
-      <strong>Canonical public path</strong>
-      <p><code>onto mcp</code> exposes MCP tools. Review-specific npm scripts have been removed from the public package surface; internal harnesses call TypeScript entrypoints directly.</p>
-    </div>
-    <div class="callout">
-      <strong>Deliberation transport</strong>
-      <p>SendMessageA2A is treated as one host transport idea. The product requirement is transport-neutral: different context-isolated lens units must revisit contested claims under teamlead-controlled deliberation.</p>
-    </div>
-    <div class="callout">
-      <strong>Presentation ownership</strong>
-      <p>Runtime owns bounded facts and artifact truth. Host LLM owns user-facing explanation through <code>llmPresentation</code> prompt/input pairs, so MCP clients do not depend on CLI stdout formatting.</p>
-    </div>
-  </section>
+  <!-- artifacts 레인 -->
+  <rect class="n-art" x="1134" y="116" width="290" height="108" rx="8"/>
+  <text class="t" x="1148" y="138">review 세션 아티팩트</text>
+  <text class="s" x="1148" y="156">execution-result · issue-ledger · stance-matrix</text>
+  <text class="s" x="1148" y="172">deliberation · review-record (YAML canonical)</text>
+  <text class="m" x="1148" y="192">.onto/review/&lt;session&gt;/ — 어느 locus든</text>
+  <text class="m" x="1148" y="208">artifact 진실은 onto가 소유</text>
+
+  <rect class="n-art" x="1134" y="256" width="290" height="92" rx="8"/>
+  <text class="t" x="1148" y="278">reconstruct 세션 아티팩트</text>
+  <text class="s" x="1148" y="296">seed · 성숙 루프 · claim-projection · record</text>
+  <text class="m" x="1148" y="316">.onto/reconstruct/&lt;session&gt;/</text>
+  <text class="m" x="1148" y="332">registry.yaml = 기계가독 권위 그래프</text>
+
+  <rect class="n-art" x="1134" y="380" width="290" height="76" rx="8"/>
+  <text class="t" x="1148" y="402">final-output.md</text>
+  <text class="s" x="1148" y="420">사용자 대면 결과 (artifact 근거 인용)</text>
+  <text class="m" x="1148" y="438">LLM 저작 + runtime 검증 푸터</text>
+
+  <!-- 투영/게이트/품질/연기 레인 -->
+  <rect class="n-view" x="1484" y="116" width="332" height="88" rx="8"/>
+  <text class="t" x="1498" y="138">MCP 응답 투영</text>
+  <text class="s" x="1498" y="156">status/result compact·standard·full + llmPresentation</text>
+  <text class="m" x="1498" y="176">투영은 진실이 아님 — 진실은 세션 아티팩트</text>
+
+  <rect class="n-gate" x="1484" y="236" width="332" height="104" rx="8"/>
+  <text class="t" x="1498" y="258">차단 게이트 (구조 가드 G1~G4 + CI)</text>
+  <text class="s" x="1498" y="276">import 경계 · 스펙 기본값 스캔 · invariant 테스트</text>
+  <text class="s" x="1498" y="292">· 보호 키 INVARIANT-CHANGE 마커</text>
+  <text class="m" x="1498" y="312">.github/workflows/invariants.yml (PR마다)</text>
+  <text class="m" x="1498" y="328">+ 런타임: validator·run-control·fail-loud 경로</text>
+
+  <rect class="n-q" x="1484" y="372" width="332" height="92" rx="8"/>
+  <text class="t" x="1498" y="394">비차단 품질</text>
+  <text class="s" x="1498" y="412">semantic quality gate(주입형 기대값) · 벤치 G5</text>
+  <text class="s" x="1498" y="428">decision gate(runs≥3·fixtures≥2 미만 PRELIMINARY)</text>
+  <text class="m" x="1498" y="448">G6 check:invariant-drift = 집계 리포트</text>
+
+  <rect class="n-post" x="1484" y="496" width="332" height="104" rx="8"/>
+  <text class="t" x="1498" y="518">연기 / 관찰 대기 (hot path 밖)</text>
+  <text class="s" x="1498" y="536">· 유기적 salvage 관찰 — 6/15 09:12 launchd 자동 실행</text>
+  <text class="s" x="1498" y="552">· evolve: 계약만 존재, runtime/MCP 도구 없음</text>
+  <text class="s" x="1498" y="568">· spreadsheet/database reconstruct 어댑터 (계약만)</text>
+  <text class="s" x="1498" y="584">· reconstruct effort 상수의 settings 이관 검토</text>
+
+  <!-- 흐름: 입력 → runtime -->
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M284,162 H344"/>
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M284,280 L344,200"/>
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M284,390 L344,300"/>
+  <!-- runtime 내부 -->
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M534,216 V248"/>
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M534,356 V388"/>
+  <!-- runtime ↔ LLM -->
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M724,290 L784,170"/>
+  <path class="fl" stroke="#d97706" marker-end="url(#a-amber)" d="M784,290 L724,300"/>
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M724,540 L784,545"/>
+  <path class="fl" stroke="#d97706" marker-end="url(#a-amber)" d="M784,430 L724,420"/>
+  <!-- runtime → artifacts -->
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M724,430 L1134,180"/>
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M724,560 L1134,300"/>
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M1279,348 V380"/>
+  <!-- artifacts → 투영 -->
+  <path class="fl" stroke="#94a3b8" stroke-dasharray="6 4" marker-end="url(#a-gray)" d="M1424,170 L1484,160"/>
+  <!-- 게이트 → runtime (차단) -->
+  <path class="fl" stroke="#dc2626" marker-end="url(#a-red)" d="M1484,300 L1424,300"/>
+</svg>
+</div>
+
+<!-- ───────── 아키텍처 ───────── -->
+<h2>아키텍처 (구조 SSOT: docs/architecture/repo-layout.md)</h2>
+<table>
+  <tr><th>층</th><th>위치</th><th>역할</th></tr>
+  <tr><td>MCP surface</td><td><code>src/mcp/</code></td><td>16개 도구 스키마 + 서버 (resources/prompts 자기문서화)</td></tr>
+  <tr><td>Core API</td><td><code>src/core-api/</code></td><td>MCP·하니스가 호출하는 facade (review/reconstruct prepare·run·round·advance·status·result)</td></tr>
+  <tr><td>실행층</td><td><code>src/core-runtime/cli/</code></td><td>invocation runner·dispatch 루프·provider unit executor·nesting worker·salvage — review/를 단방향 import</td></tr>
+  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 — cli/ import 금지(G1 강제)</td></tr>
+  <tr><td>provider 경계</td><td><code>src/core-runtime/llm/</code></td><td>스위처: oauth(codex·claude_code 워커) / api_key(openai·anthropic·grok) / local(lmstudio)</td></tr>
+  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon → rank 2~4 원칙 → rank 5 기능 계약(+reconstruct registry)</td></tr>
+</table>
+
+<!-- ───────── 검증 체계 ───────── -->
+<h2>검증 체계 (현재 전부 green)</h2>
+<table>
+  <tr><th>층</th><th>수단</th><th>비고</th></tr>
+  <tr><td>구조 가드</td><td>G1 <code>check:import-boundary</code> · G2 <code>check:spec-defaults</code> · G4 <code>check:invariant-change</code> · G6 <code>check:invariant-drift</code></td><td>INVARIANTS.md 강제 현황 표가 매핑 소유; CI가 PR마다 G1~G4 실행</td></tr>
+  <tr><td>불변식 테스트</td><td><code>*.invariant.test.ts</code> (G3)</td><td>auth 생략→OAuth 워커, submit schema=spine 단일 source</td></tr>
+  <tr><td>conformance</td><td><code>check:review:invocation-runner</code> · <code>check:mcp:review</code> · <code>check:review:route</code> · <code>check:retired-root-paths</code></td><td>기존 4종</td></tr>
+  <tr><td>테스트</td><td>vitest 85 files / 948 passed (+1 todo)</td><td>golden 하니스·결정론 salvage 트리거 E2E 포함</td></tr>
+  <tr><td>벤치 게이트</td><td>G5 decision gate (하니스 내장)</td><td>runs≥3·fixtures≥2 미충족 시 결론 거부 + PRELIMINARY</td></tr>
+</table>
+
+<!-- ───────── 로드맵/결정/변경영향 ───────── -->
+<h2>로드맵 현황과 다음 결정</h2>
+<ul>
+  <li><b>완료</b>: staged roadmap 전 단계 (격리 기록: <code>development-records/plan/mcp-native-staged-roadmap-completed.md</code>) — host orchestration(B)·nested workers·live 심의·salvage·구조 가드까지.</li>
+  <li><b>대기 1건</b>: 유기적 salvage 관찰 — 6/15(일) 09:12 KST launchd 자동 실행(quota 리셋 직후). 결과 확인 → 설계 doc §7 기록 → 커밋·PR.</li>
+  <li><b>후속 결정 후보</b>: evolve 트랙 활성화 여부 · reconstruct spreadsheet/database 어댑터 · reconstruct 타임아웃 effort 상수의 settings 이관(G2 waiver에 명기).</li>
+</ul>
+
+<h2>변경 영향 읽는 법</h2>
+<ul>
+  <li>보호 표면(settings 키·material 정의·auth 정규화·waiver 표)을 건드리면 <code>INVARIANT-CHANGE: &lt;INV-ID&gt;</code> 마커 + 사용자 확인이 필요하다(G4·AGENTS §0-2).</li>
+  <li>구조 서술은 repo-layout SSOT 한 곳만 고치면 된다(AGENTS·CLAUDE·development.md는 포인터).</li>
+  <li>벤치 수치는 decision gate를 통과한 것만 결론으로 쓴다 — PRELIMINARY는 예비 관찰.</li>
+</ul>
+
 </main>
 </body>
 </html>

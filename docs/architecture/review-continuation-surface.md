@@ -1,10 +1,7 @@
 # Review Continuation Surface
 
-Status: active implementation
-
-Date: 2026-05-27
-
-Owner: operations
+Status: Active — current continuation surface reference (referenced by
+`.onto/processes/review/pre-dispatch-contracts.md` and `productized-live-path.md`)
 
 ## Goal
 

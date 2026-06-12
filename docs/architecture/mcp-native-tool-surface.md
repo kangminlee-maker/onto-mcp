@@ -11,6 +11,8 @@ small set of tools with a stable MCP surface.
 | `onto_prepare_review` | Materialize interpretation, binding, plan, and prompt packets without executing lenses | execution plan refs, opening brief prompt |
 | `onto_review_status` | Read progress for a review session or recover the latest matching session | structured status plus `llmPresentation.progress`, liveness, run-control, material-support, warning, and latest-session projections |
 | `onto_review_continue` | Continue a review when `runControl.continuationAvailable` is true without re-running trusted or active units | continuation plan, continuation attempt refs, updated artifact refs, status, or `already_running` decision |
+| `onto_review_round` | Host orchestration (B): return the units ready to execute now with prompt packets materialized; onto does not execute them | round result (`in_progress` ready units / `ready_to_assemble` / `halted`), packet refs |
+| `onto_review_advance` | Host orchestration (B): report host-executed units; onto validates seats, records results and gates, returns the next round or assembles the `ReviewRecord` | next round result or assembled record refs |
 | `onto_review_cancel` | Request cancellation for a running review session | cancellation request artifact ref plus updated status/run-control projection |
 | `onto_review_result` | Read final result and artifact refs | compact/standard/full projection; `compact` and `standard` keep bounded count-and-signal summaries, `full` includes `review-record.yaml` and `final-output.md` |
 | `onto_list_lenses` | Show canonical lens sets | full/core-axis lens IDs |

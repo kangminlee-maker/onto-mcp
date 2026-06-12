@@ -292,4 +292,3 @@ Unsupported settings stop during profile resolution.
 | [docs/development.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/development.md) | verification harnesses and development workflow |
 | [docs/architecture/repo-layout.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/repo-layout.md) | repository layout SSOT: folder roles and placement rules |
 | [docs/architecture/](https://github.com/kangminlee-maker/onto-mcp/tree/main/docs/architecture) | architecture notes |
-| [docs/roadmap.md](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/roadmap.md) | staged roadmap |
