@@ -13,11 +13,12 @@ The active runtime lives here and must run without reaching into another
 | Path | Role |
 |---|---|
 | `.onto/authority/` | concept SSOT (`core-lexicon.yaml`), runtime-facing lens registry, diagnostic code registry |
-| `.onto/principles/` | rank 2–4 development norm documents (not shipped) |
+| `.onto/principles/` | rank 2–4 development norm documents (shipped in the npm package via the `files` allowlist) |
 | `.onto/domains/` | selectable domain documents and domain-specific profiles |
 | `.onto/processes/shared/` | cross-process target and runtime contracts |
 | `.onto/processes/review/` | review contracts |
 | `.onto/processes/reconstruct/` | reconstruct contracts, contract registry, source profiles |
+| `.onto/processes/evolve/` | future evolve material-kind adapter contract (no active runtime or MCP tool yet) |
 | `.onto/roles/` | review lens and synthesize role definitions |
 | `src/core-runtime/` | executable review/reconstruct runtime |
 | `src/core-api/` | Core API facade called by MCP and repository harnesses |
@@ -36,15 +37,24 @@ migration searches unless the task is about session artifacts themselves.
 
 ```text
 src/core-runtime/
-├── cli/          review bounded step entrypoints + provider unit executors
-├── discovery/    settings chain, onto home, lens registry, host detection
-├── llm/          provider/model switcher + LLM call wrappers
-├── review/       review artifact types, materializers, deliberation, route policy
-└── logger.ts     shared logger
+├── cli/              review bounded step entrypoints, invocation runner, provider unit executors
+├── discovery/        settings chain, onto home, lens registry, host detection
+├── llm/              provider/model switcher + LLM call wrappers
+├── observability/    runtime event stream + watcher attach
+├── onboard/          host registration (`onto register`)
+├── reconstruct/      reconstruct runtime: run control, gates, maturation loop
+├── release-channel/  release channel notice
+├── review/           review artifact types, materializers, deliberation, route policy
+├── logger.ts         shared logger
+├── path-boundary.ts  path containment guard
+├── pipeline-execution-ledger.ts  shared execution ledger core
+└── target-material-kind.ts       target material classification
 ```
 
 - `review/` owns the productized review semantics: context-isolated lenses,
   controlled deliberation, synthesize, and the `ReviewRecord`.
+- `reconstruct/` owns the reconstruct runtime semantics behind the gate
+  catalog in the reconstruct contract registry.
 - `llm/` is the runtime boundary that simplifies API-key / OAuth / local
   provider selection.
 
