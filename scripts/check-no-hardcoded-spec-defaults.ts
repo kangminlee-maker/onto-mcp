@@ -100,9 +100,11 @@ const WAIVERS: Waiver[] = [
 const MODEL_LITERAL_RE =
   /["'](gpt-[0-9][\w.-]*|claude-(?:opus|sonnet|haiku|fable|mythos)[\w.-]*|gemini-[0-9][\w.-]*|o[134](?:-mini|-pro)?)["']/;
 const EFFORT_DEFAULT_RE =
-  /(?:effort\w*|reasoning_effort)\s*(?:=|\?\?)\s*["'](?:minimal|low|medium|high|xhigh)["']/;
+  /(?:effort\w*|reasoning_effort)\s*(?:=|\?\?|:)\s*["'](?:minimal|low|medium|high|xhigh)["']/;
 const AUTH_DEFAULT_RE =
-  /(?:auth\w*\s*(?:=|\?\?)\s*["'](?:oauth|api_key|local)["']|return\s+["'](?:oauth|api_key|local)["'])/;
+  /(?:\bauth\w*\s*(?:=|\?\?|:)\s*["'](?:oauth|api_key|local)["']|return\s+["'](?:oauth|api_key|local)["'])/;
+/** 타입 유니언 문맥(`"a" | "b"`)은 vocabulary 정의지 기본값이 아니다. */
+const TYPE_UNION_CONTEXT_RE = /["']\s*\||\|\s*["']/;
 
 function isCommentLine(text: string): boolean {
   const trimmed = text.trim();
@@ -138,8 +140,9 @@ async function main(): Promise<void> {
       const push = (kind: Detection["kind"]) =>
         detections.push({ file: relPath, line: index + 1, text: text.trim(), kind });
       if (MODEL_LITERAL_RE.test(text)) push("model_literal");
-      if (EFFORT_DEFAULT_RE.test(text)) push("effort_default");
-      if (AUTH_DEFAULT_RE.test(text)) push("auth_default");
+      const isTypeUnionContext = TYPE_UNION_CONTEXT_RE.test(text);
+      if (!isTypeUnionContext && EFFORT_DEFAULT_RE.test(text)) push("effort_default");
+      if (!isTypeUnionContext && AUTH_DEFAULT_RE.test(text)) push("auth_default");
     });
   }
 

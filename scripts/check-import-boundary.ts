@@ -57,7 +57,9 @@ async function listSourceFiles(dir: string): Promise<string[]> {
 function importPathsOf(source: string): Array<{ line: number; importPath: string }> {
   const results: Array<{ line: number; importPath: string }> = [];
   const lines = source.split("\n");
-  const importRe = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g;
+  // `import "x"` 부수효과 import까지 포함 (from/동적 import/require/측면 import).
+  const importRe =
+    /(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)["']([^"']+)["']/g;
   lines.forEach((text, index) => {
     for (const match of text.matchAll(importRe)) {
       results.push({ line: index + 1, importPath: match[1]! });
@@ -94,16 +96,21 @@ async function main(): Promise<void> {
           rule: "INV-MOCK-1: mock-llm-realization may only be imported by the allowlisted realization switch points",
         });
       }
-      if (
-        relPath.startsWith("src/core-runtime/review/") &&
-        importPath.startsWith("../cli/")
-      ) {
-        violations.push({
-          file: relPath,
-          line,
-          importPath,
-          rule: "repo-layout: review/ (semantic layer) must not import cli/ (execution layer)",
-        });
+      if (relPath.startsWith("src/core-runtime/review/") && importPath.startsWith(".")) {
+        // 깊이와 무관하게 실제 해석 경로가 cli/에 닿는지 본다
+        // (예: review/foo/bar.ts의 "../../cli/x.js").
+        const resolved = path
+          .normalize(path.join(path.dirname(relPath), importPath))
+          .split(path.sep)
+          .join("/");
+        if (resolved.startsWith("src/core-runtime/cli/")) {
+          violations.push({
+            file: relPath,
+            line,
+            importPath,
+            rule: "repo-layout: review/ (semantic layer) must not import cli/ (execution layer)",
+          });
+        }
       }
     }
   }

@@ -49,8 +49,6 @@ const PROTECTED_TARGETS: ProtectedTarget[] = [
   },
 ];
 
-const MARKER_RE = /INVARIANT-CHANGE:\s*\S+/;
-
 async function git(args: string[]): Promise<string> {
   const result = await execFileAsync("git", args, {
     cwd: PROJECT_ROOT,
@@ -114,7 +112,17 @@ async function main(): Promise<void> {
   }
 
   const log = await git(["log", "--format=%B", `${mergeBase}..HEAD`]);
-  if (MARKER_RE.test(log)) {
+  // 마커는 닿은 불변식과 일치해야 한다 — 임의의 INVARIANT-CHANGE 문자열이
+  // 다른 보호 대상의 변경까지 승인하지 못하게 한다.
+  const markerInvariantIds = new Set(
+    [...log.matchAll(/INVARIANT-CHANGE:[^\n]*/g)].flatMap((marker) =>
+      [...marker[0].matchAll(/INV-[A-Z]+-\d+/g)].map((id) => id[0]),
+    ),
+  );
+  const unauthorized = touched.filter(
+    ({ target }) => !target.invariants.some((id) => markerInvariantIds.has(id)),
+  );
+  if (unauthorized.length === 0) {
     console.log(
       JSON.stringify(
         {
@@ -122,7 +130,7 @@ async function main(): Promise<void> {
           status: "passed",
           base: baseRef,
           protected_changes: touched.length,
-          marker: log.match(MARKER_RE)![0],
+          marker_invariants: [...markerInvariantIds],
         },
         null,
         2,
@@ -132,15 +140,20 @@ async function main(): Promise<void> {
   }
 
   console.error(
-    "[check:invariant-change] FAIL — protected key changes without an INVARIANT-CHANGE marker",
+    "[check:invariant-change] FAIL — protected key changes without a matching INVARIANT-CHANGE marker",
   );
-  for (const { target, line } of touched) {
+  for (const { target, line } of unauthorized) {
     console.error(
-      `  ${target.file} (${target.invariants.join(", ")}): ${line.slice(0, 120)}`,
+      `  ${target.file} (requires one of: ${target.invariants.join(", ")}): ${line.slice(0, 120)}`,
+    );
+  }
+  if (markerInvariantIds.size > 0) {
+    console.error(
+      `  markers found but for different invariants: ${[...markerInvariantIds].join(", ")}`,
     );
   }
   console.error(
-    '  add "INVARIANT-CHANGE: <INV-ID> — <사유>" to a commit message after user confirmation (AGENTS §0-2).',
+    '  add "INVARIANT-CHANGE: <INV-ID> — <사유>" (해당 불변식 id 포함) to a commit message after user confirmation (AGENTS §0-2).',
   );
   process.exit(1);
 }
