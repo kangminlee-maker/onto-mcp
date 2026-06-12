@@ -201,10 +201,20 @@ import {
   ontologySeedExcludedClaimIds,
 } from "./seed-claim-projections.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
+import {
+  attemptKindForAuthoredArtifactName,
+  createReconstructExecutionTelemetryCollector,
+  failureClassForLlmCallError,
+  mergedUnitExecutionTelemetry,
+  unitIdForAuthoredArtifactName,
+  type ReconstructExecutionTelemetryCollector,
+} from "./execution-telemetry.js";
 
 export interface ReconstructDirectiveAuthor {
   readonly authorId: string;
   readonly owner: "host_llm";
+  /** Runtime-owned execution telemetry recorded by this author's LLM calls. */
+  readonly executionTelemetry?: ReconstructExecutionTelemetryCollector;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -271,6 +281,8 @@ export type ReconstructConfirmationProviderRealization = "direct_call";
 export interface ReconstructConfirmationProvider {
   readonly providerId: string;
   readonly owner: "host_or_user";
+  /** Runtime-owned execution telemetry recorded by this provider's LLM calls. */
+  readonly executionTelemetry?: ReconstructExecutionTelemetryCollector;
   confirmPurpose(
     input: ReconstructPurposeConfirmationInput,
   ): Promise<ReconstructPurposeConfirmationArtifact>;
@@ -2739,7 +2751,18 @@ function createRunManifest(args: {
           "post-publication run-manifest validation is emitted after final output and record refs exist.",
           "Pre-handoff manifest validation must not certify future post-publication audit.",
         ),
-    ],
+    ].map((step) => {
+      const executionTelemetry = mergedUnitExecutionTelemetry(
+        [
+          args.directiveAuthor.executionTelemetry,
+          args.confirmationProvider.executionTelemetry,
+        ],
+        step.step_id,
+      );
+      return executionTelemetry
+        ? { ...step, execution_telemetry: executionTelemetry }
+        : step;
+    }),
     runtime_boundary: {
       semantic_generation: "not_performed",
       semantic_authority: "host_llm_author",
@@ -5547,6 +5570,125 @@ function compactExplorationSynthesisForPrompt(
   };
 }
 
+type ReconstructLlmAttemptKind = Parameters<
+  ReconstructExecutionTelemetryCollector["recordLlmAttempt"]
+>[0]["kind"];
+
+type ReconstructLlmOutputClassification =
+  | { ok: true }
+  | {
+    ok: false;
+    failureClass: "malformed_json" | "parse_repair_failure";
+    failureMessage: string;
+  };
+
+interface RecordedLlmCallArgs {
+  telemetry: ReconstructExecutionTelemetryCollector | undefined;
+  unitId: ReturnType<typeof unitIdForAuthoredArtifactName>;
+  kind: ReconstructLlmAttemptKind;
+  llmCall: ReconstructLlmCall;
+  llmConfig: Partial<LlmCallConfig>;
+  systemPrompt: string;
+  userPrompt: string;
+  maxTokens: number;
+  /** Classifies the returned text (e.g. JSON parseability). Defaults to ok. */
+  classifyOutput?: (text: string) => ReconstructLlmOutputClassification;
+}
+
+/**
+ * Single instrumented LLM call. Records exactly one attempt row per call
+ * (duration, prompt/output chars, supplemental provider tokens, route facts).
+ * Provider/timeout failures and output classification failures are both
+ * recorded on that row; provider failures are rethrown.
+ */
+async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult> {
+  const startedAt = Date.now();
+  const record = (
+    input: {
+      status: "succeeded" | "failed";
+      failureClass?: Parameters<
+        ReconstructExecutionTelemetryCollector["recordLlmAttempt"]
+      >[0]["failureClass"];
+      failureMessage?: string | null;
+      outputChars: number;
+      result?: LlmCallResult;
+    },
+  ): void => {
+    if (!args.telemetry || !args.unitId) return;
+    args.telemetry.recordLlmAttempt({
+      unitId: args.unitId,
+      kind: args.kind,
+      status: input.status,
+      failureClass: input.failureClass ?? null,
+      failureMessage: input.failureMessage ?? null,
+      durationMs: Date.now() - startedAt,
+      promptChars: args.systemPrompt.length + args.userPrompt.length,
+      outputChars: input.outputChars,
+      providerTokensIn: input.result?.input_tokens ?? null,
+      providerTokensOut: input.result?.output_tokens ?? null,
+      providerRoute: args.llmConfig.provider ?? null,
+      modelId: input.result?.model_id ?? args.llmConfig.model_id ?? null,
+      effort: args.llmConfig.reasoning_effort ?? null,
+      systemPrompt: args.systemPrompt,
+    });
+  };
+  let result: LlmCallResult;
+  try {
+    result = await args.llmCall(args.systemPrompt, args.userPrompt, {
+      ...args.llmConfig,
+      max_tokens: args.maxTokens,
+    });
+  } catch (error) {
+    record({
+      status: "failed",
+      failureClass: failureClassForLlmCallError(error, isLlmTimeoutError),
+      failureMessage: error instanceof Error ? error.message : String(error),
+      outputChars: 0,
+    });
+    throw error;
+  }
+  const classification = args.classifyOutput?.(result.text) ?? { ok: true };
+  if (classification.ok) {
+    record({ status: "succeeded", outputChars: result.text.length, result });
+  } else {
+    record({
+      status: "failed",
+      failureClass: classification.failureClass,
+      failureMessage: classification.failureMessage,
+      outputChars: result.text.length,
+      result,
+    });
+  }
+  return result;
+}
+
+interface JsonOutputSink {
+  parsed: Record<string, unknown> | null;
+  failureMessage: string | null;
+}
+
+function jsonOutputClassifier(args: {
+  artifactName: string;
+  failureClass: "malformed_json" | "parse_repair_failure";
+  sink: JsonOutputSink;
+}): (text: string) => ReconstructLlmOutputClassification {
+  return (text) => {
+    try {
+      args.sink.parsed = parseLlmJsonObject(text, args.artifactName);
+      return { ok: true };
+    } catch (error) {
+      args.sink.failureMessage = error instanceof Error
+        ? error.message
+        : String(error);
+      return {
+        ok: false,
+        failureClass: args.failureClass,
+        failureMessage: args.sink.failureMessage,
+      };
+    }
+  };
+}
+
 async function callJsonAuthor(args: {
   llmCall: ReconstructLlmCall;
   llmConfig: Partial<LlmCallConfig>;
@@ -5554,46 +5696,61 @@ async function callJsonAuthor(args: {
   systemPrompt: string;
   userPayload: unknown;
   maxTokens: number;
+  telemetry?: ReconstructExecutionTelemetryCollector;
 }): Promise<Record<string, unknown>> {
-  const result = await args.llmCall(
-    args.systemPrompt,
-    JSON.stringify(args.userPayload, null, 2),
-    { ...args.llmConfig, max_tokens: args.maxTokens },
+  const unitId = unitIdForAuthoredArtifactName(args.artifactName);
+  const initialSink: JsonOutputSink = { parsed: null, failureMessage: null };
+  const result = await callLlmRecorded({
+    telemetry: args.telemetry,
+    unitId,
+    kind: attemptKindForAuthoredArtifactName(args.artifactName),
+    llmCall: args.llmCall,
+    llmConfig: args.llmConfig,
+    systemPrompt: args.systemPrompt,
+    userPrompt: JSON.stringify(args.userPayload, null, 2),
+    maxTokens: args.maxTokens,
+    classifyOutput: jsonOutputClassifier({
+      artifactName: args.artifactName,
+      failureClass: "malformed_json",
+      sink: initialSink,
+    }),
+  });
+  if (initialSink.parsed) return initialSink.parsed;
+  const initialErrorMessage = initialSink.failureMessage ??
+    `${args.artifactName} author returned no parseable JSON object.`;
+  const repairSink: JsonOutputSink = { parsed: null, failureMessage: null };
+  await callLlmRecorded({
+    telemetry: args.telemetry,
+    unitId,
+    kind: "parse_repair",
+    llmCall: args.llmCall,
+    llmConfig: args.llmConfig,
+    systemPrompt: [
+      "Repair malformed JSON for a runtime artifact.",
+      `Artifact: ${args.artifactName}`,
+      "Return exactly one valid JSON object and nothing else.",
+      "Preserve all existing keys, ids, strings, arrays, and object values.",
+      "Only add, remove, or replace JSON punctuation needed to make the object parse.",
+      "Do not add new facts, do not summarize, and do not translate text.",
+    ].join("\n"),
+    userPrompt: JSON.stringify({
+      artifact_name: args.artifactName,
+      parse_error: initialErrorMessage,
+      malformed_json_text: result.text,
+    }, null, 2),
+    maxTokens: jsonRepairMaxTokens(result.text, args.maxTokens),
+    classifyOutput: jsonOutputClassifier({
+      artifactName: args.artifactName,
+      failureClass: "parse_repair_failure",
+      sink: repairSink,
+    }),
+  });
+  if (repairSink.parsed) return repairSink.parsed;
+  throw new Error(
+    `${args.artifactName} author returned invalid JSON and repair failed: ${
+      repairSink.failureMessage ?? "no parseable JSON object"
+    }`,
   );
-  try {
-    return parseLlmJsonObject(result.text, args.artifactName);
-  } catch (initialError) {
-    const repairResult = await args.llmCall(
-      [
-        "Repair malformed JSON for a runtime artifact.",
-        `Artifact: ${args.artifactName}`,
-        "Return exactly one valid JSON object and nothing else.",
-        "Preserve all existing keys, ids, strings, arrays, and object values.",
-        "Only add, remove, or replace JSON punctuation needed to make the object parse.",
-        "Do not add new facts, do not summarize, and do not translate text.",
-      ].join("\n"),
-      JSON.stringify({
-        artifact_name: args.artifactName,
-        parse_error: initialError instanceof Error
-          ? initialError.message
-          : String(initialError),
-        malformed_json_text: result.text,
-      }, null, 2),
-      {
-        ...args.llmConfig,
-        max_tokens: jsonRepairMaxTokens(result.text, args.maxTokens),
-      },
-    );
-    try {
-      return parseLlmJsonObject(repairResult.text, args.artifactName);
-    } catch (repairError) {
-      throw new Error(
-        `${args.artifactName} author returned invalid JSON and repair failed: ${
-          repairError instanceof Error ? repairError.message : String(repairError)
-        }`,
-      );
-    }
-  }
 }
 
 function isLlmTimeoutError(error: unknown): boolean {
@@ -5605,10 +5762,12 @@ function isLlmTimeoutError(error: unknown): boolean {
 export function createDirectCallReconstructDirectiveAuthor(args: {
   llmConfig?: Partial<LlmCallConfig>;
   llmCall?: ReconstructLlmCall;
+  authorId?: string;
 } = {}): ReconstructDirectiveAuthor {
-  const authorId = "direct-call-reconstruct-directive-author";
+  const authorId = args.authorId ?? "direct-call-reconstruct-directive-author";
   const llmConfig = args.llmConfig ?? {};
   const llmCall = args.llmCall ?? callLlm;
+  const telemetry = createReconstructExecutionTelemetryCollector();
   const baseSystem = [
     "You are authoring reconstruct semantic artifacts.",
     "Return only valid JSON. Do not wrap in Markdown.",
@@ -5620,6 +5779,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   return {
     authorId,
     owner: "host_llm",
+    executionTelemetry: telemetry,
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
@@ -5629,6 +5789,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "SourceObservationDirective",
         maxTokens: 2400,
         systemPrompt: [
@@ -5724,6 +5885,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: `ReconstructLensJudgment:${input.lensId}`,
         maxTokens: 3200,
         systemPrompt: [
@@ -5815,6 +5977,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "ExplorationSynthesis",
         maxTokens: 3200,
         systemPrompt: [
@@ -5889,6 +6052,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "SourceFrontier",
         maxTokens: 2000,
         systemPrompt: [
@@ -6016,6 +6180,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         raw = await callJsonAuthor({
           llmCall,
           llmConfig,
+          telemetry,
           artifactName: "SourcePurposeCandidates",
           maxTokens: 5200,
           systemPrompt: sourcePurposeSystemPrompt,
@@ -6026,6 +6191,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         raw = await callJsonAuthor({
           llmCall,
           llmConfig,
+          telemetry,
           artifactName: "SourcePurposeCandidatesMinimalKernel",
           maxTokens: 3000,
           systemPrompt: [
@@ -6130,6 +6296,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         const rawRepair = await callJsonAuthor({
           llmCall,
           llmConfig,
+          telemetry,
           artifactName: "SourcePurposeContradictionRepair",
           maxTokens: Math.min(2600, 800 + contradictionRepairCandidateIds.length * 500),
           systemPrompt: [
@@ -6229,6 +6396,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "CandidateInventory",
         maxTokens: 4000,
         systemPrompt: [
@@ -6294,6 +6462,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         const rawRepair = await callJsonAuthor({
           llmCall,
           llmConfig,
+          telemetry,
           artifactName: "CandidateInventoryCoverageRepair",
           maxTokens: Math.min(3200, 600 + missingCoverageObservationIds.length * 360),
           systemPrompt: [
@@ -6357,6 +6526,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "CandidateDisposition",
         maxTokens: 4000,
         systemPrompt: [
@@ -6421,6 +6591,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         raw = await callJsonAuthor({
           llmCall,
           llmConfig,
+          telemetry,
           artifactName: "OntologySeed",
           maxTokens: 9000,
           systemPrompt: [
@@ -6552,6 +6723,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           raw = await callJsonAuthor({
             llmCall,
             llmConfig: retryLlmConfig,
+            telemetry,
             artifactName: "OntologySeedMinimalKernel",
             maxTokens: 6500,
             systemPrompt: [
@@ -6626,6 +6798,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "ClaimRealizationMap",
         maxTokens: 8000,
         systemPrompt: [
@@ -6914,6 +7087,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           rawBatch = await callJsonAuthor({
             llmCall,
             llmConfig,
+            telemetry,
             artifactName: "CompetencyQuestions",
             maxTokens: domainBatchOnly
               ? DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS
@@ -7300,6 +7474,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         const rawRepair = await callJsonAuthor({
           llmCall,
           llmConfig,
+          telemetry,
           artifactName: "CompetencyQuestionsLimitationRepair",
           maxTokens: 1200,
           systemPrompt: [
@@ -7391,9 +7566,11 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         promptPayloadCharCount(systemPrompt, userPayload) <=
           COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT
       ) {
+        telemetry.recordBatchCount("competency_question_assessment", 1);
         raw = await callJsonAuthor({
           llmCall,
           llmConfig,
+          telemetry,
           artifactName: "CompetencyQuestionAssessment",
           maxTokens: 3200,
           systemPrompt,
@@ -7403,6 +7580,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         const batches = competencyQuestionAssessmentPromptBatches(
           input,
           systemPrompt,
+        );
+        telemetry.recordBatchCount(
+          "competency_question_assessment",
+          batches.length,
         );
         const assessments: Record<string, unknown>[] = [];
         for (let index = 0; index < batches.length; index += 1) {
@@ -7429,6 +7610,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           const batchRaw = await callJsonAuthor({
             llmCall,
             llmConfig,
+            telemetry,
             artifactName: `CompetencyQuestionAssessment batch ${index + 1}`,
             maxTokens: 3200,
             systemPrompt,
@@ -7498,6 +7680,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "FailureClassification",
         maxTokens: 2600,
         systemPrompt: [
@@ -7562,6 +7745,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "RevisionProposal",
         maxTokens: 2600,
         systemPrompt: [
@@ -7619,6 +7803,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "StopDecision",
         maxTokens: 1600,
         systemPrompt: [
@@ -7684,6 +7869,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "MaturationQuestionFrontier",
         maxTokens: 4200,
         systemPrompt: [
@@ -7844,6 +8030,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "MaturationClosureFrontier",
         maxTokens: 3600,
         systemPrompt: [
@@ -7973,6 +8160,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "AnswerSupportLedger",
         maxTokens: 3800,
         systemPrompt: [
@@ -8113,6 +8301,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "MaturationAnswerClaims",
         maxTokens: 3200,
         systemPrompt: [
@@ -8209,6 +8398,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
+        telemetry,
         artifactName: "OntologyExpansion",
         maxTokens: 3200,
         systemPrompt: [
@@ -8286,8 +8476,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeFinalOutput(input) {
-      const result = await llmCall(
-        [
+      const result = await callLlmRecorded({
+        telemetry,
+        unitId: "final_output",
+        kind: "initial",
+        llmCall,
+        llmConfig,
+        maxTokens: 4200,
+        userPrompt: JSON.stringify(compactFinalOutputPromptPayload(input), null, 2),
+        systemPrompt: [
           "You are writing the final reconstruct result for the user.",
           "Write concise Markdown. Ground every important statement in artifact refs or ids.",
           "Use claim.name as the user-facing label. Include claim_id only where artifact truth or traceability needs it.",
@@ -8299,9 +8496,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Do not claim full domain-document alignment beyond governing_snapshot domain competency admission.",
           "Do not invent or upgrade claim projection levels. The canonical claim-projection artifact remains the truth authority; prose may summarize its already-published validated contents.",
         ].join("\n"),
-        JSON.stringify(compactFinalOutputPromptPayload(input), null, 2),
-        { ...llmConfig, max_tokens: 4200 },
-      );
+      });
       return result.text;
     },
   };
@@ -8310,13 +8505,17 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
 export function createDirectCallReconstructConfirmationProvider(args: {
   llmConfig?: Partial<LlmCallConfig>;
   llmCall?: ReconstructLlmCall;
+  providerId?: string;
 } = {}): ReconstructConfirmationProvider {
-  const providerId = "direct-call-reconstruct-confirmation-provider";
+  const providerId = args.providerId ??
+    "direct-call-reconstruct-confirmation-provider";
   const llmConfig = args.llmConfig ?? {};
   const llmCall = args.llmCall ?? callLlm;
+  const telemetry = createReconstructExecutionTelemetryCollector();
   return {
     providerId,
     owner: "host_or_user",
+    executionTelemetry: telemetry,
     async confirmPurpose(input) {
       const selectedCandidate = input.sourcePurposeCandidates.purpose_candidates
         .find((candidate) =>
@@ -8354,8 +8553,18 @@ export function createDirectCallReconstructConfirmationProvider(args: {
           },
         };
       }
-      const result = await llmCall(
-        [
+      const purposeConfirmationSink: JsonOutputSink = {
+        parsed: null,
+        failureMessage: null,
+      };
+      const result = await callLlmRecorded({
+        telemetry,
+        unitId: "purpose_confirmation",
+        kind: "initial",
+        llmCall,
+        llmConfig,
+        maxTokens: 2400,
+        systemPrompt: [
           "You are mediating source-derived purpose confirmation for a non-interactive host.",
           "Return only valid JSON. Do not wrap in Markdown.",
           "The source-purpose validator has determined that the selected purpose was inferred or limitation-backed and therefore needs confirmation before seed readiness can honestly project ready or limited.",
@@ -8363,16 +8572,21 @@ export function createDirectCallReconstructConfirmationProvider(args: {
           "Use confirmed only when the selected statement is acceptable as-is. Use revised_confirmed only when a revised_statement is supplied and still grounded in the same source-purpose candidate. Use rejected, pending, revised_pending_evidence_check, or not_available when the seed should not proceed.",
           "JSON shape: {\"confirmation_status\":\"confirmed|rejected|revised_pending_evidence_check|revised_confirmed|pending|not_available\",\"confirmed_statement\":\"... or null\",\"revised_statement\":\"... or null\",\"confirmed_frame_element_refs\":[\"...\"],\"rejected_frame_element_refs\":[\"...\"],\"user_response_summary\":\"...\",\"source_conflict_policy\":\"...\",\"limitation_refs\":[\"...\"]}",
         ].join("\n"),
-        JSON.stringify({
+        userPrompt: JSON.stringify({
           source_purpose_candidates_ref: input.sourcePurposeCandidatesRef,
           source_purpose_candidates_validation_ref:
             input.sourcePurposeCandidatesValidationRef,
           selected_candidate: selectedCandidate,
           validation: input.sourcePurposeCandidatesValidation,
         }, null, 2),
-        { ...llmConfig, max_tokens: 2400 },
-      );
-      const raw = parseLlmJsonObject(result.text, "PurposeConfirmation");
+        classifyOutput: jsonOutputClassifier({
+          artifactName: "PurposeConfirmation",
+          failureClass: "malformed_json",
+          sink: purposeConfirmationSink,
+        }),
+      });
+      const raw = purposeConfirmationSink.parsed ??
+        parseLlmJsonObject(result.text, "PurposeConfirmation");
       const status = enumString(
         raw.confirmation_status,
         [
@@ -8432,8 +8646,18 @@ export function createDirectCallReconstructConfirmationProvider(args: {
           ...new Set(claim.evidence_refs.map((ref) => sourceBasename(ref.source_ref))),
         ],
       }));
-      const result = await llmCall(
-        [
+      const seedConfirmationSink: JsonOutputSink = {
+        parsed: null,
+        failureMessage: null,
+      };
+      const result = await callLlmRecorded({
+        telemetry,
+        unitId: "seed_confirmation",
+        kind: "initial",
+        llmCall,
+        llmConfig,
+        maxTokens: 2400,
+        systemPrompt: [
           "You are mediating reconstruct Seed confirmation for a non-interactive host.",
           "Return only valid JSON. Do not wrap in Markdown.",
           "Classify every Seed claim summary into confirmed, rejected, partial, or deferred for the declared purpose.",
@@ -8442,16 +8666,21 @@ export function createDirectCallReconstructConfirmationProvider(args: {
           "Do not re-author Seed content or assess competency-question answerability. This step only assigns seed-claim confirmation state before competency questions are authored.",
           "JSON shape: {\"confirmation_status\":\"accepted|rejected|partial|deferred\",\"confirmed_claim_ids\":[\"...\"],\"rejected_claim_ids\":[\"...\"],\"partial_claim_ids\":[\"...\"],\"deferred_claim_ids\":[\"...\"],\"notes\":[\"...\"]}",
         ].join("\n"),
-        JSON.stringify({
+        userPrompt: JSON.stringify({
           ontology_seed_ref: input.ontologySeedRef,
           ontology_seed_validation_status: input.ontologySeedValidation.validation_status,
           ontology_seed_validation_results: input.ontologySeedValidation.validation_results,
           ontology_seed_validation_violation_count: input.ontologySeedValidation.violations.length,
           claim_summaries: claimSummaries,
         }, null, 2),
-        { ...llmConfig, max_tokens: 2400 },
-      );
-      const raw = parseLlmJsonObject(result.text, "SeedConfirmation");
+        classifyOutput: jsonOutputClassifier({
+          artifactName: "SeedConfirmation",
+          failureClass: "malformed_json",
+          sink: seedConfirmationSink,
+        }),
+      });
+      const raw = seedConfirmationSink.parsed ??
+        parseLlmJsonObject(result.text, "SeedConfirmation");
       const confirmationStatus = stringValue(
         raw.confirmation_status,
         "confirmation_status",

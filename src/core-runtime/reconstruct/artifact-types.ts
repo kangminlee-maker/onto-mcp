@@ -2983,6 +2983,12 @@ export interface ReconstructRunManifestStep {
   artifact_refs: string[];
   reason?: string;
   authority_impact?: string;
+  /**
+   * Runtime-owned per-unit execution telemetry recorded at the LLM call
+   * boundary (duration, prompt/output chars, attempt lineage, failure
+   * classes). Present only for units that made LLM calls in this run.
+   */
+  execution_telemetry?: import("./execution-telemetry.js").ReconstructUnitExecutionTelemetry;
 }
 
 export interface ReconstructRunSnapshotFamily {

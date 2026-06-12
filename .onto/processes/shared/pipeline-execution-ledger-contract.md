@@ -81,8 +81,65 @@ interface PipelineExecutionLedgerUnitEntry {
   lastFailureMessage: string | null;
   upstreamUnitIds: string[];
   downstreamUnitIds: string[];
+  executionTelemetry?: PipelineUnitExecutionTelemetry | null;
+}
+
+interface PipelineUnitExecutionTelemetry {
+  unit_id: string;
+  llm_call_count: number;
+  duration_ms: number;
+  prompt_chars: number;
+  output_chars: number;
+  provider_tokens_in: number | null;
+  provider_tokens_out: number | null;
+  provider_route: string | null;
+  model_id: string | null;
+  effort: string | null;
+  prompt_policy_sha256: string | null;
+  attempt_count: number;
+  attempts: Array<{
+    attempt: number;
+    kind: "initial" | "parse_repair" | "semantic_repair" | "timeout_recovery";
+    status: "succeeded" | "failed";
+    failure_class:
+      | "malformed_json"
+      | "parse_repair_failure"
+      | "schema_validation_failure"
+      | "timeout"
+      | "provider_error"
+      | null;
+    failure_message: string | null;
+    duration_ms: number;
+  }>;
+  batch_count: number | null;
 }
 ```
+
+Execution telemetry rules:
+
+- Telemetry is runtime-owned. It is recorded at the LLM call boundary by the
+  producing pipeline; LLMs have no authority over any telemetry value.
+- `prompt_chars`/`output_chars` are the canonical size measure for speed and
+  size comparisons: runtime computes them directly, so they are always
+  available and comparable across providers and mock realizations. Provider
+  token usage (`provider_tokens_in/out`) is a supplemental fact recorded only
+  when the provider reports it; comparisons are valid only between runs using
+  the same measure and the same provider route.
+- One attempt row is recorded per actual LLM call. `failure_class` separates
+  output-shape failures (`malformed_json`, `parse_repair_failure`), reserved
+  validation-feedback retries (`schema_validation_failure`), and transport
+  failures (`timeout`, `provider_error`).
+- `prompt_policy_sha256` is a source-layer identity fact: the hash of the
+  unit's first initial system prompt, so before/after comparisons can
+  attribute metric deltas to prompt-policy changes. Run-level source-layer
+  identities (registry/contract/profile/validator snapshots) remain owned by
+  the run manifest's governing snapshot.
+- `batch_count` records deterministic prompt batching (for example
+  competency-question assessment) so batching changes stay attributable.
+- Units that made no LLM call carry no telemetry field; absence is not a
+  failure signal.
+- Current population status: `reconstruct` populates telemetry from its run
+  manifest steps. `review` does not populate it yet.
 
 Rules:
 

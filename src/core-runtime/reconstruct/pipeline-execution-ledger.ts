@@ -18,6 +18,7 @@ import {
   type PipelineExecutionOwner,
   type PipelineExecutionUnitStatus,
 } from "../pipeline-execution-ledger.js";
+import { lastFailureMessageFromTelemetry } from "./execution-telemetry.js";
 
 type ReconstructArtifactRefKey = keyof ReconstructRecordArtifactRefs | "reconstruct_record";
 
@@ -1238,6 +1239,7 @@ export async function buildReconstructPipelineExecutionLedger(
         validationStatusesByUnitId,
       });
       const manifestStep = manifestStepByUnitId.get(spec.unitId);
+      const executionTelemetry = manifestStep?.execution_telemetry ?? null;
       const entry: PipelineExecutionLedgerUnitEntry = {
         unitId: spec.unitId,
         unitKind: spec.unitKind,
@@ -1253,10 +1255,12 @@ export async function buildReconstructPipelineExecutionLedger(
         status,
         trustStatus: trust.trustStatus,
         trustReason: trust.trustReason,
-        attemptCount: manifestStep ? 1 : 0,
-        lastFailureMessage: null,
+        attemptCount: executionTelemetry?.attempt_count ??
+          (manifestStep ? 1 : 0),
+        lastFailureMessage: lastFailureMessageFromTelemetry(executionTelemetry),
         upstreamUnitIds,
         downstreamUnitIds: downstreamUnitIds.get(spec.unitId) ?? [],
+        ...(executionTelemetry ? { executionTelemetry } : {}),
       };
       nextUnits.push(entry);
       if (isTrustedLedgerUnit(entry)) nextTrustedUnitIds.add(spec.unitId);
