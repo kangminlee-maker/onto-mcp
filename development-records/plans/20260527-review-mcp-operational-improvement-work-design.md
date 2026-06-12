@@ -9,7 +9,7 @@ creating a second review artifact truth.
 
 Source plan:
 
-- `docs/architecture/review-mcp-operational-improvement-plan.md`
+- `development-records/plan/review-mcp-operational-improvement-plan.md` (2026-06-12에 docs/architecture에서 격리 이동)
 
 Evidence basis:
 

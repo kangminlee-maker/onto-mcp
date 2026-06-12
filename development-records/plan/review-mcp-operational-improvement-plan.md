@@ -1,6 +1,6 @@
 # Review MCP Operational Improvement Plan
 
-Status: Implemented locally; kept as operational design reference
+Status: Implemented; isolated to development-records on 2026-06-12 (was docs/architecture/) — current behavior authority is the runtime and rank-5 contracts
 
 Date: 2026-05-27
 

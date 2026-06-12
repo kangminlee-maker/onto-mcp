@@ -277,6 +277,8 @@ review tools:
 - `onto_review` — review 실행
 - `onto_prepare_review` — 실행 전 session과 prompt packet 준비
 - `onto_review_continue` — 기존 session artifact에서 eligible frontier를 계속 실행
+- `onto_review_round` — host orchestration(B): 지금 실행 가능한 unit과 packet 반환 (onto는 실행하지 않음)
+- `onto_review_advance` — host orchestration(B): host가 실행한 unit 보고 → seat 검증·기록 후 다음 round 또는 record 조립
 - `onto_review_cancel` — 실행 중 review의 cooperative cancellation 요청
 - `onto_review_status` — 진행/상태 조회
 - `onto_review_result` — 완료 결과 조회
