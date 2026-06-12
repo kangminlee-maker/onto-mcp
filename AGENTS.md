@@ -60,14 +60,14 @@
 
 | 순위 | 파일 | 폴더 |
 |---|---|---|
-| 1 | [core-lexicon.yaml](/Users/kangmin/cowork/onto-mcp/.onto/authority/core-lexicon.yaml) | .onto/authority/ |
-| 2 | [ontology-as-code-guideline.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/ontology-as-code-guideline.md) | .onto/principles/ |
-| 2 | [llm-native-development-guideline.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/llm-native-development-guideline.md) | .onto/principles/ |
-| 2 | [non-specialist-communication-guideline.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/non-specialist-communication-guideline.md) | .onto/principles/ |
-| 2 | [product-locality-principle.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/product-locality-principle.md) | .onto/principles/ |
-| 3 | [productization-charter.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/productization-charter.md) | .onto/principles/ |
-| 4 | [llm-runtime-interface-principles.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/llm-runtime-interface-principles.md) | .onto/principles/ |
-| 4 | [ontology-as-code-naming-charter.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/ontology-as-code-naming-charter.md) | .onto/principles/ |
+| 1 | [core-lexicon.yaml](.onto/authority/core-lexicon.yaml) | .onto/authority/ |
+| 2 | [ontology-as-code-guideline.md](.onto/principles/ontology-as-code-guideline.md) | .onto/principles/ |
+| 2 | [llm-native-development-guideline.md](.onto/principles/llm-native-development-guideline.md) | .onto/principles/ |
+| 2 | [non-specialist-communication-guideline.md](.onto/principles/non-specialist-communication-guideline.md) | .onto/principles/ |
+| 2 | [product-locality-principle.md](.onto/principles/product-locality-principle.md) | .onto/principles/ |
+| 3 | [productization-charter.md](.onto/principles/productization-charter.md) | .onto/principles/ |
+| 4 | [llm-runtime-interface-principles.md](.onto/principles/llm-runtime-interface-principles.md) | .onto/principles/ |
+| 4 | [ontology-as-code-naming-charter.md](.onto/principles/ontology-as-code-naming-charter.md) | .onto/principles/ |
 | 5 | 기능별 계약 | .onto/processes/{feature}/*.md |
 | 6 | 타입·구현 | src/core-runtime/ |
 | 7 | 기능 프로세스·역할 정의 | .onto/processes/review/*.md, .onto/roles/*.md |
@@ -82,40 +82,40 @@ top-level 역할 표, `src/core-runtime/` 내부 구조, `.onto/review/*` 세션
 
 target material 관련 작업 시 추가로 읽을 문서:
 
-1. [target-material-kind-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/shared/target-material-kind-contract.md)
+1. [target-material-kind-contract.md](.onto/processes/shared/target-material-kind-contract.md)
 
 `review` 작업 시 추가로 읽을 문서:
 
-1. [productized-live-path.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/productized-live-path.md)
-2. [review-execution-ux-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-execution-ux-contract.md)
-3. [lens-registry.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-registry.md)
-4. [interpretation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/interpretation-contract.md)
-5. [binding-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/binding-contract.md)
-6. [lens-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-prompt-contract.md)
-7. [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/synthesize-prompt-contract.md)
-8. [issue-stance-deliberation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/issue-stance-deliberation-contract.md)
-9. [shared-phenomenon-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/shared-phenomenon-contract.md)
-10. [material-issue-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/material-issue-contract.md)
+1. [productized-live-path.md](.onto/processes/review/productized-live-path.md)
+2. [review-execution-ux-contract.md](.onto/processes/review/review-execution-ux-contract.md)
+3. [lens-registry.md](.onto/processes/review/lens-registry.md)
+4. [interpretation-contract.md](.onto/processes/review/interpretation-contract.md)
+5. [binding-contract.md](.onto/processes/review/binding-contract.md)
+6. [lens-prompt-contract.md](.onto/processes/review/lens-prompt-contract.md)
+7. [synthesize-prompt-contract.md](.onto/processes/review/synthesize-prompt-contract.md)
+8. [issue-stance-deliberation-contract.md](.onto/processes/review/issue-stance-deliberation-contract.md)
+9. [shared-phenomenon-contract.md](.onto/processes/review/shared-phenomenon-contract.md)
+10. [material-issue-contract.md](.onto/processes/review/material-issue-contract.md)
 11. selected domain `problem_framing_profile.md` if `session_domain` is not `none`
-12. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
-13. [review-target-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-target-profile-contract.md)
-14. [review-context-manifest-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-context-manifest-contract.md)
-15. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
-16. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
-17. [pipeline-execution-ledger-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/shared/pipeline-execution-ledger-contract.md)
-18. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
-19. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
-20. [review-continuation-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/review-continuation-surface.md)
-21. [mcp-native-tool-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/mcp-native-tool-surface.md)
+12. [execution-preparation-artifacts.md](.onto/processes/review/execution-preparation-artifacts.md)
+13. [review-target-profile-contract.md](.onto/processes/review/review-target-profile-contract.md)
+14. [review-context-manifest-contract.md](.onto/processes/review/review-context-manifest-contract.md)
+15. [prompt-execution-runner-contract.md](.onto/processes/review/prompt-execution-runner-contract.md)
+16. [pre-dispatch-contracts.md](.onto/processes/review/pre-dispatch-contracts.md)
+17. [pipeline-execution-ledger-contract.md](.onto/processes/shared/pipeline-execution-ledger-contract.md)
+18. [record-contract.md](.onto/processes/review/record-contract.md)
+19. [record-field-mapping.md](.onto/processes/review/record-field-mapping.md)
+20. [review-continuation-surface.md](docs/architecture/review-continuation-surface.md)
+21. [mcp-native-tool-surface.md](docs/architecture/mcp-native-tool-surface.md)
 
 `reconstruct` 작업 시 추가로 읽을 문서:
 
-1. [reconstruct-boundary-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-boundary-contract.md)
-2. [ontology-seeding-and-maturation-design.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/ontology-seeding-and-maturation-design.md)
-3. [operational-ontology-seed-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/operational-ontology-seed-contract.md)
-4. [reconstruct-contract-registry.yaml](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-contract-registry.yaml)
-5. [reconstruct-execution-ux-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-execution-ux-contract.md)
-6. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
+1. [reconstruct-boundary-contract.md](.onto/processes/reconstruct/reconstruct-boundary-contract.md)
+2. [ontology-seeding-and-maturation-design.md](.onto/processes/reconstruct/ontology-seeding-and-maturation-design.md)
+3. [operational-ontology-seed-contract.md](.onto/processes/reconstruct/operational-ontology-seed-contract.md)
+4. [reconstruct-contract-registry.yaml](.onto/processes/reconstruct/reconstruct-contract-registry.yaml)
+5. [reconstruct-execution-ux-contract.md](.onto/processes/reconstruct/reconstruct-execution-ux-contract.md)
+6. [source-profile-contract.md](.onto/processes/reconstruct/source-profile-contract.md)
 7. selected source profile under `.onto/processes/reconstruct/source-profiles/`
 
 ---
@@ -124,7 +124,7 @@ target material 관련 작업 시 추가로 읽을 문서:
 
 원칙은 아래 문서에 정의되어 있다. 재서술하지 않는다.
 
-- **LLM/runtime capability boundary**: READ `/Users/kangmin/.codex/guides/llm-capability-boundary.md`
+- **LLM/runtime capability boundary**: READ `~/.codex/guides/llm-capability-boundary.md`
 - **onto-mcp LLM/runtime 적용 규칙**: READ `.onto/principles/llm-native-development-guideline.md`
 - **인터페이스 seat와 boundary state**: READ `.onto/principles/llm-runtime-interface-principles.md`
 - **Ontology as Code 규칙**: READ `.onto/principles/ontology-as-code-guideline.md`
@@ -137,8 +137,8 @@ target material 관련 작업 시 추가로 읽을 문서:
 
 ## 4. Canonical Terms
 
-개념 SSOT: [core-lexicon.yaml](/Users/kangmin/cowork/onto-mcp/.onto/authority/core-lexicon.yaml)
-이름 규칙: [ontology-as-code-naming-charter.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/ontology-as-code-naming-charter.md)
+개념 SSOT: [core-lexicon.yaml](.onto/authority/core-lexicon.yaml)
+이름 규칙: [ontology-as-code-naming-charter.md](.onto/principles/ontology-as-code-naming-charter.md)
 
 자주 쓰는 개념:
 
@@ -206,11 +206,11 @@ bounded dispatch 계약을 강제하지 못하므로 pre-dispatch에서 fail-lou
 
 기준 문서:
 
-- [lens-registry.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-registry.md)
-- [lens-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-prompt-contract.md)
-- [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/synthesize-prompt-contract.md)
-- [issue-stance-deliberation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/issue-stance-deliberation-contract.md)
-- [productized-live-path.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/productized-live-path.md)
+- [lens-registry.md](.onto/processes/review/lens-registry.md)
+- [lens-prompt-contract.md](.onto/processes/review/lens-prompt-contract.md)
+- [synthesize-prompt-contract.md](.onto/processes/review/synthesize-prompt-contract.md)
+- [issue-stance-deliberation-contract.md](.onto/processes/review/issue-stance-deliberation-contract.md)
+- [productized-live-path.md](.onto/processes/review/productized-live-path.md)
 
 ---
 
@@ -260,9 +260,9 @@ bounded dispatch 계약을 강제하지 못하므로 pre-dispatch에서 fail-lou
 
 관련 문서:
 
-- [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
-- [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
-- [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
+- [execution-preparation-artifacts.md](.onto/processes/review/execution-preparation-artifacts.md)
+- [record-contract.md](.onto/processes/review/record-contract.md)
+- [record-field-mapping.md](.onto/processes/review/record-field-mapping.md)
 
 ---
 
@@ -295,7 +295,7 @@ reconstruct tools:
 `onto mcp`는 stdio MCP 서버 시작 명령이며 단발성 review 실행 명령이 아니다.
 `src/core-runtime/cli/review-invoke.ts`는 내부 argv adapter와 live E2E 검증 entry로만 취급한다.
 
-관련 설정: [package.json](/Users/kangmin/cowork/onto-mcp/package.json), [tsconfig.json](/Users/kangmin/cowork/onto-mcp/tsconfig.json)
+관련 설정: [package.json](package.json), [tsconfig.json](tsconfig.json)
 
 ---
 
@@ -339,9 +339,9 @@ onto의 테스트는 evidence class를 분리한다.
 
 기준 문서:
 
-- [DD-010](/Users/kangmin/cowork/onto-mcp/docs/decisions/DD-010-onto-mcp-native-tool-surface.md)
-- [repo-layout.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/repo-layout.md)
-- [mcp-native-tool-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/mcp-native-tool-surface.md)
+- [DD-010](docs/decisions/DD-010-onto-mcp-native-tool-surface.md)
+- [repo-layout.md](docs/architecture/repo-layout.md)
+- [mcp-native-tool-surface.md](docs/architecture/mcp-native-tool-surface.md)
 
 ---
 
