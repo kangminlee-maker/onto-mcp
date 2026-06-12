@@ -28,6 +28,9 @@ import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
 import { createOntoReconstructCoreApi } from "../src/core-api/reconstruct-api.js";
 import {
+  gradeBenchmarkEvidence,
+} from "../src/core-runtime/reconstruct/benchmark-evidence.js";
+import {
   evaluateReconstructGoldenQualityGate,
   reconstructGoldenFixtureSpec,
   RECONSTRUCT_QUALITY_GATE_FIXTURE_IDS,
@@ -44,8 +47,6 @@ import type { PipelineUnitExecutionTelemetry } from "../src/core-runtime/pipelin
 
 const execFileAsync = promisify(execFile);
 const PROJECT_ROOT = process.cwd();
-const PRELIMINARY_STATUS = "PRELIMINARY — not decision-grade";
-const DECISION_GRADE_STATUS = "decision-grade";
 
 type Realization = "mock" | "live";
 
@@ -454,46 +455,31 @@ async function main(): Promise<void> {
     }
   }
 
-  // Evidence grading (INV-BENCH-1 + quality-evidence trust): performance
-  // timing evidence needs runs>=3 and fixtures>=2; semantic-quality evidence
-  // is trusted only when no run was rejected for missing measurement
-  // provenance. A record with rejected quality evidence is PRELIMINARY even
-  // if the timing repetitions are sufficient. not_applicable quality runs
-  // (mock vs live-only fixture) do not lower the grade; they are reported.
-  const performanceEvidenceMet = options.runs >= 3 && options.fixtureIds.length >= 2;
+  // Evidence grading is owned by gradeBenchmarkEvidence (single source,
+  // pinned by tests): INV-BENCH-1 performance thresholds plus quality-evidence
+  // trust (no rejected runs, at least one scored run). not_applicable quality
+  // runs are reported but only lower the grade when nothing was scored.
   const qualityRuns = runs.filter((run) => run.quality_gate.q1 !== null);
   const rejectedQualityRuns = runs.filter(
     (run) => run.quality_gate.status === "rejected",
   );
-  const evidenceGrade = performanceEvidenceMet &&
-    rejectedQualityRuns.length === 0 &&
-    qualityRuns.length > 0;
-  const statusReason = evidenceGrade
-    ? "runs>=3 and fixtures>=2, scored quality evidence present, no quality-evidence rejection"
-    : [
-      ...(performanceEvidenceMet
-        ? []
-        : ["performance evidence below INV-BENCH-1 thresholds (runs>=3, fixtures>=2)"]),
-      ...(rejectedQualityRuns.length > 0
-        ? [
-          `quality evidence rejected on ${rejectedQualityRuns.length} run(s) (missing telemetry source fields)`,
-        ]
-        : []),
-      ...(qualityRuns.length === 0
-        ? ["no scored quality evidence (every quality gate was not_applicable)"]
-        : []),
-    ].join("; ");
+  const evidence = gradeBenchmarkEvidence({
+    repetitions: options.runs,
+    fixtureCount: options.fixtureIds.length,
+    scoredQualityRunCount: qualityRuns.length,
+    rejectedQualityRunCount: rejectedQualityRuns.length,
+  });
   const report = {
     benchmark: "reconstruct-pipeline",
     record_family:
       "pipeline-benchmark (specializes the review-pipeline-* record family; shared fields unchanged, reconstruct facts in reconstruct_extension)",
-    status: evidenceGrade ? DECISION_GRADE_STATUS : PRELIMINARY_STATUS,
-    status_reason: statusReason,
+    status: evidence.status,
+    status_reason: evidence.statusReason,
     evidence: {
       performance: {
         repetitions: options.runs,
         fixture_count: options.fixtureIds.length,
-        meets_inv_bench_1: performanceEvidenceMet,
+        meets_inv_bench_1: evidence.performanceEvidenceMet,
       },
       quality: {
         scored_run_count: qualityRuns.length,
