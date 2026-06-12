@@ -163,6 +163,21 @@ async function gitCommit(): Promise<string> {
   }
 }
 
+/**
+ * Source-state provenance: a record is traceable to its commit only when the
+ * working tree was clean at generation time. Dirty-tree records say so.
+ */
+async function gitWorkingTreeState(): Promise<"clean" | "dirty" | "unknown"> {
+  try {
+    const { stdout } = await execFileAsync("git", ["status", "--porcelain"], {
+      cwd: PROJECT_ROOT,
+    });
+    return stdout.trim().length === 0 ? "clean" : "dirty";
+  } catch {
+    return "unknown";
+  }
+}
+
 async function readYamlFile<T>(filePath: string): Promise<T> {
   return parseYaml(await fs.readFile(filePath, "utf8")) as T;
 }
@@ -330,7 +345,7 @@ function renderMarkdown(report: Record<string, unknown>): string {
     `# Reconstruct Pipeline Benchmark (${String(report.realization)})`,
     "",
     `> Status: ${String(report.status)} (${String(report.status_reason)})`,
-    `> Generated: ${String(report.generated_at)} | Commit: ${String(report.commit).slice(0, 9)}`,
+    `> Generated: ${String(report.generated_at)} | Commit: ${String(report.commit).slice(0, 9)} (${String(report.working_tree_state)} tree)`,
     `> Fixtures: ${(report.fixtures as string[]).join(", ")} | Repetitions: ${String(report.repetitions)}`,
     `> comparison_conclusion: null (single-case record; lever comparisons arrive with Phase 2)`,
     "",
@@ -403,6 +418,7 @@ function renderMarkdown(report: Record<string, unknown>): string {
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   const commit = await gitCommit();
+  const workingTreeState = await gitWorkingTreeState();
   const previousEnv = {
     ONTO_LLM_MOCK: process.env.ONTO_LLM_MOCK,
     ONTO_RUNTIME_WATCHER: process.env.ONTO_RUNTIME_WATCHER,
@@ -449,9 +465,11 @@ async function main(): Promise<void> {
   const rejectedQualityRuns = runs.filter(
     (run) => run.quality_gate.status === "rejected",
   );
-  const evidenceGrade = performanceEvidenceMet && rejectedQualityRuns.length === 0;
+  const evidenceGrade = performanceEvidenceMet &&
+    rejectedQualityRuns.length === 0 &&
+    qualityRuns.length > 0;
   const statusReason = evidenceGrade
-    ? "runs>=3 and fixtures>=2 and no quality-evidence rejection"
+    ? "runs>=3 and fixtures>=2, scored quality evidence present, no quality-evidence rejection"
     : [
       ...(performanceEvidenceMet
         ? []
@@ -460,6 +478,9 @@ async function main(): Promise<void> {
         ? [
           `quality evidence rejected on ${rejectedQualityRuns.length} run(s) (missing telemetry source fields)`,
         ]
+        : []),
+      ...(qualityRuns.length === 0
+        ? ["no scored quality evidence (every quality gate was not_applicable)"]
         : []),
     ].join("; ");
   const report = {
@@ -487,6 +508,7 @@ async function main(): Promise<void> {
     repetitions: options.runs,
     generated_at: new Date().toISOString(),
     commit,
+    working_tree_state: workingTreeState,
     metrics: {
       duration_s: aggregate(runs, (run) => run.duration_s),
       total_llm_duration_ms: aggregate(runs, (run) => run.totals.llm_duration_ms),
@@ -498,7 +520,7 @@ async function main(): Promise<void> {
     reconstruct_extension: {
       quality: {
         scored_run_count: qualityRuns.length,
-        skipped_runs: runs
+        unscored_runs: runs
           .filter((run) => run.quality_gate.q1 === null)
           .map((run) => ({
             fixture_id: run.fixture_id,
