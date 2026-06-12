@@ -5629,7 +5629,11 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       outputChars: input.outputChars,
       providerTokensIn: input.result?.input_tokens ?? null,
       providerTokensOut: input.result?.output_tokens ?? null,
-      providerRoute: args.llmConfig.provider ?? null,
+      // Mock realizations answer with a mock:// route marker; record the
+      // actually exercised route, not the configured live provider.
+      providerRoute: input.result?.effective_base_url?.startsWith("mock://")
+        ? "mock"
+        : args.llmConfig.provider ?? null,
       modelId: input.result?.model_id ?? args.llmConfig.model_id ?? null,
       effort: args.llmConfig.reasoning_effort ?? null,
       systemPrompt: args.systemPrompt,
@@ -6595,7 +6599,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           llmCall,
           llmConfig,
           telemetry,
-          artifactName: "OntologySeed",
+          artifactName: input.repairAttempt
+            ? "OntologySeedValidationRepair"
+            : "OntologySeed",
           maxTokens: 9000,
           systemPrompt: [
           baseSystem,
@@ -9645,6 +9651,10 @@ export async function runReconstruct(
   const sessionId = path.basename(sessionRoot);
   const targetRefs = params.targetRefs.map((targetRef) => path.resolve(targetRef));
   const { directiveAuthor, confirmationProvider } = params;
+  // Telemetry is run-scoped: a caller-reused author/provider instance must not
+  // leak a previous run's attempt rows into this run's manifest projection.
+  directiveAuthor.executionTelemetry?.reset();
+  confirmationProvider.executionTelemetry?.reset();
   const reuseExistingAuthoredArtifacts =
     params.resumeMode === "reuse_existing_authored_artifacts";
   let currentAuthoredArtifactReuseMatch: AuthoredArtifactReuseMatch | null = null;

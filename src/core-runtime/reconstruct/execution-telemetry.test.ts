@@ -195,6 +195,23 @@ describe("reconstruct execution telemetry", () => {
     expect(row?.provider_tokens_out).toBeNull();
   });
 
+  it("resets all recorded rows for run-scoped collection", () => {
+    const collector = createReconstructExecutionTelemetryCollector();
+    collector.recordLlmAttempt({
+      unitId: "ontology_seed",
+      kind: "initial",
+      status: "succeeded",
+      durationMs: 5,
+      promptChars: 10,
+      outputChars: 10,
+      artifactName: "OntologySeed",
+    });
+    expect(collector.unitTelemetry("ontology_seed")).not.toBeNull();
+    collector.reset();
+    expect(collector.unitTelemetry("ontology_seed")).toBeNull();
+    expect(collector.allUnitTelemetry()).toEqual([]);
+  });
+
   it("records batch count and returns cloned rows", () => {
     const collector = createReconstructExecutionTelemetryCollector();
     collector.recordBatchCount("competency_question_assessment", 3);

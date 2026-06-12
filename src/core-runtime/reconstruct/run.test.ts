@@ -2202,6 +2202,17 @@ describe("runReconstruct", () => {
   });
 
   it("completes three consecutive mock-realization runs with runtime-owned execution telemetry", async () => {
+    // The same author/provider instances are reused across all three runs so
+    // run-scoped telemetry is proven: a prior run's rows must not leak into
+    // the next run's manifest projection.
+    const directiveAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall: reconstructFixtureLlm,
+      authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+    });
+    const confirmationProvider = createDirectCallReconstructConfirmationProvider({
+      llmCall: reconstructFixtureLlm,
+      providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+    });
     for (let runIndex = 1; runIndex <= 3; runIndex += 1) {
       const projectRoot = await tempProjectRoot();
       const sessionRoot = path.join(
@@ -2220,14 +2231,8 @@ describe("runReconstruct", () => {
         filesystemAllowedRoots: [projectRoot],
         semanticAuthorRealization: "direct_call",
         confirmationProviderRealization: "direct_call",
-        directiveAuthor: createDirectCallReconstructDirectiveAuthor({
-          llmCall: reconstructFixtureLlm,
-          authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
-        }),
-        confirmationProvider: createDirectCallReconstructConfirmationProvider({
-          llmCall: reconstructFixtureLlm,
-          providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
-        }),
+        directiveAuthor,
+        confirmationProvider,
       });
 
       expect(result.status).toBe("completed");
@@ -2245,6 +2250,9 @@ describe("runReconstruct", () => {
         llm_call_count: 1,
         attempt_count: 1,
         batch_count: null,
+        // The mock realization answers with a mock:// route marker; telemetry
+        // must record the exercised route, not a configured live provider.
+        provider_route: "mock",
       });
       expect(seedStep?.execution_telemetry?.duration_ms)
         .toBeGreaterThanOrEqual(0);
@@ -3947,6 +3955,22 @@ describe("runReconstruct", () => {
       "ontology-seed-repair-1.input-validation.yaml",
     ));
     expect(ontologySeedValidation.validation_status).toBe("valid");
+
+    const seedTelemetry = result.reconstructRunManifest.steps.find((step) =>
+      step.step_id === "ontology_seed"
+    )?.execution_telemetry;
+    expect(
+      seedTelemetry?.attempts.map((attempt) => ({
+        kind: attempt.kind,
+        status: attempt.status,
+      })),
+    ).toEqual([
+      { kind: "initial", status: "succeeded" },
+      { kind: "semantic_repair", status: "succeeded" },
+    ]);
+    expect(seedTelemetry?.source_identity_refs).toContain(
+      "authored_artifact:OntologySeedValidationRepair",
+    );
   });
 
   it("retries ontology seed authoring with a minimal kernel prompt after provider timeout", async () => {

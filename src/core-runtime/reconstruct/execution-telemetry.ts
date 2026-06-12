@@ -46,6 +46,12 @@ export interface ReconstructExecutionTelemetryCollector {
   recordBatchCount(unitId: ReconstructStageId, batchCount: number): void;
   unitTelemetry(unitId: string): ReconstructUnitExecutionTelemetry | null;
   allUnitTelemetry(): ReconstructUnitExecutionTelemetry[];
+  /**
+   * Clears all recorded rows. Telemetry is run-scoped: runReconstruct resets
+   * author/provider collectors at run start so a reused author or provider
+   * instance cannot leak a previous run's telemetry into this run's manifest.
+   */
+  reset(): void;
 }
 
 /**
@@ -67,6 +73,7 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     ["CandidateDisposition", "candidate_disposition"],
     ["OntologySeed", "ontology_seed"],
     ["OntologySeedMinimalKernel", "ontology_seed"],
+    ["OntologySeedValidationRepair", "ontology_seed"],
     ["ClaimRealizationMap", "claim_realization"],
     ["CompetencyQuestions", "competency_questions"],
     ["CompetencyQuestionsLimitationRepair", "competency_questions"],
@@ -213,6 +220,9 @@ export function createReconstructExecutionTelemetryCollector(): ReconstructExecu
     },
     allUnitTelemetry() {
       return [...byUnitId.values()].map((row) => structuredClone(row));
+    },
+    reset() {
+      byUnitId.clear();
     },
   };
 }
