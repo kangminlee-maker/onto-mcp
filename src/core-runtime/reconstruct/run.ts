@@ -5584,7 +5584,6 @@ type ReconstructLlmOutputClassification =
 
 interface RecordedLlmCallArgs {
   telemetry: ReconstructExecutionTelemetryCollector | undefined;
-  unitId: ReturnType<typeof unitIdForAuthoredArtifactName>;
   artifactName: string;
   kind: ReconstructLlmAttemptKind;
   llmCall: ReconstructLlmCall;
@@ -5600,9 +5599,12 @@ interface RecordedLlmCallArgs {
  * Single instrumented LLM call. Records exactly one attempt row per call
  * (duration, prompt/output chars, supplemental provider tokens, route facts).
  * Provider/timeout failures and output classification failures are both
- * recorded on that row; provider failures are rethrown.
+ * recorded on that row; provider failures are rethrown. Unit ownership is
+ * resolved from the authored artifact name through the canonical fail-loud
+ * resolver — callers cannot supply their own unit attribution.
  */
 async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult> {
+  const unitId = unitIdForAuthoredArtifactName(args.artifactName);
   const startedAt = Date.now();
   const record = (
     input: {
@@ -5615,9 +5617,9 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       result?: LlmCallResult;
     },
   ): void => {
-    if (!args.telemetry || !args.unitId) return;
+    if (!args.telemetry) return;
     args.telemetry.recordLlmAttempt({
-      unitId: args.unitId,
+      unitId,
       kind: args.kind,
       status: input.status,
       failureClass: input.failureClass ?? null,
@@ -5700,11 +5702,9 @@ async function callJsonAuthor(args: {
   maxTokens: number;
   telemetry?: ReconstructExecutionTelemetryCollector;
 }): Promise<Record<string, unknown>> {
-  const unitId = unitIdForAuthoredArtifactName(args.artifactName);
   const initialSink: JsonOutputSink = { parsed: null, failureMessage: null };
   const result = await callLlmRecorded({
     telemetry: args.telemetry,
-    unitId,
     artifactName: args.artifactName,
     kind: attemptKindForAuthoredArtifactName(args.artifactName),
     llmCall: args.llmCall,
@@ -5724,7 +5724,6 @@ async function callJsonAuthor(args: {
   const repairSink: JsonOutputSink = { parsed: null, failureMessage: null };
   await callLlmRecorded({
     telemetry: args.telemetry,
-    unitId,
     artifactName: args.artifactName,
     kind: "parse_repair",
     llmCall: args.llmCall,
@@ -8482,7 +8481,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     async writeFinalOutput(input) {
       const result = await callLlmRecorded({
         telemetry,
-        unitId: "final_output",
         artifactName: "FinalOutput",
         kind: "initial",
         llmCall,
@@ -8564,7 +8562,6 @@ export function createDirectCallReconstructConfirmationProvider(args: {
       };
       const result = await callLlmRecorded({
         telemetry,
-        unitId: "purpose_confirmation",
         artifactName: "PurposeConfirmation",
         kind: "initial",
         llmCall,
@@ -8658,7 +8655,6 @@ export function createDirectCallReconstructConfirmationProvider(args: {
       };
       const result = await callLlmRecorded({
         telemetry,
-        unitId: "seed_confirmation",
         artifactName: "SeedConfirmation",
         kind: "initial",
         llmCall,

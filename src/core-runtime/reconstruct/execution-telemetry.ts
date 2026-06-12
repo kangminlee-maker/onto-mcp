@@ -79,6 +79,7 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     ["AnswerSupportLedger", "answer_support_ledger"],
     ["MaturationAnswerClaims", "maturation_answer_claims"],
     ["OntologyExpansion", "ontology_expansion"],
+    ["FinalOutput", "final_output"],
     ["PurposeConfirmation", "purpose_confirmation"],
     ["SeedConfirmation", "seed_confirmation"],
   ]);
