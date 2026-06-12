@@ -1,6 +1,6 @@
 {
   "name": "onto-mcp",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "MCP-native ontology review runtime with context-isolated lenses and controlled deliberation",
   "homepage": "https://github.com/kangminlee-maker/onto-mcp#readme",
   "bugs": {
