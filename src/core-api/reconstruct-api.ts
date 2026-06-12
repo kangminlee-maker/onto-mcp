@@ -550,16 +550,23 @@ export function createOntoReconstructCoreApi(
       if (request.domain) {
         assertReconstructDomainId(request.domain, "reconstruct domain");
       }
-      const semanticAuthorLlmConfig = resolveLlmProviderConfig({
-        config: {
-          llm: resolveReconstructActorLlmSettings(
-            settings,
-            "semantic_author",
-          ),
-        },
-      });
-      const confirmationProviderLlmConfig =
-        resolveLlmProviderConfig({
+      const mockRealizationEnabled = isReconstructMockLlmRealizationEnabled();
+      // Mock realization needs no provider config: actor llm settings stay
+      // required only for live direct_call execution, and the recorded route
+      // comes from the mock result marker, not from a configured provider.
+      const semanticAuthorLlmConfig = mockRealizationEnabled
+        ? {}
+        : resolveLlmProviderConfig({
+          config: {
+            llm: resolveReconstructActorLlmSettings(
+              settings,
+              "semantic_author",
+            ),
+          },
+        });
+      const confirmationProviderLlmConfig = mockRealizationEnabled
+        ? {}
+        : resolveLlmProviderConfig({
           config: {
             llm: resolveReconstructActorLlmSettings(
               settings,
@@ -567,7 +574,6 @@ export function createOntoReconstructCoreApi(
             ),
           },
         });
-      const mockRealizationEnabled = isReconstructMockLlmRealizationEnabled();
       const directiveAuthor =
         createDirectCallReconstructDirectiveAuthor({
           llmConfig: semanticAuthorLlmConfig,

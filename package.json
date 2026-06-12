@@ -51,6 +51,7 @@
     "test:review:live": "npm run build:ts-core && tsx scripts/review-mcp-live-e2e.ts",
     "test:review:live:cli": "npm run build:ts-core && tsx scripts/review-live-e2e.ts",
     "benchmark:review:pipeline": "tsx scripts/review-pipeline-benchmark.ts",
+    "benchmark:reconstruct:pipeline": "tsx scripts/reconstruct-pipeline-benchmark.ts",
     "migrate:reconstruct-artifact-fields": "tsx scripts/migrate-reconstruct-artifact-fields.ts",
     "test:e2e": "npm run build:ts-core && tsx scripts/review-mcp-live-e2e.ts"
   },
