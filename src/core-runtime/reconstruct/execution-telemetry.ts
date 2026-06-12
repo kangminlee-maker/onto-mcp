@@ -37,6 +37,8 @@ export interface RecordReconstructLlmAttemptInput {
   modelId?: string | null;
   effort?: string | null;
   systemPrompt?: string | null;
+  /** Authored artifact name for the call; recorded as a source-identity ref. */
+  artifactName?: string | null;
 }
 
 export interface ReconstructExecutionTelemetryCollector {
@@ -81,14 +83,27 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     ["SeedConfirmation", "seed_confirmation"],
   ]);
 
+/**
+ * Fail-loud ownership resolution: every authored artifact must map to the
+ * pipeline unit that owns its telemetry. A new or renamed authored artifact
+ * without a mapping is a contract error, not a silent telemetry omission.
+ */
 export function unitIdForAuthoredArtifactName(
   artifactName: string,
-): ReconstructStageId | null {
+): ReconstructStageId {
   if (artifactName.startsWith("ReconstructLensJudgment:")) return "lens_judgment";
   if (artifactName.startsWith("CompetencyQuestionAssessment")) {
     return "competency_question_assessment";
   }
-  return UNIT_ID_BY_AUTHORED_ARTIFACT_NAME.get(artifactName) ?? null;
+  const unitId = UNIT_ID_BY_AUTHORED_ARTIFACT_NAME.get(artifactName);
+  if (!unitId) {
+    throw new Error(
+      `Authored artifact "${artifactName}" has no telemetry unit mapping. ` +
+        "Add it to UNIT_ID_BY_AUTHORED_ARTIFACT_NAME in execution-telemetry.ts " +
+        "so its execution telemetry is recorded.",
+    );
+  }
+  return unitId;
 }
 
 export function attemptKindForAuthoredArtifactName(
@@ -110,6 +125,15 @@ function sha256Hex(text: string): string {
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
 }
 
+function addSourceIdentityRef(
+  row: ReconstructUnitExecutionTelemetry,
+  ref: string,
+): void {
+  if (!row.source_identity_refs.includes(ref)) {
+    row.source_identity_refs.push(ref);
+  }
+}
+
 export function createReconstructExecutionTelemetryCollector(): ReconstructExecutionTelemetryCollector {
   const byUnitId = new Map<string, ReconstructUnitExecutionTelemetry>();
 
@@ -128,6 +152,7 @@ export function createReconstructExecutionTelemetryCollector(): ReconstructExecu
       model_id: null,
       effort: null,
       prompt_policy_sha256: null,
+      source_identity_refs: [],
       attempt_count: 0,
       attempts: [],
       batch_count: null,
@@ -159,6 +184,13 @@ export function createReconstructExecutionTelemetryCollector(): ReconstructExecu
         typeof input.systemPrompt === "string"
       ) {
         row.prompt_policy_sha256 = sha256Hex(input.systemPrompt);
+        addSourceIdentityRef(
+          row,
+          `prompt_policy_sha256:${row.prompt_policy_sha256}`,
+        );
+      }
+      if (input.artifactName) {
+        addSourceIdentityRef(row, `authored_artifact:${input.artifactName}`);
       }
       row.attempt_count += 1;
       row.attempts.push({
@@ -200,13 +232,16 @@ export function mergedUnitExecutionTelemetry(
   return null;
 }
 
-export function lastFailureMessageFromTelemetry(
+/**
+ * Terminal failure summary: returns a failure message only when the unit's
+ * final recorded attempt failed (the unit did not recover). Recovered
+ * intermediate failures stay visible in `attempts` but do not surface as the
+ * ledger-level `lastFailureMessage`.
+ */
+export function terminalFailureMessageFromTelemetry(
   telemetry: ReconstructUnitExecutionTelemetry | null | undefined,
 ): string | null {
-  if (!telemetry) return null;
-  for (let index = telemetry.attempts.length - 1; index >= 0; index -= 1) {
-    const attempt = telemetry.attempts[index]!;
-    if (attempt.status === "failed") return attempt.failure_message;
-  }
-  return null;
+  const lastAttempt = telemetry?.attempts[telemetry.attempts.length - 1];
+  if (!lastAttempt || lastAttempt.status !== "failed") return null;
+  return lastAttempt.failure_message;
 }

@@ -232,6 +232,14 @@ export function callReconstructMockLlm(
       ],
       open_questions: [],
     });
+  } else if (systemPrompt.includes("Integrate reconstruct lens judgments")) {
+    // Checked before the broader "reconstruct lens" predicate: the synthesis
+    // prompt contains that substring, so the narrower branch must win.
+    text = JSON.stringify({
+      accepted_gaps: [],
+      requested_source_refs: [],
+      no_next_frontier_rationale: "All fixture evidence needed for the Seed is present.",
+    });
   } else if (systemPrompt.includes("reconstruct lens")) {
     text = JSON.stringify({
       candidate_labels: [
@@ -244,12 +252,6 @@ export function callReconstructMockLlm(
       ],
       semantic_gaps: [],
       no_next_frontier_rationale: "No additional source is required for this fixture.",
-    });
-  } else if (systemPrompt.includes("Integrate reconstruct lens judgments")) {
-    text = JSON.stringify({
-      accepted_gaps: [],
-      requested_source_refs: [],
-      no_next_frontier_rationale: "All fixture evidence needed for the Seed is present.",
     });
   } else if (systemPrompt.includes("Convert exploration synthesis")) {
     text = JSON.stringify({

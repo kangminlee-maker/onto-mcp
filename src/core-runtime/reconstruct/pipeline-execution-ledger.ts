@@ -18,7 +18,7 @@ import {
   type PipelineExecutionOwner,
   type PipelineExecutionUnitStatus,
 } from "../pipeline-execution-ledger.js";
-import { lastFailureMessageFromTelemetry } from "./execution-telemetry.js";
+import { terminalFailureMessageFromTelemetry } from "./execution-telemetry.js";
 
 type ReconstructArtifactRefKey = keyof ReconstructRecordArtifactRefs | "reconstruct_record";
 
@@ -1257,7 +1257,7 @@ export async function buildReconstructPipelineExecutionLedger(
         trustReason: trust.trustReason,
         attemptCount: executionTelemetry?.attempt_count ??
           (manifestStep ? 1 : 0),
-        lastFailureMessage: lastFailureMessageFromTelemetry(executionTelemetry),
+        lastFailureMessage: terminalFailureMessageFromTelemetry(executionTelemetry),
         upstreamUnitIds,
         downstreamUnitIds: downstreamUnitIds.get(spec.unitId) ?? [],
         ...(executionTelemetry ? { executionTelemetry } : {}),

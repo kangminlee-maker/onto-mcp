@@ -3,8 +3,8 @@ import {
   attemptKindForAuthoredArtifactName,
   createReconstructExecutionTelemetryCollector,
   failureClassForLlmCallError,
-  lastFailureMessageFromTelemetry,
   mergedUnitExecutionTelemetry,
+  terminalFailureMessageFromTelemetry,
   unitIdForAuthoredArtifactName,
 } from "./execution-telemetry.js";
 
@@ -22,7 +22,8 @@ describe("reconstruct execution telemetry", () => {
       .toBe("ontology_seed");
     expect(unitIdForAuthoredArtifactName("SourcePurposeContradictionRepair"))
       .toBe("source_purpose_candidates");
-    expect(unitIdForAuthoredArtifactName("UnknownArtifact")).toBeNull();
+    expect(() => unitIdForAuthoredArtifactName("UnknownArtifact"))
+      .toThrow(/no telemetry unit mapping/);
   });
 
   it("classifies attempt kinds from authored artifact names", () => {
@@ -88,6 +89,9 @@ describe("reconstruct execution telemetry", () => {
       batch_count: null,
     });
     expect(row?.prompt_policy_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(row?.source_identity_refs).toEqual([
+      `prompt_policy_sha256:${row?.prompt_policy_sha256}`,
+    ]);
     expect(row?.attempts).toEqual([
       {
         attempt: 1,
@@ -106,8 +110,69 @@ describe("reconstruct execution telemetry", () => {
         duration_ms: 80,
       },
     ]);
-    expect(lastFailureMessageFromTelemetry(row))
-      .toBe("OntologySeed author returned no JSON object.");
+    // The unit recovered (final attempt succeeded): the intermediate failure
+    // stays in attempts but is not a terminal failure summary.
+    expect(terminalFailureMessageFromTelemetry(row)).toBeNull();
+  });
+
+  it("reports a terminal failure message only when the final attempt failed", () => {
+    const collector = createReconstructExecutionTelemetryCollector();
+    collector.recordLlmAttempt({
+      unitId: "ontology_seed",
+      kind: "initial",
+      status: "failed",
+      failureClass: "malformed_json",
+      failureMessage: "initial malformed",
+      durationMs: 1,
+      promptChars: 1,
+      outputChars: 1,
+      artifactName: "OntologySeed",
+    });
+    collector.recordLlmAttempt({
+      unitId: "ontology_seed",
+      kind: "parse_repair",
+      status: "failed",
+      failureClass: "parse_repair_failure",
+      failureMessage: "repair also malformed",
+      durationMs: 1,
+      promptChars: 1,
+      outputChars: 1,
+      artifactName: "OntologySeed",
+    });
+    const row = collector.unitTelemetry("ontology_seed");
+    expect(terminalFailureMessageFromTelemetry(row)).toBe("repair also malformed");
+    expect(terminalFailureMessageFromTelemetry(null)).toBeNull();
+  });
+
+  it("accumulates distinct authored-artifact source identity refs", () => {
+    const collector = createReconstructExecutionTelemetryCollector();
+    collector.recordLlmAttempt({
+      unitId: "ontology_seed",
+      kind: "initial",
+      status: "failed",
+      failureClass: "timeout",
+      failureMessage: "timed out",
+      durationMs: 1,
+      promptChars: 1,
+      outputChars: 0,
+      systemPrompt: "seed prompt",
+      artifactName: "OntologySeed",
+    });
+    collector.recordLlmAttempt({
+      unitId: "ontology_seed",
+      kind: "timeout_recovery",
+      status: "succeeded",
+      durationMs: 1,
+      promptChars: 1,
+      outputChars: 1,
+      artifactName: "OntologySeedMinimalKernel",
+    });
+    const refs = collector.unitTelemetry("ontology_seed")?.source_identity_refs;
+    expect(refs).toContain("authored_artifact:OntologySeed");
+    expect(refs).toContain("authored_artifact:OntologySeedMinimalKernel");
+    expect(
+      refs?.some((ref) => ref.startsWith("prompt_policy_sha256:")),
+    ).toBe(true);
   });
 
   it("keeps provider tokens null when the provider reports none", () => {

@@ -96,6 +96,7 @@ interface PipelineUnitExecutionTelemetry {
   model_id: string | null;
   effort: string | null;
   prompt_policy_sha256: string | null;
+  source_identity_refs: string[];
   attempt_count: number;
   attempts: Array<{
     attempt: number;
@@ -134,6 +135,19 @@ Execution telemetry rules:
   attribute metric deltas to prompt-policy changes. Run-level source-layer
   identities (registry/contract/profile/validator snapshots) remain owned by
   the run manifest's governing snapshot.
+- `source_identity_refs` is the extensible runtime-owned identity list for
+  metric attribution. Each ref is a `<kind>:<value>` string. Current kinds:
+  `prompt_policy_sha256:<hash>` and `authored_artifact:<name>` (one per
+  distinct authored-artifact variant the unit executed; initial, repair, and
+  recovery artifact names identify the payload-contract seat). Comparators
+  must treat a metric delta as attributable only when the dependent identity
+  refs are present on both sides.
+- Telemetry unit ownership is fail-loud: an authored artifact without a unit
+  mapping is a contract error at call time, not a silent telemetry omission.
+- Ledger-level `lastFailureMessage` means terminal unit failure only: it is
+  set from telemetry when the unit's final recorded attempt failed. Recovered
+  intermediate failures (for example a repaired malformed output) stay
+  visible in `attempts` and must not surface as `lastFailureMessage`.
 - `batch_count` records deterministic prompt batching (for example
   competency-question assessment) so batching changes stay attributable.
 - Units that made no LLM call carry no telemetry field; absence is not a

@@ -61,6 +61,16 @@ export interface PipelineUnitExecutionTelemetry {
   effort: string | null;
   /** Source-layer identity: hash of the unit's first initial system prompt. */
   prompt_policy_sha256: string | null;
+  /**
+   * Runtime-owned source-layer identity refs for metric attribution. Each ref
+   * is a `<kind>:<value>` string, currently `prompt_policy_sha256:<hash>` and
+   * one `authored_artifact:<name>` per distinct authored-artifact variant the
+   * unit executed (initial / repair / recovery artifact names carry the
+   * payload-contract seat). Run-level identities (registry, contract, source
+   * profile, validator snapshots) remain owned by the run manifest's
+   * governing snapshot.
+   */
+  source_identity_refs: string[];
   attempt_count: number;
   attempts: PipelineExecutionAttempt[];
   batch_count: number | null;

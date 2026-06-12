@@ -5585,6 +5585,7 @@ type ReconstructLlmOutputClassification =
 interface RecordedLlmCallArgs {
   telemetry: ReconstructExecutionTelemetryCollector | undefined;
   unitId: ReturnType<typeof unitIdForAuthoredArtifactName>;
+  artifactName: string;
   kind: ReconstructLlmAttemptKind;
   llmCall: ReconstructLlmCall;
   llmConfig: Partial<LlmCallConfig>;
@@ -5630,6 +5631,7 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       modelId: input.result?.model_id ?? args.llmConfig.model_id ?? null,
       effort: args.llmConfig.reasoning_effort ?? null,
       systemPrompt: args.systemPrompt,
+      artifactName: args.artifactName,
     });
   };
   let result: LlmCallResult;
@@ -5703,6 +5705,7 @@ async function callJsonAuthor(args: {
   const result = await callLlmRecorded({
     telemetry: args.telemetry,
     unitId,
+    artifactName: args.artifactName,
     kind: attemptKindForAuthoredArtifactName(args.artifactName),
     llmCall: args.llmCall,
     llmConfig: args.llmConfig,
@@ -5722,6 +5725,7 @@ async function callJsonAuthor(args: {
   await callLlmRecorded({
     telemetry: args.telemetry,
     unitId,
+    artifactName: args.artifactName,
     kind: "parse_repair",
     llmCall: args.llmCall,
     llmConfig: args.llmConfig,
@@ -8479,6 +8483,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const result = await callLlmRecorded({
         telemetry,
         unitId: "final_output",
+        artifactName: "FinalOutput",
         kind: "initial",
         llmCall,
         llmConfig,
@@ -8560,6 +8565,7 @@ export function createDirectCallReconstructConfirmationProvider(args: {
       const result = await callLlmRecorded({
         telemetry,
         unitId: "purpose_confirmation",
+        artifactName: "PurposeConfirmation",
         kind: "initial",
         llmCall,
         llmConfig,
@@ -8653,6 +8659,7 @@ export function createDirectCallReconstructConfirmationProvider(args: {
       const result = await callLlmRecorded({
         telemetry,
         unitId: "seed_confirmation",
+        artifactName: "SeedConfirmation",
         kind: "initial",
         llmCall,
         llmConfig,

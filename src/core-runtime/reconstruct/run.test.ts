@@ -32,6 +32,7 @@ import type {
   ReconstructSourceObservationReentryValidationArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceObservationsArtifact,
+  ReconstructSourcePurposeCandidatesArtifact,
   ReconstructSourcePurposeCandidatesValidationArtifact,
   ReconstructSourceScoutPackArtifact,
   ReconstructSourceScoutPackValidationArtifact,
@@ -59,6 +60,9 @@ import {
 import {
   buildReconstructPipelineExecutionLedger,
 } from "./pipeline-execution-ledger.js";
+import {
+  terminalFailureMessageFromTelemetry,
+} from "./execution-telemetry.js";
 
 const tmpRoots: string[] = [];
 
@@ -695,6 +699,148 @@ describe("runReconstruct", () => {
     ]);
     expect(telemetry?.prompt_chars).toBeGreaterThan(0);
     expect(telemetry?.prompt_policy_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(telemetry?.source_identity_refs).toContain(
+      "authored_artifact:SourceObservationDirective",
+    );
+  });
+
+  it("records terminal parse_repair_failure telemetry when repair also fails", async () => {
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () =>
+        Promise.resolve({ text: "{not json" } satisfies LlmCallResult),
+    });
+
+    await expect(
+      author.writeSourceObservationDirective({
+        sessionId: "session-1",
+        intent: "Create a bounded reconstruct Seed.",
+        targetMaterialProfile: {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-05-28T00:00:00.000Z",
+          target_refs: ["src/app/page.tsx"],
+          target_material_kind: "code",
+          target_material_kind_candidates: ["code"],
+          support_status: "partial",
+          unsupported_reason: null,
+          selected_source_profiles: [],
+          detection: {
+            owner: "runtime_heuristic",
+            confidence: 0.92,
+            confidence_basis: "fixture",
+            per_ref: [],
+          },
+        },
+        sourceObservations: {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-05-28T00:00:00.000Z",
+          observations: [
+            {
+              observation_id: "obs-1",
+              target_material_kind: "code",
+              adapter_id: "fixture-observer",
+              source_ref: "src/app/page.tsx",
+              location: "file",
+              summary: "Dashboard page fixture.",
+              structural_data: {},
+            },
+          ],
+          skipped_refs: [],
+          validation_results: [],
+        },
+      }),
+    ).rejects.toThrow(/invalid JSON and repair failed/);
+
+    const telemetry = author.executionTelemetry?.unitTelemetry(
+      "observation_directive",
+    );
+    expect(
+      telemetry?.attempts.map((attempt) => ({
+        kind: attempt.kind,
+        status: attempt.status,
+        failure_class: attempt.failure_class,
+      })),
+    ).toEqual([
+      { kind: "initial", status: "failed", failure_class: "malformed_json" },
+      {
+        kind: "parse_repair",
+        status: "failed",
+        failure_class: "parse_repair_failure",
+      },
+    ]);
+    expect(terminalFailureMessageFromTelemetry(telemetry))
+      .toMatch(/returned no JSON object/);
+  });
+
+  it("records purpose confirmation telemetry when confirmation is required", async () => {
+    const provider = createDirectCallReconstructConfirmationProvider({
+      llmCall: () =>
+        Promise.resolve({
+          text: JSON.stringify({
+            confirmation_status: "confirmed",
+            confirmed_statement: "Explain fixture service structure.",
+            revised_statement: null,
+            confirmed_frame_element_refs: ["purpose-element-1"],
+            rejected_frame_element_refs: [],
+            user_response_summary: "Host confirmed the inferred purpose.",
+            source_conflict_policy: "Use validation authority.",
+            limitation_refs: [],
+          }),
+        } satisfies LlmCallResult),
+    });
+
+    // Focused telemetry test: only the fields confirmPurpose reads are
+    // populated; the full artifact shape is owned by other tests.
+    const selectedCandidate = {
+      purpose_candidate_id: "purpose-candidate-1",
+      statement: "Explain fixture service structure.",
+      adequacy_frame: {
+        required_elements: [{ element_id: "purpose-element-1" }],
+      },
+    };
+    const confirmation = await provider.confirmPurpose({
+      sessionId: "session-1",
+      sourcePurposeCandidates: {
+        purpose_candidates: [selectedCandidate],
+      } as unknown as ReconstructSourcePurposeCandidatesArtifact,
+      sourcePurposeCandidatesRef: "source-purpose-candidates.yaml",
+      sourcePurposeCandidatesValidation: {
+        selected_purpose_candidate_id: "purpose-candidate-1",
+        confirmation_required: true,
+      } as unknown as ReconstructSourcePurposeCandidatesValidationArtifact,
+      sourcePurposeCandidatesValidationRef:
+        "source-purpose-candidates-validation.yaml",
+    });
+
+    expect(confirmation.confirmation_status).toBe("confirmed");
+    const telemetry = provider.executionTelemetry?.unitTelemetry(
+      "purpose_confirmation",
+    );
+    expect(telemetry).toMatchObject({
+      unit_id: "purpose_confirmation",
+      llm_call_count: 1,
+      attempt_count: 1,
+    });
+    expect(telemetry?.source_identity_refs).toContain(
+      "authored_artifact:PurposeConfirmation",
+    );
+    expect(telemetry?.attempts[0]).toMatchObject({
+      kind: "initial",
+      status: "succeeded",
+      failure_class: null,
+    });
+  });
+
+  it("routes the exploration synthesis mock branch ahead of the broader lens predicate", async () => {
+    const result = await reconstructFixtureLlm(
+      "Integrate reconstruct lens judgments into one exploration synthesis.",
+      JSON.stringify({ source_observations: [] }),
+    );
+    const parsed = JSON.parse(result.text) as Record<string, unknown>;
+    expect(parsed).toHaveProperty("accepted_gaps");
+    expect(parsed).toHaveProperty("requested_source_refs");
+    expect(parsed).not.toHaveProperty("candidate_labels");
   });
 
   it("drops ungrounded direct-call lens rows", async () => {
@@ -2132,6 +2278,26 @@ describe("runReconstruct", () => {
         step.step_id === "seed_confirmation"
       );
       expect(seedConfirmationStep?.execution_telemetry?.llm_call_count).toBe(1);
+      expect(
+        seedConfirmationStep?.execution_telemetry?.source_identity_refs,
+      ).toContain("authored_artifact:SeedConfirmation");
+
+      const finalOutputStep = manifest.steps.find((step) =>
+        step.step_id === "final_output"
+      );
+      expect(finalOutputStep?.execution_telemetry).toMatchObject({
+        unit_id: "final_output",
+        llm_call_count: 1,
+        attempt_count: 1,
+      });
+      expect(finalOutputStep?.execution_telemetry?.output_chars)
+        .toBeGreaterThan(0);
+      expect(
+        finalOutputStep?.execution_telemetry?.source_identity_refs,
+      ).toContain("authored_artifact:FinalOutput");
+      expect(
+        seedStep?.execution_telemetry?.source_identity_refs,
+      ).toContain("authored_artifact:OntologySeed");
 
       const runtimeSteps = manifest.steps.filter((step) =>
         step.performed_by.authority === "runtime"
