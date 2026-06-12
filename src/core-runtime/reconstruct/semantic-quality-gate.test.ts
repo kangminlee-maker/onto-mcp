@@ -118,6 +118,7 @@ const HAPPY_CLAIM_IDS = [
   "object-fixture-service",
   "actor-fixture-user",
   "action-explain-fixture",
+  "binding-fixture-source",
 ];
 
 function happyArgs() {
@@ -200,6 +201,19 @@ describe("reconstruct golden semantic quality gate", () => {
       .toMatch(/batch_count is missing/);
   });
 
+  it("rejects completed call-required units outside the exemption set without telemetry", () => {
+    const args = happyArgs();
+    args.runManifest = manifestWith([
+      llmStep("ontology_seed"),
+      llmStep("competency_question_assessment"),
+      llmStep("answer_support_ledger", { withTelemetry: false }),
+    ]);
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.status).toBe("rejected");
+    expect(result.source_field_rejections.join("\n"))
+      .toMatch(/answer_support_ledger: completed LLM-owned unit has no execution_telemetry/);
+  });
+
   it("does not require telemetry for LLM-owned units that can complete without a call", () => {
     const args = happyArgs();
     args.runManifest = manifestWith([
@@ -229,7 +243,7 @@ describe("reconstruct golden semantic quality gate", () => {
 
   it("marks dropped questions when assessments cover fewer questions than authored", () => {
     const args = happyArgs();
-    args.competencyQuestionAssessment = assessmentsFor(2);
+    args.competencyQuestionAssessment = assessmentsFor(3);
     const result = evaluateReconstructGoldenQualityGate(args);
     expect(result.status).toBe("failed");
     expect(result.q3?.dropped_question_count).toBe(1);

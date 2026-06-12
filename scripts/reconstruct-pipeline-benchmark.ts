@@ -329,7 +329,7 @@ function renderMarkdown(report: Record<string, unknown>): string {
   const lines: string[] = [
     `# Reconstruct Pipeline Benchmark (${String(report.realization)})`,
     "",
-    `> Status: ${String(report.status)}`,
+    `> Status: ${String(report.status)} (${String(report.status_reason)})`,
     `> Generated: ${String(report.generated_at)} | Commit: ${String(report.commit).slice(0, 9)}`,
     `> Fixtures: ${(report.fixtures as string[]).join(", ")} | Repetitions: ${String(report.repetitions)}`,
     `> comparison_conclusion: null (single-case record; lever comparisons arrive with Phase 2)`,
@@ -438,13 +438,50 @@ async function main(): Promise<void> {
     }
   }
 
-  const evidenceGrade = options.runs >= 3 && options.fixtureIds.length >= 2;
+  // Evidence grading (INV-BENCH-1 + quality-evidence trust): performance
+  // timing evidence needs runs>=3 and fixtures>=2; semantic-quality evidence
+  // is trusted only when no run was rejected for missing measurement
+  // provenance. A record with rejected quality evidence is PRELIMINARY even
+  // if the timing repetitions are sufficient. not_applicable quality runs
+  // (mock vs live-only fixture) do not lower the grade; they are reported.
+  const performanceEvidenceMet = options.runs >= 3 && options.fixtureIds.length >= 2;
   const qualityRuns = runs.filter((run) => run.quality_gate.q1 !== null);
+  const rejectedQualityRuns = runs.filter(
+    (run) => run.quality_gate.status === "rejected",
+  );
+  const evidenceGrade = performanceEvidenceMet && rejectedQualityRuns.length === 0;
+  const statusReason = evidenceGrade
+    ? "runs>=3 and fixtures>=2 and no quality-evidence rejection"
+    : [
+      ...(performanceEvidenceMet
+        ? []
+        : ["performance evidence below INV-BENCH-1 thresholds (runs>=3, fixtures>=2)"]),
+      ...(rejectedQualityRuns.length > 0
+        ? [
+          `quality evidence rejected on ${rejectedQualityRuns.length} run(s) (missing telemetry source fields)`,
+        ]
+        : []),
+    ].join("; ");
   const report = {
     benchmark: "reconstruct-pipeline",
     record_family:
       "pipeline-benchmark (specializes the review-pipeline-* record family; shared fields unchanged, reconstruct facts in reconstruct_extension)",
     status: evidenceGrade ? DECISION_GRADE_STATUS : PRELIMINARY_STATUS,
+    status_reason: statusReason,
+    evidence: {
+      performance: {
+        repetitions: options.runs,
+        fixture_count: options.fixtureIds.length,
+        meets_inv_bench_1: performanceEvidenceMet,
+      },
+      quality: {
+        evaluated_run_count: qualityRuns.length,
+        not_applicable_run_count: runs.filter(
+          (run) => run.quality_gate.status === "not_applicable",
+        ).length,
+        rejected_run_count: rejectedQualityRuns.length,
+      },
+    },
     realization: options.realization,
     fixtures: options.fixtureIds,
     repetitions: options.runs,

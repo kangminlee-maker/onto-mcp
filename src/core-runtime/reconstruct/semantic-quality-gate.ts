@@ -103,11 +103,11 @@ const GOLDEN_FIXTURES: Record<
     expected_concepts: [
       {
         concept_key: "fixture-service",
-        name_alternates: ["fixtureservice", "featureservice"],
+        name_alternates: ["fixtureservice"],
       },
       {
         concept_key: "fixture-user",
-        name_alternates: ["fixtureuser", "fixturereader", "serviceuser"],
+        name_alternates: ["fixtureuser", "fixturereader"],
       },
       {
         concept_key: "explain-fixture",
@@ -132,6 +132,11 @@ const GOLDEN_FIXTURES: Record<
       {
         cq_key: "cq-explain-fixture",
         linked_concept_key: "explain-fixture",
+        expected_answer_status: "answerable",
+      },
+      {
+        cq_key: "cq-fixture-source-binding",
+        linked_concept_key: "fixture-source-binding",
         expected_answer_status: "answerable",
       },
     ],
@@ -184,7 +189,7 @@ const GOLDEN_FIXTURES: Record<
     expected_concepts: [
       {
         concept_key: "lending-service",
-        name_alternates: ["lendingservice", "loanservice", "library"],
+        name_alternates: ["lendingservice", "loanservice"],
       },
       {
         concept_key: "borrower",
@@ -196,7 +201,7 @@ const GOLDEN_FIXTURES: Record<
       },
       {
         concept_key: "loan-record-binding",
-        name_alternates: ["loanrecord", "loans", "loanbinding"],
+        name_alternates: ["loanrecord", "loanbinding"],
       },
     ],
     expected_cq: [
@@ -213,6 +218,11 @@ const GOLDEN_FIXTURES: Record<
       {
         cq_key: "cq-checkout-book",
         linked_concept_key: "checkout-book",
+        expected_answer_status: "answerable",
+      },
+      {
+        cq_key: "cq-loan-record-binding",
+        linked_concept_key: "loan-record-binding",
         expected_answer_status: "answerable",
       },
     ],
@@ -361,29 +371,19 @@ function conceptMatch(
 }
 
 /**
- * Units that always make at least one LLM call in a completed run. Other
- * LLM-owned units may legitimately complete without a call (for example a
- * not-required purpose confirmation or an empty maturation frontier), so
- * telemetry absence is a failure signal only for this set; when telemetry is
- * present on any unit its dependent fields must still be complete.
+ * Explicit no-call exemptions: the only LLM-owned units with a runtime path
+ * that completes without any LLM call (a not-required purpose confirmation,
+ * or maturation units the runtime authors as empty projections when the
+ * question frontier is empty). Every other completed non-runtime unit must
+ * carry telemetry — reject-by-default, so a newly added authored unit cannot
+ * silently skip measurement provenance.
  */
-const REQUIRED_TELEMETRY_UNIT_IDS: ReadonlySet<string> = new Set([
-  "observation_directive",
-  "lens_judgment",
-  "exploration_synthesis",
-  "source_frontier",
-  "source_purpose_candidates",
-  "candidate_inventory",
-  "candidate_disposition",
-  "ontology_seed",
-  "claim_realization",
-  "seed_confirmation",
-  "competency_questions",
-  "competency_question_assessment",
-  "failure_classification",
-  "revision_proposal",
-  "stop_decision",
-  "final_output",
+const NO_CALL_EXEMPT_UNIT_IDS: ReadonlySet<string> = new Set([
+  "purpose_confirmation",
+  "maturation_question_frontier",
+  "maturation_closure_frontier",
+  "maturation_answer_claims",
+  "ontology_expansion",
 ]);
 
 /**
@@ -402,7 +402,7 @@ function sourceFieldRejections(
       continue;
     }
     if (!telemetry) {
-      if (REQUIRED_TELEMETRY_UNIT_IDS.has(step.step_id)) {
+      if (!NO_CALL_EXEMPT_UNIT_IDS.has(step.step_id)) {
         rejections.push(
           `step ${step.step_id}: completed LLM-owned unit has no execution_telemetry`,
         );
