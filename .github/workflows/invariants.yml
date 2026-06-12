@@ -1,0 +1,26 @@
+name: invariant-guards
+
+# 구조적 가드 (docs/architecture/structural-guardrails-enforcement.md):
+# G1 import 경계, G2 스펙 기본값 스캐너, G4 보호 키 변경 마커.
+on:
+  pull_request:
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: G1 import boundary (INV-MOCK-1, repo-layout)
+        run: npx tsx scripts/check-import-boundary.ts
+      - name: G2 hardcoded spec defaults (INV-AUTH-1, INV-CFG-1)
+        run: npx tsx scripts/check-no-hardcoded-spec-defaults.ts
+      - name: G3 invariant tests (INV-AUTH-1, INV-SCHEMA-1, INV-TEST-1)
+        run: npx vitest run --reporter=dot invariant.test
+      - name: G4 protected key change marker (INV-AUTH-1, INV-CFG-1, INV-MATERIAL-1)
+        run: npx tsx scripts/check-invariant-change-marker.ts "origin/${{ github.base_ref }}"
