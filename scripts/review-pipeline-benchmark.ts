@@ -852,8 +852,8 @@ function isBenchmarkOwnedProcessCommand(
 ): boolean {
   if (!command.includes(projectRoot)) return false;
   return [
-    "src/core-runtime/cli/review-invoke.ts",
-    "dist/core-runtime/cli/review-invoke.js",
+    "src/core-runtime/cli/review-invocation-runner.ts",
+    "dist/core-runtime/cli/review-invocation-runner.js",
     "codex-review-unit-executor",
     "inline-http-review-unit-executor",
     "codex exec",
@@ -1119,7 +1119,7 @@ function reviewInvokeArgs(args: {
   options: BenchmarkOptions;
 }): string[] {
   const commandArgs = [
-    "src/core-runtime/cli/review-invoke.ts",
+    "src/core-runtime/cli/review-invocation-runner.ts",
     args.fixture.target_path,
     `Benchmark ${args.benchCase.label}: ${args.fixture.intent}`,
     "--project-root",

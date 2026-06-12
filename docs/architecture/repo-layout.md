@@ -63,9 +63,9 @@ src/core-runtime/
   `src/core-runtime/cli` and `src/core-runtime/llm` until a separate provider
   layer is justified by distinct ownership.
 - Layering direction: `cli/` (execution layer) imports `review/` (semantic
-  layer), not the reverse. Known exception:
-  `review/review-invocation-runner.ts` imports cli entrypoints and forms a
-  cycle with `cli/review-invoke.ts` — it is functionally an execution-layer
-  facade and is a relocation candidate; do not add new review→cli imports.
+  layer), never the reverse. The invocation entry surface
+  (`cli/review-invocation-runner.ts`: prepare/run orchestration plus the CLI
+  wrappers) lives in `cli/` and consumes `cli/review-invoke.js` setup helpers
+  one-directionally.
 - External host integration should be treated as provider evidence, not the
   canonical `onto` implementation.
