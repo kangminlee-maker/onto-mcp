@@ -47,6 +47,24 @@ const PROTECTED_TARGETS: ProtectedTarget[] = [
     linePattern: /return\s+"(oauth|api_key|local)"/,
     invariants: ["INV-AUTH-1"],
   },
+  {
+    // INVARIANTS.md가 지정한 runtime predicate owner — material 판정 어휘 변경.
+    file: "src/core-runtime/review/review-result-classification.ts",
+    linePattern: /MATERIAL_SEVERIT|admission_disqualified/,
+    invariants: ["INV-MATERIAL-1"],
+  },
+  {
+    // settings 수용 스키마와 chain 완성 기본값 (AGENTS §0-2: 스키마 변경은 확인 필수).
+    file: "src/core-runtime/discovery/settings-chain.ts",
+    linePattern: /Schema\b|max_retries|retry_initial_delay_ms/,
+    invariants: ["INV-CFG-1"],
+  },
+  {
+    // G2 waiver 표 — 하드코딩 인가 권위 자체의 변경도 마커를 요구한다.
+    file: "scripts/check-no-hardcoded-spec-defaults.ts",
+    linePattern: /\b(file|linePattern|reason):/,
+    invariants: ["INV-CFG-1", "INV-AUTH-1"],
+  },
 ];
 
 async function git(args: string[]): Promise<string> {

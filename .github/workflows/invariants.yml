@@ -20,5 +20,7 @@ jobs:
         run: npx tsx scripts/check-import-boundary.ts
       - name: G2 hardcoded spec defaults (INV-AUTH-1, INV-CFG-1)
         run: npx tsx scripts/check-no-hardcoded-spec-defaults.ts
+      - name: G3 invariant tests (INV-AUTH-1, INV-SCHEMA-1, INV-TEST-1)
+        run: npx vitest run --reporter=dot invariant.test
       - name: G4 protected key change marker (INV-AUTH-1, INV-CFG-1, INV-MATERIAL-1)
         run: npx tsx scripts/check-invariant-change-marker.ts "origin/${{ github.base_ref }}"

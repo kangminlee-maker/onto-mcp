@@ -25,7 +25,7 @@ interface Detection {
   file: string;
   line: number;
   text: string;
-  kind: "model_literal" | "effort_default" | "auth_default";
+  kind: "model_literal" | "effort_default" | "auth_default" | "retry_default";
 }
 
 interface Waiver {
@@ -95,6 +95,13 @@ const WAIVERS: Waiver[] = [
     reason:
       "타임아웃 재시도 de-escalation 정책 상수(high→medium minimal-kernel 재시도) — settings 기본값이 아닌 bounded retry 정책. settings 이관은 별도 결정.",
   },
+  {
+    file: "src/core-runtime/discovery/settings-chain.ts",
+    linePattern:
+      /^(?:lens_|issue_artifact_|deliberation_|synthesis_)?(?:max_retries|retry_initial_delay_ms):\s*(?:\d+|DEFAULT_REVIEW_RETRY_SETTINGS\.retry_initial_delay_ms),$/,
+    reason:
+      "settings chain의 resolved-shape 완성 기본값 — settings 권위 모듈 자체가 소유하는 canonical 완성값. 변경은 G4 보호 대상(INVARIANT-CHANGE 마커 필요).",
+  },
 ];
 
 const MODEL_LITERAL_RE =
@@ -105,6 +112,8 @@ const AUTH_DEFAULT_RE =
   /(?:\bauth\w*\s*(?:=|\?\?|:)\s*["'](?:oauth|api_key|local)["']|return\s+["'](?:oauth|api_key|local)["'])/;
 /** 타입 유니언 문맥(`"a" | "b"`)은 vocabulary 정의지 기본값이 아니다. */
 const TYPE_UNION_CONTEXT_RE = /["']\s*\||\|\s*["']/;
+const RETRY_DEFAULT_RE =
+  /(?:max_retries|retry_initial_delay_ms|maxRetries|retryInitialDelayMs)\w*\s*(?:=|\?\?|:)\s*[0-9]/;
 
 function isCommentLine(text: string): boolean {
   const trimmed = text.trim();
@@ -143,6 +152,7 @@ async function main(): Promise<void> {
       const isTypeUnionContext = TYPE_UNION_CONTEXT_RE.test(text);
       if (!isTypeUnionContext && EFFORT_DEFAULT_RE.test(text)) push("effort_default");
       if (!isTypeUnionContext && AUTH_DEFAULT_RE.test(text)) push("auth_default");
+      if (RETRY_DEFAULT_RE.test(text)) push("retry_default");
     });
   }
 
@@ -176,7 +186,12 @@ async function main(): Promise<void> {
       {
         check: "spec-defaults",
         status: "passed",
-        detection_kinds: ["model_literal", "effort_default", "auth_default"],
+        detection_kinds: [
+          "model_literal",
+          "effort_default",
+          "auth_default",
+          "retry_default",
+        ],
         waivers: WAIVERS.map((w) => ({ file: w.file, reason: w.reason })),
       },
       null,
