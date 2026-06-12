@@ -475,7 +475,7 @@ async function main(): Promise<void> {
         meets_inv_bench_1: performanceEvidenceMet,
       },
       quality: {
-        evaluated_run_count: qualityRuns.length,
+        scored_run_count: qualityRuns.length,
         not_applicable_run_count: runs.filter(
           (run) => run.quality_gate.status === "not_applicable",
         ).length,
@@ -497,7 +497,7 @@ async function main(): Promise<void> {
     comparison_conclusion: null,
     reconstruct_extension: {
       quality: {
-        evaluated_run_count: qualityRuns.length,
+        scored_run_count: qualityRuns.length,
         skipped_runs: runs
           .filter((run) => run.quality_gate.q1 === null)
           .map((run) => ({

@@ -10,7 +10,7 @@
       "meets_inv_bench_1": true
     },
     "quality": {
-      "evaluated_run_count": 3,
+      "scored_run_count": 3,
       "not_applicable_run_count": 3,
       "rejected_run_count": 0
     }
@@ -21,38 +21,38 @@
     "reconstruct-golden-target-v2"
   ],
   "repetitions": 3,
-  "generated_at": "2026-06-12T11:29:04.837Z",
-  "commit": "d71f30e53c9769e8113e835a465cd0950c44c83d",
+  "generated_at": "2026-06-12T11:44:43.691Z",
+  "commit": "8c6671d17978f1db65f7f5894221d4d91e0cd4cf",
   "metrics": {
     "duration_s": {
       "reconstruct-golden-target-v1": {
-        "mean": 0.782,
-        "stdev": 0.059,
-        "min": 0.744,
-        "max": 0.85,
+        "mean": 0.786,
+        "stdev": 0.063,
+        "min": 0.736,
+        "max": 0.857,
         "n": 3
       },
       "reconstruct-golden-target-v2": {
-        "mean": 0.74,
-        "stdev": 0.014,
-        "min": 0.729,
-        "max": 0.756,
+        "mean": 0.749,
+        "stdev": 0.007,
+        "min": 0.741,
+        "max": 0.755,
         "n": 3
       }
     },
     "total_llm_duration_ms": {
       "reconstruct-golden-target-v1": {
-        "mean": 0.667,
+        "mean": 1.667,
         "stdev": 1.155,
-        "min": 0,
-        "max": 2,
+        "min": 1,
+        "max": 3,
         "n": 3
       },
       "reconstruct-golden-target-v2": {
-        "mean": 0.667,
+        "mean": 1.667,
         "stdev": 0.577,
-        "min": 0,
-        "max": 1,
+        "min": 1,
+        "max": 2,
         "n": 3
       }
     },
@@ -108,7 +108,7 @@
   "comparison_conclusion": null,
   "reconstruct_extension": {
     "quality": {
-      "evaluated_run_count": 3,
+      "scored_run_count": 3,
       "skipped_runs": [
         {
           "fixture_id": "reconstruct-golden-target-v2",
@@ -159,11 +159,11 @@
       "fixture_id": "reconstruct-golden-target-v1",
       "realization": "mock",
       "target_path": "src/fixture-service.ts",
-      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-Di98qO/.onto/reconstruct/benchmark-run-1",
-      "duration_s": 0.85,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-YrgJV1/.onto/reconstruct/benchmark-run-1",
+      "duration_s": 0.857,
       "totals": {
         "llm_call_count": 25,
-        "llm_duration_ms": 2,
+        "llm_duration_ms": 1,
         "prompt_chars": 276321,
         "output_chars": 60579,
         "failure_class_counts": {}
@@ -425,7 +425,7 @@
           "step_id": "candidate_disposition",
           "unit_id": "candidate_disposition",
           "llm_call_count": 1,
-          "duration_ms": 1,
+          "duration_ms": 0,
           "prompt_chars": 11318,
           "output_chars": 990,
           "provider_tokens_in": 1,
@@ -446,7 +446,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 1
+              "duration_ms": 0
             }
           ],
           "batch_count": null
@@ -455,7 +455,7 @@
           "step_id": "ontology_seed",
           "unit_id": "ontology_seed",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 41516,
           "output_chars": 19057,
           "provider_tokens_in": 1,
@@ -476,7 +476,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -545,7 +545,7 @@
           "step_id": "competency_questions",
           "unit_id": "competency_questions",
           "llm_call_count": 1,
-          "duration_ms": 1,
+          "duration_ms": 0,
           "prompt_chars": 19486,
           "output_chars": 30040,
           "provider_tokens_in": 1,
@@ -566,7 +566,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 1
+              "duration_ms": 0
             }
           ],
           "batch_count": null
@@ -826,11 +826,11 @@
       },
       "metadata": {
         "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
-        "commit": "d71f30e53c9769e8113e835a465cd0950c44c83d",
+        "commit": "8c6671d17978f1db65f7f5894221d4d91e0cd4cf",
         "node_version": "v26.0.0",
         "model_id": "reconstruct-mock-model",
         "provider_route": "mock",
-        "started_at": "2026-06-12T11:29:00.191Z"
+        "started_at": "2026-06-12T11:44:39.001Z"
       }
     },
     {
@@ -838,11 +838,11 @@
       "fixture_id": "reconstruct-golden-target-v1",
       "realization": "mock",
       "target_path": "src/fixture-service.ts",
-      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-IRtVAW/.onto/reconstruct/benchmark-run-2",
-      "duration_s": 0.744,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-T76gNv/.onto/reconstruct/benchmark-run-2",
+      "duration_s": 0.766,
       "totals": {
         "llm_call_count": 25,
-        "llm_duration_ms": 0,
+        "llm_duration_ms": 3,
         "prompt_chars": 276321,
         "output_chars": 60579,
         "failure_class_counts": {}
@@ -1074,7 +1074,7 @@
           "step_id": "candidate_inventory",
           "unit_id": "candidate_inventory",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 16672,
           "output_chars": 945,
           "provider_tokens_in": 1,
@@ -1095,7 +1095,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -1224,7 +1224,7 @@
           "step_id": "competency_questions",
           "unit_id": "competency_questions",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 19486,
           "output_chars": 30040,
           "provider_tokens_in": 1,
@@ -1245,7 +1245,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -1254,7 +1254,7 @@
           "step_id": "competency_question_assessment",
           "unit_id": "competency_question_assessment",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 29412,
           "output_chars": 1229,
           "provider_tokens_in": 1,
@@ -1275,7 +1275,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": 1
@@ -1505,11 +1505,11 @@
       },
       "metadata": {
         "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
-        "commit": "d71f30e53c9769e8113e835a465cd0950c44c83d",
+        "commit": "8c6671d17978f1db65f7f5894221d4d91e0cd4cf",
         "node_version": "v26.0.0",
         "model_id": "reconstruct-mock-model",
         "provider_route": "mock",
-        "started_at": "2026-06-12T11:29:01.056Z"
+        "started_at": "2026-06-12T11:44:39.876Z"
       }
     },
     {
@@ -1517,11 +1517,11 @@
       "fixture_id": "reconstruct-golden-target-v1",
       "realization": "mock",
       "target_path": "src/fixture-service.ts",
-      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-ydd0nL/.onto/reconstruct/benchmark-run-3",
-      "duration_s": 0.752,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-iNNEvl/.onto/reconstruct/benchmark-run-3",
+      "duration_s": 0.736,
       "totals": {
         "llm_call_count": 25,
-        "llm_duration_ms": 0,
+        "llm_duration_ms": 1,
         "prompt_chars": 276321,
         "output_chars": 60579,
         "failure_class_counts": {}
@@ -1663,7 +1663,7 @@
           "step_id": "exploration_synthesis",
           "unit_id": "exploration_synthesis",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 5476,
           "output_chars": 131,
           "provider_tokens_in": 1,
@@ -1684,7 +1684,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -2184,11 +2184,11 @@
       },
       "metadata": {
         "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
-        "commit": "d71f30e53c9769e8113e835a465cd0950c44c83d",
+        "commit": "8c6671d17978f1db65f7f5894221d4d91e0cd4cf",
         "node_version": "v26.0.0",
         "model_id": "reconstruct-mock-model",
         "provider_route": "mock",
-        "started_at": "2026-06-12T11:29:01.814Z"
+        "started_at": "2026-06-12T11:44:40.655Z"
       }
     },
     {
@@ -2196,11 +2196,11 @@
       "fixture_id": "reconstruct-golden-target-v2",
       "realization": "mock",
       "target_path": "src/lending-service.ts",
-      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-2q3hFe/.onto/reconstruct/benchmark-run-1",
-      "duration_s": 0.756,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-rqHW9H/.onto/reconstruct/benchmark-run-1",
+      "duration_s": 0.755,
       "totals": {
         "llm_call_count": 25,
-        "llm_duration_ms": 0,
+        "llm_duration_ms": 2,
         "prompt_chars": 273871,
         "output_chars": 60592,
         "failure_class_counts": {}
@@ -2402,7 +2402,7 @@
           "step_id": "source_purpose_candidates",
           "unit_id": "source_purpose_candidates",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 15378,
           "output_chars": 2925,
           "provider_tokens_in": 1,
@@ -2423,7 +2423,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -2522,7 +2522,7 @@
           "step_id": "claim_realization",
           "unit_id": "claim_realization",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 8183,
           "output_chars": 1654,
           "provider_tokens_in": 1,
@@ -2543,7 +2543,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -2802,11 +2802,11 @@
       },
       "metadata": {
         "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
-        "commit": "d71f30e53c9769e8113e835a465cd0950c44c83d",
+        "commit": "8c6671d17978f1db65f7f5894221d4d91e0cd4cf",
         "node_version": "v26.0.0",
         "model_id": "reconstruct-mock-model",
         "provider_route": "mock",
-        "started_at": "2026-06-12T11:29:02.579Z"
+        "started_at": "2026-06-12T11:44:41.404Z"
       }
     },
     {
@@ -2814,8 +2814,8 @@
       "fixture_id": "reconstruct-golden-target-v2",
       "realization": "mock",
       "target_path": "src/lending-service.ts",
-      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-69YoSF/.onto/reconstruct/benchmark-run-2",
-      "duration_s": 0.734,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-Opd1bv/.onto/reconstruct/benchmark-run-2",
+      "duration_s": 0.741,
       "totals": {
         "llm_call_count": 25,
         "llm_duration_ms": 1,
@@ -3050,7 +3050,7 @@
           "step_id": "candidate_inventory",
           "unit_id": "candidate_inventory",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 15468,
           "output_chars": 945,
           "provider_tokens_in": 1,
@@ -3071,7 +3071,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -3200,7 +3200,7 @@
           "step_id": "competency_questions",
           "unit_id": "competency_questions",
           "llm_call_count": 1,
-          "duration_ms": 1,
+          "duration_ms": 0,
           "prompt_chars": 19573,
           "output_chars": 30040,
           "provider_tokens_in": 1,
@@ -3221,7 +3221,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 1
+              "duration_ms": 0
             }
           ],
           "batch_count": null
@@ -3420,11 +3420,11 @@
       },
       "metadata": {
         "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
-        "commit": "d71f30e53c9769e8113e835a465cd0950c44c83d",
+        "commit": "8c6671d17978f1db65f7f5894221d4d91e0cd4cf",
         "node_version": "v26.0.0",
         "model_id": "reconstruct-mock-model",
         "provider_route": "mock",
-        "started_at": "2026-06-12T11:29:03.348Z"
+        "started_at": "2026-06-12T11:44:42.172Z"
       }
     },
     {
@@ -3432,11 +3432,11 @@
       "fixture_id": "reconstruct-golden-target-v2",
       "realization": "mock",
       "target_path": "src/lending-service.ts",
-      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-lGI4o3/.onto/reconstruct/benchmark-run-3",
-      "duration_s": 0.729,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-YKh3Zq/.onto/reconstruct/benchmark-run-3",
+      "duration_s": 0.75,
       "totals": {
         "llm_call_count": 25,
-        "llm_duration_ms": 1,
+        "llm_duration_ms": 2,
         "prompt_chars": 273871,
         "output_chars": 60592,
         "failure_class_counts": {}
@@ -3578,7 +3578,7 @@
           "step_id": "exploration_synthesis",
           "unit_id": "exploration_synthesis",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 5489,
           "output_chars": 131,
           "provider_tokens_in": 1,
@@ -3599,7 +3599,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -3818,7 +3818,7 @@
           "step_id": "competency_questions",
           "unit_id": "competency_questions",
           "llm_call_count": 1,
-          "duration_ms": 0,
+          "duration_ms": 1,
           "prompt_chars": 19573,
           "output_chars": 30040,
           "provider_tokens_in": 1,
@@ -3839,7 +3839,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 0
+              "duration_ms": 1
             }
           ],
           "batch_count": null
@@ -3848,7 +3848,7 @@
           "step_id": "competency_question_assessment",
           "unit_id": "competency_question_assessment",
           "llm_call_count": 1,
-          "duration_ms": 1,
+          "duration_ms": 0,
           "prompt_chars": 29412,
           "output_chars": 1229,
           "provider_tokens_in": 1,
@@ -3869,7 +3869,7 @@
               "status": "succeeded",
               "failure_class": null,
               "failure_message": null,
-              "duration_ms": 1
+              "duration_ms": 0
             }
           ],
           "batch_count": 1
@@ -4038,11 +4038,11 @@
       },
       "metadata": {
         "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
-        "commit": "d71f30e53c9769e8113e835a465cd0950c44c83d",
+        "commit": "8c6671d17978f1db65f7f5894221d4d91e0cd4cf",
         "node_version": "v26.0.0",
         "model_id": "reconstruct-mock-model",
         "provider_route": "mock",
-        "started_at": "2026-06-12T11:29:04.095Z"
+        "started_at": "2026-06-12T11:44:42.928Z"
       }
     }
   ]

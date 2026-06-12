@@ -445,19 +445,10 @@ export function evaluateReconstructGoldenQualityGate(
     scope: "fixture_specific" as const,
     realization: args.realization,
   };
-  if (args.realization === "mock" && !spec.mock_compatible) {
-    return {
-      ...base,
-      status: "not_applicable",
-      reason:
-        "The deterministic mock realization's payloads do not target this fixture's domain; quality scores apply to live semantic authoring only.",
-      source_field_rejections: [],
-      q1: null,
-      q2: null,
-      q3: null,
-    };
-  }
-
+  // Measurement provenance is checked before applicability: a run with
+  // missing telemetry source fields is rejected even when its semantic
+  // scores would not apply, so the provenance gate cannot be bypassed
+  // through a not_applicable fixture/realization combination.
   const rejections = sourceFieldRejections(args.runManifest);
   if (rejections.length > 0) {
     return {
@@ -466,6 +457,18 @@ export function evaluateReconstructGoldenQualityGate(
       reason:
         "Telemetry source fields required for metric attribution are missing; metrics are not computed from unproven measurements.",
       source_field_rejections: rejections,
+      q1: null,
+      q2: null,
+      q3: null,
+    };
+  }
+  if (args.realization === "mock" && !spec.mock_compatible) {
+    return {
+      ...base,
+      status: "not_applicable",
+      reason:
+        "The deterministic mock realization's payloads do not target this fixture's domain; quality scores apply to live semantic authoring only.",
+      source_field_rejections: [],
       q1: null,
       q2: null,
       q3: null,

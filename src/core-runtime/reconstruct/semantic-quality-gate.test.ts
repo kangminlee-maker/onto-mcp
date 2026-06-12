@@ -249,6 +249,20 @@ describe("reconstruct golden semantic quality gate", () => {
     expect(result.q3?.dropped_question_count).toBe(1);
   });
 
+  it("rejects missing provenance even on not_applicable fixture/realization combinations", () => {
+    const args = happyArgs();
+    args.runManifest = manifestWith([
+      llmStep("ontology_seed", { withTelemetry: false }),
+      llmStep("competency_question_assessment"),
+    ]);
+    const result = evaluateReconstructGoldenQualityGate({
+      ...args,
+      fixtureId: "reconstruct-golden-target-v2",
+    });
+    expect(result.status).toBe("rejected");
+    expect(result.source_field_rejections.length).toBeGreaterThan(0);
+  });
+
   it("reports not_applicable for mock runs against live-only fixtures", () => {
     const args = happyArgs();
     const result = evaluateReconstructGoldenQualityGate({
