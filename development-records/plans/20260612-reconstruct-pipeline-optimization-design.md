@@ -1,6 +1,8 @@
 # Reconstruct Pipeline Optimization Design
 
-> Status: approved r4 — Phase 0 구현 진행 중 (첫 PR #45: M1 계측 + M2 mock 실현)
+> Status: approved r4 — Phase 0 구현 진행 중 (PR #45 merged: M1 계측 + M2 mock 실현;
+> 후속 PR: M3 golden fixture + semantic quality gate, M4 benchmark 하네스
+> `scripts/reconstruct-pipeline-benchmark.ts` + 첫 mock baseline 기록)
 > Date: 2026-06-12
 > Scope: reconstruct 파이프라인의 품질·안정성·속도 최적화의 측정 설계 + 레버 설계 + 실행 단계 설계
 > Baseline reference: review pipeline 최적화 과정 (2026-04-17 A1~A5, 2026-06-05~08 efficiency work)

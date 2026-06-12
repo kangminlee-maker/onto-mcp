@@ -1,0 +1,4053 @@
+{
+  "benchmark": "reconstruct-pipeline",
+  "record_family": "pipeline-benchmark (specializes the review-pipeline-* record family; shared fields unchanged, reconstruct facts in reconstruct_extension)",
+  "status": "PRELIMINARY — not decision-grade",
+  "status_reason": "scored quality evidence covers 1 distinct fixture(s); INV-BENCH-1 needs >=2",
+  "evidence": {
+    "performance": {
+      "repetitions": 3,
+      "fixture_count": 2,
+      "meets_inv_bench_1": true
+    },
+    "quality": {
+      "scored_run_count": 3,
+      "not_applicable_run_count": 3,
+      "rejected_run_count": 0
+    }
+  },
+  "realization": "mock",
+  "fixtures": [
+    "reconstruct-golden-target-v1",
+    "reconstruct-golden-target-v2"
+  ],
+  "repetitions": 3,
+  "generated_at": "2026-06-12T13:17:47.352Z",
+  "commit": "a12c6f81b1bf835a6dc447fa65fb01b181de8123",
+  "working_tree_state": "clean",
+  "metrics": {
+    "duration_s": {
+      "reconstruct-golden-target-v1": {
+        "mean": 0.775,
+        "stdev": 0.088,
+        "min": 0.706,
+        "max": 0.874,
+        "n": 3
+      },
+      "reconstruct-golden-target-v2": {
+        "mean": 0.738,
+        "stdev": 0.029,
+        "min": 0.706,
+        "max": 0.761,
+        "n": 3
+      }
+    },
+    "total_llm_duration_ms": {
+      "reconstruct-golden-target-v1": {
+        "mean": 2,
+        "stdev": 0,
+        "min": 2,
+        "max": 2,
+        "n": 3
+      },
+      "reconstruct-golden-target-v2": {
+        "mean": 0.667,
+        "stdev": 0.577,
+        "min": 0,
+        "max": 1,
+        "n": 3
+      }
+    },
+    "total_llm_call_count": {
+      "reconstruct-golden-target-v1": {
+        "mean": 25,
+        "stdev": 0,
+        "min": 25,
+        "max": 25,
+        "n": 3
+      },
+      "reconstruct-golden-target-v2": {
+        "mean": 25,
+        "stdev": 0,
+        "min": 25,
+        "max": 25,
+        "n": 3
+      }
+    },
+    "total_prompt_chars": {
+      "reconstruct-golden-target-v1": {
+        "mean": 276321,
+        "stdev": 0,
+        "min": 276321,
+        "max": 276321,
+        "n": 3
+      },
+      "reconstruct-golden-target-v2": {
+        "mean": 273871,
+        "stdev": 0,
+        "min": 273871,
+        "max": 273871,
+        "n": 3
+      }
+    },
+    "total_output_chars": {
+      "reconstruct-golden-target-v1": {
+        "mean": 60579,
+        "stdev": 0,
+        "min": 60579,
+        "max": 60579,
+        "n": 3
+      },
+      "reconstruct-golden-target-v2": {
+        "mean": 60592,
+        "stdev": 0,
+        "min": 60592,
+        "max": 60592,
+        "n": 3
+      }
+    }
+  },
+  "comparison_conclusion": null,
+  "reconstruct_extension": {
+    "quality": {
+      "scored_run_count": 3,
+      "unscored_runs": [
+        {
+          "fixture_id": "reconstruct-golden-target-v2",
+          "run_index": 1,
+          "status": "not_applicable",
+          "reason": "The deterministic mock realization's payloads do not target this fixture's domain; quality scores apply to live semantic authoring only."
+        },
+        {
+          "fixture_id": "reconstruct-golden-target-v2",
+          "run_index": 2,
+          "status": "not_applicable",
+          "reason": "The deterministic mock realization's payloads do not target this fixture's domain; quality scores apply to live semantic authoring only."
+        },
+        {
+          "fixture_id": "reconstruct-golden-target-v2",
+          "run_index": 3,
+          "status": "not_applicable",
+          "reason": "The deterministic mock realization's payloads do not target this fixture's domain; quality scores apply to live semantic authoring only."
+        }
+      ],
+      "q1_recall": {
+        "mean": 1,
+        "stdev": 0,
+        "min": 1,
+        "max": 1,
+        "n": 3
+      },
+      "q2_support_rate": {
+        "mean": 1,
+        "stdev": 0,
+        "min": 1,
+        "max": 1,
+        "n": 3
+      },
+      "q3_dropped_questions": {
+        "mean": 0,
+        "stdev": 0,
+        "min": 0,
+        "max": 0,
+        "n": 3
+      }
+    },
+    "failure_class_counts": {}
+  },
+  "runs": [
+    {
+      "run_index": 1,
+      "fixture_id": "reconstruct-golden-target-v1",
+      "realization": "mock",
+      "target_path": "src/fixture-service.ts",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-N5JPL6/.onto/reconstruct/benchmark-run-1",
+      "duration_s": 0.874,
+      "totals": {
+        "llm_call_count": 25,
+        "llm_duration_ms": 2,
+        "prompt_chars": 276321,
+        "output_chars": 60579,
+        "failure_class_counts": {}
+      },
+      "units": [
+        {
+          "step_id": "observation_directive",
+          "unit_id": "observation_directive",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 9335,
+          "output_chars": 178,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+          "source_identity_refs": [
+            "prompt_policy_sha256:4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+            "authored_artifact:SourceObservationDirective"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "lens_judgment",
+          "unit_id": "lens_judgment",
+          "llm_call_count": 9,
+          "duration_ms": 1,
+          "prompt_chars": 49626,
+          "output_chars": 2556,
+          "provider_tokens_in": 9,
+          "provider_tokens_out": 9,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+            "authored_artifact:ReconstructLensJudgment:logic",
+            "authored_artifact:ReconstructLensJudgment:structure",
+            "authored_artifact:ReconstructLensJudgment:dependency",
+            "authored_artifact:ReconstructLensJudgment:semantics",
+            "authored_artifact:ReconstructLensJudgment:pragmatics",
+            "authored_artifact:ReconstructLensJudgment:evolution",
+            "authored_artifact:ReconstructLensJudgment:coverage",
+            "authored_artifact:ReconstructLensJudgment:conciseness",
+            "authored_artifact:ReconstructLensJudgment:axiology"
+          ],
+          "attempt_count": 9,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 2,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 3,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 4,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 5,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 1
+            },
+            {
+              "attempt": 6,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 7,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 8,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 9,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "exploration_synthesis",
+          "unit_id": "exploration_synthesis",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5476,
+          "output_chars": 131,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+            "authored_artifact:ExplorationSynthesis"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_frontier",
+          "unit_id": "source_frontier",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 3102,
+          "output_chars": 98,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+          "source_identity_refs": [
+            "prompt_policy_sha256:05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+            "authored_artifact:SourceFrontier"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_purpose_candidates",
+          "unit_id": "source_purpose_candidates",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 16582,
+          "output_chars": 2925,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+            "authored_artifact:SourcePurposeCandidates"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_inventory",
+          "unit_id": "candidate_inventory",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 16672,
+          "output_chars": 945,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+          "source_identity_refs": [
+            "prompt_policy_sha256:9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+            "authored_artifact:CandidateInventory"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_disposition",
+          "unit_id": "candidate_disposition",
+          "llm_call_count": 1,
+          "duration_ms": 1,
+          "prompt_chars": 11318,
+          "output_chars": 990,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+          "source_identity_refs": [
+            "prompt_policy_sha256:f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+            "authored_artifact:CandidateDisposition"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 1
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "ontology_seed",
+          "unit_id": "ontology_seed",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 41516,
+          "output_chars": 19057,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+            "authored_artifact:OntologySeed"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "claim_realization",
+          "unit_id": "claim_realization",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8096,
+          "output_chars": 1654,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+          "source_identity_refs": [
+            "prompt_policy_sha256:5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+            "authored_artifact:ClaimRealizationMap"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "seed_confirmation",
+          "unit_id": "seed_confirmation",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5027,
+          "output_chars": 480,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+          "source_identity_refs": [
+            "prompt_policy_sha256:3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+            "authored_artifact:SeedConfirmation"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_questions",
+          "unit_id": "competency_questions",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 19486,
+          "output_chars": 30040,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+          "source_identity_refs": [
+            "prompt_policy_sha256:fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+            "authored_artifact:CompetencyQuestions"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_question_assessment",
+          "unit_id": "competency_question_assessment",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29412,
+          "output_chars": 1229,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+          "source_identity_refs": [
+            "prompt_policy_sha256:d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+            "authored_artifact:CompetencyQuestionAssessment"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": 1
+        },
+        {
+          "step_id": "failure_classification",
+          "unit_id": "failure_classification",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15248,
+          "output_chars": 15,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+          "source_identity_refs": [
+            "prompt_policy_sha256:8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+            "authored_artifact:FailureClassification"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "revision_proposal",
+          "unit_id": "revision_proposal",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 2634,
+          "output_chars": 16,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+          "source_identity_refs": [
+            "prompt_policy_sha256:32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+            "authored_artifact:RevisionProposal"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "stop_decision",
+          "unit_id": "stop_decision",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 4836,
+          "output_chars": 119,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+          "source_identity_refs": [
+            "prompt_policy_sha256:c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+            "authored_artifact:StopDecision"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "answer_support_ledger",
+          "unit_id": "answer_support_ledger",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8312,
+          "output_chars": 24,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+            "authored_artifact:AnswerSupportLedger"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "final_output",
+          "unit_id": "final_output",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29643,
+          "output_chars": 122,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+          "source_identity_refs": [
+            "prompt_policy_sha256:07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+            "authored_artifact:FinalOutput"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        }
+      ],
+      "quality_gate": {
+        "fixture_id": "reconstruct-golden-target-v1",
+        "scope": "fixture_specific",
+        "realization": "mock",
+        "status": "passed",
+        "source_field_rejections": [],
+        "q1": {
+          "expected_count": 4,
+          "matched_count": 4,
+          "recall": 1,
+          "missing_concept_keys": [],
+          "matches": [
+            {
+              "concept_key": "fixture-service",
+              "matched_name": "Fixture Service",
+              "seed_family": "conceptual_frame.concepts"
+            },
+            {
+              "concept_key": "fixture-user",
+              "matched_name": "Fixture User",
+              "seed_family": "dynamic_layer.actor_types"
+            },
+            {
+              "concept_key": "explain-fixture",
+              "matched_name": "Explain Fixture",
+              "seed_family": "kinetic_layer.action_types"
+            },
+            {
+              "concept_key": "fixture-source-binding",
+              "matched_name": "binding-fixture-source object-fixture-service",
+              "seed_family": "data_binding_layer.source_bindings"
+            }
+          ]
+        },
+        "q2": {
+          "population": 4,
+          "supported_count": 4,
+          "support_rate": 1,
+          "rows": [
+            {
+              "cq_key": "cq-fixture-service",
+              "matched_question_id": "cq-1",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-fixture-user",
+              "matched_question_id": "cq-4",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-explain-fixture",
+              "matched_question_id": "cq-6",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-fixture-source-binding",
+              "matched_question_id": "cq-9",
+              "answer_status": "answerable",
+              "supported": true
+            }
+          ]
+        },
+        "q3": {
+          "authored_question_count": 11,
+          "assessed_question_count": 11,
+          "dropped_question_count": 0,
+          "dropped_question_ids": [],
+          "batch_count": 1
+        }
+      },
+      "metadata": {
+        "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
+        "commit": "a12c6f81b1bf835a6dc447fa65fb01b181de8123",
+        "node_version": "v26.0.0",
+        "model_id": "reconstruct-mock-model",
+        "provider_route": "mock",
+        "started_at": "2026-06-12T13:17:42.734Z"
+      }
+    },
+    {
+      "run_index": 2,
+      "fixture_id": "reconstruct-golden-target-v1",
+      "realization": "mock",
+      "target_path": "src/fixture-service.ts",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-GiR7wV/.onto/reconstruct/benchmark-run-2",
+      "duration_s": 0.706,
+      "totals": {
+        "llm_call_count": 25,
+        "llm_duration_ms": 2,
+        "prompt_chars": 276321,
+        "output_chars": 60579,
+        "failure_class_counts": {}
+      },
+      "units": [
+        {
+          "step_id": "observation_directive",
+          "unit_id": "observation_directive",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 9335,
+          "output_chars": 178,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+          "source_identity_refs": [
+            "prompt_policy_sha256:4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+            "authored_artifact:SourceObservationDirective"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "lens_judgment",
+          "unit_id": "lens_judgment",
+          "llm_call_count": 9,
+          "duration_ms": 0,
+          "prompt_chars": 49626,
+          "output_chars": 2556,
+          "provider_tokens_in": 9,
+          "provider_tokens_out": 9,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+            "authored_artifact:ReconstructLensJudgment:logic",
+            "authored_artifact:ReconstructLensJudgment:structure",
+            "authored_artifact:ReconstructLensJudgment:dependency",
+            "authored_artifact:ReconstructLensJudgment:semantics",
+            "authored_artifact:ReconstructLensJudgment:pragmatics",
+            "authored_artifact:ReconstructLensJudgment:evolution",
+            "authored_artifact:ReconstructLensJudgment:coverage",
+            "authored_artifact:ReconstructLensJudgment:conciseness",
+            "authored_artifact:ReconstructLensJudgment:axiology"
+          ],
+          "attempt_count": 9,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 2,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 3,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 4,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 5,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 6,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 7,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 8,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 9,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "exploration_synthesis",
+          "unit_id": "exploration_synthesis",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5476,
+          "output_chars": 131,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+            "authored_artifact:ExplorationSynthesis"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_frontier",
+          "unit_id": "source_frontier",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 3102,
+          "output_chars": 98,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+          "source_identity_refs": [
+            "prompt_policy_sha256:05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+            "authored_artifact:SourceFrontier"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_purpose_candidates",
+          "unit_id": "source_purpose_candidates",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 16582,
+          "output_chars": 2925,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+            "authored_artifact:SourcePurposeCandidates"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_inventory",
+          "unit_id": "candidate_inventory",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 16672,
+          "output_chars": 945,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+          "source_identity_refs": [
+            "prompt_policy_sha256:9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+            "authored_artifact:CandidateInventory"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_disposition",
+          "unit_id": "candidate_disposition",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 11318,
+          "output_chars": 990,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+          "source_identity_refs": [
+            "prompt_policy_sha256:f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+            "authored_artifact:CandidateDisposition"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "ontology_seed",
+          "unit_id": "ontology_seed",
+          "llm_call_count": 1,
+          "duration_ms": 1,
+          "prompt_chars": 41516,
+          "output_chars": 19057,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+            "authored_artifact:OntologySeed"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 1
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "claim_realization",
+          "unit_id": "claim_realization",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8096,
+          "output_chars": 1654,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+          "source_identity_refs": [
+            "prompt_policy_sha256:5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+            "authored_artifact:ClaimRealizationMap"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "seed_confirmation",
+          "unit_id": "seed_confirmation",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5027,
+          "output_chars": 480,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+          "source_identity_refs": [
+            "prompt_policy_sha256:3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+            "authored_artifact:SeedConfirmation"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_questions",
+          "unit_id": "competency_questions",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 19486,
+          "output_chars": 30040,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+          "source_identity_refs": [
+            "prompt_policy_sha256:fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+            "authored_artifact:CompetencyQuestions"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_question_assessment",
+          "unit_id": "competency_question_assessment",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29412,
+          "output_chars": 1229,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+          "source_identity_refs": [
+            "prompt_policy_sha256:d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+            "authored_artifact:CompetencyQuestionAssessment"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": 1
+        },
+        {
+          "step_id": "failure_classification",
+          "unit_id": "failure_classification",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15248,
+          "output_chars": 15,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+          "source_identity_refs": [
+            "prompt_policy_sha256:8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+            "authored_artifact:FailureClassification"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "revision_proposal",
+          "unit_id": "revision_proposal",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 2634,
+          "output_chars": 16,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+          "source_identity_refs": [
+            "prompt_policy_sha256:32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+            "authored_artifact:RevisionProposal"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "stop_decision",
+          "unit_id": "stop_decision",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 4836,
+          "output_chars": 119,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+          "source_identity_refs": [
+            "prompt_policy_sha256:c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+            "authored_artifact:StopDecision"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "answer_support_ledger",
+          "unit_id": "answer_support_ledger",
+          "llm_call_count": 1,
+          "duration_ms": 1,
+          "prompt_chars": 8312,
+          "output_chars": 24,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+            "authored_artifact:AnswerSupportLedger"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 1
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "final_output",
+          "unit_id": "final_output",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29643,
+          "output_chars": 122,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+          "source_identity_refs": [
+            "prompt_policy_sha256:07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+            "authored_artifact:FinalOutput"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        }
+      ],
+      "quality_gate": {
+        "fixture_id": "reconstruct-golden-target-v1",
+        "scope": "fixture_specific",
+        "realization": "mock",
+        "status": "passed",
+        "source_field_rejections": [],
+        "q1": {
+          "expected_count": 4,
+          "matched_count": 4,
+          "recall": 1,
+          "missing_concept_keys": [],
+          "matches": [
+            {
+              "concept_key": "fixture-service",
+              "matched_name": "Fixture Service",
+              "seed_family": "conceptual_frame.concepts"
+            },
+            {
+              "concept_key": "fixture-user",
+              "matched_name": "Fixture User",
+              "seed_family": "dynamic_layer.actor_types"
+            },
+            {
+              "concept_key": "explain-fixture",
+              "matched_name": "Explain Fixture",
+              "seed_family": "kinetic_layer.action_types"
+            },
+            {
+              "concept_key": "fixture-source-binding",
+              "matched_name": "binding-fixture-source object-fixture-service",
+              "seed_family": "data_binding_layer.source_bindings"
+            }
+          ]
+        },
+        "q2": {
+          "population": 4,
+          "supported_count": 4,
+          "support_rate": 1,
+          "rows": [
+            {
+              "cq_key": "cq-fixture-service",
+              "matched_question_id": "cq-1",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-fixture-user",
+              "matched_question_id": "cq-4",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-explain-fixture",
+              "matched_question_id": "cq-6",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-fixture-source-binding",
+              "matched_question_id": "cq-9",
+              "answer_status": "answerable",
+              "supported": true
+            }
+          ]
+        },
+        "q3": {
+          "authored_question_count": 11,
+          "assessed_question_count": 11,
+          "dropped_question_count": 0,
+          "dropped_question_ids": [],
+          "batch_count": 1
+        }
+      },
+      "metadata": {
+        "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
+        "commit": "a12c6f81b1bf835a6dc447fa65fb01b181de8123",
+        "node_version": "v26.0.0",
+        "model_id": "reconstruct-mock-model",
+        "provider_route": "mock",
+        "started_at": "2026-06-12T13:17:43.623Z"
+      }
+    },
+    {
+      "run_index": 3,
+      "fixture_id": "reconstruct-golden-target-v1",
+      "realization": "mock",
+      "target_path": "src/fixture-service.ts",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-UCamDD/.onto/reconstruct/benchmark-run-3",
+      "duration_s": 0.745,
+      "totals": {
+        "llm_call_count": 25,
+        "llm_duration_ms": 2,
+        "prompt_chars": 276321,
+        "output_chars": 60579,
+        "failure_class_counts": {}
+      },
+      "units": [
+        {
+          "step_id": "observation_directive",
+          "unit_id": "observation_directive",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 9335,
+          "output_chars": 178,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+          "source_identity_refs": [
+            "prompt_policy_sha256:4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+            "authored_artifact:SourceObservationDirective"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "lens_judgment",
+          "unit_id": "lens_judgment",
+          "llm_call_count": 9,
+          "duration_ms": 1,
+          "prompt_chars": 49626,
+          "output_chars": 2556,
+          "provider_tokens_in": 9,
+          "provider_tokens_out": 9,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+            "authored_artifact:ReconstructLensJudgment:logic",
+            "authored_artifact:ReconstructLensJudgment:structure",
+            "authored_artifact:ReconstructLensJudgment:dependency",
+            "authored_artifact:ReconstructLensJudgment:semantics",
+            "authored_artifact:ReconstructLensJudgment:pragmatics",
+            "authored_artifact:ReconstructLensJudgment:evolution",
+            "authored_artifact:ReconstructLensJudgment:coverage",
+            "authored_artifact:ReconstructLensJudgment:conciseness",
+            "authored_artifact:ReconstructLensJudgment:axiology"
+          ],
+          "attempt_count": 9,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 1
+            },
+            {
+              "attempt": 2,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 3,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 4,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 5,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 6,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 7,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 8,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 9,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "exploration_synthesis",
+          "unit_id": "exploration_synthesis",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5476,
+          "output_chars": 131,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+            "authored_artifact:ExplorationSynthesis"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_frontier",
+          "unit_id": "source_frontier",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 3102,
+          "output_chars": 98,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+          "source_identity_refs": [
+            "prompt_policy_sha256:05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+            "authored_artifact:SourceFrontier"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_purpose_candidates",
+          "unit_id": "source_purpose_candidates",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 16582,
+          "output_chars": 2925,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+            "authored_artifact:SourcePurposeCandidates"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_inventory",
+          "unit_id": "candidate_inventory",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 16672,
+          "output_chars": 945,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+          "source_identity_refs": [
+            "prompt_policy_sha256:9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+            "authored_artifact:CandidateInventory"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_disposition",
+          "unit_id": "candidate_disposition",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 11318,
+          "output_chars": 990,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+          "source_identity_refs": [
+            "prompt_policy_sha256:f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+            "authored_artifact:CandidateDisposition"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "ontology_seed",
+          "unit_id": "ontology_seed",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 41516,
+          "output_chars": 19057,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+            "authored_artifact:OntologySeed"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "claim_realization",
+          "unit_id": "claim_realization",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8096,
+          "output_chars": 1654,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+          "source_identity_refs": [
+            "prompt_policy_sha256:5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+            "authored_artifact:ClaimRealizationMap"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "seed_confirmation",
+          "unit_id": "seed_confirmation",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5027,
+          "output_chars": 480,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+          "source_identity_refs": [
+            "prompt_policy_sha256:3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+            "authored_artifact:SeedConfirmation"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_questions",
+          "unit_id": "competency_questions",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 19486,
+          "output_chars": 30040,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+          "source_identity_refs": [
+            "prompt_policy_sha256:fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+            "authored_artifact:CompetencyQuestions"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_question_assessment",
+          "unit_id": "competency_question_assessment",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29412,
+          "output_chars": 1229,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+          "source_identity_refs": [
+            "prompt_policy_sha256:d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+            "authored_artifact:CompetencyQuestionAssessment"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": 1
+        },
+        {
+          "step_id": "failure_classification",
+          "unit_id": "failure_classification",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15248,
+          "output_chars": 15,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+          "source_identity_refs": [
+            "prompt_policy_sha256:8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+            "authored_artifact:FailureClassification"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "revision_proposal",
+          "unit_id": "revision_proposal",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 2634,
+          "output_chars": 16,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+          "source_identity_refs": [
+            "prompt_policy_sha256:32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+            "authored_artifact:RevisionProposal"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "stop_decision",
+          "unit_id": "stop_decision",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 4836,
+          "output_chars": 119,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+          "source_identity_refs": [
+            "prompt_policy_sha256:c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+            "authored_artifact:StopDecision"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "answer_support_ledger",
+          "unit_id": "answer_support_ledger",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8312,
+          "output_chars": 24,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+            "authored_artifact:AnswerSupportLedger"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "final_output",
+          "unit_id": "final_output",
+          "llm_call_count": 1,
+          "duration_ms": 1,
+          "prompt_chars": 29643,
+          "output_chars": 122,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+          "source_identity_refs": [
+            "prompt_policy_sha256:07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+            "authored_artifact:FinalOutput"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 1
+            }
+          ],
+          "batch_count": null
+        }
+      ],
+      "quality_gate": {
+        "fixture_id": "reconstruct-golden-target-v1",
+        "scope": "fixture_specific",
+        "realization": "mock",
+        "status": "passed",
+        "source_field_rejections": [],
+        "q1": {
+          "expected_count": 4,
+          "matched_count": 4,
+          "recall": 1,
+          "missing_concept_keys": [],
+          "matches": [
+            {
+              "concept_key": "fixture-service",
+              "matched_name": "Fixture Service",
+              "seed_family": "conceptual_frame.concepts"
+            },
+            {
+              "concept_key": "fixture-user",
+              "matched_name": "Fixture User",
+              "seed_family": "dynamic_layer.actor_types"
+            },
+            {
+              "concept_key": "explain-fixture",
+              "matched_name": "Explain Fixture",
+              "seed_family": "kinetic_layer.action_types"
+            },
+            {
+              "concept_key": "fixture-source-binding",
+              "matched_name": "binding-fixture-source object-fixture-service",
+              "seed_family": "data_binding_layer.source_bindings"
+            }
+          ]
+        },
+        "q2": {
+          "population": 4,
+          "supported_count": 4,
+          "support_rate": 1,
+          "rows": [
+            {
+              "cq_key": "cq-fixture-service",
+              "matched_question_id": "cq-1",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-fixture-user",
+              "matched_question_id": "cq-4",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-explain-fixture",
+              "matched_question_id": "cq-6",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-fixture-source-binding",
+              "matched_question_id": "cq-9",
+              "answer_status": "answerable",
+              "supported": true
+            }
+          ]
+        },
+        "q3": {
+          "authored_question_count": 11,
+          "assessed_question_count": 11,
+          "dropped_question_count": 0,
+          "dropped_question_ids": [],
+          "batch_count": 1
+        }
+      },
+      "metadata": {
+        "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
+        "commit": "a12c6f81b1bf835a6dc447fa65fb01b181de8123",
+        "node_version": "v26.0.0",
+        "model_id": "reconstruct-mock-model",
+        "provider_route": "mock",
+        "started_at": "2026-06-12T13:17:44.341Z"
+      }
+    },
+    {
+      "run_index": 1,
+      "fixture_id": "reconstruct-golden-target-v2",
+      "realization": "mock",
+      "target_path": "src/lending-service.ts",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-d1XMn4/.onto/reconstruct/benchmark-run-1",
+      "duration_s": 0.747,
+      "totals": {
+        "llm_call_count": 25,
+        "llm_duration_ms": 1,
+        "prompt_chars": 273871,
+        "output_chars": 60592,
+        "failure_class_counts": {}
+      },
+      "units": [
+        {
+          "step_id": "observation_directive",
+          "unit_id": "observation_directive",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8048,
+          "output_chars": 178,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+          "source_identity_refs": [
+            "prompt_policy_sha256:4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+            "authored_artifact:SourceObservationDirective"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "lens_judgment",
+          "unit_id": "lens_judgment",
+          "llm_call_count": 9,
+          "duration_ms": 0,
+          "prompt_chars": 50526,
+          "output_chars": 2556,
+          "provider_tokens_in": 9,
+          "provider_tokens_out": 9,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+            "authored_artifact:ReconstructLensJudgment:logic",
+            "authored_artifact:ReconstructLensJudgment:structure",
+            "authored_artifact:ReconstructLensJudgment:dependency",
+            "authored_artifact:ReconstructLensJudgment:semantics",
+            "authored_artifact:ReconstructLensJudgment:pragmatics",
+            "authored_artifact:ReconstructLensJudgment:evolution",
+            "authored_artifact:ReconstructLensJudgment:coverage",
+            "authored_artifact:ReconstructLensJudgment:conciseness",
+            "authored_artifact:ReconstructLensJudgment:axiology"
+          ],
+          "attempt_count": 9,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 2,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 3,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 4,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 5,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 6,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 7,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 8,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 9,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "exploration_synthesis",
+          "unit_id": "exploration_synthesis",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5489,
+          "output_chars": 131,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+            "authored_artifact:ExplorationSynthesis"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_frontier",
+          "unit_id": "source_frontier",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 3115,
+          "output_chars": 98,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+          "source_identity_refs": [
+            "prompt_policy_sha256:05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+            "authored_artifact:SourceFrontier"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_purpose_candidates",
+          "unit_id": "source_purpose_candidates",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15378,
+          "output_chars": 2925,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+            "authored_artifact:SourcePurposeCandidates"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_inventory",
+          "unit_id": "candidate_inventory",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15468,
+          "output_chars": 945,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+          "source_identity_refs": [
+            "prompt_policy_sha256:9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+            "authored_artifact:CandidateInventory"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_disposition",
+          "unit_id": "candidate_disposition",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 11418,
+          "output_chars": 990,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+          "source_identity_refs": [
+            "prompt_policy_sha256:f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+            "authored_artifact:CandidateDisposition"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "ontology_seed",
+          "unit_id": "ontology_seed",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 41529,
+          "output_chars": 19070,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+            "authored_artifact:OntologySeed"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "claim_realization",
+          "unit_id": "claim_realization",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8183,
+          "output_chars": 1654,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+          "source_identity_refs": [
+            "prompt_policy_sha256:5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+            "authored_artifact:ClaimRealizationMap"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "seed_confirmation",
+          "unit_id": "seed_confirmation",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5027,
+          "output_chars": 480,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+          "source_identity_refs": [
+            "prompt_policy_sha256:3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+            "authored_artifact:SeedConfirmation"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_questions",
+          "unit_id": "competency_questions",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 19573,
+          "output_chars": 30040,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+          "source_identity_refs": [
+            "prompt_policy_sha256:fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+            "authored_artifact:CompetencyQuestions"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_question_assessment",
+          "unit_id": "competency_question_assessment",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29412,
+          "output_chars": 1229,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+          "source_identity_refs": [
+            "prompt_policy_sha256:d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+            "authored_artifact:CompetencyQuestionAssessment"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": 1
+        },
+        {
+          "step_id": "failure_classification",
+          "unit_id": "failure_classification",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15248,
+          "output_chars": 15,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+          "source_identity_refs": [
+            "prompt_policy_sha256:8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+            "authored_artifact:FailureClassification"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "revision_proposal",
+          "unit_id": "revision_proposal",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 2634,
+          "output_chars": 16,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+          "source_identity_refs": [
+            "prompt_policy_sha256:32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+            "authored_artifact:RevisionProposal"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "stop_decision",
+          "unit_id": "stop_decision",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 4849,
+          "output_chars": 119,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+          "source_identity_refs": [
+            "prompt_policy_sha256:c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+            "authored_artifact:StopDecision"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "answer_support_ledger",
+          "unit_id": "answer_support_ledger",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8318,
+          "output_chars": 24,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+            "authored_artifact:AnswerSupportLedger"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "final_output",
+          "unit_id": "final_output",
+          "llm_call_count": 1,
+          "duration_ms": 1,
+          "prompt_chars": 29656,
+          "output_chars": 122,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+          "source_identity_refs": [
+            "prompt_policy_sha256:07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+            "authored_artifact:FinalOutput"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 1
+            }
+          ],
+          "batch_count": null
+        }
+      ],
+      "quality_gate": {
+        "fixture_id": "reconstruct-golden-target-v2",
+        "scope": "fixture_specific",
+        "realization": "mock",
+        "status": "not_applicable",
+        "reason": "The deterministic mock realization's payloads do not target this fixture's domain; quality scores apply to live semantic authoring only.",
+        "source_field_rejections": [],
+        "q1": null,
+        "q2": null,
+        "q3": null
+      },
+      "metadata": {
+        "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
+        "commit": "a12c6f81b1bf835a6dc447fa65fb01b181de8123",
+        "node_version": "v26.0.0",
+        "model_id": "reconstruct-mock-model",
+        "provider_route": "mock",
+        "started_at": "2026-06-12T13:17:45.100Z"
+      }
+    },
+    {
+      "run_index": 2,
+      "fixture_id": "reconstruct-golden-target-v2",
+      "realization": "mock",
+      "target_path": "src/lending-service.ts",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-cfdqq6/.onto/reconstruct/benchmark-run-2",
+      "duration_s": 0.761,
+      "totals": {
+        "llm_call_count": 25,
+        "llm_duration_ms": 1,
+        "prompt_chars": 273871,
+        "output_chars": 60592,
+        "failure_class_counts": {}
+      },
+      "units": [
+        {
+          "step_id": "observation_directive",
+          "unit_id": "observation_directive",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8048,
+          "output_chars": 178,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+          "source_identity_refs": [
+            "prompt_policy_sha256:4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+            "authored_artifact:SourceObservationDirective"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "lens_judgment",
+          "unit_id": "lens_judgment",
+          "llm_call_count": 9,
+          "duration_ms": 0,
+          "prompt_chars": 50526,
+          "output_chars": 2556,
+          "provider_tokens_in": 9,
+          "provider_tokens_out": 9,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+            "authored_artifact:ReconstructLensJudgment:logic",
+            "authored_artifact:ReconstructLensJudgment:structure",
+            "authored_artifact:ReconstructLensJudgment:dependency",
+            "authored_artifact:ReconstructLensJudgment:semantics",
+            "authored_artifact:ReconstructLensJudgment:pragmatics",
+            "authored_artifact:ReconstructLensJudgment:evolution",
+            "authored_artifact:ReconstructLensJudgment:coverage",
+            "authored_artifact:ReconstructLensJudgment:conciseness",
+            "authored_artifact:ReconstructLensJudgment:axiology"
+          ],
+          "attempt_count": 9,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 2,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 3,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 4,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 5,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 6,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 7,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 8,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 9,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "exploration_synthesis",
+          "unit_id": "exploration_synthesis",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5489,
+          "output_chars": 131,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+            "authored_artifact:ExplorationSynthesis"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_frontier",
+          "unit_id": "source_frontier",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 3115,
+          "output_chars": 98,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+          "source_identity_refs": [
+            "prompt_policy_sha256:05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+            "authored_artifact:SourceFrontier"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_purpose_candidates",
+          "unit_id": "source_purpose_candidates",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15378,
+          "output_chars": 2925,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+            "authored_artifact:SourcePurposeCandidates"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_inventory",
+          "unit_id": "candidate_inventory",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15468,
+          "output_chars": 945,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+          "source_identity_refs": [
+            "prompt_policy_sha256:9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+            "authored_artifact:CandidateInventory"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_disposition",
+          "unit_id": "candidate_disposition",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 11418,
+          "output_chars": 990,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+          "source_identity_refs": [
+            "prompt_policy_sha256:f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+            "authored_artifact:CandidateDisposition"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "ontology_seed",
+          "unit_id": "ontology_seed",
+          "llm_call_count": 1,
+          "duration_ms": 1,
+          "prompt_chars": 41529,
+          "output_chars": 19070,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+            "authored_artifact:OntologySeed"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 1
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "claim_realization",
+          "unit_id": "claim_realization",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8183,
+          "output_chars": 1654,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+          "source_identity_refs": [
+            "prompt_policy_sha256:5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+            "authored_artifact:ClaimRealizationMap"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "seed_confirmation",
+          "unit_id": "seed_confirmation",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5027,
+          "output_chars": 480,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+          "source_identity_refs": [
+            "prompt_policy_sha256:3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+            "authored_artifact:SeedConfirmation"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_questions",
+          "unit_id": "competency_questions",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 19573,
+          "output_chars": 30040,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+          "source_identity_refs": [
+            "prompt_policy_sha256:fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+            "authored_artifact:CompetencyQuestions"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_question_assessment",
+          "unit_id": "competency_question_assessment",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29412,
+          "output_chars": 1229,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+          "source_identity_refs": [
+            "prompt_policy_sha256:d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+            "authored_artifact:CompetencyQuestionAssessment"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": 1
+        },
+        {
+          "step_id": "failure_classification",
+          "unit_id": "failure_classification",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15248,
+          "output_chars": 15,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+          "source_identity_refs": [
+            "prompt_policy_sha256:8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+            "authored_artifact:FailureClassification"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "revision_proposal",
+          "unit_id": "revision_proposal",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 2634,
+          "output_chars": 16,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+          "source_identity_refs": [
+            "prompt_policy_sha256:32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+            "authored_artifact:RevisionProposal"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "stop_decision",
+          "unit_id": "stop_decision",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 4849,
+          "output_chars": 119,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+          "source_identity_refs": [
+            "prompt_policy_sha256:c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+            "authored_artifact:StopDecision"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "answer_support_ledger",
+          "unit_id": "answer_support_ledger",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8318,
+          "output_chars": 24,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+            "authored_artifact:AnswerSupportLedger"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "final_output",
+          "unit_id": "final_output",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29656,
+          "output_chars": 122,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+          "source_identity_refs": [
+            "prompt_policy_sha256:07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+            "authored_artifact:FinalOutput"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        }
+      ],
+      "quality_gate": {
+        "fixture_id": "reconstruct-golden-target-v2",
+        "scope": "fixture_specific",
+        "realization": "mock",
+        "status": "not_applicable",
+        "reason": "The deterministic mock realization's payloads do not target this fixture's domain; quality scores apply to live semantic authoring only.",
+        "source_field_rejections": [],
+        "q1": null,
+        "q2": null,
+        "q3": null
+      },
+      "metadata": {
+        "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
+        "commit": "a12c6f81b1bf835a6dc447fa65fb01b181de8123",
+        "node_version": "v26.0.0",
+        "model_id": "reconstruct-mock-model",
+        "provider_route": "mock",
+        "started_at": "2026-06-12T13:17:45.860Z"
+      }
+    },
+    {
+      "run_index": 3,
+      "fixture_id": "reconstruct-golden-target-v2",
+      "realization": "mock",
+      "target_path": "src/lending-service.ts",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-06Y3X1/.onto/reconstruct/benchmark-run-3",
+      "duration_s": 0.706,
+      "totals": {
+        "llm_call_count": 25,
+        "llm_duration_ms": 0,
+        "prompt_chars": 273871,
+        "output_chars": 60592,
+        "failure_class_counts": {}
+      },
+      "units": [
+        {
+          "step_id": "observation_directive",
+          "unit_id": "observation_directive",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8048,
+          "output_chars": 178,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+          "source_identity_refs": [
+            "prompt_policy_sha256:4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+            "authored_artifact:SourceObservationDirective"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "lens_judgment",
+          "unit_id": "lens_judgment",
+          "llm_call_count": 9,
+          "duration_ms": 0,
+          "prompt_chars": 50526,
+          "output_chars": 2556,
+          "provider_tokens_in": 9,
+          "provider_tokens_out": 9,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+            "authored_artifact:ReconstructLensJudgment:logic",
+            "authored_artifact:ReconstructLensJudgment:structure",
+            "authored_artifact:ReconstructLensJudgment:dependency",
+            "authored_artifact:ReconstructLensJudgment:semantics",
+            "authored_artifact:ReconstructLensJudgment:pragmatics",
+            "authored_artifact:ReconstructLensJudgment:evolution",
+            "authored_artifact:ReconstructLensJudgment:coverage",
+            "authored_artifact:ReconstructLensJudgment:conciseness",
+            "authored_artifact:ReconstructLensJudgment:axiology"
+          ],
+          "attempt_count": 9,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 2,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 3,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 4,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 5,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 6,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 7,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 8,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            },
+            {
+              "attempt": 9,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "exploration_synthesis",
+          "unit_id": "exploration_synthesis",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5489,
+          "output_chars": 131,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+            "authored_artifact:ExplorationSynthesis"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_frontier",
+          "unit_id": "source_frontier",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 3115,
+          "output_chars": 98,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+          "source_identity_refs": [
+            "prompt_policy_sha256:05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+            "authored_artifact:SourceFrontier"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_purpose_candidates",
+          "unit_id": "source_purpose_candidates",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15378,
+          "output_chars": 2925,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+            "authored_artifact:SourcePurposeCandidates"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_inventory",
+          "unit_id": "candidate_inventory",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15468,
+          "output_chars": 945,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+          "source_identity_refs": [
+            "prompt_policy_sha256:9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+            "authored_artifact:CandidateInventory"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_disposition",
+          "unit_id": "candidate_disposition",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 11418,
+          "output_chars": 990,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+          "source_identity_refs": [
+            "prompt_policy_sha256:f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+            "authored_artifact:CandidateDisposition"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "ontology_seed",
+          "unit_id": "ontology_seed",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 41529,
+          "output_chars": 19070,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:76171e60ecf2ae7507011bcdaa275cf12be2e52e66ddb34102c265615a54ba5f",
+            "authored_artifact:OntologySeed"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "claim_realization",
+          "unit_id": "claim_realization",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8183,
+          "output_chars": 1654,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+          "source_identity_refs": [
+            "prompt_policy_sha256:5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+            "authored_artifact:ClaimRealizationMap"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "seed_confirmation",
+          "unit_id": "seed_confirmation",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 5027,
+          "output_chars": 480,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+          "source_identity_refs": [
+            "prompt_policy_sha256:3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+            "authored_artifact:SeedConfirmation"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_questions",
+          "unit_id": "competency_questions",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 19573,
+          "output_chars": 30040,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+          "source_identity_refs": [
+            "prompt_policy_sha256:fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+            "authored_artifact:CompetencyQuestions"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_question_assessment",
+          "unit_id": "competency_question_assessment",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29412,
+          "output_chars": 1229,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+          "source_identity_refs": [
+            "prompt_policy_sha256:d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+            "authored_artifact:CompetencyQuestionAssessment"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": 1
+        },
+        {
+          "step_id": "failure_classification",
+          "unit_id": "failure_classification",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 15248,
+          "output_chars": 15,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+          "source_identity_refs": [
+            "prompt_policy_sha256:8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+            "authored_artifact:FailureClassification"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "revision_proposal",
+          "unit_id": "revision_proposal",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 2634,
+          "output_chars": 16,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+          "source_identity_refs": [
+            "prompt_policy_sha256:32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+            "authored_artifact:RevisionProposal"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "stop_decision",
+          "unit_id": "stop_decision",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 4849,
+          "output_chars": 119,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+          "source_identity_refs": [
+            "prompt_policy_sha256:c23726de9f8763d5bc1f3f25c8e71c5fb1aa454276011a30d504ba7a5378aa79",
+            "authored_artifact:StopDecision"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "answer_support_ledger",
+          "unit_id": "answer_support_ledger",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 8318,
+          "output_chars": 24,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+            "authored_artifact:AnswerSupportLedger"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "final_output",
+          "unit_id": "final_output",
+          "llm_call_count": 1,
+          "duration_ms": 0,
+          "prompt_chars": 29656,
+          "output_chars": 122,
+          "provider_tokens_in": 1,
+          "provider_tokens_out": 1,
+          "provider_route": "mock",
+          "model_id": "reconstruct-mock-model",
+          "effort": null,
+          "prompt_policy_sha256": "07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+          "source_identity_refs": [
+            "prompt_policy_sha256:07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+            "authored_artifact:FinalOutput"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 0
+            }
+          ],
+          "batch_count": null
+        }
+      ],
+      "quality_gate": {
+        "fixture_id": "reconstruct-golden-target-v2",
+        "scope": "fixture_specific",
+        "realization": "mock",
+        "status": "not_applicable",
+        "reason": "The deterministic mock realization's payloads do not target this fixture's domain; quality scores apply to live semantic authoring only.",
+        "source_field_rejections": [],
+        "q1": null,
+        "q2": null,
+        "q3": null
+      },
+      "metadata": {
+        "project_root": "/Users/kangmin/cowork/onto-mcp-claude",
+        "commit": "a12c6f81b1bf835a6dc447fa65fb01b181de8123",
+        "node_version": "v26.0.0",
+        "model_id": "reconstruct-mock-model",
+        "provider_route": "mock",
+        "started_at": "2026-06-12T13:17:46.633Z"
+      }
+    }
+  ]
+}
