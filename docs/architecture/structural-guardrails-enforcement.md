@@ -1,8 +1,9 @@
 # 구조적 가드: INVARIANTS 강제
 
-> 상태: Active
+> 상태: Active — **G1~G6 구현 완료** (구현 현황 표는 [INVARIANTS.md](../../INVARIANTS.md) §강제 수단 구현 현황)
 > 목적: [INVARIANTS.md](../../INVARIANTS.md)의 불변식을 지침(AGENTS §0)에서 **구조적 강제**(역량 경계·검증 게이트)로 끌어올린다.
 > 관계: [AGENTS.md](../../AGENTS.md) §0
+> 구현 노트: G1·G2는 eslint/dependency-cruiser 대신 기존 `check:*` 패턴의 tsx conformance 스크립트로 구현했다(신규 lint 의존성 0; 수용 기준 — 위반 시 비-0 종료 — 은 동일하게 충족). G2의 스펙 인가 정규화 지점은 스크립트 내 가시적 waiver로 등록되며 stale waiver는 실패한다. G4는 로컬 `check:invariant-change` + PR CI([invariants.yml](../../.github/workflows/invariants.yml))로 강제한다. G5는 [scripts/review-pipeline-benchmark.ts](../../scripts/review-pipeline-benchmark.ts)의 decision gate로 이미 충족되어 있었다.
 
 ## 원칙
 

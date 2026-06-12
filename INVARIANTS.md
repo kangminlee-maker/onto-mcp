@@ -71,4 +71,15 @@
 
 ## 강제 수단 구현 현황
 
-위 불변식 중 다수는 현재 지침(AGENTS §0)으로만 강제되고, 구조적 강제(역량 경계·검증 게이트)는 아직 미구현이다. 구현은 [docs/architecture/structural-guardrails-enforcement.md](docs/architecture/structural-guardrails-enforcement.md)에서 다룬다.
+구조적 가드 G1~G6이 구현되어 있다(설계: [docs/architecture/structural-guardrails-enforcement.md](docs/architecture/structural-guardrails-enforcement.md)). CI는 [.github/workflows/invariants.yml](.github/workflows/invariants.yml)이 PR마다 G1·G2·G4를 강제한다.
+
+| 가드 | 불변식 | 실행 |
+|---|---|---|
+| G1 import 경계 | INV-MOCK-1 (+repo-layout 레이어링) | `npm run check:import-boundary` |
+| G2 스펙 기본값 스캐너 | INV-AUTH-1, INV-CFG-1 | `npm run check:spec-defaults` (인가 정규화는 가시적 waiver) |
+| G3 불변식 테스트 | INV-AUTH-1, INV-SCHEMA-1, INV-TEST-1 | `src/**/*.invariant.test.ts` (vitest) |
+| G4 보호 키 변경 마커 | INV-AUTH-1, INV-CFG-1, INV-MATERIAL-1 | `npm run check:invariant-change [-- baseRef]` + CI |
+| G5 벤치마크 게이트 | INV-BENCH-1, INV-EXP-1 | 하니스 내장(decision gate: runs≥3·fixtures≥2 미충족 시 `comparison_conclusion=null` + PRELIMINARY) |
+| G6 드리프트 리포트 | 집계 | `npm run check:invariant-drift [-- baseRef]` |
+
+INV-LOOP-1·INV-SCOPE-1은 지침 강제로 남는다(무인 루프·스코프 판단은 구조화 대상 아님).

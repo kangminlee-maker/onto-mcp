@@ -38,7 +38,7 @@
 
 8. **최적화가 재설계로 커지면**, 원래 성공기준("품질 손상 없음")을 새 스코프에서 다시 측정한다.
 
-> 위 규칙들의 구조적 강제(가드)는 [docs/architecture/structural-guardrails-enforcement.md](docs/architecture/structural-guardrails-enforcement.md)를 따른다. 아직 미구현 가드(G1~G6)는 우선 구현 대상이다.
+> 위 규칙들의 구조적 강제(가드)는 [docs/architecture/structural-guardrails-enforcement.md](docs/architecture/structural-guardrails-enforcement.md)를 따른다. G1~G6 구현 완료 — 실행 명령·불변식 매핑은 [INVARIANTS.md](INVARIANTS.md) §강제 수단 구현 현황. 빠른 일괄 확인: `npm run check:invariant-drift`.
 
 ---
 
