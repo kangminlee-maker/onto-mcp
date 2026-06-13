@@ -1,8 +1,9 @@
 # Reconstruct Pipeline Benchmark (live)
 
 > Status: PRELIMINARY — not decision-grade (5 run(s) failed before producing a record; scored quality evidence covers 1 distinct fixture(s); INV-BENCH-1 needs >=2)
-> Generated: 2026-06-13T06:23:22.303Z | Commit: cad2e07a1 (clean tree)
-> Fixtures: reconstruct-golden-target-v1, reconstruct-golden-target-v2 | Repetitions: 3 | Effort: medium | Unit timeout: 420000ms
+> Generated: 2026-06-13T08:54:07.843Z | Commit: cad2e07a1 (clean tree)
+> Re-derived (no re-execution) from a record originally generated 2026-06-13T06:23:22.303Z; commit/tree above are the original data provenance.
+> Fixtures: reconstruct-golden-target-v1, reconstruct-golden-target-v2 | Repetitions: 3 | Requested effort: medium | Unit timeout: 420000ms
 > comparison_conclusion: null (single-case record; lever comparisons arrive with Phase 2)
 
 ## Per-fixture metrics (mean ± stdev [min..max], n)
@@ -17,13 +18,15 @@
 
 ## Failed runs
 
+Failure classes: final_output_provenance=3, ontology_seed_validation=1, competency_questions_validation=1
+
 | fixture | run | failure_class | duration_s | error |
 |---|---|---|---|---|
-| reconstruct-golden-target-v1 | 1 | other | 585.7 | final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final ou |
-| reconstruct-golden-target-v1 | 2 | other | 689.759 | ontology-seed validation failed at /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-go |
-| reconstruct-golden-target-v1 | 3 | other | 637.978 | final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final ou |
-| reconstruct-golden-target-v2 | 1 | other | 895.517 | competency-questions validation failed at /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconst |
-| reconstruct-golden-target-v2 | 2 | other | 1126.436 | final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final ou |
+| reconstruct-golden-target-v1 | 1 | final_output_provenance | 585.7 | final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final ou |
+| reconstruct-golden-target-v1 | 2 | ontology_seed_validation | 689.759 | ontology-seed validation failed at /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-go |
+| reconstruct-golden-target-v1 | 3 | final_output_provenance | 637.978 | final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final ou |
+| reconstruct-golden-target-v2 | 1 | competency_questions_validation | 895.517 | competency-questions validation failed at /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconst |
+| reconstruct-golden-target-v2 | 2 | final_output_provenance | 1126.436 | final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final ou |
 
 ## Quality gate
 

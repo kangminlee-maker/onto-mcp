@@ -43,12 +43,18 @@ reprioritizes the Phase 2 entry (see §6).
 | v2 | 3 | — | **completed** | — |
 
 Failure tally: **3× final_output provenance, 1× ontology_seed semantic, 1× competency_questions coverage.**
-Every failure is a deterministic-validator rejection of LLM-authored content that was *parseable* but
-*incomplete or semantically invalid*. None were timeouts (at 420s) and none were malformed JSON.
+This tally is the record's structured `reconstruct_extension.failed_run_failure_class_counts`
+(`{final_output_provenance: 3, ontology_seed_validation: 1, competency_questions_validation: 1}`) —
+derived from a typed per-run `failure_class`, not from re-parsing error strings. Every failure is a
+deterministic-validator rejection of LLM-authored content that was *parseable* but *incomplete or
+semantically invalid*. None were timeouts (at 420s) and none were malformed JSON.
 
 ## 3. Retry / salvage coverage — why it does not catch these
 
-Three recovery mechanisms exist in the runtime; the table maps each against the observed failures.
+The runtime's recovery mechanisms **relevant to the observed failures** are the three below; this is a
+scoped inventory grounded in the failure paths hit here, not an exhaustive catalogue of every runtime
+recovery surface (the full per-unit recovery surface is L6's matrix to enumerate). The table maps each
+against the observed failures.
 
 | mechanism | where | covers | gap vs observed failures |
 |---|---|---|---|

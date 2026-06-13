@@ -18,15 +18,19 @@
     }
   },
   "realization": "live",
-  "effort": "medium",
+  "requested_effort": "medium",
   "fixtures": [
     "reconstruct-golden-target-v1",
     "reconstruct-golden-target-v2"
   ],
   "repetitions": 3,
-  "generated_at": "2026-06-13T06:23:22.303Z",
+  "generated_at": "2026-06-13T08:54:07.843Z",
   "commit": "cad2e07a180d828383d3e7379f4c135716a624bf",
   "working_tree_state": "clean",
+  "reprojected_from": {
+    "original_generated_at": "2026-06-13T06:23:22.303Z",
+    "note": "Re-derived from the preserved record's runs/failed_runs (no re-execution); commit + working_tree_state are the original data provenance."
+  },
   "metrics": {
     "duration_s": {
       "reconstruct-golden-target-v2": {
@@ -101,14 +105,19 @@
         "n": 1
       }
     },
-    "failure_class_counts": {},
+    "completed_run_internal_failure_class_counts": {},
+    "failed_run_failure_class_counts": {
+      "final_output_provenance": 3,
+      "ontology_seed_validation": 1,
+      "competency_questions_validation": 1
+    },
     "failed_runs": [
       {
         "run_index": 1,
         "fixture_id": "reconstruct-golden-target-v1",
         "realization": "live",
         "duration_s": 585.7,
-        "failure_class": "other",
+        "failure_class": "final_output_provenance",
         "error_message": "final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final output is missing provenance-bound section: Claim Projection"
       },
       {
@@ -116,7 +125,7 @@
         "fixture_id": "reconstruct-golden-target-v1",
         "realization": "live",
         "duration_s": 689.759,
-        "failure_class": "other",
+        "failure_class": "ontology_seed_validation",
         "error_message": "ontology-seed validation failed at /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-Ak2GrE/.onto/reconstruct/benchmark-run-2/ontology-seed-validation.yaml: 1. candidate_target_ref_invalid (candidate-fixture-service-record-object): candidate_disposition.dispositions[2].target_seed_refs property_fixture_service_description is not valid for promoted_to_seed_layer; expected one of conceptual_frame.concepts, semantic_layer.object_types, semantic_layer.link_types, semantic_layer.value_types, semantic_layer.constraints, dynamic_layer.actor_types, dynamic_layer.actor_roles, dynamic_layer.permission_policies, kinetic_layer.action_types, kinetic_layer.functions, kinetic_layer.workflows, dynamic_layer.state_models, dynamic_layer.lifecycle_rules, data_binding_layer.source_bindings, data_binding_layer.read_models, data_binding_layer.writebacks, data_binding_layer.provenance_bindings, handoff_limitations"
       },
       {
@@ -124,7 +133,7 @@
         "fixture_id": "reconstruct-golden-target-v1",
         "realization": "live",
         "duration_s": 637.978,
-        "failure_class": "other",
+        "failure_class": "final_output_provenance",
         "error_message": "final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final output is missing provenance-bound section: Claim Projection"
       },
       {
@@ -132,7 +141,7 @@
         "fixture_id": "reconstruct-golden-target-v2",
         "realization": "live",
         "duration_s": 895.517,
-        "failure_class": "other",
+        "failure_class": "competency_questions_validation",
         "error_message": "competency-questions validation failed at /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v2-AXlOHW/.onto/reconstruct/benchmark-run-1/competency-questions-validation.yaml: 1. missing_required_coverage (ontology_representation_formalism): modeling concern has no competency question coverage: ontology_representation_formalism"
       },
       {
@@ -140,7 +149,7 @@
         "fixture_id": "reconstruct-golden-target-v2",
         "realization": "live",
         "duration_s": 1126.436,
-        "failure_class": "other",
+        "failure_class": "final_output_provenance",
         "error_message": "final-output.md failed provenance validation: final output is missing provenance-bound section: Artifact Truth; final output is missing provenance-bound section: Claim Projection"
       }
     ]
@@ -853,9 +862,9 @@
         "node_version": "v26.0.0",
         "model_id": "gpt-5.5",
         "provider_route": "codex",
-        "effort": "medium",
         "unit_timeout_ms": 420000,
-        "started_at": "2026-06-13T06:03:23.748Z"
+        "started_at": "2026-06-13T06:03:23.748Z",
+        "applied_effort": "medium"
       }
     }
   ]

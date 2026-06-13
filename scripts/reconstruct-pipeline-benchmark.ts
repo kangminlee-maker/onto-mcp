@@ -31,6 +31,11 @@ import {
   gradeBenchmarkEvidence,
 } from "../src/core-runtime/reconstruct/benchmark-evidence.js";
 import {
+  benchmarkFailureClassCounts,
+  classifyBenchmarkRunFailure,
+  type BenchmarkRunFailureClass,
+} from "../src/core-runtime/reconstruct/benchmark-failure-class.js";
+import {
   evaluateReconstructGoldenQualityGate,
   reconstructGoldenFixtureSpec,
   RECONSTRUCT_QUALITY_GATE_FIXTURE_IDS,
@@ -63,6 +68,8 @@ interface HarnessOptions {
   effort?: string;
   outputPath?: string;
   keepTmp: boolean;
+  /** Re-derive a corrected report from an existing record without re-running. */
+  reprojectFrom?: string;
 }
 
 interface UnitTelemetryRow extends PipelineUnitExecutionTelemetry {
@@ -93,7 +100,7 @@ interface BenchmarkRunRecord {
     node_version: string;
     model_id: string | null;
     provider_route: string | null;
-    effort: string | null;
+    applied_effort: string | null;
     unit_timeout_ms: number;
     started_at: string;
   };
@@ -104,7 +111,7 @@ interface BenchmarkFailedRun {
   fixture_id: ReconstructQualityGateFixtureId;
   realization: Realization;
   duration_s: number;
-  failure_class: "timeout" | "other";
+  failure_class: BenchmarkRunFailureClass;
   error_message: string;
 }
 
@@ -125,8 +132,10 @@ function usage(): string {
     `  --fixture <id>         Repeatable. One of: ${RECONSTRUCT_QUALITY_GATE_FIXTURE_IDS.join(", ")}`,
     "                         Default: all golden fixtures",
     "  --realization <mode>   mock | live (default mock; mock sets ONTO_LLM_MOCK=1)",
-    "  --effort <level>       Pin reconstruct reasoning effort for live runs",
-    "                         (e.g. medium|high|xhigh). Recorded in metadata.",
+    "  --effort <level>       Pin reconstruct reasoning effort. live-only (rejected",
+    "                         for mock); recorded as requested_effort.",
+    "  --reproject-from <p>   Re-derive a corrected report from an existing record",
+    "                         (no re-execution); writes to --output or in place.",
     "  --output <path>        JSON output path (md sibling is derived)",
     "  --keep-tmp             Keep per-run temp project roots",
   ].join("\n");
@@ -160,6 +169,10 @@ function parseOptions(argv: string[]): HarnessOptions {
       const effort = argv[++index];
       if (!effort) throw new Error("--effort requires a value");
       options.effort = effort;
+    } else if (arg === "--reproject-from") {
+      const from = argv[++index];
+      if (!from) throw new Error("--reproject-from requires a path");
+      options.reprojectFrom = from;
     } else if (arg === "--output") {
       options.outputPath = argv[++index];
     } else if (arg === "--keep-tmp") {
@@ -175,6 +188,11 @@ function parseOptions(argv: string[]): HarnessOptions {
     options.fixtureIds = [...RECONSTRUCT_QUALITY_GATE_FIXTURE_IDS];
   }
   options.fixtureIds = [...new Set(options.fixtureIds)];
+  if (options.effort !== undefined && options.realization !== "live") {
+    // Effort only affects the live provider path; the mock route ignores it.
+    // Reject it for mock so a record can never encode an unapplied effort.
+    throw new Error("--effort applies only to --realization live");
+  }
   if (options.realization === "live" && options.effort === undefined) {
     // Reproducible default: pin live runs to the repo's declared effort
     // instead of inheriting the runner's personal settings-chain effort.
@@ -334,7 +352,9 @@ async function executeRun(args: {
         node_version: process.version,
         model_id: firstUnit?.model_id ?? null,
         provider_route: firstUnit?.provider_route ?? null,
-        effort: firstUnit?.effort ?? args.effort ?? null,
+        // Applied effort from telemetry (what the provider actually used); null
+        // for mock. The requested effort is recorded once at report level.
+        applied_effort: firstUnit?.effort ?? null,
         unit_timeout_ms: Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120_000,
         started_at: startedAt,
       },
@@ -381,7 +401,14 @@ function renderMarkdown(report: Record<string, unknown>): string {
     "",
     `> Status: ${String(report.status)} (${String(report.status_reason)})`,
     `> Generated: ${String(report.generated_at)} | Commit: ${String(report.commit).slice(0, 9)} (${String(report.working_tree_state)} tree)`,
-    `> Fixtures: ${(report.fixtures as string[]).join(", ")} | Repetitions: ${String(report.repetitions)} | Effort: ${String(report.effort ?? "(settings)")} | Unit timeout: ${Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120000}ms`,
+    ...(report.reprojected_from
+      ? [
+        `> Re-derived (no re-execution) from a record originally generated ${
+          String((report.reprojected_from as { original_generated_at: string }).original_generated_at)
+        }; commit/tree above are the original data provenance.`,
+      ]
+      : []),
+    `> Fixtures: ${(report.fixtures as string[]).join(", ")} | Repetitions: ${String(report.repetitions)} | Requested effort: ${String(report.requested_effort ?? "(settings/none)")} | Unit timeout: ${(report.runs as BenchmarkRunRecord[])[0]?.metadata.unit_timeout_ms ?? "n/a"}ms`,
     `> comparison_conclusion: null (single-case record; lever comparisons arrive with Phase 2)`,
     "",
     "## Per-fixture metrics (mean ± stdev [min..max], n)",
@@ -397,11 +424,19 @@ function renderMarkdown(report: Record<string, unknown>): string {
     }
   }
   const extension = report.reconstruct_extension as
-    | { failed_runs?: BenchmarkFailedRun[] }
+    | {
+      failed_runs?: BenchmarkFailedRun[];
+      failed_run_failure_class_counts?: Record<string, number>;
+    }
     | undefined;
   const failedRuns = extension?.failed_runs ?? [];
   if (failedRuns.length > 0) {
     lines.push("", "## Failed runs", "");
+    const classCounts = extension?.failed_run_failure_class_counts ?? {};
+    const tally = Object.entries(classCounts)
+      .map(([cls, count]) => `${cls}=${count}`)
+      .join(", ");
+    lines.push(`Failure classes: ${tally || "(none)"}`, "");
     lines.push("| fixture | run | failure_class | duration_s | error |");
     lines.push("|---|---|---|---|---|");
     for (const failed of failedRuns) {
@@ -475,6 +510,8 @@ interface BuildReportArgs {
   repetitions: number;
   commit: string;
   workingTreeState: "clean" | "dirty" | "unknown";
+  /** Set when re-deriving a corrected report from a preserved record. */
+  reprojectedFrom?: { original_generated_at: string };
 }
 
 function buildReport(args: BuildReportArgs): Record<string, unknown> {
@@ -518,12 +555,21 @@ function buildReport(args: BuildReportArgs): Record<string, unknown> {
       },
     },
     realization: args.realization,
-    effort: args.effort ?? null,
+    requested_effort: args.effort ?? null,
     fixtures: args.fixtureIds,
     repetitions: args.repetitions,
     generated_at: new Date().toISOString(),
     commit: args.commit,
     working_tree_state: args.workingTreeState,
+    ...(args.reprojectedFrom
+      ? {
+        reprojected_from: {
+          original_generated_at: args.reprojectedFrom.original_generated_at,
+          note:
+            "Re-derived from the preserved record's runs/failed_runs (no re-execution); commit + working_tree_state are the original data provenance.",
+        },
+      }
+      : {}),
     metrics: {
       duration_s: aggregate(args.runs, (run) => run.duration_s),
       total_llm_duration_ms: aggregate(
@@ -557,7 +603,12 @@ function buildReport(args: BuildReportArgs): Record<string, unknown> {
           qualityRuns.map((run) => run.quality_gate.q3?.dropped_question_count ?? 0),
         ),
       },
-      failure_class_counts: args.runs.reduce<Record<string, number>>(
+      // Internal attempt failure classes observed within COMPLETED runs
+      // (e.g. a parse-repair on a unit that still finished). Distinct from
+      // whole-run failures, which are aggregated below.
+      completed_run_internal_failure_class_counts: args.runs.reduce<
+        Record<string, number>
+      >(
         (acc, run) => {
           for (
             const [failureClass, count] of Object.entries(
@@ -570,10 +621,23 @@ function buildReport(args: BuildReportArgs): Record<string, unknown> {
         },
         {},
       ),
+      // Whole-run failures (runs that died before producing a record),
+      // aggregated by the structured failure class.
+      failed_run_failure_class_counts: benchmarkFailureClassCounts(
+        args.failedRuns,
+      ),
       failed_runs: args.failedRuns,
     },
     runs: args.runs,
   };
+}
+
+async function writeFileAtomic(filePath: string, content: string): Promise<void> {
+  // Temp-sibling + atomic rename so a process kill mid-write cannot leave a
+  // torn report file (the durable-write guarantee for long live baselines).
+  const tempPath = `${filePath}.tmp-${process.pid}`;
+  await fs.writeFile(tempPath, content, "utf8");
+  await fs.rename(tempPath, filePath);
 }
 
 async function writeReport(
@@ -581,14 +645,80 @@ async function writeReport(
   outputPath: string,
 ): Promise<string> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  // JSON is the canonical artifact; the markdown is derived from the same
+  // report object, so both reflect one consistent snapshot.
+  await writeFileAtomic(outputPath, `${JSON.stringify(report, null, 2)}\n`);
   const markdownPath = outputPath.replace(/\.json$/, ".md");
-  await fs.writeFile(markdownPath, renderMarkdown(report), "utf8");
+  await writeFileAtomic(markdownPath, renderMarkdown(report));
   return markdownPath;
+}
+
+async function reprojectRecord(options: HarnessOptions): Promise<void> {
+  // Re-derive a corrected report from a preserved record's runs/failed_runs
+  // without re-executing. Used to migrate an existing record to the current
+  // schema (structured failure classes, field names) from the same data.
+  const sourcePath = path.resolve(options.reprojectFrom!);
+  const loaded = JSON.parse(await fs.readFile(sourcePath, "utf8")) as {
+    realization: Realization;
+    effort?: string | null;
+    requested_effort?: string | null;
+    fixtures: ReconstructQualityGateFixtureId[];
+    repetitions: number;
+    commit: string;
+    working_tree_state: "clean" | "dirty" | "unknown";
+    generated_at: string;
+    reprojected_from?: { original_generated_at?: string };
+    runs: BenchmarkRunRecord[];
+    reconstruct_extension?: { failed_runs?: BenchmarkFailedRun[] };
+  };
+  const runs: BenchmarkRunRecord[] = (loaded.runs ?? []).map((run) => {
+    const meta = run.metadata as Record<string, unknown>;
+    const appliedEffort = (meta.applied_effort ?? meta.effort ?? null) as
+      | string
+      | null;
+    const { effort: _legacyEffort, ...restMeta } = meta;
+    return {
+      ...run,
+      metadata: { ...restMeta, applied_effort: appliedEffort },
+    } as BenchmarkRunRecord;
+  });
+  const failedRuns: BenchmarkFailedRun[] = (
+    loaded.reconstruct_extension?.failed_runs ?? []
+  ).map((failed) => ({
+    ...failed,
+    failure_class: classifyBenchmarkRunFailure(failed.error_message),
+  }));
+  const requestedEffort = loaded.requested_effort ?? loaded.effort ?? undefined;
+  const report = buildReport({
+    runs,
+    failedRuns,
+    realization: loaded.realization,
+    ...(requestedEffort ? { effort: requestedEffort } : {}),
+    fixtureIds: loaded.fixtures,
+    repetitions: loaded.repetitions,
+    commit: loaded.commit,
+    workingTreeState: loaded.working_tree_state,
+    reprojectedFrom: {
+      // Preserve the true original across a chain of reprojections.
+      original_generated_at: loaded.reprojected_from?.original_generated_at ??
+        loaded.generated_at,
+    },
+  });
+  const outputPath = options.outputPath
+    ? path.resolve(options.outputPath)
+    : sourcePath;
+  const markdownPath = await writeReport(report, outputPath);
+  process.stdout.write(
+    `${JSON.stringify({ reprojected: outputPath, markdown: markdownPath, status: report.status }, null, 2)}\n`,
+  );
 }
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+  if (options.reprojectFrom) {
+    await reprojectRecord(options);
+    return;
+  }
   const commit = await gitCommit();
   const workingTreeState = await gitWorkingTreeState();
   const previousEnv = {
@@ -653,9 +783,7 @@ async function main(): Promise<void> {
             fixture_id: fixtureId,
             realization: options.realization,
             duration_s: Math.round((Date.now() - runStartedMs)) / 1000,
-            failure_class: /timed out|timeout/i.test(errorMessage)
-              ? "timeout"
-              : "other",
+            failure_class: classifyBenchmarkRunFailure(errorMessage),
             error_message: errorMessage,
           });
           process.stderr.write(
