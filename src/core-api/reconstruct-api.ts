@@ -91,6 +91,13 @@ export interface RunReconstructRequest extends PrepareReconstructRequest {
   resumeMode?: "fresh" | "reuse_existing_authored_artifacts";
   semanticAuthorRealization?: "direct_call";
   confirmationProviderRealization?: "direct_call";
+  /**
+   * Optional reasoning-effort override applied to both reconstruct actors,
+   * winning over the resolved settings-chain effort. Used by the benchmark
+   * harness to pin a reproducible effort independent of the runner's personal
+   * settings; the chosen effort is recorded in per-unit execution telemetry.
+   */
+  llmEffort?: string;
 }
 
 export interface PreparedReconstruct {
@@ -554,6 +561,9 @@ export function createOntoReconstructCoreApi(
       // Mock realization needs no provider config: actor llm settings stay
       // required only for live direct_call execution, and the recorded route
       // comes from the mock result marker, not from a configured provider.
+      const llmEffortOverride = request.llmEffort
+        ? { reasoning_effort: request.llmEffort }
+        : undefined;
       const semanticAuthorLlmConfig = mockRealizationEnabled
         ? {}
         : resolveLlmProviderConfig({
@@ -563,6 +573,7 @@ export function createOntoReconstructCoreApi(
               "semantic_author",
             ),
           },
+          ...(llmEffortOverride ? { cliOverrides: llmEffortOverride } : {}),
         });
       const confirmationProviderLlmConfig = mockRealizationEnabled
         ? {}
@@ -573,6 +584,7 @@ export function createOntoReconstructCoreApi(
               "confirmation_provider",
             ),
           },
+          ...(llmEffortOverride ? { cliOverrides: llmEffortOverride } : {}),
         });
       const directiveAuthor =
         createDirectCallReconstructDirectiveAuthor({
