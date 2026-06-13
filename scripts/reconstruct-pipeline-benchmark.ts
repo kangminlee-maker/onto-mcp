@@ -54,6 +54,13 @@ interface HarnessOptions {
   runs: number;
   fixtureIds: ReconstructQualityGateFixtureId[];
   realization: Realization;
+  /**
+   * Pinned reasoning effort for live runs (recorded in metadata). Fixes a
+   * reproducible effort independent of the runner's personal settings chain.
+   * Ignored for mock realization (no provider). Undefined leaves the resolved
+   * settings effort in place.
+   */
+  effort?: string;
   outputPath?: string;
   keepTmp: boolean;
 }
@@ -86,8 +93,19 @@ interface BenchmarkRunRecord {
     node_version: string;
     model_id: string | null;
     provider_route: string | null;
+    effort: string | null;
+    unit_timeout_ms: number;
     started_at: string;
   };
+}
+
+interface BenchmarkFailedRun {
+  run_index: number;
+  fixture_id: ReconstructQualityGateFixtureId;
+  realization: Realization;
+  duration_s: number;
+  failure_class: "timeout" | "other";
+  error_message: string;
 }
 
 interface Stats {
@@ -107,6 +125,8 @@ function usage(): string {
     `  --fixture <id>         Repeatable. One of: ${RECONSTRUCT_QUALITY_GATE_FIXTURE_IDS.join(", ")}`,
     "                         Default: all golden fixtures",
     "  --realization <mode>   mock | live (default mock; mock sets ONTO_LLM_MOCK=1)",
+    "  --effort <level>       Pin reconstruct reasoning effort for live runs",
+    "                         (e.g. medium|high|xhigh). Recorded in metadata.",
     "  --output <path>        JSON output path (md sibling is derived)",
     "  --keep-tmp             Keep per-run temp project roots",
   ].join("\n");
@@ -136,6 +156,10 @@ function parseOptions(argv: string[]): HarnessOptions {
         throw new Error("--realization must be mock or live");
       }
       options.realization = realization;
+    } else if (arg === "--effort") {
+      const effort = argv[++index];
+      if (!effort) throw new Error("--effort requires a value");
+      options.effort = effort;
     } else if (arg === "--output") {
       options.outputPath = argv[++index];
     } else if (arg === "--keep-tmp") {
@@ -151,6 +175,11 @@ function parseOptions(argv: string[]): HarnessOptions {
     options.fixtureIds = [...RECONSTRUCT_QUALITY_GATE_FIXTURE_IDS];
   }
   options.fixtureIds = [...new Set(options.fixtureIds)];
+  if (options.realization === "live" && options.effort === undefined) {
+    // Reproducible default: pin live runs to the repo's declared effort
+    // instead of inheriting the runner's personal settings-chain effort.
+    options.effort = "medium";
+  }
   return options;
 }
 
@@ -246,6 +275,7 @@ async function materializeFixtureProject(
 async function executeRun(args: {
   fixtureId: ReconstructQualityGateFixtureId;
   realization: Realization;
+  effort?: string;
   runIndex: number;
   commit: string;
   keepTmp: boolean;
@@ -263,6 +293,7 @@ async function executeRun(args: {
       intent: spec.intent,
       semanticAuthorRealization: "direct_call",
       confirmationProviderRealization: "direct_call",
+      ...(args.effort ? { llmEffort: args.effort } : {}),
     });
     const durationS = (Date.now() - startedMs) / 1000;
     const manifest: ReconstructRunManifestArtifact = result.reconstructRunManifest;
@@ -303,6 +334,8 @@ async function executeRun(args: {
         node_version: process.version,
         model_id: firstUnit?.model_id ?? null,
         provider_route: firstUnit?.provider_route ?? null,
+        effort: firstUnit?.effort ?? args.effort ?? null,
+        unit_timeout_ms: Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120_000,
         started_at: startedAt,
       },
     };
@@ -348,7 +381,7 @@ function renderMarkdown(report: Record<string, unknown>): string {
     "",
     `> Status: ${String(report.status)} (${String(report.status_reason)})`,
     `> Generated: ${String(report.generated_at)} | Commit: ${String(report.commit).slice(0, 9)} (${String(report.working_tree_state)} tree)`,
-    `> Fixtures: ${(report.fixtures as string[]).join(", ")} | Repetitions: ${String(report.repetitions)}`,
+    `> Fixtures: ${(report.fixtures as string[]).join(", ")} | Repetitions: ${String(report.repetitions)} | Effort: ${String(report.effort ?? "(settings)")} | Unit timeout: ${Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120000}ms`,
     `> comparison_conclusion: null (single-case record; lever comparisons arrive with Phase 2)`,
     "",
     "## Per-fixture metrics (mean ± stdev [min..max], n)",
@@ -360,6 +393,22 @@ function renderMarkdown(report: Record<string, unknown>): string {
     for (const [fixtureId, value] of Object.entries(byFixture)) {
       lines.push(
         `| ${metricName} | ${fixtureId} | ${value.mean} | ${value.stdev} | ${value.min} | ${value.max} | ${value.n} |`,
+      );
+    }
+  }
+  const extension = report.reconstruct_extension as
+    | { failed_runs?: BenchmarkFailedRun[] }
+    | undefined;
+  const failedRuns = extension?.failed_runs ?? [];
+  if (failedRuns.length > 0) {
+    lines.push("", "## Failed runs", "");
+    lines.push("| fixture | run | failure_class | duration_s | error |");
+    lines.push("|---|---|---|---|---|");
+    for (const failed of failedRuns) {
+      lines.push(
+        `| ${failed.fixture_id} | ${failed.run_index} | ${failed.failure_class} | ${failed.duration_s} | ${
+          failed.error_message.replace(/\|/g, "\\|").slice(0, 120)
+        } |`,
       );
     }
   }
@@ -432,21 +481,46 @@ async function main(): Promise<void> {
     delete process.env.ONTO_LLM_MOCK;
   }
   const runs: BenchmarkRunRecord[] = [];
+  const failedRuns: BenchmarkFailedRun[] = [];
   try {
     for (const fixtureId of options.fixtureIds) {
       for (let runIndex = 1; runIndex <= options.runs; runIndex += 1) {
         process.stderr.write(
           `[run] ${fixtureId} ${options.realization} ${runIndex}/${options.runs}\n`,
         );
-        runs.push(
-          await executeRun({
-            fixtureId,
+        // A single run failure (e.g. a unit timeout) is captured as a
+        // failed-run record so the batch continues and the expensive prior
+        // runs are not lost; the failure also blocks decision-grade status.
+        const runStartedMs = Date.now();
+        try {
+          runs.push(
+            await executeRun({
+              fixtureId,
+              realization: options.realization,
+              ...(options.effort ? { effort: options.effort } : {}),
+              runIndex,
+              commit,
+              keepTmp: options.keepTmp,
+            }),
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error
+            ? error.message
+            : String(error);
+          failedRuns.push({
+            run_index: runIndex,
+            fixture_id: fixtureId,
             realization: options.realization,
-            runIndex,
-            commit,
-            keepTmp: options.keepTmp,
-          }),
-        );
+            duration_s: Math.round((Date.now() - runStartedMs)) / 1000,
+            failure_class: /timed out|timeout/i.test(errorMessage)
+              ? "timeout"
+              : "other",
+            error_message: errorMessage,
+          });
+          process.stderr.write(
+            `[run-failed] ${fixtureId} ${runIndex}/${options.runs}: ${errorMessage}\n`,
+          );
+        }
       }
     }
   } finally {
@@ -472,6 +546,7 @@ async function main(): Promise<void> {
       qualityRuns.map((run) => run.fixture_id),
     ).size,
     rejectedQualityRunCount: rejectedQualityRuns.length,
+    failedRunCount: failedRuns.length,
   });
   const report = {
     benchmark: "reconstruct-pipeline",
@@ -483,6 +558,8 @@ async function main(): Promise<void> {
       performance: {
         repetitions: options.runs,
         fixture_count: options.fixtureIds.length,
+        succeeded_run_count: runs.length,
+        failed_run_count: failedRuns.length,
         meets_inv_bench_1: evidence.performanceEvidenceMet,
       },
       quality: {
@@ -494,6 +571,7 @@ async function main(): Promise<void> {
       },
     },
     realization: options.realization,
+    effort: options.effort ?? null,
     fixtures: options.fixtureIds,
     repetitions: options.runs,
     generated_at: new Date().toISOString(),
@@ -543,6 +621,7 @@ async function main(): Promise<void> {
         },
         {},
       ),
+      failed_runs: failedRuns,
     },
     runs,
   };

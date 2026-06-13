@@ -18,6 +18,8 @@ export interface BenchmarkEvidenceInput {
   /** Distinct fixtures that contributed scored quality results. */
   scoredQualityFixtureCount: number;
   rejectedQualityRunCount: number;
+  /** Runs that errored out before producing a record (e.g. unit timeout). */
+  failedRunCount: number;
 }
 
 export interface BenchmarkEvidenceGrade {
@@ -31,7 +33,9 @@ export interface BenchmarkEvidenceGrade {
 export function gradeBenchmarkEvidence(
   input: BenchmarkEvidenceInput,
 ): BenchmarkEvidenceGrade {
-  const performanceEvidenceMet = input.repetitions >= 3 && input.fixtureCount >= 2;
+  const performanceEvidenceMet = input.repetitions >= 3 &&
+    input.fixtureCount >= 2 &&
+    input.failedRunCount === 0;
   const decisionGrade = performanceEvidenceMet &&
     input.rejectedQualityRunCount === 0 &&
     input.scoredQualityRunCount > 0 &&
@@ -39,9 +43,12 @@ export function gradeBenchmarkEvidence(
   const statusReason = decisionGrade
     ? "runs>=3 and >=2 distinct fixtures with scored quality evidence, no quality-evidence rejection"
     : [
-      ...(performanceEvidenceMet
+      ...(input.repetitions >= 3 && input.fixtureCount >= 2
         ? []
         : ["performance evidence below INV-BENCH-1 thresholds (runs>=3, fixtures>=2)"]),
+      ...(input.failedRunCount > 0
+        ? [`${input.failedRunCount} run(s) failed before producing a record`]
+        : []),
       ...(input.rejectedQualityRunCount > 0
         ? [
           `quality evidence rejected on ${input.rejectedQualityRunCount} run(s) (missing telemetry source fields)`,
