@@ -73,8 +73,9 @@ and it is a single bounded attempt. This is precisely the surface design lever *
 - **H1 — effort source is not reproducible.** The runner's personal `~/.onto/settings.json` set
   reconstruct actors to `effort: xhigh`, which overrides the repo's `.onto/settings.json` `medium`
   in the settings chain (user > project). An unpinned benchmark therefore measures whatever the
-  runner's machine declares. Mitigated for the harness by the new `--effort` pin (defaults live to
-  the repo's `medium`); the underlying runtime still resolves effort from the chain.
+  runner's machine declares. Mitigated for the harness by an explicit `--effort` pin (this baseline
+  used `--effort medium`); the harness injects no default effort (INV-CFG-1), so when `--effort` is
+  omitted the settings chain governs and `applied_effort` is recorded from telemetry.
 - **H2 — the 120s default unit timeout is too short for the heaviest medium-effort units.**
   `ontology_seed` took 169–216s and `candidate_disposition` took 347s at medium (§5). At the default
   120s, `ontology_seed` times out on both the primary call **and** its minimal-kernel recovery and

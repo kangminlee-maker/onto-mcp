@@ -61,10 +61,9 @@ interface HarnessOptions {
   fixtureIds: ReconstructQualityGateFixtureId[];
   realization: Realization;
   /**
-   * Pinned reasoning effort for live runs (recorded in metadata). Fixes a
-   * reproducible effort independent of the runner's personal settings chain.
-   * Ignored for mock realization (no provider). Undefined leaves the resolved
-   * settings effort in place.
+   * Explicit reasoning-effort pin for live runs (recorded as requested_effort).
+   * No default is injected (INV-CFG-1): when omitted, the settings chain
+   * governs and applied_effort is taken from telemetry. Rejected for mock.
    */
   effort?: string;
   outputPath?: string;
@@ -194,11 +193,9 @@ function parseOptions(argv: string[]): HarnessOptions {
     // Reject it for mock so a record can never encode an unapplied effort.
     throw new Error("--effort applies only to --realization live");
   }
-  if (options.realization === "live" && options.effort === undefined) {
-    // Reproducible default: pin live runs to the repo's declared effort
-    // instead of inheriting the runner's personal settings-chain effort.
-    options.effort = "medium";
-  }
+  // No hard-coded effort default (INV-CFG-1): when --effort is omitted the
+  // settings chain governs the provider effort and applied_effort is recorded
+  // from telemetry. --effort is the explicit, reproducible pin for live runs.
   return options;
 }
 
