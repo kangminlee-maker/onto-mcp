@@ -1,8 +1,10 @@
 # Reconstruct Pipeline Optimization Design
 
-> Status: approved r4 — Phase 0 구현 진행 중 (PR #45 merged: M1 계측 + M2 mock 실현;
-> 후속 PR: M3 golden fixture + semantic quality gate, M4 benchmark 하네스
-> `scripts/reconstruct-pipeline-benchmark.ts` + 첫 mock baseline 기록)
+> Status: approved r4 — Phase 0 완결(PR #45+#46 merged: M1 계측·M2 mock·M3 golden gate·M4 benchmark),
+> Phase 1 baseline 완료. **Phase 2 진입 대기(L1부터)**.
+> Phase 1 결과: [20260613-reconstruct-opt-phase1-baseline-findings.md](20260613-reconstruct-opt-phase1-baseline-findings.md)
+> — live medium-effort 완주율 ~17%(1/6), 실패 5건 전부 검증 게이트(타임아웃·malformed JSON 아님);
+> retry/salvage가 그 실패 모드를 구조적으로 미커버 → **L1을 "순서상 첫째"에서 "green run 전제"로 격상**.
 > Date: 2026-06-12
 > Scope: reconstruct 파이프라인의 품질·안정성·속도 최적화의 측정 설계 + 레버 설계 + 실행 단계 설계
 > Baseline reference: review pipeline 최적화 과정 (2026-04-17 A1~A5, 2026-06-05~08 efficiency work)
@@ -328,7 +330,7 @@ benchmark md/json은 어떤 지표 사실의 권위도 갖지 않는다 — ledg
 | Phase | 내용 | 산출물 | 게이트 (다음 단계 진입 조건) |
 |---|---|---|---|
 | 0 | 측정 기반 구축 (M1~M4 + §5.3 권위 맵) | ledger 확장 + mock 실현 + golden fixture + 비교기 + 권위 맵 | mock 3회 연속 완주; **M1 전 필드(duration/tokens/attempts/실패 분류/provider_route/effort/batch_count + source-layer identity ref)의 대표 row가 ledger에 존재**; 비교기가 source 필드 또는 의존 identity ref 부재 지표를 거부함을 테스트로 증명; 테스트 전체 통과 |
-| 1 | baseline 확정 | mock×3 + 실 provider(원칙 ×3, 불가 시 n=1 preliminary 명시) benchmark 기록, per-unit 병목 표 | baseline 기록 commit; 병목 상위 3 유닛 식별 |
+| 1 ✅ | baseline 확정 | mock×3(Phase 0) + live medium 기록(`reconstruct-pipeline-live-20260613.*`, PRELIMINARY: 6 run 중 1 완주), per-unit 병목 표 → [Phase 1 findings](20260613-reconstruct-opt-phase1-baseline-findings.md) | **완료**: 기록 commit + 병목 상위 3(lens_judgment 순차 9콜·ontology_seed 대형 단일콜·candidate_disposition 변동) 식별. 추가 발견: medium 완주율 ~17%, 검증 게이트 실패 무복구 → L1 전제화 |
 | 2 | 레버 사이클 (L1→L2a→L4→L5a→[게이트 통과 시 L2b·L3·L5b·L5c·L6] 순, 1레버 1사이클) | 레버별 가설→실측 기록 + 코드 + 테스트 | 아래 "레버 수락 절차" |
 | 3 | E2E 검증 + 종결 | golden 대상 fresh full run(원칙 n≥3), 최종 benchmark 비교 기록, 문서 갱신(IMPLEMENTATION_MAP, 계약 개정분) | §4.2 done-when 충족 보고 |
 
