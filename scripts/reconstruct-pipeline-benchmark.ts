@@ -466,6 +466,127 @@ function renderMarkdown(report: Record<string, unknown>): string {
   return lines.join("\n");
 }
 
+interface BuildReportArgs {
+  runs: BenchmarkRunRecord[];
+  failedRuns: BenchmarkFailedRun[];
+  realization: Realization;
+  effort?: string;
+  fixtureIds: ReconstructQualityGateFixtureId[];
+  repetitions: number;
+  commit: string;
+  workingTreeState: "clean" | "dirty" | "unknown";
+}
+
+function buildReport(args: BuildReportArgs): Record<string, unknown> {
+  // Evidence grading is owned by gradeBenchmarkEvidence (single source,
+  // pinned by tests): INV-BENCH-1 performance thresholds plus quality-evidence
+  // trust (no failed runs, no rejected runs, scored quality on >=2 fixtures).
+  const qualityRuns = args.runs.filter((run) => run.quality_gate.q1 !== null);
+  const rejectedQualityRuns = args.runs.filter(
+    (run) => run.quality_gate.status === "rejected",
+  );
+  const evidence = gradeBenchmarkEvidence({
+    repetitions: args.repetitions,
+    fixtureCount: args.fixtureIds.length,
+    scoredQualityRunCount: qualityRuns.length,
+    scoredQualityFixtureCount: new Set(
+      qualityRuns.map((run) => run.fixture_id),
+    ).size,
+    rejectedQualityRunCount: rejectedQualityRuns.length,
+    failedRunCount: args.failedRuns.length,
+  });
+  return {
+    benchmark: "reconstruct-pipeline",
+    record_family:
+      "pipeline-benchmark (specializes the review-pipeline-* record family; shared fields unchanged, reconstruct facts in reconstruct_extension)",
+    status: evidence.status,
+    status_reason: evidence.statusReason,
+    evidence: {
+      performance: {
+        repetitions: args.repetitions,
+        fixture_count: args.fixtureIds.length,
+        succeeded_run_count: args.runs.length,
+        failed_run_count: args.failedRuns.length,
+        meets_inv_bench_1: evidence.performanceEvidenceMet,
+      },
+      quality: {
+        scored_run_count: qualityRuns.length,
+        not_applicable_run_count: args.runs.filter(
+          (run) => run.quality_gate.status === "not_applicable",
+        ).length,
+        rejected_run_count: rejectedQualityRuns.length,
+      },
+    },
+    realization: args.realization,
+    effort: args.effort ?? null,
+    fixtures: args.fixtureIds,
+    repetitions: args.repetitions,
+    generated_at: new Date().toISOString(),
+    commit: args.commit,
+    working_tree_state: args.workingTreeState,
+    metrics: {
+      duration_s: aggregate(args.runs, (run) => run.duration_s),
+      total_llm_duration_ms: aggregate(
+        args.runs,
+        (run) => run.totals.llm_duration_ms,
+      ),
+      total_llm_call_count: aggregate(
+        args.runs,
+        (run) => run.totals.llm_call_count,
+      ),
+      total_prompt_chars: aggregate(args.runs, (run) => run.totals.prompt_chars),
+      total_output_chars: aggregate(args.runs, (run) => run.totals.output_chars),
+    },
+    comparison_conclusion: null,
+    reconstruct_extension: {
+      quality: {
+        scored_run_count: qualityRuns.length,
+        unscored_runs: args.runs
+          .filter((run) => run.quality_gate.q1 === null)
+          .map((run) => ({
+            fixture_id: run.fixture_id,
+            run_index: run.run_index,
+            status: run.quality_gate.status,
+            reason: run.quality_gate.reason ?? null,
+          })),
+        q1_recall: stats(qualityRuns.map((run) => run.quality_gate.q1?.recall ?? 0)),
+        q2_support_rate: stats(
+          qualityRuns.map((run) => run.quality_gate.q2?.support_rate ?? 0),
+        ),
+        q3_dropped_questions: stats(
+          qualityRuns.map((run) => run.quality_gate.q3?.dropped_question_count ?? 0),
+        ),
+      },
+      failure_class_counts: args.runs.reduce<Record<string, number>>(
+        (acc, run) => {
+          for (
+            const [failureClass, count] of Object.entries(
+              run.totals.failure_class_counts,
+            )
+          ) {
+            acc[failureClass] = (acc[failureClass] ?? 0) + count;
+          }
+          return acc;
+        },
+        {},
+      ),
+      failed_runs: args.failedRuns,
+    },
+    runs: args.runs,
+  };
+}
+
+async function writeReport(
+  report: Record<string, unknown>,
+  outputPath: string,
+): Promise<string> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  const markdownPath = outputPath.replace(/\.json$/, ".md");
+  await fs.writeFile(markdownPath, renderMarkdown(report), "utf8");
+  return markdownPath;
+}
+
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   const commit = await gitCommit();
@@ -480,8 +601,26 @@ async function main(): Promise<void> {
   } else {
     delete process.env.ONTO_LLM_MOCK;
   }
+  const outputPath = options.outputPath
+    ? path.resolve(options.outputPath)
+    : defaultOutputPath(options.realization);
   const runs: BenchmarkRunRecord[] = [];
   const failedRuns: BenchmarkFailedRun[] = [];
+  const persist = async (): Promise<void> => {
+    await writeReport(
+      buildReport({
+        runs,
+        failedRuns,
+        realization: options.realization,
+        ...(options.effort ? { effort: options.effort } : {}),
+        fixtureIds: options.fixtureIds,
+        repetitions: options.runs,
+        commit,
+        workingTreeState,
+      }),
+      outputPath,
+    );
+  };
   try {
     for (const fixtureId of options.fixtureIds) {
       for (let runIndex = 1; runIndex <= options.runs; runIndex += 1) {
@@ -491,6 +630,8 @@ async function main(): Promise<void> {
         // A single run failure (e.g. a unit timeout) is captured as a
         // failed-run record so the batch continues and the expensive prior
         // runs are not lost; the failure also blocks decision-grade status.
+        // The record is persisted after every run so a process-level kill
+        // mid-batch still leaves the completed runs on disk.
         const runStartedMs = Date.now();
         try {
           runs.push(
@@ -521,6 +662,7 @@ async function main(): Promise<void> {
             `[run-failed] ${fixtureId} ${runIndex}/${options.runs}: ${errorMessage}\n`,
           );
         }
+        await persist();
       }
     }
   } finally {
@@ -530,111 +672,19 @@ async function main(): Promise<void> {
     }
   }
 
-  // Evidence grading is owned by gradeBenchmarkEvidence (single source,
-  // pinned by tests): INV-BENCH-1 performance thresholds plus quality-evidence
-  // trust (no rejected runs, at least one scored run). not_applicable quality
-  // runs are reported but only lower the grade when nothing was scored.
-  const qualityRuns = runs.filter((run) => run.quality_gate.q1 !== null);
-  const rejectedQualityRuns = runs.filter(
-    (run) => run.quality_gate.status === "rejected",
-  );
-  const evidence = gradeBenchmarkEvidence({
-    repetitions: options.runs,
-    fixtureCount: options.fixtureIds.length,
-    scoredQualityRunCount: qualityRuns.length,
-    scoredQualityFixtureCount: new Set(
-      qualityRuns.map((run) => run.fixture_id),
-    ).size,
-    rejectedQualityRunCount: rejectedQualityRuns.length,
-    failedRunCount: failedRuns.length,
-  });
-  const report = {
-    benchmark: "reconstruct-pipeline",
-    record_family:
-      "pipeline-benchmark (specializes the review-pipeline-* record family; shared fields unchanged, reconstruct facts in reconstruct_extension)",
-    status: evidence.status,
-    status_reason: evidence.statusReason,
-    evidence: {
-      performance: {
-        repetitions: options.runs,
-        fixture_count: options.fixtureIds.length,
-        succeeded_run_count: runs.length,
-        failed_run_count: failedRuns.length,
-        meets_inv_bench_1: evidence.performanceEvidenceMet,
-      },
-      quality: {
-        scored_run_count: qualityRuns.length,
-        not_applicable_run_count: runs.filter(
-          (run) => run.quality_gate.status === "not_applicable",
-        ).length,
-        rejected_run_count: rejectedQualityRuns.length,
-      },
-    },
-    realization: options.realization,
-    effort: options.effort ?? null,
-    fixtures: options.fixtureIds,
-    repetitions: options.runs,
-    generated_at: new Date().toISOString(),
-    commit,
-    working_tree_state: workingTreeState,
-    metrics: {
-      duration_s: aggregate(runs, (run) => run.duration_s),
-      total_llm_duration_ms: aggregate(runs, (run) => run.totals.llm_duration_ms),
-      total_llm_call_count: aggregate(runs, (run) => run.totals.llm_call_count),
-      total_prompt_chars: aggregate(runs, (run) => run.totals.prompt_chars),
-      total_output_chars: aggregate(runs, (run) => run.totals.output_chars),
-    },
-    comparison_conclusion: null,
-    reconstruct_extension: {
-      quality: {
-        scored_run_count: qualityRuns.length,
-        unscored_runs: runs
-          .filter((run) => run.quality_gate.q1 === null)
-          .map((run) => ({
-            fixture_id: run.fixture_id,
-            run_index: run.run_index,
-            status: run.quality_gate.status,
-            reason: run.quality_gate.reason ?? null,
-          })),
-        q1_recall: stats(
-          qualityRuns.map((run) => run.quality_gate.q1?.recall ?? 0),
-        ),
-        q2_support_rate: stats(
-          qualityRuns.map((run) => run.quality_gate.q2?.support_rate ?? 0),
-        ),
-        q3_dropped_questions: stats(
-          qualityRuns.map((run) =>
-            run.quality_gate.q3?.dropped_question_count ?? 0
-          ),
-        ),
-      },
-      failure_class_counts: runs.reduce<Record<string, number>>(
-        (acc, run) => {
-          for (
-            const [failureClass, count] of Object.entries(
-              run.totals.failure_class_counts,
-            )
-          ) {
-            acc[failureClass] = (acc[failureClass] ?? 0) + count;
-          }
-          return acc;
-        },
-        {},
-      ),
-      failed_runs: failedRuns,
-    },
+  await persist();
+  const finalReport = buildReport({
     runs,
-  };
-
-  const outputPath = options.outputPath
-    ? path.resolve(options.outputPath)
-    : defaultOutputPath(options.realization);
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  const markdownPath = outputPath.replace(/\.json$/, ".md");
-  await fs.writeFile(markdownPath, renderMarkdown(report), "utf8");
+    failedRuns,
+    realization: options.realization,
+    ...(options.effort ? { effort: options.effort } : {}),
+    fixtureIds: options.fixtureIds,
+    repetitions: options.runs,
+    commit,
+    workingTreeState,
+  });
   process.stdout.write(
-    `${JSON.stringify({ status: report.status, output: outputPath, markdown: markdownPath, runs: runs.length }, null, 2)}\n`,
+    `${JSON.stringify({ status: finalReport.status, output: outputPath, runs: runs.length, failed: failedRuns.length }, null, 2)}\n`,
   );
 }
 
