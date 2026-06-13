@@ -10,6 +10,21 @@
 export const BENCHMARK_PRELIMINARY_STATUS = "PRELIMINARY — not decision-grade";
 export const BENCHMARK_DECISION_GRADE_STATUS = "decision-grade";
 
+/**
+ * The canonical realization-scoped effort rule for a benchmark report:
+ * `requested_effort` is meaningful only for the live provider path; the mock
+ * route never applies effort, so it is null for any non-live realization.
+ * Centralized here so every report builder (normal run and record
+ * reprojection) enforces the same invariant — a record can never encode an
+ * effort the run did not apply.
+ */
+export function requestedEffortForRealization(
+  realization: string,
+  effort: string | null | undefined,
+): string | null {
+  return realization === "live" ? (effort ?? null) : null;
+}
+
 export interface BenchmarkEvidenceInput {
   repetitions: number;
   /** Distinct requested fixture ids. */

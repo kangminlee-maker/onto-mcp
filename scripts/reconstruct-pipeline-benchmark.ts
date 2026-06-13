@@ -29,6 +29,7 @@ import { parse as parseYaml } from "yaml";
 import { createOntoReconstructCoreApi } from "../src/core-api/reconstruct-api.js";
 import {
   gradeBenchmarkEvidence,
+  requestedEffortForRealization,
 } from "../src/core-runtime/reconstruct/benchmark-evidence.js";
 import {
   benchmarkFailureClassCounts,
@@ -555,7 +556,12 @@ function buildReport(args: BuildReportArgs): Record<string, unknown> {
       },
     },
     realization: args.realization,
-    requested_effort: args.effort ?? null,
+    // Realization-scoped: live-only, null for mock/legacy non-live records.
+    // Enforced centrally so both normal runs and reprojections honor it.
+    requested_effort: requestedEffortForRealization(
+      args.realization,
+      args.effort,
+    ),
     fixtures: args.fixtureIds,
     repetitions: args.repetitions,
     generated_at: new Date().toISOString(),

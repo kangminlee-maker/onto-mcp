@@ -3,7 +3,24 @@ import {
   BENCHMARK_DECISION_GRADE_STATUS,
   BENCHMARK_PRELIMINARY_STATUS,
   gradeBenchmarkEvidence,
+  requestedEffortForRealization,
 } from "./benchmark-evidence.js";
+
+describe("requested effort realization scoping", () => {
+  it("keeps requested effort only for live realization", () => {
+    expect(requestedEffortForRealization("live", "medium")).toBe("medium");
+    expect(requestedEffortForRealization("live", undefined)).toBeNull();
+    expect(requestedEffortForRealization("live", null)).toBeNull();
+  });
+
+  it("drops effort for non-live realizations (mock cannot apply it)", () => {
+    // Guards the reproject path: a legacy mock record carrying effort must
+    // normalize to null, not leak into requested_effort.
+    expect(requestedEffortForRealization("mock", "medium")).toBeNull();
+    expect(requestedEffortForRealization("mock", undefined)).toBeNull();
+    expect(requestedEffortForRealization("evolve", "high")).toBeNull();
+  });
+});
 
 describe("reconstruct benchmark evidence grading", () => {
   it("grades decision-grade only with full performance and scored quality evidence", () => {
