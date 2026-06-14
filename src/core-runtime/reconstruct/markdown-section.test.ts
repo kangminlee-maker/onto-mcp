@@ -103,9 +103,15 @@ describe("upsertMarkdownSection", () => {
     // helper-owned invariant: malformed content is rejected rather than silently
     // producing an undiscoverable section.
     expect(() => upsertMarkdownSection("# Final Output", "no heading here"))
-      .toThrow(/must begin with a "## " heading line/);
+      .toThrow(/must begin with a canonical "## " heading line/);
     expect(() => upsertMarkdownSection("# Final Output", "### Too Deep\n\nx"))
-      .toThrow(/must begin with a "## " heading line/);
+      .toThrow(/must begin with a canonical "## " heading line/);
+    // Non-canonical separators the validator (`## ${heading}`) cannot rediscover
+    // are rejected, so the helper's accepted set matches the validator's exactly.
+    expect(() => upsertMarkdownSection("# Final Output", "##  Double Space\n\nx"))
+      .toThrow(/must begin with a canonical "## " heading line/);
+    expect(() => upsertMarkdownSection("# Final Output", "##\tTab Sep\n\nx"))
+      .toThrow(/must begin with a canonical "## " heading line/);
   });
 });
 
