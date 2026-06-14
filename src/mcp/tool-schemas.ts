@@ -125,6 +125,17 @@ export const OntoReconstructSessionInputSchema = z.object({
   projectRoot: z.string().min(1).optional(),
 }).strict();
 
+export const OntoReconstructReadInputSchema = OntoReconstructSessionInputSchema
+  .extend({
+    projectionLevel: ReviewResultProjectionLevelSchema.optional(),
+  })
+  .strict();
+
+export const OntoListInputSchema = z.object({
+  kind: z.enum(["lenses", "domains", "source_profiles"]),
+  projectRoot: z.string().min(1).optional(),
+}).strict();
+
 const OntoValidateSourceObservationDirectiveToolInputSchema = z.object({
   directiveKind: z.literal("source_observation"),
   directivePath: z.string().min(1),
@@ -162,6 +173,9 @@ export const OntoValidateReconstructDirectiveToolInputSchema = z.discriminatedUn
   ],
 );
 
+// Canonical full-profile tool surface advertised to agentic hosts (Claude Code,
+// Codex CLI). The read/list families are consolidated entry points; their
+// pre-consolidation names remain callable as deprecated aliases below.
 export const OntoToolNames = [
   "onto_review",
   "onto_prepare_review",
@@ -169,19 +183,45 @@ export const OntoToolNames = [
   "onto_review_round",
   "onto_review_advance",
   "onto_review_cancel",
-  "onto_review_status",
-  "onto_review_result",
-  "onto_list_lenses",
-  "onto_list_domains",
-  "onto_list_source_profiles",
+  "onto_review_read",
   "onto_observe_source",
   "onto_validate_reconstruct_directive",
   "onto_reconstruct",
+  "onto_reconstruct_read",
+  "onto_list",
+] as const;
+
+// Bounded view for chat hosts (.mcpb desktop): hides advanced orchestration
+// (prepare/continue/round/advance) but keeps cancellation, per the Host
+// Usability Roadmap in docs/architecture/mcp-native-tool-surface.md.
+export const OntoSimpleProfileToolNames = [
+  "onto_review",
+  "onto_review_read",
+  "onto_review_cancel",
+  "onto_reconstruct",
+  "onto_observe_source",
+  "onto_validate_reconstruct_directive",
+  "onto_reconstruct_read",
+  "onto_list",
+] as const;
+
+// Stable compatibility aliases: callable and normalized to the consolidated
+// tools, but not advertised in tools/list. Removed only at a major tool-surface
+// version bump (never silently).
+export const OntoDeprecatedToolAliases = [
+  "onto_review_status",
+  "onto_review_result",
   "onto_reconstruct_status",
   "onto_reconstruct_result",
+  "onto_list_lenses",
+  "onto_list_domains",
+  "onto_list_source_profiles",
 ] as const;
 
 export type OntoToolName = (typeof OntoToolNames)[number];
+export type OntoSimpleProfileToolName =
+  (typeof OntoSimpleProfileToolNames)[number];
+export type OntoDeprecatedToolAlias = (typeof OntoDeprecatedToolAliases)[number];
 export type OntoReviewToolInput = z.infer<typeof OntoReviewToolInputSchema>;
 export type OntoPrepareReviewToolInput = z.infer<
   typeof OntoPrepareReviewToolInputSchema
@@ -189,6 +229,10 @@ export type OntoPrepareReviewToolInput = z.infer<
 export type OntoReviewSessionInput = z.infer<typeof OntoReviewSessionInputSchema>;
 export type OntoReviewStatusInput = z.infer<typeof OntoReviewStatusInputSchema>;
 export type OntoReviewResultInput = z.infer<typeof OntoReviewResultInputSchema>;
+export type OntoReconstructReadInput = z.infer<
+  typeof OntoReconstructReadInputSchema
+>;
+export type OntoListInput = z.infer<typeof OntoListInputSchema>;
 export type OntoReviewCancelToolInput = z.infer<
   typeof OntoReviewCancelToolInputSchema
 >;
