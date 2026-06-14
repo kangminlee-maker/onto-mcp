@@ -1,7 +1,7 @@
 # Reconstruct Pipeline Optimization Design
 
 > Status: approved r4 — Phase 0 완결(PR #45+#46 merged: M1 계측·M2 mock·M3 golden gate·M4 benchmark),
-> Phase 1 baseline 완료. **Phase 2 진행 중 — L1a(정합) 구현·게이트 통과(머지 대기), L1b(검증 재시도) 다음**.
+> Phase 1 baseline 완료. **Phase 2 진행 중 — L1a(정합) MERGED(PR #49, main 63e6ee8); L1b 1차 슬라이스(competency_questions 검증 재시도) 구현·게이트 진행**.
 > Phase 1 결과: [20260613-reconstruct-opt-phase1-baseline-findings.md](20260613-reconstruct-opt-phase1-baseline-findings.md)
 > — live medium-effort 완주율 ~17%(1/6), 실패 5건 전부 검증 게이트(타임아웃·malformed JSON 아님);
 > retry/salvage가 그 실패 모드를 구조적으로 미커버 → **L1을 "순서상 첫째"에서 "green run 전제"로 격상**.
@@ -224,7 +224,7 @@ benchmark md/json은 어떤 지표 사실의 권위도 갖지 않는다 — ledg
 **L1b 검증 실패 피드백 재시도(의미적, 다음)**. live 최다 실패가 retry 공백이 아니라
 generate-and-validate **정합 버그**였다는 발견이 분할 근거다.
 
-#### L1a. final-output 섹션 append ↔ 검증기 정합 — 결정적 (S1) · **완료(PR #48, 게이트 통과)**
+#### L1a. final-output 섹션 append ↔ 검증기 정합 — 결정적 (S1) · **MERGED(PR #49, main 63e6ee8)**
 
 - **근본 원인 (live 베이스라인 3/5)**: `final_output_provenance` 실패는 retry 부재가 아니라
   append 가드와 검증기의 **매칭 규칙 불일치**였다. append 가드는
@@ -244,7 +244,9 @@ generate-and-validate **정합 버그**였다는 발견이 분할 근거다.
   회귀 테스트 `markdown-section.test.ts`(충돌 헤딩 재현 + 불변식 강제), 전체 vitest 그린.
   onto core-axis 게이트 material 0(2라운드, low 지적 반영 수렴).
 
-#### L1b. 검증 실패 피드백 재시도 — 의미적 (S1·S2) · **다음**
+#### L1b. 검증 실패 피드백 재시도 — 의미적 (S1·S2) · **진행 중**
+
+> **1차 슬라이스 (competency_questions, 구현됨)**: CQ는 현재 author→validate→**재시도 0회** hard-halt(라이브 `missing_required_coverage` 1/5). ontology_seed의 검증 실패 1회 재작성 패턴을 전체 재작성 방식으로 일반화: author input에 `repairAttempt` 추가, 배치 작성 단일 콜 지점(`callCompetencyQuestionBatch`)에 repair 프롬프트(미커버 coverage 지시문)·`CompetencyQuestionsValidationRepair` artifactName·userPayload `repair_attempt` 주입, run 흐름에 invalid→copy→repair 재작성→재검증 루프. 미커버 항목 추출은 순수 헬퍼 `competencyQuestionsRepairDirectives`(missing_required_coverage 우선 + 폴백, unit test). repair payload는 seed 패턴대로 이전 질문 coverage(`previous_questions_coverage`)·검증 요약(`previous_validation_summary`)을 투영해 통과 coverage 보존(onto material 지적 반영). repair 지시문은 systemPrompt 보간이 아니라 userPayload 구조화 데이터로만 전달(프롬프트 인젝션 차단, Codex P2). `CompetencyQuestionsValidationRepair`는 telemetry unit 매핑 등록(Codex P1). 검증: L1a 동일 철학(헬퍼 unit test + 전체 회귀 그린; mock은 항상 valid라 복구 경로는 live 확인 이연). **다음 슬라이스**: ① **검증 실패 attempt 계측**(현재 seed·CQ repair 모두 검증 게이트 miss를 `attempts[]`에 기록 안 함 → S1/S2 측정 부정확, Codex P2; seed+CQ 통합 telemetry 좌석 신설), ② ontology_seed semantic(기존 1회로 불충분 — bound·repair 컨텍스트 강화), ③ final_output 잔여 의미 실패.
 
 - **현 경계 (코드 검증)**: LLM 유닛은 이미 JSON 저작(`callJsonAuthor`) + 1회
   malformed-JSON repair를 거치고, YAML 직렬화는 런타임이 소유한다. 공백은
@@ -364,7 +366,7 @@ generate-and-validate **정합 버그**였다는 발견이 분할 근거다.
 |---|---|---|---|
 | 0 | 측정 기반 구축 (M1~M4 + §5.3 권위 맵) | ledger 확장 + mock 실현 + golden fixture + 비교기 + 권위 맵 | mock 3회 연속 완주; **M1 전 필드(duration/tokens/attempts/실패 분류/provider_route/effort/batch_count + source-layer identity ref)의 대표 row가 ledger에 존재**; 비교기가 source 필드 또는 의존 identity ref 부재 지표를 거부함을 테스트로 증명; 테스트 전체 통과 |
 | 1 ✅ | baseline 확정 | mock×3(Phase 0) + live medium 기록(`reconstruct-pipeline-live-20260613.*`, PRELIMINARY: 6 run 중 1 완주), per-unit 병목 표 → [Phase 1 findings](20260613-reconstruct-opt-phase1-baseline-findings.md) | **완료**: 기록 commit + 병목 상위 3(lens_judgment 순차 9콜·ontology_seed 대형 단일콜·candidate_disposition 변동) 식별. 추가 발견: medium 완주율 ~17%, 검증 게이트 실패 무복구 → L1 전제화 |
-| 2 🔄 | 레버 사이클 (L1a→L1b→L2a→L4→L5a→[게이트 통과 시 L2b·L3·L5b·L5c·L6] 순, 1레버 1사이클) | 레버별 가설→실측 기록 + 코드 + 테스트 | 아래 "레버 수락 절차". **L1a(정합) 완료(PR #48, onto material 0·테스트 그린, 머지 대기)** — final_output append↔검증기 매칭 불일치 버그를 결정적 수정으로 제거; L1b(검증 재시도)부터 잔여 author-owned 의미 실패 대상 |
+| 2 🔄 | 레버 사이클 (L1a→L1b→L2a→L4→L5a→[게이트 통과 시 L2b·L3·L5b·L5c·L6] 순, 1레버 1사이클) | 레버별 가설→실측 기록 + 코드 + 테스트 | 아래 "레버 수락 절차". **L1a(정합) MERGED(PR #49, main 63e6ee8; onto material 0·테스트 그린)** — final_output append↔검증기 매칭 불일치 버그를 결정적 수정으로 제거 (얽힌 PR #48은 closed, MCP 트랙이 사용); L1b(검증 재시도) 진행 중 |
 | 3 | E2E 검증 + 종결 | golden 대상 fresh full run(원칙 n≥3), 최종 benchmark 비교 기록, 문서 갱신(IMPLEMENTATION_MAP, 계약 개정분) | §4.2 done-when 충족 보고 |
 
 **레버 수락 절차 (Phase 2, 닫힌 규칙)**: 각 레버 PR마다 —

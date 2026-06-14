@@ -77,6 +77,7 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     ["ClaimRealizationMap", "claim_realization"],
     ["CompetencyQuestions", "competency_questions"],
     ["CompetencyQuestionsLimitationRepair", "competency_questions"],
+    ["CompetencyQuestionsValidationRepair", "competency_questions"],
     ["CompetencyQuestionAssessment", "competency_question_assessment"],
     ["FailureClassification", "failure_classification"],
     ["RevisionProposal", "revision_proposal"],

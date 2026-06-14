@@ -20,6 +20,8 @@ describe("reconstruct execution telemetry", () => {
       .toBe("competency_question_assessment");
     expect(unitIdForAuthoredArtifactName("OntologySeedMinimalKernel"))
       .toBe("ontology_seed");
+    expect(unitIdForAuthoredArtifactName("CompetencyQuestionsValidationRepair"))
+      .toBe("competency_questions");
     expect(unitIdForAuthoredArtifactName("SourcePurposeContradictionRepair"))
       .toBe("source_purpose_candidates");
     expect(unitIdForAuthoredArtifactName("FinalOutput")).toBe("final_output");
@@ -34,6 +36,8 @@ describe("reconstruct execution telemetry", () => {
     expect(attemptKindForAuthoredArtifactName("OntologySeedMinimalKernel"))
       .toBe("timeout_recovery");
     expect(attemptKindForAuthoredArtifactName("CandidateInventoryCoverageRepair"))
+      .toBe("semantic_repair");
+    expect(attemptKindForAuthoredArtifactName("CompetencyQuestionsValidationRepair"))
       .toBe("semantic_repair");
   });
 
