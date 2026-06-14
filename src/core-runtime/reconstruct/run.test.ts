@@ -3963,11 +3963,23 @@ describe("runReconstruct", () => {
       seedTelemetry?.attempts.map((attempt) => ({
         kind: attempt.kind,
         status: attempt.status,
+        failure_class: attempt.failure_class,
       })),
     ).toEqual([
-      { kind: "initial", status: "succeeded" },
-      { kind: "semantic_repair", status: "succeeded" },
+      { kind: "initial", status: "succeeded", failure_class: null },
+      // The validation gate miss that triggered the repair is now recorded so a
+      // recovered run no longer hides the schema_validation_failure.
+      {
+        kind: "validation_gate",
+        status: "failed",
+        failure_class: "schema_validation_failure",
+      },
+      { kind: "semantic_repair", status: "succeeded", failure_class: null },
     ]);
+    // The validation gate miss is not an LLM call, so it does not inflate the
+    // call count (initial + repair = 2 LLM calls, 3 attempts).
+    expect(seedTelemetry?.llm_call_count).toBe(2);
+    expect(seedTelemetry?.attempt_count).toBe(3);
     expect(seedTelemetry?.source_identity_refs).toContain(
       "authored_artifact:OntologySeedValidationRepair",
     );

@@ -100,7 +100,8 @@ interface PipelineUnitExecutionTelemetry {
   attempt_count: number;
   attempts: Array<{
     attempt: number;
-    kind: "initial" | "parse_repair" | "semantic_repair" | "timeout_recovery";
+    // open sets: known members + (string & {}) — see "additively-extensible" rule below
+    kind: "initial" | "parse_repair" | "semantic_repair" | "timeout_recovery" | "validation_gate" | (string & {});
     status: "succeeded" | "failed";
     failure_class:
       | "malformed_json"
@@ -108,6 +109,7 @@ interface PipelineUnitExecutionTelemetry {
       | "schema_validation_failure"
       | "timeout"
       | "provider_error"
+      | (string & {})
       | null;
     failure_message: string | null;
     duration_ms: number;
@@ -126,10 +128,26 @@ Execution telemetry rules:
   token usage (`provider_tokens_in/out`) is a supplemental fact recorded only
   when the provider reports it; comparisons are valid only between runs using
   the same measure and the same provider route.
-- One attempt row is recorded per actual LLM call. `failure_class` separates
-  output-shape failures (`malformed_json`, `parse_repair_failure`), reserved
-  validation-feedback retries (`schema_validation_failure`), and transport
-  failures (`timeout`, `provider_error`).
+- One attempt row is recorded per actual LLM call (`initial`, `parse_repair`,
+  `semantic_repair`, `timeout_recovery`); these increment `llm_call_count` and
+  the size counters. In addition, a `validation_gate` attempt row is recorded
+  when a deterministic validation gate rejects an authored artifact before a
+  feedback retry: it carries `status: "failed"` and
+  `failure_class: "schema_validation_failure"`, increments `attempt_count` so
+  the validation miss stays visible in the recovered unit's lineage, but does
+  not count as an LLM call (no `llm_call_count`/size contribution). `failure_class`
+  separates output-shape failures (`malformed_json`, `parse_repair_failure`),
+  validation-gate misses (`schema_validation_failure`), and transport failures
+  (`timeout`, `provider_error`).
+- `kind` and `failure_class` are **additively-extensible, forward-compatible
+  sets**: handling of LLM input/output is a cross-pipeline concern and LLM
+  response/failure characteristics are not under our control, so the shared
+  ledger evolves to represent them (new kinds/classes are added as new
+  failure-handling or recovery shapes are introduced). Such additions are
+  backward-compatible and do **not** bump `schemaVersion`; consumers MUST treat
+  the sets as open and tolerate an unknown `kind`/`failure_class` (record or
+  pass it through) rather than reject the artifact. `validation_gate` /
+  `schema_validation_failure` were added under this policy.
 - `prompt_policy_sha256` is a source-layer identity fact: the hash of the
   unit's first initial system prompt, so before/after comparisons can
   attribute metric deltas to prompt-policy changes. Run-level source-layer
