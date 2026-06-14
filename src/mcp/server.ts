@@ -55,6 +55,7 @@ import {
   type OntoToolName,
 } from "./tool-schemas.js";
 import { reviewReadMode } from "./review-read-mode.js";
+import { resolveReviewReturnRunningAfterMs } from "./review-sync-window.js";
 
 type JsonValue =
   | null
@@ -171,7 +172,7 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
     returnRunningAfterMs: {
       type: "number",
       description:
-        "Optional synchronous wait budget in milliseconds. When exceeded after session planning, onto_review returns a running handle and background execution continues.",
+        "Optional synchronous wait budget in milliseconds. When exceeded after session planning, onto_review returns a running handle and background execution continues; recover via onto_review_read(latest=true). The default is profile-aware (simple 45s, full 25s; override with env ONTO_MCP_REVIEW_RETURN_RUNNING_AFTER_MS or ..._SIMPLE) — most core-axis reviews exceed any host-safe window and return a handle.",
     },
   },
 };
@@ -972,10 +973,12 @@ function progressTokenFromToolCallParams(
 }
 
 function defaultReviewReturnRunningAfterMs(): number {
-  const raw = process.env.ONTO_MCP_REVIEW_RETURN_RUNNING_AFTER_MS;
-  if (raw === undefined || raw.trim().length === 0) return 25_000;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 25_000;
+  // Profile-aware bounded window: simple (.mcpb desktop) gets a modestly larger
+  // budget than full. Single-source resolution in review-sync-window.ts.
+  return resolveReviewReturnRunningAfterMs(resolveToolProfile(), {
+    full: process.env.ONTO_MCP_REVIEW_RETURN_RUNNING_AFTER_MS,
+    simple: process.env.ONTO_MCP_REVIEW_RETURN_RUNNING_AFTER_MS_SIMPLE,
+  });
 }
 
 function sendMcpProgressNotification(
