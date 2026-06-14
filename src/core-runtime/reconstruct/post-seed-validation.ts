@@ -37,6 +37,7 @@ import {
   loadReconstructContractRegistry,
   type ReconstructContractRegistry,
 } from "./contract-registry.js";
+import { markdownSectionText } from "./markdown-section.js";
 
 const CLAIM_REALIZATION_STANCES = [
   "observed_runtime_behavior",
@@ -2033,21 +2034,6 @@ export interface ReconstructFinalOutputProvenanceSectionBindingInput {
   authority_refs: string[];
   validation_refs: string[];
   required_fragments: string[];
-}
-
-function markdownSectionText(markdown: string, heading: string): string | null {
-  const headingLine = `## ${heading}`;
-  const lines = markdown.split(/\r?\n/);
-  const startIndex = lines.findIndex((line) => line.trim() === headingLine);
-  if (startIndex < 0) return null;
-  let endIndex = lines.length;
-  for (let index = startIndex + 1; index < lines.length; index += 1) {
-    if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
-      endIndex = index;
-      break;
-    }
-  }
-  return lines.slice(startIndex, endIndex).join("\n");
 }
 
 export function validateFinalOutputProvenance(args: {
