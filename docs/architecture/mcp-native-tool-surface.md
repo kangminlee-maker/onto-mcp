@@ -32,11 +32,11 @@ stable compatibility aliases in either profile but are not advertised.
 
 ## Host Usability Roadmap (Planned)
 
-> Status: Accepted direction (2026-06-13). Tool consolidation + profiles (Phase 1
-> item 3) **implemented 2026-06-14** and reflected in the Tool Set above (12-tool
-> surface + simple/full profiles + deprecated aliases). The remaining Phase 1 items
-> (polling acceptance contract, provider `user_config`, `.mcpb` packaging) and all of
-> Phase 2 are **not yet implemented**. Extends DD-010. The Tool Set above records
+> Status: Accepted direction (2026-06-13). Phase 1 items 3 (tool consolidation +
+> profiles) and 1 (polling acceptance contract) are **implemented (2026-06-14)** and
+> reflected in the Tool Set above (12-tool surface + simple/full profiles + deprecated
+> aliases + profile-aware sync window). The remaining Phase 1 items (provider
+> `user_config`, `.mcpb` packaging) and all of Phase 2 are **not yet implemented**. Extends DD-010. The Tool Set above records
 > current behavior; the items below record the decided direction.
 > Hardened against onto self-review `20260613-d1c99dba` (6 medium design-completeness
 > gaps incorporated: over-window contract, `onto_review_read` responsibility map,
@@ -70,20 +70,26 @@ state/authority decision.
 Core API, artifacts, and authority model are unchanged. These are MCP-surface and
 packaging changes only.
 
-1. **Polling friction.** Chat hosts have no auto-poll loop, so manual status polling
-   stalls. Mitigations: raise the bounded synchronous window for the simple profile so
-   core-axis reviews finish in-call when possible; enable `notifications/progress` by
-   default; collapse the read path to one obvious entry point (`onto_review_read`)
-   defaulting to `latest=true` so the host need not carry `sessionRoot`. Track MCP
-   Tasks (spec 2025-11-25, call-now/fetch-later) for hosts that support it — it removes
-   manual polling entirely; `onto_review_read` polling stays as the fallback. This
-   keeps the "MCP native progress is transport only" non-goal intact.
+1. **Polling friction.** ✅ **Implemented 2026-06-14** (profile-aware sync window in
+   `review-sync-window.ts`; the read-path fallback and terminal-signal correctness
+   shipped with item 3). Chat hosts have no auto-poll loop, so manual status polling
+   stalls. Mitigations: a profile-aware bounded synchronous window (simple larger than
+   full) so the fastest reviews finish in-call; the read path collapsed to one obvious
+   entry point (`onto_review_read`) defaulting to `latest=true` so the host need not
+   carry `sessionRoot`. `notifications/progress` is emitted when the host supplies a
+   `progressToken` (transport-only — the server cannot force it). Tracking: MCP Tasks
+   (spec 2025-11-25, call-now/fetch-later) would remove manual polling for supporting
+   hosts; until then `onto_review_read` polling is the fallback. This keeps the
+   "MCP native progress is transport only" non-goal intact.
 
-   **Acceptance contract** (simple profile must define this before "done" — raising the
-   window must not replace polling friction with an unbounded blocking call):
-   - **Bounded wait** — a max synchronous window (name the config source); after it the
-     call returns `status: running` + run handle instead of blocking further. Host
-     responsiveness takes priority over in-call completion once the bound is reached.
+   **Acceptance contract** (implemented — raising the window does not become an
+   unbounded blocking call):
+   - **Bounded wait** — profile-aware max synchronous window: simple 45s, full 25s
+     (env `ONTO_MCP_REVIEW_RETURN_RUNNING_AFTER_MS` / `..._SIMPLE`, single-source
+     resolution in `review-sync-window.ts`). After it the call returns `status: running`
+     + run handle instead of blocking further; host responsiveness takes priority once
+     the bound is reached. Most core-axis reviews exceed any host-safe window and return
+     a handle.
    - **Over-window fallback** — the single one-step recovery call is
      `onto_review_read(latest=true)` (no `sessionRoot` juggling); document it as the one
      "check on it" call.
