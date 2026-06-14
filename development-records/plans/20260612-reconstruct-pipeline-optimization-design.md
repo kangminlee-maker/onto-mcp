@@ -1,10 +1,14 @@
 # Reconstruct Pipeline Optimization Design
 
 > Status: approved r4 — Phase 0 완결(PR #45+#46 merged: M1 계측·M2 mock·M3 golden gate·M4 benchmark),
-> Phase 1 baseline 완료. **Phase 2 진입 대기(L1부터)**.
+> Phase 1 baseline 완료. **Phase 2 진행 중 — L1a(정합) 구현·게이트 통과(머지 대기), L1b(검증 재시도) 다음**.
 > Phase 1 결과: [20260613-reconstruct-opt-phase1-baseline-findings.md](20260613-reconstruct-opt-phase1-baseline-findings.md)
 > — live medium-effort 완주율 ~17%(1/6), 실패 5건 전부 검증 게이트(타임아웃·malformed JSON 아님);
 > retry/salvage가 그 실패 모드를 구조적으로 미커버 → **L1을 "순서상 첫째"에서 "green run 전제"로 격상**.
+> **L1a 구현 발견(2026-06-14)**: 최다 실패(final_output provenance 3/5)는 retry 공백이 아니라
+> append 가드(`includes` 부분문자열)와 검증기(`markdownSectionText` 정확한 줄)의 **매칭 규칙 불일치 버그**.
+> 충돌 헤딩(`### Claim Projection` 등) 시 canonical 섹션이 미삽입 → "missing section" hard-halt.
+> 결정적 정합 수정으로 해소(§6 L1a). 남은 author-owned 의미 실패(CQ coverage·seed semantic)는 L1b 재시도 대상.
 > Date: 2026-06-12
 > Scope: reconstruct 파이프라인의 품질·안정성·속도 최적화의 측정 설계 + 레버 설계 + 실행 단계 설계
 > Baseline reference: review pipeline 최적화 과정 (2026-04-17 A1~A5, 2026-06-05~08 efficiency work)
@@ -216,9 +220,37 @@ benchmark md/json은 어떤 지표 사실의 권위도 갖지 않는다 — ledg
 
 ### L1. 구조화 제출 채널 정합 + 검증 실패 피드백 재시도 — 안정성 (S1·S2)
 
+구현 착수 후 실측 발견으로 L1을 두 슬라이스로 분할한다: **L1a 정합(결정적, 완료)** +
+**L1b 검증 실패 피드백 재시도(의미적, 다음)**. live 최다 실패가 retry 공백이 아니라
+generate-and-validate **정합 버그**였다는 발견이 분할 근거다.
+
+#### L1a. final-output 섹션 append ↔ 검증기 정합 — 결정적 (S1) · **완료(PR #48, 게이트 통과)**
+
+- **근본 원인 (live 베이스라인 3/5)**: `final_output_provenance` 실패는 retry 부재가 아니라
+  append 가드와 검증기의 **매칭 규칙 불일치**였다. append 가드는
+  `finalOutputText.includes("## Claim Projection")`(부분문자열), 교체·검증기
+  (`markdownSectionText`)는 `line.trim() === "## Claim Projection"`(정확한 줄). LLM 저자가
+  충돌 헤딩(`### Claim Projection`, `## Claim Projection Notes`)을 쓰면 가드가 "이미 있음"으로
+  오판 → 교체 경로가 정확한 줄을 못 찾아 원문 그대로 반환 → canonical 프로비넌스 섹션이
+  영영 미삽입 → 검증기가 "missing provenance-bound section" hard-halt. 입력 의존적이라
+  관측된 1통과/3실패와 정확히 일치. retry로는 비결정적으로만 가려질 버그.
+- **수정**: `reconstruct/markdown-section.ts`를 `## ` 섹션 의미론의 **단일 소유자**로 신설
+  — `upsertMarkdownSection`(삽입/교체) + `markdownSectionText`(검증기 추출기)가 하나의
+  **정확한 줄** 규칙 공유 → 가드와 검증기 드리프트 불가. canonical 헤딩을 `content` 첫 줄에서
+  유도하고 비-canonical(다중 공백·탭) 형태는 fail-loud 거부 → 섹션 발견성이 **헬퍼 소유
+  불변식**(호출자 전제조건 아님). `appendFinalOutput*` 5개 + 검증기를 위임, 부분문자열 가드와
+  중복 splice 루프 5개 + `replaceMarkdownSectionContent` 제거(개념 표면 축소).
+- **결과/검증**: LLM 비용 0의 결정적 수정으로 최다 실패 클래스를 뿌리에서 제거.
+  회귀 테스트 `markdown-section.test.ts`(충돌 헤딩 재현 + 불변식 강제), 전체 vitest 그린.
+  onto core-axis 게이트 material 0(2라운드, low 지적 반영 수렴).
+
+#### L1b. 검증 실패 피드백 재시도 — 의미적 (S1·S2) · **다음**
+
 - **현 경계 (코드 검증)**: LLM 유닛은 이미 JSON 저작(`callJsonAuthor`) + 1회
   malformed-JSON repair를 거치고, YAML 직렬화는 런타임이 소유한다. 공백은
-  (a) 스키마/의미 검증 실패 시 피드백 재시도 없이 hard halt,
+  (a) 스키마/의미 검증 실패 시 피드백 재시도 없이 hard halt(L1a로 제거되지 않는
+  author-owned 의미 실패: competency_questions `missing_required_coverage`,
+  ontology_seed semantic — live 잔여 2/5),
   (b) unknown-field/runtime-owned-field 거부·allowed-set 검증의 유닛 간 불균질.
 - **변경**:
   1. reconstruct는 `direct_call` realization 강제이므로, 구조화 제출 채널의
@@ -230,6 +262,7 @@ benchmark md/json은 어떤 지표 사실의 권위도 갖지 않는다 — ledg
   2. 스키마/검증 실패 시 실패 사유를 repair context로 넣은 bounded 재시도(기본
      1회)를 `attempts[]`에 실패 분류와 함께 기록. 재시도는 순수 생성+검증 구간에만
      허용 (부작용 없음). 기존 parse-repair와 합산해 유닛당 총 재시도 상한을 둔다.
+     ontology_seed의 기존 1회 검증 재시도 패턴을 final_output 잔여 의미 실패·CQ로 일반화.
   3. S2 부지표를 실패 분류별(parse-repair / schema-validation)로 측정한다.
 - **비포함**: timeout recovery 확장은 L1에서 분리 — §6 L6.
 - **기대**: S2=0 (판정 셋 기준), S1 상승. 속도 중립~소폭 양.
@@ -331,7 +364,7 @@ benchmark md/json은 어떤 지표 사실의 권위도 갖지 않는다 — ledg
 |---|---|---|---|
 | 0 | 측정 기반 구축 (M1~M4 + §5.3 권위 맵) | ledger 확장 + mock 실현 + golden fixture + 비교기 + 권위 맵 | mock 3회 연속 완주; **M1 전 필드(duration/tokens/attempts/실패 분류/provider_route/effort/batch_count + source-layer identity ref)의 대표 row가 ledger에 존재**; 비교기가 source 필드 또는 의존 identity ref 부재 지표를 거부함을 테스트로 증명; 테스트 전체 통과 |
 | 1 ✅ | baseline 확정 | mock×3(Phase 0) + live medium 기록(`reconstruct-pipeline-live-20260613.*`, PRELIMINARY: 6 run 중 1 완주), per-unit 병목 표 → [Phase 1 findings](20260613-reconstruct-opt-phase1-baseline-findings.md) | **완료**: 기록 commit + 병목 상위 3(lens_judgment 순차 9콜·ontology_seed 대형 단일콜·candidate_disposition 변동) 식별. 추가 발견: medium 완주율 ~17%, 검증 게이트 실패 무복구 → L1 전제화 |
-| 2 | 레버 사이클 (L1→L2a→L4→L5a→[게이트 통과 시 L2b·L3·L5b·L5c·L6] 순, 1레버 1사이클) | 레버별 가설→실측 기록 + 코드 + 테스트 | 아래 "레버 수락 절차" |
+| 2 🔄 | 레버 사이클 (L1a→L1b→L2a→L4→L5a→[게이트 통과 시 L2b·L3·L5b·L5c·L6] 순, 1레버 1사이클) | 레버별 가설→실측 기록 + 코드 + 테스트 | 아래 "레버 수락 절차". **L1a(정합) 완료(PR #48, onto material 0·테스트 그린, 머지 대기)** — final_output append↔검증기 매칭 불일치 버그를 결정적 수정으로 제거; L1b(검증 재시도)부터 잔여 author-owned 의미 실패 대상 |
 | 3 | E2E 검증 + 종결 | golden 대상 fresh full run(원칙 n≥3), 최종 benchmark 비교 기록, 문서 갱신(IMPLEMENTATION_MAP, 계약 개정분) | §4.2 done-when 충족 보고 |
 
 **레버 수락 절차 (Phase 2, 닫힌 규칙)**: 각 레버 PR마다 —
