@@ -250,7 +250,7 @@ const REVIEW_READ_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["compact", "standard", "full"],
       description:
-        "Read mode. compact returns the recovery/liveness status projection (smallest polling payload). standard and full return the bounded result — full adds the ReviewRecord and final output — once the review completes (completed/completed_with_degradation); a running, halted, or failed session returns the status/failure projection so the call never errors.",
+        "Read mode. compact returns the recovery/liveness status projection (smallest polling payload). standard and full return the bounded result — full adds the ReviewRecord and final output — once the review completes (completed/completed_with_degradation); a running, halted, or failed session returns the status/failure projection instead of a missing-ReviewRecord result error.",
     },
   },
 };
@@ -573,7 +573,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review",
     description:
-      "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly. Long-running: if it returns a running handle (status=running), poll onto_review_read (with the same sessionRoot, or latest=true) until status=completed; onto_review_read returns the result once terminal. Requires an llm provider configured in .onto/settings.json (or ~/.onto/settings.json); see the onto://usage resource. Read onto://usage first if unsure of the workflow.",
+      "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly. Long-running: if it returns a running handle (status=running), poll onto_review_read (with the same sessionRoot, or latest=true) until status=completed; onto_review_read returns the result once the review completes (completed/completed_with_degradation). Requires an llm provider configured in .onto/settings.json (or ~/.onto/settings.json); see the onto://usage resource. Read onto://usage first if unsure of the workflow.",
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
@@ -609,7 +609,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review_read",
     description:
-      "Read a review session — one entry point for recovery/liveness while running and the result once it completes. Pass sessionRoot, or latest=true to recover the newest matching session. projectionLevel: compact = smallest polling payload (status/liveness); standard/full = bounded result (full adds the ReviewRecord and final output) once the review completes (completed/completed_with_degradation); a running, halted, or failed session returns the status/failure projection so the call never errors. Replaces onto_review_status and onto_review_result.",
+      "Read a review session — one entry point for recovery/liveness while running and the result once it completes. Pass sessionRoot, or latest=true to recover the newest matching session. projectionLevel: compact = smallest polling payload (status/liveness); standard/full = bounded result (full adds the ReviewRecord and final output) once the review completes (completed/completed_with_degradation); a running, halted, or failed session returns the status/failure projection instead of taking the result-read path, so it never hits a missing-ReviewRecord error (invalid input or blocked-path calls still surface errors). Replaces onto_review_status and onto_review_result.",
     inputSchema: REVIEW_READ_INPUT_SCHEMA,
   },
   {
@@ -705,8 +705,10 @@ reported through canonical route visibility. Listing tools needs no provider.
    status="completed". Pass projectionLevel="compact" for the smallest polling
    payload.
 3. \`onto_review_read\` is the single read surface: while running it returns the
-   status/liveness projection; once terminal, projectionLevel standard|full
-   returns the bounded result (full adds the ReviewRecord and final output text).
+   status/liveness projection; once the review completes (completed or
+   completed_with_degradation) projectionLevel standard|full returns the bounded
+   result (full adds the ReviewRecord and final output text); a halted or failed
+   session returns the status/failure projection.
    Present using the result's llmPresentation prompts.
 
 Other review tools: \`onto_prepare_review\` (materialize without executing) then
@@ -875,7 +877,8 @@ type ReviewStatusProjection = "compact" | "standard" | "full";
  * is the default and keeps a trimmed pipeline ledger plus continuation summary.
  * `compact` keeps only small top-level facts. `full` returns the status
  * unchanged and should be requested only when complete internals are required.
- * For final results, onto_review_read returns the result projection once terminal.
+ * For final results, onto_review_read returns the result projection once the
+ * review completes (completed/completed_with_degradation).
  */
 function projectReviewStatus(status: unknown, level: ReviewStatusProjection): unknown {
   if (level === "full") return status;
@@ -1590,8 +1593,8 @@ export async function callTool(
       }
       case "onto_review_read": {
         // Consolidated read surface: recovery/liveness while running, result
-        // once terminal. Routing by session state (not projectionLevel alone)
-        // means a still-running session returns status instead of the
+        // once the review completes. Routing by session state (not projectionLevel
+        // alone) means running/halted/failed sessions return status instead of the
         // "cannot read result while attempt is started" error.
         const parsed = OntoReviewStatusInputSchema.parse(args);
         const projection = parsed.projectionLevel ?? "standard";
