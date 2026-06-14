@@ -54,6 +54,7 @@ import {
   OntoValidateReconstructDirectiveToolInputSchema,
   type OntoToolName,
 } from "./tool-schemas.js";
+import { reviewReadMode } from "./review-read-mode.js";
 
 type JsonValue =
   | null
@@ -249,7 +250,7 @@ const REVIEW_READ_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["compact", "standard", "full"],
       description:
-        "Read mode. compact returns the recovery/liveness status projection (smallest polling payload). standard and full return the bounded result — full adds the ReviewRecord and final output — once the review is terminal, and fall back to the status projection on a still-running session so the call never errors.",
+        "Read mode. compact returns the recovery/liveness status projection (smallest polling payload). standard and full return the bounded result — full adds the ReviewRecord and final output — once the review completes (completed/completed_with_degradation); a running, halted, or failed session returns the status/failure projection so the call never errors.",
     },
   },
 };
@@ -608,7 +609,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review_read",
     description:
-      "Read a review session — one entry point for recovery/liveness while running and the result once terminal. Pass sessionRoot, or latest=true to recover the newest matching session. projectionLevel: compact = smallest polling payload (status/liveness); standard/full = bounded result (full adds the ReviewRecord and final output) when complete, falling back to status on a still-running session so the call never errors. Replaces onto_review_status and onto_review_result.",
+      "Read a review session — one entry point for recovery/liveness while running and the result once it completes. Pass sessionRoot, or latest=true to recover the newest matching session. projectionLevel: compact = smallest polling payload (status/liveness); standard/full = bounded result (full adds the ReviewRecord and final output) once the review completes (completed/completed_with_degradation); a running, halted, or failed session returns the status/failure projection so the call never errors. Replaces onto_review_status and onto_review_result.",
     inputSchema: REVIEW_READ_INPUT_SCHEMA,
   },
   {
@@ -656,7 +657,7 @@ function resolveToolProfile(): ToolProfile {
     : "full";
 }
 
-function advertisedToolDefinitions(): ToolDefinition[] {
+export function advertisedToolDefinitions(): ToolDefinition[] {
   if (resolveToolProfile() !== "simple") {
     return TOOL_DEFINITIONS;
   }
@@ -1423,7 +1424,7 @@ async function resolveAllowedReconstructSessionRoot(args: {
   return canonicalSessionRoot;
 }
 
-async function callTool(
+export async function callTool(
   name: string,
   args: unknown,
   options: { progressToken?: McpProgressToken | null } = {},
@@ -1637,10 +1638,7 @@ async function callTool(
         const status = await reviewApi.getReviewStatus(sessionRoot, {
           projectionLevel: projection,
         });
-        const resultReadable =
-          status.status === "completed" ||
-          status.status === "completed_with_degradation";
-        if (resultReadable && projection !== "compact") {
+        if (reviewReadMode(status.status, projection) === "result") {
           return formatToolResult(
             await reviewApi.getReviewResult(sessionRoot, {
               projectionLevel: projection,

@@ -205,9 +205,10 @@ export const OntoSimpleProfileToolNames = [
   "onto_list",
 ] as const;
 
-// Stable compatibility aliases: callable and normalized to the consolidated
-// tools, but not advertised in tools/list. Removed only at a major tool-surface
-// version bump (never silently).
+// Stable compatibility aliases: still callable via their original handlers
+// (behavior preserved unchanged), not advertised in tools/list. Removed only at
+// a major tool-surface version bump (never silently). The runtime contract is
+// pinned by tool-surface.test.ts (each alias dispatches; disjoint from full).
 export const OntoDeprecatedToolAliases = [
   "onto_review_status",
   "onto_review_result",

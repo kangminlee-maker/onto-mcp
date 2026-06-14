@@ -13,7 +13,7 @@ small set of tools with a stable MCP surface.
 | `onto_review_round` | Host orchestration (B): return the units ready to execute now with prompt packets materialized; onto does not execute them | round result (`in_progress` ready units / `ready_to_assemble` / `halted`), packet refs |
 | `onto_review_advance` | Host orchestration (B): report host-executed units; onto validates seats, records results and gates, returns the next round or assembles the `ReviewRecord` | next round result or assembled record refs |
 | `onto_review_cancel` | Request cancellation for a running review session | cancellation request artifact ref plus updated status/run-control projection |
-| `onto_review_read` | Read a review session: recovery/liveness status while running (`sessionRoot` or `latest=true`), and the bounded result once terminal. Routes by session state so a running session never errors | status/liveness/run-control/continuation projection at `compact`; result projection at `standard`/`full` once complete (`full` adds `review-record.yaml` and `final-output.md`), falling back to status while running |
+| `onto_review_read` | Read a review session: recovery/liveness status while running (`sessionRoot` or `latest=true`), and the bounded result once it completes. Routes by session state so the call never errors | status/liveness/run-control/continuation projection at `compact`; result projection at `standard`/`full` once the review completes (`completed`/`completed_with_degradation`; `full` adds `review-record.yaml` and `final-output.md`); a running, halted, or failed session returns the status/failure projection |
 | `onto_observe_source` | Materialize reconstruct source observations | `target-material-profile.yaml`, `source-inventory.yaml`, `source-observations.yaml`, initial `reconstruct-record.yaml` |
 | `onto_validate_reconstruct_directive` | Validate LLM-authored reconstruct directive files | validation artifact with status and violations |
 | `onto_reconstruct` | Run the material-aware reconstruct post-Seed artifact loop with direct-call semantic/confirmation realization | post-Seed artifacts, `final-output.md`, `reconstruct-run-manifest.yaml`, `reconstruct-record.yaml` |
@@ -133,8 +133,9 @@ responsibility:
   full `ReviewRecord` + `final-output.md` at `full`.
 
 On rollout, `onto_review_status` / `onto_review_result` are retained as **stable
-compatibility aliases** (not temporary migration shims) that normalize onto
-`onto_review_read`, so existing recovery/continuation references here and in
+compatibility aliases** (not temporary migration shims) that keep their original
+behavior via retained legacy handlers — they are not re-pointed at `onto_review_read`
+— so existing recovery/continuation references here and in
 `review-continuation-surface.md` keep resolving. Lifecycle: aliases persist through the
 deprecation window and are removed only at a major tool-surface version bump, with a
 migration note — never silently. `onto_reconstruct_read` follows the same split.
