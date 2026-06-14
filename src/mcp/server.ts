@@ -37,7 +37,9 @@ import {
   OntoListDomainsToolInputSchema,
   OntoListSourceProfilesToolInputSchema,
   OntoObserveSourceToolInputSchema,
+  OntoListInputSchema,
   OntoPrepareReviewToolInputSchema,
+  OntoReconstructReadInputSchema,
   OntoReconstructSessionInputSchema,
   OntoReconstructToolInputSchema,
   OntoReviewAdvanceToolInputSchema,
@@ -48,9 +50,11 @@ import {
   OntoReviewSessionInputSchema,
   OntoReviewStatusInputSchema,
   OntoReviewToolInputSchema,
+  OntoSimpleProfileToolNames,
   OntoValidateReconstructDirectiveToolInputSchema,
   type OntoToolName,
 } from "./tool-schemas.js";
+import { reviewReadMode } from "./review-read-mode.js";
 
 type JsonValue =
   | null
@@ -232,22 +236,21 @@ const REVIEW_STATUS_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["compact", "standard", "full"],
       description:
-        "Status payload size. Default standard keeps a trimmed pipeline ledger and continuation summary. Pass compact for a smaller polling payload, or full only when complete status internals are required. For final results prefer onto_review_result.",
+        "Status payload size. Default standard keeps a trimmed pipeline ledger and continuation summary. Pass compact for a smaller polling payload, or full only when complete status internals are required.",
     },
   },
 };
 
-const REVIEW_RESULT_INPUT_SCHEMA: JsonValue = {
+const REVIEW_READ_INPUT_SCHEMA: JsonValue = {
   type: "object",
   additionalProperties: false,
-  required: ["sessionRoot"],
   properties: {
-    ...((SESSION_INPUT_SCHEMA as { properties: Record<string, JsonValue> }).properties),
+    ...((REVIEW_STATUS_INPUT_SCHEMA as { properties: Record<string, JsonValue> }).properties),
     projectionLevel: {
       type: "string",
       enum: ["compact", "standard", "full"],
       description:
-        "Result projection size. compact and standard omit final output text and ReviewRecord; full includes complete artifacts.",
+        "Read mode. compact returns the recovery/liveness status projection (smallest polling payload). standard and full return the bounded result — full adds the ReviewRecord and final output — once the review completes (completed/completed_with_degradation); a running, halted, or failed session returns the status/failure projection instead of a missing-ReviewRecord result error.",
     },
   },
 };
@@ -352,21 +355,17 @@ const REVIEW_ADVANCE_INPUT_SCHEMA: JsonValue = {
   },
 };
 
-const LIST_DOMAINS_INPUT_SCHEMA: JsonValue = {
+const LIST_INPUT_SCHEMA: JsonValue = {
   type: "object",
   additionalProperties: false,
+  required: ["kind"],
   properties: {
-    projectRoot: {
+    kind: {
       type: "string",
-      description: "Project root whose project-local domains should be included.",
+      enum: ["lenses", "domains", "source_profiles"],
+      description:
+        "Which registry to list: lenses (canonical full and core-axis review lens ids), domains (available domain ids), or source_profiles (reconstruct source profiles by target_material_kind).",
     },
-  },
-};
-
-const LIST_SOURCE_PROFILES_INPUT_SCHEMA: JsonValue = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
     projectRoot: {
       type: "string",
       description: "Project root. Defaults to the MCP server working directory.",
@@ -493,6 +492,21 @@ const RECONSTRUCT_SESSION_INPUT_SCHEMA: JsonValue = {
   },
 };
 
+const RECONSTRUCT_READ_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionRoot"],
+  properties: {
+    ...((RECONSTRUCT_SESSION_INPUT_SCHEMA as { properties: Record<string, JsonValue> }).properties),
+    projectionLevel: {
+      type: "string",
+      enum: ["compact", "standard", "full"],
+      description:
+        "Read mode. compact/standard return stage progress, liveness, and count summary (recovery polling); full returns the reconstruct record, run manifest, and final output.",
+    },
+  },
+};
+
 // NOTE: top-level `allOf`/`oneOf`/`anyOf` is rejected by the Anthropic tool API
 // ("input_schema does not support oneOf/allOf/anyOf at the top level"), which 400s
 // the whole request when onto is enabled. Per-`directiveKind` required-field rules
@@ -559,7 +573,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review",
     description:
-      "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly. Long-running: if it returns a running handle (status=running), poll onto_review_status (with the same sessionRoot, or latest=true) until status=completed, then read onto_review_result. Requires an llm provider configured in .onto/settings.json (or ~/.onto/settings.json); see the onto://usage resource. Read onto://usage first if unsure of the workflow.",
+      "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly. Long-running: if it returns a running handle (status=running), poll onto_review_read (with the same sessionRoot, or latest=true) until the review is no longer running (completed, completed_with_degradation, halted, or failed); onto_review_read returns the result for completed/completed_with_degradation, otherwise the status/failure projection. Requires an llm provider configured in .onto/settings.json (or ~/.onto/settings.json); see the onto://usage resource. Read onto://usage first if unsure of the workflow.",
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
@@ -593,32 +607,16 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     inputSchema: REVIEW_CANCEL_INPUT_SCHEMA,
   },
   {
-    name: "onto_review_status",
+    name: "onto_review_read",
     description:
-      "Read structured status and artifact refs for a review session, or recover the latest matching session. The default payload is bounded; pass projectionLevel=full only when complete status internals are required.",
-    inputSchema: REVIEW_STATUS_INPUT_SCHEMA,
+      "Read a review session — one entry point for recovery/liveness while running and the result once it completes. Pass sessionRoot, or latest=true to recover the newest matching session. projectionLevel: compact = smallest polling payload (status/liveness); standard/full = bounded result (full adds the ReviewRecord and final output) once the review completes (completed/completed_with_degradation); a running, halted, or failed session returns the status/failure projection instead of taking the result-read path, so it never hits a missing-ReviewRecord error (invalid input or blocked-path calls still surface errors). Replaces onto_review_status and onto_review_result.",
+    inputSchema: REVIEW_READ_INPUT_SCHEMA,
   },
   {
-    name: "onto_review_result",
+    name: "onto_list",
     description:
-      "Read bounded result projections for a completed review session. compact and standard omit final output text and ReviewRecord; full includes complete artifacts.",
-    inputSchema: REVIEW_RESULT_INPUT_SCHEMA,
-  },
-  {
-    name: "onto_list_lenses",
-    description: "List canonical full and core-axis review lens ids.",
-    inputSchema: { type: "object", additionalProperties: false, properties: {} },
-  },
-  {
-    name: "onto_list_domains",
-    description: "List available domain ids from project, user, and installation domain seats.",
-    inputSchema: LIST_DOMAINS_INPUT_SCHEMA,
-  },
-  {
-    name: "onto_list_source_profiles",
-    description:
-      "List reconstruct source profiles by target_material_kind and support status.",
-    inputSchema: LIST_SOURCE_PROFILES_INPUT_SCHEMA,
+      "List a registry by kind: lenses (canonical full and core-axis review lens ids), domains (available domain ids from project/user/installation seats), or source_profiles (reconstruct source profiles by target_material_kind). Replaces onto_list_lenses, onto_list_domains, and onto_list_source_profiles.",
+    inputSchema: LIST_INPUT_SCHEMA,
   },
   {
     name: "onto_observe_source",
@@ -639,18 +637,33 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     inputSchema: RECONSTRUCT_INPUT_SCHEMA,
   },
   {
-    name: "onto_reconstruct_status",
+    name: "onto_reconstruct_read",
     description:
-      "Read structured status, stage progress, liveness, count summary, and artifact refs for a reconstruct session.",
-    inputSchema: RECONSTRUCT_SESSION_INPUT_SCHEMA,
-  },
-  {
-    name: "onto_reconstruct_result",
-    description:
-      "Read the reconstruct record, run manifest, stage progress, final output, and artifact refs for a reconstruct session.",
-    inputSchema: RECONSTRUCT_SESSION_INPUT_SCHEMA,
+      "Read a reconstruct session — stage progress, liveness, and count summary at projectionLevel compact/standard; the full record, run manifest, and final output at projectionLevel=full. Replaces onto_reconstruct_status and onto_reconstruct_result.",
+    inputSchema: RECONSTRUCT_READ_INPUT_SCHEMA,
   },
 ];
+
+type ToolProfile = "full" | "simple";
+
+// Profile is a bounded visibility view over the same Core API (no behavior
+// change): full advertises every tool to agentic hosts; simple advertises the
+// chat-host subset shipped in the .mcpb desktop bundle. Default is full so CLI
+// and Claude Code surfaces are unchanged. Deprecated aliases stay callable in
+// either profile but are never advertised.
+function resolveToolProfile(): ToolProfile {
+  return process.env.ONTO_MCP_PROFILE?.trim().toLowerCase() === "simple"
+    ? "simple"
+    : "full";
+}
+
+export function advertisedToolDefinitions(): ToolDefinition[] {
+  if (resolveToolProfile() !== "simple") {
+    return TOOL_DEFINITIONS;
+  }
+  const simple = new Set<string>(OntoSimpleProfileToolNames);
+  return TOOL_DEFINITIONS.filter((tool) => simple.has(tool.name));
+}
 
 const USAGE_GUIDE = `# Using onto via MCP
 
@@ -688,19 +701,22 @@ reported through canonical route visibility. Listing tools needs no provider.
 1. Call \`onto_review\` with { target, intent } (target = file/dir/token). Optional:
    reviewMode ("core-axis" cheaper, "full"), domain or noDomain=true, lensIds.
 2. review is long-running. If the result status is "running", it returns a run
-   handle; poll \`onto_review_status\` (same sessionRoot, or latest=true) until
-   status="completed". Default status is bounded; pass projectionLevel="compact"
-   for the smallest polling payload.
-3. Read \`onto_review_result\` (projectionLevel compact|standard|full) for the
-   bounded result. Use \`full\` only when you need the ReviewRecord and final
-   output text. Present using the result's llmPresentation prompts.
+   handle; poll \`onto_review_read\` (same sessionRoot, or latest=true) until
+   status is no longer "running" (completed, completed_with_degradation, halted,
+   or failed). Pass projectionLevel="compact" for the smallest polling payload.
+3. \`onto_review_read\` is the single read surface: while running it returns the
+   status/liveness projection; once the review completes (completed or
+   completed_with_degradation) projectionLevel standard|full returns the bounded
+   result (full adds the ReviewRecord and final output text); a halted or failed
+   session returns the status/failure projection.
+   Present using the result's llmPresentation prompts.
 
 Other review tools: \`onto_prepare_review\` (materialize without executing) then
 \`onto_review_continue\`; \`onto_review_cancel\` to stop a running session.
 Host-orchestration (review.execution.orchestration=host): \`onto_prepare_review\`
 then drive the round loop yourself with \`onto_review_round\` (get ready units) and
 \`onto_review_advance\` (report executed units); onto validates seats and assembles.
-Discover options with \`onto_list_lenses\` and \`onto_list_domains\`.
+Discover options with \`onto_list\` (kind="lenses" or "domains").
 
 ## Reconstruct — multi-step (LLM authors artifacts between steps)
 
@@ -709,8 +725,9 @@ Discover options with \`onto_list_lenses\` and \`onto_list_domains\`.
    / ontology seed); validate each with \`onto_validate_reconstruct_directive\`
    (directiveKind selects which artifact shape).
 3. \`onto_reconstruct\` { targetRefs, intent } runs the material-aware path with
-   validation gates; poll \`onto_reconstruct_status\`; read \`onto_reconstruct_result\`.
-Discover material profiles with \`onto_list_source_profiles\`.
+   validation gates; poll \`onto_reconstruct_read\` (projectionLevel "full" returns
+   the record, run manifest, and final output).
+Discover material profiles with \`onto_list\` (kind="source_profiles").
 
 ## Notes
 
@@ -774,8 +791,8 @@ const PROMPT_DEFINITIONS: PromptDefinition[] = [
       return [
         `Use the onto MCP server to review ${target}.`,
         `Call onto_review with target="${target}", intent="${intent}", reviewMode="${reviewMode}".`,
-        "If the result status is \"running\", poll onto_review_status (same sessionRoot, projectionLevel=compact) until status=completed,",
-        "then read onto_review_result and summarize highest severity, material issues, and action candidates using its llmPresentation.",
+        "If the result status is \"running\", poll onto_review_read (same sessionRoot, projectionLevel=compact) until status is no longer running (completed, completed_with_degradation, halted, or failed),",
+        "then read onto_review_read (projectionLevel=full) and summarize highest severity, material issues, and action candidates using its llmPresentation.",
         "If unsure about setup or the workflow, read the onto://usage resource first.",
       ].join("\n");
     },
@@ -796,7 +813,7 @@ const PROMPT_DEFINITIONS: PromptDefinition[] = [
         "First call onto_observe_source with those targetRefs.",
         "Author the required directive YAML, validating each with onto_validate_reconstruct_directive,",
         `then call onto_reconstruct with targetRefs and intent="${intent}".`,
-        "Poll onto_reconstruct_status until terminal, then read onto_reconstruct_result.",
+        "Poll onto_reconstruct_read until terminal, then read onto_reconstruct_read (projectionLevel=full).",
         "Read the onto://usage resource for the full reconstruct workflow.",
       ].join("\n");
     },
@@ -856,11 +873,12 @@ function formatToolResult(data: unknown): JsonValue {
 type ReviewStatusProjection = "compact" | "standard" | "full";
 
 /**
- * Trim an onto_review_status payload for token-limited hosts. `standard`
+ * Trim a review status payload for token-limited hosts. `standard`
  * is the default and keeps a trimmed pipeline ledger plus continuation summary.
  * `compact` keeps only small top-level facts. `full` returns the status
  * unchanged and should be requested only when complete internals are required.
- * For final results use onto_review_result.
+ * For final results, onto_review_read returns the result projection once the
+ * review completes (completed/completed_with_degradation).
  */
 function projectReviewStatus(status: unknown, level: ReviewStatusProjection): unknown {
   if (level === "full") return status;
@@ -1409,7 +1427,7 @@ async function resolveAllowedReconstructSessionRoot(args: {
   return canonicalSessionRoot;
 }
 
-async function callTool(
+export async function callTool(
   name: string,
   args: unknown,
   options: { progressToken?: McpProgressToken | null } = {},
@@ -1573,6 +1591,72 @@ async function callTool(
           }),
         );
       }
+      case "onto_review_read": {
+        // Consolidated read surface: recovery/liveness while running, result
+        // once the review completes. Routing by session state (not projectionLevel
+        // alone) means running/halted/failed sessions return status instead of the
+        // "cannot read result while attempt is started" error.
+        const parsed = OntoReviewStatusInputSchema.parse(args);
+        const projection = parsed.projectionLevel ?? "standard";
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        let sessionRoot: string;
+        let latestSessionMatches:
+          | Awaited<ReturnType<typeof reviewApi.findLatestReviewSessions>>
+          | undefined;
+        if (parsed.sessionRoot) {
+          sessionRoot = await resolveAllowedSessionRoot({
+            sessionRoot: parsed.sessionRoot,
+            projectRoot,
+          });
+        } else {
+          latestSessionMatches = await reviewApi.findLatestReviewSessions({
+            projectRoot,
+            ...(parsed.target !== undefined ? { target: parsed.target } : {}),
+            ...(parsed.domain !== undefined ? { domain: parsed.domain } : {}),
+            ...(parsed.requestHash !== undefined
+              ? { requestHash: parsed.requestHash }
+              : {}),
+            ...(parsed.createdAfter !== undefined
+              ? { createdAfter: parsed.createdAfter }
+              : {}),
+            ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
+          });
+          const latest = latestSessionMatches[0];
+          if (!latest) {
+            return formatToolResult({
+              sessionId: null,
+              sessionRoot: null,
+              status: "unknown",
+              artifactRefs: {},
+              failureRefs: [],
+              structuredFailures: [],
+              latestSessionMatches,
+            });
+          }
+          sessionRoot = await resolveAllowedSessionRoot({
+            sessionRoot: latest.sessionRoot,
+            projectRoot,
+          });
+        }
+        const status = await reviewApi.getReviewStatus(sessionRoot, {
+          projectionLevel: projection,
+        });
+        if (reviewReadMode(status.status, projection) === "result") {
+          return formatToolResult(
+            await reviewApi.getReviewResult(sessionRoot, {
+              projectionLevel: projection,
+            }),
+          );
+        }
+        return formatToolResult(
+          projectReviewStatus(
+            latestSessionMatches !== undefined
+              ? { ...status, latestSessionMatches }
+              : status,
+            projection,
+          ),
+        );
+      }
       case "onto_list_lenses":
         return formatToolResult(await reviewApi.listLenses());
       case "onto_list_domains": {
@@ -1588,6 +1672,23 @@ async function callTool(
         );
         // Wrap the array so structuredContent is a JSON object (MCP requirement).
         return formatToolResult({ sourceProfiles });
+      }
+      case "onto_list": {
+        const parsed = OntoListInputSchema.parse(args);
+        if (parsed.kind === "lenses") {
+          return formatToolResult(await reviewApi.listLenses());
+        }
+        // Wrap arrays so structuredContent is a JSON object (MCP requirement).
+        if (parsed.kind === "domains") {
+          return formatToolResult({
+            domains: await reviewApi.listDomains(parsed.projectRoot),
+          });
+        }
+        return formatToolResult({
+          sourceProfiles: await reconstructApi.listSourceProfiles(
+            parsed.projectRoot,
+          ),
+        });
       }
       case "onto_observe_source": {
         const parsed = OntoObserveSourceToolInputSchema.parse(args);
@@ -1773,6 +1874,18 @@ async function callTool(
         });
         return formatToolResult(await reconstructApi.getRunResult(sessionRoot));
       }
+      case "onto_reconstruct_read": {
+        const parsed = OntoReconstructReadInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = await resolveAllowedReconstructSessionRoot({
+          projectRoot,
+          sessionRoot: parsed.sessionRoot,
+        });
+        if ((parsed.projectionLevel ?? "standard") === "full") {
+          return formatToolResult(await reconstructApi.getRunResult(sessionRoot));
+        }
+        return formatToolResult(await reconstructApi.getRunStatus(sessionRoot));
+      }
       default:
         return formatToolError(`Unknown tool: ${name}`);
     }
@@ -1819,7 +1932,7 @@ async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null>
     case "ping":
       return jsonRpcResult(message.id, {});
     case "tools/list":
-      return jsonRpcResult(message.id, { tools: TOOL_DEFINITIONS });
+      return jsonRpcResult(message.id, { tools: advertisedToolDefinitions() });
     case "resources/list":
       return jsonRpcResult(message.id, {
         resources: RESOURCE_DEFINITIONS.map(({ uri, name, description, mimeType }) => ({

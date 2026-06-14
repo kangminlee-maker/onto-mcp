@@ -34,7 +34,7 @@
 <main>
 
 <h1>onto-mcp Implementation Map</h1>
-<p class="stamp">기준: v0.4.8 + 문서 위생 패스 (2026-06-12) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
+<p class="stamp">기준: v0.4.8 (2026-06-12) · MCP 호스트 사용성 트랙 결정 기록 (2026-06-13) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
 
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
@@ -45,7 +45,7 @@
   <div class="card"><h3>Health</h3>
     <p><span class="ok">vitest 85 files / 948 passed</span> · 정적 체크 9종 green · CI(invariant-guards) PR마다 가동 · drift <span class="ok">no_drift</span></p></div>
   <div class="card"><h3>다음 결정</h3>
-    <p>유기적 salvage 관찰 결과(6/15 09:12 자동 실행) 반영 → salvage 회수율 기록. 이후 트랙 선택(evolve 활성화 여부 등).</p></div>
+    <p><b>신규</b>: MCP 호스트 사용성 — 데스크탑 우선(<code>.mcpb</code>) 단계적 개선 결정됨(2026-06-13). 설계 4회 onto 리뷰로 <b>0건 수렴</b>(8→6→1→0) — 커밋·Phase 1(툴 병합→폴링→user_config→패키징) 구현 대기. · 유기적 salvage 관찰(6/15 09:12) 반영.</p></div>
   <div class="card"><h3>주요 리스크</h3>
     <p><span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift 리포트).</p></div>
 </div>
@@ -269,6 +269,7 @@
 <h2>로드맵 현황과 다음 결정</h2>
 <ul>
   <li><b>완료</b>: staged roadmap 전 단계 (격리 기록: <code>development-records/plan/mcp-native-staged-roadmap-completed.md</code>) — host orchestration(B)·nested workers·live 심의·salvage·구조 가드까지.</li>
+  <li><b>신규 트랙 — MCP 호스트 사용성</b>(결정 2026-06-13, <b>미구현</b>): claude.ai 웹/데스크탑 사용성 개선. <b>Phase 1(데스크탑)</b> = 폴링 마찰 제거·provider <code>user_config</code> 이관·툴 16→12 병합 + simple/full 프로파일·<code>.mcpb</code> 패키징(Core API·권위 모델 불변). <b>Phase 2(원격/웹)</b> = Streamable HTTP+OAuth, 멀티-artifact 번들(code+문서+스프레드시트) 리뷰 — 방향만 기록. <b>onto 셀프리뷰</b>(<code>20260613-d1c99dba</code>, medium 6건)로 경화: Phase 1 over-window acceptance 계약·<code>onto_review_read</code> 책임맵·simple run-control 보강, Phase 2 scope↔bundle 분리 + 구현 전 acceptance gate(권위·provenance·retention·sink) 명시. <b>재리뷰</b>(<code>20260613-da680d10</code>) 수렴 — 원본 6건 해소, 후속 2테마(simple에 <code>onto_review_cancel</code> 포함·current↔planned read 권위 브리지+alias 생명주기) 마무리. 3·4차(<code>7e2c6adb</code>·<code>1e0adfbe</code>)로 <b>0건 수렴</b>(8→6→1→0, blocker/high 0). 설계: <code>docs/architecture/mcp-native-tool-surface.md</code> §Host Usability Roadmap · DD-010.</li>
   <li><b>대기 1건</b>: 유기적 salvage 관찰 — 6/15(월) 09:12 KST launchd 자동 실행(quota 리셋 직후). 결과 확인 → 설계 doc §7 기록 → 커밋·PR.</li>
   <li><b>후속 결정 후보</b>: evolve 트랙 활성화 여부 · reconstruct spreadsheet/database 어댑터 · reconstruct 타임아웃 effort 상수의 settings 이관(G2 waiver에 명기).</li>
 </ul>
