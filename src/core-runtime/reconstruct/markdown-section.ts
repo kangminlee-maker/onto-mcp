@@ -52,9 +52,13 @@ export function upsertMarkdownSection(
   content: string,
 ): string {
   const headingLine = content.split(/\r?\n/)[0]?.trim() ?? "";
-  if (!/^##\s+/.test(headingLine)) {
+  // Accept exactly the canonical `## ` + heading form that markdownSectionText
+  // reconstructs (`## ${heading}`, single ASCII space). A wider `^##\s+` would
+  // admit multi-space/tab separators the validator could never rediscover,
+  // re-opening the same insert/validate drift this module exists to close.
+  if (!/^## \S/.test(headingLine)) {
     throw new Error(
-      `upsertMarkdownSection: content must begin with a "## " heading line, got: ${
+      `upsertMarkdownSection: content must begin with a canonical "## " heading line (single space), got: ${
         JSON.stringify(headingLine)
       }`,
     );
