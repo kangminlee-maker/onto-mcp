@@ -39,6 +39,7 @@ function printHelp(): void {
       "Active interface:",
       "  mcp            Start the MCP stdio tool server",
       "  register       Register the onto MCP server into supported hosts",
+      "  configure-provider  Write LLM provider settings into the settings.json chain",
       "",
       "Available MCP tools:",
       "  onto_review",
@@ -64,7 +65,7 @@ function printHelp(): void {
 function unsupportedCommandMessage(subcommand: string): string {
   return [
     `[onto] Unsupported public CLI subcommand: ${subcommand}`,
-    "Active public commands: onto mcp, onto register",
+    "Active public commands: onto mcp, onto register, onto configure-provider",
   ].join("\n");
 }
 
@@ -84,6 +85,13 @@ async function main(): Promise<number> {
     case "register": {
       const { runRegister } = await import("./core-runtime/onboard/register.js");
       return runRegister(argv.slice(1));
+    }
+
+    case "configure-provider": {
+      const { runConfigureProvider } = await import(
+        "./core-runtime/onboard/configure-provider.js"
+      );
+      return runConfigureProvider(argv.slice(1));
     }
 
     case "--version":

@@ -988,7 +988,7 @@ function normalizeParsedSettings(settings: ParsedSettings): OntoSettings {
   return normalizeV3Settings(settings);
 }
 
-async function readSettingsAt(filePath: string): Promise<OntoSettings> {
+export async function readSettingsAt(filePath: string): Promise<OntoSettings> {
   if (!(await fileExists(filePath))) return {};
   let parsed: unknown;
   try {

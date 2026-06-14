@@ -33,10 +33,11 @@ stable compatibility aliases in either profile but are not advertised.
 ## Host Usability Roadmap (Planned)
 
 > Status: Accepted direction (2026-06-13). Phase 1 items 3 (tool consolidation +
-> profiles) and 1 (polling acceptance contract) are **implemented (2026-06-14)** and
-> reflected in the Tool Set above (12-tool surface + simple/full profiles + deprecated
-> aliases + profile-aware sync window). The remaining Phase 1 items (provider
-> `user_config`, `.mcpb` packaging) and all of Phase 2 are **not yet implemented**. Extends DD-010. The Tool Set above records
+> profiles), 1 (polling acceptance contract), and the **core of 2** (provider settings
+> writer `onto configure-provider`) are **implemented (2026-06-14/15)** and reflected in
+> the Tool Set above (12-tool surface + simple/full profiles + deprecated aliases +
+> profile-aware sync window). Remaining: item 2's `.mcpb` `user_config` wiring (lands
+> with item 4) and item 4 (`.mcpb` packaging); all of Phase 2 is **not yet implemented**. Extends DD-010. The Tool Set above records
 > current behavior; the items below record the decided direction.
 > Hardened against onto self-review `20260613-d1c99dba` (6 medium design-completeness
 > gaps incorporated: over-window contract, `onto_review_read` responsibility map,
@@ -101,12 +102,19 @@ packaging changes only.
      **not** raw `execution-result.yaml`, which is upserted mid-run and can read
      `halted_partial` while the attempt is still active. Polling guidance must say so
      (observed live in review `20260613-d1c99dba`: a raw-artifact poller false-terminates).
-2. **Provider prerequisite.** Collect LLM provider config at install time via the
-   `.mcpb` `manifest.json` `user_config` (secrets flagged sensitive) instead of
-   hand-editing `settings.json`. `user_config` is an **input channel only**: it writes
-   into the `settings.json/v3` chain, which remains the sole canonical authority for
-   provider/route resolution. No new settings authority or precedence is introduced —
-   the bundle UI is a convenience front-end over the same keys.
+2. **Provider prerequisite.** ✅ **Core mechanism implemented 2026-06-15**
+   (`onto configure-provider`, `src/core-runtime/onboard/configure-provider.ts`); the
+   `.mcpb` `manifest.json` `user_config` that invokes it lands with item 4. Collect LLM
+   provider config at install time via `user_config` (secrets flagged sensitive) instead
+   of hand-editing `settings.json`. `user_config` is an **input channel only**:
+   `onto configure-provider --provider/--model [--auth/--api-key-env/…]` writes/merges
+   the actor LLM blocks (review teamlead/lens/synthesize; reconstruct actors when
+   `--auth` is given) into the `settings.json/v3` chain (user seat by default, `--project`
+   for the project seat), which remains the sole canonical authority for provider/route
+   resolution. It embeds no provider/auth/model default (fails loud if missing —
+   INV-CFG-1), writes only `api_key_env` (never the key itself), and validates through
+   the real settings loader before an atomic write. No new settings authority or
+   precedence is introduced — the bundle UI is a convenience front-end over the same keys.
 3. **Tool consolidation + profiles.** ✅ **Implemented 2026-06-14** (`src/mcp/`,
    `tool-surface.test.ts`). Reduce 16 → 12 by merging near-duplicate entry
    points on existing axes (no new operation concepts), and expose a bounded
