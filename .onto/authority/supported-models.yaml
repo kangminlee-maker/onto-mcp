@@ -1,0 +1,27 @@
+# Supported model registry — authority SSOT for selectable LLM models.
+#
+# Only models whose support has been verified by a benchmark (a benchmark record
+# shows the model completing a pipeline run end to end) may be listed here.
+# settings.json model selection is validated against this registry by the
+# supported-model gate (assertSettingsModelsSupported): at the reconstruct live
+# execution boundary (real provider calls) and by the `check:supported-models`
+# (G7) guard on the committed config (every seat). Review-side runtime
+# enforcement is a noted follow-up, so the runtime gate is wired on the
+# reconstruct live path only today. A (provider, model) pair not listed here is
+# rejected fail-loud at those gate points. Settings resolution itself is a pure
+# projection and does not enforce this gate.
+#
+# To add a model: run the benchmark, confirm a completed run, then add an entry
+# citing the benchmark record under benchmark_evidence_refs. Curated by humans;
+# the citation is the evidence, the entry is the authority.
+schema_version: "1"
+supported_models:
+  - provider: openai
+    model: gpt-5.5
+    verified_at: "2026-06-13"
+    benchmark_evidence_refs:
+      - development-records/benchmark/reconstruct-pipeline-live-20260613.json
+    notes: >-
+      Completed a full reconstruct pipeline run in the live medium baseline
+      (1 of 6 attempts completed end to end); support verified. Performance
+      evidence is PRELIMINARY in that record — support, not a performance claim.

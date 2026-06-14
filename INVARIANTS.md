@@ -45,6 +45,13 @@
 - **강제**: 역량 경계(벤치마크 하니스 게이트) + 지침. `↔ AGENTS §0-5`
 - **검증**: 하니스가 반복·fixture 조건 미충족 시 결론 출력을 거부한다. 관련 코드: [scripts/review-pipeline-benchmark.ts](scripts/review-pipeline-benchmark.ts). 상세 요구: [docs/architecture/benchmark-harness-requirements.md](docs/architecture/benchmark-harness-requirements.md).
 
+## INV-MODEL-1 — 모델 선택은 벤치마크로 지원 검증된 모델만
+- **규칙**: settings.json에서 선택 가능한 LLM 모델은 권위 레지스트리 [.onto/authority/supported-models.yaml](.onto/authority/supported-models.yaml)에 등록된 `(provider, model)`로 한정한다. 레지스트리에는 벤치마크 기록이 파이프라인 완주를 입증한 모델만(사람 큐레이션, 벤치마크 record 인용) 올린다. 미등록 모델 선택은 supported-model 게이트가 reconstruct live 실행 경계(실제 provider 호출)와 G7 가드(커밋된 모든 seat)에서 fail-loud로 거부한다. review 런타임 강제는 후속 과제이므로 런타임 게이트는 현재 reconstruct live 경로에만 배선돼 있고, review의 커밋 seat은 G7가 커버한다. settings 해석(`resolveSettingsChain`)은 순수 projection이며 이 게이트를 적용하지 않는다(게이트≠projection — mock/test 해석이 임의 fixture 모델로 통과할 수 있게).
+- **근거**: 검증되지 않은 모델로 운영하면 파이프라인 안정성·품질 기준선이 무근거로 흔들린다. "지원함"은 벤치마크 증거로만 확립한다.
+- **현재 source**: 권위 = `.onto/authority/supported-models.yaml`. runtime 게이트 = `assertSettingsModelsSupported`([settings-chain.ts](src/core-runtime/discovery/settings-chain.ts)) — 멤버십 검사는 [supported-models.ts](src/core-runtime/discovery/supported-models.ts)의 `assertSupportedModelRoutes`. 호출 지점: reconstruct live 실행 경계(`!mockRealizationEnabled`, [reconstruct-api.ts](src/core-api/reconstruct-api.ts))와 G7 가드. `resolveSettingsChain`은 게이트를 적용하지 않는다.
+- **강제**: 역량 경계(reconstruct live 실행 경계에서 fail-loud 거부) + G7 가드. `↔ AGENTS §0-2`(.onto/settings.json 스키마/계약 변경은 사람 승인).
+- **검증**: `npm run check:supported-models` — 커밋된 .onto/settings.json의 모든 모델이 레지스트리에 있는지 검사, 위반 시 비-0.
+
 ## INV-EXP-1 — 비교 실험은 한 번에 한 변수만 바꾼다
 - **규칙**: A/B 비교 시 한 번에 하나의 변수만 변경한다. 두 변수를 동시에 비교해야 하면 2×2 이상의 매트릭스로 효과를 분리한다.
 - **근거**: 한 비교에서 두 변수를 동시에 바꾸면 개선의 출처를 분리할 수 없다.
@@ -81,5 +88,6 @@
 | G4 보호 키 변경 마커 | INV-AUTH-1, INV-CFG-1, INV-MATERIAL-1 | `npm run check:invariant-change [-- baseRef]` + CI |
 | G5 벤치마크 게이트 | INV-BENCH-1, INV-EXP-1 | 하니스 내장(decision gate: runs≥3·fixtures≥2 미충족 시 `comparison_conclusion=null` + PRELIMINARY) |
 | G6 드리프트 리포트 | 집계 | `npm run check:invariant-drift [-- baseRef]` |
+| G7 지원 모델 가드 | INV-MODEL-1 | `npm run check:supported-models` (커밋된 settings.json ⊆ supported-models.yaml; runtime도 reconstruct live 실행 경계에서 동일 게이트 `assertSettingsModelsSupported` 호출) |
 
 INV-LOOP-1·INV-SCOPE-1은 지침 강제로 남는다(무인 루프·스코프 판단은 구조화 대상 아님).

@@ -42,6 +42,7 @@ import {
   isReconstructMockLlmRealizationEnabled,
 } from "../core-runtime/reconstruct/mock-llm-realization.js";
 import {
+  assertSettingsModelsSupported,
   resolveSettingsChain,
   resolveReconstructActorLlmSettings,
 } from "../core-runtime/discovery/settings-chain.js";
@@ -558,6 +559,13 @@ export function createOntoReconstructCoreApi(
         assertReconstructDomainId(request.domain, "reconstruct domain");
       }
       const mockRealizationEnabled = isReconstructMockLlmRealizationEnabled();
+      // INV-MODEL-1: a live (paid) reconstruct run may only select models a
+      // benchmark verified as supported (authority: supported-models.yaml). Mock
+      // realization makes no real provider calls, so it is exempt — the gate is
+      // about real model spending, not settings shape.
+      if (!mockRealizationEnabled) {
+        assertSettingsModelsSupported(settings);
+      }
       // Mock realization needs no provider config: actor llm settings stay
       // required only for live direct_call execution, and the recorded route
       // comes from the mock result marker, not from a configured provider.

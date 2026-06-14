@@ -24,3 +24,5 @@ jobs:
         run: npx vitest run --reporter=dot invariant.test
       - name: G4 protected key change marker (INV-AUTH-1, INV-CFG-1, INV-MATERIAL-1)
         run: npx tsx scripts/check-invariant-change-marker.ts "origin/${{ github.base_ref }}"
+      - name: G7 supported-model guard (INV-MODEL-1)
+        run: npx tsx scripts/check-supported-models.ts
