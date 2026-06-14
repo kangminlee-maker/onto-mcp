@@ -14,19 +14,25 @@ import crypto from "node:crypto";
 import type { ReconstructStageId } from "./artifact-types.js";
 import type {
   PipelineExecutionAttemptKind,
+  PipelineExecutionAttemptKindKnown,
   PipelineExecutionFailureClass,
+  PipelineExecutionFailureClassKnown,
   PipelineUnitExecutionTelemetry,
 } from "../pipeline-execution-ledger.js";
 
+// Open (stored/consumed) aliases.
 export type ReconstructExecutionAttemptKind = PipelineExecutionAttemptKind;
 export type ReconstructExecutionFailureClass = PipelineExecutionFailureClass;
+// Closed (producer) aliases — recordLlmAttempt accepts only known members.
+export type ReconstructExecutionAttemptKindKnown = PipelineExecutionAttemptKindKnown;
+export type ReconstructExecutionFailureClassKnown = PipelineExecutionFailureClassKnown;
 export type ReconstructUnitExecutionTelemetry = PipelineUnitExecutionTelemetry;
 
 export interface RecordReconstructLlmAttemptInput {
   unitId: ReconstructStageId;
-  kind: ReconstructExecutionAttemptKind;
+  kind: ReconstructExecutionAttemptKindKnown;
   status: "succeeded" | "failed";
-  failureClass?: ReconstructExecutionFailureClass | null;
+  failureClass?: ReconstructExecutionFailureClassKnown | null;
   failureMessage?: string | null;
   durationMs: number;
   promptChars: number;
@@ -43,6 +49,16 @@ export interface RecordReconstructLlmAttemptInput {
 
 export interface ReconstructExecutionTelemetryCollector {
   recordLlmAttempt(input: RecordReconstructLlmAttemptInput): void;
+  /**
+   * Records a deterministic validation-gate rejection of an authored artifact
+   * (recorded before a validation-feedback retry). Appends a failed
+   * `schema_validation_failure` attempt so a recovered unit's lineage still
+   * shows the validation miss for S1/S2, but does not count as an LLM call (no
+   * `llm_call_count` or size contribution). The LLM has no authority over it.
+   */
+  recordValidationGateFailure(
+    input: { unitId: ReconstructStageId; failureMessage: string },
+  ): void;
   recordBatchCount(unitId: ReconstructStageId, batchCount: number): void;
   unitTelemetry(unitId: string): ReconstructUnitExecutionTelemetry | null;
   allUnitTelemetry(): ReconstructUnitExecutionTelemetry[];
@@ -117,7 +133,7 @@ export function unitIdForAuthoredArtifactName(
 
 export function attemptKindForAuthoredArtifactName(
   artifactName: string,
-): ReconstructExecutionAttemptKind {
+): ReconstructExecutionAttemptKindKnown {
   if (artifactName.endsWith("MinimalKernel")) return "timeout_recovery";
   if (artifactName.endsWith("Repair")) return "semantic_repair";
   return "initial";
@@ -126,7 +142,7 @@ export function attemptKindForAuthoredArtifactName(
 export function failureClassForLlmCallError(
   error: unknown,
   isTimeout: (error: unknown) => boolean,
-): ReconstructExecutionFailureClass {
+): ReconstructExecutionFailureClassKnown {
   return isTimeout(error) ? "timeout" : "provider_error";
 }
 
@@ -210,6 +226,18 @@ export function createReconstructExecutionTelemetryCollector(): ReconstructExecu
         failure_message:
           input.status === "failed" ? input.failureMessage ?? null : null,
         duration_ms: Math.max(0, Math.round(input.durationMs)),
+      });
+    },
+    recordValidationGateFailure(input) {
+      const row = unitRow(input.unitId);
+      row.attempt_count += 1;
+      row.attempts.push({
+        attempt: row.attempt_count,
+        kind: "validation_gate",
+        status: "failed",
+        failure_class: "schema_validation_failure",
+        failure_message: input.failureMessage,
+        duration_ms: 0,
       });
     },
     recordBatchCount(unitId, batchCount) {

@@ -20,18 +20,36 @@ export type PipelineExecutionTrustStatus =
   | "untrusted"
   | "blocked_by_upstream";
 
-export type PipelineExecutionAttemptKind =
+// Producers emit only these known members — the closed sets a producer API
+// (e.g. recordLlmAttempt) should accept, so a typo is a type error.
+export type PipelineExecutionAttemptKindKnown =
   | "initial"
   | "parse_repair"
   | "semantic_repair"
-  | "timeout_recovery";
+  | "timeout_recovery"
+  | "validation_gate";
 
-export type PipelineExecutionFailureClass =
+export type PipelineExecutionFailureClassKnown =
   | "malformed_json"
   | "parse_repair_failure"
   | "schema_validation_failure"
   | "timeout"
   | "provider_error";
+
+// Additively-extensible, forward-compatible open sets for the STORED/CONSUMED
+// field (see pipeline-execution-ledger-contract.md): handling LLM input/output
+// is a cross-pipeline concern and LLM failure/recovery shapes are not under our
+// control, so the set grows over time. The known members carry meaning and
+// autocomplete; `(string & {})` keeps the read shape open so a consumer reading
+// a newer producer's value type-checks (tolerate, don't reject) without a
+// schemaVersion bump. Producers still emit only the *Known members above.
+export type PipelineExecutionAttemptKind =
+  | PipelineExecutionAttemptKindKnown
+  | (string & {});
+
+export type PipelineExecutionFailureClass =
+  | PipelineExecutionFailureClassKnown
+  | (string & {});
 
 export interface PipelineExecutionAttempt {
   attempt: number;

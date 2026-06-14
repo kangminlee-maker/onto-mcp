@@ -6,6 +6,7 @@ import {
   mergedUnitExecutionTelemetry,
   terminalFailureMessageFromTelemetry,
   unitIdForAuthoredArtifactName,
+  type ReconstructUnitExecutionTelemetry,
 } from "./execution-telemetry.js";
 
 describe("reconstruct execution telemetry", () => {
@@ -246,5 +247,142 @@ describe("reconstruct execution telemetry", () => {
       mergedUnitExecutionTelemetry([author, provider], "ontology_seed"),
     ).toBeNull();
     expect(mergedUnitExecutionTelemetry([undefined, undefined], "x")).toBeNull();
+  });
+
+  it("records a validation-gate miss as a failed attempt without counting an LLM call", () => {
+    const collector = createReconstructExecutionTelemetryCollector();
+    collector.recordLlmAttempt({
+      unitId: "competency_questions",
+      kind: "initial",
+      status: "succeeded",
+      durationMs: 50,
+      promptChars: 100,
+      outputChars: 100,
+      artifactName: "CompetencyQuestions",
+    });
+    collector.recordValidationGateFailure({
+      unitId: "competency_questions",
+      failureMessage: "missing_required_coverage (ontology_representation_formalism)",
+    });
+    collector.recordLlmAttempt({
+      unitId: "competency_questions",
+      kind: "semantic_repair",
+      status: "succeeded",
+      durationMs: 60,
+      promptChars: 120,
+      outputChars: 140,
+      artifactName: "CompetencyQuestionsValidationRepair",
+    });
+    const row = collector.unitTelemetry("competency_questions");
+    // The validation miss is visible in the lineage but is not an LLM call and
+    // does not contribute to the size counters.
+    expect(row?.llm_call_count).toBe(2);
+    expect(row?.attempt_count).toBe(3);
+    expect(row?.prompt_chars).toBe(220);
+    expect(row?.output_chars).toBe(240);
+    expect(row?.attempts).toEqual([
+      {
+        attempt: 1,
+        kind: "initial",
+        status: "succeeded",
+        failure_class: null,
+        failure_message: null,
+        duration_ms: 50,
+      },
+      {
+        attempt: 2,
+        kind: "validation_gate",
+        status: "failed",
+        failure_class: "schema_validation_failure",
+        failure_message:
+          "missing_required_coverage (ontology_representation_formalism)",
+        duration_ms: 0,
+      },
+      {
+        attempt: 3,
+        kind: "semantic_repair",
+        status: "succeeded",
+        failure_class: null,
+        failure_message: null,
+        duration_ms: 60,
+      },
+    ]);
+    // The unit recovered (terminal attempt succeeded).
+    expect(terminalFailureMessageFromTelemetry(row)).toBeNull();
+  });
+
+  it("surfaces the terminal validation-gate rejection when repair output stays invalid", () => {
+    // first miss -> repair (LLM call succeeds) -> still invalid -> terminal gate
+    // rejection. The unit halts here, so the terminal failure summary must report
+    // the validation rejection, not the succeeded repair call.
+    const collector = createReconstructExecutionTelemetryCollector();
+    collector.recordLlmAttempt({
+      unitId: "ontology_seed",
+      kind: "initial",
+      status: "succeeded",
+      durationMs: 5,
+      promptChars: 10,
+      outputChars: 10,
+    });
+    collector.recordValidationGateFailure({
+      unitId: "ontology_seed",
+      failureMessage: "first miss",
+    });
+    collector.recordLlmAttempt({
+      unitId: "ontology_seed",
+      kind: "semantic_repair",
+      status: "succeeded",
+      durationMs: 5,
+      promptChars: 10,
+      outputChars: 10,
+    });
+    collector.recordValidationGateFailure({
+      unitId: "ontology_seed",
+      failureMessage: "still invalid after repair",
+    });
+    const row = collector.unitTelemetry("ontology_seed");
+    expect(row?.attempts.map((attempt) => attempt.kind)).toEqual([
+      "initial",
+      "validation_gate",
+      "semantic_repair",
+      "validation_gate",
+    ]);
+    expect(terminalFailureMessageFromTelemetry(row))
+      .toBe("still invalid after repair");
+  });
+
+  it("tolerates an unknown (future) attempt kind / failure class at the consumer boundary", () => {
+    // The kind/failure_class sets are additively-extensible and forward-
+    // compatible at the STORED/read shape: a consumer reading a manifest a newer
+    // producer wrote must record/pass an unknown value through, not reject it.
+    // (Producers stay closed — recordLlmAttempt's input rejects unknown kinds.)
+    const telemetry: ReconstructUnitExecutionTelemetry = {
+      unit_id: "ontology_seed",
+      llm_call_count: 1,
+      duration_ms: 7,
+      prompt_chars: 3,
+      output_chars: 0,
+      provider_tokens_in: null,
+      provider_tokens_out: null,
+      provider_route: null,
+      model_id: null,
+      effort: null,
+      prompt_policy_sha256: null,
+      source_identity_refs: [],
+      attempt_count: 1,
+      attempts: [
+        {
+          attempt: 1,
+          kind: "future_attempt_kind",
+          status: "failed",
+          failure_class: "future_failure_class",
+          failure_message: "emitted by a newer producer",
+          duration_ms: 7,
+        },
+      ],
+      batch_count: null,
+    };
+    expect(terminalFailureMessageFromTelemetry(telemetry))
+      .toBe("emitted by a newer producer");
   });
 });

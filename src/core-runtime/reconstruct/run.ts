@@ -10537,6 +10537,12 @@ export async function runReconstruct(
       outputPath: ontologySeedValidationPath,
     });
   if (ontologySeedValidation.validation_status === "invalid") {
+    directiveAuthor.executionTelemetry?.recordValidationGateFailure({
+      unitId: "ontology_seed",
+      failureMessage: validationDetailSummary(
+        ontologySeedValidation as unknown as Record<string, unknown>,
+      ),
+    });
     const repairAttemptId = "ontology-seed-repair-1";
     const repairInputPath = path.join(sessionRoot, `${repairAttemptId}.input.yaml`);
     const repairInputValidationPath = path.join(
@@ -10570,6 +10576,16 @@ export async function runReconstruct(
       registryPath: contractRegistryPath,
       outputPath: ontologySeedValidationPath,
     });
+    if (ontologySeedValidation.validation_status === "invalid") {
+      // The repair output is still invalid: record the terminal validation-gate
+      // rejection so the failed unit's lineage ends at the gate that halts it.
+      directiveAuthor.executionTelemetry?.recordValidationGateFailure({
+        unitId: "ontology_seed",
+        failureMessage: validationDetailSummary(
+          ontologySeedValidation as unknown as Record<string, unknown>,
+        ),
+      });
+    }
   }
   assertRuntimeValidationValid({
     artifactName: "ontology-seed",
@@ -10695,6 +10711,12 @@ export async function runReconstruct(
     });
   let competencyQuestionsValidation = await writeCompetencyQuestionsValidation();
   if (competencyQuestionsValidation.validation_status === "invalid") {
+    directiveAuthor.executionTelemetry?.recordValidationGateFailure({
+      unitId: "competency_questions",
+      failureMessage: validationDetailSummary(
+        competencyQuestionsValidation as unknown as Record<string, unknown>,
+      ),
+    });
     const repairAttemptId = "competency-questions-repair-1";
     const repairInputPath = path.join(sessionRoot, `${repairAttemptId}.input.yaml`);
     const repairInputValidationPath = path.join(
@@ -10724,6 +10746,16 @@ export async function runReconstruct(
       });
     }
     competencyQuestionsValidation = await writeCompetencyQuestionsValidation();
+    if (competencyQuestionsValidation.validation_status === "invalid") {
+      // The repair output is still invalid: record the terminal validation-gate
+      // rejection so the failed unit's lineage ends at the gate that halts it.
+      directiveAuthor.executionTelemetry?.recordValidationGateFailure({
+        unitId: "competency_questions",
+        failureMessage: validationDetailSummary(
+          competencyQuestionsValidation as unknown as Record<string, unknown>,
+        ),
+      });
+    }
   }
   assertRuntimeValidationValid({
     artifactName: "competency-questions",
