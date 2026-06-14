@@ -9,26 +9,35 @@ small set of tools with a stable MCP surface.
 |---|---|---|
 | `onto_review` | Start and optionally run a review | session id, status, run handle, artifact refs, `resultClassificationSummary`, `llmPresentation` prompts |
 | `onto_prepare_review` | Materialize interpretation, binding, plan, and prompt packets without executing lenses | execution plan refs, opening brief prompt |
-| `onto_review_status` | Read progress for a review session or recover the latest matching session | structured status plus `llmPresentation.progress`, liveness, run-control, material-support, warning, and latest-session projections |
 | `onto_review_continue` | Continue a review when `runControl.continuationAvailable` is true without re-running trusted or active units | continuation plan, continuation attempt refs, updated artifact refs, status, or `already_running` decision |
 | `onto_review_round` | Host orchestration (B): return the units ready to execute now with prompt packets materialized; onto does not execute them | round result (`in_progress` ready units / `ready_to_assemble` / `halted`), packet refs |
 | `onto_review_advance` | Host orchestration (B): report host-executed units; onto validates seats, records results and gates, returns the next round or assembles the `ReviewRecord` | next round result or assembled record refs |
 | `onto_review_cancel` | Request cancellation for a running review session | cancellation request artifact ref plus updated status/run-control projection |
-| `onto_review_result` | Read final result and artifact refs | compact/standard/full projection; `compact` and `standard` keep bounded count-and-signal summaries, `full` includes `review-record.yaml` and `final-output.md` |
-| `onto_list_lenses` | Show canonical lens sets | full/core-axis lens IDs |
-| `onto_list_domains` | Show available domains | domain IDs and source dirs |
-| `onto_list_source_profiles` | Show reconstruct source profiles | source profile refs keyed by `target_material_kind` |
+| `onto_review_read` | Read a review session: recovery/liveness status while running (`sessionRoot` or `latest=true`), and the bounded result once terminal. Routes by session state so a running session never errors | status/liveness/run-control/continuation projection at `compact`; result projection at `standard`/`full` once complete (`full` adds `review-record.yaml` and `final-output.md`), falling back to status while running |
 | `onto_observe_source` | Materialize reconstruct source observations | `target-material-profile.yaml`, `source-inventory.yaml`, `source-observations.yaml`, initial `reconstruct-record.yaml` |
 | `onto_validate_reconstruct_directive` | Validate LLM-authored reconstruct directive files | validation artifact with status and violations |
 | `onto_reconstruct` | Run the material-aware reconstruct post-Seed artifact loop with direct-call semantic/confirmation realization | post-Seed artifacts, `final-output.md`, `reconstruct-run-manifest.yaml`, `reconstruct-record.yaml` |
-| `onto_reconstruct_status` | Read reconstruct progress/result state | record stage, stage progress, liveness, count summary, and artifact refs |
-| `onto_reconstruct_result` | Read reconstruct result artifacts | record, run manifest, progress projection, and final output text |
+| `onto_reconstruct_read` | Read a reconstruct session: stage progress, liveness, count summary at `compact`/`standard`; full record, run manifest, and final output at `full` | record stage, stage progress, liveness, count summary, and artifact refs; `full` adds run manifest and final output text |
+| `onto_list` | List a registry by `kind`: `lenses`, `domains`, or `source_profiles` | full/core-axis lens IDs, domain IDs, or source profile refs keyed by `target_material_kind` |
+
+**Profiles & compatibility.** `tools/list` advertises the **full** profile (all 12)
+by default; set `ONTO_MCP_PROFILE=simple` (the `.mcpb` desktop bundle) to advertise the
+bounded **simple** profile of 8 — `onto_review`, `onto_review_read`, `onto_review_cancel`,
+`onto_reconstruct`, `onto_observe_source`, `onto_validate_reconstruct_directive`,
+`onto_reconstruct_read`, `onto_list` — which hides advanced orchestration but keeps
+cancellation. The pre-consolidation names (`onto_review_status`/`onto_review_result`,
+`onto_reconstruct_status`/`onto_reconstruct_result`,
+`onto_list_lenses`/`onto_list_domains`/`onto_list_source_profiles`) remain callable as
+stable compatibility aliases in either profile but are not advertised.
 
 ## Host Usability Roadmap (Planned)
 
-> Status: Accepted direction (2026-06-13), **not yet implemented**. Extends DD-010.
-> The 16-tool surface above remains the implemented reality until each item below
-> lands. This section records the decided direction for review, not current behavior.
+> Status: Accepted direction (2026-06-13). Tool consolidation + profiles (Phase 1
+> item 3) **implemented 2026-06-14** and reflected in the Tool Set above (12-tool
+> surface + simple/full profiles + deprecated aliases). The remaining Phase 1 items
+> (polling acceptance contract, provider `user_config`, `.mcpb` packaging) and all of
+> Phase 2 are **not yet implemented**. Extends DD-010. The Tool Set above records
+> current behavior; the items below record the decided direction.
 > Hardened against onto self-review `20260613-d1c99dba` (6 medium design-completeness
 > gaps incorporated: over-window contract, `onto_review_read` responsibility map,
 > simple-profile run-control, read-merge basis, Phase 2 authority decomposition, and
@@ -92,7 +101,8 @@ packaging changes only.
    into the `settings.json/v3` chain, which remains the sole canonical authority for
    provider/route resolution. No new settings authority or precedence is introduced —
    the bundle UI is a convenience front-end over the same keys.
-3. **Tool consolidation + profiles.** Reduce 16 → 12 by merging near-duplicate entry
+3. **Tool consolidation + profiles.** ✅ **Implemented 2026-06-14** (`src/mcp/`,
+   `tool-surface.test.ts`). Reduce 16 → 12 by merging near-duplicate entry
    points on existing axes (no new operation concepts), and expose a bounded
    **simple** profile for chat hosts vs the **full** profile for agentic hosts.
    Profiles are bounded views over the same Core API (per
@@ -111,11 +121,11 @@ simple profile (8): `onto_review`, `onto_review_read`, `onto_review_cancel`,
 `onto_reconstruct_read`, `onto_list`.
 
 **`onto_review_read` responsibility map** (resolves the `*_status`/`*_result` merge).
-Tense bridge: until Phase 1 lands, `onto_review_status` remains the **current** canonical
-read/polling surface — the "Long-Running Review Recovery" and "Non-Goals" sections below
-describe current behavior and are not retroactively changed; `onto_review_read` is the
-**planned** successor. The merge is two read *modes* under one entry point; the merged
-tool owns both, and it does not drop any `*_status` responsibility:
+Read-surface authority (implemented 2026-06-14): `onto_review_read` is the canonical
+read/polling surface across this doc; `onto_review_status` / `onto_review_result` are
+deprecated aliases (see Profiles & compatibility). The merge is two read *modes* under
+one entry point; the merged tool owns both, and it does not drop any `*_status`
+responsibility:
 - **Recovery/liveness mode** (was `onto_review_status`): `latest=true` recovery,
   run-control/lifecycle state, liveness, continuation visibility, `compact` polling
   payload. This stays the canonical, public, fallback read surface.
@@ -195,7 +205,8 @@ active attempt metadata. The artifact truth remains the session root:
 `session-metadata.yaml`, `execution-plan.yaml`, `execution-result.yaml`,
 `review-run-manifest.yaml`, `review-record.yaml`, and related review artifacts.
 
-`onto_review_status` is the canonical polling and recovery surface. Callers can
+`onto_review_read` is the canonical polling and recovery surface (`onto_review_status`
+is a deprecated alias). Callers can
 pass `sessionRoot`, or pass `latest=true` with optional `target`, `domain`, and
 `requestHash` filters to recover the newest matching session under
 `projectRoot`. The latest-session lookup does not infer review findings; it only
@@ -251,7 +262,7 @@ The public concept is `review_continue`, not subagent management. The runtime
 continues artifact-backed review units: lens units, issue artifact units,
 per-lens deliberation units, teamlead controlled deliberation, and synthesize.
 
-`onto_review_status` remains the read surface. When
+`onto_review_read` remains the read surface. When
 `runControl.continuationAvailable` is true, including prepared, halted, failed
 attempt, and stale-active states, it exposes a derived `continuationPlan`
 projection: which artifacts are reusable, which unit is missing or failed, which
@@ -292,12 +303,11 @@ not make the runtime an ontology meaning author:
 
 | Tool | Purpose |
 |---|---|
-| `onto_list_source_profiles` | list reconstruct source profiles by `target_material_kind` and support status |
+| `onto_list` (`kind="source_profiles"`) | list reconstruct source profiles by `target_material_kind` and support status |
 | `onto_observe_source` | return deterministic material-structure observations |
 | `onto_validate_reconstruct_directive` | validate LLM-authored reconstruct directives |
 | `onto_reconstruct` | orchestrate the post-Seed artifact loop through direct-call `semanticAuthorRealization` and `confirmationProviderRealization` |
-| `onto_reconstruct_status` | read the current `reconstruct-record.yaml` plus stage progress, liveness, and count summary projection |
-| `onto_reconstruct_result` | return the record, run manifest, progress projection, and final output text |
+| `onto_reconstruct_read` | read the current `reconstruct-record.yaml` plus stage progress, liveness, and count summary (`compact`/`standard`); the record, run manifest, progress projection, and final output text at `full` |
 
 These tools should be added through the bounded Core API facade in
 `src/core-api/reconstruct-api.ts`. The facade covers source-profile listing,
@@ -305,7 +315,7 @@ preparation artifact materialization, directive validation, post-Seed run
 orchestration, status, and result reads; MCP schemas should remain a thin
 projection over that surface.
 
-`onto_reconstruct_status` and `onto_reconstruct_result` should use the same
+`onto_reconstruct_read` should use the same
 shared `PipelineExecutionLedger` trust/provenance model when reconstruct
 stage validation expands. LLM-authored reconstruct artifacts are not trusted
 merely because they exist; the matching runtime validation unit must complete.
@@ -349,7 +359,7 @@ host LLM and user-mediated flow.
 - MCP native progress is transport only. When a caller supplies
   `_meta.progressToken` on `onto_review`, the server emits
   `notifications/progress` with versioned `ontoReviewProgress` metadata. The
-  canonical read surface remains `onto_review_status`, and progress step ids
+  canonical read surface remains `onto_review_read`, and progress step ids
   come from the shared runtime progress contract projected into
   `review-run-manifest.yaml`.
 - MCP does not create a second materiality concept. Result materiality is the
