@@ -173,14 +173,15 @@ right fix for this subset — it would only re-roll the author and occasionally 
 heading. The correct fix is **deterministic**: a single owner of `## `-section semantics
 (`reconstruct/markdown-section.ts`) so the append guard and the validator share one exact-line rule and
 cannot drift, with section discoverability made a **helper-owned** invariant (heading derived from
-content's first line; non-canonical forms rejected fail-loud). This is L1a (PR #48): zero added LLM
-cost, removes the largest failure class at its root, gated by `onto_review` core-axis material-0.
+content's first line; non-canonical forms rejected fail-loud). This is L1a (merged PR #49; the
+entangled PR #48 was closed): zero added LLM cost, removes the largest failure class at its root,
+gated by `onto_review` core-axis material-0.
 
 **Revised L1 split:**
 
 | Slice | Failure subset | Mechanism | Status |
 |---|---|---|---|
-| **L1a** | `final_output` provenance (3/5) | deterministic append↔validator alignment | done (PR #48) |
+| **L1a** | `final_output` provenance (3/5) | deterministic append↔validator alignment | merged (PR #49) |
 | **L1b** | `ontology_seed` semantic (1/5), `competency_questions` coverage (1/5) | bounded validation-feedback retry (generalize the existing `ontology_seed` 1-attempt repair) | next |
 
 The ~17% completion baseline remains the measurement reference; L1a's contribution is measured by the
