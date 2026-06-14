@@ -18,6 +18,12 @@ from "first in sequence" to "prerequisite for a reliably green medium-effort run
 The Phase 1 gate (record committed; top bottleneck units identified) is met, and the evidence
 reprioritizes the Phase 2 entry (see §6).
 
+> **Addendum (2026-06-14, L1a):** Implementing L1 revealed that the **3× `final_output` provenance**
+> failures below were *not* a retry/convergence gap — they were a deterministic **append↔validator
+> matching bug** (substring guard vs exact-line discovery) that a retry would only flakily mask. They
+> are fixed deterministically in L1a; only the remaining 2/5 (`ontology_seed` semantic,
+> `competency_questions` coverage) are genuine validation-feedback-retry targets (L1b). See §8.
+
 ## 1. Run conditions (reproducible)
 
 - Harness: `npm run benchmark:reconstruct:pipeline -- --realization live --runs 3 --effort medium`
@@ -145,3 +151,38 @@ The design already ordered **L1 first**; the live evidence makes the *reason* co
 **Next:** enter Phase 2 with **L1** (generate-and-validate alignment + bounded validation-feedback
 retry, per design §6 L1), measured against the ~17% live completion baseline; each lever PR gated by
 `onto_review` core-axis material-issue-0 (design §7).
+
+## 8. Addendum — L1a root-cause refinement (2026-06-14)
+
+Implementing L1 against the §2 inventory surfaced that the dominant failure class was misdiagnosed in
+the heat of the baseline as "no validation-feedback retry." The actual mechanism for the **3×
+`final_output` provenance** failures (60% of all failures) is a deterministic alignment bug:
+
+- The five `appendFinalOutput*` helpers guarded section presence with
+  `finalOutputText.includes("## Claim Projection")` — a **substring** test.
+- The in-place replace and the provenance validator (`markdownSectionText`) locate the section by
+  **exact trimmed line** match (`line.trim() === "## Claim Projection"`).
+- When the LLM author emitted a colliding heading (`### Claim Projection`, `## Claim Projection
+  Notes`), the `includes` guard reported "present", the replace path found no exact line and returned
+  the text **unchanged**, so the runtime's canonical provenance section was **never inserted** — and
+  the validator then hard-halted with "missing provenance-bound section." Input-dependent, which is
+  exactly why one run passed and three failed with identical wording.
+
+Implication for the §3 coverage table and §6 framing: a validation-feedback retry would *not* be the
+right fix for this subset — it would only re-roll the author and occasionally avoid the colliding
+heading. The correct fix is **deterministic**: a single owner of `## `-section semantics
+(`reconstruct/markdown-section.ts`) so the append guard and the validator share one exact-line rule and
+cannot drift, with section discoverability made a **helper-owned** invariant (heading derived from
+content's first line; non-canonical forms rejected fail-loud). This is L1a (PR #48): zero added LLM
+cost, removes the largest failure class at its root, gated by `onto_review` core-axis material-0.
+
+**Revised L1 split:**
+
+| Slice | Failure subset | Mechanism | Status |
+|---|---|---|---|
+| **L1a** | `final_output` provenance (3/5) | deterministic append↔validator alignment | done (PR #48) |
+| **L1b** | `ontology_seed` semantic (1/5), `competency_questions` coverage (1/5) | bounded validation-feedback retry (generalize the existing `ontology_seed` 1-attempt repair) | next |
+
+The ~17% completion baseline remains the measurement reference; L1a's contribution is measured by the
+disappearance of the `final_output_provenance` class, L1b's by recovery of the remaining author-owned
+semantic failures.
