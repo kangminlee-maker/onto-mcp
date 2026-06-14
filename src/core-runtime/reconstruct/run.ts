@@ -111,6 +111,7 @@ import {
   writeRevisionProposalValidationArtifact,
   writeSeedConfirmationValidationForOntologySeedArtifact,
 } from "./post-seed-validation.js";
+import { upsertMarkdownSection } from "./markdown-section.js";
 import { assembleReconstructRecord } from "./record.js";
 import {
   collectOntologySeedRefs,
@@ -9033,27 +9034,7 @@ function appendFinalOutputProvenanceFooter(
     ...requiredFragments.map((fragment) => `- ${fragment}`),
     "",
   ].join("\n");
-  if (finalOutputText.includes(heading)) {
-    const lines = finalOutputText.split(/\r?\n/);
-    const start = lines.findIndex((line) => line.trim() === heading);
-    let end = lines.length;
-    for (let index = start + 1; index < lines.length; index += 1) {
-      if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
-        end = index;
-        break;
-      }
-    }
-    return [
-      ...lines.slice(0, start),
-      footer.trimEnd(),
-      ...lines.slice(end),
-    ].join("\n");
-  }
-  return [
-    finalOutputText.trimEnd(),
-    "",
-    footer,
-  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, footer);
 }
 
 function appendFinalOutputProvenanceBindingsSection(
@@ -9072,50 +9053,7 @@ function appendFinalOutputProvenanceBindingsSection(
     ]),
     "",
   ].join("\n");
-  if (!finalOutputText.includes(heading)) {
-    return [
-      finalOutputText.trimEnd(),
-      "",
-      content,
-    ].join("\n");
-  }
-  const lines = finalOutputText.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim() === heading);
-  if (start < 0) return finalOutputText;
-  let end = lines.length;
-  for (let index = start + 1; index < lines.length; index += 1) {
-    if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
-      end = index;
-      break;
-    }
-  }
-  return [
-    ...lines.slice(0, start),
-    content.trimEnd(),
-    ...lines.slice(end),
-  ].join("\n");
-}
-
-function replaceMarkdownSectionContent(
-  markdown: string,
-  heading: string,
-  content: string,
-): string {
-  const lines = markdown.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim() === heading);
-  if (start < 0) return markdown;
-  let end = lines.length;
-  for (let index = start + 1; index < lines.length; index += 1) {
-    if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
-      end = index;
-      break;
-    }
-  }
-  return [
-    ...lines.slice(0, start),
-    content.trimEnd(),
-    ...lines.slice(end),
-  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, content);
 }
 
 function appendFinalOutputAnswerabilitySection(
@@ -9128,22 +9066,7 @@ function appendFinalOutputAnswerabilitySection(
     ...ontologySeedSummaryLines(ontologySeed),
     "",
   ].join("\n");
-  if (
-    finalOutputText.split(/\r?\n/).some((line) =>
-      line.trim() === "## Seed Answerability"
-    )
-  ) {
-    return replaceMarkdownSectionContent(
-      finalOutputText,
-      "## Seed Answerability",
-      content,
-    );
-  }
-  return [
-    finalOutputText.trimEnd(),
-    "",
-    content,
-  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, content);
 }
 
 function appendFinalOutputClaimProjectionSection(
@@ -9185,14 +9108,7 @@ function appendFinalOutputClaimProjectionSection(
     "- The canonical claim projection is generated from the immutable pre-publication run-control checkpoint.",
     "",
   ].join("\n");
-  if (!finalOutputText.includes(heading)) {
-    return [
-      finalOutputText.trimEnd(),
-      "",
-      content,
-    ].join("\n");
-  }
-  return replaceMarkdownSectionContent(finalOutputText, heading, content);
+  return upsertMarkdownSection(finalOutputText, content);
 }
 
 function appendFinalOutputArtifactTruthSection(
@@ -9346,28 +9262,7 @@ function appendFinalOutputArtifactTruthSection(
     `- Reconstruct run manifest: ${args.manifestPath}`,
     "",
   ].join("\n");
-  if (!finalOutputText.includes(heading)) {
-    return [
-      finalOutputText.trimEnd(),
-      "",
-      content,
-    ].join("\n");
-  }
-  const lines = finalOutputText.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim() === heading);
-  if (start < 0) return finalOutputText;
-  let end = lines.length;
-  for (let index = start + 1; index < lines.length; index += 1) {
-    if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
-      end = index;
-      break;
-    }
-  }
-  return [
-    ...lines.slice(0, start),
-    content.trimEnd(),
-    ...lines.slice(end),
-  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, content);
 }
 
 async function writeFinalOutputProvenanceValidationArtifact(args: {
