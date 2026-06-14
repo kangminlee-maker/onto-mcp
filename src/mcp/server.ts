@@ -573,7 +573,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review",
     description:
-      "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly. Long-running: if it returns a running handle (status=running), poll onto_review_read (with the same sessionRoot, or latest=true) until status=completed; onto_review_read returns the result once the review completes (completed/completed_with_degradation). Requires an llm provider configured in .onto/settings.json (or ~/.onto/settings.json); see the onto://usage resource. Read onto://usage first if unsure of the workflow.",
+      "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly. Long-running: if it returns a running handle (status=running), poll onto_review_read (with the same sessionRoot, or latest=true) until the review is no longer running (completed, completed_with_degradation, halted, or failed); onto_review_read returns the result for completed/completed_with_degradation, otherwise the status/failure projection. Requires an llm provider configured in .onto/settings.json (or ~/.onto/settings.json); see the onto://usage resource. Read onto://usage first if unsure of the workflow.",
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
@@ -702,8 +702,8 @@ reported through canonical route visibility. Listing tools needs no provider.
    reviewMode ("core-axis" cheaper, "full"), domain or noDomain=true, lensIds.
 2. review is long-running. If the result status is "running", it returns a run
    handle; poll \`onto_review_read\` (same sessionRoot, or latest=true) until
-   status="completed". Pass projectionLevel="compact" for the smallest polling
-   payload.
+   status is no longer "running" (completed, completed_with_degradation, halted,
+   or failed). Pass projectionLevel="compact" for the smallest polling payload.
 3. \`onto_review_read\` is the single read surface: while running it returns the
    status/liveness projection; once the review completes (completed or
    completed_with_degradation) projectionLevel standard|full returns the bounded
@@ -791,7 +791,7 @@ const PROMPT_DEFINITIONS: PromptDefinition[] = [
       return [
         `Use the onto MCP server to review ${target}.`,
         `Call onto_review with target="${target}", intent="${intent}", reviewMode="${reviewMode}".`,
-        "If the result status is \"running\", poll onto_review_read (same sessionRoot, projectionLevel=compact) until status=completed,",
+        "If the result status is \"running\", poll onto_review_read (same sessionRoot, projectionLevel=compact) until status is no longer running (completed, completed_with_degradation, halted, or failed),",
         "then read onto_review_read (projectionLevel=full) and summarize highest severity, material issues, and action candidates using its llmPresentation.",
         "If unsure about setup or the workflow, read the onto://usage resource first.",
       ].join("\n");
