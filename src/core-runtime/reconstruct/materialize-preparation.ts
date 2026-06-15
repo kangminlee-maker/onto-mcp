@@ -176,7 +176,27 @@ function defaultProfileForKind(
     matchingProfiles[0];
 }
 
-async function textStats(ref: string): Promise<{
+/**
+ * Structural `content_excerpt` capture budgets (chars). Code and other kinds keep
+ * a small leading-sample budget — the observation is a structural sample, not the
+ * whole file. Document prose is captured whole so the document tail (goals,
+ * milestones, decisions) reaches seed authoring instead of being lost to a leading
+ * slice: a typical business/policy document is well within any modern model window
+ * (e.g. ~12.5K chars ≈ ~3K tokens). The 200K cap is a safety ceiling against
+ * pathological inputs; documents that genuinely exceed it are decomposed by a later
+ * stage (see development-records/design/20260616-large-input-observation), not
+ * silently truncated here.
+ */
+const DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT = 6000;
+export const DOCUMENT_EXCERPT_CHAR_LIMIT = 200_000;
+
+function structuralExcerptCharLimit(kind: TargetMaterialKind): number {
+  return kind === "document"
+    ? DOCUMENT_EXCERPT_CHAR_LIMIT
+    : DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;
+}
+
+async function textStats(ref: string, excerptLimit: number): Promise<{
   line_count: number | null;
   char_count: number | null;
   content_sha256: string | null;
@@ -185,7 +205,6 @@ async function textStats(ref: string): Promise<{
 }> {
   try {
     const text = await fs.readFile(ref, "utf8");
-    const excerptLimit = 6000;
     return {
       line_count: text.length === 0 ? 0 : text.split(/\r?\n/).length,
       char_count: text.length,
@@ -218,7 +237,9 @@ export async function buildReconstructSourceObservation(
   const extension = path.extname(detection.ref).toLowerCase();
   const location = detection.ref;
   const stat = await fs.stat(detection.ref);
-  const stats = stat.isFile() ? await textStats(detection.ref) : {
+  const stats = stat.isFile()
+    ? await textStats(detection.ref, structuralExcerptCharLimit(detection.kind))
+    : {
     line_count: null,
     char_count: null,
     content_sha256: null,

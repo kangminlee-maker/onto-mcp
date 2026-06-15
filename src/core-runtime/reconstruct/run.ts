@@ -98,6 +98,7 @@ import {
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
 import {
   buildReconstructSourceObservation,
+  DOCUMENT_EXCERPT_CHAR_LIMIT,
   materializeReconstructPreparationArtifacts,
 } from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
@@ -5341,6 +5342,14 @@ const SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET = 32;
 const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
 const ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT = 64;
 const POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT = 500;
+// INVARIANT: the seed-stage budget (PROMPT_OBSERVATION_EXCERPT_LIMIT) must stay
+// distinct from the bounded budgets (post-seed 500, directive 300). Document excerpt
+// expansion (effectiveContentExcerptCharLimit) keys on that distinct value to scope
+// itself to seed-stage prompts; a colliding budget would wrongly expand document prose
+// inside the bounded aggregate prompts. The literal `const` types keep the values
+// statically distinct, so the seed-stage value can change safely (call sites and the
+// predicate share the same constant) — only deliberately reusing it for a bounded
+// budget would break the scoping.
 const SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS = 5000;
@@ -5353,17 +5362,46 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
+/**
+ * The seed-stage observation budget (`PROMPT_OBSERVATION_EXCERPT_LIMIT`) gives a
+ * document observation its full captured prose so purpose/candidate/seed authoring
+ * reads the whole document, not just its lead — the document tail (goals,
+ * milestones) is where actor/object evidence for seed-authoring readiness lives.
+ * The bounded post-seed maturation catalog (`POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT`)
+ * and the pre-observation directive sample (`SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT`)
+ * deliberately stay small because they aggregate many observations, so document
+ * scaling applies only at the seed-stage budget. Multi-document budget-aware
+ * selection is deferred (see development-records/design/20260616-large-input-observation).
+ */
+function effectiveContentExcerptCharLimit(
+  baseLimit: number | undefined,
+  targetMaterialKind: string | undefined,
+): number | undefined {
+  if (
+    targetMaterialKind === "document" &&
+    baseLimit === PROMPT_OBSERVATION_EXCERPT_LIMIT
+  ) {
+    return DOCUMENT_EXCERPT_CHAR_LIMIT;
+  }
+  return baseLimit;
+}
+
 function compactStructuralDataForPrompt(
   structuralData: Record<string, unknown>,
   contentExcerptCharLimit: number | undefined,
+  targetMaterialKind?: string,
 ): Record<string, unknown> {
-  if (!contentExcerptCharLimit) return structuralData;
+  const limit = effectiveContentExcerptCharLimit(
+    contentExcerptCharLimit,
+    targetMaterialKind,
+  );
+  if (!limit) return structuralData;
   const compacted: Record<string, unknown> = { ...structuralData };
   const excerpt = compacted.content_excerpt;
-  if (typeof excerpt === "string" && excerpt.length > contentExcerptCharLimit) {
-    compacted.content_excerpt = excerpt.slice(0, contentExcerptCharLimit);
+  if (typeof excerpt === "string" && excerpt.length > limit) {
+    compacted.content_excerpt = excerpt.slice(0, limit);
     compacted.prompt_content_excerpt_truncated = true;
-    compacted.prompt_content_excerpt_char_limit = contentExcerptCharLimit;
+    compacted.prompt_content_excerpt_char_limit = limit;
   }
   return compacted;
 }
@@ -5397,6 +5435,7 @@ function observationPromptPayload(
         payload.structural_data = compactStructuralDataForPrompt(
           observation.structural_data,
           options.contentExcerptCharLimit,
+          observation.target_material_kind,
         );
       }
       return payload;
@@ -6309,7 +6348,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               input.sourceObservationDirective.selected_observations,
             source_observations: observationPromptPayload(input.sourceObservations, {
               observationIds: selectedObservationIdsForPurpose,
-              contentExcerptCharLimit: 1200,
+              contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
             }),
             source_scout_pack: sourceScoutPackPromptPayload({
               sourceScoutPack: input.sourceScoutPack,

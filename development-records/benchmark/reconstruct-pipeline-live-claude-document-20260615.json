@@ -1,0 +1,106 @@
+{
+  "schema_version": "1",
+  "benchmark_kind": "reconstruct-pipeline-live",
+  "target_material_kind": "document",
+  "provider": "anthropic",
+  "model": "claude-opus-4-8",
+  "execution_adapter": "claude_code",
+  "auth": "oauth",
+  "effort": "medium",
+  "source_document": "2026-reset-strategy-review.md",
+  "started_at": "2026-06-15T16:09:32.175Z",
+  "duration_s": 3021.8,
+  "record_status": "completed",
+  "completed": true,
+  "used_claude_route": true,
+  "attempts_to_complete": 1,
+  "steps": [
+    {
+      "step_id": "observation_directive",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "lens_judgment",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "exploration_synthesis",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "source_frontier",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "source_purpose_candidates",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "candidate_inventory",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "candidate_disposition",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "ontology_seed",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "claim_realization",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "seed_confirmation",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "competency_questions",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "competency_question_assessment",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "failure_classification",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "revision_proposal",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "stop_decision",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "answer_support_ledger",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    },
+    {
+      "step_id": "final_output",
+      "provider_route": "anthropic",
+      "model_id": "claude-opus-4-8"
+    }
+  ],
+  "runner": "scripts/reconstruct-claude-live-document-e2e.mts",
+  "note": "Live completion run proving the anthropic OAuth claude_code reconstruct route end to end for the DOCUMENT material kind. PRELIMINARY for any performance/quality claim."
+}
