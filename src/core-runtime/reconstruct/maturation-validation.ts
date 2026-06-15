@@ -7,6 +7,8 @@ import type {
   ReconstructActionableOntologyValidationArtifact,
   ReconstructAnswerSupportLedgerArtifact,
   ReconstructAnswerSupportLedgerValidationArtifact,
+  ReconstructAnswerSupportJudgmentArtifact,
+  ReconstructAnswerSupportJudgmentValidationArtifact,
   ReconstructActionabilityMatrixArtifact,
   ReconstructActionabilityMatrixValidationArtifact,
   ReconstructCompetencyQuestion,
@@ -2146,6 +2148,11 @@ export function validateMaturationAnswerClaims(args: {
   maturationQuestionFrontierValidation:
     ReconstructMaturationQuestionFrontierValidationArtifact;
   maturationQuestionFrontierValidationRef?: string | null;
+  answerSupportJudgment?: ReconstructAnswerSupportJudgmentArtifact | null;
+  answerSupportJudgmentRef?: string | null;
+  answerSupportJudgmentValidation?:
+    ReconstructAnswerSupportJudgmentValidationArtifact | null;
+  answerSupportJudgmentValidationRef?: string | null;
 }): ReconstructMaturationAnswerClaimsValidationArtifact {
   const artifact = args.maturationAnswerClaims;
   const violations: ReconstructMaturationValidationViolation[] = [];
@@ -2156,6 +2163,24 @@ export function validateMaturationAnswerClaims(args: {
       cluster,
     ]),
   );
+  // B-6 judge gate (runtime realization of registry activation_condition):
+  // "activated" = orchestrator supplied a non-null judgment whose validation is
+  // valid. judgeSupported keys a confirmed support by IDENTITY
+  // (`${evidence_cluster_ref}#${evidenceRefKey}`) so the per-claim sufficiency
+  // count below can re-key it by INDEPENDENCE. Absent/invalid judgment =>
+  // judgeActive false => branch skipped => current behavior (backward compat).
+  const judgeActive = Boolean(args.answerSupportJudgment) &&
+    args.answerSupportJudgmentValidation?.validation_status === "valid";
+  const judgeSupported = new Set<string>();
+  if (judgeActive && args.answerSupportJudgment) {
+    for (const judgment of args.answerSupportJudgment.judgments) {
+      if (judgment.supports === "supported") {
+        judgeSupported.add(
+          `${judgment.evidence_cluster_ref}#${evidenceRefKey(judgment.evidence_ref)}`,
+        );
+      }
+    }
+  }
   const seen = new Set<string>();
   const answeredQuestions = new Set<string>();
   if (artifact.session_id !== args.maturationQuestionFrontier.session_id) {
@@ -2255,6 +2280,33 @@ export function validateMaturationAnswerClaims(args: {
         }));
       }
     }
+    // B-6 sufficiency (composes with the contradiction-bounded check above; a
+    // convergent claim must pass BOTH). Count INDEPENDENT judge-confirmed
+    // supports across all cited clusters: IDENTITY key joins to the judge
+    // verdict, INDEPENDENCE key (source_ref:location, byte-identical to the
+    // ledger envelope) is counted so same-source refs collapse to one.
+    if (judgeActive && claim.support_mode === "convergent_source_evidence") {
+      const independentConfirmed = new Set<string>();
+      for (const clusterRef of claim.evidence_cluster_refs) {
+        const cluster = clusters.get(clusterRef);
+        if (!cluster) continue;
+        for (const ref of cluster.evidence_refs) {
+          if (judgeSupported.has(`${clusterRef}#${evidenceRefKey(ref)}`)) {
+            independentConfirmed.add(
+              `${normalizedPathRef(ref.source_ref)}:${normalizedPathRef(ref.location)}`,
+            );
+          }
+        }
+      }
+      if (independentConfirmed.size < 2) {
+        violations.push(violation({
+          code: "insufficient_independent_evidence",
+          message:
+            "convergent answer claim requires at least two independent judge-confirmed supports",
+          subjectId: claim.answer_claim_id,
+        }));
+      }
+    }
     if (claim.evidence_cluster_refs.length === 0) {
       violations.push(violation({
         code: "support_mode_missing_authority",
@@ -2277,6 +2329,8 @@ export function validateMaturationAnswerClaims(args: {
     maturation_answer_claims_ref: args.maturationAnswerClaimsRef ?? null,
     answer_support_ledger_validation_ref:
       args.answerSupportLedgerValidationRef ?? null,
+    answer_support_judgment_validation_ref:
+      args.answerSupportJudgmentValidationRef ?? null,
     maturation_question_frontier_validation_ref:
       args.maturationQuestionFrontierValidationRef ?? null,
     validation_status: violations.length === 0 ? "valid" : "invalid",
@@ -4804,12 +4858,180 @@ export async function writeAnswerSupportLedgerValidationArtifact(args: {
   return validation;
 }
 
+// B-5 judge validation (B skeleton): structural attribution is enforced upstream
+// (separate authored artifact). This skeleton aggregates counts and is valid for
+// empty unconditional-write judgments. R3 adds the B-5 obligations
+// (refs resolve / supports enum / rationale present / dup id / convergent coverage —
+// obligation D, `uncovered_evidence_ref`). Never compares directive_author.author_id
+// (spoofable); separation is structural.
+export function validateAnswerSupportJudgment(args: {
+  answerSupportJudgment: ReconstructAnswerSupportJudgmentArtifact;
+  answerSupportJudgmentRef?: string | null;
+  answerSupportLedger: ReconstructAnswerSupportLedgerArtifact;
+  answerSupportLedgerValidation: ReconstructAnswerSupportLedgerValidationArtifact;
+  answerSupportLedgerValidationRef?: string | null;
+}): ReconstructAnswerSupportJudgmentValidationArtifact {
+  const artifact = args.answerSupportJudgment;
+  const ledger = args.answerSupportLedger;
+  const violations: ReconstructMaturationValidationViolation[] = [];
+  const SUPPORTS_VALUES: readonly string[] = ["supported", "not_supported"];
+  if (artifact.session_id !== ledger.session_id) {
+    violations.push(violation({
+      code: "session_id_mismatch",
+      message: "answer support judgment session_id must match the support ledger",
+      subjectId: artifact.session_id,
+    }));
+  }
+  if (args.answerSupportLedgerValidation.validation_status !== "valid") {
+    violations.push(violation({
+      code: "prior_validation_invalid",
+      message: "answer support judgment requires a valid support-ledger validation",
+      subjectId: args.answerSupportLedgerValidationRef ?? "answer-support-ledger-validation",
+    }));
+  }
+  const clusters = new Map(
+    ledger.evidence_clusters.map((cluster) => [cluster.evidence_cluster_id, cluster]),
+  );
+  const evidenceKeysByCluster = new Map(
+    ledger.evidence_clusters.map((cluster) => [
+      cluster.evidence_cluster_id,
+      new Set(cluster.evidence_refs.map(evidenceRefKey)),
+    ]),
+  );
+  // IDENTITY keys a judgment actually covered, per cluster (drives coverage D).
+  const judgedKeysByCluster = new Map<string, Set<string>>();
+  const seen = new Set<string>();
+  let supportedJudgmentCount = 0;
+  for (const judgment of artifact.judgments) {
+    if (seen.has(judgment.judgment_id)) {
+      violations.push(violation({
+        code: "duplicate_id",
+        message: "answer support judgment ids must be unique",
+        subjectId: judgment.judgment_id,
+      }));
+    } else {
+      seen.add(judgment.judgment_id);
+    }
+    // A: cluster ref + evidence ref resolve to a cited evidence in the ledger.
+    const evidenceKey = evidenceRefKey(judgment.evidence_ref);
+    const clusterKeys = evidenceKeysByCluster.get(judgment.evidence_cluster_ref);
+    if (!clusters.has(judgment.evidence_cluster_ref) || !clusterKeys) {
+      violations.push(violation({
+        code: "unknown_id",
+        message: "judgment evidence_cluster_ref must resolve to a support-ledger cluster",
+        subjectId: judgment.evidence_cluster_ref,
+      }));
+    } else if (!clusterKeys.has(evidenceKey)) {
+      violations.push(violation({
+        code: "unknown_id",
+        message: "judgment evidence_ref must resolve to a cited evidence ref in its cluster",
+        subjectId: judgment.judgment_id,
+      }));
+    } else {
+      const covered = judgedKeysByCluster.get(judgment.evidence_cluster_ref) ??
+        new Set<string>();
+      covered.add(evidenceKey);
+      judgedKeysByCluster.set(judgment.evidence_cluster_ref, covered);
+    }
+    // B: supports enum (raw projection of supported count, NOT sufficiency).
+    if (!SUPPORTS_VALUES.includes(judgment.supports)) {
+      violations.push(violation({
+        code: "invalid_enum",
+        message: `invalid supports verdict ${judgment.supports}`,
+        subjectId: judgment.judgment_id,
+      }));
+    } else if (judgment.supports === "supported") {
+      supportedJudgmentCount += 1;
+    }
+    // C: rationale ref present (existence only, content not read).
+    if (!judgment.rationale_ref || judgment.rationale_ref.trim().length === 0) {
+      violations.push(violation({
+        code: "missing_required_ref",
+        message: "answer support judgment must cite a rationale_ref",
+        subjectId: judgment.judgment_id,
+      }));
+    }
+  }
+  // D: convergent coverage (Codex #3) — every cited evidence_ref of a
+  // convergent_source_evidence cluster must have a judgment row, so an
+  // unfavorable/ambiguous ref cannot be silently omitted. Reuses the existing
+  // missing_required_coverage failure kind (same "required coverage missing"
+  // family). Non-convergent clusters do not trigger coverage.
+  for (const cluster of ledger.evidence_clusters) {
+    if (cluster.support_mode !== "convergent_source_evidence") continue;
+    const covered = judgedKeysByCluster.get(cluster.evidence_cluster_id) ??
+      new Set<string>();
+    for (const ref of cluster.evidence_refs) {
+      if (!covered.has(evidenceRefKey(ref))) {
+        violations.push(violation({
+          code: "missing_required_coverage",
+          message:
+            "convergent cluster requires a judgment for every cited evidence ref",
+          subjectId: cluster.evidence_cluster_id,
+        }));
+      }
+    }
+  }
+  return {
+    schema_version: "1",
+    session_id: artifact.session_id,
+    created_at: isoNow(),
+    answer_support_judgment_ref: args.answerSupportJudgmentRef ?? null,
+    answer_support_ledger_validation_ref:
+      args.answerSupportLedgerValidationRef ?? null,
+    validation_status: violations.length === 0 ? "valid" : "invalid",
+    judgment_count: artifact.judgments.length,
+    supported_judgment_count: supportedJudgmentCount,
+    validation_results: violations.length === 0
+      ? ["answer_support_judgment_valid"]
+      : ["answer_support_judgment_invalid"],
+    violations,
+  };
+}
+
+export async function writeAnswerSupportJudgmentValidationArtifact(args: {
+  answerSupportJudgmentPath: string;
+  answerSupportLedgerPath: string;
+  answerSupportLedgerValidationPath: string;
+  outputPath: string;
+}): Promise<ReconstructAnswerSupportJudgmentValidationArtifact> {
+  const [
+    answerSupportJudgment,
+    answerSupportLedger,
+    answerSupportLedgerValidation,
+  ] = await Promise.all([
+    readYamlDocument<ReconstructAnswerSupportJudgmentArtifact>(
+      args.answerSupportJudgmentPath,
+    ),
+    readYamlDocument<ReconstructAnswerSupportLedgerArtifact>(
+      args.answerSupportLedgerPath,
+    ),
+    readYamlDocument<ReconstructAnswerSupportLedgerValidationArtifact>(
+      args.answerSupportLedgerValidationPath,
+    ),
+  ]);
+  const validation = validateAnswerSupportJudgment({
+    answerSupportJudgment,
+    answerSupportJudgmentRef: args.answerSupportJudgmentPath,
+    answerSupportLedger,
+    answerSupportLedgerValidation,
+    answerSupportLedgerValidationRef: args.answerSupportLedgerValidationPath,
+  });
+  await writeYamlDocument(args.outputPath, validation);
+  return validation;
+}
+
 export async function writeMaturationAnswerClaimsValidationArtifact(args: {
   maturationAnswerClaimsPath: string;
   answerSupportLedgerPath: string;
   answerSupportLedgerValidationPath: string;
   maturationQuestionFrontierPath: string;
   maturationQuestionFrontierValidationPath: string;
+  // Judge stage paths (PATHS, not in-memory artifacts) — the claims VALIDATOR
+  // consumes the judgment (B-6); the claims AUTHOR never does. Optional so that
+  // a run without a wired judge stage keeps the prior behavior.
+  answerSupportJudgmentPath?: string | null;
+  answerSupportJudgmentValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructMaturationAnswerClaimsValidationArtifact> {
   const [
@@ -4835,6 +5057,19 @@ export async function writeMaturationAnswerClaimsValidationArtifact(args: {
       args.maturationQuestionFrontierValidationPath,
     ),
   ]);
+  const [answerSupportJudgment, answerSupportJudgmentValidation] =
+    await Promise.all([
+      args.answerSupportJudgmentPath
+        ? readYamlDocument<ReconstructAnswerSupportJudgmentArtifact>(
+          args.answerSupportJudgmentPath,
+        )
+        : Promise.resolve(null),
+      args.answerSupportJudgmentValidationPath
+        ? readYamlDocument<ReconstructAnswerSupportJudgmentValidationArtifact>(
+          args.answerSupportJudgmentValidationPath,
+        )
+        : Promise.resolve(null),
+    ]);
   const validation = validateMaturationAnswerClaims({
     maturationAnswerClaims,
     maturationAnswerClaimsRef: args.maturationAnswerClaimsPath,
@@ -4845,6 +5080,11 @@ export async function writeMaturationAnswerClaimsValidationArtifact(args: {
     maturationQuestionFrontierValidation,
     maturationQuestionFrontierValidationRef:
       args.maturationQuestionFrontierValidationPath,
+    answerSupportJudgment,
+    answerSupportJudgmentRef: args.answerSupportJudgmentPath ?? null,
+    answerSupportJudgmentValidation,
+    answerSupportJudgmentValidationRef:
+      args.answerSupportJudgmentValidationPath ?? null,
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;

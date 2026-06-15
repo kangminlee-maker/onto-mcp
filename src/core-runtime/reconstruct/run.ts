@@ -21,6 +21,7 @@ import type {
   ReconstructEvidenceRef,
   ReconstructAnswerSupportLedgerArtifact,
   ReconstructAnswerSupportLedgerValidationArtifact,
+  ReconstructAnswerSupportJudgmentArtifact,
   ReconstructExplorationSynthesisArtifact,
   ReconstructFailureClassificationArtifact,
   ReconstructFailureClassificationValidationArtifact,
@@ -167,6 +168,7 @@ import {
   writeActionabilityMatrixArtifact,
   writeActionabilityMatrixValidationArtifact,
   writeAnswerSupportLedgerValidationArtifact,
+  writeAnswerSupportJudgmentValidationArtifact,
   writeMaturationAnswerClaimsValidationArtifact,
   writeMaturationAuthorityResponseArtifact,
   writeMaturationAuthorityResponseValidationArtifact,
@@ -267,6 +269,9 @@ export interface ReconstructDirectiveAuthor {
   writeAnswerSupportLedger(
     input: ReconstructAnswerSupportLedgerAuthorInput,
   ): Promise<ReconstructAnswerSupportLedgerArtifact>;
+  writeAnswerSupportJudgment(
+    input: ReconstructAnswerSupportJudgmentAuthorInput,
+  ): Promise<ReconstructAnswerSupportJudgmentArtifact>;
   writeMaturationAnswerClaims(
     input: ReconstructMaturationAnswerClaimsAuthorInput,
   ): Promise<ReconstructMaturationAnswerClaimsArtifact>;
@@ -548,6 +553,16 @@ export interface ReconstructAnswerSupportLedgerAuthorInput {
   maturationAuthorityResponse: ReconstructMaturationAuthorityResponseArtifact;
   maturationAuthorityResponseValidation:
     ReconstructMaturationAuthorityResponseValidationArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}
+
+export interface ReconstructAnswerSupportJudgmentAuthorInput {
+  sessionId: string;
+  roundId: string;
+  answerSupportLedger: ReconstructAnswerSupportLedgerArtifact;
+  answerSupportLedgerRef: string;
+  answerSupportLedgerValidation: ReconstructAnswerSupportLedgerValidationArtifact;
+  answerSupportLedgerValidationRef: string;
   sourceObservations: ReconstructSourceObservationsArtifact;
 }
 
@@ -1679,6 +1694,9 @@ function artifactRefsWithDefaults(args: {
     answer_support_ledger: args.refs.answer_support_ledger ?? null,
     answer_support_ledger_validation:
       args.refs.answer_support_ledger_validation ?? null,
+    answer_support_judgment: args.refs.answer_support_judgment ?? null,
+    answer_support_judgment_validation:
+      args.refs.answer_support_judgment_validation ?? null,
     maturation_answer_claims: args.refs.maturation_answer_claims ?? null,
     maturation_answer_claims_validation:
       args.refs.maturation_answer_claims_validation ?? null,
@@ -2454,6 +2472,32 @@ function createRunManifest(args: {
           runtimePerformer(),
           "answer-support-ledger-validation.yaml is emitted after answer support ledger.",
           "Pre-handoff manifest validation must not certify future answer support validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "answer_support_judgment",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.answer_support_judgment]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "answer_support_judgment",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "answer-support-judgment.yaml is emitted after answer support ledger validation.",
+          "Pre-handoff manifest validation must not certify future answer support judgment.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("answer_support_judgment_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.answer_support_judgment_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "answer_support_judgment_validation",
+          "runtime",
+          runtimePerformer(),
+          "answer-support-judgment-validation.yaml is emitted after answer support judgment.",
+          "Pre-handoff manifest validation must not certify future answer support judgment validation.",
         ),
       args.terminalArtifactsCompleted
         ? completedStep(
@@ -8363,6 +8407,119 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       };
     },
 
+    // §5 unconditional-write: orchestration always writes the judgment file.
+    // Empty-ledger early-exit skips the LLM call. Otherwise this is an
+    // independent adversarial judge with deliberate CONTEXT ISOLATION: the
+    // per-cluster payload EXCLUDES the ledger author's independence_basis /
+    // rationale and re-projects evidence content so each ref is judged on its
+    // own merits. Deterministic values stay out of LLM authority — evidence_ref
+    // is lifted from observation_id via evidenceRefsFromIds. The author never
+    // computes count / independence / sufficiency (runtime B-5/B-6 own those).
+    async writeAnswerSupportJudgment(input) {
+      const ledger = input.answerSupportLedger;
+      if (ledger.evidence_clusters.length === 0) {
+        return {
+          schema_version: "1",
+          session_id: input.sessionId,
+          created_at: isoNow(),
+          round_id: input.roundId,
+          answer_support_ledger_ref: input.answerSupportLedgerRef,
+          answer_support_ledger_validation_ref:
+            input.answerSupportLedgerValidationRef,
+          judgments: [],
+          directive_author: { owner: "host_llm", author_id: authorId },
+        };
+      }
+      const judgePromptObservationIds = [
+        ...new Set(
+          ledger.evidence_clusters.flatMap((cluster) =>
+            cluster.evidence_refs.map((ref) => ref.observation_id)
+          ),
+        ),
+      ];
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        telemetry,
+        artifactName: "AnswerSupportJudgment",
+        maxTokens: 3200,
+        systemPrompt: [
+          baseSystem,
+          "Author answer-support-judgment.yaml as an independent adversarial verifier of the answer-support ledger.",
+          "For each cited evidence_observation_id in a cluster, decide whether THAT evidence on its own implies the cluster's proposed_answer_summary.",
+          "Set supports=\"supported\" only when the evidence itself implies the answer; otherwise \"not_supported\". When uncertain, default to \"not_supported\".",
+          "For convergent_source_evidence clusters you MUST emit exactly one judgment row per cited evidence_observation_id; never omit unfavorable or ambiguous evidence.",
+          "Judge each evidence on its own merits; the ledger author's own justification is intentionally withheld.",
+          "JSON shape: {\"judgments\":[{\"judgment_id\":\"...\",\"evidence_cluster_ref\":\"...\",\"evidence_observation_id\":\"...\",\"supports\":\"supported|not_supported\",\"rationale_ref\":\"...\"}]}",
+        ].join("\n"),
+        userPayload: {
+          round_id: input.roundId,
+          evidence_clusters: ledger.evidence_clusters.map((cluster) => ({
+            evidence_cluster_id: cluster.evidence_cluster_id,
+            support_mode: cluster.support_mode,
+            proposed_answer_summary: cluster.proposed_answer_summary,
+            evidence_observation_ids: cluster.evidence_refs.map(
+              (ref) => ref.observation_id,
+            ),
+          })),
+          source_observations: observationPromptPayload(
+            input.sourceObservations,
+            {
+              observationIds: judgePromptObservationIds,
+              contentExcerptCharLimit: POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            },
+          ),
+        },
+      });
+      const judgments = records(raw.judgments ?? [], "judgments").map(
+        (judgment, index) => {
+          const observationId = stringValue(
+            judgment.evidence_observation_id,
+            `judgments[${index}].evidence_observation_id`,
+          );
+          const [evidenceRef] = evidenceRefsFromIds({
+            observationIds: [observationId],
+            sourceObservations: input.sourceObservations,
+            fieldName: `judgments[${index}].evidence_observation_id`,
+          });
+          if (!evidenceRef) {
+            throw new Error(
+              `judgments[${index}].evidence_observation_id resolved to no evidence ref.`,
+            );
+          }
+          return {
+            judgment_id: optionalString(judgment.judgment_id) ??
+              `answer-support-judgment-${index + 1}`,
+            evidence_cluster_ref: stringValue(
+              judgment.evidence_cluster_ref,
+              `judgments[${index}].evidence_cluster_ref`,
+            ),
+            evidence_ref: evidenceRef,
+            supports: enumString(
+              judgment.supports,
+              ["supported", "not_supported"],
+              `judgments[${index}].supports`,
+            ),
+            rationale_ref: stringValue(
+              judgment.rationale_ref,
+              `judgments[${index}].rationale_ref`,
+            ),
+          };
+        },
+      );
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        answer_support_ledger_ref: input.answerSupportLedgerRef,
+        answer_support_ledger_validation_ref:
+          input.answerSupportLedgerValidationRef,
+        judgments,
+        directive_author: { owner: "host_llm", author_id: authorId },
+      };
+    },
+
     async writeMaturationAnswerClaims(input) {
       if (input.answerSupportLedger.evidence_clusters.length === 0) {
         return {
@@ -10962,6 +11119,14 @@ export async function runReconstruct(
     sessionRoot,
     "answer-support-ledger-validation.yaml",
   );
+  const answerSupportJudgmentPath = path.join(
+    sessionRoot,
+    "answer-support-judgment.yaml",
+  );
+  const answerSupportJudgmentValidationPath = path.join(
+    sessionRoot,
+    "answer-support-judgment-validation.yaml",
+  );
   const maturationAnswerClaimsPath = path.join(
     sessionRoot,
     "maturation-answer-claims.yaml",
@@ -11126,6 +11291,8 @@ export async function runReconstruct(
         maturationAuthorityResponseValidationPath,
       answer_support_ledger: answerSupportLedgerPath,
       answer_support_ledger_validation: answerSupportLedgerValidationPath,
+      answer_support_judgment: answerSupportJudgmentPath,
+      answer_support_judgment_validation: answerSupportJudgmentValidationPath,
       maturation_answer_claims: maturationAnswerClaimsPath,
       maturation_answer_claims_validation: maturationAnswerClaimsValidationPath,
       ontology_expansion: ontologyExpansionPath,
@@ -11601,6 +11768,36 @@ export async function runReconstruct(
     artifactRef: answerSupportLedgerValidationPath,
     validation: answerSupportLedgerValidation,
   });
+  // §5 unconditional-write: judge stage always emits answer-support-judgment.yaml
+  // (empty judgments in the B skeleton) + its validation, so the presence gate is
+  // a cheap-pass. The path (not the in-memory artifact) flows to the claims
+  // validator in R3; the claims AUTHOR never receives it (B-6 is a runtime duty).
+  await writeAuthoredYamlDocument(
+    answerSupportJudgmentPath,
+    "answer-support-judgment.yaml",
+    () =>
+      directiveAuthor.writeAnswerSupportJudgment({
+        sessionId,
+        roundId: "maturation-round-1",
+        answerSupportLedger,
+        answerSupportLedgerRef: answerSupportLedgerPath,
+        answerSupportLedgerValidation,
+        answerSupportLedgerValidationRef: answerSupportLedgerValidationPath,
+        sourceObservations: promptSourceObservations,
+      }),
+  );
+  const answerSupportJudgmentValidation =
+    await writeAnswerSupportJudgmentValidationArtifact({
+      answerSupportJudgmentPath,
+      answerSupportLedgerPath,
+      answerSupportLedgerValidationPath,
+      outputPath: answerSupportJudgmentValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "answer-support-judgment",
+    artifactRef: answerSupportJudgmentValidationPath,
+    validation: answerSupportJudgmentValidation,
+  });
   const maturationAnswerClaims = await writeAuthoredYamlDocument(
     maturationAnswerClaimsPath,
     "maturation-answer-claims.yaml",
@@ -11621,6 +11818,10 @@ export async function runReconstruct(
       answerSupportLedgerValidationPath,
       maturationQuestionFrontierPath,
       maturationQuestionFrontierValidationPath,
+      // B-6: the claims validator reads the judge artifacts (paths only); the
+      // claims author never receives them.
+      answerSupportJudgmentPath,
+      answerSupportJudgmentValidationPath,
       outputPath: maturationAnswerClaimsValidationPath,
     });
   assertRuntimeValidationValid({
