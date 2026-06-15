@@ -2299,16 +2299,19 @@ export function validateMaturationAnswerClaims(args: {
           subjectId: claim.answer_claim_id,
         }));
       } else {
+        // Count the claim's OWN supporting_evidence_refs that are judge-confirmed
+        // in one of its cited clusters, not every ref in those clusters. Downstream
+        // (claim projection, ontology expansion) consumes supporting_evidence_refs,
+        // so sufficiency must be carried by the evidence the claim actually cites.
         const independentConfirmed = new Set<string>();
-        for (const clusterRef of claim.evidence_cluster_refs) {
-          const cluster = clusters.get(clusterRef);
-          if (!cluster) continue;
-          for (const ref of cluster.evidence_refs) {
-            if (judgeSupported.has(`${clusterRef}#${evidenceRefKey(ref)}`)) {
-              independentConfirmed.add(
-                `${normalizedPathRef(ref.source_ref)}:${normalizedPathRef(ref.location)}`,
-              );
-            }
+        for (const ref of claim.supporting_evidence_refs) {
+          const judgeConfirmed = claim.evidence_cluster_refs.some((clusterRef) =>
+            judgeSupported.has(`${clusterRef}#${evidenceRefKey(ref)}`)
+          );
+          if (judgeConfirmed) {
+            independentConfirmed.add(
+              `${normalizedPathRef(ref.source_ref)}:${normalizedPathRef(ref.location)}`,
+            );
           }
         }
         if (independentConfirmed.size < 2) {

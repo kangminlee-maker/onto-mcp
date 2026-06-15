@@ -8421,7 +8421,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     // computes count / independence / sufficiency (runtime B-5/B-6 own those).
     async writeAnswerSupportJudgment(input) {
       const ledger = input.answerSupportLedger;
-      if (ledger.evidence_clusters.length === 0) {
+      // Only convergent_source_evidence clusters require a judge verdict (B-6
+      // and the contract's required_when both scope to convergent). Skip the LLM
+      // call and emit an empty judgment (the orchestrator still writes the file,
+      // §5) when no convergent cluster is present.
+      const convergentClusters = ledger.evidence_clusters.filter(
+        (cluster) => cluster.support_mode === "convergent_source_evidence",
+      );
+      if (convergentClusters.length === 0) {
         return {
           schema_version: "1",
           session_id: input.sessionId,
@@ -8436,7 +8443,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       }
       const judgePromptObservationIds = [
         ...new Set(
-          ledger.evidence_clusters.flatMap((cluster) =>
+          convergentClusters.flatMap((cluster) =>
             cluster.evidence_refs.map((ref) => ref.observation_id)
           ),
         ),
@@ -8458,7 +8465,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         ].join("\n"),
         userPayload: {
           round_id: input.roundId,
-          evidence_clusters: ledger.evidence_clusters.map((cluster) => ({
+          evidence_clusters: convergentClusters.map((cluster) => ({
             evidence_cluster_id: cluster.evidence_cluster_id,
             support_mode: cluster.support_mode,
             proposed_answer_summary: cluster.proposed_answer_summary,
@@ -8504,10 +8511,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               ["supported", "not_supported"],
               `judgments[${index}].supports`,
             ),
-            rationale_ref: stringValue(
-              judgment.rationale_ref,
-              `judgments[${index}].rationale_ref`,
-            ),
+            // Pass the rationale through raw (no throw on missing/blank) so the
+            // B-5 validator reports it deterministically as missing_required_ref
+            // instead of aborting the whole run on a single malformed row.
+            rationale_ref: optionalString(judgment.rationale_ref) ?? "",
           };
         },
       );

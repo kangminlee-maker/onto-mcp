@@ -3046,4 +3046,19 @@ describe("maturation validation", () => {
     expect(validation.violations.map((v) => v.code))
       .toContain("insufficient_independent_evidence");
   });
+
+  it("B-6: convergent claim that omits judge-confirmed evidence from its own refs is insufficient", () => {
+    // Both clusters' evidence are judge-confirmed, but the claim only carries one
+    // supporting_evidence_ref. Sufficiency follows the claim's OWN refs (Codex #3),
+    // so this must fail even though the clusters contain two confirmed refs.
+    const scenario = convergentClaimScenario();
+    scenario.answerClaims.answer_claims[0]!.supporting_evidence_refs = [evidence];
+    const validation = claimsValidationWithJudge(
+      scenario,
+      judgmentArtifact([{ evidence }, { evidence: evidence2 }]),
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code))
+      .toContain("insufficient_independent_evidence");
+  });
 });
