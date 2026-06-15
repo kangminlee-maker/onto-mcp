@@ -1478,6 +1478,33 @@ valid evidence cluster, proof, or user confirmation. An answer may be
 `partially_answered` only when the answered portion has positive support and the
 remaining gap is represented as a limitation or frontier question.
 
+Implementable `answer-support-judgment.yaml` shape (target design until the judge
+runtime stage is implemented):
+
+```yaml
+schema_version: "1"
+session_id:
+created_at:
+round_id:
+judgments:
+  - judgment_id:
+    evidence_cluster_ref:          # a validated answer-support-ledger evidence cluster
+    evidence_ref:                  # one evidence ref of that cluster
+    supports: supported | not_supported
+    rationale_ref:                 # bounded judge rationale
+```
+
+An independent judge role, distinct from the answer-support-ledger author, records
+one bounded `supports` verdict per cited evidence ref. The judge does not decide
+sufficiency: a `convergent_source_evidence` answer claim validates only when at
+least two independent evidence refs each carry a `supports: supported` judgment
+with contradictions still bounded, and runtime aggregates that count. Author and
+judge are separated structurally because the judgment is a distinct authored
+artifact attributed to its own pipeline stage, not a field the support author can
+fill. This hardening narrows only the "evidence implies the answer" residue for
+convergent source evidence; the existing count, independence, and contradiction
+checks are unchanged.
+
 #### Maturation Closure Dispositions
 
 Not every inspected issue should become ontology meaning. Maturation therefore
