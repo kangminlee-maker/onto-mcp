@@ -129,6 +129,7 @@ answer_support_judgment_validation_ref: string | null;  // judge stage 미실행
 - **EXCLUDE:** `independence_basis`(author 자기인증)와 모든 author rationale/narrative.
 - **INCLUDE per cluster:** `evidence_cluster_id`, `support_mode`, `proposed_answer_summary`, 그리고 re-projected evidence 내용 — `observationPromptPayload(sourceObservations, {observationIds: cluster.evidence_refs.map(r=>r.observation_id), contentExcerptCharLimit: POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT})`. **excerpt limit은 maturation-phase ledger author와 동일한 `POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT`(=500)** 사용 — seed-phase `PROMPT_OBSERVATION_EXCERPT_LIMIT`(=1200) 아님(prompt overflow 위험 축소).
 - 판정 질문: "이 특정 evidence가 그 자체로 proposed answer를 imply하는가". system prompt를 adversarial-verifier로 frame하고 불확실 시 `not_supported` 기본(rubber-stamp의 실패 양식은 false "supported"이므로 보수 bias가 레버).
+- **coverage 요구(Codex #3):** convergent cluster의 **모든 cited evidence_ref마다** 판정 row를 emit하도록 명시(불리/모호 evidence를 omit 금지 — omit 대신 `not_supported`로 명시 판정). B-5 obligation D가 이를 결정론으로 강제하므로 prompt는 그 계약을 author에게 미리 알린다.
 
 **rubber-stamp 잔여 위험(명시·수용):** 구조적 author≠judge는 verdict가 ledger author에 귀속되는 것은 막지만 동일 모델/컨텍스트의 semantic rubber-stamp는 막지 못한다. `llmConfig`는 directiveAuthor 인스턴스당 단일(`run.ts`에서 1회 capture)이라 **per-stage model/effort 차별화는 현재 표현 불가** — 구조적 독립을 semantic 독립으로 전환하는 유일한 레버이며 명시적 **tracked follow-up**으로 격상(out-of-scope로 묻지 않음). 테스트로 비-rubber-stamp를 증명할 수 없음(알려진 한계).
 
@@ -148,6 +149,7 @@ answer_support_judgment_validation_ref: string | null;  // judge stage 미실행
   - **B (supports enum):** `SUPPORTS_VALUES.includes(j.supports)` 아니면 `invalid_enum`; `=== 'supported'`면 `supported_judgment_count++` (raw 투영).
   - **C (rationale present):** `!j.rationale_ref || j.rationale_ref.trim().length===0` 이면 `missing_required_ref` (내용은 읽지 않음, 존재만).
   - dup `judgment_id` → `duplicate_id`(seen Set).
+- **D (convergent coverage — Codex #3 채택, per-judgment loop 종료 후 per-cluster 패스):** `cluster.support_mode === 'convergent_source_evidence'`인 각 cluster에 대해, `evidenceKeysByCluster.get(cluster_id)`의 **모든 IDENTITY 키**(`evidenceRefKey`)가 그 cluster에 대해 judgment이 emit한 키 집합에 존재하는지 확인. 빠진 키마다 신규 `uncovered_evidence_ref`(subjectId=evidence_cluster_ref). 근거: judge author(LLM)가 불리/모호 evidence_ref를 contradiction 분류 없이 **judgment에서 조용히 omit**하면 contradiction gate(B-6)도 sufficiency gate(≥2 supported)도 우회된다 — coverage를 결정론으로 강제해 "convergent cluster의 모든 cited ref가 판정됐다"를 증명(author≠judge 실효성 직결, prompt로는 보장 불가). **non-convergent cluster는 미발동**(necessity scope를 B-6과 동일하게 `convergent_source_evidence` 한정해 over-strict 회피). judge author R2 prompt(§3)도 convergent cluster의 모든 cited ref를 판정하도록 명시.
 - 반환은 ledger-validation shape 미러. **`directive_author.author_id` 비교 금지**(spoofable; 분리는 구조).
 
 **B-6 — `validateMaturationAnswerClaims`(`:2139`) 내부 conditional 의무 확장:**
@@ -160,7 +162,7 @@ answer_support_judgment_validation_ref: string | null;  // judge stage 미실행
 - validation 아티팩트에 `answer_support_judgment_validation_ref` echo 추가(다른 upstream `*_validation_ref` 방식과 동일). count 필드 추가 없음.
 - **backward compat:** optional 입력 부재/null 또는 validation invalid면 `judgeActive===false` → 분기 skip → 현재 거동과 동일(planned-tier judge stage가 wired되기 전까지 안전).
 
-**concept economy 원장:** top-level concept +1(AnswerSupportJudgment); violation code +0(B-5: `unknown_id`/`invalid_enum`/`missing_required_ref`/`prior_validation_invalid`/`session_id_mismatch`/`duplicate_id`; B-6: `insufficient_independent_evidence` — 모두 `:1962-1982` 기존 union); enum +1(`supported|not_supported`); required_when predicate +1(`answer_support_judgment_required_minimal`); stage id +2 / `ReconstructRecordArtifactRefs` 필드 +2(§6 R1 surface). helper는 모두 재사용(`evidenceRefKey`, `normalizedPathRef`, clusters Map, `violation()`, `isoNow()`, `observationPromptPayload`, `evidenceRefsFromIds`, `enumString`/`stringValue`/`optionalString`).
+**concept economy 원장:** top-level concept +1(AnswerSupportJudgment); violation code **+1**(`uncovered_evidence_ref` — Codex #3 coverage obligation, 신규 failure mode "judge가 cited evidence를 안 봤다"라 기존 `missing_required_ref`(rationale 부재)와 split 정당; 나머지 B-5 `unknown_id`/`invalid_enum`/`missing_required_ref`/`prior_validation_invalid`/`session_id_mismatch`/`duplicate_id` + B-6 `insufficient_independent_evidence`는 `:1962-1982` 기존 union 재사용); enum +1(`supported|not_supported`); required_when predicate +1(`answer_support_judgment_required_minimal`); stage id +2 / `ReconstructRecordArtifactRefs` 필드 +2(§6 R1 surface). helper는 모두 재사용(`evidenceRefKey`, `normalizedPathRef`, clusters Map, `violation()`, `isoNow()`, `observationPromptPayload`, `evidenceRefsFromIds`, `enumString`/`stringValue`/`optionalString`).
 
 ## 5. Path-A semantics 확정 — judge author는 **unconditional-write**
 
@@ -183,7 +185,7 @@ Path A는 gate predicate를 convergent-conditional에서 순수 presence(`artifa
 - **기존 테스트 drift(반드시 갱신; "full suite green"을 R1/R5 gate로):** `run.test.ts:2713-2716`(ordered stage sequence에 2 id 정위치 삽입); `pipeline-execution-ledger.test.ts:103-106`(ref fixture에 2 키); `execution-telemetry.test.ts`에 `unitIdForAuthoredArtifactName("AnswerSupportJudgment") === "answer_support_judgment"` assertion 추가. **typecheck를 R1 acceptance 신호로**(record.ts 분류 리스트 제외 — 그건 hardcoded라 전용 테스트).
 
 **R2/R3 unit (maturation-validation.test.ts, 기존 `describe('maturation validation')` 컨벤션 재사용):**
-- B-5: unknown cluster ref / unknown evidence ref → `unknown_id`; bad supports → `invalid_enum`; missing rationale → `missing_required_ref`; session 불일치 → `session_id_mismatch`; ledger validation invalid → `prior_validation_invalid`; dup id → `duplicate_id`.
+- B-5: unknown cluster ref / unknown evidence ref → `unknown_id`; bad supports → `invalid_enum`; missing rationale → `missing_required_ref`; session 불일치 → `session_id_mismatch`; ledger validation invalid → `prior_validation_invalid`; dup id → `duplicate_id`; **convergent cluster의 cited ref 일부 omit → `uncovered_evidence_ref`**(빠진 키당 1건); 전부 covered → 통과; **non-convergent cluster는 부분 판정 허용**(coverage 미발동).
 - B-6: convergent claim + <2 distinct judge-confirmed supports → invalid; ≥2 distinct → valid; judgment 입력 부재 → judge 체크 미발동(현재 거동); **두 cluster가 동일 source:location 공유 + 둘 다 supported → size 1 → insufficient**(collapse 케이스); contradiction-bounded + judge gate 합성(둘 다 통과해야 valid).
 - enum coercion: `enumString` allow-list 외 토큰 throw(yes/no 누출 없음).
 
@@ -211,3 +213,5 @@ Path A는 gate predicate를 convergent-conditional에서 순수 presence(`artifa
 6. **(prompt 설계 call)** judge userPayload에 `support_mode` 포함 여부(default 포함 권고, eval에서 rubber-stamp 보이면 재검토). 다수 cluster×evidence 시 prompt-catalog overflow bound/chunking 필요 여부(우선 전체 1회 invocation @ maxTokens~3200, overflow 시 bound 추가).
 
 **dissent/정정 기록:** ① 'hybrid'는 별도 제3안이 아니라 plan:33이 정의한 Path A 자체이므로 A의 conditions로 흡수(over-naming 회피). ② artifact-schema verdict의 boundary-recognition-procedure.md "부재" 주장은 FALSE(파일 실재, `yes/no` colloquial, Option B 확립) — enum 결론은 B-1 YAML 2소스로 여전히 유효하나 인용을 정정. ③ `supported|not_supported`는 "reuse"가 아닌 net-new 2-value enum(+1로 정직 회계).
+
+**Codex PR #55 리뷰 반영(`d01be90` 기준 P2 4건, 2026-06-15):** ① **judge identity 부재**(judgment 스키마에 author 비교 필드 없음) → R0가 이미 처리: 분리는 **구조적 강제**(별도 authored 아티팩트 + `UNIT_ID_BY_AUTHORED_ARTIFACT_NAME` 1:1 telemetry 귀속)이며 identity 문자열 비교는 spoofable이라 **의도적 미채택**; 동일모델 semantic rubber-stamp는 §7 residual #1 tracked follow-up. ② **predicate evaluator gating**(judge가 evaluator보다 먼저 구현되면 미지원 predicate로 fail-closed) → R0가 정확히 이 이유로 **Path A**(supported presence token) 채택 + gate-0 load-break 별도 수정(`ea1a49d`). ③ **coverage**(validator가 present row만 검증→불리 ref omit으로 우회) → **채택**: B-5 obligation D(`uncovered_evidence_ref`, convergent cluster 한정). ④ **§5.1 completion authority**(§16이 §5.1을 seeding completion으로 가리키나 §5.1은 revision design) → judge 트랙 외 문서 명료성, 런타임 완료는 registry 게이트가 강제하므로 안전성 무영향 — reply 처리.
