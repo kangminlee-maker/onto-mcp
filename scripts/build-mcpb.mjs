@@ -136,14 +136,25 @@ function stage() {
   for (const dir of STAGE_DIRS) copyDir(dir);
   for (const file of STAGE_FILES) copyFile(file);
 
-  // manifest.json (data-only, authored under packaging/mcpb/).
+  // manifest.json (data-only, authored under packaging/mcpb/). The bundle
+  // `version` mirrors package.json (single source of truth), so sync it into the
+  // staged manifest rather than copying a possibly-stale authored value.
   if (!fs.existsSync(manifestSrc)) {
     fail(
       `manifest not found at ${manifestSrc}. ` +
         "Author packaging/mcpb/manifest.json first (plan §2).",
     );
   }
-  fs.copyFileSync(manifestSrc, path.join(stageDir, "manifest.json"));
+  const pkgVersion = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+  ).version;
+  const manifest = JSON.parse(fs.readFileSync(manifestSrc, "utf8"));
+  manifest.version = pkgVersion;
+  fs.writeFileSync(
+    path.join(stageDir, "manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf8",
+  );
 
   writeSanitizedPackageJson();
 }

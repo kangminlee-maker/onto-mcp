@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "onto",
   "display_name": "onto — Ontology Review Runtime",
-  "version": "0.4.9",
+  "version": "0.4.11",
   "description": "MCP-native ontology review runtime with context-isolated lenses and controlled deliberation. Installs a one-click Claude Desktop server that reviews and reconstructs ontologies; collects provider config on first run and seeds ~/.onto/settings.json.",
   "author": {
     "name": "kangminlee-maker",
@@ -13,7 +13,10 @@
     "url": "https://github.com/kangminlee-maker/onto-mcp"
   },
   "compatibility": {
-    "platforms": ["darwin", "linux"],
+    "platforms": [
+      "darwin",
+      "linux"
+    ],
     "runtimes": {
       "node": ">=18.0.0"
     }
@@ -26,7 +29,9 @@
     "entry_point": "dist/mcpb-entry.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/dist/mcpb-entry.js"],
+      "args": [
+        "${__dirname}/dist/mcpb-entry.js"
+      ],
       "env": {
         "ONTO_HOME": "${__dirname}",
         "ONTO_MCP_PROFILE": "simple",
@@ -63,13 +68,29 @@
     }
   },
   "tools": [
-    { "name": "onto_review" },
-    { "name": "onto_review_read" },
-    { "name": "onto_review_cancel" },
-    { "name": "onto_reconstruct" },
-    { "name": "onto_observe_source" },
-    { "name": "onto_validate_reconstruct_directive" },
-    { "name": "onto_reconstruct_read" },
-    { "name": "onto_list" }
+    {
+      "name": "onto_review"
+    },
+    {
+      "name": "onto_review_read"
+    },
+    {
+      "name": "onto_review_cancel"
+    },
+    {
+      "name": "onto_reconstruct"
+    },
+    {
+      "name": "onto_observe_source"
+    },
+    {
+      "name": "onto_validate_reconstruct_directive"
+    },
+    {
+      "name": "onto_reconstruct_read"
+    },
+    {
+      "name": "onto_list"
+    }
   ]
 }
