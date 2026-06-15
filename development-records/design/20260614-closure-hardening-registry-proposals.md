@@ -129,8 +129,15 @@ author≠judge는 아티팩트-단위 귀속으로 구조 강제. 적용 범위 
 **Tier 결론**: 런타임에 judge 단계가 아직 없으므로 **B 전체가 planned/target tier에 착지**한다
 (maturation M1–M4·기존 planned 게이트와 동일 패턴). active 런에는 무영향이고,
 `promoted_planned_gate_policy`대로 *activation_condition 구현 + required_when 참*이면 활성화 →
-**apply는 저위험 가산**. (planned-게이트의 validator를 평탄 `validators:` 리스트에 두는 것이 기존
-규약 — 확인됨: maturation-promotion-* validators 동일.)
+**apply는 저위험 가산**.
+
+> ⚠️ **정정 (2026-06-15)**: 위에서 "planned-게이트의 validator를 active validator 리스트에 두는 게
+> 규약"이라 했으나 **틀렸다**. 런타임 loader는 active `validator_records`만 파싱하고 거기 validator의
+> gate_id를 active gate에서만 해소하므로, planned 게이트를 가리키는 validator가 active 리스트에 있으면
+> **load-throw**한다. PR #55가 그 상태로 적용돼 closure registry가 로드 실패했다(실 loader 재현).
+> 선례 `maturation-promotion-*` validator는 평탄 리스트가 아니라 **`planned_validator_records`** 섹션에
+> 있다(loader 미파싱). → gate-0 수정으로 judge validator를 `planned_validator_records`로 이동(§6). 상세
+> 설계·검증은 [R0 설계 문서](./20260615-runtime-judge-stage-r0-design.md).
 
 **신규 토큰 2개**
 - activation_condition `answer_support_judge_runtime_is_implemented` (서술 토큰; 별도 레지스트리 없음)
@@ -185,12 +192,18 @@ planned 가산이라 active-behavior 무변경 → no_drift 기대.
 | B-3 | registry `planned_validation_gate_catalog`: `answer_support_judgment_gate` (+prereq) |
 | B-4 | registry `required_when_predicate_catalog`: `answer_support_judgment_required` |
 | R-1 | registry `required_when_predicate_catalog`: `answer_support_judgment_uses_frontier_observation` |
-| B-5 | registry `validators`: `answer-support-judgment-validator` |
+| B-5 | registry `validators`→**`planned_validator_records`**: `answer-support-judgment-validator` (gate-0 정정) |
 | B-6 | registry `maturation-answer-claims-validator`: conditional input + conditional 의무 |
 
-**검증**: YAML 파싱 OK · 참조 체인 폐쇄(gate→predicate→prereq→validator→artifact) OK ·
-`check:invariant-drift` = `no_drift`(exit 0, G1~G5 passed) · **G4 통과 → 보호키 무접촉, INVARIANT-CHANGE
-마커 불필요** · spec-defaults passed. 전부 planned/target tier라 active 런 무영향.
+**검증(초기, 불충분했음)**: YAML 파싱 OK · grep 참조 체인 OK · `check:invariant-drift` = `no_drift`(G1~G5).
+→ **이 검증은 런타임 *loader* 무결성을 보지 못했다**(중대 갭).
+
+**gate-0 정정 (2026-06-15, ODKE+ R0 설계 중 발견·수정)**: 실 loader(`loadReconstructContractRegistry`)로
+돌려보니 closure registry가 **로드 실패**했다 — B-5를 active `validator_records`에 두었는데 그 gate는
+planned 카탈로그에만 있어 `references unknown gate answer_support_judgment_gate` throw. **수정**: judge
+validator를 active에서 **`planned_validator_records`**로 이동(planned-게이트 validator의 실제 선례).
+재검증: 실 loader **LOADED 39/39**(exit 0) · YAML OK · `check:invariant-drift` no_drift · judge tier=planned
+유지(행위 불변). **교훈: 이후 계약 변경 검증 루틴에 *실 loader 적재 체크*를 포함**.
 
 **후속(런타임)**: activation_condition `answer_support_judge_runtime_is_implemented` 구현 시 활성화 —
 별도 judge 파이프라인 단계(`AnswerSupportJudgment → answer_support_judgment` 귀속) + evaluator 토큰
