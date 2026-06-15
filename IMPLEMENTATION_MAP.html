@@ -34,7 +34,7 @@
 <main>
 
 <h1>onto-mcp Implementation Map</h1>
-<p class="stamp">기준: v0.4.11 (2026-06-15) · reconstruct maturation 런타임 judge 단계(ODKE+ 지지 게이트) 종결 (PR #55·#57·#58) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
+<p class="stamp">기준: v0.4.11 (2026-06-16) · reconstruct maturation 런타임 judge 단계(ODKE+ 지지 게이트) 종결 (PR #55·#57·#58) + opt-in per-stage judge LLM config (PR #62) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
 
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
@@ -45,9 +45,9 @@
   <div class="card"><h3>Health</h3>
     <p><span class="ok">vitest 101 files / 1103 passed</span> · 정적 체크 10종 green · CI(invariant-guards) PR마다 가동 · drift <span class="ok">no_drift</span> · registry 실 loader LOADED</p></div>
   <div class="card"><h3>다음 결정</h3>
-    <p><b>judge 트랙 잔여</b>: live 벤치마크(실 LLM convergent 시나리오, 비용)와 rubber-stamp residual(동일 모델/컨텍스트 — 구조 증명 불가, per-stage model/effort 분리가 레버)은 <b>tracked follow-up</b>(discovered-enhancements §7). · MCP Phase 2(원격/웹 Streamable HTTP+OAuth)는 방향만 기록.</p></div>
+    <p><b>judge 트랙 잔여</b>: rubber-stamp 근본 레버(per-stage model/effort 분리)는 <b>구현됨(PR #62)</b> — 단 효과는 judge를 <i>실제로 다른/강한 모델로</i> 쓰고 <b>live 벤치마크</b>(실 LLM convergent, 비용)로만 관찰 가능. 의미적 독립성 자체는 여전히 측정 불가(discovered-enhancements §7). · MCP Phase 2(원격/웹 Streamable HTTP+OAuth)는 방향만 기록.</p></div>
   <div class="card"><h3>주요 리스크</h3>
-    <p><span class="warn">judge rubber-stamp</span>(완화: context isolation·보수 기본·adversarial frame; 근본 해결 미적용·기록됨) · <span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift).</p></div>
+    <p><span class="warn">judge rubber-stamp</span>(완화: context isolation·보수 기본·adversarial frame + <b>per-stage model/effort 레버(PR #62)</b>; 단 의미적 독립성 측정 불가·다른 모델 사용 시만 발효) · <span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift).</p></div>
 </div>
 
 <!-- ───────── 서비스 블루프린트 ───────── -->
@@ -276,7 +276,8 @@
   <li><b>완료 — reconstruct closure hardening</b>(PR #55·#57·#58·#60): maturation closure 정지 기준을 신설 없이 굳힘. ODKE+ 지지 게이트 = <b>author≠judge 독립 judge</b>를 별도 저작 아티팩트로 분리(구조 강제). R1~R5: stage 배선 → judge LLM 저작(context isolation) → B-5/B-6 validator(convergent claim ≥2 독립 judge-confirmed, fail-closed) → 게이트 active 승격 → gate-enforce propagation E2E + 벤치 회귀. <b>3-리뷰 교차검증</b>(ultracode 6차원·onto 5렌즈·Codex): conflict-laundering·claim-own-evidence soundness 상보 포착·반영. 설계: <code>development-records/design/20260615-runtime-judge-stage-r0-design.md</code>.</li>
   <li><b>완료 — 지원 모델 레지스트리</b>(PR #54): INV-MODEL-1 — 모델 선택을 벤치-검증 모델로 제한(G7). gate=강제 / projection=순수 분리, effective-route 런타임 미러.</li>
   <li><b>완료 — MCP 호스트 사용성 Phase 1</b>(PR #50·#52·#56): 툴 16→12 병합 + simple/full 프로파일 · 폴링 acceptance(profile-aware sync window) · <code>onto configure-provider</code> · <code>.mcpb</code> 데스크탑 확장 + 첫실행 bootstrap. v0.4.10→Desktop 연결불가→<b>v0.4.11 핫픽스</b>(MCPB entry_point=import 가능한 <code>dist/mcpb-entry.js</code>). 실설치 검증 완료. 설계: <code>docs/architecture/mcp-native-tool-surface.md</code> · DD-010.</li>
-  <li><b>tracked follow-up</b>: judge rubber-stamp residual(동일 모델/컨텍스트 — 구조 증명 불가; per-stage model/effort 분리가 레버, <code>llmConfig</code> 단일 capture가 막음) · live 벤치마크(실 LLM convergent 시나리오) — <code>development-records/tracking/20260406-discovered-enhancements.md</code> §7.</li>
+  <li><b>완료 — opt-in per-stage judge LLM config</b>(PR #62): rubber-stamp residual의 근본 레버. judge가 의미저자와 다른 effort/model로 선택 실행(미설정 시 상속=회귀0); judgeModel은 author provider에서 해소·벤치-검증(INV-MODEL-1, model-provider 키)+같은-provider만 채택, 아니면 degrade. 노출=Core API·벤치 하니스·MCP <code>onto_reconstruct</code>. 4중 교차검증(ultracode×2·onto·Codex) 수렴.</li>
+  <li><b>tracked follow-up</b>: judge rubber-stamp — 레버는 구현됨, 그러나 의미적 독립성은 측정 불가이고 <b>다른/강한 모델로 실제 사용 + live 벤치마크</b>(실 LLM convergent, 비용)로만 효과 관찰 — <code>development-records/tracking/20260406-discovered-enhancements.md</code> §7.</li>
   <li><b>후속 결정 후보</b>: MCP Phase 2(원격/웹 Streamable HTTP+OAuth·멀티-artifact 번들) · claude CLI reconstruct E2E · evolve 트랙 활성화 · reconstruct spreadsheet/database 어댑터 · reconstruct effort 상수 settings 이관(G2 waiver).</li>
 </ul>
 
