@@ -118,6 +118,14 @@ export const OntoReconstructToolInputSchema = OntoObserveSourceToolInputSchema.e
   resumeMode: z.enum(["fresh", "reuse_existing_authored_artifacts"]).optional(),
   semanticAuthorRealization: z.enum(["direct_call"]).default("direct_call"),
   confirmationProviderRealization: z.enum(["direct_call"]).default("direct_call"),
+  // Optional reasoning-effort pin applied to both reconstruct actors (live only).
+  llmEffort: z.string().min(1).optional(),
+  // Opt-in per-stage answer-support JUDGE overrides (live only). judgeLlmEffort
+  // runs the judge at a different effort; judgeModel swaps the judge MODEL on the
+  // semantic author's provider. An unsupported judgeModel degrades to the author
+  // model (INV-MODEL-1); the judge otherwise inherits the semantic-author config.
+  judgeLlmEffort: z.string().min(1).optional(),
+  judgeModel: z.string().min(1).optional(),
 }).strict();
 
 export const OntoReconstructSessionInputSchema = z.object({

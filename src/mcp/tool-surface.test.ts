@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   OntoDeprecatedToolAliases,
+  OntoReconstructToolInputSchema,
   OntoSimpleProfileToolNames,
   OntoToolNames,
 } from "./tool-schemas.js";
+import { advertisedToolDefinitions } from "./server.js";
 
 // Pins the consolidated MCP tool surface from the Host Usability Roadmap
 // (docs/architecture/mcp-native-tool-surface.md §Phase 1). INV-TEST-1: these
@@ -69,5 +71,32 @@ describe("MCP tool surface (Host Usability Roadmap Phase 1)", () => {
     for (const alias of OntoDeprecatedToolAliases) {
       expect(full.has(alias)).toBe(false);
     }
+  });
+
+  it("exposes the reconstruct tuning + opt-in judge override fields on the onto_reconstruct surface", () => {
+    // The judge override (and the sibling llmEffort) must be reachable through
+    // the canonical MCP host path, not only the Core API / benchmark harness.
+    const parsed = OntoReconstructToolInputSchema.parse({
+      targetRefs: ["schedule.csv"],
+      intent: "reconstruct the schedule",
+      llmEffort: "high",
+      judgeLlmEffort: "high",
+      judgeModel: "gpt-5.5",
+    });
+    expect(parsed.llmEffort).toBe("high");
+    expect(parsed.judgeLlmEffort).toBe("high");
+    expect(parsed.judgeModel).toBe("gpt-5.5");
+
+    // Advertised JSON schema (what MCP clients see) carries the same fields.
+    const reconstructTool = advertisedToolDefinitions().find(
+      (tool) => tool.name === "onto_reconstruct",
+    );
+    expect(reconstructTool).toBeDefined();
+    const properties = (reconstructTool!.inputSchema as {
+      properties: Record<string, unknown>;
+    }).properties;
+    expect(properties.llmEffort).toBeDefined();
+    expect(properties.judgeLlmEffort).toBeDefined();
+    expect(properties.judgeModel).toBeDefined();
   });
 });
