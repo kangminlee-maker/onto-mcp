@@ -55,6 +55,11 @@ const GUARDS: GuardRun[] = [
     invariants: ["INV-AUTH-1", "INV-CFG-1", "INV-MATERIAL-1"],
     command: ["npx", "tsx", "scripts/check-invariant-change-marker.ts", baseRef],
   },
+  {
+    guard: "G7 supported-models",
+    invariants: ["INV-MODEL-1"],
+    command: ["npx", "tsx", "scripts/check-supported-models.ts"],
+  },
 ];
 
 async function runGuard(run: GuardRun): Promise<{ run: GuardRun; ok: boolean; detail: string }> {

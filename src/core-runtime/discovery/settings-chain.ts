@@ -14,6 +14,13 @@ import {
 import { fileExists } from "../review/review-artifact-utils.js";
 import type { ReviewStructuredFailureRecord } from "../review/artifact-types.js";
 import type { ReviewArtifactGenerationRealization } from "../review/artifact-types.js";
+import {
+  assertSupportedModelRoutes,
+  collectModelSelections,
+  type EffectiveModelRoute,
+  loadSupportedModelRegistry,
+  SUPPORTED_MODELS_AUTHORITY_PATH,
+} from "./supported-models.js";
 
 const LlmAuthModeSchema = z.enum(["api_key", "oauth", "local"]);
 const LlmProviderSchema = z.enum(["openai", "anthropic", "grok", "lmstudio"]);
@@ -1283,6 +1290,128 @@ function unitDefaultActorForSettingsValidation(
   }
 }
 
+/**
+ * Resolves the runtime-EFFECTIVE (provider, model) routes from merged settings
+ * for supported-model validation (INV-MODEL-1), mirroring how the runtime
+ * resolves each seat before it dispatches a real call. Every llm seat is found
+ * by {@link collectModelSelections} (including PROVIDER-ONLY seats, which the
+ * runtime still dispatches with the worker's default model):
+ * - A base seat (review/reconstruct actor, top-level llm) is validated as its
+ *   own (provider, model). If it carries only a provider (or only a model), the
+ *   missing half stays undefined so the gate fails loud — otherwise a
+ *   provider-only actor would dispatch (provider, worker-default-model) past the
+ *   gate, unverified.
+ * - A review-unit override (`review.execution.units.<id>.llm`) is merged over
+ *   its default actor's llm (`{...actorLlm, ...unitLlm}`, the runtime's own
+ *   unit→actor inheritance): the override's own half wins and the missing half
+ *   is inherited from the actor (model-only inherits the provider, provider-only
+ *   inherits the model), closing the partial-override bypass. If a half is
+ *   unresolved after inheritance, it stays undefined so the gate fails loud.
+ * - A salvage transcription model (`...retry.salvage.transcription_llm`) is
+ *   validated ONLY when `salvage.enabled === true`; when salvage is disabled it
+ *   never dispatches, so including it would be a false positive on an unused
+ *   setting. When enabled and provider-less it inherits the runtime's default
+ *   transcription provider (anthropic) — exact for the only dispatching case
+ *   (the claude_code adapter uses `provider ?? "anthropic"`; see
+ *   run-review-prompt-execution). Under the codex adapter a provider-less
+ *   transcription is NOT dispatched (it requires `provider === "openai"`), so
+ *   validating it as anthropic is a deliberate fail-closed over-approximation:
+ *   it can only over-restrict (require anthropic/<model> to be supported), never
+ *   admit an unverified live call.
+ * A seat that still has no resolvable provider OR model keeps it undefined so
+ * the membership check fails loud on it.
+ */
+export function collectEffectiveModelRoutes(
+  settings: OntoSettings,
+): EffectiveModelRoute[] {
+  const nodes = collectModelSelections(settings);
+  const providerAtPath = new Map<string, string>();
+  const modelAtPath = new Map<string, string>();
+  for (const node of nodes) {
+    if (node.provider !== undefined) providerAtPath.set(node.path, node.provider);
+    if (node.model !== undefined) modelAtPath.set(node.path, node.model);
+  }
+  const actorLlmPathFor = (unitId: ReviewExecutionUnitId): string => {
+    const actor = unitDefaultActorForSettingsValidation(unitId);
+    const nested = `review.execution.actors.${actor}.llm`;
+    return modelAtPath.has(nested) || providerAtPath.has(nested)
+      ? nested
+      : `review.execution.${actor}.llm`;
+  };
+  const reviewUnitOf = (nodePath: string): ReviewExecutionUnitId | undefined => {
+    const match = /^review\.execution\.units\.([^.[]+)\.llm$/.exec(nodePath);
+    if (!match) return undefined;
+    const unitId = match[1] as ReviewExecutionUnitId;
+    return REVIEW_EXECUTION_UNIT_IDS.includes(unitId) ? unitId : undefined;
+  };
+  // The runtime default transcription provider when a salvage transcription_llm
+  // omits provider (see run-review-prompt-execution: `provider ?? "anthropic"`).
+  const DEFAULT_TRANSCRIPTION_PROVIDER = "anthropic";
+  const isSalvageTranscription = (nodePath: string): boolean =>
+    /(^|\.)retry\.salvage\.transcription_llm$/.test(nodePath);
+
+  // A salvage transcription model is only dispatched when salvage is enabled
+  // (the runner enters salvage only on `salvage.enabled === true`). When salvage
+  // is disabled the model never runs, so validating it would be a false positive
+  // that could block G7 or a live run on an unused setting.
+  const salvageEnabled =
+    settings.review?.execution?.retry?.salvage?.enabled === true;
+
+  return nodes.flatMap((node) => {
+    if (isSalvageTranscription(node.path)) {
+      if (!salvageEnabled) return []; // disabled salvage transcription never dispatches
+      return [{ ...node, provider: node.provider ?? DEFAULT_TRANSCRIPTION_PROVIDER }];
+    }
+    const unitId = reviewUnitOf(node.path);
+    if (unitId) {
+      // A review-unit override merges over its default actor llm
+      // (`{...actorLlm, ...unitLlm}`): the override's own half wins, the missing
+      // half is inherited from the actor. Either half left unresolved → fail loud.
+      const actorPath = actorLlmPathFor(unitId);
+      return [{
+        provider: node.provider ?? providerAtPath.get(actorPath),
+        model: node.model ?? modelAtPath.get(actorPath),
+        path: node.path,
+      }];
+    }
+    // Actors, reconstruct actors, and the top-level llm are base seats: validated
+    // as their own (provider, model). A provider-only base seat keeps model
+    // undefined (and vice versa) so the gate fails loud — the runtime would
+    // otherwise dispatch it with the worker's default model, an unverifiable route.
+    return [node];
+  });
+}
+
+/**
+ * Runtime gate (INV-MODEL-1): throws if any effective model route in `settings`
+ * is not benchmark-verified in the authority registry. Deliberately separate
+ * from {@link resolveSettingsChain} — resolution is a pure projection, this is a
+ * gate. Its current live call site is the reconstruct live execution boundary
+ * (where real, paid provider calls begin; review-side runtime enforcement is a
+ * noted follow-up); it is also called by the G7 CI guard on the committed
+ * config, so the runtime and the guard validate through one function and cannot
+ * disagree. Mock/test paths that resolve settings without making real calls
+ * never invoke it.
+ */
+export function assertSettingsModelsSupported(settings: OntoSettings): void {
+  try {
+    assertSupportedModelRoutes(
+      collectEffectiveModelRoutes(settings),
+      loadSupportedModelRegistry(),
+    );
+  } catch (error) {
+    if (error instanceof OntoSettingsValidationError) throw error;
+    throw new OntoSettingsValidationError({
+      message: error instanceof Error ? error.message : String(error),
+      reasonCode: "settings_unsupported_model",
+      details: {
+        supported_models_authority: SUPPORTED_MODELS_AUTHORITY_PATH,
+        validation_error: error instanceof Error ? error.message : String(error),
+      },
+    });
+  }
+}
+
 function mergeSettings(
   user: OntoSettings,
   project: OntoSettings,
@@ -1514,5 +1643,11 @@ export async function resolveSettingsChain(
       },
     });
   }
+  // Settings resolution is a pure projection (merge → effective settings). The
+  // benchmark-verified-model gate (INV-MODEL-1) is NOT applied here: it is a
+  // gate, not a projection, and is applied via assertSettingsModelsSupported at
+  // the reconstruct live execution boundary (real provider calls) and the G7 CI
+  // guard on the committed config. Keeping resolution pure lets mock/test paths
+  // resolve settings with arbitrary fixture models without tripping the model gate.
   return merged;
 }
