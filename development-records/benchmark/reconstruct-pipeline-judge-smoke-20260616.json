@@ -1,0 +1,792 @@
+{
+  "benchmark": "reconstruct-pipeline",
+  "record_family": "pipeline-benchmark (specializes the review-pipeline-* record family; shared fields unchanged, reconstruct facts in reconstruct_extension)",
+  "status": "PRELIMINARY — not decision-grade",
+  "status_reason": "performance evidence below INV-BENCH-1 thresholds (runs>=3, fixtures>=2); scored quality evidence covers 1 distinct fixture(s); INV-BENCH-1 needs >=2",
+  "evidence": {
+    "performance": {
+      "repetitions": 1,
+      "fixture_count": 1,
+      "succeeded_run_count": 1,
+      "failed_run_count": 0,
+      "meets_inv_bench_1": false
+    },
+    "quality": {
+      "scored_run_count": 1,
+      "not_applicable_run_count": 0,
+      "rejected_run_count": 0
+    }
+  },
+  "realization": "live",
+  "requested_effort": null,
+  "requested_judge_override": {
+    "effort": "high",
+    "model": "gpt-5.5"
+  },
+  "fixtures": [
+    "reconstruct-golden-target-v1"
+  ],
+  "repetitions": 1,
+  "generated_at": "2026-06-15T17:00:25.648Z",
+  "commit": "f7299d549e7b37840d789ca60046229d8c45d9a6",
+  "working_tree_state": "clean",
+  "metrics": {
+    "duration_s": {
+      "reconstruct-golden-target-v1": {
+        "mean": 709.732,
+        "stdev": 0,
+        "min": 709.732,
+        "max": 709.732,
+        "n": 1
+      }
+    },
+    "total_llm_duration_ms": {
+      "reconstruct-golden-target-v1": {
+        "mean": 708595,
+        "stdev": 0,
+        "min": 708595,
+        "max": 708595,
+        "n": 1
+      }
+    },
+    "total_llm_call_count": {
+      "reconstruct-golden-target-v1": {
+        "mean": 25,
+        "stdev": 0,
+        "min": 25,
+        "max": 25,
+        "n": 1
+      }
+    },
+    "total_prompt_chars": {
+      "reconstruct-golden-target-v1": {
+        "mean": 410585,
+        "stdev": 0,
+        "min": 410585,
+        "max": 410585,
+        "n": 1
+      }
+    },
+    "total_output_chars": {
+      "reconstruct-golden-target-v1": {
+        "mean": 150363,
+        "stdev": 0,
+        "min": 150363,
+        "max": 150363,
+        "n": 1
+      }
+    }
+  },
+  "comparison_conclusion": null,
+  "reconstruct_extension": {
+    "quality": {
+      "scored_run_count": 1,
+      "unscored_runs": [],
+      "q1_recall": {
+        "mean": 0.75,
+        "stdev": 0,
+        "min": 0.75,
+        "max": 0.75,
+        "n": 1
+      },
+      "q2_support_rate": {
+        "mean": 0.5,
+        "stdev": 0,
+        "min": 0.5,
+        "max": 0.5,
+        "n": 1
+      },
+      "q3_dropped_questions": {
+        "mean": 0,
+        "stdev": 0,
+        "min": 0,
+        "max": 0,
+        "n": 1
+      }
+    },
+    "completed_run_internal_failure_class_counts": {},
+    "failed_run_failure_class_counts": {},
+    "failed_runs": []
+  },
+  "runs": [
+    {
+      "run_index": 1,
+      "fixture_id": "reconstruct-golden-target-v1",
+      "realization": "live",
+      "target_path": "src/fixture-service.ts",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/reconstruct-benchmark-reconstruct-golden-target-v1-GxMQel/.onto/reconstruct/benchmark-run-1",
+      "duration_s": 709.732,
+      "totals": {
+        "llm_call_count": 25,
+        "llm_duration_ms": 708595,
+        "prompt_chars": 410585,
+        "output_chars": 150363,
+        "failure_class_counts": {}
+      },
+      "units": [
+        {
+          "step_id": "observation_directive",
+          "unit_id": "observation_directive",
+          "llm_call_count": 1,
+          "duration_ms": 13212,
+          "prompt_chars": 9337,
+          "output_chars": 701,
+          "provider_tokens_in": 2336,
+          "provider_tokens_out": 176,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+          "source_identity_refs": [
+            "prompt_policy_sha256:4865d28070cf0f37506a7b90d5165145015ecb05a2380091f945974b7d256c72",
+            "authored_artifact:SourceObservationDirective"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 13212
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "lens_judgment",
+          "unit_id": "lens_judgment",
+          "llm_call_count": 9,
+          "duration_ms": 155716,
+          "prompt_chars": 52704,
+          "output_chars": 14368,
+          "provider_tokens_in": 13193,
+          "provider_tokens_out": 3596,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b4802d1e41abee3ada46a8ab7f768c1637f6ee303690e6fb7f04ff3348a50968",
+            "authored_artifact:ReconstructLensJudgment:logic",
+            "authored_artifact:ReconstructLensJudgment:structure",
+            "authored_artifact:ReconstructLensJudgment:dependency",
+            "authored_artifact:ReconstructLensJudgment:semantics",
+            "authored_artifact:ReconstructLensJudgment:pragmatics",
+            "authored_artifact:ReconstructLensJudgment:evolution",
+            "authored_artifact:ReconstructLensJudgment:coverage",
+            "authored_artifact:ReconstructLensJudgment:conciseness",
+            "authored_artifact:ReconstructLensJudgment:axiology"
+          ],
+          "attempt_count": 9,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 15567
+            },
+            {
+              "attempt": 2,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 17175
+            },
+            {
+              "attempt": 3,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 22384
+            },
+            {
+              "attempt": 4,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 19815
+            },
+            {
+              "attempt": 5,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 17902
+            },
+            {
+              "attempt": 6,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 18772
+            },
+            {
+              "attempt": 7,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 17042
+            },
+            {
+              "attempt": 8,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 11611
+            },
+            {
+              "attempt": 9,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 15448
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "exploration_synthesis",
+          "unit_id": "exploration_synthesis",
+          "llm_call_count": 1,
+          "duration_ms": 20369,
+          "prompt_chars": 19530,
+          "output_chars": 3274,
+          "provider_tokens_in": 4885,
+          "provider_tokens_out": 819,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b5fb9bda505ef7228f88df5c9cbd312b0d56a563f9d742a9fe55fdbac6777788",
+            "authored_artifact:ExplorationSynthesis"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 20369
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_frontier",
+          "unit_id": "source_frontier",
+          "llm_call_count": 1,
+          "duration_ms": 9446,
+          "prompt_chars": 6842,
+          "output_chars": 326,
+          "provider_tokens_in": 1713,
+          "provider_tokens_out": 82,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+          "source_identity_refs": [
+            "prompt_policy_sha256:05b4758bfe232bb65809265051586494b50486f8bbaeec48b08ffe1cb35dd298",
+            "authored_artifact:SourceFrontier"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 9446
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "source_purpose_candidates",
+          "unit_id": "source_purpose_candidates",
+          "llm_call_count": 1,
+          "duration_ms": 33364,
+          "prompt_chars": 20665,
+          "output_chars": 9287,
+          "provider_tokens_in": 5168,
+          "provider_tokens_out": 2322,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:843ff7f7e6fc11aa5c70fed1bd4d989a435f91a15d40d1b5918a2f53e4fe2d1f",
+            "authored_artifact:SourcePurposeCandidates"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 33364
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_inventory",
+          "unit_id": "candidate_inventory",
+          "llm_call_count": 1,
+          "duration_ms": 25792,
+          "prompt_chars": 22107,
+          "output_chars": 5603,
+          "provider_tokens_in": 5529,
+          "provider_tokens_out": 1401,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+          "source_identity_refs": [
+            "prompt_policy_sha256:9f63e69f2f160d43174aa60b3ea4709b76e329f9bfaf7fd602d647e92fb335fd",
+            "authored_artifact:CandidateInventory"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 25792
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "candidate_disposition",
+          "unit_id": "candidate_disposition",
+          "llm_call_count": 1,
+          "duration_ms": 24606,
+          "prompt_chars": 18363,
+          "output_chars": 5640,
+          "provider_tokens_in": 4593,
+          "provider_tokens_out": 1410,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+          "source_identity_refs": [
+            "prompt_policy_sha256:f8ab663ae7de257c595ee6cec29b01995d443bffe5803e9f3c312b1e45046844",
+            "authored_artifact:CandidateDisposition"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 24606
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "ontology_seed",
+          "unit_id": "ontology_seed",
+          "llm_call_count": 1,
+          "duration_ms": 216410,
+          "prompt_chars": 61012,
+          "output_chars": 67750,
+          "provider_tokens_in": 15255,
+          "provider_tokens_out": 16938,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "073211f0228e8ff1c1c7c94eb72651fb1e4800cc5c7b9d342c4c3136cea2fe71",
+          "source_identity_refs": [
+            "prompt_policy_sha256:073211f0228e8ff1c1c7c94eb72651fb1e4800cc5c7b9d342c4c3136cea2fe71",
+            "authored_artifact:OntologySeed"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 216410
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "claim_realization",
+          "unit_id": "claim_realization",
+          "llm_call_count": 1,
+          "duration_ms": 31172,
+          "prompt_chars": 17475,
+          "output_chars": 7542,
+          "provider_tokens_in": 4371,
+          "provider_tokens_out": 1886,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+          "source_identity_refs": [
+            "prompt_policy_sha256:5b9a9b5eb1f337071c2e54d2385c53a8a1f35255f0edd7032cd7a192faca29f2",
+            "authored_artifact:ClaimRealizationMap"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 31172
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "seed_confirmation",
+          "unit_id": "seed_confirmation",
+          "llm_call_count": 1,
+          "duration_ms": 14218,
+          "prompt_chars": 14865,
+          "output_chars": 1745,
+          "provider_tokens_in": 3718,
+          "provider_tokens_out": 437,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+          "source_identity_refs": [
+            "prompt_policy_sha256:3ab8a1272d0db67f1c0ca7c1a114c94ae71acac8f92f13f73bc4fb2fbde70b33",
+            "authored_artifact:SeedConfirmation"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 14218
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_questions",
+          "unit_id": "competency_questions",
+          "llm_call_count": 1,
+          "duration_ms": 54695,
+          "prompt_chars": 35125,
+          "output_chars": 16959,
+          "provider_tokens_in": 8783,
+          "provider_tokens_out": 4240,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+          "source_identity_refs": [
+            "prompt_policy_sha256:fa90e328e1347978dd8d582d168bf23375ea6c002c72625f10367e4558c1ae1a",
+            "authored_artifact:CompetencyQuestions"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 54695
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "competency_question_assessment",
+          "unit_id": "competency_question_assessment",
+          "llm_call_count": 1,
+          "duration_ms": 25626,
+          "prompt_chars": 37091,
+          "output_chars": 6715,
+          "provider_tokens_in": 9275,
+          "provider_tokens_out": 1679,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+          "source_identity_refs": [
+            "prompt_policy_sha256:d97ececbab3c5c1d986ac4b845dec690d432074617e6a041b58db13738de136b",
+            "authored_artifact:CompetencyQuestionAssessment"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 25626
+            }
+          ],
+          "batch_count": 1
+        },
+        {
+          "step_id": "failure_classification",
+          "unit_id": "failure_classification",
+          "llm_call_count": 1,
+          "duration_ms": 16581,
+          "prompt_chars": 21832,
+          "output_chars": 2040,
+          "provider_tokens_in": 5460,
+          "provider_tokens_out": 510,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+          "source_identity_refs": [
+            "prompt_policy_sha256:8727475494696148117ed084241f46c7a002a016b028caed0a4392523be3191e",
+            "authored_artifact:FailureClassification"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 16581
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "revision_proposal",
+          "unit_id": "revision_proposal",
+          "llm_call_count": 1,
+          "duration_ms": 17287,
+          "prompt_chars": 5008,
+          "output_chars": 2175,
+          "provider_tokens_in": 1254,
+          "provider_tokens_out": 544,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+          "source_identity_refs": [
+            "prompt_policy_sha256:32e98dea04b9e55059eca06ec8d824b6ae57d438789fa4a1e05bcbbf3a4d86b9",
+            "authored_artifact:RevisionProposal"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 17287
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "stop_decision",
+          "unit_id": "stop_decision",
+          "llm_call_count": 1,
+          "duration_ms": 17786,
+          "prompt_chars": 9662,
+          "output_chars": 1488,
+          "provider_tokens_in": 2418,
+          "provider_tokens_out": 372,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "6a32be664c8cddb02893b3c15fa8c51bf1008bcf6d7f27bd924228474d1eb07c",
+          "source_identity_refs": [
+            "prompt_policy_sha256:6a32be664c8cddb02893b3c15fa8c51bf1008bcf6d7f27bd924228474d1eb07c",
+            "authored_artifact:StopDecision"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 17786
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "answer_support_ledger",
+          "unit_id": "answer_support_ledger",
+          "llm_call_count": 1,
+          "duration_ms": 5800,
+          "prompt_chars": 8320,
+          "output_chars": 24,
+          "provider_tokens_in": 2082,
+          "provider_tokens_out": 6,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+          "source_identity_refs": [
+            "prompt_policy_sha256:b9cf678092de1d6570b9729fe7b9dd75899d48d4fa4d0ea006233c55e8eabd3f",
+            "authored_artifact:AnswerSupportLedger"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 5800
+            }
+          ],
+          "batch_count": null
+        },
+        {
+          "step_id": "final_output",
+          "unit_id": "final_output",
+          "llm_call_count": 1,
+          "duration_ms": 26515,
+          "prompt_chars": 50647,
+          "output_chars": 4726,
+          "provider_tokens_in": 12664,
+          "provider_tokens_out": 1182,
+          "provider_route": "codex",
+          "model_id": "gpt-5.5",
+          "effort": "xhigh",
+          "prompt_policy_sha256": "07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+          "source_identity_refs": [
+            "prompt_policy_sha256:07a82f3cd7c76a43a1f8bf33911c4516d36e16257e687c382350a31c52296535",
+            "authored_artifact:FinalOutput"
+          ],
+          "attempt_count": 1,
+          "attempts": [
+            {
+              "attempt": 1,
+              "kind": "initial",
+              "status": "succeeded",
+              "failure_class": null,
+              "failure_message": null,
+              "duration_ms": 26515
+            }
+          ],
+          "batch_count": null
+        }
+      ],
+      "quality_gate": {
+        "fixture_id": "reconstruct-golden-target-v1",
+        "scope": "fixture_specific",
+        "realization": "live",
+        "status": "failed",
+        "source_field_rejections": [],
+        "q1": {
+          "expected_count": 4,
+          "matched_count": 3,
+          "recall": 0.75,
+          "missing_concept_keys": [
+            "fixture-source-binding"
+          ],
+          "matches": [
+            {
+              "concept_key": "fixture-service",
+              "matched_name": "Fixture service record",
+              "seed_family": "conceptual_frame.concepts"
+            },
+            {
+              "concept_key": "fixture-user",
+              "matched_name": "Fixture user",
+              "seed_family": "conceptual_frame.concepts"
+            },
+            {
+              "concept_key": "explain-fixture",
+              "matched_name": "Fixture explanation",
+              "seed_family": "conceptual_frame.concepts"
+            }
+          ]
+        },
+        "q2": {
+          "population": 4,
+          "supported_count": 2,
+          "support_rate": 0.5,
+          "rows": [
+            {
+              "cq_key": "cq-fixture-service",
+              "matched_question_id": "cq-1",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-fixture-user",
+              "matched_question_id": "cq-3",
+              "answer_status": "partially_answerable",
+              "supported": false
+            },
+            {
+              "cq_key": "cq-explain-fixture",
+              "matched_question_id": "cq-2",
+              "answer_status": "answerable",
+              "supported": true
+            },
+            {
+              "cq_key": "cq-fixture-source-binding",
+              "matched_question_id": null,
+              "answer_status": null,
+              "supported": false
+            }
+          ]
+        },
+        "q3": {
+          "authored_question_count": 8,
+          "assessed_question_count": 8,
+          "dropped_question_count": 0,
+          "dropped_question_ids": [],
+          "batch_count": 1
+        }
+      },
+      "metadata": {
+        "project_root": "/Users/kangmin/cowork/onto-mcp-closure",
+        "commit": "f7299d549e7b37840d789ca60046229d8c45d9a6",
+        "node_version": "v26.0.0",
+        "model_id": "gpt-5.5",
+        "provider_route": "codex",
+        "applied_effort": "xhigh",
+        "unit_timeout_ms": 120000,
+        "started_at": "2026-06-15T16:48:35.901Z"
+      }
+    }
+  ]
+}
