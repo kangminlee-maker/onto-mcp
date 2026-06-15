@@ -8,7 +8,7 @@
   "execution_adapter": "claude_code",
   "auth": "oauth",
   "effort": "medium",
-  "verified_with": "ONTO_LLM_TIMEOUT_MS=600000 (the seed-authoring opus call exceeds the 120000ms default)",
+  "verified_with": "the run used ONTO_LLM_TIMEOUT_MS=600000; this is now the CLI worker default (DEFAULT_WORKER_TIMEOUT_MS) since the slow opus seed-authoring call exceeds the 120000ms SDK default — so support holds under default settings",
   "fixture": "reconstruct-golden-target-v1",
   "target": "src/fixture-service.ts",
   "branch_commit": "d8347bdf87af0d2c210e2b8cf15be42f2352ff2b",

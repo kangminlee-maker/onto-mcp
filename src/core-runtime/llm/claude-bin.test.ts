@@ -25,6 +25,23 @@ function tmp(): string {
   return d;
 }
 
+/**
+ * Disable the resolver's absolute common-install locations (/opt/homebrew/...,
+ * /usr/local/...) for a test, so a fallback expectation does not flake on a host
+ * that actually has Claude installed there. Real access for everything else
+ * (the test's tmp PATH/home dirs) is preserved.
+ */
+function blockAbsoluteInstallLocations(): void {
+  const realAccess = fs.accessSync;
+  vi.spyOn(fs, "accessSync").mockImplementation((p: fs.PathLike, mode?: number) => {
+    const s = String(p);
+    if (s.startsWith("/opt/homebrew/") || s.startsWith("/usr/local/")) {
+      throw Object.assign(new Error("ENOENT (test-blocked)"), { code: "ENOENT" });
+    }
+    return realAccess(p, mode);
+  });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   while (tmpDirs.length) fs.rmSync(tmpDirs.pop()!, { recursive: true, force: true });
@@ -65,7 +82,8 @@ describe("resolveClaudeBin", () => {
     const p = path.join(dir, "claude");
     fs.writeFileSync(p, "#!/bin/sh\n");
     fs.chmodSync(p, 0o644); // not executable
-    vi.spyOn(os, "homedir").mockReturnValue(tmp()); // empty home → no common-loc hit
+    vi.spyOn(os, "homedir").mockReturnValue(tmp()); // empty home → no home-loc hit
+    blockAbsoluteInstallLocations(); // ignore a real homebrew/usr-local claude
     const env = { PATH: dir } as NodeJS.ProcessEnv;
     // Not executable → not found on PATH → no common location → bare "claude".
     expect(resolveClaudeBin(env)).toBe("claude");
@@ -104,7 +122,8 @@ describe("resolveClaudeBin", () => {
   });
 
   it("falls back to the bare name when nothing is found", () => {
-    vi.spyOn(os, "homedir").mockReturnValue(tmp()); // empty home → no common locations
+    vi.spyOn(os, "homedir").mockReturnValue(tmp()); // empty home → no home-loc hit
+    blockAbsoluteInstallLocations(); // ignore a real homebrew/usr-local claude
     const env = { PATH: "/nonexistent/bin" } as NodeJS.ProcessEnv;
     expect(resolveClaudeBin(env)).toBe("claude");
   });

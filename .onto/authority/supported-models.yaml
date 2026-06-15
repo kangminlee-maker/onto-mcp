@@ -35,7 +35,9 @@ supported_models:
       OAuth Claude Code CLI worker (execution_adapter=claude_code):
       record_stage=completed with final_output present and provenance valid; the
       maturation track ran to a `blocked` continuation decision (no actionable
-      ontology emitted). Verified with ONTO_LLM_TIMEOUT_MS=600000 (the
-      seed-authoring opus call exceeds the 120000ms default). Single-run
-      completion proof (PRELIMINARY for any performance claim, INV-BENCH-1 needs
-      >=3 reps / >=2 fixtures); support — model completes the pipeline — verified.
+      ontology emitted). The CLI worker path (codex_cli/claude_code) uses the
+      600000ms DEFAULT_WORKER_TIMEOUT_MS — the slow opus seed-authoring call
+      exceeds the 120000ms SDK default — so support holds under default settings
+      (no unencoded env override required). Single-run completion proof
+      (PRELIMINARY for any performance claim, INV-BENCH-1 needs >=3 reps /
+      >=2 fixtures); support — model completes the pipeline — verified.

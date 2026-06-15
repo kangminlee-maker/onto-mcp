@@ -51,12 +51,15 @@ async function runOnce(attempt: number): Promise<AttemptOutcome> {
   const projectRoot = await fs.mkdtemp(
     path.join(os.tmpdir(), `onto-claude-live-a${attempt}-`),
   );
-  // Hermetic: point HOME at an empty tmp dir so the settings chain's user seat
-  // (~/.onto/settings.json) cannot leak the host's provider routes into this
-  // run — the tmp project seat is the only configured seat. (ONTO_CLAUDE_BIN /
-  // CLAUDE_CONFIG_DIR for the worker login are still inherited from the parent.)
-  process.env.HOME = await fs.mkdtemp(path.join(os.tmpdir(), `onto-claude-home-a${attempt}-`));
-  log(`[attempt ${attempt}] isolated project: ${projectRoot} (HOME=${process.env.HOME})`);
+  // NOTE: we deliberately do NOT rewrite $HOME to isolate the user seat. Doing
+  // so would point resolveClaudeBin()'s common-location lookup (~/.local/bin,
+  // ~/.claude/local) and the Claude Code login (~/.claude) at an empty dir —
+  // breaking the worker in the exact minimal-PATH scenario this reproduces. The
+  // host user seat (~/.onto/settings.json) does NOT leak the reconstruct route:
+  // the tmp PROJECT seat sets all reconstruct+review actors to anthropic and
+  // wins the merge; any other user-seat routes the gate sees (gpt-5.5) are
+  // already registered, so the run stays a faithful claude_code proof.
+  log(`[attempt ${attempt}] isolated project: ${projectRoot}`);
 
   for (const [rel, content] of Object.entries(spec.files)) {
     const p = path.join(projectRoot, rel);
@@ -113,9 +116,14 @@ async function runOnce(attempt: number): Promise<AttemptOutcome> {
   // reconstruct's terminal record_stage is exactly "completed" (no
   // "completed_with_degradation" — that is review-pipeline vocabulary).
   const completed = status === "completed";
-  const usedClaude = telemetrySteps.some(
-    (t) => /claude/i.test(String(t.model_id)) || t.provider_route === "anthropic",
-  );
+  // EVERY model-call step must be the claude_code route on the registered model
+  // — `.some` would let a leaked/openai-routed step still write claude evidence.
+  const modelCallSteps = telemetrySteps.filter((t) => t.model_id != null);
+  const usedClaude =
+    modelCallSteps.length > 0 &&
+    modelCallSteps.every(
+      (t) => t.provider_route === "anthropic" && String(t.model_id) === MODEL,
+    );
   log(`[attempt ${attempt}] status=${status} duration_s=${durationS.toFixed(1)} final=${result.finalOutputPath ?? "(none)"}`);
   return {
     attempt, startedAt, durationS, status, completed, usedClaude,
