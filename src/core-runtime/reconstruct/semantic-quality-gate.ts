@@ -373,16 +373,18 @@ function conceptMatch(
 
 /**
  * Explicit no-call exemptions: the only LLM-owned units with a runtime path
- * that completes without any LLM call (a not-required purpose confirmation,
- * or maturation units the runtime authors as empty projections when the
- * question frontier is empty). Every other completed non-runtime unit must
- * carry telemetry — reject-by-default, so a newly added authored unit cannot
- * silently skip measurement provenance.
+ * that completes without any LLM call (a not-required purpose confirmation, or
+ * maturation units the runtime authors as empty projections — when the question
+ * frontier is empty, or, for the answer-support judge, when the ledger has no
+ * convergent_source_evidence cluster). Every other completed non-runtime unit
+ * must carry telemetry — reject-by-default, so a newly added authored unit
+ * cannot silently skip measurement provenance.
  */
 const NO_CALL_EXEMPT_UNIT_IDS: ReadonlySet<string> = new Set([
   "purpose_confirmation",
   "maturation_question_frontier",
   "maturation_closure_frontier",
+  "answer_support_judgment",
   "maturation_answer_claims",
   "ontology_expansion",
 ]);
