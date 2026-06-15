@@ -200,11 +200,23 @@ const DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT = 6000;
 export const DOCUMENT_EXCERPT_CHAR_LIMIT = 200_000;
 const TEXT_READABLE_DOCUMENT_EXTENSIONS = new Set([".md", ".txt", ".adoc"]);
 
+/**
+ * A text-readable document earns the whole-document excerpt budget. Both the capture
+ * (here) and the seed-stage prompt projection (run.ts) consult this single predicate so
+ * a binary document (.pdf/.docx/.ppt/.rtf) is never expanded — neither the captured
+ * artifact nor the prompt carries decoded binary bytes.
+ */
+export function isTextReadableDocumentExtension(
+  extension: string | null | undefined,
+): boolean {
+  return (
+    typeof extension === "string" &&
+    TEXT_READABLE_DOCUMENT_EXTENSIONS.has(extension.toLowerCase())
+  );
+}
+
 function structuralExcerptCharLimit(kind: TargetMaterialKind, ref: string): number {
-  if (
-    kind === "document" &&
-    TEXT_READABLE_DOCUMENT_EXTENSIONS.has(path.extname(ref).toLowerCase())
-  ) {
+  if (kind === "document" && isTextReadableDocumentExtension(path.extname(ref))) {
     return DOCUMENT_EXCERPT_CHAR_LIMIT;
   }
   return DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;

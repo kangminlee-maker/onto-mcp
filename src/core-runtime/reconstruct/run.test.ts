@@ -552,14 +552,14 @@ describe("runReconstruct", () => {
     const longExcerpt = "goal milestone problem ".repeat(120); // > seed-stage budget
     expect(longExcerpt.length).toBeGreaterThan(1200);
 
-    const docObservation = (id: string) => ({
+    const docObservation = (id: string, extension = ".md") => ({
       observation_id: id,
       target_material_kind: "document" as const,
       adapter_id: "fixture-observer",
-      source_ref: `/doc/${id}.md`,
+      source_ref: `/doc/${id}${extension}`,
       location: "file",
       summary: `Document fixture ${id}.`,
-      structural_data: { content_excerpt: longExcerpt },
+      structural_data: { content_excerpt: longExcerpt, extension },
     });
 
     const projectedExcerptLengths = (
@@ -590,6 +590,10 @@ describe("runReconstruct", () => {
         docObservation("obs-doc-b"),
       ]),
     ).toEqual([1200, 1200]);
+    // A single BINARY document (only a 6K structural sample is captured) is not expanded
+    // — its decoded-binary excerpt stays bounded to the seed-stage budget.
+    expect(projectedExcerptLengths([docObservation("obs-doc-pdf", ".pdf")]))
+      .toEqual([1200]);
   });
 
   it("canonicalizes duplicate direct-call source observation selections", async () => {

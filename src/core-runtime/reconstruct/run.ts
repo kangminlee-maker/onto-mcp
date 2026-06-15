@@ -99,6 +99,7 @@ import { writeSourceObservationDirectiveValidationArtifact } from "./directive-v
 import {
   buildReconstructSourceObservation,
   DOCUMENT_EXCERPT_CHAR_LIMIT,
+  isTextReadableDocumentExtension,
   materializeReconstructPreparationArtifacts,
 } from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
@@ -1141,6 +1142,14 @@ function authoredArtifactReuseMatch(args: {
           char_count: observation.structural_data.char_count ?? null,
           content_sha256: observation.structural_data.content_sha256 ?? null,
           excerpt_truncated: observation.structural_data.excerpt_truncated ?? null,
+          // Captured excerpt length distinguishes runs authored under different capture
+          // budgets (e.g. the 6K vs 200K document cap): for a document longer than both
+          // caps `excerpt_truncated` stays true and char_count/sha are identical, so
+          // without this a resume could reuse artifacts authored from only the old lead.
+          content_excerpt_length:
+            typeof observation.structural_data.content_excerpt === "string"
+              ? observation.structural_data.content_excerpt.length
+              : null,
         },
       })),
       skipped_refs: args.sourceObservations.skipped_refs.map((skipped) => ({
@@ -5374,7 +5383,10 @@ function chunkArray<T>(items: T[], size: number): T[][] {
  *     same numeric budget; and
  *   - the prompt projects a SINGLE observation — a multi-document bundle or a mixed
  *     directory (both already-accepted inputs) would otherwise multiply the bounded
- *     catalog into a context-overflowing prompt.
+ *     catalog into a context-overflowing prompt; and
+ *   - the observation is a text-readable document (`isTextReadableDocumentExtension`) —
+ *     a binary document (.pdf/.docx) captured only the small structural sample, so
+ *     expanding it would resend decoded binary bytes rather than the bounded excerpt.
  * Multi-document / over-window budget-aware selection is deferred (see
  * development-records/design/20260616-large-input-observation).
  */
@@ -5382,8 +5394,13 @@ function effectiveContentExcerptCharLimit(
   baseLimit: number | undefined,
   targetMaterialKind: string | undefined,
   expandDocument: boolean,
+  extension: string | null | undefined,
 ): number | undefined {
-  if (expandDocument && targetMaterialKind === "document") {
+  if (
+    expandDocument &&
+    targetMaterialKind === "document" &&
+    isTextReadableDocumentExtension(extension)
+  ) {
     return DOCUMENT_EXCERPT_CHAR_LIMIT;
   }
   return baseLimit;
@@ -5395,10 +5412,13 @@ function compactStructuralDataForPrompt(
   targetMaterialKind: string | undefined,
   expandDocument: boolean,
 ): Record<string, unknown> {
+  const extension =
+    typeof structuralData.extension === "string" ? structuralData.extension : null;
   const limit = effectiveContentExcerptCharLimit(
     contentExcerptCharLimit,
     targetMaterialKind,
     expandDocument,
+    extension,
   );
   if (!limit) return structuralData;
   const compacted: Record<string, unknown> = { ...structuralData };
