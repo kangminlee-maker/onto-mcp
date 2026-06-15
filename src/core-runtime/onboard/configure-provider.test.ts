@@ -146,6 +146,66 @@ describe("writeProviderSettings", () => {
     expect(loaded.review?.mode).toBe("full");
   });
 
+  it("reads an existing settings file that contains # comments (comment-aware parse, not JSON.parse)", async () => {
+    const settingsPath = await makeTmpSettingsPath();
+    const existing = {
+      schema_version: "settings.json/v3",
+      review: { mode: "full", domains: ["security"] },
+    };
+    // A documented seat: `#` comments are valid for the real loader (YAML) but
+    // would break a JSON.parse merge.
+    await fs.writeFile(
+      settingsPath,
+      `# onto provider settings\n${JSON.stringify(existing, null, 2)}\n`,
+      "utf8",
+    );
+
+    await expect(
+      writeProviderSettings(OPENAI_OAUTH, { target: "user", settingsPath }),
+    ).resolves.toBeDefined();
+
+    const raw = JSON.parse(await fs.readFile(settingsPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const review = raw.review as Record<string, unknown>;
+    expect(review.mode).toBe("full");
+    expect(review.domains).toEqual(["security"]);
+    expect(
+      ((review.execution as Record<string, unknown>).actors as Record<
+        string,
+        unknown
+      >).teamlead,
+    ).toBeDefined();
+  });
+
+  it("rejects an api_key_env that is not a valid env-var name, without echoing the value", async () => {
+    const settingsPath = await makeTmpSettingsPath();
+    const secretLike = "sk-ant-REALKEY-do-not-echo";
+    let caught: Error | undefined;
+    try {
+      await writeProviderSettings(
+        {
+          provider: "anthropic",
+          model: "claude-x",
+          auth: "api_key",
+          apiKeyEnv: secretLike,
+        },
+        { target: "user", settingsPath },
+      );
+    } catch (error) {
+      caught = error as Error;
+    }
+    expect(caught).toBeDefined();
+    expect(caught!.message).toMatch(/environment variable NAME/);
+    // The command's "never the key" guarantee: the supplied value is not echoed.
+    expect(caught!.message).not.toContain(secretLike);
+    // Nothing was written.
+    await expect(fs.readFile(settingsPath, "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
   it("does not write an `auth` field when auth is omitted", async () => {
     const settingsPath = await makeTmpSettingsPath();
     await writeProviderSettings(

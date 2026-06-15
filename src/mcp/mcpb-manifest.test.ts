@@ -96,4 +96,15 @@ describe("mcpb manifest (Phase 1 item 4 — Desktop Extension binding)", () => {
     expect(userConfig.provider.required).toBe(true);
     expect(userConfig.model.required).toBe(true);
   });
+
+  it("restricts platforms to those whose launcher works and declares privacy policies", () => {
+    const manifest = loadManifest();
+    // Windows is excluded: the production launcher imports by native FS path,
+    // which a Windows host treats as a drive-letter specifier, not a file URL.
+    expect(manifest.compatibility.platforms).toEqual(["darwin", "linux"]);
+    expect(manifest.compatibility.runtimes.node).toBe(">=18.0.0");
+    // Provider calls leave the machine, so the manifest declares a privacy URL.
+    expect(Array.isArray(manifest.privacy_policies)).toBe(true);
+    expect(manifest.privacy_policies.length).toBeGreaterThan(0);
+  });
 });

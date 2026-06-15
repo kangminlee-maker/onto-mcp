@@ -35,14 +35,15 @@ npm run build:mcpb
 ```
 
 This stages a pruned production tree, validates `manifest.json`, and produces
-`packaging/mcpb/onto.mcpb`. The bundle `version` mirrors `package.json`.
+`build/mcpb/onto.mcpb` (the `build/` tree is gitignored). The bundle `version`
+mirrors `package.json`.
 
 ## Install in Claude Desktop + E2E check (manual)
 
 This path is inherently manual (a real host install). Steps:
 
 1. **Install.** In Claude Desktop, open Settings → Extensions and install
-   `packaging/mcpb/onto.mcpb` (or double-click the file).
+   `build/mcpb/onto.mcpb` (or double-click the file).
 2. **Fill `user_config`.** Provide:
    - `provider` (e.g. `openai`, `anthropic`) — required;
    - `model` (the model id) — required;
@@ -78,3 +79,23 @@ used. `auth=oauth` is only valid for `openai` and `anthropic`. When `auth` is
 left blank, bootstrap derives the loader-consistent default (the same value the
 runtime loader would derive) and writes it explicitly so both review and
 reconstruct actors materialize — auth is never inferred from key presence.
+
+## Platforms
+
+The bundle declares `compatibility.platforms: ["darwin", "linux"]`. Windows is
+excluded for now: the production launcher imports the server by native filesystem
+path, which a Windows host would treat as a drive-letter specifier rather than a
+file URL, so the server would exit before connecting. macOS and Linux Desktop are
+supported.
+
+## Privacy
+
+onto stores only configuration locally: `~/.onto/settings.json` holds the
+provider, model, auth route, and the **env-var name** of your API key
+(`api_key_env`) — never the API key value, which stays in the host-managed
+environment. When you run `onto_review` / `onto_reconstruct`, the review or
+reconstruct **content you target is sent to the LLM provider you configured**
+(e.g. OpenAI, Anthropic, x.ai) over that provider's API, subject to that
+provider's own privacy policy. The `lmstudio` (local) route sends nothing to an
+external service. onto itself runs locally and does not send your content to any
+onto-operated service.

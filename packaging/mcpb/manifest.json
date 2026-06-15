@@ -13,10 +13,14 @@
     "url": "https://github.com/kangminlee-maker/onto-mcp"
   },
   "compatibility": {
+    "platforms": ["darwin", "linux"],
     "runtimes": {
       "node": ">=18.0.0"
     }
   },
+  "privacy_policies": [
+    "https://github.com/kangminlee-maker/onto-mcp/blob/main/packaging/mcpb/README.md#privacy"
+  ],
   "server": {
     "type": "node",
     "entry_point": "bin/onto",

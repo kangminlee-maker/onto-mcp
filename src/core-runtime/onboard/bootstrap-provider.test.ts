@@ -211,4 +211,23 @@ describe("bootstrapProviderFromEnv", () => {
     expect(stderr).not.toContain(SENTINEL);
     expect(stderr.length).toBeGreaterThan(0);
   });
+
+  it("(g) clears an unresolved ${user_config.api_key} placeholder from env (no bogus runtime key)", async () => {
+    const env = {
+      [BOOTSTRAP_ENV.provider]: "anthropic",
+      [BOOTSTRAP_ENV.model]: "claude-x",
+      [BOOTSTRAP_ENV.auth]: "api_key",
+      [PROVIDER_API_KEY_ENV]: "${user_config.api_key}",
+    } as unknown as NodeJS.ProcessEnv;
+
+    const result = await bootstrapProviderFromEnv(env);
+
+    expect(result.status).toBe("written");
+    // The literal placeholder is removed so runtime credential readers see it
+    // absent — instead of sending the token to the provider as a bogus key.
+    expect(env[PROVIDER_API_KEY_ENV]).toBeUndefined();
+    // No api_key_env is persisted for the keyless route.
+    const teamleadLlm = readSettings().review.execution.actors.teamlead.llm;
+    expect(teamleadLlm.api_key_env).toBeUndefined();
+  });
 });

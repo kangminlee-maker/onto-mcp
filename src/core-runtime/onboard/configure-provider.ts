@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { parse as parseYaml } from "yaml";
 import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
 import {
   readSettingsAt,
@@ -127,10 +128,15 @@ async function readRawSettings(filePath: string): Promise<Record<string, unknown
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
     throw error;
   }
-  const parsed: unknown = JSON.parse(contents);
+  // Parse through the SAME comment-aware path the real loader uses
+  // (`readSettingsAt` → `yaml.parse`), not `JSON.parse`: settings.json accepts
+  // `#` comments, so JSON.parse would reject an otherwise-valid documented seat
+  // and block the merge/bootstrap.
+  const parsed: unknown = parseYaml(contents);
+  if (parsed === null || parsed === undefined) return {};
   if (!isPlainObject(parsed)) {
     throw new Error(
-      `Existing settings at ${filePath} is not a JSON object; refusing to overwrite.`,
+      `Existing settings at ${filePath} is not a settings object; refusing to overwrite.`,
     );
   }
   return parsed;
@@ -229,10 +235,28 @@ function describeBlocks(blocks: ProviderActorBlocks): string {
  * Validates the merged object through the real loader (`readSettingsAt`) plus
  * the model-switcher route check; never writes an invalid file.
  */
+/**
+ * `--api-key-env` is public, so guard the command's "never the key" guarantee:
+ * persist only a value shaped like an env-var NAME. If a caller mistakenly
+ * passes the API key itself, refuse — and do NOT echo the supplied value in the
+ * error (echoing it would itself leak the secret).
+ */
+function assertValidApiKeyEnvName(apiKeyEnv: string | undefined): void {
+  if (apiKeyEnv === undefined) return;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(apiKeyEnv)) {
+    throw new Error(
+      "api_key_env must be an environment variable NAME (letters, digits, " +
+        "underscore; not starting with a digit). Refusing to persist the " +
+        "supplied value — never pass the API key itself as the env name.",
+    );
+  }
+}
+
 export async function writeProviderSettings(
   input: ProviderSettingsInput,
   target: WriteProviderSettingsTarget,
 ): Promise<WriteProviderSettingsResult> {
+  assertValidApiKeyEnvName(input.apiKeyEnv);
   const blocks = buildProviderActorBlocks(input);
   assertActorRoutes(blocks);
 

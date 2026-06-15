@@ -113,6 +113,23 @@ export async function bootstrapProviderFromEnv(
     return { status: "skipped", reason: "no provider/model bootstrap env" };
   }
 
+  // Sanitize the api-key env BEFORE anything else. A blank optional `api_key`
+  // leaves the literal `${user_config.api_key}` (or "") in ONTO_PROVIDER_API_KEY.
+  // Runtime credential readers accept any non-empty env value as the key, so an
+  // unresolved placeholder would be sent to the provider as a bogus key (401)
+  // instead of failing cleanly — including on the idempotency skip path. Clear
+  // it from env so readers see it as absent. Only the env-var NAME is ever
+  // persisted; the key VALUE is read solely to decide `hasKey` and never stored.
+  const rawKey = env[PROVIDER_API_KEY_ENV];
+  const trimmedKey = rawKey?.trim();
+  const hasKey =
+    trimmedKey !== undefined &&
+    trimmedKey.length > 0 &&
+    !UNRESOLVED_USER_CONFIG_TOKEN.test(trimmedKey);
+  if (rawKey !== undefined && !hasKey) {
+    delete env[PROVIDER_API_KEY_ENV];
+  }
+
   // Idempotency: skip only when the user seat already resolves a complete,
   // valid provider route. A throw / missing / partial / invalid seat is
   // treated as "not configured" and materialized.
@@ -149,15 +166,6 @@ export async function bootstrapProviderFromEnv(
       return { status: "failed", reason: "auth derivation failed" };
     }
   }
-
-  // Only the env-var NAME is persisted; the key VALUE is read solely to decide
-  // whether to emit `api_key_env`, and is never assigned onto any object.
-  const rawKey = env[PROVIDER_API_KEY_ENV];
-  const trimmedKey = rawKey?.trim();
-  const hasKey =
-    trimmedKey !== undefined &&
-    trimmedKey.length > 0 &&
-    !UNRESOLVED_USER_CONFIG_TOKEN.test(trimmedKey);
 
   const input: ProviderSettingsInput = {
     provider,
