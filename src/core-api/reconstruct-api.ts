@@ -277,6 +277,15 @@ export function resolveJudgeLlmConfig(args: {
   authorLlmConfig: Partial<LlmCallConfig>;
   judgeLlmEffort?: string;
   judgeModelCandidate?: Partial<LlmCallConfig> | null;
+  /**
+   * The judge model's MODEL provider — the supported-models.yaml registry key
+   * (e.g. "openai"), NOT the runtime adapter provider. OpenAI OAuth normalizes
+   * the runtime provider to "codex", but INV-MODEL-1 is keyed by model provider
+   * (openai/gpt-5.5), so the support check must use this, mirroring the gate's
+   * collectModelSelections. Same as the author's model provider (the judge
+   * resolves on the author's settings).
+   */
+  judgeModelProvider?: string;
   registry: SupportedModelRegistry;
 }): { judgeLlmConfig: Partial<LlmCallConfig> | undefined; note: string | null } {
   if (!args.judgeLlmEffort && !args.judgeModelCandidate) {
@@ -287,19 +296,23 @@ export function resolveJudgeLlmConfig(args: {
   let note: string | null = null;
   const candidate = args.judgeModelCandidate;
   if (candidate) {
+    // INV-MODEL-1 is keyed by MODEL provider (e.g. openai/gpt-5.5), not the
+    // runtime adapter provider (OpenAI OAuth normalizes to codex). Check the
+    // model provider so a supported judge model is not spuriously degraded.
     const supported = isSupportedModelRoute(
-      candidate.provider,
+      args.judgeModelProvider,
       candidate.model_id,
       args.registry,
     );
-    // Defensive: the candidate is resolved on the author's provider, so this is
-    // expected true; it guarantees credentials/adapter never cross providers.
+    // Credential safety: the candidate resolves on the author's provider, so its
+    // runtime provider must match the author's (guarantees api_key_env/adapter
+    // never cross providers). Uses the runtime provider, not the model provider.
     const sameProvider = candidate.provider === args.authorLlmConfig.provider;
     if (supported && sameProvider) {
       Object.assign(judge, candidate);
     } else {
       note = `answer-support judge model override (${
-        candidate.provider ?? "(unresolved provider)"
+        args.judgeModelProvider ?? "(unresolved provider)"
       }/${candidate.model_id ?? "(unresolved model)"}) ${
         supported
           ? "requires a different provider than the semantic author"
@@ -688,15 +701,16 @@ export function createOntoReconstructCoreApi(
       // A judgeModel candidate is resolved on the SAME actor settings as the
       // author (no provider override), so api_key_env / execution_adapter /
       // base_url stay the author provider's — consistent, never cross-provider.
-      const judgeModelCandidate =
+      const judgeAuthorActorLlm =
         !mockRealizationEnabled && request.judgeModel
-          ? resolveLlmProviderConfig({
-            config: {
-              llm: resolveReconstructActorLlmSettings(settings, "semantic_author"),
-            },
-            cliOverrides: { model: request.judgeModel },
-          })
+          ? resolveReconstructActorLlmSettings(settings, "semantic_author")
           : null;
+      const judgeModelCandidate = judgeAuthorActorLlm
+        ? resolveLlmProviderConfig({
+          config: { llm: judgeAuthorActorLlm },
+          cliOverrides: { model: request.judgeModel! },
+        })
+        : null;
       const judgeResolution = mockRealizationEnabled
         ? { judgeLlmConfig: undefined, note: judgeConfigNote }
         : resolveJudgeLlmConfig({
@@ -705,6 +719,11 @@ export function createOntoReconstructCoreApi(
             ? { judgeLlmEffort: request.judgeLlmEffort }
             : {}),
           judgeModelCandidate,
+          // Registry key is the MODEL provider (e.g. openai), not the runtime
+          // adapter (openai OAuth → codex). The judge uses the author's provider.
+          ...(judgeAuthorActorLlm?.provider
+            ? { judgeModelProvider: judgeAuthorActorLlm.provider }
+            : {}),
           registry: loadSupportedModelRegistry(),
         });
       const judgeLlmConfig = judgeResolution.judgeLlmConfig;
