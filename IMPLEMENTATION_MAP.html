@@ -34,27 +34,27 @@
 <main>
 
 <h1>onto-mcp Implementation Map</h1>
-<p class="stamp">기준: v0.4.8 (2026-06-12) · MCP 호스트 사용성 트랙 결정 기록 (2026-06-13) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
+<p class="stamp">기준: v0.4.11 (2026-06-15) · reconstruct maturation 런타임 judge 단계(ODKE+ 지지 게이트) 종결 (PR #55·#57·#58) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
 
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
   <div class="card"><h3>현재 목표</h3>
-    <p>v0.4.8 출하 완료. review(두 orchestration 모드)·reconstruct·구조 가드가 제품 경로에서 가동 중.</p></div>
+    <p>v0.4.11 출하. review·reconstruct(seeding+maturation)·구조 가드가 제품 경로에서 가동. reconstruct <b>maturation closure</b>에 author≠judge 지지 게이트가 active로 안착.</p></div>
   <div class="card"><h3>Phase</h3>
-    <p>Phase 2(host orchestration) <span class="ok">종결</span> — staged roadmap 전 단계 완료(기록: development-records/plan/).</p></div>
+    <p>reconstruct closure hardening <span class="ok">종결</span> — 런타임 judge 단계 R1~R5 머지. MCP 호스트 사용성 Phase 1 <span class="ok">종결</span>(<code>.mcpb</code>+프로파일). Phase 2(host orchestration) <span class="ok">종결</span>.</p></div>
   <div class="card"><h3>Health</h3>
-    <p><span class="ok">vitest 85 files / 948 passed</span> · 정적 체크 9종 green · CI(invariant-guards) PR마다 가동 · drift <span class="ok">no_drift</span></p></div>
+    <p><span class="ok">vitest 101 files / 1103 passed</span> · 정적 체크 10종 green · CI(invariant-guards) PR마다 가동 · drift <span class="ok">no_drift</span> · registry 실 loader LOADED</p></div>
   <div class="card"><h3>다음 결정</h3>
-    <p><b>신규</b>: MCP 호스트 사용성 — 데스크탑 우선(<code>.mcpb</code>) 단계적 개선 결정됨(2026-06-13). 설계 4회 onto 리뷰로 <b>0건 수렴</b>(8→6→1→0) — 커밋·Phase 1(툴 병합→폴링→user_config→패키징) 구현 대기. · 유기적 salvage 관찰(6/15 09:12) 반영.</p></div>
+    <p><b>judge 트랙 잔여</b>: live 벤치마크(실 LLM convergent 시나리오, 비용)와 rubber-stamp residual(동일 모델/컨텍스트 — 구조 증명 불가, per-stage model/effort 분리가 레버)은 <b>tracked follow-up</b>(discovered-enhancements §7). · MCP Phase 2(원격/웹 Streamable HTTP+OAuth)는 방향만 기록.</p></div>
   <div class="card"><h3>주요 리스크</h3>
-    <p><span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift 리포트).</p></div>
+    <p><span class="warn">judge rubber-stamp</span>(완화: context isolation·보수 기본·adversarial frame; 근본 해결 미적용·기록됨) · <span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift).</p></div>
 </div>
 
 <!-- ───────── 서비스 블루프린트 ───────── -->
 <h2>서비스 블루프린트 — 요청이 어떻게 검증된 산출물이 되는가, 게이트는 어디에 있는가</h2>
 <div class="svgwrap">
 <svg width="1860" height="940" viewBox="0 0 1860 940" role="img" aria-labelledby="bp-title bp-desc" xmlns="http://www.w3.org/2000/svg">
-  <title id="bp-title">onto-mcp 서비스 블루프린트 (v0.4.8)</title>
+  <title id="bp-title">onto-mcp 서비스 블루프린트 (v0.4.11)</title>
   <desc id="bp-desc">MCP 요청이 runtime과 LLM 작업을 거쳐 canonical artifact와 투영으로 나뉘고, 게이트·품질 체크·연기 작업이 어디에 있는지 보여준다.</desc>
   <defs>
     <marker id="a-slate" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#475569"/></marker>
@@ -164,10 +164,12 @@
   <text class="m" x="798" y="308">submit schema = spine 단일 source</text>
   <text class="m" x="798" y="324">(G3 invariant 테스트가 고정)</text>
 
-  <rect class="n-llm" x="784" y="380" width="290" height="92" rx="8"/>
+  <rect class="n-llm" x="784" y="380" width="290" height="112" rx="8"/>
   <text class="t" x="798" y="402">reconstruct 의미 저작</text>
   <text class="s" x="798" y="420">lens judgment · purpose · seed · 답변 클러스터</text>
-  <text class="m" x="798" y="440">direct_call (semantic_author 액터)</text>
+  <text class="s" x="798" y="438">+ answer-support judge (별도 저작 아티팩트)</text>
+  <text class="m" x="798" y="456">context isolation: 저자 근거 배제 · supported|not</text>
+  <text class="m" x="798" y="474">direct_call (semantic_author 액터)</text>
 
   <rect class="n-llm" x="784" y="504" width="290" height="84" rx="8"/>
   <text class="t" x="798" y="526">salvage 회수 LLM</text>
@@ -184,7 +186,7 @@
 
   <rect class="n-art" x="1134" y="256" width="290" height="92" rx="8"/>
   <text class="t" x="1148" y="278">reconstruct 세션 아티팩트</text>
-  <text class="s" x="1148" y="296">seed · 성숙 루프 · claim-projection · record</text>
+  <text class="s" x="1148" y="296">seed · 성숙 루프 · judge · claim-projection · record</text>
   <text class="m" x="1148" y="316">.onto/reconstruct/&lt;session&gt;/</text>
   <text class="m" x="1148" y="332">registry.yaml = 기계가독 권위 그래프</text>
 
@@ -199,12 +201,14 @@
   <text class="s" x="1498" y="156">status/result compact·standard·full + llmPresentation</text>
   <text class="m" x="1498" y="176">투영은 진실이 아님 — 진실은 세션 아티팩트</text>
 
-  <rect class="n-gate" x="1484" y="236" width="332" height="104" rx="8"/>
-  <text class="t" x="1498" y="258">차단 게이트 (구조 가드 G1~G4 + CI)</text>
-  <text class="s" x="1498" y="276">import 경계 · 스펙 기본값 스캔 · invariant 테스트</text>
-  <text class="s" x="1498" y="292">· 보호 키 INVARIANT-CHANGE 마커</text>
-  <text class="m" x="1498" y="312">.github/workflows/invariants.yml (PR마다)</text>
-  <text class="m" x="1498" y="328">+ 런타임: validator·run-control·fail-loud 경로</text>
+  <rect class="n-gate" x="1484" y="220" width="332" height="140" rx="8"/>
+  <text class="t" x="1498" y="242">차단 게이트 (구조 가드 G1~G4·G7 + CI)</text>
+  <text class="s" x="1498" y="260">import 경계 · 스펙 기본값 · invariant 테스트</text>
+  <text class="s" x="1498" y="276">· 보호 키 INVARIANT-CHANGE · supported-models(G7)</text>
+  <text class="m" x="1498" y="294">.github/workflows/invariants.yml (PR마다)</text>
+  <text class="m" x="1498" y="310">+ 런타임: validator·run-control·fail-loud 경로</text>
+  <text class="s" x="1498" y="332">· answer-support judge 게이트 (maturation): convergent</text>
+  <text class="m" x="1498" y="348">claim은 ≥2 독립 judge-confirmed 없으면 fail-closed (B-6)</text>
 
   <rect class="n-q" x="1484" y="372" width="332" height="92" rx="8"/>
   <text class="t" x="1498" y="394">비차단 품질</text>
@@ -246,32 +250,34 @@
 <h2>아키텍처 (구조 SSOT: docs/architecture/repo-layout.md)</h2>
 <table>
   <tr><th>층</th><th>위치</th><th>역할</th></tr>
-  <tr><td>MCP surface</td><td><code>src/mcp/</code></td><td>16개 도구 스키마 + 서버 (resources/prompts 자기문서화)</td></tr>
+  <tr><td>MCP surface</td><td><code>src/mcp/</code></td><td>12개 도구 + simple(8)/full(12) 프로파일(<code>ONTO_MCP_PROFILE</code>) + 옛 7명 deprecated alias · <code>.mcpb</code> 데스크탑 확장 + 첫실행 bootstrap</td></tr>
   <tr><td>Core API</td><td><code>src/core-api/</code></td><td>MCP·하니스가 호출하는 facade (review/reconstruct prepare·run·round·advance·status·result)</td></tr>
   <tr><td>실행층</td><td><code>src/core-runtime/cli/</code></td><td>invocation runner·dispatch 루프·provider unit executor·nesting worker·salvage — review/를 단방향 import</td></tr>
-  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 — cli/ import 금지(G1 강제)</td></tr>
-  <tr><td>provider 경계</td><td><code>src/core-runtime/llm/</code></td><td>스위처: oauth(codex·claude_code 워커) / api_key(openai·anthropic·grok) / local(lmstudio)</td></tr>
-  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon → rank 2~4 원칙 → rank 5 기능 계약(+reconstruct registry)</td></tr>
+  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 (reconstruct: seeding+maturation+answer-support judge) — cli/ import 금지(G1 강제)</td></tr>
+  <tr><td>provider 경계</td><td><code>src/core-runtime/llm/</code></td><td>스위처: oauth(codex·claude 워커, anthropic+oauth reconstruct 포함) / api_key(openai·anthropic·grok) / local(lmstudio) · 선택은 벤치-검증 모델로 제한(G7)</td></tr>
+  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon·authority(supported-models) → rank 2~4 원칙 → rank 5 기능 계약(+reconstruct registry, judge gate active)</td></tr>
 </table>
 
 <!-- ───────── 검증 체계 ───────── -->
 <h2>검증 체계 (현재 전부 green)</h2>
 <table>
   <tr><th>층</th><th>수단</th><th>비고</th></tr>
-  <tr><td>구조 가드</td><td>G1 <code>check:import-boundary</code> · G2 <code>check:spec-defaults</code> · G4 <code>check:invariant-change</code> · G6 <code>check:invariant-drift</code></td><td>INVARIANTS.md 강제 현황 표가 매핑 소유; CI가 PR마다 G1~G4 실행</td></tr>
-  <tr><td>불변식 테스트</td><td><code>*.invariant.test.ts</code> (G3)</td><td>auth 생략→OAuth 워커, submit schema=spine 단일 source</td></tr>
+  <tr><td>구조 가드</td><td>G1 <code>check:import-boundary</code> · G2 <code>check:spec-defaults</code> · G4 <code>check:invariant-change</code> · G6 <code>check:invariant-drift</code> · G7 <code>check:supported-models</code></td><td>INVARIANTS.md 강제 현황 표가 매핑 소유; CI가 PR마다 실행</td></tr>
+  <tr><td>불변식 테스트</td><td><code>*.invariant.test.ts</code> (G3)</td><td>auth 생략→OAuth 워커, submit schema=spine 단일 source, INV-MODEL-1</td></tr>
   <tr><td>conformance</td><td><code>check:review:invocation-runner</code> · <code>check:mcp:review</code> · <code>check:review:route</code> · <code>check:retired-root-paths</code></td><td>기존 4종</td></tr>
-  <tr><td>테스트</td><td>vitest 85 files / 948 passed (+1 todo)</td><td>golden 하니스·결정론 salvage 트리거 E2E 포함</td></tr>
-  <tr><td>벤치 게이트</td><td>G5 decision gate (하니스 내장)</td><td>runs≥3·fixtures≥2 미충족 시 결론 거부 + PRELIMINARY</td></tr>
+  <tr><td>런타임 검증기</td><td>reconstruct validator (run-control·게이트·judge B-5/B-6) · 실 loader <code>loadReconstructContractRegistry</code></td><td>judge: author≠judge 구조 강제 + convergent claim fail-closed; registry 편집은 실 loader로 검증(YAML+grep으론 active 참조 깨짐 못 잡음)</td></tr>
+  <tr><td>테스트</td><td>vitest 101 files / 1103 passed (+1 todo)</td><td>golden 하니스·salvage E2E·reconstruct judge B-5/B-6·gate-enforce propagation 포함</td></tr>
+  <tr><td>벤치 게이트</td><td>G5 decision gate (하니스 내장) · reconstruct mock 완주/품질 GUARD</td><td>runs≥3·fixtures≥2 미충족 시 PRELIMINARY; judge 단계 후 mock 완주·품질 baseline-equivalent</td></tr>
 </table>
 
 <!-- ───────── 로드맵/결정/변경영향 ───────── -->
 <h2>로드맵 현황과 다음 결정</h2>
 <ul>
-  <li><b>완료</b>: staged roadmap 전 단계 (격리 기록: <code>development-records/plan/mcp-native-staged-roadmap-completed.md</code>) — host orchestration(B)·nested workers·live 심의·salvage·구조 가드까지.</li>
-  <li><b>신규 트랙 — MCP 호스트 사용성</b>(결정 2026-06-13, <b>미구현</b>): claude.ai 웹/데스크탑 사용성 개선. <b>Phase 1(데스크탑)</b> = 폴링 마찰 제거·provider <code>user_config</code> 이관·툴 16→12 병합 + simple/full 프로파일·<code>.mcpb</code> 패키징(Core API·권위 모델 불변). <b>Phase 2(원격/웹)</b> = Streamable HTTP+OAuth, 멀티-artifact 번들(code+문서+스프레드시트) 리뷰 — 방향만 기록. <b>onto 셀프리뷰</b>(<code>20260613-d1c99dba</code>, medium 6건)로 경화: Phase 1 over-window acceptance 계약·<code>onto_review_read</code> 책임맵·simple run-control 보강, Phase 2 scope↔bundle 분리 + 구현 전 acceptance gate(권위·provenance·retention·sink) 명시. <b>재리뷰</b>(<code>20260613-da680d10</code>) 수렴 — 원본 6건 해소, 후속 2테마(simple에 <code>onto_review_cancel</code> 포함·current↔planned read 권위 브리지+alias 생명주기) 마무리. 3·4차(<code>7e2c6adb</code>·<code>1e0adfbe</code>)로 <b>0건 수렴</b>(8→6→1→0, blocker/high 0). 설계: <code>docs/architecture/mcp-native-tool-surface.md</code> §Host Usability Roadmap · DD-010.</li>
-  <li><b>대기 1건</b>: 유기적 salvage 관찰 — 6/15(월) 09:12 KST launchd 자동 실행(quota 리셋 직후). 결과 확인 → 설계 doc §7 기록 → 커밋·PR.</li>
-  <li><b>후속 결정 후보</b>: evolve 트랙 활성화 여부 · reconstruct spreadsheet/database 어댑터 · reconstruct 타임아웃 effort 상수의 settings 이관(G2 waiver에 명기).</li>
+  <li><b>완료 — reconstruct closure hardening</b>(PR #55·#57·#58·#60): maturation closure 정지 기준을 신설 없이 굳힘. ODKE+ 지지 게이트 = <b>author≠judge 독립 judge</b>를 별도 저작 아티팩트로 분리(구조 강제). R1~R5: stage 배선 → judge LLM 저작(context isolation) → B-5/B-6 validator(convergent claim ≥2 독립 judge-confirmed, fail-closed) → 게이트 active 승격 → gate-enforce propagation E2E + 벤치 회귀. <b>3-리뷰 교차검증</b>(ultracode 6차원·onto 5렌즈·Codex): conflict-laundering·claim-own-evidence soundness 상보 포착·반영. 설계: <code>development-records/design/20260615-runtime-judge-stage-r0-design.md</code>.</li>
+  <li><b>완료 — 지원 모델 레지스트리</b>(PR #54): INV-MODEL-1 — 모델 선택을 벤치-검증 모델로 제한(G7). gate=강제 / projection=순수 분리, effective-route 런타임 미러.</li>
+  <li><b>완료 — MCP 호스트 사용성 Phase 1</b>(PR #50·#52·#56): 툴 16→12 병합 + simple/full 프로파일 · 폴링 acceptance(profile-aware sync window) · <code>onto configure-provider</code> · <code>.mcpb</code> 데스크탑 확장 + 첫실행 bootstrap. v0.4.10→Desktop 연결불가→<b>v0.4.11 핫픽스</b>(MCPB entry_point=import 가능한 <code>dist/mcpb-entry.js</code>). 실설치 검증 완료. 설계: <code>docs/architecture/mcp-native-tool-surface.md</code> · DD-010.</li>
+  <li><b>tracked follow-up</b>: judge rubber-stamp residual(동일 모델/컨텍스트 — 구조 증명 불가; per-stage model/effort 분리가 레버, <code>llmConfig</code> 단일 capture가 막음) · live 벤치마크(실 LLM convergent 시나리오) — <code>development-records/tracking/20260406-discovered-enhancements.md</code> §7.</li>
+  <li><b>후속 결정 후보</b>: MCP Phase 2(원격/웹 Streamable HTTP+OAuth·멀티-artifact 번들) · claude CLI reconstruct E2E · evolve 트랙 활성화 · reconstruct spreadsheet/database 어댑터 · reconstruct effort 상수 settings 이관(G2 waiver).</li>
 </ul>
 
 <h2>변경 영향 읽는 법</h2>
