@@ -23,3 +23,7 @@ __pycache__/
 *.pyc
 node_modules/
 dist/
+
+# .mcpb Desktop Extension build output (scripts/build-mcpb.mjs).
+# packaging/ and manifest.json are source — intentionally NOT ignored.
+build/

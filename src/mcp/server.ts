@@ -20,6 +20,7 @@ import {
   UnsupportedOntoConfigFilesError,
 } from "../core-runtime/discovery/settings-chain.js";
 import { readOntoVersion } from "../core-runtime/release-channel/release-channel.js";
+import { bootstrapProviderFromEnv } from "../core-runtime/onboard/bootstrap-provider.js";
 import {
   createStructuredFailureRecord,
   ReviewStructuredFailureError,
@@ -2111,6 +2112,12 @@ function parseContentLength(header: string): number {
 }
 
 export async function startMcpServer(): Promise<number> {
+  // First-run provider bootstrap for the `.mcpb` Desktop Extension install:
+  // materialize ~/.onto/settings.json once from the install-time env. Its own
+  // try/catch makes it non-fatal — tools still fail-loud via the loader if the
+  // seat is missing.
+  await bootstrapProviderFromEnv();
+
   let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
   let chain = Promise.resolve();
 
