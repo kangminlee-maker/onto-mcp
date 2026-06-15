@@ -40,8 +40,9 @@ import {
   type NestingBatchDescriptor,
   type NestingBatchUnitOutcome,
 } from "../review/nesting-batch.js";
+import { resolveClaudeBin } from "../llm/claude-bin.js";
 
-const CLAUDE_BIN = process.env.ONTO_CLAUDE_BIN ?? "claude";
+const CLAUDE_BIN = resolveClaudeBin();
 
 // ---------------------------------------------------------------------------
 // Public types

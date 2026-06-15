@@ -11,6 +11,7 @@ import {
   appendRuntimeStreamEventSync,
 } from "../observability/runtime-stream-observation.js";
 import { semanticQualityEvidenceForArtifactGeneration } from "../review/artifact-generation-realization.js";
+import { resolveClaudeBin } from "../llm/claude-bin.js";
 import {
   buildBoundedPrompt,
   buildWorkerSubmitSchema,
@@ -51,7 +52,7 @@ import {
  */
 const CLAUDE_READONLY_ALLOWED_TOOLS = ["Read", "Grep", "Glob"] as const;
 
-const CLAUDE_BIN = process.env.ONTO_CLAUDE_BIN?.trim() || "claude";
+const CLAUDE_BIN = resolveClaudeBin();
 
 /**
  * Embed the submit-tool JSON Schema into the bounded prompt. Claude Code's

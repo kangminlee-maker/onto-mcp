@@ -25,6 +25,7 @@ import {
   type LlmModelSwitcherConfig,
   type LlmExecutionAdapter,
 } from "./model-switcher.js";
+import { resolveClaudeBin } from "./claude-bin.js";
 import {
   appendRuntimeModelCallLogFromCurrentContext,
   appendRuntimeStreamChunkFromCurrentContextSync,
@@ -668,7 +669,6 @@ async function callCodexCli(
 // claude CLI call (Claude Code OAuth subscription path)
 // ---------------------------------------------------------------------------
 
-const CLAUDE_BIN = process.env.ONTO_CLAUDE_BIN?.trim() || "claude";
 
 /**
  * Parse the `result` event from `claude -p --output-format json`. The CLI emits
@@ -752,7 +752,8 @@ async function callClaudeCli(
     `claude call: model="${modelId ?? "(claude default)"}" effort="${reasoningEffort ?? "(unset)"}" timeout_ms=${DEFAULT_TIMEOUT_MS}`,
   );
 
-  const child = spawn(CLAUDE_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const claudeBin = resolveClaudeBin();
+  const child = spawn(claudeBin, args, { stdio: ["ignore", "pipe", "pipe"] });
   const claudeStreamSourceBase = {
     kind: "process" as const,
     label: "claude-cli",
@@ -792,7 +793,7 @@ async function callClaudeCli(
       clearTimeout(timeoutHandle);
       if (err.code === "ENOENT") {
         reject(new Error(
-          `Claude Code CLI not found (${CLAUDE_BIN}). Install and log in to claude, or set ONTO_CLAUDE_BIN, to use the Anthropic OAuth subscription path: https://docs.anthropic.com/en/docs/claude-code`,
+          `Claude Code CLI not found (${claudeBin}). Install and log in to claude, or set ONTO_CLAUDE_BIN, to use the Anthropic OAuth subscription path: https://docs.anthropic.com/en/docs/claude-code`,
         ));
       } else {
         reject(err);

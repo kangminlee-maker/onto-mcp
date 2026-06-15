@@ -25,3 +25,13 @@ supported_models:
       Completed a full reconstruct pipeline run in the live medium baseline
       (1 of 6 attempts completed end to end); support verified. Performance
       evidence is PRELIMINARY in that record — support, not a performance claim.
+  - provider: anthropic
+    model: claude-opus-4-8
+    verified_at: "2026-06-15"
+    benchmark_evidence_refs:
+      - development-records/benchmark/reconstruct-pipeline-live-claude-20260615.json
+    notes: >-
+      Completed a full reconstruct pipeline run end to end via the Anthropic
+      OAuth Claude Code CLI worker (execution_adapter=claude_code); support
+      verified. Record is a single-run completion proof (PRELIMINARY for any
+      performance claim), captured when the claude_code reconstruct route landed.
