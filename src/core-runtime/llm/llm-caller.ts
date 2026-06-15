@@ -23,6 +23,7 @@ import {
   isExternalOauthWorkerSelection,
   normalizeLlmModelSwitcher,
   type LlmModelSwitcherConfig,
+  type LlmExecutionAdapter,
 } from "./model-switcher.js";
 import {
   appendRuntimeModelCallLogFromCurrentContext,
@@ -60,6 +61,14 @@ export interface LlmCallConfig {
   base_url?: string;
   /** Optional environment variable name that contains the API key. */
   api_key_env?: string;
+  /**
+   * Resolved execution adapter from the model-switcher. Carried so the direct
+   * `callLlm` path can dispatch an OAuth worker that shares the provider brand:
+   * anthropic OAuth resolves to `provider: "anthropic"` + `execution_adapter:
+   * "claude_code"`, which routes to the Claude Code CLI worker instead of the
+   * Anthropic SDK (the analog of openai OAuth → `provider: "codex"`).
+   */
+  execution_adapter?: LlmExecutionAdapter;
   /** Reasoning effort. Codex maps it to `model_reasoning_effort`; OpenAI API maps it to `reasoning_effort`. */
   reasoning_effort?: string;
   /** codex-only: service tier passed as `service_tier`. Ignored by other providers. */
@@ -152,6 +161,9 @@ export function resolveLlmProviderConfig(args: {
   const out: Partial<LlmCallConfig> = {};
   if (provider) out.provider = provider;
   if (model_id) out.model_id = model_id;
+  // Carry the resolved adapter so the direct callLlm path can route an OAuth
+  // worker that keeps the provider brand (anthropic OAuth → claude_code).
+  if (selection?.execution_adapter) out.execution_adapter = selection.execution_adapter;
   if (base_url) out.base_url = base_url;
   if (reasoning_effort) out.reasoning_effort = reasoning_effort;
   if (service_tier) out.service_tier = service_tier;
@@ -653,6 +665,203 @@ async function callCodexCli(
 }
 
 // ---------------------------------------------------------------------------
+// claude CLI call (Claude Code OAuth subscription path)
+// ---------------------------------------------------------------------------
+
+const CLAUDE_BIN = process.env.ONTO_CLAUDE_BIN?.trim() || "claude";
+
+/**
+ * Parse the `result` event from `claude -p --output-format json`. The CLI emits
+ * a JSON array of stream events (the final one is `type:"result"`), tolerating
+ * JSONL and the older single-object form — mirrors the review unit executor's
+ * tolerant parser, but extracts the plain assistant text + token usage for a
+ * single-turn text call.
+ */
+function parseClaudeResultEvent(stdout: string): Record<string, unknown> {
+  const trimmed = stdout.trim();
+  if (trimmed.length === 0) {
+    throw new Error("claude worker produced no stdout.");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    const events: unknown[] = [];
+    for (const line of trimmed.split("\n")) {
+      const lineText = line.trim();
+      if (lineText.length === 0) continue;
+      try {
+        events.push(JSON.parse(lineText));
+      } catch {
+        // ignore non-JSON log lines
+      }
+    }
+    if (events.length === 0) {
+      throw new Error("failed to parse claude output as JSON.");
+    }
+    parsed = events;
+  }
+  const events = Array.isArray(parsed) ? parsed : [parsed];
+  const records = events.filter(
+    (event): event is Record<string, unknown> =>
+      !!event && typeof event === "object" && !Array.isArray(event),
+  );
+  const result =
+    records.find((event) => event.type === "result") ??
+    (records.length === 1 ? records[0] : undefined);
+  if (!result) {
+    throw new Error("claude output contained no result event.");
+  }
+  if (
+    result.is_error === true ||
+    (typeof result.subtype === "string" && result.subtype !== "success")
+  ) {
+    const message =
+      typeof result.result === "string"
+        ? result.result
+        : JSON.stringify(result).slice(0, 500);
+    throw new Error(`claude worker reported failure: ${message}`);
+  }
+  return result;
+}
+
+/**
+ * Invoke the Claude Code CLI (`claude -p … --output-format json`) as an
+ * Anthropic OAuth worker for a single-turn prompt → text response. Uses the
+ * host's logged-in Claude Code OAuth session (no `ANTHROPIC_API_KEY`) — the
+ * reconstruct/direct-call analog of `callCodexCli` for openai OAuth. Mirrors the
+ * proven claude invocation in `claude-code-review-unit-executor.ts`: the prompt
+ * is the positional arg (piped stdin is not treated as the prompt), and no
+ * project/user MCP servers are loaded so the worker has no side effects.
+ */
+async function callClaudeCli(
+  systemPrompt: string,
+  userPrompt: string,
+  modelId?: string,
+  reasoningEffort?: string,
+): Promise<LlmCallResult> {
+  const { spawn } = await import("node:child_process");
+  const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+
+  const args: string[] = ["-p", combinedPrompt, "--output-format", "json"];
+  if (modelId) args.push("--model", modelId);
+  if (reasoningEffort) args.push("--effort", reasoningEffort);
+  args.push("--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}');
+
+  emitModelCallLog(
+    `claude call: model="${modelId ?? "(claude default)"}" effort="${reasoningEffort ?? "(unset)"}" timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+  );
+
+  const child = spawn(CLAUDE_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const claudeStreamSourceBase = {
+    kind: "process" as const,
+    label: "claude-cli",
+  };
+  const claudeStreamSource = child.pid !== undefined
+    ? { ...claudeStreamSourceBase, processId: child.pid }
+    : claudeStreamSourceBase;
+
+  let stdout = "";
+  let stderr = "";
+  let timedOut = false;
+
+  child.stdout.on("data", (chunk: Buffer | string) => {
+    stdout += String(chunk);
+    appendRuntimeStreamChunkFromCurrentContextSync(
+      "stdout",
+      chunk,
+      claudeStreamSource,
+    );
+  });
+  child.stderr.on("data", (chunk: Buffer | string) => {
+    stderr += String(chunk);
+    appendRuntimeStreamChunkFromCurrentContextSync(
+      "stderr",
+      chunk,
+      claudeStreamSource,
+    );
+  });
+
+  const timeoutHandle = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGTERM");
+  }, DEFAULT_TIMEOUT_MS);
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      clearTimeout(timeoutHandle);
+      if (err.code === "ENOENT") {
+        reject(new Error(
+          `Claude Code CLI not found (${CLAUDE_BIN}). Install and log in to claude, or set ONTO_CLAUDE_BIN, to use the Anthropic OAuth subscription path: https://docs.anthropic.com/en/docs/claude-code`,
+        ));
+      } else {
+        reject(err);
+      }
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeoutHandle);
+      resolve(code ?? 1);
+    });
+  });
+
+  if (timedOut) {
+    emitModelCallLog(
+      `claude call FAILED: model="${modelId ?? "(claude default)"}" reason=timeout timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+    );
+    throw new Error(`claude CLI call timed out after ${DEFAULT_TIMEOUT_MS}ms`);
+  }
+  if (exitCode !== 0) {
+    const combined = [stderr.trim(), stdout.trim()]
+      .filter((m) => m.length > 0)
+      .join("\n");
+    emitModelCallLog(
+      `claude call FAILED: model="${modelId ?? "(claude default)"}" exit_code=${exitCode} message="${combined.slice(0, 200).replace(/\n/g, " ")}"`,
+    );
+    throw new Error(
+      combined.length > 0 ? combined : `claude CLI exited with code ${exitCode}`,
+    );
+  }
+
+  const result = parseClaudeResultEvent(stdout);
+  const text = typeof result.result === "string" ? result.result.trim() : "";
+  if (text.length === 0) {
+    throw new Error("claude worker returned an empty result.");
+  }
+  // claude exposes provider token usage on the result event; estimate only as a
+  // fallback (mirrors callCodexCli's char-count estimate).
+  const usage = (result.usage ?? {}) as {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+  const estimateTokens = (s: string) => Math.max(1, Math.ceil(s.length / 4));
+  const in_tokens =
+    typeof usage.input_tokens === "number" && usage.input_tokens > 0
+      ? usage.input_tokens
+      : estimateTokens(combinedPrompt);
+  const out_tokens =
+    typeof usage.output_tokens === "number" && usage.output_tokens > 0
+      ? usage.output_tokens
+      : estimateTokens(text);
+  const resolvedModel =
+    typeof result.model === "string" && result.model.length > 0
+      ? result.model
+      : modelId ?? "claude-default";
+
+  emitModelCallLog(
+    `claude success: model_id=${resolvedModel} input_tokens~=${in_tokens} output_tokens~=${out_tokens}`,
+  );
+
+  return {
+    text,
+    input_tokens: in_tokens,
+    output_tokens: out_tokens,
+    model_id: resolvedModel,
+    effective_base_url: "claude-cli://oauth",
+    declared_billing_mode: "subscription",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Plan-aware dispatch (Review Recovery PR-1)
 // ---------------------------------------------------------------------------
 
@@ -809,6 +1018,23 @@ export async function callLlm(
       config.model_id ?? config.models_per_provider?.codex,
       config.reasoning_effort,
       config.service_tier,
+    );
+  }
+
+  // Anthropic OAuth → Claude Code CLI worker. The model-switcher keeps
+  // provider="anthropic" for OAuth (the brand lives in execution_adapter), so
+  // dispatch on the adapter here, before the SDK/api-key path. This is the
+  // direct-call analog of openai OAuth → codex. claude DOES honor effort, so it
+  // is passed through rather than rejected by the SDK-path effort guard.
+  if (
+    config?.provider === "anthropic" &&
+    config?.execution_adapter === "claude_code"
+  ) {
+    return callClaudeCli(
+      systemPrompt,
+      userPrompt,
+      config.model_id ?? config.models_per_provider?.anthropic,
+      config.reasoning_effort,
     );
   }
 
