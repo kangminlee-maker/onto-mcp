@@ -3061,4 +3061,24 @@ describe("maturation validation", () => {
     expect(validation.violations.map((v) => v.code))
       .toContain("insufficient_independent_evidence");
   });
+
+  it("gate-enforce (R5): a judge-blocked convergent claim propagates to block downstream ontology expansion", () => {
+    const scenario = convergentClaimScenario();
+    // convergent claim with NO judgment => B-6 fail-closed => claims validation invalid
+    const claimsValidation = claimsValidationWithJudge(scenario, null);
+    expect(claimsValidation.validation_status).toBe("invalid");
+    // the invalid claims validation must PROPAGATE: ontology expansion (a
+    // downstream consumer) refuses to proceed, so a judge-less convergent claim
+    // cannot advance end-to-end through the maturation pipeline.
+    const expansionValidation = validateOntologyExpansion({
+      ontologyExpansion: emptyOntologyExpansion(),
+      maturationAnswerClaims: scenario.answerClaims,
+      maturationAnswerClaimsValidation: claimsValidation,
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+    });
+    expect(expansionValidation.validation_status).toBe("invalid");
+    expect(expansionValidation.violations.map((v) => v.code))
+      .toContain("prior_validation_invalid");
+  });
 });
