@@ -22,7 +22,8 @@
  *     servers load in the bounded outer.
  *   - effort maps to `--effort`; `service_tier` is API-only and NOT
  *     supported on `claude -p`/OAuth — deliberately absent here.
- *   - `ONTO_CLAUDE_BIN` overrides the binary (matches the unit executor).
+ *   - The binary is resolved via `resolveClaudeBin()` (ONTO_CLAUDE_BIN override
+ *     → PATH → common install locations); matches the unit executor.
  *
  * # How it relates
  *
@@ -62,8 +63,9 @@ export interface ClaudeNestingBatchWorkerInput {
    */
   project_root?: string;
   /**
-   * Claude binary path. Defaults to `ONTO_CLAUDE_BIN` env or `"claude"`
-   * (PATH-resolved). Override for tests (fake executable).
+   * Claude binary path. Defaults to `resolveClaudeBin()` — `ONTO_CLAUDE_BIN`
+   * override → `claude` as an executable file on PATH → common install
+   * locations → bare `"claude"`. Override for tests (fake executable).
    */
   claude_bin?: string;
   /**

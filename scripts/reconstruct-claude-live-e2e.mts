@@ -51,7 +51,12 @@ async function runOnce(attempt: number): Promise<AttemptOutcome> {
   const projectRoot = await fs.mkdtemp(
     path.join(os.tmpdir(), `onto-claude-live-a${attempt}-`),
   );
-  log(`[attempt ${attempt}] isolated project: ${projectRoot}`);
+  // Hermetic: point HOME at an empty tmp dir so the settings chain's user seat
+  // (~/.onto/settings.json) cannot leak the host's provider routes into this
+  // run — the tmp project seat is the only configured seat. (ONTO_CLAUDE_BIN /
+  // CLAUDE_CONFIG_DIR for the worker login are still inherited from the parent.)
+  process.env.HOME = await fs.mkdtemp(path.join(os.tmpdir(), `onto-claude-home-a${attempt}-`));
+  log(`[attempt ${attempt}] isolated project: ${projectRoot} (HOME=${process.env.HOME})`);
 
   for (const [rel, content] of Object.entries(spec.files)) {
     const p = path.join(projectRoot, rel);
@@ -105,7 +110,9 @@ async function runOnce(attempt: number): Promise<AttemptOutcome> {
       provider_route: s.execution_telemetry?.provider_route ?? null,
       model_id: s.execution_telemetry?.model_id ?? null,
     }));
-  const completed = status === "completed" || status === "completed_with_degradation";
+  // reconstruct's terminal record_stage is exactly "completed" (no
+  // "completed_with_degradation" — that is review-pipeline vocabulary).
+  const completed = status === "completed";
   const usedClaude = telemetrySteps.some(
     (t) => /claude/i.test(String(t.model_id)) || t.provider_route === "anthropic",
   );

@@ -19,12 +19,14 @@ import path from "node:path";
  *      ENOENT message ("Claude Code CLI not found … set ONTO_CLAUDE_BIN") rather
  *      than this resolver inventing a different error.
  *
- * The PATH/location discovery result is cached (the filesystem layout does not
- * change within a process); an explicit `ONTO_CLAUDE_BIN` is always re-read so
- * tests and operators can change it without a stale cache.
+ * Pure function of `env`: resolution is a handful of `stat`/`access` syscalls and
+ * each call site invokes it at most once per spawn (or once at module load), so
+ * it is NOT cached — a cache keyed on nothing would return a stale path when a
+ * later call passes a different `env.PATH` (the injected `env` would silently
+ * stop controlling discovery). The same applies to the codex OAuth direct route
+ * (`callCodexCli` still spawns a bare `"codex"`); extending this resolver to
+ * codex is a symmetric, deferred follow-up.
  */
-
-let cachedDiscovered: string | undefined;
 
 function isExecutableFile(candidate: string): boolean {
   try {
@@ -61,22 +63,17 @@ export function resolveClaudeBin(env: NodeJS.ProcessEnv = process.env): string {
   const override = env.ONTO_CLAUDE_BIN?.trim();
   if (override) return override;
 
-  if (cachedDiscovered !== undefined) return cachedDiscovered;
-
   const onPath = findClaudeOnPath(env);
-  if (onPath) return (cachedDiscovered = onPath);
+  if (onPath) return onPath;
 
   for (const location of commonInstallLocations()) {
-    if (isExecutableFile(location)) return (cachedDiscovered = location);
+    if (isExecutableFile(location)) return location;
   }
 
   // Not found — return the bare name so spawn ENOENT carries the actionable
-  // "set ONTO_CLAUDE_BIN" guidance. Do not cache the fallback (a later install
-  // should be discoverable without a process restart).
+  // "set ONTO_CLAUDE_BIN" guidance.
+  // POSIX-scoped: the bundle targets macOS/Linux (manifest compatibility.platforms
+  // = darwin/linux) and discovers a `claude` binary (no Windows `claude.exe` /
+  // %LOCALAPPDATA% lookup). Windows is out of scope here.
   return "claude";
-}
-
-/** Test-only: reset the discovery cache. */
-export function resetClaudeBinCacheForTest(): void {
-  cachedDiscovered = undefined;
 }

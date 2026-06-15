@@ -54,8 +54,8 @@ Non-material gaps (3 insufficient_evidence, 1 unanswered, 1 deferred) are resolv
 
 ## Claim Projection
 
-- Claim projection: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
-- Claim projection validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
+- Claim projection: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
+- Claim projection validation: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
 - Strongest claim level: blocked
 - Decision states: {"continue":0,"ask_user":0,"blocked":6,"actionable_limited":0,"actionable_ready":0,"not_applicable":1}
 - Actionability claims: {"none":7}
@@ -73,71 +73,71 @@ Non-material gaps (3 insufficient_evidence, 1 unanswered, 1 deferred) are resolv
 
 ## Artifact Truth
 
-- Reconstruct run control: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.yaml
-- Reconstruct run control validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-control-validation.yaml
-- Registry verification evidence: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/registry-verification-evidence.yaml
-- Registry verification evidence validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/registry-verification-evidence-validation.yaml
-- Source purpose candidates: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-purpose-candidates.yaml
-- Source purpose candidates validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-purpose-candidates-validation.yaml
-- Purpose confirmation validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/purpose-confirmation-validation.yaml
-- Source observation lineage index: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-observation-lineage-index.yaml
-- Source safety ledger: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-safety-ledger.yaml
-- Source safety ledger validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-safety-ledger-validation.yaml
-- Source scout pack: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.yaml
-- Source scout pack validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.yaml
-- Source scout pack pre-seed snapshot: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.pre-seed.yaml
-- Source scout pack pre-seed validation snapshot: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.pre-seed.yaml
-- Source scout pack post-maturation snapshot: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.post-maturation.yaml
-- Source scout pack post-maturation validation snapshot: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.post-maturation.yaml
-- Post-maturation gate projection validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml
-- Material admission ledger: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/material-admission-ledger.yaml
-- Material admission ledger validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/material-admission-ledger-validation.yaml
-- Seed authoring readiness: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness.yaml
-- Seed authoring readiness validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness-validation.yaml
-- Ontology seed: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-seed.yaml
-- Ontology seed validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-seed-validation.yaml
-- Claim realization map: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-realization-map.yaml
-- Seed confirmation validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/seed-confirmation-validation.yaml
-- Competency question assessment: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/competency-question-assessment.yaml
-- Failure classification: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/failure-classification.yaml
-- Revision proposal: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/revision-proposal.yaml
-- Pre-handoff run manifest: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff.yaml
-- Pre-handoff run manifest validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff-validation.yaml
-- Handoff decision validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/handoff-decision-validation.yaml
-- Maturation baseline: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-baseline.yaml
-- Maturation baseline validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-baseline-validation.yaml
-- Baseline actionability matrix: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix.yaml
-- Baseline actionability matrix validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix-validation.yaml
-- Actionability matrix: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/actionability-matrix.yaml
-- Actionability matrix validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/actionability-matrix-validation.yaml
-- Maturation question frontier: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-question-frontier.yaml
-- Maturation question frontier validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-question-frontier-validation.yaml
-- Maturation closure frontier: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier.yaml
-- Maturation closure frontier validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier-validation.yaml
-- Maturation authority response: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-authority-response.yaml
-- Maturation authority response validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-authority-response-validation.yaml
-- Answer support ledger: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/answer-support-ledger.yaml
-- Answer support ledger validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/answer-support-ledger-validation.yaml
-- Maturation answer claims: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-answer-claims.yaml
-- Maturation answer claims validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-answer-claims-validation.yaml
-- Ontology expansion: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-expansion.yaml
-- Ontology expansion validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-expansion-validation.yaml
-- Maturation source delta: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-source-delta.yaml
-- Maturation source delta validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-source-delta-validation.yaml
-- Maturation convergence ledger: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-convergence-ledger.yaml
-- Maturation convergence ledger validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-convergence-ledger-validation.yaml
-- Maturation continuation decision: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision.yaml
-- Maturation continuation decision validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision-validation.yaml
-- Query proofs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/query-proofs.yaml
-- Query proofs validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/query-proofs-validation.yaml
-- Visualization proofs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/visualization-proofs.yaml
-- Visualization proofs validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/visualization-proofs-validation.yaml
-- Graph exploration proofs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs.yaml
-- Graph exploration proofs validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs-validation.yaml
-- Claim projection: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
-- Claim projection validation: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
-- Reconstruct record: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-record.yaml
-- Reconstruct run manifest: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml
+- Reconstruct run control: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.yaml
+- Reconstruct run control validation: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control-validation.yaml
+- Registry verification evidence: <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence.yaml
+- Registry verification evidence validation: <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence-validation.yaml
+- Source purpose candidates: <run-root>/.onto/reconstruct/claude-live-e2e/source-purpose-candidates.yaml
+- Source purpose candidates validation: <run-root>/.onto/reconstruct/claude-live-e2e/source-purpose-candidates-validation.yaml
+- Purpose confirmation validation: <run-root>/.onto/reconstruct/claude-live-e2e/purpose-confirmation-validation.yaml
+- Source observation lineage index: <run-root>/.onto/reconstruct/claude-live-e2e/source-observation-lineage-index.yaml
+- Source safety ledger: <run-root>/.onto/reconstruct/claude-live-e2e/source-safety-ledger.yaml
+- Source safety ledger validation: <run-root>/.onto/reconstruct/claude-live-e2e/source-safety-ledger-validation.yaml
+- Source scout pack: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.yaml
+- Source scout pack validation: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.yaml
+- Source scout pack pre-seed snapshot: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.pre-seed.yaml
+- Source scout pack pre-seed validation snapshot: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.pre-seed.yaml
+- Source scout pack post-maturation snapshot: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.post-maturation.yaml
+- Source scout pack post-maturation validation snapshot: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.post-maturation.yaml
+- Post-maturation gate projection validation: <run-root>/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml
+- Material admission ledger: <run-root>/.onto/reconstruct/claude-live-e2e/material-admission-ledger.yaml
+- Material admission ledger validation: <run-root>/.onto/reconstruct/claude-live-e2e/material-admission-ledger-validation.yaml
+- Seed authoring readiness: <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness.yaml
+- Seed authoring readiness validation: <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness-validation.yaml
+- Ontology seed: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed.yaml
+- Ontology seed validation: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed-validation.yaml
+- Claim realization map: <run-root>/.onto/reconstruct/claude-live-e2e/claim-realization-map.yaml
+- Seed confirmation validation: <run-root>/.onto/reconstruct/claude-live-e2e/seed-confirmation-validation.yaml
+- Competency question assessment: <run-root>/.onto/reconstruct/claude-live-e2e/competency-question-assessment.yaml
+- Failure classification: <run-root>/.onto/reconstruct/claude-live-e2e/failure-classification.yaml
+- Revision proposal: <run-root>/.onto/reconstruct/claude-live-e2e/revision-proposal.yaml
+- Pre-handoff run manifest: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff.yaml
+- Pre-handoff run manifest validation: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff-validation.yaml
+- Handoff decision validation: <run-root>/.onto/reconstruct/claude-live-e2e/handoff-decision-validation.yaml
+- Maturation baseline: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-baseline.yaml
+- Maturation baseline validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-baseline-validation.yaml
+- Baseline actionability matrix: <run-root>/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix.yaml
+- Baseline actionability matrix validation: <run-root>/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix-validation.yaml
+- Actionability matrix: <run-root>/.onto/reconstruct/claude-live-e2e/actionability-matrix.yaml
+- Actionability matrix validation: <run-root>/.onto/reconstruct/claude-live-e2e/actionability-matrix-validation.yaml
+- Maturation question frontier: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-question-frontier.yaml
+- Maturation question frontier validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-question-frontier-validation.yaml
+- Maturation closure frontier: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier.yaml
+- Maturation closure frontier validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier-validation.yaml
+- Maturation authority response: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-authority-response.yaml
+- Maturation authority response validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-authority-response-validation.yaml
+- Answer support ledger: <run-root>/.onto/reconstruct/claude-live-e2e/answer-support-ledger.yaml
+- Answer support ledger validation: <run-root>/.onto/reconstruct/claude-live-e2e/answer-support-ledger-validation.yaml
+- Maturation answer claims: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-answer-claims.yaml
+- Maturation answer claims validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-answer-claims-validation.yaml
+- Ontology expansion: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-expansion.yaml
+- Ontology expansion validation: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-expansion-validation.yaml
+- Maturation source delta: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-source-delta.yaml
+- Maturation source delta validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-source-delta-validation.yaml
+- Maturation convergence ledger: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-convergence-ledger.yaml
+- Maturation convergence ledger validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-convergence-ledger-validation.yaml
+- Maturation continuation decision: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision.yaml
+- Maturation continuation decision validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision-validation.yaml
+- Query proofs: <run-root>/.onto/reconstruct/claude-live-e2e/query-proofs.yaml
+- Query proofs validation: <run-root>/.onto/reconstruct/claude-live-e2e/query-proofs-validation.yaml
+- Visualization proofs: <run-root>/.onto/reconstruct/claude-live-e2e/visualization-proofs.yaml
+- Visualization proofs validation: <run-root>/.onto/reconstruct/claude-live-e2e/visualization-proofs-validation.yaml
+- Graph exploration proofs: <run-root>/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs.yaml
+- Graph exploration proofs validation: <run-root>/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs-validation.yaml
+- Claim projection: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
+- Claim projection validation: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
+- Reconstruct record: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-record.yaml
+- Reconstruct run manifest: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml
 ## Seed Answerability
 
 - Ontology seed projected claims: 25
@@ -147,73 +147,73 @@ Non-material gaps (3 insufficient_evidence, 1 unanswered, 1 deferred) are resolv
 
 ## Runtime Artifact Truth Footer
 
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-control-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/registry-verification-evidence.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/registry-verification-evidence-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-record.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/candidate-inventory.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/candidate-disposition.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/candidate-disposition-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-purpose-candidates.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-purpose-candidates-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/purpose-confirmation-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-observation-lineage-index.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-safety-ledger.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-safety-ledger-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.pre-seed.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.pre-seed.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.post-maturation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.post-maturation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/material-admission-ledger.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/material-admission-ledger-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-seed.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-seed-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-realization-map.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/seed-confirmation-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/competency-question-assessment.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/failure-classification.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/revision-proposal.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/handoff-decision-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-baseline.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-baseline-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/actionability-matrix.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/actionability-matrix-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-question-frontier.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-question-frontier-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-authority-response.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-authority-response-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/answer-support-ledger.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/answer-support-ledger-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-answer-claims.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-answer-claims-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-expansion.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-expansion-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-source-delta.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-source-delta-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/query-proofs.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/query-proofs-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/visualization-proofs.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/visualization-proofs-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
-- /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-record.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/candidate-inventory.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/candidate-disposition.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/candidate-disposition-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-purpose-candidates.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-purpose-candidates-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/purpose-confirmation-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-observation-lineage-index.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-safety-ledger.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-safety-ledger-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.pre-seed.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.pre-seed.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.post-maturation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.post-maturation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/material-admission-ledger.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/material-admission-ledger-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/claim-realization-map.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/seed-confirmation-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/competency-question-assessment.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/failure-classification.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/revision-proposal.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/handoff-decision-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-baseline.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-baseline-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/actionability-matrix.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/actionability-matrix-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-question-frontier.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-question-frontier-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-authority-response.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-authority-response-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/answer-support-ledger.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/answer-support-ledger-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-answer-claims.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-answer-claims-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/ontology-expansion.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/ontology-expansion-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-source-delta.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-source-delta-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/query-proofs.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/query-proofs-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/visualization-proofs.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/visualization-proofs-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
+- <run-root>/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
 - valid
 - seed-claude-live-e2e-fixture-service#purpose
 - concept_fixture_service
@@ -252,21 +252,21 @@ Non-material gaps (3 insufficient_evidence, 1 unanswered, 1 deferred) are resolv
 
 - seed-answerability: Seed answerability is grounded in the seed and competency-question artifacts.
   - section: Seed Answerability
-  - authority_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-seed.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/competency-questions.yaml
-  - validation_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/ontology-seed-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/competency-questions-validation.yaml
+  - authority_refs: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/competency-questions.yaml
+  - validation_refs: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/competency-questions-validation.yaml
 - artifact-truth: Terminal artifact truth is grounded in run-control, the pre-handoff manifest validation, seed-readiness validation, final output provenance, and planned terminal record paths.
   - section: Artifact Truth
-  - authority_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/registry-verification-evidence.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.pre-seed.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack.post-maturation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-record.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff.yaml
-  - validation_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-control-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/registry-verification-evidence-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.pre-seed.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.post-maturation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/handoff-decision-validation.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
+  - authority_refs: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.pre-seed.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.post-maturation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-record.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff.yaml
+  - validation_refs: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.pre-seed.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.post-maturation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/handoff-decision-validation.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
 - claim-projection: The public output delegates claim truth to the canonical runtime claim projection artifact.
   - section: Claim Projection
-  - authority_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
-  - validation_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
+  - authority_refs: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
+  - validation_refs: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
 - runtime-artifact-truth-footer: The runtime footer enumerates all required provenance fragments for audit.
   - section: Runtime Artifact Truth Footer
-  - authority_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml, /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/reconstruct-record.yaml
-  - validation_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
+  - authority_refs: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml, <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-record.yaml
+  - validation_refs: <run-root>/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
 - runtime-provenance-bindings: The runtime-emitted provenance binding section lists section-to-authority bindings.
   - section: Runtime Provenance Bindings
-  - authority_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
-  - validation_refs: /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-claude-live-a2-bnA84M/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
+  - authority_refs: <run-root>/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
+  - validation_refs: <run-root>/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml

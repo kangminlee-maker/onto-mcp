@@ -32,6 +32,10 @@ supported_models:
       - development-records/benchmark/reconstruct-pipeline-live-claude-20260615.json
     notes: >-
       Completed a full reconstruct pipeline run end to end via the Anthropic
-      OAuth Claude Code CLI worker (execution_adapter=claude_code); support
-      verified. Record is a single-run completion proof (PRELIMINARY for any
-      performance claim), captured when the claude_code reconstruct route landed.
+      OAuth Claude Code CLI worker (execution_adapter=claude_code):
+      record_stage=completed with final_output present and provenance valid; the
+      maturation track ran to a `blocked` continuation decision (no actionable
+      ontology emitted). Verified with ONTO_LLM_TIMEOUT_MS=600000 (the
+      seed-authoring opus call exceeds the 120000ms default). Single-run
+      completion proof (PRELIMINARY for any performance claim, INV-BENCH-1 needs
+      >=3 reps / >=2 fixtures); support — model completes the pipeline — verified.
