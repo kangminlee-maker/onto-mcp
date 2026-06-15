@@ -2706,18 +2706,6 @@ validator_records:
         activation_condition: answer_support_judge_runtime_is_implemented
         input_authority_refs: [answer-support-judgment-validation.yaml]
     output_ref: maturation-answer-claims-validation.yaml
-  - validator_id: answer-support-judgment-validator
-    gate_ids: [answer_support_judgment_gate]
-    validator_version: 1
-    input_authority_refs:
-      - answer-support-judgment.yaml
-      - answer-support-ledger-validation.yaml
-      - reconstruct-contract-registry.yaml
-    validation_obligations:
-      - validate_judgment_refs_resolve_to_answer_support_ledger_clusters_and_evidence
-      - require_supports_enum_for_each_judgment
-      - require_rationale_ref_for_each_judgment
-    output_ref: answer-support-judgment-validation.yaml
   - validator_id: ontology-expansion-validator
     gate_ids: [ontology_expansion_gate]
     validator_version: 1
@@ -2955,6 +2943,18 @@ validator_records:
     output_ref: handoff-decision-validation.yaml
 
 planned_validator_records:
+  - validator_id: answer-support-judgment-validator
+    gate_ids: [answer_support_judgment_gate]
+    validator_version: 1
+    input_authority_refs:
+      - answer-support-judgment.yaml
+      - answer-support-ledger-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_judgment_refs_resolve_to_answer_support_ledger_clusters_and_evidence
+      - require_supports_enum_for_each_judgment
+      - require_rationale_ref_for_each_judgment
+    output_ref: answer-support-judgment-validation.yaml
   - validator_id: maturation-promotion-request-validator
     gate_ids: [maturation_promotion_request_gate]
     validator_version: 1
