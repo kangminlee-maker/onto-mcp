@@ -187,24 +187,18 @@ function defaultProfileForKind(
  * stage (see development-records/design/20260616-large-input-observation), not
  * silently truncated here.
  *
- * Material kind is detected by extension (target-material-kind.ts), and `document`
- * includes binary formats (.pdf/.docx) that `textStats` still reads as UTF-8. Only
- * text-readable document formats earn the whole-document budget — a binary document
- * keeps the small sample so we never capture 200K of decoded binary bytes and spend
- * the prompt on garbage; binary documents need an extraction step before reconstruct.
+ * Material kind is detected by extension (target-material-kind.ts `DOCUMENT_EXTENSIONS`),
+ * and `document` includes binary formats (.pdf/.docx/.ppt/.rtf) that `textStats` still
+ * reads as UTF-8. Only text-readable document formats earn the whole-document budget —
+ * a binary document keeps the small sample so we never capture 200K of decoded binary
+ * bytes and spend the prompt on garbage; binary documents need an extraction step before
+ * reconstruct. This set must be the text-prose subset of `DOCUMENT_EXTENSIONS`: an
+ * extension that the classifier does not map to `document` (e.g. `.html`) would never
+ * reach this budget, so listing it here would be dead and misleading.
  */
 const DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT = 6000;
 export const DOCUMENT_EXCERPT_CHAR_LIMIT = 200_000;
-const TEXT_READABLE_DOCUMENT_EXTENSIONS = new Set([
-  ".md",
-  ".markdown",
-  ".txt",
-  ".text",
-  ".html",
-  ".htm",
-  ".rst",
-  ".adoc",
-]);
+const TEXT_READABLE_DOCUMENT_EXTENSIONS = new Set([".md", ".txt", ".adoc"]);
 
 function structuralExcerptCharLimit(kind: TargetMaterialKind, ref: string): number {
   if (

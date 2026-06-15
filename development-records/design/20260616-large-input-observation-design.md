@@ -135,10 +135,18 @@ RLM의 load-bearing 아이디어는 REPL이 아니라 **선택 + 재귀 + 비용
   마일스톤·문제·전략)이 seed/관찰에 유입, (3) `excerpt_truncated=false`.
 - **검증**: 단위(텍스트 stats 경계) + 라이브 A/B(절단본 vs 전체본, 같은 문서) — charter §5.5 라이브 증거.
 - **리뷰 게이트**: self → onto(가능 시) → Codex. 상수/예산 변경이라 경량.
-- **Codex 리뷰 하드닝(PR #65 반영)**: 단일 문서 가정의 빈틈 3건 교정 —
-  (a) **다중 문서 블로업**: seed 프롬프트가 최대 160/64 관찰을 담으므로, 이미 허용되는 다중-문서 입력(디렉터리·복수 targetRefs)에서 각 문서가 200K로 확장되면 컨텍스트 오버플로. → 투영 확장을 **프롬프트당 document 관찰 1개일 때만** 허용(`allowDocumentExpansion`), 다중이면 bound 유지. 다중-문서 예산 배분은 Stage 2.
-  (b) **바이너리 문서(.pdf/.docx)**: 확장자 기반 detection이 바이너리도 `document`로 분류하고 textStats가 UTF-8로 읽음 → 200K 디코딩 쓰레기. → 큰 캡처를 **text-readable 확장자(.md/.txt/.html…)에만** 부여, 바이너리는 small 유지(추출 선행 필요).
-  (c) **tail-PII**: 캡처된 꼬리에 email/phone/token이 있으면 source-safety가 관찰 전체를 redact(span-level 아님) → 문서 통째 invisible. **수용·기록**(안전 스캔이 더 철저해진 것; whole-obs redaction은 기존 설계). span-level redaction은 별도 안전계층 후속.
+- **Codex 리뷰 하드닝(PR #65, 2라운드 반영)**: 단일 문서 가정의 빈틈 교정 —
+  (a) **다중 문서 + post-seed 블로업**: seed 프롬프트가 최대 160/64 관찰을 담고, post-seed 집계 프롬프트
+  (claim-realization·competency-questions)도 같은 1200 예산을 쓴다 → numeric-budget sentinel은 너무 넓다.
+  → 확장을 **명시 opt-in 플래그(`expandSingleDocumentExcerpt`)** 로 전환, **seed-authoring 6곳**(lens·purpose×2·
+  inventory×2·disposition)만 설정·claim-realization/competency 제외. 게이트는 **총 투영 관찰 1개일 때만**
+  (document count 아님) → 다중·혼합(디렉터리) 입력은 bound 유지. 다중-문서 예산 배분은 Stage 2.
+  (b) **바이너리 문서(.pdf/.docx/.ppt/.rtf)**: 확장자 detection이 바이너리도 `document`로 분류하고 textStats가
+  UTF-8로 읽음 → 200K 디코딩 쓰레기. → 큰 캡처를 **분류기 `DOCUMENT_EXTENSIONS`의 text-prose 부분집합
+  (`.md/.txt/.adoc`)에만** 부여, 바이너리는 small(추출 선행). `.html` 등은 분류기가 `unknown` 처리하므로 dead.
+  (c) **tail-PII**: 캡처된 꼬리에 email/phone/token이 있으면 source-safety가 관찰 전체를 redact(span-level 아님)
+  → 문서 통째 invisible. **수용·기록**(안전 스캔이 더 철저해진 것; whole-obs redaction은 기존 설계).
+  span-level redaction은 별도 안전계층 후속.
 
 ### Stage 1 — intra-document 분해 (축 A, 윈도 초과 단일 문서)
 - **변경**: document를 **구조 우선 결정적 분해**(heading/markdown/빈줄 문단)로 다중 inventory_unit +

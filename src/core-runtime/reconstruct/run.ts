@@ -5332,6 +5332,14 @@ interface ObservationPromptPayloadOptions {
   observationIds?: readonly string[];
   contentExcerptCharLimit?: number;
   includeStructuralData?: boolean;
+  /**
+   * Seed-authoring opt-in: a document observation may project its whole captured prose
+   * (instead of `contentExcerptCharLimit`) so purpose/candidate/seed authoring sees the
+   * document tail. Set only by seed-authoring callers — NOT by post-seed aggregate
+   * prompts (claim realization, competency questions) or the bounded catalogs. Honored
+   * only when the prompt projects a single observation (see effectiveContentExcerptCharLimit).
+   */
+  expandSingleDocumentExcerpt?: boolean;
 }
 
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
@@ -5342,14 +5350,6 @@ const SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET = 32;
 const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
 const ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT = 64;
 const POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT = 500;
-// INVARIANT: the seed-stage budget (PROMPT_OBSERVATION_EXCERPT_LIMIT) must stay
-// distinct from the bounded budgets (post-seed 500, directive 300). Document excerpt
-// expansion (effectiveContentExcerptCharLimit) keys on that distinct value to scope
-// itself to seed-stage prompts; a colliding budget would wrongly expand document prose
-// inside the bounded aggregate prompts. The literal `const` types keep the values
-// statically distinct, so the seed-stage value can change safely (call sites and the
-// predicate share the same constant) — only deliberately reusing it for a bounded
-// budget would break the scoping.
 const SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS = 5000;
@@ -5363,32 +5363,27 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 }
 
 /**
- * The seed-stage observation budget (`PROMPT_OBSERVATION_EXCERPT_LIMIT`) gives a
- * document observation its full captured prose so purpose/candidate/seed authoring
- * reads the whole document, not just its lead — the document tail (goals,
- * milestones) is where actor/object evidence for seed-authoring readiness lives.
- * The bounded post-seed maturation catalog (`POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT`)
- * and the pre-observation directive sample (`SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT`)
- * deliberately stay small because they aggregate many observations, so document
- * scaling applies only at the seed-stage budget.
- *
- * `allowDocumentExpansion` further bounds it to a SINGLE document observation in the
- * projected set: a multi-document bundle (already an accepted input — a directory or
- * several document `targetRefs`) would otherwise rewrite every selected document from
- * the bounded budget to the full-document budget, multiplying one bounded catalog into
- * a context-overflowing prompt. Multi-document budget-aware selection is deferred (see
+ * Full-document excerpt expansion: a document observation projects its whole captured
+ * prose instead of the bounded budget, so purpose/candidate/seed authoring reads the
+ * document tail (goals, milestones) where actor/object evidence for seed-authoring
+ * readiness lives. It is granted only when `expandDocument` holds, which the caller
+ * (`observationPromptPayload`) computes as BOTH:
+ *   - a seed-authoring prompt opted in (`expandSingleDocumentExcerpt`) — post-seed
+ *     aggregate/validation prompts (claim realization, competency questions) and the
+ *     bounded post-seed/directive catalogs do NOT opt in, even though several share the
+ *     same numeric budget; and
+ *   - the prompt projects a SINGLE observation — a multi-document bundle or a mixed
+ *     directory (both already-accepted inputs) would otherwise multiply the bounded
+ *     catalog into a context-overflowing prompt.
+ * Multi-document / over-window budget-aware selection is deferred (see
  * development-records/design/20260616-large-input-observation).
  */
 function effectiveContentExcerptCharLimit(
   baseLimit: number | undefined,
   targetMaterialKind: string | undefined,
-  allowDocumentExpansion: boolean,
+  expandDocument: boolean,
 ): number | undefined {
-  if (
-    allowDocumentExpansion &&
-    targetMaterialKind === "document" &&
-    baseLimit === PROMPT_OBSERVATION_EXCERPT_LIMIT
-  ) {
+  if (expandDocument && targetMaterialKind === "document") {
     return DOCUMENT_EXCERPT_CHAR_LIMIT;
   }
   return baseLimit;
@@ -5398,12 +5393,12 @@ function compactStructuralDataForPrompt(
   structuralData: Record<string, unknown>,
   contentExcerptCharLimit: number | undefined,
   targetMaterialKind: string | undefined,
-  allowDocumentExpansion: boolean,
+  expandDocument: boolean,
 ): Record<string, unknown> {
   const limit = effectiveContentExcerptCharLimit(
     contentExcerptCharLimit,
     targetMaterialKind,
-    allowDocumentExpansion,
+    expandDocument,
   );
   if (!limit) return structuralData;
   const compacted: Record<string, unknown> = { ...structuralData };
@@ -5434,14 +5429,13 @@ export function observationPromptPayload(
         );
     })()
     : sourceObservations.observations;
-  // Full-document excerpt expansion is granted only when this prompt projects a
-  // SINGLE document observation; with several documents the seed-stage budget stays
-  // bounded so a multi-document bundle cannot multiply into a context-overflowing
-  // prompt (see effectiveContentExcerptCharLimit).
-  const allowDocumentExpansion =
-    observations.filter((observation) =>
-      observation.target_material_kind === "document"
-    ).length <= 1;
+  // Full-document expansion needs the seed-authoring opt-in AND a single projected
+  // observation: a seed-authoring prompt over one document gets the whole document;
+  // multi-document bundles, mixed directories (one document among many observations),
+  // and post-seed/bounded prompts keep the budgeted excerpt (see
+  // effectiveContentExcerptCharLimit).
+  const expandDocument =
+    options.expandSingleDocumentExcerpt === true && observations.length <= 1;
   return observations
     .map((observation) => {
       const payload: Record<string, unknown> = {
@@ -5456,7 +5450,7 @@ export function observationPromptPayload(
           observation.structural_data,
           options.contentExcerptCharLimit,
           observation.target_material_kind,
-          allowDocumentExpansion,
+          expandDocument,
         );
       }
       return payload;
@@ -6054,6 +6048,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           source_observations: observationPromptPayload(input.sourceObservations, {
             observationIds: selectedObservationIds(input.sourceObservationDirective),
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            expandSingleDocumentExcerpt: true,
           }),
         },
       });
@@ -6319,6 +6314,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         source_observations: observationPromptPayload(input.sourceObservations, {
           observationIds: selectedObservationIdsForPurpose,
           contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          expandSingleDocumentExcerpt: true,
         }),
         lens_judgment_index: input.lensJudgmentIndex,
         exploration_synthesis:
@@ -6370,6 +6366,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             source_observations: observationPromptPayload(input.sourceObservations, {
               observationIds: selectedObservationIdsForPurpose,
               contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+              expandSingleDocumentExcerpt: true,
             }),
             source_scout_pack: sourceScoutPackPromptPayload({
               sourceScoutPack: input.sourceScoutPack,
@@ -6578,6 +6575,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           source_observations: observationPromptPayload(input.sourceObservations, {
             observationIds: requiredCoverageObservationIds,
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            expandSingleDocumentExcerpt: true,
           }),
           lens_judgment_index: input.lensJudgmentIndex,
           exploration_synthesis:
@@ -6632,6 +6630,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             missing_observations: observationPromptPayload(input.sourceObservations, {
               observationIds: missingCoverageObservationIds,
               contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+              expandSingleDocumentExcerpt: true,
             }),
             existing_candidate_inventory:
               compactCandidateInventoryForPrompt(candidateInventory),
@@ -6709,6 +6708,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           source_observations: observationPromptPayload(input.sourceObservations, {
             observationIds: candidateObservationIds,
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            expandSingleDocumentExcerpt: true,
           }),
         },
       });

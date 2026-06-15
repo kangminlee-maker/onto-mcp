@@ -574,9 +574,8 @@ describe("runReconstruct", () => {
           skipped_refs: [],
           validation_results: [],
         },
-        // 1200 is PROMPT_OBSERVATION_EXCERPT_LIMIT, the seed-stage budget that grants
-        // document expansion (must stay in sync with run.ts).
-        { contentExcerptCharLimit: 1200 },
+        // Seed-authoring caller: opts into single-document expansion at the budget.
+        { contentExcerptCharLimit: 1200, expandSingleDocumentExcerpt: true },
       ) as Array<any>).map(
         (observation) => observation.structural_data.content_excerpt.length as number,
       );
