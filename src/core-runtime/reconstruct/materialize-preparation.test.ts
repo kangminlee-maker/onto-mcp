@@ -162,6 +162,49 @@ describe("materializeReconstructPreparationArtifacts", () => {
       .toContain("dashboard audience");
   });
 
+  it("captures a text-readable document whole but caps a binary document at the small budget", async () => {
+    const root = await makeTmpProject();
+    // > 6000 chars so the old leading-slice boundary would truncate it.
+    const body = `# Strategy\n\n${"goal milestone problem ".repeat(400)}\n`;
+    expect(body.length).toBeGreaterThan(6000);
+
+    const mdTarget = path.join(root, "strategy.md");
+    const pdfTarget = path.join(root, "strategy.pdf");
+    await fs.writeFile(mdTarget, body, "utf8");
+    await fs.writeFile(pdfTarget, body, "utf8"); // .pdf detected as document; read as UTF-8
+
+    const readDoc = async (target: string) => {
+      const sessionRoot = path.join(
+        root,
+        ".onto",
+        "reconstruct",
+        `session-${path.basename(target)}`,
+      );
+      const refs = await materializeReconstructPreparationArtifacts({
+        sessionRoot,
+        targetRefs: [target],
+        profilesRoot,
+        filesystemAllowedRoots: [root],
+      });
+      const observations = await readYaml<ReconstructSourceObservationsArtifact>(
+        refs.source_observations,
+      );
+      return observations.observations[0]?.structural_data;
+    };
+
+    const md = await readDoc(mdTarget);
+    const pdf = await readDoc(pdfTarget);
+
+    // Text-readable document: captured whole (tail reaches seed authoring).
+    expect(md?.excerpt_truncated).toBe(false);
+    expect(md?.content_excerpt?.length).toBe(body.length);
+
+    // Binary document extension: kept at the small structural sample — never 200K of
+    // decoded binary bytes (regression guard, Codex P2).
+    expect(pdf?.excerpt_truncated).toBe(true);
+    expect(pdf?.content_excerpt?.length).toBe(6000);
+  });
+
   it("uses the default source profile for inventory when another profile sorts first", async () => {
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "reconstruct", "session-default-profile");

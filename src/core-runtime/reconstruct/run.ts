@@ -5370,14 +5370,22 @@ function chunkArray<T>(items: T[], size: number): T[][] {
  * The bounded post-seed maturation catalog (`POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT`)
  * and the pre-observation directive sample (`SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT`)
  * deliberately stay small because they aggregate many observations, so document
- * scaling applies only at the seed-stage budget. Multi-document budget-aware
- * selection is deferred (see development-records/design/20260616-large-input-observation).
+ * scaling applies only at the seed-stage budget.
+ *
+ * `allowDocumentExpansion` further bounds it to a SINGLE document observation in the
+ * projected set: a multi-document bundle (already an accepted input — a directory or
+ * several document `targetRefs`) would otherwise rewrite every selected document from
+ * the bounded budget to the full-document budget, multiplying one bounded catalog into
+ * a context-overflowing prompt. Multi-document budget-aware selection is deferred (see
+ * development-records/design/20260616-large-input-observation).
  */
 function effectiveContentExcerptCharLimit(
   baseLimit: number | undefined,
   targetMaterialKind: string | undefined,
+  allowDocumentExpansion: boolean,
 ): number | undefined {
   if (
+    allowDocumentExpansion &&
     targetMaterialKind === "document" &&
     baseLimit === PROMPT_OBSERVATION_EXCERPT_LIMIT
   ) {
@@ -5389,11 +5397,13 @@ function effectiveContentExcerptCharLimit(
 function compactStructuralDataForPrompt(
   structuralData: Record<string, unknown>,
   contentExcerptCharLimit: number | undefined,
-  targetMaterialKind?: string,
+  targetMaterialKind: string | undefined,
+  allowDocumentExpansion: boolean,
 ): Record<string, unknown> {
   const limit = effectiveContentExcerptCharLimit(
     contentExcerptCharLimit,
     targetMaterialKind,
+    allowDocumentExpansion,
   );
   if (!limit) return structuralData;
   const compacted: Record<string, unknown> = { ...structuralData };
@@ -5406,7 +5416,9 @@ function compactStructuralDataForPrompt(
   return compacted;
 }
 
-function observationPromptPayload(
+// Exported for the multi-document excerpt-budget regression test (the single-
+// document expansion gate); not part of the product surface.
+export function observationPromptPayload(
   sourceObservations: ReconstructSourceObservationsArtifact,
   options: ObservationPromptPayloadOptions = {},
 ): unknown {
@@ -5422,6 +5434,14 @@ function observationPromptPayload(
         );
     })()
     : sourceObservations.observations;
+  // Full-document excerpt expansion is granted only when this prompt projects a
+  // SINGLE document observation; with several documents the seed-stage budget stays
+  // bounded so a multi-document bundle cannot multiply into a context-overflowing
+  // prompt (see effectiveContentExcerptCharLimit).
+  const allowDocumentExpansion =
+    observations.filter((observation) =>
+      observation.target_material_kind === "document"
+    ).length <= 1;
   return observations
     .map((observation) => {
       const payload: Record<string, unknown> = {
@@ -5436,6 +5456,7 @@ function observationPromptPayload(
           observation.structural_data,
           options.contentExcerptCharLimit,
           observation.target_material_kind,
+          allowDocumentExpansion,
         );
       }
       return payload;

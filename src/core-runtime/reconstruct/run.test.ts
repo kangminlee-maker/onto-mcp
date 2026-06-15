@@ -43,6 +43,7 @@ import type {
 import {
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
+  observationPromptPayload,
   runReconstruct,
 } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -545,6 +546,51 @@ describe("runReconstruct", () => {
         location: "file",
       },
     ]);
+  });
+
+  it("expands a single document observation at the seed-stage budget but bounds several", () => {
+    const longExcerpt = "goal milestone problem ".repeat(120); // > seed-stage budget
+    expect(longExcerpt.length).toBeGreaterThan(1200);
+
+    const docObservation = (id: string) => ({
+      observation_id: id,
+      target_material_kind: "document" as const,
+      adapter_id: "fixture-observer",
+      source_ref: `/doc/${id}.md`,
+      location: "file",
+      summary: `Document fixture ${id}.`,
+      structural_data: { content_excerpt: longExcerpt },
+    });
+
+    const projectedExcerptLengths = (
+      observations: ReturnType<typeof docObservation>[],
+    ): number[] =>
+      (observationPromptPayload(
+        {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-06-16T00:00:00.000Z",
+          observations,
+          skipped_refs: [],
+          validation_results: [],
+        },
+        // 1200 is PROMPT_OBSERVATION_EXCERPT_LIMIT, the seed-stage budget that grants
+        // document expansion (must stay in sync with run.ts).
+        { contentExcerptCharLimit: 1200 },
+      ) as Array<any>).map(
+        (observation) => observation.structural_data.content_excerpt.length as number,
+      );
+
+    // Single document → full prose reaches seed authoring (not truncated).
+    expect(projectedExcerptLengths([docObservation("obs-doc-a")]))
+      .toEqual([longExcerpt.length]);
+    // Several documents → each bounded to the seed-stage budget (no aggregate blowup).
+    expect(
+      projectedExcerptLengths([
+        docObservation("obs-doc-a"),
+        docObservation("obs-doc-b"),
+      ]),
+    ).toEqual([1200, 1200]);
   });
 
   it("canonicalizes duplicate direct-call source observation selections", async () => {

@@ -179,21 +179,41 @@ function defaultProfileForKind(
 /**
  * Structural `content_excerpt` capture budgets (chars). Code and other kinds keep
  * a small leading-sample budget — the observation is a structural sample, not the
- * whole file. Document prose is captured whole so the document tail (goals,
- * milestones, decisions) reaches seed authoring instead of being lost to a leading
- * slice: a typical business/policy document is well within any modern model window
- * (e.g. ~12.5K chars ≈ ~3K tokens). The 200K cap is a safety ceiling against
+ * whole file. Text-readable document prose is captured whole so the document tail
+ * (goals, milestones, decisions) reaches seed authoring instead of being lost to a
+ * leading slice: a typical business/policy document is well within any modern model
+ * window (e.g. ~12.5K chars ≈ ~3K tokens). The 200K cap is a safety ceiling against
  * pathological inputs; documents that genuinely exceed it are decomposed by a later
  * stage (see development-records/design/20260616-large-input-observation), not
  * silently truncated here.
+ *
+ * Material kind is detected by extension (target-material-kind.ts), and `document`
+ * includes binary formats (.pdf/.docx) that `textStats` still reads as UTF-8. Only
+ * text-readable document formats earn the whole-document budget — a binary document
+ * keeps the small sample so we never capture 200K of decoded binary bytes and spend
+ * the prompt on garbage; binary documents need an extraction step before reconstruct.
  */
 const DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT = 6000;
 export const DOCUMENT_EXCERPT_CHAR_LIMIT = 200_000;
+const TEXT_READABLE_DOCUMENT_EXTENSIONS = new Set([
+  ".md",
+  ".markdown",
+  ".txt",
+  ".text",
+  ".html",
+  ".htm",
+  ".rst",
+  ".adoc",
+]);
 
-function structuralExcerptCharLimit(kind: TargetMaterialKind): number {
-  return kind === "document"
-    ? DOCUMENT_EXCERPT_CHAR_LIMIT
-    : DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;
+function structuralExcerptCharLimit(kind: TargetMaterialKind, ref: string): number {
+  if (
+    kind === "document" &&
+    TEXT_READABLE_DOCUMENT_EXTENSIONS.has(path.extname(ref).toLowerCase())
+  ) {
+    return DOCUMENT_EXCERPT_CHAR_LIMIT;
+  }
+  return DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;
 }
 
 async function textStats(ref: string, excerptLimit: number): Promise<{
@@ -238,7 +258,7 @@ export async function buildReconstructSourceObservation(
   const location = detection.ref;
   const stat = await fs.stat(detection.ref);
   const stats = stat.isFile()
-    ? await textStats(detection.ref, structuralExcerptCharLimit(detection.kind))
+    ? await textStats(detection.ref, structuralExcerptCharLimit(detection.kind, detection.ref))
     : {
     line_count: null,
     char_count: null,
