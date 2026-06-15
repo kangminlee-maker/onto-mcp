@@ -186,7 +186,12 @@ promote that facet into a permanent profile rule during the same run.
 ## 6. Mixed Material Rule
 
 `mixed` is a public `TargetMaterialKind` value, but it is not a material parser.
-Runtime must choose one of these behaviors before observation:
+Reconstruct exposes these three of the four lexicon-defined mixed behaviors as
+runnable observation behaviors; the fourth, `reserved_future`, is a non-runnable
+vocabulary state and is not a reconstruct-runnable path (so it is not in the
+runnable list below). Runtime must choose one of the three runnable behaviors
+before observation (full enum authority: `core-lexicon.yaml#TargetMaterialKind`
+and `target-material-kind-contract.md` §4.1):
 
 | Behavior | Requirement |
 |---|---|

@@ -19,6 +19,11 @@ No standalone HTML, web UI, or dashboard is required for this contract. MCP and
 CLI hosts should render the same information from runtime status/result payloads
 and reconstruct artifacts.
 
+This contract owns the generic reconstruct run UX. The material-kind-specific
+delta (detected `target_material_kind`, observation counts by material kind,
+unsupported/out-of-scope material) is owned by `target-material-kind-contract.md`
+§9 and is layered onto the surfaces below.
+
 ## 2. Opening Brief
 
 At run start, the host should show a compact opening brief before expensive

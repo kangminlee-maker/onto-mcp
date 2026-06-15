@@ -3,6 +3,11 @@
 > Status: design goal contract, partially registered in core lexicon.
 > Purpose: define the cross-process goal for material-aware target handling
 > across `review`, `reconstruct`, and future `evolve`.
+> Note: "design goal / partially registered" describes the cross-process axis and
+> `runtime_implementation_status`, not contract activeness. For the `reconstruct`
+> slice specifically, `target-material-profile.yaml` and `material_profile_gate`
+> are already contract-active per
+> `reconstruct-contract-registry.yaml#validation_gate_catalog` / `#artifact_authorities`.
 
 Related shared contract:
 
@@ -59,15 +64,18 @@ Allowed values:
 | `mixed` | Bundle containing more than one material kind. Each member needs its own material classification; `mixed` itself is not an adapter target. |
 | `unknown` | Runtime cannot classify the material safely. Adapter execution must halt or ask for clarification. |
 
-The axis is separate from:
+The axis is separate from these other classifying axes. They are not peers in
+ownership: the first two are lexicon-owned; the rest are review-contract-local
+concepts cited here for orthogonality only, not owned by this shared contract or
+the lexicon.
 
-| Axis | Question answered |
-|---|---|
-| `domain` | What is the target about? |
-| `medium` | Which cross-product implementation or reference frame accumulates reusable learning? |
-| `target_input_kind` | How did the target enter runtime? |
-| `artifact_roles` | What responsibility does the artifact carry in this run? |
-| review context `source_kind` | Which context-source artifact is being admitted into prompt packets? |
+| Axis | Question answered | Defined in (owner) |
+|---|---|---|
+| `domain` | What is the target about? | core-lexicon (rank-1) |
+| `medium` | Which cross-product implementation or reference frame accumulates reusable learning? | core-lexicon (rank-1) |
+| `target_input_kind` | How did the target enter runtime? | `review-target-profile-contract.md` §5 (review-owned; reconstruct UX references it — promote to a shared/lexicon home only if reconstruct adopts it as a formal field) |
+| `artifact_roles` | What responsibility does the artifact carry in this run? | `review-target-profile-contract.md` §5 (review-owned) |
+| review context `source_kind` | Which context-source artifact is being admitted into prompt packets? | review context contracts (review-owned; reconstruct deliberately does not use it) |
 
 ## 4. Cross-Process Alignment
 
@@ -161,6 +169,9 @@ Runtime must validate:
 
 Before full runtime implementation, at least one prompt-backed reference run
 must produce the planned artifact shapes and an acceptance observation.
+("Before full runtime implementation" here scopes `runtime_implementation_status`
+and review/future-`evolve` adoption; it does not mean the `reconstruct` material
+profile/gate are unbuilt — those are contract-active per the registry.)
 
 Recommended reference targets:
 
@@ -177,35 +188,25 @@ Historical reference-run evidence is isolated outside runtime reference context.
 Current runtime authority is the artifact contract in this file plus the
 review/reconstruct process contracts that consume it.
 
-## 9. UX Output Contract
+## 9. UX Output Contract — Material-Kind Delta
 
-Opening output should expose:
+The full opening/progress/result run-UX skeleton is owned by each process's UX
+contract (reconstruct: `reconstruct-execution-ux-contract.md` §§2-6; review: its
+own status/result surfaces). To keep these same-rank contracts from drifting,
+this section owns only the **material-kind delta** those surfaces must
+additionally expose:
 
-- selected environment, process, model, and domain
-- requested target and detected `target_material_kind`
-- planned material reading strategy
-- unsupported or partial-support status
-- runtime responsibilities and LLM responsibilities
+- opening: detected `target_material_kind`, planned material reading strategy, and
+  unsupported/partial-support status
+- progress: material detection result, observation counts by material kind, and
+  unsupported/unknown/skipped material members
+- result: material observations collected vs semantic claims promoted by LLM
+  directives, and unsupported or out-of-scope material
 
-Progress output should expose:
-
-- material detection result
-- inventory completion
-- observation counts by material kind
-- directive validation status
-- unsupported, unknown, or skipped material members
-
-Result output should separate:
-
-- material observations collected
-- semantic claims promoted by LLM directives
-- evidence gaps
-- unsupported or out-of-scope material
-- next action candidates
-
-The output contract should be rendered by the host LLM from runtime facts or by
-existing CLI/MCP status surfaces. Do not add a separate HTML implementation just
-to display this progress.
+The host LLM renders these from runtime facts or existing CLI/MCP status surfaces;
+do not add a separate HTML implementation. The generic environment/process/model/
+domain exposure and the observations-vs-claims-vs-gaps separation are defined once
+in the process UX contracts and are not restated here.
 
 ## 10. Goal Completion Conditions
 
