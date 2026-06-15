@@ -1828,6 +1828,8 @@ function createRunManifest(args: {
       maturation_authority_response_validation: null,
       answer_support_ledger: null,
       answer_support_ledger_validation: null,
+      answer_support_judgment: null,
+      answer_support_judgment_validation: null,
       maturation_answer_claims: null,
       maturation_answer_claims_validation: null,
       ontology_expansion: null,
@@ -1946,6 +1948,8 @@ function createRunManifest(args: {
             "maturation_authority_response_validation",
             "answer_support_ledger",
             "answer_support_ledger_validation",
+            "answer_support_judgment",
+            "answer_support_judgment_validation",
             "maturation_answer_claims",
             "maturation_answer_claims_validation",
             "ontology_expansion",
@@ -9385,6 +9389,8 @@ function appendFinalOutputArtifactTruthSection(
     maturationAuthorityResponseValidationPath: string;
     answerSupportLedgerPath: string;
     answerSupportLedgerValidationPath: string;
+    answerSupportJudgmentPath: string;
+    answerSupportJudgmentValidationPath: string;
     maturationAnswerClaimsPath: string;
     maturationAnswerClaimsValidationPath: string;
     ontologyExpansionPath: string;
@@ -9463,6 +9469,8 @@ function appendFinalOutputArtifactTruthSection(
     `- Maturation authority response validation: ${args.maturationAuthorityResponseValidationPath}`,
     `- Answer support ledger: ${args.answerSupportLedgerPath}`,
     `- Answer support ledger validation: ${args.answerSupportLedgerValidationPath}`,
+    `- Answer support judgment: ${args.answerSupportJudgmentPath}`,
+    `- Answer support judgment validation: ${args.answerSupportJudgmentValidationPath}`,
     `- Maturation answer claims: ${args.maturationAnswerClaimsPath}`,
     `- Maturation answer claims validation: ${args.maturationAnswerClaimsValidationPath}`,
     `- Ontology expansion: ${args.ontologyExpansionPath}`,
@@ -9597,6 +9605,8 @@ function finalOutputProvenanceSectionBindings(args: {
   maturationAuthorityResponseValidationPath: string;
   answerSupportLedgerPath: string;
   answerSupportLedgerValidationPath: string;
+  answerSupportJudgmentPath: string;
+  answerSupportJudgmentValidationPath: string;
   maturationAnswerClaimsPath: string;
   maturationAnswerClaimsValidationPath: string;
   ontologyExpansionPath: string;
@@ -9704,6 +9714,8 @@ function finalOutputProvenanceSectionBindings(args: {
         args.maturationAuthorityResponseValidationPath,
         args.answerSupportLedgerPath,
         args.answerSupportLedgerValidationPath,
+        args.answerSupportJudgmentPath,
+        args.answerSupportJudgmentValidationPath,
         args.maturationAnswerClaimsPath,
         args.maturationAnswerClaimsValidationPath,
         args.ontologyExpansionPath,
@@ -11420,6 +11432,8 @@ export async function runReconstruct(
       maturation_authority_response_validation: null,
       answer_support_ledger: null,
       answer_support_ledger_validation: null,
+      answer_support_judgment: null,
+      answer_support_judgment_validation: null,
       maturation_answer_claims: null,
       maturation_answer_claims_validation: null,
       ontology_expansion: null,
@@ -12239,6 +12253,8 @@ export async function runReconstruct(
     maturationAuthorityResponseValidationPath,
     answerSupportLedgerPath,
     answerSupportLedgerValidationPath,
+    answerSupportJudgmentPath,
+    answerSupportJudgmentValidationPath,
     maturationAnswerClaimsPath,
     maturationAnswerClaimsValidationPath,
     ontologyExpansionPath,
@@ -12332,6 +12348,8 @@ export async function runReconstruct(
     maturationAuthorityResponseValidationPath,
     answerSupportLedgerPath,
     answerSupportLedgerValidationPath,
+    answerSupportJudgmentPath,
+    answerSupportJudgmentValidationPath,
     maturationAnswerClaimsPath,
     maturationAnswerClaimsValidationPath,
     ontologyExpansionPath,
@@ -12417,6 +12435,8 @@ export async function runReconstruct(
       maturationAuthorityResponseValidationPath,
       answerSupportLedgerPath,
       answerSupportLedgerValidationPath,
+      answerSupportJudgmentPath,
+      answerSupportJudgmentValidationPath,
       maturationAnswerClaimsPath,
       maturationAnswerClaimsValidationPath,
       ontologyExpansionPath,

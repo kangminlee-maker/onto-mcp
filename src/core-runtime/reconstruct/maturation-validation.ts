@@ -2163,12 +2163,13 @@ export function validateMaturationAnswerClaims(args: {
       cluster,
     ]),
   );
-  // B-6 judge gate (runtime realization of registry activation_condition):
-  // "activated" = orchestrator supplied a non-null judgment whose validation is
-  // valid. judgeSupported keys a confirmed support by IDENTITY
+  // B-6 judge gate. judgeActive = orchestrator supplied a non-null judgment whose
+  // validation is valid. judgeSupported keys a confirmed support by IDENTITY
   // (`${evidence_cluster_ref}#${evidenceRefKey}`) so the per-claim sufficiency
-  // count below can re-key it by INDEPENDENCE. Absent/invalid judgment =>
-  // judgeActive false => branch skipped => current behavior (backward compat).
+  // count below can re-key it by INDEPENDENCE. With the judge gate active (R4) a
+  // convergent_source_evidence claim is FAIL-CLOSED on judgeActive: an
+  // absent/invalid judgment makes such a claim invalid (see the per-claim branch).
+  // Non-convergent claims are unaffected.
   const judgeActive = Boolean(args.answerSupportJudgment) &&
     args.answerSupportJudgmentValidation?.validation_status === "valid";
   const judgeSupported = new Set<string>();
@@ -2285,26 +2286,39 @@ export function validateMaturationAnswerClaims(args: {
     // supports across all cited clusters: IDENTITY key joins to the judge
     // verdict, INDEPENDENCE key (source_ref:location, byte-identical to the
     // ledger envelope) is counted so same-source refs collapse to one.
-    if (judgeActive && claim.support_mode === "convergent_source_evidence") {
-      const independentConfirmed = new Set<string>();
-      for (const clusterRef of claim.evidence_cluster_refs) {
-        const cluster = clusters.get(clusterRef);
-        if (!cluster) continue;
-        for (const ref of cluster.evidence_refs) {
-          if (judgeSupported.has(`${clusterRef}#${evidenceRefKey(ref)}`)) {
-            independentConfirmed.add(
-              `${normalizedPathRef(ref.source_ref)}:${normalizedPathRef(ref.location)}`,
-            );
-          }
-        }
-      }
-      if (independentConfirmed.size < 2) {
+    if (claim.support_mode === "convergent_source_evidence") {
+      if (!judgeActive) {
+        // Fail-closed: the answer-support judge gate is active (R4), so a
+        // convergent-source claim REQUIRES a valid judgment. judgeActive is
+        // false exactly when the judgment artifact is absent or its validation
+        // is not valid — either way the convergent claim cannot be trusted.
         violations.push(violation({
-          code: "insufficient_independent_evidence",
+          code: "prior_validation_invalid",
           message:
-            "convergent answer claim requires at least two independent judge-confirmed supports",
+            "convergent source evidence claim requires a valid answer-support judgment",
           subjectId: claim.answer_claim_id,
         }));
+      } else {
+        const independentConfirmed = new Set<string>();
+        for (const clusterRef of claim.evidence_cluster_refs) {
+          const cluster = clusters.get(clusterRef);
+          if (!cluster) continue;
+          for (const ref of cluster.evidence_refs) {
+            if (judgeSupported.has(`${clusterRef}#${evidenceRefKey(ref)}`)) {
+              independentConfirmed.add(
+                `${normalizedPathRef(ref.source_ref)}:${normalizedPathRef(ref.location)}`,
+              );
+            }
+          }
+        }
+        if (independentConfirmed.size < 2) {
+          violations.push(violation({
+            code: "insufficient_independent_evidence",
+            message:
+              "convergent answer claim requires at least two independent judge-confirmed supports",
+            subjectId: claim.answer_claim_id,
+          }));
+        }
       }
     }
     if (claim.evidence_cluster_refs.length === 0) {
@@ -4858,12 +4872,13 @@ export async function writeAnswerSupportLedgerValidationArtifact(args: {
   return validation;
 }
 
-// B-5 judge validation (B skeleton): structural attribution is enforced upstream
-// (separate authored artifact). This skeleton aggregates counts and is valid for
-// empty unconditional-write judgments. R3 adds the B-5 obligations
-// (refs resolve / supports enum / rationale present / dup id / convergent coverage —
-// obligation D, `uncovered_evidence_ref`). Never compares directive_author.author_id
-// (spoofable); separation is structural.
+// B-5 answer-support judge validation. Structural author!=judge attribution is
+// enforced upstream (separate authored artifact + 1:1 telemetry mapping); this
+// validator therefore NEVER compares directive_author.author_id (spoofable).
+// Obligations: refs resolve (unknown_id) / supports enum (invalid_enum) /
+// rationale present (missing_required_ref) / one verdict per (cluster, evidence)
+// pair (duplicate_id) / convergent coverage — every cited evidence_ref of a
+// convergent_source_evidence cluster must be judged (reuses missing_required_coverage).
 export function validateAnswerSupportJudgment(args: {
   answerSupportJudgment: ReconstructAnswerSupportJudgmentArtifact;
   answerSupportJudgmentRef?: string | null;
@@ -4930,8 +4945,22 @@ export function validateAnswerSupportJudgment(args: {
     } else {
       const covered = judgedKeysByCluster.get(judgment.evidence_cluster_ref) ??
         new Set<string>();
-      covered.add(evidenceKey);
-      judgedKeysByCluster.set(judgment.evidence_cluster_ref, covered);
+      // One verdict per (cluster, evidence) IDENTITY pair: a second judgment for
+      // the same pair (e.g. a contradictory supported + not_supported) must be
+      // invalid. Otherwise B-6 would launder it — judgeSupported only ADDS
+      // 'supported' keys, so a conflict silently resolves to "supported wins" and
+      // an ambiguous ref counts toward convergent sufficiency. Reuses duplicate_id.
+      if (covered.has(evidenceKey)) {
+        violations.push(violation({
+          code: "duplicate_id",
+          message:
+            "answer support judgment must record at most one verdict per (cluster, evidence) pair",
+          subjectId: judgment.judgment_id,
+        }));
+      } else {
+        covered.add(evidenceKey);
+        judgedKeysByCluster.set(judgment.evidence_cluster_ref, covered);
+      }
     }
     // B: supports enum (raw projection of supported count, NOT sufficiency).
     if (!SUPPORTS_VALUES.includes(judgment.supports)) {

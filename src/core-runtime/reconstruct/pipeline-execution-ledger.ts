@@ -639,7 +639,11 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     unitKind: "runtime_validation",
     owner: "runtime",
     artifactKey: "maturation_answer_claims_validation",
-    upstreamUnitIds: ["maturation_answer_claims", "answer_support_ledger_validation"],
+    upstreamUnitIds: [
+      "maturation_answer_claims",
+      "answer_support_judgment_validation",
+      "answer_support_ledger_validation",
+    ],
   },
   {
     unitId: "ontology_expansion",
