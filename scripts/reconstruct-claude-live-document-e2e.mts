@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { createOntoReconstructCoreApi } from "../src/core-api/reconstruct-api.ts";
 import { writeProviderSettings } from "../src/core-runtime/onboard/configure-provider.ts";
 import { resolveClaudeBin } from "../src/core-runtime/llm/claude-bin.ts";
+import { normalizeLlmModelSwitcher } from "../src/core-runtime/llm/model-switcher.ts";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MODEL = process.env.E2E_MODEL ?? "claude-opus-4-8";
@@ -156,12 +157,29 @@ async function main(): Promise<number> {
   }
   log(`document fixture: ${docText.length} chars, ${docText.split("\n").length} lines`);
 
+  // The evidence claims execution_adapter=claude_code, but telemetry only reports
+  // provider_route=anthropic — which an Anthropic SDK/api-key route would also show.
+  // The seat (anthropic/oauth) deterministically resolves to the claude_code worker;
+  // prove that here so a misconfigured route can never write claude_code evidence.
+  const resolvedAdapter = normalizeLlmModelSwitcher({
+    provider: "anthropic",
+    auth: "oauth",
+    model: MODEL,
+  })?.execution_adapter;
+  if (resolvedAdapter !== "claude_code") {
+    log(`FAIL: seat anthropic/oauth/${MODEL} resolves to execution_adapter=${resolvedAdapter ?? "(none)"}, not claude_code — refusing to write claude_code evidence.`);
+    return 1;
+  }
+
   const attempts: AttemptOutcome[] = [];
   let winner: AttemptOutcome | undefined;
   for (let a = 1; a <= MAX_ATTEMPTS; a++) {
     const outcome = await runOnce(a, docText);
     attempts.push(outcome);
-    if (outcome.completed && outcome.usedClaude) {
+    // A genuine document-path completion: full pipeline + the claude route + the
+    // detected material actually being `document` (else this overwrites the document
+    // benchmark with a different/regressed material kind).
+    if (outcome.completed && outcome.usedClaude && outcome.materialKind === "document") {
       winner = outcome;
       break;
     }
@@ -178,7 +196,7 @@ async function main(): Promise<number> {
     log(`  step ${t.step_id}: provider_route=${t.provider_route} model_id=${t.model_id}`);
   }
 
-  if (result.completed && result.usedClaude) {
+  if (result.completed && result.usedClaude && result.materialKind === "document") {
     const evidencePath = path.join(REPO_ROOT, EVIDENCE_REL);
     const evidence = {
       schema_version: "1",
@@ -186,7 +204,7 @@ async function main(): Promise<number> {
       target_material_kind: result.materialKind,
       provider: "anthropic",
       model: MODEL,
-      execution_adapter: "claude_code",
+      execution_adapter: resolvedAdapter,
       auth: "oauth",
       effort: EFFORT,
       source_document: path.basename(DOC_PATH),
@@ -211,7 +229,8 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  log(`FAIL: no completion across ${attempts.length} attempt(s). Last status=${result.status}` +
+  log(`FAIL: no document-path completion across ${attempts.length} attempt(s). Last status=${result.status}` +
+    ` material_kind=${result.materialKind}` +
     (result.error ? ` error=${result.error}` : "") + ". No evidence written.");
   return 1;
 }
