@@ -1,0 +1,71 @@
+{
+  "manifest_version": "0.3",
+  "name": "onto",
+  "display_name": "onto — Ontology Review Runtime",
+  "version": "0.4.9",
+  "description": "MCP-native ontology review runtime with context-isolated lenses and controlled deliberation. Installs a one-click Claude Desktop server that reviews and reconstructs ontologies; collects provider config on first run and seeds ~/.onto/settings.json.",
+  "author": {
+    "name": "kangminlee-maker",
+    "url": "https://github.com/kangminlee-maker"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kangminlee-maker/onto-mcp"
+  },
+  "compatibility": {
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "bin/onto",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/bin/onto", "mcp", "--global"],
+      "env": {
+        "ONTO_HOME": "${__dirname}",
+        "ONTO_MCP_PROFILE": "simple",
+        "ONTO_BOOTSTRAP_PROVIDER": "${user_config.provider}",
+        "ONTO_BOOTSTRAP_MODEL": "${user_config.model}",
+        "ONTO_BOOTSTRAP_AUTH": "${user_config.auth}",
+        "ONTO_PROVIDER_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "user_config": {
+    "provider": {
+      "type": "string",
+      "title": "LLM provider",
+      "description": "The LLM provider that runs ontology review and reconstruction (for example: anthropic, openai). Determines which model family and auth routes are available.",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "title": "Model",
+      "description": "The provider model id used for review and reconstruction (for example: claude-opus-4, gpt-5). Must be a model the chosen provider supports.",
+      "required": true
+    },
+    "auth": {
+      "type": "string",
+      "title": "Auth route (optional)",
+      "description": "How the provider is authenticated. Choices: api_key | oauth | local. Leave blank to use the default OAuth route — for provider=openai this is the OAuth subscription (Codex) route, which IGNORES the pasted API key. Pick api_key to authenticate with the key you paste below."
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API key (optional)",
+      "description": "Provider API key, used only when auth=api_key. Stored in the host keychain and passed to the server via env; the onto runtime persists only the env-var NAME, never the key value. Leave blank when using the OAuth or local route.",
+      "sensitive": true
+    }
+  },
+  "tools": [
+    { "name": "onto_review" },
+    { "name": "onto_review_read" },
+    { "name": "onto_review_cancel" },
+    { "name": "onto_reconstruct" },
+    { "name": "onto_observe_source" },
+    { "name": "onto_validate_reconstruct_directive" },
+    { "name": "onto_reconstruct_read" },
+    { "name": "onto_list" }
+  ]
+}

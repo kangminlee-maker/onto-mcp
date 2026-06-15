@@ -38,6 +38,7 @@
     "version:next": "node scripts/next-version.mjs",
     "clean:ts-core": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build:ts-core": "npm run clean:ts-core && tsc -p tsconfig.json",
+    "build:mcpb": "node scripts/build-mcpb.mjs",
     "check:ts-core": "tsc -p tsconfig.json --noEmit",
     "check:review:invocation-runner": "tsx scripts/review-invocation-runner-conformance.ts",
     "check:retired-root-paths": "bash scripts/check-retired-root-paths.sh",

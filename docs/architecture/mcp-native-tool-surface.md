@@ -32,13 +32,15 @@ stable compatibility aliases in either profile but are not advertised.
 
 ## Host Usability Roadmap (Planned)
 
-> Status: Accepted direction (2026-06-13). Phase 1 items 3 (tool consolidation +
-> profiles), 1 (polling acceptance contract), and the **core of 2** (provider settings
-> writer `onto configure-provider`) are **implemented (2026-06-14/15)** and reflected in
-> the Tool Set above (12-tool surface + simple/full profiles + deprecated aliases +
-> profile-aware sync window). Remaining: item 2's `.mcpb` `user_config` wiring (lands
-> with item 4) and item 4 (`.mcpb` packaging); all of Phase 2 is **not yet implemented**. Extends DD-010. The Tool Set above records
-> current behavior; the items below record the decided direction.
+> Status: Accepted direction (2026-06-13). **All of Phase 1 is implemented
+> (2026-06-14/15):** items 3 (tool consolidation + profiles), 1 (polling acceptance
+> contract), 2 (provider settings writer `onto configure-provider` + its `.mcpb`
+> `user_config` wiring), and 4 (`.mcpb` Desktop Extension packaging + first-run
+> bootstrap) are reflected in the Tool Set above (12-tool surface + simple/full
+> profiles + deprecated aliases + profile-aware sync window) and shipped as the
+> `.mcpb` desktop bundle. All of Phase 2 is **not yet implemented**. Extends DD-010.
+> The Tool Set above records current behavior; the items below record the decided
+> direction.
 > Hardened against onto self-review `20260613-d1c99dba` (6 medium design-completeness
 > gaps incorporated: over-window contract, `onto_review_read` responsibility map,
 > simple-profile run-control, read-merge basis, Phase 2 authority decomposition, and
@@ -102,9 +104,10 @@ packaging changes only.
      **not** raw `execution-result.yaml`, which is upserted mid-run and can read
      `halted_partial` while the attempt is still active. Polling guidance must say so
      (observed live in review `20260613-d1c99dba`: a raw-artifact poller false-terminates).
-2. **Provider prerequisite.** ✅ **Core mechanism implemented 2026-06-15**
-   (`onto configure-provider`, `src/core-runtime/onboard/configure-provider.ts`); the
-   `.mcpb` `manifest.json` `user_config` that invokes it lands with item 4. Collect LLM
+2. **Provider prerequisite.** ✅ **Implemented 2026-06-15**
+   (`onto configure-provider`, `src/core-runtime/onboard/configure-provider.ts`; the
+   `.mcpb` `manifest.json` `user_config` that feeds it shipped with item 4 —
+   `packaging/mcpb/manifest.json` + `bootstrap-provider.ts`). Collect LLM
    provider config at install time via `user_config` (secrets flagged sensitive) instead
    of hand-editing `settings.json`. `user_config` is an **input channel only**:
    `onto configure-provider --provider/--model [--auth/--api-key-env/…]` writes/merges
@@ -167,8 +170,51 @@ in the simple profile exposes `onto_reconstruct_read` (read/liveness) only — t
 **explicit deferred parity item, not an omission**; a long-running reconstruct is
 recovered/observed via `onto_reconstruct_read` until that parity lands.
 
-4. **`.mcpb` packaging.** Ship a Desktop Extension bundle (`manifest.json` + onto
-   binary) for one-click install; keep `onto register` for CLI/advanced setup.
+4. **`.mcpb` packaging.** ✅ **Implemented 2026-06-15** (`packaging/mcpb/`,
+   `scripts/build-mcpb.mjs`, `src/core-runtime/onboard/bootstrap-provider.ts`).
+   Ship a Desktop Extension bundle (`manifest.json` + the runnable onto server) for
+   one-click Claude Desktop install; `onto register` stays for CLI/advanced setup.
+   Build with `npm run build:mcpb`, which stages a pruned production tree and produces
+   a validated `packaging/mcpb/onto.mcpb`; see `packaging/mcpb/README.md` for the build
+   and manual install/E2E steps.
+
+   - **Launch.** The manifest launches the onto MCP server in the **simple** profile
+     (`env ONTO_MCP_PROFILE=simple`) with `args ["${__dirname}/bin/onto","mcp","--global"]`.
+     `--global` short-circuits project-local delegation so the bundle's own staged
+     server runs hermetically and an unrelated project's `node_modules/onto-mcp` cannot
+     hijack the launch.
+   - **Provider config via `user_config`.** This is item 2's `.mcpb` wiring (the
+     install-time input channel for the provider settings writer). The bundle collects
+     `provider`, `model`, `auth`, and `api_key` (sensitive) as `user_config` fields and
+     substitutes them into the server `env` as `ONTO_BOOTSTRAP_PROVIDER`,
+     `ONTO_BOOTSTRAP_MODEL`, `ONTO_BOOTSTRAP_AUTH`, and `ONTO_PROVIDER_API_KEY`. **v1
+     `user_config` scope is provider/model/auth/api_key only** (no service_tier,
+     base_url, or effort). No field carries a `default` (INV-CFG-1).
+   - **First-run bootstrap.** MCPB launches the *server* with those values in `env`; it
+     does **not** run a setup command. So on server start `bootstrapProviderFromEnv()`
+     consumes that env channel **once** to materialize the canonical
+     `~/.onto/settings.json` through the existing `onto configure-provider` write-path —
+     a **one-time materialization of the canonical file, not a new runtime authority**
+     (INV-CFG-1-safe). It embeds no provider/auth/model default; every written value
+     comes from the install env. It only materializes an empty/partial/invalid user
+     seat — a seat that already resolves a complete, valid provider route (via the real
+     loader) is left untouched, so no clobber. settings.json remains the sole canonical
+     settings authority that the runtime reads. Each unfilled optional field substitutes
+     the literal `"${user_config.<name>}"`; bootstrap treats that token, plus
+     missing/empty/whitespace, as **absent** for every env read so a placeholder never
+     becomes a junk value, and only the env-var NAME (`api_key_env`) is ever persisted —
+     the API key value stays in env and is never written, logged, or stringified.
+   - **`auth` is an explicit `user_config` field** (api_key/oauth/local) with route
+     guidance, because the auth meaning is provider-dependent. When the user leaves it
+     blank, bootstrap derives the **loader-consistent** auth via
+     `normalizeLlmModelSwitcher` (the same value the loader would derive — INV-AUTH-1:
+     auth is never inferred from key presence) and passes it explicitly, so **both**
+     review and reconstruct actors materialize (the simple profile advertises
+     `onto_reconstruct`). For **openai** specifically: pick `auth=api_key` to use a
+     direct API key (the `direct_model_call` route reads the key); leaving openai's auth
+     blank selects the default **OAuth** route (`external_oauth_worker`), which ignores
+     the key — so an openai user who supplied an API key must set `auth=api_key` for it
+     to be used. The field description states this.
 
 ### Phase 2 — Remote (web/mobile), direction only
 
