@@ -76,3 +76,12 @@
 - **현재 상태**: **해결됨** (2026-04-06). `resolveDomainDirectory()`가 `ontoHome/domains/` → `projectRoot/domains/` 순서로 탐색. `--onto-home`이 전체 CLI 체인을 통해 전달됨. E2E 검증: 외부 프로젝트에서 `@llm-native-development` 도메인 지정 시 ontoHome의 9개 도메인 파일이 prompt packet에 정상 포함.
 - **판단**: ~~blocker~~ → 해결됨
 - **비고**: 기록 시점에는 domain 해석에 ontoHome fallback이 없었으나, role 해석 정책 구현 시 `resolveDomainDirectory`에도 동일 패턴이 적용됨. 디렉토리 단위 all-or-nothing 정책 유지.
+
+### 7. answer-support judge의 semantic rubber-stamp 잔여 위험 (per-stage 모델/effort 분리)
+
+- **발견일**: 2026-06-15
+- **출처**: 런타임 judge stage 구현(PR #57/#58, ODKE+ 지지 게이트). R0 설계 §3·§7 residual #1에서 명시, ultracode+onto 교차리뷰에서 재확인.
+- **개념**: author≠judge(글쓴이≠심사관)는 **구조적으로만** 강제된다 — judge는 별도 authored 아티팩트(`AnswerSupportJudgment`)이고 `UNIT_ID_BY_AUTHORED_ARTIFACT_NAME`로 1:1 telemetry 귀속되며, validator는 spoofable한 `directive_author.author_id`를 비교하지 않는다. **그러나 author와 judge가 같은 모델·같은 컨텍스트로 돌면, judge가 증거를 실제로 읽지 않고 기계적으로 `supported`만 찍는 semantic rubber-stamp는 구조로 막지 못한다.** 결정론 validator(B-5/B-6)는 형식(판정 존재·enum·≥2 독립·coverage·충돌 없음)만 검사하므로 "판정이 진심인가"는 측정 불가. 테스트로도 비-rubber-stamp를 증명할 수 없다(알려진 한계).
+- **현재 상태**: **기록만 (accepted residual / tracked follow-up)**. 완화는 적용됨 — judge userPayload에서 ledger author의 `independence_basis`/rationale를 배제(context isolation), 불확실 시 `not_supported` 보수 기본, adversarial-verifier 프롬프트 frame. 근본 해결(judge를 다른 모델/effort로 분리)은 **미적용**: `llmConfig`가 directiveAuthor 인스턴스당 단일(`run.ts`에서 1회 capture, judge author도 동일 `callJsonAuthor` 경로 사용)이라 per-stage model/effort 차별화가 현재 표현 불가.
+- **판단**: enhancement (accepted residual) — judge gate는 active이고 형식 강제는 작동하나, 의미적 독립성은 보강 여지. "해결된 속성"으로 오인 금지.
+- **비고**: 구현 시 directiveAuthor가 stage별 `llmConfig`(특히 judge용 별도 model/effort)를 받도록 plumbing 확장 필요. 구조적 독립 → 의미적 독립 전환의 유일한 레버. 이상적으로는 author보다 strong/different 모델을 judge에 배정. 관련: R0 설계 `development-records/design/20260615-runtime-judge-stage-r0-design.md` §3(rubber-stamp 잔여 위험)·§7 residual #1.
