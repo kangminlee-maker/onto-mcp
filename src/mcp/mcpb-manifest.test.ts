@@ -33,6 +33,18 @@ describe("mcpb manifest (Phase 1 item 4 — Desktop Extension binding)", () => {
     expect(env.ONTO_HOME).toBe("${__dirname}");
   });
 
+  it("entry_point is an importable .js module (Claude Desktop imports it by path)", () => {
+    const manifest = loadManifest();
+    // Desktop's built-in Node host imports entry_point as an ES module, so it
+    // MUST be an importable `.js` (not the extensionless `bin/onto` CLI, which
+    // fails ESM resolution and never starts the server).
+    expect(manifest.server.entry_point).toMatch(/\.js$/);
+    expect(manifest.server.entry_point).not.toBe("bin/onto");
+    // The spawn-path args reference the same importable entry.
+    const args = manifest.server.mcp_config.args as string[];
+    expect(args.some((a) => a.endsWith(manifest.server.entry_point))).toBe(true);
+  });
+
   it("maps each BOOTSTRAP_ENV / PROVIDER_API_KEY_ENV key to the matching ${user_config.*} token", () => {
     const env = loadManifest().server.mcp_config.env as Record<string, string>;
 
