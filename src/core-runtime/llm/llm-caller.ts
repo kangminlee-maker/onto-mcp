@@ -25,6 +25,7 @@ import {
   type LlmModelSwitcherConfig,
   type LlmExecutionAdapter,
 } from "./model-switcher.js";
+import { resolveClaudeBin } from "./claude-bin.js";
 import {
   appendRuntimeModelCallLogFromCurrentContext,
   appendRuntimeStreamChunkFromCurrentContextSync,
@@ -191,6 +192,15 @@ export interface LlmCallResult {
 // enough for ~50-item single-batch audits while still failing fast on real
 // network problems.
 const DEFAULT_TIMEOUT_MS = Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120_000;
+// External OAuth CLI workers (`codex exec`, `claude -p`) spawn a full agentic
+// turn, not a single SDK request — a heavy single-turn authoring call (e.g.
+// reconstruct seed authoring on a frontier model) routinely runs minutes. The
+// 120s SDK default is too tight for that path and caused deterministic timeouts
+// on the claude-opus-4-8 reconstruct route; give the CLI workers a longer
+// default so supported models complete without an unencoded env override. The
+// `ONTO_LLM_TIMEOUT_MS` override still applies to both paths when set.
+const DEFAULT_WORKER_TIMEOUT_MS =
+  Number(process.env.ONTO_LLM_TIMEOUT_MS) || 600_000;
 // SDK auto-retry hides failures behind a long stall. We surface failures
 // faster (1 retry instead of the default 2) so operators see provider errors
 // within ~2× timeout instead of ~3×.
@@ -544,7 +554,7 @@ async function callCodexCli(
   const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
   emitModelCallLog(
-    `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" service_tier="${serviceTier ?? "(unset)"}" timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+    `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" service_tier="${serviceTier ?? "(unset)"}" timeout_ms=${DEFAULT_WORKER_TIMEOUT_MS}`,
   );
 
   const child = spawn("codex", args, {
@@ -585,7 +595,7 @@ async function callCodexCli(
   const timeoutHandle = setTimeout(() => {
     timedOut = true;
     child.kill("SIGTERM");
-  }, DEFAULT_TIMEOUT_MS);
+  }, DEFAULT_WORKER_TIMEOUT_MS);
 
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on("error", (err: NodeJS.ErrnoException) => {
@@ -606,9 +616,9 @@ async function callCodexCli(
 
   if (timedOut) {
     emitModelCallLog(
-      `codex call FAILED: model="${modelId ?? "(codex default)"}" reason=timeout timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+      `codex call FAILED: model="${modelId ?? "(codex default)"}" reason=timeout timeout_ms=${DEFAULT_WORKER_TIMEOUT_MS}`,
     );
-    throw new Error(`codex CLI call timed out after ${DEFAULT_TIMEOUT_MS}ms`);
+    throw new Error(`codex CLI call timed out after ${DEFAULT_WORKER_TIMEOUT_MS}ms`);
   }
   if (exitCode !== 0) {
     const combined = [stderr.trim(), stdout.trim()]
@@ -668,7 +678,6 @@ async function callCodexCli(
 // claude CLI call (Claude Code OAuth subscription path)
 // ---------------------------------------------------------------------------
 
-const CLAUDE_BIN = process.env.ONTO_CLAUDE_BIN?.trim() || "claude";
 
 /**
  * Parse the `result` event from `claude -p --output-format json`. The CLI emits
@@ -749,10 +758,11 @@ async function callClaudeCli(
   args.push("--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}');
 
   emitModelCallLog(
-    `claude call: model="${modelId ?? "(claude default)"}" effort="${reasoningEffort ?? "(unset)"}" timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+    `claude call: model="${modelId ?? "(claude default)"}" effort="${reasoningEffort ?? "(unset)"}" timeout_ms=${DEFAULT_WORKER_TIMEOUT_MS}`,
   );
 
-  const child = spawn(CLAUDE_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const claudeBin = resolveClaudeBin();
+  const child = spawn(claudeBin, args, { stdio: ["ignore", "pipe", "pipe"] });
   const claudeStreamSourceBase = {
     kind: "process" as const,
     label: "claude-cli",
@@ -785,14 +795,14 @@ async function callClaudeCli(
   const timeoutHandle = setTimeout(() => {
     timedOut = true;
     child.kill("SIGTERM");
-  }, DEFAULT_TIMEOUT_MS);
+  }, DEFAULT_WORKER_TIMEOUT_MS);
 
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on("error", (err: NodeJS.ErrnoException) => {
       clearTimeout(timeoutHandle);
       if (err.code === "ENOENT") {
         reject(new Error(
-          `Claude Code CLI not found (${CLAUDE_BIN}). Install and log in to claude, or set ONTO_CLAUDE_BIN, to use the Anthropic OAuth subscription path: https://docs.anthropic.com/en/docs/claude-code`,
+          `Claude Code CLI not found (${claudeBin}). Install and log in to claude, or set ONTO_CLAUDE_BIN, to use the Anthropic OAuth subscription path: https://docs.anthropic.com/en/docs/claude-code`,
         ));
       } else {
         reject(err);
@@ -806,9 +816,9 @@ async function callClaudeCli(
 
   if (timedOut) {
     emitModelCallLog(
-      `claude call FAILED: model="${modelId ?? "(claude default)"}" reason=timeout timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+      `claude call FAILED: model="${modelId ?? "(claude default)"}" reason=timeout timeout_ms=${DEFAULT_WORKER_TIMEOUT_MS}`,
     );
-    throw new Error(`claude CLI call timed out after ${DEFAULT_TIMEOUT_MS}ms`);
+    throw new Error(`claude CLI call timed out after ${DEFAULT_WORKER_TIMEOUT_MS}ms`);
   }
   if (exitCode !== 0) {
     const combined = [stderr.trim(), stdout.trim()]

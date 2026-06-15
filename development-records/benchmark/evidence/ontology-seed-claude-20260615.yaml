@@ -1,0 +1,704 @@
+seed_identity:
+  schema_version: "1"
+  seed_id: seed-claude-live-e2e-fixture-service
+  title: "Bounded operational seed: FixtureService explains fixture structure to
+    fixture users"
+  target_refs:
+    - <run-root>/src/fixture-service.ts
+  generated_at: 2026-06-15T10:46:49.054Z
+  authoring_profile: direct-call-reconstruct-directive-author
+purpose:
+  reconstruct_intent: Reconstruct a bounded operational seed naming who explains
+    the fixture service, which action explains, and which source record backs
+    each explanation.
+  declared_purpose: FixtureService explains fixture structure to fixture users via
+    explainFixture, resolving a backing FixtureServiceRecord by fixtureServiceId
+    and failing closed on no match.
+  purpose_source_status: explicit_source_declared
+  purpose_evidence_policy:
+    accepted_evidence_kind: observed_code_material
+    acceptance_basis: Class docstring declares the explain purpose and the actor,
+      action, and source object are directly observed in the single code
+      material.
+  purpose_confirmation:
+    required: false
+    status: auto_accepted
+    confirmed_purpose_candidate_id: purpose-explain-fixture-structure
+    prompt_summary: Confirm bounded explain-over-records purpose for fixture service code.
+    user_response_summary: Confirmation not required; explicit source declaration
+      auto-accepted as valid and usable.
+    source_conflict_policy: no_contradicting_source_observed
+    limitation_refs: []
+  purpose_candidates:
+    - purpose_candidate_id: purpose-explain-fixture-structure
+      statement: "FixtureService explains fixture structure to fixture users:
+        explainFixture resolves the backing FixtureServiceRecord by
+        fixtureServiceId and returns a per-user explanation, failing closed on
+        no match."
+      rank: primary
+      purpose_source_status: explicit_source_declared
+      evidence_kind_refs:
+        - P1
+        - P2
+        - P3
+      supporting_source_refs:
+        - <run-root>/src/fixture-service.ts
+      contradicting_source_refs: []
+      adequacy_signal_coverage:
+        material_kind: code
+        required_facets:
+          - actor_type
+          - action_type
+          - object_type
+          - guard
+        covered_facets:
+          - actor_type
+          - action_type
+          - object_type
+          - guard
+        missing_facets: []
+      ranking_rationale: Docstring declares the purpose directly; typed actor + record
+        interface and the find-then-return-or-throw flow converge on the same
+        explain-over-records purpose.
+      limitation_refs:
+        - limit-records-provider-unobserved
+        - limit-role-unenforced
+        - limit-fixture-structure-referent-underspecified
+  purpose_adequacy_frame:
+    frame_id: frame-bounded-explain-seed
+    name: Bounded explain-over-records operational seed
+    frame_kind: operational_seed
+    frame_status: source_declared
+    adequacy_claim: Purpose is adequately modeled when the seed names who explains,
+      the explaining action, and the source record backing each explanation,
+      plus the fail-closed guard.
+    ranking_rationale: Single explicit code material supplies actor, action, object,
+      and guard with no contradicting source.
+    material_kind_requirements:
+      target_material_kind: code
+      required_facets:
+        - actor_type
+        - action_type
+        - object_type
+        - guard
+      optional_facets:
+        - permission_policy
+        - provenance
+      rationale: The source declares an explain action over records for a typed user
+        with an error guard on lookup miss.
+    required_elements:
+      - element_id: elem-actor-fixture-user
+        element_kind: actor_type
+        description: FixtureUser actor (userId, role 'fixture-reader'), the party to
+          whom fixture structure is explained.
+        seed_ref_refs:
+          - actor_user
+        evidence_refs:
+          - observation_id: obs_1fe6a7ee2695eebb
+            target_material_kind: code
+            source_ref: <run-root>/src/fixture-service.ts
+            location: <run-root>/src/fixture-service.ts
+        limitation_refs: []
+      - element_id: elem-action-explain-fixture
+        element_kind: action_type
+        description: explainFixture(user, fixtureServiceId) resolves a record by id and
+          returns a per-user description string.
+        seed_ref_refs:
+          - action_explain_fixture
+        evidence_refs:
+          - observation_id: obs_1fe6a7ee2695eebb
+            target_material_kind: code
+            source_ref: <run-root>/src/fixture-service.ts
+            location: <run-root>/src/fixture-service.ts
+        limitation_refs: []
+      - element_id: elem-object-fixture-record
+        element_kind: object_type
+        description: FixtureServiceRecord (fixtureServiceId, description) is the source
+          object backing each explanation.
+        seed_ref_refs:
+          - object_fixture_record
+        evidence_refs:
+          - observation_id: obs_1fe6a7ee2695eebb
+            target_material_kind: code
+            source_ref: <run-root>/src/fixture-service.ts
+            location: <run-root>/src/fixture-service.ts
+        limitation_refs: []
+      - element_id: elem-guard-unknown-fixture
+        element_kind: guard
+        description: "Fail-closed guard: explainFixture throws Error('unknown fixture
+          service') when no record matches fixtureServiceId."
+        seed_ref_refs:
+          - validation_unknown_fixture_id
+          - constraint_unknown_fixture_guard
+        evidence_refs:
+          - observation_id: obs_1fe6a7ee2695eebb
+            target_material_kind: code
+            source_ref: <run-root>/src/fixture-service.ts
+            location: <run-root>/src/fixture-service.ts
+        limitation_refs:
+          - limit-guard-unknown-fixture-policy
+    source_refs:
+      - <run-root>/src/fixture-service.ts
+    evidence_refs:
+      - observation_id: obs_1fe6a7ee2695eebb
+        target_material_kind: code
+        source_ref: <run-root>/src/fixture-service.ts
+        location: <run-root>/src/fixture-service.ts
+    limitation_refs: []
+  secondary_purpose_frames: []
+  intended_decisions:
+    - Determine which FixtureServiceRecord authoritatively backs an explanation
+      for a given fixtureServiceId.
+  intended_actions:
+    - Explain fixture structure to a fixture user via explainFixture, failing
+      closed on unknown ids.
+  non_goals:
+    - Modeling who constructs FixtureService or supplies its records
+      (unobserved).
+    - Enforcing the fixture-reader role as an access constraint (orphan literal).
+  evidence_refs:
+    - observation_id: obs_1fe6a7ee2695eebb
+      target_material_kind: code
+      source_ref: <run-root>/src/fixture-service.ts
+      location: <run-root>/src/fixture-service.ts
+decision_context:
+  principal_user: Fixture user (FixtureUser) requesting an explanation of fixture structure.
+  downstream_use: Next-iteration ontology maturation of the fixture explanation surface.
+  decision_boundary: Bounded to the single observed code material; record provider
+    and role enforcement are out of scope.
+  risk_notes: Record provider unobserved and fixtureServiceId uniqueness
+    unconstrained; authoritative-source-per-id semantics are not guaranteed.
+conceptual_frame:
+  concepts:
+    - concept_id: concept_fixture_service
+      name: FixtureService
+      definition: The explaining agent that holds records and exposes explainFixture.
+      purpose_role: who_explains
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+      confidence: high
+    - concept_id: concept_fixture_user
+      name: FixtureUser
+      definition: The party to whom fixture structure is explained.
+      purpose_role: recipient
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+      confidence: high
+    - concept_id: concept_fixture_record
+      name: FixtureServiceRecord
+      definition: The source-backed record holding fixtureServiceId and description.
+      purpose_role: which_source
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+      confidence: high
+    - concept_id: concept_explain
+      name: explainFixture
+      definition: The explaining action resolving a record and returning a per-user
+        explanation.
+      purpose_role: which_action
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+      confidence: high
+    - concept_id: concept_fixture_service_id
+      name: fixtureServiceId
+      definition: The match key linking the explainFixture argument to a record.
+      purpose_role: identifier
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+      confidence: medium
+  associations:
+    - association_id: assoc_service_explains_user
+      source_concept_id: concept_fixture_service
+      target_concept_id: concept_fixture_user
+      association_kind: explains_to
+      statement: FixtureService explains fixture structure to FixtureUser.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+    - association_id: assoc_explain_uses_record
+      source_concept_id: concept_explain
+      target_concept_id: concept_fixture_record
+      association_kind: resolves
+      statement: explainFixture resolves a FixtureServiceRecord by fixtureServiceId.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+    - association_id: assoc_record_keyed_by_id
+      source_concept_id: concept_fixture_record
+      target_concept_id: concept_fixture_service_id
+      association_kind: identified_by
+      statement: FixtureServiceRecord is matched by fixtureServiceId.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+semantic_layer:
+  object_types:
+    - object_type_id: object_fixture_record
+      name: FixtureServiceRecord
+      object_kind: record
+      description: Source-backed record holding fixtureServiceId and description,
+        looked up by explainFixture.
+      primary_key:
+        property_id: property_fixture_service_id
+        name: fixtureServiceId
+        value_type: value_string
+        evidence_refs:
+          - observation_id: obs_1fe6a7ee2695eebb
+            target_material_kind: code
+            source_ref: <run-root>/src/fixture-service.ts
+            location: <run-root>/src/fixture-service.ts
+      properties:
+        - property_id: property_fixture_service_id
+          name: fixtureServiceId
+          value_type: value_string
+          nullable: false
+          description: Identifier used as the explainFixture lookup key; cross-record
+            uniqueness unconstrained.
+          constraints:
+            - match key for explainFixture
+          evidence_refs:
+            - observation_id: obs_1fe6a7ee2695eebb
+              target_material_kind: code
+              source_ref: <run-root>/src/fixture-service.ts
+              location: <run-root>/src/fixture-service.ts
+        - property_id: property_fixture_description
+          name: description
+          value_type: value_string
+          nullable: false
+          description: Authoritative description returned in the per-user explanation.
+          constraints: []
+          evidence_refs:
+            - observation_id: obs_1fe6a7ee2695eebb
+              target_material_kind: code
+              source_ref: <run-root>/src/fixture-service.ts
+              location: <run-root>/src/fixture-service.ts
+      backing_source_refs:
+        - <run-root>/src/fixture-service.ts
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+      status: confirmed
+  link_types: []
+  value_types:
+    - value_type_id: value_string
+      name: String
+      representation: string
+      constraints: []
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+  constraints:
+    - constraint_id: constraint_unknown_fixture_guard
+      target_ref: action_explain_fixture
+      constraint_kind: fail_closed_guard
+      statement: explainFixture must throw 'unknown fixture service' when no record
+        matches fixtureServiceId.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+kinetic_layer:
+  action_types:
+    - action_type_id: action_explain_fixture
+      name: explainFixture
+      description: "Resolves a FixtureServiceRecord by fixtureServiceId and returns
+        `${user.userId}: ${record.description}`, throwing on no match."
+      actor_type_ids:
+        - actor_fixture_service
+        - actor_user
+      target_object_type_ids:
+        - object_fixture_record
+      affected_object_type_ids: []
+      parameters:
+        - parameter_id: param_user
+          name: user
+          value_source: caller
+          value_type: actor_user
+          required: true
+        - parameter_id: param_fixture_service_id
+          name: fixtureServiceId
+          value_source: caller
+          value_type: value_string
+          required: true
+      preconditions:
+        - precondition_id: pre_record_exists
+          statement: A FixtureServiceRecord with the given fixtureServiceId must exist.
+          evidence_refs:
+            - observation_id: obs_1fe6a7ee2695eebb
+              target_material_kind: code
+              source_ref: <run-root>/src/fixture-service.ts
+              location: <run-root>/src/fixture-service.ts
+      postconditions:
+        - postcondition_id: post_explanation_returned
+          statement: Returns a per-user explanation string combining userId and record
+            description.
+          evidence_refs:
+            - observation_id: obs_1fe6a7ee2695eebb
+              target_material_kind: code
+              source_ref: <run-root>/src/fixture-service.ts
+              location: <run-root>/src/fixture-service.ts
+      side_effects:
+        - side_effect_id: side_throw_unknown
+          statement: Throws Error('unknown fixture service') when no record matches.
+          failure_behavior: fail_closed
+          evidence_refs:
+            - observation_id: obs_1fe6a7ee2695eebb
+              target_material_kind: code
+              source_ref: <run-root>/src/fixture-service.ts
+              location: <run-root>/src/fixture-service.ts
+      writeback_behavior:
+        writes: false
+        writeback_source_refs: []
+        rationale: explainFixture is a read-only lookup-and-return action; no
+          persistence observed.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+      status: confirmed
+  functions: []
+  workflows:
+    - workflow_id: workflow_explain_fixture
+      name: Explain fixture to user
+      ordered_action_type_ids:
+        - action_explain_fixture
+      trigger: FixtureUser requests an explanation for a fixtureServiceId.
+      terminal_state: explanation_returned_or_unknown_fixture_error
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+dynamic_layer:
+  actor_types:
+    - actor_type_id: actor_user
+      name: FixtureUser
+      actor_kind: human_or_caller
+      role_refs:
+        - role_fixture_reader
+      description: Party to whom fixture structure is explained; carries userId and a
+        role literal.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+    - actor_type_id: actor_fixture_service
+      name: FixtureService
+      actor_kind: system_component
+      role_refs: []
+      description: Explaining agent class that holds records and exposes explainFixture.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+  actor_roles:
+    - role_id: role_fixture_reader
+      name: fixture-reader
+      holder_actor_type_ids:
+        - actor_user
+      authority_scope_refs: []
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+  permission_policies:
+    - policy_id: policy_explain_fixture
+      actor_type_id: actor_user
+      action_type_id: action_explain_fixture
+      object_type_id: object_fixture_record
+      permission_kind: allow
+      condition: A record matching fixtureServiceId exists; otherwise the action fails
+        closed. Role 'fixture-reader' is defined but not enforced.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+  state_models: []
+  lifecycle_rules: []
+data_binding_layer:
+  source_bindings:
+    - binding_id: binding_fixture_records
+      seed_ref: object_fixture_record
+      source_ref: <run-root>/src/fixture-service.ts
+      binding_kind: constructor_injection
+      statement: FixtureService receives its FixtureServiceRecord[] collection via
+        constructor injection; upstream producer unobserved.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+  read_models:
+    - read_model_id: read_fixture_explanation
+      name: Fixture explanation read
+      object_type_ids:
+        - object_fixture_record
+      source_refs:
+        - <run-root>/src/fixture-service.ts
+      transformation_summary: Selects the record matching fixtureServiceId and
+        projects its description into a per-user explanation string.
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+  writebacks: []
+  provenance_bindings:
+    - provenance_id: provenance_fixture_record
+      seed_ref: object_fixture_record
+      source_ref: <run-root>/src/fixture-service.ts
+      author_or_system: runtime_heuristic_observation
+      timestamp_ref: purpose-confirmation-validation.yaml#created_at
+      evidence_refs:
+        - observation_id: obs_1fe6a7ee2695eebb
+          target_material_kind: code
+          source_ref: <run-root>/src/fixture-service.ts
+          location: <run-root>/src/fixture-service.ts
+validation_layer:
+  question_authority_ref:
+    authority_scope: canonical_question_set
+    projection_policy: record_manifest_ref
+  coverage_axes:
+    - purpose
+    - static_surface
+    - kinetic_surface
+    - dynamic_surface
+    - data_binding_layer
+    - ontology_handoff
+    - limitation
+    - source_authority
+  unsupported_question_candidates:
+    - candidate_id: validation_unknown_fixture_id
+      question: Does explainFixture fail closed (throw 'unknown fixture service')
+        rather than return a result when no record matches the fixtureServiceId?
+      unsupported_reason: Asserted by the observed guard but not yet exercised by an
+        active runtime validator in this seed iteration.
+      needed_source_or_confirmation: Runtime validation execution confirming the throw-on-no-match behavior.
+    - candidate_id: validation_records_provider
+      question: Who constructs FixtureService and supplies its FixtureServiceRecord[]
+        records?
+      unsupported_reason: No observation shows the construction site or record provider.
+      needed_source_or_confirmation: Source material covering the FixtureService construction/injection site.
+  runtime_validation_refs:
+    - authority_scope: reconstruct_runtime_validation
+      projection_policy: record_manifest_ref
+candidate_disposition_authority_ref:
+  authority_scope: external_candidate_disposition
+  projection_policy: reference_only
+ontology_handoff:
+  readiness_claim: limited
+  classification_mapping: Concepts map to actor types (FixtureService,
+    FixtureUser), object type (FixtureServiceRecord), and action type
+    (explainFixture); taxonomy is flat for this kernel.
+  entity_identity_mapping: Entities identified by stable seed ids (actor_user,
+    actor_fixture_service, object_fixture_record, action_explain_fixture).
+  instance_assertion_mapping:
+    instance_availability_status: absent
+    rationale: No live record instances enumerated; only types observed.
+    limitation_refs:
+      - limit-records-provider-unobserved
+  terminology_mapping: Source identifiers (FixtureService, FixtureUser,
+    FixtureServiceRecord, fixtureServiceId, explainFixture) preserved verbatim
+    as concept/record names.
+  relation_type_mapping: explains_to, resolves, identified_by captured as
+    conceptual associations; formal link types deferred.
+  constraint_mapping: Fail-closed guard captured as
+    constraint_unknown_fixture_guard and validation_unknown_fixture_id.
+  modularity_boundary: Bounded to the single fixture-service.ts module.
+  reasoning_or_formalism_profile:
+    representation_formalism: informal_actionable_graph
+    vocabulary_systems:
+      - custom_controlled_vocabulary
+    validation_formalisms:
+      - custom_runtime_validator
+    ontology_type: action_centric_ontology
+    owl_profile: not_applicable
+    alignment_posture: none
+    rationale: First-pass actionable seed over one code material; no formal logic
+      layer applied.
+    limitation_refs: []
+  application_context_mapping: Applies to fixture explanation requests within the observed service module.
+  metadata_mapping: Seed metadata carried in seed_identity; provenance carried in
+    data_binding_layer.provenance_bindings.
+  provenance_mapping: object_fixture_record bound to fixture-service.ts via
+    provenance_fixture_record.
+  change_tracking_mapping: Single-iteration seed; change tracking deferred to next maturation cycle.
+  competency_scope_mapping: Answers who explains, which action explains, and which
+    source backs the explanation.
+  alignment_mapping: No external vocabulary alignment in this iteration.
+  modeling_concern_applicability:
+    rows:
+      - concern_id: controlled_vocabulary_modeling
+        applies: true
+        limitation_refs: []
+        rationale: Source identifiers form a small controlled vocabulary for the seed.
+        evidence_refs:
+          - observation_id: obs_1fe6a7ee2695eebb
+            target_material_kind: code
+            source_ref: <run-root>/src/fixture-service.ts
+            location: <run-root>/src/fixture-service.ts
+      - concern_id: shape_or_validation_modeling
+        applies: true
+        limitation_refs:
+          - limit-guard-unknown-fixture-policy
+        rationale: Fail-closed guard implies a validation shape but no active validator
+          is wired yet.
+        evidence_refs:
+          - observation_id: obs_1fe6a7ee2695eebb
+            target_material_kind: code
+            source_ref: <run-root>/src/fixture-service.ts
+            location: <run-root>/src/fixture-service.ts
+      - concern_id: dataset_or_observation_modeling
+        applies: unknown
+        limitation_refs:
+          - limit-records-provider-unobserved
+        rationale: The records dataset provider is unobserved, so dataset modeling
+          cannot be confirmed.
+        evidence_refs: []
+      - concern_id: metadata_and_provenance_modeling
+        applies: true
+        limitation_refs: []
+        rationale: Provenance binding ties the record object to its observed source.
+        evidence_refs:
+          - observation_id: obs_1fe6a7ee2695eebb
+            target_material_kind: code
+            source_ref: <run-root>/src/fixture-service.ts
+            location: <run-root>/src/fixture-service.ts
+  reference_standard_mapping: No external reference standard adopted in this iteration.
+  pattern_catalog_mapping: Follows an actor-action-record explain pattern with a
+    fail-closed lookup guard.
+  query_access_contract:
+    applies: unknown
+    limitation_refs:
+      - limit-guard-unknown-fixture-policy
+    rationale: Read access via explainFixture is observed, but no proof-validated
+      query interface is active yet.
+  visualization_contract:
+    applies: false
+    rationale: No visualization surface in scope for this seed iteration.
+  graph_exploration_contract:
+    applies: false
+    rationale: No graph exploration surface in scope for this seed iteration.
+  graph_connectivity: "Connected: FixtureService -> explainFixture ->
+    FixtureServiceRecord, with FixtureUser as recipient and fixtureServiceId as
+    the key."
+  limitation_refs:
+    - limit-records-provider-unobserved
+    - limit-role-unenforced
+    - limit-fixture-structure-referent-underspecified
+    - limit-guard-unknown-fixture-policy
+source_authority:
+  evidence_scope: Single observed code material fixture-service.ts.
+  permission_scope: Read-only observation of the provided source file.
+  trust_boundary: Observed code is trusted as the authoritative source; upstream
+    record provider is outside the boundary.
+  instruction_authority: Purpose authority from source-purpose-candidates.yaml and
+    purpose-confirmation-validation.yaml; disposition from
+    candidate-disposition.yaml.
+  external_content_handling: No external content ingested; all facts derived from the single source file.
+  included_source_refs:
+    - <run-root>/src/fixture-service.ts
+  excluded_source_refs: []
+  restricted_source_refs: []
+  source_gaps:
+    - No source observed for the FixtureService construction site or record
+      provider.
+    - No schema, lifecycle, temporality, or audit evidence beyond the single
+      code material.
+  rationale: Bounded seed authored from one explicit code material; gaps recorded
+    rather than guessed.
+handoff_limitations:
+  - limitation_id: limit-records-provider-unobserved
+    limitation_kind: source_gap
+    description: The upstream producer/supplier of the FixtureServiceRecord[]
+      records and the FixtureService construction site are not observed.
+    affected_refs:
+      - binding_fixture_records
+      - object_fixture_record
+    missing_source_refs:
+      - fixture-service construction/injection site
+    mitigation_or_next_action: Obtain source covering FixtureService construction
+      and record provisioning in the next maturation iteration.
+    evidence_refs:
+      - observation_id: obs_1fe6a7ee2695eebb
+        target_material_kind: code
+        source_ref: <run-root>/src/fixture-service.ts
+        location: <run-root>/src/fixture-service.ts
+  - limitation_id: limit-role-unenforced
+    limitation_kind: undeclared_modality
+    description: The fixture-reader role literal on FixtureUser is defined but never
+      referenced by explainFixture, so its access-constraint modality is
+      undeclared.
+    affected_refs:
+      - role_fixture_reader
+      - policy_explain_fixture
+    missing_source_refs: []
+    mitigation_or_next_action: Confirm whether fixture-reader gates explainFixture in a future iteration.
+    evidence_refs:
+      - observation_id: obs_1fe6a7ee2695eebb
+        target_material_kind: code
+        source_ref: <run-root>/src/fixture-service.ts
+        location: <run-root>/src/fixture-service.ts
+  - limitation_id: limit-fixture-structure-referent-underspecified
+    limitation_kind: underspecified_referent
+    description: The 'fixture structure' referent and fixtureServiceId cross-record
+      uniqueness are underspecified, leaving authoritative-source-per-id
+      semantics ambiguous.
+    affected_refs:
+      - property_fixture_service_id
+      - concept_fixture_service_id
+    missing_source_refs: []
+    mitigation_or_next_action: Clarify fixture-structure semantics and id uniqueness
+      constraints in the next iteration.
+    evidence_refs:
+      - observation_id: obs_1fe6a7ee2695eebb
+        target_material_kind: code
+        source_ref: <run-root>/src/fixture-service.ts
+        location: <run-root>/src/fixture-service.ts
+  - limitation_id: limit-guard-unknown-fixture-policy
+    limitation_kind: deferred_validation
+    description: The fail-closed unknown-fixture guard is asserted from the observed
+      control flow but not yet enforced by an active runtime validator.
+    affected_refs:
+      - action_explain_fixture
+      - validation_unknown_fixture_id
+      - constraint_unknown_fixture_guard
+    missing_source_refs: []
+    mitigation_or_next_action: Activate a runtime validator proving
+      throw-on-no-match in the next iteration.
+    evidence_refs:
+      - observation_id: obs_1fe6a7ee2695eebb
+        target_material_kind: code
+        source_ref: <run-root>/src/fixture-service.ts
+        location: <run-root>/src/fixture-service.ts

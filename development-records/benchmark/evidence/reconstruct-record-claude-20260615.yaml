@@ -1,0 +1,723 @@
+schema_version: "1"
+reconstruct_record_id: reconstruct-record:claude-live-e2e
+session_id: claude-live-e2e
+entrypoint: reconstruct
+record_stage: completed
+created_at: 2026-06-15T11:00:53.511Z
+updated_at: 2026-06-15T11:00:53.511Z
+target_material_kind: code
+support_status: partial
+artifact_refs:
+  reconstruct_run_control: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.yaml
+  reconstruct_run_control_validation: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control-validation.yaml
+  reconstruct_run_control_pre_publication_validation: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.pre-publication-validation.yaml
+  reconstruct_run_bootstrap_diagnostic: null
+  registry_verification_evidence: <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence.yaml
+  registry_verification_evidence_validation: <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence-validation.yaml
+  target_material_profile: <run-root>/.onto/reconstruct/claude-live-e2e/target-material-profile.yaml
+  target_material_profile_validation: <run-root>/.onto/reconstruct/claude-live-e2e/target-material-profile-validation.yaml
+  source_inventory: <run-root>/.onto/reconstruct/claude-live-e2e/source-inventory.yaml
+  initial_source_frontier: <run-root>/.onto/reconstruct/claude-live-e2e/initial-source-frontier.yaml
+  source_observations: <run-root>/.onto/reconstruct/claude-live-e2e/source-observations.yaml
+  source_observation_delta: null
+  source_observation_delta_validation: null
+  source_observation_reentry_validation: null
+  source_observation_lineage_index: <run-root>/.onto/reconstruct/claude-live-e2e/source-observation-lineage-index.yaml
+  source_observation_lineage_index_validation: <run-root>/.onto/reconstruct/claude-live-e2e/source-observation-lineage-index-validation.yaml
+  source_safety_ledger: <run-root>/.onto/reconstruct/claude-live-e2e/source-safety-ledger.yaml
+  source_safety_ledger_validation: <run-root>/.onto/reconstruct/claude-live-e2e/source-safety-ledger-validation.yaml
+  source_scout_pack: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.yaml
+  source_scout_pack_validation: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.yaml
+  source_scout_pack_pre_seed: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.pre-seed.yaml
+  source_scout_pack_validation_pre_seed: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.pre-seed.yaml
+  source_scout_pack_post_maturation: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.post-maturation.yaml
+  source_scout_pack_validation_post_maturation: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.post-maturation.yaml
+  post_maturation_gate_projection_validation: <run-root>/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml
+  source_observation_directive: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/source-observation-directive.yaml
+  source_observation_directive_validation: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/source-observation-directive-validation.yaml
+  lens_judgment_index: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/lens-judgment-index.yaml
+  exploration_synthesis: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/exploration-synthesis.yaml
+  source_frontier: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/source-frontier.yaml
+  source_frontier_validation: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/source-frontier-validation.yaml
+  source_purpose_candidates: <run-root>/.onto/reconstruct/claude-live-e2e/source-purpose-candidates.yaml
+  source_purpose_candidates_validation: <run-root>/.onto/reconstruct/claude-live-e2e/source-purpose-candidates-validation.yaml
+  purpose_confirmation: <run-root>/.onto/reconstruct/claude-live-e2e/purpose-confirmation.yaml
+  purpose_confirmation_validation: <run-root>/.onto/reconstruct/claude-live-e2e/purpose-confirmation-validation.yaml
+  material_admission_ledger: <run-root>/.onto/reconstruct/claude-live-e2e/material-admission-ledger.yaml
+  material_admission_ledger_validation: <run-root>/.onto/reconstruct/claude-live-e2e/material-admission-ledger-validation.yaml
+  candidate_inventory: <run-root>/.onto/reconstruct/claude-live-e2e/candidate-inventory.yaml
+  candidate_disposition: <run-root>/.onto/reconstruct/claude-live-e2e/candidate-disposition.yaml
+  candidate_disposition_validation: <run-root>/.onto/reconstruct/claude-live-e2e/candidate-disposition-validation.yaml
+  seed_authoring_readiness: <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness.yaml
+  seed_authoring_readiness_validation: <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness-validation.yaml
+  ontology_seed: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed.yaml
+  ontology_seed_validation: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed-validation.yaml
+  claim_realization_map: <run-root>/.onto/reconstruct/claude-live-e2e/claim-realization-map.yaml
+  claim_realization_map_validation: <run-root>/.onto/reconstruct/claude-live-e2e/claim-realization-map-validation.yaml
+  seed_confirmation: <run-root>/.onto/reconstruct/claude-live-e2e/seed-confirmation.yaml
+  seed_confirmation_validation: <run-root>/.onto/reconstruct/claude-live-e2e/seed-confirmation-validation.yaml
+  competency_questions: <run-root>/.onto/reconstruct/claude-live-e2e/competency-questions.yaml
+  competency_questions_validation: <run-root>/.onto/reconstruct/claude-live-e2e/competency-questions-validation.yaml
+  competency_question_assessment: <run-root>/.onto/reconstruct/claude-live-e2e/competency-question-assessment.yaml
+  competency_question_assessment_validation: <run-root>/.onto/reconstruct/claude-live-e2e/competency-question-assessment-validation.yaml
+  failure_classification: <run-root>/.onto/reconstruct/claude-live-e2e/failure-classification.yaml
+  failure_classification_validation: <run-root>/.onto/reconstruct/claude-live-e2e/failure-classification-validation.yaml
+  revision_proposal: <run-root>/.onto/reconstruct/claude-live-e2e/revision-proposal.yaml
+  revision_proposal_validation: <run-root>/.onto/reconstruct/claude-live-e2e/revision-proposal-validation.yaml
+  reconstruct_metrics: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-metrics.yaml
+  stop_decision: <run-root>/.onto/reconstruct/claude-live-e2e/stop-decision.yaml
+  pre_handoff_run_manifest_validation: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff-validation.yaml
+  post_publication_run_manifest_validation: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.post-publication-validation.yaml
+  handoff_decision_validation: <run-root>/.onto/reconstruct/claude-live-e2e/handoff-decision-validation.yaml
+  maturation_baseline: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-baseline.yaml
+  maturation_baseline_validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-baseline-validation.yaml
+  baseline_actionability_matrix: <run-root>/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix.yaml
+  baseline_actionability_matrix_validation: <run-root>/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix-validation.yaml
+  actionability_matrix: <run-root>/.onto/reconstruct/claude-live-e2e/actionability-matrix.yaml
+  actionability_matrix_validation: <run-root>/.onto/reconstruct/claude-live-e2e/actionability-matrix-validation.yaml
+  maturation_question_frontier: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-question-frontier.yaml
+  maturation_question_frontier_validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-question-frontier-validation.yaml
+  maturation_closure_frontier: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier.yaml
+  maturation_closure_frontier_validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier-validation.yaml
+  maturation_authority_response: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-authority-response.yaml
+  maturation_authority_response_validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-authority-response-validation.yaml
+  answer_support_ledger: <run-root>/.onto/reconstruct/claude-live-e2e/answer-support-ledger.yaml
+  answer_support_ledger_validation: <run-root>/.onto/reconstruct/claude-live-e2e/answer-support-ledger-validation.yaml
+  maturation_answer_claims: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-answer-claims.yaml
+  maturation_answer_claims_validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-answer-claims-validation.yaml
+  ontology_expansion: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-expansion.yaml
+  ontology_expansion_validation: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-expansion-validation.yaml
+  maturation_source_delta: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-source-delta.yaml
+  maturation_source_delta_validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-source-delta-validation.yaml
+  maturation_convergence_ledger: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-convergence-ledger.yaml
+  maturation_convergence_ledger_validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-convergence-ledger-validation.yaml
+  maturation_continuation_decision: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision.yaml
+  maturation_continuation_decision_validation: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision-validation.yaml
+  query_proofs: <run-root>/.onto/reconstruct/claude-live-e2e/query-proofs.yaml
+  query_proofs_validation: <run-root>/.onto/reconstruct/claude-live-e2e/query-proofs-validation.yaml
+  visualization_proofs: <run-root>/.onto/reconstruct/claude-live-e2e/visualization-proofs.yaml
+  visualization_proofs_validation: <run-root>/.onto/reconstruct/claude-live-e2e/visualization-proofs-validation.yaml
+  graph_exploration_proofs: <run-root>/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs.yaml
+  graph_exploration_proofs_validation: <run-root>/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs-validation.yaml
+  actionable_ontology: null
+  actionable_ontology_validation: null
+  claim_projection: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
+  claim_projection_validation: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
+  final_output: <run-root>/.onto/reconstruct/claude-live-e2e/final-output.md
+  final_output_provenance_validation: <run-root>/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
+  reconstruct_run_manifest: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml
+artifact_integrity:
+  - artifact_key: reconstruct_run_control
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.yaml
+    exists: true
+    sha256: 3073a93118600d4e8ef660ae18fedffc7c5fe9fde37390bf6f685707cdae54aa
+    validation_status: null
+  - artifact_key: reconstruct_run_control_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control-validation.yaml
+    exists: true
+    sha256: ab4d184ab9ec71fd60121e38d769a70d15736ad09dd84a8dfd170b0995796e37
+    validation_status: valid
+  - artifact_key: reconstruct_run_control_pre_publication_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-control.pre-publication-validation.yaml
+    exists: true
+    sha256: 578ccedab9774cabc658c31260f87d39187483efd40a851ede71f3d2c78f6304
+    validation_status: valid
+  - artifact_key: reconstruct_run_bootstrap_diagnostic
+    artifact_ref: null
+    exists: false
+    sha256: null
+    validation_status: null
+  - artifact_key: registry_verification_evidence
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence.yaml
+    exists: true
+    sha256: d2ceef5b4dc05fd8b19a0f53b8a6590298d7e56436d905a51ca8ceacdb245e20
+    validation_status: null
+  - artifact_key: registry_verification_evidence_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/registry-verification-evidence-validation.yaml
+    exists: true
+    sha256: d601da53dab9cef5e6dab4085237db5be3b0622c4992f888f6f2907f07384dd7
+    validation_status: valid
+  - artifact_key: target_material_profile
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/target-material-profile.yaml
+    exists: true
+    sha256: 03cf4a4ed08752c83fedeb7de6fa59cc720d25ffb6e4947c9583f2b0894acd4f
+    validation_status: null
+  - artifact_key: target_material_profile_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/target-material-profile-validation.yaml
+    exists: true
+    sha256: 30b3fbf47c169dff439e57e82340b1ab272745628f44dbe724f547fc7a39ecb8
+    validation_status: valid
+  - artifact_key: source_inventory
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-inventory.yaml
+    exists: true
+    sha256: 2434533cad37ce21616f060fbc3b1fd264606a7c99ce7e28b684f5afe77204a1
+    validation_status: null
+  - artifact_key: initial_source_frontier
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/initial-source-frontier.yaml
+    exists: true
+    sha256: e64974ad3bfbc9553ffa1d1cbef46a7d17da231bb33064c072d16597360e05e0
+    validation_status: null
+  - artifact_key: source_observations
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-observations.yaml
+    exists: true
+    sha256: ac91d9edb9eb2915393f310c8915fae58749f9489cbfc60f0bc119d680b75a28
+    validation_status: null
+  - artifact_key: source_observation_delta
+    artifact_ref: null
+    exists: false
+    sha256: null
+    validation_status: null
+  - artifact_key: source_observation_delta_validation
+    artifact_ref: null
+    exists: false
+    sha256: null
+    validation_status: null
+  - artifact_key: source_observation_reentry_validation
+    artifact_ref: null
+    exists: false
+    sha256: null
+    validation_status: null
+  - artifact_key: source_observation_lineage_index
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-observation-lineage-index.yaml
+    exists: true
+    sha256: 5a844f083466b7dc2f92dc5ac1ea4fcb82fa2f8fee7792ecc95951373959c341
+    validation_status: null
+  - artifact_key: source_observation_lineage_index_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-observation-lineage-index-validation.yaml
+    exists: true
+    sha256: 28408ed6aaa9288bfaf5d2f91c130f17793066f45bf5d766acc40ec098ab8eb4
+    validation_status: valid
+  - artifact_key: source_safety_ledger
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-safety-ledger.yaml
+    exists: true
+    sha256: dec17200d5230f3b1d310adf7d81272ffe0ad42828686cb2ef5fe854b7cef7a2
+    validation_status: null
+  - artifact_key: source_safety_ledger_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-safety-ledger-validation.yaml
+    exists: true
+    sha256: 2a1de16af5de1c8608503b8e66286aa17c001f87aecd81c4f50a6a400fee844e
+    validation_status: valid
+  - artifact_key: source_scout_pack
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.yaml
+    exists: true
+    sha256: cb360a6ff2a0d81d9b14fe55b8d33b876c05ccfd3acf59cb3b6b31264534c4a6
+    validation_status: null
+  - artifact_key: source_scout_pack_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.yaml
+    exists: true
+    sha256: 98438f3c1feb9ec1bb1b8ef9e8f18c67b857613656a7075eeb17618c961e13fb
+    validation_status: valid
+  - artifact_key: source_scout_pack_pre_seed
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.pre-seed.yaml
+    exists: true
+    sha256: 9a650ba6a96ac1df736a44426abe60578157302d3a8450f1c7405c76cd408841
+    validation_status: null
+  - artifact_key: source_scout_pack_validation_pre_seed
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.pre-seed.yaml
+    exists: true
+    sha256: 8788ab325bdf932165abf2fc8dad8169298040a9f10912b5c0f3943545c73df1
+    validation_status: valid
+  - artifact_key: source_scout_pack_post_maturation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack.post-maturation.yaml
+    exists: true
+    sha256: 2969d7ae7232862819cb6fea3b192e71412e9ccda76a54a26152ae0e51529c4b
+    validation_status: null
+  - artifact_key: source_scout_pack_validation_post_maturation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-scout-pack-validation.post-maturation.yaml
+    exists: true
+    sha256: e1d7d3e23c5e1dd6cf382076b95f60ec1b2d1d45805e686ea701111f68b618f6
+    validation_status: valid
+  - artifact_key: post_maturation_gate_projection_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/post-maturation-gate-projection-validation.yaml
+    exists: true
+    sha256: bc35a2185eda25aa57ea92d0dae3c70e85c38cb67e8361755051921f0a37ec60
+    validation_status: valid
+  - artifact_key: source_observation_directive
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/source-observation-directive.yaml
+    exists: true
+    sha256: 564ed83ea8864e728e84422b724dff4ef2d993af33759fd4011115acf8dd8327
+    validation_status: null
+  - artifact_key: source_observation_directive_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/source-observation-directive-validation.yaml
+    exists: true
+    sha256: 82a0ae3055aa8bb583df94174b81b4f92de4d90c4c203bc7280f2e0e04cd6a0d
+    validation_status: valid
+  - artifact_key: lens_judgment_index
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/lens-judgment-index.yaml
+    exists: true
+    sha256: c55ce956ae2c77e07865c92789ae7fc39cadf0c75f814083cb3551428e484285
+    validation_status: null
+  - artifact_key: exploration_synthesis
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/exploration-synthesis.yaml
+    exists: true
+    sha256: 11d878858a714033e5a1e733730d350525e332eac980c4e2b974c86295a46ac9
+    validation_status: null
+  - artifact_key: source_frontier
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/source-frontier.yaml
+    exists: true
+    sha256: 82312fa1decc8c8b2589a816cff974b082c3a9d9958c7b798caa968343e20be4
+    validation_status: null
+  - artifact_key: source_frontier_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/rounds/round-1/source-frontier-validation.yaml
+    exists: true
+    sha256: 04947886c04a4eeaf212f53c3fa1dc4cb3727bab68420d3598ee3a26cec24fdc
+    validation_status: valid
+  - artifact_key: source_purpose_candidates
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-purpose-candidates.yaml
+    exists: true
+    sha256: d2405fc986acd4c3f9b0b6d1d328d6bbfeb5d1a81ab720de8858392287587bed
+    validation_status: null
+  - artifact_key: source_purpose_candidates_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/source-purpose-candidates-validation.yaml
+    exists: true
+    sha256: abf649741c66c16a23d9c82c9bd408e7b6a09d1c24356906882a2fa214dcf3fe
+    validation_status: valid
+  - artifact_key: purpose_confirmation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/purpose-confirmation.yaml
+    exists: true
+    sha256: 860dc870952fe43315c3a1410aac6d935df3427d1f43b51254cf713c61733aef
+    validation_status: null
+  - artifact_key: purpose_confirmation_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/purpose-confirmation-validation.yaml
+    exists: true
+    sha256: 1a5991fd8b9fb0563a012ccec2a35742606777373380cd2d5ea9d5a4f506b2ad
+    validation_status: valid
+  - artifact_key: material_admission_ledger
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/material-admission-ledger.yaml
+    exists: true
+    sha256: a0faa3a86be1ed19111313ae9159abb96d00d448c8cf95ba09fc5d608a94cf1e
+    validation_status: null
+  - artifact_key: material_admission_ledger_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/material-admission-ledger-validation.yaml
+    exists: true
+    sha256: 198881f49c072c0706476195c942bfb47dc5ebd0f03ed5add42d6e80b452b8b0
+    validation_status: valid
+  - artifact_key: candidate_inventory
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/candidate-inventory.yaml
+    exists: true
+    sha256: 08b73a6d5ca4bc2d05725bdf23090546b61fb228117b6062e2ac0e6d1bc307ff
+    validation_status: null
+  - artifact_key: candidate_disposition
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/candidate-disposition.yaml
+    exists: true
+    sha256: 274e9897a94cc4a43c5aeba4d6b8e244e46262d372d43e1644e7240f932802c6
+    validation_status: null
+  - artifact_key: candidate_disposition_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/candidate-disposition-validation.yaml
+    exists: true
+    sha256: c3cf77b53438272f1fa42db0c416b0009850dd4c7ceb6d5fe2dbd0eb7a0bf790
+    validation_status: valid
+  - artifact_key: seed_authoring_readiness
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness.yaml
+    exists: true
+    sha256: 7ace2210e202ef85ef3db7c0b0a79eb833573180deec2b8bf40206b9d876c7b7
+    validation_status: null
+  - artifact_key: seed_authoring_readiness_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/seed-authoring-readiness-validation.yaml
+    exists: true
+    sha256: e117d0eadd2e86fbbcd760974ff8146a028ca8eff0cb4fd010c91e7620842c2c
+    validation_status: valid
+  - artifact_key: ontology_seed
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed.yaml
+    exists: true
+    sha256: 4b57a88b9fb48c3c0c7cad211d7afec24085ec0351a7b0e12bf5d4ac443836fd
+    validation_status: null
+  - artifact_key: ontology_seed_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-seed-validation.yaml
+    exists: true
+    sha256: c28af5a5a07993385799fe1924e50956b606d83d6da2dd9734433021c0607f63
+    validation_status: valid
+  - artifact_key: claim_realization_map
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/claim-realization-map.yaml
+    exists: true
+    sha256: 73db2365fa6d51ddf8cb2103d0eaf4d9f04de01ee409240848b6f425509679e5
+    validation_status: null
+  - artifact_key: claim_realization_map_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/claim-realization-map-validation.yaml
+    exists: true
+    sha256: 118fba3817a55e51462455334ce6ebde2a680d5982571959df3f8dd2c90a3e7d
+    validation_status: valid
+  - artifact_key: seed_confirmation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/seed-confirmation.yaml
+    exists: true
+    sha256: a1b3ccbc04bf54b5544683a59a4561a3249fd25ca39c9be49ae2f53d32b30380
+    validation_status: null
+  - artifact_key: seed_confirmation_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/seed-confirmation-validation.yaml
+    exists: true
+    sha256: 993b98824811046b039f62dc54d79cdde0b08b2f27ee24bc7ab3635f8c0ed6b6
+    validation_status: valid
+  - artifact_key: competency_questions
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/competency-questions.yaml
+    exists: true
+    sha256: 2b22104b1fef86d2fafc6a81bd97f79db99b0b10d4e95d4acafabeb69a1affa7
+    validation_status: null
+  - artifact_key: competency_questions_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/competency-questions-validation.yaml
+    exists: true
+    sha256: dedaf930cf8c4492798018599b64f8009bdb8de5cf9ca6abee0f40d1e44e06f5
+    validation_status: valid
+  - artifact_key: competency_question_assessment
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/competency-question-assessment.yaml
+    exists: true
+    sha256: 6782d2b359445b4ef19d0d2376000f277fe54d53decedc844f0252940bfdf33a
+    validation_status: null
+  - artifact_key: competency_question_assessment_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/competency-question-assessment-validation.yaml
+    exists: true
+    sha256: 1ada7d0574c27f7bb00c0ff16e0cd698895b4219cfae55a155064ce8c4e98d5b
+    validation_status: valid
+  - artifact_key: failure_classification
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/failure-classification.yaml
+    exists: true
+    sha256: 562b1fec6e74eed60dc922c1fd5b9acda50596029e006f376b2855537b60335f
+    validation_status: null
+  - artifact_key: failure_classification_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/failure-classification-validation.yaml
+    exists: true
+    sha256: bfdfd2e3a2ed58b2468208eedd7a813bbff2a7f4508e38f964265d902056bcd4
+    validation_status: valid
+  - artifact_key: revision_proposal
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/revision-proposal.yaml
+    exists: true
+    sha256: 9e9ddf09715244db19f7345234bc973aa793769fef855b954d0907531504d22b
+    validation_status: null
+  - artifact_key: revision_proposal_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/revision-proposal-validation.yaml
+    exists: true
+    sha256: 855433a55e29d84cfd4268aef99284ffbd8b1f10b7d7aa2137cc5f3775afcedf
+    validation_status: valid
+  - artifact_key: reconstruct_metrics
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-metrics.yaml
+    exists: true
+    sha256: b69170e14427bc3ee6c0a6c1a2dd14efff73f51379cb0bf5b149c036bbd4ee14
+    validation_status: null
+  - artifact_key: stop_decision
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/stop-decision.yaml
+    exists: true
+    sha256: a7fb5f37e9eb12cacf4661bc61c02e8e6e2da46a341179d503bddb6f35b9ef00
+    validation_status: null
+  - artifact_key: pre_handoff_run_manifest_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.pre-handoff-validation.yaml
+    exists: true
+    sha256: 7721c546c7db488af661255037ca05ad2a05f3cd65d870e09f94e9f8f8eaeb26
+    validation_status: valid
+  - artifact_key: post_publication_run_manifest_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.post-publication-validation.yaml
+    exists: true
+    sha256: 514eaa51fac9806038fcd7fe9ae667a98824dbc51d976ff8c1fee7a9bc5efb3d
+    validation_status: valid
+  - artifact_key: handoff_decision_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/handoff-decision-validation.yaml
+    exists: true
+    sha256: 3c91f2178c2905884fdc4ab9e558b04a87ce4bcb0134c39c01e30538478a2117
+    validation_status: valid
+  - artifact_key: maturation_baseline
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-baseline.yaml
+    exists: true
+    sha256: ca15106cf7b4e8e234f3fd4a7bfdf1115447ea22898422852f9f64d84b756657
+    validation_status: null
+  - artifact_key: maturation_baseline_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-baseline-validation.yaml
+    exists: true
+    sha256: 1c8e9ea156c95e3ca14d2092c8ae023aaa3106c104de2d50c537c5c015397ede
+    validation_status: valid
+  - artifact_key: baseline_actionability_matrix
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix.yaml
+    exists: true
+    sha256: 50eb608dbae5d6574182b0f35a5ed6f4908be8cfb37f48b8c209092cad2ff89a
+    validation_status: null
+  - artifact_key: baseline_actionability_matrix_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/baseline-actionability-matrix-validation.yaml
+    exists: true
+    sha256: 467f694c6f66394c114a57e1cd17e3bbf4df4552e9481c89620e4c827aca09df
+    validation_status: valid
+  - artifact_key: actionability_matrix
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/actionability-matrix.yaml
+    exists: true
+    sha256: f6ebcddfb2c2868fac13ecf1544e2ea8a9be07a8d777036fc63192bd9fbd2b12
+    validation_status: null
+  - artifact_key: actionability_matrix_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/actionability-matrix-validation.yaml
+    exists: true
+    sha256: f9979a9868445736e8c444c7b00fdf3b4082acae6754048a2195038842a8ba83
+    validation_status: valid
+  - artifact_key: maturation_question_frontier
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-question-frontier.yaml
+    exists: true
+    sha256: ed616d9ca132987730fca83dc91055c28fb282146a0fa855ea1ec4a2037ce5c8
+    validation_status: null
+  - artifact_key: maturation_question_frontier_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-question-frontier-validation.yaml
+    exists: true
+    sha256: d73e953844c0d9cebc29e8efec1e179ca788944e0da32e18be850b5b5f3a9f52
+    validation_status: valid
+  - artifact_key: maturation_closure_frontier
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier.yaml
+    exists: true
+    sha256: a7e4144c488f3e753b78d8c35e59a79598ab24606f8facfc6cf16421d95159c2
+    validation_status: null
+  - artifact_key: maturation_closure_frontier_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-closure-frontier-validation.yaml
+    exists: true
+    sha256: 5a3b64eb9f3785e052aacbae78beee67001ce953151c7106c36b712ea2ae88ed
+    validation_status: valid
+  - artifact_key: maturation_authority_response
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-authority-response.yaml
+    exists: true
+    sha256: d7f6f5dbec64bbbe7731a93303fcf2aa2f5bd588b2ef2f7cfbd07639a2685216
+    validation_status: null
+  - artifact_key: maturation_authority_response_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-authority-response-validation.yaml
+    exists: true
+    sha256: ac135bbb9a93aafa9a4b038a16a7af0626c20e868cf85b23e9b44d05fe7e7033
+    validation_status: valid
+  - artifact_key: answer_support_ledger
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/answer-support-ledger.yaml
+    exists: true
+    sha256: cde2cb2f62be64c32215133e25b12dc58ffd0fb07c9991edf1bf571b73e57b71
+    validation_status: null
+  - artifact_key: answer_support_ledger_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/answer-support-ledger-validation.yaml
+    exists: true
+    sha256: 5e96a43b6187e9c3c54f265e995e8b387756f598ecdc968c052337ee2d381d1e
+    validation_status: valid
+  - artifact_key: maturation_answer_claims
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-answer-claims.yaml
+    exists: true
+    sha256: 3a01df52aa2495b6eb1f0eec2c2addabec0a06b8dfa054047be1f0183b5928fa
+    validation_status: null
+  - artifact_key: maturation_answer_claims_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-answer-claims-validation.yaml
+    exists: true
+    sha256: cdaccc697abc2c9cbb11b830729bbe2bdc371a818404e170bf7250b063687418
+    validation_status: valid
+  - artifact_key: ontology_expansion
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-expansion.yaml
+    exists: true
+    sha256: f69842785f53281eeab305bd72da22af88776666bc1c9403b5cf4f9088e6f271
+    validation_status: null
+  - artifact_key: ontology_expansion_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/ontology-expansion-validation.yaml
+    exists: true
+    sha256: 4a8d3214e644594c03a8e1d73074736bc203cad261ffff18025a369a46beff83
+    validation_status: valid
+  - artifact_key: maturation_source_delta
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-source-delta.yaml
+    exists: true
+    sha256: ba5cc897cfd0331380f276455c84f7371084300943d209c9d362e5a621abadd5
+    validation_status: null
+  - artifact_key: maturation_source_delta_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-source-delta-validation.yaml
+    exists: true
+    sha256: 126be1dd6713d4c0fe96931063b73a51d0ca52ef0e33851137bf6b44fe8b372b
+    validation_status: valid
+  - artifact_key: maturation_convergence_ledger
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-convergence-ledger.yaml
+    exists: true
+    sha256: e583628b3f072edca3a6f16558fcfbb4495f1ca3dc18f5d60dbd916396162995
+    validation_status: null
+  - artifact_key: maturation_convergence_ledger_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-convergence-ledger-validation.yaml
+    exists: true
+    sha256: 86c4b0b32e68c62fdd9abc6b31825d0bb7538bd8c4c95287d2d3fabd3775d80f
+    validation_status: valid
+  - artifact_key: maturation_continuation_decision
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision.yaml
+    exists: true
+    sha256: 3846b93d177a414cc10dc0f500459bd75149086a166d39d225620a21db19cb0b
+    validation_status: null
+  - artifact_key: maturation_continuation_decision_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/maturation-continuation-decision-validation.yaml
+    exists: true
+    sha256: f42eae09b15f1dd8e5869fc8097a88d3411a85a28c9b7307b5d8ccb17697d954
+    validation_status: valid
+  - artifact_key: query_proofs
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/query-proofs.yaml
+    exists: true
+    sha256: 25c5cdb59ab20781ac854e60dbf6ec36d543dd157f0abd85408f0de9630d9c4f
+    validation_status: null
+  - artifact_key: query_proofs_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/query-proofs-validation.yaml
+    exists: true
+    sha256: 233fd94f09e69889ec1b5794ce2beff95d811653f50af25b55fb3a6839f9d511
+    validation_status: valid
+  - artifact_key: visualization_proofs
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/visualization-proofs.yaml
+    exists: true
+    sha256: 5b870e1ac423ff51cd2efb9e5f665668425915cf4975f0141344d822c190de84
+    validation_status: null
+  - artifact_key: visualization_proofs_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/visualization-proofs-validation.yaml
+    exists: true
+    sha256: 236e525fd5d97f0a0c5486c09f2a5ca27b0001dc830b5599fd335829f38ab303
+    validation_status: valid
+  - artifact_key: graph_exploration_proofs
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs.yaml
+    exists: true
+    sha256: 96b5b9732b44d486e3e714dbe0c9037eec5be632edd89d6660e6d3a5034428eb
+    validation_status: null
+  - artifact_key: graph_exploration_proofs_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/graph-exploration-proofs-validation.yaml
+    exists: true
+    sha256: c31bfe492024f47cbfd4dab523a465fcb0a27b2a31fd1d8402398819139bdbb5
+    validation_status: valid
+  - artifact_key: actionable_ontology
+    artifact_ref: null
+    exists: false
+    sha256: null
+    validation_status: null
+  - artifact_key: actionable_ontology_validation
+    artifact_ref: null
+    exists: false
+    sha256: null
+    validation_status: null
+  - artifact_key: claim_projection
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection.yaml
+    exists: true
+    sha256: c8721bddb331772f15e477b3b243b4b62741c4ddb995c9e2bae5676db892d1b5
+    validation_status: null
+  - artifact_key: claim_projection_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/claim-projection-validation.yaml
+    exists: true
+    sha256: 29960649bc2115eedba531ec14f3f924f7800ff82cc87f1e0b0a4075ea352751
+    validation_status: valid
+  - artifact_key: final_output
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/final-output.md
+    exists: true
+    sha256: 25a41f1744d4672b18636b6bd7633bec629d4844117f0da2aa5965b5a5c39dbc
+    validation_status: null
+  - artifact_key: final_output_provenance_validation
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/final-output-provenance-validation.yaml
+    exists: true
+    sha256: 8fb14780e1a95c7be3b2a4a10d8b74c37e4cc802b64e7d8db744cd8806007799
+    validation_status: valid
+  - artifact_key: reconstruct_run_manifest
+    artifact_ref: <run-root>/.onto/reconstruct/claude-live-e2e/reconstruct-run-manifest.yaml
+    exists: true
+    sha256: c64960f169869435dab19c5c6352bbb848b0a537001bb97fd6274bc95ed3a824
+    validation_status: null
+validation_summary:
+  target_material_profile_status: valid
+  source_observation_directive_status: valid
+  candidate_disposition_status: valid
+  seed_authoring_readiness_status: valid
+  ontology_seed_status: valid
+  claim_realization_status: valid
+  seed_confirmation_status: partial
+  pre_handoff_run_manifest_status: valid
+  post_publication_run_manifest_status: valid
+  handoff_decision_status: valid
+  final_output_provenance_status: valid
+  semantic_claim_count: 25
+  evidence_ref_count: 39
+  confirmed_claim_count: 20
+  rejected_claim_count: 0
+  partial_claim_count: 1
+  deferred_claim_count: 4
+  competency_question_count: 13
+  competency_question_assessment_count: 13
+  failure_count: 6
+  revision_proposal_count: 6
+  unresolved_count: 4
+  deferred_count: 6
+  pass_rate: 0.6923
+missing_artifacts: []
+runtime_boundary:
+  semantic_generation: not_performed
+  runtime_owned_gates:
+    - target_material_profiling
+    - reconstruct_run_control
+    - reconstruct_run_control_validation
+    - registry_verification_evidence
+    - registry_verification_evidence_validation
+    - target_material_profile_validation
+    - source_inventory
+    - initial_source_frontier
+    - source_observation
+    - source_observation_delta
+    - source_observation_delta_validation
+    - source_observation_reentry_validation
+    - source_observation_lineage_index
+    - source_observation_lineage_index_validation
+    - source_safety_ledger
+    - source_safety_ledger_validation
+    - source_scout_pack
+    - source_scout_pack_validation
+    - source_scout_pack_pre_seed
+    - source_scout_pack_validation_pre_seed
+    - source_scout_pack_post_maturation
+    - source_scout_pack_validation_post_maturation
+    - post_maturation_gate_projection_validation
+    - material_admission_ledger
+    - material_admission_ledger_validation
+    - source_frontier_validation
+    - source_observation_directive_validation
+    - candidate_disposition_validation
+    - seed_authoring_readiness
+    - seed_authoring_readiness_validation
+    - ontology_seed_validation
+    - claim_realization_validation
+    - seed_confirmation_validation
+    - competency_questions_validation
+    - competency_question_assessment_validation
+    - failure_classification_validation
+    - revision_proposal_validation
+    - final_output_provenance_validation
+    - pre_handoff_run_manifest_validation
+    - post_publication_run_manifest_validation
+    - handoff_decision_validation
+    - maturation_baseline
+    - maturation_baseline_validation
+    - baseline_actionability_matrix
+    - baseline_actionability_matrix_validation
+    - actionability_matrix
+    - actionability_matrix_validation
+    - maturation_closure_frontier_validation
+    - maturation_authority_response
+    - maturation_authority_response_validation
+    - answer_support_ledger_validation
+    - maturation_answer_claims_validation
+    - ontology_expansion_validation
+    - maturation_source_delta
+    - maturation_source_delta_validation
+    - maturation_convergence_ledger
+    - maturation_convergence_ledger_validation
+    - maturation_continuation_decision
+    - maturation_continuation_decision_validation
+    - query_proofs
+    - query_proofs_validation
+    - visualization_proofs
+    - visualization_proofs_validation
+    - graph_exploration_proofs
+    - graph_exploration_proofs_validation
+    - actionable_ontology
+    - actionable_ontology_validation
+    - claim_projection
+    - claim_projection_validation
+    - reconstruct_metrics
+    - record_assembly
+    - run_manifest_assembly
+  host_user_mediated_artifacts:
+    - seed_confirmation
+  llm_owned_directives:
+    - source_observation_directive
+    - lens_judgment
+    - exploration_synthesis
+    - source_frontier
+    - candidate_inventory
+    - candidate_disposition
+    - ontology_seed
+    - claim_realization_map
+    - competency_questions
+    - competency_question_assessment
+    - failure_classification
+    - revision_proposal
+    - stop_decision
+    - maturation_question_frontier
+    - maturation_closure_frontier
+    - answer_support_ledger
+    - maturation_answer_claims
+    - ontology_expansion
+    - final_output
+warnings: []

@@ -1,0 +1,42 @@
+{
+  "schema_version": "1",
+  "benchmark_kind": "reconstruct-pipeline-live",
+  "evidence_basis": "Human-curated completion summary derived from the run's authoritative reconstruct-record.yaml (record_stage=completed). The machine artifacts are committed alongside under evidence/ (paths relativized to <run-root>/). NOT a byte-for-shape reproduction of scripts/reconstruct-claude-live-e2e.mts's own writer.",
+  "status": "PRELIMINARY — support proof for one model, not a performance claim (single run; INV-BENCH-1 needs >=3 reps, >=2 fixtures)",
+  "provider": "anthropic",
+  "model": "claude-opus-4-8",
+  "execution_adapter": "claude_code",
+  "auth": "oauth",
+  "effort": "medium",
+  "verified_with": "the run used ONTO_LLM_TIMEOUT_MS=600000; this is now the CLI worker default (DEFAULT_WORKER_TIMEOUT_MS) since the slow opus seed-authoring call exceeds the 120000ms SDK default — so support holds under default settings",
+  "fixture": "reconstruct-golden-target-v1",
+  "target": "src/fixture-service.ts",
+  "branch_commit": "d8347bdf87af0d2c210e2b8cf15be42f2352ff2b",
+  "completed_at": "2026-06-15T11:00:02.614Z",
+  "duration_s": 1171.5,
+  "record_stage": "completed",
+  "completion_facts": {
+    "record_stage": "completed",
+    "note": "record_stage=completed is granted by deriveRecordStage (src/core-runtime/reconstruct/record.ts) ONLY when final_output is present AND final_output_provenance_status=valid AND ~14 other validations are valid.",
+    "final_output_provenance_status": "valid",
+    "maturation_track_ran": true,
+    "maturation_continuation_decision": "blocked",
+    "actionable_ontology": null,
+    "maturation_note": "The maturation track DID run (validations valid) to a 'blocked' maturation_continuation_decision — no actionable ontology was emitted (actionable_ontology=null). This is the same final_output+provenance completion bar as the openai/gpt-5.5 entry's winning run, NOT a stop-at-handoff partial.",
+    "completed_steps": 52
+  },
+  "route_telemetry": {
+    "model_call_steps": 15,
+    "all_steps_provider_route": "anthropic",
+    "all_steps_model_id": "claude-opus-4-8",
+    "source": "evidence/reconstruct-record-claude-20260615.yaml (per-artifact provenance) + the run's pre-handoff manifest"
+  },
+  "evidence_artifacts": [
+    "development-records/benchmark/evidence/reconstruct-record-claude-20260615.yaml",
+    "development-records/benchmark/evidence/final-output-claude-20260615.md",
+    "development-records/benchmark/evidence/ontology-seed-claude-20260615.yaml",
+    "development-records/benchmark/evidence/README.md"
+  ],
+  "runner": "scripts/reconstruct-claude-live-e2e.mts",
+  "caveat": "evidence/final-output-claude-20260615.md is the verbatim model (claude) output; its own §Completion-Scope prose is internally inconsistent about which stages ran. The reconstruct-record.yaml is authoritative (see evidence/README.md)."
+}

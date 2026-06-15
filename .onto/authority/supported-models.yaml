@@ -25,3 +25,19 @@ supported_models:
       Completed a full reconstruct pipeline run in the live medium baseline
       (1 of 6 attempts completed end to end); support verified. Performance
       evidence is PRELIMINARY in that record — support, not a performance claim.
+  - provider: anthropic
+    model: claude-opus-4-8
+    verified_at: "2026-06-15"
+    benchmark_evidence_refs:
+      - development-records/benchmark/reconstruct-pipeline-live-claude-20260615.json
+    notes: >-
+      Completed a full reconstruct pipeline run end to end via the Anthropic
+      OAuth Claude Code CLI worker (execution_adapter=claude_code):
+      record_stage=completed with final_output present and provenance valid; the
+      maturation track ran to a `blocked` continuation decision (no actionable
+      ontology emitted). The CLI worker path (codex_cli/claude_code) uses the
+      600000ms DEFAULT_WORKER_TIMEOUT_MS — the slow opus seed-authoring call
+      exceeds the 120000ms SDK default — so support holds under default settings
+      (no unencoded env override required). Single-run completion proof
+      (PRELIMINARY for any performance claim, INV-BENCH-1 needs >=3 reps /
+      >=2 fixtures); support — model completes the pipeline — verified.

@@ -36,7 +36,7 @@ outer의 유일한 역할: **script를 `bash -s`로 실행하고 stdout을 verba
 | brand | spawn | 비고 |
 |---|---|---|
 | codex (`codex-nesting-batch-worker.ts`) | `codex exec --sandbox danger-full-access --ephemeral`, prompt는 stdin | outer가 subprocess를 spawn해야 하므로 non-seatbelt; inner unit executor는 자체 read-only sandbox 유지 |
-| claude (`claude-nesting-batch-worker.ts`) | `claude -p <prompt positional> --allowedTools Bash --permission-mode bypassPermissions --strict-mcp-config`(빈 MCP) | prompt는 **positional**(stdin 무시됨). `--effort` 지원, service_tier 표면 없음(API 전용). `ONTO_CLAUDE_BIN` 오버라이드 |
+| claude (`claude-nesting-batch-worker.ts`) | `claude -p <prompt positional> --allowedTools Bash --permission-mode bypassPermissions --strict-mcp-config`(빈 MCP) | prompt는 **positional**(stdin 무시됨). `--effort` 지원, service_tier 표면 없음(API 전용). 바이너리는 `resolveClaudeBin()`로 해석(`ONTO_CLAUDE_BIN` 오버라이드 → PATH → 일반 설치 위치) |
 
 outer(teamlead seat) model/effort는 settings `review.execution.teamlead.llm`에서 brand adapter(codex_cli/claude_code) 일치 시에만 해석된다. **inner unit의 LLM 설정은 outer 설정이 아니라 호출자가 구성한 inner argv에 실린다**(flat 동등).
 
