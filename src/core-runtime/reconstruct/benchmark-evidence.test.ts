@@ -4,6 +4,7 @@ import {
   BENCHMARK_PRELIMINARY_STATUS,
   gradeBenchmarkEvidence,
   requestedEffortForRealization,
+  requestedJudgeOverrideForRealization,
 } from "./benchmark-evidence.js";
 
 describe("requested effort realization scoping", () => {
@@ -19,6 +20,29 @@ describe("requested effort realization scoping", () => {
     expect(requestedEffortForRealization("mock", "medium")).toBeNull();
     expect(requestedEffortForRealization("mock", undefined)).toBeNull();
     expect(requestedEffortForRealization("evolve", "high")).toBeNull();
+  });
+});
+
+describe("requested judge override realization scoping", () => {
+  it("records the requested judge override only for live realization", () => {
+    expect(requestedJudgeOverrideForRealization("live", "high", "gpt-5.5")).toEqual({
+      effort: "high",
+      model: "gpt-5.5",
+    });
+    expect(requestedJudgeOverrideForRealization("live", "high", undefined)).toEqual({
+      effort: "high",
+      model: null,
+    });
+    expect(requestedJudgeOverrideForRealization("live", undefined, "gpt-5.5")).toEqual({
+      effort: null,
+      model: "gpt-5.5",
+    });
+  });
+
+  it("is null when neither lever is requested, and for non-live realizations", () => {
+    expect(requestedJudgeOverrideForRealization("live", undefined, undefined)).toBeNull();
+    expect(requestedJudgeOverrideForRealization("mock", "high", "gpt-5.5")).toBeNull();
+    expect(requestedJudgeOverrideForRealization("evolve", "high", "gpt-5.5")).toBeNull();
   });
 });
 

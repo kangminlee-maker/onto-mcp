@@ -50,7 +50,13 @@ import {
   resolveOntoHome,
 } from "../core-runtime/discovery/onto-home.js";
 import {
+  isSupportedModelRoute,
+  loadSupportedModelRegistry,
+  type SupportedModelRegistry,
+} from "../core-runtime/discovery/supported-models.js";
+import {
   resolveLlmProviderConfig,
+  type LlmCallConfig,
 } from "../core-runtime/llm/llm-caller.js";
 import {
   writeOntologySeedValidationArtifact,
@@ -99,6 +105,20 @@ export interface RunReconstructRequest extends PrepareReconstructRequest {
    * settings; the chosen effort is recorded in per-unit execution telemetry.
    */
   llmEffort?: string;
+  /**
+   * Optional per-stage override for the answer-support JUDGE only (opt-in
+   * semantic-independence lever against rubber-stamping; the judge otherwise
+   * inherits the semantic-author config). Any subset may be set:
+   * `judgeLlmEffort` (run the judge at a different reasoning effort — always
+   * feasible) and/or `judgeModel` (a different/stronger judge MODEL ON THE
+   * SEMANTIC AUTHOR'S PROVIDER, so credentials/route stay consistent — a single
+   * seat is enough; cross-provider judges are intentionally out of scope). A
+   * model override is used only when the (author provider, judgeModel) pair is
+   * benchmark-verified (INV-MODEL-1); otherwise the judge DEGRADES to the
+   * semantic-author model with a recorded note. Mock realization ignores these.
+   */
+  judgeLlmEffort?: string;
+  judgeModel?: string;
 }
 
 export interface PreparedReconstruct {
@@ -238,6 +258,76 @@ function resolveFromBase(basePath: string, maybeRelativePath: string): string {
   return path.isAbsolute(maybeRelativePath)
     ? path.resolve(maybeRelativePath)
     : path.resolve(basePath, maybeRelativePath);
+}
+
+/**
+ * Pure adopt-vs-degrade decision for the opt-in answer-support judge config.
+ * The judge keeps the semantic author's config except for the requested
+ * overrides. A judgeModelCandidate (already resolved on the author's provider,
+ * so its credentials/adapter match the author) is adopted only when it is a
+ * benchmark-verified route (INV-MODEL-1) AND keeps the author's provider; any
+ * other case degrades to the author model with a recorded note. Effort always
+ * INHERITS the author's effective effort (e.g. a pinned `--effort`) unless
+ * judgeLlmEffort explicitly overrides it — never the model candidate's raw
+ * settings effort, which could otherwise silently run the judge weaker than the
+ * author. Returns `undefined` config when nothing was requested (caller inherits
+ * the author config — zero change).
+ */
+export function resolveJudgeLlmConfig(args: {
+  authorLlmConfig: Partial<LlmCallConfig>;
+  judgeLlmEffort?: string;
+  judgeModelCandidate?: Partial<LlmCallConfig> | null;
+  /**
+   * The judge model's MODEL provider — the supported-models.yaml registry key
+   * (e.g. "openai"), NOT the runtime adapter provider. OpenAI OAuth normalizes
+   * the runtime provider to "codex", but INV-MODEL-1 is keyed by model provider
+   * (openai/gpt-5.5), so the support check must use this, mirroring the gate's
+   * collectModelSelections. Same as the author's model provider (the judge
+   * resolves on the author's settings).
+   */
+  judgeModelProvider?: string;
+  registry: SupportedModelRegistry;
+}): { judgeLlmConfig: Partial<LlmCallConfig> | undefined; note: string | null } {
+  if (!args.judgeLlmEffort && !args.judgeModelCandidate) {
+    return { judgeLlmConfig: undefined, note: null };
+  }
+  const judge: Partial<LlmCallConfig> = { ...args.authorLlmConfig };
+  const authorEffort = args.authorLlmConfig.reasoning_effort;
+  let note: string | null = null;
+  const candidate = args.judgeModelCandidate;
+  if (candidate) {
+    // INV-MODEL-1 is keyed by MODEL provider (e.g. openai/gpt-5.5), not the
+    // runtime adapter provider (OpenAI OAuth normalizes to codex). Check the
+    // model provider so a supported judge model is not spuriously degraded.
+    const supported = isSupportedModelRoute(
+      args.judgeModelProvider,
+      candidate.model_id,
+      args.registry,
+    );
+    // Credential safety: the candidate resolves on the author's provider, so its
+    // runtime provider must match the author's (guarantees api_key_env/adapter
+    // never cross providers). Uses the runtime provider, not the model provider.
+    const sameProvider = candidate.provider === args.authorLlmConfig.provider;
+    if (supported && sameProvider) {
+      Object.assign(judge, candidate);
+    } else {
+      note = `answer-support judge model override (${
+        args.judgeModelProvider ?? "(unresolved provider)"
+      }/${candidate.model_id ?? "(unresolved model)"}) ${
+        supported
+          ? "requires a different provider than the semantic author"
+          : "is not a benchmark-verified route"
+      }; degraded to the semantic-author model`;
+    }
+  }
+  // Effort = explicit judge override, else the author's effective effort. This
+  // wins over any reasoning_effort Object.assign copied from the model candidate
+  // (the candidate is resolved without the author's effort pin, so its raw
+  // settings effort can diverge from the author's pinned effort).
+  if (args.judgeLlmEffort) judge.reasoning_effort = args.judgeLlmEffort;
+  else if (authorEffort !== undefined) judge.reasoning_effort = authorEffort;
+  else delete judge.reasoning_effort;
+  return { judgeLlmConfig: judge, note };
 }
 
 function dateStamp(): string {
@@ -594,9 +684,54 @@ export function createOntoReconstructCoreApi(
           },
           ...(llmEffortOverride ? { cliOverrides: llmEffortOverride } : {}),
         });
+      // Opt-in per-stage JUDGE config (semantic-independence lever). Default =
+      // inherit the semantic-author config (judgeLlmConfig undefined → no change,
+      // zero regression). A judgeModel override resolves ON THE AUTHOR'S PROVIDER
+      // (same credentials/route), so it is adopted only when the resulting
+      // (author provider, judgeModel) pair is benchmark-verified, otherwise it
+      // degrades. resolveJudgeLlmConfig owns the adopt-vs-degrade decision.
+      const judgeOverrideRequested = Boolean(
+        request.judgeLlmEffort || request.judgeModel,
+      );
+      let judgeConfigNote: string | null = null;
+      if (judgeOverrideRequested && mockRealizationEnabled) {
+        judgeConfigNote =
+          "answer-support judge override ignored under mock realization (no real provider calls)";
+      }
+      // A judgeModel candidate is resolved on the SAME actor settings as the
+      // author (no provider override), so api_key_env / execution_adapter /
+      // base_url stay the author provider's — consistent, never cross-provider.
+      const judgeAuthorActorLlm =
+        !mockRealizationEnabled && request.judgeModel
+          ? resolveReconstructActorLlmSettings(settings, "semantic_author")
+          : null;
+      const judgeModelCandidate = judgeAuthorActorLlm
+        ? resolveLlmProviderConfig({
+          config: { llm: judgeAuthorActorLlm },
+          cliOverrides: { model: request.judgeModel! },
+        })
+        : null;
+      const judgeResolution = mockRealizationEnabled
+        ? { judgeLlmConfig: undefined, note: judgeConfigNote }
+        : resolveJudgeLlmConfig({
+          authorLlmConfig: semanticAuthorLlmConfig,
+          ...(request.judgeLlmEffort
+            ? { judgeLlmEffort: request.judgeLlmEffort }
+            : {}),
+          judgeModelCandidate,
+          // Registry key is the MODEL provider (e.g. openai), not the runtime
+          // adapter (openai OAuth → codex). The judge uses the author's provider.
+          ...(judgeAuthorActorLlm?.provider
+            ? { judgeModelProvider: judgeAuthorActorLlm.provider }
+            : {}),
+          registry: loadSupportedModelRegistry(),
+        });
+      const judgeLlmConfig = judgeResolution.judgeLlmConfig;
+      if (!mockRealizationEnabled) judgeConfigNote = judgeResolution.note;
       const directiveAuthor =
         createDirectCallReconstructDirectiveAuthor({
           llmConfig: semanticAuthorLlmConfig,
+          ...(judgeLlmConfig ? { judgeLlmConfig } : {}),
           ...(mockRealizationEnabled
             ? {
               llmCall: callReconstructMockLlm,
@@ -623,6 +758,21 @@ export function createOntoReconstructCoreApi(
           : "reconstruct session starting",
         stageId: "start",
       });
+      if (judgeConfigNote) {
+        // Honest accounting: the operator opted into a judge override that was
+        // not used (unsupported model degraded to the author model, or ignored
+        // under mock), so the rubber-stamp mitigation did NOT take effect. The
+        // judge's actual model/effort is independently recorded in the judge
+        // step execution telemetry. Emitted BEFORE the run so it survives a
+        // run failure — the degrade decision is independent of the run outcome.
+        appendRuntimeStatusEventSync({
+          pipeline: "reconstruct",
+          sessionRoot,
+          sourceLabel: "onto_reconstruct",
+          message: judgeConfigNote,
+          stageId: "answer_support_judgment",
+        });
+      }
       const watcherResult = spawnRuntimeWatcherPane(
         projectRoot,
         sessionRoot,

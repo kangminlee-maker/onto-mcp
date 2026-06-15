@@ -201,6 +201,23 @@ export function collectModelSelections(settings: unknown): EffectiveModelRoute[]
   return out;
 }
 
+/** Non-throwing membership check: is (provider, model) a benchmark-verified
+ * supported route? Reuses the same verified-pair set as
+ * {@link assertSupportedModelRoutes}, but returns a boolean so opt-in callers
+ * (e.g. the answer-support judge per-stage model override) can DEGRADE to the
+ * inherited config when an override is unsupported, instead of failing the run.
+ * An unresolved provider or model is not verified. */
+export function isSupportedModelRoute(
+  provider: string | undefined,
+  model: string | undefined,
+  registry: SupportedModelRegistry,
+): boolean {
+  if (provider === undefined || model === undefined) return false;
+  return registry.supported_models.some(
+    (entry) => entry.provider === provider && entry.model === model,
+  );
+}
+
 /** Throws if any effective route is not a benchmark-verified (provider, model)
  * pair. A route whose effective provider OR model could not be resolved is
  * rejected (fail-loud) rather than leniently accepted — the route must resolve

@@ -6,7 +6,11 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
   ReconstructSourceObservationsArtifact,
 } from "../core-runtime/reconstruct/artifact-types.js";
-import { createOntoReconstructCoreApi } from "./reconstruct-api.js";
+import {
+  createOntoReconstructCoreApi,
+  resolveJudgeLlmConfig,
+} from "./reconstruct-api.js";
+import type { SupportedModelRegistry } from "../core-runtime/discovery/supported-models.js";
 
 const tempRoots: string[] = [];
 
@@ -254,4 +258,143 @@ describe("createOntoReconstructCoreApi", () => {
     expect(readBack.validation_summary.evidence_ref_count).toBe(1);
   });
 
+});
+
+describe("resolveJudgeLlmConfig", () => {
+  const registry: SupportedModelRegistry = {
+    schema_version: "1",
+    supported_models: [
+      {
+        provider: "openai",
+        model: "gpt-5.5",
+        verified_at: "2026-06-13",
+        benchmark_evidence_refs: ["development-records/benchmark/x.json"],
+      },
+      {
+        provider: "openai",
+        model: "gpt-5-mini",
+        verified_at: "2026-06-13",
+        benchmark_evidence_refs: ["development-records/benchmark/x.json"],
+      },
+      {
+        provider: "anthropic",
+        model: "claude-opus-4-8",
+        verified_at: "2026-06-15",
+        benchmark_evidence_refs: ["development-records/benchmark/y.json"],
+      },
+    ],
+  };
+  const author = { provider: "openai" as const, model_id: "gpt-5-mini", api_key_env: "MY_OPENAI_KEY" };
+
+  it("returns undefined config (inherit) when nothing is requested", () => {
+    const out = resolveJudgeLlmConfig({ authorLlmConfig: author, registry });
+    expect(out.judgeLlmConfig).toBeUndefined();
+    expect(out.note).toBeNull();
+  });
+
+  it("applies an effort-only override without touching provider/model", () => {
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: author,
+      judgeLlmEffort: "high",
+      registry,
+    });
+    expect(out.judgeLlmConfig?.reasoning_effort).toBe("high");
+    expect(out.judgeLlmConfig?.provider).toBe("openai");
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5-mini");
+    expect(out.note).toBeNull();
+  });
+
+  it("adopts a supported same-provider model override (keeps author credentials)", () => {
+    // candidate is resolved on the author's provider, so it carries the author's
+    // api_key_env — adoption must keep the provider and the matching credential.
+    const candidate = { provider: "openai" as const, model_id: "gpt-5.5", api_key_env: "MY_OPENAI_KEY" };
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: author,
+      judgeModelCandidate: candidate,
+      judgeModelProvider: "openai",
+      registry,
+    });
+    expect(out.judgeLlmConfig?.provider).toBe("openai");
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5.5");
+    expect(out.judgeLlmConfig?.api_key_env).toBe("MY_OPENAI_KEY");
+    expect(out.note).toBeNull();
+  });
+
+  it("adopts a supported judge model on the OAuth route where the runtime provider is codex (registry uses the model provider)", () => {
+    // OpenAI OAuth normalizes the runtime provider to "codex", but the registry
+    // is keyed by the model provider (openai/gpt-5.5). The support check must use
+    // judgeModelProvider="openai", not candidate.provider="codex", otherwise a
+    // supported judge model is spuriously degraded and the lever is dead.
+    const codexAuthor = { provider: "codex" as const, model_id: "gpt-5-mini", api_key_env: "MY_OPENAI_KEY" };
+    const candidate = { provider: "codex" as const, model_id: "gpt-5.5", api_key_env: "MY_OPENAI_KEY" };
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: codexAuthor,
+      judgeModelCandidate: candidate,
+      judgeModelProvider: "openai",
+      registry,
+    });
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5.5");
+    expect(out.judgeLlmConfig?.provider).toBe("codex");
+    expect(out.note).toBeNull();
+  });
+
+  it("degrades (keeps author model + note) when the model override is unsupported", () => {
+    const candidate = { provider: "openai" as const, model_id: "gpt-9-unverified", api_key_env: "MY_OPENAI_KEY" };
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: author,
+      judgeModelCandidate: candidate,
+      judgeModelProvider: "openai",
+      registry,
+    });
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5-mini");
+    expect(out.note).toMatch(/not a benchmark-verified route/);
+  });
+
+  it("degrades (never cross-provider credential leak) when a candidate resolves to a different runtime provider", () => {
+    // Defensive: even if a candidate somehow carried a different runtime provider,
+    // it must NOT be adopted (would mix the author's api_key_env with another
+    // provider's endpoint — the cross-provider wrong-credential dispatch).
+    const candidate = { provider: "anthropic" as const, model_id: "claude-opus-4-8", api_key_env: "MY_OPENAI_KEY" };
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: author,
+      judgeModelCandidate: candidate,
+      judgeModelProvider: "anthropic",
+      registry,
+    });
+    expect(out.judgeLlmConfig?.provider).toBe("openai");
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5-mini");
+    expect(out.judgeLlmConfig?.api_key_env).toBe("MY_OPENAI_KEY");
+    expect(out.note).toMatch(/requires a different provider/);
+  });
+
+  it("inherits the author's effective (pinned) effort across a model swap when no judge effort is given", () => {
+    // The candidate is resolved without the author's --effort pin, so it carries
+    // the raw settings effort ('medium'); adopting it must NOT downgrade the
+    // judge below the author's pinned 'high'.
+    const authorHigh = { provider: "openai" as const, model_id: "gpt-5-mini", reasoning_effort: "high" };
+    const candidate = { provider: "openai" as const, model_id: "gpt-5.5", reasoning_effort: "medium" };
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: authorHigh,
+      judgeModelCandidate: candidate,
+      judgeModelProvider: "openai",
+      registry,
+    });
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5.5");
+    expect(out.judgeLlmConfig?.reasoning_effort).toBe("high");
+    expect(out.note).toBeNull();
+  });
+
+  it("combines a supported model override with an effort override", () => {
+    const candidate = { provider: "openai" as const, model_id: "gpt-5.5", api_key_env: "MY_OPENAI_KEY" };
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: author,
+      judgeLlmEffort: "high",
+      judgeModelCandidate: candidate,
+      judgeModelProvider: "openai",
+      registry,
+    });
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5.5");
+    expect(out.judgeLlmConfig?.reasoning_effort).toBe("high");
+    expect(out.note).toBeNull();
+  });
 });

@@ -25,6 +25,25 @@ export function requestedEffortForRealization(
   return realization === "live" ? (effort ?? null) : null;
 }
 
+/**
+ * Realization-scoped record of the opt-in answer-support judge override that
+ * was REQUESTED for a benchmark run (symmetric to {@link
+ * requestedEffortForRealization}). Live-only — the mock route never applies the
+ * override — and null when neither lever was requested, so a record always
+ * self-describes whether a judge override was in play (reproducibility). The
+ * REALIZED judge model/effort remains recoverable from the answer_support_judgment
+ * unit telemetry; this captures the operator's intent.
+ */
+export function requestedJudgeOverrideForRealization(
+  realization: string,
+  judgeEffort: string | null | undefined,
+  judgeModel: string | null | undefined,
+): { effort: string | null; model: string | null } | null {
+  if (realization !== "live") return null;
+  if (!judgeEffort && !judgeModel) return null;
+  return { effort: judgeEffort ?? null, model: judgeModel ?? null };
+}
+
 export interface BenchmarkEvidenceInput {
   repetitions: number;
   /** Distinct requested fixture ids. */

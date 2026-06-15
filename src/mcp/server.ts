@@ -474,6 +474,21 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       description:
         "Explicit confirmation provider realization. direct_call uses configured llm provider.",
     },
+    llmEffort: {
+      type: "string",
+      description:
+        "Optional reasoning-effort pin applied to both reconstruct actors (live only; mock ignores it).",
+    },
+    judgeLlmEffort: {
+      type: "string",
+      description:
+        "Opt-in: run the answer-support judge at a different reasoning effort than the semantic author (live only). Reduces same-model rubber-stamping.",
+    },
+    judgeModel: {
+      type: "string",
+      description:
+        "Opt-in: swap the answer-support judge MODEL (on the semantic author's provider; live only). An unsupported model degrades to the author model (INV-MODEL-1); a degrade is recorded as a runtime status note.",
+    },
   },
 };
 
@@ -1854,6 +1869,9 @@ export async function callTool(
             semanticAuthorRealization: parsed.semanticAuthorRealization,
             confirmationProviderRealization:
               parsed.confirmationProviderRealization,
+            ...(parsed.llmEffort !== undefined ? { llmEffort: parsed.llmEffort } : {}),
+            ...(parsed.judgeLlmEffort !== undefined ? { judgeLlmEffort: parsed.judgeLlmEffort } : {}),
+            ...(parsed.judgeModel !== undefined ? { judgeModel: parsed.judgeModel } : {}),
             ...(sessionRoot ? { sessionRoot } : {}),
             ...(profilesRoot ? { profilesRoot } : {}),
             ...(filesystemAllowedRoots ? { filesystemAllowedRoots } : {}),

@@ -2337,6 +2337,98 @@ describe("runReconstruct", () => {
     expect(llmCalls).toBe(0);
   });
 
+  function convergentJudgeLedger(
+    sessionId: string,
+    obs: ReconstructSourceObservationsArtifact["observations"][number],
+  ): ReconstructAnswerSupportLedgerArtifact {
+    return {
+      schema_version: "1",
+      session_id: sessionId,
+      created_at: "2026-06-15T00:00:00.000Z",
+      round_id: "maturation-round-1",
+      evidence_clusters: [{
+        evidence_cluster_id: "cluster-judge-cfg",
+        question_refs: ["q-1"],
+        support_mode: "convergent_source_evidence",
+        proposed_answer_summary: "Implemented in source-1.",
+        evidence_refs: [{
+          observation_id: obs.observation_id,
+          target_material_kind: obs.target_material_kind,
+          source_ref: obs.source_ref,
+          location: obs.location,
+        }],
+        proof_refs: [],
+        user_confirmation_refs: [],
+        authority_response_refs: [],
+        independence_basis: "withheld",
+        contradiction_refs: [],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "ledger-author" },
+    };
+  }
+
+  it("judge uses the opt-in judgeLlmConfig override when supplied", async () => {
+    const { sourceObservations } = answerSupportPromptFixture();
+    const firstObs = sourceObservations.observations[0]!;
+    const judgeConfigs: Array<Partial<{ model_id?: string; reasoning_effort?: string }>> = [];
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmConfig: { model_id: "author-model", reasoning_effort: "low" },
+      judgeLlmConfig: { model_id: "judge-model", reasoning_effort: "high" },
+      llmCall: (systemPrompt, userPrompt, config) => {
+        judgeConfigs.push(config ?? {});
+        return reconstructFixtureLlm(systemPrompt, userPrompt);
+      },
+    });
+
+    await author.writeAnswerSupportJudgment({
+      sessionId: sourceObservations.session_id,
+      roundId: "maturation-round-1",
+      answerSupportLedger: convergentJudgeLedger(sourceObservations.session_id, firstObs),
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      answerSupportLedgerValidation: validJudgeLedgerValidation(
+        sourceObservations.session_id,
+        1,
+      ),
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      sourceObservations,
+    });
+
+    expect(judgeConfigs).toHaveLength(1);
+    expect(judgeConfigs[0]!.model_id).toBe("judge-model");
+    expect(judgeConfigs[0]!.reasoning_effort).toBe("high");
+  });
+
+  it("judge inherits the author llmConfig when no judge override is supplied", async () => {
+    const { sourceObservations } = answerSupportPromptFixture();
+    const firstObs = sourceObservations.observations[0]!;
+    const judgeConfigs: Array<Partial<{ model_id?: string; reasoning_effort?: string }>> = [];
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmConfig: { model_id: "author-model", reasoning_effort: "low" },
+      llmCall: (systemPrompt, userPrompt, config) => {
+        judgeConfigs.push(config ?? {});
+        return reconstructFixtureLlm(systemPrompt, userPrompt);
+      },
+    });
+
+    await author.writeAnswerSupportJudgment({
+      sessionId: sourceObservations.session_id,
+      roundId: "maturation-round-1",
+      answerSupportLedger: convergentJudgeLedger(sourceObservations.session_id, firstObs),
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      answerSupportLedgerValidation: validJudgeLedgerValidation(
+        sourceObservations.session_id,
+        1,
+      ),
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      sourceObservations,
+    });
+
+    expect(judgeConfigs).toHaveLength(1);
+    expect(judgeConfigs[0]!.model_id).toBe("author-model");
+    expect(judgeConfigs[0]!.reasoning_effort).toBe("low");
+  });
+
   it("completes three consecutive mock-realization runs with runtime-owned execution telemetry", async () => {
     // The same author/provider instances are reused across all three runs so
     // run-scoped telemetry is proven: a prior run's rows must not leak into

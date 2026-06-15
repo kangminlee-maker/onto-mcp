@@ -30,6 +30,7 @@ import { createOntoReconstructCoreApi } from "../src/core-api/reconstruct-api.js
 import {
   gradeBenchmarkEvidence,
   requestedEffortForRealization,
+  requestedJudgeOverrideForRealization,
 } from "../src/core-runtime/reconstruct/benchmark-evidence.js";
 import {
   benchmarkFailureClassCounts,
@@ -66,6 +67,15 @@ interface HarnessOptions {
    * governs and applied_effort is taken from telemetry. Rejected for mock.
    */
   effort?: string;
+  /**
+   * Opt-in per-stage answer-support JUDGE overrides (live-only, like effort).
+   * judgeEffort runs the judge at a different reasoning effort; judgeModel swaps
+   * the judge MODEL on the semantic author's provider. Used to A/B the judge's
+   * semantic independence against same-model rubber-stamping. An unsupported
+   * judgeModel degrades to the author model (recorded as a runtime status note).
+   */
+  judgeEffort?: string;
+  judgeModel?: string;
   outputPath?: string;
   keepTmp: boolean;
   /** Re-derive a corrected report from an existing record without re-running. */
@@ -134,6 +144,10 @@ function usage(): string {
     "  --realization <mode>   mock | live (default mock; mock sets ONTO_LLM_MOCK=1)",
     "  --effort <level>       Pin reconstruct reasoning effort. live-only (rejected",
     "                         for mock); recorded as requested_effort.",
+    "  --judge-effort <level> Opt-in: run the answer-support judge at a different",
+    "                         reasoning effort. live-only.",
+    "  --judge-model <id>     Opt-in: swap the judge MODEL (on the author's provider).",
+    "                         live-only; unsupported model degrades to the author.",
     "  --reproject-from <p>   Re-derive a corrected report from an existing record",
     "                         (no re-execution); writes to --output or in place.",
     "  --output <path>        JSON output path (md sibling is derived)",
@@ -169,6 +183,14 @@ function parseOptions(argv: string[]): HarnessOptions {
       const effort = argv[++index];
       if (!effort) throw new Error("--effort requires a value");
       options.effort = effort;
+    } else if (arg === "--judge-effort") {
+      const judgeEffort = argv[++index];
+      if (!judgeEffort) throw new Error("--judge-effort requires a value");
+      options.judgeEffort = judgeEffort;
+    } else if (arg === "--judge-model") {
+      const judgeModel = argv[++index];
+      if (!judgeModel) throw new Error("--judge-model requires a value");
+      options.judgeModel = judgeModel;
     } else if (arg === "--reproject-from") {
       const from = argv[++index];
       if (!from) throw new Error("--reproject-from requires a path");
@@ -192,6 +214,14 @@ function parseOptions(argv: string[]): HarnessOptions {
     // Effort only affects the live provider path; the mock route ignores it.
     // Reject it for mock so a record can never encode an unapplied effort.
     throw new Error("--effort applies only to --realization live");
+  }
+  if (
+    (options.judgeEffort !== undefined || options.judgeModel !== undefined) &&
+    options.realization !== "live"
+  ) {
+    // The judge override only affects real provider calls; mock ignores it.
+    // Reject for mock so a record never encodes an unapplied judge override.
+    throw new Error("--judge-effort/--judge-model apply only to --realization live");
   }
   // No hard-coded effort default (INV-CFG-1): when --effort is omitted the
   // settings chain governs the provider effort and applied_effort is recorded
@@ -292,6 +322,8 @@ async function executeRun(args: {
   fixtureId: ReconstructQualityGateFixtureId;
   realization: Realization;
   effort?: string;
+  judgeEffort?: string;
+  judgeModel?: string;
   runIndex: number;
   commit: string;
   keepTmp: boolean;
@@ -310,6 +342,8 @@ async function executeRun(args: {
       semanticAuthorRealization: "direct_call",
       confirmationProviderRealization: "direct_call",
       ...(args.effort ? { llmEffort: args.effort } : {}),
+      ...(args.judgeEffort ? { judgeLlmEffort: args.judgeEffort } : {}),
+      ...(args.judgeModel ? { judgeModel: args.judgeModel } : {}),
     });
     const durationS = (Date.now() - startedMs) / 1000;
     const manifest: ReconstructRunManifestArtifact = result.reconstructRunManifest;
@@ -504,6 +538,8 @@ interface BuildReportArgs {
   failedRuns: BenchmarkFailedRun[];
   realization: Realization;
   effort?: string;
+  judgeEffort?: string;
+  judgeModel?: string;
   fixtureIds: ReconstructQualityGateFixtureId[];
   repetitions: number;
   commit: string;
@@ -558,6 +594,13 @@ function buildReport(args: BuildReportArgs): Record<string, unknown> {
     requested_effort: requestedEffortForRealization(
       args.realization,
       args.effort,
+    ),
+    // Opt-in answer-support judge override that was requested (live-only, null
+    // when none): keeps the record reproducible symmetric to requested_effort.
+    requested_judge_override: requestedJudgeOverrideForRealization(
+      args.realization,
+      args.judgeEffort,
+      args.judgeModel,
     ),
     fixtures: args.fixtureIds,
     repetitions: args.repetitions,
@@ -665,6 +708,7 @@ async function reprojectRecord(options: HarnessOptions): Promise<void> {
     realization: Realization;
     effort?: string | null;
     requested_effort?: string | null;
+    requested_judge_override?: { effort?: string | null; model?: string | null } | null;
     fixtures: ReconstructQualityGateFixtureId[];
     repetitions: number;
     commit: string;
@@ -692,11 +736,14 @@ async function reprojectRecord(options: HarnessOptions): Promise<void> {
     failure_class: classifyBenchmarkRunFailure(failed.error_message),
   }));
   const requestedEffort = loaded.requested_effort ?? loaded.effort ?? undefined;
+  const requestedJudge = loaded.requested_judge_override ?? undefined;
   const report = buildReport({
     runs,
     failedRuns,
     realization: loaded.realization,
     ...(requestedEffort ? { effort: requestedEffort } : {}),
+    ...(requestedJudge?.effort ? { judgeEffort: requestedJudge.effort } : {}),
+    ...(requestedJudge?.model ? { judgeModel: requestedJudge.model } : {}),
     fixtureIds: loaded.fixtures,
     repetitions: loaded.repetitions,
     commit: loaded.commit,
@@ -746,6 +793,8 @@ async function main(): Promise<void> {
         failedRuns,
         realization: options.realization,
         ...(options.effort ? { effort: options.effort } : {}),
+        ...(options.judgeEffort ? { judgeEffort: options.judgeEffort } : {}),
+        ...(options.judgeModel ? { judgeModel: options.judgeModel } : {}),
         fixtureIds: options.fixtureIds,
         repetitions: options.runs,
         commit,
@@ -772,6 +821,8 @@ async function main(): Promise<void> {
               fixtureId,
               realization: options.realization,
               ...(options.effort ? { effort: options.effort } : {}),
+              ...(options.judgeEffort ? { judgeEffort: options.judgeEffort } : {}),
+              ...(options.judgeModel ? { judgeModel: options.judgeModel } : {}),
               runIndex,
               commit,
               keepTmp: options.keepTmp,
@@ -809,6 +860,8 @@ async function main(): Promise<void> {
     failedRuns,
     realization: options.realization,
     ...(options.effort ? { effort: options.effort } : {}),
+    ...(options.judgeEffort ? { judgeEffort: options.judgeEffort } : {}),
+    ...(options.judgeModel ? { judgeModel: options.judgeModel } : {}),
     fixtureIds: options.fixtureIds,
     repetitions: options.runs,
     commit,

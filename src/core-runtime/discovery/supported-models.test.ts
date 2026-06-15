@@ -4,6 +4,7 @@ import {
   assertSupportedModelRoutes,
   collectModelSelections,
   exactTrackedMode,
+  isSupportedModelRoute,
   type SupportedModelRegistry,
 } from "./supported-models.js";
 import {
@@ -137,6 +138,22 @@ describe("exactTrackedMode", () => {
 
   it("returns null for untracked (empty) output", () => {
     expect(exactTrackedMode("", "anything.json")).toBeNull();
+  });
+});
+
+describe("isSupportedModelRoute", () => {
+  it("returns true for a registered (provider, model) pair", () => {
+    expect(isSupportedModelRoute("openai", "gpt-5.5", registry)).toBe(true);
+  });
+
+  it("returns false for an unregistered pair (judge override degrades)", () => {
+    expect(isSupportedModelRoute("openai", "gpt-9", registry)).toBe(false);
+    expect(isSupportedModelRoute("anthropic", "gpt-5.5", registry)).toBe(false);
+  });
+
+  it("returns false when provider or model is unresolved", () => {
+    expect(isSupportedModelRoute(undefined, "gpt-5.5", registry)).toBe(false);
+    expect(isSupportedModelRoute("openai", undefined, registry)).toBe(false);
   });
 });
 

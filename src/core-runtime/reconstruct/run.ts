@@ -5851,11 +5851,19 @@ function isLlmTimeoutError(error: unknown): boolean {
 
 export function createDirectCallReconstructDirectiveAuthor(args: {
   llmConfig?: Partial<LlmCallConfig>;
+  /**
+   * Optional per-stage config for the answer-support JUDGE only (opt-in
+   * semantic-independence lever). When omitted, the judge inherits llmConfig
+   * (default — zero change). The orchestrator (reconstruct-api) resolves this,
+   * including the degrade-to-author decision for an unsupported model override.
+   */
+  judgeLlmConfig?: Partial<LlmCallConfig>;
   llmCall?: ReconstructLlmCall;
   authorId?: string;
 } = {}): ReconstructDirectiveAuthor {
   const authorId = args.authorId ?? "direct-call-reconstruct-directive-author";
   const llmConfig = args.llmConfig ?? {};
+  const judgeLlmConfig = args.judgeLlmConfig ?? llmConfig;
   const llmCall = args.llmCall ?? callLlm;
   const telemetry = createReconstructExecutionTelemetryCollector();
   const baseSystem = [
@@ -8450,7 +8458,12 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       ];
       const raw = await callJsonAuthor({
         llmCall,
-        llmConfig,
+        // Per-stage judge config (opt-in). Defaults to llmConfig (== author) so
+        // the judge inherits the author model/effort unless an override was
+        // resolved upstream — the structural separation is unchanged; this only
+        // lets the judge optionally run with a different model/effort to reduce
+        // same-model rubber-stamping.
+        llmConfig: judgeLlmConfig,
         telemetry,
         artifactName: "AnswerSupportJudgment",
         maxTokens: 3200,
