@@ -611,18 +611,39 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     ],
   },
   {
+    unitId: "answer_support_judgment",
+    unitKind: "semantic_answer_support_judgment",
+    owner: "host_llm",
+    artifactKey: "answer_support_judgment",
+    upstreamUnitIds: ["answer_support_ledger_validation"],
+  },
+  {
+    unitId: "answer_support_judgment_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "answer_support_judgment_validation",
+    upstreamUnitIds: [
+      "answer_support_judgment",
+      "answer_support_ledger_validation",
+    ],
+  },
+  {
     unitId: "maturation_answer_claims",
     unitKind: "semantic_answer_claims",
     owner: "host_llm",
     artifactKey: "maturation_answer_claims",
-    upstreamUnitIds: ["answer_support_ledger_validation"],
+    upstreamUnitIds: ["answer_support_judgment_validation"],
   },
   {
     unitId: "maturation_answer_claims_validation",
     unitKind: "runtime_validation",
     owner: "runtime",
     artifactKey: "maturation_answer_claims_validation",
-    upstreamUnitIds: ["maturation_answer_claims", "answer_support_ledger_validation"],
+    upstreamUnitIds: [
+      "maturation_answer_claims",
+      "answer_support_judgment_validation",
+      "answer_support_ledger_validation",
+    ],
   },
   {
     unitId: "ontology_expansion",
@@ -873,6 +894,7 @@ const VALIDATION_GATE_BY_AUTHORED_UNIT = new Map<ReconstructStageId, Reconstruct
   ["maturation_question_frontier", "maturation_question_frontier_validation"],
   ["maturation_closure_frontier", "maturation_closure_frontier_validation"],
   ["answer_support_ledger", "answer_support_ledger_validation"],
+  ["answer_support_judgment", "answer_support_judgment_validation"],
   ["maturation_answer_claims", "maturation_answer_claims_validation"],
   ["ontology_expansion", "ontology_expansion_validation"],
   ["maturation_source_delta", "maturation_source_delta_validation"],
@@ -947,6 +969,7 @@ const PRESENCE_INPUTS_BY_RUNTIME_VALIDATION = new Map<
     ["maturation_authority_response"],
   ],
   ["answer_support_ledger_validation", ["answer_support_ledger"]],
+  ["answer_support_judgment_validation", ["answer_support_judgment"]],
   ["maturation_answer_claims_validation", ["maturation_answer_claims"]],
   ["ontology_expansion_validation", ["ontology_expansion"]],
   [

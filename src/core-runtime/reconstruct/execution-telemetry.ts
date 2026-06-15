@@ -101,6 +101,7 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     ["MaturationQuestionFrontier", "maturation_question_frontier"],
     ["MaturationClosureFrontier", "maturation_closure_frontier"],
     ["AnswerSupportLedger", "answer_support_ledger"],
+    ["AnswerSupportJudgment", "answer_support_judgment"],
     ["MaturationAnswerClaims", "maturation_answer_claims"],
     ["OntologyExpansion", "ontology_expansion"],
     ["FinalOutput", "final_output"],

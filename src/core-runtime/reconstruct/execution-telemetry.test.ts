@@ -28,6 +28,8 @@ describe("reconstruct execution telemetry", () => {
     expect(unitIdForAuthoredArtifactName("FinalOutput")).toBe("final_output");
     expect(unitIdForAuthoredArtifactName("PurposeConfirmation"))
       .toBe("purpose_confirmation");
+    expect(unitIdForAuthoredArtifactName("AnswerSupportJudgment"))
+      .toBe("answer_support_judgment");
     expect(() => unitIdForAuthoredArtifactName("UnknownArtifact"))
       .toThrow(/no telemetry unit mapping/);
   });

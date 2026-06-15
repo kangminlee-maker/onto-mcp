@@ -3,6 +3,7 @@ import type {
   ReconstructActionabilityMatrixValidationArtifact,
   ReconstructAnswerSupportLedgerArtifact,
   ReconstructAnswerSupportLedgerValidationArtifact,
+  ReconstructAnswerSupportJudgmentArtifact,
   ReconstructActionabilityMatrixArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
@@ -41,6 +42,7 @@ import {
   buildMaturationContinuationDecisionArtifact,
   buildMaturationSourceDeltaArtifact,
   validateAnswerSupportLedger,
+  validateAnswerSupportJudgment,
   validateActionabilityMatrix,
   validateActionableOntology,
   validateMaturationAuthorityResponse,
@@ -2652,5 +2654,411 @@ describe("maturation validation", () => {
     expect(
       falseLimitedOntologyValidation.violations.map((violation) => violation.code),
     ).toContain("missing_required_ref");
+  });
+
+  const evidence2: ReconstructEvidenceRef = {
+    observation_id: "obs-code-2",
+    target_material_kind: "code",
+    source_ref: "src/other.ts",
+    location: "src/other.ts",
+  };
+
+  function convergentLedger(): ReconstructAnswerSupportLedgerArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      evidence_clusters: [{
+        evidence_cluster_id: "cluster-convergent",
+        question_refs: ["mq-feature-object"],
+        support_mode: "convergent_source_evidence",
+        proposed_answer_summary: "Two independent sources support the answer.",
+        evidence_refs: [evidence, evidence2],
+        proof_refs: [],
+        user_confirmation_refs: [],
+        authority_response_refs: [],
+        independence_basis: "two distinct sources",
+        contradiction_refs: [],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "ledger-author" },
+    };
+  }
+
+  function judgmentArtifact(
+    rows: Array<{
+      evidence?: ReconstructEvidenceRef;
+      cluster?: string;
+      supports?: "supported" | "not_supported";
+      rationale?: string;
+      id?: string;
+    }>,
+  ): ReconstructAnswerSupportJudgmentArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      answer_support_ledger_ref: "answer-support-ledger.yaml",
+      answer_support_ledger_validation_ref:
+        "answer-support-ledger-validation.yaml",
+      judgments: rows.map((row, index) => ({
+        judgment_id: row.id ?? `j-${index + 1}`,
+        evidence_cluster_ref: row.cluster ?? "cluster-convergent",
+        evidence_ref: row.evidence ?? evidence,
+        supports: row.supports ?? "supported",
+        rationale_ref: row.rationale ?? `rationale-${index + 1}`,
+      })),
+      directive_author: { owner: "host_llm", author_id: "judge-author" },
+    };
+  }
+
+  it("B-5: valid when every convergent evidence is judged with a rationale", () => {
+    const validation = validateAnswerSupportJudgment({
+      answerSupportJudgment: judgmentArtifact([{ evidence }, { evidence: evidence2 }]),
+      answerSupportLedger: convergentLedger(),
+      answerSupportLedgerValidation: emptyAnswerSupportValidation(),
+    });
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.judgment_count).toBe(2);
+    expect(validation.supported_judgment_count).toBe(2);
+  });
+
+  it("B-5: missing_required_coverage when a convergent evidence ref is omitted (Codex #3)", () => {
+    const validation = validateAnswerSupportJudgment({
+      answerSupportJudgment: judgmentArtifact([{ evidence }]),
+      answerSupportLedger: convergentLedger(),
+      answerSupportLedgerValidation: emptyAnswerSupportValidation(),
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code))
+      .toContain("missing_required_coverage");
+  });
+
+  it("B-5: unknown_id / invalid_enum / missing_required_ref / duplicate_id", () => {
+    const validation = validateAnswerSupportJudgment({
+      answerSupportJudgment: {
+        schema_version: "1",
+        session_id: "session-1",
+        created_at: now,
+        round_id: "maturation-round-1",
+        answer_support_ledger_ref: null,
+        answer_support_ledger_validation_ref: null,
+        judgments: [
+          {
+            judgment_id: "dup",
+            evidence_cluster_ref: "cluster-convergent",
+            evidence_ref: evidence,
+            supports: "supported",
+            rationale_ref: "r",
+          },
+          {
+            judgment_id: "dup",
+            evidence_cluster_ref: "no-such-cluster",
+            evidence_ref: evidence2,
+            supports: "maybe" as "supported",
+            rationale_ref: "   ",
+          },
+        ],
+        directive_author: { owner: "host_llm", author_id: "judge-author" },
+      },
+      answerSupportLedger: convergentLedger(),
+      answerSupportLedgerValidation: emptyAnswerSupportValidation(),
+    });
+    const codes = validation.violations.map((v) => v.code);
+    expect(codes).toContain("duplicate_id");
+    expect(codes).toContain("unknown_id");
+    expect(codes).toContain("invalid_enum");
+    expect(codes).toContain("missing_required_ref");
+  });
+
+  it("B-5: prior_validation_invalid when the support-ledger validation is invalid", () => {
+    const validation = validateAnswerSupportJudgment({
+      answerSupportJudgment: judgmentArtifact([{ evidence }, { evidence: evidence2 }]),
+      answerSupportLedger: convergentLedger(),
+      answerSupportLedgerValidation: {
+        ...emptyAnswerSupportValidation(),
+        validation_status: "invalid",
+      },
+    });
+    expect(validation.violations.map((v) => v.code))
+      .toContain("prior_validation_invalid");
+  });
+
+  it("B-5: non-convergent cluster allows a partial judgment (no coverage requirement)", () => {
+    const ledger = convergentLedger();
+    ledger.evidence_clusters[0]!.support_mode = "direct_authority";
+    const validation = validateAnswerSupportJudgment({
+      answerSupportJudgment: judgmentArtifact([{ evidence }]),
+      answerSupportLedger: ledger,
+      answerSupportLedgerValidation: emptyAnswerSupportValidation(),
+    });
+    expect(validation.validation_status).toBe("valid");
+  });
+
+  it("B-5: duplicate_id when the same (cluster, evidence) pair gets two conflicting verdicts", () => {
+    // The laundering exploit: same evidence judged supported AND not_supported.
+    // Must be invalid so B-6 cannot silently keep the 'supported' verdict.
+    const validation = validateAnswerSupportJudgment({
+      answerSupportJudgment: judgmentArtifact([
+        { evidence, supports: "supported", id: "j1" },
+        { evidence, supports: "not_supported", id: "j2" },
+        { evidence: evidence2, supports: "supported", id: "j3" },
+      ]),
+      answerSupportLedger: convergentLedger(),
+      answerSupportLedgerValidation: emptyAnswerSupportValidation(),
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code)).toContain("duplicate_id");
+  });
+
+  it("B-5: convergent coverage is satisfied when a cited ref is judged not_supported", () => {
+    const validation = validateAnswerSupportJudgment({
+      answerSupportJudgment: judgmentArtifact([
+        { evidence, supports: "supported" },
+        { evidence: evidence2, supports: "not_supported" },
+      ]),
+      answerSupportLedger: convergentLedger(),
+      answerSupportLedgerValidation: emptyAnswerSupportValidation(),
+    });
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations.map((v) => v.code))
+      .not.toContain("missing_required_coverage");
+    expect(validation.supported_judgment_count).toBe(1);
+  });
+
+  function convergentClaimScenario() {
+    const { frontier, frontierValidation } = frontierScenario();
+    const observations = sourceObservations(["src/feature.ts", "src/other.ts"]);
+    const safety = sourceSafetyAuthority(observations);
+    const ledger = convergentLedger();
+    const ledgerValidation = validateAnswerSupportLedger({
+      answerSupportLedger: ledger,
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      sourceObservations: observations,
+      ...safety,
+    });
+    const answerClaims: ReconstructMaturationAnswerClaimsArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      answer_claims: [{
+        answer_claim_id: "answer-claim-feature-object",
+        question_id: "mq-feature-object",
+        answer: "Two independent sources support the feature object.",
+        answer_status: "answered",
+        support_mode: "convergent_source_evidence",
+        evidence_cluster_refs: ["cluster-convergent"],
+        supporting_evidence_refs: [evidence, evidence2],
+        target_surface_refs: ["static_surface"],
+        target_dimension_refs: ["structure"],
+        purpose_element_refs: ["purpose-element-feature-object"],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "test-author" },
+    };
+    return { frontier, frontierValidation, ledger, ledgerValidation, answerClaims };
+  }
+
+  function claimsValidationWithJudge(
+    scenario: ReturnType<typeof convergentClaimScenario>,
+    judgment: ReconstructAnswerSupportJudgmentArtifact | null,
+  ) {
+    const judgmentValidation = judgment
+      ? validateAnswerSupportJudgment({
+        answerSupportJudgment: judgment,
+        answerSupportLedger: scenario.ledger,
+        answerSupportLedgerValidation: scenario.ledgerValidation,
+      })
+      : null;
+    return validateMaturationAnswerClaims({
+      maturationAnswerClaims: scenario.answerClaims,
+      maturationAnswerClaimsRef: "maturation-answer-claims.yaml",
+      answerSupportLedger: scenario.ledger,
+      answerSupportLedgerValidation: scenario.ledgerValidation,
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationQuestionFrontier: scenario.frontier,
+      maturationQuestionFrontierValidation: scenario.frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      answerSupportJudgment: judgment,
+      answerSupportJudgmentValidation: judgmentValidation,
+      answerSupportJudgmentValidationRef: judgment
+        ? "answer-support-judgment-validation.yaml"
+        : null,
+    });
+  }
+
+  it("B-6: convergent claim valid with two independent judge-confirmed supports", () => {
+    const scenario = convergentClaimScenario();
+    const validation = claimsValidationWithJudge(
+      scenario,
+      judgmentArtifact([{ evidence }, { evidence: evidence2 }]),
+    );
+    expect(scenario.ledgerValidation.validation_status).toBe("valid");
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.answer_support_judgment_validation_ref)
+      .toBe("answer-support-judgment-validation.yaml");
+  });
+
+  it("B-6: insufficient_independent_evidence when fewer than two are judge-confirmed", () => {
+    const scenario = convergentClaimScenario();
+    const validation = claimsValidationWithJudge(
+      scenario,
+      judgmentArtifact([
+        { evidence, supports: "supported" },
+        { evidence: evidence2, supports: "not_supported" },
+      ]),
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code))
+      .toContain("insufficient_independent_evidence");
+  });
+
+  it("B-6: fail-closed — a convergent claim without a valid judgment is invalid", () => {
+    const scenario = convergentClaimScenario();
+    const validation = claimsValidationWithJudge(scenario, null);
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code))
+      .toContain("prior_validation_invalid");
+  });
+
+  it("B-6: same-source supported refs collapse to one independent support (insufficient)", () => {
+    // Two clusters whose supported evidence shares the same source_ref:location;
+    // the INDEPENDENCE key collapses them to 1, so >=2 is not met even though two
+    // separate (cluster, evidence) IDENTITY pairs were judge-confirmed.
+    const { frontier, frontierValidation } = frontierScenario();
+    const sameSourceA: ReconstructEvidenceRef = {
+      observation_id: "obs-code-1",
+      target_material_kind: "code",
+      source_ref: "src/feature.ts",
+      location: "src/feature.ts",
+    };
+    const sameSourceB: ReconstructEvidenceRef = {
+      observation_id: "obs-code-1b",
+      target_material_kind: "code",
+      source_ref: "src/feature.ts",
+      location: "src/feature.ts",
+    };
+    const ledger: ReconstructAnswerSupportLedgerArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      evidence_clusters: [
+        {
+          evidence_cluster_id: "cluster-a",
+          question_refs: ["mq-feature-object"],
+          support_mode: "convergent_source_evidence",
+          proposed_answer_summary: "Cluster A.",
+          evidence_refs: [sameSourceA],
+          proof_refs: [],
+          user_confirmation_refs: [],
+          authority_response_refs: [],
+          independence_basis: "a",
+          contradiction_refs: [],
+          limitation_refs: [],
+        },
+        {
+          evidence_cluster_id: "cluster-b",
+          question_refs: ["mq-feature-object"],
+          support_mode: "convergent_source_evidence",
+          proposed_answer_summary: "Cluster B.",
+          evidence_refs: [sameSourceB],
+          proof_refs: [],
+          user_confirmation_refs: [],
+          authority_response_refs: [],
+          independence_basis: "b",
+          contradiction_refs: [],
+          limitation_refs: [],
+        },
+      ],
+      directive_author: { owner: "host_llm", author_id: "ledger-author" },
+    };
+    // Bypass the ledger envelope check (each cluster has a single ref here, which
+    // the ledger validator would flag); this test isolates the B-6 INDEPENDENCE
+    // collapse, where two judge-confirmed refs sharing one source:location count as 1.
+    const ledgerValidation: ReconstructAnswerSupportLedgerValidationArtifact = {
+      ...emptyAnswerSupportValidation(),
+      evidence_cluster_count: 2,
+      supported_question_count: 1,
+    };
+    const judgment: ReconstructAnswerSupportJudgmentArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      answer_support_ledger_ref: "answer-support-ledger.yaml",
+      answer_support_ledger_validation_ref: "answer-support-ledger-validation.yaml",
+      judgments: [
+        { judgment_id: "j-a", evidence_cluster_ref: "cluster-a", evidence_ref: sameSourceA, supports: "supported", rationale_ref: "ra" },
+        { judgment_id: "j-b", evidence_cluster_ref: "cluster-b", evidence_ref: sameSourceB, supports: "supported", rationale_ref: "rb" },
+      ],
+      directive_author: { owner: "host_llm", author_id: "judge-author" },
+    };
+    const judgmentValidation = validateAnswerSupportJudgment({
+      answerSupportJudgment: judgment,
+      answerSupportLedger: ledger,
+      answerSupportLedgerValidation: ledgerValidation,
+    });
+    const answerClaims: ReconstructMaturationAnswerClaimsArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      answer_claims: [{
+        answer_claim_id: "answer-claim-feature-object",
+        question_id: "mq-feature-object",
+        answer: "Two same-source refs.",
+        answer_status: "answered",
+        support_mode: "convergent_source_evidence",
+        evidence_cluster_refs: ["cluster-a", "cluster-b"],
+        supporting_evidence_refs: [sameSourceA, sameSourceB],
+        target_surface_refs: ["static_surface"],
+        target_dimension_refs: ["structure"],
+        purpose_element_refs: ["purpose-element-feature-object"],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "test-author" },
+    };
+    const validation = validateMaturationAnswerClaims({
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsRef: "maturation-answer-claims.yaml",
+      answerSupportLedger: ledger,
+      answerSupportLedgerValidation: ledgerValidation,
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      answerSupportJudgment: judgment,
+      answerSupportJudgmentValidation: judgmentValidation,
+      answerSupportJudgmentValidationRef: "answer-support-judgment-validation.yaml",
+    });
+    expect(judgmentValidation.validation_status).toBe("valid");
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code))
+      .toContain("insufficient_independent_evidence");
+  });
+
+  it("B-6: convergent claim that omits judge-confirmed evidence from its own refs is insufficient", () => {
+    // Both clusters' evidence are judge-confirmed, but the claim only carries one
+    // supporting_evidence_ref. Sufficiency follows the claim's OWN refs (Codex #3),
+    // so this must fail even though the clusters contain two confirmed refs.
+    const scenario = convergentClaimScenario();
+    scenario.answerClaims.answer_claims[0]!.supporting_evidence_refs = [evidence];
+    const validation = claimsValidationWithJudge(
+      scenario,
+      judgmentArtifact([{ evidence }, { evidence: evidence2 }]),
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code))
+      .toContain("insufficient_independent_evidence");
   });
 });

@@ -32,6 +32,8 @@ import type {
   ReconstructSourceObservationReentryValidationArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceObservationsArtifact,
+  ReconstructAnswerSupportLedgerArtifact,
+  ReconstructAnswerSupportLedgerValidationArtifact,
   ReconstructSourcePurposeCandidatesArtifact,
   ReconstructSourcePurposeCandidatesValidationArtifact,
   ReconstructSourceScoutPackArtifact,
@@ -2201,6 +2203,140 @@ describe("runReconstruct", () => {
     })).rejects.toThrow(/outside the bounded prompt catalog/);
   });
 
+  function validJudgeLedgerValidation(
+    sessionId: string,
+    evidenceClusterCount: number,
+  ): ReconstructAnswerSupportLedgerValidationArtifact {
+    return {
+      schema_version: "1",
+      session_id: sessionId,
+      created_at: "2026-06-15T00:00:00.000Z",
+      answer_support_ledger_ref: "answer-support-ledger.yaml",
+      maturation_question_frontier_validation_ref: null,
+      source_observation_delta_ref: null,
+      source_observation_lineage_index_ref: null,
+      source_observation_lineage_index_validation_ref: null,
+      source_observation_reentry_validation_ref: null,
+      source_safety_ledger_validation_ref: null,
+      maturation_authority_response_validation_ref: null,
+      validation_status: "valid",
+      evidence_cluster_count: evidenceClusterCount,
+      supported_question_count: evidenceClusterCount,
+      validation_results: [],
+      violations: [],
+    };
+  }
+
+  it("judges each cited evidence with context isolation and lifts evidence_ref deterministically", async () => {
+    const { sourceObservations } = answerSupportPromptFixture();
+    const firstObs = sourceObservations.observations[0]!;
+    const ledger: ReconstructAnswerSupportLedgerArtifact = {
+      schema_version: "1",
+      session_id: sourceObservations.session_id,
+      created_at: "2026-06-15T00:00:00.000Z",
+      round_id: "maturation-round-1",
+      evidence_clusters: [{
+        evidence_cluster_id: "cluster-judge-1",
+        question_refs: ["q-1"],
+        support_mode: "convergent_source_evidence",
+        proposed_answer_summary: "The feature is implemented in source-1.",
+        evidence_refs: [{
+          observation_id: firstObs.observation_id,
+          target_material_kind: firstObs.target_material_kind,
+          source_ref: firstObs.source_ref,
+          location: firstObs.location,
+        }],
+        proof_refs: [],
+        user_confirmation_refs: [],
+        authority_response_refs: [],
+        independence_basis: "AUTHOR-SELF-JUSTIFICATION-WITHHELD",
+        contradiction_refs: [],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "ledger-author" },
+    };
+    let capturedPayload: Record<string, any> | null = null;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: (systemPrompt, userPrompt) => {
+        expect(systemPrompt).toContain("Author answer-support-judgment.yaml");
+        capturedPayload = JSON.parse(userPrompt) as Record<string, any>;
+        return reconstructFixtureLlm(systemPrompt, userPrompt);
+      },
+    });
+
+    const judgment = await author.writeAnswerSupportJudgment({
+      sessionId: sourceObservations.session_id,
+      roundId: "maturation-round-1",
+      answerSupportLedger: ledger,
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      answerSupportLedgerValidation: validJudgeLedgerValidation(
+        sourceObservations.session_id,
+        1,
+      ),
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      sourceObservations,
+    });
+
+    expect(judgment.judgments).toHaveLength(1);
+    expect(judgment.judgments[0]!.supports).toBe("supported");
+    // evidence_ref is lifted to the full object (deterministic, out of LLM authority).
+    expect(judgment.judgments[0]!.evidence_ref).toEqual({
+      observation_id: firstObs.observation_id,
+      target_material_kind: firstObs.target_material_kind,
+      source_ref: firstObs.source_ref,
+      location: firstObs.location,
+    });
+    expect(judgment.judgments[0]!.rationale_ref.length).toBeGreaterThan(0);
+    expect(judgment.directive_author.owner).toBe("host_llm");
+
+    // Context isolation: the ledger author's independence_basis is withheld, and
+    // the per-cluster payload carries only the isolation-safe fields + evidence ids.
+    const payloadJson = JSON.stringify(capturedPayload);
+    expect(payloadJson).not.toContain("AUTHOR-SELF-JUSTIFICATION-WITHHELD");
+    expect(payloadJson).not.toContain("independence_basis");
+    expect(capturedPayload!.evidence_clusters[0]).toEqual({
+      evidence_cluster_id: "cluster-judge-1",
+      support_mode: "convergent_source_evidence",
+      proposed_answer_summary: "The feature is implemented in source-1.",
+      evidence_observation_ids: [firstObs.observation_id],
+    });
+  });
+
+  it("early-exits with empty judgments and no LLM call for an empty ledger", async () => {
+    const { sourceObservations } = answerSupportPromptFixture();
+    let llmCalls = 0;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () => {
+        llmCalls += 1;
+        return Promise.resolve({ text: "{}" });
+      },
+    });
+    const ledger: ReconstructAnswerSupportLedgerArtifact = {
+      schema_version: "1",
+      session_id: sourceObservations.session_id,
+      created_at: "2026-06-15T00:00:00.000Z",
+      round_id: "maturation-round-1",
+      evidence_clusters: [],
+      directive_author: { owner: "host_llm", author_id: "ledger-author" },
+    };
+
+    const judgment = await author.writeAnswerSupportJudgment({
+      sessionId: sourceObservations.session_id,
+      roundId: "maturation-round-1",
+      answerSupportLedger: ledger,
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      answerSupportLedgerValidation: validJudgeLedgerValidation(
+        sourceObservations.session_id,
+        0,
+      ),
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      sourceObservations,
+    });
+
+    expect(judgment.judgments).toEqual([]);
+    expect(llmCalls).toBe(0);
+  });
+
   it("completes three consecutive mock-realization runs with runtime-owned execution telemetry", async () => {
     // The same author/provider instances are reused across all three runs so
     // run-scoped telemetry is proven: a prior run's rows must not leak into
@@ -2437,6 +2573,16 @@ describe("runReconstruct", () => {
       .toContain("claim-projection-validation.yaml");
     expect(record.artifact_refs.final_output_provenance_validation)
       .toContain("final-output-provenance-validation.yaml");
+    expect(record.artifact_refs.answer_support_judgment)
+      .toContain("answer-support-judgment.yaml");
+    expect(record.artifact_refs.answer_support_judgment_validation)
+      .toContain("answer-support-judgment-validation.yaml");
+    // judge stage provenance classification (record.ts runtime_boundary lists are
+    // hardcoded, not compiler-enforced): authored -> llm, validation -> runtime.
+    expect(record.runtime_boundary.llm_owned_directives)
+      .toContain("answer_support_judgment");
+    expect(record.runtime_boundary.runtime_owned_gates)
+      .toContain("answer_support_judgment_validation");
     expect(record.validation_summary).toMatchObject({
       target_material_profile_status: "valid",
       source_observation_directive_status: "valid",
@@ -2712,6 +2858,8 @@ describe("runReconstruct", () => {
       "maturation_authority_response_validation",
       "answer_support_ledger",
       "answer_support_ledger_validation",
+      "answer_support_judgment",
+      "answer_support_judgment_validation",
       "maturation_answer_claims",
       "maturation_answer_claims_validation",
       "ontology_expansion",

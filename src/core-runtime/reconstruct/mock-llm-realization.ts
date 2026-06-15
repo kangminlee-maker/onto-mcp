@@ -854,6 +854,25 @@ export function callReconstructMockLlm(
     text = JSON.stringify({
       evidence_clusters: [],
     });
+  } else if (systemPrompt.includes("Author answer-support-judgment.yaml")) {
+    // Mirrors the judge author payload shape: per-cluster
+    // {evidence_cluster_id, evidence_observation_ids}. Returns one supported
+    // judgment per cited evidence to exercise the supported path deterministically.
+    const judgeClusters = (input.evidence_clusters ?? []) as Array<{
+      evidence_cluster_id: string;
+      evidence_observation_ids?: string[];
+    }>;
+    text = JSON.stringify({
+      judgments: judgeClusters.flatMap((cluster) =>
+        (cluster.evidence_observation_ids ?? []).map((observationId, index) => ({
+          judgment_id: `${cluster.evidence_cluster_id}-judgment-${index + 1}`,
+          evidence_cluster_ref: cluster.evidence_cluster_id,
+          evidence_observation_id: observationId,
+          supports: "supported",
+          rationale_ref: `rationale:${cluster.evidence_cluster_id}:${observationId}`,
+        }))
+      ),
+    });
   } else if (systemPrompt.includes("Author maturation-answer-claims.yaml")) {
     text = JSON.stringify({
       answer_claims: [],

@@ -1637,6 +1637,8 @@ export const RECONSTRUCT_STAGE_IDS = [
   "maturation_authority_response_validation",
   "answer_support_ledger",
   "answer_support_ledger_validation",
+  "answer_support_judgment",
+  "answer_support_judgment_validation",
   "maturation_answer_claims",
   "maturation_answer_claims_validation",
   "ontology_expansion",
@@ -2266,6 +2268,47 @@ export interface ReconstructAnswerSupportLedgerArtifact {
   };
 }
 
+// Independent judge verdict over answer-support evidence, authored as a SEPARATE
+// artifact from the support ledger so author != judge is enforced structurally
+// (1:1 telemetry attribution via UNIT_ID_BY_AUTHORED_ARTIFACT_NAME), not by a
+// spoofable self-declared identity field. Each judgment = one (cluster, evidence)
+// pair; sufficiency/independence are computed downstream (B-6), never here.
+export interface ReconstructAnswerSupportJudgment {
+  judgment_id: string;
+  evidence_cluster_ref: string;
+  evidence_ref: ReconstructEvidenceRef;
+  supports: "supported" | "not_supported";
+  rationale_ref: string;
+}
+
+export interface ReconstructAnswerSupportJudgmentArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  round_id: string;
+  answer_support_ledger_ref: string | null;
+  answer_support_ledger_validation_ref: string | null;
+  judgments: ReconstructAnswerSupportJudgment[];
+  directive_author: {
+    owner: "host_llm";
+    author_id: string;
+  };
+}
+
+export interface ReconstructAnswerSupportJudgmentValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  answer_support_judgment_ref: string | null;
+  answer_support_ledger_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  judgment_count: number;
+  // raw count projection — NOT a sufficiency verdict; B-6 owns sufficiency.
+  supported_judgment_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
 export interface ReconstructAnswerSupportLedgerValidationArtifact {
   schema_version: "1";
   session_id: string;
@@ -2317,6 +2360,8 @@ export interface ReconstructMaturationAnswerClaimsValidationArtifact {
   created_at: string;
   maturation_answer_claims_ref: string | null;
   answer_support_ledger_validation_ref: string | null;
+  // judge stage 미실행(judgment 입력 부재) 시 null — B-6 분기 skip과 정합.
+  answer_support_judgment_validation_ref: string | null;
   maturation_question_frontier_validation_ref: string | null;
   validation_status: "valid" | "invalid";
   answer_claim_count: number;
@@ -3329,6 +3374,8 @@ export interface ReconstructRecordArtifactRefs {
   maturation_authority_response_validation: string | null;
   answer_support_ledger: string | null;
   answer_support_ledger_validation: string | null;
+  answer_support_judgment: string | null;
+  answer_support_judgment_validation: string | null;
   maturation_answer_claims: string | null;
   maturation_answer_claims_validation: string | null;
   ontology_expansion: string | null;
