@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml } from "yaml";
+import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import {
   isTargetMaterialKind,
 } from "../target-material-kind.js";
@@ -34,11 +35,6 @@ function violation(args: {
 
 async function readYamlDocument<T>(filePath: string): Promise<T> {
   return parseYaml(await fs.readFile(filePath, "utf8")) as T;
-}
-
-async function writeYamlDocument(filePath: string, value: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, stringifyYaml(value), "utf8");
 }
 
 function sourceProfileKey(args: {

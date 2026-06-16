@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml } from "yaml";
+import { atomicWriteFile, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructOntologySeedArtifact,
   ReconstructOntologySeedValidationArtifact,
@@ -812,11 +813,6 @@ function promptPayloadCharCount(systemPrompt: string, userPayload: unknown): num
 
 async function sha256File(filePath: string): Promise<string> {
   return crypto.createHash("sha256").update(await fs.readFile(filePath)).digest("hex");
-}
-
-async function writeYamlDocument(filePath: string, value: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, stringifyYaml(value), "utf8");
 }
 
 async function writeSourceObservationLineageIndexArtifact(args: {
@@ -12580,7 +12576,7 @@ export async function runReconstruct(
       `final-output.md failed provenance validation: ${finalOutputViolations.map((item) => item.message).join("; ")}`,
     );
   }
-  await fs.writeFile(finalOutputPath, finalOutputText, "utf8");
+  await atomicWriteFile(finalOutputPath, finalOutputText);
   const finalOutputProvenanceValidation =
     await writeFinalOutputProvenanceValidationArtifact({
       sessionId,

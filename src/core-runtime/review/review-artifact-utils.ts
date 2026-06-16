@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
+import { atomicWriteFile } from "../artifact-io.js";
 import type { DirectoryListingOptions } from "./artifact-types.js";
 
 export const DEFAULT_EXCLUDED_NAMES: readonly string[] = [
@@ -37,8 +38,7 @@ export async function writeYamlDocument(
   filePath: string,
   data: unknown,
 ): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${dumpYamlDocument(data)}\n`, "utf8");
+  await atomicWriteFile(filePath, `${dumpYamlDocument(data)}\n`);
 }
 
 export async function readYamlDocument<T>(filePath: string): Promise<T> {

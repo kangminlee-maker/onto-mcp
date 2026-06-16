@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml } from "yaml";
+import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructOntologySeedArtifact,
   ReconstructOntologySeedValidationArtifact,
@@ -2084,11 +2085,6 @@ export function validateFinalOutputProvenance(args: {
     }
   }
   return violations;
-}
-
-async function writeYamlDocument(filePath: string, value: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, stringifyYaml(value), "utf8");
 }
 
 async function readYamlDocument<T>(filePath: string): Promise<T> {
