@@ -43,6 +43,7 @@ import type {
 import {
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
+  observationPromptPayload,
   runReconstruct,
 } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -545,6 +546,54 @@ describe("runReconstruct", () => {
         location: "file",
       },
     ]);
+  });
+
+  it("expands a single document observation at the seed-stage budget but bounds several", () => {
+    const longExcerpt = "goal milestone problem ".repeat(120); // > seed-stage budget
+    expect(longExcerpt.length).toBeGreaterThan(1200);
+
+    const docObservation = (id: string, extension = ".md") => ({
+      observation_id: id,
+      target_material_kind: "document" as const,
+      adapter_id: "fixture-observer",
+      source_ref: `/doc/${id}${extension}`,
+      location: "file",
+      summary: `Document fixture ${id}.`,
+      structural_data: { content_excerpt: longExcerpt, extension },
+    });
+
+    const projectedExcerptLengths = (
+      observations: ReturnType<typeof docObservation>[],
+    ): number[] =>
+      (observationPromptPayload(
+        {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-06-16T00:00:00.000Z",
+          observations,
+          skipped_refs: [],
+          validation_results: [],
+        },
+        // Seed-authoring caller: opts into single-document expansion at the budget.
+        { contentExcerptCharLimit: 1200, expandSingleDocumentExcerpt: true },
+      ) as Array<any>).map(
+        (observation) => observation.structural_data.content_excerpt.length as number,
+      );
+
+    // Single document → full prose reaches seed authoring (not truncated).
+    expect(projectedExcerptLengths([docObservation("obs-doc-a")]))
+      .toEqual([longExcerpt.length]);
+    // Several documents → each bounded to the seed-stage budget (no aggregate blowup).
+    expect(
+      projectedExcerptLengths([
+        docObservation("obs-doc-a"),
+        docObservation("obs-doc-b"),
+      ]),
+    ).toEqual([1200, 1200]);
+    // A single BINARY document (only a 6K structural sample is captured) is not expanded
+    // — its decoded-binary excerpt stays bounded to the seed-stage budget.
+    expect(projectedExcerptLengths([docObservation("obs-doc-pdf", ".pdf")]))
+      .toEqual([1200]);
   });
 
   it("canonicalizes duplicate direct-call source observation selections", async () => {
