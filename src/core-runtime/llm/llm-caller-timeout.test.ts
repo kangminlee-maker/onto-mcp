@@ -13,11 +13,18 @@ vi.mock("openai", () => {
   class APIConnectionTimeoutError extends Error {}
   class MockOpenAI {
     static APIConnectionTimeoutError = APIConnectionTimeoutError;
+    // Canonical OpenAI now routes through the Responses API; grok/lmstudio still
+    // use chat.completions. Both surfaces reject with the SDK timeout class.
     chat = {
       completions: {
         create: async () => {
           throw new APIConnectionTimeoutError("Request timed out.");
         },
+      },
+    };
+    responses = {
+      create: async () => {
+        throw new APIConnectionTimeoutError("Request timed out.");
       },
     };
     constructor(_args: unknown) {}
