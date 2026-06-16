@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml } from "yaml";
+import { atomicWriteYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructDirectiveValidationViolation,
   ReconstructSourceObservationDirectiveArtifact,
@@ -162,7 +163,6 @@ export async function writeSourceObservationDirectiveValidationArtifact(args: {
     directiveRef: path.resolve(args.directivePath),
     sourceObservationsRef: path.resolve(args.sourceObservationsPath),
   });
-  await fs.mkdir(path.dirname(args.outputPath), { recursive: true });
-  await fs.writeFile(args.outputPath, stringifyYaml(validation), "utf8");
+  await atomicWriteYamlDocument(args.outputPath, validation);
   return validation;
 }

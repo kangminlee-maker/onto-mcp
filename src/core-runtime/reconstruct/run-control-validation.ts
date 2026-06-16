@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructRecordArtifactRefs,
   ReconstructRunBootstrapDiagnosticArtifact,
@@ -28,11 +29,6 @@ async function sha256File(filePath: string): Promise<string | null> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
-}
-
-async function writeYamlDocument(filePath: string, value: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, stringifyYaml(value), "utf8");
 }
 
 async function writeYamlDocumentAtomicCreate(

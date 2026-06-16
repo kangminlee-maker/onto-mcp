@@ -45,6 +45,7 @@ src/core-runtime/
 ├── reconstruct/      reconstruct runtime: run control, gates, maturation loop
 ├── release-channel/  release channel notice
 ├── review/           review artifact types, materializers, deliberation, route policy
+├── artifact-io.ts    shared atomic artifact writes (tmp+rename)
 ├── logger.ts         shared logger
 ├── path-boundary.ts  path containment guard
 ├── pipeline-execution-ledger.ts  shared execution ledger core

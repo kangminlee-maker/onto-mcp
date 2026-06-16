@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml } from "yaml";
+import { atomicWriteYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionValidationArtifact,
@@ -801,7 +802,6 @@ export async function assembleReconstructRecord(
   const outputPath = params.outputPath
     ? path.resolve(params.outputPath)
     : path.join(sessionRoot, "reconstruct-record.yaml");
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, stringifyYaml(record), "utf8");
+  await atomicWriteYamlDocument(outputPath, record);
   return record;
 }
