@@ -434,6 +434,7 @@ export function buildSourceScoutPackFromArtifacts(args: {
   assertArrayField(args.sourceSafetyLedger.safety_rows, "source-safety-ledger", "safety_rows");
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   assertArrayField(args.targetMaterialProfile.selected_source_profiles, "target-material-profile", "selected_source_profiles");
+  assertArrayField(args.targetMaterialProfile.target_refs, "target-material-profile", "target_refs");
   const scopeState = scoutScopeState({
     targetMaterialProfile: args.targetMaterialProfile,
     targetMaterialProfileValidation: args.targetMaterialProfileValidation,

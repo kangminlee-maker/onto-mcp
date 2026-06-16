@@ -308,6 +308,8 @@ export function validateSourceObservationDelta(args: {
 }): ReconstructSourceObservationDeltaValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   assertArrayField(args.delta.delta_rows, "source-observation-delta", "delta_rows");
+  assertArrayField(args.delta.accepted_frontier_ref_ids, "source-observation-delta", "accepted_frontier_ref_ids");
+  assertArrayField(args.delta.added_observation_ids, "source-observation-delta", "added_observation_ids");
   const violations: ReconstructSourceObservationDeltaValidationViolation[] = [];
   if (args.delta.schema_version !== "1") {
     violations.push(violation({

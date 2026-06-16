@@ -193,6 +193,11 @@ export function validateRegistryVerificationEvidence(args: {
   expectedRegistrySha256?: string | null;
 }): ReconstructRegistryVerificationEvidenceValidationArtifact {
   assertArrayField(args.evidence.evidence_rows, "registry-verification-evidence", "evidence_rows");
+  assertArrayField(args.evidence.active_artifact_authority_ids, "registry-verification-evidence", "active_artifact_authority_ids");
+  assertArrayField(args.evidence.active_validation_gate_ids, "registry-verification-evidence", "active_validation_gate_ids");
+  assertArrayField(args.evidence.active_validator_ids, "registry-verification-evidence", "active_validator_ids");
+  assertArrayField(args.evidence.required_when_predicate_ids, "registry-verification-evidence", "required_when_predicate_ids");
+  assertArrayField(args.evidence.source_profile_ids, "registry-verification-evidence", "source_profile_ids");
   assertArrayField(args.contractRegistry.validator_records, "contract-registry", "validator_records");
   assertArrayField(args.contractRegistry.validation_gate_catalog, "contract-registry", "validation_gate_catalog");
   assertArrayField(args.contractRegistry.required_when_predicate_catalog, "contract-registry", "required_when_predicate_catalog");

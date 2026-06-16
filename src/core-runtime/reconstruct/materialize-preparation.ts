@@ -464,7 +464,19 @@ export async function materializeReconstructPreparationArtifacts(
     const refDetection = detection.per_ref.find((candidate) => candidate.ref === unit.ref);
     if (!refDetection) continue;
     const observation = await buildReconstructSourceObservation(refDetection);
-    if (observation) observations.push(observation);
+    if (observation) {
+      observations.push(observation);
+    } else {
+      // buildReconstructSourceObservation returns null when the ref is no longer
+      // a concrete, existing source at observation time (e.g. deleted between
+      // detection and re-observation). Surface it as skipped rather than dropping
+      // it silently from both observations and skipped_refs.
+      skippedRefs.push({
+        ref: unit.ref,
+        target_material_kind: unit.target_material_kind,
+        reason: "source ref unavailable at observation time",
+      });
+    }
   }
 
   const sourceObservations: ReconstructSourceObservationsArtifact = {

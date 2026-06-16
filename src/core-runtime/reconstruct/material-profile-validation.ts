@@ -102,6 +102,7 @@ export function validateTargetMaterialProfile(args: {
   assertArrayField(args.targetMaterialProfile.target_refs, "target-material-profile", "target_refs");
   assertArrayField(args.targetMaterialProfile.selected_source_profiles, "target-material-profile", "selected_source_profiles");
   assertArrayField(args.targetMaterialProfile.target_material_kind_candidates, "target-material-profile", "target_material_kind_candidates");
+  assertArrayField(args.targetMaterialProfile.detection.per_ref, "target-material-profile", "detection.per_ref");
   const profile = args.targetMaterialProfile;
   const violations: ReconstructTargetMaterialProfileValidationViolation[] = [];
   const projectRoot = projectRootFromRegistryPath(args.registryRef);

@@ -224,6 +224,8 @@ export function validateReconstructRunControl(args: {
   assertArrayField(args.runControl.request_rows, "run-control", "request_rows");
   assertArrayField(args.runControl.attempt_rows, "run-control", "attempt_rows");
   assertArrayField(args.runControl.lock_rows, "run-control", "lock_rows");
+  assertArrayField(args.runControl.write_transactions, "run-control", "write_transactions");
+  assertArrayField(args.runControl.resume_rows, "run-control", "resume_rows");
   const violations: ReconstructRunControlValidationViolation[] = [];
   if (args.runControl.schema_version !== "1") {
     violations.push(violation({

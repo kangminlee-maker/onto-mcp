@@ -944,6 +944,7 @@ export function validateOntologySeed(args: {
   registryRef?: string | null;
 }): ReconstructOntologySeedValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  assertArrayField(args.registry.coverage_axis_registry, "contract-registry", "coverage_axis_registry");
   const violations: ReconstructOntologySeedValidationViolation[] = [];
   const addShapeViolation = (_code: "schema_shape_invalid", message: string) => {
     violations.push(seedValidationViolation({ code: "schema_shape_invalid", message }));
