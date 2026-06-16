@@ -2,7 +2,10 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import {
+  assertArrayField,
+  atomicWriteYamlDocument as writeYamlDocument,
+} from "../artifact-io.js";
 import type {
   ReconstructRecordArtifactRefs,
   ReconstructRunBootstrapDiagnosticArtifact,
@@ -178,6 +181,8 @@ function violation(args: {
 function requiresTerminalValidationTrust(
   runControl: ReconstructRunControlArtifact,
 ): boolean {
+  assertArrayField(runControl.attempt_rows, "run-control", "attempt_rows");
+  assertArrayField(runControl.resume_rows, "run-control", "resume_rows");
   return runControl.attempt_rows.some((row) =>
     row.attempt_status === "completed"
   ) || runControl.resume_rows.some((row) =>
@@ -190,6 +195,7 @@ function inferTerminalValidationRef(args: {
   runControlPath: string | null;
   explicitRef?: string | null;
 }): string | null {
+  assertArrayField(args.runControl.write_transactions, "run-control", "write_transactions");
   if (args.explicitRef !== undefined) {
     return args.explicitRef ? path.resolve(args.explicitRef) : null;
   }
@@ -215,6 +221,11 @@ export function validateReconstructRunControl(args: {
   terminalValidationRef?: string | null;
   terminalValidationStatus?: string | null;
 }): ReconstructRunControlValidationArtifact {
+  assertArrayField(args.runControl.request_rows, "run-control", "request_rows");
+  assertArrayField(args.runControl.attempt_rows, "run-control", "attempt_rows");
+  assertArrayField(args.runControl.lock_rows, "run-control", "lock_rows");
+  assertArrayField(args.runControl.write_transactions, "run-control", "write_transactions");
+  assertArrayField(args.runControl.resume_rows, "run-control", "resume_rows");
   const violations: ReconstructRunControlValidationViolation[] = [];
   if (args.runControl.schema_version !== "1") {
     violations.push(violation({

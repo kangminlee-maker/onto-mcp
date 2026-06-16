@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { atomicWriteFile, atomicWriteYamlDocument } from "./artifact-io.js";
+import { assertArrayField, atomicWriteFile, atomicWriteYamlDocument } from "./artifact-io.js";
 
 const tmpRoots: string[] = [];
 
@@ -130,5 +130,34 @@ describe("atomicWriteYamlDocument", () => {
     await atomicWriteYamlDocument(target, { ok: true });
 
     expect(await listDir(root)).toEqual(["doc.yaml"]);
+  });
+});
+
+describe("assertArrayField", () => {
+  it("passes for an array (including empty)", () => {
+    expect(() => assertArrayField([], "source-observations", "observations")).not.toThrow();
+    expect(() => assertArrayField([1, 2], "source-observations", "observations")).not.toThrow();
+  });
+
+  it.each([
+    ["null", null, "null"],
+    ["undefined (missing field)", undefined, "undefined"],
+    ["a number scalar", 3, "number"],
+    ["a string scalar", "not-an-array", "string"],
+    ["an object map", { a: 1 }, "object"],
+  ])("throws a contextualized integrity error for %s", (_label, value, gotType) => {
+    expect(() => assertArrayField(value, "source-observations", "observations")).toThrow(
+      /artifact integrity: source-observations field 'observations' must be an array/,
+    );
+    // The message names the actual type so the failure is actionable.
+    expect(() => assertArrayField(value, "source-observations", "observations")).toThrow(
+      new RegExp(`got ${gotType}`),
+    );
+  });
+
+  it("names the specific artifact and field in the message", () => {
+    expect(() => assertArrayField(null, "contract-registry", "validator_records")).toThrow(
+      "artifact integrity: contract-registry field 'validator_records' must be an array, got null",
+    );
   });
 });

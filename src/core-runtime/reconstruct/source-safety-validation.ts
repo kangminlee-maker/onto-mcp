@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructSourceObservationsArtifact,
   ReconstructSourceSafetyAllowedProofForm,
@@ -387,6 +387,7 @@ export function buildSourceSafetyLedgerFromSourceObservations(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef?: string | null;
 }): ReconstructSourceSafetyLedgerArtifact {
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   return {
     schema_version: "1",
     session_id: args.sourceObservations.session_id,
@@ -401,6 +402,7 @@ export function buildSourceSafetyLedgerFromSourceObservations(args: {
 function sourceObservationSubjectRefs(
   sourceObservations: ReconstructSourceObservationsArtifact,
 ): Set<string> {
+  assertArrayField(sourceObservations.observations, "source-observations", "observations");
   return new Set(sourceObservations.observations.map((observation) =>
     observation.source_ref
   ));
@@ -409,6 +411,7 @@ function sourceObservationSubjectRefs(
 function sourceObservationBindingBySafetyRowId(
   sourceObservations: ReconstructSourceObservationsArtifact,
 ): Map<string, ReconstructSourceObservation> {
+  assertArrayField(sourceObservations.observations, "source-observations", "observations");
   return new Map(sourceObservations.observations.flatMap((observation) =>
     INTENDED_CONSUMPTIONS.map((intendedConsumption) => [
       sourceSafetyRowIdForObservation(observation, intendedConsumption),
@@ -590,6 +593,7 @@ export function validateSourceSafetyLedger(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef?: string | null;
 }): ReconstructSourceSafetyLedgerValidationArtifact {
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   const violations: ReconstructSourceSafetyValidationViolation[] = [];
   const rawLedger = args.sourceSafetyLedger as unknown;
   if (!isRecord(rawLedger) || !Array.isArray(rawLedger.safety_rows)) {

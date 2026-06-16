@@ -257,7 +257,21 @@ export async function buildReconstructSourceObservation(
   }
   const extension = path.extname(detection.ref).toLowerCase();
   const location = detection.ref;
-  const stat = await fs.stat(detection.ref);
+  // Re-observation runs after an earlier detection: the ref may have vanished
+  // in between (TOCTOU). Treat a missing ref as nothing-to-observe (degrade to
+  // null, like the !detection.exists guard above) instead of crashing the run
+  // with an uncontextualized ENOENT. Other stat failures still propagate.
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(detection.ref);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    // ENOENT: the ref was deleted; ENOTDIR: a parent path component became a
+    // file. Both mean the ref is no longer an observable source (TOCTOU), so
+    // degrade to null. Other stat failures still propagate.
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error;
+  }
   const stats = stat.isFile()
     ? await textStats(detection.ref, structuralExcerptCharLimit(detection.kind, detection.ref))
     : {
@@ -435,11 +449,6 @@ export async function materializeReconstructPreparationArtifacts(
       source: "binding",
     },
   };
-  const initialSourceFrontier = buildInitialSourceFrontier({
-    sessionId,
-    inventory,
-  });
-
   const observations: ReconstructSourceObservation[] = [];
   const skippedRefs: ReconstructSourceObservationsArtifact["skipped_refs"] = [];
   for (const unit of inventory.inventory_units) {
@@ -454,8 +463,32 @@ export async function materializeReconstructPreparationArtifacts(
     const refDetection = detection.per_ref.find((candidate) => candidate.ref === unit.ref);
     if (!refDetection) continue;
     const observation = await buildReconstructSourceObservation(refDetection);
-    if (observation) observations.push(observation);
+    if (observation) {
+      observations.push(observation);
+    } else {
+      // buildReconstructSourceObservation returns null when the ref is no longer
+      // a concrete, existing source at observation time (e.g. deleted between
+      // detection and re-observation). Mark the inventory unit skipped — the
+      // single source of truth that the initial frontier (built below), the
+      // zero-observation halt, and later frontier admission all derive from — so
+      // the vanished ref is excluded everywhere instead of being silently dropped
+      // or re-queued by the deterministic first-frontier scout.
+      unit.scan_status = "skipped";
+      unit.skip_reason = "source ref unavailable at observation time";
+      skippedRefs.push({
+        ref: unit.ref,
+        target_material_kind: unit.target_material_kind,
+        reason: unit.skip_reason,
+      });
+    }
   }
+
+  // Built after observation so refs marked skipped above (vanished mid-run) are
+  // excluded from frontier source_refs rather than re-admitted later.
+  const initialSourceFrontier = buildInitialSourceFrontier({
+    sessionId,
+    inventory,
+  });
 
   const sourceObservations: ReconstructSourceObservationsArtifact = {
     schema_version: "1",

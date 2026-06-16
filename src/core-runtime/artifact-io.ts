@@ -52,3 +52,26 @@ export async function atomicWriteYamlDocument(
 ): Promise<void> {
   await atomicWriteFile(filePath, stringifyYaml(value));
 }
+
+/**
+ * Fail-closed shape guard for trusted artifact reads. The pipeline reads its
+ * own artifacts and trusts them on read; a malformed artifact (e.g. a required
+ * array field that is missing, null, or a scalar — from a torn write or
+ * out-of-band tampering) would otherwise crash deep inside a validator with an
+ * uncontextualized `TypeError: ... is not iterable`. This throws an integrity
+ * error that names the artifact and field instead, so the run halts with an
+ * actionable message rather than continuing on misread data.
+ */
+export function assertArrayField(
+  value: unknown,
+  artifactLabel: string,
+  fieldName: string,
+): void {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `artifact integrity: ${artifactLabel} field '${fieldName}' must be an array, got ${
+        value === null ? "null" : typeof value
+      }`,
+    );
+  }
+}

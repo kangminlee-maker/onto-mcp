@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructSourceObservationsArtifact,
   ReconstructSourceSafetyLedgerArtifact,
@@ -176,6 +176,7 @@ function violation(args: {
 function safetyRowById(
   sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact,
 ): Map<string, ReconstructSourceSafetyRow> {
+  assertArrayField(sourceSafetyLedger.safety_rows, "source-safety-ledger", "safety_rows");
   return new Map(
     sourceSafetyLedger.safety_rows.map((row) => [row.safety_row_id, row]),
   );
@@ -185,6 +186,7 @@ function selectedProfileRefForObservation(args: {
   observation: ReconstructSourceObservation;
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
 }): string | null {
+  assertArrayField(args.targetMaterialProfile.selected_source_profiles, "target-material-profile", "selected_source_profiles");
   return args.targetMaterialProfile.selected_source_profiles.find((profile) =>
     profile.target_material_kind === args.observation.target_material_kind
   )?.profile_ref ?? null;
@@ -194,6 +196,7 @@ function scoutScopeState(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   targetMaterialProfileValidation: ReconstructTargetMaterialProfileValidationArtifact;
 }): ReconstructSourceScoutScopeState {
+  assertArrayField(args.targetMaterialProfile.target_material_kind_candidates, "target-material-profile", "target_material_kind_candidates");
   if (
     args.targetMaterialProfile.target_material_kind === "mixed" &&
     args.targetMaterialProfile.target_material_kind_candidates.some((kind) =>
@@ -428,6 +431,10 @@ export function buildSourceScoutPackFromArtifacts(args: {
   sourceObservationLineageIndexValidationSha256?: string | null;
   targetMaterialProfileValidationSha256?: string | null;
 }): ReconstructSourceScoutPackArtifact {
+  assertArrayField(args.sourceSafetyLedger.safety_rows, "source-safety-ledger", "safety_rows");
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  assertArrayField(args.targetMaterialProfile.selected_source_profiles, "target-material-profile", "selected_source_profiles");
+  assertArrayField(args.targetMaterialProfile.target_refs, "target-material-profile", "target_refs");
   const scopeState = scoutScopeState({
     targetMaterialProfile: args.targetMaterialProfile,
     targetMaterialProfileValidation: args.targetMaterialProfileValidation,
@@ -546,7 +553,11 @@ export async function validateSourceScoutPack(args: {
   sourceObservationLineageIndexValidationRef?: string | null;
   sourceObservationLineageIndexValidationSha256?: string | null;
 }): Promise<ReconstructSourceScoutPackValidationArtifact> {
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  assertArrayField(args.sourceScoutPack.profile_scout_coverage_slots, "source-scout-pack", "profile_scout_coverage_slots");
   const violations: ReconstructSourceScoutPackValidationViolation[] = [];
+  // signal_rows is this validator's primary subject and is already shape-checked
+  // gracefully below (→ schema_shape_invalid violation), so it is NOT asserted.
   const rawPack = args.sourceScoutPack as unknown;
   if (!isRecord(rawPack) || !Array.isArray(rawPack.signal_rows)) {
     violations.push(violation({

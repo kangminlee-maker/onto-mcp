@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructOntologySeedArtifact,
   ReconstructOntologySeedValidationArtifact,
@@ -105,6 +105,7 @@ export async function validateReconstructRunManifest(args: {
   lensIds?: string[];
   admittedDomainIds?: string[];
 }): Promise<ReconstructRunManifestValidationArtifact> {
+  assertArrayField(args.manifest.steps, "run-manifest", "steps");
   const violations: ReconstructPostSeedValidationViolation[] = [];
   const stepById = new Map(args.manifest.steps.map((step) => [step.step_id, step]));
   for (const stageId of RECONSTRUCT_STAGE_IDS) {
