@@ -1169,3 +1169,690 @@ describe("post-seed reconstruct validation", () => {
     );
   });
 });
+
+function clone<T>(value: T): T {
+  return structuredClone(value);
+}
+
+function expectRejection(
+  validation: { validation_status: string; violations: { code: string }[] },
+  code: string,
+): void {
+  expect(validation.validation_status).toBe("invalid");
+  expect(validation.violations.some((violation) => violation.code === code))
+    .toBe(true);
+}
+
+describe("validateClaimRealizationMapForOntologySeed rejection branches", () => {
+  function validBase() {
+    const seed = ontologySeed();
+    const claims = ontologySeedClaimProjections(seed).map((claim) => claim.claim_id);
+    const claimRealizationMap: ReconstructClaimRealizationMapArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      ontology_seed_ref: "ontology-seed.yaml",
+      claim_realizations: claims.map((claimId) => ({
+        claim_id: claimId,
+        stance: "observed_runtime_behavior",
+        evidence_refs: [{ ...evidenceRef }],
+        rationale: "Observed.",
+      })),
+      directive_author: { owner: "mock", author_id: "mock" },
+    };
+    return {
+      claimRealizationMap,
+      ontologySeed: seed,
+      sourceObservations: sourceObservations(),
+    };
+  }
+
+  it("validates the reused base fixture cleanly", () => {
+    expect(
+      validateClaimRealizationMapForOntologySeed(validBase()).validation_status,
+    ).toBe("valid");
+  });
+
+  it("rejects a session_id that does not match seed authority (session_id_mismatch)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.session_id = "session-other";
+    expectRejection(
+      validateClaimRealizationMapForOntologySeed(base),
+      "session_id_mismatch",
+    );
+  });
+
+  it("rejects a duplicate claim realization (duplicate_id)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations.push(
+      clone(base.claimRealizationMap.claim_realizations[0]!),
+    );
+    expectRejection(validateClaimRealizationMapForOntologySeed(base), "duplicate_id");
+  });
+
+  it("rejects a realization for an unknown claim id (unknown_id)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations.push({
+      claim_id: "claim-does-not-exist",
+      stance: "observed_runtime_behavior",
+      evidence_refs: [{ ...evidenceRef }],
+      rationale: "Observed.",
+    });
+    expectRejection(validateClaimRealizationMapForOntologySeed(base), "unknown_id");
+  });
+
+  it("rejects an out-of-set stance (invalid_enum)", () => {
+    const base = clone(validBase());
+    (base.claimRealizationMap.claim_realizations[0]! as { stance: string }).stance =
+      "bogus_stance";
+    expectRejection(validateClaimRealizationMapForOntologySeed(base), "invalid_enum");
+  });
+
+  it("rejects a realization without rationale (rationale_missing)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations[0]!.rationale = "   ";
+    expectRejection(
+      validateClaimRealizationMapForOntologySeed(base),
+      "rationale_missing",
+    );
+  });
+
+  it("rejects a non-deferred realization without evidence (evidence_ref_missing)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations[0]!.evidence_refs = [];
+    expectRejection(
+      validateClaimRealizationMapForOntologySeed(base),
+      "evidence_ref_missing",
+    );
+  });
+
+  it("rejects a claim with no realization stance (missing_required_coverage)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations.pop();
+    expectRejection(
+      validateClaimRealizationMapForOntologySeed(base),
+      "missing_required_coverage",
+    );
+  });
+
+  it("rejects evidence citing an unknown observation (unknown_observation_ref)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations[0]!.evidence_refs[0]!.observation_id =
+      "obs-unknown";
+    expectRejection(
+      validateClaimRealizationMapForOntologySeed(base),
+      "unknown_observation_ref",
+    );
+  });
+
+  it("rejects evidence whose material kind differs from the observation (material_kind_mismatch)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations[0]!.evidence_refs[0]!
+      .target_material_kind = "document";
+    expectRejection(
+      validateClaimRealizationMapForOntologySeed(base),
+      "material_kind_mismatch",
+    );
+  });
+
+  it("rejects evidence whose source_ref differs from the observation (source_ref_mismatch)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations[0]!.evidence_refs[0]!.source_ref =
+      "/tmp/other.ts";
+    expectRejection(
+      validateClaimRealizationMapForOntologySeed(base),
+      "source_ref_mismatch",
+    );
+  });
+
+  it("rejects evidence whose location differs from the observation (location_mismatch)", () => {
+    const base = clone(validBase());
+    base.claimRealizationMap.claim_realizations[0]!.evidence_refs[0]!.location =
+      "line:99";
+    expectRejection(
+      validateClaimRealizationMapForOntologySeed(base),
+      "location_mismatch",
+    );
+  });
+});
+
+describe("validateSeedConfirmationForOntologySeed rejection branches", () => {
+  function validBase() {
+    const seed = ontologySeed();
+    const claims = ontologySeedClaimProjections(seed).map((claim) => claim.claim_id);
+    const seedConfirmation: ReconstructSeedConfirmationArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      ontology_seed_ref: "ontology-seed.yaml",
+      ontology_seed_validation_ref: "ontology-seed-validation.yaml",
+      confirmation_status: "accepted",
+      confirmed_claim_ids: claims,
+      rejected_claim_ids: [],
+      partial_claim_ids: [],
+      deferred_claim_ids: [],
+      notes: [],
+      confirmation_provider: { owner: "mock", provider_id: "mock" },
+    };
+    return {
+      seedConfirmation,
+      ontologySeed: seed,
+      ontologySeedValidation: ontologySeedValidation(),
+    };
+  }
+
+  it("validates the reused base fixture cleanly", () => {
+    expect(
+      validateSeedConfirmationForOntologySeed(validBase()).validation_status,
+    ).toBe("valid");
+  });
+
+  it("rejects an invalid prior ontology-seed validation (prior_validation_invalid)", () => {
+    const base = clone(validBase());
+    base.ontologySeedValidation.validation_status = "invalid";
+    expectRejection(
+      validateSeedConfirmationForOntologySeed(base),
+      "prior_validation_invalid",
+    );
+  });
+
+  it("rejects confirmation of an unknown claim id (unknown_id)", () => {
+    const base = clone(validBase());
+    base.seedConfirmation.confirmed_claim_ids = [
+      ...base.seedConfirmation.confirmed_claim_ids,
+      "claim-unknown",
+    ];
+    expectRejection(validateSeedConfirmationForOntologySeed(base), "unknown_id");
+  });
+
+  it("rejects a claim placed in two confirmation states (conflicting_state)", () => {
+    const base = clone(validBase());
+    const claimId = base.seedConfirmation.confirmed_claim_ids[0]!;
+    base.seedConfirmation.rejected_claim_ids = [claimId];
+    expectRejection(
+      validateSeedConfirmationForOntologySeed(base),
+      "conflicting_state",
+    );
+  });
+
+  it("rejects a claim with no confirmation state (missing_required_coverage)", () => {
+    const base = clone(validBase());
+    base.seedConfirmation.confirmed_claim_ids =
+      base.seedConfirmation.confirmed_claim_ids.slice(1);
+    expectRejection(
+      validateSeedConfirmationForOntologySeed(base),
+      "missing_required_coverage",
+    );
+  });
+});
+
+describe("validateCompetencyQuestionsForOntologySeed rejection branches", () => {
+  function validBase() {
+    const seed = ontologySeed();
+    const claims = ontologySeedClaimProjections(seed).map((claim) => claim.claim_id);
+    const competencyQuestions: ReconstructCompetencyQuestionsArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      seed_confirmation_ref: null,
+      ontology_seed_ref: "ontology-seed.yaml",
+      questions: [
+        {
+          question_id: "cq-1",
+          question: "Can the seed explain every active claim?",
+          linked_claim_ids: claims,
+          ...competencyCoverageRefs(claims),
+          evidence_refs: [{ ...evidenceRef }],
+        },
+      ],
+      open_questions: [],
+      directive_author: { owner: "mock", author_id: "mock" },
+    };
+    return {
+      competencyQuestions,
+      ontologySeed: seed,
+      ontologySeedValidation: ontologySeedValidation(),
+      seedConfirmationValidation: seedConfirmationValidationForClaims(claims),
+      sourceObservations: sourceObservations(),
+      contractRegistry,
+    };
+  }
+
+  it("validates the reused base fixture cleanly", () => {
+    expect(
+      validateCompetencyQuestionsForOntologySeed(validBase()).validation_status,
+    ).toBe("valid");
+  });
+
+  it("rejects a duplicate competency question id (duplicate_id)", () => {
+    const base = clone(validBase());
+    base.competencyQuestions.questions.push(
+      clone(base.competencyQuestions.questions[0]!),
+    );
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "duplicate_id",
+    );
+  });
+
+  it("rejects a question without rationale (rationale_missing)", () => {
+    const base = clone(validBase());
+    base.competencyQuestions.questions[0]!.rationale = "   ";
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "rationale_missing",
+    );
+  });
+
+  it("rejects an out-of-set expected_answer_kind (invalid_enum)", () => {
+    const base = clone(validBase());
+    (base.competencyQuestions.questions[0]! as { expected_answer_kind: string })
+      .expected_answer_kind = "bogus_kind";
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "invalid_enum",
+    );
+  });
+
+  it("rejects a non-covered question without limitation_refs (missing_required_coverage)", () => {
+    const base = clone(validBase());
+    (base.competencyQuestions.questions[0]! as { coverage_disposition: string })
+      .coverage_disposition = "limited";
+    base.competencyQuestions.questions[0]!.limitation_refs = [];
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "missing_required_coverage",
+    );
+  });
+
+  it("rejects a covered active question without evidence (evidence_ref_missing)", () => {
+    const base = clone(validBase());
+    base.competencyQuestions.questions[0]!.evidence_refs = [];
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "evidence_ref_missing",
+    );
+  });
+
+  it("rejects a link to a non-eligible claim (unknown_id)", () => {
+    const base = clone(validBase());
+    base.competencyQuestions.questions[0]!.linked_claim_ids = [
+      ...base.competencyQuestions.questions[0]!.linked_claim_ids,
+      "claim-not-eligible",
+    ];
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "unknown_id",
+    );
+  });
+
+  it("rejects evidence citing an unknown observation (unknown_observation_ref)", () => {
+    const base = clone(validBase());
+    base.competencyQuestions.questions[0]!.evidence_refs[0]!.observation_id =
+      "obs-unknown";
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "unknown_observation_ref",
+    );
+  });
+
+  it("rejects evidence whose material kind differs from the observation (material_kind_mismatch)", () => {
+    const base = clone(validBase());
+    base.competencyQuestions.questions[0]!.evidence_refs[0]!.target_material_kind =
+      "document";
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "material_kind_mismatch",
+    );
+  });
+
+  it("rejects evidence whose source_ref differs from the observation (source_ref_mismatch)", () => {
+    const base = clone(validBase());
+    base.competencyQuestions.questions[0]!.evidence_refs[0]!.source_ref =
+      "/tmp/other.ts";
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "source_ref_mismatch",
+    );
+  });
+
+  it("rejects evidence whose location differs from the observation (location_mismatch)", () => {
+    const base = clone(validBase());
+    base.competencyQuestions.questions[0]!.evidence_refs[0]!.location = "line:99";
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "location_mismatch",
+    );
+  });
+
+  it("rejects an invalid prior seed-confirmation validation (prior_validation_invalid)", () => {
+    const base = clone(validBase());
+    base.seedConfirmationValidation.validation_status = "invalid";
+    expectRejection(
+      validateCompetencyQuestionsForOntologySeed(base),
+      "prior_validation_invalid",
+    );
+  });
+});
+
+describe("validateCompetencyQuestionAssessment rejection branches", () => {
+  function questionsFixture(): ReconstructCompetencyQuestionsArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      seed_confirmation_ref: null,
+      ontology_seed_ref: "ontology-seed.yaml",
+      questions: [
+        {
+          question_id: "cq-1",
+          question: "Can claim action-1 be answered?",
+          linked_claim_ids: ["action-1"],
+          ...competencyCoverageRefs(["action-1"]),
+          evidence_refs: [{ ...evidenceRef }],
+        },
+      ],
+      open_questions: [],
+      directive_author: { owner: "mock", author_id: "mock" },
+    };
+  }
+
+  function validBase() {
+    const assessment: ReconstructCompetencyQuestionAssessmentArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      competency_questions_ref: "competency-questions.yaml",
+      competency_questions_validation_ref: "competency-questions-validation.yaml",
+      assessments: [
+        {
+          question_id: "cq-1",
+          answer_status: "partially_answerable",
+          answer_summary: "The question is only partially answerable.",
+          required_seed_refs: ["action-1"],
+          linked_claim_ids: ["action-1"],
+          evidence_refs: [{ ...evidenceRef }],
+          missing_source_or_confirmation: null,
+          ambiguity_notes: [],
+          downstream_effect: "limited",
+          rationale: "Needs more evidence.",
+        },
+      ],
+      directive_author: { owner: "mock", author_id: "mock" },
+    };
+    return {
+      competencyQuestionAssessment: assessment,
+      competencyQuestions: questionsFixture(),
+    };
+  }
+
+  it("validates the reused base fixture cleanly", () => {
+    expect(
+      validateCompetencyQuestionAssessment(validBase()).validation_status,
+    ).toBe("valid");
+  });
+
+  it("rejects a duplicate competency question assessment (duplicate_id)", () => {
+    const base = clone(validBase());
+    base.competencyQuestionAssessment.assessments.push(
+      clone(base.competencyQuestionAssessment.assessments[0]!),
+    );
+    expectRejection(
+      validateCompetencyQuestionAssessment(base),
+      "duplicate_id",
+    );
+  });
+
+  it("rejects a linked claim outside the question (unknown_id)", () => {
+    const base = clone(validBase());
+    base.competencyQuestionAssessment.assessments[0]!.linked_claim_ids = [
+      "action-1",
+      "claim-outside",
+    ];
+    expectRejection(
+      validateCompetencyQuestionAssessment(base),
+      "unknown_id",
+    );
+  });
+
+  it("rejects evidence outside the competency question (unknown_observation_ref)", () => {
+    const base = clone(validBase());
+    base.competencyQuestionAssessment.assessments[0]!.evidence_refs = [
+      { ...evidenceRef },
+      { ...evidenceRef, observation_id: "obs-extra" },
+    ];
+    expectRejection(
+      validateCompetencyQuestionAssessment(base),
+      "unknown_observation_ref",
+    );
+  });
+
+  it("rejects an out-of-set answer_status (invalid_enum)", () => {
+    const base = clone(validBase());
+    (base.competencyQuestionAssessment.assessments[0]! as { answer_status: string })
+      .answer_status = "bogus_status";
+    expectRejection(
+      validateCompetencyQuestionAssessment(base),
+      "invalid_enum",
+    );
+  });
+
+  it("rejects an assessment without rationale (rationale_missing)", () => {
+    const base = clone(validBase());
+    base.competencyQuestionAssessment.assessments[0]!.rationale = "   ";
+    expectRejection(
+      validateCompetencyQuestionAssessment(base),
+      "rationale_missing",
+    );
+  });
+
+  it("rejects an assessment missing a question seed ref (missing_required_coverage)", () => {
+    const base = clone(validBase());
+    base.competencyQuestionAssessment.assessments[0]!.required_seed_refs = [];
+    expectRejection(
+      validateCompetencyQuestionAssessment(base),
+      "missing_required_coverage",
+    );
+  });
+});
+
+describe("validateFailureClassification rejection branches", () => {
+  function assessmentFixture(): ReconstructCompetencyQuestionAssessmentArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      competency_questions_ref: "competency-questions.yaml",
+      competency_questions_validation_ref: "competency-questions-validation.yaml",
+      assessments: [
+        {
+          question_id: "cq-1",
+          answer_status: "partially_answerable",
+          answer_summary: "The question is only partially answerable.",
+          required_seed_refs: ["action-1"],
+          linked_claim_ids: ["action-1"],
+          evidence_refs: [{ ...evidenceRef }],
+          missing_source_or_confirmation: null,
+          ambiguity_notes: [],
+          downstream_effect: "limited",
+          rationale: "Needs more evidence.",
+        },
+      ],
+      directive_author: { owner: "mock", author_id: "mock" },
+    };
+  }
+
+  function seedConfirmationValidation(): ReconstructSeedConfirmationValidationArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      seed_confirmation_ref: "seed-confirmation.yaml",
+      ontology_seed_ref: "ontology-seed.yaml",
+      ontology_seed_validation_ref: "ontology-seed-validation.yaml",
+      validation_status: "valid",
+      accepted_claim_ids: ["concept-1"],
+      rejected_claim_ids: [],
+      partial_claim_ids: ["action-1"],
+      deferred_claim_ids: [],
+      cq_eligible_claim_ids: ["concept-1", "action-1"],
+      validation_results: ["seed_confirmation_valid"],
+      violations: [],
+    };
+  }
+
+  function validBase() {
+    const failureClassification: ReconstructFailureClassificationArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      competency_question_assessment_ref: "competency-question-assessment.yaml",
+      competency_question_assessment_validation_ref:
+        "competency-question-assessment-validation.yaml",
+      seed_confirmation_validation_ref: "seed-confirmation-validation.yaml",
+      failures: [
+        {
+          failure_id: "failure-1",
+          failure_kind: "insufficient_evidence",
+          materiality: "material",
+          question_id: "cq-1",
+          claim_id: "action-1",
+          rationale: "The question is only partially answered.",
+          recommended_action: "collect_evidence",
+        },
+      ],
+      directive_author: { owner: "mock", author_id: "mock" },
+    };
+    return {
+      failureClassification,
+      competencyQuestionAssessment: assessmentFixture(),
+      seedConfirmationValidation: seedConfirmationValidation(),
+    };
+  }
+
+  it("validates the reused base fixture cleanly", () => {
+    expect(validateFailureClassification(validBase()).validation_status).toBe("valid");
+  });
+
+  it("rejects a duplicate failure id (duplicate_id)", () => {
+    const base = clone(validBase());
+    base.failureClassification.failures.push(
+      clone(base.failureClassification.failures[0]!),
+    );
+    expectRejection(validateFailureClassification(base), "duplicate_id");
+  });
+
+  it("rejects an out-of-set failure_kind (invalid_enum)", () => {
+    const base = clone(validBase());
+    (base.failureClassification.failures[0]! as { failure_kind: string })
+      .failure_kind = "bogus_kind";
+    expectRejection(validateFailureClassification(base), "invalid_enum");
+  });
+
+  it("rejects a failure referencing an unknown question (unknown_id)", () => {
+    const base = clone(validBase());
+    base.failureClassification.failures[0]!.question_id = "cq-unknown";
+    expectRejection(validateFailureClassification(base), "unknown_id");
+  });
+
+  it("rejects a failure without rationale (rationale_missing)", () => {
+    const base = clone(validBase());
+    base.failureClassification.failures[0]!.rationale = "   ";
+    expectRejection(validateFailureClassification(base), "rationale_missing");
+  });
+});
+
+describe("validateRevisionProposal rejection branches", () => {
+  function failureClassification(): ReconstructFailureClassificationArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      competency_question_assessment_ref: "competency-question-assessment.yaml",
+      competency_question_assessment_validation_ref:
+        "competency-question-assessment-validation.yaml",
+      seed_confirmation_validation_ref: "seed-confirmation-validation.yaml",
+      failures: [
+        {
+          failure_id: "failure-1",
+          failure_kind: "insufficient_evidence",
+          materiality: "material",
+          question_id: "cq-1",
+          claim_id: "action-1",
+          rationale: "The question is only partially answered.",
+          recommended_action: "collect_evidence",
+        },
+      ],
+      directive_author: { owner: "mock", author_id: "mock" },
+    };
+  }
+
+  function validBase() {
+    const revisionProposal: ReconstructRevisionProposalArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-29T00:00:00.000Z",
+      failure_classification_ref: "failure-classification.yaml",
+      failure_classification_validation_ref: "failure-classification-validation.yaml",
+      proposals: [
+        {
+          proposal_id: "proposal-1",
+          target_type: "failure",
+          target_id: "failure-1",
+          action: "extend",
+          rationale: "Gather more source evidence.",
+          expected_effect: "The competency question can be answered.",
+        },
+      ],
+      directive_author: { owner: "mock", author_id: "mock" },
+    };
+    return {
+      revisionProposal,
+      failureClassification: failureClassification(),
+    };
+  }
+
+  it("validates the reused base fixture cleanly", () => {
+    expect(validateRevisionProposal(validBase()).validation_status).toBe("valid");
+  });
+
+  it("rejects a duplicate proposal id (duplicate_id)", () => {
+    const base = clone(validBase());
+    base.revisionProposal.proposals.push(
+      clone(base.revisionProposal.proposals[0]!),
+    );
+    expectRejection(validateRevisionProposal(base), "duplicate_id");
+  });
+
+  it("rejects a proposal referencing an unknown failure (unknown_id)", () => {
+    const base = clone(validBase());
+    base.revisionProposal.proposals[0]!.target_id = "failure-unknown";
+    expectRejection(validateRevisionProposal(base), "unknown_id");
+  });
+
+  it("rejects an out-of-set proposal action (invalid_enum)", () => {
+    const base = clone(validBase());
+    (base.revisionProposal.proposals[0]! as { action: string }).action =
+      "bogus_action";
+    expectRejection(validateRevisionProposal(base), "invalid_enum");
+  });
+
+  it("rejects a proposal without rationale or expected_effect (rationale_missing)", () => {
+    const base = clone(validBase());
+    base.revisionProposal.proposals[0]!.rationale = "   ";
+    expectRejection(validateRevisionProposal(base), "rationale_missing");
+  });
+});
+
+describe("validateFinalOutputProvenance rejection branches", () => {
+  it("flags a required fragment that the final output does not cite (final_output_provenance_missing)", () => {
+    const violations = validateFinalOutputProvenance({
+      finalOutputText: "See ontology-seed.yaml.",
+      requiredFragments: ["ontology-seed.yaml", "proposal-1"],
+    });
+    expect(violations.some((violation) =>
+      violation.code === "final_output_provenance_missing" &&
+      violation.subject_id === "proposal-1"
+    )).toBe(true);
+  });
+});

@@ -783,3 +783,132 @@ describe("claim projection validation", () => {
       .toContain("blocked_projection_missing_recovery_ref");
   });
 });
+
+describe("validateClaimProjection rejection branches", () => {
+  function nonMaterialRow(artifact: ReturnType<typeof projection>) {
+    return artifact.projection_rows.find((row) =>
+      row.projection_surface !== "material_kind_support"
+    )!;
+  }
+
+  function materialRow(artifact: ReturnType<typeof projection>) {
+    return artifact.projection_rows.find((row) =>
+      row.projection_surface === "material_kind_support"
+    )!;
+  }
+
+  it("treats the base actionable-ready projection as valid before mutation", () => {
+    const base = structuredClone(projection());
+    const validation = validateClaimProjection({ claimProjection: base });
+
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations).toEqual([]);
+  });
+
+  it("rejects an unexpected schema_version (schema_shape_invalid)", () => {
+    const artifact = structuredClone(projection());
+    (artifact as { schema_version: string }).schema_version = "2";
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "schema_shape_invalid"))
+      .toBe(true);
+  });
+
+  it("rejects duplicate projection ids (duplicate_id)", () => {
+    const artifact = structuredClone(projection());
+    artifact.projection_rows[1]!.projection_id =
+      artifact.projection_rows[0]!.projection_id;
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "duplicate_id"))
+      .toBe(true);
+  });
+
+  it("rejects an out-of-enum claim_level (invalid_enum)", () => {
+    const artifact = structuredClone(projection());
+    (nonMaterialRow(artifact) as { claim_level: string }).claim_level =
+      "not_a_real_level";
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "invalid_enum"))
+      .toBe(true);
+  });
+
+  it("rejects actionable_ready decision_state without ready actionability (decision_state_actionability_mismatch)", () => {
+    const artifact = structuredClone(projection());
+    nonMaterialRow(artifact).actionability_claim = "limited";
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) =>
+        v.code === "decision_state_actionability_mismatch"
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects an empty material-kind support member row set (member_capability_row_missing)", () => {
+    const artifact = structuredClone(projection());
+    materialRow(artifact).member_capability_rows = [];
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "member_capability_row_missing"),
+    ).toBe(true);
+  });
+
+  it("rejects actionable_ready claim_level without actionable_ready decision_state (ready_projection_without_ready_decision)", () => {
+    const artifact = structuredClone(projection());
+    const row = nonMaterialRow(artifact);
+    row.decision_state = "actionable_limited";
+    row.actionability_claim = "limited";
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) =>
+        v.code === "ready_projection_without_ready_decision"
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a row that cites no required validation refs (required_validation_ref_missing)", () => {
+    const artifact = structuredClone(projection());
+    nonMaterialRow(artifact).required_validation_refs = [];
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "required_validation_ref_missing"),
+    ).toBe(true);
+  });
+
+  it("rejects an unbounded operated-system release-health governance scope (broader_governance_scope_unbounded)", () => {
+    const artifact = structuredClone(projection());
+    (nonMaterialRow(artifact).governance_scope as {
+      operated_system_release_health: string;
+    }).operated_system_release_health = "included";
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) =>
+        v.code === "broader_governance_scope_unbounded"
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a row missing a bounded UX field (missing_required_field)", () => {
+    const artifact = structuredClone(projection());
+    nonMaterialRow(artifact).display_label = "";
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "missing_required_field"))
+      .toBe(true);
+  });
+});

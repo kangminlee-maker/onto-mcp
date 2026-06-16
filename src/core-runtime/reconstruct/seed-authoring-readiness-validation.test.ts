@@ -877,3 +877,164 @@ describe("seed authoring readiness validation", () => {
     expect(validation.validation_status).toBe("valid");
   });
 });
+
+describe("validateSeedAuthoringReadiness rejection branches", () => {
+  function validBundle(
+    buildOptions: Parameters<typeof buildReadiness>[1] = {},
+    element: ReconstructPurposeAdequacyRequiredElement = requiredElement(),
+  ) {
+    const bundle = buildReadiness(element, buildOptions);
+    const validateArgs = {
+      sourcePurposeCandidates: bundle.sourcePurpose,
+      sourcePurposeCandidatesValidation: bundle.purposeValidation,
+      targetMaterialProfileValidation: bundle.targetMaterialProfile,
+      sourceScoutPackValidation: bundle.sourceScoutPack,
+      sourceObservationDirectiveValidation: bundle.sourceObservationDirective,
+      purposeConfirmationValidation: bundle.purposeConfirmation,
+      materialAdmissionLedger: bundle.materialAdmissionLedger,
+      candidateDispositionValidation: bundle.candidateDisposition,
+      sourceFrontierValidations: bundle.sourceFrontierValidations,
+      admittedDomainIds: buildOptions.admittedDomainIds,
+    };
+    return { bundle, validateArgs };
+  }
+
+  it("confirms the reused valid base validates before mutation", () => {
+    const { bundle, validateArgs } = validBundle();
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: bundle.readiness,
+      ...validateArgs,
+    });
+    expect(validation.validation_status).toBe("valid");
+  });
+
+  it("rejects session_id_mismatch when readiness session_id diverges from source-purpose-candidates", () => {
+    const { bundle, validateArgs } = validBundle();
+    const tampered = structuredClone(bundle.readiness);
+    tampered.session_id = `${bundle.readiness.session_id}-divergent`;
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: tampered,
+      ...validateArgs,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((item) => item.code === "session_id_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects closure_row_missing when an expected closure row is dropped from the artifact", () => {
+    const { bundle, validateArgs } = validBundle();
+    const tampered = structuredClone(bundle.readiness);
+    expect(tampered.closure_rows.length).toBeGreaterThan(0);
+    tampered.closure_rows = tampered.closure_rows.slice(1);
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: tampered,
+      ...validateArgs,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((item) => item.code === "closure_row_missing"))
+      .toBe(true);
+  });
+
+  it("rejects closure_row_invalid_state when a closure row reports the wrong closure state", () => {
+    const { bundle, validateArgs } = validBundle();
+    const tampered = structuredClone(bundle.readiness);
+    const target = tampered.closure_rows[0];
+    expect(target).toBeDefined();
+    expect(target!.closure_state).toBe("evidence_backed");
+    target!.closure_state = "missing";
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: tampered,
+      ...validateArgs,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((item) => item.code === "closure_row_invalid_state"))
+      .toBe(true);
+  });
+
+  it("rejects closure_row_dangling_material_admission when a row points at an unexpected admission ref", () => {
+    const { bundle, validateArgs } = validBundle();
+    const tampered = structuredClone(bundle.readiness);
+    const target = tampered.closure_rows[0];
+    expect(target).toBeDefined();
+    target!.material_admission_row_ref = "material-admission:fabricated-row";
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: tampered,
+      ...validateArgs,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((item) =>
+      item.code === "closure_row_dangling_material_admission"
+    )).toBe(true);
+  });
+
+  it("rejects closure_row_dangling_required_element when the artifact carries an unknown closure row", () => {
+    const { bundle, validateArgs } = validBundle();
+    const tampered = structuredClone(bundle.readiness);
+    const base = tampered.closure_rows[0];
+    expect(base).toBeDefined();
+    tampered.closure_rows = [
+      ...tampered.closure_rows,
+      {
+        ...structuredClone(base!),
+        closure_row_id: "seed-authoring-closure:fabricated-unknown-element",
+        required_element_ref: "purpose-element-unknown",
+      },
+    ];
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: tampered,
+      ...validateArgs,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((item) =>
+      item.code === "closure_row_dangling_required_element"
+    )).toBe(true);
+  });
+
+  it("rejects missing_requirement_category_not_reported when reported categories diverge from closure rows", () => {
+    const { bundle, validateArgs } = validBundle();
+    const tampered = structuredClone(bundle.readiness);
+    tampered.missing_requirement_categories = [
+      ...tampered.missing_requirement_categories,
+      "fabricated_missing_category",
+    ];
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: tampered,
+      ...validateArgs,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((item) =>
+      item.code === "missing_requirement_category_not_reported"
+    )).toBe(true);
+  });
+
+  it("rejects ontology_domain_category_missing when an expected ontology domain category row is dropped", () => {
+    const { bundle, validateArgs } = validBundle({ admittedDomainIds: ["ontology"] });
+    expect(bundle.readiness.ontology_domain_required_category_rows.length)
+      .toBeGreaterThan(0);
+    const tampered = structuredClone(bundle.readiness);
+    tampered.ontology_domain_required_category_rows =
+      tampered.ontology_domain_required_category_rows.slice(1);
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: tampered,
+      ...validateArgs,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((item) =>
+      item.code === "ontology_domain_category_missing"
+    )).toBe(true);
+  });
+});
