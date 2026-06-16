@@ -54,34 +54,45 @@ function refFromPath(sessionPath: string): SessionRef | null {
   };
 }
 
-async function resolveSession(
-  args: WatchArgs,
-): Promise<{ ref: SessionRef | null; reason?: string }> {
-  if (args.session) {
-    const byPath = refFromPath(args.session);
-    if (byPath) return { ref: byPath };
-  }
+interface ResolvedWatch {
+  sessions: SessionRef[];
+  initialSession?: SessionRef;
+  error?: string;
+}
+
+async function resolveWatch(args: WatchArgs): Promise<ResolvedWatch> {
   const sessions = await discoverSessions(args.projectRoot);
-  if (sessions.length === 0) {
-    return { ref: null, reason: `no review/reconstruct sessions under ${args.projectRoot}/.onto` };
+  if (!args.session) {
+    // No arg → open the SessionSelector (error only when there is nothing to show).
+    if (sessions.length === 0) {
+      return { sessions, error: `no review/reconstruct sessions under ${args.projectRoot}/.onto` };
+    }
+    return { sessions };
   }
-  if (!args.session) return { ref: sessions[0]! }; // most recently modified
+  const byPath = refFromPath(args.session);
+  if (byPath) {
+    return { sessions: sessions.length ? sessions : [byPath], initialSession: byPath };
+  }
   const match = sessions.find((s) => s.sessionId.includes(args.session!));
   if (!match) {
-    return { ref: null, reason: `no session matching "${args.session}"` };
+    return { sessions, error: `no session matching "${args.session}"` };
   }
-  return { ref: match };
+  return { sessions, initialSession: match };
 }
 
 export async function runWatch(argv: string[]): Promise<number> {
   const args = parseArgs(argv);
-  const { ref, reason } = await resolveSession(args);
-  if (!ref) {
-    process.stderr.write(`[onto watch] ${reason}\n`);
+  const { sessions, initialSession, error } = await resolveWatch(args);
+  if (error) {
+    process.stderr.write(`[onto watch] ${error}\n`);
     return 1;
   }
   const instance = render(
-    createElement(WatchApp, { session: ref, ontoHome: args.projectRoot }),
+    createElement(WatchApp, {
+      sessions,
+      ...(initialSession ? { initialSession } : {}),
+      ontoHome: args.projectRoot,
+    }),
   );
   await instance.waitUntilExit();
   return 0;
