@@ -265,7 +265,11 @@ export async function buildReconstructSourceObservation(
   try {
     stat = await fs.stat(detection.ref);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    const code = (error as NodeJS.ErrnoException).code;
+    // ENOENT: the ref was deleted; ENOTDIR: a parent path component became a
+    // file. Both mean the ref is no longer an observable source (TOCTOU), so
+    // degrade to null. Other stat failures still propagate.
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
     throw error;
   }
   const stats = stat.isFile()

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteFile, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertArrayField, atomicWriteFile, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructOntologySeedArtifact,
   ReconstructOntologySeedValidationArtifact,
@@ -1445,6 +1445,7 @@ function assertSemanticAuthoringHasObservedEvidence(args: {
   // source-observations.skipped_refs (not the inventory, which was built before
   // the re-observation), so merge both — otherwise a single-ref TOCTOU run halts
   // with a misleading skipped_refs=none.
+  assertArrayField(args.sourceObservations.skipped_refs, "source-observations", "skipped_refs");
   const observationSkipped = args.sourceObservations.skipped_refs.map((row) =>
     `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
   );
