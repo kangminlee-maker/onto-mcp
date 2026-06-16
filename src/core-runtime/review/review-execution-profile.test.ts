@@ -71,6 +71,11 @@ describe("resolveReviewExecutionProfile", () => {
     const result = resolveReviewExecutionProfile({
       explicitCodex: false,
       settings,
+      // Inject binary availability so the test is hermetic: all actors are OpenAI
+      // OAuth -> codex worker, which consults codexAvailable. Without this the
+      // resolution depended on detectCodexBinaryAvailable() hitting the real host
+      // (green locally where codex is installed, "no_host" on clean CI).
+      codexAvailable: true,
       env: { [REVIEW_MOCK_REALIZATION_ENV]: "1" },
     });
 
