@@ -201,6 +201,11 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120_000;
 // `ONTO_LLM_TIMEOUT_MS` override still applies to both paths when set.
 const DEFAULT_WORKER_TIMEOUT_MS =
   Number(process.env.ONTO_LLM_TIMEOUT_MS) || 600_000;
+// Grace period after a timeout SIGTERM before escalating to SIGKILL. A worker
+// that traps/ignores SIGTERM would otherwise leave the run hanging indefinitely
+// (the close-event promise never resolves); SIGKILL cannot be trapped, so this
+// bounds the worst-case hang to timeout + grace.
+const WORKER_SIGKILL_GRACE_MS = 5_000;
 // SDK auto-retry hides failures behind a long stall. We surface failures
 // faster (1 retry instead of the default 2) so operators see provider errors
 // within ~2× timeout instead of ~3×.
@@ -427,6 +432,17 @@ async function callAnthropic(
     emitModelCallLog(
       `anthropic call FAILED: model="${modelId}" status=${e.status ?? "?"} type=${e.error?.type ?? e.name ?? "?"} message="${e.error?.message ?? e.message ?? String(err)}" request_id=${e.request_id ?? "?"}`,
     );
+    // Normalize SDK request timeouts (thrown after maxRetries is exhausted) to a
+    // message the timeout-recovery classifier recognizes — the SDK error's own
+    // message ("Request timed out.") does not match, so api_key-provider timeout
+    // recovery was previously dead. instanceof is the robust check (the class
+    // does not override Error.prototype.name).
+    if (err instanceof Anthropic.APIConnectionTimeoutError) {
+      throw new Error(
+        `anthropic call timed out after ${DEFAULT_TIMEOUT_MS}ms`,
+        { cause: err },
+      );
+    }
     throw err;
   }
 
@@ -497,6 +513,15 @@ async function callOpenAI(
     emitModelCallLog(
       `${providerLabel} call FAILED: model="${modelId}" status=${e.status ?? "?"} type=${e.error?.type ?? e.name ?? "?"} message="${e.error?.message ?? e.message ?? String(err)}" request_id=${e.request_id ?? "?"}`,
     );
+    // Normalize SDK request timeouts to a classifier-recognized message (see the
+    // anthropic path above) so OpenAI/grok/lmstudio api_key timeouts also trigger
+    // timeout recovery instead of failing hard.
+    if (err instanceof OpenAI.APIConnectionTimeoutError) {
+      throw new Error(
+        `${providerLabel} call timed out after ${DEFAULT_TIMEOUT_MS}ms`,
+        { cause: err },
+      );
+    }
     throw err;
   }
 
@@ -589,17 +614,32 @@ async function callCodexCli(
     );
   });
 
+  // Swallow stdin write errors (EPIPE): if the worker exits before reading the
+  // prompt (e.g. fast model-allowlist rejection), an unhandled 'error' on the
+  // stdin stream would crash the host process. The real failure surfaces via the
+  // exit code / stderr below.
+  child.stdin.on("error", () => {});
   child.stdin.write(combinedPrompt);
   child.stdin.end();
 
+  let sigkillHandle: ReturnType<typeof setTimeout> | undefined;
   const timeoutHandle = setTimeout(() => {
     timedOut = true;
     child.kill("SIGTERM");
+    sigkillHandle = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch { /* already exited */ }
+    }, WORKER_SIGKILL_GRACE_MS);
   }, DEFAULT_WORKER_TIMEOUT_MS);
 
+  const clearTimers = (): void => {
+    clearTimeout(timeoutHandle);
+    if (sigkillHandle) clearTimeout(sigkillHandle);
+  };
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on("error", (err: NodeJS.ErrnoException) => {
-      clearTimeout(timeoutHandle);
+      clearTimers();
       if (err.code === "ENOENT") {
         reject(new Error(
           "codex CLI not found on PATH. Install codex to use the OAuth subscription path: https://github.com/openai/codex",
@@ -609,7 +649,7 @@ async function callCodexCli(
       }
     });
     child.on("close", (code) => {
-      clearTimeout(timeoutHandle);
+      clearTimers();
       resolve(code ?? 1);
     });
   });
@@ -792,14 +832,24 @@ async function callClaudeCli(
     );
   });
 
+  let sigkillHandle: ReturnType<typeof setTimeout> | undefined;
   const timeoutHandle = setTimeout(() => {
     timedOut = true;
     child.kill("SIGTERM");
+    sigkillHandle = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch { /* already exited */ }
+    }, WORKER_SIGKILL_GRACE_MS);
   }, DEFAULT_WORKER_TIMEOUT_MS);
 
+  const clearTimers = (): void => {
+    clearTimeout(timeoutHandle);
+    if (sigkillHandle) clearTimeout(sigkillHandle);
+  };
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on("error", (err: NodeJS.ErrnoException) => {
-      clearTimeout(timeoutHandle);
+      clearTimers();
       if (err.code === "ENOENT") {
         reject(new Error(
           `Claude Code CLI not found (${claudeBin}). Install and log in to claude, or set ONTO_CLAUDE_BIN, to use the Anthropic OAuth subscription path: https://docs.anthropic.com/en/docs/claude-code`,
@@ -809,7 +859,7 @@ async function callClaudeCli(
       }
     });
     child.on("close", (code) => {
-      clearTimeout(timeoutHandle);
+      clearTimers();
       resolve(code ?? 1);
     });
   });

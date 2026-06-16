@@ -5917,7 +5917,10 @@ async function callJsonAuthor(args: {
   );
 }
 
-function isLlmTimeoutError(error: unknown): boolean {
+// Exported for the timeout-classification contract test (llm-caller normalizes
+// SDK request timeouts to a message this predicate must recognize); not part of
+// the product surface.
+export function isLlmTimeoutError(error: unknown): boolean {
   return error instanceof Error &&
     /(codex CLI call timed out|call timed out after|timed out after \d+ms|reason=timeout|timeout_ms)/i
       .test(error.message);
