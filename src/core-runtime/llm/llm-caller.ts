@@ -378,14 +378,14 @@ function missingModelError(provider: "anthropic" | "openai" | "grok" | "lmstudio
   );
 }
 
-function unsupportedReasoningEffortError(provider: "anthropic" | "grok" | "lmstudio"): Error {
+function unsupportedReasoningEffortError(provider: "grok" | "lmstudio"): Error {
   return new Error(
-    `provider=${provider} cannot honor reasoning_effort; remove effort from this actor or switch to provider=openai/codex.`,
+    `provider=${provider} cannot honor reasoning_effort; remove effort from this actor or switch to provider=openai/codex/anthropic.`,
   );
 }
 
 function assertNoUnsupportedReasoningEffort(
-  provider: "anthropic" | "grok" | "lmstudio",
+  provider: "grok" | "lmstudio",
   reasoningEffort: string | undefined,
 ): void {
   if (reasoningEffort) {
@@ -403,6 +403,7 @@ async function callAnthropic(
   apiKey: string,
   modelId: string,
   maxTokens: number,
+  reasoningEffort?: string,
 ): Promise<LlmCallResult> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({
@@ -411,13 +412,36 @@ async function callAnthropic(
     maxRetries: DEFAULT_MAX_RETRIES,
   });
 
-  emitModelCallLog(`anthropic call: model="${modelId}" max_tokens=${maxTokens}`);
+  emitModelCallLog(
+    `anthropic call: model="${modelId}" max_tokens=${maxTokens} effort=${reasoningEffort ?? "(unset)"}`,
+  );
 
   let response;
   try {
     response = await client.messages.create({
       model: modelId,
       max_tokens: maxTokens,
+      // Reasoning depth is controlled by output_config.effort (GA, no beta
+      // header), but on opus-4.x effort only modulates *thinking* depth when
+      // adaptive thinking is enabled — without it the model runs without
+      // thinking, so configured effort would not be realized on this route.
+      // Pair the two so effort actually engages reasoning (matching the openai
+      // Responses and claude-CLI routes); effort also bounds overall token
+      // spend. The free-form seat string maps onto the API effort enum; absent
+      // → the API default (high) with no thinking (legacy behavior preserved).
+      ...(reasoningEffort
+        ? {
+            thinking: { type: "adaptive" as const },
+            output_config: {
+              effort: reasoningEffort as
+                | "low"
+                | "medium"
+                | "high"
+                | "xhigh"
+                | "max",
+            },
+          }
+        : {}),
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     });
@@ -449,6 +473,15 @@ async function callAnthropic(
   emitModelCallLog(
     `anthropic success: model_id=${response.model ?? modelId} input_tokens=${response.usage.input_tokens} output_tokens=${response.usage.output_tokens}`,
   );
+
+  // With adaptive thinking on (effort set), thinking shares the max_tokens
+  // budget; a max_tokens stop means the response was truncated and may carry
+  // partial/empty text. Fail loud rather than record a truncated artifact.
+  if (reasoningEffort && response.stop_reason === "max_tokens") {
+    throw new Error(
+      `anthropic response truncated at max_tokens=${maxTokens} (effort=${reasoningEffort} reasoning exhausted the budget); raise max_tokens`,
+    );
+  }
 
   const text = response.content
     .filter((block) => block.type === "text")
@@ -544,6 +577,102 @@ async function callOpenAI(
     model_id: modelId,
     effective_base_url: baseUrl ?? defaultBase,
     declared_billing_mode: providerLabel === "lmstudio" ? "local" : "per_token",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI Responses API call (canonical OpenAI reasoning models, e.g. gpt-5.x)
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical OpenAI path. Reasoning models (gpt-5.x) are driven through the
+ * Responses API: reasoning depth is `reasoning.effort` and the output cap is
+ * `max_output_tokens` (Chat Completions' `max_tokens` is rejected by reasoning
+ * models). grok/lmstudio stay on Chat Completions via `callOpenAI` — they are
+ * OpenAI-compatible Chat Completions endpoints with no Responses API.
+ */
+async function callOpenAIResponses(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  modelId: string,
+  maxOutputTokens: number,
+  reasoningEffort?: string,
+): Promise<LlmCallResult> {
+  const { default: OpenAI } = await import("openai");
+  const client = new OpenAI({
+    apiKey,
+    timeout: DEFAULT_TIMEOUT_MS,
+    maxRetries: DEFAULT_MAX_RETRIES,
+  });
+
+  emitModelCallLog(
+    `openai call: model="${modelId}" max_output_tokens=${maxOutputTokens} effort=${reasoningEffort ?? "(unset)"}`,
+  );
+
+  let response;
+  try {
+    response = await client.responses.create({
+      model: modelId,
+      instructions: systemPrompt,
+      input: userPrompt,
+      max_output_tokens: maxOutputTokens,
+      // Transient single-turn authoring/review calls; the Responses API stores
+      // response objects provider-side by default (retrievable for ~30d). Opt
+      // out so these prompts/outputs are not persisted — matches the
+      // chat.completions path, which never stored.
+      store: false,
+      ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
+    } as never);
+  } catch (err) {
+    const e = err as {
+      status?: number;
+      name?: string;
+      message?: string;
+      error?: { type?: string; message?: string };
+      request_id?: string;
+    };
+    emitModelCallLog(
+      `openai call FAILED: model="${modelId}" status=${e.status ?? "?"} type=${e.error?.type ?? e.name ?? "?"} message="${e.error?.message ?? e.message ?? String(err)}" request_id=${e.request_id ?? "?"}`,
+    );
+    // Mirror the api_key timeout normalization on the chat.completions path so
+    // Responses-API timeouts also trigger timeout recovery.
+    if (err instanceof OpenAI.APIConnectionTimeoutError) {
+      throw new Error(`openai call timed out after ${DEFAULT_TIMEOUT_MS}ms`, {
+        cause: err,
+      });
+    }
+    throw err;
+  }
+
+  // Only status="completed" carries a usable result. Anything else —
+  // "incomplete" (e.g. max_output_tokens exhausted, partial/empty output_text),
+  // "failed", "cancelled", "queued", "in_progress" — would otherwise be recorded
+  // as a normal result via `output_text ?? ""`, silently corrupting downstream
+  // artifacts. Fail loud so the caller retries or surfaces it.
+  if (response.status !== "completed") {
+    const detail =
+      response.incomplete_details?.reason ?? response.error?.message ?? "no detail";
+    emitModelCallLog(
+      `openai call NOT COMPLETED: model="${modelId}" status=${response.status} detail=${detail} max_output_tokens=${maxOutputTokens}`,
+    );
+    throw new Error(
+      `openai response not completed (status=${response.status}: ${detail}) at max_output_tokens=${maxOutputTokens} — raise max_output_tokens if truncated`,
+    );
+  }
+
+  const usage = response.usage;
+  emitModelCallLog(
+    `openai success: model_id=${response.model ?? modelId} input_tokens=${usage?.input_tokens ?? 0} output_tokens=${usage?.output_tokens ?? 0}`,
+  );
+
+  return {
+    text: response.output_text ?? "",
+    input_tokens: usage?.input_tokens ?? 0,
+    output_tokens: usage?.output_tokens ?? 0,
+    model_id: modelId,
+    effective_base_url: "https://api.openai.com/v1",
+    declared_billing_mode: "per_token",
   };
 }
 
@@ -956,7 +1085,6 @@ async function dispatchByPlan(
     );
   }
   if (plan.provider_identity === "anthropic") {
-    assertNoUnsupportedReasoningEffort("anthropic", config.reasoning_effort);
     const apiKey = readEnvApiKey(
       config.api_key_env ? [config.api_key_env] : ["ANTHROPIC_API_KEY"],
     );
@@ -967,7 +1095,14 @@ async function dispatchByPlan(
     }
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.anthropic;
     if (!modelId) throw missingModelError("anthropic");
-    return callAnthropic(systemPrompt, userPrompt, apiKey, modelId, maxTokens);
+    return callAnthropic(
+      systemPrompt,
+      userPrompt,
+      apiKey,
+      modelId,
+      maxTokens,
+      config.reasoning_effort,
+    );
   }
   if (plan.provider_identity === "openai") {
     const apiKey = readOpenAiApiKey(config.api_key_env);
@@ -978,14 +1113,12 @@ async function dispatchByPlan(
     }
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.openai;
     if (!modelId) throw missingModelError("openai");
-    return callOpenAI(
+    return callOpenAIResponses(
       systemPrompt,
       userPrompt,
       apiKey,
       modelId,
       maxTokens,
-      undefined,
-      "openai",
       config.reasoning_effort,
     );
   }
@@ -1084,8 +1217,8 @@ export async function callLlm(
   // Anthropic OAuth → Claude Code CLI worker. The model-switcher keeps
   // provider="anthropic" for OAuth (the brand lives in execution_adapter), so
   // dispatch on the adapter here, before the SDK/api-key path. This is the
-  // direct-call analog of openai OAuth → codex. claude DOES honor effort, so it
-  // is passed through rather than rejected by the SDK-path effort guard.
+  // direct-call analog of openai OAuth → codex. Both this CLI route (--effort)
+  // and the api_key SDK route below (output_config.effort) honor effort.
   if (
     config?.provider === "anthropic" &&
     config?.execution_adapter === "claude_code"
@@ -1096,10 +1229,6 @@ export async function callLlm(
       config.model_id ?? config.models_per_provider?.anthropic,
       config.reasoning_effort,
     );
-  }
-
-  if (config?.provider === "anthropic") {
-    assertNoUnsupportedReasoningEffort("anthropic", config.reasoning_effort);
   }
 
   if (config?.provider === "grok") {
@@ -1162,22 +1291,26 @@ export async function callLlm(
       );
     }
     case "anthropic": {
-      assertNoUnsupportedReasoningEffort("anthropic", config?.reasoning_effort);
       const modelId = config?.model_id ?? perProviderModel;
       if (!modelId) throw missingModelError("anthropic");
-      return callAnthropic(systemPrompt, userPrompt, resolved.apiKey, modelId, maxTokens);
-    }
-    case "openai": {
-      const modelId = config?.model_id ?? perProviderModel;
-      if (!modelId) throw missingModelError("openai");
-      return callOpenAI(
+      return callAnthropic(
         systemPrompt,
         userPrompt,
         resolved.apiKey,
         modelId,
         maxTokens,
-        undefined,
-        "openai",
+        config?.reasoning_effort,
+      );
+    }
+    case "openai": {
+      const modelId = config?.model_id ?? perProviderModel;
+      if (!modelId) throw missingModelError("openai");
+      return callOpenAIResponses(
+        systemPrompt,
+        userPrompt,
+        resolved.apiKey,
+        modelId,
+        maxTokens,
         config?.reasoning_effort,
       );
     }
