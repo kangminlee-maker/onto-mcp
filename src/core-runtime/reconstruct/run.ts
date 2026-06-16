@@ -1436,11 +1436,19 @@ function assertSemanticAuthoringHasObservedEvidence(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
 }): void {
   if (args.sourceObservations.observations.length > 0) return;
-  const skipped = args.sourceInventory.inventory_units
+  const inventorySkipped = args.sourceInventory.inventory_units
     .filter((unit) => unit.scan_status === "skipped")
     .map((unit) =>
       `${path.basename(unit.ref)}:${unit.target_material_kind}:${unit.skip_reason ?? "skipped"}`
     );
+  // Refs that vanished between detection and re-observation are recorded in
+  // source-observations.skipped_refs (not the inventory, which was built before
+  // the re-observation), so merge both — otherwise a single-ref TOCTOU run halts
+  // with a misleading skipped_refs=none.
+  const observationSkipped = args.sourceObservations.skipped_refs.map((row) =>
+    `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
+  );
+  const skipped = [...new Set([...inventorySkipped, ...observationSkipped])];
   throw new Error(
     [
       "reconstruct semantic authoring requires at least one runtime source observation",

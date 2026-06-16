@@ -534,6 +534,7 @@ export function validateSourceObservationReentry(args: {
 }): ReconstructSourceObservationReentryValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   assertArrayField(args.sourceSafetyLedger.safety_rows, "source-safety-ledger", "safety_rows");
+  assertArrayField(args.delta.added_observation_ids, "source-observation-delta", "added_observation_ids");
   const violations: ReconstructSourceObservationReentryValidationViolation[] = [];
   if (args.delta.schema_version !== "1") {
     violations.push(reentryViolation({

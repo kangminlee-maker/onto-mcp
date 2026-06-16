@@ -554,6 +554,7 @@ export async function validateSourceScoutPack(args: {
   sourceObservationLineageIndexValidationSha256?: string | null;
 }): Promise<ReconstructSourceScoutPackValidationArtifact> {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  assertArrayField(args.sourceScoutPack.profile_scout_coverage_slots, "source-scout-pack", "profile_scout_coverage_slots");
   const violations: ReconstructSourceScoutPackValidationViolation[] = [];
   // signal_rows is this validator's primary subject and is already shape-checked
   // gracefully below (→ schema_shape_invalid violation), so it is NOT asserted.
