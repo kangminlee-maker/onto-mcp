@@ -50,6 +50,7 @@
     "check:invariant-drift": "tsx scripts/check-invariant-drift.ts",
     "check:supported-models": "tsx scripts/check-supported-models.ts",
     "test": "npm run test:e2e",
+    "test:vitest": "vitest run",
     "test:review:live": "npm run build:ts-core && tsx scripts/review-mcp-live-e2e.ts",
     "test:review:live:cli": "npm run build:ts-core && tsx scripts/review-live-e2e.ts",
     "benchmark:review:pipeline": "tsx scripts/review-pipeline-benchmark.ts",

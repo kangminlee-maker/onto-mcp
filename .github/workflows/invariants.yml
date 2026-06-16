@@ -2,6 +2,8 @@ name: invariant-guards
 
 # 구조적 가드 (docs/architecture/structural-guardrails-enforcement.md):
 # G1 import 경계, G2 스펙 기본값 스캐너, G4 보호 키 변경 마커.
+# + 전체 vitest 스위트(vitest.config include set, ~102 파일)를 머지 게이트로 실행한다.
+#   라이브/벤치(npm test=test:e2e, benchmark:*)는 credentialed라 CI에서 제외한다.
 on:
   pull_request:
 
@@ -26,3 +28,7 @@ jobs:
         run: npx tsx scripts/check-invariant-change-marker.ts "origin/${{ github.base_ref }}"
       - name: G7 supported-model guard (INV-MODEL-1)
         run: npx tsx scripts/check-supported-models.ts
+      - name: Full vitest suite (unit + integration merge gate)
+        # vitest.config include set; superset of the G3 invariant subset above.
+        # Live/benchmark scripts (npm test, benchmark:*) stay out — they need credentials.
+        run: npm run test:vitest -- --reporter=dot
