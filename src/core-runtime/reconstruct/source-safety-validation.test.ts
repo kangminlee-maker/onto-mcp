@@ -372,3 +372,91 @@ describe("source safety validation", () => {
     );
   });
 });
+
+describe("validateSourceSafetyLedger rejection branches", () => {
+  it("confirms the deep-clonable base fixtures validate before mutation", () => {
+    const observations = sourceObservations();
+    const ledger = structuredClone(validLedger());
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceObservations: observations,
+    });
+
+    expect(validation.validation_status).toBe("valid");
+  });
+
+  it("rejects a safety_rows element that is not an object (schema_shape_invalid)", () => {
+    const observations = sourceObservations();
+    const ledger = structuredClone(validLedger());
+    // safety_rows stays a real array; one element is a non-record value that
+    // normalizeSafetyRow cannot interpret as a row.
+    ledger.safety_rows[0] =
+      "not-a-row" as unknown as ReconstructSourceSafetyRow;
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceObservations: observations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "schema_shape_invalid"))
+      .toBe(true);
+  });
+
+  it("rejects a ledger whose session_id differs from source observations (session_id_mismatch)", () => {
+    const observations = sourceObservations();
+    const ledger = structuredClone(validLedger());
+    ledger.session_id = "session-mismatch";
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceObservations: observations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_id_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects a row with no allowed proof forms (missing_required_field)", () => {
+    const observations = sourceObservations();
+    const ledger = structuredClone(validLedger());
+    ledger.safety_rows[0] = {
+      ...ledger.safety_rows[0]!,
+      redaction_evidence: {
+        ...ledger.safety_rows[0]!.redaction_evidence,
+        allowed_proof_forms: [],
+      },
+    };
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceObservations: observations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "missing_required_field"))
+      .toBe(true);
+  });
+
+  it("rejects a ledger with a duplicate safety row id (duplicate_id)", () => {
+    const observations = sourceObservations();
+    const ledger = structuredClone(validLedger());
+    // Collapse the second row's id onto the first; safety_row_id stays a real
+    // string, so this is a semantic id collision rather than a shape fault.
+    ledger.safety_rows[1] = {
+      ...ledger.safety_rows[1]!,
+      safety_row_id: ledger.safety_rows[0]!.safety_row_id,
+    };
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceObservations: observations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "duplicate_id"))
+      .toBe(true);
+  });
+});

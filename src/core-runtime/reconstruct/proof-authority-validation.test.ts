@@ -108,3 +108,71 @@ describe("proof authority validation", () => {
       .toContain("missing_required_ref");
   });
 });
+
+describe("validateProofAuthority rejection branches", () => {
+  function validBase(): {
+    proofAuthority: ReturnType<typeof buildProofAuthorityArtifact>;
+    args: Omit<
+      Parameters<typeof validateProofAuthority>[0],
+      "proofAuthority"
+    >;
+  } {
+    const proofAuthority = buildProofAuthorityArtifact({
+      sessionId: "session-1",
+      proofSurface: "query_access",
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationContinuationDecisionValidationRef:
+        "maturation-continuation-decision-validation.yaml",
+    });
+    return {
+      proofAuthority,
+      args: {
+        proofAuthorityRef: "query-proofs.yaml",
+        expectedSurface: "query_access",
+        actionabilityMatrixValidation: actionabilityMatrixValidation(),
+        actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+        maturationContinuationDecisionValidation: continuationValidation(),
+        maturationContinuationDecisionValidationRef:
+          "maturation-continuation-decision-validation.yaml",
+      },
+    };
+  }
+
+  it("confirms the valid base validates before mutation", () => {
+    const { proofAuthority, args } = validBase();
+    const validation = validateProofAuthority({ proofAuthority, ...args });
+    expect(validation.validation_status).toBe("valid");
+  });
+
+  it("rejects a proof surface that does not match the expected seat (conflicting_state)", () => {
+    const { proofAuthority, args } = validBase();
+    const mutated = structuredClone(proofAuthority);
+    mutated.proof_surface = "visualization";
+
+    const validation = validateProofAuthority({
+      ...args,
+      proofAuthority: mutated,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "conflicting_state"))
+      .toBe(true);
+  });
+
+  it("rejects proof authority when a prior validation is invalid (prior_validation_invalid)", () => {
+    const { proofAuthority, args } = validBase();
+    const priorInvalid = structuredClone(actionabilityMatrixValidation());
+    priorInvalid.validation_status = "invalid";
+
+    const validation = validateProofAuthority({
+      ...args,
+      proofAuthority,
+      actionabilityMatrixValidation: priorInvalid,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "prior_validation_invalid"),
+    ).toBe(true);
+  });
+});

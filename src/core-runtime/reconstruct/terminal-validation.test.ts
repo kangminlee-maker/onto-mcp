@@ -13,6 +13,7 @@ import type {
   ReconstructStopDecisionArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
+import { RECONSTRUCT_STAGE_IDS } from "./artifact-types.js";
 import {
   loadReconstructContractRegistry,
   type ReconstructContractRegistry,
@@ -871,6 +872,277 @@ describe("terminal reconstruct validation", () => {
     );
     expect(result.violations.some((violation) =>
       violation.subject_id === "reserved_revision_possible_gate"
+    )).toBe(true);
+  });
+});
+
+function clone<T>(value: T): T {
+  return structuredClone(value);
+}
+
+// Valid base for validateReconstructRunManifest: every required stage is
+// present as a `skipped` step (skipped steps bypass artifact-ref checks), and
+// a truthy governing_snapshot satisfies the snapshot-presence guard when no
+// registry validation inputs are supplied. This base validates as "valid".
+function validRunManifest(): ReconstructRunManifestArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    entrypoint: "reconstruct",
+    created_at: now,
+    completed_at: now,
+    target_refs: [],
+    intent: "test",
+    execution_profile: {
+      profile_kind: "full_integral_exploration",
+      runner: "integral-exploration-direct-call",
+      semantic_author_realization: "direct_call",
+      confirmation_provider_realization: "direct_call",
+      directive_author_id: "author",
+      confirmation_provider_id: "provider",
+      allowed_completion_claim: "test",
+    },
+    artifact_refs: {},
+    governing_snapshot: { registry: { registry_id: "r" } },
+    purpose_adequacy_scope: {
+      implemented_artifacts: [],
+      deferred_artifacts: [],
+      deferred_reason: "test",
+    },
+    steps: RECONSTRUCT_STAGE_IDS.map((stageId) => ({
+      step_id: stageId,
+      owner: "runtime",
+      performed_by: {
+        authority: "runtime",
+        realization: "runtime",
+        actor_id: "reconstruct-runtime",
+      },
+      status: "skipped",
+      artifact_refs: [],
+    })),
+    runtime_boundary: {
+      semantic_generation: "not_performed",
+      semantic_authority: "host_llm_or_mock_author",
+    },
+  } as ReconstructRunManifestArtifact;
+}
+
+describe("validateReconstructRunManifest rejection branches", () => {
+  it("validates the base fixture as valid before mutation", async () => {
+    const result = await validateReconstructRunManifest({
+      manifest: validRunManifest(),
+    });
+    expect(result.validation_status).toBe("valid");
+    expect(result.violations).toEqual([]);
+  });
+
+  it("rejects a manifest that omits a required stage step", async () => {
+    const base = validRunManifest();
+    const mutated = clone(base);
+    mutated.steps = mutated.steps.filter(
+      (step) => step.step_id !== "stop_decision",
+    );
+    const result = await validateReconstructRunManifest({ manifest: mutated });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "manifest_step_missing" &&
+      violation.subject_id === "stop_decision"
+    )).toBe(true);
+  });
+
+  it("rejects a completed step that records no artifact refs", async () => {
+    const base = validRunManifest();
+    const mutated = clone(base);
+    const step = mutated.steps.find((candidate) =>
+      candidate.step_id === "stop_decision"
+    );
+    step!.status = "completed";
+    step!.artifact_refs = [];
+    const result = await validateReconstructRunManifest({ manifest: mutated });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "manifest_artifact_ref_missing" &&
+      violation.subject_id === "stop_decision"
+    )).toBe(true);
+  });
+
+  it("rejects a manifest with no governing snapshot when registry inputs are absent", async () => {
+    const base = validRunManifest();
+    const mutated = clone(base);
+    (mutated as { governing_snapshot: unknown }).governing_snapshot = null;
+    const result = await validateReconstructRunManifest({ manifest: mutated });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "manifest_snapshot_missing" &&
+      violation.subject_id === "governing_snapshot"
+    )).toBe(true);
+  });
+});
+
+describe("validatePostMaturationGateProjection rejection branches", () => {
+  const postMaturationPackRef = "/tmp/source-scout-pack.post-maturation.yaml";
+  const postMaturationValidationRef =
+    "/tmp/source-scout-pack-validation.post-maturation.yaml";
+
+  it("validates the base projection as valid before mutation", async () => {
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const result = validatePostMaturationGateProjection({
+      sessionId: "session-1",
+      contractRegistry,
+      sourceScoutPackPostMaturationRef: postMaturationPackRef,
+      sourceScoutPackPostMaturationValidationRef: postMaturationValidationRef,
+      sourceScoutPackPostMaturationValidation:
+        sourceScoutPackValidation(postMaturationPackRef),
+    });
+    expect(result.validation_status).toBe("valid");
+    expect(result.violations).toEqual([]);
+  });
+
+  it("rejects a registry that lacks the post-maturation gate row", async () => {
+    const baseRegistry = await loadReconstructContractRegistry({ registryPath });
+    const result = validatePostMaturationGateProjection({
+      sessionId: "session-1",
+      contractRegistry: {
+        ...baseRegistry,
+        validation_gate_catalog: baseRegistry.validation_gate_catalog.filter(
+          (gate) => gate.gate_id !== "source_scout_pack_post_maturation_gate",
+        ),
+      },
+      sourceScoutPackPostMaturationRef: postMaturationPackRef,
+      sourceScoutPackPostMaturationValidationRef: postMaturationValidationRef,
+      sourceScoutPackPostMaturationValidation:
+        sourceScoutPackValidation(postMaturationPackRef),
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "unknown_id" &&
+      violation.subject_id === "source_scout_pack_post_maturation_gate"
+    )).toBe(true);
+  });
+
+  it("rejects a projection that is missing the post-maturation snapshot ref", async () => {
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const result = validatePostMaturationGateProjection({
+      sessionId: "session-1",
+      contractRegistry,
+      sourceScoutPackPostMaturationRef: null,
+      sourceScoutPackPostMaturationValidationRef: postMaturationValidationRef,
+      sourceScoutPackPostMaturationValidation:
+        sourceScoutPackValidation(postMaturationPackRef),
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "missing_required_ref" &&
+      violation.subject_id === "source_scout_pack_post_maturation"
+    )).toBe(true);
+  });
+
+  it("rejects a projection that is missing the post-maturation validation ref", async () => {
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const result = validatePostMaturationGateProjection({
+      sessionId: "session-1",
+      contractRegistry,
+      sourceScoutPackPostMaturationRef: postMaturationPackRef,
+      sourceScoutPackPostMaturationValidationRef: null,
+      sourceScoutPackPostMaturationValidation:
+        sourceScoutPackValidation(postMaturationPackRef),
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "handoff_required_validation_missing" &&
+      violation.subject_id === "source_scout_pack_post_maturation_gate"
+    )).toBe(true);
+  });
+
+  it("rejects a projection whose post-maturation validation is invalid", async () => {
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const validation = sourceScoutPackValidation(postMaturationPackRef);
+    validation.validation_status = "invalid";
+    const result = validatePostMaturationGateProjection({
+      sessionId: "session-1",
+      contractRegistry,
+      sourceScoutPackPostMaturationRef: postMaturationPackRef,
+      sourceScoutPackPostMaturationValidationRef: postMaturationValidationRef,
+      sourceScoutPackPostMaturationValidation: validation,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "handoff_required_validation_invalid" &&
+      violation.subject_id === "source_scout_pack_post_maturation_gate"
+    )).toBe(true);
+  });
+});
+
+describe("validateHandoffDecision rejection branches", () => {
+  it("rejects handoff when a required gate validation is missing", async () => {
+    const result = await validateFixture({
+      manifest: manifest(null),
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "handoff_required_validation_missing" &&
+      violation.subject_id === "ontology_seed_gate"
+    )).toBe(true);
+  });
+
+  it("rejects handoff when a required applicable gate validation is invalid", async () => {
+    const preSeedPackRef = "/tmp/source-scout-pack.pre-seed.yaml";
+    const preSeedValidationRef = "/tmp/source-scout-pack-validation.pre-seed.yaml";
+    const invalidPreSeedValidation = sourceScoutPackValidation(preSeedPackRef);
+    invalidPreSeedValidation.validation_status = "invalid";
+    const result = await validateFixture({
+      manifest: {
+        ...manifest(null),
+        artifact_refs: {
+          ...manifest(null).artifact_refs,
+          source_scout_pack_pre_seed: preSeedPackRef,
+          source_scout_pack_validation_pre_seed: preSeedValidationRef,
+        },
+      } as ReconstructRunManifestArtifact,
+      sourceScoutPackPreSeedValidation: invalidPreSeedValidation,
+    });
+
+    const preSeedGate = result.gate_projection.find((gate) =>
+      gate.gate_id === "source_scout_pack_pre_seed_gate"
+    );
+    expect(preSeedGate?.applicability).toBe("applicable");
+    expect(preSeedGate?.validation_status).toBe("invalid");
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "handoff_required_validation_invalid" &&
+      violation.subject_id === "source_scout_pack_pre_seed_gate"
+    )).toBe(true);
+  });
+
+  it("rejects a stop decision when readiness projection is not ready", async () => {
+    const baseRegistry = await loadReconstructContractRegistry({ registryPath });
+    const result = await validateFixture({
+      manifest: manifest(null),
+      stopDecision: "stop",
+      contractRegistry: {
+        ...baseRegistry,
+        validation_gate_catalog: [],
+      },
+      ontologySeed: {
+        ontology_handoff: {
+          readiness_claim: "blocked",
+        },
+      },
+    });
+
+    expect(result.readiness_projection).toBe("blocked");
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "handoff_decision_inconsistent" &&
+      violation.subject_id === "stop"
     )).toBe(true);
   });
 });

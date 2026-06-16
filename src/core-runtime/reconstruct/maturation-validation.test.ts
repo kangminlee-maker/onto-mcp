@@ -3082,3 +3082,142 @@ describe("maturation validation", () => {
       .toContain("prior_validation_invalid");
   });
 });
+
+describe("maturation rejection branches", () => {
+  // Pins "reject invalid artifact" behavior for emittable codes not already
+  // asserted elsewhere. Each case deep-clones a VALID base and applies the
+  // smallest shape-valid-but-semantically-invalid mutation.
+
+  // Builds a closure frontier whose single source request targets an
+  // inventoried-but-unobserved code source: a VALID base for closure
+  // source-request rejection branches.
+  function validClosureSourceRequestScenario() {
+    const { frontier, frontierValidation } = frontierScenario();
+    const closureFrontier: ReconstructMaturationClosureFrontierArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      question_frontier_ref: "maturation-question-frontier.yaml",
+      source_requests: [
+        {
+          source_request_id: "source-request-feature-extra",
+          question_refs: ["mq-feature-object"],
+          member_scope_refs: [],
+          member_source_refs: [],
+          cross_material_ref_refs: [],
+          requested_source_ref: "src/feature-extra.ts",
+          requested_location: "src/feature-extra.ts",
+          target_material_kind: "code",
+          expected_evidence_kind: "additional structural evidence",
+          reason: "The request targets a new, not-yet-observed inventory source.",
+        },
+      ],
+      authority_requests: [],
+      directive_author: {
+        owner: "host_llm",
+        author_id: "test-author",
+      },
+    };
+    return {
+      frontier,
+      frontierValidation,
+      closureFrontier,
+      runClosure: (
+        target: ReconstructMaturationClosureFrontierArtifact,
+      ): ReconstructMaturationClosureFrontierValidationArtifact =>
+        validateMaturationClosureFrontier({
+          maturationClosureFrontier: target,
+          maturationClosureFrontierRef: "maturation-closure-frontier.yaml",
+          maturationQuestionFrontier: frontier,
+          maturationQuestionFrontierValidation: frontierValidation,
+          maturationQuestionFrontierValidationRef:
+            "maturation-question-frontier-validation.yaml",
+          sourceInventory: sourceInventory([
+            "src/feature.ts",
+            "src/feature-extra.ts",
+          ]),
+          sourceInventoryRef: "source-inventory.yaml",
+          sourceObservations: sourceObservations(["src/feature.ts"]),
+          sourceObservationsRef: "source-observations.yaml",
+          targetMaterialProfileValidation:
+            validTargetMaterialProfileValidation(),
+        }),
+    };
+  }
+
+  it("accepts the closure source-request base before mutation", () => {
+    const { closureFrontier, runClosure } = validClosureSourceRequestScenario();
+    expect(runClosure(closureFrontier).validation_status).toBe("valid");
+  });
+
+  it("rejects a maturation baseline whose session_id does not match source-purpose candidates", () => {
+    const maturationBaseline = structuredClone(baseline());
+    maturationBaseline.session_id = "session-mismatch";
+
+    const validation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_id_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects a baseline row that loses member lineage when the target is mixed material", () => {
+    const maturationBaseline = structuredClone(baseline());
+    // Base baseline row carries no member lineage and no limitation refs, so a
+    // mixed-material purpose target makes that row require preserved lineage.
+    const mixedCandidates = structuredClone(sourcePurposeCandidates());
+    mixedCandidates.target_material_kind = "mixed";
+
+    const validation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: mixedCandidates,
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "mixed_lineage_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a closure source request whose source ref is not in source inventory", () => {
+    const { closureFrontier, runClosure } = validClosureSourceRequestScenario();
+    const mutated = structuredClone(closureFrontier);
+    mutated.source_requests[0]!.requested_source_ref = "src/not-inventoried.ts";
+    mutated.source_requests[0]!.requested_location = "src/not-inventoried.ts";
+
+    const validation = runClosure(mutated);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "unsupported_source_ref"))
+      .toBe(true);
+  });
+
+  it("rejects a closure source request whose location is semantic-only", () => {
+    const { closureFrontier, runClosure } = validClosureSourceRequestScenario();
+    const mutated = structuredClone(closureFrontier);
+    mutated.source_requests[0]!.requested_location = "semantic:feature-extra";
+
+    const validation = runClosure(mutated);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "semantic_only_location"))
+      .toBe(true);
+  });
+});

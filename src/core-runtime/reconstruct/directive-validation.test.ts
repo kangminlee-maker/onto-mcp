@@ -112,6 +112,63 @@ describe("validateSourceObservationDirective", () => {
     ]);
   });
 
+});
+
+describe("validateSourceObservationDirective rejection branches", () => {
+  it("rejects directive session_id that does not match observations", () => {
+    const directive = structuredClone(validDirective());
+    directive.session_id = "session-other";
+
+    const validation = validateSourceObservationDirective({
+      directive,
+      sourceObservations: sourceObservations(),
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_id_mismatch")).toBe(true);
+  });
+
+  it("rejects a directive with an empty selection", () => {
+    const directive = structuredClone(validDirective());
+    directive.selected_observations = [];
+
+    const validation = validateSourceObservationDirective({
+      directive,
+      sourceObservations: sourceObservations(),
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "empty_selection")).toBe(true);
+  });
+
+  it("rejects a selection whose source_ref does not match the observation", () => {
+    const directive = structuredClone(validDirective());
+    directive.selected_observations[0].source_ref = "/tmp/other-source.csv";
+
+    const validation = validateSourceObservationDirective({
+      directive,
+      sourceObservations: sourceObservations(),
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "source_ref_mismatch")).toBe(true);
+  });
+
+  it("rejects a selection whose location does not match the observation", () => {
+    const directive = structuredClone(validDirective());
+    directive.selected_observations[0].location = "/tmp/other-location.csv";
+
+    const validation = validateSourceObservationDirective({
+      directive,
+      sourceObservations: sourceObservations(),
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "location_mismatch")).toBe(true);
+  });
+});
+
+describe("validateSourceObservationDirective artifact write", () => {
   it("writes a validation artifact from directive and observations files", async () => {
     const root = await makeTmpProject();
     const directivePath = path.join(root, "source-observation-directive.yaml");
