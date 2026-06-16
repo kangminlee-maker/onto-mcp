@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructMaturationClosureFrontierArtifact,
   ReconstructMaturationClosureFrontierValidationArtifact,
@@ -132,6 +132,7 @@ function samePathRef(
 function observationsBySourceRef(
   observations: ReconstructSourceObservationsArtifact,
 ): Map<string, ReconstructSourceObservation> {
+  assertArrayField(observations.observations, "source-observations", "observations");
   return new Map(observations.observations.map((observation) => [
     path.resolve(observation.source_ref),
     observation,
@@ -305,6 +306,8 @@ export function validateSourceObservationDelta(args: {
   frontierValidation: SourceObservationDeltaFrontierValidationArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
 }): ReconstructSourceObservationDeltaValidationArtifact {
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  assertArrayField(args.delta.delta_rows, "source-observation-delta", "delta_rows");
   const violations: ReconstructSourceObservationDeltaValidationViolation[] = [];
   if (args.delta.schema_version !== "1") {
     violations.push(violation({
@@ -527,6 +530,8 @@ export function validateSourceObservationReentry(args: {
   sourceSafetyLedgerValidation: ReconstructSourceSafetyLedgerValidationArtifact;
   sourceSafetyLedgerValidationRef?: string | null;
 }): ReconstructSourceObservationReentryValidationArtifact {
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  assertArrayField(args.sourceSafetyLedger.safety_rows, "source-safety-ledger", "safety_rows");
   const violations: ReconstructSourceObservationReentryValidationViolation[] = [];
   if (args.delta.schema_version !== "1") {
     violations.push(reentryViolation({
@@ -625,6 +630,8 @@ export async function validateSourceObservationLineageIndex(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef?: string | null;
 }): Promise<ReconstructSourceObservationLineageIndexValidationArtifact> {
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
+  assertArrayField(args.lineageIndex.lineage_rows, "source-observation-lineage-index", "lineage_rows");
   const violations: ReconstructSourceObservationLineageIndexValidationViolation[] = [];
   const seen = new Set<string>();
   const observationsById = new Map(args.sourceObservations.observations.map((

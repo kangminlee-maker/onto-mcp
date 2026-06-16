@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructRegistryVerificationEvidenceArtifact,
   ReconstructRegistryVerificationEvidenceRow,
@@ -50,6 +50,10 @@ export async function buildRegistryVerificationEvidenceArtifact(args: {
   registryPath: string;
   contractRegistry: ReconstructContractRegistry;
 }): Promise<ReconstructRegistryVerificationEvidenceArtifact> {
+  assertArrayField(args.contractRegistry.validation_gate_catalog, "contract-registry", "validation_gate_catalog");
+  assertArrayField(args.contractRegistry.validator_records, "contract-registry", "validator_records");
+  assertArrayField(args.contractRegistry.required_when_predicate_catalog, "contract-registry", "required_when_predicate_catalog");
+  assertArrayField(args.contractRegistry.source_profile_records, "contract-registry", "source_profile_records");
   const registryRef = path.resolve(args.registryPath);
   const registryHash = await sha256File(registryRef);
   const artifactAuthorityIds = Object.keys(args.contractRegistry.artifact_authorities)
@@ -128,22 +132,26 @@ function sortedArtifactAuthorityIds(registry: ReconstructContractRegistry): stri
 }
 
 function sortedValidationGateIds(registry: ReconstructContractRegistry): string[] {
+  assertArrayField(registry.validation_gate_catalog, "contract-registry", "validation_gate_catalog");
   return registry.validation_gate_catalog.map((gate) => gate.gate_id).sort();
 }
 
 function sortedValidatorIds(registry: ReconstructContractRegistry): string[] {
+  assertArrayField(registry.validator_records, "contract-registry", "validator_records");
   return registry.validator_records
     .map((validator) => validator.validator_id)
     .sort();
 }
 
 function sortedPredicateIds(registry: ReconstructContractRegistry): string[] {
+  assertArrayField(registry.required_when_predicate_catalog, "contract-registry", "required_when_predicate_catalog");
   return registry.required_when_predicate_catalog
     .map((predicate) => predicate.predicate_id)
     .sort();
 }
 
 function sortedSourceProfileIds(registry: ReconstructContractRegistry): string[] {
+  assertArrayField(registry.source_profile_records, "contract-registry", "source_profile_records");
   return registry.source_profile_records
     .map((profile) => profile.profile_id)
     .sort();
@@ -184,6 +192,10 @@ export function validateRegistryVerificationEvidence(args: {
   expectedRegistryRef?: string | null;
   expectedRegistrySha256?: string | null;
 }): ReconstructRegistryVerificationEvidenceValidationArtifact {
+  assertArrayField(args.evidence.evidence_rows, "registry-verification-evidence", "evidence_rows");
+  assertArrayField(args.contractRegistry.validator_records, "contract-registry", "validator_records");
+  assertArrayField(args.contractRegistry.validation_gate_catalog, "contract-registry", "validation_gate_catalog");
+  assertArrayField(args.contractRegistry.required_when_predicate_catalog, "contract-registry", "required_when_predicate_catalog");
   const violations: ReconstructRegistryVerificationEvidenceValidationViolation[] = [];
   const expectedRegistryRef = args.expectedRegistryRef
     ? path.resolve(args.expectedRegistryRef)

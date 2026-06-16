@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteYamlDocument } from "../artifact-io.js";
+import { assertArrayField, atomicWriteYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructDirectiveValidationViolation,
   ReconstructSourceObservationDirectiveArtifact,
@@ -88,6 +88,7 @@ function validateSelectionAgainstObservation(args: {
 export function validateSourceObservationDirective(
   params: ValidateSourceObservationDirectiveParams,
 ): ReconstructSourceObservationDirectiveValidationArtifact {
+  assertArrayField(params.sourceObservations.observations, "source-observations", "observations");
   const violations: ReconstructDirectiveValidationViolation[] = [];
   const { directive, sourceObservations } = params;
 

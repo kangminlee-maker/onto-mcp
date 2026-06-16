@@ -10,7 +10,10 @@ import type {
   ReconstructTargetMaterialProfileArtifact,
   ReconstructInitialSourceFrontierArtifact,
 } from "./artifact-types.js";
-import { materializeReconstructPreparationArtifacts } from "./materialize-preparation.js";
+import {
+  buildReconstructSourceObservation,
+  materializeReconstructPreparationArtifacts,
+} from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 
 const profilesRoot = path.resolve(".onto/processes/reconstruct/source-profiles");
@@ -430,5 +433,24 @@ describe("materializeReconstructPreparationArtifacts", () => {
 
     expect(validation.validation_status).toBe("valid");
     expect(validation.violations).toEqual([]);
+  });
+});
+
+describe("buildReconstructSourceObservation re-observation fail-soft", () => {
+  it("returns null when a previously-detected ref vanished before re-observation", async () => {
+    const root = await makeTmpProject();
+    // detection.exists was true at detection time, but the file is gone by the
+    // time re-observation runs (TOCTOU). The stat must degrade to null, not crash.
+    const detection = {
+      ref: path.join(root, "deleted-after-detection.ts"),
+      exists: true,
+      kind: "code" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+
+    await expect(
+      buildReconstructSourceObservation(detection),
+    ).resolves.toBeNull();
   });
 });

@@ -257,7 +257,17 @@ export async function buildReconstructSourceObservation(
   }
   const extension = path.extname(detection.ref).toLowerCase();
   const location = detection.ref;
-  const stat = await fs.stat(detection.ref);
+  // Re-observation runs after an earlier detection: the ref may have vanished
+  // in between (TOCTOU). Treat a missing ref as nothing-to-observe (degrade to
+  // null, like the !detection.exists guard above) instead of crashing the run
+  // with an uncontextualized ENOENT. Other stat failures still propagate.
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(detection.ref);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
   const stats = stat.isFile()
     ? await textStats(detection.ref, structuralExcerptCharLimit(detection.kind, detection.ref))
     : {

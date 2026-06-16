@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import {
   loadReconstructContractRegistry,
   type ReconstructContractRegistry,
@@ -126,6 +126,7 @@ function normalizeSourceRef(ref: string): string {
 function evidenceObservationById(
   sourceObservations: ReconstructSourceObservationsArtifact,
 ): Map<string, ReconstructSourceObservationsArtifact["observations"][number]> {
+  assertArrayField(sourceObservations.observations, "source-observations", "observations");
   return new Map(
     sourceObservations.observations.map((observation) => [
       observation.observation_id,
@@ -241,12 +242,14 @@ function readEvidenceRefs(args: {
 }
 
 function registryCandidateKindIds(registry: ReconstructContractRegistry): Set<string> {
+  assertArrayField(registry.candidate_kind_registry, "contract-registry", "candidate_kind_registry");
   return new Set(
     registry.candidate_kind_registry.map((record) => record.candidate_kind_id),
   );
 }
 
 function registryCandidateDispositionIds(registry: ReconstructContractRegistry): Set<string> {
+  assertArrayField(registry.candidate_disposition_registry, "contract-registry", "candidate_disposition_registry");
   return new Set(
     registry.candidate_disposition_registry.map((record) => record.disposition_id),
   );
@@ -276,6 +279,7 @@ export function validateCandidateDisposition(args: {
   sourceObservationsRef?: string | null;
   registryRef?: string | null;
 }): ReconstructCandidateDispositionValidationArtifact {
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   const violations: ReconstructCandidateDispositionValidationViolation[] = [];
   const addShapeViolation = (_code: "schema_shape_invalid", message: string) => {
     violations.push(candidateValidationViolation({
@@ -939,6 +943,7 @@ export function validateOntologySeed(args: {
   sourceObservationsRef?: string | null;
   registryRef?: string | null;
 }): ReconstructOntologySeedValidationArtifact {
+  assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   const violations: ReconstructOntologySeedValidationViolation[] = [];
   const addShapeViolation = (_code: "schema_shape_invalid", message: string) => {
     violations.push(seedValidationViolation({ code: "schema_shape_invalid", message }));

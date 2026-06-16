@@ -355,4 +355,20 @@ describe("source safety validation", () => {
       "supporting_detail_contradiction",
     );
   });
+
+  it("throws a contextualized integrity error when source-observations.observations is malformed", () => {
+    // A torn write or tampering could leave `observations` as a non-array.
+    // The trusted-read shape guard must surface which artifact/field is bad
+    // instead of crashing deep inside with an uncontextualized TypeError.
+    const malformed = {
+      ...sourceObservations(),
+      observations: null,
+    } as unknown as ReconstructSourceObservationsArtifact;
+
+    expect(() =>
+      buildSourceSafetyLedgerFromSourceObservations({ sourceObservations: malformed }),
+    ).toThrow(
+      "artifact integrity: source-observations field 'observations' must be an array, got null",
+    );
+  });
 });

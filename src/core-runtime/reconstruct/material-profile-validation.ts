@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
-import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { atomicWriteYamlDocument as writeYamlDocument, assertArrayField } from "../artifact-io.js";
 import {
   isTargetMaterialKind,
 } from "../target-material-kind.js";
@@ -47,6 +47,7 @@ function sourceProfileKey(args: {
 function sourceProfileRecordsByKey(
   registry: ReconstructContractRegistry,
 ): Map<string, ReconstructSourceProfileRecord> {
+  assertArrayField(registry.source_profile_records, "contract-registry", "source_profile_records");
   return new Map(
     registry.source_profile_records.map((record) => [
       sourceProfileKey(record),
@@ -97,6 +98,10 @@ export function validateTargetMaterialProfile(args: {
   targetMaterialProfileRef?: string | null;
   registryRef?: string | null;
 }): ReconstructTargetMaterialProfileValidationArtifact {
+  assertArrayField(args.contractRegistry.source_profile_records, "contract-registry", "source_profile_records");
+  assertArrayField(args.targetMaterialProfile.target_refs, "target-material-profile", "target_refs");
+  assertArrayField(args.targetMaterialProfile.selected_source_profiles, "target-material-profile", "selected_source_profiles");
+  assertArrayField(args.targetMaterialProfile.target_material_kind_candidates, "target-material-profile", "target_material_kind_candidates");
   const profile = args.targetMaterialProfile;
   const violations: ReconstructTargetMaterialProfileValidationViolation[] = [];
   const projectRoot = projectRootFromRegistryPath(args.registryRef);
