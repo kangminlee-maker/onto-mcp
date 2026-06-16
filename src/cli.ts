@@ -87,6 +87,11 @@ async function main(): Promise<number> {
       return runRegister(argv.slice(1));
     }
 
+    case "watch": {
+      const { runWatch } = await import("./tui/index.js");
+      return runWatch(argv.slice(1));
+    }
+
     case "configure-provider": {
       const { runConfigureProvider } = await import(
         "./core-runtime/onboard/configure-provider.js"

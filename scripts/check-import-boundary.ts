@@ -38,6 +38,7 @@ interface Violation {
 function isTestOrBoundaryFile(relPath: string): boolean {
   return (
     relPath.endsWith(".test.ts") ||
+    relPath.endsWith(".test.tsx") ||
     relPath.includes("/test-fixtures/") ||
     relPath.endsWith("/mock-llm-realization.ts")
   );
@@ -49,7 +50,10 @@ async function listSourceFiles(dir: string): Promise<string[]> {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       out.push(...(await listSourceFiles(full)));
-    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+    } else if (
+      entry.isFile() &&
+      (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx"))
+    ) {
       out.push(full);
     }
   }
