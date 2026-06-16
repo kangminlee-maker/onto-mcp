@@ -905,3 +905,539 @@ describe("OntologySeed validators", () => {
       ]));
   });
 });
+
+async function loadRegistry() {
+  return loadReconstructContractRegistry({
+    registryPath: path.resolve(
+      ".onto/processes/reconstruct/reconstruct-contract-registry.yaml",
+    ),
+  });
+}
+
+describe("validateCandidateDisposition rejection branches", () => {
+  it("rejects a candidate row that is not an object (schema_shape_invalid)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    (inventory.candidates as unknown[])[0] = "not-an-object";
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "schema_shape_invalid")).toBe(true);
+  });
+
+  it("rejects inventory and disposition with differing session_id (session_id_mismatch)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    const disposition = structuredClone(candidateDisposition());
+    inventory.session_id = "inventory-session";
+    disposition.session_id = "disposition-session";
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "session_id_mismatch")).toBe(true);
+  });
+
+  it("rejects a duplicate candidate_id in the inventory (duplicate_candidate_id)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    inventory.candidates.push(structuredClone(inventory.candidates[0]!));
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "duplicate_candidate_id")).toBe(true);
+  });
+
+  it("rejects two dispositions for the same candidate (duplicate_disposition)", async () => {
+    const registry = await loadRegistry();
+    const disposition = structuredClone(candidateDisposition());
+    disposition.dispositions.push(structuredClone(disposition.dispositions[0]!));
+
+    const result = validateCandidateDisposition({
+      candidateInventory: candidateInventory(),
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "duplicate_disposition")).toBe(true);
+  });
+
+  it("rejects a disposition for a candidate not in the inventory (unknown_candidate_id)", async () => {
+    const registry = await loadRegistry();
+    const disposition = structuredClone(candidateDisposition());
+    const extra = structuredClone(disposition.dispositions[0]!);
+    extra.candidate_id = "candidate-not-in-inventory";
+    disposition.dispositions.push(extra);
+
+    const result = validateCandidateDisposition({
+      candidateInventory: candidateInventory(),
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "unknown_candidate_id")).toBe(true);
+  });
+
+  it("rejects a candidate_kind outside the registry (invalid_candidate_kind)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    (inventory.candidates[0] as Record<string, unknown>).candidate_kind = "made_up_kind";
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "invalid_candidate_kind")).toBe(true);
+  });
+
+  it("rejects a disposition_id outside the registry (invalid_disposition)", async () => {
+    const registry = await loadRegistry();
+    const disposition = structuredClone(candidateDisposition());
+    (disposition.dispositions[0] as Record<string, unknown>).disposition_id = "made_up_disposition";
+
+    const result = validateCandidateDisposition({
+      candidateInventory: candidateInventory(),
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "invalid_disposition")).toBe(true);
+  });
+
+  it("rejects a promoted disposition with no target_seed_refs (promoted_target_missing)", async () => {
+    const registry = await loadRegistry();
+    const disposition = structuredClone(candidateDisposition());
+    (disposition.dispositions[0] as Record<string, unknown>).target_seed_refs = [];
+
+    const result = validateCandidateDisposition({
+      candidateInventory: candidateInventory(),
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "promoted_target_missing")).toBe(true);
+  });
+
+  it("rejects a represented_as disposition with no target_seed_refs (target_ref_missing)", async () => {
+    const registry = await loadRegistry();
+    const disposition = structuredClone(candidateDisposition());
+    const row = disposition.dispositions[0] as Record<string, unknown>;
+    row.disposition_id = "represented_as_link";
+    row.target_seed_refs = [];
+
+    const result = validateCandidateDisposition({
+      candidateInventory: candidateInventory(),
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "target_ref_missing")).toBe(true);
+  });
+
+  it("rejects a disposition with a blank rationale (rationale_missing)", async () => {
+    const registry = await loadRegistry();
+    const disposition = structuredClone(candidateDisposition());
+    (disposition.dispositions[0] as Record<string, unknown>).rationale = "";
+
+    const result = validateCandidateDisposition({
+      candidateInventory: candidateInventory(),
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "rationale_missing")).toBe(true);
+  });
+
+  it("rejects a candidate with an empty evidence_refs array (evidence_ref_missing)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    (inventory.candidates[0] as Record<string, unknown>).evidence_refs = [];
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "evidence_ref_missing")).toBe(true);
+  });
+
+  it("rejects an evidence ref that is not a well-formed object (evidence_ref_shape_invalid)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    (inventory.candidates[0] as Record<string, unknown>).evidence_refs = ["prose evidence"];
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "evidence_ref_shape_invalid")).toBe(true);
+  });
+
+  it("rejects an evidence ref to an unknown observation_id (unknown_observation_ref)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    const ref = (inventory.candidates[0] as any).evidence_refs[0] as Record<string, unknown>;
+    ref.observation_id = "obs-does-not-exist";
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "unknown_observation_ref")).toBe(true);
+  });
+
+  it("rejects an evidence ref whose target_material_kind diverges from the observation (material_kind_mismatch)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    const ref = (inventory.candidates[0] as any).evidence_refs[0] as Record<string, unknown>;
+    ref.target_material_kind = "document";
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "material_kind_mismatch")).toBe(true);
+  });
+
+  it("rejects an evidence ref whose source_ref diverges from the observation (source_ref_mismatch)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    const ref = (inventory.candidates[0] as any).evidence_refs[0] as Record<string, unknown>;
+    ref.source_ref = path.resolve("src/other-file.ts");
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "source_ref_mismatch")).toBe(true);
+  });
+
+  it("rejects an evidence ref whose location diverges from the observation (location_mismatch)", async () => {
+    const registry = await loadRegistry();
+    const inventory = structuredClone(candidateInventory());
+    const ref = (inventory.candidates[0] as any).evidence_refs[0] as Record<string, unknown>;
+    ref.location = "a different location string";
+
+    const result = validateCandidateDisposition({
+      candidateInventory: inventory,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "location_mismatch")).toBe(true);
+  });
+});
+
+describe("validateOntologySeed rejection branches", () => {
+  it("rejects a concept row that is not an object (schema_shape_invalid)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    ((seed.conceptual_frame as any).concepts as unknown[])[0] = "not-an-object";
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "schema_shape_invalid")).toBe(true);
+  });
+
+  it("rejects a disposition session_id that diverges from source observations (session_id_mismatch)", async () => {
+    const registry = await loadRegistry();
+    const disposition = structuredClone(candidateDisposition());
+    disposition.session_id = "different-session";
+
+    const result = validateOntologySeed({
+      ontologySeed: ontologySeed(),
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "session_id_mismatch")).toBe(true);
+  });
+
+  it("rejects two seed records that share an id (duplicate_id)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    const concepts = (seed.conceptual_frame as any).concepts as unknown[];
+    concepts.push(structuredClone(concepts[0]));
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "duplicate_id")).toBe(true);
+  });
+
+  it("rejects an actor role that holds an unknown actor type (unknown_ref)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.dynamic_layer as any).actor_roles[0].holder_actor_type_ids = ["actor-nonexistent"];
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "unknown_ref")).toBe(true);
+  });
+
+  it("rejects a required evidence_refs that is present but empty (evidence_ref_missing)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.purpose as any).evidence_refs = [];
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "evidence_ref_missing")).toBe(true);
+  });
+
+  it("rejects an evidence ref to an unknown observation_id (unknown_observation_ref)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.purpose as any).evidence_refs[0].observation_id = "obs-does-not-exist";
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "unknown_observation_ref")).toBe(true);
+  });
+
+  it("rejects an evidence ref whose target_material_kind diverges from the observation (material_kind_mismatch)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.purpose as any).evidence_refs[0].target_material_kind = "document";
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "material_kind_mismatch")).toBe(true);
+  });
+
+  it("rejects an evidence ref whose source_ref diverges from the observation (source_ref_mismatch)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.purpose as any).evidence_refs[0].source_ref = path.resolve("src/other-file.ts");
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "source_ref_mismatch")).toBe(true);
+  });
+
+  it("rejects an evidence ref whose location diverges from the observation (location_mismatch)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.purpose as any).evidence_refs[0].location = "a different location string";
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "location_mismatch")).toBe(true);
+  });
+
+  it("rejects an included source_ref that was never observed (source_ref_unknown)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.source_authority as any).included_source_refs.push(path.resolve("src/unobserved.ts"));
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "source_ref_unknown")).toBe(true);
+  });
+
+  it("rejects a limitation_ref that points at no declared limitation (limitation_ref_unknown)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.ontology_handoff as any).classification_mapping.limitation_refs = ["limitation-undeclared"];
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "limitation_ref_unknown")).toBe(true);
+  });
+
+  it("rejects a candidate_disposition_authority_ref with a wrong scope (candidate_authority_ref_invalid)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.candidate_disposition_authority_ref as any).authority_scope = "internal_self_authority";
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "candidate_authority_ref_invalid")).toBe(true);
+  });
+
+  it("rejects a represented_as_property target that points at a known non-property seed ref (candidate_target_ref_invalid)", async () => {
+    const registry = await loadRegistry();
+    const disposition = structuredClone(candidateDisposition());
+    const row = disposition.dispositions[0] as Record<string, unknown>;
+    row.disposition_id = "represented_as_property";
+    row.target_seed_refs = ["object-dashboard"];
+
+    const result = validateOntologySeed({
+      ontologySeed: ontologySeed(),
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "candidate_target_ref_invalid")).toBe(true);
+  });
+
+  it("rejects an action type with no permission policy coverage (permission_missing)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.dynamic_layer as any).permission_policies = [];
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "permission_missing")).toBe(true);
+  });
+
+  it("rejects an object type with no data binding coverage (data_binding_missing)", async () => {
+    const registry = await loadRegistry();
+    const seed = structuredClone(ontologySeed());
+    (seed.semantic_layer as any).object_types.push({
+      object_type_id: "object-unbound",
+      name: "Unbound Object",
+      object_kind: "surface",
+      description: "An object with no data binding coverage.",
+      primary_key: {
+        property_id: "property-unbound-id",
+        name: "unbound id",
+        value_type: "string",
+        evidence_refs: [evidenceRef()],
+      },
+      properties: [],
+      backing_source_refs: [path.resolve("src/feature.ts")],
+      evidence_refs: [evidenceRef()],
+      status: "confirmed",
+    });
+
+    const result = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((v) => v.code === "data_binding_missing")).toBe(true);
+  });
+});

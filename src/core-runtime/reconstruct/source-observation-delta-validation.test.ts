@@ -662,3 +662,738 @@ describe("source observation delta validation", () => {
     );
   });
 });
+
+describe("validateSourceObservationDelta rejection branches", () => {
+  it("rejects a delta whose schema_version is not 1", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta: {
+        ...delta,
+        schema_version: "2" as ReconstructSourceObservationDeltaArtifact["schema_version"],
+      },
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "schema_shape_invalid"))
+      .toBe(true);
+  });
+
+  it("rejects a delta whose session_id does not match the source observations", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta: {
+        ...delta,
+        session_id: "session-other",
+      },
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_id_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects a delta whose frontier_kind does not match the frontier artifact", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta: {
+        ...delta,
+        frontier_kind: "maturation_closure_frontier",
+      },
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "frontier_kind_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects a delta whose round_id does not match the frontier round", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta: {
+        ...delta,
+        round_id: "round-2",
+      },
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "round_id_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects a delta whose frontier validation is not valid", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta,
+      frontier: frontier(),
+      frontierValidation: {
+        ...frontierValidation(),
+        validation_status: "invalid",
+      },
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "frontier_validation_invalid"),
+    ).toBe(true);
+  });
+
+  it("rejects an accepted frontier id that has no frontier row", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta,
+      frontier: frontier(),
+      frontierValidation: {
+        ...frontierValidation(),
+        accepted_frontier_ref_ids: ["frontier-feature", "frontier-ghost"],
+      },
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "accepted_frontier_missing"),
+    ).toBe(true);
+  });
+
+  it("rejects an accepted frontier id that has no delta row", () => {
+    const { delta, nextObservations } = deltaFixture();
+    const twoRefFrontier: ReconstructSourceFrontierArtifact = {
+      ...frontier(),
+      frontier_refs: [
+        ...frontier().frontier_refs,
+        {
+          frontier_ref_id: "frontier-extra",
+          source_ref: "/repo/src/extra.ts",
+          rationale: "Need extra source.",
+          priority: "high",
+        },
+      ],
+    };
+
+    const validation = validateSourceObservationDelta({
+      delta,
+      frontier: twoRefFrontier,
+      frontierValidation: {
+        ...frontierValidation(),
+        accepted_frontier_ref_ids: ["frontier-feature", "frontier-extra"],
+      },
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "delta_row_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a delta row that references a frontier id that was not accepted", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta: {
+        ...delta,
+        delta_rows: [{
+          ...delta.delta_rows[0]!,
+          frontier_ref_id: "frontier-unaccepted",
+        }],
+      },
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "delta_row_unknown_frontier"),
+    ).toBe(true);
+  });
+
+  it("rejects a delta row that references an unknown observation id", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta: {
+        ...delta,
+        delta_rows: [{
+          ...delta.delta_rows[0]!,
+          observation_id: "obs-ghost",
+        }],
+      },
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "delta_row_unknown_observation"),
+    ).toBe(true);
+  });
+
+  it("rejects a delta row whose observation lacks round/batch/trigger lineage", () => {
+    const { delta } = deltaFixture();
+    const lineagelessObservations = observations([
+      {
+        ...observation({ id: "obs-feature", ref: "/repo/src/feature.ts" }),
+        observation_batch_id: "",
+      },
+    ]);
+
+    const validation = validateSourceObservationDelta({
+      delta,
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: lineagelessObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) =>
+        v.code === "observation_lineage_identity_missing"
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a delta row whose source_ref does not match the observation", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta: {
+        ...delta,
+        delta_rows: [{
+          ...delta.delta_rows[0]!,
+          source_ref: "/repo/src/mismatch.ts",
+        }],
+      },
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "source_ref_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects a delta row whose target_material_kind does not match the observation", () => {
+    const { delta, nextObservations } = deltaFixture();
+
+    const validation = validateSourceObservationDelta({
+      delta: {
+        ...delta,
+        delta_rows: [{
+          ...delta.delta_rows[0]!,
+          target_material_kind: "document",
+        }],
+      },
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "target_material_kind_mismatch"),
+    ).toBe(true);
+  });
+});
+
+describe("validateSourceObservationReentry rejection branches", () => {
+  it("rejects re-entry when the delta schema_version is not 1", () => {
+    const { delta, nextObservations } = deltaFixture();
+    const deltaValidation = validateSourceObservationDelta({
+      delta,
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    const reentry = validateSourceObservationReentry({
+      delta: {
+        ...delta,
+        schema_version: "2" as ReconstructSourceObservationDeltaArtifact["schema_version"],
+      },
+      deltaValidation,
+      sourceObservations: nextObservations,
+      sourceSafetyLedger: safetyLedger(),
+      sourceSafetyLedgerValidation: safetyValidation(),
+    });
+
+    expect(reentry.validation_status).toBe("invalid");
+    expect(reentry.violations.some((v) => v.code === "schema_shape_invalid"))
+      .toBe(true);
+  });
+
+  it("rejects re-entry when the delta validation is not valid", () => {
+    const { delta, nextObservations } = deltaFixture();
+    const deltaValidation = validateSourceObservationDelta({
+      delta,
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    const reentry = validateSourceObservationReentry({
+      delta,
+      deltaValidation: {
+        ...deltaValidation,
+        validation_status: "invalid",
+      },
+      sourceObservations: nextObservations,
+      sourceSafetyLedger: safetyLedger(),
+      sourceSafetyLedgerValidation: safetyValidation(),
+    });
+
+    expect(reentry.validation_status).toBe("invalid");
+    expect(reentry.violations.some((v) => v.code === "delta_validation_invalid"))
+      .toBe(true);
+  });
+
+  it("rejects re-entry when the source safety validation is not valid", () => {
+    const { delta, nextObservations } = deltaFixture();
+    const deltaValidation = validateSourceObservationDelta({
+      delta,
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    const reentry = validateSourceObservationReentry({
+      delta,
+      deltaValidation,
+      sourceObservations: nextObservations,
+      sourceSafetyLedger: safetyLedger(),
+      sourceSafetyLedgerValidation: {
+        ...safetyValidation(),
+        validation_status: "invalid",
+      },
+    });
+
+    expect(reentry.validation_status).toBe("invalid");
+    expect(
+      reentry.violations.some((v) => v.code === "source_safety_validation_invalid"),
+    ).toBe(true);
+  });
+
+  it("rejects re-entry when a delta observation is missing from source observations", () => {
+    const { delta, nextObservations } = deltaFixture();
+    const deltaValidation = validateSourceObservationDelta({
+      delta,
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+
+    const reentry = validateSourceObservationReentry({
+      delta: {
+        ...delta,
+        added_observation_ids: ["obs-ghost"],
+      },
+      deltaValidation,
+      sourceObservations: nextObservations,
+      sourceSafetyLedger: safetyLedger(),
+      sourceSafetyLedgerValidation: safetyValidation(),
+    });
+
+    expect(reentry.validation_status).toBe("invalid");
+    expect(
+      reentry.violations.some((v) =>
+        v.code === "delta_observation_missing_from_source_observations"
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects re-entry when a delta observation is not prompt-visible", () => {
+    const { delta, nextObservations } = deltaFixture();
+    const deltaValidation = validateSourceObservationDelta({
+      delta,
+      frontier: frontier(),
+      frontierValidation: frontierValidation(),
+      sourceObservations: nextObservations,
+    });
+    const blockedLedger = safetyLedger();
+    blockedLedger.safety_rows[0] = {
+      ...blockedLedger.safety_rows[0]!,
+      visibility_tier: "no_prompt_use",
+    };
+
+    const reentry = validateSourceObservationReentry({
+      delta,
+      deltaValidation,
+      sourceObservations: nextObservations,
+      sourceSafetyLedger: blockedLedger,
+      sourceSafetyLedgerValidation: safetyValidation(),
+    });
+
+    expect(reentry.validation_status).toBe("invalid");
+    expect(
+      reentry.violations.some((v) =>
+        v.code === "delta_observation_not_prompt_visible"
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("validateSourceObservationLineageIndex rejection branches", () => {
+  async function withValidLineageFixture(
+    run: (ctx: {
+      root: string;
+      deltaPath: string;
+      deltaValidationPath: string;
+      reentryPath: string;
+      lineageIndex: ReconstructSourceObservationLineageIndexArtifact;
+      nextObservations: ReconstructSourceObservationsArtifact;
+    }) => Promise<void>,
+  ): Promise<void> {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "onto-reconstruct-lineage-index-reject-"),
+    );
+    try {
+      const { delta, nextObservations } = deltaFixture();
+      const deltaPath = path.join(root, "source-observation-delta.yaml");
+      const deltaValidationPath = path.join(
+        root,
+        "source-observation-delta-validation.yaml",
+      );
+      const reentryPath = path.join(
+        root,
+        "source-observation-reentry-validation.yaml",
+      );
+      const deltaValidation = validateSourceObservationDelta({
+        delta,
+        deltaRef: deltaPath,
+        frontier: frontier(),
+        frontierValidation: frontierValidation(),
+        sourceObservations: nextObservations,
+      });
+      const reentry = validateSourceObservationReentry({
+        delta,
+        deltaValidation,
+        deltaValidationRef: deltaValidationPath,
+        sourceObservations: nextObservations,
+        sourceSafetyLedger: safetyLedger(),
+        sourceSafetyLedgerValidation: safetyValidation(),
+      });
+      await fs.writeFile(deltaPath, JSON.stringify(delta), "utf8");
+      await fs.writeFile(
+        deltaValidationPath,
+        JSON.stringify(deltaValidation),
+        "utf8",
+      );
+      await fs.writeFile(reentryPath, JSON.stringify(reentry), "utf8");
+      const lineageIndex: ReconstructSourceObservationLineageIndexArtifact = {
+        schema_version: "1",
+        session_id: "session-1",
+        created_at: now,
+        lineage_rows: [{
+          lineage_row_id: "lineage-row-round-1",
+          round_id: "round-1",
+          frontier_kind: "source_frontier",
+          source_observation_delta_ref: deltaPath,
+          source_observation_delta_validation_ref: deltaValidationPath,
+          source_observation_reentry_validation_ref: reentryPath,
+          added_observation_ids: ["obs-feature"],
+        }],
+      };
+      await run({
+        root,
+        deltaPath,
+        deltaValidationPath,
+        reentryPath,
+        lineageIndex,
+        nextObservations,
+      });
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  }
+
+  it("confirms the lineage fixture validates valid before mutation", async () => {
+    await withValidLineageFixture(async ({ lineageIndex, nextObservations }) => {
+      const validation = await validateSourceObservationLineageIndex({
+        sessionId: "session-1",
+        lineageIndex,
+        sourceObservations: nextObservations,
+      });
+      expect(validation.validation_status).toBe("valid");
+    });
+  });
+
+  it("rejects a lineage index whose schema_version is not 1", async () => {
+    await withValidLineageFixture(async ({ lineageIndex, nextObservations }) => {
+      const validation = await validateSourceObservationLineageIndex({
+        sessionId: "session-1",
+        lineageIndex: {
+          ...lineageIndex,
+          schema_version:
+            "2" as ReconstructSourceObservationLineageIndexArtifact["schema_version"],
+        },
+        sourceObservations: nextObservations,
+      });
+      expect(validation.validation_status).toBe("invalid");
+      expect(validation.violations.some((v) => v.code === "schema_shape_invalid"))
+        .toBe(true);
+    });
+  });
+
+  it("rejects a lineage index whose session_id does not match the session", async () => {
+    await withValidLineageFixture(async ({ lineageIndex, nextObservations }) => {
+      const validation = await validateSourceObservationLineageIndex({
+        sessionId: "session-1",
+        lineageIndex: {
+          ...lineageIndex,
+          session_id: "session-other",
+        },
+        sourceObservations: nextObservations,
+      });
+      expect(validation.validation_status).toBe("invalid");
+      expect(validation.violations.some((v) => v.code === "session_id_mismatch"))
+        .toBe(true);
+    });
+  });
+
+  it("rejects a lineage index with duplicate lineage_row_id", async () => {
+    await withValidLineageFixture(async ({ lineageIndex, nextObservations }) => {
+      const validation = await validateSourceObservationLineageIndex({
+        sessionId: "session-1",
+        lineageIndex: {
+          ...lineageIndex,
+          lineage_rows: [
+            lineageIndex.lineage_rows[0]!,
+            {
+              ...lineageIndex.lineage_rows[0]!,
+              added_observation_ids: [],
+            },
+          ],
+        },
+        sourceObservations: nextObservations,
+      });
+      expect(validation.validation_status).toBe("invalid");
+      expect(validation.violations.some((v) => v.code === "duplicate_id"))
+        .toBe(true);
+    });
+  });
+
+  it("rejects a lineage row whose delta ref is not readable", async () => {
+    await withValidLineageFixture(
+      async ({ root, lineageIndex, nextObservations }) => {
+        const validation = await validateSourceObservationLineageIndex({
+          sessionId: "session-1",
+          lineageIndex: {
+            ...lineageIndex,
+            lineage_rows: [{
+              ...lineageIndex.lineage_rows[0]!,
+              source_observation_delta_ref: path.join(root, "missing-delta.yaml"),
+            }],
+          },
+          sourceObservations: nextObservations,
+        });
+        expect(validation.validation_status).toBe("invalid");
+        expect(validation.violations.some((v) => v.code === "lineage_delta_missing"))
+          .toBe(true);
+      },
+    );
+  });
+
+  it("rejects a lineage row whose delta validation ref is not readable", async () => {
+    await withValidLineageFixture(
+      async ({ root, lineageIndex, nextObservations }) => {
+        const validation = await validateSourceObservationLineageIndex({
+          sessionId: "session-1",
+          lineageIndex: {
+            ...lineageIndex,
+            lineage_rows: [{
+              ...lineageIndex.lineage_rows[0]!,
+              source_observation_delta_validation_ref: path.join(
+                root,
+                "missing-delta-validation.yaml",
+              ),
+            }],
+          },
+          sourceObservations: nextObservations,
+        });
+        expect(validation.validation_status).toBe("invalid");
+        expect(
+          validation.violations.some((v) =>
+            v.code === "lineage_delta_validation_missing"
+          ),
+        ).toBe(true);
+      },
+    );
+  });
+
+  it("rejects a lineage row whose re-entry validation ref is not readable", async () => {
+    await withValidLineageFixture(
+      async ({ root, lineageIndex, nextObservations }) => {
+        const validation = await validateSourceObservationLineageIndex({
+          sessionId: "session-1",
+          lineageIndex: {
+            ...lineageIndex,
+            lineage_rows: [{
+              ...lineageIndex.lineage_rows[0]!,
+              source_observation_reentry_validation_ref: path.join(
+                root,
+                "missing-reentry-validation.yaml",
+              ),
+            }],
+          },
+          sourceObservations: nextObservations,
+        });
+        expect(validation.validation_status).toBe("invalid");
+        expect(
+          validation.violations.some((v) =>
+            v.code === "lineage_reentry_validation_missing"
+          ),
+        ).toBe(true);
+      },
+    );
+  });
+
+  it("rejects a lineage row whose round_id does not match the delta", async () => {
+    await withValidLineageFixture(async ({ lineageIndex, nextObservations }) => {
+      const validation = await validateSourceObservationLineageIndex({
+        sessionId: "session-1",
+        lineageIndex: {
+          ...lineageIndex,
+          lineage_rows: [{
+            ...lineageIndex.lineage_rows[0]!,
+            round_id: "round-2",
+          }],
+        },
+        sourceObservations: nextObservations,
+      });
+      expect(validation.validation_status).toBe("invalid");
+      expect(validation.violations.some((v) => v.code === "round_id_mismatch"))
+        .toBe(true);
+    });
+  });
+
+  it("rejects a lineage row whose frontier_kind does not match the delta", async () => {
+    await withValidLineageFixture(async ({ lineageIndex, nextObservations }) => {
+      const validation = await validateSourceObservationLineageIndex({
+        sessionId: "session-1",
+        lineageIndex: {
+          ...lineageIndex,
+          lineage_rows: [{
+            ...lineageIndex.lineage_rows[0]!,
+            frontier_kind: "maturation_closure_frontier",
+          }],
+        },
+        sourceObservations: nextObservations,
+      });
+      expect(validation.validation_status).toBe("invalid");
+      expect(validation.violations.some((v) => v.code === "frontier_kind_mismatch"))
+        .toBe(true);
+    });
+  });
+
+  it("rejects a lineage row whose delta validation is not valid", async () => {
+    await withValidLineageFixture(
+      async ({ root, deltaValidationPath, lineageIndex, nextObservations }) => {
+        const invalidDeltaValidationPath = path.join(
+          root,
+          "invalid-source-observation-delta-validation.yaml",
+        );
+        const validDeltaValidation = JSON.parse(
+          await fs.readFile(deltaValidationPath, "utf8"),
+        );
+        await fs.writeFile(
+          invalidDeltaValidationPath,
+          JSON.stringify({ ...validDeltaValidation, validation_status: "invalid" }),
+          "utf8",
+        );
+        const validation = await validateSourceObservationLineageIndex({
+          sessionId: "session-1",
+          lineageIndex: {
+            ...lineageIndex,
+            lineage_rows: [{
+              ...lineageIndex.lineage_rows[0]!,
+              source_observation_delta_validation_ref: invalidDeltaValidationPath,
+            }],
+          },
+          sourceObservations: nextObservations,
+        });
+        expect(validation.validation_status).toBe("invalid");
+        expect(
+          validation.violations.some((v) =>
+            v.code === "lineage_delta_validation_invalid"
+          ),
+        ).toBe(true);
+      },
+    );
+  });
+
+  it("rejects a lineage row whose re-entry validation is not valid", async () => {
+    await withValidLineageFixture(
+      async ({ root, reentryPath, lineageIndex, nextObservations }) => {
+        const invalidReentryPath = path.join(
+          root,
+          "invalid-source-observation-reentry-validation.yaml",
+        );
+        const validReentry = JSON.parse(await fs.readFile(reentryPath, "utf8"));
+        await fs.writeFile(
+          invalidReentryPath,
+          JSON.stringify({ ...validReentry, validation_status: "invalid" }),
+          "utf8",
+        );
+        const validation = await validateSourceObservationLineageIndex({
+          sessionId: "session-1",
+          lineageIndex: {
+            ...lineageIndex,
+            lineage_rows: [{
+              ...lineageIndex.lineage_rows[0]!,
+              source_observation_reentry_validation_ref: invalidReentryPath,
+            }],
+          },
+          sourceObservations: nextObservations,
+        });
+        expect(validation.validation_status).toBe("invalid");
+        expect(
+          validation.violations.some((v) =>
+            v.code === "lineage_reentry_validation_invalid"
+          ),
+        ).toBe(true);
+      },
+    );
+  });
+
+  it("rejects a lineage row whose added_observation_ids do not match the delta", async () => {
+    await withValidLineageFixture(async ({ lineageIndex, nextObservations }) => {
+      const validation = await validateSourceObservationLineageIndex({
+        sessionId: "session-1",
+        lineageIndex: {
+          ...lineageIndex,
+          lineage_rows: [{
+            ...lineageIndex.lineage_rows[0]!,
+            added_observation_ids: [],
+          }],
+        },
+        sourceObservations: nextObservations,
+      });
+      expect(validation.validation_status).toBe("invalid");
+      expect(
+        validation.violations.some((v) =>
+          v.code === "lineage_added_observation_mismatch"
+        ),
+      ).toBe(true);
+    });
+  });
+});

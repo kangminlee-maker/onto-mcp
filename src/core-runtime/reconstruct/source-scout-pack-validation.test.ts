@@ -390,3 +390,218 @@ describe("source scout pack validation", () => {
     )).toBe(true);
   });
 });
+
+describe("validateSourceScoutPack rejection branches", () => {
+  function clone<T>(value: T): T {
+    return structuredClone(value);
+  }
+
+  // Valid prompt-visible code base: scope_state =
+  // supported_single_member_code_or_document, 5 prompt_visible signal rows
+  // bound to the obs-scout-1 prompt_context safety row (consumption_allowed).
+  function validCodeBase() {
+    const observations = sourceObservations("code");
+    const safety = safetyArtifacts(observations);
+    const pack = buildSourceScoutPackFromArtifacts({
+      targetMaterialProfile: targetMaterialProfile("code"),
+      targetMaterialProfileValidation: targetMaterialProfileValidation(),
+      sourceObservations: observations,
+      sourceSafetyLedger: safety.ledger,
+      sourceSafetyLedgerValidation: safety.validation,
+    });
+    return { observations, safety, pack };
+  }
+
+  function runValidation(args: {
+    pack: ReturnType<typeof validCodeBase>["pack"];
+    observations: ReturnType<typeof validCodeBase>["observations"];
+    safety: ReturnType<typeof validCodeBase>["safety"];
+    targetMaterialProfileValidationArtifact?: ReconstructTargetMaterialProfileValidationArtifact;
+  }) {
+    return validateSourceScoutPack({
+      sourceScoutPack: args.pack,
+      sourceObservations: args.observations,
+      sourceSafetyLedger: args.safety.ledger,
+      sourceSafetyLedgerValidation: args.safety.validation,
+      targetMaterialProfileValidation:
+        args.targetMaterialProfileValidationArtifact ??
+        targetMaterialProfileValidation(),
+    });
+  }
+
+  it("base fixture validates valid before mutation (guards the negatives)", async () => {
+    const base = validCodeBase();
+    const validation = await runValidation(base);
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations).toHaveLength(0);
+  });
+
+  it("rejects session_id that drifts from source observations", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    pack.session_id = "other-session";
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_id_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects pack when source-safety-ledger-validation is not valid", async () => {
+    const base = validCodeBase();
+    const safety = clone(base.safety);
+    safety.validation.validation_status = "invalid";
+    const validation = await runValidation({ ...base, safety });
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "source_safety_validation_invalid"),
+    ).toBe(true);
+  });
+
+  it("rejects pack when target-material-profile-validation is not valid", async () => {
+    const base = validCodeBase();
+    const validation = await runValidation({
+      ...base,
+      targetMaterialProfileValidationArtifact: targetMaterialProfileValidation(false),
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) =>
+        v.code === "target_material_profile_validation_invalid"
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects duplicate signal row ids", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    // Re-append an existing valid row so the duplicate passes every per-row
+    // check except the id-uniqueness check.
+    pack.signal_rows.push(clone(pack.signal_rows[0]!));
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "duplicate_id")).toBe(true);
+  });
+
+  it("rejects an empty signal_row_id (required scalar field)", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    // Append an otherwise-valid clone with a blank id; no coverage slot
+    // references the blank id, so only schema_shape_invalid fires.
+    const appended = clone(pack.signal_rows[0]!);
+    appended.signal_row_id = "";
+    pack.signal_rows.push(appended);
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "schema_shape_invalid"))
+      .toBe(true);
+  });
+
+  it("rejects an invalid signal_axis enum", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    (pack.signal_rows[0]! as unknown as Record<string, unknown>).signal_axis =
+      "not_an_axis";
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "invalid_signal_axis"))
+      .toBe(true);
+  });
+
+  it("rejects an invalid signal_basis enum", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    (pack.signal_rows[0]! as unknown as Record<string, unknown>).signal_basis =
+      "not_a_basis";
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "invalid_signal_basis"))
+      .toBe(true);
+  });
+
+  it("rejects an invalid prompt_visibility_state enum", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    (pack.signal_rows[0]! as unknown as Record<string, unknown>)
+      .prompt_visibility_state = "not_a_state";
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "invalid_prompt_visibility_state"),
+    ).toBe(true);
+  });
+
+  it("rejects a signal row that references an unknown observation", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    pack.signal_rows[0]!.observation_id = "obs-does-not-exist";
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "signal_observation_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a signal row content hash that drifts from its observation", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    pack.signal_rows[0]!.source_observation_content_sha256 = "stale-content-sha";
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "source_observations_hash_mismatch"),
+    ).toBe(true);
+  });
+
+  it("rejects a signal row bound to a missing prompt-context safety row", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    pack.signal_rows[0]!.source_safety_row_id = "source_safety:nope:prompt_context";
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "signal_safety_row_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a prompt-visible signal when source safety validation is not valid", async () => {
+    const base = validCodeBase();
+    const safety = clone(base.safety);
+    safety.validation.validation_status = "invalid";
+    const validation = await runValidation({ ...base, safety });
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) =>
+        v.code === "prompt_visible_signal_without_valid_safety"
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a prompt-visible signal bound to a non-consumption_allowed tier", async () => {
+    const base = validCodeBase();
+    const safety = clone(base.safety);
+    // Keep the prompt_context row id (so binding resolves) but downgrade its
+    // visibility tier to a shape-valid non-consumption_allowed enum.
+    const promptContextRow = safety.ledger.safety_rows.find((row) =>
+      row.safety_row_id.endsWith(":prompt_context")
+    );
+    promptContextRow!.visibility_tier = "internal_only";
+    const validation = await runValidation({ ...base, safety });
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) =>
+        v.code === "prompt_visible_signal_without_consumption_allowed_tier"
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a coverage slot that references a missing signal row", async () => {
+    const base = validCodeBase();
+    const pack = clone(base.pack);
+    const slot = pack.profile_scout_coverage_slots.find((s) =>
+      s.signal_row_refs.length > 0
+    );
+    slot!.signal_row_refs.push("source_scout:obs-scout-1:actor:deadbeefdeadbeef");
+    const validation = await runValidation({ ...base, pack });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "coverage_slot_signal_missing"))
+      .toBe(true);
+  });
+});

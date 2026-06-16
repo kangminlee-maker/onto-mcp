@@ -262,3 +262,274 @@ describe("purpose authority validation", () => {
     expect(confirmationValidation.seed_readiness_effect).toBe("must_project_blocked");
   });
 });
+
+// Deep clone helper so each mutation works on an isolated copy of the valid base.
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+describe("validateSourcePurposeCandidates rejection branches", () => {
+  it("confirms the base fixture validates clean before mutations", () => {
+    const validation = sourcePurposeValidation(sourcePurposeCandidates());
+
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations).toEqual([]);
+  });
+
+  it("rejects alias field source_purpose_status (alias_field_present)", () => {
+    const base = clone(sourcePurposeCandidates());
+    (base as unknown as Record<string, unknown>).source_purpose_status = "explicit_source_declared";
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "alias_field_present")).toBe(true);
+  });
+
+  it("rejects session_id that does not match observations (session_id_mismatch)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.session_id = "session-mismatch";
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_id_mismatch")).toBe(true);
+  });
+
+  it("rejects candidates with no primary candidate (missing_primary_purpose)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.purpose_candidates[0].rank = "secondary";
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "missing_primary_purpose")).toBe(true);
+  });
+
+  it("rejects more than one primary candidate (multiple_primary_purpose)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const second = clone(base.purpose_candidates[0]);
+    second.purpose_candidate_id = "purpose-feature-explanation-2";
+    second.adequacy_frame.frame_id = "frame-feature-explanation-2";
+    base.purpose_candidates.push(second);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "multiple_primary_purpose")).toBe(true);
+  });
+
+  it("rejects selection pointing at a non-primary candidate (selected_primary_mismatch)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const secondary = clone(base.purpose_candidates[0]);
+    secondary.purpose_candidate_id = "purpose-feature-secondary";
+    secondary.rank = "secondary";
+    secondary.adequacy_frame.frame_id = "frame-feature-secondary";
+    base.purpose_candidates.push(secondary);
+    base.selection.primary_purpose_candidate_id = "purpose-feature-secondary";
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "selected_primary_mismatch")).toBe(true);
+  });
+
+  it("rejects duplicate purpose_candidate_id (duplicate_id)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const duplicate = clone(base.purpose_candidates[0]);
+    duplicate.rank = "rejected";
+    duplicate.adequacy_frame.frame_id = "frame-feature-duplicate";
+    base.purpose_candidates.push(duplicate);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "duplicate_id")).toBe(true);
+  });
+
+  it("rejects an empty candidate statement (missing_required_field)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.purpose_candidates[0].statement = "   ";
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "missing_required_field")).toBe(true);
+  });
+
+  it("rejects an out-of-range evidence kind (invalid_enum)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.purpose_candidates[0].evidence_kind_refs = [
+      "P1",
+      "P9" as unknown as ReconstructEvidenceRef["target_material_kind"],
+    ] as ReconstructSourcePurposeCandidatesArtifact["purpose_candidates"][number]["evidence_kind_refs"];
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "invalid_enum")).toBe(true);
+  });
+
+  it("rejects a malformed supporting evidence ref (evidence_ref_shape_invalid)", () => {
+    const base = clone(sourcePurposeCandidates());
+    (base.purpose_candidates[0] as unknown as Record<string, unknown>)
+      .supporting_evidence_refs = [{ observation_id: "obs-code-1" }];
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "evidence_ref_shape_invalid")).toBe(true);
+  });
+
+  it("rejects a non-rejected candidate citing no evidence (evidence_ref_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.purpose_candidates[0].supporting_evidence_refs = [];
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "evidence_ref_missing")).toBe(true);
+  });
+
+  it("rejects inferred primary purpose with insufficient evidence kinds (insufficient_inferred_evidence)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.purpose_candidates[0].purpose_source_status = "convergent_inferred";
+    base.purpose_candidates[0].evidence_kind_refs = ["P1"];
+    base.purpose_candidates[0].adequacy_frame.frame_status = "evidence_inferred";
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "insufficient_inferred_evidence")).toBe(true);
+  });
+
+  it("rejects unresolved contradicting source refs (contradiction_unresolved)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.purpose_candidates[0].contradicting_source_refs = ["src/conflict.ts"];
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "contradiction_unresolved")).toBe(true);
+  });
+
+  it("rejects an adequacy frame missing required elements (required_element_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.purpose_candidates[0].adequacy_frame.required_elements = [];
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
+  it("rejects mixed target material without member lineage (mixed_lineage_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    base.target_material_kind = "mixed";
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "mixed_lineage_missing")).toBe(true);
+  });
+});
+
+describe("validatePurposeConfirmation rejection branches", () => {
+  function inferredSourceValidation() {
+    return sourcePurposeValidation(sourcePurposeCandidates({
+      purpose_source_status: "convergent_inferred",
+      evidence_kind_refs: ["P2", "P3"],
+      adequacy_frame: {
+        ...sourcePurposeCandidates().purpose_candidates[0].adequacy_frame,
+        frame_status: "evidence_inferred",
+      },
+    }));
+  }
+
+  it("confirms the inferred-confirmation base validates clean before mutations", () => {
+    const sourceValidation = inferredSourceValidation();
+    const confirmationValidation = validatePurposeConfirmation({
+      purposeConfirmation: purposeConfirmation(
+        "confirmed",
+        "Explain the feature module as an operational ontology seed.",
+      ),
+      purposeConfirmationRef: "purpose-confirmation.yaml",
+      sourcePurposeCandidatesValidation: sourceValidation,
+      sourcePurposeCandidatesValidationRef: "source-purpose-candidates-validation.yaml",
+    });
+
+    expect(confirmationValidation.validation_status).toBe("valid");
+    expect(confirmationValidation.violations).toEqual([]);
+  });
+
+  it("rejects a confirmation whose session_id differs (session_id_mismatch)", () => {
+    const sourceValidation = inferredSourceValidation();
+    const confirmation = purposeConfirmation(
+      "confirmed",
+      "Explain the feature module as an operational ontology seed.",
+    );
+    confirmation.session_id = "session-mismatch";
+
+    const confirmationValidation = validatePurposeConfirmation({
+      purposeConfirmation: confirmation,
+      purposeConfirmationRef: "purpose-confirmation.yaml",
+      sourcePurposeCandidatesValidation: sourceValidation,
+      sourcePurposeCandidatesValidationRef: "source-purpose-candidates-validation.yaml",
+    });
+
+    expect(confirmationValidation.validation_status).toBe("invalid");
+    expect(confirmationValidation.violations.some((v) => v.code === "session_id_mismatch")).toBe(true);
+  });
+
+  it("rejects a confirmation pointing at a different candidate (selected_primary_mismatch)", () => {
+    const sourceValidation = inferredSourceValidation();
+    const confirmation = purposeConfirmation(
+      "confirmed",
+      "Explain the feature module as an operational ontology seed.",
+    );
+    confirmation.purpose_candidate_id = "purpose-other-candidate";
+
+    const confirmationValidation = validatePurposeConfirmation({
+      purposeConfirmation: confirmation,
+      purposeConfirmationRef: "purpose-confirmation.yaml",
+      sourcePurposeCandidatesValidation: sourceValidation,
+      sourcePurposeCandidatesValidationRef: "source-purpose-candidates-validation.yaml",
+    });
+
+    expect(confirmationValidation.validation_status).toBe("invalid");
+    expect(confirmationValidation.violations.some((v) => v.code === "selected_primary_mismatch")).toBe(true);
+  });
+
+  it("rejects a confirmed status without confirmed_statement (missing_required_field)", () => {
+    const sourceValidation = inferredSourceValidation();
+
+    const confirmationValidation = validatePurposeConfirmation({
+      purposeConfirmation: purposeConfirmation("confirmed", null),
+      purposeConfirmationRef: "purpose-confirmation.yaml",
+      sourcePurposeCandidatesValidation: sourceValidation,
+      sourcePurposeCandidatesValidationRef: "source-purpose-candidates-validation.yaml",
+    });
+
+    expect(confirmationValidation.validation_status).toBe("invalid");
+    expect(confirmationValidation.violations.some((v) => v.code === "missing_required_field")).toBe(true);
+  });
+
+  it("rejects a confirmation against a failed source validation (conflicting_state)", () => {
+    const sourceValidation = inferredSourceValidation();
+    const failedSourceValidation = clone(sourceValidation);
+    failedSourceValidation.validation_status = "invalid";
+
+    const confirmationValidation = validatePurposeConfirmation({
+      purposeConfirmation: purposeConfirmation(
+        "confirmed",
+        "Explain the feature module as an operational ontology seed.",
+      ),
+      purposeConfirmationRef: "purpose-confirmation.yaml",
+      sourcePurposeCandidatesValidation: failedSourceValidation,
+      sourcePurposeCandidatesValidationRef: "source-purpose-candidates-validation.yaml",
+    });
+
+    expect(confirmationValidation.validation_status).toBe("invalid");
+    expect(confirmationValidation.violations.some((v) => v.code === "conflicting_state")).toBe(true);
+  });
+});

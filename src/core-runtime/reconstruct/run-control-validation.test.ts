@@ -617,3 +617,258 @@ describe("reconstruct run-control validation", () => {
     })).rejects.toThrow(/is not running/);
   });
 });
+
+// Deterministic, shape-valid base run-control artifact for rejection-branch
+// regression coverage. A fresh deep clone of this validates as
+// validation_status === "valid"; each rejection test applies the smallest
+// shape-valid-but-semantically-invalid mutation that triggers exactly one code.
+function validBaseRunControl(): ReconstructRunControlArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session",
+    session_root: "/tmp/session",
+    created_at: "2026-06-02T00:00:00.000Z",
+    updated_at: "2026-06-02T00:00:00.000Z",
+    runtime_version: "test",
+    request_rows: [{
+      request_id: "request:1",
+      idempotency_key_hash: "hash",
+      request_fingerprint: "fingerprint",
+      target_signature_ref: "target-signature:1",
+      requested_stage: "seeding",
+      duplicate_policy: "reject_conflict",
+      request_status: "accepted",
+    }],
+    attempt_rows: [{
+      attempt_id: "attempt:1",
+      parent_attempt_id: null,
+      attempt_kind: "initial",
+      trigger_ref: null,
+      started_at: "2026-06-02T00:00:00.000Z",
+      completed_at: null,
+      attempt_status: "running",
+      recovery_from_refs: [],
+    }],
+    lock_rows: [{
+      lock_id: "lock:1",
+      lock_scope: "session_root",
+      owner_attempt_id: "attempt:1",
+      lease_started_at: "2026-06-02T00:00:00.000Z",
+      lease_expires_at: "2026-06-02T01:00:00.000Z",
+      lock_token_hash: "lockhash",
+      conflict_policy: "fail_loud",
+      lock_status: "held",
+    }],
+    write_transactions: [],
+    resume_rows: [],
+  };
+}
+
+function cloneBase(): ReconstructRunControlArtifact {
+  return structuredClone(validBaseRunControl());
+}
+
+describe("validateReconstructRunControl rejection branches", () => {
+  it("base fixture validates before any mutation", () => {
+    const validation = validateReconstructRunControl({
+      runControl: cloneBase(),
+    });
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations).toHaveLength(0);
+  });
+
+  it("rejects schema_version other than '1' (schema_shape_invalid)", () => {
+    const runControl = cloneBase();
+    (runControl as unknown as { schema_version: string }).schema_version = "2";
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "schema_shape_invalid"))
+      .toBe(true);
+  });
+
+  it("rejects a session_id that does not match the current session (session_id_mismatch)", () => {
+    const runControl = cloneBase();
+
+    const validation = validateReconstructRunControl({
+      runControl,
+      expectedSessionId: "a-different-session",
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_id_mismatch"))
+      .toBe(true);
+  });
+
+  it("rejects an empty session_root (session_root_missing)", () => {
+    const runControl = cloneBase();
+    runControl.session_root = "";
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_root_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a session_root that does not match the current session root (session_root_missing)", () => {
+    const runControl = cloneBase();
+
+    const validation = validateReconstructRunControl({
+      runControl,
+      expectedSessionRoot: "/tmp/some-other-root",
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_root_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a run-control with no request rows (request_row_missing)", () => {
+    const runControl = cloneBase();
+    runControl.request_rows = [];
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "request_row_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a conflicting request row (conflicting_request)", () => {
+    const runControl = cloneBase();
+    runControl.request_rows[0]!.request_status = "rejected_conflict";
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "conflicting_request"))
+      .toBe(true);
+  });
+
+  it("rejects a run-control with no attempt rows (attempt_row_missing)", () => {
+    const runControl = cloneBase();
+    runControl.attempt_rows = [];
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "attempt_row_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a run-control without a running/completed/recovered attempt (active_attempt_missing)", () => {
+    const runControl = cloneBase();
+    runControl.attempt_rows[0]!.attempt_status = "failed";
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "active_attempt_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a run-control without an active session_root lock (session_lock_missing)", () => {
+    const runControl = cloneBase();
+    runControl.lock_rows[0]!.lock_status = "expired";
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "session_lock_missing"))
+      .toBe(true);
+  });
+
+  it("rejects a conflicting lock row (conflicting_lock)", () => {
+    const runControl = cloneBase();
+    runControl.lock_rows.push({
+      lock_id: "lock:2",
+      lock_scope: "artifact_path",
+      owner_attempt_id: "attempt:1",
+      lease_started_at: "2026-06-02T00:00:00.000Z",
+      lease_expires_at: "2026-06-02T01:00:00.000Z",
+      lock_token_hash: "lockhash-2",
+      conflict_policy: "fail_loud",
+      lock_status: "conflict_blocked",
+    });
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "conflicting_lock"))
+      .toBe(true);
+  });
+
+  it("rejects a write transaction missing artifact_ref/owner_attempt_id (invalid_transaction)", () => {
+    const runControl = cloneBase();
+    runControl.write_transactions.push({
+      transaction_id: "write:1",
+      owner_attempt_id: "",
+      artifact_ref: "",
+      temp_ref: null,
+      expected_prior_hash: null,
+      committed_hash: null,
+      commit_method: "observed_file_hash",
+      transaction_status: "prepared",
+      recovery_ref: null,
+    });
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "invalid_transaction"))
+      .toBe(true);
+  });
+
+  it("rejects a resume row whose source_attempt_id resolves to no attempt (invalid_resume)", () => {
+    const runControl = cloneBase();
+    runControl.resume_rows.push({
+      resume_id: "resume:1",
+      resume_token_hash: "resumehash",
+      source_attempt_id: "attempt:does-not-exist",
+      checkpoint_refs: [],
+      trusted_artifact_refs: [],
+      stale_artifact_refs: [],
+      required_revalidation_refs: [],
+      resume_decision: "retry_required",
+    });
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "invalid_resume"))
+      .toBe(true);
+  });
+
+  it("rejects a completed attempt whose terminal validation is invalid (terminal_validation_invalid)", () => {
+    const runControl = cloneBase();
+    // A completed attempt makes terminal validation trust mandatory.
+    runControl.attempt_rows[0]!.attempt_status = "completed";
+    runControl.attempt_rows[0]!.completed_at = "2026-06-02T00:30:00.000Z";
+    const terminalValidationRef = "/tmp/session/terminal-validation.yaml";
+    // Provide a committed hash transaction for the terminal validation artifact
+    // so the expected_transaction_missing branch does not co-fire here.
+    runControl.write_transactions.push({
+      transaction_id: "write:terminal",
+      owner_attempt_id: "attempt:1",
+      artifact_ref: terminalValidationRef,
+      temp_ref: null,
+      expected_prior_hash: null,
+      committed_hash: "f".repeat(64),
+      commit_method: "observed_file_hash",
+      transaction_status: "committed",
+      recovery_ref: null,
+    });
+
+    const validation = validateReconstructRunControl({
+      runControl,
+      terminalValidationRef,
+      terminalValidationStatus: "invalid",
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "terminal_validation_invalid"))
+      .toBe(true);
+  });
+});
