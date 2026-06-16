@@ -22,7 +22,7 @@ recorded, not a quality/performance measurement.
 - **Judge override recorded** (reproducibility): `requested_judge_override = { model: "gpt-5.5", effort: "high" }`, durable in the record symmetric to `requested_effort`.
 - **Quality gate = failed** on this single live run (q1 recall 0.75, q2 support 0.5) — expected noise for one non-decision-grade live run; not a regression signal.
 
-## Limitation — judge LLM call not exercised this run
+## Limitation of THIS run — judge LLM call not exercised in the full pipeline (observed separately below)
 
 The live-authored answer-support ledger had **no `convergent_source_evidence` cluster**
 (the `answer_support_ledger` step emitted an effectively empty ledger, 24 output chars),
@@ -36,16 +36,44 @@ The adopt-vs-degrade logic itself — including the Codex-found codex-runtime / 
 support check — is proven deterministically by the `resolveJudgeLlmConfig` unit tests
 (`src/core-api/reconstruct-api.test.ts`), including the codex-runtime regression case.
 
+## Direct judge-call observation (isolated stage, live)
+
+Two full-pipeline live runs (schedule.csv, and a strongly-redundant 3-source library target)
+both produced an **empty answer-support ledger** (`evidence_clusters: []`) → judge early-exit,
+so the judge LLM call could not be observed end-to-end (convergent-cluster formation is a
+non-deterministic upstream LLM decision). To observe it directly, the judge stage was isolated:
+the production `writeAnswerSupportJudgment` was driven with a hand-crafted convergent ledger
+(one cluster, two independent source observations stating the same fact) and the **real** judge
+config resolved by `resolveJudgeLlmConfig` (no mock). Observed:
+
+- **ADOPTED, not degraded** — `resolveJudgeLlmConfig` returned `note = null` on the real
+  default route: author `provider = codex` (OpenAI OAuth runtime), judge model `gpt-5.5`
+  checked against model provider `openai` → supported → adopted. (Before the Codex fix this
+  would have degraded — the lever would be dead.)
+- **Per-stage effort difference is real** — author `effort = medium`, judge `effort = high`;
+  the codex call ran at `effort="high"`. (This also clarifies the "xhigh" note below: with an
+  explicit config the judge runs at exactly the requested `high`.)
+- **Real judge LLM call** — `llm_call_count = 1`, ~12.6 s, real tokens (642 in / 141 out).
+- **Not a rubber-stamp** — the judge read each cited excerpt and returned reasoned verdicts:
+  both evidence refs `supported`, each rationale quoting the source's "≤ 5 books" statement →
+  convergent (≥2 independent) support confirmed.
+
+This exercises the exact production judge path (resolve → `createDirectCallReconstructDirectiveAuthor`
+→ `writeAnswerSupportJudgment` → real `callLlm`); only the ledger input was synthesized to
+guarantee a convergent cluster.
+
 ## Out-of-scope observation
 
-All live units (the **author** path) reported `effort = "xhigh"` despite settings
-`semantic_author.llm.effort = "medium"`. This is the author/codex effort path, unrelated to
-this feature (a judge-effort leak would surface as `"high"`, not `"xhigh"`; the author config
-construction is unchanged by PR #62). Likely a codex effort mapping; tracked separately if it
-matters.
+In the **full-pipeline** runs all units (the **author** path) reported `effort = "xhigh"`
+despite settings `semantic_author.llm.effort = "medium"`. This is the author/codex effort path,
+unrelated to this feature (a judge-effort leak would surface as `"high"`, not `"xhigh"`; the
+isolated probe above confirms the judge runs at exactly its configured `high`). Likely a
+settings-chain/codex author-effort mapping; tracked separately if it matters.
 
 ## Conclusion
 
-Smoke validates the judge override **plumbing end-to-end on the live product path**
-(forward → record → complete, zero regression). Judge-call-level behavior is covered by the
-deterministic unit tests; observing it live needs a convergent-cluster run.
+The judge override is validated on the live route: **plumbing end-to-end** (full pipeline:
+forward → record → complete, zero regression) and the **judge LLM call itself** (isolated
+stage: adopt on the codex runtime, per-stage `high` effort, reasoned non-rubber-stamp verdicts).
+Full-pipeline judge-call observation remains gated on a convergent cluster forming, which is a
+non-deterministic upstream LLM decision.
