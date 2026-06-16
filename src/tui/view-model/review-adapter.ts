@@ -31,7 +31,6 @@ import type {
 import {
   REVIEW_PROGRESS_STEPS,
   type ReviewProgressStepId,
-  reviewProgressStepById,
 } from "../../core-api/review-progress.js";
 import type {
   NodeState,
@@ -42,16 +41,9 @@ import type {
   WorkflowStatus,
 } from "./tree-view-model.js";
 
-/** Step ordinal for every progress step id, for stable phase ordering. */
-const STEP_ORDER = new Map<ReviewProgressStepId, number>(
-  REVIEW_PROGRESS_STEPS.map((spec) => [spec.id, spec.step]),
-);
-
 /** Phase that collects units the projection has not bound to a progress step. */
 const UNCATEGORIZED_PHASE_ID = "unassigned";
 const UNCATEGORIZED_PHASE_LABEL = "unassigned units";
-/** Order key placing the uncategorized phase after every real step. */
-const UNCATEGORIZED_ORDER = REVIEW_PROGRESS_STEPS.length + 1;
 
 /**
  * Structural view of the bounded progress-presentation payload carried by
@@ -149,10 +141,39 @@ function derivePhaseState(
   return "pending";
 }
 
-/** Group `unitProgress[]` by `progressStepId` into phases, in step order. */
+/**
+ * State for a progress step that has no bound units: completed when the workflow
+ * itself completed, when the step is in `completed_steps`, or when it sits before
+ * the current step; running at the current step; otherwise pending. This keeps
+ * idle/completed steps visible so the HUD shows the whole pipeline (not only the
+ * steps that happened to carry units).
+ */
+function emptyStepState(
+  stepId: ReviewProgressStepId,
+  stepNumber: number,
+  completedStepIds: Set<string>,
+  currentStep: number | null,
+  workflowStatus: WorkflowStatus,
+): NodeState {
+  if (workflowStatus === "completed") return "completed";
+  if (completedStepIds.has(stepId)) return "completed";
+  if (currentStep != null) {
+    if (stepNumber < currentStep) return "completed";
+    if (stepNumber === currentStep) return "running";
+  }
+  return "pending";
+}
+
+/**
+ * Emit a phase for EVERY progress step (in canonical order), attaching any units
+ * bound to it, so completed/idle steps stay visible. Units the projection left
+ * unbound (`progressStepId === null`) collect into a trailing uncategorized phase.
+ */
 function derivePhases(
   status: ReviewStatus,
   completedStepIds: Set<string>,
+  currentStep: number | null,
+  workflowStatus: WorkflowStatus,
 ): TreePhase[] {
   const byStep = new Map<ReviewProgressStepId | null, TreeNode[]>();
   for (const unit of status.unitProgress ?? []) {
@@ -162,32 +183,24 @@ function derivePhases(
     else byStep.set(key, [unitToNode(unit)]);
   }
 
-  const phases: TreePhase[] = [];
-  for (const [stepId, nodes] of byStep) {
-    if (stepId === null) {
-      phases.push({
-        id: UNCATEGORIZED_PHASE_ID,
-        label: UNCATEGORIZED_PHASE_LABEL,
-        state: derivePhaseState(nodes, null, completedStepIds),
-        nodes,
-      });
-      continue;
-    }
-    const spec = reviewProgressStepById(stepId);
+  const phases: TreePhase[] = REVIEW_PROGRESS_STEPS.map((spec) => {
+    const nodes = byStep.get(spec.id) ?? [];
+    const state = nodes.length > 0
+      ? derivePhaseState(nodes, spec.id, completedStepIds)
+      : emptyStepState(spec.id, spec.step, completedStepIds, currentStep, workflowStatus);
+    return { id: spec.id, label: spec.label, state, nodes };
+  });
+
+  const unassigned = byStep.get(null);
+  if (unassigned && unassigned.length > 0) {
     phases.push({
-      id: stepId,
-      label: spec.label,
-      state: derivePhaseState(nodes, stepId, completedStepIds),
-      nodes,
+      id: UNCATEGORIZED_PHASE_ID,
+      label: UNCATEGORIZED_PHASE_LABEL,
+      state: derivePhaseState(unassigned, null, completedStepIds),
+      nodes: unassigned,
     });
   }
-
-  return phases.sort((left, right) => phaseOrder(left.id) - phaseOrder(right.id));
-}
-
-function phaseOrder(phaseId: string): number {
-  if (phaseId === UNCATEGORIZED_PHASE_ID) return UNCATEGORIZED_ORDER;
-  return STEP_ORDER.get(phaseId as ReviewProgressStepId) ?? UNCATEGORIZED_ORDER;
+  return phases;
 }
 
 /**
@@ -311,7 +324,12 @@ export function reviewStatusToTreeViewModel(
   const input = readProgressPresentationInput(status);
   const workflowStatus = deriveWorkflowStatus(status.status);
   const completedStepIds = new Set(input.progress?.completed_steps ?? []);
-  const phases = derivePhases(status, completedStepIds);
+  const phases = derivePhases(
+    status,
+    completedStepIds,
+    input.progress?.current_step ?? null,
+    workflowStatus,
+  );
 
   return {
     pipeline: "review",

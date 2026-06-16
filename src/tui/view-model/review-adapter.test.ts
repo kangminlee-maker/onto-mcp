@@ -6,6 +6,7 @@ import type {
   ReviewStatus,
 } from "../../core-api/review-api.js";
 import type { ReviewResultClassificationSummary } from "../../core-runtime/review/artifact-types.js";
+import { REVIEW_PROGRESS_STEPS } from "../../core-api/review-progress.js";
 import { reviewStatusToTreeViewModel } from "./review-adapter.js";
 
 const SESSION_ROOT = "/tmp/.onto/review/20260616-62411f81";
@@ -162,12 +163,18 @@ describe("reviewStatusToTreeViewModel", () => {
     expect(vm.sessionRoot).toBe(SESSION_ROOT);
     expect(vm.status).toBe("running");
 
-    // Phases ordered by progress step: manifest_validation (step 1) before
-    // lens_dispatch (step 2). Phase label = the step label.
-    expect(vm.phases.map((p) => p.id)).toEqual([
+    // Every progress step is emitted in canonical order (idle steps stay
+    // visible): manifest_validation (step 1) then lens_dispatch (step 2) lead.
+    expect(vm.phases).toHaveLength(REVIEW_PROGRESS_STEPS.length);
+    expect(vm.phases.map((p) => p.id).slice(0, 2)).toEqual([
       "manifest_validation",
       "lens_dispatch",
     ]);
+    // A step after the current step (2) with no units is pending.
+    const laterIdleStep = vm.phases.find(
+      (p) => p.nodes.length === 0 && p.state === "pending",
+    );
+    expect(laterIdleStep).toBeDefined();
     const manifestPhase = vm.phases[0]!;
     expect(manifestPhase.label).toBe("load execution plan");
     // listed in completed_steps → completed phase.
@@ -275,9 +282,10 @@ describe("reviewStatusToTreeViewModel", () => {
 
     expect(vm.status).toBe("completed");
 
-    expect(vm.phases).toHaveLength(1);
-    const synthesizePhase = vm.phases[0]!;
-    expect(synthesizePhase.id).toBe("synthesize");
+    // A completed run shows the whole pipeline; every step renders completed.
+    expect(vm.phases).toHaveLength(REVIEW_PROGRESS_STEPS.length);
+    expect(vm.phases.every((p) => p.state === "completed")).toBe(true);
+    const synthesizePhase = vm.phases.find((p) => p.id === "synthesize")!;
     expect(synthesizePhase.label).toBe("synthesize and write execution result");
     expect(synthesizePhase.state).toBe("completed");
     expect(synthesizePhase.nodes[0]!.outputPath).toBe("/tmp/final-output.md");

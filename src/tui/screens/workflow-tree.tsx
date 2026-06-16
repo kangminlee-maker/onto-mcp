@@ -83,7 +83,13 @@ function Footer({ vm }: { vm: TreeViewModel }): JSX.Element {
   return <Box marginTop={1} />;
 }
 
-export function WorkflowTree({ vm }: { vm: TreeViewModel }): JSX.Element {
+export interface WorkflowTreeProps {
+  vm: TreeViewModel;
+  /** Node id highlighted by the drill-down cursor, when a node is selected. */
+  selectedNodeId?: string;
+}
+
+export function WorkflowTree({ vm, selectedNodeId }: WorkflowTreeProps): JSX.Element {
   const badge = STATUS_BADGE[vm.status];
   const phasesDone = vm.phases.filter((p) => p.state === "completed").length;
   return (
@@ -109,13 +115,18 @@ export function WorkflowTree({ vm }: { vm: TreeViewModel }): JSX.Element {
             <Text color={NODE_COLOR[phase.state]}>
               {`${NODE_ICON[phase.state]} ${phase.label}`}
             </Text>
-            {phase.nodes.map((node) => (
-              <Box key={node.id}>
-                <Text color={NODE_COLOR[node.status]}>{`  ${NODE_ICON[node.status]} `}</Text>
-                <Text>{node.label}</Text>
-                <NodeBadge node={node} />
-              </Box>
-            ))}
+            {phase.nodes.map((node) => {
+              const selected = node.id === selectedNodeId;
+              return (
+                <Box key={node.id}>
+                  <Text color={NODE_COLOR[node.status]}>
+                    {`${selected ? "›" : " "} ${NODE_ICON[node.status]} `}
+                  </Text>
+                  <Text bold={selected}>{node.label}</Text>
+                  <NodeBadge node={node} />
+                </Box>
+              );
+            })}
           </Box>
         ))}
       </Box>
