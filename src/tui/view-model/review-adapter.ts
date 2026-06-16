@@ -1,0 +1,335 @@
+/**
+ * review → {@link TreeViewModel} adapter.
+ *
+ * PURE function: maps a {@link ReviewStatus} (from `getReviewStatus(sessionRoot)`
+ * in `core-api/review-api`) into the pipeline-agnostic {@link TreeViewModel} the
+ * `onto watch` HUD renders. No I/O, no LLM calls, no clock reads — every output
+ * field is derived from the input status. The view it produces carries no
+ * authority and is never persisted.
+ *
+ * Shape difference vs reconstruct: review exposes per-UNIT live signal
+ * (`unitProgress[]` — alias, kind, status, attempts, signal age, output) grouped
+ * by `progressStepId` into the 12 progress steps, plus rich `runControl` and a
+ * finding-severity footer. The HUD never sees that difference — this adapter
+ * normalizes it into the same {@link TreeViewModel}.
+ *
+ * The structured progress facts the HUD shows above the unit tree (liveness,
+ * narrator line, completed steps, finding severity counts + material titles) live
+ * inside `llmPresentation.progress.input`, which `ReviewStatus` types as
+ * `unknown` (it is the bounded LLM-presentation payload). We narrow that payload
+ * with the {@link ProgressPresentationInput} structural view below — a read-only
+ * subset of the source's progress-presentation shape — and fall back to safe
+ * defaults when a field is absent.
+ */
+import type {
+  CompactReviewResultClassificationSummary,
+  ReviewResultClassificationProjection,
+  ReviewRunControlProjection,
+  ReviewRuntimeUnitProgressProjection,
+  ReviewStatus,
+} from "../../core-api/review-api.js";
+import {
+  REVIEW_PROGRESS_STEPS,
+  type ReviewProgressStepId,
+  reviewProgressStepById,
+} from "../../core-api/review-progress.js";
+import type {
+  NodeState,
+  SeverityCounts,
+  TreeNode,
+  TreePhase,
+  TreeViewModel,
+  WorkflowStatus,
+} from "./tree-view-model.js";
+
+/** Step ordinal for every progress step id, for stable phase ordering. */
+const STEP_ORDER = new Map<ReviewProgressStepId, number>(
+  REVIEW_PROGRESS_STEPS.map((spec) => [spec.id, spec.step]),
+);
+
+/** Phase that collects units the projection has not bound to a progress step. */
+const UNCATEGORIZED_PHASE_ID = "unassigned";
+const UNCATEGORIZED_PHASE_LABEL = "unassigned units";
+/** Order key placing the uncategorized phase after every real step. */
+const UNCATEGORIZED_ORDER = REVIEW_PROGRESS_STEPS.length + 1;
+
+/**
+ * Structural view of the bounded progress-presentation payload carried by
+ * `ReviewStatus.llmPresentation.progress.input` (typed `unknown` at the
+ * boundary). Every field is optional — the adapter reads defensively and never
+ * assumes the payload is present or complete.
+ */
+interface ProgressPresentationInput {
+  progress?: {
+    current_step?: number | null;
+    total_steps?: number | null;
+    completed_steps?: string[];
+  };
+  liveness?: {
+    state?: string;
+    seconds_since_last_observed_artifact?: number | null;
+    poll_after_seconds?: number | null;
+    summary?: string;
+  };
+  latest_update?: {
+    summary?: string;
+  };
+  result_classification_summary?: ReviewResultClassificationProjection | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Narrow the `unknown` presentation payload to the read-only fields we use. */
+function readProgressPresentationInput(
+  status: ReviewStatus,
+): ProgressPresentationInput {
+  const input = status.llmPresentation?.progress?.input;
+  return isRecord(input) ? (input as ProgressPresentationInput) : {};
+}
+
+/**
+ * Map a runtime unit status to the shared {@link NodeState}. `retrying` and
+ * `running_stale` are both still in-flight (the HUD surfaces the retry count /
+ * stale signal age separately), so they collapse to `running`.
+ */
+function unitStatusToNodeState(
+  unitStatus: ReviewRuntimeUnitProgressProjection["status"],
+): NodeState {
+  switch (unitStatus) {
+    case "pending":
+      return "pending";
+    case "running":
+    case "retrying":
+    case "running_stale":
+      return "running";
+    case "completed":
+      return "completed";
+    case "failed":
+      return "failed";
+  }
+}
+
+function unitToNode(unit: ReviewRuntimeUnitProgressProjection): TreeNode {
+  return {
+    id: unit.unitId,
+    label: unit.publicAlias,
+    status: unitStatusToNodeState(unit.status),
+    kind: unit.unitKind,
+    signalAgeSec: unit.secondsSinceLatestSignal,
+    attempts: unit.attemptCount,
+    failureMessage: unit.failureMessage,
+    // Prefer the authored output; fall back to the running-log ref for drill-down.
+    outputPath: unit.outputPath ?? unit.runningLogRef ?? null,
+  };
+}
+
+/**
+ * Phase state from its nodes (+ the projection's completed step ids). A failed
+ * node fails the phase; any in-flight node makes it running; a step listed in
+ * `completed_steps` (or all nodes completed) completes it; a halted node halts
+ * it; otherwise it is pending.
+ */
+function derivePhaseState(
+  nodes: TreeNode[],
+  stepId: ReviewProgressStepId | null,
+  completedStepIds: Set<string>,
+): NodeState {
+  if (nodes.some((node) => node.status === "failed")) return "failed";
+  if (nodes.some((node) => node.status === "running")) return "running";
+  if (nodes.some((node) => node.status === "halted")) return "halted";
+  if (stepId !== null && completedStepIds.has(stepId)) return "completed";
+  if (nodes.length > 0 && nodes.every((node) => node.status === "completed")) {
+    return "completed";
+  }
+  if (nodes.length > 0 && nodes.every((node) => node.status === "skipped")) {
+    return "skipped";
+  }
+  return "pending";
+}
+
+/** Group `unitProgress[]` by `progressStepId` into phases, in step order. */
+function derivePhases(
+  status: ReviewStatus,
+  completedStepIds: Set<string>,
+): TreePhase[] {
+  const byStep = new Map<ReviewProgressStepId | null, TreeNode[]>();
+  for (const unit of status.unitProgress ?? []) {
+    const key = unit.progressStepId;
+    const bucket = byStep.get(key);
+    if (bucket) bucket.push(unitToNode(unit));
+    else byStep.set(key, [unitToNode(unit)]);
+  }
+
+  const phases: TreePhase[] = [];
+  for (const [stepId, nodes] of byStep) {
+    if (stepId === null) {
+      phases.push({
+        id: UNCATEGORIZED_PHASE_ID,
+        label: UNCATEGORIZED_PHASE_LABEL,
+        state: derivePhaseState(nodes, null, completedStepIds),
+        nodes,
+      });
+      continue;
+    }
+    const spec = reviewProgressStepById(stepId);
+    phases.push({
+      id: stepId,
+      label: spec.label,
+      state: derivePhaseState(nodes, stepId, completedStepIds),
+      nodes,
+    });
+  }
+
+  return phases.sort((left, right) => phaseOrder(left.id) - phaseOrder(right.id));
+}
+
+function phaseOrder(phaseId: string): number {
+  if (phaseId === UNCATEGORIZED_PHASE_ID) return UNCATEGORIZED_ORDER;
+  return STEP_ORDER.get(phaseId as ReviewProgressStepId) ?? UNCATEGORIZED_ORDER;
+}
+
+/**
+ * Map the review status union to the shared {@link WorkflowStatus}. A degraded
+ * completion is still a completion; `halted_partial` is the operator-facing halt;
+ * `prepared` / `unknown` are pre-run states the HUD shows as still-running (the
+ * narrator/liveness convey the finer state).
+ */
+function deriveWorkflowStatus(status: ReviewStatus["status"]): WorkflowStatus {
+  switch (status) {
+    case "completed":
+    case "completed_with_degradation":
+      return "completed";
+    case "halted_partial":
+      return "halted";
+    case "failed":
+      return "failed";
+    case "running":
+    case "prepared":
+    case "unknown":
+      return "running";
+  }
+}
+
+/**
+ * Run control from the review projection. `cancellationAvailable` /
+ * `continuationAvailable` are the authoritative flags; review has no per-round
+ * advance, so `advanceable` is left undefined.
+ */
+function deriveRunControl(
+  runControl: ReviewRunControlProjection | undefined,
+): TreeViewModel["runControl"] {
+  return {
+    cancellable: runControl?.cancellationAvailable ?? false,
+    continuable: runControl?.continuationAvailable ?? false,
+  };
+}
+
+const EMPTY_SEVERITY_COUNTS: SeverityCounts = {
+  blocker: 0,
+  high: 0,
+  medium: 0,
+  low: 0,
+  info: 0,
+};
+
+/**
+ * Footer findings: severity counts + material issue titles. Works for both the
+ * full and compact result-classification projections — material titles come from
+ * `material_issues[]` (full) or `material_issue_signals[]` (compact).
+ */
+function deriveFindings(
+  summary: ReviewResultClassificationProjection | null | undefined,
+): SeverityCounts & { material: string[] } {
+  if (!summary) {
+    return { ...EMPTY_SEVERITY_COUNTS, material: [] };
+  }
+  const counts: SeverityCounts = {
+    blocker: summary.severity_counts.blocker,
+    high: summary.severity_counts.high,
+    medium: summary.severity_counts.medium,
+    low: summary.severity_counts.low,
+    info: summary.severity_counts.info,
+  };
+  return { ...counts, material: materialIssueTitles(summary) };
+}
+
+function isCompactSummary(
+  summary: ReviewResultClassificationProjection,
+): summary is CompactReviewResultClassificationSummary {
+  return "material_issue_signals" in summary;
+}
+
+function materialIssueTitles(
+  summary: ReviewResultClassificationProjection,
+): string[] {
+  if (isCompactSummary(summary)) {
+    return summary.material_issue_signals.map((signal) =>
+      titleLine(signal.issue_id, signal.signal),
+    );
+  }
+  return summary.material_issues.map((issue) =>
+    titleLine(
+      issue.issue_id,
+      issue.problem_definition ?? issue.issue_statement ?? issue.impact,
+    ),
+  );
+}
+
+function titleLine(issueId: string, text: string | undefined): string {
+  const trimmed = (text ?? "").trim();
+  return trimmed.length > 0 ? `${issueId}: ${trimmed}` : issueId;
+}
+
+/**
+ * Narrator line: prefer the latest progress signal summary, fall back to the
+ * liveness summary, then to the bare status. Mirrors the design's
+ * `latest_update.summary / liveness.summary` rule.
+ */
+function deriveNarrator(
+  input: ProgressPresentationInput,
+  workflowStatus: WorkflowStatus,
+): string {
+  const latest = input.latest_update?.summary?.trim();
+  if (latest) return latest;
+  const liveness = input.liveness?.summary?.trim();
+  if (liveness) return liveness;
+  return `review ${workflowStatus}`;
+}
+
+/**
+ * Pure projection: {@link ReviewStatus} → {@link TreeViewModel}.
+ *
+ * `sessionRoot` is threaded explicitly (the caller already knows it) so the view
+ * model header is independent of how the status was fetched.
+ */
+export function reviewStatusToTreeViewModel(
+  status: ReviewStatus,
+  sessionRoot: string,
+): TreeViewModel {
+  const input = readProgressPresentationInput(status);
+  const workflowStatus = deriveWorkflowStatus(status.status);
+  const completedStepIds = new Set(input.progress?.completed_steps ?? []);
+  const phases = derivePhases(status, completedStepIds);
+
+  return {
+    pipeline: "review",
+    sessionId: status.sessionId,
+    sessionRoot,
+    status: workflowStatus,
+    narrator: deriveNarrator(input, workflowStatus),
+    liveness: {
+      state: input.liveness?.state ?? "unknown",
+      secondsSinceSignal:
+        input.liveness?.seconds_since_last_observed_artifact ?? null,
+      pollMs:
+        input.liveness?.poll_after_seconds == null
+          ? null
+          : input.liveness.poll_after_seconds * 1000,
+    },
+    phases,
+    summary: { findings: deriveFindings(input.result_classification_summary) },
+    runControl: deriveRunControl(status.runControl),
+  };
+}

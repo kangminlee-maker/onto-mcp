@@ -7,6 +7,7 @@ export default defineConfig({
       "src/core-runtime/{scope-runtime,readers,evolve,learning,review,reconstruct,discovery,govern,cli,llm,mock,translate,onboard,config,install,observability}/**/*.test.ts",
       "src/core-api/**/*.test.ts",
       "src/mcp/**/*.test.ts",
+      "src/tui/**/*.test.ts",
     ],
     testTimeout: 30000,
   },

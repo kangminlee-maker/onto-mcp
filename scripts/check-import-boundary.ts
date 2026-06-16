@@ -114,6 +114,24 @@ async function main(): Promise<void> {
           });
         }
       }
+      if (relPath.startsWith("src/tui/") && importPath.startsWith(".")) {
+        // tui/ (presentation layer) consumes the core-api facade only; reaching
+        // into core-runtime directly is forbidden so the view stays a pure
+        // consumer of the published projection contract. Tests are exempt
+        // (isTestOrBoundaryFile) and may build fixtures from core-runtime types.
+        const resolved = path
+          .normalize(path.join(path.dirname(relPath), importPath))
+          .split(path.sep)
+          .join("/");
+        if (resolved.startsWith("src/core-runtime/")) {
+          violations.push({
+            file: relPath,
+            line,
+            importPath,
+            rule: "repo-layout: tui/ (presentation) must consume core-api, not core-runtime directly",
+          });
+        }
+      }
     }
   }
 
