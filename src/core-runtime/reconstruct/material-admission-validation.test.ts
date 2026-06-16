@@ -268,3 +268,136 @@ describe("material admission validation", () => {
       .toContain("diagnostic_affects_actionability");
   });
 });
+
+describe("validateMaterialAdmissionLedger rejection branches", () => {
+  function validBase() {
+    const ledger = buildMaterialAdmissionLedgerFromSourcePurpose({
+      sessionId: "session-1",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: sourcePurposeValidation(),
+    });
+    return {
+      materialAdmissionLedger: ledger,
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: sourcePurposeValidation(),
+      candidateInventory: candidateInventory(),
+      ontologySeed: ontologySeed(),
+      ontologySeedValidation: ontologySeedValidation(),
+      sourceObservations: sourceObservations(),
+    };
+  }
+
+  function clone<T>(value: T): T {
+    return structuredClone(value);
+  }
+
+  function expectRejection(
+    validation: ReturnType<typeof validateMaterialAdmissionLedger>,
+    code: string,
+  ): void {
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((violation) => violation.code === code))
+      .toBe(true);
+  }
+
+  it("validates the reused base fixture cleanly", () => {
+    const validation = validateMaterialAdmissionLedger(validBase());
+    expect(validation.validation_status).toBe("valid");
+  });
+
+  it("rejects schema_version other than 1 (schema_shape_invalid)", () => {
+    const base = clone(validBase());
+    (base.materialAdmissionLedger as { schema_version: string }).schema_version = "2";
+    expectRejection(validateMaterialAdmissionLedger(base), "schema_shape_invalid");
+  });
+
+  it("rejects invalid prior source-purpose validation (prior_validation_invalid)", () => {
+    const base = clone(validBase());
+    base.sourcePurposeCandidatesValidation.validation_status = "invalid";
+    expectRejection(validateMaterialAdmissionLedger(base), "prior_validation_invalid");
+  });
+
+  it("rejects mismatched session_id between ledger and prior validation (session_id_mismatch)", () => {
+    const base = clone(validBase());
+    base.sourcePurposeCandidatesValidation.session_id = "session-other";
+    expectRejection(validateMaterialAdmissionLedger(base), "session_id_mismatch");
+  });
+
+  it("rejects rows missing admission_id (missing_required_field)", () => {
+    const base = clone(validBase());
+    base.materialAdmissionLedger.admission_rows[0]!.admission_id = "";
+    expectRejection(validateMaterialAdmissionLedger(base), "missing_required_field");
+  });
+
+  it("rejects duplicate admission_id across rows (duplicate_id)", () => {
+    const base = clone(validBase());
+    const row = clone(base.materialAdmissionLedger.admission_rows[0]!);
+    base.materialAdmissionLedger.admission_rows.push(row);
+    expectRejection(validateMaterialAdmissionLedger(base), "duplicate_id");
+  });
+
+  it("rejects an out-of-set enum value (invalid_enum)", () => {
+    const base = clone(validBase());
+    (base.materialAdmissionLedger.admission_rows[0]! as { materiality: string })
+      .materiality = "catastrophic";
+    expectRejection(validateMaterialAdmissionLedger(base), "invalid_enum");
+  });
+
+  it("rejects a phase/input_kind combination that is not allowed (invalid_phase_input_kind)", () => {
+    const base = clone(validBase());
+    // Keep purpose_adequacy_element input_kind but move it to the material-value phase.
+    base.materialAdmissionLedger.admission_rows[0]!.admission_phase =
+      "pre_seed_material_value";
+    expectRejection(
+      validateMaterialAdmissionLedger(base),
+      "invalid_phase_input_kind",
+    );
+  });
+
+  it("rejects a purpose_adequacy_element row missing its snapshot ref (missing_snapshot_ref)", () => {
+    const base = clone(validBase());
+    base.materialAdmissionLedger.admission_rows[0]!.purpose_element_snapshot_ref = null;
+    expectRejection(validateMaterialAdmissionLedger(base), "missing_snapshot_ref");
+  });
+
+  it("rejects supersedes_admission_refs pointing at an unknown id (superseded_ref_unknown)", () => {
+    const base = clone(validBase());
+    base.materialAdmissionLedger.admission_rows[0]!.supersedes_admission_refs = [
+      "material-admission:does-not-exist",
+    ];
+    expectRejection(validateMaterialAdmissionLedger(base), "superseded_ref_unknown");
+  });
+
+  it("rejects purpose_element_refs not in the selected purpose frame (unknown_purpose_element_ref)", () => {
+    const base = clone(validBase());
+    base.materialAdmissionLedger.admission_rows[0]!.purpose_element_refs = [
+      "purpose-element-user-action",
+      "purpose-element-not-selected",
+    ];
+    expectRejection(
+      validateMaterialAdmissionLedger(base),
+      "unknown_purpose_element_ref",
+    );
+  });
+
+  it("rejects source_refs that resolve to no observed source (unknown_source_ref)", () => {
+    const base = clone(validBase());
+    base.materialAdmissionLedger.admission_rows[0]!.source_refs = [
+      "/repo/src/app.ts",
+      "/repo/src/not-observed.ts",
+    ];
+    expectRejection(validateMaterialAdmissionLedger(base), "unknown_source_ref");
+  });
+
+  it("rejects rejected_ambiguous rows without replayable evidence (rejected_without_replayable_evidence)", () => {
+    const base = clone(validBase());
+    const row = base.materialAdmissionLedger.admission_rows[0]!;
+    row.disposition = "rejected_ambiguous";
+    row.source_refs = [];
+    row.limitation_refs = [];
+    expectRejection(
+      validateMaterialAdmissionLedger(base),
+      "rejected_without_replayable_evidence",
+    );
+  });
+});
