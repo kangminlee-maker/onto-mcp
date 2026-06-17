@@ -1,6 +1,7 @@
 # Design — S1: 공유 spreadsheet 추출 어댑터 (xlsx/csv → 구조 인벤토리)
 
-> 상태: **설계 착수 (high-level + 구현-프로세스). 구현 미착수 — 승인 후 구현.**
+> 상태: **검증 완료(§11, ultracode+onto, 1B·4H·14M). csv-first(P1~P3)는 유효, xlsx 경로는 §11 보정 후 착수.** 구현 미착수 — 승인 후 구현.
+> ⚠️ §6.1/§8.5의 (d) Python-우선은 **§11 블로커로 폐기** → L1은 다중 백엔드 체인(Node lib 우선). 충돌 시 **§11이 우선**.
 > 짝 핸드오프(진단 박제): `development-records/handoff/20260617-spreadsheet-material-handling-wiring-diagnosis-handoff.md`.
 > 정렬 계약: `.onto/processes/evolve/material-kind-adapter-contract.md`,
 > `.onto/processes/shared/target-material-kind-contract.md`, `.onto/processes/review/review-target-profile-contract.md`.
@@ -306,3 +307,44 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
   (ii) 모호 케이스용 **LLM bounded-submit 채널**: `header_row`·`categorical_cols`·`key_candidates`만 제출(runtime-owned 필드 reject, unknown 필드 fail-loud);
   (iii) 채택 파라미터 + **출처(`heuristic`|`llm`)** + 신뢰도를 인벤토리에 기록·**캐시** → 동일 입력 replay 결정론(비결정성은 파라미터 선택에만 국한);
   (iv) runtime이 그 파라미터로 **객관 계산**(distinct 카운트·교집합·해시).
+
+---
+
+## 11. 검증 결과 (ultracode 다중에이전트 + onto 셀프리뷰) — 2026-06-17
+
+> Run `wf_d3dc5f01-827`, 32 에이전트, 7차원 리뷰→적대적 검증→종합. **판정: xlsx 경로는 현 설계대로 구현 불가, csv-first(P1~P3)는 유효.** confirmed **1 BLOCKER · 4 HIGH · 14 MEDIUM**. 아래 보정 후 xlsx 착수.
+
+### 11.1 BLOCKER — runtime-locus 오류 (반드시 선보정)
+- onto reconstruct/review는 **설치 호스트의 Node MCP-서버 프로세스**에서 실행된다(`buildReconstructSourceObservation`가 거기서 돎). mcpb는 `runtimes:{node:>=18}` **Node 전용** 선언. §8 데모가 돈 **Cowork Linux 샌드박스(`mcp__workspace__bash`)와는 다른 환경**이다.
+- 따라서 §6 (d)"openpyxl via execution adapter(Python)" + §8.5 lazy pip-install은 **실제 타깃에서 비실행**. "타깃=Cowork→Python 보장→(d)" 추론은 category error → **폐기**.
+
+### 11.2 L1 결정(보정·확정): **capability-detect 다중 백엔드 체인** (사용자 지시 "상황별 다중" + 검증 수렴)
+1. **csv → 순수 Node(zero-dep)** — 어디서나, P1~P3 먼저.
+2. **xlsx 1순위 → 번들 Node 라이브러리**(SheetJS=포맷 폭 .xlsx/.xlsm/.xls/.ods, 또는 exceljs=streaming). in-process·호스트 이식성·`content_sha256`/직렬화 runtime 소유·mcpb 자족. 비용=prod dep+번들(§5 redesign-trigger(a) 측정)·zip-bomb/외부참조 공격면 한정.
+3. **선택 폴백 → Python/openpyxl** — Python 보장 환경에서만, **INV 리뷰 필수**(hash-pin offline wheel·explicit python3 resolver·고정 임베드 스크립트·fail-loud `unsupported_reason`). 번들/네트워크 설치 금지 가드.
+4. **기각**: osascript(macOS+Excel.app 전용·비결정·비번들) / LibreOffice-headless(바이너리 비번들·호스트 부재) / LLM-authored 스크립트(임의코드·거버넌스 충돌, §10.4서 이미 기각).
+- `execution_adapter` 이름 재사용 금지(LLM-라우팅 enum) → "workbook extraction runtime" 등 신규 명명.
+
+### 11.3 HIGH (xlsx/wiring 전 폐쇄)
+- **PII-1**: §2.4 raw 셀 필드(sample_rows/top_values/key 값)가 reconstruct의 `content_excerpt`-keyed redaction을 우회 → **데이터 관측은 기본 aggregate-counts-only**(distinct_count·overlap 카운트만, 원시 값 비전파). 필요시 `SENSITIVE_SOURCE_PATTERNS`+`allowed_proof_forms`(hash/bounded_summary/source_ref_only) 경유.
+- **PII-2**: review 파이프라인은 **redaction 전무**(`renderReviewTargetMaterializedInput`→`fs.readFile utf8` 그대로) → C-review 전 review-side PII 계약 명문화; 인벤토리는 공유 아티팩트이므로 **공유 redaction projection 1개**를 양 소비자가 사용.
+- **ESC-1**: §10 LLM 에스컬레이션이 현재 **결정론·모델해소-이전 단계**에 주입됨(actor/seat/route·실패강등 미명세) + §2.2"S1엔 LLM 없음"과 자기모순 → 에스컬레이션을 **seed 단계 또는 명명된 prep-actor**(해소된 route)로 분리, 실패강등(LLM 불가→heuristic 파라미터+출처기록, hard 모호만 fail-loud) 명세.
+- **CACHE-1**: replay 결정론이 주장뿐 → **캐시 키 명세**: `content_sha256 + 휴리스틱/추출기 버전 + 에스컬레이션-트리거 버전 + 프롬프트 해시 + model id/effort`; 캐시 레코드를 replay 권위로(run.ts `AuthoredArtifactReuseMatch` 패턴), drift 테스트로 무효화 검증.
+
+### 11.4 MEDIUM (14) — 보정 목록
+- **L2-1**: scout(`buildSignalRowsForObservation`)는 **code/document 하드게이트** → **csv/spreadsheet는 L2 무료라는 §2.1a 전제 거짓**(csv=kind spreadsheet라 scout []). §2.1a/§9.2 정직 재서술: spreadsheet L2-scout는 **미배선·미래작업**(별도 §5 phase거나 함의 제거). S1은 인벤토리를 `structural_data`로만 전달.
+- **SCHEMA-1**: `header_row:int` → `header_rows:int[]|null` + `layout_kind`(tabular/pivot_or_crosstab/matrix_no_header/unknown); 비-tabular시 columns[]/vocab 강등 규칙. §10.4(ii) submit payload도 동일.
+- **HASH-1**: 바이너리 워크북의 `content_sha256`는 **raw 바이트** 해시(텍스트 UTF-8 해시 재사용 아님, 의도적 동작 변경) 명시.
+- **CAPS-1**: §2.4 데이터층 캡 명시(max_rows_scanned_per_sheet·max_distinct_tracked_per_column·max_columns_profiled·max_sheet_pairs), `capture_truncated`를 데이터층 캡에서도 구동, cap 초과 distinct_count=추정치, cap 값을 캐시 파라미터에 포함.
+- **AUTH-1**: S1 근거를 **inactive evolve 계약** 대신 **active `validateSourceObservationBoundary`(source-observations.ts)** 인용; bounded-submit를 그 validator+capability-boundary로 정당화; `PROHIBITED_STRUCTURAL_KEYS` 통과 테스트.
+- **GEN-1**: §9.2 "code import/call 그래프 이미 인코딩"은 **거짓**(src에 그래프 추출기 없음) → PLANNED 표기; code 관측=file-stats+excerpt+regex scout뿐.
+- **GEN-2**: §2.1a/§9.2 `partially_wired` 오귀속 정정 — partially_wired는 generic textStats 게이트(document도 동일), scout는 code/document-scoped **추가 L2**. spreadsheet planned 이유=raw 바이너리에 양층 모두의 text L1 부재.
+- **NAME-1**(execution_adapter 오버로드)·**INSTALL-1**(bootstrapProviderFromEnv는 install 아닌 settings-write; 유추 폐기, stale ref 2133→2137)·**REJECT-1**(osascript/LibreOffice 명시 기각 1줄)·**CSV-1**(단일시트 csv는 cross_sheet_key_overlap/per_sheet_data 퇴화 — optionality 명시) — 11.2/11.3에 흡수 또는 1줄 정정.
+
+### 11.5 onto 셀프리뷰 요지
+- 개념경제: `execution_adapter` 오버로드(NAME-1)·evolve 계약 오귀속(AUTH-1)이 주 위반. envelope 분리(L2 공통+L1 어댑터)·aggregate-only redaction은 개념경제·capability-boundary에 부합. 방향은 건전, 명세·근거 보정 필요.
+
+### 11.6 반영 계획
+- **선행(xlsx 전)**: 11.1 BLOCKER + 11.3 HIGH 4건 + 11.2 L1 체인 확정 → §6.1/§8.5/§5 P4·§2.4/§3.2·§3.1/§10·§2.2 보정.
+- **동반**: 11.4 MEDIUM 13건을 해당 섹션에 반영.
+- **무관 유효**: csv-first P1~P3는 보정과 독립적으로 착수 가능.
