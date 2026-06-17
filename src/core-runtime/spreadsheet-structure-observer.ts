@@ -578,13 +578,16 @@ export function buildCsvInventory(args: {
   content: string;
   contentSha256: string;
   caps?: DataLayerCaps;
+  /** When the source extension is definitive (e.g. .tsv), pass the delimiter so a
+   *  tab file isn't re-detected as comma when tabs are sparse in the sample. */
+  delimiter?: CsvDelimiter;
 }): WorkbookStructuralInventory {
   const caps = args.caps ?? DEFAULT_DATA_LAYER_CAPS;
   const sheetName = path.basename(args.sourceRef);
   // Strip a leading UTF-8 BOM (common in Excel CSV exports) so it doesn't attach
   // to the first header cell. content_sha256 stays the raw-byte hash (with BOM).
   const content = args.content.charCodeAt(0) === 0xfeff ? args.content.slice(1) : args.content;
-  const delimiter = detectDelimiter(content);
+  const delimiter = args.delimiter ?? detectDelimiter(content);
   // +1 so a header row never eats into the data-row scan budget.
   const { rows, truncated: rowsTruncated } = parseCsv(
     content,
@@ -934,6 +937,58 @@ function parseTable(xml: string): { name: string; ref: string } | null {
   return result;
 }
 
+// Excel stores dates as numeric serials; the date-ness is in the cell's number
+// format (style), not the value. Builtin date numFmt IDs (date / datetime only;
+// time-only 18-21,45-47 are excluded so a time serial isn't rendered as a date).
+const BUILTIN_DATE_NUMFMT_IDS = new Set([14, 15, 16, 17, 22]);
+
+/** A custom format is date-ish if it carries a year or day token (`m` alone is
+ *  ambiguous month/minute). Locale prefixes / quoted literals can yield rare
+ *  false positives — acceptable for type inference. */
+function isDateFormatCode(code: string): boolean {
+  return /[yd]/i.test(code);
+}
+
+/** Parse styles.xml → the set of cellXfs indexes (a cell's `s` attribute) whose
+ *  number format is a date, so date-styled numeric cells can be typed as dates. */
+function parseStyles(xml: string): Set<number> {
+  const dateNumFmtIds = new Set<number>(BUILTIN_DATE_NUMFMT_IDS);
+  const dateXfIndexes = new Set<number>();
+  let inCellXfs = false;
+  let xfIndex = 0;
+  const parser = new SaxesParser();
+  parser.on("opentag", (node) => {
+    const a = attrsOf(node);
+    if (node.name === "numFmt") {
+      const id = parseInt(a.numFmtId ?? "", 10);
+      if (Number.isInteger(id) && a.formatCode && isDateFormatCode(a.formatCode)) {
+        dateNumFmtIds.add(id);
+      }
+    } else if (node.name === "cellXfs") {
+      inCellXfs = true; // the `s` attribute indexes into cellXfs, not cellStyleXfs
+      xfIndex = 0;
+    } else if (node.name === "xf" && inCellXfs) {
+      const id = parseInt(a.numFmtId ?? "0", 10);
+      if (dateNumFmtIds.has(id)) dateXfIndexes.add(xfIndex);
+      xfIndex += 1;
+    }
+  });
+  parser.on("closetag", (node) => {
+    if (node.name === "cellXfs") inCellXfs = false;
+  });
+  parser.write(xml).close();
+  return dateXfIndexes;
+}
+
+/** Excel 1900-system serial → ISO date (YYYY-MM-DD). 25569 = serial of
+ *  1970-01-01; correct for dates from 1900-03-01 on (covers real data). */
+function excelSerialToISODate(serial: number): string | null {
+  if (!Number.isFinite(serial)) return null;
+  const d = new Date(Math.round((serial - 25569) * 86400000));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
 interface ParsedPivotTable {
   name: string;
   location: string;
@@ -1058,8 +1113,9 @@ function createWorksheetParser(args: {
   sharedStrings: string[];
   sheetName: string;
   caps: DataLayerCaps;
+  dateXfIndexes: Set<number>;
 }): { write: (text: string) => void; finalize: () => void; getResult: () => ParsedWorksheet } {
-  const { sharedStrings, sheetName, caps } = args;
+  const { sharedStrings, sheetName, caps, dateXfIndexes } = args;
   const merged_ranges: ParsedWorksheet["merged_ranges"] = [];
   const data_validations: ParsedWorksheet["data_validations"] = [];
   const formula_cells: ParsedWorksheet["formula_cells"] = [];
@@ -1085,6 +1141,7 @@ function createWorksheetParser(args: {
   let curRow: string[] | null = null;
   let cellRef = "";
   let cellType = "";
+  let cellStyle = -1;
   let cellCol = 0;
   let inV = false;
   let inF = false;
@@ -1148,6 +1205,7 @@ function createWorksheetParser(args: {
       case "c": {
         cellRef = a.r ?? "";
         cellType = a.t ?? "";
+        cellStyle = a.s !== undefined ? parseInt(a.s, 10) : -1;
         const parsed = cellRef ? parseCellRef(cellRef) : null;
         // Normalize to the used-range origin so an offset sheet (e.g. B2:D10)
         // doesn't gain phantom leading empty columns.
@@ -1236,7 +1294,15 @@ function createWorksheetParser(args: {
           if (cellType === "s") value = sharedStrings[parseInt(vText, 10)] ?? "";
           else if (cellType === "inlineStr") value = isText;
           else if (cellType === "b") value = vText === "1" ? "true" : "false";
-          else value = vText; // str / e / n / default number
+          else if (
+            (cellType === "" || cellType === "n") &&
+            vText.length > 0 &&
+            dateXfIndexes.has(cellStyle)
+          ) {
+            // Numeric serial with a date number format → emit the ISO date so the
+            // column is typed as a date, not a number (Codex P2).
+            value = excelSerialToISODate(Number(vText)) ?? vText;
+          } else value = vText; // str / e / n / default number
           if (cellCol >= 0) {
             while (curRow.length < cellCol) curRow.push("");
             curRow[cellCol] = value;
@@ -1315,6 +1381,7 @@ export function buildXlsxInventory(args: {
         name === "xl/workbook.xml" ||
         name === "xl/_rels/workbook.xml.rels" ||
         name === "xl/sharedStrings.xml" ||
+        name === "xl/styles.xml" ||
         (name.startsWith("xl/worksheets/_rels/") && name.endsWith(".rels")) ||
         (name.startsWith("xl/tables/") && name.endsWith(".xml")) ||
         (name.startsWith("xl/externalLinks/_rels/") && name.endsWith(".rels")) ||
@@ -1344,12 +1411,15 @@ export function buildXlsxInventory(args: {
   let workbook: ParsedWorkbook;
   let workbookRels: ParsedRel[];
   let sharedStrings: string[];
+  let dateXfIndexes: Set<number>;
   try {
     workbook = parseWorkbook(workbookXml);
     const relsXml = parts.get("xl/_rels/workbook.xml.rels");
     workbookRels = relsXml ? parseRels(relsXml) : [];
     const sstXml = parts.get("xl/sharedStrings.xml");
     sharedStrings = sstXml ? parseSharedStrings(sstXml) : [];
+    const stylesXml = parts.get("xl/styles.xml");
+    dateXfIndexes = stylesXml ? parseStyles(stylesXml) : new Set<number>();
   } catch (error) {
     return unsupported(`xlsx workbook parse failed: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -1468,7 +1538,7 @@ export function buildXlsxInventory(args: {
       sinkFor: (name) => {
         const sheetEntry = sheetByPath.get(name);
         if (!sheetEntry) return null;
-        const wp = createWorksheetParser({ sharedStrings, sheetName: sheetEntry.name, caps });
+        const wp = createWorksheetParser({ sharedStrings, sheetName: sheetEntry.name, caps, dateXfIndexes });
         return {
           write: wp.write,
           finalize: () => {
@@ -1521,7 +1591,9 @@ export function buildXlsxInventory(args: {
     error_cells.push(...parsed.error_cells);
 
     const profile = profileSheetRows({ sheetName: sheetEntry.name, rows: parsed.rows, caps });
-    if (profile.data_layer_truncated) captureTruncated = true;
+    if (profile.data_layer_truncated || profile.col_count > caps.max_columns_profiled) {
+      captureTruncated = true;
+    }
     risk_signals.push(...profile.risk_signals);
     distinct_value_vocab.push(...profile.distinct_value_vocab);
     if (profile.column_value_sets.size > 0) {
@@ -1664,6 +1736,8 @@ export async function observeSpreadsheetSource(
       sourceRef,
       content: bytes.toString("utf8"),
       contentSha256,
+      // The .tsv extension is definitive — force tabs instead of re-detecting.
+      ...(workbookKind === "tsv" ? { delimiter: "\t" as const } : {}),
       ...(opts?.caps ? { caps: opts.caps } : {}),
     });
   }

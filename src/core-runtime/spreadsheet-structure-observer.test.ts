@@ -696,3 +696,53 @@ describe("Codex review fixes — round 2 (P4 hardening)", () => {
     expect(d.columns.map((c) => c.name)).toEqual(["name", "age"]); // first name is "name", not "﻿name"
   });
 });
+
+describe("Codex review fixes — round 3 (P4 hardening)", () => {
+  it("sets capture_truncated when an XLSX sheet exceeds the column cap (R3 #2)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:C2"/><sheetData>` +
+          `<row r="1"><c r="A1" t="inlineStr"><is><t>a</t></is></c><c r="B1" t="inlineStr"><is><t>b</t></is></c><c r="C1" t="inlineStr"><is><t>c</t></is></c></row>` +
+          `<row r="2"><c r="A2"><v>1</v></c><c r="B2"><v>2</v></c><c r="C2"><v>3</v></c></row>` +
+          `</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/wide.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      caps: { ...DEFAULT_DATA_LAYER_CAPS, max_columns_profiled: 2 }, // 3 cols > cap
+    });
+    expect(r.capture_truncated).toBe(true);
+  });
+
+  it("parses a .tsv as tab-delimited even when a cell contains commas (R3 #3)", async () => {
+    const tmp = path.join(os.tmpdir(), `onto-s1-tsv-${process.pid}`);
+    await fs.mkdir(tmp, { recursive: true });
+    const file = path.join(tmp, "vendors.tsv");
+    await fs.writeFile(file, "name\tcompany\nAlice\tACME, Inc.\nBob\tFoo, LLC\n", "utf8");
+    const r = await observeSpreadsheetSource(file);
+    expect(r.workbook_kind).toBe("tsv");
+    expect(r.per_sheet_data[0]!.columns.map((c) => c.name)).toEqual(["name", "company"]); // not split on the comma
+    await fs.rm(tmp, { recursive: true, force: true });
+  });
+
+  it("types a date-styled numeric XLSX column as a date, not a number (R3 #4)", () => {
+    const styles =
+      `<?xml version="1.0"?><styleSheet xmlns="${SML_NS}">` +
+      `<numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts>` +
+      `<cellXfs count="2"><xf numFmtId="0" xfId="0"/><xf numFmtId="164" xfId="0"/></cellXfs></styleSheet>`;
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A3"/><sheetData>` +
+      `<row r="1"><c r="A1" t="inlineStr"><is><t>txn_date</t></is></c></row>` +
+      `<row r="2"><c r="A2" s="1"><v>45292</v></c></row>` + // date serial, date style (xf 1)
+      `<row r="3"><c r="A3" s="1"><v>45293</v></c></row>` +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync({ ...makeMinimalXlsxParts(sheet), "xl/styles.xml": strToU8(styles) });
+    const r = buildXlsxInventory({ sourceRef: "/abs/dates.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    const col = r.per_sheet_data[0]!.columns[0]!;
+    expect(col.name).toBe("txn_date");
+    expect(col.inferred_type).toBe("date"); // serial 45292 → ISO date, not integer
+  });
+});
