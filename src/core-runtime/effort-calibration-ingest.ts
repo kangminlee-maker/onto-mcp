@@ -381,19 +381,75 @@ export function reviewRunRouteIdentity(
 }
 
 /**
- * Distinct derived route identities across a profile's runs, plus the non-fatal
- * cross-check of the declared `--route` hint and the worst route_completeness for
- * the decision-grade gate (design §7 Q3). Identities are deduped by routeToken
- * (the lossy single-string projection). When no run carried route evidence the
- * completeness is `under_determined` (the route axis resolved nothing) and the
- * declared hint is necessarily uncorroborated.
+ * The route identities of the reconstruct runs that ACTUALLY feed the frontier —
+ * the same runs `ingestReconstructReport` retains (telemetry shows the swept
+ * stage ran at the point). Route evidence is collected from these retained
+ * samples only, never from runs whose applied effort / judge mismatch dropped
+ * them, so a discarded wrong-route run can't taint route_completeness or add a
+ * phantom route (finding: derive route evidence from retained samples). A
+ * retained run that carries no route witness contributes null (kept, not
+ * dropped, so the summary can downgrade for it). Failed runs carry no telemetry
+ * and assert no route, so they are excluded.
+ */
+export function reconstructRetainedRouteIdentities(
+  report: ReconstructBenchmarkReport,
+  tag?: ReconstructStageTag,
+): Array<RouteIdentity | null> {
+  const point = tag ?? deriveReconstructTag(report);
+  if (!point) return [];
+  const out: Array<RouteIdentity | null> = [];
+  for (const run of report.runs ?? []) {
+    if (!appliedEffortMatches(run, point.stage, point.effort)) continue;
+    out.push(reconstructRunRouteIdentity(run));
+  }
+  return out;
+}
+
+/**
+ * The route identities of the review runs that feed the frontier — the gated
+ * (completed) candidate and unit-sweep baseline runs, mirroring
+ * `ingestReviewReport`'s attribution. Failed runs carry no quality gate or route
+ * telemetry, so only gated runs are sampled. A gated run missing its route
+ * projection contributes null (so the summary can downgrade for it).
+ */
+export function reviewRetainedRouteIdentities(
+  report: ReviewBenchmarkReport,
+): Array<RouteIdentity | null> {
+  const out: Array<RouteIdentity | null> = [];
+  for (const run of report.runs ?? []) {
+    if (!run.semantic_quality_gate) continue;
+    const isCandidate = Boolean(run.varied_unit_id && run.varied_effort);
+    const isBaseline = Boolean(
+      run.base_effort && run.case_id?.startsWith(UNIT_SWEEP_BASE_PREFIX),
+    );
+    if (!isCandidate && !isBaseline) continue;
+    out.push(reviewRunRouteIdentity(run));
+  }
+  return out;
+}
+
+/**
+ * Distinct derived route identities across a profile's retained runs, plus the
+ * non-fatal cross-check of the declared `--route` hint and the worst
+ * route_completeness for the decision-grade gate (design §7 Q3).
+ *
+ * Identities are deduped by routeToken AND effective_base_url, so two custom or
+ * proxy endpoints behind the same adapter (same routeToken, different base) stay
+ * distinct routes rather than collapsing into one "complete" identity (finding:
+ * preserve base URL when grouping). Completeness is `under_determined` when no
+ * run carried route evidence OR when any contributing retained run was missing a
+ * route witness (a null among the inputs — finding: count missing witnesses as
+ * incomplete); otherwise it is the worst completeness across the distinct
+ * identities. `identities.length > 1` means the profile aggregates more than one
+ * execution route, which the caller treats as non-decision-grade on the route
+ * axis (a per-route profile must observe a single route).
  */
 export interface DerivedRouteSummary {
-  /** Distinct derived identities (deduped by routeToken), canonical record. */
+  /** Distinct derived identities (deduped by routeToken + base_url), canonical. */
   identities: RouteIdentity[];
-  /** routeToken projection per distinct identity (artifact + warning text). */
+  /** Display token per distinct identity (routeToken, `@base_url` when custom). */
   tokens: string[];
-  /** Worst completeness across identities; `under_determined` when none. */
+  /** Worst completeness; `under_determined` when none or a witness was missing. */
   completeness: RouteCompleteness;
   /** Whether the declared hint corroborates at least one derived identity. */
   hintCorroborated: boolean;
@@ -403,21 +459,29 @@ export function summarizeDerivedRoutes(
   derived: ReadonlyArray<RouteIdentity | null>,
   declaredRouteHint: string,
 ): DerivedRouteSummary {
-  const byToken = new Map<string, RouteIdentity>();
+  // A null among contributing runs is a retained sample with no route witness —
+  // the profile cannot claim a complete route while including it (design §10).
+  const hasMissingWitness = derived.some((id) => id === null);
+  const byKey = new Map<string, RouteIdentity>();
   for (const identity of derived) {
     if (!identity) continue;
-    const token = routeToken(identity);
-    if (!byToken.has(token)) byToken.set(token, identity);
+    const key = `${routeToken(identity)} ${identity.effective_base_url ?? ""}`;
+    if (!byKey.has(key)) byKey.set(key, identity);
   }
-  const identities = [...byToken.values()];
-  const tokens = [...byToken.keys()];
+  const identities = [...byKey.values()];
+  const tokens = identities.map((id) =>
+    id.effective_base_url
+      ? `${routeToken(id)}@${id.effective_base_url}`
+      : routeToken(id),
+  );
+  const completeness: RouteCompleteness =
+    identities.length === 0 || hasMissingWitness
+      ? "under_determined"
+      : worstRouteCompleteness(identities.map((id) => id.route_completeness));
   return {
     identities,
     tokens,
-    completeness:
-      identities.length === 0
-        ? "under_determined"
-        : worstRouteCompleteness(identities.map((id) => id.route_completeness)),
+    completeness,
     hintCorroborated: identities.some((id) =>
       routeHintMatches(declaredRouteHint, id),
     ),

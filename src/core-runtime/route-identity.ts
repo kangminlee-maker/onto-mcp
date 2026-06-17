@@ -200,19 +200,24 @@ export function worstRouteCompleteness(
  * a human label — historically provider-level (`"anthropic"`) or the slash form
  * (`"anthropic/claude-cli"`) — while the canonical route is the structured
  * RouteIdentity. The hint is demoted to a non-fatal cross-check (design §5,
- * §11.2): it corroborates when it equals the full routeToken, the model_provider,
- * or the execution_adapter — comparing both the whole hint and its first slash
- * segment so a legacy `provider/adapter` label still matches a provider-level
- * derivation.
+ * §11.2): an EXACT match against the full routeToken, the model_provider, or the
+ * execution_adapter always corroborates. The lenient provider-head fallback
+ * (first slash segment → model_provider) applies ONLY when the adapter is
+ * unknown (provider_only / under_determined): for a `complete` identity the
+ * adapter IS known, so a slash hint naming a different adapter (e.g.
+ * `anthropic/claude-cli` against an `anthropic_sdk` identity) must NOT be
+ * silently corroborated — that would hide the SDK-vs-OAuth split this refactor
+ * exists to surface.
  */
 export function routeHintMatches(hint: string, identity: RouteIdentity): boolean {
+  if (
+    hint === routeToken(identity) ||
+    hint === identity.model_provider ||
+    hint === identity.execution_adapter
+  ) {
+    return true;
+  }
+  if (identity.route_completeness === "complete") return false;
   const head = hint.split("/")[0] ?? hint;
-  const candidates = [
-    routeToken(identity),
-    identity.model_provider,
-    identity.execution_adapter,
-  ];
-  return candidates.some(
-    (candidate) => candidate != null && (candidate === hint || candidate === head),
-  );
+  return head === identity.model_provider;
 }

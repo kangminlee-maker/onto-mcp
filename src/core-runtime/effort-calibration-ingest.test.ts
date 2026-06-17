@@ -3,7 +3,9 @@ import {
   deriveReconstructTag,
   ingestReconstructReport,
   ingestReviewReport,
+  reconstructRetainedRouteIdentities,
   reconstructRunRouteIdentity,
+  reviewRetainedRouteIdentities,
   reviewRunRouteIdentity,
   summarizeDerivedRoutes,
   type ReconstructBenchmarkReport,
@@ -394,8 +396,8 @@ describe("summarizeDerivedRoutes", () => {
     effectiveBaseUrl: null,
   });
 
-  it("dedups identities by routeToken and corroborates a provider-level hint", () => {
-    const summary = summarizeDerivedRoutes([sdk, sdk, null], "anthropic");
+  it("dedups identical identities and corroborates a provider-level hint", () => {
+    const summary = summarizeDerivedRoutes([sdk, sdk], "anthropic");
     expect(summary.identities).toHaveLength(1);
     expect(summary.completeness).toBe("complete");
     expect(summary.hintCorroborated).toBe(true);
@@ -406,6 +408,33 @@ describe("summarizeDerivedRoutes", () => {
     expect(summary.identities).toHaveLength(3);
     // sdk + oauth are complete but legacy is provider_only → worst wins.
     expect(summary.completeness).toBe("provider_only");
+  });
+
+  it("keeps two same-token routes distinct when their base URLs differ", () => {
+    // Two openai-compatible endpoints share the routeToken but are different
+    // routes; the base_url must distinguish them (no silent collapse).
+    const a = witnessedReconstructRouteIdentity({
+      provider: "lmstudio",
+      executionAdapter: "openai_compatible_http",
+      declaredBillingMode: "local",
+      effectiveBaseUrl: "http://localhost:1234/v1",
+    });
+    const b = witnessedReconstructRouteIdentity({
+      provider: "lmstudio",
+      executionAdapter: "openai_compatible_http",
+      declaredBillingMode: "local",
+      effectiveBaseUrl: "http://localhost:9999/v1",
+    });
+    const summary = summarizeDerivedRoutes([a, b], "lmstudio");
+    expect(summary.identities).toHaveLength(2);
+  });
+
+  it("downgrades to under_determined when a contributing run had no witness", () => {
+    // A retained sample with no route witness (null) must not be silently dropped
+    // while the profile claims a complete route.
+    const summary = summarizeDerivedRoutes([sdk, null], "anthropic");
+    expect(summary.identities).toHaveLength(1);
+    expect(summary.completeness).toBe("under_determined");
   });
 
   it("flags an uncorroborated declared hint without throwing", () => {
@@ -419,5 +448,68 @@ describe("summarizeDerivedRoutes", () => {
     expect(summary.identities).toHaveLength(0);
     expect(summary.completeness).toBe("under_determined");
     expect(summary.hintCorroborated).toBe(false);
+  });
+});
+
+describe("retained route identities", () => {
+  const witnessed: RouteIdentity = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "claude_code",
+    declaredBillingMode: "subscription",
+    effectiveBaseUrl: "claude-cli://oauth",
+  });
+
+  it("collects reconstruct route evidence only from runs retained at the point", () => {
+    const report: ReconstructBenchmarkReport = {
+      requested_effort: "high",
+      runs: [
+        // retained: applied effort matches the swept point.
+        {
+          quality_gate: reconGate("passed", { recall: 1, supportRate: 1, authored: 4, dropped: 0 }),
+          metadata: { applied_effort: "high", route_identity: witnessed },
+        },
+        // dropped: applied effort != point → its route must not be collected.
+        {
+          quality_gate: reconGate("passed", { recall: 1, supportRate: 1, authored: 4, dropped: 0 }),
+          metadata: {
+            applied_effort: "medium",
+            route_identity: witnessedReconstructRouteIdentity({
+              provider: "anthropic",
+              executionAdapter: "anthropic_sdk",
+              declaredBillingMode: "per_token",
+              effectiveBaseUrl: "https://api.anthropic.com",
+            }),
+          },
+        },
+      ],
+    };
+    const ids = reconstructRetainedRouteIdentities(report);
+    expect(ids).toEqual([witnessed]);
+  });
+
+  it("collects review route evidence only from gated runs", () => {
+    const report: ReviewBenchmarkReport = {
+      runs: [
+        {
+          case_id: "unit-sweep-lens-high",
+          varied_unit_id: "lens",
+          varied_effort: "high",
+          base_effort: "medium",
+          semantic_quality_gate: reviewGate("passed", ["passed"]),
+          review_profile: { runtime_route: { model_provider: "anthropic", execution_adapter: "claude_code" } },
+        },
+        // failed candidate (no gate) → carries no route telemetry → excluded.
+        {
+          case_id: "unit-sweep-lens-high",
+          varied_unit_id: "lens",
+          varied_effort: "high",
+          base_effort: "medium",
+          review_profile: { runtime_route: { model_provider: "openai", execution_adapter: "codex_cli" } },
+        },
+      ],
+    };
+    const ids = reviewRetainedRouteIdentities(report);
+    expect(ids).toHaveLength(1);
+    expect(ids[0]?.execution_adapter).toBe("claude_code");
   });
 });

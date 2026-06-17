@@ -8,7 +8,7 @@
  * One invocation builds one pipeline's profile:
  *   review:      one unit-sweep report (self-describes each unit+effort).
  *     tsx scripts/effort-calibration-report.ts --review-report <path> \
- *       --provider anthropic --model claude-opus-4-8 --route anthropic/claude-cli
+ *       --provider anthropic --model claude-opus-4-8 --route claude_code
  *   reconstruct: one report per pinned effort point (repeat the flag). A report
  *     auto-derives its (stage, effort) from the pinned knob; prefix
  *     stage:effort: to force it.
@@ -16,7 +16,7 @@
  *       --reconstruct-report author:low:<path> \
  *       --reconstruct-report author:high:<path> \
  *       --reconstruct-report judge:high:<path> \
- *       --provider anthropic --model claude-opus-4-8 --route anthropic/claude-cli
+ *       --provider anthropic --model claude-opus-4-8 --route claude_code
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -25,8 +25,8 @@ import {
   ingestReconstructReport,
   ingestReviewReport,
   JUDGE_STEP_ID,
-  reconstructRunRouteIdentity,
-  reviewRunRouteIdentity,
+  reconstructRetainedRouteIdentities,
+  reviewRetainedRouteIdentities,
   summarizeDerivedRoutes,
   type DerivedRouteSummary,
   type ReconstructBenchmarkReport,
@@ -73,7 +73,7 @@ function usage(): string {
     "                                     stage ∈ author|judge; omit prefix to auto-derive.",
     "  --provider <id>                    Provider id (required).",
     "  --model <id>                       Model id (required).",
-    "  --route <id>                       Effort-honoring route (required).",
+    "  --route <id>                       Declared route hint + file key, cross-checked vs the derived route (required).",
     `  --effort-order <csv>               Ascending effort order. Default: ${DEFAULT_EFFORT_ORDER.join(",")}`,
     `  --plateau <num>                    Plateau quality threshold. Default: ${DEFAULT_PLATEAU}`,
     "  --pass-quorum <num>                Min gatePassRate for viability. Default: 1 (all runs).",
@@ -380,12 +380,11 @@ async function main(): Promise<void> {
     pipeline = "review";
     const report = await readJson<ReviewBenchmarkReport>(options.reviewReport);
     assertIdentity(options.reviewReport, report, options);
-    // Derive each run's profile-derived RouteIdentity (adapter / model_provider /
-    // billing / base_url) instead of strict-matching the legacy provider token.
-    // --route is now a hint cross-checked after ingestion, not a throw (design §5).
-    for (const run of report.runs ?? []) {
-      derivedRouteIdentities.push(reviewRunRouteIdentity(run));
-    }
+    // Derive route identities from the runs that actually feed the frontier
+    // (gated candidate/baseline runs), profile-derived (adapter / model_provider
+    // / billing / base_url). --route is a hint cross-checked after ingestion, not
+    // a throw (design §5); evidence comes from retained samples only.
+    derivedRouteIdentities.push(...reviewRetainedRouteIdentities(report));
     sweepContext = {
       selected_lens_ids: report.selected_lens_ids ?? [],
       fixtures: report.fixtures ?? [],
@@ -409,14 +408,14 @@ async function main(): Promise<void> {
           .filter((m): m is string => typeof m === "string"),
       );
       for (const model of models) assertIdentity(filePath, { model }, options);
-      // Derive each run's witnessed RouteIdentity (S1.1/S1.2 surfaced
+      // Derive witnessed RouteIdentity from the runs that actually feed the
+      // frontier (the same runs ingestReconstructReport retains), so a dropped
+      // wrong-effort/early-exit run can't taint the route. S1.1/S1.2 surfaced
       // route_identity; a legacy provider-only report degrades through the
-      // witnessed constructor). The Anthropic-SDK vs Claude-Code-OAuth split that
+      // witnessed constructor. The Anthropic-SDK vs Claude-Code-OAuth split that
       // provider_route alone could not express now lives in execution_adapter /
       // billing_mode, and --route is a hint cross-checked after ingestion (§3, §5).
-      for (const run of report.runs ?? []) {
-        derivedRouteIdentities.push(reconstructRunRouteIdentity(run));
-      }
+      derivedRouteIdentities.push(...reconstructRetainedRouteIdentities(report, tag));
       // Single-variable invariant: the base context must match across ALL
       // sources, and the non-swept requested knobs must match within each stage
       // (so a judge sweep can't fold in an author-effort or judge-model change).
@@ -515,13 +514,21 @@ async function main(): Promise<void> {
   const thinPoints = report.stages
     .flatMap((s) => s.curve.map((p) => ({ stage: s.stage, ...p })))
     .filter((p) => p.runs < DECISION_GRADE_MIN_RUNS);
-  // Route axis (Q3, design §7): a route that did not resolve past model_provider
-  // (legacy provider-only telemetry, or no route evidence at all) cannot back a
-  // per-route profile and is non-decision-grade on its own axis — separate from
-  // the effort-axis thinPoints. Gated by the SAME --allow-preliminary opt-in.
+  // Route axis (Q3, design §7), separate from the effort-axis thinPoints and
+  // gated by the SAME --allow-preliminary opt-in. Two ways the route fails it:
+  //  - incomplete: the route did not resolve past model_provider (legacy
+  //    provider-only telemetry, a missing witness, or no route evidence at all).
+  //  - ambiguous: the retained samples span more than one distinct execution
+  //    route, so a single-route profile would aggregate behavior across routes
+  //    and corrupt the per-route effort recommendation (the conflation this
+  //    refactor exists to prevent).
   const routeIncomplete = routeSummary.completeness !== "complete";
+  const routeAmbiguous = routeSummary.identities.length > 1;
   const decisionGrade =
-    sourcesDecisionGrade && thinPoints.length === 0 && !routeIncomplete;
+    sourcesDecisionGrade &&
+    thinPoints.length === 0 &&
+    !routeIncomplete &&
+    !routeAmbiguous;
   if (!decisionGrade && !options.allowPreliminary) {
     const reasons: string[] = [];
     if (!sourcesDecisionGrade) {
@@ -544,6 +551,13 @@ async function main(): Promise<void> {
       reasons.push(
         `route_completeness=${routeSummary.completeness} (derived: [${derived}]) — ` +
           "adapter/auth not resolved (legacy provider-only telemetry or no route witness)",
+      );
+    }
+    if (routeAmbiguous) {
+      reasons.push(
+        `profile aggregates ${routeSummary.identities.length} distinct execution routes ` +
+          `([${routeSummary.tokens.join(", ")}]); a per-route profile must observe a single ` +
+          "route — split the sources or pin one route per profile",
       );
     }
     throw new Error(

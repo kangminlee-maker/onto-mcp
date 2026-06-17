@@ -180,6 +180,12 @@ describe("routeHintMatches", () => {
     declaredBillingMode: "per_token",
     effectiveBaseUrl: "https://api.anthropic.com",
   });
+  const legacy = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: null,
+    declaredBillingMode: null,
+    effectiveBaseUrl: null,
+  });
 
   it("corroborates a provider-level hint against model_provider", () => {
     expect(routeHintMatches("anthropic", sdk)).toBe(true);
@@ -190,8 +196,15 @@ describe("routeHintMatches", () => {
     expect(routeHintMatches("anthropic_sdk", sdk)).toBe(true);
   });
 
-  it("corroborates the first segment of a legacy slash-form hint", () => {
-    expect(routeHintMatches("anthropic/claude-cli", sdk)).toBe(true);
+  it("does NOT corroborate a slash-adapter hint against a complete identity", () => {
+    // anthropic/claude-cli names the claude-cli adapter, but the identity is the
+    // anthropic SDK — corroborating it would hide the SDK-vs-OAuth split.
+    expect(routeHintMatches("anthropic/claude-cli", sdk)).toBe(false);
+  });
+
+  it("allows the provider-head fallback only for a provider_only legacy identity", () => {
+    expect(legacy.route_completeness).toBe("provider_only");
+    expect(routeHintMatches("anthropic/claude-cli", legacy)).toBe(true);
   });
 
   it("does not corroborate a different provider", () => {
