@@ -460,6 +460,53 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     // the pivot-hosting sheet is a crosstab, not a flat table
     expect(r.per_sheet_data.find((d) => d.sheet === "Summary")!.layout_kind).toBe("pivot_or_crosstab");
   });
+
+  it("computes cross-sheet key overlap between same-named columns (counts only, CHAN-1)", () => {
+    const sheet = (rows: string) =>
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:B4"/><sheetData>${rows}</sheetData></worksheet>`;
+    const str = (ref: string, v: string) => `<c r="${ref}" t="inlineStr"><is><t>${v}</t></is></c>`;
+    const num = (ref: string, v: number) => `<c r="${ref}"><v>${v}</v></c>`;
+    const bytes = zipSync({
+      "xl/workbook.xml": strToU8(
+        `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+          `<sheet name="주문" sheetId="1" r:id="rId1"/><sheet name="출고" sheetId="2" r:id="rId2"/>` +
+          `</sheets></workbook>`,
+      ),
+      "xl/_rels/workbook.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+          `<Relationship Id="rId2" Type="${relType("worksheet")}" Target="worksheets/sheet2.xml"/></Relationships>`,
+      ),
+      // 주문.결제번호 = {P001,P002,P003}
+      "xl/worksheets/sheet1.xml": strToU8(
+        sheet(
+          `<row r="1">${str("A1", "결제번호")}${str("B1", "금액")}</row>` +
+            `<row r="2">${str("A2", "P001")}${num("B2", 100)}</row>` +
+            `<row r="3">${str("A3", "P002")}${num("B3", 200)}</row>` +
+            `<row r="4">${str("A4", "P003")}${num("B4", 300)}</row>`,
+        ),
+      ),
+      // 출고.결제번호 = {P002,P003,P004} → overlap with 주문 = {P002,P003} = 2
+      "xl/worksheets/sheet2.xml": strToU8(
+        sheet(
+          `<row r="1">${str("A1", "결제번호")}${str("B1", "상태")}</row>` +
+            `<row r="2">${str("A2", "P002")}${str("B2", "done")}</row>` +
+            `<row r="3">${str("A3", "P003")}${str("B3", "done")}</row>` +
+            `<row r="4">${str("A4", "P004")}${str("B4", "pending")}</row>`,
+        ),
+      ),
+    });
+    const r = buildXlsxInventory({ sourceRef: "/abs/join.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+
+    expect(r.cross_sheet_key_overlap).toHaveLength(1);
+    const o = r.cross_sheet_key_overlap[0]!;
+    expect(o.key_name).toBe("결제번호");
+    expect([...o.sheets].sort()).toEqual(["주문", "출고"].sort());
+    expect(o.pairwise_overlap).toHaveLength(1);
+    expect(o.pairwise_overlap[0]!.count).toBe(2); // P002, P003 shared
+    // CHAN-1: only counts — no raw key values leak.
+    expect(JSON.stringify(r.cross_sheet_key_overlap)).not.toContain("P002");
+  });
 });
 
 describe("header detection — offset headers + confidence (deterministic, finding 3)", () => {

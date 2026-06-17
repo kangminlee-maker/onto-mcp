@@ -304,6 +304,13 @@ function renderSpreadsheetStructuralView(
       );
     }
   }
+  if (inventory.cross_sheet_key_overlap.length) {
+    lines.push("", "cross_sheet_key_overlap (shared-column value overlap, counts only):");
+    for (const o of inventory.cross_sheet_key_overlap) {
+      const pairs = o.pairwise_overlap.map((p) => `${p.a}∩${p.b}=${p.count}`).join(", ");
+      lines.push(`  - ${o.key_name} across [${o.sheets.join(", ")}]: ${pairs}`);
+    }
+  }
   if (inventory.risk_signals.length) {
     lines.push("", "risk_signals:");
     for (const signal of inventory.risk_signals) {

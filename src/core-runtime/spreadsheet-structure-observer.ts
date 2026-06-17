@@ -330,6 +330,10 @@ interface SheetRowProfile {
   data_layer_truncated: boolean;
   col_count: number;
   row_count: number;
+  /** Bounded distinct value SET per real-named column (tabular only) — held
+   *  INTERNALLY to compute cross-sheet key overlap; never emitted (only the
+   *  overlap COUNT is, CHAN-1). Empty for matrix/headerless sheets. */
+  column_value_sets: Map<string, Set<string>>;
 }
 
 /** Deterministic per-sheet data profiling shared by every format (csv = one
@@ -354,6 +358,7 @@ function profileSheetRows(args: {
       data_layer_truncated: false,
       col_count: 0,
       row_count: 0,
+      column_value_sets: new Map(),
     };
   }
 
@@ -389,6 +394,9 @@ function profileSheetRows(args: {
 
   const columns: InventoryColumn[] = [];
   const distinct_value_vocab: DistinctValueVocabEntry[] = [];
+  // Retained only for tabular sheets with a real column name — fuels cross-sheet
+  // key overlap; never emitted (CHAN-1). Bounded by the distinct cap per column.
+  const column_value_sets = new Map<string, Set<string>>();
   let dataLayerTruncated = false;
 
   for (let c = 0; c < profiledCols; c += 1) {
@@ -447,6 +455,13 @@ function profileSheetRows(args: {
         distinct_count_is_estimate: false,
       });
     }
+
+    // Cross-sheet key/dimension candidate: a real-named tabular column with ≥2
+    // distinct values. The bounded set stays internal (CHAN-1).
+    if (hasHeader && distinct.size >= 2) {
+      const name = columnName(c);
+      if (!name.startsWith("col_")) column_value_sets.set(name, distinct);
+    }
   }
 
   const layout: SheetLayoutKind = hasHeader ? "tabular" : "matrix_no_header";
@@ -460,7 +475,53 @@ function profileSheetRows(args: {
     data_layer_truncated: dataLayerTruncated,
     col_count: colCount,
     row_count: rows.length,
+    column_value_sets,
   };
+}
+
+/** Cross-sheet key/dimension overlap (design §2.4): for each column NAME shared by
+ *  ≥2 sheets, the pairwise count of shared values between their (bounded) value
+ *  sets — a data-level relationship signal. Counts only (CHAN-1); the total number
+ *  of pairs is bounded by max_sheet_pairs (CAPS-1). */
+function computeCrossSheetKeyOverlap(
+  perSheet: Array<{ sheet: string; valueSets: Map<string, Set<string>> }>,
+  caps: DataLayerCaps,
+): { overlaps: CrossSheetKeyOverlap[]; truncated: boolean } {
+  const byKey = new Map<string, Array<{ sheet: string; values: Set<string> }>>();
+  for (const { sheet, valueSets } of perSheet) {
+    for (const [col, values] of valueSets) {
+      const list = byKey.get(col);
+      if (list) list.push({ sheet, values });
+      else byKey.set(col, [{ sheet, values }]);
+    }
+  }
+  const overlaps: CrossSheetKeyOverlap[] = [];
+  let pairBudget = caps.max_sheet_pairs;
+  let truncated = false;
+  for (const [key, occ] of byKey) {
+    if (occ.length < 2) continue;
+    const pairwise: Array<{ a: string; b: string; count: number }> = [];
+    for (let i = 0; i < occ.length; i += 1) {
+      for (let j = i + 1; j < occ.length; j += 1) {
+        if (pairBudget <= 0) {
+          truncated = true;
+          break;
+        }
+        pairBudget -= 1;
+        const a = occ[i]!;
+        const b = occ[j]!;
+        const [small, large] = a.values.size <= b.values.size ? [a.values, b.values] : [b.values, a.values];
+        let count = 0;
+        for (const v of small) if (large.has(v)) count += 1;
+        if (count > 0) pairwise.push({ a: a.sheet, b: b.sheet, count });
+      }
+      if (pairBudget <= 0) break;
+    }
+    if (pairwise.length > 0) {
+      overlaps.push({ key_name: key, sheets: occ.map((o) => o.sheet), pairwise_overlap: pairwise });
+    }
+  }
+  return { overlaps, truncated };
 }
 
 /** Build the inventory from already-read CSV text. Pure & deterministic:
@@ -1276,6 +1337,7 @@ export function buildXlsxInventory(args: {
   const sheets: InventorySheet[] = [];
   const per_sheet_data: PerSheetData[] = [];
   const distinct_value_vocab: DistinctValueVocabEntry[] = [];
+  const crossSheetInput: Array<{ sheet: string; valueSets: Map<string, Set<string>> }> = [];
   const formula_cells: WorkbookStructuralInventory["formula_cells"] = [];
   const merged_ranges: WorkbookStructuralInventory["merged_ranges"] = [];
   const data_validations: WorkbookStructuralInventory["data_validations"] = [];
@@ -1313,6 +1375,9 @@ export function buildXlsxInventory(args: {
     if (profile.data_layer_truncated) captureTruncated = true;
     risk_signals.push(...profile.risk_signals);
     distinct_value_vocab.push(...profile.distinct_value_vocab);
+    if (profile.column_value_sets.size > 0) {
+      crossSheetInput.push({ sheet: sheetEntry.name, valueSets: profile.column_value_sets });
+    }
 
     const dims = parsed.dimensions;
     sheets.push({
@@ -1336,6 +1401,10 @@ export function buildXlsxInventory(args: {
       columns: profile.columns,
     });
   }
+
+  const { overlaps: cross_sheet_key_overlap, truncated: overlapTruncated } =
+    computeCrossSheetKeyOverlap(crossSheetInput, caps);
+  if (overlapTruncated) captureTruncated = true;
 
   if (macroPresent) {
     risk_signals.push({ kind: "macro_present", location: path.basename(args.sourceRef), literal: "workbook carries a VBA project" });
@@ -1364,10 +1433,7 @@ export function buildXlsxInventory(args: {
     risk_signals,
     per_sheet_data,
     distinct_value_vocab,
-    // Cross-sheet key-overlap (a data-relation signal, §2.4) needs retained
-    // bounded per-column value sets across sheets — a distinct increment, not
-    // wired yet (csv returns [] too).
-    cross_sheet_key_overlap: [],
+    cross_sheet_key_overlap,
     data_layer_caps: caps,
     capture_truncated: captureTruncated,
     unsupported_reason: null,
