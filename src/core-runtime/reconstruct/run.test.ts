@@ -2718,6 +2718,8 @@ describe("runReconstruct", () => {
       "ontology_expansion_validation",
       "maturation_source_delta",
       "maturation_source_delta_validation",
+      "maturation_convergence_ledger",
+      "maturation_convergence_ledger_validation",
       "maturation_continuation_decision",
       "maturation_continuation_decision_validation",
       "query_proofs",
@@ -2737,15 +2739,27 @@ describe("runReconstruct", () => {
       ).toBeNull();
     }
     expect(preHandoffManifest.artifact_refs.reconstruct_record).toBeNull();
-    expect(preHandoffManifest.purpose_adequacy_scope.implemented_artifacts)
-      .not.toContain("reconstruct_record");
-    expect(preHandoffManifest.purpose_adequacy_scope.implemented_artifacts)
-      .not.toContain("final_output");
+    // purpose_adequacy_scope.implemented_artifacts must also exclude every
+    // terminal-gated ref pre-handoff. handoff_decision_validation is the lone
+    // exception: it is in the always-implemented list, so it is nulled in
+    // artifact_refs but legitimately still listed here.
+    const preHandoffScope =
+      preHandoffManifest.purpose_adequacy_scope.implemented_artifacts;
+    for (const key of preHandoffNulledRefs) {
+      if (key === "handoff_decision_validation") continue;
+      expect(
+        preHandoffScope,
+        `pre-handoff implemented_artifacts must exclude ${key}`,
+      ).not.toContain(key);
+    }
+    expect(preHandoffScope).not.toContain("reconstruct_record");
     // The completed final manifest restores the terminal record + the refs this
-    // run produced (confirms the gating is conditional, not a permanent drop).
-    expect(manifest.artifact_refs.reconstruct_record).not.toBeNull();
-    expect(manifest.artifact_refs.handoff_decision_validation).not.toBeNull();
-    expect(manifest.artifact_refs.final_output).not.toBeNull();
+    // run produced as actual path strings — not merely non-null, since a dropped
+    // key reads as undefined and would slip past a not-null check.
+    expect(typeof manifest.artifact_refs.reconstruct_record).toBe("string");
+    expect(typeof manifest.artifact_refs.handoff_decision_validation).toBe("string");
+    expect(typeof manifest.artifact_refs.final_output).toBe("string");
+    expect(typeof manifest.artifact_refs.maturation_convergence_ledger).toBe("string");
     expect(manifest.purpose_adequacy_scope.implemented_artifacts)
       .toContain("reconstruct_record");
 
