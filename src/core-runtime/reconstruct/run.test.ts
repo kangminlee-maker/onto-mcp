@@ -5704,6 +5704,37 @@ describe("runReconstruct", () => {
     })).rejects.toThrow(/runtime_implementation_status=planned/);
   });
 
+  it("fails loud for a sole unsupported workbook format (.xls) — empty inventory is not evidence (Codex F1)", async () => {
+    // End-to-end proof that the gate flip did NOT let a legacy workbook reach LLM
+    // authoring: a sole .xls target is runnable (spreadsheet partially_wired) and is
+    // observed, but its inventory carries only `unsupported_reason`, so it is demoted
+    // to a skip → zero observations → the run fails loud instead of authoring from
+    // empty evidence.
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "xls-run");
+    const xlsTarget = path.join(projectRoot, "legacy.xls");
+    await fs.writeFile(xlsTarget, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]));
+
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [xlsTarget],
+      intent: "Create a bounded reconstruct Seed from a legacy workbook target.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
+    })).rejects.toThrow(
+      /at least one runtime source observation|extraction unsupported/,
+    );
+  });
+
   it("selects every observation and leaves mixed material expansion explicit", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
