@@ -11,6 +11,7 @@ import {
 } from "../target-material-kind.js";
 import {
   observeSpreadsheetSource,
+  projectInventoryForAdmission,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
 } from "../spreadsheet-structure-observer.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
@@ -450,7 +451,12 @@ async function buildSpreadsheetSourceObservation(args: {
   const { detection, stat, location, lineage } = args;
   const basename = path.basename(detection.ref);
   const extension = path.extname(detection.ref).toLowerCase();
-  const inventory = await observeSpreadsheetSource(detection.ref);
+  // Route through the single shared admission projection (§11 CHAN-1): the
+  // structural_data inventory carries no raw cell values — those reach a prompt
+  // only via the source-safety channel, never through structural_data.
+  const inventory = projectInventoryForAdmission(
+    await observeSpreadsheetSource(detection.ref),
+  );
   const summary = inventory.unsupported_reason
     ? `spreadsheet workbook observed at ${basename} — extraction unsupported (${inventory.unsupported_reason}), structure_inspected_only`
     : `spreadsheet workbook observed at ${basename} — ${inventory.sheets.length} sheet(s), structure_inspected_only`;

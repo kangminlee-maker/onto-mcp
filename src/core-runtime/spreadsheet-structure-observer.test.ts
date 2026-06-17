@@ -7,6 +7,7 @@ import {
   buildCsvInventory,
   observeSpreadsheetSource,
   parseCsv,
+  projectInventoryForAdmission,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
   type DataLayerCaps,
 } from "./spreadsheet-structure-observer.js";
@@ -153,5 +154,29 @@ describe("observeSpreadsheetSource — IO + dispatch", () => {
   it("reports unreadable sources without throwing", async () => {
     const r = await observeSpreadsheetSource(path.join(tmp, "does-not-exist.csv"));
     expect(r.unsupported_reason).toMatch(/source unreadable/);
+  });
+});
+
+describe("projectInventoryForAdmission — channel governance (CHAN-1/CHAN-2)", () => {
+  it("strips raw top_values while preserving aggregate distinct counts", () => {
+    const inventory = inv("name,role\nAlice,eng\nBob,eng\n");
+    // The observer itself never emits top_values; a future data-observation
+    // phase might (via the source-safety channel). Simulate that and assert the
+    // single shared projection excludes it for every consumer.
+    inventory.distinct_value_vocab[0].top_values = [
+      { value: "Alice", count: 1 },
+      { value: "Bob", count: 1 },
+    ];
+    const before = inventory.distinct_value_vocab[0];
+    const projected = projectInventoryForAdmission(inventory);
+    const entry = projected.distinct_value_vocab[0];
+
+    expect(entry.top_values).toBeUndefined();
+    expect(entry.distinct_count).toBe(before.distinct_count);
+    expect(entry.distinct_count_is_estimate).toBe(before.distinct_count_is_estimate);
+    // No raw value leaks anywhere in the projected inventory.
+    expect(JSON.stringify(projected)).not.toContain("Alice");
+    // The source inventory is not mutated (projection returns a copy).
+    expect(inventory.distinct_value_vocab[0].top_values).toBeDefined();
   });
 });

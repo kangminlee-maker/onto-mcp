@@ -105,6 +105,12 @@ const SPREADSHEET_EXTENSIONS = new Set([
   ".xlsx",
 ]);
 
+/** True when the ref's name denotes spreadsheet/workbook material by extension
+ *  (the canonical SPREADSHEET_EXTENSIONS set). Pure — no IO. */
+export function isSpreadsheetRef(ref: string): boolean {
+  return SPREADSHEET_EXTENSIONS.has(path.extname(ref).toLowerCase());
+}
+
 const DOCUMENT_EXTENSIONS = new Set([
   ".adoc",
   ".doc",

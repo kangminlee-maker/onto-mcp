@@ -514,3 +514,28 @@ export async function observeSpreadsheetSource(
     reason: `${workbookKind} extraction not yet implemented (P4: bundled Node library)`,
   });
 }
+
+/**
+ * The single admission-safe projection of a workbook inventory (design §11
+ * CHAN-1/CHAN-2). It returns a structural + aggregate-only view: raw cell values
+ * — `distinct_value_vocab[].top_values` (and any future sample/key-value fields)
+ * — are excluded. Consumers that lack their own source-safety admission gate
+ * (e.g. the review pipeline, §3.2) MUST route through this so the safe default is
+ * enforced in ONE place and cannot drift between consumers. Raw values reach a
+ * prompt only via the explicit source-safety channel, never via this projection.
+ */
+export function projectInventoryForAdmission(
+  inventory: WorkbookStructuralInventory,
+): WorkbookStructuralInventory {
+  return {
+    ...inventory,
+    // Reconstruct each vocab entry from aggregate-only fields, dropping the
+    // optional raw-value `top_values` entirely.
+    distinct_value_vocab: inventory.distinct_value_vocab.map((entry) => ({
+      sheet: entry.sheet,
+      column: entry.column,
+      distinct_count: entry.distinct_count,
+      distinct_count_is_estimate: entry.distinct_count_is_estimate,
+    })),
+  };
+}
