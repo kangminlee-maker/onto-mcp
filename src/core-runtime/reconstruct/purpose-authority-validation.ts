@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructEvidenceRef,
+  ReconstructPurposeAdequacyFrame,
   ReconstructPurposeConfirmationArtifact,
   ReconstructPurposeConfirmationValidationArtifact,
   ReconstructPurposeEvidenceKind,
@@ -12,6 +13,7 @@ import type {
   ReconstructSourcePurposeCandidatesValidationArtifact,
   ReconstructSourcePurposeValidationViolation,
 } from "./artifact-types.js";
+import { TARGET_MATERIAL_KINDS } from "../target-material-kind.js";
 
 const PURPOSE_EVIDENCE_KINDS: readonly ReconstructPurposeEvidenceKind[] = [
   "P1",
@@ -19,6 +21,13 @@ const PURPOSE_EVIDENCE_KINDS: readonly ReconstructPurposeEvidenceKind[] = [
   "P3",
   "P4",
   "P5",
+];
+
+const PURPOSE_FRAME_STATUSES: readonly ReconstructPurposeAdequacyFrame["frame_status"][] = [
+  "source_declared",
+  "evidence_inferred",
+  "limitation_backed",
+  "unresolved",
 ];
 
 function isoNow(): string {
@@ -279,12 +288,77 @@ export function validateSourcePurposeCandidates(args: {
         subjectId: candidate.purpose_candidate_id,
       }));
     }
-    if (!Array.isArray(frame.required_elements) || frame.required_elements.length === 0) {
+    // The frame header (frame_kind, frame_status, material_kind_requirements) is required for
+    // every candidate regardless of rank. The direct-call mapper enforces it on the authoring
+    // path; this validator must enforce it on the disk/reuse path (source-purpose-candidates.yaml
+    // is parsed without schema validation) so a malformed frame is never blessed as valid. Only
+    // required_elements is rank-dependent — a rejected candidate may leave it empty (below).
+    if (!hasNonEmptyString(frame.frame_kind)) {
       violations.push(violation({
         code: "required_element_missing",
-        message: `${candidatePath}.adequacy_frame.required_elements must not be empty`,
+        message: `${candidatePath}.adequacy_frame.frame_kind must be non-empty`,
         subjectId: candidate.purpose_candidate_id,
       }));
+    }
+    if (!PURPOSE_FRAME_STATUSES.includes(frame.frame_status)) {
+      violations.push(violation({
+        code: "invalid_enum",
+        message: `${candidatePath}.adequacy_frame.frame_status is not a valid frame status`,
+        subjectId: candidate.purpose_candidate_id,
+      }));
+    }
+    const requirements = frame.material_kind_requirements;
+    if (typeof requirements !== "object" || requirements === null) {
+      violations.push(violation({
+        code: "required_element_missing",
+        message: `${candidatePath}.adequacy_frame.material_kind_requirements is required`,
+        subjectId: candidate.purpose_candidate_id,
+      }));
+    } else {
+      if (!TARGET_MATERIAL_KINDS.includes(requirements.target_material_kind)) {
+        violations.push(violation({
+          code: "invalid_enum",
+          message:
+            `${candidatePath}.adequacy_frame.material_kind_requirements.target_material_kind is invalid`,
+          subjectId: candidate.purpose_candidate_id,
+        }));
+      }
+      if (!Array.isArray(requirements.required_facets)) {
+        violations.push(violation({
+          code: "required_element_missing",
+          message:
+            `${candidatePath}.adequacy_frame.material_kind_requirements.required_facets must be an array`,
+          subjectId: candidate.purpose_candidate_id,
+        }));
+      }
+      if (!hasNonEmptyString(requirements.rationale)) {
+        violations.push(violation({
+          code: "required_element_missing",
+          message:
+            `${candidatePath}.adequacy_frame.material_kind_requirements.rationale must be non-empty`,
+          subjectId: candidate.purpose_candidate_id,
+        }));
+      }
+    }
+    if (!Array.isArray(frame.required_elements) || frame.required_elements.length === 0) {
+      // Rejected candidates record a considered-and-excluded alternative for provenance,
+      // not an active adequacy frame, so they may leave required_elements as an empty array
+      // (the full frame header above is still required for every rank). Mirrors the rejected
+      // exemption for supporting evidence. Only the empty-array case is exempt: a non-array
+      // required_elements still violates the artifact contract for every rank, and
+      // non-rejected candidates must still carry frame elements. When a rejected candidate
+      // does provide elements, the element-format checks below still apply.
+      const rejectedEmptyArray =
+        candidate.rank === "rejected" &&
+        Array.isArray(frame.required_elements) &&
+        frame.required_elements.length === 0;
+      if (!rejectedEmptyArray) {
+        violations.push(violation({
+          code: "required_element_missing",
+          message: `${candidatePath}.adequacy_frame.required_elements must not be empty`,
+          subjectId: candidate.purpose_candidate_id,
+        }));
+      }
       continue;
     }
     for (const [elementIndex, element] of frame.required_elements.entries()) {

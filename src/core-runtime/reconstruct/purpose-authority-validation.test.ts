@@ -423,6 +423,114 @@ describe("validateSourcePurposeCandidates rejection branches", () => {
     expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
   });
 
+  it("allows a rejected candidate with empty required_elements (rank-aware leniency)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const rejected = clone(base.purpose_candidates[0]);
+    rejected.purpose_candidate_id = "purpose-feature-rejected";
+    rejected.rank = "rejected";
+    rejected.adequacy_frame.frame_id = "frame-feature-rejected";
+    rejected.adequacy_frame.required_elements = [];
+    base.purpose_candidates.push(rejected);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations).toEqual([]);
+  });
+
+  it("still rejects a rejected candidate whose required_elements is not an array (required_element_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const rejected = clone(base.purpose_candidates[0]);
+    rejected.purpose_candidate_id = "purpose-feature-rejected";
+    rejected.rank = "rejected";
+    rejected.adequacy_frame.frame_id = "frame-feature-rejected";
+    // Only an empty array is exempt for rejected; a non-array still violates the contract.
+    (rejected.adequacy_frame as unknown as Record<string, unknown>).required_elements = null;
+    base.purpose_candidates.push(rejected);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
+  it("still rejects a non-rejected candidate with empty required_elements (required_element_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const secondary = clone(base.purpose_candidates[0]);
+    secondary.purpose_candidate_id = "purpose-feature-secondary";
+    secondary.rank = "secondary";
+    secondary.adequacy_frame.frame_id = "frame-feature-secondary";
+    secondary.adequacy_frame.required_elements = [];
+    base.purpose_candidates.push(secondary);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
+  it("still validates element format when a rejected candidate provides required_elements", () => {
+    const base = clone(sourcePurposeCandidates());
+    const rejected = clone(base.purpose_candidates[0]);
+    rejected.purpose_candidate_id = "purpose-feature-rejected";
+    rejected.rank = "rejected";
+    rejected.adequacy_frame.frame_id = "frame-feature-rejected";
+    // Non-empty required_elements still trigger element-format checks for rejected candidates.
+    rejected.adequacy_frame.required_elements[0].element_id = "   ";
+    base.purpose_candidates.push(rejected);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
+  it("enforces the full frame header even when a rejected candidate's required_elements are exempt (required_element_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const rejected = clone(base.purpose_candidates[0]);
+    rejected.purpose_candidate_id = "purpose-feature-rejected";
+    rejected.rank = "rejected";
+    rejected.adequacy_frame.frame_id = "frame-feature-rejected";
+    rejected.adequacy_frame.required_elements = [];
+    // Empty required_elements is exempt for rejected, but the frame header is still required:
+    // a blank frame_kind must still fail loud (host/reuse-authored YAML skips the mapper).
+    rejected.adequacy_frame.frame_kind = "   ";
+    base.purpose_candidates.push(rejected);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
+  it("rejects an invalid adequacy_frame.frame_status for any rank (invalid_enum)", () => {
+    const base = clone(sourcePurposeCandidates());
+    (base.purpose_candidates[0].adequacy_frame as unknown as Record<string, unknown>)
+      .frame_status = "not_a_status";
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "invalid_enum")).toBe(true);
+  });
+
+  it("rejects a missing material_kind_requirements in the frame header (required_element_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const rejected = clone(base.purpose_candidates[0]);
+    rejected.purpose_candidate_id = "purpose-feature-rejected";
+    rejected.rank = "rejected";
+    rejected.adequacy_frame.frame_id = "frame-feature-rejected";
+    rejected.adequacy_frame.required_elements = [];
+    (rejected.adequacy_frame as unknown as Record<string, unknown>).material_kind_requirements =
+      undefined;
+    base.purpose_candidates.push(rejected);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
   it("rejects mixed target material without member lineage (mixed_lineage_missing)", () => {
     const base = clone(sourcePurposeCandidates());
     base.target_material_kind = "mixed";

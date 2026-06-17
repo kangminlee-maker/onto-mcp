@@ -6473,6 +6473,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         baseSystem,
         "Author source-purpose-candidates.yaml. Determine the target's source-derived purpose from observed source material, not from the user's generic reconstruct intent.",
         "Always return at least one purpose candidate and exactly one primary candidate. Preserve rejected or contradicted alternatives instead of deleting them.",
+        "A rejected candidate records a considered-and-excluded alternative for provenance: it must still author the full adequacy_frame header (frame_id, frame_kind, frame_status, adequacy_claim, and material_kind_requirements), but may set required_elements to an empty list [] instead of enumerating frame elements.",
         "Use purpose_source_status exactly; never use source_purpose_status or inference_status.",
         "P1 means the purpose is directly declared by the source. P2 means repeated source structure implies the same purpose. P3 means code/data workflow implies it. P4 means user-facing or operational language implies it. P5 means weak contextual hint only.",
         "A primary purpose that is not explicit_source_declared must cite at least two evidence_kind_refs and one must be P2, P3, or P4.",
