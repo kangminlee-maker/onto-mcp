@@ -9985,15 +9985,23 @@ export async function runReconstruct(
     validation: runControlState.validation,
   });
   try {
+  // Parse the contract registry once per run and thread the in-memory object
+  // through every validator/writer below, instead of each re-reading and
+  // re-parsing the 180KB file (previously ~10+ redundant loads per run).
+  const contractRegistry = await loadReconstructContractRegistry({
+    registryPath: contractRegistryPath,
+  });
   await writeRegistryVerificationEvidenceArtifact({
     sessionId,
     registryPath: contractRegistryPath,
+    contractRegistry,
     outputPath: registryVerificationEvidencePath,
   });
   const registryVerificationEvidenceValidation =
     await writeRegistryVerificationEvidenceValidationArtifact({
       evidencePath: registryVerificationEvidencePath,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: registryVerificationEvidenceValidationPath,
     });
   assertRuntimeValidationValid({
@@ -10020,9 +10028,6 @@ export async function runReconstruct(
     await readYamlDocument<ReconstructSourceInventoryArtifact>(
       preparationRefs.source_inventory,
     );
-  const contractRegistry = await loadReconstructContractRegistry({
-    registryPath: contractRegistryPath,
-  });
   const manifestPath = path.join(sessionRoot, "reconstruct-run-manifest.yaml");
   const targetMaterialProfileValidationPath = path.join(
     sessionRoot,
@@ -10032,6 +10037,7 @@ export async function runReconstruct(
     await writeTargetMaterialProfileValidationArtifact({
       targetMaterialProfilePath: preparationRefs.target_material_profile,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: targetMaterialProfileValidationPath,
     });
   assertRuntimeValidationValid({
@@ -10698,6 +10704,7 @@ export async function runReconstruct(
       candidateDispositionPath,
       sourceObservationsPath: preparationRefs.source_observations,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: candidateDispositionValidationPath,
     });
   assertRuntimeValidationValid({
@@ -10813,6 +10820,7 @@ export async function runReconstruct(
       candidateDispositionPath,
       sourceObservationsPath: preparationRefs.source_observations,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: ontologySeedValidationPath,
     });
   if (ontologySeedValidation.validation_status === "invalid") {
@@ -10853,6 +10861,7 @@ export async function runReconstruct(
       candidateDispositionPath,
       sourceObservationsPath: preparationRefs.source_observations,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: ontologySeedValidationPath,
     });
     if (ontologySeedValidation.validation_status === "invalid") {
@@ -10984,6 +10993,7 @@ export async function runReconstruct(
       seedConfirmationValidationPath,
       sourceObservationsPath: preparationRefs.source_observations,
       registryPath: contractRegistryPath,
+      contractRegistry,
       reconstructRunManifestPath: manifestPath,
       governingSnapshot,
       outputPath: competencyQuestionsValidationPath,
@@ -11476,6 +11486,7 @@ export async function runReconstruct(
       manifestPath: preHandoffManifestPath,
       projectRoot,
       registryPath: contractRegistryPath,
+      contractRegistry,
       targetMaterialProfilePath: preparationRefs.target_material_profile,
       lensIds,
       admittedDomainIds: params.domain ? [params.domain] : [],
@@ -11513,6 +11524,7 @@ export async function runReconstruct(
     failureClassificationValidationPath,
     revisionProposalValidationPath,
     registryPath: contractRegistryPath,
+    contractRegistry,
     outputPath: handoffDecisionValidationPath,
   });
   assertRuntimeValidationValid({
@@ -11825,6 +11837,7 @@ export async function runReconstruct(
       sourceScoutPackPostMaturationPath,
       sourceScoutPackPostMaturationValidationPath,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: postMaturationGateProjectionValidationPath,
     });
   assertRuntimeValidationValid({
@@ -12625,6 +12638,7 @@ export async function runReconstruct(
       manifestPath,
       projectRoot,
       registryPath: contractRegistryPath,
+      contractRegistry,
       targetMaterialProfilePath: preparationRefs.target_material_profile,
       lensIds,
       admittedDomainIds: params.domain ? [params.domain] : [],

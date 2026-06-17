@@ -1314,6 +1314,7 @@ export async function writeReconstructRunManifestValidationArtifact(args: {
   manifestPath: string;
   projectRoot: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   targetMaterialProfilePath: string;
   lensIds: string[];
   admittedDomainIds?: string[];
@@ -1323,7 +1324,8 @@ export async function writeReconstructRunManifestValidationArtifact(args: {
     args.manifestPath,
   );
   const [contractRegistry, targetMaterialProfile] = await Promise.all([
-    loadReconstructContractRegistry({ registryPath: args.registryPath }),
+    args.contractRegistry ??
+      loadReconstructContractRegistry({ registryPath: args.registryPath }),
     readYamlDocument<{
       selected_source_profiles: ReconstructRunManifestArtifact["governing_snapshot"]["selected_source_profiles"];
     }>(args.targetMaterialProfilePath),
@@ -1347,11 +1349,13 @@ export async function writePostMaturationGateProjectionValidationArtifact(args: 
   sourceScoutPackPostMaturationPath: string;
   sourceScoutPackPostMaturationValidationPath: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructPostMaturationGateProjectionValidationArtifact> {
   const [contractRegistry, sourceScoutPackPostMaturationValidation] =
     await Promise.all([
-      loadReconstructContractRegistry({ registryPath: args.registryPath }),
+      args.contractRegistry ??
+        loadReconstructContractRegistry({ registryPath: args.registryPath }),
       readYamlDocumentIfPresent<ReconstructSourceScoutPackValidationArtifact>(
         args.sourceScoutPackPostMaturationValidationPath,
       ),
@@ -1396,6 +1400,7 @@ export async function writeHandoffDecisionValidationArtifact(args: {
   failureClassificationValidationPath: string;
   revisionProposalValidationPath: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructHandoffDecisionValidationArtifact> {
   const [
@@ -1409,7 +1414,8 @@ export async function writeHandoffDecisionValidationArtifact(args: {
       args.manifestValidationPath,
     ),
     readYamlDocument<ReconstructMetricsArtifact>(args.metricsPath),
-    loadReconstructContractRegistry({ registryPath: args.registryPath }),
+    args.contractRegistry ??
+      loadReconstructContractRegistry({ registryPath: args.registryPath }),
   ]);
   const manifest = await readYamlDocumentIfPresent<ReconstructRunManifestArtifact>(
     manifestValidation.reconstruct_run_manifest_ref,

@@ -2193,6 +2193,7 @@ export async function writeCompetencyQuestionsValidationForOntologySeedArtifact(
   seedConfirmationValidationPath?: string | null;
   sourceObservationsPath: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   reconstructRunManifestPath?: string | null;
   governingSnapshot?: ReconstructRunGoverningSnapshot | null;
   outputPath: string;
@@ -2217,7 +2218,8 @@ export async function writeCompetencyQuestionsValidationForOntologySeedArtifact(
       readYamlDocument<ReconstructSourceObservationsArtifact>(
         args.sourceObservationsPath,
       ),
-      loadReconstructContractRegistry({ registryPath: args.registryPath }),
+      args.contractRegistry ??
+        loadReconstructContractRegistry({ registryPath: args.registryPath }),
     ]);
   const manifest = args.governingSnapshot || !args.reconstructRunManifestPath
     ? null

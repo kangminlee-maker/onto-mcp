@@ -431,11 +431,13 @@ export function validateRegistryVerificationEvidence(args: {
 export async function writeRegistryVerificationEvidenceArtifact(args: {
   sessionId: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructRegistryVerificationEvidenceArtifact> {
-  const contractRegistry = await loadReconstructContractRegistry({
-    registryPath: args.registryPath,
-  });
+  const contractRegistry = args.contractRegistry ??
+    await loadReconstructContractRegistry({
+      registryPath: args.registryPath,
+    });
   const artifact = await buildRegistryVerificationEvidenceArtifact({
     sessionId: args.sessionId,
     registryPath: args.registryPath,
@@ -448,13 +450,15 @@ export async function writeRegistryVerificationEvidenceArtifact(args: {
 export async function writeRegistryVerificationEvidenceValidationArtifact(args: {
   evidencePath: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructRegistryVerificationEvidenceValidationArtifact> {
   const [evidence, contractRegistry] = await Promise.all([
     readYamlDocument<ReconstructRegistryVerificationEvidenceArtifact>(
       args.evidencePath,
     ),
-    loadReconstructContractRegistry({ registryPath: args.registryPath }),
+    args.contractRegistry ??
+      loadReconstructContractRegistry({ registryPath: args.registryPath }),
   ]);
   const validation = validateRegistryVerificationEvidence({
     evidence,

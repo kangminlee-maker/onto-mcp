@@ -2222,6 +2222,7 @@ export async function writeCandidateDispositionValidationArtifact(args: {
   candidateDispositionPath: string;
   sourceObservationsPath: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructCandidateDispositionValidationArtifact> {
   const [candidateInventory, candidateDisposition, sourceObservations, registry] =
@@ -2231,7 +2232,8 @@ export async function writeCandidateDispositionValidationArtifact(args: {
       readYamlDocument<ReconstructSourceObservationsArtifact>(
         args.sourceObservationsPath,
       ),
-      loadReconstructContractRegistry({ registryPath: args.registryPath }),
+      args.contractRegistry ??
+        loadReconstructContractRegistry({ registryPath: args.registryPath }),
     ]);
   const validation = validateCandidateDisposition({
     candidateInventory,
@@ -2252,6 +2254,7 @@ export async function writeOntologySeedValidationArtifact(args: {
   candidateDispositionPath: string;
   sourceObservationsPath: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructOntologySeedValidationArtifact> {
   const [ontologySeed, candidateDisposition, sourceObservations, registry] =
@@ -2261,7 +2264,8 @@ export async function writeOntologySeedValidationArtifact(args: {
       readYamlDocument<ReconstructSourceObservationsArtifact>(
         args.sourceObservationsPath,
       ),
-      loadReconstructContractRegistry({ registryPath: args.registryPath }),
+      args.contractRegistry ??
+        loadReconstructContractRegistry({ registryPath: args.registryPath }),
     ]);
   const validation = validateOntologySeed({
     ontologySeed,
