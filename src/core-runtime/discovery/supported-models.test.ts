@@ -5,6 +5,7 @@ import {
   collectModelSelections,
   exactTrackedMode,
   isSupportedModelRoute,
+  parseSupportedModelRegistry,
   type SupportedModelRegistry,
 } from "./supported-models.js";
 import {
@@ -138,6 +139,74 @@ describe("exactTrackedMode", () => {
 
   it("returns null for untracked (empty) output", () => {
     expect(exactTrackedMode("", "anything.json")).toBeNull();
+  });
+});
+
+describe("parseSupportedModelRegistry (context_window_tokens contract)", () => {
+  const entry = (extra: Record<string, unknown>) => ({
+    schema_version: "1",
+    supported_models: [
+      {
+        provider: "openai",
+        model: "gpt-5.5",
+        verified_at: "2026-06-13",
+        benchmark_evidence_refs: ["development-records/benchmark/x.json"],
+        ...extra,
+      },
+    ],
+  });
+
+  it("loads an entry without a context window (FLOOR fallback path)", () => {
+    const parsed = parseSupportedModelRegistry(entry({}));
+    expect(parsed.supported_models[0]?.context_window_tokens).toBeUndefined();
+  });
+
+  it("loads an entry with a positive integer window and its provenance", () => {
+    const parsed = parseSupportedModelRegistry(
+      entry({
+        context_window_tokens: 1050000,
+        context_window_provenance: "OpenAI API model reference",
+      }),
+    );
+    expect(parsed.supported_models[0]?.context_window_tokens).toBe(1050000);
+    expect(parsed.supported_models[0]?.context_window_provenance)
+      .toBe("OpenAI API model reference");
+  });
+
+  it("rejects a zero window", () => {
+    expect(() =>
+      parseSupportedModelRegistry(
+        entry({ context_window_tokens: 0, context_window_provenance: "src" }),
+      )
+    ).toThrow(/context_window_tokens/);
+  });
+
+  it("rejects a negative window", () => {
+    expect(() =>
+      parseSupportedModelRegistry(
+        entry({ context_window_tokens: -1, context_window_provenance: "src" }),
+      )
+    ).toThrow(/context_window_tokens/);
+  });
+
+  it("rejects a non-integer window", () => {
+    expect(() =>
+      parseSupportedModelRegistry(
+        entry({ context_window_tokens: 1024.5, context_window_provenance: "src" }),
+      )
+    ).toThrow(/context_window_tokens/);
+  });
+
+  it("rejects a window value without provenance (no unsourced window)", () => {
+    expect(() =>
+      parseSupportedModelRegistry(entry({ context_window_tokens: 1050000 }))
+    ).toThrow(/context_window_provenance/);
+  });
+
+  it("rejects an unknown field (strict)", () => {
+    expect(() =>
+      parseSupportedModelRegistry(entry({ context_window: 1050000 }))
+    ).toThrow(/Malformed supported-model registry/);
   });
 });
 

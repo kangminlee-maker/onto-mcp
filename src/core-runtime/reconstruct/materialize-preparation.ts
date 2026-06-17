@@ -8,6 +8,7 @@ import {
   type TargetMaterialKind,
   type TargetMaterialRefDetection,
 } from "../target-material-kind.js";
+import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import {
   validateSourceObservationBoundary,
   type ReconstructSourceObservation,
@@ -177,23 +178,117 @@ function defaultProfileForKind(
  * whole file. Text-readable document prose is captured whole so the document tail
  * (goals, milestones, decisions) reaches seed authoring instead of being lost to a
  * leading slice: a typical business/policy document is well within any modern model
- * window (e.g. ~12.5K chars ≈ ~3K tokens). The 200K cap is a safety ceiling against
- * pathological inputs; documents that genuinely exceed it are decomposed by a later
- * stage (see development-records/design/20260616-large-input-observation), not
- * silently truncated here.
+ * window (e.g. ~12.5K chars ≈ ~3K tokens).
+ *
+ * Capture is MODEL-AGNOSTIC: it runs before the seed-stage (provider, model) is
+ * resolved, so it captures up to a fixed `DOCUMENT_CAPTURE_CEILING_CHARS` ceiling
+ * (a disk/pathological-input safety bound, NOT a window bound). The seed-stage
+ * prompt PROJECTION then slices that captured prose to a dynamic, model-aware
+ * budget (see deriveDocumentExcerptProjectionBudget + run.ts). The ceiling is set
+ * comfortably above any projection budget so projection only ever narrows, never
+ * needs more than was captured. A document longer than the ceiling is captured-
+ * truncated (`excerpt_truncated`); one longer than the projection budget is
+ * projection-truncated at the seed stage (recorded durably there). True
+ * window-overflow recovery (selecting the relevant tail) is a later stage (see
+ * development-records/design/20260616-large-input-observation).
  *
  * Material kind is detected by extension (target-material-kind.ts `DOCUMENT_EXTENSIONS`),
  * and `document` includes binary formats (.pdf/.docx/.ppt/.rtf) that `textStats` still
  * reads as UTF-8. Only text-readable document formats earn the whole-document budget —
- * a binary document keeps the small sample so we never capture 200K of decoded binary
- * bytes and spend the prompt on garbage; binary documents need an extraction step before
- * reconstruct. This set must be the text-prose subset of `DOCUMENT_EXTENSIONS`: an
+ * a binary document keeps the small sample so we never capture the ceiling in decoded
+ * binary bytes and spend the prompt on garbage; binary documents need an extraction step
+ * before reconstruct. This set must be the text-prose subset of `DOCUMENT_EXTENSIONS`: an
  * extension that the classifier does not map to `document` (e.g. `.html`) would never
  * reach this budget, so listing it here would be dead and misleading.
  */
 const DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT = 6000;
-export const DOCUMENT_EXCERPT_CHAR_LIMIT = 200_000;
+/**
+ * Capture ceiling (chars) for whole-document prose. Static and model-agnostic —
+ * the upper bound for both capture AND the dynamic projection clamp, so the
+ * captured excerpt is always a superset of any projection. Set well above the
+ * largest projection budget (opus/gpt-5.5 ~1M-token windows derive ~0.5M-char
+ * budgets) to leave headroom; the absolute bound is disk, not a model window.
+ */
+export const DOCUMENT_CAPTURE_CEILING_CHARS = 5_000_000;
+/**
+ * Floor (chars) for the seed-stage document projection budget. The static value
+ * used when the model window is unknown (mock realization, provider-only seat, an
+ * unregistered model, or a registry entry without context_window_tokens). Equal to
+ * the prior fixed document excerpt budget, so a model-unaware run is unchanged.
+ */
+export const DOCUMENT_EXCERPT_PROJECTION_FLOOR = 200_000;
+/**
+ * Fraction of the model context window the projection budget may consume, leaving
+ * margin for prompt instructions, non-excerpt payload, output tokens, and
+ * tokenization variance. Window-proportional (not a fixed char margin) so the
+ * margin scales with the window (C1).
+ */
+const WINDOW_BUDGET_FRACTION = 0.5;
+/**
+ * Conservative LOWER bound on chars-per-token used to convert a token window into
+ * a char budget. NOT the average (~4 for English): CJK-dense prose tokenizes to
+ * far fewer chars per token (≈1 or below), so a low bound keeps the char budget
+ * from implying more tokens than the window holds (C1). This is an approximation
+ * pending a real tokenizer; the CJK-dense live fixture (P6) validates/calibrates
+ * it, and the re-design trigger lowers it if even this conservative budget
+ * overflows.
+ */
+const CHARS_PER_TOKEN_LB = 1;
+/**
+ * Chars reserved from the derived budget for the prompt's instructions, the
+ * non-excerpt structural payload, and the model's output allowance — all of which
+ * also consume the window alongside the document excerpt (C1).
+ */
+const PROMPT_OVERHEAD_RESERVE_CHARS = 50_000;
+
+// Clamp integrity: the capture ceiling must be >= the projection floor so the
+// derived budget's clamp(raw, FLOOR, CEILING) range is well-formed and the
+// captured excerpt is always a superset of any projection (C4). A module-load
+// assert fails fast on a future mis-edit of these constants.
+if (DOCUMENT_EXCERPT_PROJECTION_FLOOR > DOCUMENT_CAPTURE_CEILING_CHARS) {
+  throw new Error(
+    "Invalid document excerpt budgets: DOCUMENT_EXCERPT_PROJECTION_FLOOR " +
+      `(${DOCUMENT_EXCERPT_PROJECTION_FLOOR}) must be <= ` +
+      `DOCUMENT_CAPTURE_CEILING_CHARS (${DOCUMENT_CAPTURE_CEILING_CHARS}).`,
+  );
+}
+
 const TEXT_READABLE_DOCUMENT_EXTENSIONS = new Set([".md", ".txt", ".adoc"]);
+
+/**
+ * Derives the seed-stage document projection budget (chars) for the active
+ * (provider, model) seat from its registered context window. Pure and total
+ * (never throws): an unresolved provider/model, an unregistered pair, or an entry
+ * without a window all fall back to the static FLOOR, so mock realization and
+ * provider-only seats are unchanged.
+ *
+ * The route key is the MODEL provider (the registry key, e.g. "openai"), not the
+ * runtime adapter provider (openai OAuth dispatches as "codex"; anthropic OAuth
+ * stays "anthropic"). The caller passes the model provider so the default
+ * gpt-5.5 OAuth seat resolves against `openai/gpt-5.5` (see reconstruct-api).
+ *
+ * This is the SINGLE model→budget conversion point: model literals never reach
+ * the char-budget tuning constants, so G2/INV-CFG-1 stay satisfied.
+ */
+export function deriveDocumentExcerptProjectionBudget(
+  route: { provider?: string; modelId?: string },
+  registry: SupportedModelRegistry,
+): number {
+  if (!route.provider || !route.modelId) {
+    return DOCUMENT_EXCERPT_PROJECTION_FLOOR;
+  }
+  const window = registry.supported_models.find(
+    (entry) => entry.provider === route.provider && entry.model === route.modelId,
+  )?.context_window_tokens;
+  if (!window) return DOCUMENT_EXCERPT_PROJECTION_FLOOR;
+  const raw =
+    Math.floor(window * WINDOW_BUDGET_FRACTION * CHARS_PER_TOKEN_LB) -
+    PROMPT_OVERHEAD_RESERVE_CHARS;
+  return Math.min(
+    Math.max(raw, DOCUMENT_EXCERPT_PROJECTION_FLOOR),
+    DOCUMENT_CAPTURE_CEILING_CHARS,
+  );
+}
 
 /**
  * A text-readable document earns the whole-document excerpt budget. Both the capture
@@ -212,7 +307,7 @@ export function isTextReadableDocumentExtension(
 
 function structuralExcerptCharLimit(kind: TargetMaterialKind, ref: string): number {
   if (kind === "document" && isTextReadableDocumentExtension(path.extname(ref))) {
-    return DOCUMENT_EXCERPT_CHAR_LIMIT;
+    return DOCUMENT_CAPTURE_CEILING_CHARS;
   }
   return DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;
 }

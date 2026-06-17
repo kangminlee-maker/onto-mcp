@@ -30,6 +30,10 @@ Workbook, sheet, named range, table, or used range.
 - named ranges
 - hidden rows and columns
 - macros or VBA presence
+- protected ranges and sheet protection
+- filters and auto-filter state
+- charts, images, and object anchors
+- external links and data connections to other workbooks or sources
 
 ## Correct Observation Examples
 
@@ -46,6 +50,18 @@ Workbook, sheet, named range, table, or used range.
 > This sheet is a sales report.
 
 > The formula is a cost-recognition policy.
+
+> The `#REF!` in `B2` is a bug caused by a deleted column.
+
+> The date in `C5` is stored as text, so it is wrong.
+
+## Static Inspection Boundary
+
+Static structural inspection reveals how formulas and structure were written, but
+it cannot prove computed results. Record an observed formula or value as structure
+inspected only; do not assert that a formula's output is correct unless an engine
+recalculated it. Note unresolved external data, links, or connections as
+unresolved rather than assuming their current values.
 
 ## Detail Location Format
 
@@ -93,6 +109,19 @@ outside this list, record it in the `PurposeAdequacyFrame` with evidence and
 promote it to this profile only after repeated real-source runs justify the
 refinement.
 
+## Large Workbook Inspection Strategy
+
+Inspect structure before converting the workbook to another format. Do not flatten
+a workbook into a single table or dataframe before checking whether structure --
+formulas, merged ranges, named ranges, and cross-sheet references -- carries
+meaning.
+
+For large workbooks, prefer narrow, targeted reads around the relevant ranges over
+loading every sheet in full. Read the workbook's own structural index first -- the
+sheet list, per-sheet dimensions, named ranges, and table definitions -- and use a
+read-only or streaming inspection path so the used range and formula cells can be
+observed without materializing the entire workbook.
+
 ## Scan Targets
 
 - sheet list and used range per sheet
@@ -104,3 +133,9 @@ refinement.
 - data validation rules
 - macro/VBA presence
 - external data connections
+- protected ranges and sheet protection
+- filters and auto-filter state
+- charts, images, and object anchors
+- external links to other workbooks
+- formula-error cells, recorded as literal tokens such as `#REF!`, `#N/A`, or `#VALUE!`
+- structural-risk signals recorded literally and without diagnosis: cross-sheet references whose target sheet or range is absent, dates stored as text, empty cells inside a calculation chain, and lookup keys whose stored type differs from the target column

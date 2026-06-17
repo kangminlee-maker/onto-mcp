@@ -45,7 +45,9 @@ import {
   createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
   runReconstruct,
+  singleDocumentProjectionTruncation,
 } from "./run.js";
+import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
 import {
   ontologySeedClaimProjections,
@@ -594,6 +596,50 @@ describe("runReconstruct", () => {
     // — its decoded-binary excerpt stays bounded to the seed-stage budget.
     expect(projectedExcerptLengths([docObservation("obs-doc-pdf", ".pdf")]))
       .toEqual([1200]);
+  });
+
+  it("slices an expanded single document to the model-aware projection budget", () => {
+    const longExcerpt = "goal milestone problem ".repeat(120); // 2760 chars
+    const docObservation = {
+      observation_id: "obs-doc-budget",
+      target_material_kind: "document" as const,
+      adapter_id: "fixture-observer",
+      source_ref: "/doc/large.md",
+      location: "file",
+      summary: "Large document fixture.",
+      structural_data: { content_excerpt: longExcerpt, extension: ".md" },
+    };
+    const project = (budget: number | undefined) =>
+      (observationPromptPayload(
+        {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-06-16T00:00:00.000Z",
+          observations: [docObservation],
+          skipped_refs: [],
+          validation_results: [],
+        },
+        {
+          expandSingleDocumentExcerpt: true,
+          ...(budget !== undefined ? { documentExcerptCharBudget: budget } : {}),
+        },
+      ) as Array<any>)[0]?.structural_data;
+
+    // Budget < captured length → sliced to the budget and flagged truncated.
+    const tight = project(1000);
+    expect(tight.content_excerpt.length).toBe(1000);
+    expect(tight.prompt_content_excerpt_truncated).toBe(true);
+    expect(tight.prompt_content_excerpt_char_limit).toBe(1000);
+
+    // Budget >= captured length → whole prose, not flagged.
+    const roomy = project(100_000);
+    expect(roomy.content_excerpt.length).toBe(longExcerpt.length);
+    expect(roomy.prompt_content_excerpt_truncated).toBeUndefined();
+
+    // No budget passed → static FLOOR (200K) default, so 2760 chars is whole.
+    const floored = project(undefined);
+    expect(floored.content_excerpt.length).toBe(longExcerpt.length);
+    expect(floored.prompt_content_excerpt_truncated).toBeUndefined();
   });
 
   it("canonicalizes duplicate direct-call source observation selections", async () => {
@@ -5723,5 +5769,177 @@ describe("runReconstruct", () => {
     ]);
     await expect(fs.access(path.join(sessionRoot, "final-output.md")))
       .resolves.toBeUndefined();
+  });
+});
+
+describe("observationPromptPayload projection-truncation recording", () => {
+  const artifact = (
+    items: Array<{
+      id: string;
+      kind: string;
+      ext?: string | null;
+      excerpt?: unknown;
+    }>,
+  ) => ({
+    schema_version: "1" as const,
+    session_id: "session-1",
+    created_at: "2026-06-16T00:00:00.000Z",
+    observations: items.map((item) => ({
+      observation_id: item.id,
+      target_material_kind: item.kind,
+      adapter_id: "fixture-observer",
+      source_ref: `/doc/${item.id}`,
+      location: "file",
+      summary: `Fixture ${item.id}.`,
+      structural_data: {
+        ...(item.ext !== undefined ? { extension: item.ext } : {}),
+        ...(item.excerpt !== undefined ? { content_excerpt: item.excerpt } : {}),
+      },
+    })),
+    skipped_refs: [],
+    validation_results: [],
+  });
+
+  const recordTruncations = (
+    sourceObservations: ReturnType<typeof artifact>,
+    options: {
+      observationIds?: string[];
+      documentExcerptCharBudget?: number;
+    },
+  ): DocumentExcerptProjectionTruncation[] => {
+    const recorded: DocumentExcerptProjectionTruncation[] = [];
+    observationPromptPayload(sourceObservations as any, {
+      expandSingleDocumentExcerpt: true,
+      ...(options.observationIds ? { observationIds: options.observationIds } : {}),
+      ...(options.documentExcerptCharBudget !== undefined
+        ? { documentExcerptCharBudget: options.documentExcerptCharBudget }
+        : {}),
+      recordDocumentExcerptProjectionTruncation: (t) => recorded.push(t),
+    });
+    return recorded;
+  };
+
+  it("records a single selected text document the budget sliced", () => {
+    const recorded = recordTruncations(
+      artifact([{ id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(5000) }]),
+      { documentExcerptCharBudget: 1000 },
+    );
+    expect(recorded).toEqual([
+      {
+        observation_id: "obs-doc",
+        source_ref: "/doc/obs-doc",
+        captured_chars: 5000,
+        projection_budget_chars: 1000,
+      },
+    ]);
+  });
+
+  it("records nothing when the captured excerpt fits the budget", () => {
+    const recorded = recordTruncations(
+      artifact([{ id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(500) }]),
+      { documentExcerptCharBudget: 1000 },
+    );
+    expect(recorded).toEqual([]);
+  });
+
+  it("records a budget slice when one large doc is selected out of many (Codex P2/5534)", () => {
+    const recorded = recordTruncations(
+      artifact([
+        { id: "obs-small", kind: "document", ext: ".md", excerpt: "x".repeat(100) },
+        { id: "obs-big", kind: "document", ext: ".md", excerpt: "y".repeat(5000) },
+        { id: "obs-code", kind: "code", ext: ".ts", excerpt: "z".repeat(5000) },
+      ]),
+      { observationIds: ["obs-big"], documentExcerptCharBudget: 1000 },
+    );
+    expect(recorded).toEqual([
+      {
+        observation_id: "obs-big",
+        source_ref: "/doc/obs-big",
+        captured_chars: 5000,
+        projection_budget_chars: 1000,
+      },
+    ]);
+  });
+
+  it("records nothing for a source-safety redacted document (no content_excerpt) (Codex P3/1040)", () => {
+    // sourceObservationsForPrompt deletes content_excerpt for redacted observations.
+    const recorded = recordTruncations(
+      artifact([{ id: "obs-redacted", kind: "document", ext: ".md" }]),
+      { documentExcerptCharBudget: 1000 },
+    );
+    expect(recorded).toEqual([]);
+  });
+
+  it("ignores a binary document (small sample only, not expanded)", () => {
+    const recorded = recordTruncations(
+      artifact([{ id: "obs-pdf", kind: "document", ext: ".pdf", excerpt: "x".repeat(5000) }]),
+      { documentExcerptCharBudget: 1000 },
+    );
+    expect(recorded).toEqual([]);
+  });
+
+  it("records nothing for a multi-observation projection (expansion gate; Stage 2 scope)", () => {
+    const recorded = recordTruncations(
+      artifact([
+        { id: "obs-a", kind: "document", ext: ".md", excerpt: "x".repeat(5000) },
+        { id: "obs-b", kind: "document", ext: ".md", excerpt: "y".repeat(5000) },
+      ]),
+      { documentExcerptCharBudget: 1000 },
+    );
+    expect(recorded).toEqual([]);
+  });
+
+  // Resume fallback (Codex P2/12751): on reuse_existing_authored_artifacts the
+  // author sink is empty, so runReconstruct recomputes the single-document case
+  // from the projected (redacted) observations + budget.
+  describe("singleDocumentProjectionTruncation (resume fallback)", () => {
+    it("recomputes a single sliced text document", () => {
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(5000) }]) as any,
+          1000,
+        ),
+      ).toEqual([
+        {
+          observation_id: "obs-doc",
+          source_ref: "/doc/obs-doc",
+          captured_chars: 5000,
+          projection_budget_chars: 1000,
+        },
+      ]);
+    });
+
+    it("recomputes nothing for a redacted document (content_excerpt stripped)", () => {
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-redacted", kind: "document", ext: ".md" }]) as any,
+          1000,
+        ),
+      ).toEqual([]);
+    });
+
+    it("recomputes nothing when within budget, binary, or multi-observation", () => {
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-fit", kind: "document", ext: ".md", excerpt: "x".repeat(500) }]) as any,
+          1000,
+        ),
+      ).toEqual([]);
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-pdf", kind: "document", ext: ".pdf", excerpt: "x".repeat(5000) }]) as any,
+          1000,
+        ),
+      ).toEqual([]);
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([
+            { id: "obs-a", kind: "document", ext: ".md", excerpt: "x".repeat(5000) },
+            { id: "obs-b", kind: "document", ext: ".md", excerpt: "y".repeat(5000) },
+          ]) as any,
+          1000,
+        ),
+      ).toEqual([]);
+    });
   });
 });

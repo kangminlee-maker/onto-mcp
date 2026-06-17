@@ -52,7 +52,7 @@ const GUARDS: GuardRun[] = [
   },
   {
     guard: "G4 invariant-change-marker",
-    invariants: ["INV-AUTH-1", "INV-CFG-1", "INV-MATERIAL-1"],
+    invariants: ["INV-AUTH-1", "INV-CFG-1", "INV-MATERIAL-1", "INV-MODEL-1"],
     command: ["npx", "tsx", "scripts/check-invariant-change-marker.ts", baseRef],
   },
   {

@@ -18,6 +18,8 @@ import {
   RECONSTRUCT_STAGE_IDS,
 } from "../core-runtime/reconstruct/artifact-types.js";
 import {
+  deriveDocumentExcerptProjectionBudget,
+  DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   materializeReconstructPreparationArtifacts,
 } from "../core-runtime/reconstruct/materialize-preparation.js";
 import {
@@ -662,17 +664,20 @@ export function createOntoReconstructCoreApi(
       const llmEffortOverride = request.llmEffort
         ? { reasoning_effort: request.llmEffort }
         : undefined;
-      const semanticAuthorLlmConfig = mockRealizationEnabled
-        ? {}
-        : resolveLlmProviderConfig({
-          config: {
-            llm: resolveReconstructActorLlmSettings(
-              settings,
-              "semantic_author",
-            ),
-          },
+      // The semantic_author actor settings (non-mock). The MODEL provider here
+      // (e.g. "openai") is the supported-models registry key, DISTINCT from the
+      // resolved RUNTIME provider (openai OAuth resolves to "codex"). The document
+      // projection-budget lookup keys on the model provider so the default
+      // gpt-5.5 OAuth seat resolves (see deriveDocumentExcerptProjectionBudget).
+      const semanticAuthorActorLlm = mockRealizationEnabled
+        ? null
+        : resolveReconstructActorLlmSettings(settings, "semantic_author");
+      const semanticAuthorLlmConfig = semanticAuthorActorLlm
+        ? resolveLlmProviderConfig({
+          config: { llm: semanticAuthorActorLlm },
           ...(llmEffortOverride ? { cliOverrides: llmEffortOverride } : {}),
-        });
+        })
+        : {};
       const confirmationProviderLlmConfig = mockRealizationEnabled
         ? {}
         : resolveLlmProviderConfig({
@@ -684,6 +689,30 @@ export function createOntoReconstructCoreApi(
           },
           ...(llmEffortOverride ? { cliOverrides: llmEffortOverride } : {}),
         });
+      // The supported-models registry (non-mock only): loaded once and shared by
+      // the judge-override support check and the document projection-budget
+      // lookup. Mock realization makes no real provider calls, so it stays
+      // decoupled from the install authority file (C6).
+      const supportedModelRegistry = mockRealizationEnabled
+        ? null
+        : loadSupportedModelRegistry();
+      // Single seed-stage document projection budget (chars), derived once from
+      // the semantic author's MODEL window. Mock / unresolved model → static
+      // FLOOR (no regression). Threaded to the directive author, which slices a
+      // single document's seed-stage excerpt to this budget.
+      const documentExcerptProjectionBudget = supportedModelRegistry
+        ? deriveDocumentExcerptProjectionBudget(
+          {
+            ...(semanticAuthorActorLlm?.provider
+              ? { provider: semanticAuthorActorLlm.provider }
+              : {}),
+            ...(semanticAuthorLlmConfig.model_id
+              ? { modelId: semanticAuthorLlmConfig.model_id }
+              : {}),
+          },
+          supportedModelRegistry,
+        )
+        : DOCUMENT_EXCERPT_PROJECTION_FLOOR;
       // Opt-in per-stage JUDGE config (semantic-independence lever). Default =
       // inherit the semantic-author config (judgeLlmConfig undefined → no change,
       // zero regression). A judgeModel override resolves ON THE AUTHOR'S PROVIDER
@@ -724,7 +753,9 @@ export function createOntoReconstructCoreApi(
           ...(judgeAuthorActorLlm?.provider
             ? { judgeModelProvider: judgeAuthorActorLlm.provider }
             : {}),
-          registry: loadSupportedModelRegistry(),
+          // Non-null in this branch: both this and supportedModelRegistry gate on
+          // the same mockRealizationEnabled check.
+          registry: supportedModelRegistry!,
         });
       const judgeLlmConfig = judgeResolution.judgeLlmConfig;
       if (!mockRealizationEnabled) judgeConfigNote = judgeResolution.note;
@@ -732,6 +763,7 @@ export function createOntoReconstructCoreApi(
         createDirectCallReconstructDirectiveAuthor({
           llmConfig: semanticAuthorLlmConfig,
           ...(judgeLlmConfig ? { judgeLlmConfig } : {}),
+          documentExcerptProjectionBudget,
           ...(mockRealizationEnabled
             ? {
               llmCall: callReconstructMockLlm,
