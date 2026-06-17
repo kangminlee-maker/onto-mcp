@@ -31,6 +31,7 @@
  */
 
 import type { EffortSweepRun } from "./effort-calibration-sweep.js";
+import type { RouteIdentity } from "./route-identity.js";
 import type { SemanticQualityGateResult } from "./review/semantic-quality-gate.js";
 import type { ReconstructQualityGateResult } from "./reconstruct/semantic-quality-gate.js";
 import { reviewRunGateSignal } from "./effort-calibration-review.js";
@@ -162,6 +163,12 @@ export interface ReconstructBenchmarkRun {
     applied_effort?: string | null;
     model_id?: string | null;
     provider_route?: string | null;
+    /**
+     * Witnessed route identity (effort-calibration simplification §9). Absent on
+     * legacy reports authored before the harness surfaced it — the CLI degrades
+     * such a source's route_completeness rather than failing (design §10).
+     */
+    route_identity?: RouteIdentity | null;
   };
   /** Per-unit execution telemetry; the judge unit is only present when it ran. */
   units?: Array<{ step_id?: string; effort?: string | null; llm_call_count?: number }>;

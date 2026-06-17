@@ -50,7 +50,8 @@ import type {
   ReconstructOntologySeedArtifact,
   ReconstructRunManifestArtifact,
 } from "../src/core-runtime/reconstruct/artifact-types.js";
-import type { PipelineUnitExecutionTelemetry } from "../src/core-runtime/pipeline-execution-ledger.js";
+import type { ReconstructUnitExecutionTelemetry } from "../src/core-runtime/reconstruct/execution-telemetry.js";
+import type { RouteIdentity } from "../src/core-runtime/route-identity.js";
 
 const execFileAsync = promisify(execFile);
 const PROJECT_ROOT = process.cwd();
@@ -82,7 +83,7 @@ interface HarnessOptions {
   reprojectFrom?: string;
 }
 
-interface UnitTelemetryRow extends PipelineUnitExecutionTelemetry {
+interface UnitTelemetryRow extends ReconstructUnitExecutionTelemetry {
   step_id: string;
 }
 
@@ -110,6 +111,7 @@ interface BenchmarkRunRecord {
     node_version: string;
     model_id: string | null;
     provider_route: string | null;
+    route_identity: RouteIdentity | null;
     applied_effort: string | null;
     unit_timeout_ms: number;
     started_at: string;
@@ -384,6 +386,10 @@ async function executeRun(args: {
         node_version: process.version,
         model_id: firstUnit?.model_id ?? null,
         provider_route: firstUnit?.provider_route ?? null,
+        // Witnessed route identity (adapter/model_provider/billing/base_url) — the
+        // adapter/auth-aware route the calibration CLI derives from instead of the
+        // provider-only provider_route (effort-calibration simplification §9).
+        route_identity: firstUnit?.route_identity ?? null,
         // Applied effort from telemetry (what the provider actually used); null
         // for mock. The requested effort is recorded once at report level.
         applied_effort: firstUnit?.effort ?? null,
