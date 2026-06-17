@@ -1,0 +1,171 @@
+/**
+ * Unified route identity (effort-calibration simplification, design
+ * 20260617-effort-calibration-simplification-telemetry-derived-design.md §5).
+ *
+ * A RouteIdentity is a projection of the model-switcher's already-resolved
+ * selection — it REUSES LlmExecutionAdapter / LlmProviderName / LlmBillingMode
+ * rather than minting a parallel vocabulary. The only genuinely new fields are
+ * `route_provenance` (witnessed vs profile-derived) and `route_completeness`
+ * (whether the route resolved past model_provider).
+ *
+ * Provenance honesty (design §3, §8):
+ *  - reconstruct derives execution_adapter / model_provider from the resolved
+ *    selection carried on the call config (witnessed at the call boundary), NOT
+ *    by reverse-mapping effective_base_url (which cannot recover model_provider
+ *    for codex-cli://oauth or a custom openai-compatible base).
+ *  - billing_mode is a code-path constant (`declared_billing_mode`), so it stays
+ *    declared-provenance even on the reconstruct (otherwise witnessed) side.
+ *  - effective_base_url is corroboration only, and identifies custom proxy bases
+ *    that downgrade route_completeness.
+ */
+import type {
+  LlmBillingMode,
+  LlmExecutionAdapter,
+  LlmProviderName,
+  RuntimeLlmProvider,
+} from "./llm/model-switcher.js";
+
+export type RouteProvenance = "witnessed" | "profile_derived";
+
+/**
+ * Calibration route adapter set. Extends the live LlmExecutionAdapter with
+ * `mock` (a deliberate concept-surface addition for calibration; not added to
+ * LlmExecutionAdapter itself — design §11.3).
+ */
+export type RouteExecutionAdapter = LlmExecutionAdapter | "mock";
+
+/**
+ * Whether a route resolved past model_provider.
+ *  - `complete`: execution_adapter AND model_provider known.
+ *  - `provider_only`: model_provider known but adapter unknown (legacy
+ *    provider-only telemetry) — non-decision-grade unless --allow-preliminary.
+ *  - `under_determined`: not even model_provider resolved.
+ */
+export type RouteCompleteness = "complete" | "provider_only" | "under_determined";
+
+export interface RouteIdentity {
+  execution_adapter: RouteExecutionAdapter | null;
+  model_provider: LlmProviderName | null;
+  /** declared-provenance even on the reconstruct witnessed side (design §8). */
+  billing_mode: LlmBillingMode | null;
+  /** Corroboration + custom-base identification; not the primary derivation source. */
+  effective_base_url: string | null;
+  route_provenance: RouteProvenance;
+  route_completeness: RouteCompleteness;
+  /** Review-only mock realization; null for reconstruct (design §8). */
+  realization: string | null;
+}
+
+/**
+ * Map the model-switcher's RuntimeLlmProvider brand to the canonical model
+ * vendor. The only brand that differs from its model_provider is `codex` (the
+ * openai OAuth brand). Returns null for an unknown brand (route_completeness
+ * then degrades to under_determined).
+ */
+export function modelProviderFromRuntimeProvider(
+  provider: string | null | undefined,
+): LlmProviderName | null {
+  switch (provider as RuntimeLlmProvider) {
+    case "codex":
+    case "openai":
+      return "openai";
+    case "anthropic":
+      return "anthropic";
+    case "grok":
+      return "grok";
+    case "lmstudio":
+      return "lmstudio";
+    default:
+      return null;
+  }
+}
+
+function completeness(
+  adapter: RouteExecutionAdapter | null,
+  modelProvider: LlmProviderName | null,
+): RouteCompleteness {
+  if (!modelProvider) return "under_determined";
+  return adapter ? "complete" : "provider_only";
+}
+
+/**
+ * Build the witnessed reconstruct RouteIdentity from the fields available at the
+ * call-record boundary: the resolved provider brand and execution_adapter
+ * carried on the call config (witnessed), the call result's declared billing
+ * mode and effective_base_url. A `mock://` base short-circuits to the mock
+ * adapter (coarse; reconstruct contributes no realization).
+ */
+export function witnessedReconstructRouteIdentity(input: {
+  /** Resolved RuntimeLlmProvider from the call config (args.llmConfig.provider). */
+  provider: string | null | undefined;
+  /** Resolved adapter carried on the call config (args.llmConfig.execution_adapter). */
+  executionAdapter: LlmExecutionAdapter | null | undefined;
+  /** Call result declared_billing_mode (code-path constant; declared-provenance). */
+  declaredBillingMode: LlmBillingMode | null | undefined;
+  /** Call result effective_base_url (corroboration / custom-base id). */
+  effectiveBaseUrl: string | null | undefined;
+}): RouteIdentity {
+  const effectiveBaseUrl = input.effectiveBaseUrl ?? null;
+  if (effectiveBaseUrl?.startsWith("mock://")) {
+    return {
+      execution_adapter: "mock",
+      model_provider: null,
+      billing_mode: input.declaredBillingMode ?? "local",
+      effective_base_url: effectiveBaseUrl,
+      route_provenance: "witnessed",
+      route_completeness: "complete",
+      realization: null,
+    };
+  }
+  const adapter = input.executionAdapter ?? null;
+  const modelProvider = modelProviderFromRuntimeProvider(input.provider);
+  return {
+    execution_adapter: adapter,
+    model_provider: modelProvider,
+    billing_mode: input.declaredBillingMode ?? null,
+    effective_base_url: effectiveBaseUrl,
+    route_provenance: "witnessed",
+    route_completeness: completeness(adapter, modelProvider),
+    realization: null,
+  };
+}
+
+/**
+ * Build a profile-derived RouteIdentity from a review route projection (already
+ * structurally rich: adapter / model_provider / billing / base_url). Review has
+ * no result-level base_url witness, so provenance is profile_derived (design
+ * §4, §11.1). `realization` (semantic_mock | boundary_stub | fixture) is
+ * review-only.
+ */
+export function profileDerivedRouteIdentity(input: {
+  executionAdapter: RouteExecutionAdapter | null | undefined;
+  modelProvider: LlmProviderName | null | undefined;
+  billingMode: LlmBillingMode | null | undefined;
+  effectiveBaseUrl?: string | null | undefined;
+  realization?: string | null | undefined;
+}): RouteIdentity {
+  const adapter = input.executionAdapter ?? null;
+  const modelProvider = input.modelProvider ?? null;
+  return {
+    execution_adapter: adapter,
+    model_provider: modelProvider,
+    billing_mode: input.billingMode ?? null,
+    effective_base_url: input.effectiveBaseUrl ?? null,
+    route_provenance: "profile_derived",
+    route_completeness: completeness(adapter, modelProvider),
+    realization: input.realization ?? null,
+  };
+}
+
+/**
+ * Derived single-string projection of a RouteIdentity for CLI `--route`
+ * comparison and grouping keys. The structured RouteIdentity stays canonical;
+ * this is a lossy projection (design §11.2). Shape:
+ * `<adapter|provider_only>:<billing>:<model_provider>`.
+ */
+export function routeToken(identity: RouteIdentity): string {
+  const adapter = identity.execution_adapter ?? "provider_only";
+  const billing = identity.billing_mode ?? "unknown";
+  const provider = identity.model_provider ?? "unknown";
+  return `${adapter}:${billing}:${provider}`;
+}

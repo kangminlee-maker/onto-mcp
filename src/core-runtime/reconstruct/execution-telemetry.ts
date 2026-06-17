@@ -19,6 +19,14 @@ import type {
   PipelineExecutionFailureClassKnown,
   PipelineUnitExecutionTelemetry,
 } from "../pipeline-execution-ledger.js";
+import type {
+  LlmBillingMode,
+  LlmExecutionAdapter,
+} from "../llm/model-switcher.js";
+import {
+  type RouteIdentity,
+  witnessedReconstructRouteIdentity,
+} from "../route-identity.js";
 
 // Open (stored/consumed) aliases.
 export type ReconstructExecutionAttemptKind = PipelineExecutionAttemptKind;
@@ -26,7 +34,20 @@ export type ReconstructExecutionFailureClass = PipelineExecutionFailureClass;
 // Closed (producer) aliases — recordLlmAttempt accepts only known members.
 export type ReconstructExecutionAttemptKindKnown = PipelineExecutionAttemptKindKnown;
 export type ReconstructExecutionFailureClassKnown = PipelineExecutionFailureClassKnown;
-export type ReconstructUnitExecutionTelemetry = PipelineUnitExecutionTelemetry;
+/**
+ * Reconstruct telemetry row = the shared pipeline telemetry PLUS a witnessed
+ * route identity. The extra field is a reconstruct-only extension (design §9,
+ * §11.4): the shared `PipelineUnitExecutionTelemetry` is unchanged, so no
+ * shared-surface widening and no shared schemaVersion bump. The reconstruct row
+ * is a structural subtype, so it still assigns to the shared ledger's
+ * `executionTelemetry` field (the route_identity rides along for reconstruct
+ * units only). `null` until a call with route fields is recorded; older
+ * manifests omit it (read as null/undefined).
+ */
+export interface ReconstructUnitExecutionTelemetry
+  extends PipelineUnitExecutionTelemetry {
+  route_identity: RouteIdentity | null;
+}
 
 export interface RecordReconstructLlmAttemptInput {
   unitId: ReconstructStageId;
@@ -40,6 +61,14 @@ export interface RecordReconstructLlmAttemptInput {
   providerTokensIn?: number | null;
   providerTokensOut?: number | null;
   providerRoute?: string | null;
+  /** Resolved provider brand (args.llmConfig.provider) for the witnessed route. */
+  provider?: string | null;
+  /** Resolved execution adapter (args.llmConfig.execution_adapter), witnessed. */
+  executionAdapter?: LlmExecutionAdapter | null;
+  /** Call result declared_billing_mode (declared-provenance). */
+  declaredBillingMode?: LlmBillingMode | null;
+  /** Call result effective_base_url (corroboration / custom-base id). */
+  effectiveBaseUrl?: string | null;
   modelId?: string | null;
   effort?: string | null;
   systemPrompt?: string | null;
@@ -177,6 +206,7 @@ export function createReconstructExecutionTelemetryCollector(): ReconstructExecu
       provider_route: null,
       model_id: null,
       effort: null,
+      route_identity: null,
       prompt_policy_sha256: null,
       source_identity_refs: [],
       attempt_count: 0,
@@ -204,6 +234,16 @@ export function createReconstructExecutionTelemetryCollector(): ReconstructExecu
       if (input.providerRoute) row.provider_route = input.providerRoute;
       if (input.modelId) row.model_id = input.modelId;
       if (input.effort) row.effort = input.effort;
+      // Witnessed route identity from the resolved selection at the call
+      // boundary (last attempt with route fields wins, mirroring provider_route).
+      if (input.provider || input.executionAdapter || input.effectiveBaseUrl) {
+        row.route_identity = witnessedReconstructRouteIdentity({
+          provider: input.provider,
+          executionAdapter: input.executionAdapter,
+          declaredBillingMode: input.declaredBillingMode,
+          effectiveBaseUrl: input.effectiveBaseUrl,
+        });
+      }
       if (
         row.prompt_policy_sha256 === null &&
         input.kind === "initial" &&

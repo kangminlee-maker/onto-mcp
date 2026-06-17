@@ -5920,6 +5920,14 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       providerRoute: input.result?.effective_base_url?.startsWith("mock://")
         ? "mock"
         : args.llmConfig.provider ?? null,
+      // Witnessed route identity inputs: the resolved selection carried on the
+      // call config (provider brand + execution_adapter) and the call result's
+      // declared billing + effective_base_url. The telemetry collector projects
+      // these into a structured RouteIdentity (effort-calibration simplification).
+      provider: args.llmConfig.provider ?? null,
+      executionAdapter: args.llmConfig.execution_adapter ?? null,
+      declaredBillingMode: input.result?.declared_billing_mode ?? null,
+      effectiveBaseUrl: input.result?.effective_base_url ?? null,
       modelId: input.result?.model_id ?? args.llmConfig.model_id ?? null,
       effort: args.llmConfig.reasoning_effort ?? null,
       systemPrompt: args.systemPrompt,
