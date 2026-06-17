@@ -217,6 +217,37 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 - 세션이 산출물 Overview에 명시: "의미는 헤더·데이터로부터 추론한 해석… 회계용어는 담당자 검증 권장 / Semantics inferred; verify with domain expert."
 - 이는 보강 프로파일 `Static Inspection Boundary`("structure inspected only")와 **독립적으로 같은 결론** → 정직성 설계 검증됨.
 
-### 8.5 미해결/주의
-- (d) 경로는 **실행환경 Python+openpyxl 보장**이 전제. Cowork 샌드박스는 충족하나, onto의 reconstruct live executor(claude_code/codex) 경로에서의 가용성은 **착수 전 확인 필요**(없으면 (a) Node lib fallback).
+### 8.5 미해결/주의 (가용성 해소됨)
+- **가용성 확인 완료(이 트랙)**: 타깃 = **Cowork 샌드박스** → python3+pip 보유(세션 실증), openpyxl pip-설치 가능. onto 런타임은 Node 전용(child_process는 LLM CLI에만)이고, mcpb manifest는 `runtimes:{node:>=18}` node 전용 선언이라 **Desktop엔 python 미보장** — 그러나 타깃이 Cowork이므로 무의미. → **(d) 고정 openpyxl + lazy ensure-install이 xlsx 1순위**로 확정. 의존성 설치 유도는 기존 first-run bootstrap seam(`bootstrapProviderFromEnv`, `src/mcp/server.ts:2133`)과 같은 패턴으로 **xlsx 최초 사용 시에만**(버전 핀·check-then-install 멱등·실패 시 fail-loud `unsupported_reason`·로깅). csv는 순수 Node로 의존성 0. (a) Node lib는 non-Cowork 호스트용 선택 fallback으로 강등.
 - 세션은 **단일 워크북·수기**였다. S1은 다회·자동·결정론을 더해야 하므로 고정 스크립트의 **입력 검증·예산·실패기록**(암호화/손상/거대)을 §5 P4~P6에서 강화.
+
+---
+
+## 9. 분업 경계와 일반화 (Cowork ↔ reconstruct, kind 일반화)
+
+### 9.1 올바른 분업 seam = **관측↔seed-authoring** (seed↔maturation 아님)
+- 검토한 제안: "Cowork가 seed 생성, reconstruct가 maturation". **문자 그대로는 불가** — seed↔maturation은 onto에서 **증거-결합 계약**(일반 온톨로지 핸드오프 아님).
+- 근거(`.onto/processes/reconstruct/ontology-seeding-and-maturation-design.md`): `OntologySeed`는 **source_authority**(seed를 back/prove하는 source record)·**data_binding_layer**·**frontier**(maturation이 돌릴 미해결 질문)·**CQ 아티팩트 링크**·**정직한 한계 carry**를 담아야 한다. maturation 루프 = "현재 온톨로지에서 질문을 뽑아 source material/runtime/authority에서 **answer-support 수집**, 7차원(evidence 포함) 확장" → **frontier를 따라 돌고 답을 source 관측에 묶는다.**
+- Cowork freehand `.ttl`엔 frontier·source 바인딩·정직한 gap·CQ 링크가 **없다**(="semantics inferred" 자인). → maturation에 넘기면 돌릴 frontier도, answer-support를 묶을 바인딩도 없음. 완성품에서 역설계는 취약하고 frontier·한계는 *완성 아티팩트가 아니라 관측 과정*에서만 나오므로 복구 불가.
+- **올바른 형태** (제안의 정신은 맞되 seam을 한 단계 앞으로):
+  ```
+  Cowork 강점(풍부·적응적 데이터레벨 관측 = §8 3기법)
+    → onto-shaped 관측 + seed "제안"(LLM proposes)
+      → onto seed-authoring 검증·정규화(claim↔관측 evidence 바인딩·frontier 구성·CQ 링크·한계 기록; 근거 없는 주장 reject)  ← seed는 onto 소유
+        → onto maturation (설계대로)
+  ```
+  = capability-boundary "LLM이 의미 payload 제안 → runtime이 canonical 아티팩트로 확정 → 거버넌스 하류". **이 그림의 관측 레이어가 곧 S1** → 하이브리드는 S1을 대체하지 않고 **강화**한다.
+- 단, **일회성·빠른 산출물**이 목적이면 Cowork freehand 단독이 더 낫다(거버넌스 불필요). 하이브리드는 재현·감사·근거·도메인 자산화가 필요할 때의 답.
+
+### 9.2 S1 = kind-불가지론 "structure-observer" 패밀리의 첫 실현
+- S1은 스프레드시트 전용 일회성이 아니라 **per-kind 관측자 패밀리의 첫 인스턴스**(`adapter_id: ${kind}-structure-observer` 규약이 이미 예고; code는 이미 `partially_wired`=runnable).
+- 공통 SHAPE = **구조 인덱스 → 빈도/어휘 신호 → 관계 그래프 → 인벤토리.** §8 3기법은 그 스프레드시트 실현일 뿐:
+
+  | 공통 단계 | spreadsheet 실현(S1) | code 실현(기존 code profile이 이미 인코딩) |
+  |---|---|---|
+  | 구조 인덱스 | 시트·used range·헤더행 탐지·컬럼 | 파일/모듈/패키지 경계·class/func/type 시그니처 |
+  | 빈도/어휘 | 범주형 distinct 값+빈도(통제어휘) | 토큰 축별 빈도(actor/action/state/guard/object) — code.md "Actor-Action-State Scout Guidance" |
+  | 관계 그래프 | 시트간 key-overlap(데이터 *추론*) | import/call 그래프·공유 타입(정적 *명시* → **더 신뢰도 높음**) |
+
+- 도구만 다름(openpyxl ↔ AST/tree-sitter/ripgrep). observe-don't-interpret 경계는 양쪽 동일(code profile도 "토큰을 claim으로 승격 금지").
+- **설계 지침**: §2.2/§2.4 인벤토리를 **kind-불가지론 envelope(adapter_id/version/source_ref/content_sha256/unsupported_reason) + 실현별 레이어**로 설계 → S1 산물이 code 관측 강화(이미 runnable이라 자연스러운 2번째 대상)·document/database로 그대로 재사용. = 개념 경제(공유 추출 1 + 실현 N).
