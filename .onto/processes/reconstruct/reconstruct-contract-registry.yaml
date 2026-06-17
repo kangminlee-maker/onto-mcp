@@ -67,11 +67,11 @@ source_profile_records:
     target_material_kind: spreadsheet
     is_default_for_kind: true
     definition_ref: .onto/processes/reconstruct/source-profiles/spreadsheet.md
-    definition_sha256: 35fa949f3fc680b52f3e8ff78eeb9754b86d068e6b20dca51f4107ba881b868f
+    definition_sha256: 6b543ab5621ef169312c1632fa6e446950a72621a974c29130695039cea7b51b
     contract_status: active
     runtime_implementation_status: planned
     schema_version: 1
-    profile_version: 2
+    profile_version: 3
     migration_status: current
     supersedes: []
     replaced_by: []
