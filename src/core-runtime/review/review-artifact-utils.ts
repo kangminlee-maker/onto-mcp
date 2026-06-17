@@ -293,6 +293,17 @@ function renderSpreadsheetStructuralView(
   if (inventory.error_cells.length) structural.push(`error_cells: ${inventory.error_cells.length}`);
   if (inventory.macro_present) structural.push("macro_present: true");
   if (structural.length) lines.push("", structural.join("; "));
+  if (inventory.pivot_tables.length) {
+    lines.push("", `pivot_tables: ${inventory.pivot_tables.length}`);
+    for (const p of inventory.pivot_tables) {
+      const src = p.source_sheet ? ` source=${p.source_sheet}!${p.source_ref ?? ""}` : "";
+      lines.push(`  - ${p.name} @ ${p.sheet}!${p.location}${src}`);
+      lines.push(
+        `    rows=[${p.row_fields.join(", ")}] cols=[${p.column_fields.join(", ")}]` +
+          ` data=[${p.data_fields.join(", ")}] filters=[${p.page_fields.join(", ")}]`,
+      );
+    }
+  }
   if (inventory.risk_signals.length) {
     lines.push("", "risk_signals:");
     for (const signal of inventory.risk_signals) {

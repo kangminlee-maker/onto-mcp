@@ -137,6 +137,20 @@ export interface WorkbookStructuralInventory {
   sheets: InventorySheet[];
   named_ranges: Array<{ name: string; scope: string; refers_to: string }>;
   tables: Array<{ name: string; sheet: string; range: string }>;
+  /** PivotTables (design §2.2): aggregation/summary structure. Field NAMES are
+   *  schema (like column headers), not raw cell values; the pivot CACHE RECORDS
+   *  (the cached data) are never read (CHAN-1). */
+  pivot_tables: Array<{
+    name: string;
+    sheet: string;
+    location: string;
+    source_sheet: string | null;
+    source_ref: string | null;
+    row_fields: string[];
+    column_fields: string[];
+    page_fields: string[];
+    data_fields: string[];
+  }>;
   formula_cells: Array<{ sheet: string; cell: string; formula: string; cross_sheet_refs: string[] }>;
   merged_ranges: Array<{ sheet: string; range: string }>;
   data_validations: Array<{ sheet: string; range: string; rule_summary: string }>;
@@ -476,6 +490,7 @@ export function buildCsvInventory(args: {
     inspection_method: "structure_inspected_only" as const,
     named_ranges: [],
     tables: [],
+    pivot_tables: [],
     formula_cells: [],
     merged_ranges: [],
     data_validations: [],
@@ -794,6 +809,108 @@ function parseTable(xml: string): { name: string; ref: string } | null {
   return result;
 }
 
+interface ParsedPivotTable {
+  name: string;
+  location: string;
+  rowFieldIdx: number[];
+  colFieldIdx: number[];
+  pageFieldIdx: number[];
+  dataFields: Array<{ fld: number; name: string }>;
+}
+/** Parse a pivotTableN.xml: the field LAYOUT (which cache-field index sits on
+ *  rows / columns / pages / data), not any cached data. */
+function parsePivotTable(xml: string): ParsedPivotTable | null {
+  let name = "";
+  let location = "";
+  let sawRoot = false;
+  const rowFieldIdx: number[] = [];
+  const colFieldIdx: number[] = [];
+  const pageFieldIdx: number[] = [];
+  const dataFields: Array<{ fld: number; name: string }> = [];
+  let section: "row" | "col" | "page" | "data" | null = null;
+  const parser = new SaxesParser();
+  parser.on("opentag", (node) => {
+    const a = attrsOf(node);
+    switch (node.name) {
+      case "pivotTableDefinition":
+        name = a.name ?? "";
+        sawRoot = true;
+        break;
+      case "location":
+        if (a.ref) location = a.ref;
+        break;
+      case "rowFields":
+        section = "row";
+        break;
+      case "colFields":
+        section = "col";
+        break;
+      case "pageFields":
+        section = "page";
+        break;
+      case "dataFields":
+        section = "data";
+        break;
+      case "field": {
+        const x = parseInt(a.x ?? "", 10);
+        if (Number.isInteger(x) && x >= 0) {
+          if (section === "row") rowFieldIdx.push(x);
+          else if (section === "col") colFieldIdx.push(x);
+        }
+        break;
+      }
+      case "pageField": {
+        const f = parseInt(a.fld ?? "", 10);
+        if (Number.isInteger(f) && f >= 0) pageFieldIdx.push(f);
+        break;
+      }
+      case "dataField": {
+        const f = parseInt(a.fld ?? "", 10);
+        if (Number.isInteger(f)) dataFields.push({ fld: f, name: a.name ?? "" });
+        break;
+      }
+      default:
+        break;
+    }
+  });
+  parser.on("closetag", (node) => {
+    if (
+      node.name === "rowFields" ||
+      node.name === "colFields" ||
+      node.name === "pageFields" ||
+      node.name === "dataFields"
+    ) {
+      section = null;
+    }
+  });
+  parser.write(xml).close();
+  return sawRoot ? { name, location, rowFieldIdx, colFieldIdx, pageFieldIdx, dataFields } : null;
+}
+
+/** Parse a pivotCacheDefinition: the source range/sheet and the cache field NAMES
+ *  (indexed; pivot field placements reference them). Cache RECORDS are never read. */
+function parsePivotCacheDefinition(xml: string): {
+  sourceSheet: string | null;
+  sourceRef: string | null;
+  fieldNames: string[];
+} {
+  let sourceSheet: string | null = null;
+  let sourceRef: string | null = null;
+  const fieldNames: string[] = [];
+  const parser = new SaxesParser();
+  parser.on("opentag", (node) => {
+    const a = attrsOf(node);
+    if (node.name === "worksheetSource") {
+      sourceSheet = a.sheet ?? null;
+      sourceRef = a.ref ?? a.name ?? null;
+    } else if (node.name === "cacheField") {
+      fieldNames.push(a.name ?? "");
+    }
+  });
+  parser.write(xml).close();
+  return { sourceSheet, sourceRef, fieldNames };
+}
+
 interface ParsedWorksheet {
   dimensions: { rows: number; cols: number };
   protected: boolean;
@@ -1000,7 +1117,8 @@ export function buildXlsxInventory(args: {
     });
 
   // Pass 1: stream the small parts (workbook, rels, sharedStrings, sheet rels,
-  // tables) into memory. Worksheets and media/pivot caches are NOT inflated here.
+  // tables, pivot definitions) into memory. Worksheets and the giant pivot cache
+  // RECORDS are NOT inflated here (pivotCacheDefinition is; records are skipped).
   let parts: Map<string, string>;
   try {
     parts = streamCollectEntries({
@@ -1010,7 +1128,9 @@ export function buildXlsxInventory(args: {
         name === "xl/_rels/workbook.xml.rels" ||
         name === "xl/sharedStrings.xml" ||
         (name.startsWith("xl/worksheets/_rels/") && name.endsWith(".rels")) ||
-        (name.startsWith("xl/tables/") && name.endsWith(".xml")),
+        (name.startsWith("xl/tables/") && name.endsWith(".xml")) ||
+        (name.startsWith("xl/pivotTables/") && (name.endsWith(".xml") || name.endsWith(".rels"))) ||
+        (name.startsWith("xl/pivotCache/") && name.endsWith(".xml") && name.includes("Definition")),
       onMacro: () => {
         macroPresent = true;
       },
@@ -1058,25 +1178,74 @@ export function buildXlsxInventory(args: {
     refers_to: dn.refersTo,
   }));
 
-  // Resolve each sheet's worksheet entry path and its owned tables (from pass-1
-  // sheet rels + table parts — all small, already in memory).
+  // Resolve each sheet's worksheet entry path and its owned tables + pivot tables
+  // (from pass-1 sheet rels + parts — all small, already in memory).
   const sheetByPath = new Map<string, { name: string; rid: string; hidden: boolean }>();
   const tables: Array<{ name: string; sheet: string; range: string }> = [];
+  const pivotRefs: Array<{ sheet: string; baseDir: string; pivotPath: string }> = [];
   for (const sheetEntry of workbook.sheets) {
     const rel = relById.get(sheetEntry.rid);
     const sheetPath = rel ? resolveZipPath("xl", rel.target) : null;
     if (!sheetPath) continue;
     sheetByPath.set(sheetPath, sheetEntry);
-    const sheetRelsXml = parts.get(
-      `${path.posix.dirname(sheetPath)}/_rels/${path.posix.basename(sheetPath)}.rels`,
-    );
+    const sheetDir = path.posix.dirname(sheetPath);
+    const sheetRelsXml = parts.get(`${sheetDir}/_rels/${path.posix.basename(sheetPath)}.rels`);
     if (!sheetRelsXml) continue;
     for (const r of parseRels(sheetRelsXml)) {
-      if (!r.type.toLowerCase().endsWith("table")) continue;
-      const tableXml = parts.get(resolveZipPath(path.posix.dirname(sheetPath), r.target));
-      const table = tableXml ? parseTable(tableXml) : null;
-      if (table) tables.push({ name: table.name, sheet: sheetEntry.name, range: table.ref });
+      const type = r.type.toLowerCase();
+      // pivotTable type also ends with "table" — check it first.
+      if (type.endsWith("pivottable")) {
+        pivotRefs.push({ sheet: sheetEntry.name, baseDir: sheetDir, pivotPath: resolveZipPath(sheetDir, r.target) });
+      } else if (type.endsWith("table")) {
+        const tableXml = parts.get(resolveZipPath(sheetDir, r.target));
+        const table = tableXml ? parseTable(tableXml) : null;
+        if (table) tables.push({ name: table.name, sheet: sheetEntry.name, range: table.ref });
+      }
     }
+  }
+
+  // Build pivot tables: parse each pivotTableN.xml + resolve its cache definition
+  // (field names + source) via the pivot's rels. Cache RECORDS are never read.
+  const pivot_tables: WorkbookStructuralInventory["pivot_tables"] = [];
+  const pivotHostSheets = new Set<string>();
+  const PIVOT_CAP = 300;
+  for (const { sheet, pivotPath } of pivotRefs) {
+    if (pivot_tables.length >= PIVOT_CAP) break;
+    const pivotXml = parts.get(pivotPath);
+    if (!pivotXml) continue;
+    const pt = parsePivotTable(pivotXml);
+    if (!pt) continue;
+    let fieldNames: string[] = [];
+    let sourceSheet: string | null = null;
+    let sourceRef: string | null = null;
+    const pivotDir = path.posix.dirname(pivotPath);
+    const pivotRelsXml = parts.get(`${pivotDir}/_rels/${path.posix.basename(pivotPath)}.rels`);
+    if (pivotRelsXml) {
+      for (const r of parseRels(pivotRelsXml)) {
+        if (!r.type.toLowerCase().endsWith("pivotcachedefinition")) continue;
+        const cacheXml = parts.get(resolveZipPath(pivotDir, r.target));
+        if (cacheXml) {
+          const cache = parsePivotCacheDefinition(cacheXml);
+          fieldNames = cache.fieldNames;
+          sourceSheet = cache.sourceSheet;
+          sourceRef = cache.sourceRef;
+        }
+        break;
+      }
+    }
+    const nameOf = (idx: number) => fieldNames[idx] ?? `field_${idx}`;
+    pivot_tables.push({
+      name: pt.name,
+      sheet,
+      location: pt.location,
+      source_sheet: sourceSheet,
+      source_ref: sourceRef,
+      row_fields: pt.rowFieldIdx.map(nameOf),
+      column_fields: pt.colFieldIdx.map(nameOf),
+      page_fields: pt.pageFieldIdx.map(nameOf),
+      data_fields: pt.dataFields.map((d) => d.name || nameOf(d.fld)),
+    });
+    pivotHostSheets.add(sheet);
   }
 
   // Pass 2: stream each worksheet through a SAX parser chunk-by-chunk — a
@@ -1153,9 +1322,15 @@ export function buildXlsxInventory(args: {
       hidden: sheetEntry.hidden,
       protected: parsed.protected,
     });
+    // A pivot-hosting sheet whose own layout isn't a confident flat table is a
+    // crosstab (uses the otherwise-unset pivot_or_crosstab kind). A sheet with a
+    // real header that merely also anchors a pivot keeps its tabular layout — the
+    // pivots are recorded separately in pivot_tables.
+    const hostsPivot = pivotHostSheets.has(sheetEntry.name);
     per_sheet_data.push({
       sheet: sheetEntry.name,
-      layout_kind: profile.layout_kind,
+      layout_kind:
+        hostsPivot && profile.layout_kind !== "tabular" ? "pivot_or_crosstab" : profile.layout_kind,
       header_rows: profile.header_rows,
       header_confidence: profile.header_confidence,
       columns: profile.columns,
@@ -1179,6 +1354,7 @@ export function buildXlsxInventory(args: {
     sheets,
     named_ranges,
     tables,
+    pivot_tables,
     formula_cells,
     merged_ranges,
     data_validations,
@@ -1223,6 +1399,7 @@ function unsupportedInventory(args: {
     sheets: [],
     named_ranges: [],
     tables: [],
+    pivot_tables: [],
     formula_cells: [],
     merged_ranges: [],
     data_validations: [],

@@ -413,6 +413,53 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     const b = buildXlsxInventory({ sourceRef: "/abs/book.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
+
+  it("recognizes pivot tables, resolving fields from the cache, and marks the host sheet crosstab", () => {
+    const bytes = zipSync({
+      "xl/workbook.xml": strToU8(
+        `<?xml version="1.0"?><workbook ${WB_R}><sheets><sheet name="Summary" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+      ),
+      "xl/_rels/workbook.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}"><Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/></Relationships>`,
+      ),
+      // The pivot renders a numeric crosstab grid (no flat-table header of its own).
+      "xl/worksheets/sheet1.xml": strToU8(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A3:C20"/><sheetData>` +
+          `<row r="3"><c r="A3"><v>100</v></c><c r="B3"><v>200</v></c></row>` +
+          `<row r="4"><c r="A4"><v>300</v></c><c r="B4"><v>400</v></c></row></sheetData></worksheet>`,
+      ),
+      "xl/worksheets/_rels/sheet1.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}"><Relationship Id="rId1" Type="${relType("pivotTable")}" Target="../pivotTables/pivotTable1.xml"/></Relationships>`,
+      ),
+      "xl/pivotTables/pivotTable1.xml": strToU8(
+        `<?xml version="1.0"?><pivotTableDefinition name="매출요약" cacheId="1"><location ref="A3:C20"/>` +
+          `<pivotFields count="3"><pivotField axis="axisRow"/><pivotField axis="axisCol"/><pivotField dataField="1"/></pivotFields>` +
+          `<rowFields count="1"><field x="0"/></rowFields><colFields count="1"><field x="1"/></colFields>` +
+          `<dataFields count="1"><dataField name="합계 : 금액" fld="2" subtotal="sum"/></dataFields></pivotTableDefinition>`,
+      ),
+      "xl/pivotTables/_rels/pivotTable1.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}"><Relationship Id="rId1" Type="${relType("pivotCacheDefinition")}" Target="../pivotCache/pivotCacheDefinition1.xml"/></Relationships>`,
+      ),
+      "xl/pivotCache/pivotCacheDefinition1.xml": strToU8(
+        `<?xml version="1.0"?><pivotCacheDefinition><cacheSource type="worksheet"><worksheetSource ref="A1:C100" sheet="결제상세"/></cacheSource>` +
+          `<cacheFields count="3"><cacheField name="결제일"/><cacheField name="상품"/><cacheField name="금액"/></cacheFields></pivotCacheDefinition>`,
+      ),
+    });
+    const r = buildXlsxInventory({ sourceRef: "/abs/pivot.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+
+    expect(r.pivot_tables).toHaveLength(1);
+    const p = r.pivot_tables[0]!;
+    expect(p.name).toBe("매출요약");
+    expect(p.sheet).toBe("Summary");
+    expect(p.location).toBe("A3:C20");
+    expect(p.source_sheet).toBe("결제상세");
+    expect(p.source_ref).toBe("A1:C100");
+    expect(p.row_fields).toEqual(["결제일"]); // cache field index 0
+    expect(p.column_fields).toEqual(["상품"]); // index 1
+    expect(p.data_fields).toEqual(["합계 : 금액"]); // dataField display name
+    // the pivot-hosting sheet is a crosstab, not a flat table
+    expect(r.per_sheet_data.find((d) => d.sheet === "Summary")!.layout_kind).toBe("pivot_or_crosstab");
+  });
 });
 
 describe("header detection — offset headers + confidence (deterministic, finding 3)", () => {
