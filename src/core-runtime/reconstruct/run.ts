@@ -5570,6 +5570,42 @@ export function observationPromptPayload(
     });
 }
 
+/**
+ * Resume fallback for the projection-truncation record. On
+ * `reuse_existing_authored_artifacts` the seed-authoring calls that populate the
+ * author's truncation sink are skipped, so it is empty even though the reused
+ * artifacts may have been authored from a budget-sliced prompt. This recomputes
+ * the unambiguous SINGLE-document case from the already-projected observations
+ * (`promptSourceObservations` — source-safety redaction already applied, so a
+ * redacted document has no `content_excerpt` and is correctly not reported) and
+ * the budget. A multi-observation run that selected one large document would need
+ * the persisted directives to recompute on resume — deferred; the primary
+ * large-input scenario is a single document. Exported for the regression test.
+ */
+export function singleDocumentProjectionTruncation(
+  promptSourceObservations: ReconstructSourceObservationsArtifact,
+  budget: number,
+): DocumentExcerptProjectionTruncation[] {
+  if (promptSourceObservations.observations.length !== 1) return [];
+  const observation = promptSourceObservations.observations[0]!;
+  if (observation.target_material_kind !== "document") return [];
+  const extension =
+    typeof observation.structural_data.extension === "string"
+      ? observation.structural_data.extension
+      : null;
+  if (!isTextReadableDocumentExtension(extension)) return [];
+  const excerpt = observation.structural_data.content_excerpt;
+  if (typeof excerpt !== "string" || excerpt.length <= budget) return [];
+  return [
+    {
+      observation_id: observation.observation_id,
+      source_ref: observation.source_ref,
+      captured_chars: excerpt.length,
+      projection_budget_chars: budget,
+    },
+  ];
+}
+
 function sourceScoutPackPromptPayload(args: {
   sourceScoutPack?: ReconstructSourceScoutPackArtifact | null | undefined;
   sourceScoutPackValidation?:
@@ -12744,11 +12780,21 @@ export async function runReconstruct(
   );
   // Seed authoring has run, so the author has collected any document whose tail
   // the projection budget sliced (post-selection, post-redaction — the projected
-  // reality). Record each durably (runtime-events.ndjson) before composing final
-  // output, so the signal lands even if final-output validation later throws — no
-  // silent truncation (C2).
-  const documentProjectionTruncations =
+  // reality). On resume (reuse_existing_authored_artifacts) those calls are
+  // skipped and the sink is empty, so recompute the single-document case from the
+  // projected observations + budget — otherwise a resumed run would silently omit
+  // a truncation its reused artifacts were authored under. Record each durably
+  // (runtime-events.ndjson) before composing final output, so the signal lands
+  // even if final-output validation later throws — no silent truncation (C2).
+  const recordedProjectionTruncations =
     directiveAuthor.documentExcerptProjectionTruncations ?? [];
+  const documentProjectionTruncations = recordedProjectionTruncations.length > 0
+    ? recordedProjectionTruncations
+    : singleDocumentProjectionTruncation(
+      promptSourceObservations,
+      directiveAuthor.documentExcerptProjectionBudget ??
+        DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+    );
   for (const truncation of documentProjectionTruncations) {
     appendRuntimeStatusEventSync({
       pipeline: "reconstruct",

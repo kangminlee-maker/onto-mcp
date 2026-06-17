@@ -45,6 +45,7 @@ import {
   createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
   runReconstruct,
+  singleDocumentProjectionTruncation,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -5886,5 +5887,59 @@ describe("observationPromptPayload projection-truncation recording", () => {
       { documentExcerptCharBudget: 1000 },
     );
     expect(recorded).toEqual([]);
+  });
+
+  // Resume fallback (Codex P2/12751): on reuse_existing_authored_artifacts the
+  // author sink is empty, so runReconstruct recomputes the single-document case
+  // from the projected (redacted) observations + budget.
+  describe("singleDocumentProjectionTruncation (resume fallback)", () => {
+    it("recomputes a single sliced text document", () => {
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(5000) }]) as any,
+          1000,
+        ),
+      ).toEqual([
+        {
+          observation_id: "obs-doc",
+          source_ref: "/doc/obs-doc",
+          captured_chars: 5000,
+          projection_budget_chars: 1000,
+        },
+      ]);
+    });
+
+    it("recomputes nothing for a redacted document (content_excerpt stripped)", () => {
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-redacted", kind: "document", ext: ".md" }]) as any,
+          1000,
+        ),
+      ).toEqual([]);
+    });
+
+    it("recomputes nothing when within budget, binary, or multi-observation", () => {
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-fit", kind: "document", ext: ".md", excerpt: "x".repeat(500) }]) as any,
+          1000,
+        ),
+      ).toEqual([]);
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-pdf", kind: "document", ext: ".pdf", excerpt: "x".repeat(5000) }]) as any,
+          1000,
+        ),
+      ).toEqual([]);
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([
+            { id: "obs-a", kind: "document", ext: ".md", excerpt: "x".repeat(5000) },
+            { id: "obs-b", kind: "document", ext: ".md", excerpt: "y".repeat(5000) },
+          ]) as any,
+          1000,
+        ),
+      ).toEqual([]);
+    });
   });
 });
