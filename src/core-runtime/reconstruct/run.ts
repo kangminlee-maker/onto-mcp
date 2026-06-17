@@ -1851,6 +1851,8 @@ function createRunManifest(args: {
       ontology_expansion_validation: null,
       maturation_source_delta: null,
       maturation_source_delta_validation: null,
+      maturation_convergence_ledger: null,
+      maturation_convergence_ledger_validation: null,
       maturation_continuation_decision: null,
       maturation_continuation_decision_validation: null,
       query_proofs: null,
