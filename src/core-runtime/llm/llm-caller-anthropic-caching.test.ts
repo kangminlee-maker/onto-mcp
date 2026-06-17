@@ -43,7 +43,7 @@ describe("anthropic api_key route: prompt caching (cache_control + token telemet
     delete process.env.ANTHROPIC_API_KEY;
   });
 
-  it("marks the system block and the user message as ephemeral cache breakpoints", async () => {
+  it("marks the stable system block as a cache breakpoint but leaves the varying user message uncached", async () => {
     createMock.mockResolvedValue(
       anthropicResponse({
         input_tokens: 100,
@@ -57,10 +57,7 @@ describe("anthropic api_key route: prompt caching (cache_control + token telemet
 
     const arg = createMock.mock.calls[0]![0] as {
       system: Array<{ type: string; text: string; cache_control?: unknown }>;
-      messages: Array<{
-        role: string;
-        content: Array<{ type: string; text: string; cache_control?: unknown }>;
-      }>;
+      messages: Array<{ role: string; content: unknown }>;
     };
     // System is a text block carrying a cache breakpoint (not a bare string).
     expect(Array.isArray(arg.system)).toBe(true);
@@ -69,13 +66,9 @@ describe("anthropic api_key route: prompt caching (cache_control + token telemet
       text: "SYSTEM_PROMPT",
       cache_control: { type: "ephemeral" },
     });
-    // User message content is a text block carrying a cache breakpoint.
-    const userBlock = arg.messages[0]!.content[0]!;
-    expect(userBlock).toMatchObject({
-      type: "text",
-      text: "USER_PROMPT",
-      cache_control: { type: "ephemeral" },
-    });
+    // The user message stays a bare string: it changes per call, so a
+    // breakpoint there would pay cache writes that are almost never read.
+    expect(arg.messages[0]!.content).toBe("USER_PROMPT");
   });
 
   it("reports input_tokens as the total = uncached + cache_read + cache_creation, and surfaces the split", async () => {

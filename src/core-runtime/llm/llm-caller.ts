@@ -452,15 +452,19 @@ async function callAnthropic(
             },
           }
         : {}),
-      // Prompt caching (Anthropic-only): mark the stable system prefix and the
-      // user message as ephemeral cache breakpoints. cache_control does not
-      // change the model output — it only lets identical prefixes within the
-      // 5-minute TTL bill at cache-read rates. Two breakpoints (well under the
-      // 4 max): the system block alone (read when the system instructions
-      // repeat across calls) and system+user together (read on an exact
-      // re-send, e.g. a timeout retry). A prefix shorter than the model's
-      // minimum cacheable size simply doesn't cache — no error, no behavior
-      // change.
+      // Prompt caching (Anthropic-only): mark only the stable system prefix as
+      // an ephemeral cache breakpoint. cache_control does not change the model
+      // output — it lets an identical system prefix within the 5-minute TTL
+      // bill at cache-read rates when the same instructions repeat across calls
+      // (e.g. multiple units/rounds in one stage). A prefix shorter than the
+      // model's minimum cacheable size simply doesn't cache (no error, no
+      // behavior change). The user message is deliberately NOT a breakpoint:
+      // it carries the per-call target/excerpt and changes between calls, so a
+      // breakpoint there would write a fresh system+user cache entry on every
+      // miss (paying the cache-write premium) while almost never being read —
+      // a net cost increase on large unique prompts. Caching the repeated
+      // observation excerpt needs it split into a leading stable block, which
+      // belongs with the large-input Stage 1' prompt restructuring.
       system: systemPrompt
         ? [
             {
@@ -470,18 +474,7 @@ async function callAnthropic(
             },
           ]
         : systemPrompt,
-      messages: [
-        {
-          role: "user" as const,
-          content: [
-            {
-              type: "text" as const,
-              text: userPrompt,
-              cache_control: { type: "ephemeral" as const },
-            },
-          ],
-        },
-      ],
+      messages: [{ role: "user", content: userPrompt }],
     });
   } catch (err) {
     const e = err as {
