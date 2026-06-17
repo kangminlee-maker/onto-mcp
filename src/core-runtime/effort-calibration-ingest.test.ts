@@ -487,6 +487,37 @@ describe("retained route identities", () => {
     expect(ids).toEqual([witnessed]);
   });
 
+  it("uses the judge unit's own route for a judge sweep, not the author metadata", () => {
+    const authorRoute = witnessedReconstructRouteIdentity({
+      provider: "anthropic",
+      executionAdapter: "anthropic_sdk",
+      declaredBillingMode: "per_token",
+      effectiveBaseUrl: "https://api.anthropic.com",
+    });
+    const judgeRoute = witnessedReconstructRouteIdentity({
+      provider: "codex",
+      executionAdapter: "codex_cli",
+      declaredBillingMode: "subscription",
+      effectiveBaseUrl: "codex-cli://oauth",
+    });
+    const report: ReconstructBenchmarkReport = {
+      requested_judge_override: { effort: "high" },
+      runs: [
+        {
+          quality_gate: reconGate("passed", { recall: 1, supportRate: 1, authored: 4, dropped: 0 }),
+          // metadata route mirrors the AUTHOR unit (anthropic SDK)…
+          metadata: { applied_effort: "medium", route_identity: authorRoute },
+          // …but the swept judge unit ran on a different route (codex).
+          units: [
+            { step_id: "answer_support_judgment", effort: "high", llm_call_count: 1, route_identity: judgeRoute },
+          ],
+        },
+      ],
+    };
+    const ids = reconstructRetainedRouteIdentities(report);
+    expect(ids).toEqual([judgeRoute]);
+  });
+
   it("collects review route evidence only from gated runs", () => {
     const report: ReviewBenchmarkReport = {
       runs: [

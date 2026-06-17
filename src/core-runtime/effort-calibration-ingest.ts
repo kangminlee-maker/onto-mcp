@@ -200,7 +200,18 @@ export interface ReconstructBenchmarkRun {
     route_identity?: RouteIdentity | null;
   };
   /** Per-unit execution telemetry; the judge unit is only present when it ran. */
-  units?: Array<{ step_id?: string; effort?: string | null; llm_call_count?: number }>;
+  units?: Array<{
+    step_id?: string;
+    effort?: string | null;
+    llm_call_count?: number;
+    /**
+     * Witnessed route identity of THIS unit. The judge (answer_support_judgment)
+     * can run on a different route than the author, so a judge-stage calibration
+     * must read the judge unit's route here, not the run-level metadata route
+     * (which mirrors the first author unit).
+     */
+    route_identity?: RouteIdentity | null;
+  }>;
 }
 
 /**
@@ -400,9 +411,33 @@ export function reconstructRetainedRouteIdentities(
   const out: Array<RouteIdentity | null> = [];
   for (const run of report.runs ?? []) {
     if (!appliedEffortMatches(run, point.stage, point.effort)) continue;
-    out.push(reconstructRunRouteIdentity(run));
+    out.push(retainedRunRouteIdentity(run, point));
   }
   return out;
+}
+
+/**
+ * The route identity that backs a retained sample at `point`. For an author
+ * point the run-level metadata route (= the first author unit) is the swept
+ * unit's route. For a JUDGE point the swept unit is the answer_support_judgment
+ * call, which may run on a different route than the author, so its OWN
+ * route_identity is read; a judge unit that ran without a route witness yields
+ * null (the route is undetermined, never silently the author's).
+ */
+function retainedRunRouteIdentity(
+  run: ReconstructBenchmarkRun,
+  point: ReconstructStageTag,
+): RouteIdentity | null {
+  if (point.stage === "judge") {
+    const judgeUnit = (run.units ?? []).find(
+      (u) =>
+        u.step_id === JUDGE_STEP_ID &&
+        u.effort === point.effort &&
+        (u.llm_call_count ?? 0) >= 1,
+    );
+    return judgeUnit?.route_identity ?? null;
+  }
+  return reconstructRunRouteIdentity(run);
 }
 
 /**

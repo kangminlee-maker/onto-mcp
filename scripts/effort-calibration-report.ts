@@ -493,6 +493,18 @@ async function main(): Promise<void> {
         "recording it as a declared hint only.\n",
     );
   }
+  // --provider is part of the artifact's identity key (like --model), so a
+  // witnessed model_provider that contradicts it is a hard error, not a hint
+  // mismatch: the profile would otherwise be stored under the wrong provider.
+  // (model_provider null = under-determined route; nothing to contradict.)
+  for (const identity of routeSummary.identities) {
+    if (identity.model_provider && identity.model_provider !== options.provider) {
+      throw new Error(
+        `derived model_provider "${identity.model_provider}" != --provider "${options.provider}" ` +
+          `(route ${routeToken(identity)}); the profile would be stored under the wrong provider identity.`,
+      );
+    }
+  }
 
   const report = buildEffortCalibrationReport({
     pipeline,
@@ -569,15 +581,16 @@ async function main(): Promise<void> {
   }
 
   const generatedAt = new Date().toISOString();
-  // Key the default filename by the DERIVED route token when a single route was
+  // Key the default filename by the DERIVED route when a single route was
   // witnessed, so two profiles built with the same provider-level `--route` hint
-  // but different adapters/auth (e.g. anthropic_sdk vs claude_code) do not
-  // overwrite each other. Fall back to the declared hint only when the route is
-  // ambiguous or undetermined (no single derived token to key by).
-  const routeFileKey =
-    routeSummary.identities.length === 1
-      ? routeToken(routeSummary.identities[0]!)
-      : options.route;
+  // but different routes do not overwrite each other. Use the base-aware token
+  // (routeSummary.tokens, which keeps effective_base_url) so two custom proxy
+  // bases stay distinct, and append `-preliminary` for a non-decision-grade
+  // profile so it can't clobber a decision-grade one for the same route/day.
+  // Fall back to the declared hint when the route is ambiguous/undetermined.
+  const routeKeyBase =
+    routeSummary.identities.length === 1 ? routeSummary.tokens[0]! : options.route;
+  const routeFileKey = decisionGrade ? routeKeyBase : `${routeKeyBase}-preliminary`;
   const outputPath = path.resolve(
     options.outputPath ??
       defaultOutputPath(
