@@ -37,7 +37,7 @@ import {
   buildEffortCalibrationReport,
   type EffortSweepRun,
 } from "../src/core-runtime/effort-calibration-sweep.js";
-import type { RouteIdentity } from "../src/core-runtime/route-identity.js";
+import { routeToken, type RouteIdentity } from "../src/core-runtime/route-identity.js";
 import type {
   EffortCalibrationReport,
   StageFrontier,
@@ -270,7 +270,10 @@ function defaultOutputPath(
   const date = generatedAt.slice(0, 10).replace(/-/g, "");
   // Provider and route are part of the calibration identity (same model can have
   // different effort behavior per route), so include them to avoid clobbering a
-  // sibling profile for the same model+day.
+  // sibling profile for the same model+day. `route` is the DERIVED route token
+  // when a single route was witnessed (so anthropic_sdk and claude_code profiles
+  // built with the same `--route anthropic` hint get distinct files), falling
+  // back to the declared hint only when the route is ambiguous/undetermined.
   const id = [identity.provider, identity.model, identity.route].map(slug).join("-");
   return path.join(
     "development-records",
@@ -566,11 +569,20 @@ async function main(): Promise<void> {
   }
 
   const generatedAt = new Date().toISOString();
+  // Key the default filename by the DERIVED route token when a single route was
+  // witnessed, so two profiles built with the same provider-level `--route` hint
+  // but different adapters/auth (e.g. anthropic_sdk vs claude_code) do not
+  // overwrite each other. Fall back to the declared hint only when the route is
+  // ambiguous or undetermined (no single derived token to key by).
+  const routeFileKey =
+    routeSummary.identities.length === 1
+      ? routeToken(routeSummary.identities[0]!)
+      : options.route;
   const outputPath = path.resolve(
     options.outputPath ??
       defaultOutputPath(
         pipeline,
-        { provider: options.provider, model: options.model, route: options.route },
+        { provider: options.provider, model: options.model, route: routeFileKey },
         generatedAt,
       ),
   );
@@ -578,7 +590,8 @@ async function main(): Promise<void> {
     artifact: "effort_profile",
     // v2 adds the derived route identity block (route_identities /
     // route_completeness / route_hint_corroborated); `route` (from ...report)
-    // stays the declared hint and file key.
+    // stays the declared hint, while the default filename is keyed by the
+    // derived route token (see routeFileKey above).
     schema_version: 2,
     generated_at: generatedAt,
     decision_grade: decisionGrade,

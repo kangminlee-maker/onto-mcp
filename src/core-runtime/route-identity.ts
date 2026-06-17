@@ -18,11 +18,13 @@
  *  - effective_base_url is corroboration only, and identifies custom proxy bases
  *    that downgrade route_completeness.
  */
-import type {
-  LlmBillingMode,
-  LlmExecutionAdapter,
-  LlmProviderName,
-  RuntimeLlmProvider,
+import {
+  DEFAULT_GROK_BASE_URL,
+  DEFAULT_LMSTUDIO_BASE_URL,
+  type LlmBillingMode,
+  type LlmExecutionAdapter,
+  type LlmProviderName,
+  type RuntimeLlmProvider,
 } from "./llm/model-switcher.js";
 
 export type RouteProvenance = "witnessed" | "profile_derived";
@@ -80,12 +82,38 @@ export function modelProviderFromRuntimeProvider(
   }
 }
 
+/** The non-default openai-compatible bases that ARE normal provider routes. */
+const KNOWN_OPENAI_COMPATIBLE_BASE_URLS: ReadonlySet<string> = new Set([
+  DEFAULT_GROK_BASE_URL,
+  DEFAULT_LMSTUDIO_BASE_URL,
+]);
+
+/**
+ * Whether an `openai_compatible_http` route runs against a CUSTOM proxy base —
+ * a base_url that is neither a mock sentinel nor one of the known provider
+ * defaults. The selection still resolves an adapter + model_provider, but a
+ * custom endpoint cannot be treated as the normal provider route (design §6 MF2):
+ * effective_base_url is corroboration only, so a custom base downgrades
+ * route_completeness rather than passing as fully witnessed.
+ */
+function isCustomOpenAiCompatibleBase(
+  adapter: RouteExecutionAdapter | null,
+  baseUrl: string | null,
+): boolean {
+  if (adapter !== "openai_compatible_http") return false;
+  if (!baseUrl) return false;
+  return !KNOWN_OPENAI_COMPATIBLE_BASE_URLS.has(baseUrl);
+}
+
 function completeness(
   adapter: RouteExecutionAdapter | null,
   modelProvider: LlmProviderName | null,
+  baseUrl: string | null,
 ): RouteCompleteness {
   if (!modelProvider) return "under_determined";
-  return adapter ? "complete" : "provider_only";
+  if (!adapter) return "provider_only";
+  if (isCustomOpenAiCompatibleBase(adapter, baseUrl)) return "provider_only";
+  return "complete";
 }
 
 /**
@@ -125,7 +153,7 @@ export function witnessedReconstructRouteIdentity(input: {
     billing_mode: input.declaredBillingMode ?? null,
     effective_base_url: effectiveBaseUrl,
     route_provenance: "witnessed",
-    route_completeness: completeness(adapter, modelProvider),
+    route_completeness: completeness(adapter, modelProvider, effectiveBaseUrl),
     realization: null,
   };
 }
@@ -146,13 +174,14 @@ export function profileDerivedRouteIdentity(input: {
 }): RouteIdentity {
   const adapter = input.executionAdapter ?? null;
   const modelProvider = input.modelProvider ?? null;
+  const effectiveBaseUrl = input.effectiveBaseUrl ?? null;
   return {
     execution_adapter: adapter,
     model_provider: modelProvider,
     billing_mode: input.billingMode ?? null,
-    effective_base_url: input.effectiveBaseUrl ?? null,
+    effective_base_url: effectiveBaseUrl,
     route_provenance: "profile_derived",
-    route_completeness: completeness(adapter, modelProvider),
+    route_completeness: completeness(adapter, modelProvider, effectiveBaseUrl),
     realization: input.realization ?? null,
   };
 }

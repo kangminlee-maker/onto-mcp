@@ -108,6 +108,30 @@ describe("witnessedReconstructRouteIdentity", () => {
     expect(id.model_provider).toBeNull();
     expect(id.route_completeness).toBe("under_determined");
   });
+
+  it("keeps a known-default openai-compatible base complete", () => {
+    const id = witnessedReconstructRouteIdentity({
+      provider: "lmstudio",
+      executionAdapter: "openai_compatible_http",
+      declaredBillingMode: "local",
+      effectiveBaseUrl: "http://localhost:1234/v1",
+    });
+    expect(id.route_completeness).toBe("complete");
+  });
+
+  it("downgrades a custom openai-compatible proxy base to provider_only", () => {
+    // A non-default base is corroboration only — it cannot be promoted as the
+    // normal provider route (design §6 MF2), so completeness drops.
+    const id = witnessedReconstructRouteIdentity({
+      provider: "grok",
+      executionAdapter: "openai_compatible_http",
+      declaredBillingMode: "per_token",
+      effectiveBaseUrl: "https://my-proxy.internal/v1",
+    });
+    expect(id.execution_adapter).toBe("openai_compatible_http");
+    expect(id.model_provider).toBe("grok");
+    expect(id.route_completeness).toBe("provider_only");
+  });
 });
 
 describe("profileDerivedRouteIdentity", () => {
