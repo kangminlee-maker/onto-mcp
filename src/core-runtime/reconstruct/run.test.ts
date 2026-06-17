@@ -43,10 +43,10 @@ import type {
 import {
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
-  documentExcerptProjectionTruncations,
   observationPromptPayload,
   runReconstruct,
 } from "./run.js";
+import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
 import {
   ontologySeedClaimProjections,
@@ -5771,8 +5771,8 @@ describe("runReconstruct", () => {
   });
 });
 
-describe("documentExcerptProjectionTruncations", () => {
-  const observations = (
+describe("observationPromptPayload projection-truncation recording", () => {
+  const artifact = (
     items: Array<{
       id: string;
       kind: string;
@@ -5799,13 +5799,31 @@ describe("documentExcerptProjectionTruncations", () => {
     validation_results: [],
   });
 
-  it("records a single text document whose captured excerpt exceeds the budget", () => {
-    const excerpt = "x".repeat(5000);
-    const result = documentExcerptProjectionTruncations(
-      observations([{ id: "obs-doc", kind: "document", ext: ".md", excerpt }]) as any,
-      1000,
+  const recordTruncations = (
+    sourceObservations: ReturnType<typeof artifact>,
+    options: {
+      observationIds?: string[];
+      documentExcerptCharBudget?: number;
+    },
+  ): DocumentExcerptProjectionTruncation[] => {
+    const recorded: DocumentExcerptProjectionTruncation[] = [];
+    observationPromptPayload(sourceObservations as any, {
+      expandSingleDocumentExcerpt: true,
+      ...(options.observationIds ? { observationIds: options.observationIds } : {}),
+      ...(options.documentExcerptCharBudget !== undefined
+        ? { documentExcerptCharBudget: options.documentExcerptCharBudget }
+        : {}),
+      recordDocumentExcerptProjectionTruncation: (t) => recorded.push(t),
+    });
+    return recorded;
+  };
+
+  it("records a single selected text document the budget sliced", () => {
+    const recorded = recordTruncations(
+      artifact([{ id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(5000) }]),
+      { documentExcerptCharBudget: 1000 },
     );
-    expect(result).toEqual([
+    expect(recorded).toEqual([
       {
         observation_id: "obs-doc",
         source_ref: "/doc/obs-doc",
@@ -5816,43 +5834,57 @@ describe("documentExcerptProjectionTruncations", () => {
   });
 
   it("records nothing when the captured excerpt fits the budget", () => {
-    const result = documentExcerptProjectionTruncations(
-      observations([
-        { id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(500) },
-      ]) as any,
-      1000,
+    const recorded = recordTruncations(
+      artifact([{ id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(500) }]),
+      { documentExcerptCharBudget: 1000 },
     );
-    expect(result).toEqual([]);
+    expect(recorded).toEqual([]);
   });
 
-  it("ignores a binary document (only a structural sample is captured, not expanded)", () => {
-    const result = documentExcerptProjectionTruncations(
-      observations([
-        { id: "obs-pdf", kind: "document", ext: ".pdf", excerpt: "x".repeat(5000) },
-      ]) as any,
-      1000,
+  it("records a budget slice when one large doc is selected out of many (Codex P2/5534)", () => {
+    const recorded = recordTruncations(
+      artifact([
+        { id: "obs-small", kind: "document", ext: ".md", excerpt: "x".repeat(100) },
+        { id: "obs-big", kind: "document", ext: ".md", excerpt: "y".repeat(5000) },
+        { id: "obs-code", kind: "code", ext: ".ts", excerpt: "z".repeat(5000) },
+      ]),
+      { observationIds: ["obs-big"], documentExcerptCharBudget: 1000 },
     );
-    expect(result).toEqual([]);
+    expect(recorded).toEqual([
+      {
+        observation_id: "obs-big",
+        source_ref: "/doc/obs-big",
+        captured_chars: 5000,
+        projection_budget_chars: 1000,
+      },
+    ]);
   });
 
-  it("ignores a non-document observation", () => {
-    const result = documentExcerptProjectionTruncations(
-      observations([
-        { id: "obs-code", kind: "code", ext: ".ts", excerpt: "x".repeat(5000) },
-      ]) as any,
-      1000,
+  it("records nothing for a source-safety redacted document (no content_excerpt) (Codex P3/1040)", () => {
+    // sourceObservationsForPrompt deletes content_excerpt for redacted observations.
+    const recorded = recordTruncations(
+      artifact([{ id: "obs-redacted", kind: "document", ext: ".md" }]),
+      { documentExcerptCharBudget: 1000 },
     );
-    expect(result).toEqual([]);
+    expect(recorded).toEqual([]);
   });
 
-  it("records nothing for a multi-observation bundle (expansion gate; Stage 2 scope)", () => {
-    const result = documentExcerptProjectionTruncations(
-      observations([
+  it("ignores a binary document (small sample only, not expanded)", () => {
+    const recorded = recordTruncations(
+      artifact([{ id: "obs-pdf", kind: "document", ext: ".pdf", excerpt: "x".repeat(5000) }]),
+      { documentExcerptCharBudget: 1000 },
+    );
+    expect(recorded).toEqual([]);
+  });
+
+  it("records nothing for a multi-observation projection (expansion gate; Stage 2 scope)", () => {
+    const recorded = recordTruncations(
+      artifact([
         { id: "obs-a", kind: "document", ext: ".md", excerpt: "x".repeat(5000) },
         { id: "obs-b", kind: "document", ext: ".md", excerpt: "y".repeat(5000) },
-      ]) as any,
-      1000,
+      ]),
+      { documentExcerptCharBudget: 1000 },
     );
-    expect(result).toEqual([]);
+    expect(recorded).toEqual([]);
   });
 });
