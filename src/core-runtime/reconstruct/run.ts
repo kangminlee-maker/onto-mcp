@@ -106,6 +106,7 @@ import {
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   isTextReadableDocumentExtension,
   materializeReconstructPreparationArtifacts,
+  spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import {
@@ -9429,7 +9430,11 @@ async function observeAcceptedFrontierRefs(args: {
         `source-observation-batch:${args.sourceFrontier.round_id}:source_frontier`,
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
     });
-    if (!observation) {
+    // A null observation (vanished ref) and an unsupported workbook format
+    // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence)
+    // are both un-observable by the current runtime; neither may be admitted as
+    // frontier evidence (mirrors the materialize-loop demotion).
+    if (!observation || spreadsheetUnsupportedReason(observation)) {
       throw new Error(
         `accepted source frontier ref cannot be observed by current runtime: ${frontier.source_ref}`,
       );
@@ -9523,7 +9528,9 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
         `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
       triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
     });
-    if (!observation) {
+    // Unsupported workbook formats are un-observable like a vanished ref — no
+    // evidence to admit (mirrors the materialize-loop demotion and F1).
+    if (!observation || spreadsheetUnsupportedReason(observation)) {
       throw new Error(
         `accepted maturation closure source request cannot be observed by current runtime: ${request.requested_source_ref}`,
       );

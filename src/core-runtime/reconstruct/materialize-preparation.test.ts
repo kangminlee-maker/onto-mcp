@@ -17,6 +17,7 @@ import {
   DOCUMENT_CAPTURE_CEILING_CHARS,
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   materializeReconstructPreparationArtifacts,
+  spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
@@ -498,6 +499,35 @@ describe("materializeReconstructPreparationArtifacts", () => {
         reason: expect.stringContaining("extraction unsupported"),
       }),
     ]);
+  });
+
+  it("spreadsheetUnsupportedReason flags an unsupported workbook but not a supported one (shared frontier guard)", async () => {
+    // The frontier / maturation-closure re-entry paths in run.ts reuse this guard to
+    // reject an accepted-but-unobservable workbook ref, mirroring the materialize-loop
+    // demotion above so the evidence gate is honest on EVERY admission path.
+    const root = await makeTmpProject();
+    const xls = path.join(root, "legacy.xls");
+    const csv = path.join(root, "ok.csv");
+    await fs.writeFile(xls, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]));
+    await fs.writeFile(csv, "a,b\n1,2\n", "utf8");
+
+    const xlsObservation = await buildReconstructSourceObservation({
+      ref: xls,
+      exists: true,
+      kind: "spreadsheet",
+      confidence: 0.92,
+      confidence_basis: "test",
+    });
+    const csvObservation = await buildReconstructSourceObservation({
+      ref: csv,
+      exists: true,
+      kind: "spreadsheet",
+      confidence: 0.92,
+      confidence_basis: "test",
+    });
+
+    expect(spreadsheetUnsupportedReason(xlsObservation!)).not.toBeNull();
+    expect(spreadsheetUnsupportedReason(csvObservation!)).toBeNull();
   });
 
   it("keeps unknown targets skipped instead of guessing an adapter", async () => {

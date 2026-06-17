@@ -499,7 +499,7 @@ async function buildSpreadsheetSourceObservation(args: {
  * (.xls/.xlsb/.ods, corrupt, oversized) carries no structural evidence, so the
  * materialize loop demotes it to a skip rather than admitting an empty observation.
  */
-function spreadsheetUnsupportedReason(
+export function spreadsheetUnsupportedReason(
   observation: ReconstructSourceObservation,
 ): string | null {
   if (observation.target_material_kind !== "spreadsheet") return null;
