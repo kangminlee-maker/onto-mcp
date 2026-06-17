@@ -321,6 +321,22 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(JSON.stringify(r)).not.toContain("Bob");
   });
 
+  it("extracts cross-sheet refs with non-ASCII (Korean) sheet names and ignores #REF!", () => {
+    // Mirrors a real workbook: SUMIFS over Korean-named sheets, plus a #REF! error
+    // token that must NOT be mistaken for a sheet reference.
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+      `<row r="1"><c r="A1"><f>SUMIFS(결제상세!$AK:$AK,결제상세!$D:$D,매출!$A1)+#REF!</f><v>0</v></c></row>` +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync(makeMinimalXlsxParts(sheet));
+    const r = buildXlsxInventory({ sourceRef: "/abs/k.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.formula_cells).toHaveLength(1);
+    const refs = r.formula_cells[0]!.cross_sheet_refs;
+    expect(refs).toContain("결제상세");
+    expect(refs).toContain("매출");
+    expect(refs).not.toContain("REF");
+  });
+
   it("detects a VBA macro project from xl/vbaProject.bin even on a .xlsx", () => {
     const parts = makeMinimalXlsxParts(
       `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +

@@ -534,7 +534,10 @@ function parseRangeDims(ref: string): { rows: number; cols: number } | null {
  *  (a cross-sheet relationship signal), excluding self-references. */
 function extractCrossSheetRefs(formula: string, currentSheet: string): string[] {
   const refs = new Set<string>();
-  const re = /(?:'([^']+)'|([A-Za-z_\\][A-Za-z0-9_.]*))!/g;
+  // Unicode-aware (sheet names are commonly non-ASCII, e.g. Korean). The
+  // negative lookbehind drops Excel error tokens like `#REF!` (a `#`-prefixed
+  // name followed by `!` is an error, not a sheet reference).
+  const re = /(?<!#)(?:'([^']+)'|([\p{L}_][\p{L}\p{N}_.]*))!/gu;
   let m: RegExpExecArray | null;
   while ((m = re.exec(formula)) !== null) {
     const name = (m[1] ?? m[2] ?? "").replace(/''/g, "'");
