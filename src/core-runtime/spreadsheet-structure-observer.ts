@@ -29,7 +29,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { unzipSync, type Unzipped, type UnzipFileInfo } from "fflate";
+import { Unzip, UnzipInflate } from "fflate";
 import { SaxesParser, type SaxesTagPlain } from "saxes";
 
 export const SPREADSHEET_OBSERVER_ADAPTER_ID = "spreadsheet-structure-observer";
@@ -484,16 +484,20 @@ export function buildCsvInventory(args: {
 
 // ───────────────────────── P4: xlsx/xlsm extractor (fflate + saxes) ─────────────────────────
 //
-// Read-only OOXML structure extraction. We stream-decompress only the XML parts
-// we parse (filter), guard each entry with a decompressed-byte budget (zip-bomb
-// defense), and bound the per-sheet cell scan by data_layer_caps with early-exit
-// (cell VALUE work stops at the row cap; structural parts after <sheetData> —
-// mergeCells/dataValidations/sheetProtection — are still captured). No writing,
-// no formula recalculation, no whole-workbook object model.
+// Read-only OOXML structure extraction, STREAMING. fflate's streaming Unzip feeds
+// each entry's decompressed chunks incrementally so a multi-hundred-MB worksheet
+// is never held whole — worksheet chunks are piped straight into a streaming SAX
+// parser and the per-sheet cell scan is bounded by data_layer_caps (cell VALUE
+// work stops at the row cap; structural parts after <sheetData> are still seen).
+// Pass 1 collects the small parts (workbook, rels, sharedStrings, tables); pass 2
+// streams the worksheets (sharedStrings now resolved). No writing, no formula
+// recalculation, no whole-workbook object model.
 
-/** Per-entry decompressed-size budget. A single XML part larger than this is
- *  skipped (capture_truncated + risk signal) rather than inflated into memory. */
-const XLSX_PER_ENTRY_BYTE_BUDGET = 64 * 1024 * 1024;
+/** Byte budget for an ACCUMULATED small part (workbook/sharedStrings/rels/table).
+ *  Worksheets are streamed and not subject to it. Counted from decompressed
+ *  chunks (the streaming local header may omit sizes), and on overflow the part
+ *  is dropped (capture_truncated + risk signal) rather than held in memory. */
+const XLSX_PART_BYTE_BUDGET = 128 * 1024 * 1024;
 
 const XLSX_FORMULA_CAP = 5000;
 const XLSX_MERGE_CAP = 2000;
@@ -546,9 +550,99 @@ function extractCrossSheetRefs(formula: string, currentSheet: string): string[] 
   return [...refs];
 }
 
-function decodeEntry(files: Unzipped, name: string): string | null {
-  const bytes = files[name];
-  return bytes ? new TextDecoder().decode(bytes) : null;
+/** Feed the in-memory archive to a streaming Unzip in bounded input chunks. This
+ *  is what makes it genuinely streaming: pushing the whole buffer at once lets the
+ *  sync inflater emit a huge entry as one chunk (which would also blow past V8's
+ *  ~512MB max string length when decoded). 1 MiB input chunks keep the inflated
+ *  output — and our decoded strings fed to SAX — small. */
+function pushArchive(unzip: Unzip, bytes: Uint8Array): void {
+  const CHUNK = 1 << 20;
+  if (bytes.length === 0) {
+    unzip.push(new Uint8Array(0), true);
+    return;
+  }
+  for (let off = 0; off < bytes.length; off += CHUNK) {
+    const end = Math.min(off + CHUNK, bytes.length);
+    unzip.push(bytes.subarray(off, end), end >= bytes.length);
+  }
+}
+
+/** Stream the archive once, decoding only the entries `want()` selects into a
+ *  name→text map. Each accepted entry is accumulated from decompressed chunks and
+ *  dropped if it exceeds XLSX_PART_BYTE_BUDGET (memory guard / zip-bomb defense).
+ *  `onMacro` fires for xl/vbaProject.bin without decompressing it. Synchronous:
+ *  fflate's UnzipInflate runs the callbacks during push. */
+function streamCollectEntries(args: {
+  bytes: Uint8Array;
+  want: (name: string) => boolean;
+  onOversized: (name: string) => void;
+  onMacro: (name: string) => void;
+}): Map<string, string> {
+  const out = new Map<string, string>();
+  const unzip = new Unzip();
+  unzip.register(UnzipInflate);
+  unzip.onfile = (file) => {
+    if (file.name === "xl/vbaProject.bin") {
+      args.onMacro(file.name);
+      return;
+    }
+    if (!args.want(file.name)) return;
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    let oversized = false;
+    file.ondata = (err, chunk, final) => {
+      if (err || oversized) return;
+      total += chunk.length;
+      if (total > XLSX_PART_BYTE_BUDGET) {
+        oversized = true;
+        chunks.length = 0;
+        args.onOversized(file.name);
+        return;
+      }
+      // fflate may reuse the chunk buffer — copy before retaining.
+      chunks.push(chunk.slice());
+      if (final) out.set(file.name, new TextDecoder().decode(concatChunks(chunks, total)));
+    };
+    file.start();
+  };
+  pushArchive(unzip, args.bytes);
+  return out;
+}
+
+function concatChunks(chunks: Uint8Array[], total: number): Uint8Array {
+  if (chunks.length === 1) return chunks[0]!;
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out;
+}
+
+/** Stream the archive once, piping each worksheet entry selected by `want()`
+ *  through `sinkFor(name)` chunk-by-chunk (the worksheet is never materialized
+ *  whole). Synchronous (UnzipInflate). */
+function streamWorksheets(args: {
+  bytes: Uint8Array;
+  want: (name: string) => boolean;
+  sinkFor: (name: string) => { write: (text: string) => void; finalize: () => void } | null;
+}): void {
+  const unzip = new Unzip();
+  unzip.register(UnzipInflate);
+  unzip.onfile = (file) => {
+    if (!args.want(file.name)) return;
+    const sink = args.sinkFor(file.name);
+    if (!sink) return;
+    const decoder = new TextDecoder();
+    file.ondata = (err, chunk, final) => {
+      if (err) return;
+      sink.write(decoder.decode(chunk, { stream: !final }));
+      if (final) sink.finalize();
+    };
+    file.start();
+  };
+  pushArchive(unzip, args.bytes);
 }
 
 function resolveZipPath(baseDir: string, target: string): string {
@@ -664,13 +758,16 @@ interface ParsedWorksheet {
   rows: string[][];
   rows_truncated: boolean;
 }
-function parseWorksheet(args: {
-  xml: string;
+/** A streaming worksheet parser: pipe decompressed chunks through `write`, then
+ *  `finalize`, then read `getResult`. The worksheet is never materialized whole;
+ *  the per-sheet cell scan is bounded by `caps` (cell VALUE work stops at the row
+ *  cap, structural parts after <sheetData> are still captured). */
+function createWorksheetParser(args: {
   sharedStrings: string[];
   sheetName: string;
   caps: DataLayerCaps;
-}): ParsedWorksheet {
-  const { xml, sharedStrings, sheetName, caps } = args;
+}): { write: (text: string) => void; finalize: () => void; getResult: () => ParsedWorksheet } {
+  const { sharedStrings, sheetName, caps } = args;
   const merged_ranges: ParsedWorksheet["merged_ranges"] = [];
   const data_validations: ParsedWorksheet["data_validations"] = [];
   const formula_cells: ParsedWorksheet["formula_cells"] = [];
@@ -814,17 +911,23 @@ function parseWorksheet(args: {
         break;
     }
   });
-  parser.write(xml).close();
-
   return {
-    dimensions: declaredDims ?? { rows: maxRow, cols: maxCol },
-    protected: protectedSheet,
-    merged_ranges,
-    data_validations,
-    formula_cells,
-    error_cells,
-    rows,
-    rows_truncated: rowsTruncated,
+    write: (text: string) => {
+      parser.write(text);
+    },
+    finalize: () => {
+      parser.close();
+    },
+    getResult: (): ParsedWorksheet => ({
+      dimensions: declaredDims ?? { rows: maxRow, cols: maxCol },
+      protected: protectedSheet,
+      merged_ranges,
+      data_validations,
+      formula_cells,
+      error_cells,
+      rows,
+      rows_truncated: rowsTruncated,
+    }),
   };
 }
 
@@ -850,32 +953,35 @@ export function buildXlsxInventory(args: {
       reason,
     });
 
-  let files: Unzipped;
+  // Pass 1: stream the small parts (workbook, rels, sharedStrings, sheet rels,
+  // tables) into memory. Worksheets and media/pivot caches are NOT inflated here.
+  let parts: Map<string, string>;
   try {
-    files = unzipSync(args.bytes, {
-      filter: (f: UnzipFileInfo) => {
-        if (f.name === "xl/vbaProject.bin") {
-          macroPresent = true;
-          return false;
-        }
-        if (f.originalSize > XLSX_PER_ENTRY_BYTE_BUDGET) {
-          captureTruncated = true;
-          risk_signals.push({
-            kind: "oversized_zip_entry",
-            location: f.name,
-            literal: `original_size=${f.originalSize} exceeds ${XLSX_PER_ENTRY_BYTE_BUDGET}`,
-          });
-          return false;
-        }
-        // Only the XML/rels parts we parse — never media/binaries.
-        return /^xl\/.*\.(xml|rels)$/i.test(f.name);
+    parts = streamCollectEntries({
+      bytes: args.bytes,
+      want: (name) =>
+        name === "xl/workbook.xml" ||
+        name === "xl/_rels/workbook.xml.rels" ||
+        name === "xl/sharedStrings.xml" ||
+        (name.startsWith("xl/worksheets/_rels/") && name.endsWith(".rels")) ||
+        (name.startsWith("xl/tables/") && name.endsWith(".xml")),
+      onMacro: () => {
+        macroPresent = true;
+      },
+      onOversized: (name) => {
+        captureTruncated = true;
+        risk_signals.push({
+          kind: "oversized_zip_entry",
+          location: name,
+          literal: `decompressed part exceeds ${XLSX_PART_BYTE_BUDGET} bytes; dropped`,
+        });
       },
     });
   } catch (error) {
     return unsupported(`xlsx unzip failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const workbookXml = decodeEntry(files, "xl/workbook.xml");
+  const workbookXml = parts.get("xl/workbook.xml");
   if (!workbookXml) {
     return unsupported("xlsx missing xl/workbook.xml (not a valid OOXML workbook)");
   }
@@ -885,9 +991,9 @@ export function buildXlsxInventory(args: {
   let sharedStrings: string[];
   try {
     workbook = parseWorkbook(workbookXml);
-    const relsXml = decodeEntry(files, "xl/_rels/workbook.xml.rels");
+    const relsXml = parts.get("xl/_rels/workbook.xml.rels");
     workbookRels = relsXml ? parseRels(relsXml) : [];
-    const sstXml = decodeEntry(files, "xl/sharedStrings.xml");
+    const sstXml = parts.get("xl/sharedStrings.xml");
     sharedStrings = sstXml ? parseSharedStrings(sstXml) : [];
   } catch (error) {
     return unsupported(`xlsx workbook parse failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -906,10 +1012,55 @@ export function buildXlsxInventory(args: {
     refers_to: dn.refersTo,
   }));
 
+  // Resolve each sheet's worksheet entry path and its owned tables (from pass-1
+  // sheet rels + table parts — all small, already in memory).
+  const sheetByPath = new Map<string, { name: string; rid: string; hidden: boolean }>();
+  const tables: Array<{ name: string; sheet: string; range: string }> = [];
+  for (const sheetEntry of workbook.sheets) {
+    const rel = relById.get(sheetEntry.rid);
+    const sheetPath = rel ? resolveZipPath("xl", rel.target) : null;
+    if (!sheetPath) continue;
+    sheetByPath.set(sheetPath, sheetEntry);
+    const sheetRelsXml = parts.get(
+      `${path.posix.dirname(sheetPath)}/_rels/${path.posix.basename(sheetPath)}.rels`,
+    );
+    if (!sheetRelsXml) continue;
+    for (const r of parseRels(sheetRelsXml)) {
+      if (!r.type.toLowerCase().endsWith("table")) continue;
+      const tableXml = parts.get(resolveZipPath(path.posix.dirname(sheetPath), r.target));
+      const table = tableXml ? parseTable(tableXml) : null;
+      if (table) tables.push({ name: table.name, sheet: sheetEntry.name, range: table.ref });
+    }
+  }
+
+  // Pass 2: stream each worksheet through a SAX parser chunk-by-chunk — a
+  // hundred-MB sheet is bounded by the row cap, never held whole.
+  const parsedByPath = new Map<string, ParsedWorksheet>();
+  try {
+    streamWorksheets({
+      bytes: args.bytes,
+      want: (name) => sheetByPath.has(name),
+      sinkFor: (name) => {
+        const sheetEntry = sheetByPath.get(name);
+        if (!sheetEntry) return null;
+        const wp = createWorksheetParser({ sharedStrings, sheetName: sheetEntry.name, caps });
+        return {
+          write: wp.write,
+          finalize: () => {
+            wp.finalize();
+            parsedByPath.set(name, wp.getResult());
+          },
+        };
+      },
+    });
+  } catch {
+    // A corrupt worksheet aborts the streaming push; sheets parsed before it are
+    // retained, and any sheet missing from parsedByPath degrades to unreadable below.
+  }
+
   const sheets: InventorySheet[] = [];
   const per_sheet_data: PerSheetData[] = [];
   const distinct_value_vocab: DistinctValueVocabEntry[] = [];
-  const tables: Array<{ name: string; sheet: string; range: string }> = [];
   const formula_cells: WorkbookStructuralInventory["formula_cells"] = [];
   const merged_ranges: WorkbookStructuralInventory["merged_ranges"] = [];
   const data_validations: WorkbookStructuralInventory["data_validations"] = [];
@@ -918,33 +1069,13 @@ export function buildXlsxInventory(args: {
   for (const sheetEntry of workbook.sheets) {
     const rel = relById.get(sheetEntry.rid);
     const sheetPath = rel ? resolveZipPath("xl", rel.target) : null;
-    const sheetXml = sheetPath ? decodeEntry(files, sheetPath) : null;
-    if (!sheetXml) {
+    const parsed = sheetPath ? parsedByPath.get(sheetPath) : undefined;
+    if (!parsed) {
       // Sheet part missing/unreadable — record it literally, keep the others.
       risk_signals.push({
         kind: "unreadable_sheet_part",
         location: sheetEntry.name,
-        literal: sheetPath ? `missing entry ${sheetPath}` : `unresolved relationship ${sheetEntry.rid}`,
-      });
-      sheets.push({
-        name: sheetEntry.name,
-        used_range: null,
-        dimensions: { rows: 0, cols: 0 },
-        hidden: sheetEntry.hidden,
-        protected: false,
-      });
-      per_sheet_data.push({ sheet: sheetEntry.name, layout_kind: "unknown", header_rows: null, columns: [] });
-      continue;
-    }
-
-    let parsed: ParsedWorksheet;
-    try {
-      parsed = parseWorksheet({ xml: sheetXml, sharedStrings, sheetName: sheetEntry.name, caps });
-    } catch (error) {
-      risk_signals.push({
-        kind: "unreadable_sheet_part",
-        location: sheetEntry.name,
-        literal: `parse error: ${error instanceof Error ? error.message : String(error)}`,
+        literal: sheetPath ? `missing or unreadable entry ${sheetPath}` : `unresolved relationship ${sheetEntry.rid}`,
       });
       sheets.push({
         name: sheetEntry.name,
@@ -982,21 +1113,6 @@ export function buildXlsxInventory(args: {
       header_rows: profile.header_rows,
       columns: profile.columns,
     });
-
-    // Tables owned by this sheet (sheet rels → ../tables/tableN.xml).
-    if (sheetPath) {
-      const sheetRelsPath = `${path.posix.dirname(sheetPath)}/_rels/${path.posix.basename(sheetPath)}.rels`;
-      const sheetRelsXml = decodeEntry(files, sheetRelsPath);
-      if (sheetRelsXml) {
-        for (const r of parseRels(sheetRelsXml)) {
-          if (!r.type.toLowerCase().endsWith("table")) continue;
-          const tablePath = resolveZipPath(path.posix.dirname(sheetPath), r.target);
-          const tableXml = decodeEntry(files, tablePath);
-          const table = tableXml ? parseTable(tableXml) : null;
-          if (table) tables.push({ name: table.name, sheet: sheetEntry.name, range: table.ref });
-        }
-      }
-    }
   }
 
   if (macroPresent) {

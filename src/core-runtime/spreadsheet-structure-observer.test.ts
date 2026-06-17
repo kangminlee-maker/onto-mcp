@@ -384,14 +384,16 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(r.sheets[0]!.dimensions.rows).toBe(600);
   });
 
-  it("returns an honest unsupported_reason on a non-zip input (not a crash)", () => {
+  it("returns an honest unsupported_reason on a non-OOXML input (not a crash)", () => {
     const r = buildXlsxInventory({
       sourceRef: "/abs/bad.xlsx",
       bytes: strToU8("this is not a zip file"),
       contentSha256: "deadbeef",
       workbookKind: "xlsx",
     });
-    expect(r.unsupported_reason).toMatch(/unzip failed/);
+    // Streaming unzip yields no entries for non-zip bytes → honest "missing
+    // workbook.xml"; a malformed zip surfaces "unzip failed". Either is honest.
+    expect(r.unsupported_reason).toMatch(/unzip failed|workbook\.xml/);
   });
 
   it("returns an honest unsupported_reason when xl/workbook.xml is absent", () => {

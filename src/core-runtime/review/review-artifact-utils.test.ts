@@ -84,7 +84,7 @@ describe("spreadsheet target rendering (P3 review seam, §3.2 / CHAN-2)", () => 
     const snapshot = await renderTargetSnapshot([xlsx]);
     expect(snapshot).toContain("Spreadsheet Structural Inventory");
     expect(snapshot).toContain("unsupported:");
-    expect(snapshot).toContain("unzip failed");
+    expect(snapshot).toMatch(/unzip failed|workbook\.xml/);
   });
 
   it("renders an empty csv as a structural view without throwing", async () => {

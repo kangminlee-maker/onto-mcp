@@ -688,7 +688,7 @@ describe("buildReconstructSourceObservation spreadsheet seam (P2, csv)", () => {
     expect(sd.content_sha256).toBe(await sha256File(target));
     const inventory = sd.workbook_inventory as Record<string, unknown>;
     expect(inventory.workbook_kind).toBe("xlsx");
-    expect(inventory.unsupported_reason).toEqual(expect.stringContaining("unzip failed"));
+    expect(inventory.unsupported_reason).toEqual(expect.stringMatching(/unzip failed|workbook\.xml/));
     expect(observation!.summary).toContain("extraction unsupported");
     expect(observation!.summary).toContain("structure_inspected_only");
   });
