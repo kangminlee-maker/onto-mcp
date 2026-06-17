@@ -31,7 +31,21 @@
  */
 
 import type { EffortSweepRun } from "./effort-calibration-sweep.js";
-import type { RouteIdentity } from "./route-identity.js";
+import type {
+  LlmBillingMode,
+  LlmExecutionAdapter,
+  LlmProviderName,
+} from "./llm/model-switcher.js";
+import {
+  modelProviderFromRuntimeProvider,
+  profileDerivedRouteIdentity,
+  routeHintMatches,
+  routeToken,
+  witnessedReconstructRouteIdentity,
+  worstRouteCompleteness,
+  type RouteCompleteness,
+  type RouteIdentity,
+} from "./route-identity.js";
 import type { SemanticQualityGateResult } from "./review/semantic-quality-gate.js";
 import type { ReconstructQualityGateResult } from "./reconstruct/semantic-quality-gate.js";
 import { reviewRunGateSignal } from "./effort-calibration-review.js";
@@ -56,8 +70,23 @@ export interface ReviewBenchmarkRun {
   base_effort?: string;
   /** Whole-review semantic quality gate; absent when the run failed. */
   semantic_quality_gate?: SemanticQualityGateResult;
-  /** Per-run runtime context; runtime_provider is the route token to validate. */
-  review_profile?: { runtime_route?: { runtime_provider?: string | null } | null };
+  /**
+   * Per-run runtime context. The runtime_route is the (already structurally
+   * rich) ReviewRuntimeRouteArtifactProjection — review is profile-derived
+   * (design §4), so the CLI reads adapter / model_provider / billing / base_url
+   * to build a RouteIdentity, not just the legacy provider token.
+   */
+  review_profile?: {
+    runtime_route?: {
+      execution_adapter?: LlmExecutionAdapter | null;
+      model_provider?: LlmProviderName | null;
+      billing_mode?: LlmBillingMode | null;
+      base_url?: string | null;
+      artifact_generation_realization?: string | null;
+      /** Legacy provider token; superseded by model_provider for derivation. */
+      runtime_provider?: string | null;
+    } | null;
+  };
 }
 
 /** Structural subset of a review benchmark report (top-level identity/status). */
@@ -296,4 +325,101 @@ export function ingestReconstructReport(
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Route derivation (S1.3 — CLI consumer of the witnessed route identity)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive one reconstruct run's RouteIdentity. Prefers the harness-surfaced
+ * witnessed `route_identity` (S1.1/S1.2). A legacy report that predates route
+ * witnessing carries only the provider-only `provider_route`; that string is
+ * degraded through the witnessed constructor (adapter unknown → route_completeness
+ * `provider_only`, or `under_determined` for an unknown brand) so the CLI records
+ * an honest, degraded identity instead of failing (design §10). Returns null when
+ * neither is present (no route evidence on this run).
+ */
+export function reconstructRunRouteIdentity(
+  run: ReconstructBenchmarkRun,
+): RouteIdentity | null {
+  const witnessed = run.metadata?.route_identity;
+  if (witnessed) return witnessed;
+  const providerRoute = run.metadata?.provider_route;
+  if (providerRoute == null) return null;
+  return witnessedReconstructRouteIdentity({
+    provider: providerRoute,
+    executionAdapter: null,
+    declaredBillingMode: null,
+    effectiveBaseUrl: null,
+  });
+}
+
+/**
+ * Derive one review run's RouteIdentity from its (already structurally rich)
+ * runtime_route projection. Review has no result-level witness — the route is
+ * resolved from settings/profile — so provenance is profile_derived (design §4).
+ * A legacy report that carries only the provider-level `runtime_provider` token
+ * (no `model_provider`) falls back to the brand mapping, degrading to
+ * provider_only — symmetric with the reconstruct legacy path (design §10) rather
+ * than discarding the recoverable brand. Returns null when the run carries no
+ * route projection at all.
+ */
+export function reviewRunRouteIdentity(
+  run: ReviewBenchmarkRun,
+): RouteIdentity | null {
+  const route = run.review_profile?.runtime_route;
+  if (!route) return null;
+  return profileDerivedRouteIdentity({
+    executionAdapter: route.execution_adapter ?? null,
+    modelProvider:
+      route.model_provider ?? modelProviderFromRuntimeProvider(route.runtime_provider),
+    billingMode: route.billing_mode ?? null,
+    effectiveBaseUrl: route.base_url ?? null,
+    realization: route.artifact_generation_realization ?? null,
+  });
+}
+
+/**
+ * Distinct derived route identities across a profile's runs, plus the non-fatal
+ * cross-check of the declared `--route` hint and the worst route_completeness for
+ * the decision-grade gate (design §7 Q3). Identities are deduped by routeToken
+ * (the lossy single-string projection). When no run carried route evidence the
+ * completeness is `under_determined` (the route axis resolved nothing) and the
+ * declared hint is necessarily uncorroborated.
+ */
+export interface DerivedRouteSummary {
+  /** Distinct derived identities (deduped by routeToken), canonical record. */
+  identities: RouteIdentity[];
+  /** routeToken projection per distinct identity (artifact + warning text). */
+  tokens: string[];
+  /** Worst completeness across identities; `under_determined` when none. */
+  completeness: RouteCompleteness;
+  /** Whether the declared hint corroborates at least one derived identity. */
+  hintCorroborated: boolean;
+}
+
+export function summarizeDerivedRoutes(
+  derived: ReadonlyArray<RouteIdentity | null>,
+  declaredRouteHint: string,
+): DerivedRouteSummary {
+  const byToken = new Map<string, RouteIdentity>();
+  for (const identity of derived) {
+    if (!identity) continue;
+    const token = routeToken(identity);
+    if (!byToken.has(token)) byToken.set(token, identity);
+  }
+  const identities = [...byToken.values()];
+  const tokens = [...byToken.keys()];
+  return {
+    identities,
+    tokens,
+    completeness:
+      identities.length === 0
+        ? "under_determined"
+        : worstRouteCompleteness(identities.map((id) => id.route_completeness)),
+    hintCorroborated: identities.some((id) =>
+      routeHintMatches(declaredRouteHint, id),
+    ),
+  };
 }

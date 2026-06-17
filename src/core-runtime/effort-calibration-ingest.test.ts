@@ -3,9 +3,16 @@ import {
   deriveReconstructTag,
   ingestReconstructReport,
   ingestReviewReport,
+  reconstructRunRouteIdentity,
+  reviewRunRouteIdentity,
+  summarizeDerivedRoutes,
   type ReconstructBenchmarkReport,
   type ReviewBenchmarkReport,
 } from "./effort-calibration-ingest.js";
+import {
+  witnessedReconstructRouteIdentity,
+  type RouteIdentity,
+} from "./route-identity.js";
 import type { SemanticQualityGateResult } from "./review/semantic-quality-gate.js";
 import type { ReconstructQualityGateResult } from "./reconstruct/semantic-quality-gate.js";
 
@@ -287,5 +294,130 @@ describe("ingestReconstructReport", () => {
     expect(() =>
       ingestReconstructReport({ runs: [{ quality_gate: reconGate("passed") }] }),
     ).toThrow(/pins no effort/);
+  });
+});
+
+describe("reconstructRunRouteIdentity", () => {
+  const witnessed: RouteIdentity = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "claude_code",
+    declaredBillingMode: "subscription",
+    effectiveBaseUrl: "claude-cli://oauth",
+  });
+
+  it("returns the harness-surfaced witnessed route_identity as-is", () => {
+    const id = reconstructRunRouteIdentity({
+      quality_gate: reconGate("passed"),
+      metadata: { applied_effort: "high", route_identity: witnessed },
+    });
+    expect(id).toEqual(witnessed);
+    expect(id?.execution_adapter).toBe("claude_code");
+    expect(id?.route_completeness).toBe("complete");
+  });
+
+  it("degrades a legacy provider-only report to a provider_only identity", () => {
+    const id = reconstructRunRouteIdentity({
+      quality_gate: reconGate("passed"),
+      metadata: { applied_effort: "high", provider_route: "anthropic" },
+    });
+    expect(id?.execution_adapter).toBeNull();
+    expect(id?.model_provider).toBe("anthropic");
+    expect(id?.route_completeness).toBe("provider_only");
+    expect(id?.route_provenance).toBe("witnessed");
+  });
+
+  it("returns null when a run carries no route evidence", () => {
+    expect(
+      reconstructRunRouteIdentity({
+        quality_gate: reconGate("passed"),
+        metadata: { applied_effort: "high" },
+      }),
+    ).toBeNull();
+    expect(reconstructRunRouteIdentity({ quality_gate: reconGate("passed") })).toBeNull();
+  });
+});
+
+describe("reviewRunRouteIdentity", () => {
+  it("derives a profile_derived identity from the rich runtime_route", () => {
+    const id = reviewRunRouteIdentity({
+      review_profile: {
+        runtime_route: {
+          execution_adapter: "claude_code",
+          model_provider: "anthropic",
+          billing_mode: "subscription",
+          artifact_generation_realization: "real_model",
+        },
+      },
+    });
+    expect(id?.route_provenance).toBe("profile_derived");
+    expect(id?.execution_adapter).toBe("claude_code");
+    expect(id?.model_provider).toBe("anthropic");
+    expect(id?.route_completeness).toBe("complete");
+    expect(id?.realization).toBe("real_model");
+  });
+
+  it("degrades a legacy provider-only review report symmetrically with reconstruct", () => {
+    // Only the legacy runtime_provider token is present (no model_provider) →
+    // recover the brand and degrade to provider_only, not under_determined.
+    const id = reviewRunRouteIdentity({
+      review_profile: { runtime_route: { runtime_provider: "anthropic" } },
+    });
+    expect(id?.model_provider).toBe("anthropic");
+    expect(id?.execution_adapter).toBeNull();
+    expect(id?.route_completeness).toBe("provider_only");
+    expect(id?.route_provenance).toBe("profile_derived");
+  });
+
+  it("returns null when a run carries no route projection", () => {
+    expect(reviewRunRouteIdentity({})).toBeNull();
+    expect(reviewRunRouteIdentity({ review_profile: {} })).toBeNull();
+  });
+});
+
+describe("summarizeDerivedRoutes", () => {
+  const sdk = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "anthropic_sdk",
+    declaredBillingMode: "per_token",
+    effectiveBaseUrl: "https://api.anthropic.com",
+  });
+  const oauth = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "claude_code",
+    declaredBillingMode: "subscription",
+    effectiveBaseUrl: "claude-cli://oauth",
+  });
+  const legacy = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: null,
+    declaredBillingMode: null,
+    effectiveBaseUrl: null,
+  });
+
+  it("dedups identities by routeToken and corroborates a provider-level hint", () => {
+    const summary = summarizeDerivedRoutes([sdk, sdk, null], "anthropic");
+    expect(summary.identities).toHaveLength(1);
+    expect(summary.completeness).toBe("complete");
+    expect(summary.hintCorroborated).toBe(true);
+  });
+
+  it("keeps distinct routes and takes the worst completeness", () => {
+    const summary = summarizeDerivedRoutes([sdk, oauth, legacy], "anthropic");
+    expect(summary.identities).toHaveLength(3);
+    // sdk + oauth are complete but legacy is provider_only → worst wins.
+    expect(summary.completeness).toBe("provider_only");
+  });
+
+  it("flags an uncorroborated declared hint without throwing", () => {
+    const summary = summarizeDerivedRoutes([sdk], "openai");
+    expect(summary.hintCorroborated).toBe(false);
+    expect(summary.tokens).toEqual([expect.stringContaining("anthropic")]);
+  });
+
+  it("reports under_determined and no corroboration when no route evidence exists", () => {
+    const summary = summarizeDerivedRoutes([null, null], "anthropic");
+    expect(summary.identities).toHaveLength(0);
+    expect(summary.completeness).toBe("under_determined");
+    expect(summary.hintCorroborated).toBe(false);
   });
 });

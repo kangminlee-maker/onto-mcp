@@ -169,3 +169,50 @@ export function routeToken(identity: RouteIdentity): string {
   const provider = identity.model_provider ?? "unknown";
   return `${adapter}:${billing}:${provider}`;
 }
+
+const ROUTE_COMPLETENESS_ORDER: Record<RouteCompleteness, number> = {
+  complete: 0,
+  provider_only: 1,
+  under_determined: 2,
+};
+
+/**
+ * The most degraded completeness across a set of identities. The route axis of
+ * the decision-grade gate (design §7 Q3) uses the worst — one legacy
+ * provider-only source taints the merged profile's route. `complete` is the
+ * fold identity (an empty list returns `complete`); a caller that treats "no
+ * identities at all" as a degradation must handle the empty case itself.
+ */
+export function worstRouteCompleteness(
+  values: readonly RouteCompleteness[],
+): RouteCompleteness {
+  let worst: RouteCompleteness = "complete";
+  for (const value of values) {
+    if (ROUTE_COMPLETENESS_ORDER[value] > ROUTE_COMPLETENESS_ORDER[worst]) {
+      worst = value;
+    }
+  }
+  return worst;
+}
+
+/**
+ * Whether a declared `--route` hint corroborates a derived identity. The hint is
+ * a human label — historically provider-level (`"anthropic"`) or the slash form
+ * (`"anthropic/claude-cli"`) — while the canonical route is the structured
+ * RouteIdentity. The hint is demoted to a non-fatal cross-check (design §5,
+ * §11.2): it corroborates when it equals the full routeToken, the model_provider,
+ * or the execution_adapter — comparing both the whole hint and its first slash
+ * segment so a legacy `provider/adapter` label still matches a provider-level
+ * derivation.
+ */
+export function routeHintMatches(hint: string, identity: RouteIdentity): boolean {
+  const head = hint.split("/")[0] ?? hint;
+  const candidates = [
+    routeToken(identity),
+    identity.model_provider,
+    identity.execution_adapter,
+  ];
+  return candidates.some(
+    (candidate) => candidate != null && (candidate === hint || candidate === head),
+  );
+}

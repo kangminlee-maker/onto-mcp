@@ -25,6 +25,10 @@ import {
   ingestReconstructReport,
   ingestReviewReport,
   JUDGE_STEP_ID,
+  reconstructRunRouteIdentity,
+  reviewRunRouteIdentity,
+  summarizeDerivedRoutes,
+  type DerivedRouteSummary,
   type ReconstructBenchmarkReport,
   type ReconstructStageTag,
   type ReviewBenchmarkReport,
@@ -33,6 +37,7 @@ import {
   buildEffortCalibrationReport,
   type EffortSweepRun,
 } from "../src/core-runtime/effort-calibration-sweep.js";
+import type { RouteIdentity } from "../src/core-runtime/route-identity.js";
 import type {
   EffortCalibrationReport,
   StageFrontier,
@@ -224,11 +229,14 @@ function renderMarkdown(
   sources: Array<{ path: string; status: string | null }>,
   decisionGrade: boolean,
   sweepContext: Record<string, unknown>,
+  route: DerivedRouteSummary,
 ): string {
+  const derivedTokens = route.tokens.length > 0 ? route.tokens.join(", ") : "none";
   const lines = [
     `# Effort profile — ${report.pipeline}`,
     "",
-    `- model: \`${report.provider}/${report.model}\` via \`${report.route}\``,
+    `- model: \`${report.provider}/${report.model}\` via \`${report.route}\` (declared hint)`,
+    `- route: completeness=${route.completeness}, hint_corroborated=${route.hintCorroborated}, derived=[${derivedTokens}]`,
     `- decision_grade: ${decisionGrade}`,
     `- sweep context: \`${JSON.stringify(sweepContext)}\``,
     `- thresholds: passQuorum=${report.thresholds.passQuorum ?? 1}, plateau=${report.thresholds.plateauThreshold}`,
@@ -357,6 +365,11 @@ function reconstructNonSweptKey(
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   const sourceStatuses: Array<{ path: string; status: string | null }> = [];
+  // Route identities derived per run from witnessed telemetry (reconstruct) or
+  // the profile-derived projection (review). The declared --route is demoted to
+  // a hint cross-checked against these (design §5); the worst route_completeness
+  // gates decision-grade on the route axis (§7 Q3).
+  const derivedRouteIdentities: Array<RouteIdentity | null> = [];
   let runs: EffortSweepRun[];
   let pipeline: string;
   // Sweep context recorded in the artifact so a restricted/partial calibration
@@ -367,19 +380,11 @@ async function main(): Promise<void> {
     pipeline = "review";
     const report = await readJson<ReviewBenchmarkReport>(options.reviewReport);
     assertIdentity(options.reviewReport, report, options);
-    // Validate the runtime route token (provider) so a same-model report from a
-    // different route/auth is not saved under the wrong per-route identity.
-    const routes = new Set(
-      (report.runs ?? [])
-        .map((r) => r.review_profile?.runtime_route?.runtime_provider)
-        .filter((r): r is string => typeof r === "string"),
-    );
-    for (const route of routes) {
-      if (route !== options.route) {
-        throw new Error(
-          `${options.reviewReport}: report route "${route}" != --route "${options.route}"`,
-        );
-      }
+    // Derive each run's profile-derived RouteIdentity (adapter / model_provider /
+    // billing / base_url) instead of strict-matching the legacy provider token.
+    // --route is now a hint cross-checked after ingestion, not a throw (design §5).
+    for (const run of report.runs ?? []) {
+      derivedRouteIdentities.push(reviewRunRouteIdentity(run));
     }
     sweepContext = {
       selected_lens_ids: report.selected_lens_ids ?? [],
@@ -404,22 +409,13 @@ async function main(): Promise<void> {
           .filter((m): m is string => typeof m === "string"),
       );
       for (const model of models) assertIdentity(filePath, { model }, options);
-      // NOTE: reconstruct telemetry's provider_route is provider-only (Anthropic
-      // SDK/api-key and Claude Code OAuth both read "anthropic"), so this can't
-      // distinguish execution adapter/auth. An adapter/auth-aware route token is
-      // a known limitation tracked for the simplification refactor (derive a
-      // unified route identity from telemetry); for now route is provider-level.
-      const routes = new Set(
-        (report.runs ?? [])
-          .map((r) => r.metadata?.provider_route)
-          .filter((r): r is string => typeof r === "string"),
-      );
-      for (const route of routes) {
-        if (route !== options.route) {
-          throw new Error(
-            `${filePath}: report route "${route}" != --route "${options.route}"`,
-          );
-        }
+      // Derive each run's witnessed RouteIdentity (S1.1/S1.2 surfaced
+      // route_identity; a legacy provider-only report degrades through the
+      // witnessed constructor). The Anthropic-SDK vs Claude-Code-OAuth split that
+      // provider_route alone could not express now lives in execution_adapter /
+      // billing_mode, and --route is a hint cross-checked after ingestion (§3, §5).
+      for (const run of report.runs ?? []) {
+        derivedRouteIdentities.push(reconstructRunRouteIdentity(run));
       }
       // Single-variable invariant: the base context must match across ALL
       // sources, and the non-swept requested knobs must match within each stage
@@ -482,6 +478,20 @@ async function main(): Promise<void> {
     );
   }
 
+  // Cross-check the declared --route hint against the derived route identities.
+  // A mismatch is recorded and warned, NOT thrown (design §5): the structured
+  // RouteIdentity is canonical, --route is a human label / file key. A genuinely
+  // wrong route surfaces as an uncorroborated hint plus the recorded identities.
+  const routeSummary = summarizeDerivedRoutes(derivedRouteIdentities, options.route);
+  if (!routeSummary.hintCorroborated) {
+    const derived = routeSummary.tokens.length > 0 ? routeSummary.tokens.join(", ") : "none";
+    process.stderr.write(
+      `WARN: --route "${options.route}" is not corroborated by the derived route ` +
+        `identit${routeSummary.tokens.length === 1 ? "y" : "ies"} [${derived}]; ` +
+        "recording it as a declared hint only.\n",
+    );
+  }
+
   const report = buildEffortCalibrationReport({
     pipeline,
     provider: options.provider,
@@ -505,7 +515,13 @@ async function main(): Promise<void> {
   const thinPoints = report.stages
     .flatMap((s) => s.curve.map((p) => ({ stage: s.stage, ...p })))
     .filter((p) => p.runs < DECISION_GRADE_MIN_RUNS);
-  const decisionGrade = sourcesDecisionGrade && thinPoints.length === 0;
+  // Route axis (Q3, design §7): a route that did not resolve past model_provider
+  // (legacy provider-only telemetry, or no route evidence at all) cannot back a
+  // per-route profile and is non-decision-grade on its own axis — separate from
+  // the effort-axis thinPoints. Gated by the SAME --allow-preliminary opt-in.
+  const routeIncomplete = routeSummary.completeness !== "complete";
+  const decisionGrade =
+    sourcesDecisionGrade && thinPoints.length === 0 && !routeIncomplete;
   if (!decisionGrade && !options.allowPreliminary) {
     const reasons: string[] = [];
     if (!sourcesDecisionGrade) {
@@ -521,6 +537,13 @@ async function main(): Promise<void> {
         .join(", ");
       reasons.push(
         `points below ${DECISION_GRADE_MIN_RUNS} retained runs after telemetry filtering: ${thin}`,
+      );
+    }
+    if (routeIncomplete) {
+      const derived = routeSummary.tokens.length > 0 ? routeSummary.tokens.join(", ") : "none";
+      reasons.push(
+        `route_completeness=${routeSummary.completeness} (derived: [${derived}]) — ` +
+          "adapter/auth not resolved (legacy provider-only telemetry or no route witness)",
       );
     }
     throw new Error(
@@ -539,12 +562,20 @@ async function main(): Promise<void> {
   );
   const artifact = {
     artifact: "effort_profile",
-    schema_version: 1,
+    // v2 adds the derived route identity block (route_identities /
+    // route_completeness / route_hint_corroborated); `route` (from ...report)
+    // stays the declared hint and file key.
+    schema_version: 2,
     generated_at: generatedAt,
     decision_grade: decisionGrade,
     source_reports: sourceStatuses,
     sweep_context: sweepContext,
     sweep_run_count: runs.length,
+    // Canonical structured route identity derived from telemetry (reconstruct:
+    // witnessed; review: profile_derived). The declared --route is a hint.
+    route_identities: routeSummary.identities,
+    route_completeness: routeSummary.completeness,
+    route_hint_corroborated: routeSummary.hintCorroborated,
     ...report,
   };
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -552,7 +583,7 @@ async function main(): Promise<void> {
   const markdownPath = outputPath.replace(/\.json$/, ".md");
   await writeFileAtomic(
     markdownPath,
-    renderMarkdown(report, generatedAt, sourceStatuses, decisionGrade, sweepContext),
+    renderMarkdown(report, generatedAt, sourceStatuses, decisionGrade, sweepContext, routeSummary),
   );
 
   process.stdout.write(
@@ -562,6 +593,8 @@ async function main(): Promise<void> {
         markdown: markdownPath,
         pipeline,
         decision_grade: decisionGrade,
+        route_completeness: routeSummary.completeness,
+        route_hint_corroborated: routeSummary.hintCorroborated,
         sweep_run_count: runs.length,
         stages: report.stages.map((s) => ({
           stage: s.stage,

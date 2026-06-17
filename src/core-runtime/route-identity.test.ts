@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   modelProviderFromRuntimeProvider,
   profileDerivedRouteIdentity,
+  routeHintMatches,
   routeToken,
   witnessedReconstructRouteIdentity,
+  worstRouteCompleteness,
 } from "./route-identity.js";
 
 describe("modelProviderFromRuntimeProvider", () => {
@@ -154,5 +156,45 @@ describe("routeToken", () => {
       effectiveBaseUrl: null,
     });
     expect(routeToken(id)).toBe("provider_only:unknown:unknown");
+  });
+});
+
+describe("worstRouteCompleteness", () => {
+  it("returns the most degraded completeness in the set", () => {
+    expect(worstRouteCompleteness(["complete", "complete"])).toBe("complete");
+    expect(worstRouteCompleteness(["complete", "provider_only"])).toBe("provider_only");
+    expect(worstRouteCompleteness(["provider_only", "under_determined"])).toBe(
+      "under_determined",
+    );
+  });
+
+  it("folds an empty set to the complete identity element", () => {
+    expect(worstRouteCompleteness([])).toBe("complete");
+  });
+});
+
+describe("routeHintMatches", () => {
+  const sdk = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "anthropic_sdk",
+    declaredBillingMode: "per_token",
+    effectiveBaseUrl: "https://api.anthropic.com",
+  });
+
+  it("corroborates a provider-level hint against model_provider", () => {
+    expect(routeHintMatches("anthropic", sdk)).toBe(true);
+  });
+
+  it("corroborates the full routeToken and the execution_adapter", () => {
+    expect(routeHintMatches(routeToken(sdk), sdk)).toBe(true);
+    expect(routeHintMatches("anthropic_sdk", sdk)).toBe(true);
+  });
+
+  it("corroborates the first segment of a legacy slash-form hint", () => {
+    expect(routeHintMatches("anthropic/claude-cli", sdk)).toBe(true);
+  });
+
+  it("does not corroborate a different provider", () => {
+    expect(routeHintMatches("openai", sdk)).toBe(false);
   });
 });
