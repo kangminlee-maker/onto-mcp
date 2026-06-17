@@ -31,6 +31,7 @@
 | 영역 | 청사진 | 실물 | gap | 닫힘 조건 |
 |---|---|---|---|---|
 | source-safety 채널 | source 내용은 admission 거쳐 프롬프트-가시(visibility-tier·allowed-proof-form·intended-consumption·redaction·replay + `source_safety_ledger` + `delta_observation_not_prompt_visible`) | reconstruct에 ledger/타입 존재, **`content_excerpt` 채널 기준으로 작동** | 신규 관측 필드(미래 S1 §2.4)는 이 채널을 **우회** → admission/provenance/replay/미신뢰-source 취급 건너뜀 | 신규 필드를 ledger 통과/단일 채널로 모을 때 (§11 CHAN-1) |
+| ⚠️ spreadsheet 인벤토리 리터럴 (C-recon으로 **활성화**) | CHAN-1=raw 셀 값 미방출, raw값은 source-safety 채널만 경유 | C-recon flip 후 `workbook_inventory`가 프롬프트-가시 — **raw값은 제거(CHAN-1 충족)되나 구조 리터럴(formula 본문·external-link 타깃·추론 header명)은 source-safety 민감 스캐너(`hasSensitiveSourceEvidence`=content_excerpt만 스캔) 우회**(Codex PR #92 F3) | 구조 리터럴이 민감 스캔/필드-단위 redaction 없이 프롬프트 도달. 잔여 위험은 owner-settled "헤더명=스키마"(S1 CHAN-1) 경계 안, 주 PII 벡터(raw값)는 이미 차단 | **필드-단위 redaction을 source-safety 경유로** 구현(CHAN-2 closure 슬라이스). over-drop/미redact 위험 탓 부분완화 부적합 → 전용 슬라이스 |
 
 ## 4. review — source 내용 admission / 검증
 

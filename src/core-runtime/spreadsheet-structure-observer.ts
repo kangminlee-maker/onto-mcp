@@ -1831,6 +1831,13 @@ export interface WorkbookInventoryPromptCaps {
    *  reference picture (the inventory's reason for being) that a single global head-N
    *  would bias toward the first sheet. */
   max_formula_cells_per_sheet: number;
+  /** GLOBAL ceiling on formula_cells after the per-sheet sample. The per-sheet cap
+   *  alone is unbounded by sheet count — a workbook with hundreds of sheets would
+   *  still emit (per_sheet_cap × sheet_count) formulas, so this caps the total. */
+  max_formula_cells_total: number;
+  /** Max sheets kept in per_sheet_data. The per-column cap bounds each sheet, but a
+   *  high-sheet-count workbook still needs a sheet ceiling. */
+  max_sheets: number;
   /** columns[] kept per per_sheet_data entry (a wide sheet can profile up to
    *  data_layer_caps.max_columns_profiled = 512 columns). */
   max_columns_per_sheet: number;
@@ -1850,6 +1857,8 @@ export interface WorkbookInventoryPromptCaps {
 
 export const DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS: WorkbookInventoryPromptCaps = {
   max_formula_cells_per_sheet: 30,
+  max_formula_cells_total: 600,
+  max_sheets: 50,
   max_columns_per_sheet: 64,
   max_distinct_value_vocab: 200,
   max_pivot_tables: 50,
@@ -1911,18 +1920,23 @@ export function projectInventoryForPrompt(
     if (kept < total) sections.push({ section, kept, total });
   };
 
+  // Per-sheet sample first (cross-sheet picture), then a GLOBAL ceiling so a
+  // high-sheet-count workbook stays bounded regardless of sheet count.
   const formulaCells = capPerGroup(
     inventory.formula_cells,
     (cell) => cell.sheet,
     caps.max_formula_cells_per_sheet,
-  );
+  ).slice(0, caps.max_formula_cells_total);
   record("formula_cells", formulaCells.length, inventory.formula_cells.length);
 
-  // per_sheet_data: keep every sheet (sheet count is bounded), cap each sheet's
-  // columns[]. Aggregate the column trim across sheets into one honest record.
+  // per_sheet_data: cap the number of SHEETS first (bounds a high-sheet-count
+  // workbook), then cap each kept sheet's columns[]. columnsTotal sums only kept
+  // sheets — a dropped sheet's column loss is implied by the per_sheet_data record.
+  const keptSheets = inventory.per_sheet_data.slice(0, caps.max_sheets);
+  record("per_sheet_data", keptSheets.length, inventory.per_sheet_data.length);
   let columnsKept = 0;
   let columnsTotal = 0;
-  const perSheetData = inventory.per_sheet_data.map((sheet) => {
+  const perSheetData = keptSheets.map((sheet) => {
     columnsTotal += sheet.columns.length;
     const columns = sheet.columns.slice(0, caps.max_columns_per_sheet);
     columnsKept += columns.length;

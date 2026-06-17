@@ -845,6 +845,8 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
     }
     const r = projectInventoryForPrompt(inv, {
       max_formula_cells_per_sheet: 5,
+      max_formula_cells_total: 600,
+      max_sheets: 50,
       max_columns_per_sheet: 64,
       max_distinct_value_vocab: 200,
       max_pivot_tables: 50,
@@ -901,5 +903,30 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
     expect(r.inventory.inspection_method).toBe("structure_inspected_only");
     // Input is not mutated (pure).
     expect(inv.distinct_value_vocab).toHaveLength(300);
+  });
+
+  it("bounds a high-sheet-count workbook with global sheet + formula ceilings (Codex P2)", () => {
+    const inv = emptyInventory();
+    // 200 sheets × 10 formulas each: the per-sheet cap (30) is never hit, so without
+    // a global ceiling all 2000 formulas + 200 sheets would reach the prompt.
+    for (let s = 0; s < 200; s += 1) {
+      const sheet = `S${s}`;
+      for (let i = 0; i < 10; i += 1) {
+        inv.formula_cells.push({ sheet, cell: `A${i}`, formula: "=1", cross_sheet_refs: [] });
+      }
+      inv.per_sheet_data.push({
+        sheet,
+        layout_kind: "tabular",
+        header_rows: [1],
+        columns: [{ name: "c0", index: 0, inferred_type: "string" as const, non_empty_ratio: 1 }],
+        header_confidence: "high",
+      });
+    }
+    const r = projectInventoryForPrompt(inv);
+    expect(r.inventory.formula_cells.length).toBeLessThanOrEqual(600);
+    expect(r.inventory.per_sheet_data).toHaveLength(50);
+    expect(r.truncated).toBe(true);
+    expect(r.sections).toContainEqual({ section: "per_sheet_data", kept: 50, total: 200 });
+    expect(r.sections).toContainEqual({ section: "formula_cells", kept: 600, total: 2000 });
   });
 });

@@ -472,6 +472,34 @@ describe("materializeReconstructPreparationArtifacts", () => {
     expect(sd.content_sha256).toBe(sd.workbook_inventory.content_sha256);
   });
 
+  it("demotes an unsupported workbook format (.xls) to a skip — keeps the evidence gate honest (Codex P2)", async () => {
+    // After the gate flip an .xls/.xlsb/.ods ref is runnable, but the observer cannot
+    // extract it (unsupported_reason). It must NOT pass the evidence gate as an empty
+    // observation — it is demoted to a skip so a sole-target run fails loud.
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-xls");
+    const target = path.join(root, "legacy.xls");
+    await fs.writeFile(target, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]));
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+
+    const observations =
+      await readYaml<ReconstructSourceObservationsArtifact>(refs.source_observations);
+    // No structural evidence → demoted to skip → zero observations (sole target halts).
+    expect(observations.observations).toEqual([]);
+    expect(observations.skipped_refs).toEqual([
+      expect.objectContaining({
+        target_material_kind: "spreadsheet",
+        reason: expect.stringContaining("extraction unsupported"),
+      }),
+    ]);
+  });
+
   it("keeps unknown targets skipped instead of guessing an adapter", async () => {
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "reconstruct", "session-b");

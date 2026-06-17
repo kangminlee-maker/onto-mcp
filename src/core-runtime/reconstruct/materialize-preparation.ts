@@ -493,6 +493,23 @@ async function buildSpreadsheetSourceObservation(args: {
   return observation;
 }
 
+/**
+ * The `unsupported_reason` of a spreadsheet observation's workbook inventory, or
+ * null when the observation is not an unsupported workbook. An unsupported workbook
+ * (.xls/.xlsb/.ods, corrupt, oversized) carries no structural evidence, so the
+ * materialize loop demotes it to a skip rather than admitting an empty observation.
+ */
+function spreadsheetUnsupportedReason(
+  observation: ReconstructSourceObservation,
+): string | null {
+  if (observation.target_material_kind !== "spreadsheet") return null;
+  const inventory = observation.structural_data.workbook_inventory as
+    | { unsupported_reason?: unknown }
+    | undefined;
+  const reason = inventory?.unsupported_reason;
+  return typeof reason === "string" && reason.length > 0 ? reason : null;
+}
+
 function stableFrontierRefId(unit: ReconstructSourceInventoryUnit): string {
   const digest = crypto
     .createHash("sha256")
@@ -639,7 +656,25 @@ export async function materializeReconstructPreparationArtifacts(
     if (!refDetection) continue;
     const observation = await buildReconstructSourceObservation(refDetection);
     if (observation) {
-      observations.push(observation);
+      const unsupportedReason = spreadsheetUnsupportedReason(observation);
+      if (unsupportedReason) {
+        // A workbook whose format the observer cannot extract (.xls/.xlsb/.ods,
+        // corrupt, oversized) yields an inventory carrying only `unsupported_reason`
+        // — no structural evidence. After the gate flip such a ref is runnable and
+        // produces an observation, so without this demotion a sole legacy-format
+        // target would pass the zero-observation halt and reach LLM authoring with
+        // empty evidence. Demote it to a skip so the run fails loud as unsupported
+        // (the evidence gate stays honest about un-observed material).
+        unit.scan_status = "skipped";
+        unit.skip_reason = `spreadsheet extraction unsupported: ${unsupportedReason}`;
+        skippedRefs.push({
+          ref: unit.ref,
+          target_material_kind: unit.target_material_kind,
+          reason: unit.skip_reason,
+        });
+      } else {
+        observations.push(observation);
+      }
     } else {
       // buildReconstructSourceObservation returns null when the ref is no longer
       // a concrete, existing source at observation time (e.g. deleted between
