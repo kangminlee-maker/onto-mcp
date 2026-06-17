@@ -310,8 +310,13 @@ async function main(): Promise<number> {
   const charCount: number = typeof sd.char_count === "number" ? sd.char_count : 0;
   const excerptTruncated: boolean = sd.excerpt_truncated === true;
   const capturedWhole = capturedChars === charCount && charCount > 200_000 && !excerptTruncated;
+  // External documents (E2E_DOC_PATH) are not required to carry the synthetic late
+  // sentinel, so the late-inflow signal is asserted only for the generated fixtures (per
+  // the E2E_DOC_PATH note above); for an external doc that check is skipped.
+  const usesExternalDoc = Boolean(process.env.E2E_DOC_PATH);
   const sentinelCaptured =
     typeof sd.content_excerpt === "string" && sd.content_excerpt.includes(LATE_SENTINEL);
+  const lateSentinelSignalOk = usesExternalDoc || sentinelCaptured;
 
   // Projection signal: a doc above the FLOOR but within the budget must NOT be
   // projection-truncated — that whole projection only the dynamic budget explains.
@@ -334,13 +339,13 @@ async function main(): Promise<number> {
     materialKind === "document" &&
     usedOpus &&
     capturedWhole &&
-    sentinelCaptured &&
+    lateSentinelSignalOk &&
     projectedWhole;
 
   log(`status=${status} material_kind=${materialKind} duration_s=${durationS.toFixed(1)}`);
   log(`used_opus_route=${usedOpus} model_call_steps=${modelCallSteps.length}`);
   log(`captured_chars=${capturedChars} char_count=${charCount} excerpt_truncated=${excerptTruncated} captured_whole=${capturedWhole}`);
-  log(`late_sentinel_captured=${sentinelCaptured} projected_whole=${projectedWhole} (truncation_events=${projectionTruncationEvents.length}, final_output_section=${finalOutputHasTruncationSection})`);
+  log(`late_sentinel_captured=${sentinelCaptured} (required=${!usesExternalDoc}) projected_whole=${projectedWhole} (truncation_events=${projectionTruncationEvents.length}, final_output_section=${finalOutputHasTruncationSection})`);
   log(`final output: ${result.finalOutputPath ?? "(none)"}`);
 
   const evidenceRel = `development-records/benchmark/reconstruct-pipeline-live-claude-budget-${FIXTURE_KIND}-20260617.json`;
