@@ -281,12 +281,17 @@ export function validateSourcePurposeCandidates(args: {
     }
     if (!Array.isArray(frame.required_elements) || frame.required_elements.length === 0) {
       // Rejected candidates record a considered-and-excluded alternative for provenance,
-      // not an active adequacy frame, so they may leave required_elements empty (frame_id
-      // and adequacy_claim above are still required). Mirrors the rejected exemption for
-      // supporting evidence. Non-rejected candidates must still carry frame elements. When
-      // a rejected candidate does provide required_elements, the element-format checks below
-      // still apply (this branch only skips the empty case).
-      if (candidate.rank !== "rejected") {
+      // not an active adequacy frame, so they may leave required_elements as an empty array
+      // (frame_id and adequacy_claim above are still required). Mirrors the rejected
+      // exemption for supporting evidence. Only the empty-array case is exempt: a non-array
+      // required_elements still violates the artifact contract for every rank, and
+      // non-rejected candidates must still carry frame elements. When a rejected candidate
+      // does provide elements, the element-format checks below still apply.
+      const rejectedEmptyArray =
+        candidate.rank === "rejected" &&
+        Array.isArray(frame.required_elements) &&
+        frame.required_elements.length === 0;
+      if (!rejectedEmptyArray) {
         violations.push(violation({
           code: "required_element_missing",
           message: `${candidatePath}.adequacy_frame.required_elements must not be empty`,

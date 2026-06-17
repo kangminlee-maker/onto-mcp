@@ -438,6 +438,22 @@ describe("validateSourcePurposeCandidates rejection branches", () => {
     expect(validation.violations).toEqual([]);
   });
 
+  it("still rejects a rejected candidate whose required_elements is not an array (required_element_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const rejected = clone(base.purpose_candidates[0]);
+    rejected.purpose_candidate_id = "purpose-feature-rejected";
+    rejected.rank = "rejected";
+    rejected.adequacy_frame.frame_id = "frame-feature-rejected";
+    // Only an empty array is exempt for rejected; a non-array still violates the contract.
+    (rejected.adequacy_frame as unknown as Record<string, unknown>).required_elements = null;
+    base.purpose_candidates.push(rejected);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
   it("still rejects a non-rejected candidate with empty required_elements (required_element_missing)", () => {
     const base = clone(sourcePurposeCandidates());
     const secondary = clone(base.purpose_candidates[0]);
