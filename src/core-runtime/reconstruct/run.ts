@@ -9985,23 +9985,15 @@ export async function runReconstruct(
     validation: runControlState.validation,
   });
   try {
-  // Parse the contract registry once per run and thread the in-memory object
-  // through every validator/writer below, instead of each re-reading and
-  // re-parsing the 180KB file (previously ~10+ redundant loads per run).
-  const contractRegistry = await loadReconstructContractRegistry({
-    registryPath: contractRegistryPath,
-  });
   await writeRegistryVerificationEvidenceArtifact({
     sessionId,
     registryPath: contractRegistryPath,
-    contractRegistry,
     outputPath: registryVerificationEvidencePath,
   });
   const registryVerificationEvidenceValidation =
     await writeRegistryVerificationEvidenceValidationArtifact({
       evidencePath: registryVerificationEvidencePath,
       registryPath: contractRegistryPath,
-      contractRegistry,
       outputPath: registryVerificationEvidenceValidationPath,
     });
   assertRuntimeValidationValid({
@@ -10028,6 +10020,14 @@ export async function runReconstruct(
     await readYamlDocument<ReconstructSourceInventoryArtifact>(
       preparationRefs.source_inventory,
     );
+  // Parse the 180KB contract registry once and thread the in-memory object
+  // through the validators/writers below, instead of each re-reading and
+  // re-parsing it (previously ~9 redundant loads per run). Registry
+  // verification above intentionally loads from disk itself, as the gate that
+  // proves the on-disk registry is well-formed.
+  const contractRegistry = await loadReconstructContractRegistry({
+    registryPath: contractRegistryPath,
+  });
   const manifestPath = path.join(sessionRoot, "reconstruct-run-manifest.yaml");
   const targetMaterialProfileValidationPath = path.join(
     sessionRoot,

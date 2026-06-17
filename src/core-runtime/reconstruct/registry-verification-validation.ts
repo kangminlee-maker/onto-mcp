@@ -431,13 +431,14 @@ export function validateRegistryVerificationEvidence(args: {
 export async function writeRegistryVerificationEvidenceArtifact(args: {
   sessionId: string;
   registryPath: string;
-  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructRegistryVerificationEvidenceArtifact> {
-  const contractRegistry = args.contractRegistry ??
-    await loadReconstructContractRegistry({
-      registryPath: args.registryPath,
-    });
+  // Registry verification is the gate that proves the on-disk registry is
+  // well-formed, so it always loads from `registryPath` itself rather than
+  // accepting a threaded in-memory registry that could belong to another path.
+  const contractRegistry = await loadReconstructContractRegistry({
+    registryPath: args.registryPath,
+  });
   const artifact = await buildRegistryVerificationEvidenceArtifact({
     sessionId: args.sessionId,
     registryPath: args.registryPath,
@@ -450,15 +451,16 @@ export async function writeRegistryVerificationEvidenceArtifact(args: {
 export async function writeRegistryVerificationEvidenceValidationArtifact(args: {
   evidencePath: string;
   registryPath: string;
-  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructRegistryVerificationEvidenceValidationArtifact> {
+  // Loads the registry from `registryPath` itself (never a threaded object):
+  // this gate hashes the on-disk file and compares it against the evidence, so
+  // the parsed IDs must come from the same path being hashed.
   const [evidence, contractRegistry] = await Promise.all([
     readYamlDocument<ReconstructRegistryVerificationEvidenceArtifact>(
       args.evidencePath,
     ),
-    args.contractRegistry ??
-      loadReconstructContractRegistry({ registryPath: args.registryPath }),
+    loadReconstructContractRegistry({ registryPath: args.registryPath }),
   ]);
   const validation = validateRegistryVerificationEvidence({
     evidence,
