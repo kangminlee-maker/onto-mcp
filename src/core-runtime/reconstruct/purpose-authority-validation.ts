@@ -280,11 +280,19 @@ export function validateSourcePurposeCandidates(args: {
       }));
     }
     if (!Array.isArray(frame.required_elements) || frame.required_elements.length === 0) {
-      violations.push(violation({
-        code: "required_element_missing",
-        message: `${candidatePath}.adequacy_frame.required_elements must not be empty`,
-        subjectId: candidate.purpose_candidate_id,
-      }));
+      // Rejected candidates record a considered-and-excluded alternative for provenance,
+      // not an active adequacy frame, so they may leave required_elements empty (frame_id
+      // and adequacy_claim above are still required). Mirrors the rejected exemption for
+      // supporting evidence. Non-rejected candidates must still carry frame elements. When
+      // a rejected candidate does provide required_elements, the element-format checks below
+      // still apply (this branch only skips the empty case).
+      if (candidate.rank !== "rejected") {
+        violations.push(violation({
+          code: "required_element_missing",
+          message: `${candidatePath}.adequacy_frame.required_elements must not be empty`,
+          subjectId: candidate.purpose_candidate_id,
+        }));
+      }
       continue;
     }
     for (const [elementIndex, element] of frame.required_elements.entries()) {

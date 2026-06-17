@@ -423,6 +423,52 @@ describe("validateSourcePurposeCandidates rejection branches", () => {
     expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
   });
 
+  it("allows a rejected candidate with empty required_elements (rank-aware leniency)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const rejected = clone(base.purpose_candidates[0]);
+    rejected.purpose_candidate_id = "purpose-feature-rejected";
+    rejected.rank = "rejected";
+    rejected.adequacy_frame.frame_id = "frame-feature-rejected";
+    rejected.adequacy_frame.required_elements = [];
+    base.purpose_candidates.push(rejected);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations).toEqual([]);
+  });
+
+  it("still rejects a non-rejected candidate with empty required_elements (required_element_missing)", () => {
+    const base = clone(sourcePurposeCandidates());
+    const secondary = clone(base.purpose_candidates[0]);
+    secondary.purpose_candidate_id = "purpose-feature-secondary";
+    secondary.rank = "secondary";
+    secondary.adequacy_frame.frame_id = "frame-feature-secondary";
+    secondary.adequacy_frame.required_elements = [];
+    base.purpose_candidates.push(secondary);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
+  it("still validates element format when a rejected candidate provides required_elements", () => {
+    const base = clone(sourcePurposeCandidates());
+    const rejected = clone(base.purpose_candidates[0]);
+    rejected.purpose_candidate_id = "purpose-feature-rejected";
+    rejected.rank = "rejected";
+    rejected.adequacy_frame.frame_id = "frame-feature-rejected";
+    // Non-empty required_elements still trigger element-format checks for rejected candidates.
+    rejected.adequacy_frame.required_elements[0].element_id = "   ";
+    base.purpose_candidates.push(rejected);
+
+    const validation = sourcePurposeValidation(base);
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) => v.code === "required_element_missing")).toBe(true);
+  });
+
   it("rejects mixed target material without member lineage (mixed_lineage_missing)", () => {
     const base = clone(sourcePurposeCandidates());
     base.target_material_kind = "mixed";
