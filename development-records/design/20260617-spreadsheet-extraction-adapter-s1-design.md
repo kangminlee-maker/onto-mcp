@@ -103,8 +103,8 @@ unsupported_reason    : string|null  ← 암호화/손상/미지원 포맷
 - S1은 **구조 인덱스(sheets/dimensions/named ranges)를 먼저** 읽고, formula/validation 셀은 **예산 한도**까지 수집 → `capture_truncated`.
 - xlsx는 ZIP/XML **스트리밍 read-only**(전체 워크북 메모리 적재 회피). reconstruct의 모델-무지 capture / 모델-인지 projection 2단 구조(`materialize-preparation.ts` 주석)와 동일 철학.
 
-### 2.4 데이터 관측 레이어 (실증 세션 반영 — §8)
-구조(수식/명명범위) 인벤토리만으로는 **온톨로지 seeding에 부족**하다. 실증 세션(§8)은 수식을 전혀 안 보고(`data_only=True`)
+### 2.4 데이터 관측 레이어 (실증 사례 반영 — §8)
+구조(수식/명명범위) 인벤토리만으로는 **온톨로지 seeding에 부족**하다. 실증 사례(§8)은 수식을 전혀 안 보고(`data_only=True`)
 **데이터 레벨 관측**만으로 클래스·속성·관계를 도출했다. 따라서 인벤토리는 구조 레이어와 **분리된 데이터 관측 레이어**를 갖는다:
 ```
 per_sheet_data[]:
@@ -183,18 +183,21 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 
 ---
 
-## 8. 실증 보강 — 세션 `local_a1ae0b6b` (onto @0.4.12, reconstruct 미사용)
+## 8. 대비 축: **LLM-주도 적응적 관측** 방법론 (실증 사례 기반)
 
-> 출처: Cowork local-agent-mode 세션 `local_a1ae0b6b-a7f8-4e61-abb4-93aca092ee06`(샌드박스 `keen-adoring-gauss`),
-> 2026-06-17. 입력 `mbp_2026년 02월_결제 및 수익인식F.xlsx`(14시트, 누적 ~190,700행) →
-> 수익인식 온톨로지(클래스 24·객체속성 23·데이터속성 32) `.ttl`(rdflib 검증) + 데이터사전 `.xlsx` + `.docx` + 다이어그램.
+> **방법론 정의** — LLM이 실행환경(코드 실행 샌드박스)에서 자료-적합 도구(openpyxl read-only, AST 등)로 **추출 코드를 직접
+> 작성·실행**하여 구조+데이터 신호를 뽑고 의미를 추론하는 *적응적* 관측. onto의 **runtime-owned 결정론 추출(S1)** 과 대비되는
+> 관측 방법론 축이다. 이 절은 두 축의 장단을 가르고 S1이 무엇을 흡수해야 하는지를 정한다.
+>
+> *실증 사례(provenance, 이하 'cmd #n')*: 세션 `local_a1ae0b6b`(onto @0.4.12 환경, **reconstruct 파이프라인 미사용**),
+> 2026-06-17. xlsx 14시트·누적 ~190,700행 → 수익인식 온톨로지(클래스 24·객체 23·데이터 32) `.ttl`(rdflib 검증) + 데이터사전.
 
-### 8.1 결정적 관찰: **onto reconstruct를 안 썼다**
-- 도구 집계: `mcp__workspace__bash` ×18(샌드박스), `Write`/`Task*` 외 **onto/reconstruct/review 호출 0**.
-  cmd #2에서 `which onto`·onto 스킬 탐색만 하고, 이후 전부 **샌드박스 Python(openpyxl)** 으로 진행.
-- 함의: 유능한 LLM + Python/openpyxl이 있는 실행환경이면 **S1 없이도** xlsx→온톨로지가 **이미 가능**.
-  → **S1의 가치 재정의**: "불가능을 가능케"가 아니라, 이 **수기 레시피를 결정론·재현·provenance·자동**으로 productize하는 것.
-  매번 LLM이 ad-hoc 스크립트를 다시 짜는 비결정성을 고정 추출기로 대체한다(§6 (d)의 근거).
+### 8.1 결정적 관찰: **결정론 추출기 없이도 성립한다**
+- 실증 사례는 reconstruct/review를 **호출하지 않았다**(`mcp__workspace__bash` ×18, onto 호출 0; `which onto` 탐색만).
+  전부 LLM이 실행환경에서 작성·실행한 **Python(openpyxl)** 관측이었다.
+- 함의: **LLM-주도 적응적 관측**이 가능한 실행환경이면 **고정 추출기(S1) 없이도** xlsx→온톨로지가 이미 성립.
+  → **S1의 가치 재정의**: "불가능을 가능케"가 아니라, 이 **적응적 레시피를 결정론·재현·provenance·자동**으로 productize하는 것.
+  매 런 LLM이 ad-hoc 스크립트를 다시 짜는 **비결정성**을 고정 추출기로 대체한다(§6 (d)의 근거). 두 축의 분업은 §9.1.
 
 ### 8.2 실증된 추출 레시피 (그대로 S1 결정론 단계로 승격)
 1. **구조 인덱스 먼저** (cmd #1): `load_workbook(f, data_only=True, read_only=True)` → `sheetnames` + 시트별 `max_row×max_col`.
@@ -207,7 +210,7 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 6. **출력 검증**: 생성 `.ttl`을 rdflib로 파싱해 triples/classes/props 카운트(cmd #17) — "실엔진 검증" 규율.
 
 ### 8.3 캘리브레이션: reconstruct는 **데이터-의미**, references는 **수식-감사**
-- 실증 세션은 `data_only=True`로 **수식을 한 번도 안 봤다**. 온톨로지 가치는 헤더·distinct값·key-overlap 등 **데이터 관측**에서 나왔다.
+- 실증 사례은 `data_only=True`로 **수식을 한 번도 안 봤다**. 온톨로지 가치는 헤더·distinct값·key-overlap 등 **데이터 관측**에서 나왔다.
 - 반면 보강한 `spreadsheet.md`/§2.2는 references(저작·감사 지향)를 따라 **수식/cross-sheet-ref 구조에 치우쳐** 있었다.
 - **결론**: reconstruct(온톨로지 seeding) 목표에선 **데이터 관측 레이어(§2.4)가 1차, 수식 구조(§2.2)는 2차.**
   → **후속 calibration**: 커밋 `9c5cd85`의 `spreadsheet.md` `Scan Targets`에 데이터 관측(헤더행 탐지·distinct-value 어휘·시트간 key-overlap·컬럼 타입추정)을 **추가 가중**. (이번 범위 밖, C-recon에서 반영.)
@@ -223,21 +226,21 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 
 ---
 
-## 9. 분업 경계와 일반화 (Cowork ↔ reconstruct, kind 일반화)
+## 9. 분업 경계와 일반화 (LLM-주도 적응적 관측 ↔ reconstruct, kind 일반화)
 
 ### 9.1 올바른 분업 seam = **관측↔seed-authoring** (seed↔maturation 아님)
-- 검토한 제안: "Cowork가 seed 생성, reconstruct가 maturation". **문자 그대로는 불가** — seed↔maturation은 onto에서 **증거-결합 계약**(일반 온톨로지 핸드오프 아님).
+- 검토한 제안: "**LLM-주도 적응적 관측이 seed까지 생성**하고, reconstruct가 maturation". **문자 그대로는 불가** — seed↔maturation은 onto에서 **증거-결합 계약**(일반 온톨로지 핸드오프 아님).
 - 근거(`.onto/processes/reconstruct/ontology-seeding-and-maturation-design.md`): `OntologySeed`는 **source_authority**(seed를 back/prove하는 source record)·**data_binding_layer**·**frontier**(maturation이 돌릴 미해결 질문)·**CQ 아티팩트 링크**·**정직한 한계 carry**를 담아야 한다. maturation 루프 = "현재 온톨로지에서 질문을 뽑아 source material/runtime/authority에서 **answer-support 수집**, 7차원(evidence 포함) 확장" → **frontier를 따라 돌고 답을 source 관측에 묶는다.**
-- Cowork freehand `.ttl`엔 frontier·source 바인딩·정직한 gap·CQ 링크가 **없다**(="semantics inferred" 자인). → maturation에 넘기면 돌릴 frontier도, answer-support를 묶을 바인딩도 없음. 완성품에서 역설계는 취약하고 frontier·한계는 *완성 아티팩트가 아니라 관측 과정*에서만 나오므로 복구 불가.
+- LLM-주도 freehand `.ttl`엔 frontier·source 바인딩·정직한 gap·CQ 링크가 **없다**(="semantics inferred" 자인). → maturation에 넘기면 돌릴 frontier도, answer-support를 묶을 바인딩도 없음. 완성품에서 역설계는 취약하고 frontier·한계는 *완성 아티팩트가 아니라 관측 과정*에서만 나오므로 복구 불가.
 - **올바른 형태** (제안의 정신은 맞되 seam을 한 단계 앞으로):
   ```
-  Cowork 강점(풍부·적응적 데이터레벨 관측 = §8 3기법)
+  LLM-주도 관측의 강점(풍부·적응적 데이터레벨 = §8 3기법)
     → onto-shaped 관측 + seed "제안"(LLM proposes)
       → onto seed-authoring 검증·정규화(claim↔관측 evidence 바인딩·frontier 구성·CQ 링크·한계 기록; 근거 없는 주장 reject)  ← seed는 onto 소유
         → onto maturation (설계대로)
   ```
   = capability-boundary "LLM이 의미 payload 제안 → runtime이 canonical 아티팩트로 확정 → 거버넌스 하류". **이 그림의 관측 레이어가 곧 S1** → 하이브리드는 S1을 대체하지 않고 **강화**한다.
-- 단, **일회성·빠른 산출물**이 목적이면 Cowork freehand 단독이 더 낫다(거버넌스 불필요). 하이브리드는 재현·감사·근거·도메인 자산화가 필요할 때의 답.
+- 단, **일회성·빠른 산출물**이 목적이면 LLM-주도 freehand 단독이 더 낫다(거버넌스 불필요). 하이브리드는 재현·감사·근거·도메인 자산화가 필요할 때의 답.
 
 ### 9.2 S1 = kind-불가지론 "structure-observer" 패밀리의 첫 실현
 - S1은 스프레드시트 전용 일회성이 아니라 **per-kind 관측자 패밀리의 첫 인스턴스**(`adapter_id: ${kind}-structure-observer` 규약이 이미 예고; code는 이미 `partially_wired`=runnable).
