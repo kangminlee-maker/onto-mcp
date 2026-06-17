@@ -70,6 +70,18 @@
 S1은 **"워크북이 구조적으로 무엇을 담고 있나"** 만 답한다(결정론). **"그게 무슨 의미인가"** 는 안 답한다(LLM).
 이는 `material-kind-adapter-contract.md` §3 "adapter may observe or project structure, but must not perform the design inquiry"와 정확히 일치.
 
+### 2.1a 2층 구조: 포맷 어댑터 ↔ 관측 레이어 (핵심 멘탈 모델)
+material 관측은 **두 층**이다. 둘을 섞어 생각하면 "왜 code는 되고 xlsx는 안 됐나"가 안 풀린다.
+
+| 층 | 책임 | kind 의존성 | 현재 상태 |
+|---|---|---|---|
+| **L1 포맷 어댑터** | 자료를 **읽을 수 있는 표현**으로 변환(시트/셀/값, 또는 토큰 스트림) | **kind별** | text(code·md·csv)=공짜 / **binary(xlsx·pdf·docx)=어댑터 필요** |
+| **L2 관측 레이어** | 읽을 수 있는 표현 위에서 신호 추출(구조 인덱스 → 빈도/어휘 → 관계 그래프) | **kind-불가지론(기법 패밀리)** | generic 텍스트 관측 + 결정론 source scout(actor/action/state 축)만 부분 구현 |
+
+- **이것이 `partially_wired`(code) vs `planned`(spreadsheet)의 진짜 이유**: onto의 기존 관측·scout는 파일을 **UTF-8 텍스트로 읽는** 기계 → code/csv는 L1이 공짜라 L2가 돈다. **xlsx는 binary라 L1 부재 → 텍스트로 읽으면 쓰레기 → L2가 못 돎.** 그래서 spreadsheet 관측은 아예 wired 안 됨.
+- **S1 = 빠져 있던 L1(spreadsheet 포맷 어댑터)**. openpyxl/csv 파서로 읽을 수 있는 표현을 만들면, 그 위 L2(세 기법 패밀리)는 code와 동일하게 적용된다(§9.2).
+- 실증 사례(§8)는 이 L1을 **openpyxl로** 해결하고 L2를 freehand로 했다. S1은 L1을 결정론으로 박는다. **L2를 어디까지 결정론 vs LLM에 맡길지는 별도 결정(§10).**
+
 ### 2.2 출력 = runtime-owned 인벤토리 (canonical)
 capability-boundary 가이드 *Deterministic Projection* + *Runtime-Owned Deterministic Fields*:
 ids/paths/해시/직렬화는 runtime 소유, LLM은 인벤토리를 **읽기만** 한다.
@@ -253,4 +265,38 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
   | 관계 그래프 | 시트간 key-overlap(데이터 *추론*) | import/call 그래프·공유 타입(정적 *명시* → **더 신뢰도 높음**) |
 
 - 도구만 다름(openpyxl ↔ AST/tree-sitter/ripgrep). observe-don't-interpret 경계는 양쪽 동일(code profile도 "토큰을 claim으로 승격 금지").
-- **설계 지침**: §2.2/§2.4 인벤토리를 **kind-불가지론 envelope(adapter_id/version/source_ref/content_sha256/unsupported_reason) + 실현별 레이어**로 설계 → S1 산물이 code 관측 강화(이미 runnable이라 자연스러운 2번째 대상)·document/database로 그대로 재사용. = 개념 경제(공유 추출 1 + 실현 N).
+- **정밀화(§2.1a 2층 모델)**: 위 "공통 SHAPE"가 곧 **L2 관측 레이어(kind-불가지론)** 이고, 표의 "spreadsheet 실현/code 실현"은 각 kind의 **L1 포맷 어댑터**(openpyxl ↔ AST)가 만든 표현 위에서 도는 동일 L2다. 즉 패밀리는 *관측자 하나*가 아니라 **"공통 L2 + kind별 L1"** 두 층. code가 `partially_wired`인 건 L1(텍스트)이 공짜라서, spreadsheet가 `planned`였던 건 L1이 없어서 — S1은 그 빠진 L1.
+- **설계 지침**: 인벤토리(§2.2/§2.4)를 **kind-불가지론 envelope(adapter_id/version/source_ref/content_sha256/unsupported_reason) = L2 산출 + kind별 L1 어댑터**로 분리 설계 → S1의 L2 산물이 code 관측 강화(이미 runnable, 자연스러운 2번째 대상)·document/database로 재사용. = 개념 경제(L2 공통 1 + L1 어댑터 N).
+- **남은 결정**: L2를 *어디까지 결정론 runtime vs LLM에 맡길지* — §10.
+
+---
+
+## 10. L2 관측 레이어 보강: 통제 ↔ 위임 스펙트럼 (**결정 대기**)
+
+> 질문: §8 세 기법(+더 풍부한 관측)을 **어디까지 결정론 runtime이 통제 vs LLM에 위임**할까. 나침반 = capability-boundary 핵심("LLM은 의미 제안, runtime은 아티팩트 진실 결정").
+
+### 10.1 먼저 분해: 무엇이 "객관" vs "판단"인가
+- **객관(결정론이 옳음)**: 시트/차원 열거, 셀 값 읽기, distinct **카운트**, 집합 **교집합 카운트**, 해시. → 재현·감사 필수. **LLM이 산수를 하면 안 된다.**
+- **판단(하드코딩 휴리스틱이 자주 틀림)**: 헤더행 위치, 어떤 컬럼이 범주형/자유텍스트/ID/날짜인가, 어떤 컬럼이 join 후보키인가, 다중행·피벗 레이아웃 해석. → 작은 샘플을 읽고 결정하는 건 LLM이 강함. 하드코딩은 취약("결정론적이지만 틀림").
+
+### 10.2 옵션 (통제 → 위임)
+| | A 고정 결정론 | **C 하이브리드** | B 완전 LLM freehand |
+|---|---|---|---|
+| L1 포맷 어댑터 | runtime | runtime | LLM |
+| 판단(헤더/범주형/키) | 하드코딩 휴리스틱 | **LLM이 bounded 파라미터 제안** | LLM |
+| 객관(카운트/overlap) | runtime | **runtime이 파라미터로 결정론 계산** | LLM |
+| 적응성 | ✗ 낮음(이상 레이아웃 깨짐) | ★ 높음(LLM이 레이아웃 읽음) | ★ 최고 |
+| 재현/감사/provenance | ★ 최고 | ★ (파라미터 기록·캐시→replay 결정론) | ✗ 매 런 변동 |
+| 비용/보안 | ★ 저렴·안전 | 중(작은 LLM 호출, 코드실행 없음) | ✗ 토큰·임의코드실행 위험 |
+| onto 거버넌스 적합 | ★ | ★ | ✗ maturation 증거-결합 깨짐 |
+
+변형: **C′** = 결정론 휴리스틱 먼저, **저신뢰/모호 케이스만 LLM 에스컬레이션**(흔한 케이스 완전 결정론·LLM 비용 최소). **B′** = LLM-작성 추출 스크립트를 runtime이 핀·해시·재실행(C보다 적응적이나 임의코드·감사부담 ↑).
+
+### 10.3 권장(제안): **C′ → C**
+- LLM은 **판단 파라미터만** bounded submit(예: `header_row=2`, `categorical_cols=[…]`, `key_candidates=[…]`); runtime이 그 파라미터로 **객관 계산**(카운트/overlap) + 인벤토리·해시·provenance 생성 = capability-boundary "construct-and-verify / bounded submit". 비결정성은 **파라미터 선택에만** 국한·기록·캐시 → replay 결정론(B의 "전체 변동"과 결정적 차이).
+- 시작은 **C′**(결정론 우선, 모호시만 LLM)로 비용·표면 최소화 → 필요시 C로 확장.
+- 순수 A는 실제 워크북(가변 헤더·피벗)에 취약(§8이 증거). 순수 B는 onto 거버넌스(재현·증거·maturation)와 충돌 → S1 존재 이유 부정. B′는 특수 레이아웃 fallback으로만.
+
+### 10.4 결정 필요 (이 항목이 미결)
+- 채택 지점: **A / C / C′ / B / B′** 중?
+- C/C′ 채택 시 후속 설계: LLM 파라미터 submit 채널·파라미터 캐시/replay·에스컬레이션 임계 → §5 P-단계에 추가.
