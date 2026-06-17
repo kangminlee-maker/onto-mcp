@@ -40,8 +40,30 @@ const SupportedModelEntrySchema = z
     verified_at: z.string().min(1),
     benchmark_evidence_refs: z.array(z.string().min(1)).min(1),
     notes: z.string().optional(),
+    // Active (provider, model) context window in tokens — the SSOT the
+    // reconstruct projection-budget helper (deriveDocumentExcerptProjectionBudget)
+    // reads to scale a single text document's seed-stage excerpt to the model.
+    // Optional: an entry without it falls back to the static projection FLOOR
+    // (model-agnostic, no regression). INV-MODEL-1; the window field is
+    // G4-protected (a change requires an INVARIANT-CHANGE: INV-MODEL-1 marker).
+    context_window_tokens: z.number().int().positive().optional(),
+    // Citation for context_window_tokens, kept SEPARATE from
+    // benchmark_evidence_refs: a context window is a published model spec, not a
+    // benchmark result. Required whenever context_window_tokens is present so a
+    // window value is never unsourced (C7).
+    context_window_provenance: z.string().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (entry) =>
+      entry.context_window_tokens === undefined ||
+      entry.context_window_provenance !== undefined,
+    {
+      message:
+        "context_window_tokens requires context_window_provenance (a window value must cite its source)",
+      path: ["context_window_provenance"],
+    },
+  );
 
 const SupportedModelRegistrySchema = z
   .object({
@@ -89,14 +111,12 @@ function findSupportedModelsAuthorityPath(): string {
   );
 }
 
-/** Loads and shape-validates the supported-model registry from the install root.
- * Strict: the authority always ships, so a missing or malformed file is an
- * installation error, not a skip. */
-export function loadSupportedModelRegistry(): SupportedModelRegistry {
-  const filePath = findSupportedModelsAuthorityPath();
-  const parsed = SupportedModelRegistrySchema.safeParse(
-    parseYaml(fs.readFileSync(filePath, "utf8")),
-  );
+/** Shape-validates raw (already-parsed) registry data. The one validation path
+ * both {@link loadSupportedModelRegistry} (disk) and tests use, so the schema
+ * contract — strict shape, positive-int `context_window_tokens`, a window value
+ * only with its provenance — is exercised without touching the install file. */
+export function parseSupportedModelRegistry(raw: unknown): SupportedModelRegistry {
+  const parsed = SupportedModelRegistrySchema.safeParse(raw);
   if (!parsed.success) {
     throw new Error(
       `Malformed supported-model registry at ${SUPPORTED_MODELS_AUTHORITY_PATH}: ` +
@@ -107,6 +127,14 @@ export function loadSupportedModelRegistry(): SupportedModelRegistry {
   }
   assertRepoRelativeEvidenceRefs(parsed.data);
   return parsed.data;
+}
+
+/** Loads and shape-validates the supported-model registry from the install root.
+ * Strict: the authority always ships, so a missing or malformed file is an
+ * installation error, not a skip. */
+export function loadSupportedModelRegistry(): SupportedModelRegistry {
+  const filePath = findSupportedModelsAuthorityPath();
+  return parseSupportedModelRegistry(parseYaml(fs.readFileSync(filePath, "utf8")));
 }
 
 /** Validates that every `benchmark_evidence_refs` entry is a repo-relative path

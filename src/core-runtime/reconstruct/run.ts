@@ -99,7 +99,7 @@ import {
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
 import {
   buildReconstructSourceObservation,
-  DOCUMENT_EXCERPT_CHAR_LIMIT,
+  DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   isTextReadableDocumentExtension,
   materializeReconstructPreparationArtifacts,
 } from "./materialize-preparation.js";
@@ -116,6 +116,7 @@ import {
   writeSeedConfirmationValidationForOntologySeedArtifact,
 } from "./post-seed-validation.js";
 import { upsertMarkdownSection } from "./markdown-section.js";
+import { appendRuntimeStatusEventSync } from "../observability/runtime-stream-observation.js";
 import { assembleReconstructRecord } from "./record.js";
 import {
   collectOntologySeedRefs,
@@ -221,6 +222,14 @@ export interface ReconstructDirectiveAuthor {
   readonly owner: "host_llm";
   /** Runtime-owned execution telemetry recorded by this author's LLM calls. */
   readonly executionTelemetry?: ReconstructExecutionTelemetryCollector;
+  /**
+   * Seed-stage document projection budget (chars) the orchestrator derived from
+   * the active seat's model window. The author applies it to single-document
+   * seed prompts; runReconstruct also reads it once to record any document the
+   * budget projection-truncates. Absent on authors created without a budget
+   * (defaults to the static FLOOR).
+   */
+  readonly documentExcerptProjectionBudget?: number;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -5356,6 +5365,13 @@ interface ObservationPromptPayloadOptions {
    * only when the prompt projects a single observation (see effectiveContentExcerptCharLimit).
    */
   expandSingleDocumentExcerpt?: boolean;
+  /**
+   * Model-aware ceiling (chars) for an expanded single document excerpt. Set
+   * alongside `expandSingleDocumentExcerpt` by seed-authoring callers to the active
+   * seat's derived projection budget (deriveDocumentExcerptProjectionBudget). When
+   * omitted, the static FLOOR applies — a model-unaware caller is unchanged.
+   */
+  documentExcerptCharBudget?: number;
 }
 
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
@@ -5402,13 +5418,16 @@ function effectiveContentExcerptCharLimit(
   targetMaterialKind: string | undefined,
   expandDocument: boolean,
   extension: string | null | undefined,
+  documentExcerptCharBudget: number | undefined,
 ): number | undefined {
   if (
     expandDocument &&
     targetMaterialKind === "document" &&
     isTextReadableDocumentExtension(extension)
   ) {
-    return DOCUMENT_EXCERPT_CHAR_LIMIT;
+    // Model-aware budget when the seat resolved one; else the static FLOOR — a
+    // model-unaware caller keeps the prior whole-document budget (no regression).
+    return documentExcerptCharBudget ?? DOCUMENT_EXCERPT_PROJECTION_FLOOR;
   }
   return baseLimit;
 }
@@ -5418,6 +5437,7 @@ function compactStructuralDataForPrompt(
   contentExcerptCharLimit: number | undefined,
   targetMaterialKind: string | undefined,
   expandDocument: boolean,
+  documentExcerptCharBudget: number | undefined,
 ): Record<string, unknown> {
   const extension =
     typeof structuralData.extension === "string" ? structuralData.extension : null;
@@ -5426,6 +5446,7 @@ function compactStructuralDataForPrompt(
     targetMaterialKind,
     expandDocument,
     extension,
+    documentExcerptCharBudget,
   );
   if (!limit) return structuralData;
   const compacted: Record<string, unknown> = { ...structuralData };
@@ -5478,10 +5499,56 @@ export function observationPromptPayload(
           options.contentExcerptCharLimit,
           observation.target_material_kind,
           expandDocument,
+          options.documentExcerptCharBudget,
         );
       }
       return payload;
     });
+}
+
+interface DocumentExcerptProjectionTruncation {
+  observation_id: string;
+  source_ref: string;
+  captured_chars: number;
+  projection_budget_chars: number;
+}
+
+/**
+ * The single-document seed projection truncations for (observations, budget): a
+ * text-readable document whose captured excerpt exceeds the projection budget is
+ * sliced to the budget at every seed-authoring prompt, so its tail never reaches
+ * seed authoring. Mirrors the expandDocument gate (compactStructuralDataForPrompt
+ * + effectiveContentExcerptCharLimit): budget-based expansion applies only when a
+ * single observation is projected, so a multi-document bundle (Stage 2 scope)
+ * yields none. Deterministic given the inputs — runReconstruct computes it ONCE so
+ * the truncation is recorded durably (runtime-events.ndjson) and surfaced in final
+ * output, instead of being silently dropped in ephemeral prompt payloads (C2).
+ *
+ * Exported for the durable projection-truncation regression test; not part of the
+ * product surface.
+ */
+export function documentExcerptProjectionTruncations(
+  sourceObservations: ReconstructSourceObservationsArtifact,
+  budget: number,
+): DocumentExcerptProjectionTruncation[] {
+  if (sourceObservations.observations.length !== 1) return [];
+  const observation = sourceObservations.observations[0]!;
+  if (observation.target_material_kind !== "document") return [];
+  const extension =
+    typeof observation.structural_data.extension === "string"
+      ? observation.structural_data.extension
+      : null;
+  if (!isTextReadableDocumentExtension(extension)) return [];
+  const excerpt = observation.structural_data.content_excerpt;
+  if (typeof excerpt !== "string" || excerpt.length <= budget) return [];
+  return [
+    {
+      observation_id: observation.observation_id,
+      source_ref: observation.source_ref,
+      captured_chars: excerpt.length,
+      projection_budget_chars: budget,
+    },
+  ];
 }
 
 function sourceScoutPackPromptPayload(args: {
@@ -5944,11 +6011,19 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   judgeLlmConfig?: Partial<LlmCallConfig>;
   llmCall?: ReconstructLlmCall;
   authorId?: string;
+  /**
+   * Seed-stage document projection budget (chars) from the active seat's model
+   * window (deriveDocumentExcerptProjectionBudget). Applied to single-document
+   * seed prompts. Defaults to the static FLOOR when omitted (model-unaware).
+   */
+  documentExcerptProjectionBudget?: number;
 } = {}): ReconstructDirectiveAuthor {
   const authorId = args.authorId ?? "direct-call-reconstruct-directive-author";
   const llmConfig = args.llmConfig ?? {};
   const judgeLlmConfig = args.judgeLlmConfig ?? llmConfig;
   const llmCall = args.llmCall ?? callLlm;
+  const documentExcerptProjectionBudget =
+    args.documentExcerptProjectionBudget ?? DOCUMENT_EXCERPT_PROJECTION_FLOOR;
   const telemetry = createReconstructExecutionTelemetryCollector();
   const baseSystem = [
     "You are authoring reconstruct semantic artifacts.",
@@ -5962,6 +6037,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     authorId,
     owner: "host_llm",
     executionTelemetry: telemetry,
+    documentExcerptProjectionBudget,
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
@@ -6087,6 +6163,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             observationIds: selectedObservationIds(input.sourceObservationDirective),
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
             expandSingleDocumentExcerpt: true,
+            documentExcerptCharBudget: documentExcerptProjectionBudget,
           }),
         },
       });
@@ -6353,6 +6430,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           observationIds: selectedObservationIdsForPurpose,
           contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
           expandSingleDocumentExcerpt: true,
+          documentExcerptCharBudget: documentExcerptProjectionBudget,
         }),
         lens_judgment_index: input.lensJudgmentIndex,
         exploration_synthesis:
@@ -6405,6 +6483,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               observationIds: selectedObservationIdsForPurpose,
               contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
               expandSingleDocumentExcerpt: true,
+              documentExcerptCharBudget: documentExcerptProjectionBudget,
             }),
             source_scout_pack: sourceScoutPackPromptPayload({
               sourceScoutPack: input.sourceScoutPack,
@@ -6614,6 +6693,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             observationIds: requiredCoverageObservationIds,
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
             expandSingleDocumentExcerpt: true,
+            documentExcerptCharBudget: documentExcerptProjectionBudget,
           }),
           lens_judgment_index: input.lensJudgmentIndex,
           exploration_synthesis:
@@ -6669,6 +6749,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               observationIds: missingCoverageObservationIds,
               contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
               expandSingleDocumentExcerpt: true,
+              documentExcerptCharBudget: documentExcerptProjectionBudget,
             }),
             existing_candidate_inventory:
               compactCandidateInventoryForPrompt(candidateInventory),
@@ -6747,6 +6828,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             observationIds: candidateObservationIds,
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
             expandSingleDocumentExcerpt: true,
+            documentExcerptCharBudget: documentExcerptProjectionBudget,
           }),
         },
       });
@@ -9360,6 +9442,39 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
   return nextSourceObservations;
 }
 
+/**
+ * Surfaces seed-stage document projection truncation in final output (C2): a
+ * captured document whose tail exceeded the model-window projection budget did
+ * not reach seed authoring. No-op when nothing was truncated. The durable
+ * machine signal is the runtime-events.ndjson status event emitted at observation
+ * load; this is the human-readable counterpart. Uses only operational wording —
+ * no claim-value fragments — so it never trips final-output provenance forbidden
+ * fragments.
+ */
+function appendFinalOutputDocumentProjectionTruncationSection(
+  finalOutputText: string,
+  truncations: DocumentExcerptProjectionTruncation[],
+): string {
+  if (truncations.length === 0) return finalOutputText;
+  const heading = "## Document Projection Truncation";
+  const content = [
+    heading,
+    "",
+    "A captured document exceeded the seed-stage projection budget for the active " +
+      "model window, so its tail was not projected into seed authoring. The full " +
+      "captured content is retained in source-observations; only the seed-stage " +
+      "prompt projection was bounded. Recovering the omitted tail is a later stage.",
+    "",
+    ...truncations.map((truncation) =>
+      `- ${truncation.source_ref} (${truncation.observation_id}): captured ` +
+      `${truncation.captured_chars} chars, projected ` +
+      `${truncation.projection_budget_chars} chars`
+    ),
+    "",
+  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, content);
+}
+
 function appendFinalOutputProvenanceFooter(
   finalOutputText: string,
   requiredFragments: string[],
@@ -10016,6 +10131,29 @@ export async function runReconstruct(
     await readYamlDocument<ReconstructSourceObservationsArtifact>(
       preparationRefs.source_observations,
     );
+  // Record any document the seed-stage projection budget truncates, ONCE: the
+  // active seat's budget (from the directive author) vs the captured excerpt. The
+  // seed prompts apply the same budget per call but on ephemeral payloads, so
+  // this is the durable signal (runtime-events.ndjson + final output) that a
+  // document's tail did not reach seed authoring — no silent truncation (C2).
+  const documentProjectionTruncations = documentExcerptProjectionTruncations(
+    sourceObservations,
+    directiveAuthor.documentExcerptProjectionBudget ??
+      DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+  );
+  for (const truncation of documentProjectionTruncations) {
+    appendRuntimeStatusEventSync({
+      pipeline: "reconstruct",
+      sessionRoot,
+      sourceLabel: "document-projection-budget",
+      stageId: "source_observations",
+      message:
+        `document ${truncation.source_ref} (${truncation.observation_id}) captured ` +
+        `${truncation.captured_chars} chars exceeds the seed-stage projection budget ` +
+        `${truncation.projection_budget_chars} chars; its tail was not projected into ` +
+        "seed authoring (full captured content retained in source-observations).",
+    });
+  }
   const sourceInventory =
     await readYamlDocument<ReconstructSourceInventoryArtifact>(
       preparationRefs.source_inventory,
@@ -12589,6 +12727,10 @@ export async function runReconstruct(
   finalOutputText = appendFinalOutputProvenanceBindingsSection(
     finalOutputText,
     requiredFinalOutputSectionBindings,
+  );
+  finalOutputText = appendFinalOutputDocumentProjectionTruncationSection(
+    finalOutputText,
+    documentProjectionTruncations,
   );
   const finalOutputViolations = validateFinalOutputProvenance({
     finalOutputText,

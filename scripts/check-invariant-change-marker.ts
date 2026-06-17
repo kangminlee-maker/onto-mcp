@@ -8,6 +8,7 @@
  *  - .onto/settings.json 의 auth/provider/model/effort 키 라인
  *  - .onto/processes/review/material-issue-contract.md 전체 (material 정의)
  *  - src/core-runtime/llm/model-switcher.ts 의 auth 정규화 return 라인
+ *  - .onto/authority/supported-models.yaml 의 context_window_tokens 라인 (INV-MODEL-1)
  *
  * 사용: npx tsx scripts/check-invariant-change-marker.ts [baseRef]
  *  - baseRef 기본값: origin/main (CI에서는 PR base ref를 넘긴다)
@@ -68,6 +69,13 @@ const PROTECTED_TARGETS: ProtectedTarget[] = [
     file: "scripts/check-no-hardcoded-spec-defaults.ts",
     linePattern: /\b(file|linePattern|reason):/,
     invariants: ["INV-CFG-1", "INV-AUTH-1"],
+  },
+  {
+    // 모델 context window 값 — reconstruct projection 예산의 SSOT. window 필드
+    // 변경만 보호한다(일반 모델 추가·다른 필드 편집엔 friction 없음).
+    file: ".onto/authority/supported-models.yaml",
+    linePattern: /context_window_tokens/,
+    invariants: ["INV-MODEL-1"],
   },
 ];
 

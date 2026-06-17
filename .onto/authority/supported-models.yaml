@@ -14,6 +14,13 @@
 # To add a model: run the benchmark, confirm a completed run, then add an entry
 # citing the benchmark record under benchmark_evidence_refs. Curated by humans;
 # the citation is the evidence, the entry is the authority.
+#
+# Optional context_window_tokens: the model's active context window (tokens),
+# the SSOT the reconstruct projection-budget helper reads to scale a single
+# document's seed-stage excerpt. It is a published model spec (not a benchmark
+# result), so it carries its own citation in context_window_provenance and is
+# G4-protected (a change requires an INVARIANT-CHANGE: INV-MODEL-1 marker). An
+# entry without a window falls back to the static projection FLOOR.
 schema_version: "1"
 supported_models:
   - provider: openai
@@ -25,6 +32,12 @@ supported_models:
       Completed a full reconstruct pipeline run in the live medium baseline
       (1 of 6 attempts completed end to end); support verified. Performance
       evidence is PRELIMINARY in that record — support, not a performance claim.
+    context_window_tokens: 1050000
+    context_window_provenance: >-
+      OpenAI API model reference (developers.openai.com/api/docs/models/gpt-5.5,
+      retrieved 2026-06-17): 1,050,000-token context window, 128,000 max output
+      tokens. Cost note: inputs above 272,000 tokens incur 2x input / 1.5x
+      output pricing for the session.
   - provider: anthropic
     model: claude-opus-4-8
     verified_at: "2026-06-15"
@@ -41,3 +54,7 @@ supported_models:
       (no unencoded env override required). Single-run completion proof
       (PRELIMINARY for any performance claim, INV-BENCH-1 needs >=3 reps /
       >=2 fixtures); support — model completes the pipeline — verified.
+    context_window_tokens: 1000000
+    context_window_provenance: >-
+      Anthropic model reference (platform.claude.com models overview): Claude
+      Opus 4.8 ships a 1,000,000-token (1M) context window.

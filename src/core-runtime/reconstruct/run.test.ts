@@ -43,6 +43,7 @@ import type {
 import {
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
+  documentExcerptProjectionTruncations,
   observationPromptPayload,
   runReconstruct,
 } from "./run.js";
@@ -594,6 +595,50 @@ describe("runReconstruct", () => {
     // — its decoded-binary excerpt stays bounded to the seed-stage budget.
     expect(projectedExcerptLengths([docObservation("obs-doc-pdf", ".pdf")]))
       .toEqual([1200]);
+  });
+
+  it("slices an expanded single document to the model-aware projection budget", () => {
+    const longExcerpt = "goal milestone problem ".repeat(120); // 2760 chars
+    const docObservation = {
+      observation_id: "obs-doc-budget",
+      target_material_kind: "document" as const,
+      adapter_id: "fixture-observer",
+      source_ref: "/doc/large.md",
+      location: "file",
+      summary: "Large document fixture.",
+      structural_data: { content_excerpt: longExcerpt, extension: ".md" },
+    };
+    const project = (budget: number | undefined) =>
+      (observationPromptPayload(
+        {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-06-16T00:00:00.000Z",
+          observations: [docObservation],
+          skipped_refs: [],
+          validation_results: [],
+        },
+        {
+          expandSingleDocumentExcerpt: true,
+          ...(budget !== undefined ? { documentExcerptCharBudget: budget } : {}),
+        },
+      ) as Array<any>)[0]?.structural_data;
+
+    // Budget < captured length → sliced to the budget and flagged truncated.
+    const tight = project(1000);
+    expect(tight.content_excerpt.length).toBe(1000);
+    expect(tight.prompt_content_excerpt_truncated).toBe(true);
+    expect(tight.prompt_content_excerpt_char_limit).toBe(1000);
+
+    // Budget >= captured length → whole prose, not flagged.
+    const roomy = project(100_000);
+    expect(roomy.content_excerpt.length).toBe(longExcerpt.length);
+    expect(roomy.prompt_content_excerpt_truncated).toBeUndefined();
+
+    // No budget passed → static FLOOR (200K) default, so 2760 chars is whole.
+    const floored = project(undefined);
+    expect(floored.content_excerpt.length).toBe(longExcerpt.length);
+    expect(floored.prompt_content_excerpt_truncated).toBeUndefined();
   });
 
   it("canonicalizes duplicate direct-call source observation selections", async () => {
@@ -5723,5 +5768,91 @@ describe("runReconstruct", () => {
     ]);
     await expect(fs.access(path.join(sessionRoot, "final-output.md")))
       .resolves.toBeUndefined();
+  });
+});
+
+describe("documentExcerptProjectionTruncations", () => {
+  const observations = (
+    items: Array<{
+      id: string;
+      kind: string;
+      ext?: string | null;
+      excerpt?: unknown;
+    }>,
+  ) => ({
+    schema_version: "1" as const,
+    session_id: "session-1",
+    created_at: "2026-06-16T00:00:00.000Z",
+    observations: items.map((item) => ({
+      observation_id: item.id,
+      target_material_kind: item.kind,
+      adapter_id: "fixture-observer",
+      source_ref: `/doc/${item.id}`,
+      location: "file",
+      summary: `Fixture ${item.id}.`,
+      structural_data: {
+        ...(item.ext !== undefined ? { extension: item.ext } : {}),
+        ...(item.excerpt !== undefined ? { content_excerpt: item.excerpt } : {}),
+      },
+    })),
+    skipped_refs: [],
+    validation_results: [],
+  });
+
+  it("records a single text document whose captured excerpt exceeds the budget", () => {
+    const excerpt = "x".repeat(5000);
+    const result = documentExcerptProjectionTruncations(
+      observations([{ id: "obs-doc", kind: "document", ext: ".md", excerpt }]) as any,
+      1000,
+    );
+    expect(result).toEqual([
+      {
+        observation_id: "obs-doc",
+        source_ref: "/doc/obs-doc",
+        captured_chars: 5000,
+        projection_budget_chars: 1000,
+      },
+    ]);
+  });
+
+  it("records nothing when the captured excerpt fits the budget", () => {
+    const result = documentExcerptProjectionTruncations(
+      observations([
+        { id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(500) },
+      ]) as any,
+      1000,
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("ignores a binary document (only a structural sample is captured, not expanded)", () => {
+    const result = documentExcerptProjectionTruncations(
+      observations([
+        { id: "obs-pdf", kind: "document", ext: ".pdf", excerpt: "x".repeat(5000) },
+      ]) as any,
+      1000,
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("ignores a non-document observation", () => {
+    const result = documentExcerptProjectionTruncations(
+      observations([
+        { id: "obs-code", kind: "code", ext: ".ts", excerpt: "x".repeat(5000) },
+      ]) as any,
+      1000,
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("records nothing for a multi-observation bundle (expansion gate; Stage 2 scope)", () => {
+    const result = documentExcerptProjectionTruncations(
+      observations([
+        { id: "obs-a", kind: "document", ext: ".md", excerpt: "x".repeat(5000) },
+        { id: "obs-b", kind: "document", ext: ".md", excerpt: "y".repeat(5000) },
+      ]) as any,
+      1000,
+    );
+    expect(result).toEqual([]);
   });
 });

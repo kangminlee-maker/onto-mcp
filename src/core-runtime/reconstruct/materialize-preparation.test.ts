@@ -12,8 +12,12 @@ import type {
 } from "./artifact-types.js";
 import {
   buildReconstructSourceObservation,
+  deriveDocumentExcerptProjectionBudget,
+  DOCUMENT_CAPTURE_CEILING_CHARS,
+  DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   materializeReconstructPreparationArtifacts,
 } from "./materialize-preparation.js";
+import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 
 const profilesRoot = path.resolve(".onto/processes/reconstruct/source-profiles");
@@ -202,10 +206,35 @@ describe("materializeReconstructPreparationArtifacts", () => {
     expect(md?.excerpt_truncated).toBe(false);
     expect(md?.content_excerpt?.length).toBe(body.length);
 
-    // Binary document extension: kept at the small structural sample — never 200K of
-    // decoded binary bytes (regression guard, Codex P2).
+    // Binary document extension: kept at the small structural sample — never the
+    // capture ceiling in decoded binary bytes (regression guard, Codex P2).
     expect(pdf?.excerpt_truncated).toBe(true);
     expect(pdf?.content_excerpt?.length).toBe(6000);
+  });
+
+  it("captures a text document past the prior 200K excerpt limit whole (raised capture ceiling)", async () => {
+    const root = await makeTmpProject();
+    // > 200K chars: the prior DOCUMENT_EXCERPT_CHAR_LIMIT would have truncated
+    // this; the raised DOCUMENT_CAPTURE_CEILING_CHARS captures it whole so the
+    // seed-stage projection (not capture) owns model-aware narrowing.
+    const body = "goal milestone problem decision ".repeat(8000); // 256K chars
+    expect(body.length).toBeGreaterThan(200_000);
+
+    const mdTarget = path.join(root, "large.md");
+    await fs.writeFile(mdTarget, body, "utf8");
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-large");
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [mdTarget],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+    const observations = await readYaml<ReconstructSourceObservationsArtifact>(
+      refs.source_observations,
+    );
+    const md = observations.observations[0]?.structural_data;
+    expect(md?.excerpt_truncated).toBe(false);
+    expect(md?.content_excerpt?.length).toBe(body.length);
   });
 
   it("uses the default source profile for inventory when another profile sorts first", async () => {
@@ -433,6 +462,140 @@ describe("materializeReconstructPreparationArtifacts", () => {
 
     expect(validation.validation_status).toBe("valid");
     expect(validation.violations).toEqual([]);
+  });
+});
+
+describe("deriveDocumentExcerptProjectionBudget", () => {
+  const registry: SupportedModelRegistry = {
+    schema_version: "1",
+    supported_models: [
+      {
+        provider: "openai",
+        model: "gpt-5.5",
+        verified_at: "2026-06-13",
+        benchmark_evidence_refs: ["development-records/benchmark/x.json"],
+        context_window_tokens: 1_050_000,
+        context_window_provenance: "OpenAI API model reference",
+      },
+      {
+        provider: "anthropic",
+        model: "claude-opus-4-8",
+        verified_at: "2026-06-15",
+        benchmark_evidence_refs: ["development-records/benchmark/y.json"],
+        context_window_tokens: 1_000_000,
+        context_window_provenance: "Anthropic model reference",
+      },
+      {
+        // A registered model WITHOUT a window → FLOOR fallback.
+        provider: "openai",
+        model: "gpt-legacy",
+        verified_at: "2026-01-01",
+        benchmark_evidence_refs: ["development-records/benchmark/z.json"],
+      },
+      {
+        // Tiny window so the derived raw budget falls below FLOOR → clamps up.
+        provider: "grok",
+        model: "grok-small",
+        verified_at: "2026-01-01",
+        benchmark_evidence_refs: ["development-records/benchmark/g.json"],
+        context_window_tokens: 300_000,
+        context_window_provenance: "fixture",
+      },
+      {
+        // Huge window so the derived raw budget exceeds CEILING → clamps down.
+        provider: "grok",
+        model: "grok-huge",
+        verified_at: "2026-01-01",
+        benchmark_evidence_refs: ["development-records/benchmark/h.json"],
+        context_window_tokens: 100_000_000,
+        context_window_provenance: "fixture",
+      },
+    ],
+  };
+
+  // floor(window * 0.5 * 1) - 50_000, then clamp(., FLOOR, CEILING).
+  it("scales the budget to the model window (within the clamp range)", () => {
+    expect(
+      deriveDocumentExcerptProjectionBudget(
+        { provider: "anthropic", modelId: "claude-opus-4-8" },
+        registry,
+      ),
+    ).toBe(450_000); // 1_000_000*0.5 - 50_000
+    expect(
+      deriveDocumentExcerptProjectionBudget(
+        { provider: "openai", modelId: "gpt-5.5" },
+        registry,
+      ),
+    ).toBe(475_000); // 1_050_000*0.5 - 50_000
+    expect(deriveDocumentExcerptProjectionBudget(
+      { provider: "anthropic", modelId: "claude-opus-4-8" },
+      registry,
+    )).toBeGreaterThan(DOCUMENT_EXCERPT_PROJECTION_FLOOR);
+  });
+
+  it("clamps a below-floor derived budget up to FLOOR", () => {
+    // 300_000*0.5 - 50_000 = 100_000 < FLOOR
+    expect(
+      deriveDocumentExcerptProjectionBudget(
+        { provider: "grok", modelId: "grok-small" },
+        registry,
+      ),
+    ).toBe(DOCUMENT_EXCERPT_PROJECTION_FLOOR);
+  });
+
+  it("clamps an above-ceiling derived budget down to CEILING", () => {
+    expect(
+      deriveDocumentExcerptProjectionBudget(
+        { provider: "grok", modelId: "grok-huge" },
+        registry,
+      ),
+    ).toBe(DOCUMENT_CAPTURE_CEILING_CHARS);
+  });
+
+  it("falls back to FLOOR when provider or model is unresolved", () => {
+    expect(
+      deriveDocumentExcerptProjectionBudget({ modelId: "gpt-5.5" }, registry),
+    ).toBe(DOCUMENT_EXCERPT_PROJECTION_FLOOR);
+    expect(
+      deriveDocumentExcerptProjectionBudget({ provider: "openai" }, registry),
+    ).toBe(DOCUMENT_EXCERPT_PROJECTION_FLOOR);
+    expect(deriveDocumentExcerptProjectionBudget({}, registry)).toBe(
+      DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+    );
+  });
+
+  it("falls back to FLOOR for an unregistered pair", () => {
+    expect(
+      deriveDocumentExcerptProjectionBudget(
+        { provider: "openai", modelId: "gpt-unknown" },
+        registry,
+      ),
+    ).toBe(DOCUMENT_EXCERPT_PROJECTION_FLOOR);
+    // Registered model under the wrong provider is also unregistered as a pair.
+    expect(
+      deriveDocumentExcerptProjectionBudget(
+        { provider: "anthropic", modelId: "gpt-5.5" },
+        registry,
+      ),
+    ).toBe(DOCUMENT_EXCERPT_PROJECTION_FLOOR);
+  });
+
+  it("falls back to FLOOR for a registered model without a window", () => {
+    expect(
+      deriveDocumentExcerptProjectionBudget(
+        { provider: "openai", modelId: "gpt-legacy" },
+        registry,
+      ),
+    ).toBe(DOCUMENT_EXCERPT_PROJECTION_FLOOR);
+  });
+
+  it("never returns below FLOOR or above CEILING", () => {
+    const budget = deriveDocumentExcerptProjectionBudget(
+      { provider: "openai", modelId: "gpt-5.5" },
+      registry,
+    );
+    expect(budget).toBeGreaterThanOrEqual(DOCUMENT_EXCERPT_PROJECTION_FLOOR);
+    expect(budget).toBeLessThanOrEqual(DOCUMENT_CAPTURE_CEILING_CHARS);
   });
 });
 
