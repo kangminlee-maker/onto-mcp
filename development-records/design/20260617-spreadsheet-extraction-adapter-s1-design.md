@@ -103,6 +103,21 @@ unsupported_reason    : string|null  ← 암호화/손상/미지원 포맷
 - S1은 **구조 인덱스(sheets/dimensions/named ranges)를 먼저** 읽고, formula/validation 셀은 **예산 한도**까지 수집 → `capture_truncated`.
 - xlsx는 ZIP/XML **스트리밍 read-only**(전체 워크북 메모리 적재 회피). reconstruct의 모델-무지 capture / 모델-인지 projection 2단 구조(`materialize-preparation.ts` 주석)와 동일 철학.
 
+### 2.4 데이터 관측 레이어 (실증 세션 반영 — §8)
+구조(수식/명명범위) 인벤토리만으로는 **온톨로지 seeding에 부족**하다. 실증 세션(§8)은 수식을 전혀 안 보고(`data_only=True`)
+**데이터 레벨 관측**만으로 클래스·속성·관계를 도출했다. 따라서 인벤토리는 구조 레이어와 **분리된 데이터 관측 레이어**를 갖는다:
+```
+per_sheet_data[]:
+  sheet                  : name
+  header_row             : int        ← 시트마다 다름(1 가정 금지), 탐지값 기록
+  columns[]              : { name, index, inferred_type, non_empty_ratio }
+  sample_rows[]          : 앞 N행 bounded 샘플 (셀/행 char 캡)   ← flatten 아님
+distinct_value_vocab[]   : { sheet, column, top_values:[{value,count}], distinct_count }  ← 통제어휘 후보(enum/class)
+cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,count}] }     ← 데이터 레벨 관계 신호
+```
+- `cross_sheet_key_overlap`은 §2.2의 수식 `cross_sheet_refs`와 **상보적**: 수식이 없어도(평평한 멀티시트 원장) join-key 값 교집합으로 엔티티 관계를 관측.
+- 모두 **관측(빈도·교집합 카운트)일 뿐 의미 단정 아님**. enum/class/관계로의 승격은 LLM(semantic 계약) 몫.
+
 ---
 
 ## 3. 소비자 seam 상세
@@ -151,7 +166,7 @@ unsupported_reason    : string|null  ← 암호화/손상/미지원 포맷
 
 ## 6. Open Decisions (착수 전 사용자 확정 필요)
 
-1. **xlsx 추출 방식** — (a) Node 라이브러리(JS, mcpb 번들 가능, prod dep +1; 현재 deps 4개) / (b) Python `openpyxl` shell-out(references와 동일 엔진, 그러나 Python 런타임 의존·MCPB 자족성 저해) / (c) **csv-only 우선**(P1~P3만, xlsx는 후속 트랙). → 기본 권장: **(c)로 시작해 패턴 검증 후 (a)**. mcpb 자족성·INV-CFG 고려 시 (a) > (b).
+1. **xlsx 추출 방식** (실증 §8로 재순위화) — (a) Node 라이브러리(JS, mcpb 번들 가능, prod dep +1) / (b) Python `openpyxl` ad-hoc shell-out / (c) csv-only 우선 / **(d) onto-동봉 고정 openpyxl 스크립트를 execution adapter(Python)로 실행** — 결정론·provenance는 runtime 소유(고정 스크립트), 엔진은 실증·references와 동일(openpyxl), **Node 파서 의존성·번들 증가 0**. → **재권장 순위: (d) ≈ (c) 우선 → (a)**. 단 (d)는 실행환경에 Python+openpyxl 보장이 전제(Cowork 샌드박스는 충족; claude_code/codex executor 경로는 확인 필요). (b)는 스크립트가 고정·동봉 아니면 결정론·감사성 약함 → (d)로 흡수.
 2. **review semantic 위치(C-review)** — 새 per-material review 프로파일 신설 vs `lens-prompt`/`review-target-profile` 계약 확장. (S1 범위 밖이나 seam 형태에 영향.)
 3. **프로즈 전파(W0)** — `scan_targets`만으로 충분 vs 파서+selected ref+패킷이 본문 섹션까지 carry(개념 표면↑). (C-recon 범위.)
 
@@ -165,3 +180,43 @@ unsupported_reason    : string|null  ← 암호화/손상/미지원 포맷
 - **음성/실패**: 암호화·손상·매크로·빈 파일·거대 파일 → fail-loud 또는 명시적 unsupported(조용한 통과 금지).
 - **정직성**: "structure_inspected_only" 불변, 재계산 결과 미주장.
 - **권장 사전 게이트**: S1은 의존성·번들·양 파이프라인 교차 → 구현 착수 전 **ultracode + onto 교차검증**(메모리 `design-validation-ultracode-onto`).
+
+---
+
+## 8. 실증 보강 — 세션 `local_a1ae0b6b` (onto @0.4.12, reconstruct 미사용)
+
+> 출처: Cowork local-agent-mode 세션 `local_a1ae0b6b-a7f8-4e61-abb4-93aca092ee06`(샌드박스 `keen-adoring-gauss`),
+> 2026-06-17. 입력 `mbp_2026년 02월_결제 및 수익인식F.xlsx`(14시트, 누적 ~190,700행) →
+> 수익인식 온톨로지(클래스 24·객체속성 23·데이터속성 32) `.ttl`(rdflib 검증) + 데이터사전 `.xlsx` + `.docx` + 다이어그램.
+
+### 8.1 결정적 관찰: **onto reconstruct를 안 썼다**
+- 도구 집계: `mcp__workspace__bash` ×18(샌드박스), `Write`/`Task*` 외 **onto/reconstruct/review 호출 0**.
+  cmd #2에서 `which onto`·onto 스킬 탐색만 하고, 이후 전부 **샌드박스 Python(openpyxl)** 으로 진행.
+- 함의: 유능한 LLM + Python/openpyxl이 있는 실행환경이면 **S1 없이도** xlsx→온톨로지가 **이미 가능**.
+  → **S1의 가치 재정의**: "불가능을 가능케"가 아니라, 이 **수기 레시피를 결정론·재현·provenance·자동**으로 productize하는 것.
+  매번 LLM이 ad-hoc 스크립트를 다시 짜는 비결정성을 고정 추출기로 대체한다(§6 (d)의 근거).
+
+### 8.2 실증된 추출 레시피 (그대로 S1 결정론 단계로 승격)
+1. **구조 인덱스 먼저** (cmd #1): `load_workbook(f, data_only=True, read_only=True)` → `sheetnames` + 시트별 `max_row×max_col`.
+   `read_only=True`로 190K행 시트도 스트리밍(메모리 폭발 없음) — §2.3 "구조 인덱스 우선·flatten 금지"의 실증.
+2. **bounded 샘플** (cmd #4): 전 시트 앞 8행, 셀 22자·행 300자 캡, 후행 빈셀 trim → §2.4 `sample_rows` 예산의 구체값.
+3. **헤더행 per-sheet 탐지** (cmd #3,#5,#6): 결제상세=row2, 수익인식60일/당월산식=row4, 정가표=row1 — **row1 가정 금지**(§2.4 `header_row`).
+4. **통제어휘 발견** (cmd #5): 범주형 컬럼(PG사·부문·브랜드·결제수단·결제상태…) `Counter` top-N+빈도 → §2.4 `distinct_value_vocab`. enum/class 후보의 핵심 산파.
+5. **시트 간 관계 = 데이터 레벨 key-overlap** (cmd #6): 주문번호/아임포트주문번호/imp_uid distinct 집합의 **교집합 카운트**로 시트 결합 추론.
+   수식이 아니라 **값**으로 관계를 본다 → §2.4 `cross_sheet_key_overlap`(이 설계의 신규 핵심, 기존 S1 초안엔 없던 관측).
+6. **출력 검증**: 생성 `.ttl`을 rdflib로 파싱해 triples/classes/props 카운트(cmd #17) — "실엔진 검증" 규율.
+
+### 8.3 캘리브레이션: reconstruct는 **데이터-의미**, references는 **수식-감사**
+- 실증 세션은 `data_only=True`로 **수식을 한 번도 안 봤다**. 온톨로지 가치는 헤더·distinct값·key-overlap 등 **데이터 관측**에서 나왔다.
+- 반면 보강한 `spreadsheet.md`/§2.2는 references(저작·감사 지향)를 따라 **수식/cross-sheet-ref 구조에 치우쳐** 있었다.
+- **결론**: reconstruct(온톨로지 seeding) 목표에선 **데이터 관측 레이어(§2.4)가 1차, 수식 구조(§2.2)는 2차.**
+  → **후속 calibration**: 커밋 `9c5cd85`의 `spreadsheet.md` `Scan Targets`에 데이터 관측(헤더행 탐지·distinct-value 어휘·시트간 key-overlap·컬럼 타입추정)을 **추가 가중**. (이번 범위 밖, C-recon에서 반영.)
+- review 쪽은 반대로 수식/감사가 더 관련(spreadsheet-review-package) → 두 semantic 계약의 **강조점이 다름**을 확인(개념 경제: 공유 추출 1, 강조 weight는 소비자별).
+
+### 8.4 honesty 독립 수렴
+- 세션이 산출물 Overview에 명시: "의미는 헤더·데이터로부터 추론한 해석… 회계용어는 담당자 검증 권장 / Semantics inferred; verify with domain expert."
+- 이는 보강 프로파일 `Static Inspection Boundary`("structure inspected only")와 **독립적으로 같은 결론** → 정직성 설계 검증됨.
+
+### 8.5 미해결/주의
+- (d) 경로는 **실행환경 Python+openpyxl 보장**이 전제. Cowork 샌드박스는 충족하나, onto의 reconstruct live executor(claude_code/codex) 경로에서의 가용성은 **착수 전 확인 필요**(없으면 (a) Node lib fallback).
+- 세션은 **단일 워크북·수기**였다. S1은 다회·자동·결정론을 더해야 하므로 고정 스크립트의 **입력 검증·예산·실패기록**(암호화/손상/거대)을 §5 P4~P6에서 강화.

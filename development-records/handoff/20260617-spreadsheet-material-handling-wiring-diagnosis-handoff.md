@@ -103,5 +103,7 @@ xlsx/csv는 **분류는 양쪽 다 됨**(확장자), 그러나 **워크북→구
 ## 7. 다음 액션
 
 - **S1 설계 착수**(이 핸드오프와 짝): `development-records/design/20260617-spreadsheet-extraction-adapter-s1-design.md`.
+  **§8 = 실증 보강**: Cowork 세션 `local_a1ae0b6b`(onto @0.4.12, **reconstruct 미사용**, 샌드박스 openpyxl로 xlsx→온톨로지 산출) 작업내역 반영.
+  핵심: S1은 그 수기 레시피의 **결정론·재현·provenance·자동화**(§6 신규 옵션 (d)=onto-동봉 고정 openpyxl을 execution adapter로); 인벤토리에 **데이터 관측 레이어 신설**(§2.4: header_row 탐지·distinct-value 어휘·시트간 key-overlap); **reconstruct는 데이터-의미 1차·수식 2차** 캘리브레이션(C-recon에서 `spreadsheet.md` 추가 가중).
 - S1은 의존성·번들·양 파이프라인에 걸치는 큰 슬라이스 → 착수 전 **ultracode + onto 교차검증** 권장(메모리 `design-validation-ultracode-onto`).
 - 메모리 갱신 대상: `large-input-observation-track`(spreadsheet read 시너지), 신규 spreadsheet-material 트랙.
