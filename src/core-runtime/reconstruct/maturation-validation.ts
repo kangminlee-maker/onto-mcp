@@ -216,6 +216,70 @@ function sameResolvedRef(left: string, right: string): boolean {
   return path.resolve(left) === path.resolve(right);
 }
 
+type ActionabilityMatrixRow =
+  ReconstructActionabilityMatrixArtifact["rows"][number];
+
+/**
+ * Index actionability matrix rows by the dimensions used to compute a delta's
+ * affected_matrix_row_refs, so the build/validate intersection is O(rows + refs)
+ * per delta instead of a per-delta linear scan over the whole matrix.
+ *
+ * Row indices (not matrix_row_ids) are stored so that the downstream projection
+ * reproduces the exact multiplicity and ordering of
+ * `matrixRows.filter(...).map((row) => row.matrix_row_id)`.
+ */
+function indexActionabilityRowsByDelta(matrixRows: ActionabilityMatrixRow[]): {
+  bySourceRef: Map<string, Set<number>>;
+  byObservationId: Map<string, Set<number>>;
+} {
+  const bySourceRef = new Map<string, Set<number>>();
+  const byObservationId = new Map<string, Set<number>>();
+  const add = (map: Map<string, Set<number>>, key: string, index: number) => {
+    const bucket = map.get(key);
+    if (bucket) bucket.add(index);
+    else map.set(key, new Set([index]));
+  };
+  matrixRows.forEach((row, index) => {
+    for (const ref of row.member_source_refs) {
+      add(bySourceRef, path.resolve(ref), index);
+    }
+    for (const ref of row.cross_material_ref_refs) {
+      add(bySourceRef, path.resolve(ref), index);
+    }
+    for (const ref of row.supporting_refs) {
+      add(byObservationId, ref, index);
+    }
+  });
+  return { bySourceRef, byObservationId };
+}
+
+/**
+ * Resolve the sorted matrix_row_ids affected by a delta row, equivalent to
+ * `matrixRows.filter((row) => member/cross resolves to source_ref OR
+ * supporting_refs includes observation_id).map((row) => row.matrix_row_id).sort()`.
+ */
+function affectedMatrixRowRefsForDelta(
+  matrixRows: ActionabilityMatrixRow[],
+  index: ReturnType<typeof indexActionabilityRowsByDelta>,
+  deltaRow: { source_ref: string; observation_id: string },
+): string[] {
+  const matched = new Set<number>();
+  for (
+    const rowIndex of index.bySourceRef.get(path.resolve(deltaRow.source_ref)) ??
+      []
+  ) {
+    matched.add(rowIndex);
+  }
+  for (const rowIndex of index.byObservationId.get(deltaRow.observation_id) ?? []) {
+    matched.add(rowIndex);
+  }
+  const refs: string[] = [];
+  matrixRows.forEach((row, rowIndex) => {
+    if (matched.has(rowIndex)) refs.push(row.matrix_row_id);
+  });
+  return refs.sort();
+}
+
 function violation(args: {
   code: ReconstructMaturationValidationViolation["code"];
   message: string;
@@ -1624,6 +1688,20 @@ export function validateAnswerSupportLedger(args: {
       row.added_observation_ids
     ) ?? [],
   );
+  // Index added_observation_id -> first lineage row, mirroring the `.find`
+  // (first-match) semantics so per-ref lookups are O(1) instead of a nested
+  // linear scan over every lineage row.
+  const lineageRowByObservationId = new Map<
+    string,
+    ReconstructSourceObservationLineageIndexArtifact["lineage_rows"][number]
+  >();
+  for (const row of args.sourceObservationLineageIndex?.lineage_rows ?? []) {
+    for (const observationId of row.added_observation_ids) {
+      if (!lineageRowByObservationId.has(observationId)) {
+        lineageRowByObservationId.set(observationId, row);
+      }
+    }
+  }
   const reentryValidationsByRef = new Map(
     (args.sourceObservationReentryValidations ?? []).map((item) => [
       item.ref,
@@ -1933,9 +2011,8 @@ export function validateAnswerSupportLedger(args: {
         }));
       }
       const observation = sourceObservationsById.get(ref.observation_id);
-      const lineageRow = args.sourceObservationLineageIndex?.lineage_rows.find((
-        row,
-      ) => row.added_observation_ids.includes(ref.observation_id)) ?? null;
+      const lineageRow = lineageRowByObservationId.get(ref.observation_id) ??
+        null;
       const refCarriesLineage = Boolean(
         observation?.round_id ||
           observation?.observation_batch_id ||
@@ -3228,20 +3305,14 @@ export function buildMaturationSourceDeltaArtifact(args: {
   actionabilityMatrixValidationRef: string;
 }): ReconstructMaturationSourceDeltaArtifact {
   const matrixRows = args.actionabilityMatrix.rows;
+  const actionabilityIndex = indexActionabilityRowsByDelta(matrixRows);
   const impactRows =
     (args.sourceObservationDelta?.delta_rows ?? []).map((deltaRow) => {
-      const affectedMatrixRowRefs = matrixRows
-        .filter((row) =>
-          row.member_source_refs.some((ref) =>
-            sameResolvedRef(ref, deltaRow.source_ref)
-          ) ||
-          row.cross_material_ref_refs.some((ref) =>
-            sameResolvedRef(ref, deltaRow.source_ref)
-          ) ||
-          row.supporting_refs.includes(deltaRow.observation_id)
-        )
-        .map((row) => row.matrix_row_id)
-        .sort();
+      const affectedMatrixRowRefs = affectedMatrixRowRefsForDelta(
+        matrixRows,
+        actionabilityIndex,
+        deltaRow,
+      );
       return {
         impact_row_id: `maturation-source-delta:${slug(deltaRow.delta_row_id)}`,
         delta_row_id: deltaRow.delta_row_id,
@@ -3294,9 +3365,9 @@ export function validateMaturationSourceDelta(args: {
 }): ReconstructMaturationSourceDeltaValidationArtifact {
   const artifact = args.maturationSourceDelta;
   const violations: ReconstructMaturationValidationViolation[] = [];
-  const matrixRowIds = new Set(
-    args.actionabilityMatrix.rows.map((row) => row.matrix_row_id),
-  );
+  const matrixRows = args.actionabilityMatrix.rows;
+  const matrixRowIds = new Set(matrixRows.map((row) => row.matrix_row_id));
+  const actionabilityIndex = indexActionabilityRowsByDelta(matrixRows);
   const deltaRowsById = new Map(
     (args.sourceObservationDelta?.delta_rows ?? []).map((row) => [
       row.delta_row_id,
@@ -3390,18 +3461,11 @@ export function validateMaturationSourceDelta(args: {
         }));
       }
     }
-    const expectedAffectedMatrixRowRefs = args.actionabilityMatrix.rows
-      .filter((matrixRow) =>
-        matrixRow.member_source_refs.some((ref) =>
-          sameResolvedRef(ref, deltaRow.source_ref)
-        ) ||
-        matrixRow.cross_material_ref_refs.some((ref) =>
-          sameResolvedRef(ref, deltaRow.source_ref)
-        ) ||
-        matrixRow.supporting_refs.includes(deltaRow.observation_id)
-      )
-      .map((matrixRow) => matrixRow.matrix_row_id)
-      .sort();
+    const expectedAffectedMatrixRowRefs = affectedMatrixRowRefsForDelta(
+      matrixRows,
+      actionabilityIndex,
+      deltaRow,
+    );
     if (
       row.affected_matrix_row_refs.join("\0") !==
         expectedAffectedMatrixRowRefs.join("\0")

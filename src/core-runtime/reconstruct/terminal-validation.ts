@@ -129,15 +129,18 @@ export async function validateReconstructRunManifest(args: {
       continue;
     }
     if (SELF_VALIDATION_OUTPUT_REFS.has(step.step_id)) continue;
-    for (const ref of step.artifact_refs) {
-      if (!(await exists(ref))) {
+    const refExistence = await Promise.all(
+      step.artifact_refs.map((ref) => exists(ref)),
+    );
+    step.artifact_refs.forEach((ref, index) => {
+      if (!refExistence[index]) {
         violations.push(violation({
           code: "manifest_artifact_missing",
           message: `manifest step ${step.step_id} references a missing artifact: ${ref}`,
           subjectId: step.step_id,
         }));
       }
-    }
+    });
   }
   if (
     args.projectRoot &&
