@@ -380,67 +380,62 @@ function seedNameRows(seed: ReconstructOntologySeedArtifact): SeedNameRow[] {
   return rows;
 }
 
-/** Maps a seed-object id (object_type_id, concept_id, …) to its display name. */
-function seedRefNameIndex(seed: ReconstructOntologySeedArtifact): Map<string, string> {
-  const index = new Map<string, string>();
-  const families: Array<{ container: string; key: string; idKey: string }> = [
-    { container: "conceptual_frame", key: "concepts", idKey: "concept_id" },
-    { container: "semantic_layer", key: "object_types", idKey: "object_type_id" },
-    { container: "kinetic_layer", key: "action_types", idKey: "action_type_id" },
-    { container: "kinetic_layer", key: "workflows", idKey: "workflow_id" },
-    { container: "dynamic_layer", key: "actor_types", idKey: "actor_type_id" },
-  ];
-  for (const family of families) {
-    for (const row of recordRows(seed[family.container], family.key)) {
-      const id = stringField(row, family.idKey);
-      const name = stringField(row, "name");
-      if (id.length > 0 && name.length > 0 && !index.has(id)) index.set(id, name);
+/**
+ * The object_type ids whose object NAME matches a binding-target alternate. The
+ * target object is identified by its NAME (model-agnostic on the id), and the
+ * binding is then tied to it by EXACT seed_ref == object_type_id (below), so no
+ * substring matching ever runs over model-chosen ids. Only `semantic_layer.
+ * object_types` are scanned — a source binding must back an object type, not a
+ * concept/action/actor (which would let the fixture pass without the backed
+ * object it measures).
+ */
+function targetObjectTypeIds(
+  objectTypeRows: Record<string, unknown>[],
+  targetAlternates: string[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const row of objectTypeRows) {
+    const name = normalizeName(stringField(row, "name"));
+    if (name.length === 0) continue;
+    if (targetAlternates.some((alternate) => name.includes(normalizeName(alternate)))) {
+      const id = stringField(row, "object_type_id").trim();
+      if (id.length > 0) ids.add(id);
     }
   }
-  return index;
+  return ids;
 }
 
 /**
  * Whether a source binding satisfies a binding-target concept: it must name a
  * backing source (`source_ref` present) and target the right object — its
- * `seed_ref` resolves to an object whose NAME (or, when unresolved, the raw
- * seed_ref id) normalized-contains a target alternate. Matching the resolved
- * NAME keeps this robust to model-chosen ids (descriptive binding ids, opaque
- * object ids alike).
+ * (trimmed) `seed_ref` is EXACTLY one of the target object type ids. Id equality
+ * (not substring) means a descriptive binding id, an opaque object id, incidental
+ * whitespace, or a mis-named object cannot leak a false match.
  */
 function bindingTargetsConcept(
   binding: Record<string, unknown>,
-  targetAlternates: string[],
-  nameIndex: Map<string, string>,
+  targetObjectIds: Set<string>,
 ): boolean {
   if (stringField(binding, "source_ref").trim().length === 0) return false;
-  const seedRef = stringField(binding, "seed_ref");
-  if (seedRef.length === 0) return false;
-  // Match the RESOLVED object name; fall back to the raw seed_ref id ONLY when it
-  // does not resolve. Otherwise a binding to a mis-named object (resolved name
-  // unrelated) would still be credited because its machine id happens to contain
-  // the target alternate — the very id-spelling bias this gate removes.
-  const haystack = normalizeName(nameIndex.get(seedRef) ?? seedRef);
-  return targetAlternates.some((alternate) =>
-    haystack.includes(normalizeName(alternate)),
-  );
+  return targetObjectIds.has(stringField(binding, "seed_ref").trim());
 }
 
 function conceptMatch(
   expected: ReconstructGoldenExpectedConcept,
   rows: SeedNameRow[],
   sourceBindings: Record<string, unknown>[],
-  nameIndex: Map<string, string>,
+  objectTypeRows: Record<string, unknown>[],
 ): ReconstructQualityGateQ1Match | null {
   // A binding-target concept's PRESENCE (Q1) is credited only by a source
-  // binding that targets the right object (resolved by seed_ref → object name)
-  // and names a backing source. `name_alternates` are NOT used for Q1 presence
-  // here — they would also match the target object's own NAME and credit the
-  // binding concept for a seed that has the object but no binding; they remain
-  // for the Q2 CQ↔concept linkage.
+  // binding (with a source_ref) whose seed_ref is exactly the id of an object
+  // type the fixture names. `name_alternates` are NOT used for Q1 presence here —
+  // they would also match the target object's own NAME and credit the binding
+  // concept for a seed that has the object but no binding; they remain for the Q2
+  // CQ↔concept linkage.
   if (expected.binding_target_alternates) {
+    const targetIds = targetObjectTypeIds(objectTypeRows, expected.binding_target_alternates);
     for (const binding of sourceBindings) {
-      if (bindingTargetsConcept(binding, expected.binding_target_alternates, nameIndex)) {
+      if (bindingTargetsConcept(binding, targetIds)) {
         return {
           concept_key: expected.concept_key,
           matched_name: [
@@ -583,11 +578,11 @@ export function evaluateReconstructGoldenQualityGate(
     args.ontologySeed.data_binding_layer,
     "source_bindings",
   );
-  const nameIndex = seedRefNameIndex(args.ontologySeed);
+  const objectTypeRows = recordRows(args.ontologySeed.semantic_layer, "object_types");
   const matches: ReconstructQualityGateQ1Match[] = [];
   const missing: string[] = [];
   for (const expected of spec.expected_concepts) {
-    const match = conceptMatch(expected, nameRows, sourceBindings, nameIndex);
+    const match = conceptMatch(expected, nameRows, sourceBindings, objectTypeRows);
     if (match) matches.push(match);
     else missing.push(expected.concept_key);
   }
@@ -621,33 +616,40 @@ export function evaluateReconstructGoldenQualityGate(
         `Fixture ${spec.fixture_id} expected_cq ${expected.cq_key} links unknown concept ${expected.linked_concept_key}`,
       );
     }
-    // For a binding-target concept the CQ references the binding or its target
-    // object, whose ids are model-chosen, so name_alternates alone miss the live
-    // shape (a question naming `binding_fixture_records_backing_source` or the
-    // resolved object). Link via name_alternates ∪ target alternates ∪ the
-    // targeting bindings' own ids, mirroring the Q1 binding-targeting model.
+    // A binding-target concept's CQ can only be supported when a valid binding
+    // exists — otherwise a run with no source binding could mark the binding CQ
+    // supported just by a generic question mentioning the target object, inflating
+    // support-rate for the missing-binding case Q1 is meant to catch. So for a
+    // binding concept ALL link tokens (including name_alternates, which name the
+    // target object for v2) are gated on a targeting binding being present; the
+    // tokens then include the binding's own ids so a live question naming the
+    // descriptive binding id links. Non-binding concepts link via name_alternates.
     const targetingBindings = concept.binding_target_alternates
       ? sourceBindings.filter((binding) =>
           bindingTargetsConcept(
             binding,
-            concept.binding_target_alternates!,
-            nameIndex,
+            targetObjectTypeIds(objectTypeRows, concept.binding_target_alternates!),
           ),
         )
       : [];
-    // Target alternates help Q2 ONLY when a valid binding exists — otherwise a
-    // run with no source binding could mark the binding CQ supported just by a
-    // generic question mentioning the target object, inflating support-rate for
-    // the missing-binding case Q1 is meant to catch. The targeting bindings' own
-    // ids are inherently present only when a binding exists.
-    const linkTokens = [
-      ...concept.name_alternates,
-      ...(targetingBindings.length > 0 ? concept.binding_target_alternates ?? [] : []),
-      ...targetingBindings.flatMap((binding) => [
-        stringField(binding, "binding_id"),
-        stringField(binding, "seed_ref"),
-      ]),
-    ].filter((token) => token.length > 0);
+    const rawTokens = concept.binding_target_alternates
+      ? targetingBindings.length > 0
+        ? [
+            ...concept.name_alternates,
+            ...concept.binding_target_alternates,
+            ...targetingBindings.flatMap((binding) => [
+              stringField(binding, "binding_id"),
+              stringField(binding, "seed_ref"),
+            ]),
+          ]
+        : []
+      : concept.name_alternates;
+    // Normalize and drop tokens that normalize to "" — `haystack.includes("")` is
+    // always true, so a punctuation-only id (e.g. binding_id ".") would match
+    // every question.
+    const linkTokens = rawTokens
+      .map((token) => normalizeName(token))
+      .filter((token) => token.length > 0);
     const question = args.competencyQuestions.questions.find((candidate) => {
       if (usedQuestionIds.has(candidate.question_id)) return false;
       const haystack = normalizeName(
@@ -658,7 +660,7 @@ export function evaluateReconstructGoldenQualityGate(
           ...(candidate.seed_ref_refs ?? []),
         ].join(" "),
       );
-      return linkTokens.some((token) => haystack.includes(normalizeName(token)));
+      return linkTokens.some((token) => haystack.includes(token));
     });
     if (question) usedQuestionIds.add(question.question_id);
     const assessment = question

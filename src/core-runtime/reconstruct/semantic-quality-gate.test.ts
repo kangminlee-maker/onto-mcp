@@ -346,6 +346,110 @@ describe("reconstruct golden semantic quality gate", () => {
     expect(result.q2?.support_rate).toBe(1);
   });
 
+  it("does NOT credit a binding that targets a concept id rather than an object type", () => {
+    const args = happyArgs();
+    args.ontologySeed = {
+      ...fixtureServiceSeed(),
+      conceptual_frame: {
+        concepts: [{ concept_id: "concept-fixture-service", name: "Fixture Service" }],
+      },
+      data_binding_layer: {
+        source_bindings: [
+          {
+            binding_id: "b1",
+            seed_ref: "concept-fixture-service",
+            source_ref: "src/fixture-service.ts",
+          },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.q1?.missing_concept_keys).toContain("fixture-source-binding");
+  });
+
+  it("resolves a seed_ref with incidental whitespace (trimmed) to the object type", () => {
+    const args = happyArgs();
+    args.ontologySeed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: {
+        source_bindings: [
+          {
+            binding_id: "b1",
+            seed_ref: " object-fixture-service ",
+            source_ref: "src/fixture-service.ts",
+          },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.q1?.recall).toBe(1);
+  });
+
+  it("does NOT support the binding CQ via name_alternates when no binding exists", () => {
+    // The binding CQ references the binding name_alternate ("binding-fixture-source"
+    // normalizes to contain "fixturesource"); with no source binding it must stay
+    // unsupported (all binding-concept link tokens are gated on a binding).
+    const seed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: { source_bindings: [] },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const claimIds = [
+      "object-fixture-service",
+      "actor-fixture-user",
+      "action-explain-fixture",
+      "binding-fixture-source",
+    ];
+    const result = evaluateReconstructGoldenQualityGate({
+      fixtureId: "reconstruct-golden-target-v1",
+      realization: "mock",
+      runManifest: manifestWith([
+        llmStep("ontology_seed"),
+        llmStep("competency_question_assessment"),
+      ]),
+      ontologySeed: seed,
+      competencyQuestions: questionsFor(claimIds),
+      competencyQuestionAssessment: assessmentsFor(claimIds.length),
+    });
+    const bindingRow = (result.q2?.rows ?? []).find(
+      (row) => row.cq_key === "cq-fixture-source-binding",
+    );
+    expect(bindingRow?.supported).toBe(false);
+  });
+
+  it("does NOT let a punctuation-only binding id match every question", () => {
+    const seed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: {
+        source_bindings: [
+          { binding_id: ".", seed_ref: "object-fixture-service", source_ref: "src/fixture-service.ts" },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const questions = {
+      questions: [
+        { question_id: "cq-claim-1", question: "Explain object-fixture-service?", linked_claim_ids: ["object-fixture-service"], seed_ref_refs: ["object-fixture-service"] },
+        { question_id: "cq-claim-2", question: "Explain actor-fixture-user?", linked_claim_ids: ["actor-fixture-user"], seed_ref_refs: ["actor-fixture-user"] },
+        { question_id: "cq-claim-3", question: "Explain action-explain-fixture?", linked_claim_ids: ["action-explain-fixture"], seed_ref_refs: ["action-explain-fixture"] },
+        { question_id: "cq-claim-4", question: "Totally unrelated question", linked_claim_ids: ["zzz"], seed_ref_refs: ["zzz"] },
+      ],
+    } as unknown as ReconstructCompetencyQuestionsArtifact;
+    const result = evaluateReconstructGoldenQualityGate({
+      fixtureId: "reconstruct-golden-target-v1",
+      realization: "mock",
+      runManifest: manifestWith([
+        llmStep("ontology_seed"),
+        llmStep("competency_question_assessment"),
+      ]),
+      ontologySeed: seed,
+      competencyQuestions: questions,
+      competencyQuestionAssessment: assessmentsFor(4),
+    });
+    const bindingRow = (result.q2?.rows ?? []).find(
+      (row) => row.cq_key === "cq-fixture-source-binding",
+    );
+    expect(bindingRow?.supported).toBe(false);
+  });
+
   it("rejects metrics when a required LLM unit has no telemetry source fields", () => {
     const args = happyArgs();
     args.runManifest = manifestWith([
