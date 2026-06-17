@@ -34,27 +34,27 @@
 <main>
 
 <h1>onto-mcp Implementation Map</h1>
-<p class="stamp">기준: v0.4.11 (2026-06-16) · reconstruct maturation 런타임 judge 단계(ODKE+ 지지 게이트) 종결 (PR #55·#57·#58) + opt-in per-stage judge LLM config (PR #62) · claude reconstruct 라우트·바이너리 리졸버 (PR #59) · document 관찰 절단 제거 = large-input Stage 0 (PR #65) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
+<p class="stamp">기준: v0.4.12 (2026-06-17) · reconstruct 파이프라인 안정화 #1–#10 + 런타임 answer-support judge + large-input Stage 0 excerpt 예산 + effort 캘리브 P1–P4a + claude reconstruct 라우트 (v0.4.12 릴리스) · <b>large-input Stage 1′ = 모델-윈도 파생 단일문서 투영 예산</b> (PR #84) · <b>rejected purpose-candidate adequacy-frame 검증 rank-aware + full-header 통일 강제</b> (PR #85) · 라이브 e2e external-doc sentinel 게이팅 (PR #86) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
 
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
   <div class="card"><h3>현재 목표</h3>
-    <p>v0.4.11 출하. review·reconstruct(seeding+maturation)·구조 가드가 제품 경로에서 가동. reconstruct <b>maturation closure</b>에 author≠judge 지지 게이트가 active로 안착.</p></div>
+    <p>v0.4.12 출하. review·reconstruct(seeding+maturation)·구조 가드가 제품 경로에서 가동. 대용량 단일 문서가 <b>모델 윈도까지 통째 관찰·투영</b>(Stage 1′)되고, rejected purpose 후보의 적합성 프레임 과엄격성이 제거됨.</p></div>
   <div class="card"><h3>Phase</h3>
-    <p>reconstruct closure hardening <span class="ok">종결</span> — 런타임 judge 단계 R1~R5 머지. MCP 호스트 사용성 Phase 1 <span class="ok">종결</span>(<code>.mcpb</code>+프로파일). Phase 2(host orchestration) <span class="ok">종결</span>.</p></div>
+    <p>reconstruct closure hardening <span class="ok">종결</span> · 파이프라인 안정화 #1–#10 <span class="ok">종결</span> · large-input <b>Stage 0+1′</b> <span class="ok">종결</span>(윈도 파생 투영 예산). MCP 호스트 사용성 Phase 1·2 <span class="ok">종결</span>.</p></div>
   <div class="card"><h3>Health</h3>
-    <p><span class="ok">vitest 102 files / 1130 passed</span> · 정적 체크 10종 green · CI(invariant-guards) PR마다 가동 · drift <span class="ok">no_drift</span> · registry 실 loader LOADED</p></div>
+    <p><span class="ok">vitest 111 files / 1465 passed</span> (+1 todo) · 정적 체크 green · CI(invariant-guards) PR마다 가동 · drift <span class="ok">no_drift</span> · registry 실 loader LOADED</p></div>
   <div class="card"><h3>다음 결정</h3>
-    <p><b>judge 트랙 잔여</b>: rubber-stamp 근본 레버(per-stage model/effort 분리)는 <b>구현됨(PR #62)</b> — 단 효과는 judge를 <i>실제로 다른/강한 모델로</i> 쓰고 <b>live 벤치마크</b>(실 LLM convergent, 비용)로만 관찰 가능. 의미적 독립성 자체는 여전히 측정 불가(discovered-enhancements §7). · <b>large-input 관찰 Stage 1</b>(intra-document 섹션 분해)이 다음 구현 후보. · MCP Phase 2(원격/웹 Streamable HTTP+OAuth)는 방향만 기록.</p></div>
+    <p><b>large-input</b>: Stage 0+1′ 종결 → 다음 후보 = <b>Stage 2</b>(다문서 breadth + purpose-결정 선택 + 비용 캐스케이드 + 진짜 윈도초과 tail 회복). · <b>judge rubber-stamp 레버</b>(PR #62)는 구현됨 — 효과는 <i>다른/강한 모델 + live 벤치마크</i>(비용)로만 관찰(discovered-enhancements §7). · MCP Phase 2(원격/웹 Streamable HTTP+OAuth)는 방향만.</p></div>
   <div class="card"><h3>주요 리스크</h3>
-    <p><span class="warn">judge rubber-stamp</span>(완화: context isolation·보수 기본·adversarial frame + <b>per-stage model/effort 레버(PR #62)</b>; 단 의미적 독립성 측정 불가·다른 모델 사용 시만 발효) · <span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift).</p></div>
+    <p><span class="warn">judge rubber-stamp</span>(완화: context isolation·per-stage model/effort 레버 PR #62; 의미적 독립성 측정 불가) · <span class="warn">gpt-5.5 입력&gt;272K토큰 2x 과금 cliff</span>(대형 CJK 기본 seat·예산으로 회피 불가·한계 기록) · <span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift).</p></div>
 </div>
 
 <!-- ───────── 서비스 블루프린트 ───────── -->
 <h2>서비스 블루프린트 — 요청이 어떻게 검증된 산출물이 되는가, 게이트는 어디에 있는가</h2>
 <div class="svgwrap">
 <svg width="1860" height="940" viewBox="0 0 1860 940" role="img" aria-labelledby="bp-title bp-desc" xmlns="http://www.w3.org/2000/svg">
-  <title id="bp-title">onto-mcp 서비스 블루프린트 (v0.4.11)</title>
+  <title id="bp-title">onto-mcp 서비스 블루프린트 (v0.4.12)</title>
   <desc id="bp-desc">MCP 요청이 runtime과 LLM 작업을 거쳐 canonical artifact와 투영으로 나뉘고, 게이트·품질 체크·연기 작업이 어디에 있는지 보여준다.</desc>
   <defs>
     <marker id="a-slate" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#475569"/></marker>
@@ -111,7 +111,7 @@
 
   <!-- 입력 레인 -->
   <rect class="n-in" x="44" y="116" width="240" height="92" rx="8"/>
-  <text class="t" x="58" y="138">MCP tool call (16종)</text>
+  <text class="t" x="58" y="138">MCP tool call (12종)</text>
   <text class="s" x="58" y="156">onto_review / _round / _advance</text>
   <text class="s" x="58" y="172">onto_reconstruct / observe / validate</text>
   <text class="m" x="58" y="192">src/mcp (schema) → core-api</text>
@@ -147,7 +147,7 @@
 
   <rect class="n-rt" x="344" y="504" width="380" height="96" rx="8"/>
   <text class="t" x="358" y="526">reconstruct 러너</text>
-  <text class="s" x="358" y="544">run-control 원자 admission → 관찰/안전/계보 게이트</text>
+  <text class="s" x="358" y="544">원자 admission → 관찰(윈도 파생 투영 예산)·안전·계보 게이트</text>
   <text class="s" x="358" y="560">→ seed 검증·성숙 루프 → claim projection</text>
   <text class="m" x="358" y="580">core-runtime/reconstruct (registry가 권위 그래프)</text>
 
@@ -218,10 +218,10 @@
 
   <rect class="n-post" x="1484" y="496" width="332" height="104" rx="8"/>
   <text class="t" x="1498" y="518">연기 / 관찰 대기 (hot path 밖)</text>
-  <text class="s" x="1498" y="536">· 유기적 salvage 관찰 — 6/15 09:12 launchd 자동 실행</text>
+  <text class="s" x="1498" y="536">· large-input Stage 2: 다문서 breadth·선택·비용 캐스케이드</text>
   <text class="s" x="1498" y="552">· evolve: 계약만 존재, runtime/MCP 도구 없음</text>
   <text class="s" x="1498" y="568">· spreadsheet/database reconstruct 어댑터 (계약만)</text>
-  <text class="s" x="1498" y="584">· reconstruct effort 상수의 settings 이관 검토</text>
+  <text class="s" x="1498" y="584">· 유기적 salvage 관찰 (launchd 예약 트랙·별도)</text>
 
   <!-- 흐름: 입력 → runtime -->
   <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M284,162 H344"/>
@@ -253,9 +253,9 @@
   <tr><td>MCP surface</td><td><code>src/mcp/</code></td><td>12개 도구 + simple(8)/full(12) 프로파일(<code>ONTO_MCP_PROFILE</code>) + 옛 7명 deprecated alias · <code>.mcpb</code> 데스크탑 확장 + 첫실행 bootstrap</td></tr>
   <tr><td>Core API</td><td><code>src/core-api/</code></td><td>MCP·하니스가 호출하는 facade (review/reconstruct prepare·run·round·advance·status·result)</td></tr>
   <tr><td>실행층</td><td><code>src/core-runtime/cli/</code></td><td>invocation runner·dispatch 루프·provider unit executor·nesting worker·salvage — review/를 단방향 import</td></tr>
-  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 (reconstruct: seeding+maturation+answer-support judge) — cli/ import 금지(G1 강제)</td></tr>
+  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 (reconstruct: seeding+maturation+answer-support judge) · 단일문서 관찰은 <b>모델-윈도 파생 투영 예산</b>(<code>deriveDocumentExcerptProjectionBudget</code>, 캡처 ceiling과 분리) · purpose 후보 검증은 rank-aware(rejected는 빈 required_elements 면제·full frame header는 전 rank 강제) — cli/ import 금지(G1 강제)</td></tr>
   <tr><td>provider 경계</td><td><code>src/core-runtime/llm/</code></td><td>스위처: oauth(codex·claude 워커, anthropic+oauth reconstruct 포함) / api_key(openai·anthropic·grok) / local(lmstudio) · claude 바이너리 <code>resolveClaudeBin</code>(ONTO_CLAUDE_BIN→PATH→일반위치) · CLI 워커 기본 타임아웃 600s · 선택은 벤치-검증 모델(<code>claude-opus-4-8</code> 등록·G7)로 제한</td></tr>
-  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon·authority(supported-models) → rank 2~4 원칙 → rank 5 기능 계약(+reconstruct registry, judge gate active)</td></tr>
+  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon·authority(supported-models — <code>context_window_tokens</code>+provenance, <b>G4 보호</b>: 윈도가 런타임 투영 예산에 영향) → rank 2~4 원칙 → rank 5 기능 계약(+reconstruct registry, judge gate active)</td></tr>
 </table>
 
 <!-- ───────── 검증 체계 ───────── -->
@@ -266,7 +266,7 @@
   <tr><td>불변식 테스트</td><td><code>*.invariant.test.ts</code> (G3)</td><td>auth 생략→OAuth 워커, submit schema=spine 단일 source, INV-MODEL-1</td></tr>
   <tr><td>conformance</td><td><code>check:review:invocation-runner</code> · <code>check:mcp:review</code> · <code>check:review:route</code> · <code>check:retired-root-paths</code></td><td>기존 4종</td></tr>
   <tr><td>런타임 검증기</td><td>reconstruct validator (run-control·게이트·judge B-5/B-6) · 실 loader <code>loadReconstructContractRegistry</code></td><td>judge: author≠judge 구조 강제 + convergent claim fail-closed; registry 편집은 실 loader로 검증(YAML+grep으론 active 참조 깨짐 못 잡음)</td></tr>
-  <tr><td>테스트</td><td>vitest 102 files / 1130 passed (+1 todo)</td><td>golden 하니스·salvage E2E·reconstruct judge B-5/B-6·gate-enforce propagation·document 관찰 excerpt 예산(다중문서·바이너리 게이트) 포함</td></tr>
+  <tr><td>테스트</td><td>vitest 111 files / 1465 passed (+1 todo)</td><td>golden 하니스·salvage E2E·reconstruct judge B-5/B-6·gate-enforce propagation·document 관찰 excerpt 예산(다중문서·바이너리 게이트)·윈도 파생 투영 예산(<code>deriveDocumentExcerptProjectionBudget</code>·CJK)·purpose-candidate rejected-frame rank-aware 검증 포함</td></tr>
   <tr><td>벤치 게이트</td><td>G5 decision gate (하니스 내장) · reconstruct mock 완주/품질 GUARD</td><td>runs≥3·fixtures≥2 미충족 시 PRELIMINARY; judge 단계 후 mock 완주·품질 baseline-equivalent</td></tr>
 </table>
 
@@ -279,8 +279,11 @@
   <li><b>완료 — opt-in per-stage judge LLM config</b>(PR #62): rubber-stamp residual의 근본 레버. judge가 의미저자와 다른 effort/model로 선택 실행(미설정 시 상속=회귀0); judgeModel은 author provider에서 해소·벤치-검증(INV-MODEL-1, model-provider 키)+같은-provider만 채택, 아니면 degrade. 노출=Core API·벤치 하니스·MCP <code>onto_reconstruct</code>. 4중 교차검증(ultracode×2·onto·Codex) 수렴.</li>
   <li><b>완료 — claude reconstruct 라우트</b>(PR #59): anthropic+oauth reconstruct를 네이티브 <code>callClaudeCli</code> 워커로 — <code>resolveClaudeBin</code>(per-user 바이너리·호스트 최소 PATH 대응) + <code>claude-opus-4-8</code> 등록(라이브 full 완주로 INV-MODEL-1 충족). 3중 리뷰(ultracode·onto·Codex) 수렴.</li>
   <li><b>완료 — document 관찰 절단 제거 = large-input Stage 0</b>(PR #65): reconstruct 관찰 <code>content_excerpt</code> 예산을 kind-aware로 — text-readable document(.md/.txt/.adoc) 전체 캡처(200K ceiling), <b>seed-authoring 프롬프트 + 단일 document 관찰</b>일 때만 전체 투영(post-seed 집계·다중문서·바이너리는 bound 유지). 라이브 A/B: 완주 1/3→1/1·문서 후반(목표·마일스톤) seed 유입. <b>Codex 4라운드 수렴</b>(다중문서 블로업·바이너리 쓰레기·resume provenance·E2E evidence 무결성). 진단: 절단은 윈도 한계가 아니라 self-inflicted(12.5K자≈3K토큰). 설계: <code>development-records/design/20260616-large-input-observation-design.md</code>.</li>
+  <li><b>완료 — large-input Stage 1′ = 모델-윈도 파생 단일문서 투영 예산</b>(PR #84): 단일 text 문서 관찰의 <i>투영</i> 예산을 활성 모델 context window에서 파생(<code>deriveDocumentExcerptProjectionBudget</code> = clamp(window·fraction − overhead, FLOOR 200K, CEILING))·캡처 ceiling과 분리. <code>supported-models.yaml</code>에 <code>context_window_tokens</code>+provenance 신설(G4 보호·opus 1M·gpt-5.5 1.05M). 라이브 A/B(normal+CJK-밀집 211K자) 둘 다 done-when PASS — 통째 투영·말미 사실 seed 유입. <b>Codex 3라운드</b>(투영시점 탐지·resume 재사용·redaction) 수렴. overflow tail 회복은 Stage 2. 설계: <code>development-records/design/20260616-large-input-stage1-design.md</code>(v5).</li>
+  <li><b>완료 — rejected purpose-candidate adequacy-frame 검증 견고성</b>(PR #85): rejected 후보가 빈 <code>required_elements</code>를 남겨도 ~40분 런이 abort되던 버그 제거 — 검증기 rank-aware(rejected는 빈 배열만 면제·식별필드/형식검증 유지), full frame header(frame_kind·frame_status·material_kind_requirements)는 <b>전 rank 강제</b>(디스크/재사용 경로엔 스키마 게이트 없음 → 검증기가 유일 권위). prompt·mapper·validator 3면 계약 일치. <b>Codex 3라운드</b> 동근(同根) 수렴. 후속 PR #86: 라이브 e2e external-doc sentinel 게이팅. 설계: <code>development-records/design/20260617-purpose-candidates-rejected-frame-validation-fix-design.md</code>.</li>
+  <li><b>완료 — reconstruct 파이프라인 안정화 #1–#10 + v0.4.12 릴리스</b>(PR #80·#81·#82 외): CI 라이브 merge 게이트·원자 쓰기·LLM 경계 하드닝·validator 음성 테스트·perf(레지스트리 1회 스레딩·hot validator 인덱싱). 신규 기능 전 4축 안정화 진단(ultracode) 백로그를 hot부터 소진 — 행위 불변·회귀 0.</li>
   <li><b>tracked follow-up</b>: judge rubber-stamp — 레버는 구현됨, 그러나 의미적 독립성은 측정 불가이고 <b>다른/강한 모델로 실제 사용 + live 벤치마크</b>(실 LLM convergent, 비용)로만 효과 관찰 — <code>development-records/tracking/20260406-discovered-enhancements.md</code> §7.</li>
-  <li><b>후속 결정 후보</b>: <b>large-input 관찰 Stage 1</b>(intra-document 구조 우선 섹션 분해 — <code>observation.location</code> 앵커 + dedup 키 <code>source_ref</code>→<code>source_ref+location</code>) → <b>Stage 2</b>(다문서 경량 inventory + purpose-결정 선택 + 비용 캐스케이드; RLM 개념 차용, 직접 도입 아님) · MCP Phase 2(원격/웹 Streamable HTTP+OAuth·멀티-artifact 번들) · evolve 트랙 활성화 · reconstruct spreadsheet/database 어댑터 · reconstruct effort 상수 settings 이관(G2 waiver).</li>
+  <li><b>후속 결정 후보</b>: <b>large-input Stage 2</b>(다문서 breadth 경량 inventory + purpose-결정 선택 + 비용 캐스케이드 + intra-document 섹션 분해[<code>source_ref+location</code> 앵커] + 진짜 윈도초과 tail 회복; RLM 개념 차용, 직접 도입 아님) · MCP Phase 2(원격/웹 Streamable HTTP+OAuth·멀티-artifact 번들) · evolve 트랙 활성화 · reconstruct spreadsheet/database 어댑터(S1 추출 어댑터 설계 진행 중·별도 트랙) · reconstruct effort 상수 settings 이관(G2 waiver).</li>
 </ul>
 
 <h2>변경 영향 읽는 법</h2>
