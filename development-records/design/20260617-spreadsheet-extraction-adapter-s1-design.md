@@ -318,16 +318,18 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 - onto reconstruct/review는 **설치 호스트의 Node MCP-서버 프로세스**에서 실행된다(`buildReconstructSourceObservation`가 거기서 돎). mcpb는 `runtimes:{node:>=18}` **Node 전용** 선언. §8 데모가 돈 **Cowork Linux 샌드박스(`mcp__workspace__bash`)와는 다른 환경**이다.
 - 따라서 §6 (d)"openpyxl via execution adapter(Python)" + §8.5 lazy pip-install은 **실제 타깃에서 비실행**. "타깃=Cowork→Python 보장→(d)" 추론은 category error → **폐기**.
 
-### 11.2 L1 결정(보정·확정): **capability-detect 다중 백엔드 체인** (사용자 지시 "상황별 다중" + 검증 수렴)
-1. **csv → 순수 Node(zero-dep)** — 어디서나, P1~P3 먼저.
-2. **xlsx 1순위 → 번들 Node 라이브러리**(SheetJS=포맷 폭 .xlsx/.xlsm/.xls/.ods, 또는 exceljs=streaming). in-process·호스트 이식성·`content_sha256`/직렬화 runtime 소유·mcpb 자족. 비용=prod dep+번들(§5 redesign-trigger(a) 측정)·zip-bomb/외부참조 공격면 한정.
-3. **선택 폴백 → Python/openpyxl** — Python 보장 환경에서만, **INV 리뷰 필수**(hash-pin offline wheel·explicit python3 resolver·고정 임베드 스크립트·fail-loud `unsupported_reason`). 번들/네트워크 설치 금지 가드.
-4. **기각**: osascript(macOS+Excel.app 전용·비결정·비번들) / LibreOffice-headless(바이너리 비번들·호스트 부재) / LLM-authored 스크립트(임의코드·거버넌스 충돌, §10.4서 이미 기각).
-- `execution_adapter` 이름 재사용 금지(LLM-라우팅 enum) → "workbook extraction runtime" 등 신규 명명.
+### 11.2 L1 결정(보정·확정, 2026-06-17): **단일 번들 의존성** (capability-detect 체인 폐기)
+**사용자 결정**: 사용자 환경이 너무 다양해 "그때그때 있는 환경 사용"(capability-detect 체인)은 코드 복잡도를 폭증시킨다. → **차라리 의존성 1개를 추가해 변수를 줄인다.** L1은 환경 감지/폴백 없이 **모든 호스트에서 동일하게 도는 in-process 백엔드**로 고정한다.
+1. **xlsx → 번들 Node 라이브러리 1개**(prod dep 추가). 후보: **SheetJS**(`xlsx`, 포맷 폭 .xlsx/.xlsm/.xls/.ods/.csv) 기본 / **exceljs**(streaming WorkbookReader, 대용량 우위·레거시 포맷 약함) — P4에서 번들크기·streaming 측정 후 1개 확정. in-process라 `content_sha256`/직렬화 runtime 소유, mcpb 자족, OS/런타임 무관.
+2. **csv → 순수 Node**(zero-dep) 유지, P1~P3 먼저. (SheetJS 채택 시 csv도 그걸로 통일 가능 — 변수 더 축소.)
+3. **폐기(폴백 없음)**: Python/openpyxl(런타임 Python 미보장·설치 부수효과·복잡도), osascript(macOS+Excel 전용), LibreOffice-headless(비번들), LLM-authored(임의코드·거버넌스). **환경 감지 분기 자체를 두지 않는다.**
+- 비용: prod dep +1·번들 증가(§5 redesign-trigger(a) 측정)·xlsx 파서 공격면(zip-bomb/외부참조) 한정. 이 비용을 **변수 축소·전 호스트 동일동작**과 맞바꾼다.
+- `execution_adapter` 이름 재사용 불필요(subprocess 없음). 신규 추출기는 평범한 결정론 runtime 코드.
 
 ### 11.3 HIGH (xlsx/wiring 전 폐쇄)
-- **PII-1**: §2.4 raw 셀 필드(sample_rows/top_values/key 값)가 reconstruct의 `content_excerpt`-keyed redaction을 우회 → **데이터 관측은 기본 aggregate-counts-only**(distinct_count·overlap 카운트만, 원시 값 비전파). 필요시 `SENSITIVE_SOURCE_PATTERNS`+`allowed_proof_forms`(hash/bounded_summary/source_ref_only) 경유.
-- **PII-2**: review 파이프라인은 **redaction 전무**(`renderReviewTargetMaterializedInput`→`fs.readFile utf8` 그대로) → C-review 전 review-side PII 계약 명문화; 인벤토리는 공유 아티팩트이므로 **공유 redaction projection 1개**를 양 소비자가 사용.
+> **PII/프라이버시 자체는 범위 밖**(우리는 도구를 만들 뿐, 데이터 보호는 호출자 책임). 그러나 검증이 이 발견을 raise한 **진짜 이유는 PII가 아니라 채널 거버넌스 우회**다 — onto엔 이미 source 내용이 프롬프트로 가는 길을 다스리는 `ReconstructSourceSafety*` 체계(visibility-tier·allowed-proof-form·intended-consumption·redaction·replay state + `source_safety_ledger` + `delta_observation_not_prompt_visible` 게이트)가 있다. 아래는 그 **in-scope** 관점으로 재서술.
+- **CHAN-1 (source→프롬프트 admission 우회)**: §2.4 신규 관측 필드가 source 내용을 LLM으로 보내면서 reconstruct의 **source-safety 채널**(현재 `content_excerpt`-keyed)을 **우회** → (a) prompt-visibility admission, (b) provenance/replay 원장, (c) allowed-proof-form(hash/bounded_summary/source_ref_only), (d) 미신뢰-source 취급(프롬프트 인젝션 표면)을 전부 건너뜀. PII 여부와 무관한 **거버넌스/재현/신뢰경계** 문제. → 신규 필드를 **source_safety_ledger를 통과**시키거나 `content_excerpt` 단일 채널로 모으고, 기본은 **aggregate(카운트)만** 프롬프트-가시.
+- **CHAN-2 (review의 source 내용 거버넌스 부재)**: review 파이프라인은 source-safety 원장·admission **자체가 없음**(`fs.readFile utf8` 그대로). 바이너리라 안 읽히던 게 S1으로 읽히면 **review가 source 내용을 무통제로 admit**하는 선재 갭이 드러남 → C-review 전 review측 admission 계약 필요; 인벤토리는 공유 아티팩트이므로 **공유 admission projection 1개**.
 - **ESC-1**: §10 LLM 에스컬레이션이 현재 **결정론·모델해소-이전 단계**에 주입됨(actor/seat/route·실패강등 미명세) + §2.2"S1엔 LLM 없음"과 자기모순 → 에스컬레이션을 **seed 단계 또는 명명된 prep-actor**(해소된 route)로 분리, 실패강등(LLM 불가→heuristic 파라미터+출처기록, hard 모호만 fail-loud) 명세.
 - **CACHE-1**: replay 결정론이 주장뿐 → **캐시 키 명세**: `content_sha256 + 휴리스틱/추출기 버전 + 에스컬레이션-트리거 버전 + 프롬프트 해시 + model id/effort`; 캐시 레코드를 replay 권위로(run.ts `AuthoredArtifactReuseMatch` 패턴), drift 테스트로 무효화 검증.
 
@@ -345,6 +347,6 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 - 개념경제: `execution_adapter` 오버로드(NAME-1)·evolve 계약 오귀속(AUTH-1)이 주 위반. envelope 분리(L2 공통+L1 어댑터)·aggregate-only redaction은 개념경제·capability-boundary에 부합. 방향은 건전, 명세·근거 보정 필요.
 
 ### 11.6 반영 계획
-- **선행(xlsx 전)**: 11.1 BLOCKER + 11.3 HIGH 4건 + 11.2 L1 체인 확정 → §6.1/§8.5/§5 P4·§2.4/§3.2·§3.1/§10·§2.2 보정.
+- **선행(xlsx 전)**: 11.1 BLOCKER + 11.3 HIGH 4건(CHAN-1/CHAN-2/ESC-1/CACHE-1) + 11.2 **L1 단일 번들 의존성** 확정 → §6.1/§8.5/§5 P4·§2.4/§3.2·§3.1/§10·§2.2 보정.
 - **동반**: 11.4 MEDIUM 13건을 해당 섹션에 반영.
 - **무관 유효**: csv-first P1~P3는 보정과 독립적으로 착수 가능.
