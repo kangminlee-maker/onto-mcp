@@ -96,6 +96,10 @@ import {
   type TargetMaterialRefDetection,
   type TargetMaterialKind,
 } from "../target-material-kind.js";
+import {
+  projectInventoryForPrompt,
+  type WorkbookStructuralInventory,
+} from "../spreadsheet-structure-observer.js";
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
 import {
   buildReconstructSourceObservation,
@@ -5475,6 +5479,26 @@ function compactStructuralDataForPrompt(
   expandDocument: boolean,
   documentExcerptCharBudget: number | undefined,
 ): Record<string, unknown> {
+  const compacted: Record<string, unknown> = { ...structuralData };
+
+  // Spreadsheet workbook_inventory: bounded prompt projection (SIZE axis), applied
+  // UNCONDITIONALLY — a workbook has no content_excerpt, so the budget guard below
+  // does not cover it, and the `!limit` early return must not let the full inventory
+  // (tens of thousands of formula cells on a real file) reach the prompt unbounded.
+  // The persisted source-observations.yaml keeps the full inventory; only this prompt
+  // payload is capped (capture-whole / project-bounded, mirroring content_excerpt).
+  const inventory = compacted.workbook_inventory;
+  if (inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)) {
+    const projection = projectInventoryForPrompt(
+      inventory as WorkbookStructuralInventory,
+    );
+    compacted.workbook_inventory = projection.inventory;
+    if (projection.truncated) {
+      compacted.workbook_inventory_projection_truncated = true;
+      compacted.workbook_inventory_projection_sections = projection.sections;
+    }
+  }
+
   const extension =
     typeof structuralData.extension === "string" ? structuralData.extension : null;
   const limit = effectiveContentExcerptCharLimit(
@@ -5484,13 +5508,13 @@ function compactStructuralDataForPrompt(
     extension,
     documentExcerptCharBudget,
   );
-  if (!limit) return structuralData;
-  const compacted: Record<string, unknown> = { ...structuralData };
-  const excerpt = compacted.content_excerpt;
-  if (typeof excerpt === "string" && excerpt.length > limit) {
-    compacted.content_excerpt = excerpt.slice(0, limit);
-    compacted.prompt_content_excerpt_truncated = true;
-    compacted.prompt_content_excerpt_char_limit = limit;
+  if (limit) {
+    const excerpt = compacted.content_excerpt;
+    if (typeof excerpt === "string" && excerpt.length > limit) {
+      compacted.content_excerpt = excerpt.slice(0, limit);
+      compacted.prompt_content_excerpt_truncated = true;
+      compacted.prompt_content_excerpt_char_limit = limit;
+    }
   }
   return compacted;
 }

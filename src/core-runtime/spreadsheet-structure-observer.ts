@@ -1806,3 +1806,202 @@ export function projectInventoryForAdmission(
     })),
   };
 }
+
+// ───────────────── Prompt projection (SIZE axis — distinct from admission's SAFETY axis) ─────────────────
+//
+// `projectInventoryForAdmission` removes raw values (CHAN-1, safety). It does NOT
+// bound array SIZE: a real workbook yields tens of thousands of formula cells and
+// thousands of per-(sheet,column) vocab rows (one observed file: 27,245 formula
+// cells across 14 sheets). The persisted inventory keeps all of them (replay /
+// provenance), but a SEED-AUTHORING PROMPT must carry only a bounded, representative
+// structural sample — otherwise the inventory overflows the model window with no
+// budget guard (the content_excerpt budget, which a workbook never has, does not
+// cover it). This is the spreadsheet analog of the document excerpt projection
+// budget: capture whole, project a bounded view at prompt time, and record what was
+// dropped so the prompt stays honest (the seed author can declare a limitation).
+//
+// v1 uses fixed, model-agnostic head caps: a representative structural sample is the
+// right product shape regardless of window (you never want all 27,245 formula cells
+// in a prompt), and fixed caps are safe even for the smallest registered window.
+// Window-proportional sizing is a deferred refinement (calibrated at the live bench,
+// like the document budget's CJK calibration).
+
+export interface WorkbookInventoryPromptCaps {
+  /** formula_cells kept PER SHEET — a per-sheet sample preserves the cross-sheet
+   *  reference picture (the inventory's reason for being) that a single global head-N
+   *  would bias toward the first sheet. */
+  max_formula_cells_per_sheet: number;
+  /** columns[] kept per per_sheet_data entry (a wide sheet can profile up to
+   *  data_layer_caps.max_columns_profiled = 512 columns). */
+  max_columns_per_sheet: number;
+  max_distinct_value_vocab: number;
+  max_pivot_tables: number;
+  max_cross_sheet_overlaps: number;
+  /** pairwise_overlap kept per kept cross_sheet_key_overlap entry. */
+  max_pairwise_per_overlap: number;
+  max_named_ranges: number;
+  max_tables: number;
+  max_data_validations: number;
+  max_external_links: number;
+  max_error_cells: number;
+  max_merged_ranges: number;
+  max_risk_signals: number;
+}
+
+export const DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS: WorkbookInventoryPromptCaps = {
+  max_formula_cells_per_sheet: 30,
+  max_columns_per_sheet: 64,
+  max_distinct_value_vocab: 200,
+  max_pivot_tables: 50,
+  max_cross_sheet_overlaps: 50,
+  max_pairwise_per_overlap: 16,
+  max_named_ranges: 50,
+  max_tables: 50,
+  max_data_validations: 50,
+  max_external_links: 50,
+  max_error_cells: 50,
+  max_merged_ranges: 50,
+  max_risk_signals: 50,
+};
+
+/** One dropped-detail record per section the projection actually trimmed. The seed
+ *  author reads these to declare an honest limitation about partial structural
+ *  evidence (handoff B2 / §11 honesty). */
+export interface WorkbookInventorySectionTruncation {
+  section: string;
+  kept: number;
+  total: number;
+}
+
+export interface WorkbookInventoryProjectionResult {
+  inventory: WorkbookStructuralInventory;
+  truncated: boolean;
+  sections: WorkbookInventorySectionTruncation[];
+}
+
+/** Keep the first `perGroup` items of each `key`-group, preserving original order.
+ *  Pure (input untouched). */
+function capPerGroup<T>(items: T[], key: (item: T) => string, perGroup: number): T[] {
+  const counts = new Map<string, number>();
+  const kept: T[] = [];
+  for (const item of items) {
+    const k = key(item);
+    const n = counts.get(k) ?? 0;
+    if (n < perGroup) {
+      kept.push(item);
+      counts.set(k, n + 1);
+    }
+  }
+  return kept;
+}
+
+/**
+ * Bounded, representative prompt projection of a workbook inventory (SIZE axis).
+ * Pure, deterministic, total: it never mutates the input and never throws, mirroring
+ * `projectInventoryForAdmission`. The returned `sections` enumerate exactly the
+ * arrays that were trimmed (kept < total) so truncation is surfaced honestly rather
+ * than silently swallowed.
+ */
+export function projectInventoryForPrompt(
+  inventory: WorkbookStructuralInventory,
+  caps: WorkbookInventoryPromptCaps = DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS,
+): WorkbookInventoryProjectionResult {
+  const sections: WorkbookInventorySectionTruncation[] = [];
+  const record = (section: string, kept: number, total: number): void => {
+    if (kept < total) sections.push({ section, kept, total });
+  };
+
+  const formulaCells = capPerGroup(
+    inventory.formula_cells,
+    (cell) => cell.sheet,
+    caps.max_formula_cells_per_sheet,
+  );
+  record("formula_cells", formulaCells.length, inventory.formula_cells.length);
+
+  // per_sheet_data: keep every sheet (sheet count is bounded), cap each sheet's
+  // columns[]. Aggregate the column trim across sheets into one honest record.
+  let columnsKept = 0;
+  let columnsTotal = 0;
+  const perSheetData = inventory.per_sheet_data.map((sheet) => {
+    columnsTotal += sheet.columns.length;
+    const columns = sheet.columns.slice(0, caps.max_columns_per_sheet);
+    columnsKept += columns.length;
+    return { ...sheet, columns };
+  });
+  record("per_sheet_data.columns", columnsKept, columnsTotal);
+
+  const distinctValueVocab = inventory.distinct_value_vocab.slice(
+    0,
+    caps.max_distinct_value_vocab,
+  );
+  record(
+    "distinct_value_vocab",
+    distinctValueVocab.length,
+    inventory.distinct_value_vocab.length,
+  );
+
+  const pivotTables = inventory.pivot_tables.slice(0, caps.max_pivot_tables);
+  record("pivot_tables", pivotTables.length, inventory.pivot_tables.length);
+
+  // cross_sheet_key_overlap: cap the entry list AND each kept entry's pairwise list.
+  let pairwiseKept = 0;
+  let pairwiseTotal = 0;
+  const crossSheetOverlaps = inventory.cross_sheet_key_overlap
+    .slice(0, caps.max_cross_sheet_overlaps)
+    .map((overlap) => {
+      pairwiseTotal += overlap.pairwise_overlap.length;
+      const pairwise = overlap.pairwise_overlap.slice(0, caps.max_pairwise_per_overlap);
+      pairwiseKept += pairwise.length;
+      return { ...overlap, pairwise_overlap: pairwise };
+    });
+  record(
+    "cross_sheet_key_overlap",
+    crossSheetOverlaps.length,
+    inventory.cross_sheet_key_overlap.length,
+  );
+  // pairwiseTotal only sums the KEPT entries; report the trim only when those entries
+  // were themselves trimmed (a dropped entry's pairwise loss is implied by the entry
+  // record above, so double-counting it would overstate the pairwise total).
+  record("cross_sheet_key_overlap.pairwise_overlap", pairwiseKept, pairwiseTotal);
+
+  const namedRanges = inventory.named_ranges.slice(0, caps.max_named_ranges);
+  record("named_ranges", namedRanges.length, inventory.named_ranges.length);
+
+  const tables = inventory.tables.slice(0, caps.max_tables);
+  record("tables", tables.length, inventory.tables.length);
+
+  const dataValidations = inventory.data_validations.slice(0, caps.max_data_validations);
+  record("data_validations", dataValidations.length, inventory.data_validations.length);
+
+  const externalLinks = inventory.external_links.slice(0, caps.max_external_links);
+  record("external_links", externalLinks.length, inventory.external_links.length);
+
+  const errorCells = inventory.error_cells.slice(0, caps.max_error_cells);
+  record("error_cells", errorCells.length, inventory.error_cells.length);
+
+  const mergedRanges = inventory.merged_ranges.slice(0, caps.max_merged_ranges);
+  record("merged_ranges", mergedRanges.length, inventory.merged_ranges.length);
+
+  const riskSignals = inventory.risk_signals.slice(0, caps.max_risk_signals);
+  record("risk_signals", riskSignals.length, inventory.risk_signals.length);
+
+  return {
+    inventory: {
+      ...inventory,
+      formula_cells: formulaCells,
+      per_sheet_data: perSheetData,
+      distinct_value_vocab: distinctValueVocab,
+      pivot_tables: pivotTables,
+      cross_sheet_key_overlap: crossSheetOverlaps,
+      named_ranges: namedRanges,
+      tables,
+      data_validations: dataValidations,
+      external_links: externalLinks,
+      error_cells: errorCells,
+      merged_ranges: mergedRanges,
+      risk_signals: riskSignals,
+    },
+    truncated: sections.length > 0,
+    sections,
+  };
+}

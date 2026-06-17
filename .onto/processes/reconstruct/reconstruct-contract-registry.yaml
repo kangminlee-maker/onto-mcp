@@ -69,7 +69,7 @@ source_profile_records:
     definition_ref: .onto/processes/reconstruct/source-profiles/spreadsheet.md
     definition_sha256: 6b543ab5621ef169312c1632fa6e446950a72621a974c29130695039cea7b51b
     contract_status: active
-    runtime_implementation_status: planned
+    runtime_implementation_status: partially_wired
     schema_version: 1
     profile_version: 3
     migration_status: current
