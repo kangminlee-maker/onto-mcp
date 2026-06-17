@@ -3,14 +3,90 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { zipSync, strToU8 } from "fflate";
 import {
   buildCsvInventory,
+  buildXlsxInventory,
+  DEFAULT_DATA_LAYER_CAPS,
   observeSpreadsheetSource,
   parseCsv,
   projectInventoryForAdmission,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
   type DataLayerCaps,
 } from "./spreadsheet-structure-observer.js";
+
+const shaBytes = (b: Uint8Array) =>
+  crypto.createHash("sha256").update(Buffer.from(b)).digest("hex");
+
+const RELS_NS = "http://schemas.openxmlformats.org/package/2006/relationships";
+const SML_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const WB_R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+const relType = (suffix: string) =>
+  `http://schemas.openxmlformats.org/officeDocument/2006/relationships/${suffix}`;
+
+/** Assemble a deterministic two-sheet .xlsx (People + hidden Depts) exercising
+ *  shared/inline strings, a formula with a cross-sheet ref, an error cell, a
+ *  merged range, a data validation, sheet protection, a defined name, an
+ *  external link, and a table. */
+function makeWorkbookXlsx(): Uint8Array {
+  return zipSync({
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+        `<sheet name="People" sheetId="1" r:id="rId1"/>` +
+        `<sheet name="Depts" sheetId="2" state="hidden" r:id="rId2"/>` +
+        `</sheets><definedNames>` +
+        `<definedName name="HeadcountRange">People!$A$1:$C$3</definedName>` +
+        `</definedNames></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+        `<Relationship Id="rId2" Type="${relType("worksheet")}" Target="worksheets/sheet2.xml"/>` +
+        `<Relationship Id="rId3" Type="${relType("sharedStrings")}" Target="sharedStrings.xml"/>` +
+        `<Relationship Id="rId4" Type="${relType("externalLink")}" Target="externalLinks/externalLink1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "xl/sharedStrings.xml": strToU8(
+      `<?xml version="1.0"?><sst xmlns="${SML_NS}">` +
+        `<si><t>name</t></si><si><t>role</t></si><si><t>dept</t></si>` +
+        `<si><t>Alice</t></si><si><t>eng</t></si><si><t>Bob</t></si></sst>`,
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:D3"/><sheetProtection sheet="1"/><sheetData>` +
+        `<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c><c r="D1" t="inlineStr"><is><t>score</t></is></c></row>` +
+        `<row r="2"><c r="A2" t="s"><v>3</v></c><c r="B2" t="s"><v>4</v></c><c r="C2" t="s"><v>4</v></c><c r="D2"><f>Depts!A1*2</f><v>10</v></c></row>` +
+        `<row r="3"><c r="A3" t="s"><v>5</v></c><c r="B3" t="s"><v>4</v></c><c r="C3" t="s"><v>4</v></c><c r="D3" t="e"><v>#DIV/0!</v></c></row>` +
+        `</sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>` +
+        `<dataValidations count="1"><dataValidation type="list" sqref="B2:B3"><formula1>"eng,sales"</formula1></dataValidation></dataValidations>` +
+        `</worksheet>`,
+    ),
+    "xl/worksheets/sheet2.xml": strToU8(
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+        `<row r="1"><c r="A1" t="s"><v>4</v></c></row></sheetData></worksheet>`,
+    ),
+    "xl/worksheets/_rels/sheet1.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("table")}" Target="../tables/table1.xml"/></Relationships>`,
+    ),
+    "xl/tables/table1.xml": strToU8(
+      `<?xml version="1.0"?><table xmlns="${SML_NS}" name="PeopleTable" ref="A1:D3"/>`,
+    ),
+  });
+}
+
+/** Minimal single-sheet workbook (no extras) for targeted cases. */
+function makeMinimalXlsxParts(sheetXml: string): Record<string, Uint8Array> {
+  return {
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/></Relationships>`,
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(sheetXml),
+  };
+}
 
 const sha = (s: string) => crypto.createHash("sha256").update(Buffer.from(s)).digest("hex");
 
@@ -141,14 +217,26 @@ describe("observeSpreadsheetSource — IO + dispatch", () => {
     expect(r.unsupported_reason).toBeNull();
   });
 
-  it("defers xlsx to P4 with an explicit unsupported_reason (not a crash)", async () => {
+  it("reads a real .xlsx file end to end (P4)", async () => {
     await fs.mkdir(tmp, { recursive: true });
     const file = path.join(tmp, "book.xlsx");
-    await fs.writeFile(file, Buffer.from([0x50, 0x4b, 0x03, 0x04])); // ZIP magic
+    const bytes = makeWorkbookXlsx();
+    await fs.writeFile(file, bytes);
     const r = await observeSpreadsheetSource(file);
     expect(r.workbook_kind).toBe("xlsx");
-    expect(r.unsupported_reason).toMatch(/not yet implemented/);
-    expect(r.content_sha256).toHaveLength(64); // raw-byte hash still recorded
+    expect(r.unsupported_reason).toBeNull();
+    expect(r.content_sha256).toBe(shaBytes(bytes)); // raw-byte hash
+    expect(r.sheets.map((s) => s.name)).toEqual(["People", "Depts"]);
+  });
+
+  it("defers xls/ods with an explicit unsupported_reason (not a crash)", async () => {
+    await fs.mkdir(tmp, { recursive: true });
+    const file = path.join(tmp, "legacy.ods");
+    await fs.writeFile(file, Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    const r = await observeSpreadsheetSource(file);
+    expect(r.workbook_kind).toBe("ods");
+    expect(r.unsupported_reason).toMatch(/deferred/);
+    expect(r.content_sha256).toHaveLength(64);
   });
 
   it("reports unreadable sources without throwing", async () => {
@@ -178,5 +266,133 @@ describe("projectInventoryForAdmission — channel governance (CHAN-1/CHAN-2)", 
     expect(JSON.stringify(projected)).not.toContain("Alice");
     // The source inventory is not mutated (projection returns a copy).
     expect(inventory.distinct_value_vocab[0].top_values).toBeDefined();
+  });
+});
+
+describe("buildXlsxInventory — structure + data (P4)", () => {
+  it("extracts sheets, schema, formulas, structure and aggregate data from a workbook", () => {
+    const bytes = makeWorkbookXlsx();
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/book.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+    });
+
+    expect(r.unsupported_reason).toBeNull();
+    expect(r.workbook_kind).toBe("xlsx");
+    expect(r.inspection_method).toBe("structure_inspected_only");
+    expect(r.content_sha256).toBe(shaBytes(bytes)); // raw-byte hash (HASH-1)
+
+    // sheets: order, hidden, protected
+    expect(r.sheets.map((s) => s.name)).toEqual(["People", "Depts"]);
+    expect(r.sheets.find((s) => s.name === "Depts")!.hidden).toBe(true);
+    expect(r.sheets.find((s) => s.name === "People")!.protected).toBe(true);
+    expect(r.sheets.find((s) => s.name === "People")!.dimensions).toEqual({ rows: 3, cols: 4 });
+
+    // per-sheet data: header detection + column names (shared + inline strings resolved)
+    const people = r.per_sheet_data.find((d) => d.sheet === "People")!;
+    expect(people.layout_kind).toBe("tabular");
+    expect(people.header_rows).toEqual([0]);
+    expect(people.columns.map((c) => c.name)).toEqual(["name", "role", "dept", "score"]);
+
+    // aggregate vocab for the categorical "role"/"dept" columns (counts only)
+    expect(r.distinct_value_vocab.some((v) => v.sheet === "People" && v.column === "role")).toBe(true);
+
+    // formulas + cross-sheet refs
+    expect(r.formula_cells).toHaveLength(1);
+    expect(r.formula_cells[0]!.cell).toBe("D2");
+    expect(r.formula_cells[0]!.cross_sheet_refs).toContain("Depts");
+
+    // error cells, merged ranges, data validations, named ranges, external links, tables
+    expect(r.error_cells.map((e) => e.token)).toContain("#DIV/0!");
+    expect(r.merged_ranges.map((m) => m.range)).toContain("A1:B1");
+    expect(r.data_validations[0]!.range).toBe("B2:B3");
+    expect(r.data_validations[0]!.rule_summary).toContain("list");
+    expect(r.named_ranges.map((n) => n.name)).toContain("HeadcountRange");
+    expect(r.external_links).toHaveLength(1);
+    const table = r.tables.find((t) => t.name === "PeopleTable")!;
+    expect(table.sheet).toBe("People");
+    expect(table.range).toBe("A1:D3");
+
+    // Channel governance (CHAN-1): raw DATA cell values never appear — only schema
+    // (header names), aggregate counts, and structural tokens (formula/error).
+    expect(JSON.stringify(r)).not.toContain("Alice");
+    expect(JSON.stringify(r)).not.toContain("Bob");
+  });
+
+  it("detects a VBA macro project from xl/vbaProject.bin even on a .xlsx", () => {
+    const parts = makeMinimalXlsxParts(
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+        `<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row></sheetData></worksheet>`,
+    );
+    parts["xl/vbaProject.bin"] = strToU8("fake-vba-binary");
+    const bytes = zipSync(parts);
+    const r = buildXlsxInventory({ sourceRef: "/abs/m.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.macro_present).toBe(true);
+    expect(r.risk_signals.some((s) => s.kind === "macro_present")).toBe(true);
+  });
+
+  it("bounds the per-sheet scan to the row cap and keeps the true declared size (early-exit)", () => {
+    const rows: string[] = [
+      `<row r="1"><c r="A1" t="inlineStr"><is><t>id</t></is></c></row>`,
+    ];
+    for (let i = 2; i <= 600; i += 1) {
+      // Row 600 (well beyond the cap) is a string that WOULD flip the column type
+      // to string if it were scanned. With the cap it must never be processed.
+      const cell =
+        i === 600
+          ? `<c r="A600" t="inlineStr"><is><t>LATEMARKER</t></is></c>`
+          : `<c r="A${i}"><v>${i}</v></c>`;
+      rows.push(`<row r="${i}">${cell}</row>`);
+    }
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A600"/><sheetData>${rows.join("")}</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/big.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      caps: { ...DEFAULT_DATA_LAYER_CAPS, max_rows_scanned_per_sheet: 50 },
+    });
+
+    expect(r.capture_truncated).toBe(true);
+    // Late string beyond the scan window never seen → column stays integer.
+    const col = r.per_sheet_data[0]!.columns.find((c) => c.name === "id")!;
+    expect(col.inferred_type).toBe("integer");
+    expect(JSON.stringify(r)).not.toContain("LATEMARKER");
+    // Declared dimension is still reported truthfully.
+    expect(r.sheets[0]!.dimensions.rows).toBe(600);
+  });
+
+  it("returns an honest unsupported_reason on a non-zip input (not a crash)", () => {
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/bad.xlsx",
+      bytes: strToU8("this is not a zip file"),
+      contentSha256: "deadbeef",
+      workbookKind: "xlsx",
+    });
+    expect(r.unsupported_reason).toMatch(/unzip failed/);
+  });
+
+  it("returns an honest unsupported_reason when xl/workbook.xml is absent", () => {
+    const bytes = zipSync({ "xl/styles.xml": strToU8("<styleSheet/>") });
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/nowb.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+    });
+    expect(r.unsupported_reason).toMatch(/workbook\.xml/);
+  });
+
+  it("is deterministic: identical bytes → identical inventory", () => {
+    const bytes = makeWorkbookXlsx();
+    const a = buildXlsxInventory({ sourceRef: "/abs/book.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    const b = buildXlsxInventory({ sourceRef: "/abs/book.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

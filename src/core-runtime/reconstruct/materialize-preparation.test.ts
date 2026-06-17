@@ -668,11 +668,11 @@ describe("buildReconstructSourceObservation spreadsheet seam (P2, csv)", () => {
     }
   });
 
-  it("admits an xlsx-family source as structure-only with an honest unsupported_reason (P4 deferred)", async () => {
+  it("admits an unparseable xlsx as structure-only with an honest unsupported_reason (no crash)", async () => {
     const root = await makeTmpProject();
     const target = path.join(root, "report.xlsx");
-    // xlsx extraction is deferred to P4; the bytes are irrelevant — the observer
-    // returns an unsupported inventory and the seam must still admit it honestly.
+    // A corrupt/non-OOXML .xlsx: the observer returns an unsupported inventory
+    // (honest reason, no crash) and the seam must still admit it.
     await fs.writeFile(target, "not-a-real-xlsx", "utf8");
     const detection = {
       ref: target,
@@ -688,7 +688,7 @@ describe("buildReconstructSourceObservation spreadsheet seam (P2, csv)", () => {
     expect(sd.content_sha256).toBe(await sha256File(target));
     const inventory = sd.workbook_inventory as Record<string, unknown>;
     expect(inventory.workbook_kind).toBe("xlsx");
-    expect(inventory.unsupported_reason).toEqual(expect.stringContaining("P4"));
+    expect(inventory.unsupported_reason).toEqual(expect.stringContaining("unzip failed"));
     expect(observation!.summary).toContain("extraction unsupported");
     expect(observation!.summary).toContain("structure_inspected_only");
   });

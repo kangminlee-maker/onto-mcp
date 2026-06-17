@@ -11,9 +11,10 @@
 // at the top level of core-runtime alongside target-material-kind.ts rather than
 // under a pipeline subdir (repo-layout.md; import-boundary).
 //
-// This file ships P0 (the inventory type + envelope) and P1 (the pure-Node,
-// zero-dependency CSV extractor). xlsx/xls/ods go through a bundled Node library
-// at P4 (design §11.2) and currently return `unsupported_reason`.
+// This file ships P0 (the inventory type + envelope), P1 (the pure-Node,
+// zero-dependency CSV extractor) and P4 (xlsx/xlsm via the bundled read-only
+// fflate + saxes stack — streaming unzip + SAX, design §11.2). xls (BIFF) and
+// ods (a different ZIP/XML schema) still return `unsupported_reason`.
 //
 // Capability boundary (design §1.2, §10 C′): extraction here is deterministic and
 // uses only deterministic heuristics for the judgment calls (header detection,
@@ -28,6 +29,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { unzipSync, type Unzipped, type UnzipFileInfo } from "fflate";
+import { SaxesParser, type SaxesTagPlain } from "saxes";
 
 export const SPREADSHEET_OBSERVER_ADAPTER_ID = "spreadsheet-structure-observer";
 export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 1;
@@ -265,52 +268,38 @@ function sha256Hex(bytes: Buffer | string): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-/** Build the inventory from already-read CSV text. Pure & deterministic:
- *  identical (sourceRef, content, contentSha256, caps) → identical inventory. */
-export function buildCsvInventory(args: {
-  sourceRef: string;
-  content: string;
-  contentSha256: string;
-  caps?: DataLayerCaps;
-}): WorkbookStructuralInventory {
-  const caps = args.caps ?? DEFAULT_DATA_LAYER_CAPS;
-  const sheetName = path.basename(args.sourceRef);
-  const delimiter = detectDelimiter(args.content);
-  // +1 so a header row never eats into the data-row scan budget.
-  const { rows, truncated: rowsTruncated } = parseCsv(
-    args.content,
-    delimiter,
-    caps.max_rows_scanned_per_sheet + 1,
-  );
+interface SheetRowProfile {
+  layout_kind: SheetLayoutKind;
+  header_rows: number[] | null;
+  columns: InventoryColumn[];
+  distinct_value_vocab: DistinctValueVocabEntry[];
+  risk_signals: InventoryRiskSignal[];
+  data_layer_truncated: boolean;
+  col_count: number;
+  row_count: number;
+}
 
-  const envelope = {
-    adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
-    adapter_version: SPREADSHEET_OBSERVER_ADAPTER_VERSION,
-    source_ref: path.resolve(args.sourceRef),
-    content_sha256: args.contentSha256,
-    workbook_kind: (delimiter === "\t" ? "tsv" : "csv") as WorkbookKind,
-    inspection_method: "structure_inspected_only" as const,
-    named_ranges: [],
-    tables: [],
-    formula_cells: [],
-    merged_ranges: [],
-    data_validations: [],
-    external_links: [],
-    error_cells: [],
-    macro_present: false,
-    cross_sheet_key_overlap: [] as CrossSheetKeyOverlap[], // single logical sheet
-    data_layer_caps: caps,
-  };
-
+/** Deterministic per-sheet data profiling shared by every format (csv = one
+ *  sheet; xlsx = one call per sheet). Given the already-parsed cell grid (header
+ *  + data rows, already bounded by the row cap upstream), derive header detection,
+ *  column types, aggregate distinct counts, and ragged-row risk signals. Holds NO
+ *  raw values beyond bounded distinct sets it counts internally (CHAN-1). */
+function profileSheetRows(args: {
+  sheetName: string;
+  rows: string[][];
+  caps: DataLayerCaps;
+}): SheetRowProfile {
+  const { sheetName, rows, caps } = args;
   if (rows.length === 0) {
     return {
-      ...envelope,
-      sheets: [{ name: sheetName, used_range: null, dimensions: { rows: 0, cols: 0 }, hidden: false, protected: false }],
-      risk_signals: [],
-      per_sheet_data: [{ sheet: sheetName, layout_kind: "unknown", header_rows: null, columns: [] }],
+      layout_kind: "unknown",
+      header_rows: null,
+      columns: [],
       distinct_value_vocab: [],
-      capture_truncated: rowsTruncated,
-      unsupported_reason: "empty csv (no rows)",
+      risk_signals: [],
+      data_layer_truncated: false,
+      col_count: 0,
+      row_count: 0,
     };
   }
 
@@ -402,32 +391,643 @@ export function buildCsvInventory(args: {
     }
   }
 
-  const colsTruncated = colCount > caps.max_columns_profiled;
-  const usedRange = `R1C1:R${rows.length}C${colCount}`;
   const layout: SheetLayoutKind = hasHeader ? "tabular" : "matrix_no_header";
+  return {
+    layout_kind: layout,
+    header_rows: headerRows,
+    columns: layout === "tabular" ? columns : [],
+    distinct_value_vocab,
+    risk_signals,
+    data_layer_truncated: dataLayerTruncated,
+    col_count: colCount,
+    row_count: rows.length,
+  };
+}
+
+/** Build the inventory from already-read CSV text. Pure & deterministic:
+ *  identical (sourceRef, content, contentSha256, caps) → identical inventory. */
+export function buildCsvInventory(args: {
+  sourceRef: string;
+  content: string;
+  contentSha256: string;
+  caps?: DataLayerCaps;
+}): WorkbookStructuralInventory {
+  const caps = args.caps ?? DEFAULT_DATA_LAYER_CAPS;
+  const sheetName = path.basename(args.sourceRef);
+  const delimiter = detectDelimiter(args.content);
+  // +1 so a header row never eats into the data-row scan budget.
+  const { rows, truncated: rowsTruncated } = parseCsv(
+    args.content,
+    delimiter,
+    caps.max_rows_scanned_per_sheet + 1,
+  );
+
+  const envelope = {
+    adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
+    adapter_version: SPREADSHEET_OBSERVER_ADAPTER_VERSION,
+    source_ref: path.resolve(args.sourceRef),
+    content_sha256: args.contentSha256,
+    workbook_kind: (delimiter === "\t" ? "tsv" : "csv") as WorkbookKind,
+    inspection_method: "structure_inspected_only" as const,
+    named_ranges: [],
+    tables: [],
+    formula_cells: [],
+    merged_ranges: [],
+    data_validations: [],
+    external_links: [],
+    error_cells: [],
+    macro_present: false,
+    cross_sheet_key_overlap: [] as CrossSheetKeyOverlap[], // single logical sheet
+    data_layer_caps: caps,
+  };
+
+  if (rows.length === 0) {
+    return {
+      ...envelope,
+      sheets: [{ name: sheetName, used_range: null, dimensions: { rows: 0, cols: 0 }, hidden: false, protected: false }],
+      risk_signals: [],
+      per_sheet_data: [{ sheet: sheetName, layout_kind: "unknown", header_rows: null, columns: [] }],
+      distinct_value_vocab: [],
+      capture_truncated: rowsTruncated,
+      unsupported_reason: "empty csv (no rows)",
+    };
+  }
+
+  const profile = profileSheetRows({ sheetName, rows, caps });
+  const colsTruncated = profile.col_count > caps.max_columns_profiled;
 
   return {
     ...envelope,
     sheets: [
       {
         name: sheetName,
-        used_range: usedRange,
-        dimensions: { rows: rows.length, cols: colCount },
+        used_range: `R1C1:R${profile.row_count}C${profile.col_count}`,
+        dimensions: { rows: profile.row_count, cols: profile.col_count },
         hidden: false,
         protected: false,
       },
     ],
-    risk_signals,
+    risk_signals: profile.risk_signals,
     per_sheet_data: [
       {
         sheet: sheetName,
-        layout_kind: layout,
-        header_rows: headerRows,
-        columns: layout === "tabular" ? columns : [],
+        layout_kind: profile.layout_kind,
+        header_rows: profile.header_rows,
+        columns: profile.columns,
       },
     ],
+    distinct_value_vocab: profile.distinct_value_vocab,
+    capture_truncated: rowsTruncated || colsTruncated || profile.data_layer_truncated,
+    unsupported_reason: null,
+  };
+}
+
+// ───────────────────────── P4: xlsx/xlsm extractor (fflate + saxes) ─────────────────────────
+//
+// Read-only OOXML structure extraction. We stream-decompress only the XML parts
+// we parse (filter), guard each entry with a decompressed-byte budget (zip-bomb
+// defense), and bound the per-sheet cell scan by data_layer_caps with early-exit
+// (cell VALUE work stops at the row cap; structural parts after <sheetData> —
+// mergeCells/dataValidations/sheetProtection — are still captured). No writing,
+// no formula recalculation, no whole-workbook object model.
+
+/** Per-entry decompressed-size budget. A single XML part larger than this is
+ *  skipped (capture_truncated + risk signal) rather than inflated into memory. */
+const XLSX_PER_ENTRY_BYTE_BUDGET = 64 * 1024 * 1024;
+
+const XLSX_FORMULA_CAP = 5000;
+const XLSX_MERGE_CAP = 2000;
+const XLSX_DATAVALIDATION_CAP = 1000;
+const XLSX_ERROR_CELL_CAP = 1000;
+
+type SaxAttributes = Record<string, string>;
+function attrsOf(node: SaxesTagPlain): SaxAttributes {
+  return node.attributes as SaxAttributes;
+}
+
+/** "A"→0, "Z"→25, "AA"→26 (0-based column index). */
+function columnLettersToIndex(letters: string): number {
+  let n = 0;
+  for (let i = 0; i < letters.length; i += 1) {
+    n = n * 26 + (letters.charCodeAt(i) - 64);
+  }
+  return n - 1;
+}
+
+/** "A1" / "$A$1" → { col, row } (0-based col, 1-based row); null if unparseable. */
+function parseCellRef(ref: string): { col: number; row: number } | null {
+  const m = /^\$?([A-Z]+)\$?(\d+)$/.exec(ref);
+  if (!m) return null;
+  return { col: columnLettersToIndex(m[1]!), row: parseInt(m[2]!, 10) };
+}
+
+/** "A1:G100" / "A1" → { rows, cols }; null if unparseable. */
+function parseRangeDims(ref: string): { rows: number; cols: number } | null {
+  const parts = ref.split(":");
+  const a = parseCellRef((parts[0] ?? "").trim());
+  const b = parseCellRef((parts[parts.length - 1] ?? "").trim());
+  if (!a || !b) return null;
+  return { rows: Math.max(a.row, b.row), cols: Math.max(a.col, b.col) + 1 };
+}
+
+/** Sheet names referenced by a formula via the `Sheet!`/`'Sheet Name'!` prefix
+ *  (a cross-sheet relationship signal), excluding self-references. */
+function extractCrossSheetRefs(formula: string, currentSheet: string): string[] {
+  const refs = new Set<string>();
+  const re = /(?:'([^']+)'|([A-Za-z_\\][A-Za-z0-9_.]*))!/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(formula)) !== null) {
+    const name = (m[1] ?? m[2] ?? "").replace(/''/g, "'");
+    if (name && name !== currentSheet) refs.add(name);
+  }
+  return [...refs];
+}
+
+function decodeEntry(files: Unzipped, name: string): string | null {
+  const bytes = files[name];
+  return bytes ? new TextDecoder().decode(bytes) : null;
+}
+
+function resolveZipPath(baseDir: string, target: string): string {
+  if (target.startsWith("/")) return target.slice(1);
+  return path.posix.normalize(path.posix.join(baseDir, target));
+}
+
+interface ParsedRel { id: string; type: string; target: string }
+function parseRels(xml: string): ParsedRel[] {
+  const rels: ParsedRel[] = [];
+  const parser = new SaxesParser();
+  parser.on("opentag", (node) => {
+    if (node.name === "Relationship") {
+      const a = attrsOf(node);
+      rels.push({ id: a.Id ?? "", type: a.Type ?? "", target: a.Target ?? "" });
+    }
+  });
+  parser.write(xml).close();
+  return rels;
+}
+
+interface ParsedWorkbook {
+  sheets: Array<{ name: string; rid: string; hidden: boolean }>;
+  definedNames: Array<{ name: string; refersTo: string; localSheetId: string | undefined }>;
+}
+function parseWorkbook(xml: string): ParsedWorkbook {
+  const sheets: ParsedWorkbook["sheets"] = [];
+  const definedNames: ParsedWorkbook["definedNames"] = [];
+  const parser = new SaxesParser();
+  let inDefinedName = false;
+  let dnName = "";
+  let dnLocal: string | undefined;
+  let dnText = "";
+  parser.on("opentag", (node) => {
+    const a = attrsOf(node);
+    if (node.name === "sheet") {
+      const state = a.state ?? "visible";
+      sheets.push({
+        name: a.name ?? "",
+        rid: a["r:id"] ?? a.id ?? "",
+        hidden: state === "hidden" || state === "veryHidden",
+      });
+    } else if (node.name === "definedName") {
+      inDefinedName = true;
+      dnName = a.name ?? "";
+      dnLocal = a.localSheetId;
+      dnText = "";
+    }
+  });
+  parser.on("text", (t) => {
+    if (inDefinedName) dnText += t;
+  });
+  parser.on("closetag", (node) => {
+    if (node.name === "definedName") {
+      definedNames.push({ name: dnName, refersTo: dnText.trim(), localSheetId: dnLocal });
+      inDefinedName = false;
+    }
+  });
+  parser.write(xml).close();
+  return { sheets, definedNames };
+}
+
+/** Shared string table (cells of type `s` reference it by index). Rich-text runs
+ *  are concatenated. Bounded only by the per-entry byte budget upstream. */
+function parseSharedStrings(xml: string): string[] {
+  const strings: string[] = [];
+  const parser = new SaxesParser();
+  let inSi = false;
+  let inT = false;
+  let current = "";
+  parser.on("opentag", (node) => {
+    if (node.name === "si") {
+      inSi = true;
+      current = "";
+    } else if (node.name === "t" && inSi) {
+      inT = true;
+    }
+  });
+  parser.on("text", (t) => {
+    if (inT) current += t;
+  });
+  parser.on("closetag", (node) => {
+    if (node.name === "t") inT = false;
+    else if (node.name === "si") {
+      strings.push(current);
+      inSi = false;
+    }
+  });
+  parser.write(xml).close();
+  return strings;
+}
+
+function parseTable(xml: string): { name: string; ref: string } | null {
+  let result: { name: string; ref: string } | null = null;
+  const parser = new SaxesParser();
+  parser.on("opentag", (node) => {
+    if (node.name === "table" && !result) {
+      const a = attrsOf(node);
+      result = { name: a.name ?? "", ref: a.ref ?? "" };
+    }
+  });
+  parser.write(xml).close();
+  return result;
+}
+
+interface ParsedWorksheet {
+  dimensions: { rows: number; cols: number };
+  protected: boolean;
+  merged_ranges: Array<{ sheet: string; range: string }>;
+  data_validations: Array<{ sheet: string; range: string; rule_summary: string }>;
+  formula_cells: Array<{ sheet: string; cell: string; formula: string; cross_sheet_refs: string[] }>;
+  error_cells: Array<{ sheet: string; cell: string; token: string }>;
+  rows: string[][];
+  rows_truncated: boolean;
+}
+function parseWorksheet(args: {
+  xml: string;
+  sharedStrings: string[];
+  sheetName: string;
+  caps: DataLayerCaps;
+}): ParsedWorksheet {
+  const { xml, sharedStrings, sheetName, caps } = args;
+  const merged_ranges: ParsedWorksheet["merged_ranges"] = [];
+  const data_validations: ParsedWorksheet["data_validations"] = [];
+  const formula_cells: ParsedWorksheet["formula_cells"] = [];
+  const error_cells: ParsedWorksheet["error_cells"] = [];
+  const rows: string[][] = [];
+  let protectedSheet = false;
+  let declaredDims: { rows: number; cols: number } | null = null;
+  let maxRow = 0;
+  let maxCol = 0;
+  let rowsTruncated = false;
+
+  let curRow: string[] | null = null;
+  let cellRef = "";
+  let cellType = "";
+  let cellCol = 0;
+  let inV = false;
+  let inF = false;
+  let inIs = false;
+  let inIsT = false;
+  let vText = "";
+  let fText = "";
+  let isText = "";
+
+  const parser = new SaxesParser();
+  parser.on("opentag", (node) => {
+    const a = attrsOf(node);
+    switch (node.name) {
+      case "dimension": {
+        if (a.ref) declaredDims = parseRangeDims(a.ref);
+        break;
+      }
+      case "sheetProtection":
+        protectedSheet = true;
+        break;
+      case "mergeCell":
+        if (a.ref && merged_ranges.length < XLSX_MERGE_CAP) {
+          merged_ranges.push({ sheet: sheetName, range: a.ref });
+        }
+        break;
+      case "dataValidation":
+        if (data_validations.length < XLSX_DATAVALIDATION_CAP) {
+          data_validations.push({
+            sheet: sheetName,
+            range: a.sqref ?? "",
+            rule_summary: `type=${a.type ?? "any"}`,
+          });
+        }
+        break;
+      case "row":
+        curRow = rows.length >= caps.max_rows_scanned_per_sheet ? null : [];
+        if (curRow === null) rowsTruncated = true;
+        break;
+      case "c": {
+        cellRef = a.r ?? "";
+        cellType = a.t ?? "";
+        const parsed = cellRef ? parseCellRef(cellRef) : null;
+        cellCol = parsed ? parsed.col : curRow ? curRow.length : 0;
+        if (parsed) {
+          maxRow = Math.max(maxRow, parsed.row);
+          maxCol = Math.max(maxCol, parsed.col + 1);
+        }
+        vText = "";
+        fText = "";
+        isText = "";
+        break;
+      }
+      case "v":
+        inV = true;
+        vText = "";
+        break;
+      case "f":
+        inF = true;
+        fText = "";
+        break;
+      case "is":
+        inIs = true;
+        break;
+      case "t":
+        if (inIs) {
+          inIsT = true;
+          isText = "";
+        }
+        break;
+      default:
+        break;
+    }
+  });
+  parser.on("text", (t) => {
+    if (inV) vText += t;
+    else if (inF) fText += t;
+    else if (inIsT) isText += t;
+  });
+  parser.on("closetag", (node) => {
+    switch (node.name) {
+      case "v":
+        inV = false;
+        break;
+      case "f":
+        inF = false;
+        break;
+      case "is":
+        inIs = false;
+        break;
+      case "c": {
+        // Formula + error are structural (kept regardless of the row cap, bounded
+        // by their own caps). The cell's grid value is the cached <v> result.
+        if (fText.length > 0 && formula_cells.length < XLSX_FORMULA_CAP) {
+          formula_cells.push({
+            sheet: sheetName,
+            cell: cellRef,
+            formula: fText,
+            cross_sheet_refs: extractCrossSheetRefs(fText, sheetName),
+          });
+        }
+        if (cellType === "e" && error_cells.length < XLSX_ERROR_CELL_CAP) {
+          error_cells.push({ sheet: sheetName, cell: cellRef, token: vText });
+        }
+        if (curRow) {
+          let value: string;
+          if (cellType === "s") value = sharedStrings[parseInt(vText, 10)] ?? "";
+          else if (cellType === "inlineStr") value = isText;
+          else if (cellType === "b") value = vText === "1" ? "true" : "false";
+          else value = vText; // str / e / n / default number
+          if (cellCol >= 0) {
+            while (curRow.length < cellCol) curRow.push("");
+            curRow[cellCol] = value;
+          }
+        }
+        break;
+      }
+      case "t":
+        if (inIs) inIsT = false;
+        break;
+      case "row":
+        if (curRow) {
+          rows.push(curRow);
+          curRow = null;
+        }
+        break;
+      default:
+        break;
+    }
+  });
+  parser.write(xml).close();
+
+  return {
+    dimensions: declaredDims ?? { rows: maxRow, cols: maxCol },
+    protected: protectedSheet,
+    merged_ranges,
+    data_validations,
+    formula_cells,
+    error_cells,
+    rows,
+    rows_truncated: rowsTruncated,
+  };
+}
+
+/** Build the inventory from xlsx/xlsm bytes (design §11.2). Deterministic and
+ *  read-only. `content_sha256` is the RAW-byte hash, supplied by the caller. */
+export function buildXlsxInventory(args: {
+  sourceRef: string;
+  bytes: Uint8Array;
+  contentSha256: string;
+  workbookKind: WorkbookKind;
+  caps?: DataLayerCaps;
+}): WorkbookStructuralInventory {
+  const caps = args.caps ?? DEFAULT_DATA_LAYER_CAPS;
+  const risk_signals: InventoryRiskSignal[] = [];
+  let captureTruncated = false;
+  let macroPresent = args.workbookKind === "xlsm";
+
+  const unsupported = (reason: string): WorkbookStructuralInventory =>
+    unsupportedInventory({
+      sourceRef: args.sourceRef,
+      contentSha256: args.contentSha256,
+      workbookKind: args.workbookKind,
+      reason,
+    });
+
+  let files: Unzipped;
+  try {
+    files = unzipSync(args.bytes, {
+      filter: (f: UnzipFileInfo) => {
+        if (f.name === "xl/vbaProject.bin") {
+          macroPresent = true;
+          return false;
+        }
+        if (f.originalSize > XLSX_PER_ENTRY_BYTE_BUDGET) {
+          captureTruncated = true;
+          risk_signals.push({
+            kind: "oversized_zip_entry",
+            location: f.name,
+            literal: `original_size=${f.originalSize} exceeds ${XLSX_PER_ENTRY_BYTE_BUDGET}`,
+          });
+          return false;
+        }
+        // Only the XML/rels parts we parse — never media/binaries.
+        return /^xl\/.*\.(xml|rels)$/i.test(f.name);
+      },
+    });
+  } catch (error) {
+    return unsupported(`xlsx unzip failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  const workbookXml = decodeEntry(files, "xl/workbook.xml");
+  if (!workbookXml) {
+    return unsupported("xlsx missing xl/workbook.xml (not a valid OOXML workbook)");
+  }
+
+  let workbook: ParsedWorkbook;
+  let workbookRels: ParsedRel[];
+  let sharedStrings: string[];
+  try {
+    workbook = parseWorkbook(workbookXml);
+    const relsXml = decodeEntry(files, "xl/_rels/workbook.xml.rels");
+    workbookRels = relsXml ? parseRels(relsXml) : [];
+    const sstXml = decodeEntry(files, "xl/sharedStrings.xml");
+    sharedStrings = sstXml ? parseSharedStrings(sstXml) : [];
+  } catch (error) {
+    return unsupported(`xlsx workbook parse failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  const relById = new Map(workbookRels.map((r) => [r.id, r]));
+
+  // External workbook links (relationship type ends with /externalLink).
+  const external_links = workbookRels
+    .filter((r) => r.type.toLowerCase().endsWith("externallink"))
+    .map((r) => ({ target: r.target, kind: "external_workbook_link" }));
+
+  const named_ranges = workbook.definedNames.map((dn) => ({
+    name: dn.name,
+    scope: dn.localSheetId !== undefined ? `sheet:${dn.localSheetId}` : "workbook",
+    refers_to: dn.refersTo,
+  }));
+
+  const sheets: InventorySheet[] = [];
+  const per_sheet_data: PerSheetData[] = [];
+  const distinct_value_vocab: DistinctValueVocabEntry[] = [];
+  const tables: Array<{ name: string; sheet: string; range: string }> = [];
+  const formula_cells: WorkbookStructuralInventory["formula_cells"] = [];
+  const merged_ranges: WorkbookStructuralInventory["merged_ranges"] = [];
+  const data_validations: WorkbookStructuralInventory["data_validations"] = [];
+  const error_cells: WorkbookStructuralInventory["error_cells"] = [];
+
+  for (const sheetEntry of workbook.sheets) {
+    const rel = relById.get(sheetEntry.rid);
+    const sheetPath = rel ? resolveZipPath("xl", rel.target) : null;
+    const sheetXml = sheetPath ? decodeEntry(files, sheetPath) : null;
+    if (!sheetXml) {
+      // Sheet part missing/unreadable — record it literally, keep the others.
+      risk_signals.push({
+        kind: "unreadable_sheet_part",
+        location: sheetEntry.name,
+        literal: sheetPath ? `missing entry ${sheetPath}` : `unresolved relationship ${sheetEntry.rid}`,
+      });
+      sheets.push({
+        name: sheetEntry.name,
+        used_range: null,
+        dimensions: { rows: 0, cols: 0 },
+        hidden: sheetEntry.hidden,
+        protected: false,
+      });
+      per_sheet_data.push({ sheet: sheetEntry.name, layout_kind: "unknown", header_rows: null, columns: [] });
+      continue;
+    }
+
+    let parsed: ParsedWorksheet;
+    try {
+      parsed = parseWorksheet({ xml: sheetXml, sharedStrings, sheetName: sheetEntry.name, caps });
+    } catch (error) {
+      risk_signals.push({
+        kind: "unreadable_sheet_part",
+        location: sheetEntry.name,
+        literal: `parse error: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      sheets.push({
+        name: sheetEntry.name,
+        used_range: null,
+        dimensions: { rows: 0, cols: 0 },
+        hidden: sheetEntry.hidden,
+        protected: false,
+      });
+      per_sheet_data.push({ sheet: sheetEntry.name, layout_kind: "unknown", header_rows: null, columns: [] });
+      continue;
+    }
+
+    if (parsed.rows_truncated) captureTruncated = true;
+    formula_cells.push(...parsed.formula_cells);
+    merged_ranges.push(...parsed.merged_ranges);
+    data_validations.push(...parsed.data_validations);
+    error_cells.push(...parsed.error_cells);
+
+    const profile = profileSheetRows({ sheetName: sheetEntry.name, rows: parsed.rows, caps });
+    if (profile.data_layer_truncated) captureTruncated = true;
+    risk_signals.push(...profile.risk_signals);
+    distinct_value_vocab.push(...profile.distinct_value_vocab);
+
+    const dims = parsed.dimensions;
+    sheets.push({
+      name: sheetEntry.name,
+      used_range: dims.rows > 0 ? `R1C1:R${dims.rows}C${dims.cols}` : null,
+      dimensions: dims,
+      hidden: sheetEntry.hidden,
+      protected: parsed.protected,
+    });
+    per_sheet_data.push({
+      sheet: sheetEntry.name,
+      layout_kind: profile.layout_kind,
+      header_rows: profile.header_rows,
+      columns: profile.columns,
+    });
+
+    // Tables owned by this sheet (sheet rels → ../tables/tableN.xml).
+    if (sheetPath) {
+      const sheetRelsPath = `${path.posix.dirname(sheetPath)}/_rels/${path.posix.basename(sheetPath)}.rels`;
+      const sheetRelsXml = decodeEntry(files, sheetRelsPath);
+      if (sheetRelsXml) {
+        for (const r of parseRels(sheetRelsXml)) {
+          if (!r.type.toLowerCase().endsWith("table")) continue;
+          const tablePath = resolveZipPath(path.posix.dirname(sheetPath), r.target);
+          const tableXml = decodeEntry(files, tablePath);
+          const table = tableXml ? parseTable(tableXml) : null;
+          if (table) tables.push({ name: table.name, sheet: sheetEntry.name, range: table.ref });
+        }
+      }
+    }
+  }
+
+  if (macroPresent) {
+    risk_signals.push({ kind: "macro_present", location: path.basename(args.sourceRef), literal: "workbook carries a VBA project" });
+  }
+  if (external_links.length > 0) {
+    risk_signals.push({ kind: "external_links_present", location: path.basename(args.sourceRef), literal: `${external_links.length} external workbook link(s)` });
+  }
+
+  return {
+    adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
+    adapter_version: SPREADSHEET_OBSERVER_ADAPTER_VERSION,
+    source_ref: path.resolve(args.sourceRef),
+    content_sha256: args.contentSha256,
+    workbook_kind: args.workbookKind,
+    inspection_method: "structure_inspected_only",
+    sheets,
+    named_ranges,
+    tables,
+    formula_cells,
+    merged_ranges,
+    data_validations,
+    external_links,
+    error_cells,
+    macro_present: macroPresent,
+    risk_signals,
+    per_sheet_data,
     distinct_value_vocab,
-    capture_truncated: rowsTruncated || colsTruncated || dataLayerTruncated,
+    // Cross-sheet key-overlap (a data-relation signal, §2.4) needs retained
+    // bounded per-column value sets across sheets — a distinct increment, not
+    // wired yet (csv returns [] too).
+    cross_sheet_key_overlap: [],
+    data_layer_caps: caps,
+    capture_truncated: captureTruncated,
     unsupported_reason: null,
   };
 }
@@ -506,12 +1106,22 @@ export async function observeSpreadsheetSource(
       ...(opts?.caps ? { caps: opts.caps } : {}),
     });
   }
-  // xlsx/xlsm/xls/ods — P4 (bundled Node library). Not yet wired (design §11.2).
+  if (workbookKind === "xlsx" || workbookKind === "xlsm") {
+    return buildXlsxInventory({
+      sourceRef,
+      bytes,
+      contentSha256,
+      workbookKind,
+      ...(opts?.caps ? { caps: opts.caps } : {}),
+    });
+  }
+  // xls (BIFF binary) / ods (a different ZIP/XML schema) — separate parsers, not
+  // yet implemented (design §11.2 scoped xlsx/xlsm first).
   return unsupportedInventory({
     sourceRef,
     contentSha256,
     workbookKind,
-    reason: `${workbookKind} extraction not yet implemented (P4: bundled Node library)`,
+    reason: `${workbookKind} extraction not yet implemented (xls/ods deferred; xlsx/xlsm supported)`,
   });
 }
 

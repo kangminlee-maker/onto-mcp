@@ -74,16 +74,17 @@ describe("spreadsheet target rendering (P3 review seam, §3.2 / CHAN-2)", () => 
     }
   });
 
-  it("renders an xlsx target as structure-only with an honest unsupported note, not binary garbage", async () => {
+  it("renders a corrupt xlsx target as structure-only with an honest unsupported note, not binary garbage", async () => {
     const root = await makeTmpDir();
     const xlsx = path.join(root, "report.xlsx");
-    // Binary-ish bytes that would be garbage if dumped as utf8.
+    // A truncated/corrupt zip: binary-ish bytes that would be garbage if dumped
+    // as utf8. The observer reports an honest unsupported reason instead.
     await fs.writeFile(xlsx, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]));
 
     const snapshot = await renderTargetSnapshot([xlsx]);
     expect(snapshot).toContain("Spreadsheet Structural Inventory");
     expect(snapshot).toContain("unsupported:");
-    expect(snapshot).toContain("P4");
+    expect(snapshot).toContain("unzip failed");
   });
 
   it("renders an empty csv as a structural view without throwing", async () => {
