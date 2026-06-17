@@ -413,10 +413,14 @@ function bindingTargetsConcept(
   targetAlternates: string[],
   nameIndex: Map<string, string>,
 ): boolean {
-  if (stringField(binding, "source_ref").length === 0) return false;
+  if (stringField(binding, "source_ref").trim().length === 0) return false;
   const seedRef = stringField(binding, "seed_ref");
   if (seedRef.length === 0) return false;
-  const haystack = normalizeName(`${seedRef} ${nameIndex.get(seedRef) ?? ""}`);
+  // Match the RESOLVED object name; fall back to the raw seed_ref id ONLY when it
+  // does not resolve. Otherwise a binding to a mis-named object (resolved name
+  // unrelated) would still be credited because its machine id happens to contain
+  // the target alternate — the very id-spelling bias this gate removes.
+  const haystack = normalizeName(nameIndex.get(seedRef) ?? seedRef);
   return targetAlternates.some((alternate) =>
     haystack.includes(normalizeName(alternate)),
   );
@@ -631,9 +635,14 @@ export function evaluateReconstructGoldenQualityGate(
           ),
         )
       : [];
+    // Target alternates help Q2 ONLY when a valid binding exists — otherwise a
+    // run with no source binding could mark the binding CQ supported just by a
+    // generic question mentioning the target object, inflating support-rate for
+    // the missing-binding case Q1 is meant to catch. The targeting bindings' own
+    // ids are inherently present only when a binding exists.
     const linkTokens = [
       ...concept.name_alternates,
-      ...(concept.binding_target_alternates ?? []),
+      ...(targetingBindings.length > 0 ? concept.binding_target_alternates ?? [] : []),
       ...targetingBindings.flatMap((binding) => [
         stringField(binding, "binding_id"),
         stringField(binding, "seed_ref"),

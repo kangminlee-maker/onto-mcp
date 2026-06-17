@@ -223,6 +223,63 @@ describe("reconstruct golden semantic quality gate", () => {
     expect(result.q1?.missing_concept_keys).toContain("fixture-source-binding");
   });
 
+  it("does NOT credit a binding whose id contains the alternate but resolves to a mis-named object", () => {
+    const args = happyArgs();
+    // The binding's seed_ref id literally contains "fixture-service", but it
+    // resolves to an object named "Unrelated Ledger" — the resolved NAME governs,
+    // so the raw id must not leak a match.
+    args.ontologySeed = {
+      ...fixtureServiceSeed(),
+      semantic_layer: {
+        object_types: [
+          { object_type_id: "object-fixture-service", name: "Fixture Service" },
+          { object_type_id: "object-fixture-service-misnamed", name: "Unrelated Ledger" },
+        ],
+      },
+      data_binding_layer: {
+        source_bindings: [
+          {
+            binding_id: "b1",
+            seed_ref: "object-fixture-service-misnamed",
+            source_ref: "src/fixture-service.ts",
+          },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.q1?.missing_concept_keys).toContain("fixture-source-binding");
+  });
+
+  it("does NOT mark the binding CQ supported when no source binding exists (Q2 not inflated)", () => {
+    // No source binding, but a generic answerable question mentions the target
+    // object. The target alternate must not link the binding CQ without a binding.
+    const seed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: { source_bindings: [] },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const claimIds = [
+      "object-fixture-service",
+      "actor-fixture-user",
+      "action-explain-fixture",
+      "object-fixture-service", // 4th (binding CQ) merely mentions the object again
+    ];
+    const result = evaluateReconstructGoldenQualityGate({
+      fixtureId: "reconstruct-golden-target-v1",
+      realization: "mock",
+      runManifest: manifestWith([
+        llmStep("ontology_seed"),
+        llmStep("competency_question_assessment"),
+      ]),
+      ontologySeed: seed,
+      competencyQuestions: questionsFor(claimIds),
+      competencyQuestionAssessment: assessmentsFor(claimIds.length),
+    });
+    const bindingRow = (result.q2?.rows ?? []).find(
+      (row) => row.cq_key === "cq-fixture-source-binding",
+    );
+    expect(bindingRow?.supported).toBe(false);
+  });
+
   it("does NOT credit a binding concept that targets an unrelated object", () => {
     const args = happyArgs();
     args.ontologySeed = {
