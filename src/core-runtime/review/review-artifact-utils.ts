@@ -2,6 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
 import { atomicWriteFile } from "../artifact-io.js";
+import { isSpreadsheetRef } from "../target-material-kind.js";
+import {
+  observeSpreadsheetSource,
+  projectInventoryForAdmission,
+  type WorkbookStructuralInventory,
+} from "../spreadsheet-structure-observer.js";
 import type { DirectoryListingOptions } from "./artifact-types.js";
 
 export const DEFAULT_EXCLUDED_NAMES: readonly string[] = [
@@ -224,12 +230,113 @@ export async function collectFilePathsRecursively(
   return collected.sort();
 }
 
+/**
+ * Render the admission-safe workbook inventory as a compact text view for the
+ * review prompt (design §3.2 — the "inventory projection (text view)"). Honesty
+ * (review-target-profile §6): structure is inspected only, cell values and
+ * formula results are not evaluated. Carries schema/aggregate facts (column
+ * types, distinct counts, formula/validation/structure counts, risk signals)
+ * and NO raw cell values — the projection already excluded them.
+ */
+function renderSpreadsheetStructuralView(
+  inventory: WorkbookStructuralInventory,
+): string {
+  const lines: string[] = [
+    "[Spreadsheet Structural Inventory — structure inspected only; cell values and formula results are not evaluated]",
+    `workbook_kind: ${inventory.workbook_kind}`,
+    `content_sha256: ${inventory.content_sha256}`,
+  ];
+  if (inventory.unsupported_reason) {
+    lines.push(`unsupported: ${inventory.unsupported_reason}`);
+    return `${lines.join("\n")}\n`;
+  }
+  lines.push(
+    `sheets: ${inventory.sheets.length}${inventory.capture_truncated ? " (capture truncated)" : ""}`,
+  );
+  for (const sheet of inventory.sheets) {
+    const flags = `${sheet.hidden ? " (hidden)" : ""}${sheet.protected ? " (protected)" : ""}`;
+    lines.push(
+      "",
+      `## sheet: ${sheet.name}`,
+      `dimensions: ${sheet.dimensions.rows} rows × ${sheet.dimensions.cols} cols${flags}`,
+    );
+    const data = inventory.per_sheet_data.find((d) => d.sheet === sheet.name);
+    if (data) {
+      const lowConfidence =
+        data.header_confidence === "low" ? "; header_confidence: low (layout uncertain)" : "";
+      lines.push(
+        `layout_kind: ${data.layout_kind}; header_rows: ${data.header_rows ? data.header_rows.join(",") : "none"}${lowConfidence}`,
+      );
+      if (data.columns.length > 0) {
+        lines.push("columns:");
+        for (const col of data.columns) {
+          const vocab = inventory.distinct_value_vocab.find(
+            (v) => v.sheet === sheet.name && v.column === col.name,
+          );
+          const distinct = vocab
+            ? `; distinct≈${vocab.distinct_count}${vocab.distinct_count_is_estimate ? "+" : ""}`
+            : "";
+          lines.push(
+            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${distinct})`,
+          );
+        }
+      }
+    }
+  }
+  const structural: string[] = [];
+  if (inventory.named_ranges.length) structural.push(`named_ranges: ${inventory.named_ranges.length}`);
+  if (inventory.tables.length) structural.push(`tables: ${inventory.tables.length}`);
+  if (inventory.formula_cells.length) structural.push(`formula_cells: ${inventory.formula_cells.length}`);
+  if (inventory.merged_ranges.length) structural.push(`merged_ranges: ${inventory.merged_ranges.length}`);
+  if (inventory.data_validations.length) structural.push(`data_validations: ${inventory.data_validations.length}`);
+  if (inventory.external_links.length) structural.push(`external_links: ${inventory.external_links.length}`);
+  if (inventory.error_cells.length) structural.push(`error_cells: ${inventory.error_cells.length}`);
+  if (inventory.macro_present) structural.push("macro_present: true");
+  if (structural.length) lines.push("", structural.join("; "));
+  if (inventory.pivot_tables.length) {
+    lines.push("", `pivot_tables: ${inventory.pivot_tables.length}`);
+    for (const p of inventory.pivot_tables) {
+      const src = p.source_sheet ? ` source=${p.source_sheet}!${p.source_ref ?? ""}` : "";
+      lines.push(`  - ${p.name} @ ${p.sheet}!${p.location}${src}`);
+      lines.push(
+        `    rows=[${p.row_fields.join(", ")}] cols=[${p.column_fields.join(", ")}]` +
+          ` data=[${p.data_fields.join(", ")}] filters=[${p.page_fields.join(", ")}]`,
+      );
+    }
+  }
+  if (inventory.cross_sheet_key_overlap.length) {
+    lines.push("", "cross_sheet_key_overlap (shared-column value overlap, counts only):");
+    for (const o of inventory.cross_sheet_key_overlap) {
+      const pairs = o.pairwise_overlap.map((p) => `${p.a}∩${p.b}=${p.count}`).join(", ");
+      lines.push(`  - ${o.key_name} across [${o.sheets.join(", ")}]: ${pairs}`);
+    }
+  }
+  if (inventory.risk_signals.length) {
+    lines.push("", "risk_signals:");
+    for (const signal of inventory.risk_signals) {
+      lines.push(`  - ${signal.kind} @ ${signal.location}: ${signal.literal}`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 export async function readTextOrDirectoryListing(
   targetPath: string,
   options?: DirectoryListingOptions,
 ): Promise<string> {
   const stats = await fs.stat(targetPath);
   if (!stats.isDirectory()) {
+    // Spreadsheet targets are admitted as a structural/aggregate inventory view,
+    // not raw bytes (design §3.2 / §11 CHAN-2). review has no source-safety
+    // admission gate of its own, so it routes through the SAME shared projection
+    // as reconstruct — raw cell values never enter the prompt, and a binary
+    // workbook is never dumped as garbage utf8.
+    if (isSpreadsheetRef(targetPath)) {
+      const inventory = projectInventoryForAdmission(
+        await observeSpreadsheetSource(targetPath),
+      );
+      return renderSpreadsheetStructuralView(inventory);
+    }
     try {
       return await fs.readFile(targetPath, "utf8");
     } catch (error: unknown) {

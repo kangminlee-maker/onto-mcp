@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import type { Stats } from "node:fs";
 import path from "node:path";
 import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import {
@@ -8,6 +9,11 @@ import {
   type TargetMaterialKind,
   type TargetMaterialRefDetection,
 } from "../target-material-kind.js";
+import {
+  observeSpreadsheetSource,
+  projectInventoryForAdmission,
+  SPREADSHEET_OBSERVER_ADAPTER_ID,
+} from "../spreadsheet-structure-observer.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import {
   validateSourceObservationBoundary,
@@ -367,6 +373,11 @@ export async function buildReconstructSourceObservation(
     if (code === "ENOENT" || code === "ENOTDIR") return null;
     throw error;
   }
+  // Spreadsheet sources route through the shared deterministic structure
+  // observer instead of the generic raw-text path (design S1 §2.2 / §11).
+  if (detection.kind === "spreadsheet") {
+    return buildSpreadsheetSourceObservation({ detection, stat, location, lineage });
+  }
   const stats = stat.isFile()
     ? await textStats(detection.ref, structuralExcerptCharLimit(detection.kind, detection.ref))
     : {
@@ -401,6 +412,75 @@ export async function buildReconstructSourceObservation(
       content_sha256: stats.content_sha256,
       content_excerpt: stats.content_excerpt,
       excerpt_truncated: stats.excerpt_truncated,
+    },
+  };
+
+  const validation = validateSourceObservationBoundary(observation);
+  if (!validation.valid) {
+    throw new Error(
+      `Invalid source observation boundary for ${detection.ref}: ${validation.violations.join("; ")}`,
+    );
+  }
+  return observation;
+}
+
+/**
+ * Observe a spreadsheet source through the shared structure observer (design S1
+ * §2.2) — a deterministic, LLM-free structural inventory. Per channel
+ * governance (§11 CHAN-1) the observation carries NO raw cell values: it never
+ * emits the generic path's `content_excerpt` (which for a workbook would be raw
+ * data values) and the inventory's aggregate-only vocab leaves `top_values`
+ * absent. `content_sha256` is the RAW-byte hash (§11 HASH-1) surfaced at the
+ * structural_data top level because downstream source-scout-pack admission reads
+ * it there; the full inventory is nested under `workbook_inventory` as the
+ * structural substrate the seed-authoring prompt observes. xlsx-family kinds are
+ * not yet extractable (P4) and arrive here carrying an `unsupported_reason`.
+ */
+async function buildSpreadsheetSourceObservation(args: {
+  detection: TargetMaterialRefDetection;
+  stat: Stats;
+  location: string;
+  lineage?:
+    | {
+        roundId?: string | null;
+        observationBatchId?: string | null;
+        triggeringFrontierValidationRef?: string | null;
+      }
+    | undefined;
+}): Promise<ReconstructSourceObservation> {
+  const { detection, stat, location, lineage } = args;
+  const basename = path.basename(detection.ref);
+  const extension = path.extname(detection.ref).toLowerCase();
+  // Route through the single shared admission projection (§11 CHAN-1): the
+  // structural_data inventory carries no raw cell values — those reach a prompt
+  // only via the source-safety channel, never through structural_data.
+  const inventory = projectInventoryForAdmission(
+    await observeSpreadsheetSource(detection.ref),
+  );
+  const summary = inventory.unsupported_reason
+    ? `spreadsheet workbook observed at ${basename} — extraction unsupported (${inventory.unsupported_reason}), structure_inspected_only`
+    : `spreadsheet workbook observed at ${basename} — ${inventory.sheets.length} sheet(s), structure_inspected_only`;
+  const observation: ReconstructSourceObservation = {
+    observation_id: stableObservationId({ sourceRef: detection.ref, location }),
+    round_id: lineage?.roundId ?? "initial_source_frontier",
+    observation_batch_id:
+      lineage?.observationBatchId ?? "source-observation-batch:initial",
+    triggering_frontier_validation_ref:
+      lineage?.triggeringFrontierValidationRef ?? null,
+    target_material_kind: "spreadsheet",
+    adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
+    source_ref: detection.ref,
+    location,
+    summary,
+    structural_data: {
+      basename,
+      extension: extension || null,
+      path_kind: stat.isDirectory() ? "directory" : "file",
+      size_bytes: stat.isFile() ? stat.size : null,
+      // Raw-byte hash (§11 HASH-1) surfaced top-level for source-scout-pack
+      // admission, which reads structural_data.content_sha256.
+      content_sha256: inventory.content_sha256,
+      workbook_inventory: inventory,
     },
   };
 

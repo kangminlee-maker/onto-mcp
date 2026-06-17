@@ -19,6 +19,7 @@ import {
 } from "./materialize-preparation.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
+import { SPREADSHEET_OBSERVER_ADAPTER_ID } from "../spreadsheet-structure-observer.js";
 
 const profilesRoot = path.resolve(".onto/processes/reconstruct/source-profiles");
 const registryPath = path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml");
@@ -615,5 +616,80 @@ describe("buildReconstructSourceObservation re-observation fail-soft", () => {
     await expect(
       buildReconstructSourceObservation(detection),
     ).resolves.toBeNull();
+  });
+});
+
+describe("buildReconstructSourceObservation spreadsheet seam (P2, csv)", () => {
+  it("routes csv through the structure observer with no raw cell values", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "people.csv");
+    // A distinctive DATA cell value: it must never appear in the observation
+    // (channel governance §11 CHAN-1 — aggregate/structural only, no raw values).
+    await fs.writeFile(
+      target,
+      "name,role\nSECRET_DATA_VALUE_XYZ,engineer\nbob,analyst\n",
+      "utf8",
+    );
+    const detection = {
+      ref: target,
+      exists: true,
+      kind: "spreadsheet" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+
+    const observation = await buildReconstructSourceObservation(detection);
+    expect(observation).not.toBeNull();
+    expect(observation!.adapter_id).toBe(SPREADSHEET_OBSERVER_ADAPTER_ID);
+    expect(observation!.target_material_kind).toBe("spreadsheet");
+
+    const sd = observation!.structural_data as Record<string, unknown>;
+    // HASH-1: content_sha256 is the RAW-byte hash, surfaced at the top level for
+    // source-scout-pack admission.
+    expect(sd.content_sha256).toBe(await sha256File(target));
+    expect(sd.path_kind).toBe("file");
+    // Generic raw-text path's content_excerpt must be absent for a workbook.
+    expect(sd.content_excerpt).toBeUndefined();
+
+    const inventory = sd.workbook_inventory as Record<string, unknown>;
+    expect(inventory.workbook_kind).toBe("csv");
+    expect(inventory.inspection_method).toBe("structure_inspected_only");
+    expect(inventory.unsupported_reason).toBeNull();
+    expect((inventory.sheets as unknown[]).length).toBe(1);
+
+    // The data cell value must not leak anywhere in the serialized observation.
+    expect(JSON.stringify(observation)).not.toContain("SECRET_DATA_VALUE_XYZ");
+    // Aggregate-only vocab: distinct counts are kept, raw top_values are not.
+    for (const entry of inventory.distinct_value_vocab as Array<
+      Record<string, unknown>
+    >) {
+      expect(entry).not.toHaveProperty("top_values");
+      expect(typeof entry.distinct_count).toBe("number");
+    }
+  });
+
+  it("admits an unparseable xlsx as structure-only with an honest unsupported_reason (no crash)", async () => {
+    const root = await makeTmpProject();
+    const target = path.join(root, "report.xlsx");
+    // A corrupt/non-OOXML .xlsx: the observer returns an unsupported inventory
+    // (honest reason, no crash) and the seam must still admit it.
+    await fs.writeFile(target, "not-a-real-xlsx", "utf8");
+    const detection = {
+      ref: target,
+      exists: true,
+      kind: "spreadsheet" as const,
+      confidence: 0.92,
+      confidence_basis: "test fixture",
+    };
+
+    const observation = await buildReconstructSourceObservation(detection);
+    expect(observation).not.toBeNull();
+    const sd = observation!.structural_data as Record<string, unknown>;
+    expect(sd.content_sha256).toBe(await sha256File(target));
+    const inventory = sd.workbook_inventory as Record<string, unknown>;
+    expect(inventory.workbook_kind).toBe("xlsx");
+    expect(inventory.unsupported_reason).toEqual(expect.stringMatching(/unzip failed|workbook\.xml/));
+    expect(observation!.summary).toContain("extraction unsupported");
+    expect(observation!.summary).toContain("structure_inspected_only");
   });
 });
