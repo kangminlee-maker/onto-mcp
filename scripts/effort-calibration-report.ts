@@ -581,15 +581,25 @@ async function main(): Promise<void> {
   }
 
   const generatedAt = new Date().toISOString();
-  // Key the default filename by the DERIVED route when a single route was
-  // witnessed, so two profiles built with the same provider-level `--route` hint
-  // but different routes do not overwrite each other. Use the base-aware token
-  // (routeSummary.tokens, which keeps effective_base_url) so two custom proxy
-  // bases stay distinct, and append `-preliminary` for a non-decision-grade
-  // profile so it can't clobber a decision-grade one for the same route/day.
-  // Fall back to the declared hint when the route is ambiguous/undetermined.
-  const routeKeyBase =
-    routeSummary.identities.length === 1 ? routeSummary.tokens[0]! : options.route;
+  // Key the default filename so distinct profiles for the same provider/model/day
+  // don't overwrite each other. For a single COMPLETE route the base-aware token
+  // is fully resolved and is the truth (hint-independent: the same route under
+  // two different hints is one profile). For a single but NOT-complete route the
+  // token degenerates (e.g. `provider_only:unknown:unknown`) and would collide
+  // across different hints, so keep BOTH the declared hint (distinguishes unknown
+  // routes) and the base-aware token (distinguishes custom proxy bases). For an
+  // ambiguous/empty route fall back to the declared hint. `-preliminary` marks a
+  // non-decision-grade profile so it can't clobber a decision-grade one.
+  let routeKeyBase: string;
+  if (routeSummary.identities.length === 1) {
+    const only = routeSummary.identities[0]!;
+    routeKeyBase =
+      only.route_completeness === "complete"
+        ? routeSummary.tokens[0]!
+        : `${options.route}-${routeSummary.tokens[0]!}`;
+  } else {
+    routeKeyBase = options.route;
+  }
   const routeFileKey = decisionGrade ? routeKeyBase : `${routeKeyBase}-preliminary`;
   const outputPath = path.resolve(
     options.outputPath ??
