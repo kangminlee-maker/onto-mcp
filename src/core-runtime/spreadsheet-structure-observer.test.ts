@@ -746,3 +746,34 @@ describe("Codex review fixes — round 3 (P4 hardening)", () => {
     expect(col.inferred_type).toBe("date"); // serial 45292 → ISO date, not integer
   });
 });
+
+describe("Codex review fixes — round 4 (P4 hardening)", () => {
+  it("does not treat a color/currency number format as a date (R4 #2)", () => {
+    // "[Red]#,##0" contains a 'd' in "Red" — must NOT be read as a date format.
+    const styles =
+      `<?xml version="1.0"?><styleSheet xmlns="${SML_NS}">` +
+      `<numFmts count="1"><numFmt numFmtId="164" formatCode="[Red]#,##0;[Red]-#,##0"/></numFmts>` +
+      `<cellXfs count="2"><xf numFmtId="0" xfId="0"/><xf numFmtId="164" xfId="0"/></cellXfs></styleSheet>`;
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A3"/><sheetData>` +
+      `<row r="1"><c r="A1" t="inlineStr"><is><t>amount</t></is></c></row>` +
+      `<row r="2"><c r="A2" s="1"><v>1000</v></c></row>` +
+      `<row r="3"><c r="A3" s="1"><v>2000</v></c></row>` +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync({ ...makeMinimalXlsxParts(sheet), "xl/styles.xml": strToU8(styles) });
+    const r = buildXlsxInventory({ sourceRef: "/abs/amt.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.per_sheet_data[0]!.columns[0]!.inferred_type).toBe("integer"); // amounts stay numeric
+  });
+
+  it("captures cross-sheet refs to apostrophe sheet names with doubled quotes (R4 #4)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+          `<row r="1"><c r="A1"><f>'Bob''s Sheet'!A1+1</f><v>2</v></c></row>` +
+          `</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/apos.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.formula_cells[0]!.cross_sheet_refs).toContain("Bob's Sheet"); // unescaped, not "Bob"
+  });
+});

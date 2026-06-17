@@ -730,7 +730,9 @@ function extractCrossSheetRefs(formula: string, currentSheet: string): string[] 
   // Unicode-aware (sheet names are commonly non-ASCII, e.g. Korean). The
   // negative lookbehind drops Excel error tokens like `#REF!` (a `#`-prefixed
   // name followed by `!` is an error, not a sheet reference).
-  const re = /(?<!#)(?:'([^']+)'|([\p{L}_][\p{L}\p{N}_.]*))!/gu;
+  // Quoted sheet names may contain doubled apostrophes ('Bob''s Sheet'); allow
+  // them in the quoted branch, then unescape '' → ' below.
+  const re = /(?<!#)(?:'((?:[^']|'')+)'|([\p{L}_][\p{L}\p{N}_.]*))!/gu;
   let m: RegExpExecArray | null;
   while ((m = re.exec(formula)) !== null) {
     const name = (m[1] ?? m[2] ?? "").replace(/''/g, "'");
@@ -943,10 +945,15 @@ function parseTable(xml: string): { name: string; ref: string } | null {
 const BUILTIN_DATE_NUMFMT_IDS = new Set([14, 15, 16, 17, 22]);
 
 /** A custom format is date-ish if it carries a year or day token (`m` alone is
- *  ambiguous month/minute). Locale prefixes / quoted literals can yield rare
- *  false positives — acceptable for type inference. */
+ *  ambiguous month/minute). Bracketed tokens ([Red], [$-409], [h]), quoted
+ *  literals ("text"), and escaped chars are stripped first so a color/currency
+ *  format like `[Red]#,##0` isn't mistaken for a date via the `d` in "Red". */
 function isDateFormatCode(code: string): boolean {
-  return /[yd]/i.test(code);
+  const stripped = code
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/"[^"]*"/g, "")
+    .replace(/\\./g, "");
+  return /[yd]/i.test(stripped);
 }
 
 /** Parse styles.xml → the set of cellXfs indexes (a cell's `s` attribute) whose
@@ -1706,8 +1713,13 @@ function unsupportedInventory(args: {
   };
 }
 
-/** Observe a spreadsheet source file. P1 implements csv/tsv (pure Node);
- *  xlsx/xlsm/xls/ods are deferred to P4 (bundled Node lib) and return
+/** A pre-read gate on the compressed source size: the whole file is loaded into
+ *  a Buffer (then streaming-unzipped), so an oversized source must fail loud with
+ *  an unsupported_reason rather than OOM the host before caps can apply. */
+const MAX_SOURCE_BYTES = 1024 * 1024 * 1024; // 1 GiB
+
+/** Observe a spreadsheet source file. csv/tsv use the pure-Node extractor and
+ *  xlsx/xlsm the streaming fflate+saxes extractor; xls/xlsb/ods return
  *  `unsupported_reason`. `content_sha256` is always the RAW-byte hash. */
 export async function observeSpreadsheetSource(
   sourceRef: string,
@@ -1717,6 +1729,15 @@ export async function observeSpreadsheetSource(
   const workbookKind = SPREADSHEET_EXTENSION_KINDS[ext];
   let bytes: Buffer;
   try {
+    const stat = await fs.stat(sourceRef);
+    if (stat.size > MAX_SOURCE_BYTES) {
+      return unsupportedInventory({
+        sourceRef,
+        contentSha256: "",
+        workbookKind: workbookKind ?? "csv",
+        reason: `source too large (${stat.size} bytes > ${MAX_SOURCE_BYTES}); not read`,
+      });
+    }
     bytes = await fs.readFile(sourceRef);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
