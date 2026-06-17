@@ -85,7 +85,11 @@ function fixtureServiceSeed(): ReconstructOntologySeedArtifact {
     },
     data_binding_layer: {
       source_bindings: [
-        { binding_id: "binding-fixture-source", seed_ref: "object-fixture-service" },
+        {
+          binding_id: "binding-fixture-source",
+          seed_ref: "object-fixture-service",
+          source_ref: "src/fixture-service.ts",
+        },
       ],
     },
   } as unknown as ReconstructOntologySeedArtifact;
@@ -156,6 +160,133 @@ describe("reconstruct golden semantic quality gate", () => {
     expect(result.q2?.support_rate).toBe(1);
     expect(result.q3?.dropped_question_count).toBe(0);
     expect(result.q3?.batch_count).toBe(1);
+  });
+
+  it("credits a binding concept by its target object, not binding-id spelling (golden-bias fix)", () => {
+    const args = happyArgs();
+    // The exact gpt-5.5 shape: a descriptive binding_id with no
+    // "fixturesource"/"sourcebinding" substring (the old id-matcher missed it),
+    // whose seed_ref targets the fixture-service object and names a source.
+    args.ontologySeed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: {
+        source_bindings: [
+          {
+            binding_id: "binding_fixture_records_backing_source",
+            seed_ref: "object-fixture-service",
+            source_ref: "src/fixture-service.ts",
+          },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.q1?.recall).toBe(1);
+    expect(result.q1?.missing_concept_keys).toEqual([]);
+    const bindingMatch = (result.q1?.matches ?? []).find(
+      (match) => match.concept_key === "fixture-source-binding",
+    );
+    expect(bindingMatch?.seed_family).toBe("data_binding_layer.source_bindings");
+  });
+
+  it("resolves an opaque seed_ref to the object NAME (no machine-id spelling bias)", () => {
+    const args = happyArgs();
+    // Opaque object id `object-svc`, descriptive name "Fixture Service". A binding
+    // whose seed_ref is the opaque id still targets the right object via the name.
+    args.ontologySeed = {
+      ...fixtureServiceSeed(),
+      semantic_layer: {
+        object_types: [{ object_type_id: "object-svc", name: "Fixture Service" }],
+      },
+      data_binding_layer: {
+        source_bindings: [
+          { binding_id: "b1", seed_ref: "object-svc", source_ref: "src/fixture-service.ts" },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(
+      (result.q1?.matches ?? []).some((m) => m.concept_key === "fixture-source-binding"),
+    ).toBe(true);
+  });
+
+  it("does NOT credit a binding concept without a source_ref (no named backing source)", () => {
+    const args = happyArgs();
+    args.ontologySeed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: {
+        source_bindings: [
+          { binding_id: "b1", seed_ref: "object-fixture-service" },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.q1?.missing_concept_keys).toContain("fixture-source-binding");
+  });
+
+  it("does NOT credit a binding concept that targets an unrelated object", () => {
+    const args = happyArgs();
+    args.ontologySeed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: {
+        source_bindings: [
+          {
+            binding_id: "b1",
+            seed_ref: "object-unrelated-thing",
+            source_ref: "src/fixture-service.ts",
+          },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.q1?.missing_concept_keys).toContain("fixture-source-binding");
+  });
+
+  it("still misses a binding concept when no source binding was authored", () => {
+    const args = happyArgs();
+    args.ontologySeed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: { source_bindings: [] },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const result = evaluateReconstructGoldenQualityGate(args);
+    expect(result.q1?.missing_concept_keys).toContain("fixture-source-binding");
+    expect(result.q1?.recall).toBeCloseTo(0.75);
+  });
+
+  it("links the binding CQ on the live shape (Q2 via target alias / binding id, not just name_alternates)", () => {
+    // Live shape: descriptive binding id, and the binding CQ references that
+    // authored binding id (not the old mock `binding-fixture-source`). The old Q2
+    // matched name_alternates only and would leave the binding row unsupported.
+    const seed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: {
+        source_bindings: [
+          {
+            binding_id: "binding_fixture_records_backing_source",
+            seed_ref: "object-fixture-service",
+            source_ref: "src/fixture-service.ts",
+          },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const liveClaimIds = [
+      "object-fixture-service",
+      "actor-fixture-user",
+      "action-explain-fixture",
+      "binding_fixture_records_backing_source",
+    ];
+    const result = evaluateReconstructGoldenQualityGate({
+      fixtureId: "reconstruct-golden-target-v1",
+      realization: "mock",
+      runManifest: manifestWith([
+        llmStep("ontology_seed"),
+        llmStep("competency_question_assessment"),
+      ]),
+      ontologySeed: seed,
+      competencyQuestions: questionsFor(liveClaimIds),
+      competencyQuestionAssessment: assessmentsFor(liveClaimIds.length),
+    });
+    expect(result.status).toBe("passed");
+    expect(result.q2?.support_rate).toBe(1);
   });
 
   it("rejects metrics when a required LLM unit has no telemetry source fields", () => {

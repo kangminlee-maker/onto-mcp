@@ -35,6 +35,22 @@ export interface ReconstructGoldenExpectedConcept {
   concept_key: string;
   /** Normalized-containment alternates; any one match satisfies the row. */
   name_alternates: string[];
+  /**
+   * Source-binding concepts (e.g. "which source backs the loan record") are
+   * matched against the source binding that targets the relevant object, not by
+   * a binding-id spelling. When set, the concept matches iff some source binding
+   *  (1) names a backing source (`source_ref` present — else it does not say
+   *      WHICH source backs the object), and
+   *  (2) targets the right object — its `seed_ref` resolves to an object whose
+   *      NAME (or, failing resolution, the raw seed_ref id) normalized-contains
+   *      one of these alternates.
+   * Both `binding_id` and `seed_ref` are model-chosen machine identifiers, so
+   * matching the RESOLVED object name (not the raw id) keeps this model-agnostic
+   * — a valid binding with a descriptive id or an opaque object id still matches
+   * — while still requiring the binding to target the right object (a binding for
+   * only an unrelated object, or with no source_ref, does NOT satisfy the row).
+   */
+  binding_target_alternates?: string[];
 }
 
 export interface ReconstructGoldenExpectedCq {
@@ -114,8 +130,14 @@ const GOLDEN_FIXTURES: Record<
         name_alternates: ["explainfixture", "fixtureexplanation"],
       },
       {
+        // Q1 presence is credited by a source binding (with a source_ref) whose
+        // seed_ref resolves to the fixture-service object — not by binding-id
+        // spelling (the old name_alternates were fit to the mock's
+        // `binding-fixture-source` id and missed descriptive live ids).
+        // name_alternates remain for the Q2 CQ linkage.
         concept_key: "fixture-source-binding",
         name_alternates: ["fixturesource", "bindingfixturesource", "sourcebinding"],
+        binding_target_alternates: ["fixtureservice"],
       },
     ],
     expected_cq: [
@@ -200,8 +222,14 @@ const GOLDEN_FIXTURES: Record<
         name_alternates: ["checkoutbook", "checkout", "borrowbook", "loanbook"],
       },
       {
+        // Q1 presence is credited by a source binding (with a source_ref) whose
+        // seed_ref resolves to the loan-record object. The `loanrecord`
+        // name_alternate also matches the LoanRecord object NAME, so using it for
+        // Q1 would wrongly credit a seed that has the object but no binding; Q1
+        // here is binding-targeted only, and name_alternates remain for Q2.
         concept_key: "loan-record-binding",
         name_alternates: ["loanrecord", "loanbinding"],
+        binding_target_alternates: ["loanrecord"],
       },
     ],
     expected_cq: [
@@ -352,10 +380,77 @@ function seedNameRows(seed: ReconstructOntologySeedArtifact): SeedNameRow[] {
   return rows;
 }
 
+/** Maps a seed-object id (object_type_id, concept_id, …) to its display name. */
+function seedRefNameIndex(seed: ReconstructOntologySeedArtifact): Map<string, string> {
+  const index = new Map<string, string>();
+  const families: Array<{ container: string; key: string; idKey: string }> = [
+    { container: "conceptual_frame", key: "concepts", idKey: "concept_id" },
+    { container: "semantic_layer", key: "object_types", idKey: "object_type_id" },
+    { container: "kinetic_layer", key: "action_types", idKey: "action_type_id" },
+    { container: "kinetic_layer", key: "workflows", idKey: "workflow_id" },
+    { container: "dynamic_layer", key: "actor_types", idKey: "actor_type_id" },
+  ];
+  for (const family of families) {
+    for (const row of recordRows(seed[family.container], family.key)) {
+      const id = stringField(row, family.idKey);
+      const name = stringField(row, "name");
+      if (id.length > 0 && name.length > 0 && !index.has(id)) index.set(id, name);
+    }
+  }
+  return index;
+}
+
+/**
+ * Whether a source binding satisfies a binding-target concept: it must name a
+ * backing source (`source_ref` present) and target the right object — its
+ * `seed_ref` resolves to an object whose NAME (or, when unresolved, the raw
+ * seed_ref id) normalized-contains a target alternate. Matching the resolved
+ * NAME keeps this robust to model-chosen ids (descriptive binding ids, opaque
+ * object ids alike).
+ */
+function bindingTargetsConcept(
+  binding: Record<string, unknown>,
+  targetAlternates: string[],
+  nameIndex: Map<string, string>,
+): boolean {
+  if (stringField(binding, "source_ref").length === 0) return false;
+  const seedRef = stringField(binding, "seed_ref");
+  if (seedRef.length === 0) return false;
+  const haystack = normalizeName(`${seedRef} ${nameIndex.get(seedRef) ?? ""}`);
+  return targetAlternates.some((alternate) =>
+    haystack.includes(normalizeName(alternate)),
+  );
+}
+
 function conceptMatch(
   expected: ReconstructGoldenExpectedConcept,
   rows: SeedNameRow[],
+  sourceBindings: Record<string, unknown>[],
+  nameIndex: Map<string, string>,
 ): ReconstructQualityGateQ1Match | null {
+  // A binding-target concept's PRESENCE (Q1) is credited only by a source
+  // binding that targets the right object (resolved by seed_ref → object name)
+  // and names a backing source. `name_alternates` are NOT used for Q1 presence
+  // here — they would also match the target object's own NAME and credit the
+  // binding concept for a seed that has the object but no binding; they remain
+  // for the Q2 CQ↔concept linkage.
+  if (expected.binding_target_alternates) {
+    for (const binding of sourceBindings) {
+      if (bindingTargetsConcept(binding, expected.binding_target_alternates, nameIndex)) {
+        return {
+          concept_key: expected.concept_key,
+          matched_name: [
+            stringField(binding, "binding_id"),
+            stringField(binding, "seed_ref"),
+          ]
+            .filter((value) => value.length > 0)
+            .join(" "),
+          seed_family: "data_binding_layer.source_bindings",
+        };
+      }
+    }
+    return null;
+  }
   for (const row of rows) {
     const normalized = normalizeName(row.name);
     for (const alternate of expected.name_alternates) {
@@ -480,10 +575,15 @@ export function evaluateReconstructGoldenQualityGate(
 
   // Q1 — expected-concept recall over the authored seed.
   const nameRows = seedNameRows(args.ontologySeed);
+  const sourceBindings = recordRows(
+    args.ontologySeed.data_binding_layer,
+    "source_bindings",
+  );
+  const nameIndex = seedRefNameIndex(args.ontologySeed);
   const matches: ReconstructQualityGateQ1Match[] = [];
   const missing: string[] = [];
   for (const expected of spec.expected_concepts) {
-    const match = conceptMatch(expected, nameRows);
+    const match = conceptMatch(expected, nameRows, sourceBindings, nameIndex);
     if (match) matches.push(match);
     else missing.push(expected.concept_key);
   }
@@ -517,6 +617,28 @@ export function evaluateReconstructGoldenQualityGate(
         `Fixture ${spec.fixture_id} expected_cq ${expected.cq_key} links unknown concept ${expected.linked_concept_key}`,
       );
     }
+    // For a binding-target concept the CQ references the binding or its target
+    // object, whose ids are model-chosen, so name_alternates alone miss the live
+    // shape (a question naming `binding_fixture_records_backing_source` or the
+    // resolved object). Link via name_alternates ∪ target alternates ∪ the
+    // targeting bindings' own ids, mirroring the Q1 binding-targeting model.
+    const targetingBindings = concept.binding_target_alternates
+      ? sourceBindings.filter((binding) =>
+          bindingTargetsConcept(
+            binding,
+            concept.binding_target_alternates!,
+            nameIndex,
+          ),
+        )
+      : [];
+    const linkTokens = [
+      ...concept.name_alternates,
+      ...(concept.binding_target_alternates ?? []),
+      ...targetingBindings.flatMap((binding) => [
+        stringField(binding, "binding_id"),
+        stringField(binding, "seed_ref"),
+      ]),
+    ].filter((token) => token.length > 0);
     const question = args.competencyQuestions.questions.find((candidate) => {
       if (usedQuestionIds.has(candidate.question_id)) return false;
       const haystack = normalizeName(
@@ -527,9 +649,7 @@ export function evaluateReconstructGoldenQualityGate(
           ...(candidate.seed_ref_refs ?? []),
         ].join(" "),
       );
-      return concept.name_alternates.some((alternate) =>
-        haystack.includes(normalizeName(alternate))
-      );
+      return linkTokens.some((token) => haystack.includes(normalizeName(token)));
     });
     if (question) usedQuestionIds.add(question.question_id);
     const assessment = question
