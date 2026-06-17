@@ -510,20 +510,28 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
 });
 
 describe("header detection — offset headers + confidence (deterministic, finding 3)", () => {
-  it("finds the header below leading title / blank rows", () => {
-    const r = inv("Quarterly Report\n\nname,role,dept\nAlice,eng,core\nBob,eng,core\n");
+  it("finds the header below leading title / blank rows (high when data has type contrast)", () => {
+    const r = inv("Quarterly Report\n\nname,role,amount\nAlice,eng,100\nBob,eng,200\n");
     const d = r.per_sheet_data[0]!;
     expect(d.layout_kind).toBe("tabular");
     expect(d.header_rows).toEqual([2]); // skipped the title row and the blank row
-    expect(d.header_confidence).toBe("high");
-    expect(d.columns.map((c) => c.name)).toEqual(["name", "role", "dept"]);
+    expect(d.header_confidence).toBe("high"); // numeric 'amount' data → contrast
+    expect(d.columns.map((c) => c.name)).toEqual(["name", "role", "amount"]);
   });
 
-  it("keeps a clean first-row header high confidence", () => {
-    const d = inv("name,role\nAlice,eng\nBob,eng\n").per_sheet_data[0]!;
+  it("keeps a clean first-row header high confidence when data shows type contrast", () => {
+    const d = inv("name,age\nAlice,30\nBob,25\n").per_sheet_data[0]!;
     expect(d.layout_kind).toBe("tabular");
     expect(d.header_rows).toEqual([0]);
     expect(d.header_confidence).toBe("high");
+  });
+
+  it("flags an all-text first row as LOW confidence — indistinguishable from data (Codex P1)", () => {
+    // No type contrast: row 0 could be a header OR the first data row. The observer
+    // cannot tell deterministically, so it must not claim high confidence (its cells
+    // could be raw values, not schema). Escalation candidate.
+    const d = inv("Alice,Engineering\nBob,Sales\nCarol,Marketing\n").per_sheet_data[0]!;
+    expect(d.header_confidence).toBe("low");
   });
 
   it("flags a sparse/uncertain header as low confidence", () => {
@@ -536,5 +544,82 @@ describe("header detection — offset headers + confidence (deterministic, findi
     expect(d.layout_kind).toBe("matrix_no_header");
     expect(d.header_confidence).toBe("low");
     expect(d.columns).toEqual([]);
+  });
+});
+
+describe("Codex review fixes (P4 hardening)", () => {
+  it("detects CSV delimiter past a leading title line (#7)", () => {
+    // Semicolon-delimited with a title + blank line; first-line-only detection
+    // would collapse to one column.
+    const d = inv("Monthly Report\n\nname;role;amount\nAlice;eng;100\nBob;sales;200\n").per_sheet_data[0]!;
+    expect(d.layout_kind).toBe("tabular");
+    expect(d.columns.map((c) => c.name)).toEqual(["name", "role", "amount"]);
+  });
+
+  it("preserves an XLSB workbook kind instead of mislabeling it csv (#4)", async () => {
+    const tmp = path.join(os.tmpdir(), `onto-s1-xlsb-${process.pid}`);
+    await fs.mkdir(tmp, { recursive: true });
+    const file = path.join(tmp, "book.xlsb");
+    await fs.writeFile(file, Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    const r = await observeSpreadsheetSource(file);
+    expect(r.workbook_kind).toBe("xlsb");
+    expect(r.unsupported_reason).toMatch(/xlsb/);
+    await fs.rm(tmp, { recursive: true, force: true });
+  });
+
+  it("does not infer a macro from the .xlsm extension without vbaProject.bin (#8)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+          `<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c></row></sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/m.xlsm", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsm" });
+    expect(r.macro_present).toBe(false);
+    expect(r.risk_signals.some((s) => s.kind === "macro_present")).toBe(false);
+  });
+
+  it("reports an offset worksheet dimension as span + offset used_range (#3)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="B2:D10"/><sheetData>` +
+          `<row r="2"><c r="B2" t="inlineStr"><is><t>h</t></is></c></row></sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/off.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    const s = r.sheets[0]!;
+    expect(s.dimensions).toEqual({ rows: 9, cols: 3 }); // span, not bounding box (10,4)
+    expect(s.used_range).toBe("R2C2:R10C4"); // offset preserved
+  });
+
+  it("sets capture_truncated when a structural cap is hit (#5)", () => {
+    // 1001 error cells > XLSX_ERROR_CELL_CAP (1000) → truncated signal.
+    let rows = "";
+    for (let i = 1; i <= 1001; i += 1) rows += `<row r="${i}"><c r="A${i}" t="e"><v>#REF!</v></c></row>`;
+    const bytes = zipSync(
+      makeMinimalXlsxParts(`<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1001"/><sheetData>${rows}</sheetData></worksheet>`),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/cap.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.error_cells.length).toBe(1000);
+    expect(r.capture_truncated).toBe(true);
+  });
+
+  it("resolves an external-link relationship to its real external target (#6)", () => {
+    const bytes = zipSync({
+      "xl/workbook.xml": strToU8(`<?xml version="1.0"?><workbook ${WB_R}><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      "xl/_rels/workbook.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+          `<Relationship Id="rId2" Type="${relType("externalLink")}" Target="externalLinks/externalLink1.xml"/></Relationships>`,
+      ),
+      "xl/worksheets/sheet1.xml": strToU8(`<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData/></worksheet>`),
+      "xl/externalLinks/_rels/externalLink1.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${relType("externalLinkPath")}" Target="file:///C:/books/source.xlsx" TargetMode="External"/></Relationships>`,
+      ),
+    });
+    const r = buildXlsxInventory({ sourceRef: "/abs/ext.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.external_links).toHaveLength(1);
+    expect(r.external_links[0]!.target).toBe("file:///C:/books/source.xlsx"); // real path, not internal zip part
   });
 });

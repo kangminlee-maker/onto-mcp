@@ -21,10 +21,17 @@
 // column typing, categorical detection). LLM escalation for ambiguous layouts is
 // a separate, named step (design §10 / §11 ESC-1) and is NOT part of this module.
 //
-// Honesty / channel governance (design §11 CHAN-1): the data-observation layer is
+// Honesty / channel governance (design §11 CHAN-1): the DATA-OBSERVATION layer is
 // aggregate-counts-only by default — `distinct_value_vocab` carries `distinct_count`
-// but NOT raw `top_values`, and no raw sample rows are emitted. Raw values only ever
-// reach a prompt through the source-safety channel at the seam stage, never from here.
+// but NOT raw `top_values`, and no raw sample rows / cell values are emitted. Raw
+// data values reach a prompt only through the source-safety channel at the seam
+// stage, never from here.
+//   Scope note: column/header NAMES are emitted as structural schema (a header is,
+//   by definition, labels — not data). Deterministic header detection can misread a
+//   headerless all-text sheet's first DATA row as a header, surfacing that one row
+//   as column names; such sheets are flagged `header_confidence: "low"` (see
+//   detectHeaderRow) and are the intended targets of P0.5 LLM escalation. The
+//   aggregate no-raw-VALUE guarantee above is unaffected.
 
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -35,7 +42,7 @@ import { SaxesParser, type SaxesTagPlain } from "saxes";
 export const SPREADSHEET_OBSERVER_ADAPTER_ID = "spreadsheet-structure-observer";
 export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 1;
 
-export type WorkbookKind = "xlsx" | "xlsm" | "csv" | "tsv" | "xls" | "ods";
+export type WorkbookKind = "xlsx" | "xlsm" | "csv" | "tsv" | "xls" | "xlsb" | "ods";
 
 export type SheetLayoutKind =
   | "tabular"
@@ -171,16 +178,22 @@ export interface WorkbookStructuralInventory {
 const CSV_DELIMITERS = [",", "\t", ";"] as const;
 type CsvDelimiter = (typeof CSV_DELIMITERS)[number];
 
-/** Pick the delimiter with the most occurrences on the first physical line
- *  (deterministic; comma wins ties by being first). */
+/** Pick the delimiter with the most occurrences across the first several
+ *  non-empty lines (deterministic; comma wins ties by being first). Scanning
+ *  more than one line keeps a leading title/blank line — common in exported
+ *  reports — from mis-picking the delimiter. */
 function detectDelimiter(text: string): CsvDelimiter {
-  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  const lines = text
+    .split(/\r?\n/)
+    .filter((l) => l.trim().length > 0)
+    .slice(0, 10);
   let best: CsvDelimiter = ",";
   let bestCount = -1;
   for (const d of CSV_DELIMITERS) {
-    // Count only outside of the first cell's quotes is overkill for detection;
-    // a raw count is a stable, good-enough heuristic for the delimiter choice.
-    const count = firstLine.split(d).length - 1;
+    // A raw count summed over the sampled lines is a stable, good-enough
+    // heuristic for the delimiter choice.
+    let count = 0;
+    for (const line of lines) count += line.split(d).length - 1;
     if (count > bestCount) {
       best = d;
       bestCount = count;
@@ -293,10 +306,28 @@ function scoreHeaderRow(cells: string[], colCount: number): number {
   return (nonEmpty / colCount) * (nonNumeric / nonEmpty);
 }
 
+/** Whether the rows just below `headerRow` carry typed (numeric/date/boolean)
+ *  data — the contrast that distinguishes a real header from a first DATA row of
+ *  strings. Without it, an all-text first row is indistinguishable from data. */
+function hasDataTypeContrast(rows: string[][], headerRow: number): boolean {
+  const end = Math.min(rows.length, headerRow + 1 + 30);
+  for (let r = headerRow + 1; r < end; r += 1) {
+    for (const cell of rows[r] ?? []) {
+      const t = cell.trim();
+      if (t.length === 0) continue;
+      const k = classifyValue(t);
+      if (k === "integer" || k === "number" || k === "date" || k === "boolean") return true;
+    }
+  }
+  return false;
+}
+
 /** Pick the best header row in the first HEADER_SCAN_ROWS (skipping title/blank
- *  rows above it) and rate confidence. A populated sheet with no label-like row
- *  is a headerless matrix — but that absence is itself uncertain, so it is flagged
- *  low for possible downstream escalation. */
+ *  rows above it) and rate confidence. A strong label row is HIGH confidence only
+ *  when the data below shows type contrast — an all-text first row over all-text
+ *  data is indistinguishable from data, so it is flagged LOW (its cells could be
+ *  raw values, not schema; Codex P1). A populated sheet with no label-like row is
+ *  a headerless matrix, also flagged low. Both are escalation candidates. */
 function detectHeaderRow(
   rows: string[][],
   colCount: number,
@@ -311,7 +342,10 @@ function detectHeaderRow(
       bestRow = r;
     }
   }
-  if (bestScore >= HEADER_SCORE_STRONG) return { headerRowIndex: bestRow, confidence: "high" };
+  if (bestScore >= HEADER_SCORE_STRONG) {
+    const confidence = hasDataTypeContrast(rows, bestRow) ? "high" : "low";
+    return { headerRowIndex: bestRow, confidence };
+  }
   if (bestScore >= HEADER_SCORE_WEAK) return { headerRowIndex: bestRow, confidence: "low" };
   return { headerRowIndex: null, confidence: "low" };
 }
@@ -647,13 +681,23 @@ function parseCellRef(ref: string): { col: number; row: number } | null {
   return { col: columnLettersToIndex(m[1]!), row: parseInt(m[2]!, 10) };
 }
 
-/** "A1:G100" / "A1" → { rows, cols }; null if unparseable. */
-function parseRangeDims(ref: string): { rows: number; cols: number } | null {
+/** "A1:G100" / "B2:D10" / "A1" → the SPAN (rows × cols actually used) and the
+ *  used_range in R1C1 notation preserving the offset; null if unparseable. A sheet
+ *  whose dimension starts below/right of A1 (title rows, left margins) reports its
+ *  real span and origin, not a bounding box from A1. */
+function parseDimension(ref: string): { dims: { rows: number; cols: number }; usedRange: string } | null {
   const parts = ref.split(":");
   const a = parseCellRef((parts[0] ?? "").trim());
   const b = parseCellRef((parts[parts.length - 1] ?? "").trim());
   if (!a || !b) return null;
-  return { rows: Math.max(a.row, b.row), cols: Math.max(a.col, b.col) + 1 };
+  const startRow = Math.min(a.row, b.row);
+  const endRow = Math.max(a.row, b.row);
+  const startCol = Math.min(a.col, b.col);
+  const endCol = Math.max(a.col, b.col);
+  return {
+    dims: { rows: endRow - startRow + 1, cols: endCol - startCol + 1 },
+    usedRange: `R${startRow}C${startCol + 1}:R${endRow}C${endCol + 1}`,
+  };
 }
 
 /** Sheet names referenced by a formula via the `Sheet!`/`'Sheet Name'!` prefix
@@ -772,14 +816,14 @@ function resolveZipPath(baseDir: string, target: string): string {
   return path.posix.normalize(path.posix.join(baseDir, target));
 }
 
-interface ParsedRel { id: string; type: string; target: string }
+interface ParsedRel { id: string; type: string; target: string; targetMode: string }
 function parseRels(xml: string): ParsedRel[] {
   const rels: ParsedRel[] = [];
   const parser = new SaxesParser();
   parser.on("opentag", (node) => {
     if (node.name === "Relationship") {
       const a = attrsOf(node);
-      rels.push({ id: a.Id ?? "", type: a.Type ?? "", target: a.Target ?? "" });
+      rels.push({ id: a.Id ?? "", type: a.Type ?? "", target: a.Target ?? "", targetMode: a.TargetMode ?? "" });
     }
   });
   parser.write(xml).close();
@@ -974,6 +1018,7 @@ function parsePivotCacheDefinition(xml: string): {
 
 interface ParsedWorksheet {
   dimensions: { rows: number; cols: number };
+  used_range: string | null;
   protected: boolean;
   merged_ranges: Array<{ sheet: string; range: string }>;
   data_validations: Array<{ sheet: string; range: string; rule_summary: string }>;
@@ -981,6 +1026,9 @@ interface ParsedWorksheet {
   error_cells: Array<{ sheet: string; cell: string; token: string }>;
   rows: string[][];
   rows_truncated: boolean;
+  /** A structural cap (formula/merge/validation/error) was hit — folds into
+   *  capture_truncated so the artifact doesn't read as complete (Codex P2). */
+  caps_hit: boolean;
 }
 /** A streaming worksheet parser: pipe decompressed chunks through `write`, then
  *  `finalize`, then read `getResult`. The worksheet is never materialized whole;
@@ -999,9 +1047,11 @@ function createWorksheetParser(args: {
   const rows: string[][] = [];
   let protectedSheet = false;
   let declaredDims: { rows: number; cols: number } | null = null;
+  let declaredUsedRange: string | null = null;
   let maxRow = 0;
   let maxCol = 0;
   let rowsTruncated = false;
+  let capsHit = false;
 
   let curRow: string[] | null = null;
   let cellRef = "";
@@ -1020,15 +1070,22 @@ function createWorksheetParser(args: {
     const a = attrsOf(node);
     switch (node.name) {
       case "dimension": {
-        if (a.ref) declaredDims = parseRangeDims(a.ref);
+        if (a.ref) {
+          const d = parseDimension(a.ref);
+          if (d) {
+            declaredDims = d.dims;
+            declaredUsedRange = d.usedRange;
+          }
+        }
         break;
       }
       case "sheetProtection":
         protectedSheet = true;
         break;
       case "mergeCell":
-        if (a.ref && merged_ranges.length < XLSX_MERGE_CAP) {
-          merged_ranges.push({ sheet: sheetName, range: a.ref });
+        if (a.ref) {
+          if (merged_ranges.length < XLSX_MERGE_CAP) merged_ranges.push({ sheet: sheetName, range: a.ref });
+          else capsHit = true;
         }
         break;
       case "dataValidation":
@@ -1038,6 +1095,8 @@ function createWorksheetParser(args: {
             range: a.sqref ?? "",
             rule_summary: `type=${a.type ?? "any"}`,
           });
+        } else {
+          capsHit = true;
         }
         break;
       case "row":
@@ -1098,16 +1157,24 @@ function createWorksheetParser(args: {
       case "c": {
         // Formula + error are structural (kept regardless of the row cap, bounded
         // by their own caps). The cell's grid value is the cached <v> result.
-        if (fText.length > 0 && formula_cells.length < XLSX_FORMULA_CAP) {
-          formula_cells.push({
-            sheet: sheetName,
-            cell: cellRef,
-            formula: fText,
-            cross_sheet_refs: extractCrossSheetRefs(fText, sheetName),
-          });
+        if (fText.length > 0) {
+          if (formula_cells.length < XLSX_FORMULA_CAP) {
+            formula_cells.push({
+              sheet: sheetName,
+              cell: cellRef,
+              formula: fText,
+              cross_sheet_refs: extractCrossSheetRefs(fText, sheetName),
+            });
+          } else {
+            capsHit = true;
+          }
         }
-        if (cellType === "e" && error_cells.length < XLSX_ERROR_CELL_CAP) {
-          error_cells.push({ sheet: sheetName, cell: cellRef, token: vText });
+        if (cellType === "e") {
+          if (error_cells.length < XLSX_ERROR_CELL_CAP) {
+            error_cells.push({ sheet: sheetName, cell: cellRef, token: vText });
+          } else {
+            capsHit = true;
+          }
         }
         if (curRow) {
           let value: string;
@@ -1144,6 +1211,7 @@ function createWorksheetParser(args: {
     },
     getResult: (): ParsedWorksheet => ({
       dimensions: declaredDims ?? { rows: maxRow, cols: maxCol },
+      used_range: declaredUsedRange,
       protected: protectedSheet,
       merged_ranges,
       data_validations,
@@ -1151,6 +1219,7 @@ function createWorksheetParser(args: {
       error_cells,
       rows,
       rows_truncated: rowsTruncated,
+      caps_hit: capsHit,
     }),
   };
 }
@@ -1167,7 +1236,10 @@ export function buildXlsxInventory(args: {
   const caps = args.caps ?? DEFAULT_DATA_LAYER_CAPS;
   const risk_signals: InventoryRiskSignal[] = [];
   let captureTruncated = false;
-  let macroPresent = args.workbookKind === "xlsm";
+  // Macro presence is evidence-based: the actual xl/vbaProject.bin part, detected
+  // during pass 1 (onMacro). The .xlsm extension alone is NOT proof — a
+  // macro-enabled-format workbook can be macro-free (avoids false positives).
+  let macroPresent = false;
 
   const unsupported = (reason: string): WorkbookStructuralInventory =>
     unsupportedInventory({
@@ -1190,6 +1262,7 @@ export function buildXlsxInventory(args: {
         name === "xl/sharedStrings.xml" ||
         (name.startsWith("xl/worksheets/_rels/") && name.endsWith(".rels")) ||
         (name.startsWith("xl/tables/") && name.endsWith(".xml")) ||
+        (name.startsWith("xl/externalLinks/_rels/") && name.endsWith(".rels")) ||
         (name.startsWith("xl/pivotTables/") && (name.endsWith(".xml") || name.endsWith(".rels"))) ||
         (name.startsWith("xl/pivotCache/") && name.endsWith(".xml") && name.includes("Definition")),
       onMacro: () => {
@@ -1228,10 +1301,23 @@ export function buildXlsxInventory(args: {
 
   const relById = new Map(workbookRels.map((r) => [r.id, r]));
 
-  // External workbook links (relationship type ends with /externalLink).
+  // External workbook links: the workbook rel points to an INTERNAL part
+  // (externalLinks/externalLinkN.xml); the real external file/URL lives in that
+  // part's own .rels (TargetMode=External). Resolve to the actual dependency.
   const external_links = workbookRels
     .filter((r) => r.type.toLowerCase().endsWith("externallink"))
-    .map((r) => ({ target: r.target, kind: "external_workbook_link" }));
+    .map((r) => {
+      const partPath = resolveZipPath("xl", r.target);
+      const relsXml = parts.get(
+        `${path.posix.dirname(partPath)}/_rels/${path.posix.basename(partPath)}.rels`,
+      );
+      const ext = relsXml
+        ? parseRels(relsXml).find(
+            (rr) => rr.targetMode === "External" || rr.type.toLowerCase().endsWith("externallinkpath"),
+          )
+        : undefined;
+      return { target: ext?.target ?? r.target, kind: "external_workbook_link" };
+    });
 
   const named_ranges = workbook.definedNames.map((dn) => ({
     name: dn.name,
@@ -1365,7 +1451,7 @@ export function buildXlsxInventory(args: {
       continue;
     }
 
-    if (parsed.rows_truncated) captureTruncated = true;
+    if (parsed.rows_truncated || parsed.caps_hit) captureTruncated = true;
     formula_cells.push(...parsed.formula_cells);
     merged_ranges.push(...parsed.merged_ranges);
     data_validations.push(...parsed.data_validations);
@@ -1382,7 +1468,9 @@ export function buildXlsxInventory(args: {
     const dims = parsed.dimensions;
     sheets.push({
       name: sheetEntry.name,
-      used_range: dims.rows > 0 ? `R1C1:R${dims.rows}C${dims.cols}` : null,
+      // Prefer the declared dimension's used range (preserves an offset origin);
+      // fall back to an A1-anchored range derived from scanned extents.
+      used_range: parsed.used_range ?? (dims.rows > 0 ? `R1C1:R${dims.rows}C${dims.cols}` : null),
       dimensions: dims,
       hidden: sheetEntry.hidden,
       protected: parsed.protected,
@@ -1446,6 +1534,7 @@ const SPREADSHEET_EXTENSION_KINDS: Record<string, WorkbookKind> = {
   ".xlsx": "xlsx",
   ".xlsm": "xlsm",
   ".xls": "xls",
+  ".xlsb": "xlsb",
   ".ods": "ods",
 };
 
@@ -1524,13 +1613,14 @@ export async function observeSpreadsheetSource(
       ...(opts?.caps ? { caps: opts.caps } : {}),
     });
   }
-  // xls (BIFF binary) / ods (a different ZIP/XML schema) — separate parsers, not
-  // yet implemented (design §11.2 scoped xlsx/xlsm first).
+  // xls (BIFF binary) / xlsb (binary OOXML) / ods (a different ZIP/XML schema) —
+  // separate parsers, not yet implemented (design §11.2 scoped xlsx/xlsm first).
+  // The workbook_kind is preserved (not mislabeled csv) so the artifact is honest.
   return unsupportedInventory({
     sourceRef,
     contentSha256,
     workbookKind,
-    reason: `${workbookKind} extraction not yet implemented (xls/ods deferred; xlsx/xlsm supported)`,
+    reason: `${workbookKind} extraction not yet implemented (xls/xlsb/ods deferred; xlsx/xlsm supported)`,
   });
 }
 
