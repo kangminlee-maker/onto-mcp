@@ -3,9 +3,18 @@ import {
   deriveReconstructTag,
   ingestReconstructReport,
   ingestReviewReport,
+  reconstructRetainedRouteIdentities,
+  reconstructRunRouteIdentity,
+  reviewRetainedRouteIdentities,
+  reviewRunRouteIdentity,
+  summarizeDerivedRoutes,
   type ReconstructBenchmarkReport,
   type ReviewBenchmarkReport,
 } from "./effort-calibration-ingest.js";
+import {
+  witnessedReconstructRouteIdentity,
+  type RouteIdentity,
+} from "./route-identity.js";
 import type { SemanticQualityGateResult } from "./review/semantic-quality-gate.js";
 import type { ReconstructQualityGateResult } from "./reconstruct/semantic-quality-gate.js";
 
@@ -287,5 +296,251 @@ describe("ingestReconstructReport", () => {
     expect(() =>
       ingestReconstructReport({ runs: [{ quality_gate: reconGate("passed") }] }),
     ).toThrow(/pins no effort/);
+  });
+});
+
+describe("reconstructRunRouteIdentity", () => {
+  const witnessed: RouteIdentity = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "claude_code",
+    declaredBillingMode: "subscription",
+    effectiveBaseUrl: "claude-cli://oauth",
+  });
+
+  it("returns the harness-surfaced witnessed route_identity as-is", () => {
+    const id = reconstructRunRouteIdentity({
+      quality_gate: reconGate("passed"),
+      metadata: { applied_effort: "high", route_identity: witnessed },
+    });
+    expect(id).toEqual(witnessed);
+    expect(id?.execution_adapter).toBe("claude_code");
+    expect(id?.route_completeness).toBe("complete");
+  });
+
+  it("degrades a legacy provider-only report to a provider_only identity", () => {
+    const id = reconstructRunRouteIdentity({
+      quality_gate: reconGate("passed"),
+      metadata: { applied_effort: "high", provider_route: "anthropic" },
+    });
+    expect(id?.execution_adapter).toBeNull();
+    expect(id?.model_provider).toBe("anthropic");
+    expect(id?.route_completeness).toBe("provider_only");
+    expect(id?.route_provenance).toBe("witnessed");
+  });
+
+  it("returns null when a run carries no route evidence", () => {
+    expect(
+      reconstructRunRouteIdentity({
+        quality_gate: reconGate("passed"),
+        metadata: { applied_effort: "high" },
+      }),
+    ).toBeNull();
+    expect(reconstructRunRouteIdentity({ quality_gate: reconGate("passed") })).toBeNull();
+  });
+});
+
+describe("reviewRunRouteIdentity", () => {
+  it("derives a profile_derived identity from the rich runtime_route", () => {
+    const id = reviewRunRouteIdentity({
+      review_profile: {
+        runtime_route: {
+          execution_adapter: "claude_code",
+          model_provider: "anthropic",
+          billing_mode: "subscription",
+          artifact_generation_realization: "real_model",
+        },
+      },
+    });
+    expect(id?.route_provenance).toBe("profile_derived");
+    expect(id?.execution_adapter).toBe("claude_code");
+    expect(id?.model_provider).toBe("anthropic");
+    expect(id?.route_completeness).toBe("complete");
+    expect(id?.realization).toBe("real_model");
+  });
+
+  it("degrades a legacy provider-only review report symmetrically with reconstruct", () => {
+    // Only the legacy runtime_provider token is present (no model_provider) →
+    // recover the brand and degrade to provider_only, not under_determined.
+    const id = reviewRunRouteIdentity({
+      review_profile: { runtime_route: { runtime_provider: "anthropic" } },
+    });
+    expect(id?.model_provider).toBe("anthropic");
+    expect(id?.execution_adapter).toBeNull();
+    expect(id?.route_completeness).toBe("provider_only");
+    expect(id?.route_provenance).toBe("profile_derived");
+  });
+
+  it("returns null when a run carries no route projection", () => {
+    expect(reviewRunRouteIdentity({})).toBeNull();
+    expect(reviewRunRouteIdentity({ review_profile: {} })).toBeNull();
+  });
+});
+
+describe("summarizeDerivedRoutes", () => {
+  const sdk = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "anthropic_sdk",
+    declaredBillingMode: "per_token",
+    effectiveBaseUrl: "https://api.anthropic.com",
+  });
+  const oauth = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "claude_code",
+    declaredBillingMode: "subscription",
+    effectiveBaseUrl: "claude-cli://oauth",
+  });
+  const legacy = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: null,
+    declaredBillingMode: null,
+    effectiveBaseUrl: null,
+  });
+
+  it("dedups identical identities and corroborates a provider-level hint", () => {
+    const summary = summarizeDerivedRoutes([sdk, sdk], "anthropic");
+    expect(summary.identities).toHaveLength(1);
+    expect(summary.completeness).toBe("complete");
+    expect(summary.hintCorroborated).toBe(true);
+  });
+
+  it("keeps distinct routes and takes the worst completeness", () => {
+    const summary = summarizeDerivedRoutes([sdk, oauth, legacy], "anthropic");
+    expect(summary.identities).toHaveLength(3);
+    // sdk + oauth are complete but legacy is provider_only → worst wins.
+    expect(summary.completeness).toBe("provider_only");
+  });
+
+  it("keeps two same-token routes distinct when their base URLs differ", () => {
+    // Two openai-compatible endpoints share the routeToken but are different
+    // routes; the base_url must distinguish them (no silent collapse).
+    const a = witnessedReconstructRouteIdentity({
+      provider: "lmstudio",
+      executionAdapter: "openai_compatible_http",
+      declaredBillingMode: "local",
+      effectiveBaseUrl: "http://localhost:1234/v1",
+    });
+    const b = witnessedReconstructRouteIdentity({
+      provider: "lmstudio",
+      executionAdapter: "openai_compatible_http",
+      declaredBillingMode: "local",
+      effectiveBaseUrl: "http://localhost:9999/v1",
+    });
+    const summary = summarizeDerivedRoutes([a, b], "lmstudio");
+    expect(summary.identities).toHaveLength(2);
+  });
+
+  it("downgrades to under_determined when a contributing run had no witness", () => {
+    // A retained sample with no route witness (null) must not be silently dropped
+    // while the profile claims a complete route.
+    const summary = summarizeDerivedRoutes([sdk, null], "anthropic");
+    expect(summary.identities).toHaveLength(1);
+    expect(summary.completeness).toBe("under_determined");
+  });
+
+  it("flags an uncorroborated declared hint without throwing", () => {
+    const summary = summarizeDerivedRoutes([sdk], "openai");
+    expect(summary.hintCorroborated).toBe(false);
+    expect(summary.tokens).toEqual([expect.stringContaining("anthropic")]);
+  });
+
+  it("reports under_determined and no corroboration when no route evidence exists", () => {
+    const summary = summarizeDerivedRoutes([null, null], "anthropic");
+    expect(summary.identities).toHaveLength(0);
+    expect(summary.completeness).toBe("under_determined");
+    expect(summary.hintCorroborated).toBe(false);
+  });
+});
+
+describe("retained route identities", () => {
+  const witnessed: RouteIdentity = witnessedReconstructRouteIdentity({
+    provider: "anthropic",
+    executionAdapter: "claude_code",
+    declaredBillingMode: "subscription",
+    effectiveBaseUrl: "claude-cli://oauth",
+  });
+
+  it("collects reconstruct route evidence only from runs retained at the point", () => {
+    const report: ReconstructBenchmarkReport = {
+      requested_effort: "high",
+      runs: [
+        // retained: applied effort matches the swept point.
+        {
+          quality_gate: reconGate("passed", { recall: 1, supportRate: 1, authored: 4, dropped: 0 }),
+          metadata: { applied_effort: "high", route_identity: witnessed },
+        },
+        // dropped: applied effort != point → its route must not be collected.
+        {
+          quality_gate: reconGate("passed", { recall: 1, supportRate: 1, authored: 4, dropped: 0 }),
+          metadata: {
+            applied_effort: "medium",
+            route_identity: witnessedReconstructRouteIdentity({
+              provider: "anthropic",
+              executionAdapter: "anthropic_sdk",
+              declaredBillingMode: "per_token",
+              effectiveBaseUrl: "https://api.anthropic.com",
+            }),
+          },
+        },
+      ],
+    };
+    const ids = reconstructRetainedRouteIdentities(report);
+    expect(ids).toEqual([witnessed]);
+  });
+
+  it("uses the judge unit's own route for a judge sweep, not the author metadata", () => {
+    const authorRoute = witnessedReconstructRouteIdentity({
+      provider: "anthropic",
+      executionAdapter: "anthropic_sdk",
+      declaredBillingMode: "per_token",
+      effectiveBaseUrl: "https://api.anthropic.com",
+    });
+    const judgeRoute = witnessedReconstructRouteIdentity({
+      provider: "codex",
+      executionAdapter: "codex_cli",
+      declaredBillingMode: "subscription",
+      effectiveBaseUrl: "codex-cli://oauth",
+    });
+    const report: ReconstructBenchmarkReport = {
+      requested_judge_override: { effort: "high" },
+      runs: [
+        {
+          quality_gate: reconGate("passed", { recall: 1, supportRate: 1, authored: 4, dropped: 0 }),
+          // metadata route mirrors the AUTHOR unit (anthropic SDK)…
+          metadata: { applied_effort: "medium", route_identity: authorRoute },
+          // …but the swept judge unit ran on a different route (codex).
+          units: [
+            { step_id: "answer_support_judgment", effort: "high", llm_call_count: 1, route_identity: judgeRoute },
+          ],
+        },
+      ],
+    };
+    const ids = reconstructRetainedRouteIdentities(report);
+    expect(ids).toEqual([judgeRoute]);
+  });
+
+  it("collects review route evidence only from gated runs", () => {
+    const report: ReviewBenchmarkReport = {
+      runs: [
+        {
+          case_id: "unit-sweep-lens-high",
+          varied_unit_id: "lens",
+          varied_effort: "high",
+          base_effort: "medium",
+          semantic_quality_gate: reviewGate("passed", ["passed"]),
+          review_profile: { runtime_route: { model_provider: "anthropic", execution_adapter: "claude_code" } },
+        },
+        // failed candidate (no gate) → carries no route telemetry → excluded.
+        {
+          case_id: "unit-sweep-lens-high",
+          varied_unit_id: "lens",
+          varied_effort: "high",
+          base_effort: "medium",
+          review_profile: { runtime_route: { model_provider: "openai", execution_adapter: "codex_cli" } },
+        },
+      ],
+    };
+    const ids = reviewRetainedRouteIdentities(report);
+    expect(ids).toHaveLength(1);
+    expect(ids[0]?.execution_adapter).toBe("claude_code");
   });
 });

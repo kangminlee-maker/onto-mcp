@@ -8,7 +8,7 @@
  * One invocation builds one pipeline's profile:
  *   review:      one unit-sweep report (self-describes each unit+effort).
  *     tsx scripts/effort-calibration-report.ts --review-report <path> \
- *       --provider anthropic --model claude-opus-4-8 --route anthropic/claude-cli
+ *       --provider anthropic --model claude-opus-4-8 --route claude_code
  *   reconstruct: one report per pinned effort point (repeat the flag). A report
  *     auto-derives its (stage, effort) from the pinned knob; prefix
  *     stage:effort: to force it.
@@ -16,8 +16,9 @@
  *       --reconstruct-report author:low:<path> \
  *       --reconstruct-report author:high:<path> \
  *       --reconstruct-report judge:high:<path> \
- *       --provider anthropic --model claude-opus-4-8 --route anthropic/claude-cli
+ *       --provider anthropic --model claude-opus-4-8 --route claude_code
  */
+import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
@@ -25,6 +26,10 @@ import {
   ingestReconstructReport,
   ingestReviewReport,
   JUDGE_STEP_ID,
+  reconstructRetainedRouteIdentities,
+  reviewRetainedRouteIdentities,
+  summarizeDerivedRoutes,
+  type DerivedRouteSummary,
   type ReconstructBenchmarkReport,
   type ReconstructStageTag,
   type ReviewBenchmarkReport,
@@ -33,6 +38,7 @@ import {
   buildEffortCalibrationReport,
   type EffortSweepRun,
 } from "../src/core-runtime/effort-calibration-sweep.js";
+import { routeToken, type RouteIdentity } from "../src/core-runtime/route-identity.js";
 import type {
   EffortCalibrationReport,
   StageFrontier,
@@ -68,7 +74,7 @@ function usage(): string {
     "                                     stage ∈ author|judge; omit prefix to auto-derive.",
     "  --provider <id>                    Provider id (required).",
     "  --model <id>                       Model id (required).",
-    "  --route <id>                       Effort-honoring route (required).",
+    "  --route <id>                       Declared route hint + file key, cross-checked vs the derived route (required).",
     `  --effort-order <csv>               Ascending effort order. Default: ${DEFAULT_EFFORT_ORDER.join(",")}`,
     `  --plateau <num>                    Plateau quality threshold. Default: ${DEFAULT_PLATEAU}`,
     "  --pass-quorum <num>                Min gatePassRate for viability. Default: 1 (all runs).",
@@ -224,11 +230,14 @@ function renderMarkdown(
   sources: Array<{ path: string; status: string | null }>,
   decisionGrade: boolean,
   sweepContext: Record<string, unknown>,
+  route: DerivedRouteSummary,
 ): string {
+  const derivedTokens = route.tokens.length > 0 ? route.tokens.join(", ") : "none";
   const lines = [
     `# Effort profile — ${report.pipeline}`,
     "",
-    `- model: \`${report.provider}/${report.model}\` via \`${report.route}\``,
+    `- model: \`${report.provider}/${report.model}\` via \`${report.route}\` (declared hint)`,
+    `- route: completeness=${route.completeness}, hint_corroborated=${route.hintCorroborated}, derived=[${derivedTokens}]`,
     `- decision_grade: ${decisionGrade}`,
     `- sweep context: \`${JSON.stringify(sweepContext)}\``,
     `- thresholds: passQuorum=${report.thresholds.passQuorum ?? 1}, plateau=${report.thresholds.plateauThreshold}`,
@@ -262,7 +271,10 @@ function defaultOutputPath(
   const date = generatedAt.slice(0, 10).replace(/-/g, "");
   // Provider and route are part of the calibration identity (same model can have
   // different effort behavior per route), so include them to avoid clobbering a
-  // sibling profile for the same model+day.
+  // sibling profile for the same model+day. `route` is the DERIVED route token
+  // when a single route was witnessed (so anthropic_sdk and claude_code profiles
+  // built with the same `--route anthropic` hint get distinct files), falling
+  // back to the declared hint only when the route is ambiguous/undetermined.
   const id = [identity.provider, identity.model, identity.route].map(slug).join("-");
   return path.join(
     "development-records",
@@ -357,6 +369,11 @@ function reconstructNonSweptKey(
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   const sourceStatuses: Array<{ path: string; status: string | null }> = [];
+  // Route identities derived per run from witnessed telemetry (reconstruct) or
+  // the profile-derived projection (review). The declared --route is demoted to
+  // a hint cross-checked against these (design §5); the worst route_completeness
+  // gates decision-grade on the route axis (§7 Q3).
+  const derivedRouteIdentities: Array<RouteIdentity | null> = [];
   let runs: EffortSweepRun[];
   let pipeline: string;
   // Sweep context recorded in the artifact so a restricted/partial calibration
@@ -367,20 +384,11 @@ async function main(): Promise<void> {
     pipeline = "review";
     const report = await readJson<ReviewBenchmarkReport>(options.reviewReport);
     assertIdentity(options.reviewReport, report, options);
-    // Validate the runtime route token (provider) so a same-model report from a
-    // different route/auth is not saved under the wrong per-route identity.
-    const routes = new Set(
-      (report.runs ?? [])
-        .map((r) => r.review_profile?.runtime_route?.runtime_provider)
-        .filter((r): r is string => typeof r === "string"),
-    );
-    for (const route of routes) {
-      if (route !== options.route) {
-        throw new Error(
-          `${options.reviewReport}: report route "${route}" != --route "${options.route}"`,
-        );
-      }
-    }
+    // Derive route identities from the runs that actually feed the frontier
+    // (gated candidate/baseline runs), profile-derived (adapter / model_provider
+    // / billing / base_url). --route is a hint cross-checked after ingestion, not
+    // a throw (design §5); evidence comes from retained samples only.
+    derivedRouteIdentities.push(...reviewRetainedRouteIdentities(report));
     sweepContext = {
       selected_lens_ids: report.selected_lens_ids ?? [],
       fixtures: report.fixtures ?? [],
@@ -404,23 +412,14 @@ async function main(): Promise<void> {
           .filter((m): m is string => typeof m === "string"),
       );
       for (const model of models) assertIdentity(filePath, { model }, options);
-      // NOTE: reconstruct telemetry's provider_route is provider-only (Anthropic
-      // SDK/api-key and Claude Code OAuth both read "anthropic"), so this can't
-      // distinguish execution adapter/auth. An adapter/auth-aware route token is
-      // a known limitation tracked for the simplification refactor (derive a
-      // unified route identity from telemetry); for now route is provider-level.
-      const routes = new Set(
-        (report.runs ?? [])
-          .map((r) => r.metadata?.provider_route)
-          .filter((r): r is string => typeof r === "string"),
-      );
-      for (const route of routes) {
-        if (route !== options.route) {
-          throw new Error(
-            `${filePath}: report route "${route}" != --route "${options.route}"`,
-          );
-        }
-      }
+      // Derive witnessed RouteIdentity from the runs that actually feed the
+      // frontier (the same runs ingestReconstructReport retains), so a dropped
+      // wrong-effort/early-exit run can't taint the route. S1.1/S1.2 surfaced
+      // route_identity; a legacy provider-only report degrades through the
+      // witnessed constructor. The Anthropic-SDK vs Claude-Code-OAuth split that
+      // provider_route alone could not express now lives in execution_adapter /
+      // billing_mode, and --route is a hint cross-checked after ingestion (§3, §5).
+      derivedRouteIdentities.push(...reconstructRetainedRouteIdentities(report, tag));
       // Single-variable invariant: the base context must match across ALL
       // sources, and the non-swept requested knobs must match within each stage
       // (so a judge sweep can't fold in an author-effort or judge-model change).
@@ -482,6 +481,32 @@ async function main(): Promise<void> {
     );
   }
 
+  // Cross-check the declared --route hint against the derived route identities.
+  // A mismatch is recorded and warned, NOT thrown (design §5): the structured
+  // RouteIdentity is canonical, --route is a human label / file key. A genuinely
+  // wrong route surfaces as an uncorroborated hint plus the recorded identities.
+  const routeSummary = summarizeDerivedRoutes(derivedRouteIdentities, options.route);
+  if (!routeSummary.hintCorroborated) {
+    const derived = routeSummary.tokens.length > 0 ? routeSummary.tokens.join(", ") : "none";
+    process.stderr.write(
+      `WARN: --route "${options.route}" is not corroborated by the derived route ` +
+        `identit${routeSummary.tokens.length === 1 ? "y" : "ies"} [${derived}]; ` +
+        "recording it as a declared hint only.\n",
+    );
+  }
+  // --provider is part of the artifact's identity key (like --model), so a
+  // witnessed model_provider that contradicts it is a hard error, not a hint
+  // mismatch: the profile would otherwise be stored under the wrong provider.
+  // (model_provider null = under-determined route; nothing to contradict.)
+  for (const identity of routeSummary.identities) {
+    if (identity.model_provider && identity.model_provider !== options.provider) {
+      throw new Error(
+        `derived model_provider "${identity.model_provider}" != --provider "${options.provider}" ` +
+          `(route ${routeToken(identity)}); the profile would be stored under the wrong provider identity.`,
+      );
+    }
+  }
+
   const report = buildEffortCalibrationReport({
     pipeline,
     provider: options.provider,
@@ -505,7 +530,21 @@ async function main(): Promise<void> {
   const thinPoints = report.stages
     .flatMap((s) => s.curve.map((p) => ({ stage: s.stage, ...p })))
     .filter((p) => p.runs < DECISION_GRADE_MIN_RUNS);
-  const decisionGrade = sourcesDecisionGrade && thinPoints.length === 0;
+  // Route axis (Q3, design §7), separate from the effort-axis thinPoints and
+  // gated by the SAME --allow-preliminary opt-in. Two ways the route fails it:
+  //  - incomplete: the route did not resolve past model_provider (legacy
+  //    provider-only telemetry, a missing witness, or no route evidence at all).
+  //  - ambiguous: the retained samples span more than one distinct execution
+  //    route, so a single-route profile would aggregate behavior across routes
+  //    and corrupt the per-route effort recommendation (the conflation this
+  //    refactor exists to prevent).
+  const routeIncomplete = routeSummary.completeness !== "complete";
+  const routeAmbiguous = routeSummary.identities.length > 1;
+  const decisionGrade =
+    sourcesDecisionGrade &&
+    thinPoints.length === 0 &&
+    !routeIncomplete &&
+    !routeAmbiguous;
   if (!decisionGrade && !options.allowPreliminary) {
     const reasons: string[] = [];
     if (!sourcesDecisionGrade) {
@@ -523,28 +562,77 @@ async function main(): Promise<void> {
         `points below ${DECISION_GRADE_MIN_RUNS} retained runs after telemetry filtering: ${thin}`,
       );
     }
+    if (routeIncomplete) {
+      const derived = routeSummary.tokens.length > 0 ? routeSummary.tokens.join(", ") : "none";
+      reasons.push(
+        `route_completeness=${routeSummary.completeness} (derived: [${derived}]) — ` +
+          "adapter/auth not resolved (legacy provider-only telemetry or no route witness)",
+      );
+    }
+    if (routeAmbiguous) {
+      reasons.push(
+        `profile aggregates ${routeSummary.identities.length} distinct execution routes ` +
+          `([${routeSummary.tokens.join(", ")}]); a per-route profile must observe a single ` +
+          "route — split the sources or pin one route per profile",
+      );
+    }
     throw new Error(
       `Not decision-grade — ${reasons.join("; ")}. Pass --allow-preliminary to build a marked (non-decision-grade) profile.`,
     );
   }
 
   const generatedAt = new Date().toISOString();
+  // Key the default filename so distinct profiles for the same provider/model/day
+  // don't overwrite each other. For a single COMPLETE route the routeToken is
+  // fully resolved and is the truth (hint-independent: the same route under two
+  // different hints is one profile). For a single but NOT-complete route the
+  // token degenerates (e.g. `provider_only:unknown:unknown`) and would collide
+  // across different hints, so keep the declared hint (distinguishes unknown
+  // routes); a custom base is appended as a short hash, because `slug()` in the
+  // path builder collapses punctuation and would otherwise merge distinct proxy
+  // bases (e.g. `proxy/a-b` vs `proxy/a/b`). For an ambiguous/empty route fall
+  // back to the declared hint. `-preliminary` marks a non-decision-grade profile
+  // so it can't clobber a decision-grade one.
+  let routeKeyBase: string;
+  if (routeSummary.identities.length === 1) {
+    const only = routeSummary.identities[0]!;
+    if (only.route_completeness === "complete") {
+      routeKeyBase = routeToken(only);
+    } else {
+      const baseHash = only.effective_base_url
+        ? `-${crypto.createHash("sha256").update(only.effective_base_url).digest("hex").slice(0, 8)}`
+        : "";
+      routeKeyBase = `${options.route}-${routeToken(only)}${baseHash}`;
+    }
+  } else {
+    routeKeyBase = options.route;
+  }
+  const routeFileKey = decisionGrade ? routeKeyBase : `${routeKeyBase}-preliminary`;
   const outputPath = path.resolve(
     options.outputPath ??
       defaultOutputPath(
         pipeline,
-        { provider: options.provider, model: options.model, route: options.route },
+        { provider: options.provider, model: options.model, route: routeFileKey },
         generatedAt,
       ),
   );
   const artifact = {
     artifact: "effort_profile",
-    schema_version: 1,
+    // v2 adds the derived route identity block (route_identities /
+    // route_completeness / route_hint_corroborated); `route` (from ...report)
+    // stays the declared hint, while the default filename is keyed by the
+    // derived route token (see routeFileKey above).
+    schema_version: 2,
     generated_at: generatedAt,
     decision_grade: decisionGrade,
     source_reports: sourceStatuses,
     sweep_context: sweepContext,
     sweep_run_count: runs.length,
+    // Canonical structured route identity derived from telemetry (reconstruct:
+    // witnessed; review: profile_derived). The declared --route is a hint.
+    route_identities: routeSummary.identities,
+    route_completeness: routeSummary.completeness,
+    route_hint_corroborated: routeSummary.hintCorroborated,
     ...report,
   };
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -552,7 +640,7 @@ async function main(): Promise<void> {
   const markdownPath = outputPath.replace(/\.json$/, ".md");
   await writeFileAtomic(
     markdownPath,
-    renderMarkdown(report, generatedAt, sourceStatuses, decisionGrade, sweepContext),
+    renderMarkdown(report, generatedAt, sourceStatuses, decisionGrade, sweepContext, routeSummary),
   );
 
   process.stdout.write(
@@ -562,6 +650,8 @@ async function main(): Promise<void> {
         markdown: markdownPath,
         pipeline,
         decision_grade: decisionGrade,
+        route_completeness: routeSummary.completeness,
+        route_hint_corroborated: routeSummary.hintCorroborated,
         sweep_run_count: runs.length,
         stages: report.stages.map((s) => ({
           stage: s.stage,

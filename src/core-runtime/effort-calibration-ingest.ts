@@ -31,6 +31,21 @@
  */
 
 import type { EffortSweepRun } from "./effort-calibration-sweep.js";
+import type {
+  LlmBillingMode,
+  LlmExecutionAdapter,
+  LlmProviderName,
+} from "./llm/model-switcher.js";
+import {
+  modelProviderFromRuntimeProvider,
+  profileDerivedRouteIdentity,
+  routeHintMatches,
+  routeToken,
+  witnessedReconstructRouteIdentity,
+  worstRouteCompleteness,
+  type RouteCompleteness,
+  type RouteIdentity,
+} from "./route-identity.js";
 import type { SemanticQualityGateResult } from "./review/semantic-quality-gate.js";
 import type { ReconstructQualityGateResult } from "./reconstruct/semantic-quality-gate.js";
 import { reviewRunGateSignal } from "./effort-calibration-review.js";
@@ -55,8 +70,23 @@ export interface ReviewBenchmarkRun {
   base_effort?: string;
   /** Whole-review semantic quality gate; absent when the run failed. */
   semantic_quality_gate?: SemanticQualityGateResult;
-  /** Per-run runtime context; runtime_provider is the route token to validate. */
-  review_profile?: { runtime_route?: { runtime_provider?: string | null } | null };
+  /**
+   * Per-run runtime context. The runtime_route is the (already structurally
+   * rich) ReviewRuntimeRouteArtifactProjection — review is profile-derived
+   * (design §4), so the CLI reads adapter / model_provider / billing / base_url
+   * to build a RouteIdentity, not just the legacy provider token.
+   */
+  review_profile?: {
+    runtime_route?: {
+      execution_adapter?: LlmExecutionAdapter | null;
+      model_provider?: LlmProviderName | null;
+      billing_mode?: LlmBillingMode | null;
+      base_url?: string | null;
+      artifact_generation_realization?: string | null;
+      /** Legacy provider token; superseded by model_provider for derivation. */
+      runtime_provider?: string | null;
+    } | null;
+  };
 }
 
 /** Structural subset of a review benchmark report (top-level identity/status). */
@@ -162,9 +192,26 @@ export interface ReconstructBenchmarkRun {
     applied_effort?: string | null;
     model_id?: string | null;
     provider_route?: string | null;
+    /**
+     * Witnessed route identity (effort-calibration simplification §9). Absent on
+     * legacy reports authored before the harness surfaced it — the CLI degrades
+     * such a source's route_completeness rather than failing (design §10).
+     */
+    route_identity?: RouteIdentity | null;
   };
   /** Per-unit execution telemetry; the judge unit is only present when it ran. */
-  units?: Array<{ step_id?: string; effort?: string | null; llm_call_count?: number }>;
+  units?: Array<{
+    step_id?: string;
+    effort?: string | null;
+    llm_call_count?: number;
+    /**
+     * Witnessed route identity of THIS unit. The judge (answer_support_judgment)
+     * can run on a different route than the author, so a judge-stage calibration
+     * must read the judge unit's route here, not the run-level metadata route
+     * (which mirrors the first author unit).
+     */
+    route_identity?: RouteIdentity | null;
+  }>;
 }
 
 /**
@@ -289,4 +336,189 @@ export function ingestReconstructReport(
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Route derivation (S1.3 — CLI consumer of the witnessed route identity)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive one reconstruct run's RouteIdentity. Prefers the harness-surfaced
+ * witnessed `route_identity` (S1.1/S1.2). A legacy report that predates route
+ * witnessing carries only the provider-only `provider_route`; that string is
+ * degraded through the witnessed constructor (adapter unknown → route_completeness
+ * `provider_only`, or `under_determined` for an unknown brand) so the CLI records
+ * an honest, degraded identity instead of failing (design §10). Returns null when
+ * neither is present (no route evidence on this run).
+ */
+export function reconstructRunRouteIdentity(
+  run: ReconstructBenchmarkRun,
+): RouteIdentity | null {
+  const witnessed = run.metadata?.route_identity;
+  if (witnessed) return witnessed;
+  const providerRoute = run.metadata?.provider_route;
+  if (providerRoute == null) return null;
+  return witnessedReconstructRouteIdentity({
+    provider: providerRoute,
+    executionAdapter: null,
+    declaredBillingMode: null,
+    effectiveBaseUrl: null,
+  });
+}
+
+/**
+ * Derive one review run's RouteIdentity from its (already structurally rich)
+ * runtime_route projection. Review has no result-level witness — the route is
+ * resolved from settings/profile — so provenance is profile_derived (design §4).
+ * A legacy report that carries only the provider-level `runtime_provider` token
+ * (no `model_provider`) falls back to the brand mapping, degrading to
+ * provider_only — symmetric with the reconstruct legacy path (design §10) rather
+ * than discarding the recoverable brand. Returns null when the run carries no
+ * route projection at all.
+ */
+export function reviewRunRouteIdentity(
+  run: ReviewBenchmarkRun,
+): RouteIdentity | null {
+  const route = run.review_profile?.runtime_route;
+  if (!route) return null;
+  return profileDerivedRouteIdentity({
+    executionAdapter: route.execution_adapter ?? null,
+    modelProvider:
+      route.model_provider ?? modelProviderFromRuntimeProvider(route.runtime_provider),
+    billingMode: route.billing_mode ?? null,
+    effectiveBaseUrl: route.base_url ?? null,
+    realization: route.artifact_generation_realization ?? null,
+  });
+}
+
+/**
+ * The route identities of the reconstruct runs that ACTUALLY feed the frontier —
+ * the same runs `ingestReconstructReport` retains (telemetry shows the swept
+ * stage ran at the point). Route evidence is collected from these retained
+ * samples only, never from runs whose applied effort / judge mismatch dropped
+ * them, so a discarded wrong-route run can't taint route_completeness or add a
+ * phantom route (finding: derive route evidence from retained samples). A
+ * retained run that carries no route witness contributes null (kept, not
+ * dropped, so the summary can downgrade for it). Failed runs carry no telemetry
+ * and assert no route, so they are excluded.
+ */
+export function reconstructRetainedRouteIdentities(
+  report: ReconstructBenchmarkReport,
+  tag?: ReconstructStageTag,
+): Array<RouteIdentity | null> {
+  const point = tag ?? deriveReconstructTag(report);
+  if (!point) return [];
+  const out: Array<RouteIdentity | null> = [];
+  for (const run of report.runs ?? []) {
+    if (!appliedEffortMatches(run, point.stage, point.effort)) continue;
+    out.push(retainedRunRouteIdentity(run, point));
+  }
+  return out;
+}
+
+/**
+ * The route identity that backs a retained sample at `point`. For an author
+ * point the run-level metadata route (= the first author unit) is the swept
+ * unit's route. For a JUDGE point the swept unit is the answer_support_judgment
+ * call, which may run on a different route than the author, so its OWN
+ * route_identity is read; a judge unit that ran without a route witness yields
+ * null (the route is undetermined, never silently the author's).
+ */
+function retainedRunRouteIdentity(
+  run: ReconstructBenchmarkRun,
+  point: ReconstructStageTag,
+): RouteIdentity | null {
+  if (point.stage === "judge") {
+    const judgeUnit = (run.units ?? []).find(
+      (u) =>
+        u.step_id === JUDGE_STEP_ID &&
+        u.effort === point.effort &&
+        (u.llm_call_count ?? 0) >= 1,
+    );
+    return judgeUnit?.route_identity ?? null;
+  }
+  return reconstructRunRouteIdentity(run);
+}
+
+/**
+ * The route identities of the review runs that feed the frontier — the gated
+ * (completed) candidate and unit-sweep baseline runs, mirroring
+ * `ingestReviewReport`'s attribution. Failed runs carry no quality gate or route
+ * telemetry, so only gated runs are sampled. A gated run missing its route
+ * projection contributes null (so the summary can downgrade for it).
+ */
+export function reviewRetainedRouteIdentities(
+  report: ReviewBenchmarkReport,
+): Array<RouteIdentity | null> {
+  const out: Array<RouteIdentity | null> = [];
+  for (const run of report.runs ?? []) {
+    if (!run.semantic_quality_gate) continue;
+    const isCandidate = Boolean(run.varied_unit_id && run.varied_effort);
+    const isBaseline = Boolean(
+      run.base_effort && run.case_id?.startsWith(UNIT_SWEEP_BASE_PREFIX),
+    );
+    if (!isCandidate && !isBaseline) continue;
+    out.push(reviewRunRouteIdentity(run));
+  }
+  return out;
+}
+
+/**
+ * Distinct derived route identities across a profile's retained runs, plus the
+ * non-fatal cross-check of the declared `--route` hint and the worst
+ * route_completeness for the decision-grade gate (design §7 Q3).
+ *
+ * Identities are deduped by routeToken AND effective_base_url, so two custom or
+ * proxy endpoints behind the same adapter (same routeToken, different base) stay
+ * distinct routes rather than collapsing into one "complete" identity (finding:
+ * preserve base URL when grouping). Completeness is `under_determined` when no
+ * run carried route evidence OR when any contributing retained run was missing a
+ * route witness (a null among the inputs — finding: count missing witnesses as
+ * incomplete); otherwise it is the worst completeness across the distinct
+ * identities. `identities.length > 1` means the profile aggregates more than one
+ * execution route, which the caller treats as non-decision-grade on the route
+ * axis (a per-route profile must observe a single route).
+ */
+export interface DerivedRouteSummary {
+  /** Distinct derived identities (deduped by routeToken + base_url), canonical. */
+  identities: RouteIdentity[];
+  /** Display token per distinct identity (routeToken, `@base_url` when custom). */
+  tokens: string[];
+  /** Worst completeness; `under_determined` when none or a witness was missing. */
+  completeness: RouteCompleteness;
+  /** Whether the declared hint corroborates at least one derived identity. */
+  hintCorroborated: boolean;
+}
+
+export function summarizeDerivedRoutes(
+  derived: ReadonlyArray<RouteIdentity | null>,
+  declaredRouteHint: string,
+): DerivedRouteSummary {
+  // A null among contributing runs is a retained sample with no route witness —
+  // the profile cannot claim a complete route while including it (design §10).
+  const hasMissingWitness = derived.some((id) => id === null);
+  const byKey = new Map<string, RouteIdentity>();
+  for (const identity of derived) {
+    if (!identity) continue;
+    const key = JSON.stringify([routeToken(identity), identity.effective_base_url ?? null]);
+    if (!byKey.has(key)) byKey.set(key, identity);
+  }
+  const identities = [...byKey.values()];
+  const tokens = identities.map((id) =>
+    id.effective_base_url
+      ? `${routeToken(id)}@${id.effective_base_url}`
+      : routeToken(id),
+  );
+  const completeness: RouteCompleteness =
+    identities.length === 0 || hasMissingWitness
+      ? "under_determined"
+      : worstRouteCompleteness(identities.map((id) => id.route_completeness));
+  return {
+    identities,
+    tokens,
+    completeness,
+    hintCorroborated: identities.some((id) =>
+      routeHintMatches(declaredRouteHint, id),
+    ),
+  };
 }
