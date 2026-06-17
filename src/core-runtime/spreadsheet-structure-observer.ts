@@ -178,10 +178,24 @@ export interface WorkbookStructuralInventory {
 const CSV_DELIMITERS = [",", "\t", ";"] as const;
 type CsvDelimiter = (typeof CSV_DELIMITERS)[number];
 
+/** Count occurrences of `delim` in `line` that fall OUTSIDE double-quoted fields,
+ *  so a delimiter inside a quoted free-text cell doesn't skew detection. */
+function countDelimiterOutsideQuotes(line: string, delim: string): number {
+  let count = 0;
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"') inQuotes = !inQuotes;
+    else if (!inQuotes && ch === delim) count += 1;
+  }
+  return count;
+}
+
 /** Pick the delimiter with the most occurrences across the first several
  *  non-empty lines (deterministic; comma wins ties by being first). Scanning
  *  more than one line keeps a leading title/blank line — common in exported
- *  reports — from mis-picking the delimiter. */
+ *  reports — from mis-picking the delimiter, and quoted fields are ignored so a
+ *  semicolon inside a comma file's text column isn't counted. */
 function detectDelimiter(text: string): CsvDelimiter {
   const lines = text
     .split(/\r?\n/)
@@ -190,10 +204,8 @@ function detectDelimiter(text: string): CsvDelimiter {
   let best: CsvDelimiter = ",";
   let bestCount = -1;
   for (const d of CSV_DELIMITERS) {
-    // A raw count summed over the sampled lines is a stable, good-enough
-    // heuristic for the delimiter choice.
     let count = 0;
-    for (const line of lines) count += line.split(d).length - 1;
+    for (const line of lines) count += countDelimiterOutsideQuotes(line, d);
     if (count > bestCount) {
       best = d;
       bestCount = count;
@@ -417,7 +429,8 @@ function profileSheetRows(args: {
   const RAGGED_CAP = 20;
   for (let r = 0; r < dataRows.length && risk_signals.length < RAGGED_CAP; r += 1) {
     const dr = dataRows[r];
-    if (dr && dr.length !== colCount) {
+    // A fully-empty row is a blank/omitted row (sparse gap), not a ragged row.
+    if (dr && dr.length > 0 && dr.length !== colCount) {
       risk_signals.push({
         kind: "ragged_row",
         location: `${sheetName}:row ${headerStart + r + 1}`,
@@ -568,10 +581,13 @@ export function buildCsvInventory(args: {
 }): WorkbookStructuralInventory {
   const caps = args.caps ?? DEFAULT_DATA_LAYER_CAPS;
   const sheetName = path.basename(args.sourceRef);
-  const delimiter = detectDelimiter(args.content);
+  // Strip a leading UTF-8 BOM (common in Excel CSV exports) so it doesn't attach
+  // to the first header cell. content_sha256 stays the raw-byte hash (with BOM).
+  const content = args.content.charCodeAt(0) === 0xfeff ? args.content.slice(1) : args.content;
+  const delimiter = detectDelimiter(content);
   // +1 so a header row never eats into the data-row scan budget.
   const { rows, truncated: rowsTruncated } = parseCsv(
-    args.content,
+    content,
     delimiter,
     caps.max_rows_scanned_per_sheet + 1,
   );
@@ -685,7 +701,9 @@ function parseCellRef(ref: string): { col: number; row: number } | null {
  *  used_range in R1C1 notation preserving the offset; null if unparseable. A sheet
  *  whose dimension starts below/right of A1 (title rows, left margins) reports its
  *  real span and origin, not a bounding box from A1. */
-function parseDimension(ref: string): { dims: { rows: number; cols: number }; usedRange: string } | null {
+function parseDimension(
+  ref: string,
+): { dims: { rows: number; cols: number }; usedRange: string; startRow: number; startCol: number } | null {
   const parts = ref.split(":");
   const a = parseCellRef((parts[0] ?? "").trim());
   const b = parseCellRef((parts[parts.length - 1] ?? "").trim());
@@ -697,6 +715,8 @@ function parseDimension(ref: string): { dims: { rows: number; cols: number }; us
   return {
     dims: { rows: endRow - startRow + 1, cols: endCol - startCol + 1 },
     usedRange: `R${startRow}C${startCol + 1}:R${endRow}C${endCol + 1}`,
+    startRow,
+    startCol,
   };
 }
 
@@ -1048,10 +1068,19 @@ function createWorksheetParser(args: {
   let protectedSheet = false;
   let declaredDims: { rows: number; cols: number } | null = null;
   let declaredUsedRange: string | null = null;
+  let dimStartCol = 0; // used-range origin column (0 = A); normalizes cell columns
+  let firstRowNum = -1; // r of the first <row> seen; anchors sparse-gap padding
   let maxRow = 0;
   let maxCol = 0;
   let rowsTruncated = false;
   let capsHit = false;
+
+  // Shared formulas: only the master cell carries text (`<f t="shared" si="N">…`),
+  // followers are empty (`<f t="shared" si="N"/>`). Resolve followers to the master.
+  const sharedFormulas = new Map<string, string>();
+  let cellHasFormula = false;
+  let fShared = false;
+  let fSi = "";
 
   let curRow: string[] | null = null;
   let cellRef = "";
@@ -1075,6 +1104,7 @@ function createWorksheetParser(args: {
           if (d) {
             declaredDims = d.dims;
             declaredUsedRange = d.usedRange;
+            dimStartCol = d.startCol;
           }
         }
         break;
@@ -1099,15 +1129,29 @@ function createWorksheetParser(args: {
           capsHit = true;
         }
         break;
-      case "row":
+      case "row": {
+        // Honor the row's `r` index so omitted empty rows leave real gaps —
+        // otherwise sparse sheets collapse and inflate completeness ratios. Gaps
+        // are padded as empty rows, bounded by the row cap.
+        const rowNum = parseInt(a.r ?? "0", 10);
+        if (rowNum > 0) {
+          if (firstRowNum < 0) firstRowNum = rowNum;
+          const targetIndex = rowNum - firstRowNum;
+          while (rows.length < targetIndex && rows.length < caps.max_rows_scanned_per_sheet) {
+            rows.push([]);
+          }
+        }
         curRow = rows.length >= caps.max_rows_scanned_per_sheet ? null : [];
         if (curRow === null) rowsTruncated = true;
         break;
+      }
       case "c": {
         cellRef = a.r ?? "";
         cellType = a.t ?? "";
         const parsed = cellRef ? parseCellRef(cellRef) : null;
-        cellCol = parsed ? parsed.col : curRow ? curRow.length : 0;
+        // Normalize to the used-range origin so an offset sheet (e.g. B2:D10)
+        // doesn't gain phantom leading empty columns.
+        cellCol = parsed ? Math.max(0, parsed.col - dimStartCol) : curRow ? curRow.length : 0;
         if (parsed) {
           maxRow = Math.max(maxRow, parsed.row);
           maxCol = Math.max(maxCol, parsed.col + 1);
@@ -1115,6 +1159,9 @@ function createWorksheetParser(args: {
         vText = "";
         fText = "";
         isText = "";
+        cellHasFormula = false;
+        fShared = false;
+        fSi = "";
         break;
       }
       case "v":
@@ -1124,15 +1171,16 @@ function createWorksheetParser(args: {
       case "f":
         inF = true;
         fText = "";
+        cellHasFormula = true;
+        fShared = a.t === "shared";
+        fSi = a.si ?? "";
         break;
       case "is":
         inIs = true;
+        isText = "";
         break;
       case "t":
-        if (inIs) {
-          inIsT = true;
-          isText = "";
-        }
+        if (inIs) inIsT = true;
         break;
       default:
         break;
@@ -1157,13 +1205,20 @@ function createWorksheetParser(args: {
       case "c": {
         // Formula + error are structural (kept regardless of the row cap, bounded
         // by their own caps). The cell's grid value is the cached <v> result.
-        if (fText.length > 0) {
+        // A shared-formula master stores its text; a follower (empty <f>) reuses it
+        // so filled-down formulas are not undercounted.
+        let formulaText = fText;
+        if (fShared && fSi) {
+          if (fText.length > 0) sharedFormulas.set(fSi, fText);
+          else formulaText = sharedFormulas.get(fSi) ?? "";
+        }
+        if (cellHasFormula) {
           if (formula_cells.length < XLSX_FORMULA_CAP) {
             formula_cells.push({
               sheet: sheetName,
               cell: cellRef,
-              formula: fText,
-              cross_sheet_refs: extractCrossSheetRefs(fText, sheetName),
+              formula: formulaText,
+              cross_sheet_refs: extractCrossSheetRefs(formulaText, sheetName),
             });
           } else {
             capsHit = true;
@@ -1357,7 +1412,15 @@ export function buildXlsxInventory(args: {
   const pivotHostSheets = new Set<string>();
   const PIVOT_CAP = 300;
   for (const { sheet, pivotPath } of pivotRefs) {
-    if (pivot_tables.length >= PIVOT_CAP) break;
+    if (pivot_tables.length >= PIVOT_CAP) {
+      captureTruncated = true;
+      risk_signals.push({
+        kind: "pivot_table_cap",
+        location: path.basename(args.sourceRef),
+        literal: `more than ${PIVOT_CAP} pivot tables; remainder omitted`,
+      });
+      break;
+    }
     const pivotXml = parts.get(pivotPath);
     if (!pivotXml) continue;
     const pt = parsePivotTable(pivotXml);

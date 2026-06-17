@@ -623,3 +623,76 @@ describe("Codex review fixes (P4 hardening)", () => {
     expect(r.external_links[0]!.target).toBe("file:///C:/books/source.xlsx"); // real path, not internal zip part
   });
 });
+
+describe("Codex review fixes — round 2 (P4 hardening)", () => {
+  it("ignores quoted delimiters when detecting the CSV dialect (R2 #1)", () => {
+    // Commas are the real delimiter; the semicolons live inside quoted text.
+    const d = inv('name,amount,note\nAlice,30,"a;b;c"\nBob,25,"x;y"\n').per_sheet_data[0]!;
+    expect(d.layout_kind).toBe("tabular");
+    expect(d.columns.map((c) => c.name)).toEqual(["name", "amount", "note"]); // not collapsed by ';'
+  });
+
+  it("normalizes offset worksheet cells to the used-range origin — no phantom columns (R2 #2)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="B1:C3"/><sheetData>` +
+          `<row r="1"><c r="B1" t="inlineStr"><is><t>name</t></is></c><c r="C1" t="inlineStr"><is><t>age</t></is></c></row>` +
+          `<row r="2"><c r="B2" t="inlineStr"><is><t>Alice</t></is></c><c r="C2"><v>30</v></c></row>` +
+          `<row r="3"><c r="B3" t="inlineStr"><is><t>Bob</t></is></c><c r="C3"><v>25</v></c></row>` +
+          `</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/off.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    const d = r.per_sheet_data[0]!;
+    expect(d.columns.map((c) => c.name)).toEqual(["name", "age"]); // no leading phantom col_1
+  });
+
+  it("records shared-formula follower cells, resolving them to the master (R2 #4)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A2"/><sheetData>` +
+          `<row r="1"><c r="A1"><f t="shared" si="0" ref="A1:A2">Other!A1+1</f><v>2</v></c></row>` +
+          `<row r="2"><c r="A2"><f t="shared" si="0"/><v>3</v></c></row>` +
+          `</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/sf.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.formula_cells).toHaveLength(2); // master + follower, not just the master
+    expect(r.formula_cells.map((f) => f.formula)).toEqual(["Other!A1+1", "Other!A1+1"]);
+    expect(r.formula_cells[1]!.cross_sheet_refs).toContain("Other"); // follower keeps the dependency
+  });
+
+  it("preserves all rich inline-string runs (R2 #5)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:B2"/><sheetData>` +
+          `<row r="1"><c r="A1" t="inlineStr"><is><r><t>Hel</t></r><r><t>lo</t></r></is></c>` +
+          `<c r="B1" t="inlineStr"><is><t>amount</t></is></c></row>` +
+          `<row r="2"><c r="A2" t="inlineStr"><is><t>x</t></is></c><c r="B2"><v>10</v></c></row>` +
+          `</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/rt.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.per_sheet_data[0]!.columns[0]!.name).toBe("Hello"); // both runs, not just "lo"
+  });
+
+  it("preserves sparse row positions so completeness ratios stay honest (R2 #6)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A5"/><sheetData>` +
+          `<row r="1"><c r="A1" t="inlineStr"><is><t>v</t></is></c></row>` +
+          `<row r="2"><c r="A2"><v>10</v></c></row>` +
+          `<row r="5"><c r="A5"><v>20</v></c></row>` + // rows 3,4 omitted (blank)
+          `</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/sparse.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    // 4 data rows (r2..r5, with r3/r4 blank), 2 non-empty → 0.5, not 1.0.
+    expect(r.per_sheet_data[0]!.columns[0]!.non_empty_ratio).toBe(0.5);
+  });
+
+  it("strips a leading UTF-8 BOM from the first CSV header cell (R2 #8)", () => {
+    const d = inv("﻿name,age\nAlice,30\nBob,25\n").per_sheet_data[0]!;
+    expect(d.columns.map((c) => c.name)).toEqual(["name", "age"]); // first name is "name", not "﻿name"
+  });
+});
