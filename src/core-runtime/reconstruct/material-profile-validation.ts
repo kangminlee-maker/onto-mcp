@@ -273,13 +273,15 @@ export function validateTargetMaterialProfile(args: {
 export async function writeTargetMaterialProfileValidationArtifact(args: {
   targetMaterialProfilePath: string;
   registryPath: string;
+  contractRegistry?: ReconstructContractRegistry;
   outputPath: string;
 }): Promise<ReconstructTargetMaterialProfileValidationArtifact> {
   const [targetMaterialProfile, contractRegistry] = await Promise.all([
     readYamlDocument<ReconstructTargetMaterialProfileArtifact>(
       args.targetMaterialProfilePath,
     ),
-    loadReconstructContractRegistry({ registryPath: args.registryPath }),
+    args.contractRegistry ??
+      loadReconstructContractRegistry({ registryPath: args.registryPath }),
   ]);
   const validation = validateTargetMaterialProfile({
     targetMaterialProfile,

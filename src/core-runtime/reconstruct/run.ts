@@ -10020,6 +10020,11 @@ export async function runReconstruct(
     await readYamlDocument<ReconstructSourceInventoryArtifact>(
       preparationRefs.source_inventory,
     );
+  // Parse the 180KB contract registry once and thread the in-memory object
+  // through the validators/writers below, instead of each re-reading and
+  // re-parsing it (previously ~9 redundant loads per run). Registry
+  // verification above intentionally loads from disk itself, as the gate that
+  // proves the on-disk registry is well-formed.
   const contractRegistry = await loadReconstructContractRegistry({
     registryPath: contractRegistryPath,
   });
@@ -10032,6 +10037,7 @@ export async function runReconstruct(
     await writeTargetMaterialProfileValidationArtifact({
       targetMaterialProfilePath: preparationRefs.target_material_profile,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: targetMaterialProfileValidationPath,
     });
   assertRuntimeValidationValid({
@@ -10698,6 +10704,7 @@ export async function runReconstruct(
       candidateDispositionPath,
       sourceObservationsPath: preparationRefs.source_observations,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: candidateDispositionValidationPath,
     });
   assertRuntimeValidationValid({
@@ -10813,6 +10820,7 @@ export async function runReconstruct(
       candidateDispositionPath,
       sourceObservationsPath: preparationRefs.source_observations,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: ontologySeedValidationPath,
     });
   if (ontologySeedValidation.validation_status === "invalid") {
@@ -10853,6 +10861,7 @@ export async function runReconstruct(
       candidateDispositionPath,
       sourceObservationsPath: preparationRefs.source_observations,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: ontologySeedValidationPath,
     });
     if (ontologySeedValidation.validation_status === "invalid") {
@@ -10984,6 +10993,7 @@ export async function runReconstruct(
       seedConfirmationValidationPath,
       sourceObservationsPath: preparationRefs.source_observations,
       registryPath: contractRegistryPath,
+      contractRegistry,
       reconstructRunManifestPath: manifestPath,
       governingSnapshot,
       outputPath: competencyQuestionsValidationPath,
@@ -11476,6 +11486,7 @@ export async function runReconstruct(
       manifestPath: preHandoffManifestPath,
       projectRoot,
       registryPath: contractRegistryPath,
+      contractRegistry,
       targetMaterialProfilePath: preparationRefs.target_material_profile,
       lensIds,
       admittedDomainIds: params.domain ? [params.domain] : [],
@@ -11513,6 +11524,7 @@ export async function runReconstruct(
     failureClassificationValidationPath,
     revisionProposalValidationPath,
     registryPath: contractRegistryPath,
+    contractRegistry,
     outputPath: handoffDecisionValidationPath,
   });
   assertRuntimeValidationValid({
@@ -11825,6 +11837,7 @@ export async function runReconstruct(
       sourceScoutPackPostMaturationPath,
       sourceScoutPackPostMaturationValidationPath,
       registryPath: contractRegistryPath,
+      contractRegistry,
       outputPath: postMaturationGateProjectionValidationPath,
     });
   assertRuntimeValidationValid({
@@ -12625,6 +12638,7 @@ export async function runReconstruct(
       manifestPath,
       projectRoot,
       registryPath: contractRegistryPath,
+      contractRegistry,
       targetMaterialProfilePath: preparationRefs.target_material_profile,
       lensIds,
       admittedDomainIds: params.domain ? [params.domain] : [],
