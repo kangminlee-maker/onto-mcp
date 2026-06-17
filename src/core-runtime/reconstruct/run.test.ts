@@ -2687,6 +2687,68 @@ describe("runReconstruct", () => {
         record.artifact_refs.candidate_disposition_validation!,
       );
 
+    // createRunManifest null-gating contract (pipeline stabilization #7): the
+    // pre-handoff manifest (terminalArtifactsCompleted=false) must null EVERY
+    // maturation/handoff/terminal ref and the reconstruct_record, and must keep
+    // them out of purpose_adequacy_scope.implemented_artifacts. A ref left
+    // ungated pre-handoff is the R4 bug class — it silently fails pre-handoff
+    // run-manifest validation and blocks handoff. The completed run then restores
+    // the terminal refs (terminalArtifactsCompleted=true).
+    const preHandoffNulledRefs = [
+      "handoff_decision_validation",
+      "maturation_baseline",
+      "maturation_baseline_validation",
+      "baseline_actionability_matrix",
+      "baseline_actionability_matrix_validation",
+      "actionability_matrix",
+      "actionability_matrix_validation",
+      "maturation_question_frontier",
+      "maturation_question_frontier_validation",
+      "maturation_closure_frontier",
+      "maturation_closure_frontier_validation",
+      "maturation_authority_response",
+      "maturation_authority_response_validation",
+      "answer_support_ledger",
+      "answer_support_ledger_validation",
+      "answer_support_judgment",
+      "answer_support_judgment_validation",
+      "maturation_answer_claims",
+      "maturation_answer_claims_validation",
+      "ontology_expansion",
+      "ontology_expansion_validation",
+      "maturation_source_delta",
+      "maturation_source_delta_validation",
+      "maturation_continuation_decision",
+      "maturation_continuation_decision_validation",
+      "query_proofs",
+      "query_proofs_validation",
+      "visualization_proofs",
+      "visualization_proofs_validation",
+      "graph_exploration_proofs",
+      "graph_exploration_proofs_validation",
+      "claim_projection",
+      "claim_projection_validation",
+      "final_output",
+    ] as const;
+    for (const key of preHandoffNulledRefs) {
+      expect(
+        preHandoffManifest.artifact_refs[key],
+        `pre-handoff manifest must null-gate ${key}`,
+      ).toBeNull();
+    }
+    expect(preHandoffManifest.artifact_refs.reconstruct_record).toBeNull();
+    expect(preHandoffManifest.purpose_adequacy_scope.implemented_artifacts)
+      .not.toContain("reconstruct_record");
+    expect(preHandoffManifest.purpose_adequacy_scope.implemented_artifacts)
+      .not.toContain("final_output");
+    // The completed final manifest restores the terminal record + the refs this
+    // run produced (confirms the gating is conditional, not a permanent drop).
+    expect(manifest.artifact_refs.reconstruct_record).not.toBeNull();
+    expect(manifest.artifact_refs.handoff_decision_validation).not.toBeNull();
+    expect(manifest.artifact_refs.final_output).not.toBeNull();
+    expect(manifest.purpose_adequacy_scope.implemented_artifacts)
+      .toContain("reconstruct_record");
+
     expect(record.artifact_refs.final_output).toBe(result.finalOutputPath);
     expect(record.artifact_refs.reconstruct_run_control)
       .toContain("reconstruct-run-control.yaml");
