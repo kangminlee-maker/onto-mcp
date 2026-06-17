@@ -177,8 +177,18 @@ export function resolveLlmProviderConfig(args: {
 
 export interface LlmCallResult {
   text: string;
+  /**
+   * Total prompt tokens processed = uncached input + cache reads + cache
+   * writes. Reported as the sum (not the API's cache-excluded `input_tokens`)
+   * so the figure stays comparable across cached and uncached calls. The cache
+   * split is carried separately below.
+   */
   input_tokens: number;
   output_tokens: number;
+  /** Anthropic prompt-cache reads this call (~0.1x input cost). 0 when uncached/unsupported. */
+  cache_read_input_tokens?: number;
+  /** Anthropic prompt-cache writes this call (~1.25x input cost). 0 when uncached/unsupported. */
+  cache_creation_input_tokens?: number;
   model_id: string;
   artifact_generation_realization?: ReviewArtifactGenerationRealization;
   /** Actual endpoint hit (audit trail). SDK and worker providers each fill their own sentinel. */
@@ -442,8 +452,36 @@ async function callAnthropic(
             },
           }
         : {}),
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
+      // Prompt caching (Anthropic-only): mark the stable system prefix and the
+      // user message as ephemeral cache breakpoints. cache_control does not
+      // change the model output — it only lets identical prefixes within the
+      // 5-minute TTL bill at cache-read rates. Two breakpoints (well under the
+      // 4 max): the system block alone (read when the system instructions
+      // repeat across calls) and system+user together (read on an exact
+      // re-send, e.g. a timeout retry). A prefix shorter than the model's
+      // minimum cacheable size simply doesn't cache — no error, no behavior
+      // change.
+      system: systemPrompt
+        ? [
+            {
+              type: "text" as const,
+              text: systemPrompt,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ]
+        : systemPrompt,
+      messages: [
+        {
+          role: "user" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: userPrompt,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ],
+        },
+      ],
     });
   } catch (err) {
     const e = err as {
@@ -470,8 +508,18 @@ async function callAnthropic(
     throw err;
   }
 
+  const cacheReadInputTokens = response.usage.cache_read_input_tokens ?? 0;
+  const cacheCreationInputTokens =
+    response.usage.cache_creation_input_tokens ?? 0;
+  // The API's `input_tokens` excludes cache reads/writes; sum them back so the
+  // reported total is comparable to an uncached call (where it equals the sum).
+  const totalInputTokens =
+    response.usage.input_tokens +
+    cacheReadInputTokens +
+    cacheCreationInputTokens;
+
   emitModelCallLog(
-    `anthropic success: model_id=${response.model ?? modelId} input_tokens=${response.usage.input_tokens} output_tokens=${response.usage.output_tokens}`,
+    `anthropic success: model_id=${response.model ?? modelId} input_tokens=${totalInputTokens} cache_read=${cacheReadInputTokens} cache_creation=${cacheCreationInputTokens} output_tokens=${response.usage.output_tokens}`,
   );
 
   // With adaptive thinking on (effort set), thinking shares the max_tokens
@@ -490,8 +538,10 @@ async function callAnthropic(
 
   return {
     text,
-    input_tokens: response.usage.input_tokens,
+    input_tokens: totalInputTokens,
     output_tokens: response.usage.output_tokens,
+    cache_read_input_tokens: cacheReadInputTokens,
+    cache_creation_input_tokens: cacheCreationInputTokens,
     model_id: modelId,
     effective_base_url: "https://api.anthropic.com",
     declared_billing_mode: "per_token",
