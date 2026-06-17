@@ -500,7 +500,7 @@ export function summarizeDerivedRoutes(
   const byKey = new Map<string, RouteIdentity>();
   for (const identity of derived) {
     if (!identity) continue;
-    const key = `${routeToken(identity)} ${identity.effective_base_url ?? ""}`;
+    const key = JSON.stringify([routeToken(identity), identity.effective_base_url ?? null]);
     if (!byKey.has(key)) byKey.set(key, identity);
   }
   const identities = [...byKey.values()];

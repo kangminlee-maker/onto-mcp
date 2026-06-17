@@ -18,6 +18,7 @@
  *       --reconstruct-report judge:high:<path> \
  *       --provider anthropic --model claude-opus-4-8 --route claude_code
  */
+import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
@@ -582,21 +583,27 @@ async function main(): Promise<void> {
 
   const generatedAt = new Date().toISOString();
   // Key the default filename so distinct profiles for the same provider/model/day
-  // don't overwrite each other. For a single COMPLETE route the base-aware token
-  // is fully resolved and is the truth (hint-independent: the same route under
-  // two different hints is one profile). For a single but NOT-complete route the
+  // don't overwrite each other. For a single COMPLETE route the routeToken is
+  // fully resolved and is the truth (hint-independent: the same route under two
+  // different hints is one profile). For a single but NOT-complete route the
   // token degenerates (e.g. `provider_only:unknown:unknown`) and would collide
-  // across different hints, so keep BOTH the declared hint (distinguishes unknown
-  // routes) and the base-aware token (distinguishes custom proxy bases). For an
-  // ambiguous/empty route fall back to the declared hint. `-preliminary` marks a
-  // non-decision-grade profile so it can't clobber a decision-grade one.
+  // across different hints, so keep the declared hint (distinguishes unknown
+  // routes); a custom base is appended as a short hash, because `slug()` in the
+  // path builder collapses punctuation and would otherwise merge distinct proxy
+  // bases (e.g. `proxy/a-b` vs `proxy/a/b`). For an ambiguous/empty route fall
+  // back to the declared hint. `-preliminary` marks a non-decision-grade profile
+  // so it can't clobber a decision-grade one.
   let routeKeyBase: string;
   if (routeSummary.identities.length === 1) {
     const only = routeSummary.identities[0]!;
-    routeKeyBase =
-      only.route_completeness === "complete"
-        ? routeSummary.tokens[0]!
-        : `${options.route}-${routeSummary.tokens[0]!}`;
+    if (only.route_completeness === "complete") {
+      routeKeyBase = routeToken(only);
+    } else {
+      const baseHash = only.effective_base_url
+        ? `-${crypto.createHash("sha256").update(only.effective_base_url).digest("hex").slice(0, 8)}`
+        : "";
+      routeKeyBase = `${options.route}-${routeToken(only)}${baseHash}`;
+    }
   } else {
     routeKeyBase = options.route;
   }
