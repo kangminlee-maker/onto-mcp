@@ -414,3 +414,33 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });
+
+describe("header detection — offset headers + confidence (deterministic, finding 3)", () => {
+  it("finds the header below leading title / blank rows", () => {
+    const r = inv("Quarterly Report\n\nname,role,dept\nAlice,eng,core\nBob,eng,core\n");
+    const d = r.per_sheet_data[0]!;
+    expect(d.layout_kind).toBe("tabular");
+    expect(d.header_rows).toEqual([2]); // skipped the title row and the blank row
+    expect(d.header_confidence).toBe("high");
+    expect(d.columns.map((c) => c.name)).toEqual(["name", "role", "dept"]);
+  });
+
+  it("keeps a clean first-row header high confidence", () => {
+    const d = inv("name,role\nAlice,eng\nBob,eng\n").per_sheet_data[0]!;
+    expect(d.layout_kind).toBe("tabular");
+    expect(d.header_rows).toEqual([0]);
+    expect(d.header_confidence).toBe("high");
+  });
+
+  it("flags a sparse/uncertain header as low confidence", () => {
+    const d = inv("x,,\n1,2,3\n4,5,6\n").per_sheet_data[0]!;
+    expect(d.header_confidence).toBe("low");
+  });
+
+  it("flags a headerless numeric matrix as matrix_no_header + low confidence", () => {
+    const d = inv("1,2,3\n4,5,6\n7,8,9\n").per_sheet_data[0]!;
+    expect(d.layout_kind).toBe("matrix_no_header");
+    expect(d.header_confidence).toBe("low");
+    expect(d.columns).toEqual([]);
+  });
+});

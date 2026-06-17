@@ -262,8 +262,10 @@ function renderSpreadsheetStructuralView(
     );
     const data = inventory.per_sheet_data.find((d) => d.sheet === sheet.name);
     if (data) {
+      const lowConfidence =
+        data.header_confidence === "low" ? "; header_confidence: low (layout uncertain)" : "";
       lines.push(
-        `layout_kind: ${data.layout_kind}; header_rows: ${data.header_rows ? data.header_rows.join(",") : "none"}`,
+        `layout_kind: ${data.layout_kind}; header_rows: ${data.header_rows ? data.header_rows.join(",") : "none"}${lowConfidence}`,
       );
       if (data.columns.length > 0) {
         lines.push("columns:");

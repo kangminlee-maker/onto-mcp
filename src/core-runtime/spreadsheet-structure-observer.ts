@@ -89,6 +89,11 @@ export interface PerSheetData {
    *  (design §2.4 SCHEMA-1). columns[] is only asserted when layout_kind=tabular. */
   header_rows: number[] | null;
   columns: InventoryColumn[];
+  /** Deterministic header-detection confidence (design §10 C′ / §11 P0.5). The
+   *  observer stays LLM-free; "low" honestly marks a sheet whose header/layout the
+   *  heuristic could not resolve well — a candidate for downstream LLM escalation
+   *  (a separate, governed step), never resolved inside this module. */
+  header_confidence: "high" | "low";
 }
 
 export interface DistinctValueVocabEntry {
@@ -250,18 +255,51 @@ function classifyValue(raw: string): Exclude<InferredColumnType, "empty"> {
   return "string";
 }
 
-/** A header row, deterministically: every cell non-empty AND at least one cell
- *  is non-numeric (a pure-numeric first row is data, not a header). */
-function looksLikeHeader(cells: string[]): boolean {
-  if (cells.length === 0) return false;
-  let sawNonNumeric = false;
+// Header detection scans the first rows (real workbooks put title / blank rows
+// above the header) and scores each as fill_ratio × label_ratio: a header is a
+// mostly-filled row of mostly-non-numeric labels. Deterministic; the residual
+// ambiguous tail is flagged low-confidence rather than resolved by an LLM here.
+const HEADER_SCAN_ROWS = 15;
+const HEADER_SCORE_STRONG = 0.45;
+const HEADER_SCORE_WEAK = 0.15;
+
+/** fill_ratio × label_ratio of a candidate header row (0 when blank). */
+function scoreHeaderRow(cells: string[], colCount: number): number {
+  if (colCount === 0) return 0;
+  let nonEmpty = 0;
+  let nonNumeric = 0;
   for (const c of cells) {
     const t = c.trim();
-    if (t.length === 0) return false;
+    if (t.length === 0) continue;
+    nonEmpty += 1;
     const kind = classifyValue(t);
-    if (kind !== "integer" && kind !== "number") sawNonNumeric = true;
+    if (kind !== "integer" && kind !== "number") nonNumeric += 1;
   }
-  return sawNonNumeric;
+  if (nonEmpty === 0) return 0;
+  return (nonEmpty / colCount) * (nonNumeric / nonEmpty);
+}
+
+/** Pick the best header row in the first HEADER_SCAN_ROWS (skipping title/blank
+ *  rows above it) and rate confidence. A populated sheet with no label-like row
+ *  is a headerless matrix — but that absence is itself uncertain, so it is flagged
+ *  low for possible downstream escalation. */
+function detectHeaderRow(
+  rows: string[][],
+  colCount: number,
+): { headerRowIndex: number | null; confidence: "high" | "low" } {
+  const scanLimit = Math.min(HEADER_SCAN_ROWS, rows.length);
+  let bestRow = -1;
+  let bestScore = 0;
+  for (let r = 0; r < scanLimit; r += 1) {
+    const score = scoreHeaderRow(rows[r] ?? [], colCount);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = r;
+    }
+  }
+  if (bestScore >= HEADER_SCORE_STRONG) return { headerRowIndex: bestRow, confidence: "high" };
+  if (bestScore >= HEADER_SCORE_WEAK) return { headerRowIndex: bestRow, confidence: "low" };
+  return { headerRowIndex: null, confidence: "low" };
 }
 
 function sha256Hex(bytes: Buffer | string): string {
@@ -271,6 +309,7 @@ function sha256Hex(bytes: Buffer | string): string {
 interface SheetRowProfile {
   layout_kind: SheetLayoutKind;
   header_rows: number[] | null;
+  header_confidence: "high" | "low";
   columns: InventoryColumn[];
   distinct_value_vocab: DistinctValueVocabEntry[];
   risk_signals: InventoryRiskSignal[];
@@ -294,6 +333,7 @@ function profileSheetRows(args: {
     return {
       layout_kind: "unknown",
       header_rows: null,
+      header_confidence: "low",
       columns: [],
       distinct_value_vocab: [],
       risk_signals: [],
@@ -303,11 +343,15 @@ function profileSheetRows(args: {
     };
   }
 
-  const headerCells = rows[0] ?? [];
-  const hasHeader = looksLikeHeader(headerCells);
-  const headerRows = hasHeader ? [0] : null;
-  const dataRows = hasHeader ? rows.slice(1) : rows;
   const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
+  const { headerRowIndex, confidence } = detectHeaderRow(rows, colCount);
+  const hasHeader = headerRowIndex !== null;
+  const headerCells = hasHeader ? (rows[headerRowIndex] ?? []) : [];
+  const headerRows = hasHeader ? [headerRowIndex] : null;
+  // Data begins after the detected header row; rows above it (titles/blanks) are
+  // dropped from the data scan.
+  const headerStart = hasHeader ? headerRowIndex + 1 : 0;
+  const dataRows = rows.slice(headerStart);
   const profiledCols = Math.min(colCount, caps.max_columns_profiled);
 
   const columnName = (idx: number): string => {
@@ -323,7 +367,7 @@ function profileSheetRows(args: {
     if (dr && dr.length !== colCount) {
       risk_signals.push({
         kind: "ragged_row",
-        location: `${sheetName}:row ${r + (hasHeader ? 2 : 1)}`,
+        location: `${sheetName}:row ${headerStart + r + 1}`,
         literal: `${dr.length} cols vs ${colCount}`,
       });
     }
@@ -395,6 +439,7 @@ function profileSheetRows(args: {
   return {
     layout_kind: layout,
     header_rows: headerRows,
+    header_confidence: confidence,
     columns: layout === "tabular" ? columns : [],
     distinct_value_vocab,
     risk_signals,
@@ -446,7 +491,7 @@ export function buildCsvInventory(args: {
       ...envelope,
       sheets: [{ name: sheetName, used_range: null, dimensions: { rows: 0, cols: 0 }, hidden: false, protected: false }],
       risk_signals: [],
-      per_sheet_data: [{ sheet: sheetName, layout_kind: "unknown", header_rows: null, columns: [] }],
+      per_sheet_data: [{ sheet: sheetName, layout_kind: "unknown", header_rows: null, header_confidence: "low", columns: [] }],
       distinct_value_vocab: [],
       capture_truncated: rowsTruncated,
       unsupported_reason: "empty csv (no rows)",
@@ -473,6 +518,7 @@ export function buildCsvInventory(args: {
         sheet: sheetName,
         layout_kind: profile.layout_kind,
         header_rows: profile.header_rows,
+        header_confidence: profile.header_confidence,
         columns: profile.columns,
       },
     ],
@@ -1084,7 +1130,7 @@ export function buildXlsxInventory(args: {
         hidden: sheetEntry.hidden,
         protected: false,
       });
-      per_sheet_data.push({ sheet: sheetEntry.name, layout_kind: "unknown", header_rows: null, columns: [] });
+      per_sheet_data.push({ sheet: sheetEntry.name, layout_kind: "unknown", header_rows: null, header_confidence: "low", columns: [] });
       continue;
     }
 
@@ -1111,6 +1157,7 @@ export function buildXlsxInventory(args: {
       sheet: sheetEntry.name,
       layout_kind: profile.layout_kind,
       header_rows: profile.header_rows,
+      header_confidence: profile.header_confidence,
       columns: profile.columns,
     });
   }
