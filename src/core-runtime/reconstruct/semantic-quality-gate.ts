@@ -616,42 +616,33 @@ export function evaluateReconstructGoldenQualityGate(
         `Fixture ${spec.fixture_id} expected_cq ${expected.cq_key} links unknown concept ${expected.linked_concept_key}`,
       );
     }
-    // A binding-target concept's CQ can only be supported when a valid binding
-    // exists — otherwise a run with no source binding could mark the binding CQ
-    // supported just by a generic question mentioning the target object, inflating
-    // support-rate for the missing-binding case Q1 is meant to catch. So for a
-    // binding concept ALL link tokens (including name_alternates, which name the
-    // target object for v2) are gated on a targeting binding being present; the
-    // tokens then include the binding's own ids so a live question naming the
-    // descriptive binding id links. Non-binding concepts link via name_alternates.
-    const targetingBindings = concept.binding_target_alternates
-      ? sourceBindings.filter((binding) =>
-          bindingTargetsConcept(
-            binding,
-            targetObjectTypeIds(objectTypeRows, concept.binding_target_alternates!),
-          ),
-        )
-      : [];
-    const rawTokens = concept.binding_target_alternates
-      ? targetingBindings.length > 0
-        ? [
-            ...concept.name_alternates,
-            ...concept.binding_target_alternates,
-            ...targetingBindings.flatMap((binding) => [
-              stringField(binding, "binding_id"),
-              stringField(binding, "seed_ref"),
-            ]),
-          ]
-        : []
-      : concept.name_alternates;
-    // Normalize and drop tokens that normalize to "" — `haystack.includes("")` is
-    // always true, so a punctuation-only id (e.g. binding_id ".") would match
-    // every question.
-    const linkTokens = rawTokens
-      .map((token) => normalizeName(token))
-      .filter((token) => token.length > 0);
+    // A binding-target concept's CQ is supported only when a question explicitly
+    // references one of the run's TARGETING bindings BY ID (exact equality on a
+    // claim/seed ref). The object name or seed_ref must NOT credit it — a question
+    // merely about the object is not a question about its backing source — and an
+    // id SUBSTRING must not (a short binding_id like `b1` would collide with an
+    // unrelated ref `object-b10`). With no targeting binding the set is empty, so
+    // the binding CQ cannot be supported — the missing-binding case Q1 catches.
+    // Non-binding concepts link via name_alternates over the question text/refs.
     const question = args.competencyQuestions.questions.find((candidate) => {
       if (usedQuestionIds.has(candidate.question_id)) return false;
+      if (concept.binding_target_alternates) {
+        const targetIds = targetObjectTypeIds(
+          objectTypeRows,
+          concept.binding_target_alternates,
+        );
+        const bindingIds = new Set(
+          sourceBindings
+            .filter((binding) => bindingTargetsConcept(binding, targetIds))
+            .map((binding) => stringField(binding, "binding_id").trim())
+            .filter((id) => id.length > 0),
+        );
+        if (bindingIds.size === 0) return false;
+        return [
+          ...(candidate.linked_claim_ids ?? []),
+          ...(candidate.seed_ref_refs ?? []),
+        ].some((ref) => bindingIds.has(ref.trim()));
+      }
       const haystack = normalizeName(
         [
           candidate.question_id,
@@ -660,7 +651,9 @@ export function evaluateReconstructGoldenQualityGate(
           ...(candidate.seed_ref_refs ?? []),
         ].join(" "),
       );
-      return linkTokens.some((token) => haystack.includes(token));
+      return concept.name_alternates.some((alternate) =>
+        haystack.includes(normalizeName(alternate)),
+      );
     });
     if (question) usedQuestionIds.add(question.question_id);
     const assessment = question

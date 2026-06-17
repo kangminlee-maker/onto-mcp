@@ -450,6 +450,76 @@ describe("reconstruct golden semantic quality gate", () => {
     expect(bindingRow?.supported).toBe(false);
   });
 
+  it("does NOT support the binding CQ from a question that only references the object", () => {
+    // A valid binding exists, but the binding-CQ slot question references only the
+    // object (seed_ref), not the binding id — a question about the object is not a
+    // question about its backing source, so it must not be credited.
+    const seed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: {
+        source_bindings: [
+          { binding_id: "binding_x", seed_ref: "object-fixture-service", source_ref: "src/fixture-service.ts" },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const claimIds = [
+      "object-fixture-service",
+      "actor-fixture-user",
+      "action-explain-fixture",
+      "object-fixture-service", // 4th references the OBJECT, not binding_x
+    ];
+    const result = evaluateReconstructGoldenQualityGate({
+      fixtureId: "reconstruct-golden-target-v1",
+      realization: "mock",
+      runManifest: manifestWith([
+        llmStep("ontology_seed"),
+        llmStep("competency_question_assessment"),
+      ]),
+      ontologySeed: seed,
+      competencyQuestions: questionsFor(claimIds),
+      competencyQuestionAssessment: assessmentsFor(claimIds.length),
+    });
+    const bindingRow = (result.q2?.rows ?? []).find(
+      (row) => row.cq_key === "cq-fixture-source-binding",
+    );
+    expect(bindingRow?.supported).toBe(false);
+  });
+
+  it("matches binding refs by equality, not substring (no b1 ⊂ object-b10 leak)", () => {
+    const seed = {
+      ...fixtureServiceSeed(),
+      data_binding_layer: {
+        source_bindings: [
+          { binding_id: "b1", seed_ref: "object-fixture-service", source_ref: "src/fixture-service.ts" },
+        ],
+      },
+    } as unknown as ReconstructOntologySeedArtifact;
+    const questions = {
+      questions: [
+        { question_id: "cq-1", question: "Explain object-fixture-service?", linked_claim_ids: ["object-fixture-service"], seed_ref_refs: ["object-fixture-service"] },
+        { question_id: "cq-2", question: "Explain actor-fixture-user?", linked_claim_ids: ["actor-fixture-user"], seed_ref_refs: ["actor-fixture-user"] },
+        { question_id: "cq-3", question: "Explain action-explain-fixture?", linked_claim_ids: ["action-explain-fixture"], seed_ref_refs: ["action-explain-fixture"] },
+        // references object-b10 (contains the substring "b1") but not the id "b1"
+        { question_id: "cq-4", question: "Explain object-b10?", linked_claim_ids: ["object-b10"], seed_ref_refs: ["object-b10"] },
+      ],
+    } as unknown as ReconstructCompetencyQuestionsArtifact;
+    const result = evaluateReconstructGoldenQualityGate({
+      fixtureId: "reconstruct-golden-target-v1",
+      realization: "mock",
+      runManifest: manifestWith([
+        llmStep("ontology_seed"),
+        llmStep("competency_question_assessment"),
+      ]),
+      ontologySeed: seed,
+      competencyQuestions: questions,
+      competencyQuestionAssessment: assessmentsFor(4),
+    });
+    const bindingRow = (result.q2?.rows ?? []).find(
+      (row) => row.cq_key === "cq-fixture-source-binding",
+    );
+    expect(bindingRow?.supported).toBe(false);
+  });
+
   it("rejects metrics when a required LLM unit has no telemetry source fields", () => {
     const args = happyArgs();
     args.runManifest = manifestWith([
