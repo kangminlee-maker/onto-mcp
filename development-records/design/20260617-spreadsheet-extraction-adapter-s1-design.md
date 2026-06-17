@@ -165,10 +165,11 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 > 각 단계 후 review loop(self → subagent → onto). material(blocker/high/medium) 0까지 반복. 경계 확장 시 stop&ask.
 
 - **P0 — 인벤토리 스키마 확정**: `WorkbookStructuralInventory` 타입 + 공통 envelope. 검증: 타입체크, 기존 `structural_data` 소비자 무회귀.
-- **P1 — csv 추출기(의존성 0)**: 텍스트 파싱으로 헤더/열타입추정/구분자/행수 구조 관찰(평탄 슬라이스 아님). 검증: csv fixture 단위 + 결정론 해시.
+- **P0.5 — L2 파라미터 결정 메커니즘 (C′, 결정 §10)**: 결정론 휴리스틱(헤더=첫 라벨행·범주형=distinct비율·키=이름패턴+유일성) + **신뢰도/모호 게이트** + 모호시 **LLM bounded-submit**(`header_row`/`categorical_cols`/`key_candidates`만, runtime-owned·unknown 필드 reject) + 채택 파라미터·출처(`heuristic|llm`)·신뢰도 **기록·캐시**. P1·P4의 객관 계산은 이 파라미터를 입력으로 받는다. 검증: 휴리스틱 단위·에스컬레이션 트리거·**동일 파라미터 replay 결정론**·LLM 제출물 필드 reject.
+- **P1 — csv 추출기(의존성 0)**: 텍스트 파싱으로 구조 관찰(평탄 슬라이스 아님), **P0.5 파라미터로** 헤더행·열타입·distinct 어휘 계산. 검증: csv fixture 단위 + 결정론 해시.
 - **P2 — reconstruct seam 배선(csv)**: `buildReconstructSourceObservation`에서 csv→S1. 검증: 통합(관찰 아티팩트에 인벤토리), reconstruct 스위트 무회귀.
 - **P3 — review seam 배선(csv)**: `materialized-input` csv projection. 검증: review materializer 스위트 + 음성(빈/거대 csv).
-- **P4 — xlsx 추출기**: §6 결정에 따라 ZIP/XML 리더. 구조 인덱스 우선 + 예산 + 스트리밍. 검증: xlsx fixture(수식/명명범위/병합/검증/오류셀/숨김) 단위 + 음성(암호화/손상/매크로 → unsupported fail-loud).
+- **P4 — xlsx 추출기**: (d) 고정 openpyxl + lazy ensure-install(§6·§8.5). 구조 인덱스 우선 + 예산 + 스트리밍(read_only), **P0.5 파라미터 입력**. 검증: xlsx fixture(수식/명명범위/병합/검증/오류셀/숨김) 단위 + 음성(암호화/손상/매크로 → unsupported fail-loud) + openpyxl 미설치 시 ensure-install 경로.
 - **P5 — 양 seam xlsx 배선 + 대용량**: capture_truncated 경로. 검증: 대용량 xlsx 통합, 번들 크기 영향 측정.
 - **P6 — 정직성·provenance 게이트**: unsupported/partial 명시, content_sha256, "structure_inspected_only" 어서션. 검증: 음성 스위트 + invariant 가드.
 
@@ -178,7 +179,7 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 
 ## 6. Open Decisions (착수 전 사용자 확정 필요)
 
-1. **xlsx 추출 방식** (실증 §8로 재순위화) — (a) Node 라이브러리(JS, mcpb 번들 가능, prod dep +1) / (b) Python `openpyxl` ad-hoc shell-out / (c) csv-only 우선 / **(d) onto-동봉 고정 openpyxl 스크립트를 execution adapter(Python)로 실행** — 결정론·provenance는 runtime 소유(고정 스크립트), 엔진은 실증·references와 동일(openpyxl), **Node 파서 의존성·번들 증가 0**. → **재권장 순위: (d) ≈ (c) 우선 → (a)**. 단 (d)는 실행환경에 Python+openpyxl 보장이 전제(Cowork 샌드박스는 충족; claude_code/codex executor 경로는 확인 필요). (b)는 스크립트가 고정·동봉 아니면 결정론·감사성 약함 → (d)로 흡수.
+1. **[해소됨 → (d)+lazy-ensure, Cowork 타깃, §8.5] xlsx 추출 방식** (실증 §8로 재순위화) — (a) Node 라이브러리(JS, mcpb 번들 가능, prod dep +1) / (b) Python `openpyxl` ad-hoc shell-out / (c) csv-only 우선 / **(d) onto-동봉 고정 openpyxl 스크립트를 execution adapter(Python)로 실행** — 결정론·provenance는 runtime 소유(고정 스크립트), 엔진은 실증·references와 동일(openpyxl), **Node 파서 의존성·번들 증가 0**. → **재권장 순위: (d) ≈ (c) 우선 → (a)**. 단 (d)는 실행환경에 Python+openpyxl 보장이 전제(Cowork 샌드박스는 충족; claude_code/codex executor 경로는 확인 필요). (b)는 스크립트가 고정·동봉 아니면 결정론·감사성 약함 → (d)로 흡수.
 2. **review semantic 위치(C-review)** — 새 per-material review 프로파일 신설 vs `lens-prompt`/`review-target-profile` 계약 확장. (S1 범위 밖이나 seam 형태에 영향.)
 3. **프로즈 전파(W0)** — `scan_targets`만으로 충분 vs 파서+selected ref+패킷이 본문 섹션까지 carry(개념 표면↑). (C-recon 범위.)
 
@@ -271,7 +272,7 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 
 ---
 
-## 10. L2 관측 레이어 보강: 통제 ↔ 위임 스펙트럼 (**결정 대기**)
+## 10. L2 관측 레이어 보강: 통제 ↔ 위임 스펙트럼 (**결정: C′ → C**)
 
 > 질문: §8 세 기법(+더 풍부한 관측)을 **어디까지 결정론 runtime이 통제 vs LLM에 위임**할까. 나침반 = capability-boundary 핵심("LLM은 의미 제안, runtime은 아티팩트 진실 결정").
 
@@ -297,6 +298,11 @@ cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,coun
 - 시작은 **C′**(결정론 우선, 모호시만 LLM)로 비용·표면 최소화 → 필요시 C로 확장.
 - 순수 A는 실제 워크북(가변 헤더·피벗)에 취약(§8이 증거). 순수 B는 onto 거버넌스(재현·증거·maturation)와 충돌 → S1 존재 이유 부정. B′는 특수 레이아웃 fallback으로만.
 
-### 10.4 결정 필요 (이 항목이 미결)
-- 채택 지점: **A / C / C′ / B / B′** 중?
-- C/C′ 채택 시 후속 설계: LLM 파라미터 submit 채널·파라미터 캐시/replay·에스컬레이션 임계 → §5 P-단계에 추가.
+### 10.4 결정됨 (2026-06-17): **C′ → C**
+- 채택: **C′** = 결정론 휴리스틱 우선 + **저신뢰/모호 케이스만 LLM 파라미터 에스컬레이션**. 필요 시 C로 확장.
+- 기각: A(실 워크북 가변 헤더·피벗에 취약 §8) / B·B′(재현·증거·maturation 거버넌스 충돌 + 임의코드 보안 → S1 존재 이유 부정; B′는 특수 레이아웃 fallback으로만 보류).
+- 함의(→ §5 P0.5 신설):
+  (i) 결정론 휴리스틱 — 헤더=첫 라벨행, 범주형=distinct비율 임계, 키=이름패턴+유일성 — + **신뢰도/모호 게이트**;
+  (ii) 모호 케이스용 **LLM bounded-submit 채널**: `header_row`·`categorical_cols`·`key_candidates`만 제출(runtime-owned 필드 reject, unknown 필드 fail-loud);
+  (iii) 채택 파라미터 + **출처(`heuristic`|`llm`)** + 신뢰도를 인벤토리에 기록·**캐시** → 동일 입력 replay 결정론(비결정성은 파라미터 선택에만 국한);
+  (iv) runtime이 그 파라미터로 **객관 계산**(distinct 카운트·교집합·해시).
