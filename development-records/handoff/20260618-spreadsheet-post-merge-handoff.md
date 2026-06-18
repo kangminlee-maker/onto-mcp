@@ -1,7 +1,8 @@
-# Handoff (START-HERE) — spreadsheet S1 MERGED → 다음 슬라이스
+# Handoff (START-HERE) — spreadsheet 트랙: C-recon MERGED → 다음 슬라이스
 
 > **목적**: `/clear` 직후 새 세션이 **이 문서 하나로** spreadsheet 트랙을 이어간다.
-> S1(공유 추출 어댑터)은 **머지 완료**. 이 문서는 그 다음 작업(C-recon / P6 / C-review / 백로그)의 진입점.
+> S1(공유 추출 어댑터, PR #89) + **C-recon(게이트 활성화 + 프롬프트 투영 예산, PR #92)** 머지 완료.
+> 이 문서는 그 다음 작업(P6 / C-review / CHAN-2 closure / 백로그)의 진입점.
 > **As of**: 2026-06-18.
 
 ---
@@ -9,69 +10,75 @@
 ## 0. 작업공간
 
 - **worktree**: `/Users/kangmin/cowork/onto-mcp-spreadsheet`
-- **branch**: `feat/spreadsheet-followup` (base = `origin/main` = `16d69c1` = 머지된 S1 포함)
-- **셋업**: `node_modules` 설치됨(fflate/saxes 포함, 머지 반영). 새 슬라이스는 이 브랜치에서 시작하거나 `git checkout -b feat/spreadsheet-<slice> origin/main`.
-- **base 건강(확인됨)**: `npm run check:ts-core` PASS · 관측기 47 tests PASS · 머지 시점 full vitest **1510 passed**.
+- **branch**: 새 슬라이스는 `git checkout -b feat/spreadsheet-<slice> origin/main`. (직전 작업 브랜치 `feat/spreadsheet-followup`는 PR #92로 머지됨.)
+- **셋업**: `node_modules` 설치됨(fflate/saxes 포함). 새 worktree면 `npm install` 후 테스트 가능(라이브 sweep 전 fflate/saxes 누락 주의 — S1 때 발생).
+- **base 건강(머지 시점)**: full vitest **1566 passed** · ts-core / import-boundary / spec-defaults / invariant-drift / invariant-change(G4 `protected_changes:0`) / G7 모두 green.
 - **주의**: `main`은 다른 worktree(`onto-mcp-claude`)가 점유 → 여기서 `main` 체크아웃 불가. 항상 `origin/main` 기준으로 브랜치를 판다.
 
-## A. S1 — 무엇이 머지됐나 (PR #89, squash `16d69c1`)
+## A. C-recon — 무엇이 머지됐나 (PR #92)
 
-공유 **결정론·LLM-free** spreadsheet 추출기 + 양 파이프라인 seam. Codex 4라운드 하드닝(20 finding=17수정+1 settled-decline).
+spreadsheet 추출기를 reconstruct **full 파이프라인에 실배선**(S1은 seam만 배선·게이트는 `planned`이라 라이브서 skip이었음). Codex 3라운드 하드닝(2 fixed + 1 deferred).
 
-**핵심 파일**:
-- `src/core-runtime/spreadsheet-structure-observer.ts` — 공유 관측기. `observeSpreadsheetSource(ref,{caps?})` → `WorkbookStructuralInventory`.
-  - csv/tsv = 순수 Node(`buildCsvInventory`). xlsx/xlsm = streaming fflate+saxes(`buildXlsxInventory`, 1MB청크 unzip + caps early-exit). xls/xlsb/ods = `unsupported_reason`.
-  - 추출 내용: sheets·named_ranges·tables·**pivot_tables**(집계구조)·formula_cells(+cross-sheet refs, shared formula 포함)·merged·data_validations·external_links(실 타깃 해석)·error_cells·macro(vbaProject 증거)·per_sheet_data(헤더탐지+`header_confidence`+컬럼 타입, **date-style 인식**)·distinct_value_vocab(카운트만)·**cross_sheet_key_overlap**·data_layer_caps·capture_truncated.
-  - `projectInventoryForAdmission(inv)` = 양 소비자가 거치는 admission chokepoint(원시값 top_values 제외, CHAN-1).
-- **reconstruct seam**: `src/core-runtime/reconstruct/materialize-preparation.ts`의 `buildReconstructSourceObservation` → spreadsheet 분기(`buildSpreadsheetSourceObservation`). 인벤토리를 `structural_data.workbook_inventory`에 중첩, `content_sha256`=raw-byte top-level.
-- **review seam**: `src/core-runtime/review/review-artifact-utils.ts`의 `readTextOrDirectoryListing` → spreadsheet면 `renderSpreadsheetStructuralView`(구조 텍스트뷰, 원시값 0).
-- **분류**: `src/core-runtime/target-material-kind.ts`의 `isSpreadsheetRef`(순수, SPREADSHEET_EXTENSIONS 재사용).
+**핵심 변경**:
+1. **게이트 flip** — `.onto/processes/reconstruct/reconstruct-contract-registry.yaml`의 `spreadsheet-source-profile.runtime_implementation_status: planned → partially_wired`. 이제 실 csv/xlsx가 `materializeReconstructPreparationArtifacts`에서 `workbook_inventory`를 산출(scan_status `planned`·support_status `partial`). 마커 불요(보호키 아님).
+2. **프롬프트 투영 예산** — `src/core-runtime/spreadsheet-structure-observer.ts`의 신규 `projectInventoryForPrompt`(SIZE축; admission `projectInventoryForAdmission` SAFETY축과 직교). `formula_cells` 시트당 head-K + **전역 `max_formula_cells_total`(600)·`max_sheets`(50)** + 정직 truncation 매니페스트(`workbook_inventory_projection_truncated` + per-section `{kept,total}`). 영속 인벤토리는 full 유지, **프롬프트 페이로드만 bounded**. hook = `run.ts`의 `compactStructuralDataForPrompt`(content_excerpt 예산과 **독립적으로 무조건** 캡; 단일 chokepoint = `observationPromptPayload`).
+3. **unsupported 포맷 정직성 게이트** — `.xls/.xlsb/.ods`는 runnable이 됐어도 `observeSpreadsheetSource`가 `unsupported_reason`만 반환. `spreadsheetUnsupportedReason` 헬퍼로 **3개 admission 경로 전부**(materialize 루프 + run.ts source-frontier 9426 + maturation-closure 9520 재진입)에서 관측을 skip 강등 → sole-target 시 zero-observation halt(fail-loud). 빈 인벤토리로 LLM authoring 진행 방지.
 
-**실파일 검증**(`/Users/kangmin/cowork/day1_revenue_ontology/input/reference/mbp_2026년 02월_결제 및 수익인식F_260309.xlsx`, 101MB·14시트): 27,245 formula · 24 pivot · 25 cross-sheet 관계 · 39 date 컬럼 · header high 11/low 3 · ~12s/RSS~1.4GB.
+**검증**: 단독 `.xls` → `runReconstruct` fail-loud E2E 테스트 통과. csv+xlsx prep E2E. 투영 유닛/hook 테스트.
 
-## B. 다음 슬라이스 (트랙 순서)
+## B. Codex 처분 (PR #92, 3라운드)
 
-### B1. C-recon — 게이트 활성화 (가장 구체적, 추출기를 실제로 켬)
-- **현재 게이트**: `.onto/processes/reconstruct/reconstruct-contract-registry.yaml` line 72 `spreadsheet-source-profile`의 `runtime_implementation_status: planned`. 이 때문에 `materializeReconstructPreparationArtifacts`가 spreadsheet를 **skip**(seam은 배선됐으나 full 파이프라인서 미도달 — P2/P3가 unit 테스트만 쓴 이유).
-- **할 일**: `planned`→`partially_wired` flip + full-pipeline E2E(실 csv/xlsx가 `onto reconstruct`에서 `workbook_inventory` 산출 확인) + 정직성(`structure_inspected_only`) 유지.
-- **주의**: 레지스트리 편집은 **실 loader로 검증**해야(`loadReconstructContractRegistry`); YAML파싱+grep+invariant-drift는 active-gate 참조 깨짐을 못 잡음([[onto-mcp-registry-loader-verification]]). `runtime_implementation_status`가 보호키면 INVARIANT-CHANGE 마커/가드 확인. `definition_sha256`(line 70)은 spreadsheet.md 변경 시만 갱신.
-- **gap 원장**: `development-records/tracking/contract-runtime-gap-ledger.md` — flip 시 해당 행 status 갱신.
+- **F1**(unsupported 포맷 게이트) = **closed**. R1 수정(materialize-only)이 불완전 → R2가 정당하게 재플래그(frontier 2경로 누락) → 공유 가드로 완결. R3 재플래그는 unchanged registry 라인 anchor한 **false positive** → E2E 증거로 decline.
+- **F2**(워크북 전역 캡) = **converged**(R2부터 재플래그 안 됨).
+- **F3**(workbook 리터럴 source-safety 우회) = **deferred**(사용자 결정 A). → **C절 NEXT의 CHAN-2 closure**.
 
-### B2. P6 — 정직성·provenance 게이트
-- `structure_inspected_only` 단언, `unsupported_reason`(xls/xlsb/ods·oversized·corrupt) 처리 게이트, capture_truncated 정직성. C-recon과 함께/직전에.
+## C. 다음 슬라이스 (트랙 순서)
 
-### B3. C-review — review semantic distill
-- review-target-profile 계약에 spreadsheet 의미 distill. support_status `partial`→상향은 여기서.
+### C1. P6 — 정직성·provenance 게이트
+- `inspection_method: structure_inspected_only` 단언, `unsupported_reason`(xls/xlsb/ods·oversized·corrupt) 처리의 **게이트화**(현재는 materialize 강등으로 fail-loud은 되나, profile/manifest 레벨 정직성 단언은 미형식화), `capture_truncated`·`workbook_inventory_projection_truncated` 정직성 전파.
+- C-recon이 unsupported를 fail-loud로 막아뒀으니 P6은 그 위에 형식 계약/단언을 얹는 작업.
 
-### B4. 백로그
-- **메모리 최적화**: 753MB 시트 처리 시 RSS ~1.4GB → `profileSheetRows`를 "전체 grid 입력"→"행별 incremental 누적"으로 리팩토링(헤더용 첫 15행만 버퍼). 공유 함수라 csv·xlsx + 스트리밍 파서 동시 변경.
-- **xls/xlsb/ods**: 별도 파서(BIFF 바이너리·ODF 스키마). 고비용·저우선.
-- **LLM 헤더 에스컬(P0.5)**: 저신뢰(`header_confidence:"low"`) 시트만 governed LLM bounded-submit(source-safety 채널·캐시). **관측기 밖** 별도 단계.
-- **릴리스 시**: `npm run build:mcpb`(prod deps +2.1MB 반영; mcpb CLI 로컬 미설치 주의).
+### C2. C-review — review semantic distill
+- `review-target-profile` 계약에 spreadsheet 의미 distill. `reviewMaterialSupportStatus(spreadsheet)=partial` → 상향은 여기서. review seam은 S1에서 이미 배선됨(`renderSpreadsheetStructuralView`).
 
-## C. 핵심 결정/함정 (반드시 인지)
+### C3. CHAN-2 closure (F3 deferred 분) — source-safety 채널 완결
+- **무엇**: `workbook_inventory` 구조 리터럴(formula 본문·external-link 타깃·추론 header명)이 source-safety 민감 스캐너(`hasSensitiveSourceEvidence`=content_excerpt만 스캔)를 우회. CHAN-1은 raw 셀 값만 제거했고 구조 리터럴은 통과.
+- **왜 deferred**: 현 조건 저-심각도(CHAN-1이 주 PII 차단·프롬프트=본인 LLM·구조명 by-design). 부분완화는 over-drop(워크북 통째 드롭) 또는 미redact(content_excerpt만 지움) 위험 → 필드-단위 redaction을 source-safety 경유로 하는 **전용 슬라이스** 필요.
+- **승격 트리거**: 미신뢰/외부 출처 워크북 입력 · seed 프롬프트/아티팩트 신뢰경계 밖 공유 · 인벤토리 노출 필드 확장. (CHAN은 leak뿐 아니라 **프롬프트 인젝션**·provenance/replay도 통제 — 인젝션은 미래가 아닌 현재 차원.)
+- gap ledger §3에 등재됨.
 
-- **게이트 = planned**: 추출기는 머지됐으나 reconstruct full 파이프라인에선 아직 spreadsheet skip. "능력 구현됨 ≠ 실배선/활성" — C-recon 전엔 라이브 reconstruct가 spreadsheet inventory를 안 낸다.
-- **CHAN-1/CHAN-2 (settled)**: 관측기는 원시 데이터값(top_values/sample/key값)을 방출 안 함. 헤더/컬럼 **이름은 구조 스키마**로 방출. Codex가 4회 "저신뢰 헤더명 억제"를 요구했으나 **사용자 결정 = A(억제 안 함)**: 헤더명=스키마, all-text 첫행(대비 없음)은 `header_confidence:low`로 플래그+P0.5 에스컬 대상, 억제 시 문자열 조인키 cross-sheet 신호 손상. **이 결정 뒤집지 말 것**(필요 시 사용자 재확인).
-- **관측기 LLM-free 불변식**: 헤더/타입/날짜 판정은 결정론. LLM 에스컬은 별도 governed 단계(관측기 안 아님).
-- **실파일 검증 패턴**: dist 빌드 후 `node` 스크립트로 `observeSpreadsheetSource(F)` 호출(예시는 git 히스토리/메모리). 큰 메모리 필요 시 `node --max-old-space-size=6144`.
+### C4. 백로그
+- **프롬프트 투영 window-비례 sizing**: 현재 고정 캡 v1(model-agnostic). 라이브 벤치서 캘리브(문서 예산 CJK 보정과 동형).
+- **L2 scout spreadsheet 신호**: `buildSignalRowsForObservation`이 code/document 하드게이트 → spreadsheet 관측은 scout 신호 0. (회귀 아님, ledger §2.)
+- **support 문구 kind-aware화**: `supportForMaterial`의 "only minimal structural observation" 문구가 spreadsheet엔 과소표현(거짓 아님).
+- **메모리 최적화**: 753MB 시트 처리 시 RSS ~1.4GB → `profileSheetRows` incremental(헤더용 첫 15행만 버퍼).
+- **xls/xlsb/ods**: 별도 파서(BIFF·ODF). 고비용·저우선.
+- **LLM 헤더 에스컬(P0.5)**: 저신뢰(`header_confidence:low`) 시트만 governed LLM bounded-submit. 관측기 밖 별도 단계.
+- **릴리스 시**: `npm run build:mcpb`(prod deps fflate/saxes 반영).
+
+## D. 핵심 결정/함정 (반드시 인지)
+
+- **게이트 활성됨**: 이제 라이브 reconstruct가 csv/xlsx를 실제로 관측한다(C-recon 전과 반대). unsupported 포맷(.xls 등)은 honest fail-loud.
+- **CHAN-1/CHAN-2 (settled/deferred)**: 관측기는 원시 데이터값(top_values/sample/키값)을 방출 안 함(CHAN-1, `projectInventoryForAdmission`). 헤더/컬럼 **이름은 구조 스키마**로 방출(owner-settled A — 뒤집지 말 것). 구조 리터럴의 source-safety 라우팅(F3)은 CHAN-2 closure로 deferred(C3).
+- **관측기 LLM-free 불변식**: 헤더/타입/날짜 판정은 결정론. LLM 에스컬은 별도 governed 단계.
+- **공유 함수 수정 = 전 호출처 확인**: C-recon F1에서 `buildReconstructSourceObservation` 호출처 3곳 중 1곳만 고쳐 Codex가 포착. 공유 chokepoint 수정 시 전 caller 확인.
+- **실파일 검증 패턴**: dist 빌드 후 `node` 스크립트로 `observeSpreadsheetSource(F)` 호출. 큰 메모리 시 `node --max-old-space-size=6144`.
 - **명시 경로 커밋**: 다른 세션 파일 섞임 방지 — `git add <명시 경로>` + `git status` 확인.
 
-## D. 권위 문서
+## E. 권위 문서
 
-- 설계 SSOT: `development-records/design/20260617-spreadsheet-extraction-adapter-s1-design.md`(§5 P0~P6, §10 C′, §11 검증보정).
+- 설계 SSOT: `development-records/design/20260617-spreadsheet-extraction-adapter-s1-design.md`(§5 P0~P6, §11 CHAN-1/CHAN-2/검증보정).
 - 관측 계약: `.onto/processes/reconstruct/source-profiles/spreadsheet.md`.
-- gap 원장: `development-records/tracking/contract-runtime-gap-ledger.md`.
-- 이전 handoff(S1 구현 진입점, 이제 이력): `development-records/handoff/20260617-spreadsheet-s1-continue-handoff.md`.
+- gap 원장: `development-records/tracking/contract-runtime-gap-ledger.md`(§1 spreadsheet=closed, §3 CHAN/F3=deferred).
 
-## E. 메모리 포인터 (project memory)
+## F. 메모리 포인터 (project memory)
 
-- `spreadsheet-material-handling-track` — 트랙 전체 압축 RESUME(S1 MERGED·Codex 4R·NEXT).
-- `contract-runtime-gap-ledger` — 선언 vs 실배선(C-recon 게이트 flip 시 갱신).
+- `spreadsheet-material-handling-track` — 트랙 전체 압축 RESUME(C-recon MERGED·Codex 3R·NEXT).
+- `contract-runtime-gap-ledger` — 선언 vs 실배선(§1 closed, §3 CHAN-2 deferred).
 - `onto-mcp-registry-loader-verification` — 레지스트리 편집은 실 loader 검증.
 - `design-validation-ultracode-onto` — 큰 슬라이스 교차검증.
 
-## F. 검증 baseline
+## G. 검증 baseline
 
-- 머지 시점: full vitest **1510 passed** · ts-core/import-boundary/retired-root-paths green · prod-audit clean · CI guards 통과.
-- 빠른 확인: `npm run check:ts-core` + `npx vitest run src/core-runtime/spreadsheet-structure-observer.test.ts`(47) + `src/core-runtime/reconstruct/ src/core-runtime/review/`.
+- 머지 시점: full vitest **1566 passed** · 정적 가드 전부 green.
+- 빠른 확인: `npm run check:ts-core` + `npx vitest run src/core-runtime/spreadsheet-structure-observer.test.ts` + `src/core-runtime/reconstruct/ src/core-runtime/review/`.
