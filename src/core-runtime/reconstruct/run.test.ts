@@ -44,6 +44,7 @@ import {
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
+  recomputeWorkbookInventoryProjectionTruncations,
   runReconstruct,
   singleDocumentProjectionTruncation,
 } from "./run.js";
@@ -5907,6 +5908,48 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
     expect(sd.workbook_inventory.formula_cells).toHaveLength(3);
     expect(sd.workbook_inventory_projection_truncated).toBeUndefined();
     expect(sd.workbook_inventory_projection_sections).toBeUndefined();
+  });
+
+  // P6: the durable record of a bounded prompt projection, recomputed
+  // deterministically from the persisted observations (no per-call-site sink).
+  it("recompute records a bounded inventory with its section manifest", () => {
+    const artifact = spreadsheetArtifact(100);
+    const truncations = recomputeWorkbookInventoryProjectionTruncations(
+      artifact.observations as any,
+    );
+    expect(truncations).toHaveLength(1);
+    expect(truncations[0]!.observation_id).toBe("obs-sheet");
+    expect(truncations[0]!.source_ref).toBe("/data/book.xlsx");
+    expect(truncations[0]!.sections).toContainEqual({
+      section: "formula_cells",
+      kept: 30,
+      total: 100,
+    });
+  });
+
+  it("recompute records nothing when no inventory was bounded", () => {
+    const artifact = spreadsheetArtifact(3);
+    expect(
+      recomputeWorkbookInventoryProjectionTruncations(artifact.observations as any),
+    ).toEqual([]);
+  });
+
+  it("recompute ignores observations without a workbook_inventory", () => {
+    // The selector mirrors the prompt-projection site exactly: it keys on the presence
+    // of a workbook_inventory object, not on target_material_kind (only the spreadsheet
+    // observer produces one). A document observation carries no inventory → excluded.
+    const truncations = recomputeWorkbookInventoryProjectionTruncations([
+      {
+        observation_id: "obs-doc",
+        target_material_kind: "document",
+        adapter_id: "minimal-document-structure-observer",
+        source_ref: "/data/spec.md",
+        location: "file",
+        summary: "doc",
+        structural_data: { content_excerpt: "x".repeat(100000) },
+      },
+    ] as any);
+    expect(truncations).toEqual([]);
   });
 });
 

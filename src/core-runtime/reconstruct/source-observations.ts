@@ -1,4 +1,11 @@
 import type { TargetMaterialKind } from "../target-material-kind.js";
+import {
+  inventoryHasInspectedStructure,
+  SPREADSHEET_CAPTURE_TRUNCATED_PHRASE,
+  SPREADSHEET_MACRO_PRESENT_PHRASE,
+  SPREADSHEET_OBSERVER_ADAPTER_ID,
+  type WorkbookStructuralInventory,
+} from "../spreadsheet-structure-observer.js";
 
 export interface ReconstructSourceObservation {
   observation_id: string;
@@ -52,6 +59,89 @@ function collectObjectKeys(value: unknown, keys: string[] = []): string[] {
   return keys;
 }
 
+/** Lowercase 64-char hex (a raw-byte sha256). */
+const CONTENT_SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+/**
+ * P6 spreadsheet honesty/provenance assertions — the positive complement of the
+ * prohibition checks above: what a spreadsheet observation MUST honestly disclose.
+ * Runs only for spreadsheet observations; CRUCIALLY it exempts the legitimate
+ * UNSUPPORTED states the observer deliberately emits (empty-csv placeholder,
+ * oversized/unreadable with an empty hash) so the gate never converts an honest
+ * "nothing to inspect / could not read" inventory into a hard crash (the validator
+ * throws inside the builder, before the materialize loop's graceful skip-demotion).
+ */
+function validateSpreadsheetObservationHonesty(
+  observation: ReconstructSourceObservation,
+  violations: string[],
+): void {
+  const inventory = observation.structural_data.workbook_inventory as
+    | WorkbookStructuralInventory
+    | undefined;
+  // An array is `typeof "object"` too; reject it like the prompt-projection recompute
+  // does — this validator is also the boundary for persisted/replayed observations,
+  // so a malformed `workbook_inventory: []` must not pass as a valid inventory.
+  if (!inventory || typeof inventory !== "object" || Array.isArray(inventory)) {
+    violations.push(
+      "spreadsheet observation must carry a workbook_inventory in structural_data",
+    );
+    return;
+  }
+
+  // `unsupported_reason` is three-valued: null (supported), a non-empty string
+  // (genuinely unsupported), or a present-but-BLANK string (incoherent). A blank
+  // reason would skip the supported hash check yet not demote downstream
+  // (spreadsheetUnsupportedReason ignores blanks), admitting a no-evidence workbook —
+  // reject it explicitly so the honest disclosure is never empty.
+  const reason = inventory.unsupported_reason;
+  if (typeof reason === "string" && reason.trim() === "") {
+    violations.push("unsupported_reason must not be blank");
+    return;
+  }
+  const supported = reason == null;
+
+  if (supported) {
+    // B (provenance anchor): a SUPPORTED workbook (bytes actually read) must carry a
+    // well-formed raw-byte content hash at the TOP level — the field the source-scout-
+    // pack provenance consumer binds to (materialize-preparation surfaces it there).
+    // It is a presence/format anchor, NOT source-safety provenance completeness
+    // (visibility-tier / allowed-proof-form / redaction remain the open CHAN-2/F3 row).
+    // An UNSUPPORTED inventory may legitimately carry an empty hash (oversized/
+    // unreadable: bytes never read) — its unsupported_reason is the honest disclosure.
+    const sha = observation.structural_data.content_sha256;
+    if (typeof sha !== "string" || !CONTENT_SHA256_PATTERN.test(sha)) {
+      violations.push("content_sha256_missing");
+    } else if (sha !== inventory.content_sha256) {
+      // The top-level hash anchors source-scout provenance; the nested inventory hash
+      // is projected into prompts. A corrupted/replayed envelope where they disagree
+      // would let the two name different raw bytes — assert they match.
+      violations.push("content_sha256 disagrees with workbook_inventory hash");
+    }
+  } else if (inventoryHasInspectedStructure(inventory)) {
+    // C (unsupported<->empty coherence): an unsupported inventory must not claim any
+    // inspected structure across the full inventory surface, not just `sheets`.
+    violations.push(
+      "unsupported spreadsheet inventory must not claim inspected structure",
+    );
+  }
+
+  // D (truncation/macro honesty): when the inventory flags partial capture or macro
+  // presence, the prompt-visible summary MUST disclose it with the fixed phrase the
+  // producer emits (assert + emit bound to the same literal so they cannot drift).
+  if (
+    inventory.capture_truncated &&
+    !observation.summary.includes(SPREADSHEET_CAPTURE_TRUNCATED_PHRASE)
+  ) {
+    violations.push("capture_truncated not disclosed in observation summary");
+  }
+  if (
+    inventory.macro_present &&
+    !observation.summary.includes(SPREADSHEET_MACRO_PRESENT_PHRASE)
+  ) {
+    violations.push("macro_present not disclosed in observation summary");
+  }
+}
+
 export function validateSourceObservationBoundary(
   observation: ReconstructSourceObservation,
 ): ReconstructSourceObservationValidation {
@@ -94,6 +184,10 @@ export function validateSourceObservationBoundary(
     if (pattern.test(observation.summary)) {
       violations.push(`summary contains prohibited ontology interpretation: ${label}`);
     }
+  }
+
+  if (observation.adapter_id === SPREADSHEET_OBSERVER_ADAPTER_ID) {
+    validateSpreadsheetObservationHonesty(observation, violations);
   }
 
   return {

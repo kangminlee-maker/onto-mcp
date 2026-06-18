@@ -34,9 +34,11 @@ spreadsheet 추출기를 reconstruct **full 파이프라인에 실배선**(S1은
 
 ## C. 다음 슬라이스 (트랙 순서)
 
-### C1. P6 — 정직성·provenance 게이트
-- `inspection_method: structure_inspected_only` 단언, `unsupported_reason`(xls/xlsb/ods·oversized·corrupt) 처리의 **게이트화**(현재는 materialize 강등으로 fail-loud은 되나, profile/manifest 레벨 정직성 단언은 미형식화), `capture_truncated`·`workbook_inventory_projection_truncated` 정직성 전파.
-- C-recon이 unsupported를 fail-loud로 막아뒀으니 P6은 그 위에 형식 계약/단언을 얹는 작업.
+### C1. P6 — 정직성·provenance 게이트 ✅ 구현됨 (브랜치 `feat/spreadsheet-p6`)
+- **구현 완료** (ultracode 38-agent 교차검증 → revise-then-implement → 구현 → full vitest 1596·회귀0·정적 전부 green). 미커밋/미PR 상태일 수 있음 — `git log` 확인.
+- **무엇**: `validateSourceObservationBoundary`(reconstruct) 확장 — spreadsheet 관측 한정 어서션 **B**(supported일 때만 top-level content_sha256 64-hex)·**C**(unsupported는 `inventoryHasInspectedStructure` 거짓; 빈-csv/oversized/unreadable 면제)·**D**(capture_truncated/macro_present를 summary 고정 문구로 공개, assert+emit 원자). **A 드롭**(inspection_method=단일-리터럴 타입이 보장). projection-truncated는 `recomputeWorkbookInventoryProjectionTruncations`(결정론 recompute)+ndjson+final-output 섹션(documents 미러링).
+- **핵심 교훈(CHAN-2도 같은 validator)**: validator가 builder 내부서 throw→materialize skip-demotion보다 먼저 → **새 어서션은 unsupported 정상상태(빈-csv `sheets.length===1`·oversized/unreadable `content_sha256:""`)를 반드시 면제**(아니면 graceful skip이 크래시; C-recon F1 패턴). 공유 chokepoint=전 호출처 확인.
+- **미커버(의도)**: review consumer는 reconstruct-only P6 게이트 밖 → gap ledger §4 등재, **C-review에서 통합**.
 
 ### C2. C-review — review semantic distill
 - `review-target-profile` 계약에 spreadsheet 의미 distill. `reviewMaterialSupportStatus(spreadsheet)=partial` → 상향은 여기서. review seam은 S1에서 이미 배선됨(`renderSpreadsheetStructuralView`).

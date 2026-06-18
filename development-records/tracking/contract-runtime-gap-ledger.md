@@ -1,7 +1,7 @@
 # Contract ↔ Runtime Gap Ledger (청사진 vs 실물)
 
 > **목적**: onto의 *선언/계약(청사진)* 과 *실제 배선된 런타임(실물)* 사이의 gap을 **현 시점 기준으로 명확히 판단·문서화**하고, **gap이 줄어들 때마다 갱신**하는 living 원장. 설계가 "문서에 적힌 능력"을 "이미 구현된 것"으로 착각하는 함정(= S1 검증 §11에서 드러난 근본 원인)을 전역에서 방지한다.
-> **As of**: 2026-06-18 (브랜치 `feat/spreadsheet-followup`; C-recon = spreadsheet 게이트 활성화).
+> **As of**: 2026-06-18 (브랜치 `feat/spreadsheet-p6`; C-recon = spreadsheet 게이트 활성화 + P6 = reconstruct 정직성 게이트).
 > **갱신 규칙**: gap을 닫는 PR/커밋은 이 표의 해당 행을 **같은 커밋에서** 갱신한다(실물 칸·status·닫힘 조건). 새 계약/profile 추가 시 행을 추가한다. 이 문서는 *현재 상태 대시보드*이지 이력이 아니다 — 닫힌 gap은 행을 "✅ closed (커밋)"로 압축한다.
 > **권위**: 선언 status의 SSOT는 각 레지스트리/계약 헤더다(아래 "출처" 칼럼). 이 원장은 그 선언 + 실배선 spot-check의 **판정 projection**이며, 충돌 시 레지스트리/코드가 우선.
 
@@ -40,6 +40,7 @@
 | review materialized-input | 타깃을 검증용으로 admit | `renderReviewTargetMaterializedInput`→**`fs.readFile utf8` 그대로**. source-safety 원장·admission **전무** | review엔 source-내용 거버넌스 자체가 없음(바이너리 illegible로 가려져 있었음) | review측 admission 계약 + 공유 projection 시 (§11 CHAN-2) |
 | review target profile | `review-target-profile-contract.md` **Active** | v1 **결정론 heuristic**(artifact role/closure). 계약 §6: "**per-material validator/adapter 구현 전까지 material validation 주장 금지**" | material별 검증 미구현(전 kind) | per-material 검증 도입 시 |
 | review spreadsheet 지원 | — | `reviewMaterialSupportStatus(spreadsheet)=partial`(차단 안 함, 구조 맹목) | 구조 인지 없는 "partial" | C-review(S1 인벤토리 소비) 시 |
+| ⚠️ review의 spreadsheet 정직성 게이트 (P6 미커버) | P6 정직성 어서션(content_sha256/unsupported↔empty/capture·macro 공개)은 관측 무결성을 런타임 강제(inspection_method는 단일-리터럴 타입이 보장 — 어서션 A 드롭, 게이트 아님) | P6은 `validateSourceObservationBoundary`(**reconstruct 전용**)에만 어서션 추가. review(`review-artifact-utils.ts` `observeSpreadsheetSource`+`projectInventoryForAdmission`→`renderSpreadsheetStructuralView`)는 **동일 공유 관측기를 소비하나 그 게이트를 거치지 않음** — 정직성 리터럴은 renderer에 하드코딩(강제 없음). 오늘 거짓 주장은 없음(리터럴이 우연히 맞음) | 공유 관측기의 한 소비자가 정직성 게이트 밖(F1 패턴: 공유 chokepoint, 일부 caller만 커버). 잔여 위험 저-심각(현재 거짓 방출 0) | C-review가 review 경로를 같은(또는 공유) 정직성 게이트 아래로 통합 시 (P6 어서션을 공유 헬퍼로 추출하거나 review admission 계약 신설) |
 
 ## 5. evolve / shared 계약
 

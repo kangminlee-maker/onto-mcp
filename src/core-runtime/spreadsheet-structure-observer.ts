@@ -173,6 +173,55 @@ export interface WorkbookStructuralInventory {
   unsupported_reason: string | null;
 }
 
+// ───────────────────────── P6: honesty/provenance gate support ─────────────────────────
+//
+// These live next to the inventory type so the PRODUCER (the materialize summary
+// builder) and the GATE (validateSourceObservationBoundary) bind to the SAME
+// literals and helper and cannot drift. `inspection_method` needs no runtime
+// assertion: it is a single-literal type written as a const by every emitter, so
+// the type already makes "claims recompute" unrepresentable (capability boundary).
+
+/** Fixed disclosure phrase the observation summary MUST carry when the inventory
+ *  reports partial structural capture (P6 assertion D). */
+export const SPREADSHEET_CAPTURE_TRUNCATED_PHRASE =
+  "capture_truncated: structural capture hit a budget cap (partial structural evidence)";
+
+/** Fixed disclosure phrase the observation summary MUST carry when the workbook
+ *  carries macro/VBA code (P6: an emitted honesty/safety signal — structure-only
+ *  inspection cannot vouch for executable behavior). */
+export const SPREADSHEET_MACRO_PRESENT_PHRASE =
+  "macro_present: workbook carries macro/VBA code (structure inspected only; behavior not vouched)";
+
+/** True when an inventory carries any INSPECTED structure across the FULL inventory
+ *  surface: a sheet with non-zero dimensions, any structural array (including derived
+ *  cross_sheet_key_overlap and risk_signals, which can only exist after a workbook was
+ *  read+profiled), profiled columns, or distinct-value vocab. An UNSUPPORTED inventory
+ *  must NOT claim inspected structure — it carries only an `unsupported_reason` (P6
+ *  assertion C). The legitimate empty-csv placeholder (a zero-dimension sheet shell with
+ *  no columns) and `unsupportedInventory()` (`sheets: []`, all arrays empty) both return
+ *  false here, so the honesty gate passes those honest states rather than crashing them. */
+export function inventoryHasInspectedStructure(
+  inventory: WorkbookStructuralInventory,
+): boolean {
+  return (
+    inventory.sheets.some(
+      (sheet) => sheet.dimensions.rows > 0 || sheet.dimensions.cols > 0,
+    ) ||
+    inventory.named_ranges.length > 0 ||
+    inventory.tables.length > 0 ||
+    inventory.pivot_tables.length > 0 ||
+    inventory.formula_cells.length > 0 ||
+    inventory.merged_ranges.length > 0 ||
+    inventory.data_validations.length > 0 ||
+    inventory.external_links.length > 0 ||
+    inventory.error_cells.length > 0 ||
+    inventory.distinct_value_vocab.length > 0 ||
+    inventory.cross_sheet_key_overlap.length > 0 ||
+    inventory.risk_signals.length > 0 ||
+    inventory.per_sheet_data.some((sheet) => sheet.columns.length > 0)
+  );
+}
+
 // ───────────────────────── P1: CSV extractor (pure Node, zero-dep) ─────────────────────────
 
 const CSV_DELIMITERS = [",", "\t", ";"] as const;
