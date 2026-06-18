@@ -104,10 +104,9 @@ function validateSpreadsheetObservationHonesty(
     // B (provenance anchor): a SUPPORTED workbook (bytes actually read) must carry a
     // well-formed raw-byte content hash at the TOP level — the field the source-scout-
     // pack provenance consumer binds to (materialize-preparation surfaces it there).
-    // It is a presence/format anchor, NOT source-safety provenance completeness
-    // (visibility-tier / allowed-proof-form / redaction remain the open CHAN-2/F3 row).
-    // An UNSUPPORTED inventory may legitimately carry an empty hash (oversized/
-    // unreadable: bytes never read) — its unsupported_reason is the honest disclosure.
+    // It is a presence/format check on the raw-byte content hash. An UNSUPPORTED
+    // inventory may legitimately carry an empty hash (oversized/unreadable: bytes
+    // never read) — its unsupported_reason is the honest disclosure.
     const sha = observation.structural_data.content_sha256;
     if (typeof sha !== "string" || !CONTENT_SHA256_PATTERN.test(sha)) {
       violations.push("content_sha256_missing");

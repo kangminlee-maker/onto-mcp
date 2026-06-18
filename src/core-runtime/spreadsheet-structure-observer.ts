@@ -21,11 +21,9 @@
 // column typing, categorical detection). LLM escalation for ambiguous layouts is
 // a separate, named step (design §10 / §11 ESC-1) and is NOT part of this module.
 //
-// Honesty / channel governance (design §11 CHAN-1): the DATA-OBSERVATION layer is
-// aggregate-counts-only by default — `distinct_value_vocab` carries `distinct_count`
-// but NOT raw `top_values`, and no raw sample rows / cell values are emitted. Raw
-// data values reach a prompt only through the source-safety channel at the seam
-// stage, never from here.
+// The DATA-OBSERVATION layer is aggregate-counts-only by default — `distinct_value_vocab`
+// carries `distinct_count` but NOT raw `top_values`, and no raw sample rows / cell
+// values are emitted. The inventory is a structural / aggregate index, not a data dump.
 //   Scope note: column/header NAMES are emitted as structural schema (a header is,
 //   by definition, labels — not data). Deterministic header detection can misread a
 //   headerless all-text sheet's first DATA row as a header, surfacing that one row
@@ -106,12 +104,12 @@ export interface PerSheetData {
 export interface DistinctValueVocabEntry {
   sheet: string;
   column: string;
-  /** Aggregate count only (design §11 CHAN-1). If the distinct set hit the cap,
-   *  this is a ">= cap" lower-bound estimate. */
+  /** Aggregate count only. If the distinct set hit the cap, this is a ">= cap"
+   *  lower-bound estimate. */
   distinct_count: number;
   distinct_count_is_estimate: boolean;
-  /** Raw values are intentionally absent by default — they may only be populated
-   *  downstream through the source-safety channel, never by this extractor. */
+  /** Raw values are intentionally absent — the inventory carries aggregate counts
+   *  only, not raw cell values. */
   top_values?: Array<{ value: string; count: number }>;
 }
 
@@ -146,7 +144,7 @@ export interface WorkbookStructuralInventory {
   tables: Array<{ name: string; sheet: string; range: string }>;
   /** PivotTables (design §2.2): aggregation/summary structure. Field NAMES are
    *  schema (like column headers), not raw cell values; the pivot CACHE RECORDS
-   *  (the cached data) are never read (CHAN-1). */
+   *  (the cached data) are never read. */
   pivot_tables: Array<{
     name: string;
     sheet: string;
@@ -427,7 +425,7 @@ interface SheetRowProfile {
   row_count: number;
   /** Bounded distinct value SET per real-named column (tabular only) — held
    *  INTERNALLY to compute cross-sheet key overlap; never emitted (only the
-   *  overlap COUNT is, CHAN-1). Empty for matrix/headerless sheets. */
+   *  overlap COUNT is). Empty for matrix/headerless sheets. */
   column_value_sets: Map<string, Set<string>>;
 }
 
@@ -435,7 +433,7 @@ interface SheetRowProfile {
  *  sheet; xlsx = one call per sheet). Given the already-parsed cell grid (header
  *  + data rows, already bounded by the row cap upstream), derive header detection,
  *  column types, aggregate distinct counts, and ragged-row risk signals. Holds NO
- *  raw values beyond bounded distinct sets it counts internally (CHAN-1). */
+ *  raw values beyond bounded distinct sets it counts internally. */
 function profileSheetRows(args: {
   sheetName: string;
   rows: string[][];
@@ -491,7 +489,7 @@ function profileSheetRows(args: {
   const columns: InventoryColumn[] = [];
   const distinct_value_vocab: DistinctValueVocabEntry[] = [];
   // Retained only for tabular sheets with a real column name — fuels cross-sheet
-  // key overlap; never emitted (CHAN-1). Bounded by the distinct cap per column.
+  // key overlap; never emitted. Bounded by the distinct cap per column.
   const column_value_sets = new Map<string, Set<string>>();
   let dataLayerTruncated = false;
 
@@ -532,8 +530,8 @@ function profileSheetRows(args: {
     });
 
     // Categorical → controlled-vocab candidate. Deterministic rule: a bounded,
-    // repeating set of non-unique values. AGGREGATE COUNT ONLY (CHAN-1): no raw
-    // top_values are emitted here.
+    // repeating set of non-unique values. AGGREGATE COUNT ONLY: no raw top_values
+    // are emitted here.
     if (distinctEstimate) {
       // Hit the distinct cap → count is a lower-bound estimate; flag truncation (CAPS-1).
       dataLayerTruncated = true;
@@ -553,7 +551,7 @@ function profileSheetRows(args: {
     }
 
     // Cross-sheet key/dimension candidate: a real-named tabular column with ≥2
-    // distinct values. The bounded set stays internal (CHAN-1).
+    // distinct values. The bounded set stays internal.
     if (hasHeader && distinct.size >= 2) {
       const name = columnName(c);
       if (!name.startsWith("col_")) column_value_sets.set(name, distinct);
@@ -577,8 +575,8 @@ function profileSheetRows(args: {
 
 /** Cross-sheet key/dimension overlap (design §2.4): for each column NAME shared by
  *  ≥2 sheets, the pairwise count of shared values between their (bounded) value
- *  sets — a data-level relationship signal. Counts only (CHAN-1); the total number
- *  of pairs is bounded by max_sheet_pairs (CAPS-1). */
+ *  sets — a data-level relationship signal. Counts only; the total number of pairs
+ *  is bounded by max_sheet_pairs (CAPS-1). */
 function computeCrossSheetKeyOverlap(
   perSheet: Array<{ sheet: string; valueSets: Map<string, Set<string>> }>,
   caps: DataLayerCaps,
@@ -1832,13 +1830,12 @@ export async function observeSpreadsheetSource(
 }
 
 /**
- * The single admission-safe projection of a workbook inventory (design §11
- * CHAN-1/CHAN-2). It returns a structural + aggregate-only view: raw cell values
- * — `distinct_value_vocab[].top_values` (and any future sample/key-value fields)
- * — are excluded. Consumers that lack their own source-safety admission gate
- * (e.g. the review pipeline, §3.2) MUST route through this so the safe default is
- * enforced in ONE place and cannot drift between consumers. Raw values reach a
- * prompt only via the explicit source-safety channel, never via this projection.
+ * The single shared projection of a workbook inventory used by BOTH reconstruct and
+ * review. It returns a structural + aggregate-only view: raw cell values —
+ * `distinct_value_vocab[].top_values` (and any future sample/key-value fields) — are
+ * excluded. Both consumers route through this so the aggregate-only default (the
+ * inventory is a structural/aggregate index, not a data dump) is enforced in ONE
+ * place and cannot drift between them.
  */
 export function projectInventoryForAdmission(
   inventory: WorkbookStructuralInventory,
@@ -1856,10 +1853,10 @@ export function projectInventoryForAdmission(
   };
 }
 
-// ───────────────── Prompt projection (SIZE axis — distinct from admission's SAFETY axis) ─────────────────
+// ───────────────── Prompt projection (SIZE axis — bounds array size for the prompt) ─────────────────
 //
-// `projectInventoryForAdmission` removes raw values (CHAN-1, safety). It does NOT
-// bound array SIZE: a real workbook yields tens of thousands of formula cells and
+// `projectInventoryForAdmission` returns the aggregate-only view (no raw values). It
+// does NOT bound array SIZE: a real workbook yields tens of thousands of formula cells and
 // thousands of per-(sheet,column) vocab rows (one observed file: 27,245 formula
 // cells across 14 sheets). The persisted inventory keeps all of them (replay /
 // provenance), but a SEED-AUTHORING PROMPT must carry only a bounded, representative

@@ -326,9 +326,8 @@ export async function readTextOrDirectoryListing(
 ): Promise<string> {
   const stats = await fs.stat(targetPath);
   if (!stats.isDirectory()) {
-    // Spreadsheet targets are admitted as a structural/aggregate inventory view,
-    // not raw bytes (design §3.2 / §11 CHAN-2). review has no source-safety
-    // admission gate of its own, so it routes through the SAME shared projection
+    // Spreadsheet targets are rendered as a structural/aggregate inventory view,
+    // not raw bytes (design §3.2). review routes through the SAME shared projection
     // as reconstruct — raw cell values never enter the prompt, and a binary
     // workbook is never dumped as garbage utf8.
     if (isSpreadsheetRef(targetPath)) {
