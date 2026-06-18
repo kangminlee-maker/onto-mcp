@@ -12,7 +12,10 @@ import {
 import {
   observeSpreadsheetSource,
   projectInventoryForAdmission,
+  SPREADSHEET_CAPTURE_TRUNCATED_PHRASE,
+  SPREADSHEET_MACRO_PRESENT_PHRASE,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
+  type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import {
@@ -436,6 +439,26 @@ export async function buildReconstructSourceObservation(
  * structural substrate the seed-authoring prompt observes. xlsx-family kinds are
  * not yet extractable (P4) and arrive here carrying an `unsupported_reason`.
  */
+/**
+ * The honest observation summary for a workbook inventory (P6): the base disclosure
+ * plus the fixed phrases the boundary gate asserts when the capture/macro flags are
+ * set. This is the single emit path; it and the gate bind to the SAME exported phrase
+ * consts, so assert + emit cannot drift. Exported for the gate-binding regression test.
+ */
+export function buildSpreadsheetObservationSummary(
+  basename: string,
+  inventory: WorkbookStructuralInventory,
+): string {
+  const parts = [
+    inventory.unsupported_reason
+      ? `spreadsheet workbook observed at ${basename} — extraction unsupported (${inventory.unsupported_reason}), structure_inspected_only`
+      : `spreadsheet workbook observed at ${basename} — ${inventory.sheets.length} sheet(s), structure_inspected_only`,
+  ];
+  if (inventory.capture_truncated) parts.push(SPREADSHEET_CAPTURE_TRUNCATED_PHRASE);
+  if (inventory.macro_present) parts.push(SPREADSHEET_MACRO_PRESENT_PHRASE);
+  return parts.join("; ");
+}
+
 async function buildSpreadsheetSourceObservation(args: {
   detection: TargetMaterialRefDetection;
   stat: Stats;
@@ -457,9 +480,7 @@ async function buildSpreadsheetSourceObservation(args: {
   const inventory = projectInventoryForAdmission(
     await observeSpreadsheetSource(detection.ref),
   );
-  const summary = inventory.unsupported_reason
-    ? `spreadsheet workbook observed at ${basename} — extraction unsupported (${inventory.unsupported_reason}), structure_inspected_only`
-    : `spreadsheet workbook observed at ${basename} — ${inventory.sheets.length} sheet(s), structure_inspected_only`;
+  const summary = buildSpreadsheetObservationSummary(basename, inventory);
   const observation: ReconstructSourceObservation = {
     observation_id: stableObservationId({ sourceRef: detection.ref, location }),
     round_id: lineage?.roundId ?? "initial_source_frontier",

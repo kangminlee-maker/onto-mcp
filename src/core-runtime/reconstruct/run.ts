@@ -98,6 +98,7 @@ import {
 } from "../target-material-kind.js";
 import {
   projectInventoryForPrompt,
+  type WorkbookInventorySectionTruncation,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
@@ -5384,6 +5385,55 @@ export interface DocumentExcerptProjectionTruncation {
   projection_budget_chars: number;
 }
 
+/** Sibling of DocumentExcerptProjectionTruncation for spreadsheets (P6): which
+ *  inventory sections the seed-stage prompt projection bounded, and by how much. */
+export interface WorkbookInventoryProjectionTruncation {
+  observation_id: string;
+  source_ref: string;
+  sections: WorkbookInventorySectionTruncation[];
+}
+
+/**
+ * Deterministically recompute which observations had their workbook inventory bounded
+ * by the seed-stage prompt projection. Unlike the document excerpt projection — whose
+ * truncation depends on the prompt-time single-document expand opt-in, so it needs a
+ * per-call-site sink — the inventory projection is applied UNCONDITIONALLY
+ * (compactStructuralDataForPrompt) and is a pure function of the inventory
+ * (projectInventoryForPrompt). It is therefore fully recoverable from the persisted
+ * observations, so no call-site sink is needed (and none can be missed — the C-recon
+ * F1 trap). The selector here MIRRORS the projection site exactly: any observation
+ * carrying a workbook_inventory OBJECT (no kind gate — only the spreadsheet observer
+ * produces one, but matching the projection avoids a "bounded-but-unrecorded"
+ * divergence). The persisted inventory stays full; this records only that the seed-stage
+ * PROMPT saw a bounded view, so replay/audit is honest about it. Exported for the test.
+ */
+export function recomputeWorkbookInventoryProjectionTruncations(
+  observations: readonly ReconstructSourceObservation[],
+): WorkbookInventoryProjectionTruncation[] {
+  const truncations: WorkbookInventoryProjectionTruncation[] = [];
+  for (const observation of observations) {
+    const inventory = observation.structural_data.workbook_inventory;
+    if (
+      inventory === null ||
+      typeof inventory !== "object" ||
+      Array.isArray(inventory)
+    ) {
+      continue;
+    }
+    const projection = projectInventoryForPrompt(
+      inventory as WorkbookStructuralInventory,
+    );
+    if (projection.truncated) {
+      truncations.push({
+        observation_id: observation.observation_id,
+        source_ref: observation.source_ref,
+        sections: projection.sections,
+      });
+    }
+  }
+  return truncations;
+}
+
 interface ObservationPromptPayloadOptions {
   observationIds?: readonly string[];
   contentExcerptCharLimit?: number;
@@ -9593,6 +9643,42 @@ function appendFinalOutputDocumentProjectionTruncationSection(
   return upsertMarkdownSection(finalOutputText, content);
 }
 
+/**
+ * Surfaces seed-stage workbook inventory projection truncation in final output
+ * (P6): a spreadsheet whose inventory exceeded the FIXED seed-stage projection caps
+ * (DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS — model-agnostic, NOT window-derived, unlike
+ * the document excerpt budget) had only a bounded, representative structural sample
+ * projected into seed authoring. Sibling of the document projection section; the
+ * durable machine signal is the runtime-events.ndjson status event. Operational
+ * wording only (section names + counts) — no claim-value fragments — so it never
+ * trips final-output provenance forbidden fragments.
+ */
+function appendFinalOutputWorkbookInventoryProjectionTruncationSection(
+  finalOutputText: string,
+  truncations: WorkbookInventoryProjectionTruncation[],
+): string {
+  if (truncations.length === 0) return finalOutputText;
+  const heading = "## Workbook Inventory Projection Truncation";
+  const content = [
+    heading,
+    "",
+    "A spreadsheet inventory exceeded the fixed seed-stage inventory projection caps, " +
+      "so only a bounded, representative structural sample was projected into seed " +
+      "authoring. The full inventory is retained in source-observations; only the " +
+      "seed-stage prompt projection was bounded. Recovering the omitted detail is a " +
+      "later stage.",
+    "",
+    ...truncations.map((truncation) =>
+      `- ${truncation.source_ref} (${truncation.observation_id}): ` +
+      truncation.sections
+        .map((section) => `${section.section} ${section.kept}/${section.total}`)
+        .join(", ")
+    ),
+    "",
+  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, content);
+}
+
 function appendFinalOutputProvenanceFooter(
   finalOutputText: string,
   requiredFragments: string[],
@@ -12848,6 +12934,29 @@ export async function runReconstruct(
         "seed authoring (full captured content retained in source-observations).",
     });
   }
+  // Sibling for spreadsheets (P6): the inventory projection is unconditional and
+  // pure, so recompute the bounded observations deterministically from the projected
+  // observations — no per-call-site sink, nothing to miss on any path or on resume.
+  const workbookInventoryProjectionTruncations =
+    recomputeWorkbookInventoryProjectionTruncations(
+      promptSourceObservations.observations,
+    );
+  for (const truncation of workbookInventoryProjectionTruncations) {
+    appendRuntimeStatusEventSync({
+      pipeline: "reconstruct",
+      sessionRoot,
+      sourceLabel: "workbook-inventory-projection-caps",
+      stageId: "seed_authoring",
+      message:
+        `spreadsheet ${truncation.source_ref} (${truncation.observation_id}) inventory ` +
+        `exceeded the seed-stage projection caps (` +
+        truncation.sections
+          .map((section) => `${section.section} ${section.kept}/${section.total}`)
+          .join(", ") +
+        "); only a bounded structural sample was projected into seed authoring " +
+        "(full inventory retained in source-observations).",
+    });
+  }
   let finalOutputText = appendFinalOutputProvenanceFooter(
     finalOutputWithArtifactTruth,
     requiredFinalOutputFragments,
@@ -12859,6 +12968,10 @@ export async function runReconstruct(
   finalOutputText = appendFinalOutputDocumentProjectionTruncationSection(
     finalOutputText,
     documentProjectionTruncations,
+  );
+  finalOutputText = appendFinalOutputWorkbookInventoryProjectionTruncationSection(
+    finalOutputText,
+    workbookInventoryProjectionTruncations,
   );
   const finalOutputViolations = validateFinalOutputProvenance({
     finalOutputText,
