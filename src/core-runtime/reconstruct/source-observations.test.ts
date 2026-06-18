@@ -283,6 +283,50 @@ describe("validateSourceObservationBoundary — P6 spreadsheet honesty gate", ()
     );
   });
 
+  it("rejects a present-but-blank unsupported_reason (Codex P2)", () => {
+    // A blank reason would skip the supported hash check yet not demote downstream,
+    // admitting a no-evidence workbook. The gate must flag the incoherent blank.
+    const inventory = makeInventory({ unsupported_reason: "" });
+    const result = validateSourceObservationBoundary(spreadsheetObservation(inventory));
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain("unsupported_reason must not be blank");
+  });
+
+  it("rejects an array workbook_inventory payload (Codex P2)", () => {
+    const result = validateSourceObservationBoundary({
+      observation_id: "obs_spreadsheet_1",
+      target_material_kind: "spreadsheet",
+      adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
+      source_ref: "/tmp/workbook.xlsx",
+      location: "/tmp/workbook.xlsx",
+      summary: "spreadsheet workbook observed — structure_inspected_only",
+      structural_data: { content_sha256: VALID_SHA, workbook_inventory: [] },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "spreadsheet observation must carry a workbook_inventory in structural_data",
+    );
+  });
+
+  it("rejects a top-level content_sha256 that disagrees with the inventory hash (Codex P2)", () => {
+    const inventory = makeInventory({ content_sha256: "a".repeat(64) });
+    const result = validateSourceObservationBoundary({
+      observation_id: "obs_spreadsheet_1",
+      target_material_kind: "spreadsheet",
+      adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
+      source_ref: inventory.source_ref,
+      location: inventory.source_ref,
+      summary: buildSpreadsheetObservationSummary("workbook.xlsx", inventory),
+      // Corrupted envelope: top-level hash names different bytes than the nested
+      // inventory hash (which is what gets projected into the prompt).
+      structural_data: { content_sha256: "b".repeat(64), workbook_inventory: inventory },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "content_sha256 disagrees with workbook_inventory hash",
+    );
+  });
+
   it("does not apply spreadsheet honesty checks to the generic minimal observer", () => {
     // The generic minimal-spreadsheet observer (no real extraction) must be
     // unaffected: it carries no workbook_inventory and a UTF-8 text hash, neither

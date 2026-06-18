@@ -78,13 +78,27 @@ function validateSpreadsheetObservationHonesty(
   const inventory = observation.structural_data.workbook_inventory as
     | WorkbookStructuralInventory
     | undefined;
-  if (!inventory || typeof inventory !== "object") {
+  // An array is `typeof "object"` too; reject it like the prompt-projection recompute
+  // does — this validator is also the boundary for persisted/replayed observations,
+  // so a malformed `workbook_inventory: []` must not pass as a valid inventory.
+  if (!inventory || typeof inventory !== "object" || Array.isArray(inventory)) {
     violations.push(
       "spreadsheet observation must carry a workbook_inventory in structural_data",
     );
     return;
   }
-  const supported = inventory.unsupported_reason == null;
+
+  // `unsupported_reason` is three-valued: null (supported), a non-empty string
+  // (genuinely unsupported), or a present-but-BLANK string (incoherent). A blank
+  // reason would skip the supported hash check yet not demote downstream
+  // (spreadsheetUnsupportedReason ignores blanks), admitting a no-evidence workbook —
+  // reject it explicitly so the honest disclosure is never empty.
+  const reason = inventory.unsupported_reason;
+  if (typeof reason === "string" && reason.trim() === "") {
+    violations.push("unsupported_reason must not be blank");
+    return;
+  }
+  const supported = reason == null;
 
   if (supported) {
     // B (provenance anchor): a SUPPORTED workbook (bytes actually read) must carry a
@@ -97,6 +111,11 @@ function validateSpreadsheetObservationHonesty(
     const sha = observation.structural_data.content_sha256;
     if (typeof sha !== "string" || !CONTENT_SHA256_PATTERN.test(sha)) {
       violations.push("content_sha256_missing");
+    } else if (sha !== inventory.content_sha256) {
+      // The top-level hash anchors source-scout provenance; the nested inventory hash
+      // is projected into prompts. A corrupted/replayed envelope where they disagree
+      // would let the two name different raw bytes — assert they match.
+      violations.push("content_sha256 disagrees with workbook_inventory hash");
     }
   } else if (inventoryHasInspectedStructure(inventory)) {
     // C (unsupported<->empty coherence): an unsupported inventory must not claim any
