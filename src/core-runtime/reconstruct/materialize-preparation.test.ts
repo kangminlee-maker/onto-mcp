@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { zipSync, strToU8 } from "fflate";
 import type {
   ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationsArtifact,
@@ -16,6 +17,7 @@ import {
   DOCUMENT_CAPTURE_CEILING_CHARS,
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   materializeReconstructPreparationArtifacts,
+  spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
@@ -333,11 +335,58 @@ describe("materializeReconstructPreparationArtifacts", () => {
     );
   });
 
-  it("skips contract-active profiles whose runtime adapter is planned", async () => {
+  it("skips contract-active profiles whose runtime adapter is planned (database)", async () => {
+    // database-source-profile is still `planned`, so it remains the example of a
+    // contract-active profile that runtime declines to observe. (spreadsheet was
+    // flipped to partially_wired — see the spreadsheet activation test below.)
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "reconstruct", "session-planned");
+    const target = path.join(root, "warehouse.sqlite");
+    await fs.writeFile(target, "SQLite format 3 ", "utf8");
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+
+    const materialProfile =
+      await readYaml<ReconstructTargetMaterialProfileArtifact>(
+        refs.target_material_profile,
+      );
+    const inventory =
+      await readYaml<ReconstructSourceInventoryArtifact>(refs.source_inventory);
+    const observations =
+      await readYaml<ReconstructSourceObservationsArtifact>(
+        refs.source_observations,
+      );
+
+    expect(materialProfile.target_material_kind).toBe("database");
+    expect(materialProfile.support_status).toBe("unsupported");
+    expect(materialProfile.selected_source_profiles[0]).toEqual(
+      expect.objectContaining({
+        profile_id: "database-source-profile",
+        runtime_implementation_status: "planned",
+      }),
+    );
+    expect(inventory.inventory_units[0]).toEqual(
+      expect.objectContaining({
+        scan_status: "skipped",
+        skip_reason: expect.stringContaining("runtime_implementation_status=planned"),
+      }),
+    );
+    expect(observations.observations).toEqual([]);
+  });
+
+  it("observes a spreadsheet through the shared structure observer once partially_wired (C-recon)", async () => {
+    // The gate flip (spreadsheet-source-profile → partially_wired) means a real
+    // workbook is no longer skipped: it flows through the full prep pipeline and
+    // emits a deterministic workbook_inventory in source-observations.yaml.
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-spreadsheet");
     const target = path.join(root, "schedule.csv");
-    await fs.writeFile(target, "account,amount\ncash,10\n", "utf8");
+    await fs.writeFile(target, "account,amount\ncash,10\nbank,20\n", "utf8");
 
     const refs = await materializeReconstructPreparationArtifacts({
       sessionRoot,
@@ -358,20 +407,127 @@ describe("materializeReconstructPreparationArtifacts", () => {
       );
 
     expect(materialProfile.target_material_kind).toBe("spreadsheet");
-    expect(materialProfile.support_status).toBe("unsupported");
+    expect(materialProfile.support_status).toBe("partial");
     expect(materialProfile.selected_source_profiles[0]).toEqual(
       expect.objectContaining({
         profile_id: "spreadsheet-source-profile",
-        runtime_implementation_status: "planned",
+        runtime_implementation_status: "partially_wired",
       }),
     );
     expect(inventory.inventory_units[0]).toEqual(
-      expect.objectContaining({
-        scan_status: "skipped",
-        skip_reason: expect.stringContaining("runtime_implementation_status=planned"),
-      }),
+      expect.objectContaining({ scan_status: "planned" }),
     );
+    expect(observations.observations).toHaveLength(1);
+    const observation = observations.observations[0]!;
+    expect(observation.adapter_id).toBe(SPREADSHEET_OBSERVER_ADAPTER_ID);
+    expect(observation.summary).toContain("structure_inspected_only");
+    const sd = observation.structural_data as Record<string, any>;
+    expect(sd.workbook_inventory).toBeDefined();
+    expect(sd.workbook_inventory.workbook_kind).toBe("csv");
+    expect(sd.workbook_inventory.inspection_method).toBe("structure_inspected_only");
+    // Raw-byte hash surfaced top-level for source-scout-pack admission (§11 HASH-1).
+    expect(sd.content_sha256).toBe(sd.workbook_inventory.content_sha256);
+  });
+
+  it("observes an xlsx workbook through the full prep pipeline (C-recon, binary path)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-xlsx");
+    const target = path.join(root, "book.xlsx");
+    const relsNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+    const wbR =
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    const worksheetRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+    const bytes = zipSync({
+      "xl/workbook.xml": strToU8(
+        `<?xml version="1.0"?><workbook ${wbR}><sheets><sheet name="S1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+      ),
+      "xl/_rels/workbook.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${relsNs}">` +
+          `<Relationship Id="rId1" Type="${worksheetRelType}" Target="worksheets/sheet1.xml"/></Relationships>`,
+      ),
+      "xl/worksheets/sheet1.xml": strToU8(
+        `<?xml version="1.0"?><worksheet><sheetData><row r="1">` +
+          `<c r="A1"><f>1+1</f><v>2</v></c></row></sheetData></worksheet>`,
+      ),
+    });
+    await fs.writeFile(target, Buffer.from(bytes));
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+
+    const observations =
+      await readYaml<ReconstructSourceObservationsArtifact>(refs.source_observations);
+    expect(observations.observations).toHaveLength(1);
+    const observation = observations.observations[0]!;
+    expect(observation.adapter_id).toBe(SPREADSHEET_OBSERVER_ADAPTER_ID);
+    const sd = observation.structural_data as Record<string, any>;
+    expect(sd.workbook_inventory.workbook_kind).toBe("xlsx");
+    expect(sd.workbook_inventory.inspection_method).toBe("structure_inspected_only");
+    expect(sd.workbook_inventory.formula_cells).toHaveLength(1);
+    expect(sd.workbook_inventory.formula_cells[0].formula).toContain("1+1");
+    expect(sd.content_sha256).toBe(sd.workbook_inventory.content_sha256);
+  });
+
+  it("demotes an unsupported workbook format (.xls) to a skip — keeps the evidence gate honest (Codex P2)", async () => {
+    // After the gate flip an .xls/.xlsb/.ods ref is runnable, but the observer cannot
+    // extract it (unsupported_reason). It must NOT pass the evidence gate as an empty
+    // observation — it is demoted to a skip so a sole-target run fails loud.
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-xls");
+    const target = path.join(root, "legacy.xls");
+    await fs.writeFile(target, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]));
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+
+    const observations =
+      await readYaml<ReconstructSourceObservationsArtifact>(refs.source_observations);
+    // No structural evidence → demoted to skip → zero observations (sole target halts).
     expect(observations.observations).toEqual([]);
+    expect(observations.skipped_refs).toEqual([
+      expect.objectContaining({
+        target_material_kind: "spreadsheet",
+        reason: expect.stringContaining("extraction unsupported"),
+      }),
+    ]);
+  });
+
+  it("spreadsheetUnsupportedReason flags an unsupported workbook but not a supported one (shared frontier guard)", async () => {
+    // The frontier / maturation-closure re-entry paths in run.ts reuse this guard to
+    // reject an accepted-but-unobservable workbook ref, mirroring the materialize-loop
+    // demotion above so the evidence gate is honest on EVERY admission path.
+    const root = await makeTmpProject();
+    const xls = path.join(root, "legacy.xls");
+    const csv = path.join(root, "ok.csv");
+    await fs.writeFile(xls, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]));
+    await fs.writeFile(csv, "a,b\n1,2\n", "utf8");
+
+    const xlsObservation = await buildReconstructSourceObservation({
+      ref: xls,
+      exists: true,
+      kind: "spreadsheet",
+      confidence: 0.92,
+      confidence_basis: "test",
+    });
+    const csvObservation = await buildReconstructSourceObservation({
+      ref: csv,
+      exists: true,
+      kind: "spreadsheet",
+      confidence: 0.92,
+      confidence_basis: "test",
+    });
+
+    expect(spreadsheetUnsupportedReason(xlsObservation!)).not.toBeNull();
+    expect(spreadsheetUnsupportedReason(csvObservation!)).toBeNull();
   });
 
   it("keeps unknown targets skipped instead of guessing an adapter", async () => {
@@ -443,17 +599,13 @@ describe("materializeReconstructPreparationArtifacts", () => {
       "code",
       "spreadsheet",
     ]);
-    expect(observations.observations.map((observation) =>
-      observation.target_material_kind
-    )).toEqual(["code"]);
-    expect(observations.skipped_refs).toEqual([
-      expect.objectContaining({
-        ref: sheet,
-        target_material_kind: "spreadsheet",
-        reason: expect.stringContaining("runtime_implementation_status=planned"),
-      }),
-    ]);
-    expect(initialFrontier.source_refs).toHaveLength(1);
+    // Both members now observe: code via the minimal observer, the spreadsheet via
+    // the shared structure observer (gate flipped to partially_wired).
+    expect(
+      observations.observations.map((observation) => observation.target_material_kind).sort(),
+    ).toEqual(["code", "spreadsheet"]);
+    expect(observations.skipped_refs).toEqual([]);
+    expect(initialFrontier.source_refs).toHaveLength(2);
 
     const validation = await writeTargetMaterialProfileValidationArtifact({
       targetMaterialProfilePath: refs.target_material_profile,

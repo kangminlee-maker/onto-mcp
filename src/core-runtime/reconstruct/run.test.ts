@@ -4624,7 +4624,12 @@ describe("runReconstruct", () => {
 
   it("observes accepted source frontier refs before downstream semantic authoring", async () => {
     const projectRoot = await tempProjectRoot();
-    const frontierSourcePath = path.join(projectRoot, "schedule.csv");
+    // The frontier source must be IN the source inventory yet NOT observed in
+    // round 0 — a still-`planned` database target fits (skipped up front, observed
+    // only once accepted as a frontier ref). The spreadsheet no longer fits this
+    // role: after the gate flip it is observed in the initial inventory.
+    const frontierSourcePath = path.join(projectRoot, "warehouse.sqlite");
+    await fs.writeFile(frontierSourcePath, "SQLite format 3 ", "utf8");
     const sessionRoot = path.join(
       projectRoot,
       ".onto",
@@ -4656,7 +4661,7 @@ describe("runReconstruct", () => {
                 {
                   observation_id: frontierObservation.observation_id,
                   selection_rationale:
-                    "The accepted frontier spreadsheet should reach downstream authoring.",
+                    "The accepted frontier database should reach downstream authoring.",
                 },
               ],
               open_questions: [],
@@ -4673,7 +4678,7 @@ describe("runReconstruct", () => {
                 {
                   source_ref: frontierSourcePath,
                   rationale:
-                    "The spreadsheet captures usage-review schedule data needed for downstream authoring.",
+                    "The database captures usage-review schedule data needed for downstream authoring.",
                   priority: "high",
                 },
                 {
@@ -4752,7 +4757,7 @@ describe("runReconstruct", () => {
       expect.arrayContaining([
         expect.objectContaining({
           source_ref: frontierSourcePath,
-          target_material_kind: "spreadsheet",
+          target_material_kind: "database",
         }),
       ]),
     );
@@ -4764,7 +4769,7 @@ describe("runReconstruct", () => {
     expect(sourceObservationDelta.delta_rows).toEqual([
         expect.objectContaining({
           source_ref: frontierSourcePath,
-          target_material_kind: "spreadsheet",
+          target_material_kind: "database",
           lineage_status: "added",
         }),
       ]);
@@ -4783,7 +4788,7 @@ describe("runReconstruct", () => {
       expect.arrayContaining([
         expect.objectContaining({
           source_ref: frontierSourcePath,
-          target_material_kind: "spreadsheet",
+          target_material_kind: "database",
         }),
       ]),
     );
@@ -4822,7 +4827,12 @@ describe("runReconstruct", () => {
   it("observes accepted maturation closure source requests before downstream maturation artifacts", async () => {
     const projectRoot = await tempProjectRoot();
     const docPath = path.join(projectRoot, "maturation-note.md");
-    const frontierSourcePath = path.join(projectRoot, "schedule.csv");
+    // The maturation closure source must be IN the inventory yet NOT observed in
+    // round 0 — a still-`planned` database target (skipped up front, observed only
+    // when requested by maturation closure). The spreadsheet no longer fits this
+    // role after the gate flip (it is observed in the initial inventory).
+    const frontierSourcePath = path.join(projectRoot, "warehouse.sqlite");
+    await fs.writeFile(frontierSourcePath, "SQLite format 3 ", "utf8");
     await fs.writeFile(
       docPath,
       "# Maturation Note\n\nAdditional source evidence for maturation closure.\n",
@@ -4862,9 +4872,9 @@ describe("runReconstruct", () => {
               cross_material_ref_refs: [],
               requested_source_ref: frontierSourcePath,
               requested_location: frontierSourcePath,
-              target_material_kind: "spreadsheet",
+              target_material_kind: "database",
               expected_evidence_kind: "maturation source evidence",
-              reason: "Need the maturation spreadsheet to close the material question.",
+              reason: "Need the maturation database to close the material question.",
             }],
             authority_requests: [],
           }),
@@ -5117,7 +5127,7 @@ describe("runReconstruct", () => {
         }),
         expect.objectContaining({
           source_ref: frontierSourcePath,
-          target_material_kind: "spreadsheet",
+          target_material_kind: "database",
         }),
       ]),
     );
@@ -5669,13 +5679,17 @@ describe("runReconstruct", () => {
       projectRoot,
       ".onto",
       "reconstruct",
-      "spreadsheet-run",
+      "planned-run",
     );
+    // database-source-profile is still `planned`; a sole database target must fail
+    // loud. (spreadsheet was flipped to partially_wired and now observes.)
+    const dbTarget = path.join(projectRoot, "warehouse.sqlite");
+    await fs.writeFile(dbTarget, "SQLite format 3 ", "utf8");
 
     await expect(runReconstruct({
       projectRoot,
-      targetRefs: [path.join(projectRoot, "schedule.csv")],
-      intent: "Create a bounded reconstruct Seed from the schedule target.",
+      targetRefs: [dbTarget],
+      intent: "Create a bounded reconstruct Seed from the database target.",
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
@@ -5690,6 +5704,37 @@ describe("runReconstruct", () => {
     })).rejects.toThrow(/runtime_implementation_status=planned/);
   });
 
+  it("fails loud for a sole unsupported workbook format (.xls) — empty inventory is not evidence (Codex F1)", async () => {
+    // End-to-end proof that the gate flip did NOT let a legacy workbook reach LLM
+    // authoring: a sole .xls target is runnable (spreadsheet partially_wired) and is
+    // observed, but its inventory carries only `unsupported_reason`, so it is demoted
+    // to a skip → zero observations → the run fails loud instead of authoring from
+    // empty evidence.
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "xls-run");
+    const xlsTarget = path.join(projectRoot, "legacy.xls");
+    await fs.writeFile(xlsTarget, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]));
+
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [xlsTarget],
+      intent: "Create a bounded reconstruct Seed from a legacy workbook target.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
+    })).rejects.toThrow(
+      /at least one runtime source observation|extraction unsupported/,
+    );
+  });
+
   it("selects every observation and leaves mixed material expansion explicit", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
@@ -5698,12 +5743,16 @@ describe("runReconstruct", () => {
       "reconstruct",
       "mixed-run",
     );
+    // Pair the code member with a database target (still `planned`) so the mixed
+    // composite keeps one explicitly skipped member after the spreadsheet flip.
+    const dbTarget = path.join(projectRoot, "warehouse.sqlite");
+    await fs.writeFile(dbTarget, "SQLite format 3 ", "utf8");
 
     await expect(runReconstruct({
       projectRoot,
       targetRefs: [
         path.join(projectRoot, "src", "feature.ts"),
-        path.join(projectRoot, "schedule.csv"),
+        dbTarget,
       ],
       intent: "Create a bounded reconstruct Seed from a mixed target.",
       sessionRoot,
@@ -5763,12 +5812,101 @@ describe("runReconstruct", () => {
     expect(sourceScoutPackValidation.prompt_visible_signal_count).toBe(0);
     expect(sourceObservations.skipped_refs).toEqual([
       expect.objectContaining({
-        target_material_kind: "spreadsheet",
+        target_material_kind: "database",
         reason: expect.stringContaining("runtime_implementation_status=planned"),
       }),
     ]);
     await expect(fs.access(path.join(sessionRoot, "final-output.md")))
       .resolves.toBeUndefined();
+  });
+});
+
+describe("observationPromptPayload — workbook_inventory bounded prompt projection", () => {
+  const spreadsheetArtifact = (formulaCellCount: number) => ({
+    schema_version: "1" as const,
+    session_id: "session-1",
+    created_at: "2026-06-16T00:00:00.000Z",
+    observations: [
+      {
+        observation_id: "obs-sheet",
+        target_material_kind: "spreadsheet",
+        adapter_id: "spreadsheet-structure-observer",
+        source_ref: "/data/book.xlsx",
+        location: "file",
+        summary: "Fixture workbook.",
+        structural_data: {
+          basename: "book.xlsx",
+          extension: ".xlsx",
+          path_kind: "file",
+          size_bytes: 1234,
+          content_sha256: "deadbeef",
+          workbook_inventory: {
+            adapter_id: "spreadsheet-structure-observer",
+            adapter_version: 1,
+            source_ref: "/data/book.xlsx",
+            content_sha256: "deadbeef",
+            workbook_kind: "xlsx",
+            inspection_method: "structure_inspected_only",
+            sheets: [],
+            named_ranges: [],
+            tables: [],
+            pivot_tables: [],
+            formula_cells: Array.from({ length: formulaCellCount }, (_, i) => ({
+              sheet: "A",
+              cell: `A${i}`,
+              formula: "=1",
+              cross_sheet_refs: [],
+            })),
+            merged_ranges: [],
+            data_validations: [],
+            external_links: [],
+            error_cells: [],
+            macro_present: false,
+            risk_signals: [],
+            per_sheet_data: [],
+            distinct_value_vocab: [],
+            cross_sheet_key_overlap: [],
+            data_layer_caps: {
+              max_rows_scanned_per_sheet: 100000,
+              max_distinct_tracked_per_column: 256,
+              max_columns_profiled: 512,
+              max_sheet_pairs: 64,
+            },
+            capture_truncated: false,
+            unsupported_reason: null,
+          },
+        },
+      },
+    ],
+    skipped_refs: [],
+    validation_results: [],
+  });
+
+  it("caps an oversized workbook_inventory and attaches an honest truncation manifest", () => {
+    const payload = observationPromptPayload(spreadsheetArtifact(100) as any) as Array<{
+      structural_data: Record<string, any>;
+    }>;
+    const sd = payload[0]!.structural_data;
+    // Default per-sheet cap is 30 → 100 cells on one sheet trimmed to 30.
+    expect(sd.workbook_inventory.formula_cells).toHaveLength(30);
+    expect(sd.workbook_inventory_projection_truncated).toBe(true);
+    expect(sd.workbook_inventory_projection_sections).toContainEqual({
+      section: "formula_cells",
+      kept: 30,
+      total: 100,
+    });
+    // Provenance envelope is preserved in the prompt view.
+    expect(sd.content_sha256).toBe("deadbeef");
+  });
+
+  it("leaves a small workbook_inventory uncapped with no manifest", () => {
+    const payload = observationPromptPayload(spreadsheetArtifact(3) as any) as Array<{
+      structural_data: Record<string, any>;
+    }>;
+    const sd = payload[0]!.structural_data;
+    expect(sd.workbook_inventory.formula_cells).toHaveLength(3);
+    expect(sd.workbook_inventory_projection_truncated).toBeUndefined();
+    expect(sd.workbook_inventory_projection_sections).toBeUndefined();
   });
 });
 

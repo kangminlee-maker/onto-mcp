@@ -11,8 +11,10 @@ import {
   observeSpreadsheetSource,
   parseCsv,
   projectInventoryForAdmission,
+  projectInventoryForPrompt,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
   type DataLayerCaps,
+  type WorkbookStructuralInventory,
 } from "./spreadsheet-structure-observer.js";
 
 const shaBytes = (b: Uint8Array) =>
@@ -775,5 +777,156 @@ describe("Codex review fixes — round 4 (P4 hardening)", () => {
     );
     const r = buildXlsxInventory({ sourceRef: "/abs/apos.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
     expect(r.formula_cells[0]!.cross_sheet_refs).toContain("Bob's Sheet"); // unescaped, not "Bob"
+  });
+});
+
+describe("projectInventoryForPrompt — bounded prompt projection (size axis)", () => {
+  function emptyInventory(): WorkbookStructuralInventory {
+    return {
+      adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
+      adapter_version: 1,
+      source_ref: "/abs/book.xlsx",
+      content_sha256: "deadbeef",
+      workbook_kind: "xlsx",
+      inspection_method: "structure_inspected_only",
+      sheets: [],
+      named_ranges: [],
+      tables: [],
+      pivot_tables: [],
+      formula_cells: [],
+      merged_ranges: [],
+      data_validations: [],
+      external_links: [],
+      error_cells: [],
+      macro_present: false,
+      risk_signals: [],
+      per_sheet_data: [],
+      distinct_value_vocab: [],
+      cross_sheet_key_overlap: [],
+      data_layer_caps: DEFAULT_DATA_LAYER_CAPS,
+      capture_truncated: false,
+      unsupported_reason: null,
+    };
+  }
+
+  it("is a no-op on an empty inventory (not truncated, untouched)", () => {
+    const inv = emptyInventory();
+    const r = projectInventoryForPrompt(inv);
+    expect(r.truncated).toBe(false);
+    expect(r.sections).toEqual([]);
+    expect(r.inventory).toEqual(inv);
+  });
+
+  it("leaves a small under-cap inventory fully intact", () => {
+    const inv = emptyInventory();
+    inv.formula_cells = [
+      { sheet: "A", cell: "A1", formula: "=1+1", cross_sheet_refs: [] },
+      { sheet: "B", cell: "B2", formula: "=A!A1", cross_sheet_refs: ["A"] },
+    ];
+    inv.pivot_tables = [
+      { name: "P", sheet: "A", location: "A1", source_sheet: "A", source_ref: null, row_fields: ["x"], column_fields: [], page_fields: [], data_fields: ["sum"] },
+    ];
+    const r = projectInventoryForPrompt(inv);
+    expect(r.truncated).toBe(false);
+    expect(r.sections).toEqual([]);
+    expect(r.inventory.formula_cells).toEqual(inv.formula_cells);
+    expect(r.inventory.pivot_tables).toEqual(inv.pivot_tables);
+  });
+
+  it("caps formula_cells PER SHEET so the cross-sheet picture survives, not just the first sheet", () => {
+    const inv = emptyInventory();
+    // 100 cells on sheet A then 100 on sheet B. A global head-N would keep only A;
+    // per-sheet caps must keep a sample of BOTH.
+    for (let i = 0; i < 100; i += 1) {
+      inv.formula_cells.push({ sheet: "A", cell: `A${i}`, formula: "=1", cross_sheet_refs: [] });
+    }
+    for (let i = 0; i < 100; i += 1) {
+      inv.formula_cells.push({ sheet: "B", cell: `B${i}`, formula: "=2", cross_sheet_refs: [] });
+    }
+    const r = projectInventoryForPrompt(inv, {
+      max_formula_cells_per_sheet: 5,
+      max_formula_cells_total: 600,
+      max_sheets: 50,
+      max_columns_per_sheet: 64,
+      max_distinct_value_vocab: 200,
+      max_pivot_tables: 50,
+      max_cross_sheet_overlaps: 50,
+      max_pairwise_per_overlap: 16,
+      max_named_ranges: 50,
+      max_tables: 50,
+      max_data_validations: 50,
+      max_external_links: 50,
+      max_error_cells: 50,
+      max_merged_ranges: 50,
+      max_risk_signals: 50,
+    });
+    const sheetsKept = new Set(r.inventory.formula_cells.map((c) => c.sheet));
+    expect(sheetsKept).toEqual(new Set(["A", "B"]));
+    expect(r.inventory.formula_cells.filter((c) => c.sheet === "A")).toHaveLength(5);
+    expect(r.inventory.formula_cells.filter((c) => c.sheet === "B")).toHaveLength(5);
+    expect(r.truncated).toBe(true);
+    expect(r.sections).toContainEqual({ section: "formula_cells", kept: 10, total: 200 });
+  });
+
+  it("records an honest per-section manifest and preserves the persisted envelope", () => {
+    const inv = emptyInventory();
+    for (let i = 0; i < 300; i += 1) {
+      inv.distinct_value_vocab.push({
+        sheet: "A",
+        column: `c${i}`,
+        distinct_count: 1,
+        distinct_count_is_estimate: false,
+      });
+    }
+    inv.per_sheet_data = [
+      {
+        sheet: "A",
+        layout_kind: "tabular",
+        header_rows: [1],
+        columns: Array.from({ length: 80 }, (_, i) => ({
+          name: `c${i}`,
+          index: i,
+          inferred_type: "string" as const,
+          non_empty_ratio: 1,
+        })),
+        header_confidence: "high",
+      },
+    ];
+    const r = projectInventoryForPrompt(inv);
+    expect(r.inventory.distinct_value_vocab).toHaveLength(200);
+    expect(r.inventory.per_sheet_data[0]!.columns).toHaveLength(64);
+    expect(r.sections).toContainEqual({ section: "distinct_value_vocab", kept: 200, total: 300 });
+    expect(r.sections).toContainEqual({ section: "per_sheet_data.columns", kept: 64, total: 80 });
+    // Envelope / scalar provenance fields are never touched by the size projection.
+    expect(r.inventory.content_sha256).toBe(inv.content_sha256);
+    expect(r.inventory.workbook_kind).toBe(inv.workbook_kind);
+    expect(r.inventory.inspection_method).toBe("structure_inspected_only");
+    // Input is not mutated (pure).
+    expect(inv.distinct_value_vocab).toHaveLength(300);
+  });
+
+  it("bounds a high-sheet-count workbook with global sheet + formula ceilings (Codex P2)", () => {
+    const inv = emptyInventory();
+    // 200 sheets × 10 formulas each: the per-sheet cap (30) is never hit, so without
+    // a global ceiling all 2000 formulas + 200 sheets would reach the prompt.
+    for (let s = 0; s < 200; s += 1) {
+      const sheet = `S${s}`;
+      for (let i = 0; i < 10; i += 1) {
+        inv.formula_cells.push({ sheet, cell: `A${i}`, formula: "=1", cross_sheet_refs: [] });
+      }
+      inv.per_sheet_data.push({
+        sheet,
+        layout_kind: "tabular",
+        header_rows: [1],
+        columns: [{ name: "c0", index: 0, inferred_type: "string" as const, non_empty_ratio: 1 }],
+        header_confidence: "high",
+      });
+    }
+    const r = projectInventoryForPrompt(inv);
+    expect(r.inventory.formula_cells.length).toBeLessThanOrEqual(600);
+    expect(r.inventory.per_sheet_data).toHaveLength(50);
+    expect(r.truncated).toBe(true);
+    expect(r.sections).toContainEqual({ section: "per_sheet_data", kept: 50, total: 200 });
+    expect(r.sections).toContainEqual({ section: "formula_cells", kept: 600, total: 2000 });
   });
 });

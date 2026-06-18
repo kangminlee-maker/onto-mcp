@@ -96,12 +96,17 @@ import {
   type TargetMaterialRefDetection,
   type TargetMaterialKind,
 } from "../target-material-kind.js";
+import {
+  projectInventoryForPrompt,
+  type WorkbookStructuralInventory,
+} from "../spreadsheet-structure-observer.js";
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
 import {
   buildReconstructSourceObservation,
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
   isTextReadableDocumentExtension,
   materializeReconstructPreparationArtifacts,
+  spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import {
@@ -5475,6 +5480,26 @@ function compactStructuralDataForPrompt(
   expandDocument: boolean,
   documentExcerptCharBudget: number | undefined,
 ): Record<string, unknown> {
+  const compacted: Record<string, unknown> = { ...structuralData };
+
+  // Spreadsheet workbook_inventory: bounded prompt projection (SIZE axis), applied
+  // UNCONDITIONALLY — a workbook has no content_excerpt, so the budget guard below
+  // does not cover it, and the `!limit` early return must not let the full inventory
+  // (tens of thousands of formula cells on a real file) reach the prompt unbounded.
+  // The persisted source-observations.yaml keeps the full inventory; only this prompt
+  // payload is capped (capture-whole / project-bounded, mirroring content_excerpt).
+  const inventory = compacted.workbook_inventory;
+  if (inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)) {
+    const projection = projectInventoryForPrompt(
+      inventory as WorkbookStructuralInventory,
+    );
+    compacted.workbook_inventory = projection.inventory;
+    if (projection.truncated) {
+      compacted.workbook_inventory_projection_truncated = true;
+      compacted.workbook_inventory_projection_sections = projection.sections;
+    }
+  }
+
   const extension =
     typeof structuralData.extension === "string" ? structuralData.extension : null;
   const limit = effectiveContentExcerptCharLimit(
@@ -5484,13 +5509,13 @@ function compactStructuralDataForPrompt(
     extension,
     documentExcerptCharBudget,
   );
-  if (!limit) return structuralData;
-  const compacted: Record<string, unknown> = { ...structuralData };
-  const excerpt = compacted.content_excerpt;
-  if (typeof excerpt === "string" && excerpt.length > limit) {
-    compacted.content_excerpt = excerpt.slice(0, limit);
-    compacted.prompt_content_excerpt_truncated = true;
-    compacted.prompt_content_excerpt_char_limit = limit;
+  if (limit) {
+    const excerpt = compacted.content_excerpt;
+    if (typeof excerpt === "string" && excerpt.length > limit) {
+      compacted.content_excerpt = excerpt.slice(0, limit);
+      compacted.prompt_content_excerpt_truncated = true;
+      compacted.prompt_content_excerpt_char_limit = limit;
+    }
   }
   return compacted;
 }
@@ -9405,7 +9430,11 @@ async function observeAcceptedFrontierRefs(args: {
         `source-observation-batch:${args.sourceFrontier.round_id}:source_frontier`,
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
     });
-    if (!observation) {
+    // A null observation (vanished ref) and an unsupported workbook format
+    // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence)
+    // are both un-observable by the current runtime; neither may be admitted as
+    // frontier evidence (mirrors the materialize-loop demotion).
+    if (!observation || spreadsheetUnsupportedReason(observation)) {
       throw new Error(
         `accepted source frontier ref cannot be observed by current runtime: ${frontier.source_ref}`,
       );
@@ -9499,7 +9528,9 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
         `source-observation-batch:${args.maturationClosureFrontier.round_id}:maturation_closure_frontier`,
       triggeringFrontierValidationRef: args.maturationClosureFrontierValidationPath,
     });
-    if (!observation) {
+    // Unsupported workbook formats are un-observable like a vanished ref — no
+    // evidence to admit (mirrors the materialize-loop demotion and F1).
+    if (!observation || spreadsheetUnsupportedReason(observation)) {
       throw new Error(
         `accepted maturation closure source request cannot be observed by current runtime: ${request.requested_source_ref}`,
       );

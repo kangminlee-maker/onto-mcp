@@ -39,8 +39,8 @@ describe("reconstruct source profiles", () => {
 
     expect(profile?.title).toBe("Source Profile: Spreadsheet");
     expect(profile?.profile_id).toBe("spreadsheet-source-profile");
-    expect(profile?.runtime_implementation_status).toBe("planned");
-    expect(profile?.support_summary).toContain("runtime_implementation_status=planned");
+    expect(profile?.runtime_implementation_status).toBe("partially_wired");
+    expect(profile?.support_summary).toContain("runtime_implementation_status=partially_wired");
   });
 
   it("resolves the document source profile as a partially wired observer", async () => {

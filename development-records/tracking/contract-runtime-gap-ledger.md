@@ -1,7 +1,7 @@
 # Contract ↔ Runtime Gap Ledger (청사진 vs 실물)
 
 > **목적**: onto의 *선언/계약(청사진)* 과 *실제 배선된 런타임(실물)* 사이의 gap을 **현 시점 기준으로 명확히 판단·문서화**하고, **gap이 줄어들 때마다 갱신**하는 living 원장. 설계가 "문서에 적힌 능력"을 "이미 구현된 것"으로 착각하는 함정(= S1 검증 §11에서 드러난 근본 원인)을 전역에서 방지한다.
-> **As of**: 2026-06-17 (브랜치 `feat/large-input-stage1-window-budget`).
+> **As of**: 2026-06-18 (브랜치 `feat/spreadsheet-followup`; C-recon = spreadsheet 게이트 활성화).
 > **갱신 규칙**: gap을 닫는 PR/커밋은 이 표의 해당 행을 **같은 커밋에서** 갱신한다(실물 칸·status·닫힘 조건). 새 계약/profile 추가 시 행을 추가한다. 이 문서는 *현재 상태 대시보드*이지 이력이 아니다 — 닫힌 gap은 행을 "✅ closed (커밋)"로 압축한다.
 > **권위**: 선언 status의 SSOT는 각 레지스트리/계약 헤더다(아래 "출처" 칼럼). 이 원장은 그 선언 + 실배선 spot-check의 **판정 projection**이며, 충돌 시 레지스트리/코드가 우선.
 
@@ -16,7 +16,7 @@
 |---|---|---|---|---|
 | code 관측 | profile `code.md` active, **partially_wired**. Scan Targets=선언/import/시그니처/scout 축 | generic textStats(텍스트) + **code/document-scoped 정규식 scout**(actor/action/state). **AST·import/call 그래프·선언 추출 없음** | profile이 기술하는 구조 추출의 대부분이 LLM 가이드일 뿐 결정론 미구현 | 결정론 declaration/graph 추출기 도입 시 |
 | document 관측 | active, **partially_wired** | text-readable(.md/.txt/.adoc)만 generic textStats; **binary(.pdf/.docx/.ppt) 추출기 없음**(쓰레기) | 바이너리 문서 L1(추출) 부재 | 문서 L1 어댑터 도입 시 |
-| **spreadsheet 관측** | active, **planned**. profile 보강됨(§spreadsheet.md) | **없음** — `isRunnableProfileRuntimeStatus` 게이트서 `unsupported`. xlsx=바이너리 쓰레기, csv=평탄 슬라이스 | L1(워크북 추출) 전무 = **S1 트랙의 본체** | S1 구현+`partially_wired` 승격 시 |
+| **spreadsheet 관측** | active, **partially_wired**(C-recon flip). profile §spreadsheet.md | ✅ **wired** — 공유 `observeSpreadsheetSource`가 reconstruct full 파이프라인(materialize seam)서 csv/xlsx → `workbook_inventory` 결정론 산출. seed 프롬프트는 `projectInventoryForPrompt`로 bounded 투영(무예산 경로 차단)+정직 매니페스트 | **✅ closed** (게이트 활성+추출기 실배선+프롬프트 예산) | ✅ closed (C-recon, `feat/spreadsheet-followup`) |
 | database 관측 | active, **planned** | 없음 | L1·관측 전무 | 미정(후속) |
 | mixed / unknown | active_public_kind, `partial_composite_only` / `unsupported_halt_or_clarify` | per-member 위임 / halt-or-clarify | 설계대로(갭 작음) | — |
 
@@ -31,6 +31,7 @@
 | 영역 | 청사진 | 실물 | gap | 닫힘 조건 |
 |---|---|---|---|---|
 | source-safety 채널 | source 내용은 admission 거쳐 프롬프트-가시(visibility-tier·allowed-proof-form·intended-consumption·redaction·replay + `source_safety_ledger` + `delta_observation_not_prompt_visible`) | reconstruct에 ledger/타입 존재, **`content_excerpt` 채널 기준으로 작동** | 신규 관측 필드(미래 S1 §2.4)는 이 채널을 **우회** → admission/provenance/replay/미신뢰-source 취급 건너뜀 | 신규 필드를 ledger 통과/단일 채널로 모을 때 (§11 CHAN-1) |
+| ⚠️ spreadsheet 인벤토리 리터럴 (C-recon으로 **활성화**) | CHAN-1=raw 셀 값 미방출, raw값은 source-safety 채널만 경유 | C-recon flip 후 `workbook_inventory`가 프롬프트-가시 — **raw값은 제거(CHAN-1 충족)되나 구조 리터럴(formula 본문·external-link 타깃·추론 header명)은 source-safety 민감 스캐너(`hasSensitiveSourceEvidence`=content_excerpt만 스캔) 우회**(Codex PR #92 F3) | 구조 리터럴이 민감 스캔/필드-단위 redaction 없이 프롬프트 도달. 잔여 위험은 owner-settled "헤더명=스키마"(S1 CHAN-1) 경계 안, 주 PII 벡터(raw값)는 이미 차단 | **필드-단위 redaction을 source-safety 경유로** 구현(CHAN-2 closure 슬라이스). over-drop/미redact 위험 탓 부분완화 부적합 → 전용 슬라이스 |
 
 ## 4. review — source 내용 admission / 검증
 
