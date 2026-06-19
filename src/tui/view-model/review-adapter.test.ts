@@ -271,6 +271,65 @@ describe("reviewStatusToTreeViewModel", () => {
     expect(laterIdle?.state).toBe("pending");
   });
 
+  it("points the current empty step at the halt locus when the run halted", () => {
+    // A halted run with no bound runtime unit on its current step (an
+    // issue-artifact / synthesize phase): the current step must surface the halt,
+    // not a phantom "running" that misdirects the operator.
+    const status = makeStatus({
+      status: "halted_partial",
+      runControl: runControl({ continuationAvailable: true }),
+      unitProgress: [],
+      progressInput: progressInput({
+        state: "halted",
+        secondsSinceArtifact: 10,
+        pollAfterSeconds: null,
+        completedSteps: ["manifest_validation"],
+      }),
+    });
+
+    const vm = reviewStatusToTreeViewModel(status, SESSION_ROOT);
+    expect(vm.status).toBe("halted");
+    // current_step is 2 (lens_dispatch) → that empty step shows halted.
+    const current = vm.phases.find((p) => p.id === "lens_dispatch")!;
+    expect(current.nodes).toHaveLength(0);
+    expect(current.state).toBe("halted");
+    // a step before the current step stays completed; a later one stays pending.
+    expect(vm.phases.find((p) => p.id === "manifest_validation")!.state).toBe("completed");
+    const later = vm.phases.find((p) => p.nodes.length === 0 && p.id !== "manifest_validation" && p.id !== "lens_dispatch");
+    expect(later?.state).toBe("pending");
+  });
+
+  it("drills a running unit to its live running-log, not the not-yet-written output", () => {
+    const status = makeStatus({
+      status: "running",
+      runControl: runControl({ cancellationAvailable: true }),
+      unitProgress: [
+        unit({
+          unitId: "lens:logic",
+          publicAlias: "lens:logic",
+          unitKind: "lens",
+          progressStepId: "lens_dispatch",
+          status: "running",
+          // planned final artifact not written yet; live log exists.
+          outputPath: "/tmp/sess/round1/logic.md",
+          runningLogRef: "/tmp/sess/round1/.logic.running.log",
+        }),
+      ],
+      progressInput: progressInput({
+        state: "running_recent_signal",
+        secondsSinceArtifact: 1,
+        pollAfterSeconds: 5,
+        completedSteps: [],
+      }),
+    });
+
+    const vm = reviewStatusToTreeViewModel(status, SESSION_ROOT);
+    const node = vm.phases.find((p) => p.id === "lens_dispatch")!.nodes[0]!;
+    expect(node.status).toBe("running");
+    // a non-completed unit drills to the live running-log
+    expect(node.outputPath).toBe("/tmp/sess/round1/.logic.running.log");
+  });
+
   it("maps a completed session with one material issue", () => {
     const classification: ReviewResultClassificationSummary = {
       highest_severity: "high",

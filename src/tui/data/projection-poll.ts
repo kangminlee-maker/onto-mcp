@@ -24,7 +24,11 @@ export async function loadTreeViewModel(
   const options = deps.ontoHome ? { ontoHome: deps.ontoHome } : {};
   if (ref.pipeline === "review") {
     const api = createOntoReviewCoreApi(options);
-    const status = await api.getReviewStatus(ref.sessionRoot);
+    // Request the full projection: the standard projection compacts
+    // unit_progress `outputPath`/`runningLogRef` with an ellipsis, and the TUI
+    // does local file I/O (drill-down tail) on those paths — they must be
+    // untruncated.
+    const status = await api.getReviewStatus(ref.sessionRoot, { projectionLevel: "full" });
     return reviewStatusToTreeViewModel(status, ref.sessionRoot);
   }
   const api = createOntoReconstructCoreApi(options);

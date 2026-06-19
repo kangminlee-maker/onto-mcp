@@ -12,22 +12,33 @@ import { discoverSessions, type SessionRef } from "./data/session-discovery.js";
 
 interface WatchArgs {
   session?: string;
+  /** Where to discover `.onto/{review,reconstruct}` sessions (defaults to cwd). */
   projectRoot: string;
+  /** Explicit onto-mcp install root for the read APIs; auto-resolved when unset. */
+  ontoHome?: string;
 }
 
 function parseArgs(argv: string[]): WatchArgs {
   let session: string | undefined;
   let projectRoot = process.cwd();
+  let ontoHome: string | undefined;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]!;
     if (arg === "--project-root") {
       const value = argv[++index];
       if (value) projectRoot = path.resolve(value);
+    } else if (arg === "--onto-home") {
+      const value = argv[++index];
+      if (value) ontoHome = path.resolve(value);
     } else if (!arg.startsWith("-") && session === undefined) {
       session = arg;
     }
   }
-  return { ...(session !== undefined ? { session } : {}), projectRoot };
+  return {
+    ...(session !== undefined ? { session } : {}),
+    projectRoot,
+    ...(ontoHome !== undefined ? { ontoHome } : {}),
+  };
 }
 
 /** Derives a SessionRef from an explicit session-root path, when it resolves to
@@ -91,7 +102,10 @@ export async function runWatch(argv: string[]): Promise<number> {
     createElement(WatchApp, {
       sessions,
       ...(initialSession ? { initialSession } : {}),
-      ontoHome: args.projectRoot,
+      // projectRoot is for session discovery only; the read APIs resolve the
+      // onto-mcp install root themselves (or from an explicit --onto-home), so
+      // running `onto watch` from a non-install project does not break.
+      ...(args.ontoHome ? { ontoHome: args.ontoHome } : {}),
     }),
   );
   await instance.waitUntilExit();

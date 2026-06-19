@@ -112,9 +112,33 @@ function unitToNode(unit: ReviewRuntimeUnitProgressProjection): TreeNode {
     signalAgeSec: unit.secondsSinceLatestSignal,
     attempts: unit.attemptCount,
     failureMessage: unit.failureMessage,
-    // Prefer the authored output; fall back to the running-log ref for drill-down.
-    outputPath: unit.outputPath ?? unit.runningLogRef ?? null,
+    outputPath: drillDownPath(unit),
   };
+}
+
+/**
+ * Drill-down target for a unit. A completed unit's authored output is the
+ * authoritative artifact. For an active/failed unit that planned output may not
+ * exist yet, so prefer the live running-log (the projection only sets
+ * `runningLogRef` when that file is present) and fall back to the planned output.
+ */
+function drillDownPath(unit: ReviewRuntimeUnitProgressProjection): string | null {
+  if (unit.status === "completed") {
+    return unit.outputPath ?? unit.runningLogRef ?? null;
+  }
+  return unit.runningLogRef ?? unit.outputPath ?? null;
+}
+
+/**
+ * State of the current (in-flight) progress step, given the workflow's own
+ * status: a halted or failed run is terminal, and its current step is the
+ * halt/failure locus — surface that rather than a misleading "running". A live
+ * run's current step is running.
+ */
+function currentStepState(workflowStatus: WorkflowStatus): NodeState {
+  if (workflowStatus === "failed") return "failed";
+  if (workflowStatus === "halted") return "halted";
+  return "running";
 }
 
 /**
@@ -122,9 +146,9 @@ function unitToNode(unit: ReviewRuntimeUnitProgressProjection): TreeNode {
  * node fails the phase; any in-flight node makes it running; a step listed in
  * `completed_steps` (or all nodes completed) completes it; a halted node halts
  * it. A step at the current step whose units exist but have not signalled yet
- * rolls up to running — matching {@link emptyStepState}'s current-step branch so
- * the same current step reports the same state whether or not it carries units.
- * Otherwise it is pending.
+ * takes the workflow's current-step state — matching {@link emptyStepState}'s
+ * current-step branch so the same current step reports the same state whether or
+ * not it carries units. Otherwise it is pending.
  */
 function derivePhaseState(
   nodes: TreeNode[],
@@ -132,6 +156,7 @@ function derivePhaseState(
   completedStepIds: Set<string>,
   stepNumber: number | null,
   currentStep: number | null,
+  workflowStatus: WorkflowStatus,
 ): NodeState {
   if (nodes.some((node) => node.status === "failed")) return "failed";
   if (nodes.some((node) => node.status === "running")) return "running";
@@ -144,7 +169,7 @@ function derivePhaseState(
     return "skipped";
   }
   if (stepNumber != null && currentStep != null && stepNumber === currentStep) {
-    return "running";
+    return currentStepState(workflowStatus);
   }
   return "pending";
 }
@@ -152,9 +177,10 @@ function derivePhaseState(
 /**
  * State for a progress step that has no bound units: completed when the workflow
  * itself completed, when the step is in `completed_steps`, or when it sits before
- * the current step; running at the current step; otherwise pending. This keeps
- * idle/completed steps visible so the HUD shows the whole pipeline (not only the
- * steps that happened to carry units).
+ * the current step; the workflow's current-step state at the current step (so a
+ * halted/failed run points at its halt/failure locus, not a phantom "running");
+ * otherwise pending. This keeps idle/completed steps visible so the HUD shows the
+ * whole pipeline (not only the steps that happened to carry units).
  */
 function emptyStepState(
   stepId: ReviewProgressStepId,
@@ -167,7 +193,7 @@ function emptyStepState(
   if (completedStepIds.has(stepId)) return "completed";
   if (currentStep != null) {
     if (stepNumber < currentStep) return "completed";
-    if (stepNumber === currentStep) return "running";
+    if (stepNumber === currentStep) return currentStepState(workflowStatus);
   }
   return "pending";
 }
@@ -194,7 +220,7 @@ function derivePhases(
   const phases: TreePhase[] = REVIEW_PROGRESS_STEPS.map((spec) => {
     const nodes = byStep.get(spec.id) ?? [];
     const state = nodes.length > 0
-      ? derivePhaseState(nodes, spec.id, completedStepIds, spec.step, currentStep)
+      ? derivePhaseState(nodes, spec.id, completedStepIds, spec.step, currentStep, workflowStatus)
       : emptyStepState(spec.id, spec.step, completedStepIds, currentStep, workflowStatus);
     return { id: spec.id, label: spec.label, state, nodes };
   });
@@ -204,7 +230,7 @@ function derivePhases(
     phases.push({
       id: UNCATEGORIZED_PHASE_ID,
       label: UNCATEGORIZED_PHASE_LABEL,
-      state: derivePhaseState(unassigned, null, completedStepIds, null, currentStep),
+      state: derivePhaseState(unassigned, null, completedStepIds, null, currentStep, workflowStatus),
       nodes: unassigned,
     });
   }
