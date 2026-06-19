@@ -264,6 +264,19 @@ function renderSpreadsheetStructuralView(
     projectInventoryForAdmission(inventory),
   );
 
+  // One rendered formula line: cell address + formula TEXT + any cross-sheet references —
+  // the obligation-backing detail for formula_integrity / cross_sheet_reference_integrity
+  // (a count alone is not auditable).
+  const renderFormulaCellLine = (
+    cell: WorkbookStructuralInventory["formula_cells"][number],
+  ): string => {
+    const xref =
+      cell.cross_sheet_refs.length > 0
+        ? `  [cross-sheet → ${cell.cross_sheet_refs.join(", ")}]`
+        : "";
+    return `  - ${cell.cell}: ${cell.formula}${xref}`;
+  };
+
   // The honesty note lists only the sections this view renders as a bounded ITEM sample,
   // relabeled to the headings the reviewer actually sees — so it never contradicts a
   // count-only section (tables/merged_ranges, printed in full) that is not sampled (RC-2).
@@ -335,11 +348,37 @@ function renderSpreadsheetStructuralView(
     if (sheetFormulas.length > 0) {
       lines.push(`formulas (sample of ${sheetFormulas.length}):`);
       for (const cell of sheetFormulas) {
-        const xref =
-          cell.cross_sheet_refs.length > 0
-            ? `  [cross-sheet → ${cell.cross_sheet_refs.join(", ")}]`
-            : "";
-        lines.push(`  - ${cell.cell}: ${cell.formula}${xref}`);
+        lines.push(renderFormulaCellLine(cell));
+      }
+    }
+  }
+
+  // Formulas on sheets DROPPED by the per_sheet_data sheet cap (max_sheets) are still in
+  // inv.formula_cells — formula_cells is capped independently of the sheet cap — but the
+  // loop above renders only sheets that survived the cap. Without this, a workbook whose
+  // formulas live only on a beyond-cap sheet would carry formula_integrity obligations
+  // while its formula TEXT vanished silently (and, if formula_cells itself was not
+  // trimmed, with no "formula samples" truncation note). Render that residual under its
+  // own section, grouped by sheet, so the obligation stays backed; the per_sheet_data
+  // trim note above already discloses that those sheets' bodies were dropped.
+  const beyondSampleFormulas = inv.formula_cells.filter(
+    (c) => !renderedSheetNames.has(c.sheet),
+  );
+  if (beyondSampleFormulas.length > 0) {
+    const bySheet = new Map<string, WorkbookStructuralInventory["formula_cells"]>();
+    for (const cell of beyondSampleFormulas) {
+      const existing = bySheet.get(cell.sheet);
+      if (existing) existing.push(cell);
+      else bySheet.set(cell.sheet, [cell]);
+    }
+    lines.push(
+      "",
+      "## formulas on sheets beyond the rendered sheet sample (sheet bodies trimmed; formula text retained):",
+    );
+    for (const [sheetName, cells] of bySheet) {
+      lines.push(`### sheet: ${sheetName} — formulas (sample of ${cells.length}):`);
+      for (const cell of cells) {
+        lines.push(renderFormulaCellLine(cell));
       }
     }
   }

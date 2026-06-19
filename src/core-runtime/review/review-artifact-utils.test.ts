@@ -8,6 +8,10 @@ import {
   renderReviewTargetMaterializedInput,
   renderTargetSnapshot,
 } from "./review-artifact-utils.js";
+import {
+  observeSpreadsheetSource,
+  type WorkbookStructuralInventory,
+} from "../spreadsheet-structure-observer.js";
 
 const tmpRoots: string[] = [];
 
@@ -95,5 +99,50 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     const snapshot = await renderTargetSnapshot([csv]);
     expect(snapshot).toContain("Spreadsheet Structural Inventory");
     expect(snapshot).toContain("structure inspected only");
+  });
+
+  it("renders formula text for sheets dropped by the per_sheet_data sheet cap (formula residual)", async () => {
+    const root = await makeTmpDir();
+    // A real single-sheet csv yields a fully-typed base inventory; widen it to 55 sheets
+    // with a formula ONLY on the last sheet — beyond the 50-sheet per_sheet_data cap.
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const templateSheet = base.sheets[0]!;
+    const templatePsd = base.per_sheet_data[0]!;
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: Array.from({ length: 55 }, (_, i) => ({
+        ...templateSheet,
+        name: `Sheet${i + 1}`,
+      })),
+      per_sheet_data: Array.from({ length: 55 }, (_, i) => ({
+        ...templatePsd,
+        sheet: `Sheet${i + 1}`,
+      })),
+      formula_cells: [
+        { sheet: "Sheet55", cell: "A2", formula: "=RESIDUAL_55", cross_sheet_refs: ["Other!A1"] },
+      ],
+    };
+
+    // stat() must pass (readTextOrDirectoryListing); the injected inventory is reused
+    // instead of re-observing the stub bytes.
+    const xlsx = path.join(root, "wide.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const inventoryByRef = new Map([[path.resolve(xlsx), widened]]);
+
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      inventoryByRef,
+    );
+
+    // Sheet55's body is trimmed by the 50-sheet cap, but its formula TEXT must still reach
+    // the prompt so the formula_integrity obligation stays backed (not silently count-only).
+    expect(rendered).toContain("formulas on sheets beyond the rendered sheet sample");
+    expect(rendered).toContain("Sheet55");
+    expect(rendered).toContain("=RESIDUAL_55");
+    expect(rendered).toContain("Other!A1");
   });
 });

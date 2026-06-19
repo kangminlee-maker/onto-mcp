@@ -68,6 +68,26 @@ function makeReviewXlsx(): Uint8Array {
   });
 }
 
+/** A parseable-but-empty .xlsx: one sheet, NO <dimension> tag and an empty <sheetData/>,
+ *  so the observer reads it cleanly (unsupported_reason stays null) yet finds no inspected
+ *  structure at all (dimensions 0×0, every structural array empty). */
+function makeEmptyXlsx(): Uint8Array {
+  return zipSync({
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+        `<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(
+      `<?xml version="1.0"?><worksheet ${WB_R}><sheetData/></worksheet>`,
+    ),
+  });
+}
+
 async function makeTmpProject(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "onto-review-profile-"));
   tmpRoots.push(root);
@@ -315,6 +335,65 @@ describe("review target profile material kind", () => {
     // Profile and render agree (render shows the observer's unsupported_reason).
     const materialized = await readMaterializedInput(sessionRoot);
     expect(materialized).toContain("unsupported: empty csv");
+  });
+
+  it("downgrades an empty-but-parseable .xlsx (no inspected structure) to partial and marks the ref not inspectable (empty OOXML)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-emptyxlsx");
+    const xlsx = path.join(root, "blank.xlsx");
+    await fs.writeFile(xlsx, Buffer.from(makeEmptyXlsx()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [xlsx],
+      materializedKind: "single_text",
+      requestedTarget: xlsx,
+      reviewIntentSummary: "review empty xlsx",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.target_material_kind).toBe("spreadsheet");
+    // It PARSED (unsupported_reason is null), but it has NO inspected structure — the
+    // honesty gate must not emit supported/null for a workbook the render shows as empty.
+    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.target_refs[0].inspectable).toBe(false);
+    // No ref inspectable -> the spreadsheet obligations drop (no rendered backing).
+    expect(profile.review_goal).not.toEqual(
+      expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
+    );
+  });
+
+  it("degrades a directory of spreadsheets (kind=spreadsheet but no directly-inspectable workbook ref) to partial", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-ssdir");
+    const dir = path.join(root, "quarters");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, "q1.csv"), "month,revenue\nJan,100\n", "utf8");
+    await fs.writeFile(path.join(dir, "q2.csv"), "month,revenue\nFeb,120\n", "utf8");
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "directory",
+      resolvedTargetRefs: [dir],
+      materializedKind: "directory_listing",
+      requestedTarget: dir,
+      reviewIntentSummary: "review a directory of spreadsheets",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // The sampled children are all spreadsheets, so the kind aggregates to spreadsheet...
+    expect(profile.target_material_kind).toBe("spreadsheet");
+    // ...but the directory path itself is not a workbook ref (gateRefs is empty; the
+    // render emits only a listing), so a bare `supported` would be dishonest.
+    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.review_goal).not.toEqual(
+      expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
+    );
   });
 
   it("discloses a bounded structural sample in materialized-input when the projection trims (TA-3)", async () => {

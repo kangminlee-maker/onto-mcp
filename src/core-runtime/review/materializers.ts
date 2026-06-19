@@ -69,6 +69,7 @@ import {
   reviewMaterialSupportStatus,
 } from "../target-material-kind.js";
 import {
+  inventoryHasInspectedStructure,
   observeSpreadsheetSource,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
@@ -1292,6 +1293,23 @@ function requireExecutionPreparationSessionDomain(value: string): string {
   return normalizeDomainValue(value);
 }
 
+/** A spreadsheet ref is inspectable only when its shared inventory was actually read AND
+ *  carries real inspected structure: a supported format (`unsupported_reason === null`)
+ *  that is NOT an empty/structureless workbook. An empty-but-parseable `.xlsx`/`.xlsm`
+ *  returns `unsupported_reason === null` yet has no structure to render, so checking the
+ *  reason alone would over-claim support. The per-target gate and the recorded
+ *  `inspectable` flag both route through this (design §3.2 honesty; the contract/README
+ *  require unreadable/empty workbooks to degrade to partial). */
+function isInspectableSpreadsheetInventory(
+  inventory: WorkbookStructuralInventory | undefined,
+): boolean {
+  return (
+    inventory !== undefined &&
+    inventory.unsupported_reason === null &&
+    inventoryHasInspectedStructure(inventory)
+  );
+}
+
 async function buildReviewTargetProfileArtifact(
   params: MaterializeReviewExecutionPreparationArtifactsParams,
   inventoryByRef?: Map<string, WorkbookStructuralInventory>,
@@ -1326,9 +1344,9 @@ async function buildReviewTargetProfileArtifact(
   for (const [index, ref] of resolvedRefs.entries()) {
     const kind = await targetRefKind(ref, sessionRoot);
     // Per-target inspectability is spreadsheet-specific: a ref is inspectable when its
-    // shared inventory carries no unsupported_reason (a supported workbook format that
-    // was actually read). Recorded only for spreadsheet refs so the kind-vs-format axis
-    // is structurally explicit (design §3.2 honesty; C-recon F1 mirror).
+    // shared inventory was read AND carries real inspected structure (a supported format
+    // that is not an empty workbook). Recorded only for spreadsheet refs so the
+    // kind-vs-format axis is structurally explicit (design §3.2 honesty; C-recon F1 mirror).
     const isSpreadsheet = isSpreadsheetRef(ref);
     targetRefs.push({
       ref,
@@ -1339,7 +1357,7 @@ async function buildReviewTargetProfileArtifact(
         ? await targetRefSha256(ref, kind.kind, params.directoryListingOptions)
         : null,
       ...(isSpreadsheet
-        ? { inspectable: inventoryByRef?.get(ref)?.unsupported_reason === null }
+        ? { inspectable: isInspectableSpreadsheetInventory(inventoryByRef?.get(ref)) }
         : {}),
     });
   }
@@ -1365,10 +1383,13 @@ async function buildReviewTargetProfileArtifact(
     let inspectableCount = 0;
     for (const ref of gateRefs) {
       const inv = inventoryByRef?.get(ref);
-      if (inv && inv.unsupported_reason === null) {
+      if (isInspectableSpreadsheetInventory(inv)) {
         inspectableCount += 1;
       } else {
-        uninspectedReasons.push(inv?.unsupported_reason ?? "workbook not observed");
+        uninspectedReasons.push(
+          inv?.unsupported_reason ??
+            (inv ? "empty workbook (no inspected structure)" : "workbook not observed"),
+        );
       }
     }
     if (uninspectedReasons.length > 0) {
@@ -1378,6 +1399,17 @@ async function buildReviewTargetProfileArtifact(
     // Obligations need rendered backing: drop them only when NO ref was inspected.
     if (inspectableCount === 0) {
       materialGoals = [];
+      // No workbook ref was directly inspectable. This also covers the directory case: a
+      // directory whose sampled children are all spreadsheets is classified `spreadsheet`
+      // in aggregate, but the directory path itself does not pass isSpreadsheetRef, so
+      // gateRefs is empty and uninspectedReasons stays empty above. The render then emits
+      // only a directory listing, never a workbook inventory, so a kind-level `supported`
+      // would be dishonest — degrade to partial (the uninspectable-ref case already set it).
+      if (supportStatus === "supported") {
+        supportStatus = "partial";
+        supportReason =
+          "spreadsheet kind detected but no workbook ref was directly inspectable (no inventory-backed structural detail rendered)";
+      }
     }
   }
 
@@ -1478,12 +1510,15 @@ export async function materializeReviewExecutionPreparationArtifacts(
   const spreadsheetRefs = [
     ...new Set([...resolvedTargetRefs, ...materializedRefs].filter(isSpreadsheetRef)),
   ];
+  // Observe SEQUENTIALLY (not Promise.all): observeSpreadsheetSource reads each source
+  // fully into a Buffer (up to the 1 GiB pre-read limit) before streaming-unzip, so
+  // observing every ref of a multi-workbook bundle at once could exhaust host memory
+  // before any artifact is written. Sequential keeps peak memory at one workbook while
+  // still observing — and sharing — each inventory exactly once.
   const inventoryByRef = new Map<string, WorkbookStructuralInventory>();
-  await Promise.all(
-    spreadsheetRefs.map(async (ref) => {
-      inventoryByRef.set(ref, await observeSpreadsheetSource(ref));
-    }),
-  );
+  for (const ref of spreadsheetRefs) {
+    inventoryByRef.set(ref, await observeSpreadsheetSource(ref));
+  }
 
   const targetSnapshotManifest: TargetSnapshotManifest = {
     review_target_scope_kind: params.scopeKind,
