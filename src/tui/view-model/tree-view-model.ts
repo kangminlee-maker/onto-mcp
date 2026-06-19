@@ -95,7 +95,13 @@ export interface TreeViewModel {
   runControl: TreeRunControl;
 }
 
-/** True when the workflow has reached a terminal state (stop polling). */
+/**
+ * True when the workflow has reached a terminal state (stop polling). `halted`
+ * is terminal for the watch loop too: it sits paused awaiting an explicit
+ * operator continuation that may be a long way off, so the live loop stops
+ * rather than re-reading an unchanging projection every interval. The operator
+ * re-engages with [r]efresh after continuing (consistent with completed/failed).
+ */
 export function isTerminalStatus(status: WorkflowStatus): boolean {
-  return status === "completed" || status === "failed";
+  return status === "completed" || status === "failed" || status === "halted";
 }

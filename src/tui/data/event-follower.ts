@@ -38,6 +38,9 @@ export async function readRuntimeEvents(
   );
 }
 
+/** Bytes of historical backlog read on start — the UI only keeps the last 500. */
+const DEFAULT_BACKLOG_BYTES_CAP = 256 * 1024;
+
 export interface FollowRuntimeEventsOptions {
   /** Poll interval for appended lines (ms). Default 500. */
   pollMs?: number;
@@ -45,23 +48,45 @@ export interface FollowRuntimeEventsOptions {
   signal?: AbortSignal;
   /** When true, yields the existing backlog before following. Default true. */
   emitBacklog?: boolean;
+  /** Cap on the backlog read so an old/noisy log never loads whole. Default 256KB. */
+  backlogBytesCap?: number;
 }
 
 /**
- * Async iterator over a session's runtime events: emits the existing backlog
- * (unless disabled), then appended events as they land, until `signal` aborts
- * or `pollMs` cannot be honored. Tracks a byte offset and only re-parses the
- * trailing partial line on each tick.
+ * Async iterator over a session's runtime events: emits a bounded tail of the
+ * existing backlog (unless disabled), then appended events as they land, until
+ * `signal` aborts. Tracks a byte offset and only re-parses the trailing partial
+ * line on each tick.
  */
 export async function* followRuntimeEvents(
   sessionRoot: string,
   options: FollowRuntimeEventsOptions = {},
 ): AsyncGenerator<RuntimeStreamEvent> {
-  const { pollMs = 500, signal, emitBacklog = true } = options;
+  const {
+    pollMs = 500,
+    signal,
+    emitBacklog = true,
+    backlogBytesCap = DEFAULT_BACKLOG_BYTES_CAP,
+  } = options;
   const logPath = runtimeStreamEventLogPath(sessionRoot);
   let offset = 0;
   let pending = "";
-  let firstRead = true;
+  let dropPartialLine = false;
+
+  // Bound the initial backlog so a large historical log never loads whole: with
+  // emitBacklog, keep only the last backlogBytesCap bytes (dropping the partial
+  // leading line); without it, start at EOF and only follow appended lines.
+  try {
+    const { size } = await fs.stat(logPath);
+    if (!emitBacklog) {
+      offset = size;
+    } else if (size > backlogBytesCap) {
+      offset = size - backlogBytesCap;
+      dropPartialLine = true;
+    }
+  } catch {
+    // Stream not created yet — start from 0 and pick it up when it appears.
+  }
 
   while (!signal?.aborted) {
     let chunk = "";
@@ -73,13 +98,16 @@ export async function* followRuntimeEvents(
           // File shrank/rotated — restart from the top.
           offset = 0;
           pending = "";
+          dropPartialLine = false;
         }
         if (stat.size > offset) {
           const length = stat.size - offset;
           const buffer = Buffer.alloc(length);
-          await handle.read(buffer, 0, length, offset);
-          chunk = buffer.toString("utf8");
-          offset = stat.size;
+          // Advance only by bytes actually read; a short read must not skip the
+          // unread tail or decode the zero-filled remainder of the buffer.
+          const { bytesRead } = await handle.read(buffer, 0, length, offset);
+          chunk = buffer.toString("utf8", 0, bytesRead);
+          offset += bytesRead;
         }
       } finally {
         await handle.close();
@@ -97,13 +125,16 @@ export async function* followRuntimeEvents(
       const lines = pending.split("\n");
       // Keep the trailing (possibly partial) line for the next tick.
       pending = lines.pop() ?? "";
-      const emit = firstRead && !emitBacklog ? [] : lines;
-      for (const line of emit) {
+      if (dropPartialLine) {
+        // The first bounded read started mid-file; drop the partial leading line.
+        lines.shift();
+        dropPartialLine = false;
+      }
+      for (const line of lines) {
         const event = parseEventLine(line);
         if (event) yield event;
       }
     }
-    firstRead = false;
 
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }

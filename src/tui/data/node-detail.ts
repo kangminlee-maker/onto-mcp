@@ -25,8 +25,10 @@ export async function readOutputTail(
     const length = size - start;
     if (length <= 0) return [];
     const buffer = Buffer.alloc(length);
-    await handle.read(buffer, 0, length, start);
-    let text = buffer.toString("utf8");
+    // Decode only the bytes actually read (a short read must not leave the
+    // zero-filled remainder of the buffer in the decoded text).
+    const { bytesRead } = await handle.read(buffer, 0, length, start);
+    let text = buffer.toString("utf8", 0, bytesRead);
     // When we started mid-file, drop the leading partial line.
     if (start > 0) {
       const newline = text.indexOf("\n");
