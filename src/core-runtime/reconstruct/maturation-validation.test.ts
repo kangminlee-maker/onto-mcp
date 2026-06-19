@@ -70,7 +70,9 @@ const evidence: ReconstructEvidenceRef = {
   location: "src/feature.ts",
 };
 
-function sourcePurposeCandidates(): ReconstructSourcePurposeCandidatesArtifact {
+function sourcePurposeCandidates(
+  candidateLimitationRefs: string[] = [],
+): ReconstructSourcePurposeCandidatesArtifact {
   return {
     schema_version: "1",
     session_id: "session-1",
@@ -117,7 +119,7 @@ function sourcePurposeCandidates(): ReconstructSourcePurposeCandidatesArtifact {
           ],
         },
         ranking_rationale: "Fixture.",
-        limitation_refs: [],
+        limitation_refs: candidateLimitationRefs,
       },
     ],
     selection: {
@@ -261,7 +263,7 @@ function validPurposeConfirmation(): ReconstructPurposeConfirmationValidationArt
   };
 }
 
-function baseline(seedRefs = ["object-feature"]) {
+function baseline(seedRefs = ["object-feature"], candidateLimitationRefs: string[] = []) {
   return buildMaturationBaselineArtifact({
     sessionId: "session-1",
     sourceSeedRef: "ontology-seed.yaml",
@@ -276,7 +278,7 @@ function baseline(seedRefs = ["object-feature"]) {
     sourceMaterialAdmissionLedgerRef: "material-admission-ledger.yaml",
     sourceMaterialAdmissionValidationRef:
       "material-admission-ledger-validation.yaml",
-    sourcePurposeCandidates: sourcePurposeCandidates(),
+    sourcePurposeCandidates: sourcePurposeCandidates(candidateLimitationRefs),
     sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
     sourcePurposeCandidatesValidationRef: "source-purpose-candidates-validation.yaml",
     purposeConfirmationValidation: validPurposeConfirmation(),
@@ -871,6 +873,48 @@ describe("maturation validation", () => {
 
     expect(matrix.rows[0]?.member_readiness).toBe("frontier_required");
     expect(matrixValidation.frontier_required_row_count).toBe(1);
+    expect(matrixValidation.validation_status).toBe("valid");
+  });
+
+  it("keeps unmodeled material rows frontier-required when only candidate-level limitations exist (#22 dead-machine fix)", () => {
+    const candidateLimitation = "limitation-source-coverage-partial";
+    const maturationBaseline = baseline([], [candidateLimitation]);
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates([candidateLimitation]),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const matrixValidation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+
+    // Candidate-level limitation is surfaced once at the baseline/matrix top level,
+    // never copied onto the row...
+    expect(maturationBaseline.candidate_limitation_refs).toEqual([candidateLimitation]);
+    expect(matrix.candidate_limitation_refs).toEqual([candidateLimitation]);
+    expect(maturationBaseline.baseline_rows[0]?.limitation_refs).toEqual([]);
+    // ...so the answer machine stays alive: the unmodeled material row remains
+    // frontier-required instead of being silently buried as limitation_backed.
+    expect(matrix.rows[0]?.member_readiness).toBe("frontier_required");
+    expect(matrix.rows[0]?.limitation_refs).toEqual([]);
+    expect(matrixValidation.frontier_required_row_count).toBe(1);
+    expect(baselineValidation.validation_status).toBe("valid");
     expect(matrixValidation.validation_status).toBe("valid");
   });
 
@@ -2431,6 +2475,29 @@ describe("maturation validation", () => {
     expect(falseReadyValidation.validation_status).toBe("invalid");
     expect(falseReadyValidation.violations.map((violation) => violation.code))
       .toContain("conflicting_state");
+
+    // #22: purpose-candidate-level limitations keep the same all-closed matrix at
+    // actionable_limited (not actionable_ready) and surface as a claim limitation,
+    // without ever forcing a row to limitation_backed.
+    const candidateLimitedDecision = buildMaturationContinuationDecisionArtifact({
+      sessionId: "session-1",
+      actionabilityMatrix: {
+        ...matrix,
+        candidate_limitation_refs: ["limitation-source-coverage-partial"],
+      },
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation: closureValidation,
+      maturationAuthorityResponse: authorityResponse,
+      ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+    });
+    expect(candidateLimitedDecision.decision_state).toBe("actionable_limited");
+    expect(candidateLimitedDecision.limitation_refs)
+      .toContain("limitation-source-coverage-partial");
   });
 
   it("rejects actionable limited when no rows can be included in the claim", () => {

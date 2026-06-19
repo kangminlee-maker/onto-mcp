@@ -1926,6 +1926,11 @@ export interface ReconstructMaturationBaselineArtifact {
   purpose_confirmation_validation_ref: string | null;
   source_material_admission_ledger_ref: string | null;
   source_material_admission_validation_ref: string | null;
+  // Purpose-candidate-level limitations bound the overall purpose/source, not any
+  // single surface×dimension row. They constrain the actionable claim (next-round
+  // source frontier) but must NOT suppress per-row maturation frontier; row-level
+  // `limitation_refs` carry only the row's own seed-element limitations.
+  candidate_limitation_refs: string[];
   baseline_rows: ReconstructMaturationBaselineRow[];
 }
 
@@ -2000,6 +2005,9 @@ export interface ReconstructActionabilityMatrixArtifact {
   created_at: string;
   maturation_baseline_ref: string | null;
   maturation_baseline_validation_ref: string | null;
+  // Carried from the maturation baseline; see `candidate_limitation_refs` there.
+  // Constrains the actionable claim without gating any row's frontier.
+  candidate_limitation_refs: string[];
   rows: ReconstructActionabilityMatrixRow[];
 }
 

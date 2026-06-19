@@ -517,6 +517,7 @@ export function buildMaturationBaselineArtifact(args: {
         args.sourceMaterialAdmissionLedgerRef,
       source_material_admission_validation_ref:
         args.sourceMaterialAdmissionValidationRef,
+      candidate_limitation_refs: [],
       baseline_rows: [],
     };
   }
@@ -528,10 +529,12 @@ export function buildMaturationBaselineArtifact(args: {
     const resolvedEvidence = rowEvidence.length > 0
       ? rowEvidence
       : element.supporting_evidence_refs;
-    const limitationRefs = [
-      ...stringArray(seedElement?.limitation_refs),
-      ...candidate.limitation_refs,
-    ];
+    // Row-level limitations are the row's own seed-element limitations only.
+    // Candidate-level limitations are surfaced once at the baseline top-level
+    // (candidate_limitation_refs) so they constrain the actionable claim without
+    // forcing every surface×dimension row to limitation_backed (which would dead
+    // the maturation answer machine — frontier/closure/ledger/judge all skipped).
+    const limitationRefs = stringArray(seedElement?.limitation_refs);
     const coverage = questionCoverage({
       seedRefs,
       competencyQuestions: args.competencyQuestions,
@@ -615,6 +618,7 @@ export function buildMaturationBaselineArtifact(args: {
       args.sourceMaterialAdmissionLedgerRef,
     source_material_admission_validation_ref:
       args.sourceMaterialAdmissionValidationRef,
+    candidate_limitation_refs: candidate.limitation_refs,
     baseline_rows: rows.map((row) => ({
       ...row,
       blocking_reason: needsFrontier(row)
@@ -754,7 +758,12 @@ export function validateMaturationBaseline(args: {
       row.member_target_material_kind !== null &&
       row.member_source_refs.length > 0 &&
       row.cross_material_ref_refs.length > 0;
-    if (mixedTarget && !hasLineage && row.limitation_refs.length === 0) {
+    if (
+      mixedTarget &&
+      !hasLineage &&
+      row.limitation_refs.length === 0 &&
+      baseline.candidate_limitation_refs.length === 0
+    ) {
       violations.push(violation({
         code: "mixed_lineage_missing",
         message:
@@ -811,6 +820,7 @@ export function buildActionabilityMatrixArtifact(args: {
     created_at: isoNow(),
     maturation_baseline_ref: args.maturationBaselineRef,
     maturation_baseline_validation_ref: args.maturationBaselineValidationRef,
+    candidate_limitation_refs: args.maturationBaseline.candidate_limitation_refs,
     rows: args.maturationBaseline.baseline_rows.map((row) => {
       const matchingAnswerClaims = answerClaims.filter((claim) =>
         answerClaimMatchesBaselineRow(claim, row)
@@ -3655,6 +3665,11 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   const closedRows = args.actionabilityMatrix.rows.filter((row) =>
     row.member_readiness === "closed"
   );
+  // Purpose-candidate-level limitations bound the overall claim but do not gate any
+  // single row's frontier; when present they keep the claim at actionable_limited
+  // even if every row is closed (the source itself is acknowledged as partial).
+  const candidateLimitationRefs = args.actionabilityMatrix.candidate_limitation_refs;
+  const hasCandidateLimitations = candidateLimitationRefs.length > 0;
   let decisionState: ReconstructMaturationContinuationDecisionArtifact["decision_state"];
   let rationale: string;
   const convergenceLimitationRefs: string[] = [];
@@ -3670,6 +3685,9 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   } else if (limitationRows.length > 0) {
     decisionState = "actionable_limited";
     rationale = "No material frontier remains, but named limitations constrain the actionability claim.";
+  } else if (hasCandidateLimitations) {
+    decisionState = "actionable_limited";
+    rationale = "All material rows are closed, but purpose-candidate-level limitations constrain the actionability claim and signal next-round source frontier.";
   } else if (finalRequestionStatus !== "no_new_material_question") {
     decisionState = "actionable_limited";
     convergenceLimitationRefs.push(`maturation-final-requestion:${finalRequestionStatus}`);
@@ -3715,6 +3733,7 @@ export function buildMaturationContinuationDecisionArtifact(args: {
     limitation_refs: [
       ...new Set([
         ...args.actionabilityMatrix.rows.flatMap((row) => row.limitation_refs),
+        ...candidateLimitationRefs,
         ...args.ontologyExpansionValidation.violations.map((item) =>
           item.subject_id ?? "ontology_expansion_validation"
         ),
