@@ -1237,6 +1237,157 @@ describe("maturation validation", () => {
     expect(matrixValidation.validation_status).toBe("valid");
   });
 
+  it("wires blocking_question_refs as the matrix->frontier reverse link (G track)", () => {
+    const { maturationBaseline, baselineValidation, frontier, frontierValidation } =
+      frontierScenario();
+    const validateWithFrontier = (m: ReconstructActionabilityMatrixArtifact) =>
+      validateActionabilityMatrix({
+        actionabilityMatrix: m,
+        actionabilityMatrixRef: "actionability-matrix.yaml",
+        maturationBaseline,
+        maturationBaselineValidation: baselineValidation,
+        maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+        maturationQuestionFrontier: frontier,
+        maturationQuestionFrontierValidation: frontierValidation,
+        maturationQuestionFrontierValidationRef:
+          "maturation-question-frontier-validation.yaml",
+      });
+    // Current-matrix recompute threads the validated frontier in -> reverse link populates.
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+    });
+    const frontierRow = matrix.rows.find(
+      (r) => r.member_readiness === "frontier_required",
+    )!;
+    expect(frontierRow).toBeDefined();
+    expect(frontierRow.blocking_question_refs).toContain("mq-feature-object");
+    expect(validateWithFrontier(matrix).validation_status).toBe("valid");
+    // Dropping the reverse link on an open row -> missing coverage.
+    const dropped = {
+      ...matrix,
+      rows: matrix.rows.map((r) =>
+        r.matrix_row_id === frontierRow.matrix_row_id
+          ? { ...r, blocking_question_refs: [] }
+          : r
+      ),
+    };
+    expect(validateWithFrontier(dropped).violations.some((v) =>
+      v.code === "missing_required_coverage" &&
+      v.subject_id === frontierRow.matrix_row_id
+    )).toBe(true);
+    // A blocking ref that does not resolve to the validated frontier -> unknown_id.
+    const dangling = {
+      ...matrix,
+      rows: matrix.rows.map((r) =>
+        r.matrix_row_id === frontierRow.matrix_row_id
+          ? { ...r, blocking_question_refs: ["mq-ghost"] }
+          : r
+      ),
+    };
+    expect(validateWithFrontier(dangling).violations.some((v) =>
+      v.code === "unknown_id" && v.subject_id === "mq-ghost"
+    )).toBe(true);
+  });
+
+  it("rejects blocking_question_refs on the pre-frontier baseline matrix (G track)", () => {
+    const { maturationBaseline, baselineValidation } = frontierScenario();
+    // Baseline matrix: no frontier threaded in -> builder leaves the reverse link empty.
+    const baselineMatrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    expect(
+      baselineMatrix.rows.every((r) => r.blocking_question_refs.length === 0),
+    ).toBe(true);
+    const validateBaselineMatrix = (m: ReconstructActionabilityMatrixArtifact) =>
+      validateActionabilityMatrix({
+        actionabilityMatrix: m,
+        actionabilityMatrixRef: "baseline-actionability-matrix.yaml",
+        maturationBaseline,
+        maturationBaselineValidation: baselineValidation,
+        maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      });
+    expect(validateBaselineMatrix(baselineMatrix).validation_status).toBe("valid");
+    // Citing a question before the frontier exists is a conflict.
+    const premature = {
+      ...baselineMatrix,
+      rows: baselineMatrix.rows.map((r, index) =>
+        index === 0 ? { ...r, blocking_question_refs: ["mq-premature"] } : r
+      ),
+    };
+    expect(validateBaselineMatrix(premature).violations.some((v) =>
+      v.code === "conflicting_state" &&
+      v.subject_id === premature.rows[0]!.matrix_row_id
+    )).toBe(true);
+  });
+
+  it("rejects blocking_question_refs on a closed (non-frontier) matrix row (G track)", () => {
+    const { maturationBaseline, baselineValidation, frontier, frontierValidation } =
+      frontierScenario();
+    const initialMatrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
+    const ontologyExpansion = ontologyExpansionForRow(initialMatrix.rows[0]!);
+    // Answer claims + expansion raise the row to L4 -> closed (no longer frontier).
+    const buildArgs = {
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+    };
+    const matrix = buildActionabilityMatrixArtifact(buildArgs);
+    const closedRow = matrix.rows[0]!;
+    expect(closedRow.member_readiness).toBe("closed");
+    expect(closedRow.blocking_question_refs).toEqual([]);
+    const tainted = {
+      ...matrix,
+      rows: matrix.rows.map((r, index) =>
+        index === 0 ? { ...r, blocking_question_refs: ["mq-feature-object"] } : r
+      ),
+    };
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: tainted,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+    });
+    expect(validation.violations.some((v) =>
+      v.code === "conflicting_state" && v.subject_id === closedRow.matrix_row_id
+    )).toBe(true);
+  });
+
   it("rejects a question frontier that omits material frontier-required rows", () => {
     const maturationBaseline = baseline([]);
     const baselineValidation = validateMaturationBaseline({

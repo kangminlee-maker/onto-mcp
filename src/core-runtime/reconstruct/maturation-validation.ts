@@ -915,6 +915,10 @@ export function buildActionabilityMatrixArtifact(args: {
   ontologyExpansion?: ReconstructOntologyExpansionArtifact | null;
   ontologyExpansionValidation?: ReconstructOntologyExpansionValidationArtifact | null;
   ontologyExpansionValidationRef?: string | null;
+  maturationQuestionFrontier?: ReconstructMaturationQuestionFrontierArtifact | null;
+  maturationQuestionFrontierValidation?:
+    | ReconstructMaturationQuestionFrontierValidationArtifact
+    | null;
 }): ReconstructActionabilityMatrixArtifact {
   const answerClaims = args.maturationAnswerClaimsValidation?.validation_status === "valid"
     ? args.maturationAnswerClaims?.answer_claims ?? []
@@ -922,6 +926,26 @@ export function buildActionabilityMatrixArtifact(args: {
   const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
     ? args.ontologyExpansion?.expansions ?? []
     : [];
+  // Reverse link: a row's blocking_question_refs name the maturation frontier
+  // question(s) authored for it. Questions only exist once the frontier is authored
+  // from the (pre-frontier) baseline matrix, so this is populated on the current-matrix
+  // recompute when a VALIDATED frontier is threaded in and left empty otherwise (the
+  // baseline matrix passes no frontier → []). Indexed by baseline_row_id, which the
+  // frontier question references via baseline_row_refs.
+  const frontierQuestions =
+    args.maturationQuestionFrontierValidation?.validation_status === "valid"
+      ? args.maturationQuestionFrontier?.questions ?? []
+      : [];
+  const blockingQuestionsByBaselineRow = new Map<string, string[]>();
+  for (const question of frontierQuestions) {
+    for (const baselineRowRef of question.baseline_row_refs) {
+      const bucket = blockingQuestionsByBaselineRow.get(baselineRowRef);
+      if (bucket) bucket.push(question.question_id);
+      else {
+        blockingQuestionsByBaselineRow.set(baselineRowRef, [question.question_id]);
+      }
+    }
+  }
   return {
     schema_version: "1",
     session_id: args.sessionId,
@@ -1007,7 +1031,11 @@ export function buildActionabilityMatrixArtifact(args: {
         competency_assessment_refs: row.competency_assessment_refs,
         maturity_level: maturityLevel,
         supporting_refs: [...new Set(supportingRefs)],
-        blocking_question_refs: [],
+        // Only an open (frontier_required) row is blocked; a closed or
+        // limitation-backed row carries no open blocking questions.
+        blocking_question_refs: frontierRequired
+          ? [...new Set(blockingQuestionsByBaselineRow.get(row.baseline_row_id) ?? [])]
+          : [],
         limitation_refs: [...new Set(limitationRefs)],
         next_action: frontierRequired
           ? "Create a maturation frontier question for this row."
@@ -1032,6 +1060,11 @@ export function validateActionabilityMatrix(args: {
   ontologyExpansion?: ReconstructOntologyExpansionArtifact | null;
   ontologyExpansionValidation?: ReconstructOntologyExpansionValidationArtifact | null;
   ontologyExpansionValidationRef?: string | null;
+  maturationQuestionFrontier?: ReconstructMaturationQuestionFrontierArtifact | null;
+  maturationQuestionFrontierValidation?:
+    | ReconstructMaturationQuestionFrontierValidationArtifact
+    | null;
+  maturationQuestionFrontierValidationRef?: string | null;
 }): ReconstructActionabilityMatrixValidationArtifact {
   const matrix = args.actionabilityMatrix;
   const violations: ReconstructMaturationValidationViolation[] = [];
@@ -1044,6 +1077,22 @@ export function validateActionabilityMatrix(args: {
   const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
     ? args.ontologyExpansion?.expansions ?? []
     : [];
+  // Reverse-link conservation for blocking_question_refs: when a validated question
+  // frontier is threaded in (the current-matrix recompute), index each question by the
+  // baseline rows it names so the matrix's reverse link can be proven to mirror the
+  // frontier's forward link. Absent/invalid frontier (the baseline matrix) → the rows
+  // must carry no blocking questions yet.
+  const frontierAvailable =
+    args.maturationQuestionFrontierValidation?.validation_status === "valid";
+  const frontierQuestionBaselineRows = new Map<string, Set<string>>();
+  if (frontierAvailable) {
+    for (const question of args.maturationQuestionFrontier?.questions ?? []) {
+      frontierQuestionBaselineRows.set(
+        question.question_id,
+        new Set(question.baseline_row_refs),
+      );
+    }
+  }
   const seen = new Set<string>();
   if (matrix.session_id !== args.maturationBaseline.session_id) {
     violations.push(violation({
@@ -1230,6 +1279,62 @@ export function validateActionabilityMatrix(args: {
           "matrix member_readiness must follow material L4, frontier, or limitation state",
         subjectId: row.matrix_row_id,
       }));
+    }
+    // blocking_question_refs reverse-link conservation (G track):
+    // before the frontier exists (baseline matrix) the row must cite no questions;
+    // once the validated frontier exists (current matrix) an open frontier_required row
+    // must cite its blocking question(s), a closed/limitation-backed row must cite none,
+    // and every cited ref must resolve to a frontier question that names this row.
+    if (!frontierAvailable) {
+      if (row.blocking_question_refs.length > 0) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "matrix row cannot cite blocking questions before the question frontier exists",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+    } else {
+      const rowIsFrontier = row.member_readiness === "frontier_required";
+      if (rowIsFrontier && row.blocking_question_refs.length === 0) {
+        violations.push(violation({
+          code: "missing_required_coverage",
+          message:
+            "frontier-required matrix row must cite its blocking maturation question(s)",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+      if (!rowIsFrontier && row.blocking_question_refs.length > 0) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "closed or limitation-backed matrix row cannot cite open blocking questions",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+      for (const questionRef of row.blocking_question_refs) {
+        const questionBaselineRows = frontierQuestionBaselineRows.get(questionRef);
+        if (!questionBaselineRows) {
+          violations.push(violation({
+            code: "unknown_id",
+            message:
+              "matrix blocking_question_refs must resolve to the validated question frontier",
+            subjectId: questionRef,
+          }));
+          continue;
+        }
+        const namesRow = row.baseline_row_refs.some((ref) =>
+          questionBaselineRows.has(ref)
+        );
+        if (!namesRow) {
+          violations.push(violation({
+            code: "conflicting_state",
+            message:
+              "matrix blocking question must name this row's baseline ref (reverse link must mirror the frontier)",
+            subjectId: row.matrix_row_id,
+          }));
+        }
+      }
     }
   }
   // M1 coverage conservation: every baseline row must map to exactly one matrix row.
@@ -4803,6 +4908,8 @@ export async function writeActionabilityMatrixArtifact(args: {
   maturationAnswerClaimsValidationPath?: string | null;
   ontologyExpansionPath?: string | null;
   ontologyExpansionValidationPath?: string | null;
+  maturationQuestionFrontierPath?: string | null;
+  maturationQuestionFrontierValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructActionabilityMatrixArtifact> {
   const maturationBaseline =
@@ -4814,6 +4921,8 @@ export async function writeActionabilityMatrixArtifact(args: {
     maturationAnswerClaimsValidation,
     ontologyExpansion,
     ontologyExpansionValidation,
+    maturationQuestionFrontier,
+    maturationQuestionFrontierValidation,
   ] = await Promise.all([
     args.maturationAnswerClaimsPath
       ? readYamlDocument<ReconstructMaturationAnswerClaimsArtifact>(
@@ -4835,6 +4944,16 @@ export async function writeActionabilityMatrixArtifact(args: {
         args.ontologyExpansionValidationPath,
       )
       : Promise.resolve(null),
+    args.maturationQuestionFrontierPath
+      ? readYamlDocument<ReconstructMaturationQuestionFrontierArtifact>(
+        args.maturationQuestionFrontierPath,
+      )
+      : Promise.resolve(null),
+    args.maturationQuestionFrontierValidationPath
+      ? readYamlDocument<ReconstructMaturationQuestionFrontierValidationArtifact>(
+        args.maturationQuestionFrontierValidationPath,
+      )
+      : Promise.resolve(null),
   ]);
   const artifact = buildActionabilityMatrixArtifact({
     sessionId: args.sessionId,
@@ -4848,6 +4967,8 @@ export async function writeActionabilityMatrixArtifact(args: {
     ontologyExpansion,
     ontologyExpansionValidation,
     ontologyExpansionValidationRef: args.ontologyExpansionValidationPath ?? null,
+    maturationQuestionFrontier,
+    maturationQuestionFrontierValidation,
   });
   await writeYamlDocument(args.outputPath, artifact);
   return artifact;
@@ -4861,6 +4982,8 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
   maturationAnswerClaimsValidationPath?: string | null;
   ontologyExpansionPath?: string | null;
   ontologyExpansionValidationPath?: string | null;
+  maturationQuestionFrontierPath?: string | null;
+  maturationQuestionFrontierValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructActionabilityMatrixValidationArtifact> {
   const [
@@ -4871,6 +4994,8 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     maturationAnswerClaimsValidation,
     ontologyExpansion,
     ontologyExpansionValidation,
+    maturationQuestionFrontier,
+    maturationQuestionFrontierValidation,
   ] = await Promise.all([
     readYamlDocument<ReconstructActionabilityMatrixArtifact>(
       args.actionabilityMatrixPath,
@@ -4901,6 +5026,16 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
         args.ontologyExpansionValidationPath,
       )
       : Promise.resolve(null),
+    args.maturationQuestionFrontierPath
+      ? readYamlDocument<ReconstructMaturationQuestionFrontierArtifact>(
+        args.maturationQuestionFrontierPath,
+      )
+      : Promise.resolve(null),
+    args.maturationQuestionFrontierValidationPath
+      ? readYamlDocument<ReconstructMaturationQuestionFrontierValidationArtifact>(
+        args.maturationQuestionFrontierValidationPath,
+      )
+      : Promise.resolve(null),
   ]);
   const validation = validateActionabilityMatrix({
     actionabilityMatrix,
@@ -4915,6 +5050,10 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     ontologyExpansion,
     ontologyExpansionValidation,
     ontologyExpansionValidationRef: args.ontologyExpansionValidationPath ?? null,
+    maturationQuestionFrontier,
+    maturationQuestionFrontierValidation,
+    maturationQuestionFrontierValidationRef:
+      args.maturationQuestionFrontierValidationPath ?? null,
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;

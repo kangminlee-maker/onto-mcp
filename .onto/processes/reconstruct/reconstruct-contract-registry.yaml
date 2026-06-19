@@ -2563,6 +2563,7 @@ validator_records:
       - reject_matrix_rows_without_baseline_row_ref
       - validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
       - preserve_frontier_seed_state_before_question_frontier_authoring
+      - reject_blocking_question_refs_before_question_frontier_authoring
     output_ref: baseline-actionability-matrix-validation.yaml
   - validator_id: actionability-matrix-validator
     gate_ids: [actionability_matrix_gate]
@@ -2574,6 +2575,8 @@ validator_records:
       - maturation-answer-claims-validation.yaml
       - ontology-expansion.yaml
       - ontology-expansion-validation.yaml
+      - maturation-question-frontier.yaml
+      - maturation-question-frontier-validation.yaml
       - reconstruct-contract-registry.yaml
     validation_obligations:
       - support_zero_delta_baseline_only_matrix_when_no_maturation_deltas_exist
@@ -2582,6 +2585,7 @@ validator_records:
       - validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
       - validate_maturity_level_against_supporting_refs_blocking_questions_and_limitations
       - require_blocker_and_high_rows_to_be_l4_limitation_backed_or_continuation_blocking
+      - validate_blocking_question_refs_against_validated_question_frontier
     output_ref: actionability-matrix-validation.yaml
   - validator_id: maturation-question-frontier-validator
     gate_ids: [maturation_question_frontier_gate]
