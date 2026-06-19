@@ -662,6 +662,25 @@ export function validateMaturationBaseline(args: {
       subjectId: baseline.session_id,
     }));
   }
+  // candidate_limitation_refs are the source-level authority that holds an otherwise
+  // closed run at actionable_limited; a stale/edited baseline that drops them (then
+  // copied faithfully into the matrix) would pass the matrix check yet let
+  // continuation project actionable_ready. Anchor them to the selected candidate.
+  const expectedCandidateLimitations = new Set(selected?.limitation_refs ?? []);
+  const actualCandidateLimitations = new Set(baseline.candidate_limitation_refs);
+  const candidateLimitationsMatch =
+    expectedCandidateLimitations.size === actualCandidateLimitations.size &&
+    [...expectedCandidateLimitations].every((ref) =>
+      actualCandidateLimitations.has(ref)
+    );
+  if (!candidateLimitationsMatch) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "maturation baseline candidate_limitation_refs must match the selected purpose candidate's limitation_refs",
+      subjectId: "candidate_limitation_refs",
+    }));
+  }
   if (!baseline.source_reconstruct_record_ref || !args.sourceReconstructRecordSha256) {
     violations.push(violation({
       code: "source_reconstruct_record_missing",
@@ -3863,6 +3882,20 @@ export function validateMaturationContinuationDecision(args: {
     violations.push(violation({
       code: "conflicting_state",
       message: "actionable_ready cannot be projected while material frontier rows remain",
+      subjectId: "actionable_ready",
+    }));
+  }
+  // Mirror the builder: purpose-candidate-level limitations constrain the overall
+  // claim, so a saved/edited decision cannot project actionable_ready while the
+  // matrix carries them (the bounded claim is at most actionable_limited).
+  if (
+    decision.decision_state === "actionable_ready" &&
+    args.actionabilityMatrix.candidate_limitation_refs.length > 0
+  ) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "actionable_ready cannot be projected while purpose-candidate-level limitations remain",
       subjectId: "actionable_ready",
     }));
   }

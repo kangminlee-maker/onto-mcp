@@ -792,7 +792,11 @@ function competencyQuestionAssessmentProjectionContract(): Record<string, unknow
     evidence_projection:
       "evidence_observation_ids and evidence_source_basenames are prompt-visible; full evidence_refs remain runtime authority",
     source_evidence_projection:
-      "cited evidence observation bodies (from linked claim realizations and question evidence_refs) are projected as source_evidence up to a per-observation excerpt budget, so answer_status is judged on content not id labels alone",
+      "cited evidence observation bodies (from linked claim realizations, question evidence_refs, and domain competency semantic assessment evidence_refs) are projected as source_evidence up to a per-observation excerpt budget, so answer_status is judged on content not id labels alone",
+    // The actual per-observation budget is part of the contract: tuning it changes
+    // the assessment prompt surface, so it must rotate the reuse-match sha.
+    source_evidence_excerpt_char_limit:
+      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
     validation_projection:
       "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
     claim_realization_projection:
@@ -3975,6 +3979,19 @@ export function assessmentEvidenceObservationIds(
     ) {
       observationIds.add(id);
     }
+    // Domain competency semantic assessment rows carry their own validated
+    // evidence_refs — a distinct authority path not required to be duplicated in the
+    // question's evidence_refs — so their cited observation bodies must reach the
+    // assessor too, or that path stays content-blind.
+    for (const semantic of question.domain_competency_semantic_assessments ?? []) {
+      for (
+        const id of evidenceObservationIdsFromEvidenceRefs(
+          semantic.evidence_refs ?? [],
+        )
+      ) {
+        observationIds.add(id);
+      }
+    }
   }
   return [...observationIds];
 }
@@ -5755,12 +5772,18 @@ export function singleDocumentProjectionTruncation(
 ): DocumentExcerptProjectionTruncation[] {
   if (promptSourceObservations.observations.length !== 1) return [];
   const observation = promptSourceObservations.observations[0]!;
-  if (observation.target_material_kind !== "document") return [];
   const extension =
     typeof observation.structural_data.extension === "string"
       ? observation.structural_data.extension
       : null;
-  if (!isTextReadableDocumentExtension(extension)) return [];
+  // Mirror the fresh-run eligibility (document text-readable OR code) so a resumed
+  // run records code truncation provenance too — a document-only check silently
+  // dropped the runtime event/final-output section for a large single code file.
+  if (
+    !isFullExcerptProjectionEligible(observation.target_material_kind, extension)
+  ) {
+    return [];
+  }
   const excerpt = observation.structural_data.content_excerpt;
   if (typeof excerpt !== "string" || excerpt.length <= budget) return [];
   return [

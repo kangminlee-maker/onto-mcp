@@ -4424,6 +4424,26 @@ describe("runReconstruct", () => {
     expect([...ids].sort()).toEqual(["obs-1", "obs-2"]);
   });
 
+  it("also collects domain competency semantic assessment evidence (@codex P2)", () => {
+    const ids = assessmentEvidenceObservationIds(
+      {
+        claimRealizationMap: { claim_realizations: [] },
+      } as any,
+      [
+        {
+          linked_claim_ids: [],
+          evidence_refs: [],
+          domain_competency_semantic_assessments: [
+            { evidence_refs: [{ observation_id: "obs-domain" }] },
+          ],
+        },
+      ] as any,
+    );
+    // A domain competency semantic assessment row's own validated evidence (obs-domain)
+    // is a distinct authority path; its body must still reach the assessor.
+    expect([...ids]).toEqual(["obs-domain"]);
+  });
+
   it("repairs an invalid ontology seed with focused validation context", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
@@ -6274,6 +6294,24 @@ describe("observationPromptPayload projection-truncation recording", () => {
         {
           observation_id: "obs-doc",
           source_ref: "/doc/obs-doc",
+          captured_chars: 5000,
+          projection_budget_chars: 1000,
+        },
+      ]);
+    });
+
+    it("recomputes a single sliced code file too (@codex P2 — code resume parity)", () => {
+      // Fresh runs record code truncation provenance; the resume fallback must mirror
+      // the same full-excerpt eligibility (code, not only text-readable documents).
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-code", kind: "code", ext: ".ts", excerpt: "x".repeat(5000) }]) as any,
+          1000,
+        ),
+      ).toEqual([
+        {
+          observation_id: "obs-code",
+          source_ref: "/doc/obs-code",
           captured_chars: 5000,
           projection_budget_chars: 1000,
         },

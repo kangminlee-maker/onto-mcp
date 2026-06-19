@@ -954,6 +954,33 @@ describe("maturation validation", () => {
     )).toBe(true);
   });
 
+  it("rejects a maturation baseline whose candidate limitations drift from the selected candidate (@codex P2)", () => {
+    const candidateLimitation = "limitation-source-coverage-partial";
+    const maturationBaseline = baseline([], [candidateLimitation]);
+    // Tamper: drop the source-level limitation the selected candidate declared, so
+    // the matrix↔baseline check alone (which would copy the same empty set) cannot
+    // catch the drift — only the baseline↔candidate anchor does.
+    const tamperedBaseline = {
+      ...maturationBaseline,
+      candidate_limitation_refs: [],
+    };
+    const validation = validateMaturationBaseline({
+      maturationBaseline: tamperedBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates([candidateLimitation]),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) =>
+      v.code === "conflicting_state" && v.subject_id === "candidate_limitation_refs"
+    )).toBe(true);
+  });
+
   it("keeps material L3 answer-supported rows frontier-required until expansion validates them for purpose", () => {
     const maturationBaseline = baseline([]);
     const baselineValidation = validateMaturationBaseline({
@@ -2534,6 +2561,41 @@ describe("maturation validation", () => {
     expect(candidateLimitedDecision.decision_state).toBe("actionable_limited");
     expect(candidateLimitedDecision.limitation_refs)
       .toContain("limitation-source-coverage-partial");
+
+    // @codex: the validator mirrors the builder — a saved/edited actionable_ready
+    // decision is rejected when the matrix still carries candidate limitations, so a
+    // stale ready state cannot be trusted downstream.
+    const staleReadyValidation = validateMaturationContinuationDecision({
+      maturationContinuationDecision: readyDecision,
+      maturationContinuationDecisionRef:
+        "maturation-continuation-decision.yaml",
+      actionabilityMatrix: {
+        ...matrix,
+        candidate_limitation_refs: ["limitation-source-coverage-partial"],
+      },
+      actionabilityMatrixValidation: matrixValidation,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      maturationClosureFrontierValidation: closureValidation,
+      maturationClosureFrontierValidationRef:
+        "maturation-closure-frontier-validation.yaml",
+      answerSupportLedgerValidation: noQuestionAnswerSupportValidation,
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationAuthorityResponseValidation: authorityResponseValidation,
+      maturationAuthorityResponseValidationRef:
+        "maturation-authority-response-validation.yaml",
+      ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+    });
+    expect(staleReadyValidation.validation_status).toBe("invalid");
+    expect(staleReadyValidation.violations.some((v) =>
+      v.code === "conflicting_state" && v.subject_id === "actionable_ready"
+    )).toBe(true);
   });
 
   it("rejects actionable limited when no rows can be included in the claim", () => {

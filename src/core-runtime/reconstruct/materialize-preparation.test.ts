@@ -114,6 +114,33 @@ describe("materializeReconstructPreparationArtifacts", () => {
     ]);
   });
 
+  it("captures a large code file whole so seed authoring is not a leading sample (@codex P2)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-code-whole");
+    const target = path.join(root, "big.ts");
+    // > DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT (6000): a leading-sample capture would
+    // truncate this and silently author the seed from the file head, with the prompt
+    // projection truncation never firing (capture < projection budget).
+    const body = `// big code file\n${"export const value = 1;\n".repeat(500)}`;
+    expect(body.length).toBeGreaterThan(6000);
+    await fs.writeFile(target, body, "utf8");
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+    const observations = await readYaml<ReconstructSourceObservationsArtifact>(
+      refs.source_observations,
+    );
+    const structural = observations.observations[0]?.structural_data as
+      | { content_excerpt?: string; excerpt_truncated?: boolean }
+      | undefined;
+    expect(structural?.content_excerpt).toBe(body);
+    expect(structural?.excerpt_truncated).toBe(false);
+  });
+
   it("observes markdown document targets with the document source profile", async () => {
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "reconstruct", "session-doc");
