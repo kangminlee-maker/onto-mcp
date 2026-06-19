@@ -621,6 +621,17 @@ export interface ReviewTargetProfileRef {
   kind: ReviewTargetRefKind;
   exists: boolean;
   sha256: string | null;
+  /**
+   * Whether this ref was actually inspectable by its per-material observer.
+   * Spreadsheet-specific and present only for spreadsheet refs: `true` when the
+   * workbook inventory was produced (`unsupported_reason === null`), `false` for an
+   * unsupported workbook FORMAT (.xls/.xlsb/.ods) or an unreadable/oversized
+   * workbook. This makes the kind-vs-per-target-format axis structurally explicit:
+   * `target_material_kind=spreadsheet` says the KIND is handled, while `inspectable`
+   * says whether THIS ref was read — so a `supported`/`null` material profile is
+   * never emitted for a target whose render says "unsupported".
+   */
+  inspectable?: boolean;
 }
 
 export interface ReviewTargetMaterialProfile {

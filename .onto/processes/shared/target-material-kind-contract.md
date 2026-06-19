@@ -81,7 +81,7 @@ the lexicon.
 
 | Process | Required alignment |
 |---|---|
-| `review` | `review-target-profile.yaml` records `target_material_kind`; review must not claim material-aware validation before per-material validators exist. |
+| `review` | `review-target-profile.yaml` records `target_material_kind` and now provides a per-material review adapter for `spreadsheet` (kind-derived obligations in `review_goal` + inventory-backed `materialized-input.md`; structure inspected only) ⇒ `support_status: supported` for inspectable workbooks, degrading to `partial` when any rendered ref is uninspectable (unsupported format .xls/.xlsb/.ods, or unreadable/empty workbook, surfaced per-ref via `target_refs[].inspectable`); `code` stays `supported`, `document`/`database` stay `partial`, `mixed` stays `partial_composite`, and `unknown` stays `unknown` until their adapters land (precise per-kind states owned by `review-target-profile-contract.md` §6). Review `support_status` and reconstruct `runtime_implementation_status` are **independent per-process axes over the same shared inventory backing**: review `supported` does not imply the reconstruct seed pipeline is fully wired (it remains `partially_wired`). |
 | `reconstruct` | Source profiles, source adapters, source observations, and directive validation must be keyed by `target_material_kind`. |
 | `evolve` | Future adapters must not assume code-product inputs; adapter selection should start from `target_material_kind` as defined in `.onto/processes/evolve/material-kind-adapter-contract.md`. |
 

@@ -93,8 +93,8 @@ material_profile:
   target_material_kind: code
   target_material_kind_candidates:
     - code
-  support_status: partial
-  unsupported_reason: review records target material kind, but material-specific validation is not implemented yet
+  support_status: supported
+  unsupported_reason: null
   detection:
     owner: runtime_heuristic
     confidence: 0.92
@@ -157,8 +157,34 @@ This axis must stay separate from:
 - `medium`: a cross-product reference and learning frame
 
 The current runtime records material kind and detection confidence as a bounded
-heuristic. It must not claim material-specific validation until per-material
-validators or adapters are implemented.
+heuristic. Per-material review handling is now implemented for **spreadsheet**:
+runtime attaches kind-derived review obligations (`reviewMaterialGoals` — formula
+integrity, cross-sheet reference integrity, named-range hygiene, data-validation
+coverage, access/protection hygiene, structural risk signals) to `review_goal`,
+backed by a structural inventory that is rendered into `materialized-input.md`
+with detail (formula text, named-range references, data-validation rules,
+protections, risk signals) — **structure inspected only, not recalculated**. A
+spreadsheet target is therefore `support_status: supported` **when its workbook
+format is inspectable**.
+
+Two axes stay distinct. `support_status` answers whether the material KIND is
+handled. Per-ref `inspectable` on `target_refs[]` and the inventory's
+`unsupported_reason` answer whether THIS workbook was actually read: an unsupported
+workbook format (.xls/.xlsb/.ods), an unreadable/oversized workbook, or an empty
+workbook (no structure) is not inspected. If **any** rendered spreadsheet ref is
+uninspectable — across both the resolved and materialized ref sets the review prompt
+renders — the target degrades to `support_status: partial` with a reason naming each
+uninspected ref's actual cause; the inventory-backed obligations are dropped only when
+**no** ref is inspectable (a mixed-format target with at least one inspectable ref stays
+`partial` yet keeps obligations backed by the inspectable ref(s)). A `supported`/`null`
+profile is never emitted for a workbook the render shows as `unsupported`, and the
+`supported` claim is tied to the rendered inventory: a render that drops an
+obligation-backing section makes the claim dishonest.
+
+`code`, `document`, `database`, and `unknown` retain their prior support states
+until their per-material review adapters land. A spreadsheet inside a `mixed`
+bundle does not yet receive spreadsheet obligations (a known limitation,
+consistent with the `mixed` support state).
 
 ---
 

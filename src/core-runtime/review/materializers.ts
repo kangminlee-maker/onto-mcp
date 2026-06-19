@@ -64,8 +64,14 @@ import { lensSidecarArtifactPath } from "./lens-sidecar-artifact.js";
 import { deliberationResolutionPath } from "./controlled-lens-deliberation.js";
 import {
   detectTargetMaterialKind,
+  isSpreadsheetRef,
+  reviewMaterialGoals,
   reviewMaterialSupportStatus,
 } from "../target-material-kind.js";
+import {
+  observeSpreadsheetSource,
+  type WorkbookStructuralInventory,
+} from "../spreadsheet-structure-observer.js";
 import { semanticQualityEvidenceForArtifactGeneration } from "./artifact-generation-realization.js";
 
 export interface WriteInvocationInterpretationArtifactParams {
@@ -1288,6 +1294,8 @@ function requireExecutionPreparationSessionDomain(value: string): string {
 
 async function buildReviewTargetProfileArtifact(
   params: MaterializeReviewExecutionPreparationArtifactsParams,
+  inventoryByRef?: Map<string, WorkbookStructuralInventory>,
+  materializedRefs?: string[],
 ): Promise<ReviewTargetProfileArtifact> {
   const sessionRoot = path.resolve(params.sessionRoot);
   const sessionId = path.basename(sessionRoot);
@@ -1314,9 +1322,14 @@ async function buildReviewTargetProfileArtifact(
     inputKind,
     primaryRole: roles.primary,
   });
-  const targetRefs = [];
+  const targetRefs: ReviewTargetProfileArtifact["target_refs"] = [];
   for (const [index, ref] of resolvedRefs.entries()) {
     const kind = await targetRefKind(ref, sessionRoot);
+    // Per-target inspectability is spreadsheet-specific: a ref is inspectable when its
+    // shared inventory carries no unsupported_reason (a supported workbook format that
+    // was actually read). Recorded only for spreadsheet refs so the kind-vs-format axis
+    // is structurally explicit (design §3.2 honesty; C-recon F1 mirror).
+    const isSpreadsheet = isSpreadsheetRef(ref);
     targetRefs.push({
       ref,
       role: index === 0 ? "primary" as const : "supporting" as const,
@@ -1325,7 +1338,47 @@ async function buildReviewTargetProfileArtifact(
       sha256: kind.exists
         ? await targetRefSha256(ref, kind.kind, params.directoryListingOptions)
         : null,
+      ...(isSpreadsheet
+        ? { inspectable: inventoryByRef?.get(ref)?.unsupported_reason === null }
+        : {}),
     });
+  }
+
+  // PER-TARGET-FORMAT GATE (design §3.2; shared target-material-kind-contract §5/§7):
+  // reviewMaterialSupportStatus is the KIND-level claim (spreadsheet => supported). A
+  // ref that was not actually inspected — an unsupported workbook format (.xls/.xlsb/.ods),
+  // an unreadable/oversized workbook, or an empty workbook (no structure) — must downgrade
+  // the RECORDED support_status to partial so a supported/null profile is never emitted for
+  // a workbook the render shows as "unsupported". The gate scope is the UNION of resolved
+  // and materialized spreadsheet refs because materialized-input renders materializedRefs
+  // (an independently-supplied set): an uninspectable workbook in EITHER set is rendered, so
+  // either must downgrade the claim. Inspectability and the honest reason both come from the
+  // shared inventory (inspectable iff unsupported_reason === null), never from the extension.
+  let supportStatus = materialSupport.status;
+  let supportReason = materialSupport.reason;
+  let materialGoals = reviewMaterialGoals(materialDetection.target_material_kind);
+  if (materialDetection.target_material_kind === "spreadsheet") {
+    const gateRefs = uniqueStrings(
+      [...resolvedRefs, ...(materializedRefs ?? [])].filter(isSpreadsheetRef),
+    );
+    const uninspectedReasons: string[] = [];
+    let inspectableCount = 0;
+    for (const ref of gateRefs) {
+      const inv = inventoryByRef?.get(ref);
+      if (inv && inv.unsupported_reason === null) {
+        inspectableCount += 1;
+      } else {
+        uninspectedReasons.push(inv?.unsupported_reason ?? "workbook not observed");
+      }
+    }
+    if (uninspectedReasons.length > 0) {
+      supportStatus = "partial";
+      supportReason = `spreadsheet review inspects structure only; ${uninspectedReasons.length} of ${gateRefs.length} ref(s) were not inspected (${uniqueStrings(uninspectedReasons).join("; ")})`;
+    }
+    // Obligations need rendered backing: drop them only when NO ref was inspected.
+    if (inspectableCount === 0) {
+      materialGoals = [];
+    }
   }
 
   return {
@@ -1349,6 +1402,7 @@ async function buildReviewTargetProfileArtifact(
       ...goalsForRole(roles.primary),
       ...roles.secondary.flatMap(goalsForRole),
       ...domainGoalAdditions(sessionDomain),
+      ...materialGoals,
     ]),
     closure_obligation_policy: [
       "must_close_in_target",
@@ -1362,8 +1416,8 @@ async function buildReviewTargetProfileArtifact(
       target_material_kind: materialDetection.target_material_kind,
       target_material_kind_candidates:
         materialDetection.target_material_kind_candidates,
-      support_status: materialSupport.status,
-      unsupported_reason: materialSupport.reason,
+      support_status: supportStatus,
+      unsupported_reason: supportReason,
       detection: {
         owner: "runtime_heuristic",
         confidence: materialDetection.confidence,
@@ -1411,20 +1465,39 @@ export async function materializeReviewExecutionPreparationArtifacts(
 
   await ensureDirectory(executionPreparationRoot);
 
+  const resolvedTargetRefs = params.resolvedTargetRefs.map((ref) => path.resolve(ref));
   const materializedRefs =
     params.materializedRefs && params.materializedRefs.length > 0
       ? params.materializedRefs.map((ref) => path.resolve(ref))
-      : params.resolvedTargetRefs.map((ref) => path.resolve(ref));
+      : resolvedTargetRefs;
+
+  // Observe each spreadsheet ref ONCE and share the inventory across the profile and
+  // both renders (design §3.2 "single observation"): a workbook would otherwise be
+  // parsed up to three times (target-snapshot + materialized-input + profile
+  // inspectability). The map feeds per-target inspectability and the rendered detail.
+  const spreadsheetRefs = [
+    ...new Set([...resolvedTargetRefs, ...materializedRefs].filter(isSpreadsheetRef)),
+  ];
+  const inventoryByRef = new Map<string, WorkbookStructuralInventory>();
+  await Promise.all(
+    spreadsheetRefs.map(async (ref) => {
+      inventoryByRef.set(ref, await observeSpreadsheetSource(ref));
+    }),
+  );
 
   const targetSnapshotManifest: TargetSnapshotManifest = {
     review_target_scope_kind: params.scopeKind,
-    resolved_target_refs: params.resolvedTargetRefs.map((ref) => path.resolve(ref)),
+    resolved_target_refs: resolvedTargetRefs,
     review_target_profile_ref: reviewTargetProfilePath,
     captured_at: isoNow(),
     capture_reason: "prompt-backed review execution",
   };
 
-  const reviewTargetProfile = await buildReviewTargetProfileArtifact(params);
+  const reviewTargetProfile = await buildReviewTargetProfileArtifact(
+    params,
+    inventoryByRef,
+    materializedRefs,
+  );
 
   const contextCandidateAssembly: ContextCandidateAssembly = {
     system_purpose_refs: params.systemPurposeRefs ?? [],
@@ -1437,8 +1510,9 @@ export async function materializeReviewExecutionPreparationArtifacts(
     fs.writeFile(
       targetSnapshotPath,
       await renderTargetSnapshot(
-        params.resolvedTargetRefs.map((ref) => path.resolve(ref)),
+        resolvedTargetRefs,
         params.directoryListingOptions,
+        inventoryByRef,
       ),
       "utf8",
     ),
@@ -1450,6 +1524,7 @@ export async function materializeReviewExecutionPreparationArtifacts(
         params.materializedKind,
         materializedRefs,
         params.directoryListingOptions,
+        inventoryByRef,
       ),
       "utf8",
     ),
