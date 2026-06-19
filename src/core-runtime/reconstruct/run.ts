@@ -5474,6 +5474,10 @@ function deterministicOntologySeedTimeoutRecovery(args: {
 export interface DocumentExcerptProjectionTruncation {
   observation_id: string;
   source_ref: string;
+  // The bounded observation's material kind (code is now full-excerpt eligible too),
+  // so the runtime event and final-output section name the right material instead of
+  // always saying "document".
+  target_material_kind: string;
   captured_chars: number;
   projection_budget_chars: number;
 }
@@ -5742,6 +5746,7 @@ export function observationPromptPayload(
           options.recordDocumentExcerptProjectionTruncation({
             observation_id: observation.observation_id,
             source_ref: observation.source_ref,
+            target_material_kind: observation.target_material_kind,
             captured_chars: typeof captured === "string" ? captured.length : 0,
             projection_budget_chars: typeof limit === "number"
               ? limit
@@ -5790,6 +5795,7 @@ export function singleDocumentProjectionTruncation(
     {
       observation_id: observation.observation_id,
       source_ref: observation.source_ref,
+      target_material_kind: observation.target_material_kind,
       captured_chars: excerpt.length,
       projection_budget_chars: budget,
     },
@@ -9718,19 +9724,20 @@ function appendFinalOutputDocumentProjectionTruncationSection(
   truncations: DocumentExcerptProjectionTruncation[],
 ): string {
   if (truncations.length === 0) return finalOutputText;
-  const heading = "## Document Projection Truncation";
+  const heading = "## Source Projection Truncation";
   const content = [
     heading,
     "",
-    "A captured document exceeded the seed-stage projection budget for the active " +
-      "model window, so its tail was not projected into seed authoring. The full " +
-      "captured content is retained in source-observations; only the seed-stage " +
-      "prompt projection was bounded. Recovering the omitted tail is a later stage.",
+    "A captured source file (document or code) exceeded the seed-stage projection " +
+      "budget for the active model window, so its tail was not projected into seed " +
+      "authoring. The full captured content is retained in source-observations; only " +
+      "the seed-stage prompt projection was bounded. Recovering the omitted tail is a " +
+      "later stage.",
     "",
     ...truncations.map((truncation) =>
-      `- ${truncation.source_ref} (${truncation.observation_id}): captured ` +
-      `${truncation.captured_chars} chars, projected ` +
-      `${truncation.projection_budget_chars} chars`
+      `- ${truncation.source_ref} (${truncation.observation_id}, ` +
+      `${truncation.target_material_kind}): captured ${truncation.captured_chars} ` +
+      `chars, projected ${truncation.projection_budget_chars} chars`
     ),
     "",
   ].join("\n");
@@ -13020,13 +13027,14 @@ export async function runReconstruct(
     appendRuntimeStatusEventSync({
       pipeline: "reconstruct",
       sessionRoot,
-      sourceLabel: "document-projection-budget",
+      sourceLabel: "source-projection-budget",
       stageId: "seed_authoring",
       message:
-        `document ${truncation.source_ref} (${truncation.observation_id}) captured ` +
-        `${truncation.captured_chars} chars exceeds the seed-stage projection budget ` +
-        `${truncation.projection_budget_chars} chars; its tail was not projected into ` +
-        "seed authoring (full captured content retained in source-observations).",
+        `${truncation.target_material_kind} source ${truncation.source_ref} ` +
+        `(${truncation.observation_id}) captured ${truncation.captured_chars} chars ` +
+        `exceeds the seed-stage projection budget ${truncation.projection_budget_chars} ` +
+        "chars; its tail was not projected into seed authoring (full captured content " +
+        "retained in source-observations).",
     });
   }
   // Sibling for spreadsheets (P6): the inventory projection is unconditional and

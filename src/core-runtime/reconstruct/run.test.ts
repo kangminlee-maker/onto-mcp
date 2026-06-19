@@ -6165,6 +6165,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
       {
         observation_id: "obs-doc",
         source_ref: "/doc/obs-doc",
+        target_material_kind: "document",
         captured_chars: 5000,
         projection_budget_chars: 1000,
       },
@@ -6192,6 +6193,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
       {
         observation_id: "obs-big",
         source_ref: "/doc/obs-big",
+        target_material_kind: "document",
         captured_chars: 5000,
         projection_budget_chars: 1000,
       },
@@ -6294,6 +6296,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
         {
           observation_id: "obs-doc",
           source_ref: "/doc/obs-doc",
+          target_material_kind: "document",
           captured_chars: 5000,
           projection_budget_chars: 1000,
         },
@@ -6312,6 +6315,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
         {
           observation_id: "obs-code",
           source_ref: "/doc/obs-code",
+          target_material_kind: "code",
           captured_chars: 5000,
           projection_budget_chars: 1000,
         },

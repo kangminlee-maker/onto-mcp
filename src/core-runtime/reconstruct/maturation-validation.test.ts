@@ -2596,6 +2596,45 @@ describe("maturation validation", () => {
     expect(staleReadyValidation.violations.some((v) =>
       v.code === "conflicting_state" && v.subject_id === "actionable_ready"
     )).toBe(true);
+
+    // @codex R3: the public claim projects decision.limitation_refs, so a limited
+    // decision that omits a matrix candidate limitation is rejected — the source-level
+    // limitation cannot silently disappear from the downstream claim.
+    const droppedLimitationValidation = validateMaturationContinuationDecision({
+      maturationContinuationDecision: candidateLimitedDecision,
+      maturationContinuationDecisionRef:
+        "maturation-continuation-decision.yaml",
+      actionabilityMatrix: {
+        ...matrix,
+        candidate_limitation_refs: [
+          "limitation-source-coverage-partial",
+          "limitation-extra-not-in-decision",
+        ],
+      },
+      actionabilityMatrixValidation: matrixValidation,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      maturationClosureFrontierValidation: closureValidation,
+      maturationClosureFrontierValidationRef:
+        "maturation-closure-frontier-validation.yaml",
+      answerSupportLedgerValidation: noQuestionAnswerSupportValidation,
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationAuthorityResponseValidation: authorityResponseValidation,
+      maturationAuthorityResponseValidationRef:
+        "maturation-authority-response-validation.yaml",
+      ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+    });
+    expect(droppedLimitationValidation.validation_status).toBe("invalid");
+    expect(droppedLimitationValidation.violations.some((v) =>
+      v.code === "missing_required_ref" &&
+      v.subject_id === "candidate_limitation_refs"
+    )).toBe(true);
   });
 
   it("rejects actionable limited when no rows can be included in the claim", () => {
@@ -3359,6 +3398,55 @@ describe("maturation rejection branches", () => {
     expect(validation.validation_status).toBe("invalid");
     expect(validation.violations.some((v) => v.code === "mixed_lineage_missing"))
       .toBe(true);
+  });
+
+  it("exempts mixed lineage only when the selected candidate is itself limitation-backed (@codex R3)", () => {
+    const candidateLimitation = "limitation-mixed-member-lineage-unrecoverable";
+    // Baseline rows carry no member lineage; the candidate-level limitation is surfaced
+    // at the baseline top level (not copied onto rows).
+    const maturationBaseline = baseline([], [candidateLimitation]);
+    const validateMixed = (
+      candidates: ReturnType<typeof sourcePurposeCandidates>,
+    ) =>
+      validateMaturationBaseline({
+        maturationBaseline,
+        maturationBaselineRef: "maturation-baseline.yaml",
+        sourcePurposeCandidates: candidates,
+        sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+        purposeConfirmationValidation: validPurposeConfirmation(),
+        ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+        competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+        handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+        sourceReconstructRecordSha256: sourceRecordSha,
+      });
+
+    // A limitation-backed mixed candidate: the upstream purpose validator already
+    // accepted its limitation as justifying the missing member lineage, so its rows
+    // are exempt from mixed_lineage_missing.
+    const limitationBacked = structuredClone(
+      sourcePurposeCandidates([candidateLimitation]),
+    );
+    limitationBacked.target_material_kind = "mixed";
+    limitationBacked.purpose_candidates[0]!.purpose_source_status =
+      "limitation_backed";
+    expect(
+      validateMixed(limitationBacked).violations.some((v) =>
+        v.code === "mixed_lineage_missing"
+      ),
+    ).toBe(false);
+
+    // Contrast: a NOT-limitation-backed mixed candidate is not exempted by an
+    // incidental candidate limitation — each row still needs its own lineage or
+    // limitation (the F2 row-scoped obligation is preserved).
+    const notLimitationBacked = structuredClone(
+      sourcePurposeCandidates([candidateLimitation]),
+    );
+    notLimitationBacked.target_material_kind = "mixed";
+    expect(
+      validateMixed(notLimitationBacked).violations.some((v) =>
+        v.code === "mixed_lineage_missing"
+      ),
+    ).toBe(true);
   });
 
   it("rejects a closure source request whose source ref is not in source inventory", () => {

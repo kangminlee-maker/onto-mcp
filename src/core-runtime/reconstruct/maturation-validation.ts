@@ -777,11 +777,21 @@ export function validateMaturationBaseline(args: {
       row.member_target_material_kind !== null &&
       row.member_source_refs.length > 0 &&
       row.cross_material_ref_refs.length > 0;
-    // Mixed-target lineage is a row-scoped obligation: each row must preserve its
-    // member lineage or cite its own limitation that identifies which member/source
-    // grounds it. A purpose-candidate-level limitation does not name a row's member,
-    // so it must not exempt rows here (it constrains the overall claim elsewhere).
-    if (mixedTarget && !hasLineage && row.limitation_refs.length === 0) {
+    // Mixed-target lineage is row-scoped by default: each row grounds itself by its
+    // own member lineage or its own limitation, because a stray candidate limitation
+    // does not name a row's member/source. The one exception is a candidate that is
+    // ITSELF limitation-backed — the upstream purpose validator already accepted its
+    // limitation_refs as justifying gaps (e.g. unrecoverable mixed-member lineage), so
+    // its rows may lean on that acknowledgment rather than failing baseline validation.
+    // (Candidate limitations still never mark a row limitation_backed, so frontier
+    // gating is unaffected.)
+    const candidateLimitationBacked =
+      selected?.purpose_source_status === "limitation_backed" ||
+      selected?.adequacy_frame.frame_status === "limitation_backed";
+    const mixedLineageExempt =
+      row.limitation_refs.length > 0 ||
+      (candidateLimitationBacked && baseline.candidate_limitation_refs.length > 0);
+    if (mixedTarget && !hasLineage && !mixedLineageExempt) {
       violations.push(violation({
         code: "mixed_lineage_missing",
         message:
@@ -3897,6 +3907,23 @@ export function validateMaturationContinuationDecision(args: {
       message:
         "actionable_ready cannot be projected while purpose-candidate-level limitations remain",
       subjectId: "actionable_ready",
+    }));
+  }
+  // The public claim projects decision.limitation_refs, so every matrix candidate
+  // limitation must survive into it — a saved/edited limited decision that drops them
+  // (keeping only excluded rows or other limitation refs) would erase the source-level
+  // limitation from the downstream claim even though the validated matrix still carries it.
+  const decisionLimitationRefs = new Set(decision.limitation_refs);
+  if (
+    args.actionabilityMatrix.candidate_limitation_refs.some(
+      (ref) => !decisionLimitationRefs.has(ref),
+    )
+  ) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message:
+        "continuation decision limitation_refs must include every matrix candidate limitation",
+      subjectId: "candidate_limitation_refs",
     }));
   }
   if (
