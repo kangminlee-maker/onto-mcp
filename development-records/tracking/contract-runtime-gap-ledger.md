@@ -1,7 +1,7 @@
 # Contract ↔ Runtime Gap Ledger (청사진 vs 실물)
 
 > **목적**: onto의 *선언/계약(청사진)* 과 *실제 배선된 런타임(실물)* 사이의 gap을 **현 시점 기준으로 명확히 판단·문서화**하고, **gap이 줄어들 때마다 갱신**하는 living 원장. 설계가 "문서에 적힌 능력"을 "이미 구현된 것"으로 착각하는 함정(= S1 검증 §11에서 드러난 근본 원인)을 전역에서 방지한다.
-> **As of**: 2026-06-18 (브랜치 `feat/spreadsheet-p6`; C-recon = spreadsheet 게이트 활성화 + P6 = reconstruct 정직성 게이트).
+> **As of**: 2026-06-18 (S1 + C-recon + P6 = spreadsheet 추출기 실배선 + reconstruct 정직성 게이트, 전부 머지).
 > **갱신 규칙**: gap을 닫는 PR/커밋은 이 표의 해당 행을 **같은 커밋에서** 갱신한다(실물 칸·status·닫힘 조건). 새 계약/profile 추가 시 행을 추가한다. 이 문서는 *현재 상태 대시보드*이지 이력이 아니다 — 닫힌 gap은 행을 "✅ closed (커밋)"로 압축한다.
 > **권위**: 선언 status의 SSOT는 각 레지스트리/계약 헤더다(아래 "출처" 칼럼). 이 원장은 그 선언 + 실배선 spot-check의 **판정 projection**이며, 충돌 시 레지스트리/코드가 우선.
 
@@ -26,23 +26,15 @@
 |---|---|---|---|---|
 | 결정론 source scout | "kind-불가지론 L2"로 일반화 가능(§S1 설계 §9.2 주장) | `buildSignalRowsForObservation`이 **`code`/`document`로 하드게이트**(그 외 kind는 `[]`). CODE/DOCUMENT_PATTERNS만, SPREADSHEET_PATTERNS 없음 | **csv·spreadsheet는 L2 무료가 아님**(csv=kind spreadsheet). "L1만 주면 L2 자동" 전제 거짓 | scout 게이트 확장 + kind별 pattern/축 매핑 시 |
 
-## 3. reconstruct — source 내용 → 프롬프트 채널 거버넌스
+## 3. review — source 내용 admission / 검증
 
 | 영역 | 청사진 | 실물 | gap | 닫힘 조건 |
 |---|---|---|---|---|
-| source-safety 채널 | source 내용은 admission 거쳐 프롬프트-가시(visibility-tier·allowed-proof-form·intended-consumption·redaction·replay + `source_safety_ledger` + `delta_observation_not_prompt_visible`) | reconstruct에 ledger/타입 존재, **`content_excerpt` 채널 기준으로 작동** | 신규 관측 필드(미래 S1 §2.4)는 이 채널을 **우회** → admission/provenance/replay/미신뢰-source 취급 건너뜀 | 신규 필드를 ledger 통과/단일 채널로 모을 때 (§11 CHAN-1) |
-| ⚠️ spreadsheet 인벤토리 리터럴 (C-recon으로 **활성화**) | CHAN-1=raw 셀 값 미방출, raw값은 source-safety 채널만 경유 | C-recon flip 후 `workbook_inventory`가 프롬프트-가시 — **raw값은 제거(CHAN-1 충족)되나 구조 리터럴(formula 본문·external-link 타깃·추론 header명)은 source-safety 민감 스캐너(`hasSensitiveSourceEvidence`=content_excerpt만 스캔) 우회**(Codex PR #92 F3) | 구조 리터럴이 민감 스캔/필드-단위 redaction 없이 프롬프트 도달. 잔여 위험은 owner-settled "헤더명=스키마"(S1 CHAN-1) 경계 안, 주 PII 벡터(raw값)는 이미 차단 | **필드-단위 redaction을 source-safety 경유로** 구현(CHAN-2 closure 슬라이스). over-drop/미redact 위험 탓 부분완화 부적합 → 전용 슬라이스 |
-
-## 4. review — source 내용 admission / 검증
-
-| 영역 | 청사진 | 실물 | gap | 닫힘 조건 |
-|---|---|---|---|---|
-| review materialized-input | 타깃을 검증용으로 admit | `renderReviewTargetMaterializedInput`→**`fs.readFile utf8` 그대로**. source-safety 원장·admission **전무** | review엔 source-내용 거버넌스 자체가 없음(바이너리 illegible로 가려져 있었음) | review측 admission 계약 + 공유 projection 시 (§11 CHAN-2) |
+| review materialized-input | 타깃을 검증용으로 admit | `renderReviewTargetMaterializedInput`→**`fs.readFile utf8` 그대로**(spreadsheet는 S1/P3에서 구조 인벤토리 projection으로 대체됨). per-material admission/검증 계약 **없음** | review엔 per-material source-내용 admission 계약 자체가 없음(바이너리 illegible로 가려져 있었음) | review측 per-material admission 계약 도입 시 (C-review) |
 | review target profile | `review-target-profile-contract.md` **Active** | v1 **결정론 heuristic**(artifact role/closure). 계약 §6: "**per-material validator/adapter 구현 전까지 material validation 주장 금지**" | material별 검증 미구현(전 kind) | per-material 검증 도입 시 |
 | review spreadsheet 지원 | — | `reviewMaterialSupportStatus(spreadsheet)=partial`(차단 안 함, 구조 맹목) | 구조 인지 없는 "partial" | C-review(S1 인벤토리 소비) 시 |
-| ⚠️ review의 spreadsheet 정직성 게이트 (P6 미커버) | P6 정직성 어서션(content_sha256/unsupported↔empty/capture·macro 공개)은 관측 무결성을 런타임 강제(inspection_method는 단일-리터럴 타입이 보장 — 어서션 A 드롭, 게이트 아님) | P6은 `validateSourceObservationBoundary`(**reconstruct 전용**)에만 어서션 추가. review(`review-artifact-utils.ts` `observeSpreadsheetSource`+`projectInventoryForAdmission`→`renderSpreadsheetStructuralView`)는 **동일 공유 관측기를 소비하나 그 게이트를 거치지 않음** — 정직성 리터럴은 renderer에 하드코딩(강제 없음). 오늘 거짓 주장은 없음(리터럴이 우연히 맞음) | 공유 관측기의 한 소비자가 정직성 게이트 밖(F1 패턴: 공유 chokepoint, 일부 caller만 커버). 잔여 위험 저-심각(현재 거짓 방출 0) | C-review가 review 경로를 같은(또는 공유) 정직성 게이트 아래로 통합 시 (P6 어서션을 공유 헬퍼로 추출하거나 review admission 계약 신설) |
 
-## 5. evolve / shared 계약
+## 4. evolve / shared 계약
 
 | 영역 | 청사진 | 실물 | gap | 닫힘 조건 |
 |---|---|---|---|---|
@@ -50,7 +42,7 @@
 | pipeline-execution-ledger | `> Status: shared design contract` | reconstruct에 `pipeline-execution-ledger.ts` 존재(부분) | 계약↔실물 정합 spot-check 필요 | 검증 후 갱신 |
 | target-material-kind 축 | `> Status: design goal contract, partially registered in core lexicon` | `detectTargetMaterialKind`(확장자 분류)는 동작; per-kind 관측은 §1대로 대부분 planned | 분류는 됨, 관측 실현은 kind별 갭 | §1 닫힘과 동기 |
 
-## 6. 사용 메모
+## 5. 사용 메모
 - 이 원장은 S1 설계 §11(검증)에서 드러난 **"선언≠배선" 함정**의 전역 카운터파트다. onto의 INV-MODEL "benchmark-validated만"·supported-model 정직성과 **같은 계열**(declared knob ≠ applied)이다.
 - 새 설계는 위 표의 "실물" 칸을 먼저 확인하고, *청사진을 실물로 가정하지 않는다*. profile/계약을 인용할 때 해당 행의 status를 함께 인용한다.
-- spot-check 미완 항목(§5 pipeline-ledger 정합 등)은 다음 갱신에서 코드 확인 후 확정한다.
+- spot-check 미완 항목(§4 pipeline-ledger 정합 등)은 다음 갱신에서 코드 확인 후 확정한다.

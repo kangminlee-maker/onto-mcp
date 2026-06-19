@@ -41,7 +41,7 @@
 4. 정직성: 추출 실패/부분/미지원은 fail-loud 또는 명시적 `unsupported/partial` 기록(조용한 빈 통과 금지).
 5. 신규 public 응답 표면 최소(개념 경제). 의존성=**단일 번들 Node lib**(§11.2), 환경 감지/폴백 없음.
 6. 검증: 단위(추출기) + 통합(양 seam) + 결정론(해시 안정) + 음성(손상 파일/암호화/매크로). 기존 reconstruct/review 스위트 무회귀.
-7. 채널·재현(§11): 데이터 관측 원시값은 source-safety 채널 경유(기본 카운트만 — CHAN); 파라미터 캐시 키 명세로 replay 결정론(CACHE-1).
+7. 집계·재현(§11): 데이터 관측은 기본 집계(카운트)만 프롬프트-가시(원시값 비전파); 파라미터 캐시 키 명세로 replay 결정론(CACHE-1).
 
 ---
 
@@ -117,20 +117,20 @@ unsupported_reason    : string|null  ← 암호화/손상/미지원 포맷
 - S1은 **구조 인덱스(sheets/dimensions/named ranges)를 먼저** 읽고, formula/validation 셀은 **예산 한도**까지 수집 → `capture_truncated`.
 - xlsx는 ZIP/XML **스트리밍 read-only**(전체 워크북 메모리 적재 회피). reconstruct의 모델-무지 capture / 모델-인지 projection 2단 구조(`materialize-preparation.ts` 주석)와 동일 철학.
 
-### 2.4 데이터 관측 레이어 (실증 §8 반영; §11 SCHEMA-1/CHAN-1/CAPS-1 보정)
-구조 인벤토리만으로는 **온톨로지 seeding에 부족**(실증 §8은 수식 없이 데이터로 클래스·속성·관계 도출). 구조 레이어와 **분리된 데이터 관측 레이어**를 둔다. **기본은 aggregate(카운트)만 프롬프트-가시**(원시 값 비전파 — CHAN-1).
+### 2.4 데이터 관측 레이어 (실증 §8 반영; §11 SCHEMA-1/CAPS-1 보정)
+구조 인벤토리만으로는 **온톨로지 seeding에 부족**(실증 §8은 수식 없이 데이터로 클래스·속성·관계 도출). 구조 레이어와 **분리된 데이터 관측 레이어**를 둔다. **기본은 aggregate(카운트)만 프롬프트-가시**(원시 값 비전파).
 ```
 per_sheet_data[]:
   sheet                  : name
   layout_kind            : "tabular"|"pivot_or_crosstab"|"matrix_no_header"|"unknown"  ← 비-tabular면 columns/vocab 강등
   header_rows            : int[] | null    ← 다중행/병합 헤더 표현, null=헤더 없음 (단일 int 금지 — SCHEMA-1)
   columns[]              : { name, index, inferred_type, non_empty_ratio }  ← layout_kind=tabular일 때만 assert
-  sample_rows            : 기본 비전파; 필요 시에만 source-safety 채널(allowed-proof-form) 경유
+  sample_rows            : 기본 비전파(집계만)
 distinct_value_vocab[]   : { sheet, column, distinct_count, top_values? }  ← 기본 distinct_count만; top_values(원시) は ledger 통과 시에만
 cross_sheet_key_overlap[]: { key_name, sheets:[...], pairwise_overlap:[{a,b,count}] }  ← 카운트만(키 값 비전파); 단일시트 csv=빈 배열(optionality)
 data_layer_caps          : { max_rows_scanned_per_sheet, max_distinct_tracked_per_column, max_columns_profiled, max_sheet_pairs }  ← CAPS-1, 캐시 파라미터에 포함
 ```
-- **CHAN-1**: 원시 값(top_values·sample_rows·키 값)이 §3 source-safety 채널을 **우회 금지** → 기본 카운트만, 원시값은 ledger/allowed-proof-form(hash/bounded_summary/source_ref_only) 경유. (PII 아니라 채널 거버넌스.)
+- **aggregate-only**: 원시 값(top_values·sample_rows·키 값)은 기본 비전파 → 인벤토리는 집계(카운트)·구조만 산출(데이터 덤프 아님).
 - **CAPS-1**: distinct=O(rows)·overlap=O(sheets²) → 캡 초과 시 `distinct_count`=≥cap **추정치** + `capture_truncated`. cap 값은 P0.5 캐시 파라미터.
 - `cross_sheet_key_overlap` ↔ §2.2 수식 `cross_sheet_refs` **상보적**(수식 없는 평평 원장의 관계). 모두 **관측일 뿐 의미 단정 아님** — 승격은 LLM.
 
@@ -141,12 +141,12 @@ data_layer_caps          : { max_rows_scanned_per_sheet, max_distinct_tracked_pe
 ### 3.1 reconstruct (`materialize-preparation.ts`)
 - 현재: `buildReconstructSourceObservation`(`:343+`)이 모든 kind에 `textStats`+`adapter_id: minimal-${kind}-structure-observer`.
 - 변경: kind=spreadsheet일 때 S1 호출 → `structural_data`에 인벤토리, `adapter_id: "spreadsheet-structure-observer"`.
-- `content_excerpt`(binary 쓰레기 원천)는 spreadsheet에서 **인벤토리 projection(기본 카운트/구조만, §2.4 CHAN-1)** 으로 대체. `content_sha256`은 **raw 바이트**(textStats UTF-8 해시와 다름 — §11 HASH-1).
+- `content_excerpt`(binary 쓰레기 원천)는 spreadsheet에서 **인벤토리 projection(기본 카운트/구조만, §2.4)** 으로 대체. `content_sha256`은 **raw 바이트**(textStats UTF-8 해시와 다름 — §11 HASH-1).
 - 경계 검증: 관측은 **active `validateSourceObservationBoundary`** 통과(§2.1), `PROHIBITED_STRUCTURAL_KEYS`(entity/relation 등 금지) denylist 테스트를 P0/P2에 추가.
 - 게이트(`isRunnableProfileRuntimeStatus` `:110`)는 S1 backing이 생긴 **후** C-recon에서 `planned→partially_wired`로 flip(정직성: 구현 없이 status 먼저 올리지 않음).
 
 ### 3.2 review (`materializers.ts`)
-- 현재: spreadsheet→`partial`(`reviewMaterialSupportStatus`), 타깃은 `materialized-input.md`(텍스트, xlsx 무용). **review엔 source-content admission/원장 자체가 없음**(`fs.readFile utf8` 그대로 — §11 CHAN-2).
+- 현재: spreadsheet→`partial`(`reviewMaterialSupportStatus`), 타깃은 `materialized-input.md`(텍스트, xlsx 무용). **review엔 per-material source-content admission 계약 자체가 없음**(`fs.readFile utf8` 그대로).
 - 변경: kind=spreadsheet일 때 `materialized-input`/`target-snapshot`을 S1 인벤토리의 **aggregate/structural projection**(카운트·스키마·수식/검증 구조만; 원시 값·키 값·sample_rows 비포함)으로 렌더. 인벤토리는 reconstruct와 **공유 아티팩트** → **공유 admission projection 1개**를 양 소비자가 사용(안전 기본 1회 강제).
 - `review-target-profile-contract.md` §6 honesty 유지: "structure inspected only", 재계산 주장 안 함. support_status는 C-review 전까지 `partial`.
 
@@ -172,11 +172,11 @@ data_layer_caps          : { max_rows_scanned_per_sheet, max_distinct_tracked_pe
 - **P0 — 인벤토리 스키마 확정**: `WorkbookStructuralInventory` 타입 + 공통 envelope. 검증: 타입체크, 기존 `structural_data` 소비자 무회귀.
 - **P0.5 — L2 파라미터 결정 메커니즘 (C′, 결정 §10)**: 결정론 휴리스틱(헤더=첫 라벨행·범주형=distinct비율·키=이름패턴+유일성) + **신뢰도/모호 게이트** + 모호시 **LLM bounded-submit**(`header_row`/`categorical_cols`/`key_candidates`만, runtime-owned·unknown 필드 reject) + 채택 파라미터·출처(`heuristic|llm`)·신뢰도 **기록·캐시**. P1·P4의 객관 계산은 이 파라미터를 입력으로 받는다. **에스컬레이션 actor/seat**(§11 ESC-1): 결정론 단계는 모델-해소 이전이므로 escalation은 **seed 단계 또는 명명된 prep-actor**(해소된 route)에서; 실패강등=LLM 불가→heuristic 파라미터+출처기록, hard 모호만 fail-loud. **캐시 키**(§11 CACHE-1)=`content_sha256 + 휴리스틱/추출기 버전 + 트리거 버전 + 프롬프트 해시 + model id/effort`(+ `data_layer_caps`); drift 테스트로 무효화 검증. 검증: 휴리스틱 단위·에스컬레이션 트리거·**동일 파라미터 replay 결정론**·LLM 제출물 필드 reject.
 - **P1 — csv 추출기(의존성 0)**: 텍스트 파싱으로 구조 관찰(평탄 슬라이스 아님), **P0.5 파라미터로** 헤더행·열타입·distinct 어휘 계산. 검증: csv fixture 단위 + 결정론 해시.
-- **P2 — reconstruct seam 배선(csv)**: `buildReconstructSourceObservation`에서 csv→S1; 인벤토리 원시값은 **source-safety 채널 경유**(기본 카운트만 — §11 CHAN-1), `content_sha256`=raw 바이트. 검증: 통합(관찰 아티팩트에 인벤토리)·**`validateSourceObservationBoundary`+`PROHIBITED_STRUCTURAL_KEYS` 통과**·reconstruct 스위트 무회귀.
-- **P3 — review seam 배선(csv)**: `materialized-input`에 **공유 aggregate/structural admission projection**(원시값 비포함 — §11 CHAN-2; reconstruct와 1개 공유). 검증: review materializer 스위트 + admission projection 단위 + 음성(빈/거대 csv).
+- **P2 — reconstruct seam 배선(csv)**: `buildReconstructSourceObservation`에서 csv→S1; 인벤토리는 **집계(카운트)·구조만**(원시값 비전파), `content_sha256`=raw 바이트. 검증: 통합(관찰 아티팩트에 인벤토리)·**`validateSourceObservationBoundary`+`PROHIBITED_STRUCTURAL_KEYS` 통과**·reconstruct 스위트 무회귀.
+- **P3 — review seam 배선(csv)**: `materialized-input`에 **공유 aggregate/structural projection**(원시값 비포함; reconstruct와 1개 공유). 검증: review materializer 스위트 + projection 단위 + 음성(빈/거대 csv).
 - **P4 — xlsx 추출기**: **단일 번들 Node lib**(SheetJS/exceljs, §11.2), in-process. 구조 인덱스 우선 + 예산 + 스트리밍, **P0.5 파라미터 입력**, `content_sha256`=raw 바이트. 검증: xlsx fixture(수식/명명범위/병합/검증/오류셀/숨김) 단위 + 음성(암호화/손상/매크로/zip-bomb → unsupported fail-loud) + **번들크기 델타 측정**(redesign-trigger(a)).
 - **P5 — 양 seam xlsx 배선 + 대용량**: capture_truncated 경로. 검증: 대용량 xlsx 통합, 번들 크기 영향 측정.
-- **P6 — 정직성·provenance 게이트** *(구현됨; ultracode 38-agent 교차검증 후 revise-then-implement)*: `validateSourceObservationBoundary`를 **확장**(신규 validator 아님 — 관측 무결성=금지 검사의 양의 보완=정직 공개 단언; materialize 게이트 재사용). spreadsheet 관측 한정 어서션: **B** content_sha256는 `unsupported_reason===null`일 때만 top-level 64-hex(소비자 bind처; provenance *anchor*이지 source-safety provenance-complete 아님 — CHAN-2/F3 별개)·**C** unsupported 인벤토리는 `inventoryHasInspectedStructure`(전 구조 surface) 거짓이어야(빈-csv 0-dim·oversized/unreadable `sheets:[]` 면제)·**D** capture_truncated/macro_present는 summary에 고정 문구로 공개(assert+emit 동일 리터럴 원자 착지). **A(inspection_method) 드롭**=단일-리터럴 타입이 이미 보장(capability-boundary). **핵심 교훈**: validator가 builder 내부서 throw→materialize skip-demotion보다 먼저 실행→**unsupported 정상상태 면제 필수**(아니면 graceful skip이 크래시; C-recon F1 패턴 재현). projection-truncated는 별 stage(seed)라 validator로 도달 불가→documents `recordDocumentExcerptProjectionTruncation` 미러링 **결정론 recompute**(`recomputeWorkbookInventoryProjectionTruncations`)+ndjson+final-output 섹션. review consumer는 P6 미게이트(reconstruct-only)→gap ledger §4 등재(C-review서 통합). 검증: 음성+양성 must-pass 스위트(unsupported 정상상태 무크래시).
+- **P6 — 정직성·provenance 게이트** *(구현됨; ultracode 38-agent 교차검증 후 revise-then-implement)*: `validateSourceObservationBoundary`를 **확장**(신규 validator 아님 — 관측 무결성=금지 검사의 양의 보완=정직 공개 단언; materialize 게이트 재사용). spreadsheet 관측 한정 어서션: **B** content_sha256는 `unsupported_reason===null`일 때만 top-level 64-hex + 인벤토리 hash 일치(소비자 bind처; provenance anchor)·**C** unsupported 인벤토리는 `inventoryHasInspectedStructure`(전 구조 surface) 거짓이어야(빈-csv 0-dim·oversized/unreadable `sheets:[]` 면제)·**D** capture_truncated/macro_present는 summary에 고정 문구로 공개(assert+emit 동일 리터럴 원자 착지). **A(inspection_method) 드롭**=단일-리터럴 타입이 이미 보장(capability-boundary). **핵심 교훈**: validator가 builder 내부서 throw→materialize skip-demotion보다 먼저 실행→**unsupported 정상상태 면제 필수**(아니면 graceful skip이 크래시; C-recon F1 패턴 재현). projection-truncated는 별 stage(seed)라 validator로 도달 불가→documents `recordDocumentExcerptProjectionTruncation` 미러링 **결정론 recompute**(`recomputeWorkbookInventoryProjectionTruncations`)+ndjson+final-output 섹션. review consumer는 P6 미게이트(reconstruct-only)→C-review서 통합. 검증: 음성+양성 must-pass 스위트(unsupported 정상상태 무크래시).
 
 **Redesign 트리거**: (a) 번들 Node lib이 mcpb 크기/파서 공격면을 INV(INV-CFG 등) 위반 수준으로 키우면 → lib 교체(SheetJS↔exceljs) 또는 xlsx 범위 축소(csv-only) 재결정. (b) review seam이 새 filesystem read 권한을 요구하면(계약 §9 "no new filesystem reads" 위반) → stop&ask.
 
@@ -331,9 +331,6 @@ data_layer_caps          : { max_rows_scanned_per_sheet, max_distinct_tracked_pe
 - `execution_adapter` 이름 재사용 불필요(subprocess 없음). 신규 추출기는 평범한 결정론 runtime 코드.
 
 ### 11.3 HIGH (xlsx/wiring 전 폐쇄)
-> **PII/프라이버시 자체는 범위 밖**(우리는 도구를 만들 뿐, 데이터 보호는 호출자 책임). 그러나 검증이 이 발견을 raise한 **진짜 이유는 PII가 아니라 채널 거버넌스 우회**다 — onto엔 이미 source 내용이 프롬프트로 가는 길을 다스리는 `ReconstructSourceSafety*` 체계(visibility-tier·allowed-proof-form·intended-consumption·redaction·replay state + `source_safety_ledger` + `delta_observation_not_prompt_visible` 게이트)가 있다. 아래는 그 **in-scope** 관점으로 재서술.
-- **CHAN-1 (source→프롬프트 admission 우회)**: §2.4 신규 관측 필드가 source 내용을 LLM으로 보내면서 reconstruct의 **source-safety 채널**(현재 `content_excerpt`-keyed)을 **우회** → (a) prompt-visibility admission, (b) provenance/replay 원장, (c) allowed-proof-form(hash/bounded_summary/source_ref_only), (d) 미신뢰-source 취급(프롬프트 인젝션 표면)을 전부 건너뜀. PII 여부와 무관한 **거버넌스/재현/신뢰경계** 문제. → 신규 필드를 **source_safety_ledger를 통과**시키거나 `content_excerpt` 단일 채널로 모으고, 기본은 **aggregate(카운트)만** 프롬프트-가시.
-- **CHAN-2 (review의 source 내용 거버넌스 부재)**: review 파이프라인은 source-safety 원장·admission **자체가 없음**(`fs.readFile utf8` 그대로). 바이너리라 안 읽히던 게 S1으로 읽히면 **review가 source 내용을 무통제로 admit**하는 선재 갭이 드러남 → C-review 전 review측 admission 계약 필요; 인벤토리는 공유 아티팩트이므로 **공유 admission projection 1개**.
 - **ESC-1**: §10 LLM 에스컬레이션이 현재 **결정론·모델해소-이전 단계**에 주입됨(actor/seat/route·실패강등 미명세) + §2.2"S1엔 LLM 없음"과 자기모순 → 에스컬레이션을 **seed 단계 또는 명명된 prep-actor**(해소된 route)로 분리, 실패강등(LLM 불가→heuristic 파라미터+출처기록, hard 모호만 fail-loud) 명세.
 - **CACHE-1**: replay 결정론이 주장뿐 → **캐시 키 명세**: `content_sha256 + 휴리스틱/추출기 버전 + 에스컬레이션-트리거 버전 + 프롬프트 해시 + model id/effort`; 캐시 레코드를 replay 권위로(run.ts `AuthoredArtifactReuseMatch` 패턴), drift 테스트로 무효화 검증.
 
@@ -348,10 +345,10 @@ data_layer_caps          : { max_rows_scanned_per_sheet, max_distinct_tracked_pe
 - **NAME-1**(execution_adapter 오버로드)·**INSTALL-1**(bootstrapProviderFromEnv는 install 아닌 settings-write; 유추 폐기, stale ref 2133→2137)·**REJECT-1**(osascript/LibreOffice 명시 기각 1줄)·**CSV-1**(단일시트 csv는 cross_sheet_key_overlap/per_sheet_data 퇴화 — optionality 명시) — 11.2/11.3에 흡수 또는 1줄 정정.
 
 ### 11.5 onto 셀프리뷰 요지
-- 개념경제: `execution_adapter` 오버로드(NAME-1)·evolve 계약 오귀속(AUTH-1)이 주 위반. envelope 분리(L2 공통+L1 어댑터)·aggregate-only redaction은 개념경제·capability-boundary에 부합. 방향은 건전, 명세·근거 보정 필요.
+- 개념경제: `execution_adapter` 오버로드(NAME-1)·evolve 계약 오귀속(AUTH-1)이 주 위반. envelope 분리(L2 공통+L1 어댑터)·aggregate-only 관측은 개념경제·capability-boundary에 부합. 방향은 건전, 명세·근거 보정 필요.
 
 ### 11.6 반영 계획
-- **선행(xlsx 전)**: 11.1 BLOCKER + 11.3 HIGH 4건(CHAN-1/CHAN-2/ESC-1/CACHE-1) + 11.2 **L1 단일 번들 의존성** 확정 → §6.1/§8.5/§5 P4·§2.4/§3.2·§3.1/§10·§2.2 보정.
+- **선행(xlsx 전)**: 11.1 BLOCKER + 11.3 HIGH(ESC-1/CACHE-1) + 11.2 **L1 단일 번들 의존성** 확정 → §6.1/§8.5/§5 P4·§10·§2.2 보정.
 - **동반**: 11.4 MEDIUM 13건을 해당 섹션에 반영.
 - **무관 유효**: csv-first P1~P3는 보정과 독립적으로 착수 가능.
 - **본문 반영 완료(2026-06-17)**: §1.2/§1.5/§2.1/§2.1a/§2.2/§2.4/§3.1/§3.2/§5/§6.1/§9.2/§10 정정 적용. 잔여 미세건은 §11이 권위.

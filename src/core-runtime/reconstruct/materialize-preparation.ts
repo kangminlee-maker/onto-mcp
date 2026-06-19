@@ -429,13 +429,12 @@ export async function buildReconstructSourceObservation(
 
 /**
  * Observe a spreadsheet source through the shared structure observer (design S1
- * §2.2) — a deterministic, LLM-free structural inventory. Per channel
- * governance (§11 CHAN-1) the observation carries NO raw cell values: it never
- * emits the generic path's `content_excerpt` (which for a workbook would be raw
- * data values) and the inventory's aggregate-only vocab leaves `top_values`
- * absent. `content_sha256` is the RAW-byte hash (§11 HASH-1) surfaced at the
- * structural_data top level because downstream source-scout-pack admission reads
- * it there; the full inventory is nested under `workbook_inventory` as the
+ * §2.2) — a deterministic, LLM-free structural inventory. The observation carries
+ * NO raw cell values: it never emits the generic path's `content_excerpt` (which for
+ * a workbook would be raw data values) and the inventory's aggregate-only vocab
+ * leaves `top_values` absent. `content_sha256` is the RAW-byte hash (§11 HASH-1)
+ * surfaced at the structural_data top level because the downstream source-scout-pack
+ * reads it there; the full inventory is nested under `workbook_inventory` as the
  * structural substrate the seed-authoring prompt observes. xlsx-family kinds are
  * not yet extractable (P4) and arrive here carrying an `unsupported_reason`.
  */
@@ -474,9 +473,8 @@ async function buildSpreadsheetSourceObservation(args: {
   const { detection, stat, location, lineage } = args;
   const basename = path.basename(detection.ref);
   const extension = path.extname(detection.ref).toLowerCase();
-  // Route through the single shared admission projection (§11 CHAN-1): the
-  // structural_data inventory carries no raw cell values — those reach a prompt
-  // only via the source-safety channel, never through structural_data.
+  // Route through the single shared projection: the structural_data inventory
+  // carries aggregate counts / structure only, never raw cell values.
   const inventory = projectInventoryForAdmission(
     await observeSpreadsheetSource(detection.ref),
   );

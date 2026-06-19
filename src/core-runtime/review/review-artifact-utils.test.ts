@@ -48,7 +48,7 @@ describe("isDeprecatedDomainAlias", () => {
   });
 });
 
-describe("spreadsheet target rendering (P3 review seam, §3.2 / CHAN-2)", () => {
+describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
   it("renders a csv target/materialized-input as a structural view with no raw cell values", async () => {
     const root = await makeTmpDir();
     const csv = path.join(root, "people.csv");

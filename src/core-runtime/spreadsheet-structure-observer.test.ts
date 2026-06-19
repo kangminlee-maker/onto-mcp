@@ -120,13 +120,13 @@ describe("buildCsvInventory — structure (P1)", () => {
     expect(byName.city).toBe("string");
   });
 
-  it("emits aggregate distinct_count for categorical columns but NO raw values (CHAN-1)", () => {
+  it("emits aggregate distinct_count for categorical columns but NO raw values", () => {
     const r = inv(csv);
     const city = r.distinct_value_vocab.find((v) => v.column === "city");
     expect(city).toBeDefined();
     expect(city!.distinct_count).toBe(2); // Seoul, Busan
     expect(city!.distinct_count_is_estimate).toBe(false);
-    // CHAN-1: raw values are never emitted by the extractor.
+    // raw values are never emitted by the extractor.
     for (const v of r.distinct_value_vocab) expect(v.top_values).toBeUndefined();
     // High-cardinality unique column (name) is not a controlled-vocab candidate.
     expect(r.distinct_value_vocab.find((v) => v.column === "name")).toBeUndefined();
@@ -247,12 +247,12 @@ describe("observeSpreadsheetSource — IO + dispatch", () => {
   });
 });
 
-describe("projectInventoryForAdmission — channel governance (CHAN-1/CHAN-2)", () => {
+describe("projectInventoryForAdmission — aggregate-only projection", () => {
   it("strips raw top_values while preserving aggregate distinct counts", () => {
     const inventory = inv("name,role\nAlice,eng\nBob,eng\n");
-    // The observer itself never emits top_values; a future data-observation
-    // phase might (via the source-safety channel). Simulate that and assert the
-    // single shared projection excludes it for every consumer.
+    // The observer itself never emits top_values; this simulates a future field
+    // carrying one and asserts the single shared projection excludes it for every
+    // consumer.
     inventory.distinct_value_vocab[0].top_values = [
       { value: "Alice", count: 1 },
       { value: "Bob", count: 1 },
@@ -317,8 +317,8 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(table.sheet).toBe("People");
     expect(table.range).toBe("A1:D3");
 
-    // Channel governance (CHAN-1): raw DATA cell values never appear — only schema
-    // (header names), aggregate counts, and structural tokens (formula/error).
+    // raw DATA cell values never appear — only schema (header names), aggregate
+    // counts, and structural tokens (formula/error).
     expect(JSON.stringify(r)).not.toContain("Alice");
     expect(JSON.stringify(r)).not.toContain("Bob");
   });
@@ -463,7 +463,7 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(r.per_sheet_data.find((d) => d.sheet === "Summary")!.layout_kind).toBe("pivot_or_crosstab");
   });
 
-  it("computes cross-sheet key overlap between same-named columns (counts only, CHAN-1)", () => {
+  it("computes cross-sheet key overlap between same-named columns (counts only)", () => {
     const sheet = (rows: string) =>
       `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:B4"/><sheetData>${rows}</sheetData></worksheet>`;
     const str = (ref: string, v: string) => `<c r="${ref}" t="inlineStr"><is><t>${v}</t></is></c>`;
@@ -506,7 +506,7 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect([...o.sheets].sort()).toEqual(["주문", "출고"].sort());
     expect(o.pairwise_overlap).toHaveLength(1);
     expect(o.pairwise_overlap[0]!.count).toBe(2); // P002, P003 shared
-    // CHAN-1: only counts — no raw key values leak.
+    // only counts — no raw key values leak.
     expect(JSON.stringify(r.cross_sheet_key_overlap)).not.toContain("P002");
   });
 });
