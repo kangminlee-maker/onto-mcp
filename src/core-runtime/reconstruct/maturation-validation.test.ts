@@ -1057,6 +1057,71 @@ describe("maturation validation", () => {
     )).toBe(true);
   });
 
+  it("rejects a matrix that swaps lineage multiplicity or tampers competency refs (onto P1-b refinement)", () => {
+    // Baseline row carries a duplicate-bearing member-source lineage so that a
+    // multiplicity swap (same set, same length) is observable.
+    const base = baseline();
+    const dupBaseline = {
+      ...base,
+      baseline_rows: base.baseline_rows.map((row) => ({
+        ...row,
+        member_source_refs: ["lineage-a", "lineage-a", "lineage-b"],
+      })),
+    };
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline: dupBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline: dupBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const validateMatrix = (m: typeof matrix) =>
+      validateActionabilityMatrix({
+        actionabilityMatrix: m,
+        actionabilityMatrixRef: "actionability-matrix.yaml",
+        maturationBaseline: dupBaseline,
+        maturationBaselineValidation: baselineValidation,
+        maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      });
+    const rowId = matrix.rows[0]!.matrix_row_id;
+    // The faithfully-built matrix preserves order + multiplicity + competency refs.
+    expect(validateMatrix(matrix).validation_status).toBe("valid");
+    expect(matrix.rows[0]!.competency_question_refs.length).toBeGreaterThan(0);
+    // Swapping a duplicate occurrence keeps the set and length but changes multiplicity
+    // — a set-only check would miss this; exact array equality must flag it.
+    const multiplicitySwapped = {
+      ...matrix,
+      rows: matrix.rows.map((row) => ({
+        ...row,
+        member_source_refs: ["lineage-a", "lineage-b", "lineage-b"],
+      })),
+    };
+    expect(validateMatrix(multiplicitySwapped).violations.some((v) =>
+      v.code === "conflicting_state" && v.subject_id === rowId
+    )).toBe(true);
+    // Competency refs are baseline-copied (immutable); tampering them is a conflict.
+    const competencyTampered = {
+      ...matrix,
+      rows: matrix.rows.map((row) => ({
+        ...row,
+        competency_question_refs: ["cq-tampered"],
+      })),
+    };
+    expect(validateMatrix(competencyTampered).violations.some((v) =>
+      v.code === "conflicting_state" && v.subject_id === rowId
+    )).toBe(true);
+  });
+
   it("keeps material L3 answer-supported rows frontier-required until expansion validates them for purpose", () => {
     const maturationBaseline = baseline([]);
     const baselineValidation = validateMaturationBaseline({

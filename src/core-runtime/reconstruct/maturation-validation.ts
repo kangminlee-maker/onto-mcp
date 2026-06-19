@@ -648,6 +648,13 @@ function sameRefSet(a: readonly string[], b: readonly string[]): boolean {
   return b.every((ref) => seen.has(ref));
 }
 
+// Exact array equality (order- and multiplicity-sensitive). Used for matrix fields
+// the builder copies VERBATIM from the baseline row, where set-equality would miss a
+// reorder or a duplicate-occurrence swap (e.g. [a,a,b] -> [a,b,b]: same length+set).
+function sameRefArray(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((ref, index) => ref === b[index]);
+}
+
 function deriveExpectedBaselineTuples(
   selected:
     | ReconstructSourcePurposeCandidatesArtifact["purpose_candidates"][number]
@@ -1109,16 +1116,28 @@ export function validateActionabilityMatrix(args: {
     // M1 payload conservation: a matrix row can cite baseline A while mutating the
     // identity/lineage fields it must inherit. Assert the baseline-immutable set is
     // preserved (materiality is checked above; maturity/support/limitation/readiness
-    // and competency refs legitimately change by validated rules, so are NOT asserted).
+    // legitimately change by validated rules, so are NOT asserted). The builder copies
+    // member-lineage AND competency refs VERBATIM from the baseline row, so they are
+    // compared with exact array equality (multiplicity- and order-sensitive): a
+    // set-only check would let a duplicate-occurrence swap or a competency-ref tamper
+    // pass undetected.
     const identityPreserved =
       row.purpose_element_ref === baselineRow.purpose_element_ref &&
       row.actionability_surface_ref === baselineRow.actionability_surface_ref &&
       row.maturity_dimension_ref === baselineRow.maturity_dimension_ref &&
       row.materiality_ref === baselineRow.materiality_ref &&
       row.member_target_material_kind === baselineRow.member_target_material_kind &&
-      sameRefSet(row.member_scope_refs, baselineRow.member_scope_refs) &&
-      sameRefSet(row.member_source_refs, baselineRow.member_source_refs) &&
-      sameRefSet(row.cross_material_ref_refs, baselineRow.cross_material_ref_refs);
+      sameRefArray(row.member_scope_refs, baselineRow.member_scope_refs) &&
+      sameRefArray(row.member_source_refs, baselineRow.member_source_refs) &&
+      sameRefArray(row.cross_material_ref_refs, baselineRow.cross_material_ref_refs) &&
+      sameRefArray(
+        row.competency_question_refs,
+        baselineRow.competency_question_refs,
+      ) &&
+      sameRefArray(
+        row.competency_assessment_refs,
+        baselineRow.competency_assessment_refs,
+      );
     if (!identityPreserved) {
       violations.push(violation({
         code: "conflicting_state",
