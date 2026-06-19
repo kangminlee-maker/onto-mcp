@@ -66,7 +66,7 @@ function rowForConsumption(
 }
 
 describe("source safety validation", () => {
-  it("validates generated source-safety rows with exactly six canonical axes", () => {
+  it("validates generated source-safety rows with exactly four canonical axes", () => {
     const observations = sourceObservations();
     const ledger = buildSourceSafetyLedgerFromSourceObservations({
       sourceObservations: observations,
@@ -101,8 +101,6 @@ describe("source safety validation", () => {
     expect(firstRow(ledger).visibility_derivation.derived_from_axes).toEqual([
       "lifecycle_state",
       "authorization_state",
-      "privacy_state",
-      "redaction_state",
       "proof_sufficiency_state",
       "replay_state",
     ]);
@@ -135,42 +133,7 @@ describe("source safety validation", () => {
       .toBe("source_safety_explicit_consumption_authorization");
   });
 
-  it("derives redacted_output_only for sensitive prompt-context evidence", () => {
-    const observations = sourceObservations("API_KEY='sk_live_secret_value'\n");
-    const ledger = buildSourceSafetyLedgerFromSourceObservations({
-      sourceObservations: observations,
-      sourceObservationsRef: "source-observations.yaml",
-    });
-    const row = rowForConsumption(ledger, "prompt_context");
-
-    expect(row.privacy_state).toBe("privacy_sensitive");
-    expect(row.redaction_state).toBe("required");
-    expect(row.visibility_tier).toBe("redacted_output_only");
-    expect(row.redaction_evidence.allowed_proof_forms).not.toContain("raw_value");
-  });
-
-  it("treats non-secret personal data as privacy-sensitive source evidence", () => {
-    const observations = sourceObservations(
-      "Customer contact: student@example.com, phone 010-1234-5678\n",
-    );
-    const ledger = buildSourceSafetyLedgerFromSourceObservations({
-      sourceObservations: observations,
-      sourceObservationsRef: "source-observations.yaml",
-    });
-    const row = rowForConsumption(ledger, "prompt_context");
-    const evidenceRow = rowForConsumption(ledger, "evidence_support");
-    const materialClaimRow = rowForConsumption(ledger, "material_claim");
-
-    expect(row.privacy_state).toBe("privacy_sensitive");
-    expect(row.proof_sufficiency_state).toBe("trace_only");
-    expect(row.replay_state).toBe("replay_with_redaction");
-    expect(row.visibility_tier).toBe("redacted_output_only");
-    expect(evidenceRow.visibility_tier).toBe("internal_only");
-    expect(materialClaimRow.visibility_tier).toBe("no_prompt_use");
-    expect(row.limitation_refs).toContain("source-safety-sensitive-source:obs-code-1");
-  });
-
-  it("fails when visibility_tier contradicts the six-axis derivation", () => {
+  it("fails when visibility_tier contradicts the canonical-axis derivation", () => {
     const observations = sourceObservations();
     const ledger = validLedger();
     ledger.safety_rows[0] = {
@@ -202,10 +165,39 @@ describe("source safety validation", () => {
         derived_from_axes: [
           "lifecycle_state",
           "authorization_state",
+          "proof_sufficiency_state",
+        ],
+      },
+    };
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceObservations: observations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((item) => item.code)).toContain(
+      "visibility_axis_set_invalid",
+    );
+  });
+
+  it("fails a stale row that still carries retired axes instead of laundering them away (Codex P2)", () => {
+    const observations = sourceObservations();
+    const ledger = validLedger();
+    ledger.safety_rows[0] = {
+      ...firstRow(ledger),
+      visibility_derivation: {
+        ...firstRow(ledger).visibility_derivation,
+        // A pre-refactor ledger that still lists the removed privacy_state /
+        // redaction_state axes must NOT normalize down to exactly four and pass.
+        derived_from_axes: [
+          "lifecycle_state",
+          "authorization_state",
           "privacy_state",
           "redaction_state",
           "proof_sufficiency_state",
-        ],
+          "replay_state",
+        ] as ReconstructSourceSafetyRow["visibility_derivation"]["derived_from_axes"],
       },
     };
 
@@ -285,77 +277,6 @@ describe("source safety validation", () => {
     );
   });
 
-  it("fails when redaction_evidence grants raw_value against top-level redaction state", () => {
-    const observations = sourceObservations("password='very-secret-value'\n");
-    const ledger = buildSourceSafetyLedgerFromSourceObservations({
-      sourceObservations: observations,
-      sourceObservationsRef: "source-observations.yaml",
-    });
-    ledger.safety_rows[0] = {
-      ...firstRow(ledger),
-      redaction_evidence: {
-        ...firstRow(ledger).redaction_evidence,
-        allowed_proof_forms: ["raw_value", "hash"],
-      },
-    };
-
-    const validation = validateSourceSafetyLedger({
-      sourceSafetyLedger: ledger,
-      sourceObservations: observations,
-    });
-
-    expect(validation.validation_status).toBe("invalid");
-    expect(validation.violations.map((item) => item.code)).toContain(
-      "supporting_detail_contradiction",
-    );
-  });
-
-  it("fails when proof detail says unavailable but top-level proof state says sufficient", () => {
-    const observations = sourceObservations();
-    const ledger = validLedger();
-    ledger.safety_rows[0] = {
-      ...firstRow(ledger),
-      redaction_evidence: {
-        ...firstRow(ledger).redaction_evidence,
-        allowed_proof_forms: ["unavailable"],
-      },
-      visibility_tier: "no_prompt_use",
-    };
-
-    const validation = validateSourceSafetyLedger({
-      sourceSafetyLedger: ledger,
-      sourceObservations: observations,
-    });
-
-    expect(validation.validation_status).toBe("invalid");
-    expect(validation.violations.map((item) => item.code)).toContain(
-      "supporting_detail_contradiction",
-    );
-  });
-
-  it("fails when raw_value is allowed while raw_value_available is false", () => {
-    const observations = sourceObservations();
-    const ledger = validLedger();
-    ledger.safety_rows[0] = {
-      ...firstRow(ledger),
-      redaction_evidence: {
-        ...firstRow(ledger).redaction_evidence,
-        raw_value_available: false,
-        allowed_proof_forms: ["raw_value", "hash"],
-      },
-    };
-
-    const validation = validateSourceSafetyLedger({
-      sourceSafetyLedger: ledger,
-      sourceObservations: observations,
-    });
-
-    expect(validation.validation_status).toBe("invalid");
-    expect(validation.violations.map((item) => item.code)).toContain(
-      "supporting_detail_contradiction",
-    );
-  });
-
   it("throws a contextualized integrity error when source-observations.observations is malformed", () => {
     // A torn write or tampering could leave `observations` as a non-array.
     // The trusted-read shape guard must surface which artifact/field is bad
@@ -416,27 +337,6 @@ describe("validateSourceSafetyLedger rejection branches", () => {
 
     expect(validation.validation_status).toBe("invalid");
     expect(validation.violations.some((v) => v.code === "session_id_mismatch"))
-      .toBe(true);
-  });
-
-  it("rejects a row with no allowed proof forms (missing_required_field)", () => {
-    const observations = sourceObservations();
-    const ledger = structuredClone(validLedger());
-    ledger.safety_rows[0] = {
-      ...ledger.safety_rows[0]!,
-      redaction_evidence: {
-        ...ledger.safety_rows[0]!.redaction_evidence,
-        allowed_proof_forms: [],
-      },
-    };
-
-    const validation = validateSourceSafetyLedger({
-      sourceSafetyLedger: ledger,
-      sourceObservations: observations,
-    });
-
-    expect(validation.validation_status).toBe("invalid");
-    expect(validation.violations.some((v) => v.code === "missing_required_field"))
       .toBe(true);
   });
 

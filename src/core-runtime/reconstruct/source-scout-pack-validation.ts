@@ -234,7 +234,6 @@ function visibilityStateForSafetyRow(
     case "consumption_allowed":
       return "prompt_visible";
     case "internal_only":
-    case "redacted_output_only":
       return "redacted";
     case "no_prompt_use":
     case "no_replay_use":

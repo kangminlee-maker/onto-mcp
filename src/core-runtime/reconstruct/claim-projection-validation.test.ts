@@ -240,7 +240,6 @@ function sourceSafetyValidation(
     validation_status: validationStatus,
     safety_row_count: 1,
     no_prompt_use_count: 0,
-    redacted_output_only_count: 0,
     validation_results: validationStatus === "valid"
       ? ["source_safety_valid"]
       : ["source_safety_invalid"],

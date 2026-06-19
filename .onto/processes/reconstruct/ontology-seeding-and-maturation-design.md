@@ -119,7 +119,7 @@ element required by the source-derived `PurposeAdequacyFrame`.
 | `MaterialAdmissionAuthority` | runtime-assembled admission authority for purpose-critical adequacy elements, with a separate phase for literal source-backed material values | runtime |
 | `MaterialValueDisposition` | admission and closure decision for source-backed values that may affect actionability | host LLM authored, runtime validated |
 | `DomainCompetencyAdmission` | run-manifest admission of domain competency questions into required, supporting, or diagnostic maturity coverage | runtime |
-| `SourceSafetyAuthority` | validator-consumed lifecycle, authorization, privacy, redaction, proof-sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material defaults | runtime |
+| `SourceSafetyAuthority` | validator-consumed lifecycle, authorization, proof-sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material defaults | runtime |
 | `MutableVocabularyAuthority` | replayable identity, snapshot, mapping, alias, supersession, and migration state for external terms, standards, provider/framework terms, and profile-owned facets | planned until registry promotion |
 | `SourceDeltaFact` | runtime-observed source freshness fact before semantic actionability interpretation | runtime |
 | `SourceDeltaImpactJudgment` | source-delta impact interpretation against purpose, surfaces, and dimensions | host LLM authored, runtime validated |
@@ -2516,8 +2516,8 @@ activation conditions.
 | `claim-projection-validation.yaml` | runtime | proves claim level, decision state, actionability claim, material-kind/member support, bounded UX fields, target-material profile validation, and pre-publication run-control/registry/validation evidence closure |
 | `material-admission-ledger.yaml` | runtime | canonical admission/disposition rows for purpose-critical adequacy elements, and later source-backed material values when that phase is promoted |
 | `material-admission-ledger-validation.yaml` | runtime | proves admitted, deferred, rejected, and out-of-scope admission rows are replayable and closed downstream |
-| `source-safety-ledger.yaml` | runtime | lifecycle, authorization, privacy, redaction, proof sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material claim defaults |
-| `source-safety-ledger-validation.yaml` | runtime | proves unsafe, retired, redacted, disposed, invalidated, unauthorized, privacy-sensitive, or proof-insufficient source refs fail closed or become limitations |
+| `source-safety-ledger.yaml` | runtime | lifecycle, authorization, proof sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material claim defaults |
+| `source-safety-ledger-validation.yaml` | runtime | proves unsafe, retired, disposed, invalidated, unauthorized, or proof-insufficient source refs fail closed or become limitations |
 | `source-observation-lineage-index.yaml` | runtime | session-level index of every round-scoped source-observation delta, delta validation, re-entry validation, frontier kind, and added observation id consumed by answer-support validation |
 | `source-observation-lineage-index-validation.yaml` | runtime | proves the session lineage index matches valid per-round delta validations, re-entry validations, frontier kinds, and source observation ids before semantic downstream consumption |
 | `vocabulary-authority-ledger.yaml` | planned | identity, snapshot, mapping, applicability, alias, supersession, and migration rows for mutable vocabulary |
@@ -2648,7 +2648,7 @@ through prose shortcuts.
 |---|---|---|---|---|
 | 0 | `reconstruct-run-control-validation.yaml` | any seeding, maturation, retry, resume, status, result, or public projection writes/reads session artifacts | every writer, validator, status/result reader, final-output writer, record assembler | block or return existing trusted run before semantic artifacts are consumed |
 | 1 | `registry-verification-evidence-validation.yaml` | prose or public surface claims `active`, `promoted`, `current`, `implemented`, `executable`, `ready`, or material-kind support | claim projection, final-output provenance, MCP/API/status/result, prompt packet materialization | mark `pending_verification` and prevent runtime/public consumption |
-| 2 | `source-safety-ledger-validation.yaml` | an observed source record enters context assembly, a prompt packet, source observation re-entry, evidence support, or source-backed claim | prompt-packet materialization/context assembly, source observation re-entry, source-backed evidence support | exclude, redact, limit, or block according to lifecycle, authorization, privacy, redaction, proof sufficiency, replay, and observation-specific derived prompt visibility policy |
+| 2 | `source-safety-ledger-validation.yaml` | an observed source record enters context assembly, a prompt packet, source observation re-entry, evidence support, or source-backed claim | prompt-packet materialization/context assembly, source observation re-entry, source-backed evidence support | exclude, limit, or block according to lifecycle, authorization, proof sufficiency, replay, and observation-specific derived prompt visibility policy |
 | 3 | `material-admission-ledger-validation.yaml` | source-backed values can affect actionability, evidence trust, dynamic boundaries, permissions, obligations, calculations, or public claims | candidate disposition, seed validation, maturation baseline, question frontier, matrix, convergence ledger | every admitted/required source-backed row must be consumed downstream or surfaced as limitation/blocked/out-of-scope |
 | planned | `vocabulary-authority-ledger-validation.yaml` | mutable profile facets, domain terms, provider/framework terms, external standards, or reference patterns need active runtime vocabulary proof | source profile selection, seed rows, maturation rows, external boundary rows, claim projection | planned authority; current runtime must not claim this validation has active coverage |
 | 5 | `claim-projection-validation.yaml` | any status/result/MCP/API/handoff surface reports success, readiness, actionability, `blocked`, `ask_user`, or material-kind support; final-output claim sections may only cite canonical refs until this closes | all public and downstream result surfaces | surfaces may not infer claim level or next action from distributed artifacts |
@@ -2704,17 +2704,15 @@ source record's exact safety row identity into validator-consumed state. Safety
 row identity is scoped by both observation and intended consumption:
 `source_safety:<observation_id>:<intended_consumption>`.
 
-Canonical source safety has exactly six independent validation axes:
+Canonical source safety has exactly four independent validation axes:
 
 1. `lifecycle_state`
 2. `authorization_state`
-3. `privacy_state`
-4. `redaction_state`
-5. `proof_sufficiency_state`
-6. `replay_state`
+3. `proof_sufficiency_state`
+4. `replay_state`
 
-`visibility_tier` is not a seventh axis. It is a deterministic sink/output policy
-derived from the six canonical axes and the intended consumption
+`visibility_tier` is not a fifth axis. It is a deterministic sink/output policy
+derived from the four canonical axes and the intended consumption
 (`prompt_context`, `evidence_support`, `public_output`, `replay`, or
 `material_claim`). Validators must preserve both the failing canonical axis and
 the derived visibility tier when they limit or block consumption. One valid
@@ -2739,26 +2737,18 @@ safety_rows:
     subject_kind: source_ref
     lifecycle_state: active | retired | disposed | invalidated | stale | missing
     authorization_state: authorized | unauthorized | unknown | not_required
-    privacy_state: non_sensitive | privacy_sensitive | unknown
-    redaction_state: none | redacted | required | insufficient
-    proof_sufficiency_state: sufficient_for_claim | insufficient_for_claim | trace_only | unavailable
-    replay_state: replay_allowed | replay_with_redaction | no_replay_use | unknown
-    visibility_tier: consumption_allowed | internal_only | redacted_output_only | no_prompt_use | no_replay_use
+    proof_sufficiency_state: sufficient_for_claim | insufficient_for_claim | unavailable
+    replay_state: replay_allowed | no_replay_use | unknown
+    visibility_tier: consumption_allowed | internal_only | no_prompt_use | no_replay_use
     visibility_derivation:
       intended_consumption: prompt_context | evidence_support | public_output | replay | material_claim
       derived_from_axes:
         - lifecycle_state
         - authorization_state
-        - privacy_state
-        - redaction_state
         - proof_sufficiency_state
         - replay_state
       derivation_rule_ref:
     authorization_scope_ref:
-    redaction_evidence:
-      raw_value_available: true | false
-      allowed_proof_forms: [raw_value | hash | bounded_summary | source_ref_only | unavailable]
-      redaction_rule_ref:
     tombstone:
       tombstone_ref:
       reason:
@@ -2770,18 +2760,17 @@ safety_rows:
 The first consumer is prompt-packet materialization/context assembly. Raw source
 excerpts, document sections, spreadsheet cells, database comments, or other
 observed source values must not enter LLM-facing context until a source-safety
-row exists and validates for prompt use. If a row derives `no_prompt_use`, the
-observation is excluded from prompt payloads; redacted rows may include only
-allowed hash, bounded summary, or source-ref-only proof forms and must carry the
-limitation forward.
+row exists and validates for prompt use. A row is admitted into the prompt only
+when it derives `consumption_allowed`; any other tier excludes the observation
+from prompt payloads.
 
 `source-safety-ledger-validation.yaml` must be consumed by prompt-packet
 materialization/context assembly and source-observation re-entry before observed
 source rows re-enter semantic authoring. A validator must fail closed when a
 source-backed claim requires an observed source ref whose lifecycle,
-authorization, privacy, redaction, proof-sufficiency, or replay axis does not
-support the intended consumption, whose scoped safety row is missing, or whose
-derived `visibility_tier` prohibits that sink.
+authorization, proof-sufficiency, or replay axis does not support the intended
+consumption, whose scoped safety row is missing, or whose derived
+`visibility_tier` prohibits that sink.
 
 Answer-support validation consumes `source-observation-lineage-index.yaml`,
 `source-observation-lineage-index-validation.yaml`, and
@@ -2794,7 +2783,7 @@ observation-specific `evidence_support` source-safety row that is sufficient for
 claim support and replay; prompt visibility alone is not material evidence
 authority.
 
-Source safety validation has six independent axes. A row can pass one axis and
+Source safety validation has four independent axes. A row can pass one axis and
 fail another; validators must preserve the specific failing axis in limitations,
 blocked rows, and public recovery text.
 
@@ -2802,25 +2791,17 @@ blocked rows, and public recovery text.
 |---|---|---|
 | lifecycle | active snapshot or tombstone lineage | subject is retired, disposed, invalidated, stale, or missing for a material claim |
 | authorization | authorization scope or user/runtime authority | the run is not allowed to inspect, prompt, replay, or display the subject |
-| privacy | sensitivity classification and allowed disclosure basis | sensitive data would be exposed without an allowed disclosure basis |
-| redaction | redaction status and proof form | raw value is unavailable and bounded summary/hash is insufficient for the claim |
-| proof sufficiency | proof form matches claim level | trace-only proof is used to raise semantic or actionability level |
-| replay | replay eligibility and allowed proof form | future replay would require a raw value or authority snapshot that is not replayable |
+| proof sufficiency | proof form matches claim level | proof is unavailable or insufficient for the intended consumption |
+| replay | replay eligibility | future replay would require an authority snapshot that is not replayable |
 
 Derived visibility projection:
 
 | Derived `visibility_tier` | Projection rule |
 |---|---|
-| `no_prompt_use` | any canonical axis blocks `prompt_context` consumption, or the only allowed form is unavailable for prompt materialization |
+| `no_prompt_use` | any canonical axis blocks `prompt_context` consumption, or proof is unavailable for prompt materialization |
 | `no_replay_use` | `replay_state` is `no_replay_use` or `unknown` for a replay-required material claim |
-| `redacted_output_only` | the subject may be surfaced only through an allowed redacted, hashed, bounded-summary, or source-ref-only form |
 | `internal_only` | the subject may support internal validation or evidence closure but must not appear in public output |
-| `consumption_allowed` | all six canonical axes support the row's `intended_consumption`; public disclosure is allowed only when `intended_consumption` is `public_output` |
-
-Top-level axis state fields are canonical. Nested detail fields such as
-`redaction_evidence` are supporting proof only; they must not introduce a second
-authority path for redaction or proof sufficiency. Validation must fail when a
-supporting detail contradicts its top-level canonical state.
+| `consumption_allowed` | all four canonical axes support the row's `intended_consumption`; public disclosure is allowed only when `intended_consumption` is `public_output` |
 
 #### Mutable Vocabulary Authority
 
@@ -2960,7 +2941,7 @@ Validation responsibilities:
 - material-admission validation for purpose-critical adequacy elements, with
   source-backed material values only after their phase is promoted
 - source-safety validation before prompt-packet materialization/context assembly
-  and for lifecycle, authorization, privacy, redaction, proof sufficiency, replay
+  and for lifecycle, authorization, proof sufficiency, replay
   eligibility, and derived visibility projection
 - planned mutable-vocabulary validation for external/profile/provider/framework
   terms after registry promotion
@@ -2990,19 +2971,15 @@ Safety and lifecycle rules:
   validators, tool policies, or user-confirmed run scope;
 - prompt packets include only the minimum source excerpts needed for the current
   stage and preserve refs so omitted context can be audited;
-- secrets, credentials, personal data, and sensitive business values are redacted
-  from user-facing prose unless the user explicitly authorizes disclosure for the
-  run; artifact truth may preserve hashes, refs, labels, or bounded summaries
-  instead of raw sensitive text;
 - authority responses record identity, scope, timestamp/version, and replay
   eligibility, and unavailable or rejected authority responses remain visible as
   limitations or blocked rows;
 - stale source snapshots, stale profile snapshots, and unresolved migration refs
   cannot be treated as current authority;
-- retirement, disposal, or redaction of an artifact must leave an audit-visible
+- retirement or disposal of an artifact must leave an audit-visible
   tombstone with artifact ref, hash when available, lifecycle state, reason, and
   downstream refs that can no longer be trusted; and
-- replay must fail closed when a required source ref, redacted value, retired
+- replay must fail closed when a required source ref, retired
   artifact, or authority snapshot is needed to prove a material claim.
 
 These prose rules are implementation guidance only until
@@ -3157,7 +3134,7 @@ Per-kind release evidence requirements:
 | Material kind | Release-supported only when |
 |---|---|
 | `code` | real or golden repository run proves file/module/service observation, purpose inference or confirmation, actor/object/action/data-binding extraction, dependency and external-boundary mapping, validation failure visibility, and artifact refs |
-| `document` | real or golden document run proves section/heading/decision/action-item observation, purpose extraction or inference, citation-preserving evidence refs, source-safety/redaction handling, and limitation output for ambiguous prose |
+| `document` | real or golden document run proves section/heading/decision/action-item observation, purpose extraction or inference, citation-preserving evidence refs, source-safety handling, and limitation output for ambiguous prose |
 | `spreadsheet` | real or golden workbook run proves sheet/range/named-range/formula/decision-cell observation, source values and derived outputs are distinguished, formula or calculation evidence is replayable, and stale workbook or hidden-sheet gaps fail loud |
 | `database` | real or golden database/schema snapshot proves table/view/key/grant/default/derived-view observation, sampled evidence boundaries are explicit, permission and retention constraints are represented, and unavailable credentials or schema drift block/limit claims |
 | `meeting_record` | real or golden meeting artifact proves participants, decisions, action owners, due dates, open questions, and unresolved policy decisions are extracted as purpose-relevant evidence without inventing workflow paths |
