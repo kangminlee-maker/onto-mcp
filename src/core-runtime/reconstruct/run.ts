@@ -768,21 +768,28 @@ function sha256Text(text: string): string {
 }
 
 const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
-  // v3 added the cited source-evidence bodies surface (source_evidence); v4 bounds it
-  // to a deterministic per-payload observation cap. Each version + contract change
-  // rotates the reuse-match hash so resume mode cannot reuse an assessment authored
-  // under a different (or content-blind, pre-v3) evidence projection of the same sources.
+  // v3 added the cited source-evidence bodies surface (source_evidence); v4 bounds it to
+  // a deterministic per-payload SERIALIZED-SIZE budget (content_excerpt + structural
+  // payload, so an inventory-heavy spreadsheet observation counts too). Each version +
+  // contract change rotates the reuse-match hash so resume mode cannot reuse an assessment
+  // authored under a different (or content-blind, pre-v3) evidence projection of the same
+  // sources.
   "competency_question_assessment_compact_projection:v4";
 const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
 // Per-observation excerpt budget for the cited source-evidence bodies projected
 // into the assessment prompt, so answer_status is judged on evidence content
 // rather than observation-id labels alone.
 const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT = 4_000;
-// Deterministic per-payload cap on how many cited evidence bodies are projected into a
-// single assessment prompt: MAX_OBSERVATIONS * EVIDENCE_EXCERPT_LIMIT reserves a bounded
-// slice of the prompt cap for evidence, so a single evidence-rich question (which the
-// per-question batching cannot split further) cannot overflow the cap and halt the run.
-const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS = 6;
+// Deterministic per-payload SERIALIZED budget (chars) for the cited evidence bodies, kept
+// well below the prompt cap so the rest of the payload (questions, claim map) still fits.
+// Bounding by serialized size — not observation COUNT — is required because a cited
+// spreadsheet carries a workbook inventory in structural_data whose caps are count-based,
+// so a few inventory-heavy observations would blow a count-based reserve and overflow the
+// unsplittable single-question batch.
+const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS = 24_000;
+// Cheap runaway guard on how many cited observations are projected before size-bounding
+// (the serialized budget above is the real bound; this only caps projection work).
+const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_CANDIDATE_LIMIT = 50;
 const COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS = 1000;
 
 function competencyQuestionAssessmentProjectionContract(): Record<string, unknown> {
@@ -798,14 +805,14 @@ function competencyQuestionAssessmentProjectionContract(): Record<string, unknow
     evidence_projection:
       "evidence_observation_ids and evidence_source_basenames are prompt-visible; full evidence_refs remain runtime authority",
     source_evidence_projection:
-      "cited evidence observation bodies (from linked claim realizations, question evidence_refs, and domain competency semantic assessment evidence_refs) are projected as source_evidence up to a per-observation excerpt budget, so answer_status is judged on content not id labels alone",
-    // The per-observation budget and per-payload observation cap are part of the
-    // contract: tuning either changes the assessment prompt surface, so they must
-    // rotate the reuse-match sha.
+      "cited evidence observation bodies (from linked claim realizations, question evidence_refs, and domain competency semantic assessment evidence_refs) are projected as source_evidence, bounded greedily by serialized payload size, so answer_status is judged on content not id labels alone",
+    // The per-observation excerpt budget and the per-payload serialized evidence budget
+    // are part of the contract: tuning either changes the assessment prompt surface, so
+    // they must rotate the reuse-match sha.
     source_evidence_excerpt_char_limit:
       COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
-    source_evidence_max_observations:
-      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS,
+    source_evidence_total_budget_chars:
+      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
     validation_projection:
       "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
     claim_realization_projection:
@@ -4005,6 +4012,26 @@ export function assessmentEvidenceObservationIds(
   return [...observationIds];
 }
 
+// Greedily keep whole projected evidence observations (in order) until the serialized
+// budget is spent. The first is always kept so a lone over-budget observation still makes
+// progress; otherwise an observation is kept only if it leaves the running total within
+// budget. Bounding by serialized size (not count) is what makes inventory-heavy
+// spreadsheet observations count toward the cap. Exported for the size-bound unit test.
+export function boundEvidenceBySerializedSize(
+  projected: unknown[],
+  budgetChars: number,
+): { kept: unknown[]; chars: number } {
+  const kept: unknown[] = [];
+  let chars = 0;
+  for (const item of projected) {
+    const itemChars = JSON.stringify(item).length;
+    if (kept.length > 0 && chars + itemChars > budgetChars) break;
+    kept.push(item);
+    chars += itemChars;
+  }
+  return { kept, chars };
+}
+
 function competencyQuestionAssessmentUserPayload(
   input: ReconstructCompetencyQuestionAssessmentAuthorInput,
   questions: ReconstructCompetencyQuestionsArtifact["questions"],
@@ -4013,19 +4040,33 @@ function competencyQuestionAssessmentUserPayload(
     batch_count: number;
   },
 ): Record<string, unknown> {
-  // Cited evidence bodies are bounded to a deterministic per-payload budget: a single
-  // question can link to many observations, and the per-question batching cannot split
-  // a lone question further, so unbounded evidence would overflow the prompt cap and
-  // fail-loud-halt the run. Keep whole excerpts in the selector's stable order until the
-  // budget is spent; surface the omitted count so the cap is not silent.
+  // Cited evidence bodies are bounded to a deterministic per-payload SERIALIZED-SIZE
+  // budget: a single question can link to many observations, and the per-question
+  // batching cannot split a lone question further, so unbounded evidence would overflow
+  // the prompt cap and fail-loud-halt the run. Keep whole projected observations (each
+  // including its structural payload, so an inventory-heavy spreadsheet counts toward the
+  // budget) in the selector's stable order until the serialized budget is spent; surface
+  // the omitted count so the cap is not silent.
   const citedEvidenceObservationIds = assessmentEvidenceObservationIds(
     input,
     questions,
   );
-  const projectedEvidenceObservationIds = citedEvidenceObservationIds.slice(
-    0,
-    COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS,
-  );
+  const projectedEvidenceCandidates = observationPromptPayload(
+    input.sourceObservations,
+    {
+      observationIds: citedEvidenceObservationIds.slice(
+        0,
+        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_CANDIDATE_LIMIT,
+      ),
+      contentExcerptCharLimit: COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+    },
+  ) as unknown[];
+  const { kept: sourceEvidence, chars: sourceEvidenceChars } =
+    boundEvidenceBySerializedSize(
+      projectedEvidenceCandidates,
+      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
+    );
+  const projectedEvidenceCount = sourceEvidence.length;
   return {
     competency_questions_ref: input.competencyQuestionsRef,
     competency_questions_validation_ref:
@@ -4058,22 +4099,19 @@ function competencyQuestionAssessmentUserPayload(
       ),
     // Cited evidence bodies for the questions in this (batch of) assessment, so the
     // assessor judges answer_status on actual source content, not id labels alone.
-    source_evidence: observationPromptPayload(input.sourceObservations, {
-      observationIds: projectedEvidenceObservationIds,
-      contentExcerptCharLimit: COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
-    }),
+    source_evidence: sourceEvidence,
     source_evidence_projection: {
       cited_observation_count: citedEvidenceObservationIds.length,
-      projected_observation_count: projectedEvidenceObservationIds.length,
+      projected_observation_count: projectedEvidenceCount,
       omitted_observation_count:
-        citedEvidenceObservationIds.length -
-        projectedEvidenceObservationIds.length,
+        citedEvidenceObservationIds.length - projectedEvidenceCount,
+      projected_chars: sourceEvidenceChars,
+      total_budget_chars:
+        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
       per_observation_excerpt_char_limit:
         COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
-      max_projected_observations:
-        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS,
       omitted_observation_id_samples: citedEvidenceObservationIds
-        .slice(COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS)
+        .slice(projectedEvidenceCount)
         .slice(0, 10),
     },
   };

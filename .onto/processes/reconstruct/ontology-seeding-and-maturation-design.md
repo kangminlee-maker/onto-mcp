@@ -1260,6 +1260,13 @@ source_reconstruct_record_ref: reconstruct-record.yaml
 source_run_manifest_ref: reconstruct-run-manifest.yaml
 source_handoff_decision_validation_ref:
 purpose_frame_ref:
+# Purpose-candidate-level limitations bound the overall purpose/source, not any single
+# surface x dimension row. They constrain the actionable claim (continuation stays
+# actionable_limited, not actionable_ready, and they appear in the claim limitation_refs)
+# and signal next-round source frontier, WITHOUT marking any row limitation_backed.
+# The validator anchors this list to the selected purpose candidate's limitation_refs;
+# the actionability matrix carries the same list forward.
+candidate_limitation_refs: []
 baseline_rows:
   - baseline_row_id:
     purpose_element_ref:
@@ -1278,6 +1285,9 @@ baseline_rows:
     supporting_seed_refs: []
     supporting_evidence_refs: []
     supporting_validation_refs: []
+    # Row-level limitations are the row's OWN seed-element limitations only (they drive
+    # frontier gating and member_readiness); candidate-level limitations live in the
+    # top-level candidate_limitation_refs above, never copied onto rows.
     limitation_refs: []
     blocking_reason:
 ```
@@ -1698,6 +1708,10 @@ claimed.
 maturation is converging:
 
 ```yaml
+# Carried forward from the maturation baseline (must match it; the matrix validator
+# rejects drift). Continuation keeps a fully-closed run at actionable_limited and lists
+# these in the claim limitation_refs when present; never marks a row limitation_backed.
+candidate_limitation_refs: []
 rows:
   - matrix_row_id:
     baseline_row_refs: []

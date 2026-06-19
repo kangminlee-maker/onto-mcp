@@ -52,6 +52,7 @@ import {
   runReconstruct,
   singleDocumentProjectionTruncation,
   stopDecisionAllowedDecisions,
+  boundEvidenceBySerializedSize,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -3589,8 +3590,9 @@ describe("runReconstruct", () => {
         cited_observation_count?: number;
         projected_observation_count?: number;
         omitted_observation_count?: number;
+        projected_chars?: number;
+        total_budget_chars?: number;
         per_observation_excerpt_char_limit?: number;
-        max_projected_observations?: number;
         omitted_observation_id_samples?: string[];
       };
     }> = [];
@@ -4168,15 +4170,20 @@ describe("runReconstruct", () => {
       competencyAssessmentPayloads[0]?.competency_questions_validation
         ?.violation_count,
     ).toBe(0);
-    // @codex R4: source evidence is bounded to a deterministic per-payload cap so an
-    // evidence-rich question cannot overflow the prompt budget; the projection metadata
-    // surfaces the bound honestly and its invariants hold.
+    // @codex R4/R5: source evidence is bounded to a deterministic per-payload SERIALIZED
+    // budget (so an evidence-rich or inventory-heavy spreadsheet question cannot overflow
+    // the prompt budget); the projection metadata surfaces the bound honestly and its
+    // invariants hold.
     const sourceEvidenceProjection =
       competencyAssessmentPayloads[0]?.source_evidence_projection;
-    expect(sourceEvidenceProjection?.max_projected_observations).toBe(6);
+    expect(sourceEvidenceProjection?.total_budget_chars).toBe(24_000);
     expect(sourceEvidenceProjection?.per_observation_excerpt_char_limit).toBe(4000);
-    expect(sourceEvidenceProjection?.projected_observation_count)
-      .toBeLessThanOrEqual(6);
+    // Total serialized evidence stays within budget, unless a single observation alone
+    // exceeds it (that lone observation is still kept to make progress).
+    expect(
+      (sourceEvidenceProjection?.projected_chars ?? 0) <= 24_000 ||
+        (sourceEvidenceProjection?.projected_observation_count ?? 0) === 1,
+    ).toBe(true);
     expect(
       (sourceEvidenceProjection?.projected_observation_count ?? 0) +
         (sourceEvidenceProjection?.omitted_observation_count ?? 0),
@@ -6303,6 +6310,38 @@ describe("observationPromptPayload projection-truncation recording", () => {
           revisionProposal: revisionProposal(["defer", "reuse"]),
         }),
       ).toEqual(["continue", "ask_user"]);
+    });
+  });
+
+  // @codex R5: assessment source evidence is bounded by serialized payload size, not
+  // observation count, so an inventory-heavy spreadsheet observation (whose structural
+  // payload the per-char excerpt limit does not bound) cannot blow the prompt reserve.
+  describe("boundEvidenceBySerializedSize (assessment source evidence cap, #1)", () => {
+    const item = (chars: number) => ({ body: "x".repeat(chars) });
+
+    it("keeps every observation when the total fits the budget", () => {
+      const result = boundEvidenceBySerializedSize(
+        [item(100), item(100), item(100)],
+        24_000,
+      );
+      expect(result.kept).toHaveLength(3);
+      expect(result.chars).toBeLessThanOrEqual(24_000);
+    });
+
+    it("stops once the serialized budget is spent, even with few observations", () => {
+      // Two ~10K observations fit (~20K); the third would exceed 24K and is dropped.
+      const result = boundEvidenceBySerializedSize(
+        [item(10_000), item(10_000), item(10_000)],
+        24_000,
+      );
+      expect(result.kept).toHaveLength(2);
+      expect(result.chars).toBeLessThanOrEqual(24_000);
+    });
+
+    it("keeps a lone over-budget observation so the payload still makes progress", () => {
+      const result = boundEvidenceBySerializedSize([item(40_000), item(100)], 24_000);
+      expect(result.kept).toHaveLength(1);
+      expect(result.chars).toBeGreaterThan(24_000);
     });
   });
 
