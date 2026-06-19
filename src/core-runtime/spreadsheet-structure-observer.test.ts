@@ -231,6 +231,19 @@ describe("observeSpreadsheetSource — IO + dispatch", () => {
     expect(r.sheets.map((s) => s.name)).toEqual(["People", "Depts"]);
   });
 
+  it("degrades a corrupt/non-zip .xlsx to an unsupported inventory WITHOUT throwing (B1 crash isolation)", async () => {
+    await fs.mkdir(tmp, { recursive: true });
+    const file = path.join(tmp, "broken.xlsx");
+    // Passes the extension + size gate but is not a valid zip, so extraction fails. The
+    // observer must return the standard unsupported-inventory shape (which review's
+    // disposition and reconstruct's P6 gate both already accept), never throw out and abort.
+    await fs.writeFile(file, Buffer.from("this is plain text, not an OOXML zip archive"));
+    const r = await observeSpreadsheetSource(file);
+    expect(r.unsupported_reason).not.toBeNull();
+    expect(r.sheets).toEqual([]);
+    expect(r.content_sha256).not.toBe(""); // bytes WERE read; hash preserved
+  });
+
   it("defers xls/ods with an explicit unsupported_reason (not a crash)", async () => {
     await fs.mkdir(tmp, { recursive: true });
     const file = path.join(tmp, "legacy.ods");

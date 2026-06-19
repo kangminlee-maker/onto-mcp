@@ -237,4 +237,13 @@ describe("material_kind_obligations honesty (R3)", () => {
     expect(summary).toContain("could not be structurally inspected");
     expect(summary).toContain("preserve material uncertainty");
   });
+
+  it("projects obligation prose from the backed goal SUBSET — a macro-only workbook is not told to audit formulas (issue-001/004)", () => {
+    const summary = renderReviewTargetProfileSummary(
+      spreadsheetProfile(["access_and_protection_hygiene"]),
+    );
+    // access_and_protection_hygiene is backed -> its prose appears; formula prose does not.
+    expect(summary).toContain("sheet protection");
+    expect(summary).not.toContain("recalculation behavior");
+  });
 });

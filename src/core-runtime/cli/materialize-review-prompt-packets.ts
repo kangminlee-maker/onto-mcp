@@ -135,10 +135,27 @@ function materialKindReviewObligations(
         spreadsheetGoals.includes(goal),
       );
       if (backed.length > 0) {
-        return [
-          "Treat formulas, cross-sheet references, named ranges, input assumptions, and recalculation behavior as review evidence.",
-          "Check visible formula/reference mismatches, stale derived values, missing input guards, and decision-impacting calculation errors.",
-        ];
+        // Project the prose from the BACKED goal SUBSET (not a single any-backed bit), so the
+        // lens is told to audit only the structure the inventory actually rendered for this
+        // target — a macro-only or validation-only workbook is never told to audit formulas
+        // that review_goal and the render both show are absent. Emitted in stable catalog order.
+        const GOAL_PROSE: Record<string, string> = {
+          formula_integrity:
+            "Treat formulas and their recalculation behavior as review evidence; check visible formula mismatches, stale derived values, and decision-impacting calculation errors.",
+          cross_sheet_reference_integrity:
+            "Treat cross-sheet references as review evidence; check broken, stale, or misaimed references across sheets.",
+          named_range_hygiene:
+            "Treat named ranges as review evidence; check missing, overlapping, or wrongly-scoped named ranges.",
+          data_validation_coverage:
+            "Treat data-validation rules (type, operator, bounds) as review evidence; check missing or inconsistent input guards.",
+          access_and_protection_hygiene:
+            "Treat sheet protection, hidden sheets, and macro presence as review evidence; check the access/protection posture and any macro-carried risk.",
+          structural_risk_signals:
+            "Treat the recorded structural risk signals, external links, and error cells as review evidence; check decision-impacting structural risks.",
+        };
+        return spreadsheetGoals
+          .filter((goal) => backed.includes(goal))
+          .map((goal) => GOAL_PROSE[goal] as string);
       }
       // No structural obligation is backed. Distinguish an inspected plain-data workbook
       // (read — e.g. a flat CSV — but with no formula/named-range/validation/protection
