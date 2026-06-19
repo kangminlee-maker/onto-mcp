@@ -1158,6 +1158,28 @@ export function validateActionabilityMatrix(args: {
         args.actionabilityMatrixRef ?? null,
     }));
   }
+  // Current-matrix mode is signalled by post-frontier authority inputs (answer claims and
+  // ontology expansion are authored AFTER the frontier). Whenever any are present, the
+  // frontier pair is required — otherwise a current matrix with frontier_required rows and
+  // empty blocking_question_refs would validate under the pre-frontier (baseline) rules.
+  // Only the true baseline matrix (no post-frontier inputs AND no frontier) may omit it.
+  const postFrontierInputsPresent =
+    args.maturationAnswerClaims != null ||
+    args.maturationAnswerClaimsValidation != null ||
+    args.ontologyExpansion != null ||
+    args.ontologyExpansionValidation != null;
+  if (
+    postFrontierInputsPresent &&
+    !(frontierProvided && frontierValidationProvided)
+  ) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message:
+        "current-matrix actionability validation (carrying answer-claim or expansion inputs) requires the question frontier and its validation",
+      subjectId: args.maturationQuestionFrontierValidationRef ??
+        args.actionabilityMatrixRef ?? null,
+    }));
+  }
   // A supplied question-frontier validation is a declared input authority: distinguish
   // "no frontier supplied" (the pre-frontier baseline matrix, legitimately empty) from
   // "supplied but invalid". The latter must fail rather than silently fall back to the
@@ -1354,6 +1376,18 @@ export function validateActionabilityMatrix(args: {
           ) {
             expectedQuestions.add(questionId);
           }
+        }
+        // The supplied frontier must actually name this open material row. An empty
+        // expected set means a stale/edited/mismatched frontier (e.g. a valid validation
+        // paired with a different frontier artifact) — without this guard the coverage
+        // loop below would be vacuous and an unresolved row would validate with empty refs.
+        if (expectedQuestions.size === 0) {
+          violations.push(violation({
+            code: "missing_required_coverage",
+            message:
+              "frontier-required matrix row has no matching question in the supplied frontier",
+            subjectId: row.matrix_row_id,
+          }));
         }
         for (const expectedQuestionId of expectedQuestions) {
           if (!citedQuestions.has(expectedQuestionId)) {

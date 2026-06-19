@@ -1123,24 +1123,10 @@ describe("maturation validation", () => {
   });
 
   it("keeps material L3 answer-supported rows frontier-required until expansion validates them for purpose", () => {
-    const maturationBaseline = baseline([]);
-    const baselineValidation = validateMaturationBaseline({
-      maturationBaseline,
-      maturationBaselineRef: "maturation-baseline.yaml",
-      sourcePurposeCandidates: sourcePurposeCandidates(),
-      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
-      purposeConfirmationValidation: validPurposeConfirmation(),
-      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
-      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
-      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
-      sourceReconstructRecordSha256: sourceRecordSha,
-    });
-    const initialMatrix = buildActionabilityMatrixArtifact({
-      sessionId: "session-1",
-      maturationBaseline,
-      maturationBaselineRef: "maturation-baseline.yaml",
-      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
-    });
+    // A current-matrix recompute carries the question frontier pair (the row stays
+    // frontier_required, so it must cite its blocking question).
+    const { maturationBaseline, baselineValidation, matrix: initialMatrix, frontier, frontierValidation } =
+      frontierScenario();
     const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
     const matrix = buildActionabilityMatrixArtifact({
       sessionId: "session-1",
@@ -1154,6 +1140,8 @@ describe("maturation validation", () => {
       ontologyExpansion: emptyOntologyExpansion(),
       ontologyExpansionValidation: emptyOntologyExpansionValidation(),
       ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
     });
     const matrixValidation = validateActionabilityMatrix({
       actionabilityMatrix: matrix,
@@ -1168,6 +1156,10 @@ describe("maturation validation", () => {
       ontologyExpansion: emptyOntologyExpansion(),
       ontologyExpansionValidation: emptyOntologyExpansionValidation(),
       ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
     });
 
     expect(matrix.rows[0]?.maturity_level).toBe("L3_evidenced");
@@ -1176,24 +1168,8 @@ describe("maturation validation", () => {
   });
 
   it("raises material rows to L4 closed only from validated answer claims and ontology expansion", () => {
-    const maturationBaseline = baseline([]);
-    const baselineValidation = validateMaturationBaseline({
-      maturationBaseline,
-      maturationBaselineRef: "maturation-baseline.yaml",
-      sourcePurposeCandidates: sourcePurposeCandidates(),
-      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
-      purposeConfirmationValidation: validPurposeConfirmation(),
-      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
-      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
-      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
-      sourceReconstructRecordSha256: sourceRecordSha,
-    });
-    const initialMatrix = buildActionabilityMatrixArtifact({
-      sessionId: "session-1",
-      maturationBaseline,
-      maturationBaselineRef: "maturation-baseline.yaml",
-      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
-    });
+    const { maturationBaseline, baselineValidation, matrix: initialMatrix, frontier, frontierValidation } =
+      frontierScenario();
     const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
     const ontologyExpansion = ontologyExpansionForRow(initialMatrix.rows[0]!);
     const matrix = buildActionabilityMatrixArtifact({
@@ -1208,6 +1184,8 @@ describe("maturation validation", () => {
       ontologyExpansion,
       ontologyExpansionValidation: ontologyExpansionValidation(),
       ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
     });
     const matrixValidation = validateActionabilityMatrix({
       actionabilityMatrix: matrix,
@@ -1222,6 +1200,10 @@ describe("maturation validation", () => {
       ontologyExpansion,
       ontologyExpansionValidation: ontologyExpansionValidation(),
       ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
     });
 
     expect(matrix.rows[0]?.maturity_level).toBe("L4_validated_for_purpose");
@@ -1570,6 +1552,88 @@ describe("maturation validation", () => {
     expect(
       validateHalf({}).violations.some((v) => v.code === "missing_required_ref"),
     ).toBe(false);
+  });
+
+  it("requires the frontier pair when post-frontier inputs are present (codex round-3 P2)", () => {
+    const { maturationBaseline, baselineValidation, matrix: initialMatrix } =
+      frontierScenario();
+    const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
+    // A current-matrix recompute carries answer-claim inputs but OMITS the frontier pair —
+    // it must NOT be treated as the (empty) baseline matrix.
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion: emptyOntologyExpansion(),
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion: emptyOntologyExpansion(),
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      // No frontier pair supplied despite post-frontier inputs.
+    });
+    expect(validation.violations.some((v) => v.code === "missing_required_ref")).toBe(
+      true,
+    );
+  });
+
+  it("fails an open row when the supplied frontier names no matching question (codex round-3 P2)", () => {
+    const { maturationBaseline, baselineValidation, frontier } = frontierScenario();
+    // A mismatched/stale frontier: its question names a DIFFERENT baseline row, so no
+    // question names the actual frontier_required row.
+    const mismatchedFrontier = {
+      ...frontier,
+      questions: frontier.questions.map((q) => ({
+        ...q,
+        baseline_row_refs: ["other-baseline-row"],
+      })),
+    };
+    const validFrontierValidation = { validation_status: "valid" } as ReconstructMaturationQuestionFrontierValidationArtifact;
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: mismatchedFrontier,
+      maturationQuestionFrontierValidation: validFrontierValidation,
+    });
+    const frontierRow = matrix.rows.find(
+      (r) => r.member_readiness === "frontier_required",
+    )!;
+    // The builder finds no naming question, so the reverse link is empty...
+    expect(frontierRow.blocking_question_refs).toEqual([]);
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: mismatchedFrontier,
+      maturationQuestionFrontierValidation: validFrontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+    });
+    // ...and the validator must not let the unresolved open row pass silently.
+    expect(validation.violations.some((v) =>
+      v.code === "missing_required_coverage" &&
+      v.subject_id === frontierRow.matrix_row_id
+    )).toBe(true);
   });
 
   it("rejects a question frontier that omits material frontier-required rows", () => {
