@@ -1088,7 +1088,7 @@ terms:
     korean_label: "소스 안전성 권한"
     axis: "reconstruct_source"
     term_status: "active"
-    definition: "Runtime authority for lifecycle, authorization, privacy, redaction, proof-sufficiency, replay, and consumption visibility of observed source records."
+    definition: "Runtime authority for lifecycle, authorization, proof-sufficiency, replay, and consumption visibility of observed source records."
     notes:
       - "Consumption-specific rows distinguish prompt context, evidence support, public output, replay, and material claim use."
   - term_id: "reconstruct_run_control"

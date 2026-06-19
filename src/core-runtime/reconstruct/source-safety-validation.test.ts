@@ -181,6 +181,37 @@ describe("source safety validation", () => {
     );
   });
 
+  it("fails a stale row that still carries retired axes instead of laundering them away (Codex P2)", () => {
+    const observations = sourceObservations();
+    const ledger = validLedger();
+    ledger.safety_rows[0] = {
+      ...firstRow(ledger),
+      visibility_derivation: {
+        ...firstRow(ledger).visibility_derivation,
+        // A pre-refactor ledger that still lists the removed privacy_state /
+        // redaction_state axes must NOT normalize down to exactly four and pass.
+        derived_from_axes: [
+          "lifecycle_state",
+          "authorization_state",
+          "privacy_state",
+          "redaction_state",
+          "proof_sufficiency_state",
+          "replay_state",
+        ] as ReconstructSourceSafetyRow["visibility_derivation"]["derived_from_axes"],
+      },
+    };
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceObservations: observations,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((item) => item.code)).toContain(
+      "visibility_axis_set_invalid",
+    );
+  });
+
   it("fails when an observed source has no source-safety row", () => {
     const observations = sourceObservations();
     const ledger = validLedger();

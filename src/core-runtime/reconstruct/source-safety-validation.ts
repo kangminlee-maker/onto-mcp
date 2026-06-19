@@ -107,14 +107,6 @@ function inList<T extends string>(
   return typeof value === "string" && (allowed as readonly string[]).includes(value);
 }
 
-function arrayValues<T extends string>(
-  value: unknown,
-  allowed: readonly T[],
-): T[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is T => inList(item, allowed));
-}
-
 export function sourceSafetyRowIdForObservation(
   observation: ReconstructSourceObservation,
   intendedConsumption: ReconstructSourceSafetyIntendedConsumption = "prompt_context",
@@ -357,10 +349,15 @@ function normalizeSafetyRow(rawRow: unknown): ReconstructSourceSafetyRow | null 
       intended_consumption: inList(derivation.intended_consumption, INTENDED_CONSUMPTIONS)
         ? derivation.intended_consumption
         : "" as ReconstructSourceSafetyIntendedConsumption,
-      derived_from_axes: arrayValues(
-        derivation.derived_from_axes,
-        SOURCE_SAFETY_CANONICAL_AXES,
-      ),
+      // Keep every string entry as-is (do NOT filter to the canonical set): a stale
+      // or tampered row carrying retired axes (e.g. privacy_state/redaction_state)
+      // must reach validateCanonicalAxes and fail `visibility_axis_set_invalid`,
+      // not be silently laundered down to exactly the four canonical axes.
+      derived_from_axes: (Array.isArray(derivation.derived_from_axes)
+        ? derivation.derived_from_axes.filter((axis): axis is string =>
+          typeof axis === "string"
+        )
+        : []) as ReconstructSourceSafetyCanonicalAxis[],
       derivation_rule_ref:
         typeof derivation.derivation_rule_ref === "string"
           ? derivation.derivation_rule_ref

@@ -903,7 +903,7 @@ artifact_authorities:
   source_safety_ledger:
     authority_ref: source-safety-ledger.yaml
     validation_ref: source-safety-ledger-validation.yaml
-    projection_policy: six_axis_source_safety_and_derived_visibility_by_observation_id_and_intended_consumption
+    projection_policy: four_axis_source_safety_and_derived_visibility_by_observation_id_and_intended_consumption
   source_safety_ledger_validation:
     authority_ref: source-safety-ledger-validation.yaml
     validation_ref: null

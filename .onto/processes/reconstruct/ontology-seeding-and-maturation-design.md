@@ -119,7 +119,7 @@ element required by the source-derived `PurposeAdequacyFrame`.
 | `MaterialAdmissionAuthority` | runtime-assembled admission authority for purpose-critical adequacy elements, with a separate phase for literal source-backed material values | runtime |
 | `MaterialValueDisposition` | admission and closure decision for source-backed values that may affect actionability | host LLM authored, runtime validated |
 | `DomainCompetencyAdmission` | run-manifest admission of domain competency questions into required, supporting, or diagnostic maturity coverage | runtime |
-| `SourceSafetyAuthority` | validator-consumed lifecycle, authorization, privacy, redaction, proof-sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material defaults | runtime |
+| `SourceSafetyAuthority` | validator-consumed lifecycle, authorization, proof-sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material defaults | runtime |
 | `MutableVocabularyAuthority` | replayable identity, snapshot, mapping, alias, supersession, and migration state for external terms, standards, provider/framework terms, and profile-owned facets | planned until registry promotion |
 | `SourceDeltaFact` | runtime-observed source freshness fact before semantic actionability interpretation | runtime |
 | `SourceDeltaImpactJudgment` | source-delta impact interpretation against purpose, surfaces, and dimensions | host LLM authored, runtime validated |
@@ -2516,8 +2516,8 @@ activation conditions.
 | `claim-projection-validation.yaml` | runtime | proves claim level, decision state, actionability claim, material-kind/member support, bounded UX fields, target-material profile validation, and pre-publication run-control/registry/validation evidence closure |
 | `material-admission-ledger.yaml` | runtime | canonical admission/disposition rows for purpose-critical adequacy elements, and later source-backed material values when that phase is promoted |
 | `material-admission-ledger-validation.yaml` | runtime | proves admitted, deferred, rejected, and out-of-scope admission rows are replayable and closed downstream |
-| `source-safety-ledger.yaml` | runtime | lifecycle, authorization, privacy, redaction, proof sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material claim defaults |
-| `source-safety-ledger-validation.yaml` | runtime | proves unsafe, retired, redacted, disposed, invalidated, unauthorized, privacy-sensitive, or proof-insufficient source refs fail closed or become limitations |
+| `source-safety-ledger.yaml` | runtime | lifecycle, authorization, proof sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material claim defaults |
+| `source-safety-ledger-validation.yaml` | runtime | proves unsafe, retired, disposed, invalidated, unauthorized, or proof-insufficient source refs fail closed or become limitations |
 | `source-observation-lineage-index.yaml` | runtime | session-level index of every round-scoped source-observation delta, delta validation, re-entry validation, frontier kind, and added observation id consumed by answer-support validation |
 | `source-observation-lineage-index-validation.yaml` | runtime | proves the session lineage index matches valid per-round delta validations, re-entry validations, frontier kinds, and source observation ids before semantic downstream consumption |
 | `vocabulary-authority-ledger.yaml` | planned | identity, snapshot, mapping, applicability, alias, supersession, and migration rows for mutable vocabulary |
@@ -2648,7 +2648,7 @@ through prose shortcuts.
 |---|---|---|---|---|
 | 0 | `reconstruct-run-control-validation.yaml` | any seeding, maturation, retry, resume, status, result, or public projection writes/reads session artifacts | every writer, validator, status/result reader, final-output writer, record assembler | block or return existing trusted run before semantic artifacts are consumed |
 | 1 | `registry-verification-evidence-validation.yaml` | prose or public surface claims `active`, `promoted`, `current`, `implemented`, `executable`, `ready`, or material-kind support | claim projection, final-output provenance, MCP/API/status/result, prompt packet materialization | mark `pending_verification` and prevent runtime/public consumption |
-| 2 | `source-safety-ledger-validation.yaml` | an observed source record enters context assembly, a prompt packet, source observation re-entry, evidence support, or source-backed claim | prompt-packet materialization/context assembly, source observation re-entry, source-backed evidence support | exclude, redact, limit, or block according to lifecycle, authorization, privacy, redaction, proof sufficiency, replay, and observation-specific derived prompt visibility policy |
+| 2 | `source-safety-ledger-validation.yaml` | an observed source record enters context assembly, a prompt packet, source observation re-entry, evidence support, or source-backed claim | prompt-packet materialization/context assembly, source observation re-entry, source-backed evidence support | exclude, limit, or block according to lifecycle, authorization, proof sufficiency, replay, and observation-specific derived prompt visibility policy |
 | 3 | `material-admission-ledger-validation.yaml` | source-backed values can affect actionability, evidence trust, dynamic boundaries, permissions, obligations, calculations, or public claims | candidate disposition, seed validation, maturation baseline, question frontier, matrix, convergence ledger | every admitted/required source-backed row must be consumed downstream or surfaced as limitation/blocked/out-of-scope |
 | planned | `vocabulary-authority-ledger-validation.yaml` | mutable profile facets, domain terms, provider/framework terms, external standards, or reference patterns need active runtime vocabulary proof | source profile selection, seed rows, maturation rows, external boundary rows, claim projection | planned authority; current runtime must not claim this validation has active coverage |
 | 5 | `claim-projection-validation.yaml` | any status/result/MCP/API/handoff surface reports success, readiness, actionability, `blocked`, `ask_user`, or material-kind support; final-output claim sections may only cite canonical refs until this closes | all public and downstream result surfaces | surfaces may not infer claim level or next action from distributed artifacts |
@@ -2941,7 +2941,7 @@ Validation responsibilities:
 - material-admission validation for purpose-critical adequacy elements, with
   source-backed material values only after their phase is promoted
 - source-safety validation before prompt-packet materialization/context assembly
-  and for lifecycle, authorization, privacy, redaction, proof sufficiency, replay
+  and for lifecycle, authorization, proof sufficiency, replay
   eligibility, and derived visibility projection
 - planned mutable-vocabulary validation for external/profile/provider/framework
   terms after registry promotion
@@ -2971,19 +2971,15 @@ Safety and lifecycle rules:
   validators, tool policies, or user-confirmed run scope;
 - prompt packets include only the minimum source excerpts needed for the current
   stage and preserve refs so omitted context can be audited;
-- secrets, credentials, personal data, and sensitive business values are redacted
-  from user-facing prose unless the user explicitly authorizes disclosure for the
-  run; artifact truth may preserve hashes, refs, labels, or bounded summaries
-  instead of raw sensitive text;
 - authority responses record identity, scope, timestamp/version, and replay
   eligibility, and unavailable or rejected authority responses remain visible as
   limitations or blocked rows;
 - stale source snapshots, stale profile snapshots, and unresolved migration refs
   cannot be treated as current authority;
-- retirement, disposal, or redaction of an artifact must leave an audit-visible
+- retirement or disposal of an artifact must leave an audit-visible
   tombstone with artifact ref, hash when available, lifecycle state, reason, and
   downstream refs that can no longer be trusted; and
-- replay must fail closed when a required source ref, redacted value, retired
+- replay must fail closed when a required source ref, retired
   artifact, or authority snapshot is needed to prove a material claim.
 
 These prose rules are implementation guidance only until
@@ -3138,7 +3134,7 @@ Per-kind release evidence requirements:
 | Material kind | Release-supported only when |
 |---|---|
 | `code` | real or golden repository run proves file/module/service observation, purpose inference or confirmation, actor/object/action/data-binding extraction, dependency and external-boundary mapping, validation failure visibility, and artifact refs |
-| `document` | real or golden document run proves section/heading/decision/action-item observation, purpose extraction or inference, citation-preserving evidence refs, source-safety/redaction handling, and limitation output for ambiguous prose |
+| `document` | real or golden document run proves section/heading/decision/action-item observation, purpose extraction or inference, citation-preserving evidence refs, source-safety handling, and limitation output for ambiguous prose |
 | `spreadsheet` | real or golden workbook run proves sheet/range/named-range/formula/decision-cell observation, source values and derived outputs are distinguished, formula or calculation evidence is replayable, and stale workbook or hidden-sheet gaps fail loud |
 | `database` | real or golden database/schema snapshot proves table/view/key/grant/default/derived-view observation, sampled evidence boundaries are explicit, permission and retention constraints are represented, and unavailable credentials or schema drift block/limit claims |
 | `meeting_record` | real or golden meeting artifact proves participants, decisions, action owners, due dates, open questions, and unresolved policy decisions are extracted as purpose-relevant evidence without inventing workflow paths |
