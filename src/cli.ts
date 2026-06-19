@@ -40,6 +40,7 @@ function printHelp(): void {
       "  mcp            Start the MCP stdio tool server",
       "  register       Register the onto MCP server into supported hosts",
       "  configure-provider  Write LLM provider settings into the settings.json chain",
+      "  watch          Live read-only TUI for review/reconstruct sessions",
       "",
       "Available MCP tools:",
       "  onto_review",
@@ -65,7 +66,7 @@ function printHelp(): void {
 function unsupportedCommandMessage(subcommand: string): string {
   return [
     `[onto] Unsupported public CLI subcommand: ${subcommand}`,
-    "Active public commands: onto mcp, onto register, onto configure-provider",
+    "Active public commands: onto mcp, onto register, onto configure-provider, onto watch",
   ].join("\n");
 }
 

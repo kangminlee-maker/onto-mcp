@@ -72,6 +72,10 @@ export function WatchApp({
         setTreeError(null);
         setEvents([]);
         setNodeCursor(0);
+        // Bump the poll nonce so the tree effect re-runs even when the chosen
+        // session is the one already selected (same ref → deps unchanged);
+        // otherwise setVm(null) would leave the HUD stuck on "loading…".
+        setNonce((n) => n + 1);
         setScreen("tree");
       }
       return;
