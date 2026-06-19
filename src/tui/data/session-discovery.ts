@@ -5,6 +5,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { runtimeStreamEventLogPath } from "../../core-api/runtime-observation.js";
 
 export type WatchPipeline = "review" | "reconstruct";
 
@@ -41,6 +42,16 @@ async function listPipelineSessions(
       modifiedMs = (await fs.stat(sessionRoot)).mtimeMs;
     } catch {
       continue;
+    }
+    // The root dir mtime misses content appends (a running session keeps
+    // appending to runtime-events.ndjson and nested running logs without
+    // touching the dir entry), so fold in the event log's mtime as the primary
+    // activity signal — otherwise an active session can sort below older ones.
+    try {
+      const eventMs = (await fs.stat(runtimeStreamEventLogPath(sessionRoot))).mtimeMs;
+      if (eventMs > modifiedMs) modifiedMs = eventMs;
+    } catch {
+      // No event log yet — fall back to the dir mtime.
     }
     sessions.push({
       pipeline,

@@ -69,6 +69,32 @@ describe("WorkflowTree HUD", () => {
     expect(frame).toContain("issue-001 MCP host path missing");
   });
 
+  it("surfaces run-control availability (continue/advance/cancel) the projection carries", () => {
+    const haltedVm: TreeViewModel = {
+      ...reviewVm,
+      status: "halted",
+      runControl: { cancellable: false, continuable: true },
+    };
+    const haltedFrame = render(<WorkflowTree vm={haltedVm} />).lastFrame() ?? "";
+    expect(haltedFrame).toContain("Controls");
+    expect(haltedFrame).toContain("continue available");
+    expect(haltedFrame).not.toContain("cancel");
+
+    const advanceVm: TreeViewModel = {
+      ...reconstructVm,
+      runControl: { cancellable: true, continuable: false, advanceable: true },
+    };
+    const advanceFrame = render(<WorkflowTree vm={advanceVm} />).lastFrame() ?? "";
+    expect(advanceFrame).toContain("advance · cancel available");
+
+    const noneVm: TreeViewModel = {
+      ...reviewVm,
+      runControl: { cancellable: false, continuable: false },
+    };
+    const noneFrame = render(<WorkflowTree vm={noneVm} />).lastFrame() ?? "";
+    expect(noneFrame).not.toContain("Controls");
+  });
+
   it("renders a reconstruct session with stages + a coverage (counts) footer", () => {
     const { lastFrame } = render(<WorkflowTree vm={reconstructVm} />);
     const frame = lastFrame() ?? "";

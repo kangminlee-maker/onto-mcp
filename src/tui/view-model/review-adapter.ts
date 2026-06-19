@@ -45,6 +45,11 @@ import type {
 const UNCATEGORIZED_PHASE_ID = "unassigned";
 const UNCATEGORIZED_PHASE_LABEL = "unassigned units";
 
+/** Canonical progress-step ids — used to reject non-step `completed_steps` keys. */
+const VALID_PROGRESS_STEP_IDS = new Set<string>(
+  REVIEW_PROGRESS_STEPS.map((step) => step.id),
+);
+
 /**
  * Structural view of the bounded progress-presentation payload carried by
  * `ReviewStatus.llmPresentation.progress.input` (typed `unknown` at the
@@ -357,7 +362,15 @@ export function reviewStatusToTreeViewModel(
 ): TreeViewModel {
   const input = readProgressPresentationInput(status);
   const workflowStatus = deriveWorkflowStatus(status.status);
-  const completedStepIds = new Set(input.progress?.completed_steps ?? []);
+  // Consume only real progress-step ids: a prepared session fills
+  // `completed_steps` with preparation-artifact keys (interpretation/binding/
+  // execution_plan), a different vocabulary, which must not be matched against
+  // (or mistaken for) progress-step ids during phase rollup.
+  const completedStepIds = new Set(
+    (input.progress?.completed_steps ?? []).filter((id) =>
+      VALID_PROGRESS_STEP_IDS.has(id),
+    ),
+  );
   const phases = derivePhases(
     status,
     completedStepIds,

@@ -84,11 +84,20 @@ async function resolveWatch(args: WatchArgs): Promise<ResolvedWatch> {
   if (byPath) {
     return { sessions: sessions.length ? sessions : [byPath], initialSession: byPath };
   }
-  const match = sessions.find((s) => s.sessionId.includes(args.session!));
-  if (!match) {
+  const matches = sessions.filter((s) => s.sessionId.includes(args.session!));
+  if (matches.length === 0) {
     return { sessions, error: `no session matching "${args.session}"` };
   }
-  return { sessions, initialSession: match };
+  if (matches.length > 1) {
+    // Ambiguous token — don't silently attach to the newest; ask for a specific id.
+    return {
+      sessions,
+      error:
+        `"${args.session}" matches ${matches.length} sessions: ` +
+        `${matches.map((s) => s.sessionId).join(", ")}. Use a more specific id.`,
+    };
+  }
+  return { sessions, initialSession: matches[0]! };
 }
 
 export async function runWatch(argv: string[]): Promise<number> {

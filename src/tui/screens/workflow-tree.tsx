@@ -8,6 +8,7 @@ import { Box, Text } from "ink";
 import type {
   NodeState,
   TreeNode,
+  TreeRunControl,
   TreeViewModel,
   WorkflowStatus,
 } from "../view-model/tree-view-model.js";
@@ -54,6 +55,20 @@ function NodeBadge({ node }: { node: TreeNode }): JSX.Element | null {
   if (node.failureMessage) parts.push(node.failureMessage);
   if (parts.length === 0) return null;
   return <Text dimColor>{`  ${parts.join(" · ")}`}</Text>;
+}
+
+/**
+ * Surfaces the run-control availability the status projection carries (observe-
+ * only: it reports what the operator can do via the MCP/CLI, the HUD never acts).
+ * Most relevant for halted/stale sessions where continue is the next step.
+ */
+function RunControlRow({ control }: { control: TreeRunControl }): JSX.Element | null {
+  const available: string[] = [];
+  if (control.continuable) available.push("continue");
+  if (control.advanceable) available.push("advance");
+  if (control.cancellable) available.push("cancel");
+  if (available.length === 0) return null;
+  return <Text dimColor>{`Controls  ${available.join(" · ")} available`}</Text>;
 }
 
 function Footer({ vm }: { vm: TreeViewModel }): JSX.Element {
@@ -108,6 +123,7 @@ export function WorkflowTree({ vm, selectedNodeId }: WorkflowTreeProps): JSX.Ele
           <Text dimColor>{`  · ${vm.liveness.secondsSinceSignal}s since signal`}</Text>
         ) : null}
       </Box>
+      <RunControlRow control={vm.runControl} />
 
       <Box flexDirection="column" marginTop={1}>
         {vm.phases.map((phase) => (
