@@ -1266,7 +1266,12 @@ describe("maturation validation", () => {
     )!;
     expect(frontierRow).toBeDefined();
     expect(frontierRow.blocking_question_refs).toContain("mq-feature-object");
-    expect(validateWithFrontier(matrix).validation_status).toBe("valid");
+    const validated = validateWithFrontier(matrix);
+    expect(validated.validation_status).toBe("valid");
+    // The threaded frontier-validation ref is recorded as provenance (ultracode G-1).
+    expect(validated.maturation_question_frontier_validation_ref).toBe(
+      "maturation-question-frontier-validation.yaml",
+    );
     // Dropping the reverse link on an open row -> missing coverage.
     const dropped = {
       ...matrix,
@@ -1385,6 +1390,143 @@ describe("maturation validation", () => {
     });
     expect(validation.violations.some((v) =>
       v.code === "conflicting_state" && v.subject_id === closedRow.matrix_row_id
+    )).toBe(true);
+  });
+
+  it("requires a frontier_required row to cite EVERY frontier question naming it (codex P2 #1)", () => {
+    const { maturationBaseline, baselineValidation, frontier } = frontierScenario();
+    const baseQuestion = frontier.questions[0]!;
+    // Two validated frontier questions name the SAME baseline row.
+    const twoQuestionFrontier = {
+      ...frontier,
+      questions: [
+        { ...baseQuestion, question_id: "mq-feature-object" },
+        { ...baseQuestion, question_id: "mq-feature-object-2" },
+      ],
+    };
+    const validFrontierValidation = { validation_status: "valid" } as ReconstructMaturationQuestionFrontierValidationArtifact;
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: twoQuestionFrontier,
+      maturationQuestionFrontierValidation: validFrontierValidation,
+    });
+    const frontierRow = matrix.rows.find(
+      (r) => r.member_readiness === "frontier_required",
+    )!;
+    // The builder populates the FULL set.
+    expect(new Set(frontierRow.blocking_question_refs)).toEqual(
+      new Set(["mq-feature-object", "mq-feature-object-2"]),
+    );
+    const validate = (m: ReconstructActionabilityMatrixArtifact) =>
+      validateActionabilityMatrix({
+        actionabilityMatrix: m,
+        actionabilityMatrixRef: "actionability-matrix.yaml",
+        maturationBaseline,
+        maturationBaselineValidation: baselineValidation,
+        maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+        maturationQuestionFrontier: twoQuestionFrontier,
+        maturationQuestionFrontierValidation: validFrontierValidation,
+        maturationQuestionFrontierValidationRef:
+          "maturation-question-frontier-validation.yaml",
+      });
+    expect(validate(matrix).validation_status).toBe("valid");
+    // Dropping ONE of the two questions (a subset) must now fail — exact set required.
+    const subset = {
+      ...matrix,
+      rows: matrix.rows.map((r) =>
+        r.matrix_row_id === frontierRow.matrix_row_id
+          ? { ...r, blocking_question_refs: ["mq-feature-object"] }
+          : r
+      ),
+    };
+    expect(validate(subset).violations.some((v) =>
+      v.code === "missing_required_coverage" &&
+      v.subject_id === frontierRow.matrix_row_id
+    )).toBe(true);
+  });
+
+  it("rejects a blocking question that resolves but does not name the row (ultracode namesRow gap)", () => {
+    const { maturationBaseline, baselineValidation, frontier } = frontierScenario();
+    const baseQuestion = frontier.questions[0]!;
+    // mq-other-row exists in the frontier but names a different baseline row.
+    const frontierWithOther = {
+      ...frontier,
+      questions: [
+        { ...baseQuestion, question_id: "mq-feature-object" },
+        {
+          ...baseQuestion,
+          question_id: "mq-other-row",
+          baseline_row_refs: ["other-baseline-row"],
+        },
+      ],
+    };
+    const validFrontierValidation = { validation_status: "valid" } as ReconstructMaturationQuestionFrontierValidationArtifact;
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: frontierWithOther,
+      maturationQuestionFrontierValidation: validFrontierValidation,
+    });
+    const frontierRow = matrix.rows.find(
+      (r) => r.member_readiness === "frontier_required",
+    )!;
+    // Cite the real-but-wrong-row question alongside the legitimately-expected one.
+    const tampered = {
+      ...matrix,
+      rows: matrix.rows.map((r) =>
+        r.matrix_row_id === frontierRow.matrix_row_id
+          ? { ...r, blocking_question_refs: ["mq-feature-object", "mq-other-row"] }
+          : r
+      ),
+    };
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: tampered,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: frontierWithOther,
+      maturationQuestionFrontierValidation: validFrontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+    });
+    expect(validation.violations.some((v) =>
+      v.code === "conflicting_state" &&
+      v.subject_id === frontierRow.matrix_row_id
+    )).toBe(true);
+  });
+
+  it("fails the current matrix when a supplied frontier validation is invalid (codex P2 #3)", () => {
+    const { maturationBaseline, baselineValidation, frontier, frontierValidation } =
+      frontierScenario();
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+    });
+    // A supplied-but-invalid frontier validation must fail, not silently fall back.
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: { validation_status: "invalid" } as ReconstructMaturationQuestionFrontierValidationArtifact,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+    });
+    expect(validation.violations.some((v) =>
+      v.code === "prior_validation_invalid" &&
+      v.subject_id === "maturation-question-frontier-validation.yaml"
     )).toBe(true);
   });
 

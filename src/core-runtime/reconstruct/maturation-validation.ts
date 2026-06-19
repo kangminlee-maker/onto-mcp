@@ -1084,13 +1084,27 @@ export function validateActionabilityMatrix(args: {
   // must carry no blocking questions yet.
   const frontierAvailable =
     args.maturationQuestionFrontierValidation?.validation_status === "valid";
+  // qid -> the baseline rows it names (forward link), and the inverse baseline-row -> qids
+  // so the matrix's reverse link can be proven to be the EXACT set (not merely a subset)
+  // of the frontier questions naming each row.
   const frontierQuestionBaselineRows = new Map<string, Set<string>>();
+  const frontierQuestionsByBaselineRow = new Map<string, Set<string>>();
   if (frontierAvailable) {
     for (const question of args.maturationQuestionFrontier?.questions ?? []) {
       frontierQuestionBaselineRows.set(
         question.question_id,
         new Set(question.baseline_row_refs),
       );
+      for (const baselineRowRef of question.baseline_row_refs) {
+        const bucket = frontierQuestionsByBaselineRow.get(baselineRowRef);
+        if (bucket) bucket.add(question.question_id);
+        else {
+          frontierQuestionsByBaselineRow.set(
+            baselineRowRef,
+            new Set([question.question_id]),
+          );
+        }
+      }
     }
   }
   const seen = new Set<string>();
@@ -1127,6 +1141,22 @@ export function validateActionabilityMatrix(args: {
       code: "prior_validation_invalid",
       message: "actionability matrix requires valid maturation baseline validation",
       subjectId: args.maturationBaselineValidationRef ?? null,
+    }));
+  }
+  // A supplied question-frontier validation is a declared input authority: distinguish
+  // "no frontier supplied" (the pre-frontier baseline matrix, legitimately empty) from
+  // "supplied but invalid". The latter must fail rather than silently fall back to the
+  // pre-frontier rules (which would let an empty blocking_question_refs pass even though
+  // the required frontier authority failed validation).
+  if (
+    args.maturationQuestionFrontierValidation &&
+    args.maturationQuestionFrontierValidation.validation_status !== "valid"
+  ) {
+    violations.push(violation({
+      code: "prior_validation_invalid",
+      message:
+        "actionability matrix requires valid maturation question frontier validation when one is supplied",
+      subjectId: args.maturationQuestionFrontierValidationRef ?? null,
     }));
   }
   for (const row of matrix.rows) {
@@ -1296,13 +1326,30 @@ export function validateActionabilityMatrix(args: {
       }
     } else {
       const rowIsFrontier = row.member_readiness === "frontier_required";
-      if (rowIsFrontier && row.blocking_question_refs.length === 0) {
-        violations.push(violation({
-          code: "missing_required_coverage",
-          message:
-            "frontier-required matrix row must cite its blocking maturation question(s)",
-          subjectId: row.matrix_row_id,
-        }));
+      const citedQuestions = new Set(row.blocking_question_refs);
+      if (rowIsFrontier) {
+        // Exact reverse link: an open row must cite EVERY validated frontier question that
+        // names it, not merely one of them — otherwise a stale/edited matrix could drop one
+        // of several questions for a row and still hide an open blocking question.
+        const expectedQuestions = new Set<string>();
+        for (const baselineRowRef of row.baseline_row_refs) {
+          for (
+            const questionId of frontierQuestionsByBaselineRow.get(baselineRowRef) ??
+              []
+          ) {
+            expectedQuestions.add(questionId);
+          }
+        }
+        for (const expectedQuestionId of expectedQuestions) {
+          if (!citedQuestions.has(expectedQuestionId)) {
+            violations.push(violation({
+              code: "missing_required_coverage",
+              message:
+                "frontier-required matrix row must cite every blocking maturation question that names it",
+              subjectId: row.matrix_row_id,
+            }));
+          }
+        }
       }
       if (!rowIsFrontier && row.blocking_question_refs.length > 0) {
         violations.push(violation({
@@ -1370,6 +1417,8 @@ export function validateActionabilityMatrix(args: {
       args.maturationAnswerClaimsValidationRef ?? null,
     ontology_expansion_validation_ref:
       args.ontologyExpansionValidationRef ?? null,
+    maturation_question_frontier_validation_ref:
+      args.maturationQuestionFrontierValidationRef ?? null,
     validation_status: violations.length === 0 ? "valid" : "invalid",
     matrix_row_count: matrix.rows.length,
     frontier_required_row_count: matrix.rows.filter((row) =>
