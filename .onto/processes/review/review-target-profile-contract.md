@@ -93,8 +93,8 @@ material_profile:
   target_material_kind: code
   target_material_kind_candidates:
     - code
-  support_status: partial
-  unsupported_reason: review records target material kind, but material-specific validation is not implemented yet
+  support_status: supported
+  unsupported_reason: null
   detection:
     owner: runtime_heuristic
     confidence: 0.92
@@ -157,8 +157,48 @@ This axis must stay separate from:
 - `medium`: a cross-product reference and learning frame
 
 The current runtime records material kind and detection confidence as a bounded
-heuristic. It must not claim material-specific validation until per-material
-validators or adapters are implemented.
+heuristic. Per-material review handling is implemented for **spreadsheet** through a
+**single per-ref disposition** (`computeSpreadsheetDisposition`, the SSOT): every
+spreadsheet honesty surface — `support_status`, `target_refs[].inspectable`/`.sha256`,
+the `review_goal` obligations, the prompt `material_kind_obligations`, and the render
+notes — **projects from one record computed once over the shared observation**, instead
+of each surface re-deriving its claim from a different proxy. The structural inventory is
+rendered into `materialized-input.md` with detail (formula text, named-range references,
+data-validation rules incl. operator + formula bounds, protections, risk signals) —
+**structure inspected only, not recalculated**.
+
+Two distinct axes, deliberately not coupled:
+
+- **`inspectable`** — the workbook was read (`unsupported_reason === null`) AND has
+  renderable structure, *including plain tabular data* (columns / distinct-value vocab).
+  A clean CSV or a formula-free data `.xlsx` is `inspectable` and stays
+  `support_status: supported`. It is NOT coupled to whether any obligation is backed.
+- **`backed_goals`** — the POSITIVE subset of the six obligations whose specific evidence
+  exists in that ref's inventory; this drives `review_goal`. `review_goal` therefore
+  carries **only the backed subset, not always all six**: a plain-data CSV backs none
+  (and so carries no spreadsheet obligation while remaining `supported`); a macro-only or
+  protection-only workbook backs only `access_and_protection_hygiene`. `structural_risk_signals`
+  is backed by genuine structural risk only — `unreadable_sheet_part` (an observation-failure
+  marker) and the `macro_present` / `external_links_present` signals (owned by other goals)
+  do not back it.
+
+`support_status` runs the gate over the **union of resolved and materialized** spreadsheet
+refs the prompt renders — **regardless of the resolved material kind**, so a `code`-resolved
+target carrying a materialized workbook the observer could not read degrades to `partial`
+(it is not gated only when the resolved kind is spreadsheet). If **any** rendered spreadsheet
+ref is uninspectable the target is `partial`, with a reason naming each uninspected ref by
+its full resolved path and actual cause; obligations are dropped only when **no** ref is
+inspectable. A `supported`/`null` profile is never emitted for a workbook the render shows as
+`unsupported`. The render emits obligation-backing detail **before** the per-sheet bodies so
+the prompt embed cut cannot strip an obligation's evidence, and protected/hidden sheets beyond
+the render cap are disclosed by count. Observation bounds the number of sheets read
+(`max_sheets_observed`, conservatively high) and a CSV/workbook whose decode or parse throws
+degrades to an honest `unsupported` inventory rather than aborting review prep.
+
+`code`, `document`, `database`, and `unknown` retain their prior support states
+until their per-material review adapters land. A spreadsheet inside a `mixed`
+bundle does not yet receive spreadsheet obligations (a known limitation,
+consistent with the `mixed` support state).
 
 ---
 

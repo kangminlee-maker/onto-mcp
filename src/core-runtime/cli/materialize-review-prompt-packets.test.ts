@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { InvocationBindingArtifact } from "../review/artifact-types.js";
+import type {
+  InvocationBindingArtifact,
+  ReviewTargetProfileArtifact,
+} from "../review/artifact-types.js";
 import {
   renderBoundaryPolicySection,
   renderEmbeddedMaterializedInputSection,
   renderLensOutputSchemaGate,
   renderLensSidecarOutputContract,
+  renderReviewTargetProfileSummary,
   renderUnitBoundaryDetailsSection,
 } from "./materialize-review-prompt-packets.js";
 
@@ -194,5 +198,52 @@ describe("unit boundary prompt rendering", () => {
     );
     expect(text).toContain(materializedInput);
     expect(text).toContain("<!-- onto:embedded-materialized-input:end -->");
+  });
+});
+
+describe("material_kind_obligations honesty (R3)", () => {
+  // Minimal spreadsheet profile: the only fields renderReviewTargetProfileSummary /
+  // materialKindReviewObligations read are exercised; review_goal drives the honesty branch.
+  function spreadsheetProfile(reviewGoal: string[]): ReviewTargetProfileArtifact {
+    const backed = reviewGoal.includes("formula_integrity");
+    return {
+      target_material_kind: "spreadsheet",
+      target_input_kind: "single_file",
+      target_scope_kind: "file",
+      artifact_roles: { primary: "review_target", secondary: [] },
+      closure_level: "close_in_target",
+      review_goal: reviewGoal,
+      closure_obligation_policy: [],
+      material_profile: {
+        support_status: backed ? "supported" : "partial",
+        detection: { confidence: 0.9, confidence_basis: "test" },
+      },
+    } as unknown as ReviewTargetProfileArtifact;
+  }
+
+  it("emits formula/recalculation obligations when the spreadsheet goals are attached (inventory-backed)", () => {
+    const summary = renderReviewTargetProfileSummary(
+      spreadsheetProfile(["formula_integrity", "cross_sheet_reference_integrity"]),
+    );
+    expect(summary).toContain("recalculation behavior");
+    expect(summary).not.toContain("could not be structurally inspected");
+  });
+
+  it("does NOT tell the lens to audit formulas when the honesty gate dropped the spreadsheet goals (no inventory backing)", () => {
+    // partial profile whose spreadsheet review goals were dropped: the obligation surface
+    // must agree with review_goal, not re-derive audit obligations from the bare kind.
+    const summary = renderReviewTargetProfileSummary(spreadsheetProfile(["correctness"]));
+    expect(summary).not.toContain("recalculation behavior");
+    expect(summary).toContain("could not be structurally inspected");
+    expect(summary).toContain("preserve material uncertainty");
+  });
+
+  it("projects obligation prose from the backed goal SUBSET — a macro-only workbook is not told to audit formulas (issue-001/004)", () => {
+    const summary = renderReviewTargetProfileSummary(
+      spreadsheetProfile(["access_and_protection_hygiene"]),
+    );
+    // access_and_protection_hygiene is backed -> its prose appears; formula prose does not.
+    expect(summary).toContain("sheet protection");
+    expect(summary).not.toContain("recalculation behavior");
   });
 });

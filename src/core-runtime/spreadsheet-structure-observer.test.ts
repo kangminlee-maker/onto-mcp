@@ -231,6 +231,19 @@ describe("observeSpreadsheetSource — IO + dispatch", () => {
     expect(r.sheets.map((s) => s.name)).toEqual(["People", "Depts"]);
   });
 
+  it("degrades a corrupt/non-zip .xlsx to an unsupported inventory WITHOUT throwing (B1 crash isolation)", async () => {
+    await fs.mkdir(tmp, { recursive: true });
+    const file = path.join(tmp, "broken.xlsx");
+    // Passes the extension + size gate but is not a valid zip, so extraction fails. The
+    // observer must return the standard unsupported-inventory shape (which review's
+    // disposition and reconstruct's P6 gate both already accept), never throw out and abort.
+    await fs.writeFile(file, Buffer.from("this is plain text, not an OOXML zip archive"));
+    const r = await observeSpreadsheetSource(file);
+    expect(r.unsupported_reason).not.toBeNull();
+    expect(r.sheets).toEqual([]);
+    expect(r.content_sha256).not.toBe(""); // bytes WERE read; hash preserved
+  });
+
   it("defers xls/ods with an explicit unsupported_reason (not a crash)", async () => {
     await fs.mkdir(tmp, { recursive: true });
     const file = path.join(tmp, "legacy.ods");
@@ -310,7 +323,10 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(r.error_cells.map((e) => e.token)).toContain("#DIV/0!");
     expect(r.merged_ranges.map((m) => m.range)).toContain("A1:B1");
     expect(r.data_validations[0]!.range).toBe("B2:B3");
-    expect(r.data_validations[0]!.rule_summary).toContain("list");
+    expect(r.data_validations[0]!.rule_summary).toContain("type=list");
+    // The rule BOUNDS (formula1) are captured, not just the kind, so the reviewer can
+    // actually audit data_validation_coverage (#5).
+    expect(r.data_validations[0]!.rule_summary).toContain('formula1="eng,sales"');
     expect(r.named_ranges.map((n) => n.name)).toContain("HeadcountRange");
     expect(r.external_links).toHaveLength(1);
     const table = r.tables.find((t) => t.name === "PeopleTable")!;
@@ -321,6 +337,65 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     // counts, and structural tokens (formula/error).
     expect(JSON.stringify(r)).not.toContain("Alice");
     expect(JSON.stringify(r)).not.toContain("Bob");
+  });
+
+  it("captures operator and both bounds (formula1/formula2) for a range data validation (#5)", () => {
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+      `<row r="1"><c r="A1"><v>5</v></c></row></sheetData>` +
+      `<dataValidations count="1"><dataValidation type="whole" operator="between" sqref="A1:A9">` +
+      `<formula1>1</formula1><formula2>10</formula2></dataValidation></dataValidations>` +
+      `</worksheet>`;
+    const bytes = zipSync(makeMinimalXlsxParts(sheet));
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/v.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+    });
+    const dv = r.data_validations[0]!;
+    expect(dv.range).toBe("A1:A9");
+    // type + operator + both bounds, so data_validation_coverage is auditable, not just the kind.
+    expect(dv.rule_summary).toContain("type=whole");
+    expect(dv.rule_summary).toContain("operator=between");
+    expect(dv.rule_summary).toContain("formula1=1");
+    expect(dv.rule_summary).toContain("formula2=10");
+  });
+
+  it("bounds observed sheet count at max_sheets_observed and discloses capture_truncated (B4)", () => {
+    const sheetXml =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+      `<row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>`;
+    const bytes = zipSync({
+      "xl/workbook.xml": strToU8(
+        `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+          `<sheet name="S1" sheetId="1" r:id="rId1"/>` +
+          `<sheet name="S2" sheetId="2" r:id="rId2"/>` +
+          `<sheet name="S3" sheetId="3" r:id="rId3"/></sheets></workbook>`,
+      ),
+      "xl/_rels/workbook.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+          `<Relationship Id="rId2" Type="${relType("worksheet")}" Target="worksheets/sheet2.xml"/>` +
+          `<Relationship Id="rId3" Type="${relType("worksheet")}" Target="worksheets/sheet3.xml"/>` +
+          `</Relationships>`,
+      ),
+      "xl/worksheets/sheet1.xml": strToU8(sheetXml),
+      "xl/worksheets/sheet2.xml": strToU8(sheetXml),
+      "xl/worksheets/sheet3.xml": strToU8(sheetXml),
+    });
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/many.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      caps: { ...DEFAULT_DATA_LAYER_CAPS, max_sheets_observed: 2 },
+    });
+    // Only the first 2 of 3 sheets are observed; the bound is disclosed via capture_truncated,
+    // and sheet_count_total preserves the true total so the count is not mis-reported.
+    expect(r.sheets.length).toBe(2);
+    expect(r.capture_truncated).toBe(true);
+    expect(r.sheet_count_total).toBe(3);
   });
 
   it("extracts cross-sheet refs with non-ASCII (Korean) sheet names and ignores #REF!", () => {

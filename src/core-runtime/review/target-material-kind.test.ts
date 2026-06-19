@@ -2,7 +2,11 @@ import { describe, expect, it, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { detectTargetMaterialKind } from "../target-material-kind.js";
+import {
+  detectTargetMaterialKind,
+  reviewMaterialGoals,
+  reviewMaterialSupportStatus,
+} from "../target-material-kind.js";
 
 const tmpRoots: string[] = [];
 
@@ -55,5 +59,47 @@ describe("detectTargetMaterialKind", () => {
 
     expect(detection.target_material_kind).toBe("unknown");
     expect(detection.target_material_kind_candidates).toEqual(["unknown"]);
+  });
+});
+
+describe("reviewMaterialSupportStatus (kind-level claim)", () => {
+  it("reports code and spreadsheet as supported with no unsupported_reason", () => {
+    // The per-target FORMAT gate (unsupported .xls etc.) lives in the materializer;
+    // the kind-level claim for spreadsheet is supported with the structure-only honesty
+    // carried by the render + contract (unsupported_reason stays null).
+    expect(reviewMaterialSupportStatus("code")).toEqual({ status: "supported", reason: null });
+    expect(reviewMaterialSupportStatus("spreadsheet")).toEqual({
+      status: "supported",
+      reason: null,
+    });
+  });
+
+  it("keeps document and database partial until their per-material adapters land", () => {
+    expect(reviewMaterialSupportStatus("document").status).toBe("partial");
+    expect(reviewMaterialSupportStatus("database").status).toBe("partial");
+  });
+
+  it("maps mixed to partial_composite and unknown to unknown", () => {
+    expect(reviewMaterialSupportStatus("mixed").status).toBe("partial_composite");
+    expect(reviewMaterialSupportStatus("unknown").status).toBe("unknown");
+  });
+});
+
+describe("reviewMaterialGoals (kind-derived review obligations)", () => {
+  it("returns the spreadsheet structural-audit obligations", () => {
+    expect(reviewMaterialGoals("spreadsheet")).toEqual([
+      "formula_integrity",
+      "cross_sheet_reference_integrity",
+      "named_range_hygiene",
+      "data_validation_coverage",
+      "access_and_protection_hygiene",
+      "structural_risk_signals",
+    ]);
+  });
+
+  it("returns no material goals for kinds without a per-material review adapter", () => {
+    for (const kind of ["code", "document", "database", "mixed", "unknown"] as const) {
+      expect(reviewMaterialGoals(kind)).toEqual([]);
+    }
   });
 });

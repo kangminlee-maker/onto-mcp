@@ -6,6 +6,7 @@ import { isSpreadsheetRef } from "../target-material-kind.js";
 import {
   observeSpreadsheetSource,
   projectInventoryForAdmission,
+  projectInventoryForPrompt,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
 import type { DirectoryListingOptions } from "./artifact-types.js";
@@ -231,12 +232,20 @@ export async function collectFilePathsRecursively(
 }
 
 /**
- * Render the admission-safe workbook inventory as a compact text view for the
- * review prompt (design §3.2 — the "inventory projection (text view)"). Honesty
- * (review-target-profile §6): structure is inspected only, cell values and
- * formula results are not evaluated. Carries schema/aggregate facts (column
- * types, distinct counts, formula/validation/structure counts, risk signals)
- * and NO raw cell values — the projection already excluded them.
+ * Render the workbook inventory as a compact text view for the review prompt
+ * (design §3.2 — the "inventory projection (text view)"). Honesty
+ * (review-target-profile §6): structure is inspected only, cell values and formula
+ * results are not evaluated.
+ *
+ * The view carries bounded DETAIL — not just counts — for every section that backs a
+ * kind-derived review obligation (`reviewMaterialGoals`): formula TEXT + cross-sheet
+ * refs, named-range refers_to, data-validation rule_summary, error-cell tokens, and
+ * external-link targets. Without the detail those obligations would be unverifiable
+ * (the reviewer would be told to audit content that is only an integer in the prompt).
+ * Two projections compose: `projectInventoryForAdmission` drops raw cell values, then
+ * `projectInventoryForPrompt` bounds array SIZE so a large workbook cannot overflow the
+ * prompt. Anything trimmed is surfaced honestly (the "structural sample bounded" line);
+ * the full detail stays in the persisted inventory.
  */
 function renderSpreadsheetStructuralView(
   inventory: WorkbookStructuralInventory,
@@ -250,17 +259,181 @@ function renderSpreadsheetStructuralView(
     lines.push(`unsupported: ${inventory.unsupported_reason}`);
     return `${lines.join("\n")}\n`;
   }
-  lines.push(
-    `sheets: ${inventory.sheets.length}${inventory.capture_truncated ? " (capture truncated)" : ""}`,
+
+  const { inventory: inv, sections } = projectInventoryForPrompt(
+    projectInventoryForAdmission(inventory),
   );
-  for (const sheet of inventory.sheets) {
+
+  // One rendered formula line: cell address + formula TEXT + any cross-sheet references —
+  // the obligation-backing detail for formula_integrity / cross_sheet_reference_integrity
+  // (a count alone is not auditable).
+  const renderFormulaCellLine = (
+    cell: WorkbookStructuralInventory["formula_cells"][number],
+  ): string => {
+    const xref =
+      cell.cross_sheet_refs.length > 0
+        ? `  [cross-sheet → ${cell.cross_sheet_refs.join(", ")}]`
+        : "";
+    return `  - ${cell.cell}: ${cell.formula}${xref}`;
+  };
+
+  // Friendly labels for the bounded-sample note. A3: count-only sections
+  // (tables/merged_ranges, printed as full counts below) are SUPPRESSED from the note so it
+  // never contradicts them (RC-2); every OTHER projector-recorded trim is disclosed —
+  // friendly label when known, else the raw section key — so a newly-added
+  // projectInventoryForPrompt section can never be silently dropped from disclosure (#4 class).
+  const NOTE_SECTION_LABELS: Record<string, string> = {
+    per_sheet_data: "sheet bodies",
+    "per_sheet_data.columns": "columns",
+    distinct_value_vocab: "distinct-value columns",
+    formula_cells: "formula samples",
+    named_ranges: "named_ranges",
+    data_validations: "data_validations",
+    external_links: "external_links",
+    error_cells: "error_cells",
+    pivot_tables: "pivot_tables",
+    cross_sheet_key_overlap: "cross_sheet_key_overlap",
+    "cross_sheet_key_overlap.pairwise_overlap": "cross-sheet pairwise overlaps",
+    risk_signals: "risk_signals",
+  };
+  const COUNT_ONLY_TRIM_SECTIONS = new Set(["tables", "merged_ranges"]);
+  const trimSectionLabel = (section: string): string =>
+    NOTE_SECTION_LABELS[section] ?? section;
+  const renderedTrims = sections.filter(
+    (s) => !COUNT_ONLY_TRIM_SECTIONS.has(s.section),
+  );
+
+  // Total sheet count comes from the FULL inventory; the per-sheet layout below renders only
+  // the sheets whose (capped) per_sheet_data body survived projection.
+  // When observation was bounded by the sheet cap, sheet_count_total holds the true total —
+  // render "N of M observed" so the count is not mis-reported as the post-cap number, and a
+  // reviewer knows beyond-cap sheets (and any protection/structure on them) were not observed.
+  const sheetCountLabel =
+    inventory.sheet_count_total !== undefined
+      ? `${inventory.sheets.length} of ${inventory.sheet_count_total} observed`
+      : `${inventory.sheets.length}`;
+  lines.push(
+    `sheets: ${sheetCountLabel}${inv.capture_truncated ? " (capture truncated)" : ""}`,
+  );
+  if (renderedTrims.length > 0) {
+    // Honest about WHAT this note means: review renders a bounded PROMPT sample and does not
+    // persist the full WorkbookStructuralInventory, so the trimmed detail is not separately
+    // recoverable — never imply the dropped rows can be retrieved later (R1).
+    lines.push(
+      `structural sample bounded (prompt sample only — review does not persist the full inventory): ${renderedTrims
+        .map((s) => `${trimSectionLabel(s.section)} ${s.kept}/${s.total}`)
+        .join(", ")}`,
+    );
+  }
+
+  const renderedSheetNames = new Set(inv.per_sheet_data.map((d) => d.sheet));
+  // B3: protected/hidden sheets beyond the per_sheet_data render cap keep
+  // access_and_protection_hygiene attached, but their flags are emitted only inside the
+  // per-sheet layout below (rendered-sheet set) — disclose the beyond-cap count so a
+  // reviewer does not read the silence as "the rest are unprotected/visible".
+  const beyondCapAccessFlags = inventory.sheets.filter(
+    (sheet) => !renderedSheetNames.has(sheet.name) && (sheet.protected || sheet.hidden),
+  );
+  if (beyondCapAccessFlags.length > 0) {
+    lines.push(
+      `${beyondCapAccessFlags.length} protected/hidden sheet(s) beyond the rendered sample (flags not individually shown; access_and_protection_hygiene still applies)`,
+    );
+  }
+
+  // B2: obligation-backing detail is emitted UP FRONT — before the per-sheet bodies — so the
+  // downstream 300-line embed head-cut (truncateForEmbedding) preserves the evidence backing
+  // named_range_hygiene / data_validation_coverage / structural_risk_signals /
+  // cross_sheet_reference_integrity even for a many-sheet workbook. Reordering alone is
+  // zero-sum under a fixed budget, so each obligation class gets a bounded in-band sample
+  // here; the per-sheet layout (columns) follows and may be truncated under heavy load
+  // without dropping any obligation backing.
+  if (inventory.named_ranges.length) {
+    lines.push("", `named_ranges: ${inventory.named_ranges.length}`);
+    for (const nr of inv.named_ranges) {
+      lines.push(`  - ${nr.name} (${nr.scope}) → ${nr.refers_to}`);
+    }
+  }
+  if (inventory.data_validations.length) {
+    lines.push("", `data_validations: ${inventory.data_validations.length}`);
+    for (const dv of inv.data_validations) {
+      lines.push(`  - ${dv.sheet}!${dv.range}: ${dv.rule_summary}`);
+    }
+  }
+  if (inventory.error_cells.length) {
+    lines.push("", `error_cells: ${inventory.error_cells.length}`);
+    for (const ec of inv.error_cells) {
+      lines.push(`  - ${ec.sheet}!${ec.cell}: ${ec.token}`);
+    }
+  }
+  if (inventory.external_links.length) {
+    lines.push("", `external_links: ${inventory.external_links.length}`);
+    for (const el of inv.external_links) {
+      lines.push(`  - ${el.kind}: ${el.target}`);
+    }
+  }
+  // Remaining structural facts that are obligation context but not per-item audit detail.
+  const counts: string[] = [];
+  if (inventory.tables.length) counts.push(`tables: ${inventory.tables.length}`);
+  if (inventory.merged_ranges.length) counts.push(`merged_ranges: ${inventory.merged_ranges.length}`);
+  if (inventory.macro_present) counts.push("macro_present: true");
+  if (counts.length) lines.push("", counts.join("; "));
+
+  if (inventory.pivot_tables.length) {
+    lines.push("", `pivot_tables: ${inventory.pivot_tables.length}`);
+    for (const p of inv.pivot_tables) {
+      const src = p.source_sheet ? ` source=${p.source_sheet}!${p.source_ref ?? ""}` : "";
+      lines.push(`  - ${p.name} @ ${p.sheet}!${p.location}${src}`);
+      lines.push(
+        `    rows=[${p.row_fields.join(", ")}] cols=[${p.column_fields.join(", ")}]` +
+          ` data=[${p.data_fields.join(", ")}] filters=[${p.page_fields.join(", ")}]`,
+      );
+    }
+  }
+  if (inventory.cross_sheet_key_overlap.length) {
+    lines.push("", "cross_sheet_key_overlap (shared-column value overlap, counts only):");
+    for (const o of inv.cross_sheet_key_overlap) {
+      const pairs = o.pairwise_overlap.map((p) => `${p.a}∩${p.b}=${p.count}`).join(", ");
+      lines.push(`  - ${o.key_name} across [${o.sheets.join(", ")}]: ${pairs}`);
+    }
+  }
+  if (inventory.risk_signals.length) {
+    lines.push("", "risk_signals:");
+    for (const signal of inv.risk_signals) {
+      lines.push(`  - ${signal.kind} @ ${signal.location}: ${signal.literal}`);
+    }
+  }
+
+  // formula_integrity / cross_sheet_reference_integrity backing: ALL projected formula cells
+  // grouped by sheet, emitted up front (before the per-sheet bodies) so the formula TEXT
+  // survives the embed cut. Grouping over the full projected set covers both rendered-sheet
+  // and beyond-cap-sheet formulas, so a workbook whose formulas live only on a trimmed sheet
+  // still shows its formula text (formerly the separate "beyond sample" residual; F5).
+  if (inv.formula_cells.length > 0) {
+    const bySheet = new Map<string, WorkbookStructuralInventory["formula_cells"]>();
+    for (const cell of inv.formula_cells) {
+      const existing = bySheet.get(cell.sheet);
+      if (existing) existing.push(cell);
+      else bySheet.set(cell.sheet, [cell]);
+    }
+    lines.push("", `formulas (sample of ${inv.formula_cells.length}, by sheet):`);
+    for (const [sheetName, cells] of bySheet) {
+      lines.push(`### sheet: ${sheetName} — formulas (sample of ${cells.length}):`);
+      for (const cell of cells) {
+        lines.push(renderFormulaCellLine(cell));
+      }
+    }
+  }
+
+  // Per-sheet LAYOUT (dimensions + columns) — context that follows the obligation backing
+  // above and may be truncated under heavy load without losing any obligation evidence.
+  for (const sheet of inv.sheets.filter((s) => renderedSheetNames.has(s.name))) {
     const flags = `${sheet.hidden ? " (hidden)" : ""}${sheet.protected ? " (protected)" : ""}`;
     lines.push(
       "",
       `## sheet: ${sheet.name}`,
       `dimensions: ${sheet.dimensions.rows} rows × ${sheet.dimensions.cols} cols${flags}`,
     );
-    const data = inventory.per_sheet_data.find((d) => d.sheet === sheet.name);
+    const data = inv.per_sheet_data.find((d) => d.sheet === sheet.name);
     if (data) {
       const lowConfidence =
         data.header_confidence === "low" ? "; header_confidence: low (layout uncertain)" : "";
@@ -270,7 +443,7 @@ function renderSpreadsheetStructuralView(
       if (data.columns.length > 0) {
         lines.push("columns:");
         for (const col of data.columns) {
-          const vocab = inventory.distinct_value_vocab.find(
+          const vocab = inv.distinct_value_vocab.find(
             (v) => v.sheet === sheet.name && v.column === col.name,
           );
           const distinct = vocab
@@ -283,58 +456,26 @@ function renderSpreadsheetStructuralView(
       }
     }
   }
-  const structural: string[] = [];
-  if (inventory.named_ranges.length) structural.push(`named_ranges: ${inventory.named_ranges.length}`);
-  if (inventory.tables.length) structural.push(`tables: ${inventory.tables.length}`);
-  if (inventory.formula_cells.length) structural.push(`formula_cells: ${inventory.formula_cells.length}`);
-  if (inventory.merged_ranges.length) structural.push(`merged_ranges: ${inventory.merged_ranges.length}`);
-  if (inventory.data_validations.length) structural.push(`data_validations: ${inventory.data_validations.length}`);
-  if (inventory.external_links.length) structural.push(`external_links: ${inventory.external_links.length}`);
-  if (inventory.error_cells.length) structural.push(`error_cells: ${inventory.error_cells.length}`);
-  if (inventory.macro_present) structural.push("macro_present: true");
-  if (structural.length) lines.push("", structural.join("; "));
-  if (inventory.pivot_tables.length) {
-    lines.push("", `pivot_tables: ${inventory.pivot_tables.length}`);
-    for (const p of inventory.pivot_tables) {
-      const src = p.source_sheet ? ` source=${p.source_sheet}!${p.source_ref ?? ""}` : "";
-      lines.push(`  - ${p.name} @ ${p.sheet}!${p.location}${src}`);
-      lines.push(
-        `    rows=[${p.row_fields.join(", ")}] cols=[${p.column_fields.join(", ")}]` +
-          ` data=[${p.data_fields.join(", ")}] filters=[${p.page_fields.join(", ")}]`,
-      );
-    }
-  }
-  if (inventory.cross_sheet_key_overlap.length) {
-    lines.push("", "cross_sheet_key_overlap (shared-column value overlap, counts only):");
-    for (const o of inventory.cross_sheet_key_overlap) {
-      const pairs = o.pairwise_overlap.map((p) => `${p.a}∩${p.b}=${p.count}`).join(", ");
-      lines.push(`  - ${o.key_name} across [${o.sheets.join(", ")}]: ${pairs}`);
-    }
-  }
-  if (inventory.risk_signals.length) {
-    lines.push("", "risk_signals:");
-    for (const signal of inventory.risk_signals) {
-      lines.push(`  - ${signal.kind} @ ${signal.location}: ${signal.literal}`);
-    }
-  }
   return `${lines.join("\n")}\n`;
 }
 
 export async function readTextOrDirectoryListing(
   targetPath: string,
   options?: DirectoryListingOptions,
+  inventory?: WorkbookStructuralInventory,
 ): Promise<string> {
   const stats = await fs.stat(targetPath);
   if (!stats.isDirectory()) {
     // Spreadsheet targets are rendered as a structural/aggregate inventory view,
     // not raw bytes (design §3.2). review routes through the SAME shared projection
     // as reconstruct — raw cell values never enter the prompt, and a binary
-    // workbook is never dumped as garbage utf8.
+    // workbook is never dumped as garbage utf8. When the orchestrator already
+    // observed this ref (single-observation, design §3.2), reuse that inventory;
+    // otherwise observe here. The render applies the admission + prompt projections.
     if (isSpreadsheetRef(targetPath)) {
-      const inventory = projectInventoryForAdmission(
-        await observeSpreadsheetSource(targetPath),
+      return renderSpreadsheetStructuralView(
+        inventory ?? (await observeSpreadsheetSource(targetPath)),
       );
-      return renderSpreadsheetStructuralView(inventory);
     }
     try {
       return await fs.readFile(targetPath, "utf8");
@@ -376,10 +517,20 @@ export async function readTextOrDirectoryListing(
 export async function renderTargetSnapshot(
   resolvedTargetRefs: string[],
   options?: DirectoryListingOptions,
+  inventoryByRef?: Map<string, WorkbookStructuralInventory>,
 ): Promise<string> {
   const sections: string[] = [];
   for (const resolvedTargetRef of resolvedTargetRefs) {
-    sections.push(`## ${resolvedTargetRef}`, "", await readTextOrDirectoryListing(resolvedTargetRef, options), "");
+    sections.push(
+      `## ${resolvedTargetRef}`,
+      "",
+      await readTextOrDirectoryListing(
+        resolvedTargetRef,
+        options,
+        inventoryByRef?.get(path.resolve(resolvedTargetRef)),
+      ),
+      "",
+    );
   }
   return `${sections.join("\n").trimEnd()}\n`;
 }
@@ -388,13 +539,20 @@ export async function renderReviewTargetMaterializedInput(
   materializedKind: string,
   materializedRefs: string[],
   options?: DirectoryListingOptions,
+  inventoryByRef?: Map<string, WorkbookStructuralInventory>,
 ): Promise<string> {
   const sections: string[] = [`kind: ${materializedKind}`, ""];
   for (const materializedRef of materializedRefs) {
     sections.push(`## ${path.basename(materializedRef)}`);
     sections.push(`ref: ${materializedRef}`);
     sections.push("");
-    sections.push(await readTextOrDirectoryListing(materializedRef, options));
+    sections.push(
+      await readTextOrDirectoryListing(
+        materializedRef,
+        options,
+        inventoryByRef?.get(path.resolve(materializedRef)),
+      ),
+    );
     sections.push("");
   }
   return `${sections.join("\n").trimEnd()}\n`;

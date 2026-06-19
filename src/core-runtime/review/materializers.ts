@@ -64,8 +64,18 @@ import { lensSidecarArtifactPath } from "./lens-sidecar-artifact.js";
 import { deliberationResolutionPath } from "./controlled-lens-deliberation.js";
 import {
   detectTargetMaterialKind,
+  isSpreadsheetRef,
+  reviewMaterialGoals,
   reviewMaterialSupportStatus,
 } from "../target-material-kind.js";
+import {
+  observeSpreadsheetSource,
+  type WorkbookStructuralInventory,
+} from "../spreadsheet-structure-observer.js";
+import {
+  computeSpreadsheetDisposition,
+  type SpreadsheetRefDisposition,
+} from "./spreadsheet-review-disposition.js";
 import { semanticQualityEvidenceForArtifactGeneration } from "./artifact-generation-realization.js";
 
 export interface WriteInvocationInterpretationArtifactParams {
@@ -1288,6 +1298,8 @@ function requireExecutionPreparationSessionDomain(value: string): string {
 
 async function buildReviewTargetProfileArtifact(
   params: MaterializeReviewExecutionPreparationArtifactsParams,
+  inventoryByRef?: Map<string, WorkbookStructuralInventory>,
+  materializedRefs?: string[],
 ): Promise<ReviewTargetProfileArtifact> {
   const sessionRoot = path.resolve(params.sessionRoot);
   const sessionId = path.basename(sessionRoot);
@@ -1314,18 +1326,91 @@ async function buildReviewTargetProfileArtifact(
     inputKind,
     primaryRole: roles.primary,
   });
-  const targetRefs = [];
+  // SINGLE SOURCE OF TRUTH: one disposition per rendered spreadsheet ref, computed once
+  // over the UNION of resolved + materialized refs from the shared observation. Every
+  // honesty surface below (support_status, target_refs[].inspectable/.sha256, review_goal)
+  // PROJECTS from this map instead of re-deriving "is this workbook backed?" from a proxy.
+  const unionSpreadsheetRefs = uniqueStrings(
+    [...resolvedRefs, ...(materializedRefs ?? [])].filter(isSpreadsheetRef),
+  );
+  const dispositionByRef = new Map<string, SpreadsheetRefDisposition>();
+  for (const ref of unionSpreadsheetRefs) {
+    dispositionByRef.set(ref, computeSpreadsheetDisposition(inventoryByRef?.get(ref), ref));
+  }
+
+  const targetRefs: ReviewTargetProfileArtifact["target_refs"] = [];
   for (const [index, ref] of resolvedRefs.entries()) {
     const kind = await targetRefKind(ref, sessionRoot);
+    // Per-ref inspectability + sha256 PROJECT from the ref's disposition (spreadsheet-only).
+    // `inspectable` is the renderable-structure axis — a clean data CSV is inspectable even
+    // though it backs no structural obligation. sha256 reuses the single observation's
+    // content hash (no raw re-read; null when the observer declined to read the file).
+    const isSpreadsheet = isSpreadsheetRef(ref);
+    const disposition = isSpreadsheet ? dispositionByRef.get(ref) : undefined;
     targetRefs.push({
       ref,
       role: index === 0 ? "primary" as const : "supporting" as const,
       kind: kind.kind,
       exists: kind.exists,
       sha256: kind.exists
-        ? await targetRefSha256(ref, kind.kind, params.directoryListingOptions)
+        ? isSpreadsheet
+          ? (disposition?.sha256 ?? null)
+          : await targetRefSha256(ref, kind.kind, params.directoryListingOptions)
         : null,
+      ...(isSpreadsheet
+        ? { inspectable: disposition?.inspectable ?? false }
+        : {}),
     });
+  }
+
+  // SUPPORT-STATUS GATE — projects from the disposition set over the UNION of rendered
+  // spreadsheet refs. It runs UNCONDITIONALLY (not only when the resolved kind is
+  // spreadsheet) because materialized-input renders materializedRefs regardless of the
+  // resolved kind (F1): a code-resolved target carrying a materialized workbook the
+  // observer could not read must not stay `supported`. reviewMaterialSupportStatus is the
+  // KIND-level baseline; any rendered workbook ref that is not inspectable downgrades it to
+  // partial, naming each ref's honest cause (full path, deduped on path+cause).
+  let supportStatus = materialSupport.status;
+  let supportReason = materialSupport.reason;
+  let materialGoals = reviewMaterialGoals(materialDetection.target_material_kind);
+
+  const unionDispositions = unionSpreadsheetRefs.map(
+    (ref) => dispositionByRef.get(ref) as SpreadsheetRefDisposition,
+  );
+  const uninspected = unionDispositions.filter((d) => !d.inspectable);
+  if (uninspected.length > 0) {
+    supportStatus = "partial";
+    // Each uninspected disposition carries a non-null `reason` by construction (disposition
+    // invariant: !inspectable ⇒ reason is set); `?? d.ref` only satisfies the string|null
+    // type and is never actually taken.
+    supportReason = `spreadsheet review inspects structure only; ${uninspected.length} of ${unionDispositions.length} workbook ref(s) were not inspected (${uniqueStrings(uninspected.map((d) => d.reason ?? d.ref)).join("; ")})`;
+  }
+
+  // review_goal spreadsheet obligations = union of backed_goals across the RESOLVED
+  // spreadsheet refs (kind stays the trigger per the approved F1 scope: only support_status
+  // reflects the materialized union). backed_goals is the POSITIVE rule — a goal is carried
+  // only when its specific evidence was rendered for that ref, so an obligation never
+  // outruns its backing (a plain data CSV carries none; a macro-only workbook carries only
+  // access_and_protection_hygiene).
+  if (materialDetection.target_material_kind === "spreadsheet") {
+    materialGoals = uniqueStrings(
+      resolvedRefs
+        .filter(isSpreadsheetRef)
+        .flatMap((ref) => dispositionByRef.get(ref)?.backed_goals ?? []),
+    );
+    // No directly-inspectable workbook ref at all — e.g. a directory aggregated as
+    // spreadsheet with no workbook ref, or every ref uninspectable. Nothing backs an
+    // obligation and the render shows only a listing/unsupported note, so a kind-level
+    // `supported` would be dishonest.
+    const anyInspectable = unionDispositions.some((d) => d.inspectable);
+    if (!anyInspectable) {
+      materialGoals = [];
+      if (supportStatus === "supported") {
+        supportStatus = "partial";
+        supportReason =
+          "spreadsheet target has no directly-inspectable workbook ref (no inventory-backed structural detail rendered)";
+      }
+    }
   }
 
   return {
@@ -1349,6 +1434,7 @@ async function buildReviewTargetProfileArtifact(
       ...goalsForRole(roles.primary),
       ...roles.secondary.flatMap(goalsForRole),
       ...domainGoalAdditions(sessionDomain),
+      ...materialGoals,
     ]),
     closure_obligation_policy: [
       "must_close_in_target",
@@ -1362,8 +1448,8 @@ async function buildReviewTargetProfileArtifact(
       target_material_kind: materialDetection.target_material_kind,
       target_material_kind_candidates:
         materialDetection.target_material_kind_candidates,
-      support_status: materialSupport.status,
-      unsupported_reason: materialSupport.reason,
+      support_status: supportStatus,
+      unsupported_reason: supportReason,
       detection: {
         owner: "runtime_heuristic",
         confidence: materialDetection.confidence,
@@ -1411,20 +1497,42 @@ export async function materializeReviewExecutionPreparationArtifacts(
 
   await ensureDirectory(executionPreparationRoot);
 
+  const resolvedTargetRefs = params.resolvedTargetRefs.map((ref) => path.resolve(ref));
   const materializedRefs =
     params.materializedRefs && params.materializedRefs.length > 0
       ? params.materializedRefs.map((ref) => path.resolve(ref))
-      : params.resolvedTargetRefs.map((ref) => path.resolve(ref));
+      : resolvedTargetRefs;
+
+  // Observe each spreadsheet ref ONCE and share the inventory across the profile and
+  // both renders (design §3.2 "single observation"): a workbook would otherwise be
+  // parsed up to three times (target-snapshot + materialized-input + profile
+  // inspectability). The map feeds per-target inspectability and the rendered detail.
+  const spreadsheetRefs = [
+    ...new Set([...resolvedTargetRefs, ...materializedRefs].filter(isSpreadsheetRef)),
+  ];
+  // Observe SEQUENTIALLY (not Promise.all): observeSpreadsheetSource reads each source
+  // fully into a Buffer (up to the 1 GiB pre-read limit) before streaming-unzip, so
+  // observing every ref of a multi-workbook bundle at once could exhaust host memory
+  // before any artifact is written. Sequential keeps peak memory at one workbook while
+  // still observing — and sharing — each inventory exactly once.
+  const inventoryByRef = new Map<string, WorkbookStructuralInventory>();
+  for (const ref of spreadsheetRefs) {
+    inventoryByRef.set(ref, await observeSpreadsheetSource(ref));
+  }
 
   const targetSnapshotManifest: TargetSnapshotManifest = {
     review_target_scope_kind: params.scopeKind,
-    resolved_target_refs: params.resolvedTargetRefs.map((ref) => path.resolve(ref)),
+    resolved_target_refs: resolvedTargetRefs,
     review_target_profile_ref: reviewTargetProfilePath,
     captured_at: isoNow(),
     capture_reason: "prompt-backed review execution",
   };
 
-  const reviewTargetProfile = await buildReviewTargetProfileArtifact(params);
+  const reviewTargetProfile = await buildReviewTargetProfileArtifact(
+    params,
+    inventoryByRef,
+    materializedRefs,
+  );
 
   const contextCandidateAssembly: ContextCandidateAssembly = {
     system_purpose_refs: params.systemPurposeRefs ?? [],
@@ -1437,8 +1545,9 @@ export async function materializeReviewExecutionPreparationArtifacts(
     fs.writeFile(
       targetSnapshotPath,
       await renderTargetSnapshot(
-        params.resolvedTargetRefs.map((ref) => path.resolve(ref)),
+        resolvedTargetRefs,
         params.directoryListingOptions,
+        inventoryByRef,
       ),
       "utf8",
     ),
@@ -1450,6 +1559,7 @@ export async function materializeReviewExecutionPreparationArtifacts(
         params.materializedKind,
         materializedRefs,
         params.directoryListingOptions,
+        inventoryByRef,
       ),
       "utf8",
     ),

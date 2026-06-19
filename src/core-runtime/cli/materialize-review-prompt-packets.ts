@@ -21,6 +21,7 @@ import type {
   ReviewTargetProfileArtifact,
   ReviewValueAlignmentCriteriaArtifact,
 } from "../review/artifact-types.js";
+import { reviewMaterialGoals } from "../target-material-kind.js";
 import {
   fileExists,
   isoNow,
@@ -115,20 +116,61 @@ ${materializedInput}
 }
 
 function materialKindReviewObligations(
-  targetMaterialKind: ReviewTargetProfileArtifact["target_material_kind"],
+  profile: ReviewTargetProfileArtifact,
 ): string[] {
-  switch (targetMaterialKind) {
+  switch (profile.target_material_kind) {
     case "code":
       return [
         "Treat declared types, exported API signatures, documented contracts, and observable runtime behavior as review evidence.",
         "Check visible type/runtime contract mismatches, edge-case input behavior, error/null/undefined paths, and caller-facing failure modes.",
         "Classify a visible correctness or runtime-contract failure as material when it can violate the declared review goal inside the bounded target.",
       ];
-    case "spreadsheet":
+    case "spreadsheet": {
+      // The obligation prose stays in lockstep with the per-ref disposition projected into
+      // review_goal (the SSOT): a goal is named only when its specific structure was
+      // rendered. Three honest cases, so the lens is never told to audit absent formulas nor
+      // told the data is unavailable when it was actually rendered:
+      const spreadsheetGoals = reviewMaterialGoals("spreadsheet");
+      const backed = profile.review_goal.filter((goal) =>
+        spreadsheetGoals.includes(goal),
+      );
+      if (backed.length > 0) {
+        // Project the prose from the BACKED goal SUBSET (not a single any-backed bit), so the
+        // lens is told to audit only the structure the inventory actually rendered for this
+        // target — a macro-only or validation-only workbook is never told to audit formulas
+        // that review_goal and the render both show are absent. Emitted in stable catalog order.
+        const GOAL_PROSE: Record<string, string> = {
+          formula_integrity:
+            "Treat formulas and their recalculation behavior as review evidence; check visible formula mismatches, stale derived values, and decision-impacting calculation errors.",
+          cross_sheet_reference_integrity:
+            "Treat cross-sheet references as review evidence; check broken, stale, or misaimed references across sheets.",
+          named_range_hygiene:
+            "Treat named ranges as review evidence; check missing, overlapping, or wrongly-scoped named ranges.",
+          data_validation_coverage:
+            "Treat data-validation rules (type, operator, bounds) as review evidence; check missing or inconsistent input guards.",
+          access_and_protection_hygiene:
+            "Treat sheet protection, hidden sheets, and macro presence as review evidence; check the access/protection posture and any macro-carried risk.",
+          structural_risk_signals:
+            "Treat the recorded structural risk signals, external links, and error cells as review evidence; check decision-impacting structural risks.",
+        };
+        return spreadsheetGoals
+          .filter((goal) => backed.includes(goal))
+          .map((goal) => GOAL_PROSE[goal] as string);
+      }
+      // No structural obligation is backed. Distinguish an inspected plain-data workbook
+      // (read — e.g. a flat CSV — but with no formula/named-range/validation/protection
+      // structure to audit) from one that could not be inspected at all.
+      if (profile.material_profile.support_status === "supported") {
+        return [
+          "The target workbook(s) were structurally inspected but carry no formula, cross-sheet reference, named range, data validation, or protection structure to audit beyond the rendered columns/data.",
+          "Treat the rendered structural inventory as the evidence; do not infer calculation logic the workbook does not contain.",
+        ];
+      }
       return [
-        "Treat formulas, cross-sheet references, named ranges, input assumptions, and recalculation behavior as review evidence.",
-        "Check visible formula/reference mismatches, stale derived values, missing input guards, and decision-impacting calculation errors.",
+        "The target workbook(s) could not be structurally inspected (unsupported format, unreadable, or empty); the materialized input carries only an unsupported note, not formula/reference structure.",
+        "Treat only what the materialized input actually renders as evidence; do not assume formulas, cross-sheet references, or recalculated values are available, and preserve material uncertainty about the uninspected structure.",
       ];
+    }
     case "document":
       return [
         "Treat declared purpose, audience, claims, evidence, structure, and unresolved ambiguity as review evidence.",
@@ -152,7 +194,7 @@ function materialKindReviewObligations(
   }
 }
 
-function renderReviewTargetProfileSummary(
+export function renderReviewTargetProfileSummary(
   profile: ReviewTargetProfileArtifact | null,
 ): string {
   if (!profile) {
@@ -160,7 +202,7 @@ function renderReviewTargetProfileSummary(
 - profile: unavailable
 - consequence: use only the materialized input and explicit request summary as target authority.`;
   }
-  const obligations = materialKindReviewObligations(profile.target_material_kind);
+  const obligations = materialKindReviewObligations(profile);
   return `## Review Target Profile Summary
 - target_material_kind: ${profile.target_material_kind}
 - target_input_kind: ${profile.target_input_kind}
