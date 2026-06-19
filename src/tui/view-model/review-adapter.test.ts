@@ -225,6 +225,52 @@ describe("reviewStatusToTreeViewModel", () => {
     expect(vm.runControl).toEqual({ cancellable: true, continuable: false });
   });
 
+  it("rolls up the current step to running when its bound units are all still pending", () => {
+    // current_step is 2 (lens_dispatch). Its seats are bound but none has
+    // signalled yet, so every bound unit is "pending". The phase must roll up to
+    // "running" — the same state the empty current step would show — so the
+    // current step reports one consistent state whether or not it carries units.
+    const status = makeStatus({
+      status: "running",
+      runControl: runControl({ cancellationAvailable: true }),
+      unitProgress: [
+        unit({
+          unitId: "lens:axiology",
+          publicAlias: "lens:axiology",
+          unitKind: "lens",
+          progressStepId: "lens_dispatch",
+          status: "pending",
+        }),
+        unit({
+          unitId: "lens:coverage",
+          publicAlias: "lens:coverage",
+          unitKind: "lens",
+          progressStepId: "lens_dispatch",
+          status: "pending",
+        }),
+      ],
+      progressInput: progressInput({
+        state: "running_no_signal_yet",
+        secondsSinceArtifact: null,
+        pollAfterSeconds: 5,
+        completedSteps: [],
+      }),
+    });
+
+    const vm = reviewStatusToTreeViewModel(status, SESSION_ROOT);
+
+    const lensPhase = vm.phases.find((p) => p.id === "lens_dispatch")!;
+    expect(lensPhase.nodes).toHaveLength(2);
+    expect(lensPhase.nodes.every((n) => n.status === "pending")).toBe(true);
+    // The current step rolls up to running despite all-pending units.
+    expect(lensPhase.state).toBe("running");
+    // A later step with no units stays pending (current-step rule is scoped).
+    const laterIdle = vm.phases.find(
+      (p) => p.nodes.length === 0 && p.id !== "manifest_validation",
+    );
+    expect(laterIdle?.state).toBe("pending");
+  });
+
   it("maps a completed session with one material issue", () => {
     const classification: ReviewResultClassificationSummary = {
       highest_severity: "high",

@@ -88,6 +88,10 @@ export async function* followRuntimeEvents(
       // Stream not created yet — wait and retry.
     }
 
+    // Abort may have landed during the fs read; bail before yielding so a late
+    // event from an aborted follower never reaches the consumer.
+    if (signal?.aborted) return;
+
     if (chunk) {
       pending += chunk;
       const lines = pending.split("\n");

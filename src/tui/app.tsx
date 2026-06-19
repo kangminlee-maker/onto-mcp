@@ -69,6 +69,7 @@ export function WatchApp({
       } else if (key.return && sessions[selectedIndex]) {
         setSession(sessions[selectedIndex]!);
         setVm(null);
+        setTreeError(null);
         setEvents([]);
         setNodeCursor(0);
         setScreen("tree");
@@ -104,6 +105,10 @@ export function WatchApp({
       } catch (caught) {
         if (!cancelled) {
           setTreeError(caught instanceof Error ? caught.message : String(caught));
+          // Keep the live loop alive: a transient read/parse error (e.g. a file
+          // mid-rewrite) self-recovers on the next tick. The error stays visible
+          // until a successful poll clears it (setTreeError(null) above).
+          timer = setTimeout(() => void tick(), Math.max(500, defaultPollMs));
         }
       }
     }
@@ -118,20 +123,35 @@ export function WatchApp({
   useEffect(() => {
     if (!session) return;
     const controller = new AbortController();
+    let cancelled = false;
     void (async () => {
       for await (
         const event of followRuntimeEvents(session.sessionRoot, {
           signal: controller.signal,
         })
       ) {
+        // Skip a late event from the aborted (previous-session) follower so it
+        // never lands in the new session's tail.
+        if (cancelled) break;
         setEvents((prev) => [...prev, event].slice(-500));
       }
     })();
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [session]);
 
   // Drill-down: read the selected node's output tail (read-only).
   const selectedOutputPath = selectedNode?.outputPath ?? null;
+  // A running node's `.running.log` keeps growing, so re-read its tail on every
+  // poll tick (keyed on the vm the poll replaces). A terminal node's tail is
+  // stable, so for it we key only on the path and skip the per-tick re-read.
+  const tailIsStable = selectedNode != null
+    && (selectedNode.status === "completed"
+      || selectedNode.status === "failed"
+      || selectedNode.status === "skipped");
+  const tailRefreshKey = tailIsStable ? null : vm;
   useEffect(() => {
     let cancelled = false;
     if (!selectedOutputPath) {
@@ -144,7 +164,7 @@ export function WatchApp({
     return () => {
       cancelled = true;
     };
-  }, [selectedOutputPath]);
+  }, [selectedOutputPath, tailRefreshKey]);
 
   if (screen === "selector") {
     return (

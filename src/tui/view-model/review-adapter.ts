@@ -121,12 +121,17 @@ function unitToNode(unit: ReviewRuntimeUnitProgressProjection): TreeNode {
  * Phase state from its nodes (+ the projection's completed step ids). A failed
  * node fails the phase; any in-flight node makes it running; a step listed in
  * `completed_steps` (or all nodes completed) completes it; a halted node halts
- * it; otherwise it is pending.
+ * it. A step at the current step whose units exist but have not signalled yet
+ * rolls up to running — matching {@link emptyStepState}'s current-step branch so
+ * the same current step reports the same state whether or not it carries units.
+ * Otherwise it is pending.
  */
 function derivePhaseState(
   nodes: TreeNode[],
   stepId: ReviewProgressStepId | null,
   completedStepIds: Set<string>,
+  stepNumber: number | null,
+  currentStep: number | null,
 ): NodeState {
   if (nodes.some((node) => node.status === "failed")) return "failed";
   if (nodes.some((node) => node.status === "running")) return "running";
@@ -137,6 +142,9 @@ function derivePhaseState(
   }
   if (nodes.length > 0 && nodes.every((node) => node.status === "skipped")) {
     return "skipped";
+  }
+  if (stepNumber != null && currentStep != null && stepNumber === currentStep) {
+    return "running";
   }
   return "pending";
 }
@@ -186,7 +194,7 @@ function derivePhases(
   const phases: TreePhase[] = REVIEW_PROGRESS_STEPS.map((spec) => {
     const nodes = byStep.get(spec.id) ?? [];
     const state = nodes.length > 0
-      ? derivePhaseState(nodes, spec.id, completedStepIds)
+      ? derivePhaseState(nodes, spec.id, completedStepIds, spec.step, currentStep)
       : emptyStepState(spec.id, spec.step, completedStepIds, currentStep, workflowStatus);
     return { id: spec.id, label: spec.label, state, nodes };
   });
@@ -196,7 +204,7 @@ function derivePhases(
     phases.push({
       id: UNCATEGORIZED_PHASE_ID,
       label: UNCATEGORIZED_PHASE_LABEL,
-      state: derivePhaseState(unassigned, null, completedStepIds),
+      state: derivePhaseState(unassigned, null, completedStepIds, null, currentStep),
       nodes: unassigned,
     });
   }
