@@ -1530,6 +1530,48 @@ describe("maturation validation", () => {
     )).toBe(true);
   });
 
+  it("fails loud on a half-threaded question frontier (one side only) (codex round-2 P2)", () => {
+    const { maturationBaseline, baselineValidation, frontier, frontierValidation } =
+      frontierScenario();
+    const baselineMatrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const validateHalf = (
+      half: Pick<
+        Parameters<typeof validateActionabilityMatrix>[0],
+        "maturationQuestionFrontier" | "maturationQuestionFrontierValidation"
+      >,
+    ) =>
+      validateActionabilityMatrix({
+        actionabilityMatrix: baselineMatrix,
+        actionabilityMatrixRef: "actionability-matrix.yaml",
+        maturationBaseline,
+        maturationBaselineValidation: baselineValidation,
+        maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+        maturationQuestionFrontierValidationRef:
+          "maturation-question-frontier-validation.yaml",
+        ...half,
+      });
+    // Frontier artifact without its validation -> missing required ref.
+    expect(
+      validateHalf({ maturationQuestionFrontier: frontier }).violations.some((v) =>
+        v.code === "missing_required_ref"
+      ),
+    ).toBe(true);
+    // Validation without its frontier artifact -> missing required ref.
+    expect(
+      validateHalf({ maturationQuestionFrontierValidation: frontierValidation })
+        .violations.some((v) => v.code === "missing_required_ref"),
+    ).toBe(true);
+    // Neither supplied (the baseline matrix) must NOT trip the pair check.
+    expect(
+      validateHalf({}).violations.some((v) => v.code === "missing_required_ref"),
+    ).toBe(false);
+  });
+
   it("rejects a question frontier that omits material frontier-required rows", () => {
     const maturationBaseline = baseline([]);
     const baselineValidation = validateMaturationBaseline({

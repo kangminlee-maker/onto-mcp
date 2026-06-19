@@ -1143,6 +1143,21 @@ export function validateActionabilityMatrix(args: {
       subjectId: args.maturationBaselineValidationRef ?? null,
     }));
   }
+  // The question frontier is a PAIR of declared inputs (the artifact and its validation);
+  // they must be supplied together. A half-threaded call (one side only) would silently
+  // fall back to the pre-frontier rules and accept an unlinked current matrix, so fail loud.
+  const frontierProvided = args.maturationQuestionFrontier != null;
+  const frontierValidationProvided =
+    args.maturationQuestionFrontierValidation != null;
+  if (frontierProvided !== frontierValidationProvided) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message:
+        "actionability matrix question frontier and its validation must be supplied together",
+      subjectId: args.maturationQuestionFrontierValidationRef ??
+        args.actionabilityMatrixRef ?? null,
+    }));
+  }
   // A supplied question-frontier validation is a declared input authority: distinguish
   // "no frontier supplied" (the pre-frontier baseline matrix, legitimately empty) from
   // "supplied but invalid". The latter must fail rather than silently fall back to the
