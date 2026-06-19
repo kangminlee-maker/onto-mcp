@@ -621,6 +621,20 @@ export interface ReviewTargetProfileRef {
   kind: ReviewTargetRefKind;
   exists: boolean;
   sha256: string | null;
+  /**
+   * Whether this ref was actually inspectable (projected from the per-ref
+   * SpreadsheetRefDisposition). Spreadsheet-specific and present only for spreadsheet refs:
+   * `true` when the workbook was READ (`unsupported_reason === null`) AND has renderable
+   * structure — sheet bodies, columns, formulas, named ranges, validations, macro presence,
+   * or protected sheets, INCLUDING plain tabular data (a flat CSV is inspectable). `false`
+   * for an unsupported workbook FORMAT (.xls/.xlsb/.ods), an unreadable/oversized/empty
+   * workbook, or a corrupt shell whose only evidence is risk/error signals. This is the
+   * `inspectable` axis only — distinct from `backed_goals` (which obligations the inventory
+   * backs): a plain-data workbook is inspectable yet backs no structural obligation. It keeps
+   * the kind-vs-per-ref axis explicit so a `supported`/`null` material profile is never
+   * emitted for a target whose render says "unsupported".
+   */
+  inspectable?: boolean;
 }
 
 export interface ReviewTargetMaterialProfile {

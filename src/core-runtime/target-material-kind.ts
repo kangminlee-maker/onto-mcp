@@ -353,6 +353,20 @@ export function reviewMaterialSupportStatus(kind: TargetMaterialKind): {
       reason: null,
     };
   }
+  if (kind === "spreadsheet") {
+    // KIND-level claim: review has a per-material spreadsheet adapter — kind-derived
+    // review obligations (reviewMaterialGoals) backed by a structural inventory that is
+    // rendered into materialized-input (structure inspected only; formula results are
+    // NOT recalculated). The PER-TARGET-FORMAT gate lives in the review materializer:
+    // when a specific ref uses an unsupported workbook format (.xls/.xlsb/.ods) or is
+    // unreadable, the materializer downgrades the recorded support_status from this
+    // kind-level supported to partial, so a `supported`/`null` profile is never emitted
+    // for a workbook the inventory could not actually read.
+    return {
+      status: "supported",
+      reason: null,
+    };
+  }
   if (kind === "unknown") {
     return {
       status: "unknown",
@@ -371,4 +385,44 @@ export function reviewMaterialSupportStatus(kind: TargetMaterialKind): {
     reason:
       "review records target material kind, but material-specific validation is not implemented yet",
   };
+}
+
+/**
+ * Kind-derived review obligations for the review target profile's `review_goal`.
+ * These are the persisted, downstream-projected (problem-framing) review dimensions a
+ * per-material review adapter adds on top of the artifact-role and domain goals — a
+ * distinct surface from the ephemeral prompt-render `material_kind_obligations` prose.
+ *
+ * Spreadsheet obligations are distilled from the structural-audit checklist (read/observe
+ * scope only — no authoring, no recalculation, no business interpretation) and every goal
+ * is backed by a `WorkbookStructuralInventory` field that review renders into
+ * materialized-input (see review-artifact-utils `renderSpreadsheetStructuralView`):
+ *
+ * - formula_integrity            ← formula_cells (formula text) + error_cells
+ * - cross_sheet_reference_integrity ← formula_cells[].cross_sheet_refs + cross_sheet_key_overlap
+ * - named_range_hygiene          ← named_ranges (name/scope/refers_to)
+ * - data_validation_coverage     ← data_validations (range/rule_summary)
+ * - access_and_protection_hygiene ← sheets[].hidden/protected + macro_present
+ * - structural_risk_signals      ← risk_signals + external_links + error_cells
+ *
+ * The structure-inspected-only honesty is carried by the invariant render header and the
+ * review-target-profile contract, NOT by a review_goal string (uniqueStrings may dedupe or
+ * reorder it, and it would collide with the inventory's `inspection_method` literal).
+ *
+ * Other kinds return `[]` until their per-material review adapters land. `mixed` returns
+ * `[]` (a spreadsheet inside a mixed bundle does not yet receive spreadsheet obligations —
+ * a known C-review limitation, consistent with the mixed support state).
+ */
+export function reviewMaterialGoals(kind: TargetMaterialKind): string[] {
+  if (kind === "spreadsheet") {
+    return [
+      "formula_integrity",
+      "cross_sheet_reference_integrity",
+      "named_range_hygiene",
+      "data_validation_coverage",
+      "access_and_protection_hygiene",
+      "structural_risk_signals",
+    ];
+  }
+  return [];
 }

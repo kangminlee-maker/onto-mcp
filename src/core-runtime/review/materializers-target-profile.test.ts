@@ -3,10 +3,131 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
+import { zipSync, strToU8 } from "fflate";
 import type { ReviewTargetProfileArtifact } from "./artifact-types.js";
 import { materializeReviewExecutionPreparationArtifacts } from "./materializers.js";
+import { observeSpreadsheetSource } from "../spreadsheet-structure-observer.js";
 
 const tmpRoots: string[] = [];
+
+const SPREADSHEET_MATERIAL_GOALS = [
+  "formula_integrity",
+  "cross_sheet_reference_integrity",
+  "named_range_hygiene",
+  "data_validation_coverage",
+  "access_and_protection_hygiene",
+  "structural_risk_signals",
+];
+
+const RELS_NS = "http://schemas.openxmlformats.org/package/2006/relationships";
+const SML_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const WB_R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+const relType = (suffix: string) =>
+  `http://schemas.openxmlformats.org/officeDocument/2006/relationships/${suffix}`;
+
+/** Two-sheet .xlsx exercising the obligation-backing surfaces: a cross-sheet formula,
+ *  a defined name, a data validation, an error cell, a hidden sheet, sheet protection,
+ *  a VBA macro project, and a sentinel raw cell value (ZZSENTINELZZ) that must NEVER
+ *  leak into the prompt. Enough to prove the review render carries DETAIL (not counts)
+ *  AND keeps raw cell values out. */
+function makeReviewXlsx(): Uint8Array {
+  return zipSync({
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+        `<sheet name="People" sheetId="1" r:id="rId1"/>` +
+        `<sheet name="Depts" sheetId="2" state="hidden" r:id="rId2"/>` +
+        `</sheets><definedNames>` +
+        `<definedName name="HeadcountRange">People!$A$1:$C$3</definedName>` +
+        `</definedNames></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+        `<Relationship Id="rId2" Type="${relType("worksheet")}" Target="worksheets/sheet2.xml"/>` +
+        `<Relationship Id="rId3" Type="${relType("sharedStrings")}" Target="sharedStrings.xml"/>` +
+        `</Relationships>`,
+    ),
+    "xl/sharedStrings.xml": strToU8(
+      `<?xml version="1.0"?><sst xmlns="${SML_NS}">` +
+        `<si><t>name</t></si><si><t>role</t></si><si><t>dept</t></si>` +
+        `<si><t>ZZSENTINELZZ</t></si></sst>`,
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:D3"/><sheetProtection sheet="1"/><sheetData>` +
+        `<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row>` +
+        `<row r="2"><c r="A2" t="s"><v>3</v></c><c r="D2"><f>Depts!A1*2</f><v>10</v></c></row>` +
+        `<row r="3"><c r="D3" t="e"><v>#DIV/0!</v></c></row>` +
+        `</sheetData>` +
+        `<dataValidations count="1"><dataValidation type="list" sqref="B2:B3"><formula1>"eng,sales"</formula1></dataValidation></dataValidations>` +
+        `</worksheet>`,
+    ),
+    "xl/worksheets/sheet2.xml": strToU8(
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+        `<row r="1"><c r="A1"><v>5</v></c></row></sheetData></worksheet>`,
+    ),
+    "xl/vbaProject.bin": strToU8("fake-vba-project"),
+  });
+}
+
+/** A parseable-but-empty .xlsx: one sheet, NO <dimension> tag and an empty <sheetData/>,
+ *  so the observer reads it cleanly (unsupported_reason stays null) yet finds no inspected
+ *  structure at all (dimensions 0×0, every structural array empty). */
+function makeEmptyXlsx(): Uint8Array {
+  return zipSync({
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+        `<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(
+      `<?xml version="1.0"?><worksheet ${WB_R}><sheetData/></worksheet>`,
+    ),
+  });
+}
+
+/** A corrupt .xlsx whose workbook metadata parses (one declared sheet) but whose worksheet
+ *  part is absent from the zip. The observer reads it cleanly (unsupported_reason stays
+ *  null) and emits an `unreadable_sheet_part` risk signal over a zero-dimension sheet — the
+ *  risk-only shell that must NOT be treated as inspectable obligation backing. */
+function makeCorruptSheetXlsx(): Uint8Array {
+  return zipSync({
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+        `<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+        `</Relationships>`,
+    ),
+    // The worksheet part referenced by rId1 is intentionally absent.
+  });
+}
+
+/** A macro-only .xlsm: a VBA project and a single sheet with NO cell data. There is no
+ *  formula/reference structure, but macro_present is real access_and_protection_hygiene
+ *  evidence — the workbook must stay inspectable (not degraded like an empty/corrupt one). */
+function makeMacroOnlyXlsm(): Uint8Array {
+  return zipSync({
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+        `<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(
+      `<?xml version="1.0"?><worksheet ${WB_R}><sheetData/></worksheet>`,
+    ),
+    "xl/vbaProject.bin": strToU8("fake-vba-project"),
+  });
+}
 
 async function makeTmpProject(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "onto-review-profile-"));
@@ -21,6 +142,13 @@ async function readProfile(sessionRoot: string): Promise<ReviewTargetProfileArti
     "review-target-profile.yaml",
   );
   return parseYaml(await fs.readFile(profilePath, "utf8")) as ReviewTargetProfileArtifact;
+}
+
+async function readMaterializedInput(sessionRoot: string): Promise<string> {
+  return fs.readFile(
+    path.join(sessionRoot, "execution-preparation", "materialized-input.md"),
+    "utf8",
+  );
 }
 
 afterEach(async () => {
@@ -73,8 +201,423 @@ describe("review target profile material kind", () => {
     expect(profile.material_profile.target_material_kind_candidates).toEqual([
       "spreadsheet",
     ]);
-    expect(profile.material_profile.support_status).toBe("partial");
+    // C-review: an inspectable spreadsheet format (.csv) is supported; the
+    // structure-only honesty is carried by the render header + contract (so
+    // unsupported_reason stays null), and the kind-derived review obligations attach.
+    expect(profile.material_profile.support_status).toBe("supported");
+    expect(profile.material_profile.unsupported_reason).toBeNull();
+    expect(profile.target_refs[0].inspectable).toBe(true);
+    // A plain-data CSV (no formulas / named ranges / validations / macro) is inspectable
+    // and supported, but backs NONE of the six structural obligations — so review_goal
+    // carries no spreadsheet obligation (the positive backing rule; inspectable != backed).
+    for (const goal of SPREADSHEET_MATERIAL_GOALS) {
+      expect(profile.review_goal).not.toContain(goal);
+    }
+    // sha256 reuses the inventory's raw-byte content hash (single observation) rather than
+    // re-reading the file, so an oversized workbook the observer skipped is never re-read
+    // by the hashing path (#2).
+    const observed = await observeSpreadsheetSource(target);
+    expect(profile.target_refs[0].sha256).toBe(observed.content_sha256);
     expect(profile.material_profile.detection.confidence).toBeGreaterThan(0.8);
+  });
+
+  it("renders bounded spreadsheet DETAIL (formula text / named ranges / validations) into materialized-input (F1)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-xlsx");
+    const target = path.join(root, "model.xlsx");
+    await fs.writeFile(target, Buffer.from(makeReviewXlsx()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [target],
+      materializedKind: "single_text",
+      requestedTarget: target,
+      reviewIntentSummary: "review workbook model",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const materialized = await readMaterializedInput(sessionRoot);
+    // formula TEXT + cross-sheet ref (not just a count) — the F1 obligation backing:
+    expect(materialized).toContain("Depts!A1*2");
+    expect(materialized).toContain("cross-sheet");
+    // named-range refers_to detail (named_range_hygiene):
+    expect(materialized).toContain("HeadcountRange");
+    expect(materialized).toContain("People!$A$1:$C$3");
+    // data_validation range detail (data_validation_coverage):
+    expect(materialized).toContain("B2:B3");
+    // error-cell token detail (structural_risk_signals backing):
+    expect(materialized).toContain("#DIV/0!");
+    // access_and_protection_hygiene backing: hidden sheet, protected sheet, macro:
+    expect(materialized).toContain("(hidden)");
+    expect(materialized).toContain("(protected)");
+    expect(materialized).toContain("macro_present");
+    // structure-only honesty header preserved:
+    expect(materialized).toContain("structure inspected only");
+    // honesty invariant: a raw cell value must NEVER leak into the prompt (TA-4):
+    expect(materialized).not.toContain("ZZSENTINELZZ");
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.material_profile.support_status).toBe("supported");
+    expect(profile.target_refs[0].inspectable).toBe(true);
+  });
+
+  it("downgrades an unsupported workbook FORMAT (.xls) to partial and marks the ref not inspectable (H1/H4/F2)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-xls");
+    const target = path.join(root, "legacy.xls");
+    // BIFF-ish magic bytes; the observer defers .xls extraction -> unsupported_reason.
+    await fs.writeFile(target, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [target],
+      materializedKind: "single_text",
+      requestedTarget: target,
+      reviewIntentSummary: "review legacy workbook",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.target_material_kind).toBe("spreadsheet");
+    // Not supported: the format was not inspected, so no false "we read it".
+    expect(profile.material_profile.support_status).toBe("partial");
+    // The reason carries the ref's ACTUAL observer cause, not an extension label.
+    expect(profile.material_profile.unsupported_reason).toContain("xls extraction not yet implemented");
+    expect(profile.target_refs[0].inspectable).toBe(false);
+    // No inventory-backed obligations when nothing was inspected (NONE of the 6).
+    for (const goal of SPREADSHEET_MATERIAL_GOALS) {
+      expect(profile.review_goal).not.toContain(goal);
+    }
+    // The render honestly says unsupported — profile and render agree.
+    const materialized = await readMaterializedInput(sessionRoot);
+    expect(materialized).toContain("unsupported:");
+  });
+
+  it("emits partial with per-ref inspectability for a mixed-format spreadsheet bundle (.csv + .xls)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-mixedfmt");
+    const csv = path.join(root, "q1.csv");
+    const xls = path.join(root, "legacy.xls");
+    await fs.writeFile(csv, "month,revenue\nJan,100\n", "utf8");
+    await fs.writeFile(xls, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "bundle",
+      resolvedTargetRefs: [csv, xls],
+      materializedKind: "bundle_member_texts",
+      requestedTarget: "workbook bundle",
+      reviewIntentSummary: "review both workbooks",
+      sessionDomain: "accounting",
+      bundleKind: "mixed-evidence",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // Both refs are spreadsheet kind, but one FORMAT is not inspectable -> partial.
+    expect(profile.target_material_kind).toBe("spreadsheet");
+    expect(profile.material_profile.support_status).toBe("partial");
+    // q1.csv is inspectable (plain data backs no structural obligation); legacy.xls is not.
+    // The point here is per-ref inspectability + the partial downgrade, not obligations.
+    const inspectableByName = Object.fromEntries(
+      profile.target_refs.map((ref) => [path.basename(ref.ref), ref.inspectable]),
+    );
+    expect(inspectableByName["q1.csv"]).toBe(true);
+    expect(inspectableByName["legacy.xls"]).toBe(false);
+    // The downgrade reason names WHICH ref failed (basename), not just a bare cause (R2).
+    expect(profile.material_profile.unsupported_reason).toContain("legacy.xls");
+  });
+
+  it("downgrades to partial when a MATERIALIZED-only spreadsheet ref is uninspectable, even if resolved targets are clean (WC-1)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-divergent");
+    const csv = path.join(root, "resolved.csv");
+    const xls = path.join(root, "materialized.xls");
+    await fs.writeFile(csv, "month,revenue\nJan,100\n", "utf8");
+    await fs.writeFile(xls, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [csv],
+      materializedRefs: [xls],
+      materializedKind: "single_text",
+      requestedTarget: csv,
+      reviewIntentSummary: "divergent resolved/materialized sets",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // The gate scope follows the RENDER scope (materializedRefs): the uninspectable .xls
+    // that gets rendered into materialized-input downgrades the claim — no false supported.
+    expect(profile.material_profile.support_status).toBe("partial");
+    const materialized = await readMaterializedInput(sessionRoot);
+    expect(materialized).toContain("unsupported:");
+  });
+
+  it("downgrades support_status to partial when a materialized-only workbook is uninspectable even though the resolved target is CODE (F1)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-f1");
+    const code = path.join(root, "handler.ts");
+    const xls = path.join(root, "legacy.xls");
+    await fs.writeFile(code, "export const handler = () => 1;\n", "utf8");
+    await fs.writeFile(xls, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [code],
+      materializedRefs: [xls],
+      materializedKind: "single_text",
+      requestedTarget: code,
+      reviewIntentSummary: "code target with a materialized legacy workbook",
+      sessionDomain: "software-engineering",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // Resolved kind is code, but a materialized .xls is rendered into materialized-input and
+    // cannot be read. The honesty gate now runs over the resolved∪materialized union (not
+    // only when the resolved kind is spreadsheet), so support_status degrades and names the
+    // workbook — F1, latent since round 1, is closed.
+    expect(profile.target_material_kind).toBe("code");
+    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.material_profile.unsupported_reason).toContain("legacy.xls");
+  });
+
+  it("keeps support_status supported when a materialized workbook is INSPECTABLE even for a CODE target (F1 positive control)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-f1-pos");
+    const code = path.join(root, "handler.ts");
+    const xlsx = path.join(root, "model.xlsx");
+    await fs.writeFile(code, "export const handler = () => 1;\n", "utf8");
+    await fs.writeFile(xlsx, Buffer.from(makeReviewXlsx()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [code],
+      materializedRefs: [xlsx],
+      materializedKind: "single_text",
+      requestedTarget: code,
+      reviewIntentSummary: "code target with an inspectable materialized workbook",
+      sessionDomain: "software-engineering",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // The unconditional union gate must NOT over-degrade: a code target whose materialized
+    // workbook IS inspectable stays supported (guards against an over-eager F1 gate).
+    expect(profile.target_material_kind).toBe("code");
+    expect(profile.material_profile.support_status).toBe("supported");
+  });
+
+  it("treats an empty-but-supported-format workbook (empty .csv) as partial with its ACTUAL reason, not a false 'unsupported format' (CER-1)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-emptycsv");
+    const csv = path.join(root, "empty.csv");
+    await fs.writeFile(csv, "", "utf8");
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [csv],
+      materializedKind: "single_text",
+      requestedTarget: csv,
+      reviewIntentSummary: "review empty csv",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.material_profile.support_status).toBe("partial");
+    // Reason reflects emptiness, NOT a bogus "unsupported format (.csv)".
+    expect(profile.material_profile.unsupported_reason).toContain("empty csv");
+    expect(profile.material_profile.unsupported_reason).not.toContain("unsupported");
+    expect(profile.target_refs[0].inspectable).toBe(false);
+    // Profile and render agree (render shows the observer's unsupported_reason).
+    const materialized = await readMaterializedInput(sessionRoot);
+    expect(materialized).toContain("unsupported: empty csv");
+  });
+
+  it("downgrades an empty-but-parseable .xlsx (no inspected structure) to partial and marks the ref not inspectable (empty OOXML)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-emptyxlsx");
+    const xlsx = path.join(root, "blank.xlsx");
+    await fs.writeFile(xlsx, Buffer.from(makeEmptyXlsx()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [xlsx],
+      materializedKind: "single_text",
+      requestedTarget: xlsx,
+      reviewIntentSummary: "review empty xlsx",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.target_material_kind).toBe("spreadsheet");
+    // It PARSED (unsupported_reason is null), but it has NO inspected structure — the
+    // honesty gate must not emit supported/null for a workbook the render shows as empty.
+    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.target_refs[0].inspectable).toBe(false);
+    // No ref inspectable -> the spreadsheet obligations drop (no rendered backing).
+    expect(profile.review_goal).not.toEqual(
+      expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
+    );
+  });
+
+  it("treats a corrupt workbook with only unreadable_sheet_part risk signals as not inspectable -> partial (R4)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-corruptxlsx");
+    const xlsx = path.join(root, "corrupt.xlsx");
+    await fs.writeFile(xlsx, Buffer.from(makeCorruptSheetXlsx()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [xlsx],
+      materializedKind: "single_text",
+      requestedTarget: xlsx,
+      reviewIntentSummary: "review corrupt xlsx",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.target_material_kind).toBe("spreadsheet");
+    // Workbook metadata parsed (unsupported_reason null) and it emits unreadable_sheet_part
+    // risk signals, but there is NO renderable formula/reference structure — the gate must
+    // not count a risk-only shell as inspectable, so support degrades to partial.
+    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.target_refs[0].inspectable).toBe(false);
+    expect(profile.review_goal).not.toEqual(
+      expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
+    );
+  });
+
+  it("treats a macro-only .xlsm (no cell data, only a VBA project) as inspectable -> supported (#3)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-macroonly");
+    const xlsm = path.join(root, "macros.xlsm");
+    await fs.writeFile(xlsm, Buffer.from(makeMacroOnlyXlsm()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [xlsm],
+      materializedKind: "single_text",
+      requestedTarget: xlsm,
+      reviewIntentSummary: "review macro-only xlsm",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // No formula/cell structure, but macro_present is real access/protection hygiene
+    // evidence the materialized input renders — so it stays inspectable/supported and keeps
+    // its obligations, unlike an empty or corrupt shell.
+    expect(profile.material_profile.support_status).toBe("supported");
+    expect(profile.target_refs[0].inspectable).toBe(true);
+    expect(profile.review_goal).toEqual(
+      expect.arrayContaining(["access_and_protection_hygiene"]),
+    );
+  });
+
+  it("names both refs distinctly when two uninspectable workbooks share a basename (#1)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-dupbasename");
+    const q1 = path.join(root, "q1", "legacy.xls");
+    const q2 = path.join(root, "q2", "legacy.xls");
+    await fs.mkdir(path.dirname(q1), { recursive: true });
+    await fs.mkdir(path.dirname(q2), { recursive: true });
+    // BIFF magic bytes; .xls extraction is deferred -> both refs uninspectable.
+    await fs.writeFile(q1, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+    await fs.writeFile(q2, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "explicit_set",
+      resolvedTargetRefs: [q1, q2],
+      materializedKind: "single_text",
+      reviewIntentSummary: "review two legacy.xls files",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.material_profile.support_status).toBe("partial");
+    // Both distinct paths appear — dedup must NOT collapse them to one "legacy.xls".
+    expect(profile.material_profile.unsupported_reason).toContain(q1);
+    expect(profile.material_profile.unsupported_reason).toContain(q2);
+    expect(profile.material_profile.unsupported_reason).toContain("2 of 2");
+  });
+
+  it("degrades a directory of spreadsheets (kind=spreadsheet but no directly-inspectable workbook ref) to partial", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-ssdir");
+    const dir = path.join(root, "quarters");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, "q1.csv"), "month,revenue\nJan,100\n", "utf8");
+    await fs.writeFile(path.join(dir, "q2.csv"), "month,revenue\nFeb,120\n", "utf8");
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "directory",
+      resolvedTargetRefs: [dir],
+      materializedKind: "directory_listing",
+      requestedTarget: dir,
+      reviewIntentSummary: "review a directory of spreadsheets",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // The sampled children are all spreadsheets, so the kind aggregates to spreadsheet...
+    expect(profile.target_material_kind).toBe("spreadsheet");
+    // ...but the directory path itself is not a workbook ref (gateRefs is empty; the
+    // render emits only a listing), so a bare `supported` would be dishonest.
+    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.review_goal).not.toEqual(
+      expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
+    );
+  });
+
+  it("discloses a bounded structural sample in materialized-input when the projection trims (TA-3)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-wide");
+    const csv = path.join(root, "wide.csv");
+    const header = Array.from({ length: 70 }, (_, i) => `c${i + 1}`).join(",");
+    const row = Array.from({ length: 70 }, (_, i) => `v${i + 1}`).join(",");
+    await fs.writeFile(csv, `${header}\n${row}\n`, "utf8");
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [csv],
+      materializedKind: "single_text",
+      requestedTarget: csv,
+      reviewIntentSummary: "review wide csv",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const materialized = await readMaterializedInput(sessionRoot);
+    // 70 columns > max_columns_per_sheet (64) -> projection trims columns; the honesty
+    // note discloses the bounded sample rather than silently swallowing it.
+    expect(materialized).toContain("structural sample bounded");
+    expect(materialized).toContain("64/70");
+    // The note must not claim the trimmed detail is recoverable — review does not persist
+    // the full inventory, only the bounded prompt sample (R1).
+    expect(materialized).toContain("prompt sample only");
+    expect(materialized).not.toContain("persisted in the inventory");
   });
 
   it("records mixed material kind for explicit bundles", async () => {

@@ -63,6 +63,11 @@ export interface DataLayerCaps {
   max_distinct_tracked_per_column: number;
   max_columns_profiled: number;
   max_sheet_pairs: number;
+  /** Workbook-level ceiling on the number of worksheets OBSERVED (rows/structure read into
+   *  memory and persisted). Conservatively high so normal workbooks are untouched; bounds a
+   *  pathological many-sheet workbook (the per-workbook analog of the bounded-observation
+   *  fix) and sets capture_truncated when hit. */
+  max_sheets_observed: number;
 }
 
 export const DEFAULT_DATA_LAYER_CAPS: DataLayerCaps = {
@@ -70,6 +75,7 @@ export const DEFAULT_DATA_LAYER_CAPS: DataLayerCaps = {
   max_distinct_tracked_per_column: 256,
   max_columns_profiled: 512,
   max_sheet_pairs: 64,
+  max_sheets_observed: 2048,
 };
 
 export interface InventorySheet {
@@ -168,6 +174,11 @@ export interface WorkbookStructuralInventory {
   cross_sheet_key_overlap: CrossSheetKeyOverlap[];
   data_layer_caps: DataLayerCaps;
   capture_truncated: boolean;
+  /** Total worksheet count in the workbook, present ONLY when observation was bounded by
+   *  `max_sheets_observed` (so `sheets` holds fewer than this). Lets a consumer disclose
+   *  "N of M observed" instead of mis-reporting the capped count as the total; absent when
+   *  no sheet cap was hit (the full set is in `sheets`). */
+  sheet_count_total?: number;
   unsupported_reason: string | null;
 }
 
@@ -216,6 +227,42 @@ export function inventoryHasInspectedStructure(
     inventory.distinct_value_vocab.length > 0 ||
     inventory.cross_sheet_key_overlap.length > 0 ||
     inventory.risk_signals.length > 0 ||
+    inventory.per_sheet_data.some((sheet) => sheet.columns.length > 0)
+  );
+}
+
+/** Stricter than {@link inventoryHasInspectedStructure} for REVIEW inspectability: a
+ *  workbook backs a review obligation only when it rendered ACTUAL renderable structure —
+ *  sheet bodies, formulas, named ranges, tables, validations, links, vocab, cross-sheet
+ *  overlap, OR access/protection hygiene evidence (a macro project, a protected sheet).
+ *  Error/risk signals ALONE do not count: a corrupt workbook whose worksheet parts are all
+ *  unreadable emits `unreadable_sheet_part` risk signals over zero-dimension sheets, which
+ *  `inventoryHasInspectedStructure` counts as "inspected" (its job is P6 provenance —
+ *  "something was observed") but which give a reviewer no structure to audit. Review uses
+ *  this view so a spreadsheet obligation is never attached to a workbook whose only
+ *  evidence is an error signal — while still treating a macro-only or protection-only
+ *  `.xlsm` as inspectable, since access_and_protection_hygiene has real evidence there
+ *  (a corrupt shell has neither: its macro flag is false and protection is unknowable
+ *  without a readable worksheet part). error_cells are excluded: a real error cell always
+ *  lives on a non-zero-dimension sheet, already covered above. */
+export function inventoryHasRenderableStructure(
+  inventory: WorkbookStructuralInventory,
+): boolean {
+  return (
+    inventory.sheets.some(
+      (sheet) => sheet.dimensions.rows > 0 || sheet.dimensions.cols > 0,
+    ) ||
+    inventory.macro_present ||
+    inventory.sheets.some((sheet) => sheet.protected) ||
+    inventory.named_ranges.length > 0 ||
+    inventory.tables.length > 0 ||
+    inventory.pivot_tables.length > 0 ||
+    inventory.formula_cells.length > 0 ||
+    inventory.merged_ranges.length > 0 ||
+    inventory.data_validations.length > 0 ||
+    inventory.external_links.length > 0 ||
+    inventory.distinct_value_vocab.length > 0 ||
+    inventory.cross_sheet_key_overlap.length > 0 ||
     inventory.per_sheet_data.some((sheet) => sheet.columns.length > 0)
   );
 }
@@ -1159,6 +1206,32 @@ interface ParsedWorksheet {
    *  capture_truncated so the artifact doesn't read as complete (Codex P2). */
   caps_hit: boolean;
 }
+/** Maximum characters kept from a single validation bounds expression: a list source can
+ *  be arbitrarily long, but the prompt only needs enough to audit the constraint shape. */
+const XLSX_VALIDATION_FORMULA_CHARS = 200;
+
+/** Build an auditable data-validation rule summary from the captured constraint fields.
+ *  formula1/formula2 are the rule BOUNDS (list source, min/max, date) — the constraint
+ *  definition, not raw cell data — so rendering them lets the reviewer verify
+ *  data_validation_coverage instead of seeing only the validation kind. Long expressions
+ *  are bounded with an explicit ellipsis so the summary never balloons. */
+function buildValidationRuleSummary(rule: {
+  type: string;
+  operator: string;
+  formula1: string;
+  formula2: string;
+}): string {
+  const clip = (text: string): string =>
+    text.length > XLSX_VALIDATION_FORMULA_CHARS
+      ? `${text.slice(0, XLSX_VALIDATION_FORMULA_CHARS)}…`
+      : text;
+  const parts = [`type=${rule.type || "any"}`];
+  if (rule.operator) parts.push(`operator=${rule.operator}`);
+  if (rule.formula1) parts.push(`formula1=${clip(rule.formula1)}`);
+  if (rule.formula2) parts.push(`formula2=${clip(rule.formula2)}`);
+  return parts.join("; ");
+}
+
 /** A streaming worksheet parser: pipe decompressed chunks through `write`, then
  *  `finalize`, then read `getResult`. The worksheet is never materialized whole;
  *  the per-sheet cell scan is bounded by `caps` (cell VALUE work stops at the row
@@ -1205,6 +1278,20 @@ function createWorksheetParser(args: {
   let fText = "";
   let isText = "";
 
+  // dataValidation rule capture: a validation's BOUNDS live in its formula1/formula2
+  // children (a list source, a min/max, a date) and its comparison in the `operator`
+  // attribute — the constraint DEFINITION a reviewer must audit, not raw cell data. We
+  // accumulate them across the open/text/close of one <dataValidation> and emit on close
+  // so data_validation_coverage is backed by the actual rule, not just `type=`.
+  let dvActive = false;
+  let dvType = "";
+  let dvOperator = "";
+  let dvSqref = "";
+  let dvFormula1 = "";
+  let dvFormula2 = "";
+  let inDvF1 = false;
+  let inDvF2 = false;
+
   const parser = new SaxesParser();
   parser.on("opentag", (node) => {
     const a = attrsOf(node);
@@ -1230,14 +1317,26 @@ function createWorksheetParser(args: {
         }
         break;
       case "dataValidation":
-        if (data_validations.length < XLSX_DATAVALIDATION_CAP) {
-          data_validations.push({
-            sheet: sheetName,
-            range: a.sqref ?? "",
-            rule_summary: `type=${a.type ?? "any"}`,
-          });
-        } else {
-          capsHit = true;
+        // Begin a validation; the rule_summary is built on close from type + operator +
+        // formula1/formula2 (the bounds), so the reviewer sees the constraint, not just
+        // its kind. self-closing (<dataValidation .../>) still fires a closetag below.
+        dvActive = true;
+        dvType = a.type ?? "any";
+        dvOperator = a.operator ?? "";
+        dvSqref = a.sqref ?? "";
+        dvFormula1 = "";
+        dvFormula2 = "";
+        break;
+      case "formula1":
+        if (dvActive) {
+          inDvF1 = true;
+          dvFormula1 = "";
+        }
+        break;
+      case "formula2":
+        if (dvActive) {
+          inDvF2 = true;
+          dvFormula2 = "";
         }
         break;
       case "row": {
@@ -1302,6 +1401,8 @@ function createWorksheetParser(args: {
     if (inV) vText += t;
     else if (inF) fText += t;
     else if (inIsT) isText += t;
+    else if (inDvF1) dvFormula1 += t;
+    else if (inDvF2) dvFormula2 += t;
   });
   parser.on("closetag", (node) => {
     switch (node.name) {
@@ -1313,6 +1414,31 @@ function createWorksheetParser(args: {
         break;
       case "is":
         inIs = false;
+        break;
+      case "formula1":
+        inDvF1 = false;
+        break;
+      case "formula2":
+        inDvF2 = false;
+        break;
+      case "dataValidation":
+        if (dvActive) {
+          dvActive = false;
+          if (data_validations.length < XLSX_DATAVALIDATION_CAP) {
+            data_validations.push({
+              sheet: sheetName,
+              range: dvSqref,
+              rule_summary: buildValidationRuleSummary({
+                type: dvType,
+                operator: dvOperator,
+                formula1: dvFormula1,
+                formula2: dvFormula2,
+              }),
+            });
+          } else {
+            capsHit = true;
+          }
+        }
         break;
       case "c": {
         // Formula + error are structural (kept regardless of the row cap, bounded
@@ -1476,6 +1602,18 @@ export function buildXlsxInventory(args: {
     dateXfIndexes = stylesXml ? parseStyles(stylesXml) : new Set<number>();
   } catch (error) {
     return unsupported(`xlsx workbook parse failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  // B4: bound the number of OBSERVED worksheets. A pathological many-sheet workbook would
+  // otherwise hold every sheet's row-grid in memory at once and persist an unbounded
+  // inventory (the per-workbook analog of bounded observation). The cap is conservatively
+  // high, so normal workbooks are untouched; when hit, capture_truncated discloses it. This
+  // bounds the set feeding BOTH the sheetByPath population and the final inventory loop.
+  let sheetCountTotal: number | undefined;
+  if (workbook.sheets.length > caps.max_sheets_observed) {
+    sheetCountTotal = workbook.sheets.length; // preserve the true total before slicing
+    workbook.sheets = workbook.sheets.slice(0, caps.max_sheets_observed);
+    captureTruncated = true;
   }
 
   const relById = new Map(workbookRels.map((r) => [r.id, r]));
@@ -1713,6 +1851,7 @@ export function buildXlsxInventory(args: {
     cross_sheet_key_overlap,
     data_layer_caps: caps,
     capture_truncated: captureTruncated,
+    ...(sheetCountTotal !== undefined ? { sheet_count_total: sheetCountTotal } : {}),
     unsupported_reason: null,
   };
 }
@@ -1799,34 +1938,48 @@ export async function observeSpreadsheetSource(
   if (workbookKind === undefined) {
     return unsupportedInventory({ sourceRef, contentSha256, workbookKind: "csv", reason: `unrecognized spreadsheet extension: ${ext || "(none)"}` });
   }
-  if (workbookKind === "csv" || workbookKind === "tsv") {
-    return buildCsvInventory({
+  // CRASH ISOLATION: structural extraction can throw — most concretely a 512MB–1GiB CSV
+  // whose bytes pass the size gate but exceed V8's ~512MB string limit on
+  // `bytes.toString("utf8")`, plus any unexpected parser failure. Degrade THIS workbook to
+  // an honest unsupported inventory (preserving the already-computed raw-byte hash) instead
+  // of throwing out of the observer and aborting the whole review prep / reconstruct run.
+  try {
+    if (workbookKind === "csv" || workbookKind === "tsv") {
+      return buildCsvInventory({
+        sourceRef,
+        content: bytes.toString("utf8"),
+        contentSha256,
+        // The .tsv extension is definitive — force tabs instead of re-detecting.
+        ...(workbookKind === "tsv" ? { delimiter: "\t" as const } : {}),
+        ...(opts?.caps ? { caps: opts.caps } : {}),
+      });
+    }
+    if (workbookKind === "xlsx" || workbookKind === "xlsm") {
+      return buildXlsxInventory({
+        sourceRef,
+        bytes,
+        contentSha256,
+        workbookKind,
+        ...(opts?.caps ? { caps: opts.caps } : {}),
+      });
+    }
+    // xls (BIFF binary) / xlsb (binary OOXML) / ods (a different ZIP/XML schema) —
+    // separate parsers, not yet implemented (design §11.2 scoped xlsx/xlsm first).
+    // The workbook_kind is preserved (not mislabeled csv) so the artifact is honest.
+    return unsupportedInventory({
       sourceRef,
-      content: bytes.toString("utf8"),
-      contentSha256,
-      // The .tsv extension is definitive — force tabs instead of re-detecting.
-      ...(workbookKind === "tsv" ? { delimiter: "\t" as const } : {}),
-      ...(opts?.caps ? { caps: opts.caps } : {}),
-    });
-  }
-  if (workbookKind === "xlsx" || workbookKind === "xlsm") {
-    return buildXlsxInventory({
-      sourceRef,
-      bytes,
       contentSha256,
       workbookKind,
-      ...(opts?.caps ? { caps: opts.caps } : {}),
+      reason: `${workbookKind} extraction not yet implemented (xls/xlsb/ods deferred; xlsx/xlsm supported)`,
+    });
+  } catch (error) {
+    return unsupportedInventory({
+      sourceRef,
+      contentSha256,
+      workbookKind,
+      reason: `structural observation failed (${error instanceof Error ? error.message : String(error)})`,
     });
   }
-  // xls (BIFF binary) / xlsb (binary OOXML) / ods (a different ZIP/XML schema) —
-  // separate parsers, not yet implemented (design §11.2 scoped xlsx/xlsm first).
-  // The workbook_kind is preserved (not mislabeled csv) so the artifact is honest.
-  return unsupportedInventory({
-    sourceRef,
-    contentSha256,
-    workbookKind,
-    reason: `${workbookKind} extraction not yet implemented (xls/xlsb/ods deferred; xlsx/xlsm supported)`,
-  });
 }
 
 /**

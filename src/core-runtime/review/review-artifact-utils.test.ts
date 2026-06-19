@@ -8,6 +8,10 @@ import {
   renderReviewTargetMaterializedInput,
   renderTargetSnapshot,
 } from "./review-artifact-utils.js";
+import {
+  observeSpreadsheetSource,
+  type WorkbookStructuralInventory,
+} from "../spreadsheet-structure-observer.js";
 
 const tmpRoots: string[] = [];
 
@@ -95,5 +99,147 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     const snapshot = await renderTargetSnapshot([csv]);
     expect(snapshot).toContain("Spreadsheet Structural Inventory");
     expect(snapshot).toContain("structure inspected only");
+  });
+
+  it("renders formula text for sheets dropped by the per_sheet_data sheet cap (formula residual)", async () => {
+    const root = await makeTmpDir();
+    // A real single-sheet csv yields a fully-typed base inventory; widen it to 55 sheets
+    // with a formula ONLY on the last sheet — beyond the 50-sheet per_sheet_data cap.
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const templateSheet = base.sheets[0]!;
+    const templatePsd = base.per_sheet_data[0]!;
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: Array.from({ length: 55 }, (_, i) => ({
+        ...templateSheet,
+        name: `Sheet${i + 1}`,
+      })),
+      per_sheet_data: Array.from({ length: 55 }, (_, i) => ({
+        ...templatePsd,
+        sheet: `Sheet${i + 1}`,
+      })),
+      formula_cells: [
+        { sheet: "Sheet55", cell: "A2", formula: "=RESIDUAL_55", cross_sheet_refs: ["Other!A1"] },
+      ],
+    };
+
+    // stat() must pass (readTextOrDirectoryListing); the injected inventory is reused
+    // instead of re-observing the stub bytes.
+    const xlsx = path.join(root, "wide.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const inventoryByRef = new Map([[path.resolve(xlsx), widened]]);
+
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      inventoryByRef,
+    );
+
+    // Sheet55's body is trimmed by the 50-sheet cap, but its formula TEXT must still reach
+    // the prompt — formulas are rendered up front, grouped by sheet, before per-sheet bodies.
+    expect(rendered).toContain("formulas (sample of");
+    expect(rendered).toContain("Sheet55");
+    expect(rendered).toContain("=RESIDUAL_55");
+    expect(rendered).toContain("Other!A1");
+  });
+
+  it("discloses pairwise-overlap truncation in the bounded-sample note (#4)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    // One cross_sheet_key_overlap entry whose pairwise list exceeds the prompt cap (16).
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      cross_sheet_key_overlap: [
+        {
+          key_name: "id",
+          sheets: ["S0", "S1"],
+          pairwise_overlap: Array.from({ length: 20 }, (_, i) => ({
+            a: `S${i}`,
+            b: `S${i + 1}`,
+            count: i + 1,
+          })),
+        },
+      ],
+    };
+
+    const xlsx = path.join(root, "overlaps.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const inventoryByRef = new Map([[path.resolve(xlsx), widened]]);
+
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      inventoryByRef,
+    );
+
+    // The pairwise-overlap section is trimmed (16/20); the bounded-sample note must disclose
+    // it rather than silently dropping most pairwise counts.
+    expect(rendered).toContain("structural sample bounded");
+    expect(rendered).toContain("cross-sheet pairwise overlaps 16/20");
+  });
+
+  it("discloses protected/hidden sheets beyond the per_sheet_data render cap (B3)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const templateSheet = base.sheets[0]!;
+    const templatePsd = base.per_sheet_data[0]!;
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: Array.from({ length: 55 }, (_, i) => ({
+        ...templateSheet,
+        name: `Sheet${i + 1}`,
+        protected: i === 51, // a protected sheet beyond the 50-sheet render cap
+      })),
+      per_sheet_data: Array.from({ length: 55 }, (_, i) => ({
+        ...templatePsd,
+        sheet: `Sheet${i + 1}`,
+      })),
+    };
+    const xlsx = path.join(root, "wide.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+    // The protected sheet at index 51 is dropped from the per-sheet layout (50-sheet cap);
+    // its flag must still be disclosed so access_and_protection_hygiene isn't silently unbacked.
+    expect(rendered).toContain("protected/hidden sheet(s) beyond the rendered sample");
+  });
+
+  it("does not surface count-only tables/merged_ranges trims as bounded samples (A3 / RC-2)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      tables: Array.from({ length: 60 }, (_, i) => ({
+        name: `T${i}`,
+        sheet: "S1",
+        range: "A1:B2",
+      })),
+    };
+    const xlsx = path.join(root, "tabs.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+    // tables are capped 60->50 by projectInventoryForPrompt but rendered as a full COUNT,
+    // not a bounded sample — so the trim note must NOT mention tables (RC-2 guard).
+    expect(rendered).toContain("tables: 60");
+    expect(rendered).not.toContain("tables 50/60");
   });
 });
