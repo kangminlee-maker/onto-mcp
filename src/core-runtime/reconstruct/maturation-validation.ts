@@ -628,6 +628,43 @@ export function buildMaturationBaselineArtifact(args: {
   };
 }
 
+// M1 conservation — derive-from-authority. The closed set of required maturation
+// tuples is enumerated once from the selected purpose candidate's required_elements
+// (the same element x surface x dimension enumeration the baseline builder performs),
+// so the validator can prove every required tuple is present exactly once instead of
+// only checking that the rows that ARE present resolve. Coverage authority is the
+// TUPLE, not the (slug-derived) baseline_row_id, which is verified separately.
+function baselineTupleKey(
+  elementId: string,
+  surfaceRef: string,
+  dimensionRef: string,
+): string {
+  return JSON.stringify([elementId, surfaceRef, dimensionRef]);
+}
+
+function sameRefSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const seen = new Set(a);
+  return b.every((ref) => seen.has(ref));
+}
+
+function deriveExpectedBaselineTuples(
+  selected:
+    | ReconstructSourcePurposeCandidatesArtifact["purpose_candidates"][number]
+    | null
+    | undefined,
+): Set<string> {
+  const tuples = new Set<string>();
+  for (const element of selected?.adequacy_frame.required_elements ?? []) {
+    for (const surfaceRef of element.actionability_surface_refs) {
+      for (const dimensionRef of element.maturity_dimension_refs) {
+        tuples.add(baselineTupleKey(element.element_id, surfaceRef, dimensionRef));
+      }
+    }
+  }
+  return tuples;
+}
+
 export function validateMaturationBaseline(args: {
   maturationBaseline: ReconstructMaturationBaselineArtifact;
   maturationBaselineRef?: string | null;
@@ -798,6 +835,42 @@ export function validateMaturationBaseline(args: {
           "mixed-material baseline row must preserve member lineage or cite a limitation",
         subjectId: row.baseline_row_id,
       }));
+    }
+  }
+  // M1 coverage conservation: derive the closed required-tuple set from the selected
+  // candidate and prove every required tuple is present exactly once. The per-row loop
+  // above only checks that PRESENT rows resolve, so a deleted required row (erasing
+  // blocker/high scope) or a duplicated tuple would otherwise pass silently.
+  if (selected) {
+    const expectedTuples = deriveExpectedBaselineTuples(selected);
+    const presentTupleCounts = new Map<string, number>();
+    for (const row of baseline.baseline_rows) {
+      const key = baselineTupleKey(
+        row.purpose_element_ref,
+        row.actionability_surface_ref,
+        row.maturity_dimension_ref,
+      );
+      presentTupleCounts.set(key, (presentTupleCounts.get(key) ?? 0) + 1);
+    }
+    for (const tuple of expectedTuples) {
+      if (!presentTupleCounts.has(tuple)) {
+        violations.push(violation({
+          code: "missing_required_coverage",
+          message:
+            `required maturation tuple has no baseline row: ${tuple}`,
+          subjectId: tuple,
+        }));
+      }
+    }
+    for (const [tuple, count] of presentTupleCounts) {
+      if (count > 1 && expectedTuples.has(tuple)) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            `multiple baseline rows cover one required maturation tuple: ${tuple}`,
+          subjectId: tuple,
+        }));
+      }
     }
   }
   return {
@@ -1009,6 +1082,13 @@ export function validateActionabilityMatrix(args: {
       }));
     }
     seen.add(row.matrix_row_id);
+    if (row.baseline_row_refs.length !== 1) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message: "matrix row must reference exactly one baseline row",
+        subjectId: row.matrix_row_id,
+      }));
+    }
     const baselineRef = row.baseline_row_refs[0] ?? null;
     const baselineRow = baselineRef ? baselineRows.get(baselineRef) : null;
     if (!baselineRow) {
@@ -1023,6 +1103,27 @@ export function validateActionabilityMatrix(args: {
       violations.push(violation({
         code: "conflicting_state",
         message: "matrix row must preserve baseline materiality",
+        subjectId: row.matrix_row_id,
+      }));
+    }
+    // M1 payload conservation: a matrix row can cite baseline A while mutating the
+    // identity/lineage fields it must inherit. Assert the baseline-immutable set is
+    // preserved (materiality is checked above; maturity/support/limitation/readiness
+    // and competency refs legitimately change by validated rules, so are NOT asserted).
+    const identityPreserved =
+      row.purpose_element_ref === baselineRow.purpose_element_ref &&
+      row.actionability_surface_ref === baselineRow.actionability_surface_ref &&
+      row.maturity_dimension_ref === baselineRow.maturity_dimension_ref &&
+      row.materiality_ref === baselineRow.materiality_ref &&
+      row.member_target_material_kind === baselineRow.member_target_material_kind &&
+      sameRefSet(row.member_scope_refs, baselineRow.member_scope_refs) &&
+      sameRefSet(row.member_source_refs, baselineRow.member_source_refs) &&
+      sameRefSet(row.cross_material_ref_refs, baselineRow.cross_material_ref_refs);
+    if (!identityPreserved) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "matrix row must preserve the baseline row's identity and member-lineage fields",
         subjectId: row.matrix_row_id,
       }));
     }
@@ -1109,6 +1210,28 @@ export function validateActionabilityMatrix(args: {
         message:
           "matrix member_readiness must follow material L4, frontier, or limitation state",
         subjectId: row.matrix_row_id,
+      }));
+    }
+  }
+  // M1 coverage conservation: every baseline row must map to exactly one matrix row.
+  // The loop above only checks that PRESENT matrix rows resolve to a baseline row, so a
+  // matrix that DROPS a baseline row (erasing its scope from the downstream claim) would
+  // otherwise pass silently.
+  const matrixCoverageCounts = new Map<string, number>();
+  for (const row of matrix.rows) {
+    for (const ref of row.baseline_row_refs) {
+      matrixCoverageCounts.set(ref, (matrixCoverageCounts.get(ref) ?? 0) + 1);
+    }
+  }
+  for (const baselineRowId of baselineRows.keys()) {
+    const count = matrixCoverageCounts.get(baselineRowId) ?? 0;
+    if (count !== 1) {
+      violations.push(violation({
+        code: count === 0 ? "missing_required_coverage" : "conflicting_state",
+        message: count === 0
+          ? `baseline row has no actionability matrix row: ${baselineRowId}`
+          : `baseline row is covered by multiple matrix rows: ${baselineRowId}`,
+        subjectId: baselineRowId,
       }));
     }
   }
@@ -3894,6 +4017,32 @@ export function validateMaturationContinuationDecision(args: {
         subjectId: rowRef,
       }));
     }
+  }
+  // M1 partition conservation: recompute the claim_scope partition from the matrix
+  // (closed -> included; non-closed -> excluded) and require the decision to match it.
+  // The resolve check above only verifies the listed refs exist, so a claim_scope that
+  // OMITS non-closed rows would pass and the public claim would preserve the omission.
+  const expectedIncluded = args.actionabilityMatrix.rows
+    .filter((row) => row.member_readiness === "closed")
+    .map((row) => row.matrix_row_id);
+  const expectedExcluded = args.actionabilityMatrix.rows
+    .filter((row) => row.member_readiness !== "closed")
+    .map((row) => row.matrix_row_id);
+  if (!sameRefSet(decision.claim_scope.included_row_refs, expectedIncluded)) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "continuation claim_scope included_row_refs must equal the matrix's closed rows",
+      subjectId: "claim_scope.included_row_refs",
+    }));
+  }
+  if (!sameRefSet(decision.claim_scope.excluded_row_refs, expectedExcluded)) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "continuation claim_scope excluded_row_refs must equal the matrix's non-closed rows",
+      subjectId: "claim_scope.excluded_row_refs",
+    }));
   }
   const hasAuthorityNeed = decision.authority_request_refs.length > 0;
   if (decision.decision_state === "actionable_ready" && materialOpenRows.length > 0) {

@@ -981,6 +981,82 @@ describe("maturation validation", () => {
     )).toBe(true);
   });
 
+  it("rejects a baseline that drops or duplicates a required maturation tuple (M1 P1-a)", () => {
+    const maturationBaseline = baseline();
+    const validateBaseline = (b: ReturnType<typeof baseline>) =>
+      validateMaturationBaseline({
+        maturationBaseline: b,
+        maturationBaselineRef: "maturation-baseline.yaml",
+        sourcePurposeCandidates: sourcePurposeCandidates(),
+        sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+        purposeConfirmationValidation: validPurposeConfirmation(),
+        ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+        competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+        handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+        sourceReconstructRecordSha256: sourceRecordSha,
+      });
+    // As built, the baseline covers its required tuple exactly once.
+    expect(validateBaseline(maturationBaseline).validation_status).toBe("valid");
+    // Deleting the required row erases its scope → missing coverage.
+    expect(
+      validateBaseline({ ...maturationBaseline, baseline_rows: [] }).violations
+        .some((v) => v.code === "missing_required_coverage"),
+    ).toBe(true);
+    // Duplicating the required tuple under a fresh row id → conflicting coverage.
+    const row0 = maturationBaseline.baseline_rows[0]!;
+    const duplicated = {
+      ...maturationBaseline,
+      baseline_rows: [row0, { ...row0, baseline_row_id: `${row0.baseline_row_id}-dup` }],
+    };
+    expect(validateBaseline(duplicated).violations.some((v) =>
+      v.code === "conflicting_state" && (v.subject_id ?? "").startsWith("[")
+    )).toBe(true);
+  });
+
+  it("rejects a matrix that drops or mutates a baseline row (M1 P1-b)", () => {
+    const maturationBaseline = baseline();
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const validateMatrix = (m: typeof matrix) =>
+      validateActionabilityMatrix({
+        actionabilityMatrix: m,
+        actionabilityMatrixRef: "actionability-matrix.yaml",
+        maturationBaseline,
+        maturationBaselineValidation: baselineValidation,
+        maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      });
+    expect(validateMatrix(matrix).validation_status).toBe("valid");
+    // Dropping the matrix row erases the baseline row's scope from the claim.
+    expect(
+      validateMatrix({ ...matrix, rows: [] }).violations
+        .some((v) => v.code === "missing_required_coverage"),
+    ).toBe(true);
+    // Mutating the matrix row's inherited identity field → conflicting state.
+    const mutated = {
+      ...matrix,
+      rows: [{ ...matrix.rows[0]!, purpose_element_ref: "tampered-element" }],
+    };
+    expect(validateMatrix(mutated).violations.some((v) =>
+      v.code === "conflicting_state" &&
+      v.subject_id === matrix.rows[0]!.matrix_row_id
+    )).toBe(true);
+  });
+
   it("keeps material L3 answer-supported rows frontier-required until expansion validates them for purpose", () => {
     const maturationBaseline = baseline([]);
     const baselineValidation = validateMaturationBaseline({
@@ -2113,6 +2189,44 @@ describe("maturation validation", () => {
     expect(falseReadyValidation.validation_status).toBe("invalid");
     expect(falseReadyValidation.violations.map((violation) => violation.code))
       .toContain("conflicting_state");
+
+    // M1 P1-c: a claim_scope that OMITS a non-closed (excluded) row is rejected. The
+    // resolve check alone would pass; the recomputed partition catches the omission.
+    const tamperedScopeValidation = validateMaturationContinuationDecision({
+      maturationContinuationDecision: {
+        ...continuationDecision,
+        claim_scope: {
+          ...continuationDecision.claim_scope,
+          excluded_row_refs: [],
+        },
+      },
+      maturationContinuationDecisionRef:
+        "maturation-continuation-decision.yaml",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidation: matrixValidation,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      maturationClosureFrontierValidation: closureValidation,
+      maturationClosureFrontierValidationRef:
+        "maturation-closure-frontier-validation.yaml",
+      answerSupportLedgerValidation: emptyAnswerSupportValidation(),
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationAuthorityResponseValidation: authorityResponseValidation,
+      maturationAuthorityResponseValidationRef:
+        "maturation-authority-response-validation.yaml",
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationConvergenceLedgerValidation: emptyConvergenceLedgerValidation(),
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+    });
+    expect(tamperedScopeValidation.validation_status).toBe("invalid");
+    expect(tamperedScopeValidation.violations.some((v) =>
+      v.code === "conflicting_state" &&
+      v.subject_id === "claim_scope.excluded_row_refs"
+    )).toBe(true);
   });
 
   it("projects maturation source-delta impact against actionability matrix rows", () => {
