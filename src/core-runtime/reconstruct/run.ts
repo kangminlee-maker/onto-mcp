@@ -4012,10 +4012,29 @@ export function assessmentEvidenceObservationIds(
   return [...observationIds];
 }
 
-// Greedily keep whole projected evidence observations (in order) until the serialized
-// budget is spent. The first is always kept so a lone over-budget observation still makes
-// progress; otherwise an observation is kept only if it leaves the running total within
-// budget. Bounding by serialized size (not count) is what makes inventory-heavy
+// Replace an evidence observation whose serialized payload alone exceeds the whole
+// budget (e.g. a big spreadsheet workbook_inventory, which the per-char excerpt limit
+// does not bound) with a metadata-only stub, so no single observation can push an
+// unsplittable single-question assessment past the prompt cap. The stub keeps the
+// identifying fields and marks the body omitted.
+function boundSingleEvidenceItem(rawItem: unknown, budgetChars: number): unknown {
+  if (JSON.stringify(rawItem).length <= budgetChars) return rawItem;
+  const obj = (rawItem ?? {}) as Record<string, unknown>;
+  return {
+    observation_id: obj.observation_id,
+    source_ref: obj.source_ref,
+    target_material_kind: obj.target_material_kind,
+    location: obj.location,
+    summary: obj.summary,
+    evidence_body_omitted_for_budget: true,
+  };
+}
+
+// Greedily keep projected evidence observations (in order) until the serialized budget is
+// spent. Each item is first bounded to the budget (a lone over-budget observation becomes
+// a stub, never an arbitrarily large payload), then kept only if it leaves the running
+// total within budget — except the first, which is always kept (post-stub) so the payload
+// makes progress. Bounding by serialized size (not count) is what makes inventory-heavy
 // spreadsheet observations count toward the cap. Exported for the size-bound unit test.
 export function boundEvidenceBySerializedSize(
   projected: unknown[],
@@ -4023,7 +4042,8 @@ export function boundEvidenceBySerializedSize(
 ): { kept: unknown[]; chars: number } {
   const kept: unknown[] = [];
   let chars = 0;
-  for (const item of projected) {
+  for (const rawItem of projected) {
+    const item = boundSingleEvidenceItem(rawItem, budgetChars);
     const itemChars = JSON.stringify(item).length;
     if (kept.length > 0 && chars + itemChars > budgetChars) break;
     kept.push(item);
@@ -9785,6 +9805,39 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
 }
 
 /**
+ * Surfaces unresolved (reject/defer) revision proposals in final output (#2): these
+ * are proposed-only — never applied to the seed/maturation in this run — and the stop
+ * gate already treats them as deterministically unresolved work carried to the next
+ * round. The disclosure must be deterministic, not left to the final-output LLM's prose
+ * (which could omit it or imply completion), so the runtime appends this section
+ * unconditionally when such proposals remain. Operational wording only (action enum,
+ * target type/id, proposal id) — no host-authored prose — so it never trips final-output
+ * provenance forbidden fragments. Exported for the disclosure unit test.
+ */
+export function appendFinalOutputUnresolvedRevisionSection(
+  finalOutputText: string,
+  revisionProposal: ReconstructRevisionProposalArtifact,
+): string {
+  const unresolved = revisionProposal.proposals.filter(
+    (proposal) => proposal.action === "reject" || proposal.action === "defer",
+  );
+  if (unresolved.length === 0) return finalOutputText;
+  const content = [
+    "## Unresolved Revision Proposals",
+    "",
+    "Revision proposals are proposed-only and are NOT applied to the seed or maturation " +
+      "in this run. The following reject/defer proposals remain unresolved and are carried " +
+      "to the next maturation round; the run is not complete while they remain.",
+    "",
+    ...unresolved.map((proposal) =>
+      `- ${proposal.action} ${proposal.target_type} ${proposal.target_id} (${proposal.proposal_id})`
+    ),
+    "",
+  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, content);
+}
+
+/**
  * Surfaces seed-stage document projection truncation in final output (C2): a
  * captured document whose tail exceeded the model-window projection budget did
  * not reach seed authoring. No-op when nothing was truncated. The durable
@@ -13149,6 +13202,10 @@ export async function runReconstruct(
   finalOutputText = appendFinalOutputWorkbookInventoryProjectionTruncationSection(
     finalOutputText,
     workbookInventoryProjectionTruncations,
+  );
+  finalOutputText = appendFinalOutputUnresolvedRevisionSection(
+    finalOutputText,
+    revisionProposal,
   );
   const finalOutputViolations = validateFinalOutputProvenance({
     finalOutputText,

@@ -53,6 +53,7 @@ import {
   singleDocumentProjectionTruncation,
   stopDecisionAllowedDecisions,
   boundEvidenceBySerializedSize,
+  appendFinalOutputUnresolvedRevisionSection,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -4178,12 +4179,9 @@ describe("runReconstruct", () => {
       competencyAssessmentPayloads[0]?.source_evidence_projection;
     expect(sourceEvidenceProjection?.total_budget_chars).toBe(24_000);
     expect(sourceEvidenceProjection?.per_observation_excerpt_char_limit).toBe(4000);
-    // Total serialized evidence stays within budget, unless a single observation alone
-    // exceeds it (that lone observation is still kept to make progress).
-    expect(
-      (sourceEvidenceProjection?.projected_chars ?? 0) <= 24_000 ||
-        (sourceEvidenceProjection?.projected_observation_count ?? 0) === 1,
-    ).toBe(true);
+    // Total serialized evidence always stays within budget — an over-budget observation
+    // is stubbed, so even a lone evidence item cannot exceed the reserve.
+    expect(sourceEvidenceProjection?.projected_chars ?? 0).toBeLessThanOrEqual(24_000);
     expect(
       (sourceEvidenceProjection?.projected_observation_count ?? 0) +
         (sourceEvidenceProjection?.omitted_observation_count ?? 0),
@@ -6338,10 +6336,69 @@ describe("observationPromptPayload projection-truncation recording", () => {
       expect(result.chars).toBeLessThanOrEqual(24_000);
     });
 
-    it("keeps a lone over-budget observation so the payload still makes progress", () => {
-      const result = boundEvidenceBySerializedSize([item(40_000), item(100)], 24_000);
+    it("stubs a lone over-budget observation instead of admitting it whole", () => {
+      const result = boundEvidenceBySerializedSize(
+        [
+          {
+            observation_id: "obs-big",
+            source_ref: "src/big.xlsx",
+            target_material_kind: "spreadsheet",
+            structural_data: { workbook_inventory: { body: "x".repeat(40_000) } },
+          },
+        ],
+        24_000,
+      );
+      // The over-budget observation is replaced by a metadata stub, so the single
+      // unsplittable question's payload can never exceed the prompt cap.
       expect(result.kept).toHaveLength(1);
-      expect(result.chars).toBeGreaterThan(24_000);
+      expect(result.chars).toBeLessThanOrEqual(24_000);
+      expect((result.kept[0] as { evidence_body_omitted_for_budget?: boolean })
+        .evidence_body_omitted_for_budget).toBe(true);
+      expect((result.kept[0] as { observation_id?: string }).observation_id)
+        .toBe("obs-big");
+      expect((result.kept[0] as { structural_data?: unknown }).structural_data)
+        .toBeUndefined();
+    });
+  });
+
+  // @codex R6: unresolved reject/defer revision proposals must be disclosed
+  // deterministically (the stop gate already treats them as unresolved), not left to
+  // the final-output LLM's prose which could omit them or imply completion.
+  describe("appendFinalOutputUnresolvedRevisionSection (deterministic disclosure, #2)", () => {
+    const proposal = (proposal_id: string, action: string) => ({
+      proposal_id,
+      target_type: "seed",
+      target_id: "seed-1",
+      action,
+      rationale: "r",
+      expected_effect: "e",
+    });
+
+    it("appends an unresolved-revision section for reject/defer proposals", () => {
+      const out = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
+        proposals: [
+          proposal("p1", "reject"),
+          proposal("p2", "reuse"),
+          proposal("p3", "defer"),
+        ],
+      } as never);
+      expect(out).toContain("## Unresolved Revision Proposals");
+      expect(out).toContain("reject seed seed-1 (p1)");
+      expect(out).toContain("defer seed seed-1 (p3)");
+      // refinement actions are not unresolved work and are not listed
+      expect(out).not.toContain("reuse seed seed-1 (p2)");
+    });
+
+    it("is a no-op when no reject/defer proposals remain", () => {
+      const text = "# Result\n";
+      expect(
+        appendFinalOutputUnresolvedRevisionSection(text, {
+          proposals: [proposal("p1", "reuse"), proposal("p2", "extend")],
+        } as never),
+      ).toBe(text);
+      expect(
+        appendFinalOutputUnresolvedRevisionSection(text, { proposals: [] } as never),
+      ).toBe(text);
     });
   });
 

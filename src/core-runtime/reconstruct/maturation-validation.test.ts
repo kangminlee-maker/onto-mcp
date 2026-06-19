@@ -2635,6 +2635,31 @@ describe("maturation validation", () => {
       v.code === "missing_required_ref" &&
       v.subject_id === "candidate_limitation_refs"
     )).toBe(true);
+
+    // @codex R6: when candidate limitations AND an unproven final re-question convergence
+    // both hold, the candidate branch is selected but the convergence limitation must
+    // still reach the claim — both belong in decision.limitation_refs.
+    const candidateAndConvergenceDecision = buildMaturationContinuationDecisionArtifact({
+      sessionId: "session-1",
+      actionabilityMatrix: {
+        ...matrix,
+        candidate_limitation_refs: ["limitation-source-coverage-partial"],
+      },
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationConvergenceLedgerValidation: convergenceValidation,
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation: closureValidation,
+      maturationAuthorityResponse: authorityResponse,
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+    });
+    expect(candidateAndConvergenceDecision.decision_state).toBe("actionable_limited");
+    expect(candidateAndConvergenceDecision.limitation_refs)
+      .toContain("limitation-source-coverage-partial");
+    expect(candidateAndConvergenceDecision.limitation_refs)
+      .toContain("maturation-final-requestion:not_run");
   });
 
   it("rejects actionable limited when no rows can be included in the claim", () => {

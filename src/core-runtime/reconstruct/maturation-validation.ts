@@ -3719,6 +3719,12 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   // even if every row is closed (the source itself is acknowledged as partial).
   const candidateLimitationRefs = args.actionabilityMatrix.candidate_limitation_refs;
   const hasCandidateLimitations = candidateLimitationRefs.length > 0;
+  // An unproven final re-question convergence is its own limitation on the claim,
+  // independent of candidate or row limitations — so it must be recorded whenever it
+  // holds, not only when it is the sole reason for actionable_limited. Otherwise the
+  // candidate-limitation branch below would preempt it and the public claim (which
+  // projects only decision.limitation_refs) would silently drop it.
+  const convergenceUnproven = finalRequestionStatus !== "no_new_material_question";
   let decisionState: ReconstructMaturationContinuationDecisionArtifact["decision_state"];
   let rationale: string;
   const convergenceLimitationRefs: string[] = [];
@@ -3737,13 +3743,15 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   } else if (hasCandidateLimitations) {
     decisionState = "actionable_limited";
     rationale = "All material rows are closed, but purpose-candidate-level limitations constrain the actionability claim and signal next-round source frontier.";
-  } else if (finalRequestionStatus !== "no_new_material_question") {
+  } else if (convergenceUnproven) {
     decisionState = "actionable_limited";
-    convergenceLimitationRefs.push(`maturation-final-requestion:${finalRequestionStatus}`);
     rationale = "No material frontier remains, but final re-question convergence has not proven actionable readiness.";
   } else {
     decisionState = "actionable_ready";
     rationale = "All material rows are closed for the declared purpose.";
+  }
+  if (convergenceUnproven) {
+    convergenceLimitationRefs.push(`maturation-final-requestion:${finalRequestionStatus}`);
   }
   const nextFrontierRefs = [
     ...args.maturationQuestionFrontier.questions
