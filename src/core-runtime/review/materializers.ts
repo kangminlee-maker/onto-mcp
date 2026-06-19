@@ -1351,16 +1351,24 @@ async function buildReviewTargetProfileArtifact(
     // that is not an empty workbook). Recorded only for spreadsheet refs so the
     // kind-vs-format axis is structurally explicit (design §3.2 honesty; C-recon F1 mirror).
     const isSpreadsheet = isSpreadsheetRef(ref);
+    const spreadsheetInventory = isSpreadsheet ? inventoryByRef?.get(ref) : undefined;
     targetRefs.push({
       ref,
       role: index === 0 ? "primary" as const : "supporting" as const,
       kind: kind.kind,
       exists: kind.exists,
+      // For a spreadsheet ref reuse the inventory's raw-byte content_sha256 (single
+      // observation) instead of re-reading the file: targetRefSha256 fs.readFile-s the
+      // whole file, which would re-allocate — and on an oversized workbook the observer
+      // skipped, OOM — a file the observer already declined to read (content_sha256 is "" in
+      // that case, recorded here as null). Non-spreadsheet refs hash as before.
       sha256: kind.exists
-        ? await targetRefSha256(ref, kind.kind, params.directoryListingOptions)
+        ? isSpreadsheet
+          ? (spreadsheetInventory?.content_sha256 || null)
+          : await targetRefSha256(ref, kind.kind, params.directoryListingOptions)
         : null,
       ...(isSpreadsheet
-        ? { inspectable: isInspectableSpreadsheetInventory(inventoryByRef?.get(ref)) }
+        ? { inspectable: isInspectableSpreadsheetInventory(spreadsheetInventory) }
         : {}),
     });
   }
@@ -1389,13 +1397,15 @@ async function buildReviewTargetProfileArtifact(
       if (isInspectableSpreadsheetInventory(inv)) {
         inspectableCount += 1;
       } else {
-        // Name the ref (basename) alongside its actual cause: a multi-workbook bundle must
-        // identify WHICH workbook lost inventory backing, and dedup must not collapse two
-        // distinct failing paths that happen to share a cause (contract §5/§7 per-ref cause).
+        // Name the ref (full resolved path) alongside its actual cause: a multi-workbook
+        // bundle must identify WHICH workbook lost inventory backing, and the later dedup
+        // must not collapse two distinct failing paths that share a basename + cause (e.g.
+        // /q1/legacy.xls and /q2/legacy.xls). The full path is stable and unique
+        // (contract §5/§7 per-ref cause).
         const cause =
           inv?.unsupported_reason ??
           (inv ? "no renderable structure (empty or unreadable workbook)" : "workbook not observed");
-        uninspectedReasons.push(`${path.basename(ref)}: ${cause}`);
+        uninspectedReasons.push(`${ref}: ${cause}`);
       }
     }
     if (uninspectedReasons.length > 0) {

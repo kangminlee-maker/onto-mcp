@@ -145,4 +145,42 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     expect(rendered).toContain("=RESIDUAL_55");
     expect(rendered).toContain("Other!A1");
   });
+
+  it("discloses pairwise-overlap truncation in the bounded-sample note (#4)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    // One cross_sheet_key_overlap entry whose pairwise list exceeds the prompt cap (16).
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      cross_sheet_key_overlap: [
+        {
+          key_name: "id",
+          sheets: ["S0", "S1"],
+          pairwise_overlap: Array.from({ length: 20 }, (_, i) => ({
+            a: `S${i}`,
+            b: `S${i + 1}`,
+            count: i + 1,
+          })),
+        },
+      ],
+    };
+
+    const xlsx = path.join(root, "overlaps.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const inventoryByRef = new Map([[path.resolve(xlsx), widened]]);
+
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      inventoryByRef,
+    );
+
+    // The pairwise-overlap section is trimmed (16/20); the bounded-sample note must disclose
+    // it rather than silently dropping most pairwise counts.
+    expect(rendered).toContain("structural sample bounded");
+    expect(rendered).toContain("cross-sheet pairwise overlaps 16/20");
+  });
 });

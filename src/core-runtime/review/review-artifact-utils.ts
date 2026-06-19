@@ -291,6 +291,7 @@ function renderSpreadsheetStructuralView(
     error_cells: "error_cells",
     pivot_tables: "pivot_tables",
     cross_sheet_key_overlap: "cross_sheet_key_overlap",
+    "cross_sheet_key_overlap.pairwise_overlap": "cross-sheet pairwise overlaps",
     risk_signals: "risk_signals",
   };
   const renderedTrims = sections.filter((s) => s.section in NOTE_SECTION_LABELS);

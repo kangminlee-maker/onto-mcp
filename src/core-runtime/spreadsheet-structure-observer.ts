@@ -222,14 +222,18 @@ export function inventoryHasInspectedStructure(
 
 /** Stricter than {@link inventoryHasInspectedStructure} for REVIEW inspectability: a
  *  workbook backs a review obligation only when it rendered ACTUAL renderable structure —
- *  sheet bodies, formulas, named ranges, tables, validations, links, vocab, or cross-sheet
- *  overlap. Error/risk signals ALONE do not count: a corrupt workbook whose worksheet
- *  parts are all unreadable emits `unreadable_sheet_part` risk signals over zero-dimension
- *  sheets, which `inventoryHasInspectedStructure` counts as "inspected" (its job is P6
- *  provenance — "something was observed") but which give a reviewer no formula/reference
- *  structure to audit. Review uses this view so a spreadsheet obligation is never attached
- *  to a workbook whose only evidence is an error signal (error_cells are likewise excluded:
- *  a real error cell always lives on a non-zero-dimension sheet, already covered above). */
+ *  sheet bodies, formulas, named ranges, tables, validations, links, vocab, cross-sheet
+ *  overlap, OR access/protection hygiene evidence (a macro project, a protected sheet).
+ *  Error/risk signals ALONE do not count: a corrupt workbook whose worksheet parts are all
+ *  unreadable emits `unreadable_sheet_part` risk signals over zero-dimension sheets, which
+ *  `inventoryHasInspectedStructure` counts as "inspected" (its job is P6 provenance —
+ *  "something was observed") but which give a reviewer no structure to audit. Review uses
+ *  this view so a spreadsheet obligation is never attached to a workbook whose only
+ *  evidence is an error signal — while still treating a macro-only or protection-only
+ *  `.xlsm` as inspectable, since access_and_protection_hygiene has real evidence there
+ *  (a corrupt shell has neither: its macro flag is false and protection is unknowable
+ *  without a readable worksheet part). error_cells are excluded: a real error cell always
+ *  lives on a non-zero-dimension sheet, already covered above. */
 export function inventoryHasRenderableStructure(
   inventory: WorkbookStructuralInventory,
 ): boolean {
@@ -237,6 +241,8 @@ export function inventoryHasRenderableStructure(
     inventory.sheets.some(
       (sheet) => sheet.dimensions.rows > 0 || sheet.dimensions.cols > 0,
     ) ||
+    inventory.macro_present ||
+    inventory.sheets.some((sheet) => sheet.protected) ||
     inventory.named_ranges.length > 0 ||
     inventory.tables.length > 0 ||
     inventory.pivot_tables.length > 0 ||
@@ -1189,6 +1195,32 @@ interface ParsedWorksheet {
    *  capture_truncated so the artifact doesn't read as complete (Codex P2). */
   caps_hit: boolean;
 }
+/** Maximum characters kept from a single validation bounds expression: a list source can
+ *  be arbitrarily long, but the prompt only needs enough to audit the constraint shape. */
+const XLSX_VALIDATION_FORMULA_CHARS = 200;
+
+/** Build an auditable data-validation rule summary from the captured constraint fields.
+ *  formula1/formula2 are the rule BOUNDS (list source, min/max, date) — the constraint
+ *  definition, not raw cell data — so rendering them lets the reviewer verify
+ *  data_validation_coverage instead of seeing only the validation kind. Long expressions
+ *  are bounded with an explicit ellipsis so the summary never balloons. */
+function buildValidationRuleSummary(rule: {
+  type: string;
+  operator: string;
+  formula1: string;
+  formula2: string;
+}): string {
+  const clip = (text: string): string =>
+    text.length > XLSX_VALIDATION_FORMULA_CHARS
+      ? `${text.slice(0, XLSX_VALIDATION_FORMULA_CHARS)}…`
+      : text;
+  const parts = [`type=${rule.type || "any"}`];
+  if (rule.operator) parts.push(`operator=${rule.operator}`);
+  if (rule.formula1) parts.push(`formula1=${clip(rule.formula1)}`);
+  if (rule.formula2) parts.push(`formula2=${clip(rule.formula2)}`);
+  return parts.join("; ");
+}
+
 /** A streaming worksheet parser: pipe decompressed chunks through `write`, then
  *  `finalize`, then read `getResult`. The worksheet is never materialized whole;
  *  the per-sheet cell scan is bounded by `caps` (cell VALUE work stops at the row
@@ -1235,6 +1267,20 @@ function createWorksheetParser(args: {
   let fText = "";
   let isText = "";
 
+  // dataValidation rule capture: a validation's BOUNDS live in its formula1/formula2
+  // children (a list source, a min/max, a date) and its comparison in the `operator`
+  // attribute — the constraint DEFINITION a reviewer must audit, not raw cell data. We
+  // accumulate them across the open/text/close of one <dataValidation> and emit on close
+  // so data_validation_coverage is backed by the actual rule, not just `type=`.
+  let dvActive = false;
+  let dvType = "";
+  let dvOperator = "";
+  let dvSqref = "";
+  let dvFormula1 = "";
+  let dvFormula2 = "";
+  let inDvF1 = false;
+  let inDvF2 = false;
+
   const parser = new SaxesParser();
   parser.on("opentag", (node) => {
     const a = attrsOf(node);
@@ -1260,14 +1306,26 @@ function createWorksheetParser(args: {
         }
         break;
       case "dataValidation":
-        if (data_validations.length < XLSX_DATAVALIDATION_CAP) {
-          data_validations.push({
-            sheet: sheetName,
-            range: a.sqref ?? "",
-            rule_summary: `type=${a.type ?? "any"}`,
-          });
-        } else {
-          capsHit = true;
+        // Begin a validation; the rule_summary is built on close from type + operator +
+        // formula1/formula2 (the bounds), so the reviewer sees the constraint, not just
+        // its kind. self-closing (<dataValidation .../>) still fires a closetag below.
+        dvActive = true;
+        dvType = a.type ?? "any";
+        dvOperator = a.operator ?? "";
+        dvSqref = a.sqref ?? "";
+        dvFormula1 = "";
+        dvFormula2 = "";
+        break;
+      case "formula1":
+        if (dvActive) {
+          inDvF1 = true;
+          dvFormula1 = "";
+        }
+        break;
+      case "formula2":
+        if (dvActive) {
+          inDvF2 = true;
+          dvFormula2 = "";
         }
         break;
       case "row": {
@@ -1332,6 +1390,8 @@ function createWorksheetParser(args: {
     if (inV) vText += t;
     else if (inF) fText += t;
     else if (inIsT) isText += t;
+    else if (inDvF1) dvFormula1 += t;
+    else if (inDvF2) dvFormula2 += t;
   });
   parser.on("closetag", (node) => {
     switch (node.name) {
@@ -1343,6 +1403,31 @@ function createWorksheetParser(args: {
         break;
       case "is":
         inIs = false;
+        break;
+      case "formula1":
+        inDvF1 = false;
+        break;
+      case "formula2":
+        inDvF2 = false;
+        break;
+      case "dataValidation":
+        if (dvActive) {
+          dvActive = false;
+          if (data_validations.length < XLSX_DATAVALIDATION_CAP) {
+            data_validations.push({
+              sheet: sheetName,
+              range: dvSqref,
+              rule_summary: buildValidationRuleSummary({
+                type: dvType,
+                operator: dvOperator,
+                formula1: dvFormula1,
+                formula2: dvFormula2,
+              }),
+            });
+          } else {
+            capsHit = true;
+          }
+        }
         break;
       case "c": {
         // Formula + error are structural (kept regardless of the row cap, bounded

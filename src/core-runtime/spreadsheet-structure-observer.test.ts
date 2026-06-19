@@ -310,7 +310,10 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(r.error_cells.map((e) => e.token)).toContain("#DIV/0!");
     expect(r.merged_ranges.map((m) => m.range)).toContain("A1:B1");
     expect(r.data_validations[0]!.range).toBe("B2:B3");
-    expect(r.data_validations[0]!.rule_summary).toContain("list");
+    expect(r.data_validations[0]!.rule_summary).toContain("type=list");
+    // The rule BOUNDS (formula1) are captured, not just the kind, so the reviewer can
+    // actually audit data_validation_coverage (#5).
+    expect(r.data_validations[0]!.rule_summary).toContain('formula1="eng,sales"');
     expect(r.named_ranges.map((n) => n.name)).toContain("HeadcountRange");
     expect(r.external_links).toHaveLength(1);
     const table = r.tables.find((t) => t.name === "PeopleTable")!;
@@ -321,6 +324,29 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     // counts, and structural tokens (formula/error).
     expect(JSON.stringify(r)).not.toContain("Alice");
     expect(JSON.stringify(r)).not.toContain("Bob");
+  });
+
+  it("captures operator and both bounds (formula1/formula2) for a range data validation (#5)", () => {
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+      `<row r="1"><c r="A1"><v>5</v></c></row></sheetData>` +
+      `<dataValidations count="1"><dataValidation type="whole" operator="between" sqref="A1:A9">` +
+      `<formula1>1</formula1><formula2>10</formula2></dataValidation></dataValidations>` +
+      `</worksheet>`;
+    const bytes = zipSync(makeMinimalXlsxParts(sheet));
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/v.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+    });
+    const dv = r.data_validations[0]!;
+    expect(dv.range).toBe("A1:A9");
+    // type + operator + both bounds, so data_validation_coverage is auditable, not just the kind.
+    expect(dv.rule_summary).toContain("type=whole");
+    expect(dv.rule_summary).toContain("operator=between");
+    expect(dv.rule_summary).toContain("formula1=1");
+    expect(dv.rule_summary).toContain("formula2=10");
   });
 
   it("extracts cross-sheet refs with non-ASCII (Korean) sheet names and ignores #REF!", () => {

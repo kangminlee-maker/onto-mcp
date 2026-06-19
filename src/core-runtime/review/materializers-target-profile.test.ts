@@ -6,6 +6,7 @@ import { parse as parseYaml } from "yaml";
 import { zipSync, strToU8 } from "fflate";
 import type { ReviewTargetProfileArtifact } from "./artifact-types.js";
 import { materializeReviewExecutionPreparationArtifacts } from "./materializers.js";
+import { observeSpreadsheetSource } from "../spreadsheet-structure-observer.js";
 
 const tmpRoots: string[] = [];
 
@@ -107,6 +108,27 @@ function makeCorruptSheetXlsx(): Uint8Array {
   });
 }
 
+/** A macro-only .xlsm: a VBA project and a single sheet with NO cell data. There is no
+ *  formula/reference structure, but macro_present is real access_and_protection_hygiene
+ *  evidence — the workbook must stay inspectable (not degraded like an empty/corrupt one). */
+function makeMacroOnlyXlsm(): Uint8Array {
+  return zipSync({
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+        `<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(
+      `<?xml version="1.0"?><worksheet ${WB_R}><sheetData/></worksheet>`,
+    ),
+    "xl/vbaProject.bin": strToU8("fake-vba-project"),
+  });
+}
+
 async function makeTmpProject(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "onto-review-profile-"));
   tmpRoots.push(root);
@@ -188,6 +210,11 @@ describe("review target profile material kind", () => {
     expect(profile.review_goal).toEqual(
       expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
     );
+    // sha256 reuses the inventory's raw-byte content hash (single observation) rather than
+    // re-reading the file, so an oversized workbook the observer skipped is never re-read
+    // by the hashing path (#2).
+    const observed = await observeSpreadsheetSource(target);
+    expect(profile.target_refs[0].sha256).toBe(observed.content_sha256);
     expect(profile.material_profile.detection.confidence).toBeGreaterThan(0.8);
   });
 
@@ -414,6 +441,63 @@ describe("review target profile material kind", () => {
     expect(profile.review_goal).not.toEqual(
       expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
     );
+  });
+
+  it("treats a macro-only .xlsm (no cell data, only a VBA project) as inspectable -> supported (#3)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-macroonly");
+    const xlsm = path.join(root, "macros.xlsm");
+    await fs.writeFile(xlsm, Buffer.from(makeMacroOnlyXlsm()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [xlsm],
+      materializedKind: "single_text",
+      requestedTarget: xlsm,
+      reviewIntentSummary: "review macro-only xlsm",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // No formula/cell structure, but macro_present is real access/protection hygiene
+    // evidence the materialized input renders — so it stays inspectable/supported and keeps
+    // its obligations, unlike an empty or corrupt shell.
+    expect(profile.material_profile.support_status).toBe("supported");
+    expect(profile.target_refs[0].inspectable).toBe(true);
+    expect(profile.review_goal).toEqual(
+      expect.arrayContaining(["access_and_protection_hygiene"]),
+    );
+  });
+
+  it("names both refs distinctly when two uninspectable workbooks share a basename (#1)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-dupbasename");
+    const q1 = path.join(root, "q1", "legacy.xls");
+    const q2 = path.join(root, "q2", "legacy.xls");
+    await fs.mkdir(path.dirname(q1), { recursive: true });
+    await fs.mkdir(path.dirname(q2), { recursive: true });
+    // BIFF magic bytes; .xls extraction is deferred -> both refs uninspectable.
+    await fs.writeFile(q1, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+    await fs.writeFile(q2, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "explicit_set",
+      resolvedTargetRefs: [q1, q2],
+      materializedKind: "single_text",
+      reviewIntentSummary: "review two legacy.xls files",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.material_profile.support_status).toBe("partial");
+    // Both distinct paths appear — dedup must NOT collapse them to one "legacy.xls".
+    expect(profile.material_profile.unsupported_reason).toContain(q1);
+    expect(profile.material_profile.unsupported_reason).toContain(q2);
+    expect(profile.material_profile.unsupported_reason).toContain("2 of 2");
   });
 
   it("degrades a directory of spreadsheets (kind=spreadsheet but no directly-inspectable workbook ref) to partial", async () => {
