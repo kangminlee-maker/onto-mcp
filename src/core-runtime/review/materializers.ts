@@ -69,7 +69,7 @@ import {
   reviewMaterialSupportStatus,
 } from "../target-material-kind.js";
 import {
-  inventoryHasInspectedStructure,
+  inventoryHasRenderableStructure,
   observeSpreadsheetSource,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
@@ -1294,19 +1294,22 @@ function requireExecutionPreparationSessionDomain(value: string): string {
 }
 
 /** A spreadsheet ref is inspectable only when its shared inventory was actually read AND
- *  carries real inspected structure: a supported format (`unsupported_reason === null`)
- *  that is NOT an empty/structureless workbook. An empty-but-parseable `.xlsx`/`.xlsm`
- *  returns `unsupported_reason === null` yet has no structure to render, so checking the
- *  reason alone would over-claim support. The per-target gate and the recorded
- *  `inspectable` flag both route through this (design §3.2 honesty; the contract/README
- *  require unreadable/empty workbooks to degrade to partial). */
+ *  rendered real obligation-backing structure: a supported format (`unsupported_reason ===
+ *  null`) that is NOT empty and NOT a corrupt shell. An empty-but-parseable `.xlsx`/`.xlsm`
+ *  returns `unsupported_reason === null` with no structure, and a corrupt workbook whose
+ *  worksheet parts are all unreadable returns it with only `unreadable_sheet_part` risk
+ *  signals — neither gives a reviewer formula/reference structure to audit, so checking the
+ *  reason (or P6's risk-signal-inclusive `inventoryHasInspectedStructure`) alone would
+ *  over-claim support. The per-target gate and the recorded `inspectable` flag both route
+ *  through this (design §3.2 honesty; the contract/README require unreadable/empty
+ *  workbooks to degrade to partial). */
 function isInspectableSpreadsheetInventory(
   inventory: WorkbookStructuralInventory | undefined,
 ): boolean {
   return (
     inventory !== undefined &&
     inventory.unsupported_reason === null &&
-    inventoryHasInspectedStructure(inventory)
+    inventoryHasRenderableStructure(inventory)
   );
 }
 
@@ -1386,10 +1389,13 @@ async function buildReviewTargetProfileArtifact(
       if (isInspectableSpreadsheetInventory(inv)) {
         inspectableCount += 1;
       } else {
-        uninspectedReasons.push(
+        // Name the ref (basename) alongside its actual cause: a multi-workbook bundle must
+        // identify WHICH workbook lost inventory backing, and dedup must not collapse two
+        // distinct failing paths that happen to share a cause (contract §5/§7 per-ref cause).
+        const cause =
           inv?.unsupported_reason ??
-            (inv ? "empty workbook (no inspected structure)" : "workbook not observed"),
-        );
+          (inv ? "no renderable structure (empty or unreadable workbook)" : "workbook not observed");
+        uninspectedReasons.push(`${path.basename(ref)}: ${cause}`);
       }
     }
     if (uninspectedReasons.length > 0) {

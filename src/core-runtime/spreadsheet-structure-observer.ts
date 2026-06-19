@@ -220,6 +220,36 @@ export function inventoryHasInspectedStructure(
   );
 }
 
+/** Stricter than {@link inventoryHasInspectedStructure} for REVIEW inspectability: a
+ *  workbook backs a review obligation only when it rendered ACTUAL renderable structure —
+ *  sheet bodies, formulas, named ranges, tables, validations, links, vocab, or cross-sheet
+ *  overlap. Error/risk signals ALONE do not count: a corrupt workbook whose worksheet
+ *  parts are all unreadable emits `unreadable_sheet_part` risk signals over zero-dimension
+ *  sheets, which `inventoryHasInspectedStructure` counts as "inspected" (its job is P6
+ *  provenance — "something was observed") but which give a reviewer no formula/reference
+ *  structure to audit. Review uses this view so a spreadsheet obligation is never attached
+ *  to a workbook whose only evidence is an error signal (error_cells are likewise excluded:
+ *  a real error cell always lives on a non-zero-dimension sheet, already covered above). */
+export function inventoryHasRenderableStructure(
+  inventory: WorkbookStructuralInventory,
+): boolean {
+  return (
+    inventory.sheets.some(
+      (sheet) => sheet.dimensions.rows > 0 || sheet.dimensions.cols > 0,
+    ) ||
+    inventory.named_ranges.length > 0 ||
+    inventory.tables.length > 0 ||
+    inventory.pivot_tables.length > 0 ||
+    inventory.formula_cells.length > 0 ||
+    inventory.merged_ranges.length > 0 ||
+    inventory.data_validations.length > 0 ||
+    inventory.external_links.length > 0 ||
+    inventory.distinct_value_vocab.length > 0 ||
+    inventory.cross_sheet_key_overlap.length > 0 ||
+    inventory.per_sheet_data.some((sheet) => sheet.columns.length > 0)
+  );
+}
+
 // ───────────────────────── P1: CSV extractor (pure Node, zero-dep) ─────────────────────────
 
 const CSV_DELIMITERS = [",", "\t", ";"] as const;

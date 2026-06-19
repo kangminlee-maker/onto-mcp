@@ -301,8 +301,11 @@ function renderSpreadsheetStructuralView(
     `sheets: ${inventory.sheets.length}${inv.capture_truncated ? " (capture truncated)" : ""}`,
   );
   if (renderedTrims.length > 0) {
+    // Honest about WHAT this note means: review renders a bounded PROMPT sample and does not
+    // persist the full WorkbookStructuralInventory, so the trimmed detail is not separately
+    // recoverable — never imply the dropped rows can be retrieved later (R1).
     lines.push(
-      `structural sample bounded (full detail persisted in the inventory): ${renderedTrims
+      `structural sample bounded (prompt sample only — review does not persist the full inventory): ${renderedTrims
         .map((s) => `${NOTE_SECTION_LABELS[s.section]} ${s.kept}/${s.total}`)
         .join(", ")}`,
     );

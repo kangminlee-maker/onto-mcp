@@ -21,6 +21,7 @@ import type {
   ReviewTargetProfileArtifact,
   ReviewValueAlignmentCriteriaArtifact,
 } from "../review/artifact-types.js";
+import { reviewMaterialGoals } from "../target-material-kind.js";
 import {
   fileExists,
   isoNow,
@@ -115,20 +116,38 @@ ${materializedInput}
 }
 
 function materialKindReviewObligations(
-  targetMaterialKind: ReviewTargetProfileArtifact["target_material_kind"],
+  profile: ReviewTargetProfileArtifact,
 ): string[] {
-  switch (targetMaterialKind) {
+  switch (profile.target_material_kind) {
     case "code":
       return [
         "Treat declared types, exported API signatures, documented contracts, and observable runtime behavior as review evidence.",
         "Check visible type/runtime contract mismatches, edge-case input behavior, error/null/undefined paths, and caller-facing failure modes.",
         "Classify a visible correctness or runtime-contract failure as material when it can violate the declared review goal inside the bounded target.",
       ];
-    case "spreadsheet":
+    case "spreadsheet": {
+      // The spreadsheet obligations are honest only when the profile actually attached the
+      // spreadsheet review goals — i.e. at least one workbook ref was inspectable. When the
+      // honesty gate dropped them (unsupported format / unreadable / empty: support_status
+      // partial with no inventory-backed detail), the materialized input carries only an
+      // `unsupported:` note, so telling the lens to audit formulas/recalculation would
+      // invite findings from evidence it was never given. Keep this obligation surface in
+      // lockstep with review_goal so both honesty surfaces agree.
+      const spreadsheetGoals = reviewMaterialGoals("spreadsheet");
+      const inventoryBacked = profile.review_goal.some((goal) =>
+        spreadsheetGoals.includes(goal),
+      );
+      if (!inventoryBacked) {
+        return [
+          "The target workbook(s) could not be structurally inspected (unsupported format, unreadable, or empty); the materialized input carries only an unsupported note, not formula/reference structure.",
+          "Treat only what the materialized input actually renders as evidence; do not assume formulas, cross-sheet references, or recalculated values are available, and preserve material uncertainty about the uninspected structure.",
+        ];
+      }
       return [
         "Treat formulas, cross-sheet references, named ranges, input assumptions, and recalculation behavior as review evidence.",
         "Check visible formula/reference mismatches, stale derived values, missing input guards, and decision-impacting calculation errors.",
       ];
+    }
     case "document":
       return [
         "Treat declared purpose, audience, claims, evidence, structure, and unresolved ambiguity as review evidence.",
@@ -152,7 +171,7 @@ function materialKindReviewObligations(
   }
 }
 
-function renderReviewTargetProfileSummary(
+export function renderReviewTargetProfileSummary(
   profile: ReviewTargetProfileArtifact | null,
 ): string {
   if (!profile) {
@@ -160,7 +179,7 @@ function renderReviewTargetProfileSummary(
 - profile: unavailable
 - consequence: use only the materialized input and explicit request summary as target authority.`;
   }
-  const obligations = materialKindReviewObligations(profile.target_material_kind);
+  const obligations = materialKindReviewObligations(profile);
   return `## Review Target Profile Summary
 - target_material_kind: ${profile.target_material_kind}
 - target_input_kind: ${profile.target_input_kind}

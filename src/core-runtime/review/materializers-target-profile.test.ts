@@ -88,6 +88,25 @@ function makeEmptyXlsx(): Uint8Array {
   });
 }
 
+/** A corrupt .xlsx whose workbook metadata parses (one declared sheet) but whose worksheet
+ *  part is absent from the zip. The observer reads it cleanly (unsupported_reason stays
+ *  null) and emits an `unreadable_sheet_part` risk signal over a zero-dimension sheet — the
+ *  risk-only shell that must NOT be treated as inspectable obligation backing. */
+function makeCorruptSheetXlsx(): Uint8Array {
+  return zipSync({
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+        `<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+        `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+        `</Relationships>`,
+    ),
+    // The worksheet part referenced by rId1 is intentionally absent.
+  });
+}
+
 async function makeTmpProject(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "onto-review-profile-"));
   tmpRoots.push(root);
@@ -279,6 +298,8 @@ describe("review target profile material kind", () => {
     );
     expect(inspectableByName["q1.csv"]).toBe(true);
     expect(inspectableByName["legacy.xls"]).toBe(false);
+    // The downgrade reason names WHICH ref failed (basename), not just a bare cause (R2).
+    expect(profile.material_profile.unsupported_reason).toContain("legacy.xls");
   });
 
   it("downgrades to partial when a MATERIALIZED-only spreadsheet ref is uninspectable, even if resolved targets are clean (WC-1)", async () => {
@@ -366,6 +387,35 @@ describe("review target profile material kind", () => {
     );
   });
 
+  it("treats a corrupt workbook with only unreadable_sheet_part risk signals as not inspectable -> partial (R4)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-corruptxlsx");
+    const xlsx = path.join(root, "corrupt.xlsx");
+    await fs.writeFile(xlsx, Buffer.from(makeCorruptSheetXlsx()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [xlsx],
+      materializedKind: "single_text",
+      requestedTarget: xlsx,
+      reviewIntentSummary: "review corrupt xlsx",
+      sessionDomain: "accounting",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    expect(profile.target_material_kind).toBe("spreadsheet");
+    // Workbook metadata parsed (unsupported_reason null) and it emits unreadable_sheet_part
+    // risk signals, but there is NO renderable formula/reference structure — the gate must
+    // not count a risk-only shell as inspectable, so support degrades to partial.
+    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.target_refs[0].inspectable).toBe(false);
+    expect(profile.review_goal).not.toEqual(
+      expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
+    );
+  });
+
   it("degrades a directory of spreadsheets (kind=spreadsheet but no directly-inspectable workbook ref) to partial", async () => {
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "review", "session-ssdir");
@@ -420,6 +470,10 @@ describe("review target profile material kind", () => {
     // note discloses the bounded sample rather than silently swallowing it.
     expect(materialized).toContain("structural sample bounded");
     expect(materialized).toContain("64/70");
+    // The note must not claim the trimmed detail is recoverable — review does not persist
+    // the full inventory, only the bounded prompt sample (R1).
+    expect(materialized).toContain("prompt sample only");
+    expect(materialized).not.toContain("persisted in the inventory");
   });
 
   it("records mixed material kind for explicit bundles", async () => {
