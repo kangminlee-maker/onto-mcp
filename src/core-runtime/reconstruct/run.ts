@@ -5498,12 +5498,29 @@ function chunkArray<T>(items: T[], size: number): T[][] {
  *   - the prompt projects a SINGLE observation — a multi-document bundle or a mixed
  *     directory (both already-accepted inputs) would otherwise multiply the bounded
  *     catalog into a context-overflowing prompt; and
- *   - the observation is a text-readable document (`isTextReadableDocumentExtension`) —
- *     a binary document (.pdf/.docx) captured only the small structural sample, so
- *     expanding it would resend decoded binary bytes rather than the bounded excerpt.
+ *   - the observation's content_excerpt holds the whole source text
+ *     (`isFullExcerptProjectionEligible`: a text-readable document .md/.txt/.adoc,
+ *     or code captured as text) — a binary document (.pdf/.docx) captured only the
+ *     small structural sample, and spreadsheet/database carry a structural inventory
+ *     rather than raw text, so those keep the bounded excerpt.
  * Multi-document / over-window budget-aware selection is deferred (see
  * development-records/design/20260616-large-input-observation).
  */
+function isFullExcerptProjectionEligible(
+  targetMaterialKind: string | undefined,
+  extension: string | null | undefined,
+): boolean {
+  // code observations capture the source as text in content_excerpt; documents do
+  // so only for text-readable extensions (.md/.txt/.adoc). Binary documents and
+  // spreadsheet/database structural inventories are NOT whole-text, so they stay
+  // bounded (a prior gap silently truncated code source at the base limit).
+  if (targetMaterialKind === "code") return true;
+  return (
+    targetMaterialKind === "document" &&
+    isTextReadableDocumentExtension(extension)
+  );
+}
+
 function effectiveContentExcerptCharLimit(
   baseLimit: number | undefined,
   targetMaterialKind: string | undefined,
@@ -5513,8 +5530,7 @@ function effectiveContentExcerptCharLimit(
 ): number | undefined {
   if (
     expandDocument &&
-    targetMaterialKind === "document" &&
-    isTextReadableDocumentExtension(extension)
+    isFullExcerptProjectionEligible(targetMaterialKind, extension)
   ) {
     // Model-aware budget when the seat resolved one; else the static FLOOR — a
     // model-unaware caller keeps the prior whole-document budget (no regression).
@@ -5620,9 +5636,9 @@ export function observationPromptPayload(
         if (
           options.recordDocumentExcerptProjectionTruncation &&
           expandDocument &&
-          observation.target_material_kind === "document" &&
           compacted.prompt_content_excerpt_truncated === true &&
-          isTextReadableDocumentExtension(
+          isFullExcerptProjectionEligible(
+            observation.target_material_kind,
             typeof observation.structural_data.extension === "string"
               ? observation.structural_data.extension
               : null,

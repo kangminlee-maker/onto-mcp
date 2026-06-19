@@ -599,6 +599,79 @@ describe("runReconstruct", () => {
       .toEqual([1200]);
   });
 
+  it("expands a single code observation to full source (a prior gap truncated code at the base limit)", () => {
+    const longSource = "export const handler = () => doWork();\n".repeat(60);
+    expect(longSource.length).toBeGreaterThan(1200);
+    const codeObservation = (id: string) => ({
+      observation_id: id,
+      target_material_kind: "code" as const,
+      adapter_id: "fixture-observer",
+      source_ref: `/src/${id}.ts`,
+      location: "file",
+      summary: `Code fixture ${id}.`,
+      structural_data: { content_excerpt: longSource, extension: ".ts" },
+    });
+    const lengths = (
+      observations: ReturnType<typeof codeObservation>[],
+    ): number[] =>
+      (observationPromptPayload(
+        {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-06-16T00:00:00.000Z",
+          observations,
+          skipped_refs: [],
+          validation_results: [],
+        },
+        { contentExcerptCharLimit: 1200, expandSingleDocumentExcerpt: true },
+      ) as Array<any>).map(
+        (observation) => observation.structural_data.content_excerpt.length as number,
+      );
+    // Single code observation → whole source reaches seed authoring (not truncated at 1200).
+    expect(lengths([codeObservation("svc")])).toEqual([longSource.length]);
+    // Several code observations → each bounded to the base limit (no aggregate blowup).
+    expect(lengths([codeObservation("a"), codeObservation("b")])).toEqual([
+      1200,
+      1200,
+    ]);
+  });
+
+  it("surfaces code excerpt truncation when the budget is below the captured source", () => {
+    const longSource = "const x = 1;\n".repeat(200);
+    const truncations: any[] = [];
+    observationPromptPayload(
+      {
+        schema_version: "1",
+        session_id: "session-1",
+        created_at: "2026-06-16T00:00:00.000Z",
+        observations: [{
+          observation_id: "obs-code-trunc",
+          target_material_kind: "code" as const,
+          adapter_id: "fixture-observer",
+          source_ref: "/src/large.ts",
+          location: "file",
+          summary: "Large code fixture.",
+          structural_data: { content_excerpt: longSource, extension: ".ts" },
+        }],
+        skipped_refs: [],
+        validation_results: [],
+      },
+      {
+        expandSingleDocumentExcerpt: true,
+        documentExcerptCharBudget: 1000,
+        recordDocumentExcerptProjectionTruncation: (truncation) =>
+          truncations.push(truncation),
+      },
+    );
+    // Code truncation is now surfaced (it was silent before the fix).
+    expect(truncations).toHaveLength(1);
+    expect(truncations[0]).toMatchObject({
+      source_ref: "/src/large.ts",
+      captured_chars: longSource.length,
+      projection_budget_chars: 1000,
+    });
+  });
+
   it("slices an expanded single document to the model-aware projection budget", () => {
     const longExcerpt = "goal milestone problem ".repeat(120); // 2760 chars
     const docObservation = {
