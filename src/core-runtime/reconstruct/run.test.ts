@@ -22,6 +22,9 @@ import type {
   ReconstructCompetencyQuestionsValidationArtifact,
   ReconstructHandoffDecisionValidationArtifact,
   ReconstructMetricsArtifact,
+  ReconstructFailureClassificationArtifact,
+  ReconstructRevisionProposalArtifact,
+  ReconstructRevisionProposalAction,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
   ReconstructRegistryVerificationEvidenceValidationArtifact,
@@ -48,6 +51,7 @@ import {
   assessmentEvidenceObservationIds,
   runReconstruct,
   singleDocumentProjectionTruncation,
+  stopDecisionAllowedDecisions,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -3518,6 +3522,8 @@ describe("runReconstruct", () => {
       };
       revision_proposal_summary?: {
         proposal_count?: number;
+        application_status?: string;
+        unresolved_action_count?: number;
         proposal_projection_limit?: number;
         proposal_included_count?: number;
         proposal_omitted_count?: number;
@@ -4223,6 +4229,8 @@ describe("runReconstruct", () => {
       });
     expect(finalOutputPayloads[0]?.revision_proposal_summary)
       .toMatchObject({
+        application_status: "proposed_not_applied_carried_to_next_round",
+        unresolved_action_count: expect.any(Number),
         proposal_projection_limit: 60,
         proposal_included_count: expect.any(Number),
         proposal_omitted_count: expect.any(Number),
@@ -6172,6 +6180,60 @@ describe("observationPromptPayload projection-truncation recording", () => {
       { documentExcerptCharBudget: 1000 },
     );
     expect(recorded).toEqual([]);
+  });
+
+  // #2: the deterministic stop gate must consume unapplied revision actions so a
+  // single-pass run cannot claim "stop" while reject/defer proposals remain — they
+  // are carried to the next maturation round, not silently dropped.
+  describe("stopDecisionAllowedDecisions (revision proposal gate, #2)", () => {
+    const cleanMetrics = {
+      unresolved_question_count: 0,
+      confirmation_state_counts: { rejected: 0, partial: 0, deferred: 0 },
+    } as unknown as ReconstructMetricsArtifact;
+    const noMaterialFailures = {
+      failures: [],
+    } as unknown as ReconstructFailureClassificationArtifact;
+    const revisionProposal = (actions: ReconstructRevisionProposalAction[]) =>
+      ({
+        proposals: actions.map((action, index) => ({
+          proposal_id: `proposal-${index}`,
+          target_type: "seed",
+          target_id: "seed-1",
+          action,
+          rationale: "rationale",
+          expected_effect: "effect",
+        })),
+      }) as unknown as ReconstructRevisionProposalArtifact;
+
+    it("allows stop when no unresolved work and only refinement proposals remain", () => {
+      expect(
+        stopDecisionAllowedDecisions({
+          metrics: cleanMetrics,
+          failureClassification: noMaterialFailures,
+          revisionProposal: revisionProposal(["reuse", "extend", "rename", "split"]),
+        }),
+      ).toEqual(["stop", "continue", "ask_user"]);
+    });
+
+    it("refuses stop while a reject proposal remains unapplied", () => {
+      expect(
+        stopDecisionAllowedDecisions({
+          metrics: cleanMetrics,
+          failureClassification: noMaterialFailures,
+          revisionProposal: revisionProposal(["reject"]),
+        }),
+      ).toEqual(["continue", "ask_user"]);
+    });
+
+    it("refuses stop while a defer proposal remains unapplied", () => {
+      expect(
+        stopDecisionAllowedDecisions({
+          metrics: cleanMetrics,
+          failureClassification: noMaterialFailures,
+          revisionProposal: revisionProposal(["defer", "reuse"]),
+        }),
+      ).toEqual(["continue", "ask_user"]);
+    });
   });
 
   // Resume fallback (Codex P2/12751): on reuse_existing_authored_artifacts the

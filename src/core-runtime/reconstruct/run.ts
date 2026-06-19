@@ -1401,16 +1401,27 @@ function countBy<T extends string>(
   return counts;
 }
 
-function stopDecisionAllowedDecisions(input: {
+export function stopDecisionAllowedDecisions(input: {
   metrics: ReconstructMetricsArtifact;
   failureClassification: ReconstructFailureClassificationArtifact;
+  revisionProposal: ReconstructRevisionProposalArtifact;
 }): ReconstructStopDecision[] {
   const materialFailureCount = input.failureClassification.failures.filter((failure) =>
     failure.materiality === "material"
   ).length;
+  // Revision proposals are authored from failures but never applied within this
+  // single-pass run. reject/defer proposals denote dropped or postponed scope, so
+  // the run cannot claim it is resolved ("stop") while they remain unapplied — they
+  // are carried to the next maturation round instead (see revision_proposal_summary
+  // in the final-output projection). This enforces the contract
+  // consume_revision_proposal_when_present rather than leaving it advisory-only.
+  const unappliedRevisionCount = input.revisionProposal.proposals.filter((proposal) =>
+    proposal.action === "reject" || proposal.action === "defer"
+  ).length;
   const hasUnresolvedWork =
     input.metrics.unresolved_question_count > 0 ||
     materialFailureCount > 0 ||
+    unappliedRevisionCount > 0 ||
     input.metrics.confirmation_state_counts.rejected > 0 ||
     input.metrics.confirmation_state_counts.partial > 0 ||
     input.metrics.confirmation_state_counts.deferred > 0;
@@ -4118,6 +4129,14 @@ function compactFinalOutputPromptPayload(
       rationale: compactStatement(proposal.rationale),
     }),
   });
+  // Proposals are authored from failures but never applied within this single-pass
+  // run. reject/defer proposals are unresolved scope carried to the next maturation
+  // round; the stop gate refuses "stop" while they remain (see
+  // stopDecisionAllowedDecisions). Surface this honestly so the host LLM never
+  // describes the seed as already revised.
+  const unappliedRevisionActionCount = input.revisionProposal.proposals.filter(
+    (proposal) => proposal.action === "reject" || proposal.action === "defer",
+  ).length;
   const actionabilityClaimCounts = input.claimProjection.projection_rows.reduce(
     (counts, row) => {
       counts[row.actionability_claim] =
@@ -4133,6 +4152,8 @@ function compactFinalOutputPromptPayload(
       projection_kind: "final_output_compact_summary_projection",
       partial_projection_policy:
         "When any *_partial_projection field is true, prose must say prompt-visible details are partial and defer exhaustive truth to artifact refs.",
+      revision_proposal_application_policy:
+        "Revision proposals are proposed-only and are NOT applied to the seed or maturation in this run. Never describe the seed as revised, fixed, split, renamed, or pruned per a proposal; present proposals as next-round directives. When unresolved_action_count > 0, prose must say the run is not complete and carries reject/defer work to the next maturation round.",
       deterministic_runtime_append_sections: [
         "seed_answerability",
         "claim_projection",
@@ -4261,6 +4282,8 @@ function compactFinalOutputPromptPayload(
     },
     revision_proposal_summary: {
       validation_status: input.revisionProposalValidation.validation_status,
+      application_status: "proposed_not_applied_carried_to_next_round",
+      unresolved_action_count: unappliedRevisionActionCount,
       proposal_count: revisionProposalProjection.total_count,
       proposal_projection_limit: revisionProposalProjection.projection_limit,
       proposal_included_count: revisionProposalProjection.included_count,
@@ -8307,6 +8330,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Use OntologySeed and downstream runtime validations as the primary authority. Do not treat the seed as an action-ready ontology.",
           `Allowed decision values for this run: ${allowedDecisions.join(", ")}.`,
           "Return decision must be copied from the allowed decision values. If material failures, partial/deferred/rejected claims, or unresolved questions remain, do not return stop.",
+          "Revision proposals are proposed-only and not applied in this run; reject/defer proposals are unresolved scope carried to the next maturation round. When they are present, do not return stop and name them in next_actions.",
           "JSON shape: {\"decision\":\"stop|continue|ask_user\",\"rationale\":\"...\",\"next_actions\":[\"...\"]}",
         ].join("\n"),
         userPayload: {
