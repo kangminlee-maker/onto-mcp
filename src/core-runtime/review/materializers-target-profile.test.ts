@@ -390,6 +390,33 @@ describe("review target profile material kind", () => {
     expect(profile.material_profile.unsupported_reason).toContain("legacy.xls");
   });
 
+  it("keeps support_status supported when a materialized workbook is INSPECTABLE even for a CODE target (F1 positive control)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-f1-pos");
+    const code = path.join(root, "handler.ts");
+    const xlsx = path.join(root, "model.xlsx");
+    await fs.writeFile(code, "export const handler = () => 1;\n", "utf8");
+    await fs.writeFile(xlsx, Buffer.from(makeReviewXlsx()));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [code],
+      materializedRefs: [xlsx],
+      materializedKind: "single_text",
+      requestedTarget: code,
+      reviewIntentSummary: "code target with an inspectable materialized workbook",
+      sessionDomain: "software-engineering",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // The unconditional union gate must NOT over-degrade: a code target whose materialized
+    // workbook IS inspectable stays supported (guards against an over-eager F1 gate).
+    expect(profile.target_material_kind).toBe("code");
+    expect(profile.material_profile.support_status).toBe("supported");
+  });
+
   it("treats an empty-but-supported-format workbook (empty .csv) as partial with its ACTUAL reason, not a false 'unsupported format' (CER-1)", async () => {
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "review", "session-emptycsv");

@@ -174,6 +174,11 @@ export interface WorkbookStructuralInventory {
   cross_sheet_key_overlap: CrossSheetKeyOverlap[];
   data_layer_caps: DataLayerCaps;
   capture_truncated: boolean;
+  /** Total worksheet count in the workbook, present ONLY when observation was bounded by
+   *  `max_sheets_observed` (so `sheets` holds fewer than this). Lets a consumer disclose
+   *  "N of M observed" instead of mis-reporting the capped count as the total; absent when
+   *  no sheet cap was hit (the full set is in `sheets`). */
+  sheet_count_total?: number;
   unsupported_reason: string | null;
 }
 
@@ -1604,7 +1609,9 @@ export function buildXlsxInventory(args: {
   // inventory (the per-workbook analog of bounded observation). The cap is conservatively
   // high, so normal workbooks are untouched; when hit, capture_truncated discloses it. This
   // bounds the set feeding BOTH the sheetByPath population and the final inventory loop.
+  let sheetCountTotal: number | undefined;
   if (workbook.sheets.length > caps.max_sheets_observed) {
+    sheetCountTotal = workbook.sheets.length; // preserve the true total before slicing
     workbook.sheets = workbook.sheets.slice(0, caps.max_sheets_observed);
     captureTruncated = true;
   }
@@ -1844,6 +1851,7 @@ export function buildXlsxInventory(args: {
     cross_sheet_key_overlap,
     data_layer_caps: caps,
     capture_truncated: captureTruncated,
+    ...(sheetCountTotal !== undefined ? { sheet_count_total: sheetCountTotal } : {}),
     unsupported_reason: null,
   };
 }

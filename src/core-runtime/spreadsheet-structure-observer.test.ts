@@ -391,9 +391,11 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
       workbookKind: "xlsx",
       caps: { ...DEFAULT_DATA_LAYER_CAPS, max_sheets_observed: 2 },
     });
-    // Only the first 2 of 3 sheets are observed; the bound is disclosed via capture_truncated.
+    // Only the first 2 of 3 sheets are observed; the bound is disclosed via capture_truncated,
+    // and sheet_count_total preserves the true total so the count is not mis-reported.
     expect(r.sheets.length).toBe(2);
     expect(r.capture_truncated).toBe(true);
+    expect(r.sheet_count_total).toBe(3);
   });
 
   it("extracts cross-sheet refs with non-ASCII (Korean) sheet names and ignores #REF!", () => {

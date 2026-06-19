@@ -1380,6 +1380,9 @@ async function buildReviewTargetProfileArtifact(
   const uninspected = unionDispositions.filter((d) => !d.inspectable);
   if (uninspected.length > 0) {
     supportStatus = "partial";
+    // Each uninspected disposition carries a non-null `reason` by construction (disposition
+    // invariant: !inspectable ⇒ reason is set); `?? d.ref` only satisfies the string|null
+    // type and is never actually taken.
     supportReason = `spreadsheet review inspects structure only; ${uninspected.length} of ${unionDispositions.length} workbook ref(s) were not inspected (${uniqueStrings(uninspected.map((d) => d.reason ?? d.ref)).join("; ")})`;
   }
 

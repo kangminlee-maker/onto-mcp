@@ -305,8 +305,15 @@ function renderSpreadsheetStructuralView(
 
   // Total sheet count comes from the FULL inventory; the per-sheet layout below renders only
   // the sheets whose (capped) per_sheet_data body survived projection.
+  // When observation was bounded by the sheet cap, sheet_count_total holds the true total —
+  // render "N of M observed" so the count is not mis-reported as the post-cap number, and a
+  // reviewer knows beyond-cap sheets (and any protection/structure on them) were not observed.
+  const sheetCountLabel =
+    inventory.sheet_count_total !== undefined
+      ? `${inventory.sheets.length} of ${inventory.sheet_count_total} observed`
+      : `${inventory.sheets.length}`;
   lines.push(
-    `sheets: ${inventory.sheets.length}${inv.capture_truncated ? " (capture truncated)" : ""}`,
+    `sheets: ${sheetCountLabel}${inv.capture_truncated ? " (capture truncated)" : ""}`,
   );
   if (renderedTrims.length > 0) {
     // Honest about WHAT this note means: review renders a bounded PROMPT sample and does not
