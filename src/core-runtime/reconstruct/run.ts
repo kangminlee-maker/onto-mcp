@@ -768,15 +768,21 @@ function sha256Text(text: string): string {
 }
 
 const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
-  // v3 adds the cited source-evidence bodies surface (source_evidence) to the
-  // assessment prompt; the version + contract change rotate the reuse-match hash so
-  // resume mode cannot reuse a pre-v3 content-blind assessment of the same sources.
-  "competency_question_assessment_compact_projection:v3";
+  // v3 added the cited source-evidence bodies surface (source_evidence); v4 bounds it
+  // to a deterministic per-payload observation cap. Each version + contract change
+  // rotates the reuse-match hash so resume mode cannot reuse an assessment authored
+  // under a different (or content-blind, pre-v3) evidence projection of the same sources.
+  "competency_question_assessment_compact_projection:v4";
 const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
 // Per-observation excerpt budget for the cited source-evidence bodies projected
 // into the assessment prompt, so answer_status is judged on evidence content
 // rather than observation-id labels alone.
 const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT = 4_000;
+// Deterministic per-payload cap on how many cited evidence bodies are projected into a
+// single assessment prompt: MAX_OBSERVATIONS * EVIDENCE_EXCERPT_LIMIT reserves a bounded
+// slice of the prompt cap for evidence, so a single evidence-rich question (which the
+// per-question batching cannot split further) cannot overflow the cap and halt the run.
+const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS = 6;
 const COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS = 1000;
 
 function competencyQuestionAssessmentProjectionContract(): Record<string, unknown> {
@@ -793,10 +799,13 @@ function competencyQuestionAssessmentProjectionContract(): Record<string, unknow
       "evidence_observation_ids and evidence_source_basenames are prompt-visible; full evidence_refs remain runtime authority",
     source_evidence_projection:
       "cited evidence observation bodies (from linked claim realizations, question evidence_refs, and domain competency semantic assessment evidence_refs) are projected as source_evidence up to a per-observation excerpt budget, so answer_status is judged on content not id labels alone",
-    // The actual per-observation budget is part of the contract: tuning it changes
-    // the assessment prompt surface, so it must rotate the reuse-match sha.
+    // The per-observation budget and per-payload observation cap are part of the
+    // contract: tuning either changes the assessment prompt surface, so they must
+    // rotate the reuse-match sha.
     source_evidence_excerpt_char_limit:
       COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+    source_evidence_max_observations:
+      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS,
     validation_projection:
       "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
     claim_realization_projection:
@@ -4004,6 +4013,19 @@ function competencyQuestionAssessmentUserPayload(
     batch_count: number;
   },
 ): Record<string, unknown> {
+  // Cited evidence bodies are bounded to a deterministic per-payload budget: a single
+  // question can link to many observations, and the per-question batching cannot split
+  // a lone question further, so unbounded evidence would overflow the prompt cap and
+  // fail-loud-halt the run. Keep whole excerpts in the selector's stable order until the
+  // budget is spent; surface the omitted count so the cap is not silent.
+  const citedEvidenceObservationIds = assessmentEvidenceObservationIds(
+    input,
+    questions,
+  );
+  const projectedEvidenceObservationIds = citedEvidenceObservationIds.slice(
+    0,
+    COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS,
+  );
   return {
     competency_questions_ref: input.competencyQuestionsRef,
     competency_questions_validation_ref:
@@ -4037,9 +4059,23 @@ function competencyQuestionAssessmentUserPayload(
     // Cited evidence bodies for the questions in this (batch of) assessment, so the
     // assessor judges answer_status on actual source content, not id labels alone.
     source_evidence: observationPromptPayload(input.sourceObservations, {
-      observationIds: assessmentEvidenceObservationIds(input, questions),
+      observationIds: projectedEvidenceObservationIds,
       contentExcerptCharLimit: COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
     }),
+    source_evidence_projection: {
+      cited_observation_count: citedEvidenceObservationIds.length,
+      projected_observation_count: projectedEvidenceObservationIds.length,
+      omitted_observation_count:
+        citedEvidenceObservationIds.length -
+        projectedEvidenceObservationIds.length,
+      per_observation_excerpt_char_limit:
+        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+      max_projected_observations:
+        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS,
+      omitted_observation_id_samples: citedEvidenceObservationIds
+        .slice(COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_MAX_OBSERVATIONS)
+        .slice(0, 10),
+    },
   };
 }
 

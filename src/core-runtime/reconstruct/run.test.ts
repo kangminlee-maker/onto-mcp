@@ -3584,6 +3584,15 @@ describe("runReconstruct", () => {
           evidence_refs?: unknown;
         }>;
       };
+      source_evidence?: unknown[];
+      source_evidence_projection?: {
+        cited_observation_count?: number;
+        projected_observation_count?: number;
+        omitted_observation_count?: number;
+        per_observation_excerpt_char_limit?: number;
+        max_projected_observations?: number;
+        omitted_observation_id_samples?: string[];
+      };
     }> = [];
     const confirmationClaimSummaries: Array<
       Array<{ claim_id: string; claim_kind: string }>
@@ -3895,7 +3904,7 @@ describe("runReconstruct", () => {
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v3");
+    ).toBe("competency_question_assessment_compact_projection:v4");
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -3925,7 +3934,7 @@ describe("runReconstruct", () => {
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v3");
+    ).toBe("competency_question_assessment_compact_projection:v4");
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -4075,7 +4084,7 @@ describe("runReconstruct", () => {
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v3");
+    ).toBe("competency_question_assessment_compact_projection:v4");
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_sha256,
@@ -4097,7 +4106,7 @@ describe("runReconstruct", () => {
       .toMatchObject({
         projection_kind: "competency_question_assessment_compact_projection",
         projection_contract_version:
-          "competency_question_assessment_compact_projection:v3",
+          "competency_question_assessment_compact_projection:v4",
         prompt_char_limit: 50_000,
         batching_policy: expect.objectContaining({
           mode: "deterministic_prompt_budget",
@@ -4159,6 +4168,21 @@ describe("runReconstruct", () => {
       competencyAssessmentPayloads[0]?.competency_questions_validation
         ?.violation_count,
     ).toBe(0);
+    // @codex R4: source evidence is bounded to a deterministic per-payload cap so an
+    // evidence-rich question cannot overflow the prompt budget; the projection metadata
+    // surfaces the bound honestly and its invariants hold.
+    const sourceEvidenceProjection =
+      competencyAssessmentPayloads[0]?.source_evidence_projection;
+    expect(sourceEvidenceProjection?.max_projected_observations).toBe(6);
+    expect(sourceEvidenceProjection?.per_observation_excerpt_char_limit).toBe(4000);
+    expect(sourceEvidenceProjection?.projected_observation_count)
+      .toBeLessThanOrEqual(6);
+    expect(
+      (sourceEvidenceProjection?.projected_observation_count ?? 0) +
+        (sourceEvidenceProjection?.omitted_observation_count ?? 0),
+    ).toBe(sourceEvidenceProjection?.cited_observation_count);
+    expect(competencyAssessmentPayloads[0]?.source_evidence)
+      .toHaveLength(sourceEvidenceProjection?.projected_observation_count ?? -1);
     expect(finalOutputPayloads[0]?.final_output_prompt_policy?.projection_kind)
       .toBe("final_output_compact_summary_projection");
     expect(
