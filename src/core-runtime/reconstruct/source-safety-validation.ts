@@ -5,16 +5,13 @@ import { parse as parseYaml } from "yaml";
 import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
 import type {
   ReconstructSourceObservationsArtifact,
-  ReconstructSourceSafetyAllowedProofForm,
   ReconstructSourceSafetyAuthorizationState,
   ReconstructSourceSafetyCanonicalAxis,
   ReconstructSourceSafetyIntendedConsumption,
   ReconstructSourceSafetyLedgerArtifact,
   ReconstructSourceSafetyLedgerValidationArtifact,
   ReconstructSourceSafetyLifecycleState,
-  ReconstructSourceSafetyPrivacyState,
   ReconstructSourceSafetyProofSufficiencyState,
-  ReconstructSourceSafetyRedactionState,
   ReconstructSourceSafetyReplayState,
   ReconstructSourceSafetyRow,
   ReconstructSourceSafetySubjectKind,
@@ -26,8 +23,6 @@ import type { ReconstructSourceObservation } from "./source-observations.js";
 const SOURCE_SAFETY_CANONICAL_AXES = [
   "lifecycle_state",
   "authorization_state",
-  "privacy_state",
-  "redaction_state",
   "proof_sufficiency_state",
   "replay_state",
 ] as const satisfies readonly ReconstructSourceSafetyCanonicalAxis[];
@@ -52,29 +47,14 @@ const AUTHORIZATION_STATES = [
   "not_required",
 ] as const satisfies readonly ReconstructSourceSafetyAuthorizationState[];
 
-const PRIVACY_STATES = [
-  "non_sensitive",
-  "privacy_sensitive",
-  "unknown",
-] as const satisfies readonly ReconstructSourceSafetyPrivacyState[];
-
-const REDACTION_STATES = [
-  "none",
-  "redacted",
-  "required",
-  "insufficient",
-] as const satisfies readonly ReconstructSourceSafetyRedactionState[];
-
 const PROOF_SUFFICIENCY_STATES = [
   "sufficient_for_claim",
   "insufficient_for_claim",
-  "trace_only",
   "unavailable",
 ] as const satisfies readonly ReconstructSourceSafetyProofSufficiencyState[];
 
 const REPLAY_STATES = [
   "replay_allowed",
-  "replay_with_redaction",
   "no_replay_use",
   "unknown",
 ] as const satisfies readonly ReconstructSourceSafetyReplayState[];
@@ -90,35 +70,9 @@ const INTENDED_CONSUMPTIONS = [
 const VISIBILITY_TIERS = [
   "consumption_allowed",
   "internal_only",
-  "redacted_output_only",
   "no_prompt_use",
   "no_replay_use",
 ] as const satisfies readonly ReconstructSourceSafetyVisibilityTier[];
-
-const ALLOWED_PROOF_FORMS = [
-  "raw_value",
-  "hash",
-  "bounded_summary",
-  "source_ref_only",
-  "unavailable",
-] as const satisfies readonly ReconstructSourceSafetyAllowedProofForm[];
-
-const SAFE_REDACTED_PROOF_FORMS = new Set<ReconstructSourceSafetyAllowedProofForm>([
-  "hash",
-  "bounded_summary",
-  "source_ref_only",
-]);
-
-const SENSITIVE_SOURCE_PATTERNS: RegExp[] = [
-  /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/,
-  /\b(?:api[_-]?key|secret|password|passwd|pwd|token)\b\s*[:=]\s*['"]?[^'"\s]{8,}/i,
-  /\bAuthorization:\s*Bearer\s+[A-Za-z0-9._~+/=-]{12,}/i,
-  /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/,
-  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
-  /\b\d{3}-\d{2}-\d{4}\b/,
-  /\b\d{6}-[1-4]\d{6}\b/,
-  /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)\d{3,4}[-.\s]?\d{4}\b/,
-];
 
 function isoNow(): string {
   return new Date().toISOString();
@@ -168,21 +122,6 @@ export function sourceSafetyRowIdForObservation(
   return `source_safety:${observation.observation_id}:${intendedConsumption}`;
 }
 
-function observationContentExcerpt(
-  observation: ReconstructSourceObservation,
-): string | null {
-  const excerpt = observation.structural_data.content_excerpt;
-  return typeof excerpt === "string" ? excerpt : null;
-}
-
-function hasSensitiveSourceEvidence(
-  observation: ReconstructSourceObservation,
-): boolean {
-  const excerpt = observationContentExcerpt(observation);
-  if (!excerpt) return false;
-  return SENSITIVE_SOURCE_PATTERNS.some((pattern) => pattern.test(excerpt));
-}
-
 function explicitConsumptionAuthorizations(
   observation: ReconstructSourceObservation,
 ): Set<ReconstructSourceSafetyIntendedConsumption> {
@@ -216,22 +155,13 @@ function stableRuleRef(row: {
   return `source-safety-visibility-v1:${digest}`;
 }
 
-function hasSafeRedactedProofForm(row: Pick<ReconstructSourceSafetyRow, "redaction_evidence">): boolean {
-  return row.redaction_evidence.allowed_proof_forms.some((form) =>
-    SAFE_REDACTED_PROOF_FORMS.has(form)
-  );
-}
-
 export function deriveSourceSafetyVisibilityTier(
   row: Pick<
     ReconstructSourceSafetyRow,
     | "lifecycle_state"
     | "authorization_state"
-    | "privacy_state"
-    | "redaction_state"
     | "proof_sufficiency_state"
     | "replay_state"
-    | "redaction_evidence"
     | "visibility_derivation"
   >,
 ): ReconstructSourceSafetyVisibilityTier {
@@ -249,11 +179,7 @@ export function deriveSourceSafetyVisibilityTier(
   ) {
     return "no_prompt_use";
   }
-  if (
-    row.proof_sufficiency_state === "unavailable" ||
-    row.redaction_state === "insufficient" ||
-    row.redaction_evidence.allowed_proof_forms.includes("unavailable")
-  ) {
+  if (row.proof_sufficiency_state === "unavailable") {
     return "no_prompt_use";
   }
   if (
@@ -269,17 +195,6 @@ export function deriveSourceSafetyVisibilityTier(
     return "internal_only";
   }
   if (
-    row.redaction_state === "redacted" ||
-    row.redaction_state === "required" ||
-    row.replay_state === "replay_with_redaction" ||
-    row.privacy_state === "privacy_sensitive"
-  ) {
-    return hasSafeRedactedProofForm(row) ? "redacted_output_only" : "internal_only";
-  }
-  if (row.privacy_state === "unknown") {
-    return hasSafeRedactedProofForm(row) ? "redacted_output_only" : "internal_only";
-  }
-  if (
     intendedConsumption === "public_output" ||
     intendedConsumption === "prompt_context" ||
     intendedConsumption === "material_claim"
@@ -293,19 +208,10 @@ function buildSafetyRowForObservation(
   observation: ReconstructSourceObservation,
   intendedConsumption: ReconstructSourceSafetyIntendedConsumption,
 ): ReconstructSourceSafetyRow {
-  const sensitive = hasSensitiveSourceEvidence(observation);
-  const excerpt = observationContentExcerpt(observation);
   const explicitlyAuthorized = explicitConsumptionAuthorizations(observation)
     .has(intendedConsumption);
   const consumptionAuthorized =
     runtimeInternalConsumption(intendedConsumption) || explicitlyAuthorized;
-  const allowedProofForms: ReconstructSourceSafetyAllowedProofForm[] = sensitive
-    ? ["hash", "bounded_summary", "source_ref_only"]
-    : !consumptionAuthorized
-    ? ["hash", "bounded_summary", "source_ref_only"]
-    : excerpt
-    ? ["raw_value", "hash", "bounded_summary", "source_ref_only"]
-    : ["hash", "bounded_summary", "source_ref_only"];
   const rowBase = {
     safety_row_id: sourceSafetyRowIdForObservation(
       observation,
@@ -315,22 +221,10 @@ function buildSafetyRowForObservation(
     subject_kind: "source_ref",
     lifecycle_state: "active",
     authorization_state: consumptionAuthorized ? "authorized" : "unknown",
-    privacy_state: sensitive
-      ? "privacy_sensitive"
-      : consumptionAuthorized
-      ? "non_sensitive"
-      : "unknown",
-    redaction_state: sensitive ? "required" : consumptionAuthorized ? "none" : "insufficient",
-    proof_sufficiency_state: sensitive
-      ? "trace_only"
-      : consumptionAuthorized
+    proof_sufficiency_state: consumptionAuthorized
       ? "sufficient_for_claim"
       : "insufficient_for_claim",
-    replay_state: sensitive
-      ? "replay_with_redaction"
-      : consumptionAuthorized
-      ? "replay_allowed"
-      : "unknown",
+    replay_state: consumptionAuthorized ? "replay_allowed" : "unknown",
     visibility_tier: "internal_only",
     visibility_derivation: {
       intended_consumption: intendedConsumption,
@@ -345,11 +239,6 @@ function buildSafetyRowForObservation(
         ? "source_safety_explicit_consumption_authorization"
         : "runtime_target_ref_read_scope"
       : null,
-    redaction_evidence: {
-      raw_value_available: excerpt !== null,
-      allowed_proof_forms: allowedProofForms,
-      redaction_rule_ref: sensitive ? "source-safety-sensitive-source-pattern-v1" : null,
-    },
     tombstone: {
       tombstone_ref: null,
       reason: null,
@@ -357,9 +246,6 @@ function buildSafetyRowForObservation(
       downstream_refs: [],
     },
     limitation_refs: [
-      ...(sensitive
-        ? [`source-safety-sensitive-source:${observation.observation_id}`]
-        : []),
       ...(!consumptionAuthorized
         ? [
           `source-safety-consumption-authorization-gap:${observation.observation_id}:${intendedConsumption}`,
@@ -434,74 +320,8 @@ function validateCanonicalAxes(args: {
     args.violations.push(violation({
       code: "visibility_axis_set_invalid",
       message:
-        "visibility_derivation.derived_from_axes must contain exactly the six canonical source-safety axes",
+        "visibility_derivation.derived_from_axes must contain exactly the four canonical source-safety axes",
       subjectId: args.row.safety_row_id,
-    }));
-  }
-}
-
-function validateSupportingDetailConsistency(args: {
-  row: ReconstructSourceSafetyRow;
-  violations: ReconstructSourceSafetyValidationViolation[];
-}): void {
-  if (
-    args.row.redaction_state !== "none" &&
-    args.row.redaction_evidence.allowed_proof_forms.includes("raw_value")
-  ) {
-    args.violations.push(violation({
-      code: "supporting_detail_contradiction",
-      message:
-        "redaction_evidence.allowed_proof_forms cannot grant raw_value when top-level redaction_state requires or applies redaction",
-      subjectId: args.row.safety_row_id,
-      axis: "redaction_state",
-    }));
-  }
-  if (
-    args.row.redaction_state === "none" &&
-    args.row.redaction_evidence.redaction_rule_ref
-  ) {
-    args.violations.push(violation({
-      code: "supporting_detail_contradiction",
-      message:
-        "redaction_evidence.redaction_rule_ref must be null when top-level redaction_state is none",
-      subjectId: args.row.safety_row_id,
-      axis: "redaction_state",
-    }));
-  }
-  if (
-    args.row.proof_sufficiency_state === "unavailable" &&
-    !args.row.redaction_evidence.allowed_proof_forms.includes("unavailable")
-  ) {
-    args.violations.push(violation({
-      code: "supporting_detail_contradiction",
-      message:
-        "proof_sufficiency_state unavailable must be supported by allowed_proof_forms including unavailable",
-      subjectId: args.row.safety_row_id,
-      axis: "proof_sufficiency_state",
-    }));
-  }
-  if (
-    args.row.redaction_evidence.allowed_proof_forms.includes("unavailable") &&
-    args.row.proof_sufficiency_state !== "unavailable"
-  ) {
-    args.violations.push(violation({
-      code: "supporting_detail_contradiction",
-      message:
-        "allowed_proof_forms unavailable contradicts a top-level proof_sufficiency_state that is not unavailable",
-      subjectId: args.row.safety_row_id,
-      axis: "proof_sufficiency_state",
-    }));
-  }
-  if (
-    args.row.redaction_evidence.raw_value_available === false &&
-    args.row.redaction_evidence.allowed_proof_forms.includes("raw_value")
-  ) {
-    args.violations.push(violation({
-      code: "supporting_detail_contradiction",
-      message:
-        "redaction_evidence cannot allow raw_value when raw_value_available is false",
-      subjectId: args.row.safety_row_id,
-      axis: "redaction_state",
     }));
   }
 }
@@ -510,9 +330,6 @@ function normalizeSafetyRow(rawRow: unknown): ReconstructSourceSafetyRow | null 
   if (!isRecord(rawRow)) return null;
   const derivation = isRecord(rawRow.visibility_derivation)
     ? rawRow.visibility_derivation
-    : {};
-  const redactionEvidence = isRecord(rawRow.redaction_evidence)
-    ? rawRow.redaction_evidence
     : {};
   const tombstone = isRecord(rawRow.tombstone) ? rawRow.tombstone : {};
   return {
@@ -527,12 +344,6 @@ function normalizeSafetyRow(rawRow: unknown): ReconstructSourceSafetyRow | null 
     authorization_state: inList(rawRow.authorization_state, AUTHORIZATION_STATES)
       ? rawRow.authorization_state
       : "" as ReconstructSourceSafetyAuthorizationState,
-    privacy_state: inList(rawRow.privacy_state, PRIVACY_STATES)
-      ? rawRow.privacy_state
-      : "" as ReconstructSourceSafetyPrivacyState,
-    redaction_state: inList(rawRow.redaction_state, REDACTION_STATES)
-      ? rawRow.redaction_state
-      : "" as ReconstructSourceSafetyRedactionState,
     proof_sufficiency_state: inList(rawRow.proof_sufficiency_state, PROOF_SUFFICIENCY_STATES)
       ? rawRow.proof_sufficiency_state
       : "" as ReconstructSourceSafetyProofSufficiencyState,
@@ -559,17 +370,6 @@ function normalizeSafetyRow(rawRow: unknown): ReconstructSourceSafetyRow | null 
       typeof rawRow.authorization_scope_ref === "string"
         ? rawRow.authorization_scope_ref
         : null,
-    redaction_evidence: {
-      raw_value_available: redactionEvidence.raw_value_available === true,
-      allowed_proof_forms: arrayValues(
-        redactionEvidence.allowed_proof_forms,
-        ALLOWED_PROOF_FORMS,
-      ),
-      redaction_rule_ref:
-        typeof redactionEvidence.redaction_rule_ref === "string"
-          ? redactionEvidence.redaction_rule_ref
-          : null,
-    },
     tombstone: {
       tombstone_ref:
         typeof tombstone.tombstone_ref === "string" ? tombstone.tombstone_ref : null,
@@ -700,13 +500,6 @@ export function validateSourceSafetyLedger(args: {
         allowed: AUTHORIZATION_STATES,
         axis: "authorization_state",
       },
-      { field: "privacy_state", value: row.privacy_state, allowed: PRIVACY_STATES, axis: "privacy_state" },
-      {
-        field: "redaction_state",
-        value: row.redaction_state,
-        allowed: REDACTION_STATES,
-        axis: "redaction_state",
-      },
       {
         field: "proof_sufficiency_state",
         value: row.proof_sufficiency_state,
@@ -735,15 +528,7 @@ export function validateSourceSafetyLedger(args: {
         subjectId: row.safety_row_id,
       }));
     }
-    if (row.redaction_evidence.allowed_proof_forms.length === 0) {
-      violations.push(violation({
-        code: "missing_required_field",
-        message: "source safety row must name at least one allowed proof form",
-        subjectId: row.safety_row_id,
-      }));
-    }
     validateCanonicalAxes({ row, violations });
-    validateSupportingDetailConsistency({ row, violations });
     if (VISIBILITY_TIERS.includes(row.visibility_tier)) {
       const expected = deriveSourceSafetyVisibilityTier(row);
       if (row.visibility_tier !== expected) {
@@ -780,9 +565,6 @@ export function validateSourceSafetyLedger(args: {
     safety_row_count: rows.length,
     no_prompt_use_count: rows.filter((row) => row.visibility_tier === "no_prompt_use")
       .length,
-    redacted_output_only_count: rows.filter((row) =>
-      row.visibility_tier === "redacted_output_only"
-    ).length,
     validation_results: violations.length === 0
       ? ["source_safety_ledger_valid"]
       : ["source_safety_ledger_invalid"],

@@ -400,26 +400,13 @@ export type ReconstructSourceSafetyAuthorizationState =
   | "unknown"
   | "not_required";
 
-export type ReconstructSourceSafetyPrivacyState =
-  | "non_sensitive"
-  | "privacy_sensitive"
-  | "unknown";
-
-export type ReconstructSourceSafetyRedactionState =
-  | "none"
-  | "redacted"
-  | "required"
-  | "insufficient";
-
 export type ReconstructSourceSafetyProofSufficiencyState =
   | "sufficient_for_claim"
   | "insufficient_for_claim"
-  | "trace_only"
   | "unavailable";
 
 export type ReconstructSourceSafetyReplayState =
   | "replay_allowed"
-  | "replay_with_redaction"
   | "no_replay_use"
   | "unknown";
 
@@ -433,24 +420,14 @@ export type ReconstructSourceSafetyIntendedConsumption =
 export type ReconstructSourceSafetyCanonicalAxis =
   | "lifecycle_state"
   | "authorization_state"
-  | "privacy_state"
-  | "redaction_state"
   | "proof_sufficiency_state"
   | "replay_state";
 
 export type ReconstructSourceSafetyVisibilityTier =
   | "consumption_allowed"
   | "internal_only"
-  | "redacted_output_only"
   | "no_prompt_use"
   | "no_replay_use";
-
-export type ReconstructSourceSafetyAllowedProofForm =
-  | "raw_value"
-  | "hash"
-  | "bounded_summary"
-  | "source_ref_only"
-  | "unavailable";
 
 export type ReconstructSourceObservationDeltaFrontierKind =
   | "source_frontier"
@@ -603,8 +580,6 @@ export interface ReconstructSourceSafetyRow {
   subject_kind: ReconstructSourceSafetySubjectKind;
   lifecycle_state: ReconstructSourceSafetyLifecycleState;
   authorization_state: ReconstructSourceSafetyAuthorizationState;
-  privacy_state: ReconstructSourceSafetyPrivacyState;
-  redaction_state: ReconstructSourceSafetyRedactionState;
   proof_sufficiency_state: ReconstructSourceSafetyProofSufficiencyState;
   replay_state: ReconstructSourceSafetyReplayState;
   visibility_tier: ReconstructSourceSafetyVisibilityTier;
@@ -614,11 +589,6 @@ export interface ReconstructSourceSafetyRow {
     derivation_rule_ref: string;
   };
   authorization_scope_ref: string | null;
-  redaction_evidence: {
-    raw_value_available: boolean;
-    allowed_proof_forms: ReconstructSourceSafetyAllowedProofForm[];
-    redaction_rule_ref: string | null;
-  };
   tombstone: {
     tombstone_ref: string | null;
     reason: string | null;
@@ -646,8 +616,7 @@ export interface ReconstructSourceSafetyValidationViolation {
     | "source_observation_missing"
     | "source_observation_safety_row_missing"
     | "visibility_axis_set_invalid"
-    | "visibility_derivation_mismatch"
-    | "supporting_detail_contradiction";
+    | "visibility_derivation_mismatch";
   message: string;
   subject_id: string | null;
   axis: ReconstructSourceSafetyCanonicalAxis | null;
@@ -662,7 +631,6 @@ export interface ReconstructSourceSafetyLedgerValidationArtifact {
   validation_status: "valid" | "invalid";
   safety_row_count: number;
   no_prompt_use_count: number;
-  redacted_output_only_count: number;
   validation_results: string[];
   violations: ReconstructSourceSafetyValidationViolation[];
 }

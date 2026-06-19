@@ -2097,10 +2097,9 @@ validator_records:
       - source-observations.yaml
       - reconstruct-contract-registry.yaml
     validation_obligations:
-      - validate_exactly_six_canonical_source_safety_axes
+      - validate_exactly_four_canonical_source_safety_axes
       - validate_every_observation_has_source_safety_rows_for_each_intended_consumption
       - validate_visibility_tier_is_derived_not_independent_authority
-      - fail_when_nested_redaction_evidence_contradicts_top_level_axis_state
       - validate_source_safety_subject_refs_against_observed_source_refs
       - preserve_prompt_context_evidence_support_public_output_replay_and_material_claim_consumption_boundaries
     output_ref: source-safety-ledger-validation.yaml

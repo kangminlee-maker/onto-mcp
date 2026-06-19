@@ -5828,35 +5828,13 @@ function sourceObservationsForPrompt(args: {
     ...args.sourceObservations,
     observations: args.sourceObservations.observations.flatMap((observation) => {
       const row = rowsByObservationId.get(observation.observation_id);
-      if (
-        !row ||
-        row.visibility_tier === "no_prompt_use" ||
-        row.visibility_tier === "no_replay_use"
-      ) {
-        return [];
-      }
+      // Admit a source into the seed prompt only when its prompt-context visibility
+      // tier is consumption_allowed; any other tier (no_prompt_use / no_replay_use /
+      // internal_only) or a missing row withholds it (fail-closed governance).
       if (row?.visibility_tier === "consumption_allowed") {
         return [observation];
       }
-      const structuralData = { ...observation.structural_data };
-      if ("content_excerpt" in structuralData) {
-        delete structuralData.content_excerpt;
-      }
-      structuralData.source_safety_row_id =
-        row?.safety_row_id ?? sourceSafetyRowIdForObservation(observation);
-      structuralData.source_safety_visibility_tier =
-        row?.visibility_tier ?? "no_prompt_use";
-      structuralData.source_safety_allowed_proof_forms =
-        row?.redaction_evidence.allowed_proof_forms ?? ["source_ref_only"];
-      structuralData.source_safety_limitation_refs =
-        row?.limitation_refs ?? [`source-safety-row-missing:${observation.observation_id}`];
-      structuralData.content_excerpt_redacted = true;
-      return [{
-        ...observation,
-        structural_data: structuralData,
-        summary:
-          `${observation.summary} (source excerpt restricted by ${structuralData.source_safety_row_id})`,
-      }];
+      return [];
     }),
   };
 }

@@ -2704,17 +2704,15 @@ source record's exact safety row identity into validator-consumed state. Safety
 row identity is scoped by both observation and intended consumption:
 `source_safety:<observation_id>:<intended_consumption>`.
 
-Canonical source safety has exactly six independent validation axes:
+Canonical source safety has exactly four independent validation axes:
 
 1. `lifecycle_state`
 2. `authorization_state`
-3. `privacy_state`
-4. `redaction_state`
-5. `proof_sufficiency_state`
-6. `replay_state`
+3. `proof_sufficiency_state`
+4. `replay_state`
 
-`visibility_tier` is not a seventh axis. It is a deterministic sink/output policy
-derived from the six canonical axes and the intended consumption
+`visibility_tier` is not a fifth axis. It is a deterministic sink/output policy
+derived from the four canonical axes and the intended consumption
 (`prompt_context`, `evidence_support`, `public_output`, `replay`, or
 `material_claim`). Validators must preserve both the failing canonical axis and
 the derived visibility tier when they limit or block consumption. One valid
@@ -2739,26 +2737,18 @@ safety_rows:
     subject_kind: source_ref
     lifecycle_state: active | retired | disposed | invalidated | stale | missing
     authorization_state: authorized | unauthorized | unknown | not_required
-    privacy_state: non_sensitive | privacy_sensitive | unknown
-    redaction_state: none | redacted | required | insufficient
-    proof_sufficiency_state: sufficient_for_claim | insufficient_for_claim | trace_only | unavailable
-    replay_state: replay_allowed | replay_with_redaction | no_replay_use | unknown
-    visibility_tier: consumption_allowed | internal_only | redacted_output_only | no_prompt_use | no_replay_use
+    proof_sufficiency_state: sufficient_for_claim | insufficient_for_claim | unavailable
+    replay_state: replay_allowed | no_replay_use | unknown
+    visibility_tier: consumption_allowed | internal_only | no_prompt_use | no_replay_use
     visibility_derivation:
       intended_consumption: prompt_context | evidence_support | public_output | replay | material_claim
       derived_from_axes:
         - lifecycle_state
         - authorization_state
-        - privacy_state
-        - redaction_state
         - proof_sufficiency_state
         - replay_state
       derivation_rule_ref:
     authorization_scope_ref:
-    redaction_evidence:
-      raw_value_available: true | false
-      allowed_proof_forms: [raw_value | hash | bounded_summary | source_ref_only | unavailable]
-      redaction_rule_ref:
     tombstone:
       tombstone_ref:
       reason:
@@ -2770,18 +2760,17 @@ safety_rows:
 The first consumer is prompt-packet materialization/context assembly. Raw source
 excerpts, document sections, spreadsheet cells, database comments, or other
 observed source values must not enter LLM-facing context until a source-safety
-row exists and validates for prompt use. If a row derives `no_prompt_use`, the
-observation is excluded from prompt payloads; redacted rows may include only
-allowed hash, bounded summary, or source-ref-only proof forms and must carry the
-limitation forward.
+row exists and validates for prompt use. A row is admitted into the prompt only
+when it derives `consumption_allowed`; any other tier excludes the observation
+from prompt payloads.
 
 `source-safety-ledger-validation.yaml` must be consumed by prompt-packet
 materialization/context assembly and source-observation re-entry before observed
 source rows re-enter semantic authoring. A validator must fail closed when a
 source-backed claim requires an observed source ref whose lifecycle,
-authorization, privacy, redaction, proof-sufficiency, or replay axis does not
-support the intended consumption, whose scoped safety row is missing, or whose
-derived `visibility_tier` prohibits that sink.
+authorization, proof-sufficiency, or replay axis does not support the intended
+consumption, whose scoped safety row is missing, or whose derived
+`visibility_tier` prohibits that sink.
 
 Answer-support validation consumes `source-observation-lineage-index.yaml`,
 `source-observation-lineage-index-validation.yaml`, and
@@ -2794,7 +2783,7 @@ observation-specific `evidence_support` source-safety row that is sufficient for
 claim support and replay; prompt visibility alone is not material evidence
 authority.
 
-Source safety validation has six independent axes. A row can pass one axis and
+Source safety validation has four independent axes. A row can pass one axis and
 fail another; validators must preserve the specific failing axis in limitations,
 blocked rows, and public recovery text.
 
@@ -2802,25 +2791,17 @@ blocked rows, and public recovery text.
 |---|---|---|
 | lifecycle | active snapshot or tombstone lineage | subject is retired, disposed, invalidated, stale, or missing for a material claim |
 | authorization | authorization scope or user/runtime authority | the run is not allowed to inspect, prompt, replay, or display the subject |
-| privacy | sensitivity classification and allowed disclosure basis | sensitive data would be exposed without an allowed disclosure basis |
-| redaction | redaction status and proof form | raw value is unavailable and bounded summary/hash is insufficient for the claim |
-| proof sufficiency | proof form matches claim level | trace-only proof is used to raise semantic or actionability level |
-| replay | replay eligibility and allowed proof form | future replay would require a raw value or authority snapshot that is not replayable |
+| proof sufficiency | proof form matches claim level | proof is unavailable or insufficient for the intended consumption |
+| replay | replay eligibility | future replay would require an authority snapshot that is not replayable |
 
 Derived visibility projection:
 
 | Derived `visibility_tier` | Projection rule |
 |---|---|
-| `no_prompt_use` | any canonical axis blocks `prompt_context` consumption, or the only allowed form is unavailable for prompt materialization |
+| `no_prompt_use` | any canonical axis blocks `prompt_context` consumption, or proof is unavailable for prompt materialization |
 | `no_replay_use` | `replay_state` is `no_replay_use` or `unknown` for a replay-required material claim |
-| `redacted_output_only` | the subject may be surfaced only through an allowed redacted, hashed, bounded-summary, or source-ref-only form |
 | `internal_only` | the subject may support internal validation or evidence closure but must not appear in public output |
-| `consumption_allowed` | all six canonical axes support the row's `intended_consumption`; public disclosure is allowed only when `intended_consumption` is `public_output` |
-
-Top-level axis state fields are canonical. Nested detail fields such as
-`redaction_evidence` are supporting proof only; they must not introduce a second
-authority path for redaction or proof sufficiency. Validation must fail when a
-supporting detail contradicts its top-level canonical state.
+| `consumption_allowed` | all four canonical axes support the row's `intended_consumption`; public disclosure is allowed only when `intended_consumption` is `public_output` |
 
 #### Mutable Vocabulary Authority
 

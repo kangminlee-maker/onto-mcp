@@ -2102,10 +2102,7 @@ export function validateAnswerSupportLedger(args: {
         if (
           !observation ||
           !publicOutputRow ||
-          (
-            publicOutputRow.visibility_tier !== "consumption_allowed" &&
-            publicOutputRow.visibility_tier !== "redacted_output_only"
-          )
+          publicOutputRow.visibility_tier !== "consumption_allowed"
         ) {
           violations.push(violation({
             code: "missing_required_ref",

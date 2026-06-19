@@ -192,8 +192,6 @@ function safetyLedger(): ReconstructSourceSafetyLedgerArtifact {
       subject_kind: "source_ref",
       lifecycle_state: "active",
       authorization_state: "authorized",
-      privacy_state: "non_sensitive",
-      redaction_state: "none",
       proof_sufficiency_state: "sufficient_for_claim",
       replay_state: "replay_allowed",
       visibility_tier: "consumption_allowed",
@@ -202,24 +200,12 @@ function safetyLedger(): ReconstructSourceSafetyLedgerArtifact {
         derived_from_axes: [
           "lifecycle_state",
           "authorization_state",
-          "privacy_state",
-          "redaction_state",
           "proof_sufficiency_state",
           "replay_state",
         ],
         derivation_rule_ref: "test-rule",
       },
       authorization_scope_ref: "runtime_target_ref_read_scope",
-      redaction_evidence: {
-        raw_value_available: true,
-        allowed_proof_forms: [
-          "raw_value",
-          "hash",
-          "bounded_summary",
-          "source_ref_only",
-        ],
-        redaction_rule_ref: null,
-      },
       tombstone: {
         tombstone_ref: null,
         reason: null,
@@ -241,7 +227,6 @@ function safetyValidation(): ReconstructSourceSafetyLedgerValidationArtifact {
     validation_status: "valid",
     safety_row_count: 1,
     no_prompt_use_count: 0,
-    redacted_output_only_count: 0,
     validation_results: ["source_safety_ledger_valid"],
     violations: [],
   };
