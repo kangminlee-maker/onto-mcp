@@ -45,6 +45,7 @@ import {
   createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
   recomputeWorkbookInventoryProjectionTruncations,
+  assessmentEvidenceObservationIds,
   runReconstruct,
   singleDocumentProjectionTruncation,
 } from "./run.js";
@@ -4357,8 +4358,38 @@ describe("runReconstruct", () => {
       competencyQuestionsValidation,
       competencyQuestionsValidationRef: "/tmp/competency-questions-validation.yaml",
       claimRealizationMap,
+      sourceObservations: {
+        schema_version: "1",
+        session_id: "cq-budget-run",
+        created_at: "2026-06-04T00:00:00.000Z",
+        observations: [],
+        skipped_refs: [],
+        validation_results: [],
+      },
     })).rejects.toThrow(/compact prompt exceeds deterministic prompt budget/);
     expect(called).toBe(false);
+  });
+
+  it("collects only the evidence observation ids cited by the assessed questions' linked claims", () => {
+    const ids = assessmentEvidenceObservationIds(
+      {
+        claimRealizationMap: {
+          claim_realizations: [
+            {
+              claim_id: "c1",
+              evidence_refs: [
+                { observation_id: "obs-1" },
+                { observation_id: "obs-2" },
+              ],
+            },
+            { claim_id: "c2", evidence_refs: [{ observation_id: "obs-3" }] },
+          ],
+        },
+      } as any,
+      [{ linked_claim_ids: ["c1"] }] as any,
+    );
+    // c1 is linked → its two cited observations reach the assessor; c2 is excluded.
+    expect([...ids].sort()).toEqual(["obs-1", "obs-2"]);
   });
 
   it("repairs an invalid ontology seed with focused validation context", async () => {

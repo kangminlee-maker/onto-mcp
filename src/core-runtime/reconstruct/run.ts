@@ -514,6 +514,9 @@ export interface ReconstructCompetencyQuestionAssessmentAuthorInput {
   competencyQuestionsValidation: ReconstructCompetencyQuestionsValidationArtifact;
   competencyQuestionsValidationRef: string;
   claimRealizationMap: ReconstructClaimRealizationMapArtifact;
+  // Source observations so the assessor can read the cited evidence bodies (not
+  // just observation-id labels) when judging answer_status.
+  sourceObservations: ReconstructSourceObservationsArtifact;
 }
 
 export interface ReconstructFailureClassificationAuthorInput {
@@ -767,6 +770,10 @@ function sha256Text(text: string): string {
 const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
   "competency_question_assessment_compact_projection:v2";
 const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
+// Per-observation excerpt budget for the cited source-evidence bodies projected
+// into the assessment prompt, so answer_status is judged on evidence content
+// rather than observation-id labels alone.
+const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT = 4_000;
 const COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS = 1000;
 
 function competencyQuestionAssessmentProjectionContract(): Record<string, unknown> {
@@ -3921,6 +3928,28 @@ function compactClaimRealizationMapForAssessmentPrompt(
   };
 }
 
+// Observation ids cited (via evidence_refs) by the claims the questions-under-
+// assessment link to — the bounded evidence surface whose bodies the assessor reads.
+// Exported for the assessment-evidence unit test; not part of the product surface.
+export function assessmentEvidenceObservationIds(
+  input: ReconstructCompetencyQuestionAssessmentAuthorInput,
+  questions: ReconstructCompetencyQuestionsArtifact["questions"],
+): string[] {
+  const linkedClaimIds = new Set(
+    questions.flatMap((question) => question.linked_claim_ids ?? []),
+  );
+  const observationIds = new Set<string>();
+  for (const realization of input.claimRealizationMap.claim_realizations) {
+    if (!linkedClaimIds.has(realization.claim_id)) continue;
+    for (
+      const id of evidenceObservationIdsFromEvidenceRefs(realization.evidence_refs)
+    ) {
+      observationIds.add(id);
+    }
+  }
+  return [...observationIds];
+}
+
 function competencyQuestionAssessmentUserPayload(
   input: ReconstructCompetencyQuestionAssessmentAuthorInput,
   questions: ReconstructCompetencyQuestionsArtifact["questions"],
@@ -3959,6 +3988,12 @@ function competencyQuestionAssessmentUserPayload(
       compactClaimRealizationMapForAssessmentPrompt(
         input.claimRealizationMap,
       ),
+    // Cited evidence bodies for the questions in this (batch of) assessment, so the
+    // assessor judges answer_status on actual source content, not id labels alone.
+    source_evidence: observationPromptPayload(input.sourceObservations, {
+      observationIds: assessmentEvidenceObservationIds(input, questions),
+      contentExcerptCharLimit: COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+    }),
   };
 }
 
@@ -8013,7 +8048,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const systemPrompt = [
         baseSystem,
         `Assess every competency question exactly once. answer_status must be one of: ${ANSWER_STATUSES.join(", ")}.`,
-        "Input uses a compact assessment projection: full question text is prompt-visible, evidence_observation_ids identify cited evidence, and runtime retains the full competency question artifact and validation authority.",
+        "Input uses a compact assessment projection: full question text is prompt-visible, evidence_observation_ids identify cited evidence, source_evidence carries the cited observation bodies — judge answer_status on this evidence content, not on labels alone — and runtime retains the full competency question artifact and validation authority.",
         "Runtime derives required_seed_refs, evidence_refs, and downstream_effect from the question row and answer_status; the author must supply answer_summary, missing_source_or_confirmation when applicable, ambiguity_notes, and rationale.",
         "JSON shape: {\"assessments\":[{\"question_id\":\"...\",\"answer_status\":\"...\",\"answer_summary\":\"...\",\"missing_source_or_confirmation\":\"...|null\",\"ambiguity_notes\":[\"...\"],\"rationale\":\"...\"}]}",
       ].join("\n");
@@ -11383,6 +11418,7 @@ export async function runReconstruct(
         competencyQuestionsValidation,
         competencyQuestionsValidationRef: competencyQuestionsValidationPath,
         claimRealizationMap,
+        sourceObservations: promptSourceObservations,
       }),
     );
   const competencyQuestionAssessmentValidationPath = path.join(
