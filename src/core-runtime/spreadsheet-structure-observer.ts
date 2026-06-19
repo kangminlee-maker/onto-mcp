@@ -63,6 +63,11 @@ export interface DataLayerCaps {
   max_distinct_tracked_per_column: number;
   max_columns_profiled: number;
   max_sheet_pairs: number;
+  /** Workbook-level ceiling on the number of worksheets OBSERVED (rows/structure read into
+   *  memory and persisted). Conservatively high so normal workbooks are untouched; bounds a
+   *  pathological many-sheet workbook (the per-workbook analog of the bounded-observation
+   *  fix) and sets capture_truncated when hit. */
+  max_sheets_observed: number;
 }
 
 export const DEFAULT_DATA_LAYER_CAPS: DataLayerCaps = {
@@ -70,6 +75,7 @@ export const DEFAULT_DATA_LAYER_CAPS: DataLayerCaps = {
   max_distinct_tracked_per_column: 256,
   max_columns_profiled: 512,
   max_sheet_pairs: 64,
+  max_sheets_observed: 2048,
 };
 
 export interface InventorySheet {
@@ -1593,6 +1599,16 @@ export function buildXlsxInventory(args: {
     return unsupported(`xlsx workbook parse failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
+  // B4: bound the number of OBSERVED worksheets. A pathological many-sheet workbook would
+  // otherwise hold every sheet's row-grid in memory at once and persist an unbounded
+  // inventory (the per-workbook analog of bounded observation). The cap is conservatively
+  // high, so normal workbooks are untouched; when hit, capture_truncated discloses it. This
+  // bounds the set feeding BOTH the sheetByPath population and the final inventory loop.
+  if (workbook.sheets.length > caps.max_sheets_observed) {
+    workbook.sheets = workbook.sheets.slice(0, caps.max_sheets_observed);
+    captureTruncated = true;
+  }
+
   const relById = new Map(workbookRels.map((r) => [r.id, r]));
 
   // External workbook links: the workbook rel points to an INTERNAL part
@@ -1914,34 +1930,48 @@ export async function observeSpreadsheetSource(
   if (workbookKind === undefined) {
     return unsupportedInventory({ sourceRef, contentSha256, workbookKind: "csv", reason: `unrecognized spreadsheet extension: ${ext || "(none)"}` });
   }
-  if (workbookKind === "csv" || workbookKind === "tsv") {
-    return buildCsvInventory({
+  // CRASH ISOLATION: structural extraction can throw — most concretely a 512MB–1GiB CSV
+  // whose bytes pass the size gate but exceed V8's ~512MB string limit on
+  // `bytes.toString("utf8")`, plus any unexpected parser failure. Degrade THIS workbook to
+  // an honest unsupported inventory (preserving the already-computed raw-byte hash) instead
+  // of throwing out of the observer and aborting the whole review prep / reconstruct run.
+  try {
+    if (workbookKind === "csv" || workbookKind === "tsv") {
+      return buildCsvInventory({
+        sourceRef,
+        content: bytes.toString("utf8"),
+        contentSha256,
+        // The .tsv extension is definitive — force tabs instead of re-detecting.
+        ...(workbookKind === "tsv" ? { delimiter: "\t" as const } : {}),
+        ...(opts?.caps ? { caps: opts.caps } : {}),
+      });
+    }
+    if (workbookKind === "xlsx" || workbookKind === "xlsm") {
+      return buildXlsxInventory({
+        sourceRef,
+        bytes,
+        contentSha256,
+        workbookKind,
+        ...(opts?.caps ? { caps: opts.caps } : {}),
+      });
+    }
+    // xls (BIFF binary) / xlsb (binary OOXML) / ods (a different ZIP/XML schema) —
+    // separate parsers, not yet implemented (design §11.2 scoped xlsx/xlsm first).
+    // The workbook_kind is preserved (not mislabeled csv) so the artifact is honest.
+    return unsupportedInventory({
       sourceRef,
-      content: bytes.toString("utf8"),
-      contentSha256,
-      // The .tsv extension is definitive — force tabs instead of re-detecting.
-      ...(workbookKind === "tsv" ? { delimiter: "\t" as const } : {}),
-      ...(opts?.caps ? { caps: opts.caps } : {}),
-    });
-  }
-  if (workbookKind === "xlsx" || workbookKind === "xlsm") {
-    return buildXlsxInventory({
-      sourceRef,
-      bytes,
       contentSha256,
       workbookKind,
-      ...(opts?.caps ? { caps: opts.caps } : {}),
+      reason: `${workbookKind} extraction not yet implemented (xls/xlsb/ods deferred; xlsx/xlsm supported)`,
+    });
+  } catch (error) {
+    return unsupportedInventory({
+      sourceRef,
+      contentSha256,
+      workbookKind,
+      reason: `structural observation failed (${error instanceof Error ? error.message : String(error)})`,
     });
   }
-  // xls (BIFF binary) / xlsb (binary OOXML) / ods (a different ZIP/XML schema) —
-  // separate parsers, not yet implemented (design §11.2 scoped xlsx/xlsm first).
-  // The workbook_kind is preserved (not mislabeled csv) so the artifact is honest.
-  return unsupportedInventory({
-    sourceRef,
-    contentSha256,
-    workbookKind,
-    reason: `${workbookKind} extraction not yet implemented (xls/xlsb/ods deferred; xlsx/xlsm supported)`,
-  });
 }
 
 /**

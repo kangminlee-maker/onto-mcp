@@ -69,10 +69,13 @@ import {
   reviewMaterialSupportStatus,
 } from "../target-material-kind.js";
 import {
-  inventoryHasRenderableStructure,
   observeSpreadsheetSource,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
+import {
+  computeSpreadsheetDisposition,
+  type SpreadsheetRefDisposition,
+} from "./spreadsheet-review-disposition.js";
 import { semanticQualityEvidenceForArtifactGeneration } from "./artifact-generation-realization.js";
 
 export interface WriteInvocationInterpretationArtifactParams {
@@ -1293,26 +1296,6 @@ function requireExecutionPreparationSessionDomain(value: string): string {
   return normalizeDomainValue(value);
 }
 
-/** A spreadsheet ref is inspectable only when its shared inventory was actually read AND
- *  rendered real obligation-backing structure: a supported format (`unsupported_reason ===
- *  null`) that is NOT empty and NOT a corrupt shell. An empty-but-parseable `.xlsx`/`.xlsm`
- *  returns `unsupported_reason === null` with no structure, and a corrupt workbook whose
- *  worksheet parts are all unreadable returns it with only `unreadable_sheet_part` risk
- *  signals — neither gives a reviewer formula/reference structure to audit, so checking the
- *  reason (or P6's risk-signal-inclusive `inventoryHasInspectedStructure`) alone would
- *  over-claim support. The per-target gate and the recorded `inspectable` flag both route
- *  through this (design §3.2 honesty; the contract/README require unreadable/empty
- *  workbooks to degrade to partial). */
-function isInspectableSpreadsheetInventory(
-  inventory: WorkbookStructuralInventory | undefined,
-): boolean {
-  return (
-    inventory !== undefined &&
-    inventory.unsupported_reason === null &&
-    inventoryHasRenderableStructure(inventory)
-  );
-}
-
 async function buildReviewTargetProfileArtifact(
   params: MaterializeReviewExecutionPreparationArtifactsParams,
   inventoryByRef?: Map<string, WorkbookStructuralInventory>,
@@ -1343,88 +1326,86 @@ async function buildReviewTargetProfileArtifact(
     inputKind,
     primaryRole: roles.primary,
   });
+  // SINGLE SOURCE OF TRUTH: one disposition per rendered spreadsheet ref, computed once
+  // over the UNION of resolved + materialized refs from the shared observation. Every
+  // honesty surface below (support_status, target_refs[].inspectable/.sha256, review_goal)
+  // PROJECTS from this map instead of re-deriving "is this workbook backed?" from a proxy.
+  const unionSpreadsheetRefs = uniqueStrings(
+    [...resolvedRefs, ...(materializedRefs ?? [])].filter(isSpreadsheetRef),
+  );
+  const dispositionByRef = new Map<string, SpreadsheetRefDisposition>();
+  for (const ref of unionSpreadsheetRefs) {
+    dispositionByRef.set(ref, computeSpreadsheetDisposition(inventoryByRef?.get(ref), ref));
+  }
+
   const targetRefs: ReviewTargetProfileArtifact["target_refs"] = [];
   for (const [index, ref] of resolvedRefs.entries()) {
     const kind = await targetRefKind(ref, sessionRoot);
-    // Per-target inspectability is spreadsheet-specific: a ref is inspectable when its
-    // shared inventory was read AND carries real inspected structure (a supported format
-    // that is not an empty workbook). Recorded only for spreadsheet refs so the
-    // kind-vs-format axis is structurally explicit (design §3.2 honesty; C-recon F1 mirror).
+    // Per-ref inspectability + sha256 PROJECT from the ref's disposition (spreadsheet-only).
+    // `inspectable` is the renderable-structure axis — a clean data CSV is inspectable even
+    // though it backs no structural obligation. sha256 reuses the single observation's
+    // content hash (no raw re-read; null when the observer declined to read the file).
     const isSpreadsheet = isSpreadsheetRef(ref);
-    const spreadsheetInventory = isSpreadsheet ? inventoryByRef?.get(ref) : undefined;
+    const disposition = isSpreadsheet ? dispositionByRef.get(ref) : undefined;
     targetRefs.push({
       ref,
       role: index === 0 ? "primary" as const : "supporting" as const,
       kind: kind.kind,
       exists: kind.exists,
-      // For a spreadsheet ref reuse the inventory's raw-byte content_sha256 (single
-      // observation) instead of re-reading the file: targetRefSha256 fs.readFile-s the
-      // whole file, which would re-allocate — and on an oversized workbook the observer
-      // skipped, OOM — a file the observer already declined to read (content_sha256 is "" in
-      // that case, recorded here as null). Non-spreadsheet refs hash as before.
       sha256: kind.exists
         ? isSpreadsheet
-          ? (spreadsheetInventory?.content_sha256 || null)
+          ? (disposition?.sha256 ?? null)
           : await targetRefSha256(ref, kind.kind, params.directoryListingOptions)
         : null,
       ...(isSpreadsheet
-        ? { inspectable: isInspectableSpreadsheetInventory(spreadsheetInventory) }
+        ? { inspectable: disposition?.inspectable ?? false }
         : {}),
     });
   }
 
-  // PER-TARGET-FORMAT GATE (design §3.2; shared target-material-kind-contract §5/§7):
-  // reviewMaterialSupportStatus is the KIND-level claim (spreadsheet => supported). A
-  // ref that was not actually inspected — an unsupported workbook format (.xls/.xlsb/.ods),
-  // an unreadable/oversized workbook, or an empty workbook (no structure) — must downgrade
-  // the RECORDED support_status to partial so a supported/null profile is never emitted for
-  // a workbook the render shows as "unsupported". The gate scope is the UNION of resolved
-  // and materialized spreadsheet refs because materialized-input renders materializedRefs
-  // (an independently-supplied set): an uninspectable workbook in EITHER set is rendered, so
-  // either must downgrade the claim. Inspectability and the honest reason both come from the
-  // shared inventory (inspectable iff unsupported_reason === null), never from the extension.
+  // SUPPORT-STATUS GATE — projects from the disposition set over the UNION of rendered
+  // spreadsheet refs. It runs UNCONDITIONALLY (not only when the resolved kind is
+  // spreadsheet) because materialized-input renders materializedRefs regardless of the
+  // resolved kind (F1): a code-resolved target carrying a materialized workbook the
+  // observer could not read must not stay `supported`. reviewMaterialSupportStatus is the
+  // KIND-level baseline; any rendered workbook ref that is not inspectable downgrades it to
+  // partial, naming each ref's honest cause (full path, deduped on path+cause).
   let supportStatus = materialSupport.status;
   let supportReason = materialSupport.reason;
   let materialGoals = reviewMaterialGoals(materialDetection.target_material_kind);
+
+  const unionDispositions = unionSpreadsheetRefs.map(
+    (ref) => dispositionByRef.get(ref) as SpreadsheetRefDisposition,
+  );
+  const uninspected = unionDispositions.filter((d) => !d.inspectable);
+  if (uninspected.length > 0) {
+    supportStatus = "partial";
+    supportReason = `spreadsheet review inspects structure only; ${uninspected.length} of ${unionDispositions.length} workbook ref(s) were not inspected (${uniqueStrings(uninspected.map((d) => d.reason ?? d.ref)).join("; ")})`;
+  }
+
+  // review_goal spreadsheet obligations = union of backed_goals across the RESOLVED
+  // spreadsheet refs (kind stays the trigger per the approved F1 scope: only support_status
+  // reflects the materialized union). backed_goals is the POSITIVE rule — a goal is carried
+  // only when its specific evidence was rendered for that ref, so an obligation never
+  // outruns its backing (a plain data CSV carries none; a macro-only workbook carries only
+  // access_and_protection_hygiene).
   if (materialDetection.target_material_kind === "spreadsheet") {
-    const gateRefs = uniqueStrings(
-      [...resolvedRefs, ...(materializedRefs ?? [])].filter(isSpreadsheetRef),
+    materialGoals = uniqueStrings(
+      resolvedRefs
+        .filter(isSpreadsheetRef)
+        .flatMap((ref) => dispositionByRef.get(ref)?.backed_goals ?? []),
     );
-    const uninspectedReasons: string[] = [];
-    let inspectableCount = 0;
-    for (const ref of gateRefs) {
-      const inv = inventoryByRef?.get(ref);
-      if (isInspectableSpreadsheetInventory(inv)) {
-        inspectableCount += 1;
-      } else {
-        // Name the ref (full resolved path) alongside its actual cause: a multi-workbook
-        // bundle must identify WHICH workbook lost inventory backing, and the later dedup
-        // must not collapse two distinct failing paths that share a basename + cause (e.g.
-        // /q1/legacy.xls and /q2/legacy.xls). The full path is stable and unique
-        // (contract §5/§7 per-ref cause).
-        const cause =
-          inv?.unsupported_reason ??
-          (inv ? "no renderable structure (empty or unreadable workbook)" : "workbook not observed");
-        uninspectedReasons.push(`${ref}: ${cause}`);
-      }
-    }
-    if (uninspectedReasons.length > 0) {
-      supportStatus = "partial";
-      supportReason = `spreadsheet review inspects structure only; ${uninspectedReasons.length} of ${gateRefs.length} ref(s) were not inspected (${uniqueStrings(uninspectedReasons).join("; ")})`;
-    }
-    // Obligations need rendered backing: drop them only when NO ref was inspected.
-    if (inspectableCount === 0) {
+    // No directly-inspectable workbook ref at all — e.g. a directory aggregated as
+    // spreadsheet with no workbook ref, or every ref uninspectable. Nothing backs an
+    // obligation and the render shows only a listing/unsupported note, so a kind-level
+    // `supported` would be dishonest.
+    const anyInspectable = unionDispositions.some((d) => d.inspectable);
+    if (!anyInspectable) {
       materialGoals = [];
-      // No workbook ref was directly inspectable. This also covers the directory case: a
-      // directory whose sampled children are all spreadsheets is classified `spreadsheet`
-      // in aggregate, but the directory path itself does not pass isSpreadsheetRef, so
-      // gateRefs is empty and uninspectedReasons stays empty above. The render then emits
-      // only a directory listing, never a workbook inventory, so a kind-level `supported`
-      // would be dishonest — degrade to partial (the uninspectable-ref case already set it).
       if (supportStatus === "supported") {
         supportStatus = "partial";
         supportReason =
-          "spreadsheet kind detected but no workbook ref was directly inspectable (no inventory-backed structural detail rendered)";
+          "spreadsheet target has no directly-inspectable workbook ref (no inventory-backed structural detail rendered)";
       }
     }
   }

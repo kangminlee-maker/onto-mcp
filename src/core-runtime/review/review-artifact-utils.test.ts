@@ -139,8 +139,8 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     );
 
     // Sheet55's body is trimmed by the 50-sheet cap, but its formula TEXT must still reach
-    // the prompt so the formula_integrity obligation stays backed (not silently count-only).
-    expect(rendered).toContain("formulas on sheets beyond the rendered sheet sample");
+    // the prompt — formulas are rendered up front, grouped by sheet, before per-sheet bodies.
+    expect(rendered).toContain("formulas (sample of");
     expect(rendered).toContain("Sheet55");
     expect(rendered).toContain("=RESIDUAL_55");
     expect(rendered).toContain("Other!A1");
@@ -182,5 +182,64 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     // it rather than silently dropping most pairwise counts.
     expect(rendered).toContain("structural sample bounded");
     expect(rendered).toContain("cross-sheet pairwise overlaps 16/20");
+  });
+
+  it("discloses protected/hidden sheets beyond the per_sheet_data render cap (B3)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const templateSheet = base.sheets[0]!;
+    const templatePsd = base.per_sheet_data[0]!;
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: Array.from({ length: 55 }, (_, i) => ({
+        ...templateSheet,
+        name: `Sheet${i + 1}`,
+        protected: i === 51, // a protected sheet beyond the 50-sheet render cap
+      })),
+      per_sheet_data: Array.from({ length: 55 }, (_, i) => ({
+        ...templatePsd,
+        sheet: `Sheet${i + 1}`,
+      })),
+    };
+    const xlsx = path.join(root, "wide.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+    // The protected sheet at index 51 is dropped from the per-sheet layout (50-sheet cap);
+    // its flag must still be disclosed so access_and_protection_hygiene isn't silently unbacked.
+    expect(rendered).toContain("protected/hidden sheet(s) beyond the rendered sample");
+  });
+
+  it("does not surface count-only tables/merged_ranges trims as bounded samples (A3 / RC-2)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      tables: Array.from({ length: 60 }, (_, i) => ({
+        name: `T${i}`,
+        sheet: "S1",
+        range: "A1:B2",
+      })),
+    };
+    const xlsx = path.join(root, "tabs.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+    // tables are capped 60->50 by projectInventoryForPrompt but rendered as a full COUNT,
+    // not a bounded sample — so the trim note must NOT mention tables (RC-2 guard).
+    expect(rendered).toContain("tables: 60");
+    expect(rendered).not.toContain("tables 50/60");
   });
 });

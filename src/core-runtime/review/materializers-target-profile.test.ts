@@ -207,9 +207,12 @@ describe("review target profile material kind", () => {
     expect(profile.material_profile.support_status).toBe("supported");
     expect(profile.material_profile.unsupported_reason).toBeNull();
     expect(profile.target_refs[0].inspectable).toBe(true);
-    expect(profile.review_goal).toEqual(
-      expect.arrayContaining(SPREADSHEET_MATERIAL_GOALS),
-    );
+    // A plain-data CSV (no formulas / named ranges / validations / macro) is inspectable
+    // and supported, but backs NONE of the six structural obligations — so review_goal
+    // carries no spreadsheet obligation (the positive backing rule; inspectable != backed).
+    for (const goal of SPREADSHEET_MATERIAL_GOALS) {
+      expect(profile.review_goal).not.toContain(goal);
+    }
     // sha256 reuses the inventory's raw-byte content hash (single observation) rather than
     // re-reading the file, so an oversized workbook the observer skipped is never re-read
     // by the hashing path (#2).
@@ -318,8 +321,8 @@ describe("review target profile material kind", () => {
     // Both refs are spreadsheet kind, but one FORMAT is not inspectable -> partial.
     expect(profile.target_material_kind).toBe("spreadsheet");
     expect(profile.material_profile.support_status).toBe("partial");
-    // At least one ref inspectable -> obligations still attach (backed by the .csv).
-    expect(profile.review_goal).toContain("formula_integrity");
+    // q1.csv is inspectable (plain data backs no structural obligation); legacy.xls is not.
+    // The point here is per-ref inspectability + the partial downgrade, not obligations.
     const inspectableByName = Object.fromEntries(
       profile.target_refs.map((ref) => [path.basename(ref.ref), ref.inspectable]),
     );
@@ -355,6 +358,36 @@ describe("review target profile material kind", () => {
     expect(profile.material_profile.support_status).toBe("partial");
     const materialized = await readMaterializedInput(sessionRoot);
     expect(materialized).toContain("unsupported:");
+  });
+
+  it("downgrades support_status to partial when a materialized-only workbook is uninspectable even though the resolved target is CODE (F1)", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-f1");
+    const code = path.join(root, "handler.ts");
+    const xls = path.join(root, "legacy.xls");
+    await fs.writeFile(code, "export const handler = () => 1;\n", "utf8");
+    await fs.writeFile(xls, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+
+    await materializeReviewExecutionPreparationArtifacts({
+      sessionRoot,
+      scopeKind: "file",
+      resolvedTargetRefs: [code],
+      materializedRefs: [xls],
+      materializedKind: "single_text",
+      requestedTarget: code,
+      reviewIntentSummary: "code target with a materialized legacy workbook",
+      sessionDomain: "software-engineering",
+      filesystemAllowedRoots: [root],
+    });
+
+    const profile = await readProfile(sessionRoot);
+    // Resolved kind is code, but a materialized .xls is rendered into materialized-input and
+    // cannot be read. The honesty gate now runs over the resolved∪materialized union (not
+    // only when the resolved kind is spreadsheet), so support_status degrades and names the
+    // workbook — F1, latent since round 1, is closed.
+    expect(profile.target_material_kind).toBe("code");
+    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.material_profile.unsupported_reason).toContain("legacy.xls");
   });
 
   it("treats an empty-but-supported-format workbook (empty .csv) as partial with its ACTUAL reason, not a false 'unsupported format' (CER-1)", async () => {

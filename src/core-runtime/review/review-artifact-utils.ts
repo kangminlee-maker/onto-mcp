@@ -277,9 +277,11 @@ function renderSpreadsheetStructuralView(
     return `  - ${cell.cell}: ${cell.formula}${xref}`;
   };
 
-  // The honesty note lists only the sections this view renders as a bounded ITEM sample,
-  // relabeled to the headings the reviewer actually sees — so it never contradicts a
-  // count-only section (tables/merged_ranges, printed in full) that is not sampled (RC-2).
+  // Friendly labels for the bounded-sample note. A3: count-only sections
+  // (tables/merged_ranges, printed as full counts below) are SUPPRESSED from the note so it
+  // never contradicts them (RC-2); every OTHER projector-recorded trim is disclosed —
+  // friendly label when known, else the raw section key — so a newly-added
+  // projectInventoryForPrompt section can never be silently dropped from disclosure (#4 class).
   const NOTE_SECTION_LABELS: Record<string, string> = {
     per_sheet_data: "sheet bodies",
     "per_sheet_data.columns": "columns",
@@ -294,10 +296,15 @@ function renderSpreadsheetStructuralView(
     "cross_sheet_key_overlap.pairwise_overlap": "cross-sheet pairwise overlaps",
     risk_signals: "risk_signals",
   };
-  const renderedTrims = sections.filter((s) => s.section in NOTE_SECTION_LABELS);
+  const COUNT_ONLY_TRIM_SECTIONS = new Set(["tables", "merged_ranges"]);
+  const trimSectionLabel = (section: string): string =>
+    NOTE_SECTION_LABELS[section] ?? section;
+  const renderedTrims = sections.filter(
+    (s) => !COUNT_ONLY_TRIM_SECTIONS.has(s.section),
+  );
 
-  // Total sheet count comes from the FULL inventory; the loop below renders only the
-  // sheets whose (capped) per_sheet_data body survived projection.
+  // Total sheet count comes from the FULL inventory; the per-sheet layout below renders only
+  // the sheets whose (capped) per_sheet_data body survived projection.
   lines.push(
     `sheets: ${inventory.sheets.length}${inv.capture_truncated ? " (capture truncated)" : ""}`,
   );
@@ -307,88 +314,32 @@ function renderSpreadsheetStructuralView(
     // recoverable — never imply the dropped rows can be retrieved later (R1).
     lines.push(
       `structural sample bounded (prompt sample only — review does not persist the full inventory): ${renderedTrims
-        .map((s) => `${NOTE_SECTION_LABELS[s.section]} ${s.kept}/${s.total}`)
+        .map((s) => `${trimSectionLabel(s.section)} ${s.kept}/${s.total}`)
         .join(", ")}`,
     );
   }
 
-  // Render only sheets that retain a (capped) per_sheet_data body, so a high-sheet-count
-  // workbook never emits unbounded '## sheet:' headers without their backing detail
-  // (the per_sheet_data cap bounds this; the "sheet bodies" trim above discloses the drop).
   const renderedSheetNames = new Set(inv.per_sheet_data.map((d) => d.sheet));
-  for (const sheet of inv.sheets.filter((s) => renderedSheetNames.has(s.name))) {
-    const flags = `${sheet.hidden ? " (hidden)" : ""}${sheet.protected ? " (protected)" : ""}`;
-    lines.push(
-      "",
-      `## sheet: ${sheet.name}`,
-      `dimensions: ${sheet.dimensions.rows} rows × ${sheet.dimensions.cols} cols${flags}`,
-    );
-    const data = inv.per_sheet_data.find((d) => d.sheet === sheet.name);
-    if (data) {
-      const lowConfidence =
-        data.header_confidence === "low" ? "; header_confidence: low (layout uncertain)" : "";
-      lines.push(
-        `layout_kind: ${data.layout_kind}; header_rows: ${data.header_rows ? data.header_rows.join(",") : "none"}${lowConfidence}`,
-      );
-      if (data.columns.length > 0) {
-        lines.push("columns:");
-        for (const col of data.columns) {
-          const vocab = inv.distinct_value_vocab.find(
-            (v) => v.sheet === sheet.name && v.column === col.name,
-          );
-          const distinct = vocab
-            ? `; distinct≈${vocab.distinct_count}${vocab.distinct_count_is_estimate ? "+" : ""}`
-            : "";
-          lines.push(
-            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${distinct})`,
-          );
-        }
-      }
-    }
-    // formula_integrity / cross_sheet_reference_integrity: per-sheet formula sample with
-    // the formula TEXT and its cross-sheet references, so the reviewer can audit the
-    // actual calculation logic instead of only seeing a count.
-    const sheetFormulas = inv.formula_cells.filter((c) => c.sheet === sheet.name);
-    if (sheetFormulas.length > 0) {
-      lines.push(`formulas (sample of ${sheetFormulas.length}):`);
-      for (const cell of sheetFormulas) {
-        lines.push(renderFormulaCellLine(cell));
-      }
-    }
-  }
-
-  // Formulas on sheets DROPPED by the per_sheet_data sheet cap (max_sheets) are still in
-  // inv.formula_cells — formula_cells is capped independently of the sheet cap — but the
-  // loop above renders only sheets that survived the cap. Without this, a workbook whose
-  // formulas live only on a beyond-cap sheet would carry formula_integrity obligations
-  // while its formula TEXT vanished silently (and, if formula_cells itself was not
-  // trimmed, with no "formula samples" truncation note). Render that residual under its
-  // own section, grouped by sheet, so the obligation stays backed; the per_sheet_data
-  // trim note above already discloses that those sheets' bodies were dropped.
-  const beyondSampleFormulas = inv.formula_cells.filter(
-    (c) => !renderedSheetNames.has(c.sheet),
+  // B3: protected/hidden sheets beyond the per_sheet_data render cap keep
+  // access_and_protection_hygiene attached, but their flags are emitted only inside the
+  // per-sheet layout below (rendered-sheet set) — disclose the beyond-cap count so a
+  // reviewer does not read the silence as "the rest are unprotected/visible".
+  const beyondCapAccessFlags = inventory.sheets.filter(
+    (sheet) => !renderedSheetNames.has(sheet.name) && (sheet.protected || sheet.hidden),
   );
-  if (beyondSampleFormulas.length > 0) {
-    const bySheet = new Map<string, WorkbookStructuralInventory["formula_cells"]>();
-    for (const cell of beyondSampleFormulas) {
-      const existing = bySheet.get(cell.sheet);
-      if (existing) existing.push(cell);
-      else bySheet.set(cell.sheet, [cell]);
-    }
+  if (beyondCapAccessFlags.length > 0) {
     lines.push(
-      "",
-      "## formulas on sheets beyond the rendered sheet sample (sheet bodies trimmed; formula text retained):",
+      `${beyondCapAccessFlags.length} protected/hidden sheet(s) beyond the rendered sample (flags not individually shown; access_and_protection_hygiene still applies)`,
     );
-    for (const [sheetName, cells] of bySheet) {
-      lines.push(`### sheet: ${sheetName} — formulas (sample of ${cells.length}):`);
-      for (const cell of cells) {
-        lines.push(renderFormulaCellLine(cell));
-      }
-    }
   }
 
-  // Workbook-level obligation-backing detail. Totals come from the full inventory; the
-  // rendered items are the bounded sample (any trim is declared above).
+  // B2: obligation-backing detail is emitted UP FRONT — before the per-sheet bodies — so the
+  // downstream 300-line embed head-cut (truncateForEmbedding) preserves the evidence backing
+  // named_range_hygiene / data_validation_coverage / structural_risk_signals /
+  // cross_sheet_reference_integrity even for a many-sheet workbook. Reordering alone is
+  // zero-sum under a fixed budget, so each obligation class gets a bounded in-band sample
+  // here; the per-sheet layout (columns) follows and may be truncated under heavy load
+  // without dropping any obligation backing.
   if (inventory.named_ranges.length) {
     lines.push("", `named_ranges: ${inventory.named_ranges.length}`);
     for (const nr of inv.named_ranges) {
@@ -442,6 +393,60 @@ function renderSpreadsheetStructuralView(
     lines.push("", "risk_signals:");
     for (const signal of inv.risk_signals) {
       lines.push(`  - ${signal.kind} @ ${signal.location}: ${signal.literal}`);
+    }
+  }
+
+  // formula_integrity / cross_sheet_reference_integrity backing: ALL projected formula cells
+  // grouped by sheet, emitted up front (before the per-sheet bodies) so the formula TEXT
+  // survives the embed cut. Grouping over the full projected set covers both rendered-sheet
+  // and beyond-cap-sheet formulas, so a workbook whose formulas live only on a trimmed sheet
+  // still shows its formula text (formerly the separate "beyond sample" residual; F5).
+  if (inv.formula_cells.length > 0) {
+    const bySheet = new Map<string, WorkbookStructuralInventory["formula_cells"]>();
+    for (const cell of inv.formula_cells) {
+      const existing = bySheet.get(cell.sheet);
+      if (existing) existing.push(cell);
+      else bySheet.set(cell.sheet, [cell]);
+    }
+    lines.push("", `formulas (sample of ${inv.formula_cells.length}, by sheet):`);
+    for (const [sheetName, cells] of bySheet) {
+      lines.push(`### sheet: ${sheetName} — formulas (sample of ${cells.length}):`);
+      for (const cell of cells) {
+        lines.push(renderFormulaCellLine(cell));
+      }
+    }
+  }
+
+  // Per-sheet LAYOUT (dimensions + columns) — context that follows the obligation backing
+  // above and may be truncated under heavy load without losing any obligation evidence.
+  for (const sheet of inv.sheets.filter((s) => renderedSheetNames.has(s.name))) {
+    const flags = `${sheet.hidden ? " (hidden)" : ""}${sheet.protected ? " (protected)" : ""}`;
+    lines.push(
+      "",
+      `## sheet: ${sheet.name}`,
+      `dimensions: ${sheet.dimensions.rows} rows × ${sheet.dimensions.cols} cols${flags}`,
+    );
+    const data = inv.per_sheet_data.find((d) => d.sheet === sheet.name);
+    if (data) {
+      const lowConfidence =
+        data.header_confidence === "low" ? "; header_confidence: low (layout uncertain)" : "";
+      lines.push(
+        `layout_kind: ${data.layout_kind}; header_rows: ${data.header_rows ? data.header_rows.join(",") : "none"}${lowConfidence}`,
+      );
+      if (data.columns.length > 0) {
+        lines.push("columns:");
+        for (const col of data.columns) {
+          const vocab = inv.distinct_value_vocab.find(
+            (v) => v.sheet === sheet.name && v.column === col.name,
+          );
+          const distinct = vocab
+            ? `; distinct≈${vocab.distinct_count}${vocab.distinct_count_is_estimate ? "+" : ""}`
+            : "";
+          lines.push(
+            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${distinct})`,
+          );
+        }
+      }
     }
   }
   return `${lines.join("\n")}\n`;

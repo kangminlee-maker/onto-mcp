@@ -126,26 +126,32 @@ function materialKindReviewObligations(
         "Classify a visible correctness or runtime-contract failure as material when it can violate the declared review goal inside the bounded target.",
       ];
     case "spreadsheet": {
-      // The spreadsheet obligations are honest only when the profile actually attached the
-      // spreadsheet review goals — i.e. at least one workbook ref was inspectable. When the
-      // honesty gate dropped them (unsupported format / unreadable / empty: support_status
-      // partial with no inventory-backed detail), the materialized input carries only an
-      // `unsupported:` note, so telling the lens to audit formulas/recalculation would
-      // invite findings from evidence it was never given. Keep this obligation surface in
-      // lockstep with review_goal so both honesty surfaces agree.
+      // The obligation prose stays in lockstep with the per-ref disposition projected into
+      // review_goal (the SSOT): a goal is named only when its specific structure was
+      // rendered. Three honest cases, so the lens is never told to audit absent formulas nor
+      // told the data is unavailable when it was actually rendered:
       const spreadsheetGoals = reviewMaterialGoals("spreadsheet");
-      const inventoryBacked = profile.review_goal.some((goal) =>
+      const backed = profile.review_goal.filter((goal) =>
         spreadsheetGoals.includes(goal),
       );
-      if (!inventoryBacked) {
+      if (backed.length > 0) {
         return [
-          "The target workbook(s) could not be structurally inspected (unsupported format, unreadable, or empty); the materialized input carries only an unsupported note, not formula/reference structure.",
-          "Treat only what the materialized input actually renders as evidence; do not assume formulas, cross-sheet references, or recalculated values are available, and preserve material uncertainty about the uninspected structure.",
+          "Treat formulas, cross-sheet references, named ranges, input assumptions, and recalculation behavior as review evidence.",
+          "Check visible formula/reference mismatches, stale derived values, missing input guards, and decision-impacting calculation errors.",
+        ];
+      }
+      // No structural obligation is backed. Distinguish an inspected plain-data workbook
+      // (read — e.g. a flat CSV — but with no formula/named-range/validation/protection
+      // structure to audit) from one that could not be inspected at all.
+      if (profile.material_profile.support_status === "supported") {
+        return [
+          "The target workbook(s) were structurally inspected but carry no formula, cross-sheet reference, named range, data validation, or protection structure to audit beyond the rendered columns/data.",
+          "Treat the rendered structural inventory as the evidence; do not infer calculation logic the workbook does not contain.",
         ];
       }
       return [
-        "Treat formulas, cross-sheet references, named ranges, input assumptions, and recalculation behavior as review evidence.",
-        "Check visible formula/reference mismatches, stale derived values, missing input guards, and decision-impacting calculation errors.",
+        "The target workbook(s) could not be structurally inspected (unsupported format, unreadable, or empty); the materialized input carries only an unsupported note, not formula/reference structure.",
+        "Treat only what the materialized input actually renders as evidence; do not assume formulas, cross-sheet references, or recalculated values are available, and preserve material uncertainty about the uninspected structure.",
       ];
     }
     case "document":

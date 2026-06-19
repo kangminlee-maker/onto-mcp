@@ -63,8 +63,11 @@ path-boundary primitive and only owns MCP-specific failure shaping. Execution
 plan refs are validated by the shared review execution-plan boundary helper
 before continuation or direct prompt-runner dispatch. Code targets are reported as
 supported. Inspectable spreadsheet workbooks (.xlsx/.xlsm/.csv/.tsv) are reported as
-supported (structure inspected only — not recalculated); unsupported spreadsheet
-formats (.xls/.xlsb/.ods) and unreadable or empty workbooks degrade to partial.
+supported (structure inspected only — not recalculated), with review obligations attached
+only for the structure actually present (a plain-data CSV is supported but carries no
+formula/validation obligation); unsupported spreadsheet formats (.xls/.xlsb/.ods),
+unreadable/oversized/empty workbooks, and corrupt shells degrade to partial — and a
+materialized workbook rendered alongside a non-spreadsheet target degrades it too.
 Document and mixed targets keep partial material-support disclosure where
 material-specific validation remains partial.
 

@@ -349,6 +349,40 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(dv.rule_summary).toContain("formula2=10");
   });
 
+  it("bounds observed sheet count at max_sheets_observed and discloses capture_truncated (B4)", () => {
+    const sheetXml =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A1"/><sheetData>` +
+      `<row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>`;
+    const bytes = zipSync({
+      "xl/workbook.xml": strToU8(
+        `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+          `<sheet name="S1" sheetId="1" r:id="rId1"/>` +
+          `<sheet name="S2" sheetId="2" r:id="rId2"/>` +
+          `<sheet name="S3" sheetId="3" r:id="rId3"/></sheets></workbook>`,
+      ),
+      "xl/_rels/workbook.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${relType("worksheet")}" Target="worksheets/sheet1.xml"/>` +
+          `<Relationship Id="rId2" Type="${relType("worksheet")}" Target="worksheets/sheet2.xml"/>` +
+          `<Relationship Id="rId3" Type="${relType("worksheet")}" Target="worksheets/sheet3.xml"/>` +
+          `</Relationships>`,
+      ),
+      "xl/worksheets/sheet1.xml": strToU8(sheetXml),
+      "xl/worksheets/sheet2.xml": strToU8(sheetXml),
+      "xl/worksheets/sheet3.xml": strToU8(sheetXml),
+    });
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/many.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      caps: { ...DEFAULT_DATA_LAYER_CAPS, max_sheets_observed: 2 },
+    });
+    // Only the first 2 of 3 sheets are observed; the bound is disclosed via capture_truncated.
+    expect(r.sheets.length).toBe(2);
+    expect(r.capture_truncated).toBe(true);
+  });
+
   it("extracts cross-sheet refs with non-ASCII (Korean) sheet names and ignores #REF!", () => {
     // Mirrors a real workbook: SUMIFS over Korean-named sheets, plus a #REF! error
     // token that must NOT be mistaken for a sheet reference.
