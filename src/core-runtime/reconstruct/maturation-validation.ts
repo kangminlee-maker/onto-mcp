@@ -758,12 +758,11 @@ export function validateMaturationBaseline(args: {
       row.member_target_material_kind !== null &&
       row.member_source_refs.length > 0 &&
       row.cross_material_ref_refs.length > 0;
-    if (
-      mixedTarget &&
-      !hasLineage &&
-      row.limitation_refs.length === 0 &&
-      baseline.candidate_limitation_refs.length === 0
-    ) {
+    // Mixed-target lineage is a row-scoped obligation: each row must preserve its
+    // member lineage or cite its own limitation that identifies which member/source
+    // grounds it. A purpose-candidate-level limitation does not name a row's member,
+    // so it must not exempt rows here (it constrains the overall claim elsewhere).
+    if (mixedTarget && !hasLineage && row.limitation_refs.length === 0) {
       violations.push(violation({
         code: "mixed_lineage_missing",
         message:
@@ -942,6 +941,27 @@ export function validateActionabilityMatrix(args: {
       code: "session_id_mismatch",
       message: "actionability matrix session_id must match baseline",
       subjectId: matrix.session_id,
+    }));
+  }
+  // Continuation trusts matrix.candidate_limitation_refs to keep an otherwise closed
+  // run at actionable_limited, so the matrix must faithfully carry the validated
+  // baseline's candidate limitations — a stale/edited matrix that drops them would
+  // otherwise let continuation project actionable_ready despite the source limitation.
+  const baselineCandidateLimitations = new Set(
+    args.maturationBaseline.candidate_limitation_refs,
+  );
+  const matrixCandidateLimitations = new Set(matrix.candidate_limitation_refs);
+  const candidateLimitationsMatch =
+    baselineCandidateLimitations.size === matrixCandidateLimitations.size &&
+    [...baselineCandidateLimitations].every((ref) =>
+      matrixCandidateLimitations.has(ref)
+    );
+  if (!candidateLimitationsMatch) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "actionability matrix candidate_limitation_refs must match the validated maturation baseline",
+      subjectId: "candidate_limitation_refs",
     }));
   }
   if (args.maturationBaselineValidation.validation_status !== "valid") {

@@ -3895,7 +3895,7 @@ describe("runReconstruct", () => {
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v2");
+    ).toBe("competency_question_assessment_compact_projection:v3");
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -3925,7 +3925,7 @@ describe("runReconstruct", () => {
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v2");
+    ).toBe("competency_question_assessment_compact_projection:v3");
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -4075,7 +4075,7 @@ describe("runReconstruct", () => {
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v2");
+    ).toBe("competency_question_assessment_compact_projection:v3");
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_sha256,
@@ -4097,7 +4097,7 @@ describe("runReconstruct", () => {
       .toMatchObject({
         projection_kind: "competency_question_assessment_compact_projection",
         projection_contract_version:
-          "competency_question_assessment_compact_projection:v2",
+          "competency_question_assessment_compact_projection:v3",
         prompt_char_limit: 50_000,
         batching_policy: expect.objectContaining({
           mode: "deterministic_prompt_budget",
@@ -4397,6 +4397,30 @@ describe("runReconstruct", () => {
       [{ linked_claim_ids: ["c1"] }] as any,
     );
     // c1 is linked → its two cited observations reach the assessor; c2 is excluded.
+    expect([...ids].sort()).toEqual(["obs-1", "obs-2"]);
+  });
+
+  it("also collects evidence observation ids cited directly by the question (@codex P2)", () => {
+    const ids = assessmentEvidenceObservationIds(
+      {
+        claimRealizationMap: {
+          claim_realizations: [
+            { claim_id: "c1", evidence_refs: [{ observation_id: "obs-1" }] },
+          ],
+        },
+      } as any,
+      [
+        {
+          linked_claim_ids: ["c1"],
+          evidence_refs: [
+            { observation_id: "obs-2" },
+            { observation_id: "obs-1" },
+          ],
+        },
+      ] as any,
+    );
+    // The question's own evidence ref (obs-2) — runtime assessment authority — reaches
+    // the assessor alongside its linked claim's evidence (obs-1), without duplication.
     expect([...ids].sort()).toEqual(["obs-1", "obs-2"]);
   });
 

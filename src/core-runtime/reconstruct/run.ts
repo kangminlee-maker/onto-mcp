@@ -768,7 +768,10 @@ function sha256Text(text: string): string {
 }
 
 const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
-  "competency_question_assessment_compact_projection:v2";
+  // v3 adds the cited source-evidence bodies surface (source_evidence) to the
+  // assessment prompt; the version + contract change rotate the reuse-match hash so
+  // resume mode cannot reuse a pre-v3 content-blind assessment of the same sources.
+  "competency_question_assessment_compact_projection:v3";
 const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
 // Per-observation excerpt budget for the cited source-evidence bodies projected
 // into the assessment prompt, so answer_status is judged on evidence content
@@ -788,6 +791,8 @@ function competencyQuestionAssessmentProjectionContract(): Record<string, unknow
       "full question text is included without truncation; runtime keeps the full artifact authority",
     evidence_projection:
       "evidence_observation_ids and evidence_source_basenames are prompt-visible; full evidence_refs remain runtime authority",
+    source_evidence_projection:
+      "cited evidence observation bodies (from linked claim realizations and question evidence_refs) are projected as source_evidence up to a per-observation excerpt budget, so answer_status is judged on content not id labels alone",
     validation_projection:
       "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
     claim_realization_projection:
@@ -3954,6 +3959,19 @@ export function assessmentEvidenceObservationIds(
     if (!linkedClaimIds.has(realization.claim_id)) continue;
     for (
       const id of evidenceObservationIdsFromEvidenceRefs(realization.evidence_refs)
+    ) {
+      observationIds.add(id);
+    }
+  }
+  // Covered questions are validated on their own evidence_refs, and the assessment
+  // validator keeps each assessment's evidence_refs within the question's refs, so
+  // questions whose authority is direct evidence (not via a linked claim) would
+  // otherwise stay content-blind. Include those observation bodies too.
+  for (const question of questions) {
+    for (
+      const id of evidenceObservationIdsFromEvidenceRefs(
+        question.evidence_refs ?? [],
+      )
     ) {
       observationIds.add(id);
     }

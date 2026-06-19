@@ -918,6 +918,42 @@ describe("maturation validation", () => {
     expect(matrixValidation.validation_status).toBe("valid");
   });
 
+  it("rejects an actionability matrix that drops the baseline's candidate limitations (@codex P2)", () => {
+    const candidateLimitation = "limitation-source-coverage-partial";
+    const maturationBaseline = baseline([], [candidateLimitation]);
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates([candidateLimitation]),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    // A stale/edited matrix that drops the source-level limitation must fail, so
+    // continuation cannot silently project actionable_ready off a tampered matrix.
+    const tamperedMatrix = { ...matrix, candidate_limitation_refs: [] };
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: tamperedMatrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.some((v) =>
+      v.code === "conflicting_state" && v.subject_id === "candidate_limitation_refs"
+    )).toBe(true);
+  });
+
   it("keeps material L3 answer-supported rows frontier-required until expansion validates them for purpose", () => {
     const maturationBaseline = baseline([]);
     const baselineValidation = validateMaturationBaseline({
