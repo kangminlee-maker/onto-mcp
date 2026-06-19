@@ -514,6 +514,9 @@ export interface ReconstructCompetencyQuestionAssessmentAuthorInput {
   competencyQuestionsValidation: ReconstructCompetencyQuestionsValidationArtifact;
   competencyQuestionsValidationRef: string;
   claimRealizationMap: ReconstructClaimRealizationMapArtifact;
+  // Source observations so the assessor can read the cited evidence bodies (not
+  // just observation-id labels) when judging answer_status.
+  sourceObservations: ReconstructSourceObservationsArtifact;
 }
 
 export interface ReconstructFailureClassificationAuthorInput {
@@ -765,8 +768,28 @@ function sha256Text(text: string): string {
 }
 
 const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
-  "competency_question_assessment_compact_projection:v2";
+  // v3 added the cited source-evidence bodies surface (source_evidence); v4 bounds it to
+  // a deterministic per-payload SERIALIZED-SIZE budget (content_excerpt + structural
+  // payload, so an inventory-heavy spreadsheet observation counts too). Each version +
+  // contract change rotates the reuse-match hash so resume mode cannot reuse an assessment
+  // authored under a different (or content-blind, pre-v3) evidence projection of the same
+  // sources.
+  "competency_question_assessment_compact_projection:v4";
 const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
+// Per-observation excerpt budget for the cited source-evidence bodies projected
+// into the assessment prompt, so answer_status is judged on evidence content
+// rather than observation-id labels alone.
+const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT = 4_000;
+// Deterministic per-payload SERIALIZED budget (chars) for the cited evidence bodies, kept
+// well below the prompt cap so the rest of the payload (questions, claim map) still fits.
+// Bounding by serialized size — not observation COUNT — is required because a cited
+// spreadsheet carries a workbook inventory in structural_data whose caps are count-based,
+// so a few inventory-heavy observations would blow a count-based reserve and overflow the
+// unsplittable single-question batch.
+const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS = 24_000;
+// Cheap runaway guard on how many cited observations are projected before size-bounding
+// (the serialized budget above is the real bound; this only caps projection work).
+const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_CANDIDATE_LIMIT = 50;
 const COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS = 1000;
 
 function competencyQuestionAssessmentProjectionContract(): Record<string, unknown> {
@@ -781,6 +804,15 @@ function competencyQuestionAssessmentProjectionContract(): Record<string, unknow
       "full question text is included without truncation; runtime keeps the full artifact authority",
     evidence_projection:
       "evidence_observation_ids and evidence_source_basenames are prompt-visible; full evidence_refs remain runtime authority",
+    source_evidence_projection:
+      "cited evidence observation bodies (from linked claim realizations, question evidence_refs, and domain competency semantic assessment evidence_refs) are projected as source_evidence, bounded greedily by serialized payload size, so answer_status is judged on content not id labels alone",
+    // The per-observation excerpt budget and the per-payload serialized evidence budget
+    // are part of the contract: tuning either changes the assessment prompt surface, so
+    // they must rotate the reuse-match sha.
+    source_evidence_excerpt_char_limit:
+      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+    source_evidence_total_budget_chars:
+      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
     validation_projection:
       "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
     claim_realization_projection:
@@ -1394,16 +1426,27 @@ function countBy<T extends string>(
   return counts;
 }
 
-function stopDecisionAllowedDecisions(input: {
+export function stopDecisionAllowedDecisions(input: {
   metrics: ReconstructMetricsArtifact;
   failureClassification: ReconstructFailureClassificationArtifact;
+  revisionProposal: ReconstructRevisionProposalArtifact;
 }): ReconstructStopDecision[] {
   const materialFailureCount = input.failureClassification.failures.filter((failure) =>
     failure.materiality === "material"
   ).length;
+  // Revision proposals are authored from failures but never applied within this
+  // single-pass run. reject/defer proposals denote dropped or postponed scope, so
+  // the run cannot claim it is resolved ("stop") while they remain unapplied — they
+  // are carried to the next maturation round instead (see revision_proposal_summary
+  // in the final-output projection). This enforces the contract
+  // consume_revision_proposal_when_present rather than leaving it advisory-only.
+  const unappliedRevisionCount = input.revisionProposal.proposals.filter((proposal) =>
+    proposal.action === "reject" || proposal.action === "defer"
+  ).length;
   const hasUnresolvedWork =
     input.metrics.unresolved_question_count > 0 ||
     materialFailureCount > 0 ||
+    unappliedRevisionCount > 0 ||
     input.metrics.confirmation_state_counts.rejected > 0 ||
     input.metrics.confirmation_state_counts.partial > 0 ||
     input.metrics.confirmation_state_counts.deferred > 0;
@@ -3921,6 +3964,94 @@ function compactClaimRealizationMapForAssessmentPrompt(
   };
 }
 
+// Observation ids cited (via evidence_refs) by the claims the questions-under-
+// assessment link to — the bounded evidence surface whose bodies the assessor reads.
+// Exported for the assessment-evidence unit test; not part of the product surface.
+export function assessmentEvidenceObservationIds(
+  input: ReconstructCompetencyQuestionAssessmentAuthorInput,
+  questions: ReconstructCompetencyQuestionsArtifact["questions"],
+): string[] {
+  const linkedClaimIds = new Set(
+    questions.flatMap((question) => question.linked_claim_ids ?? []),
+  );
+  const observationIds = new Set<string>();
+  for (const realization of input.claimRealizationMap.claim_realizations) {
+    if (!linkedClaimIds.has(realization.claim_id)) continue;
+    for (
+      const id of evidenceObservationIdsFromEvidenceRefs(realization.evidence_refs)
+    ) {
+      observationIds.add(id);
+    }
+  }
+  // Covered questions are validated on their own evidence_refs, and the assessment
+  // validator keeps each assessment's evidence_refs within the question's refs, so
+  // questions whose authority is direct evidence (not via a linked claim) would
+  // otherwise stay content-blind. Include those observation bodies too.
+  for (const question of questions) {
+    for (
+      const id of evidenceObservationIdsFromEvidenceRefs(
+        question.evidence_refs ?? [],
+      )
+    ) {
+      observationIds.add(id);
+    }
+    // Domain competency semantic assessment rows carry their own validated
+    // evidence_refs — a distinct authority path not required to be duplicated in the
+    // question's evidence_refs — so their cited observation bodies must reach the
+    // assessor too, or that path stays content-blind.
+    for (const semantic of question.domain_competency_semantic_assessments ?? []) {
+      for (
+        const id of evidenceObservationIdsFromEvidenceRefs(
+          semantic.evidence_refs ?? [],
+        )
+      ) {
+        observationIds.add(id);
+      }
+    }
+  }
+  return [...observationIds];
+}
+
+// Replace an evidence observation whose serialized payload alone exceeds the whole
+// budget (e.g. a big spreadsheet workbook_inventory, which the per-char excerpt limit
+// does not bound) with a metadata-only stub, so no single observation can push an
+// unsplittable single-question assessment past the prompt cap. The stub keeps the
+// identifying fields and marks the body omitted.
+function boundSingleEvidenceItem(rawItem: unknown, budgetChars: number): unknown {
+  if (JSON.stringify(rawItem).length <= budgetChars) return rawItem;
+  const obj = (rawItem ?? {}) as Record<string, unknown>;
+  return {
+    observation_id: obj.observation_id,
+    source_ref: obj.source_ref,
+    target_material_kind: obj.target_material_kind,
+    location: obj.location,
+    summary: obj.summary,
+    evidence_body_omitted_for_budget: true,
+  };
+}
+
+// Greedily keep projected evidence observations (in order) until the serialized budget is
+// spent. Each item is first bounded to the budget (a lone over-budget observation becomes
+// a stub, never an arbitrarily large payload), then kept only if it leaves the running
+// total within budget — except the first, which is always kept (post-stub) so the payload
+// makes progress. Bounding by serialized size (not count) is what makes inventory-heavy
+// spreadsheet observations count toward the cap. Exported for the size-bound unit test.
+export function boundEvidenceBySerializedSize(
+  projected: unknown[],
+  budgetChars: number,
+): { kept: unknown[]; chars: number } {
+  const kept: unknown[] = [];
+  let chars = 0;
+  for (const rawItem of projected) {
+    const item = boundSingleEvidenceItem(rawItem, budgetChars);
+    const itemChars = JSON.stringify(item).length;
+    if (kept.length > 0 && chars + itemChars > budgetChars) break;
+    kept.push(item);
+    chars += itemChars;
+  }
+  return { kept, chars };
+}
+
 function competencyQuestionAssessmentUserPayload(
   input: ReconstructCompetencyQuestionAssessmentAuthorInput,
   questions: ReconstructCompetencyQuestionsArtifact["questions"],
@@ -3929,6 +4060,33 @@ function competencyQuestionAssessmentUserPayload(
     batch_count: number;
   },
 ): Record<string, unknown> {
+  // Cited evidence bodies are bounded to a deterministic per-payload SERIALIZED-SIZE
+  // budget: a single question can link to many observations, and the per-question
+  // batching cannot split a lone question further, so unbounded evidence would overflow
+  // the prompt cap and fail-loud-halt the run. Keep whole projected observations (each
+  // including its structural payload, so an inventory-heavy spreadsheet counts toward the
+  // budget) in the selector's stable order until the serialized budget is spent; surface
+  // the omitted count so the cap is not silent.
+  const citedEvidenceObservationIds = assessmentEvidenceObservationIds(
+    input,
+    questions,
+  );
+  const projectedEvidenceCandidates = observationPromptPayload(
+    input.sourceObservations,
+    {
+      observationIds: citedEvidenceObservationIds.slice(
+        0,
+        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_CANDIDATE_LIMIT,
+      ),
+      contentExcerptCharLimit: COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+    },
+  ) as unknown[];
+  const { kept: sourceEvidence, chars: sourceEvidenceChars } =
+    boundEvidenceBySerializedSize(
+      projectedEvidenceCandidates,
+      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
+    );
+  const projectedEvidenceCount = sourceEvidence.length;
   return {
     competency_questions_ref: input.competencyQuestionsRef,
     competency_questions_validation_ref:
@@ -3959,6 +4117,23 @@ function competencyQuestionAssessmentUserPayload(
       compactClaimRealizationMapForAssessmentPrompt(
         input.claimRealizationMap,
       ),
+    // Cited evidence bodies for the questions in this (batch of) assessment, so the
+    // assessor judges answer_status on actual source content, not id labels alone.
+    source_evidence: sourceEvidence,
+    source_evidence_projection: {
+      cited_observation_count: citedEvidenceObservationIds.length,
+      projected_observation_count: projectedEvidenceCount,
+      omitted_observation_count:
+        citedEvidenceObservationIds.length - projectedEvidenceCount,
+      projected_chars: sourceEvidenceChars,
+      total_budget_chars:
+        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
+      per_observation_excerpt_char_limit:
+        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+      omitted_observation_id_samples: citedEvidenceObservationIds
+        .slice(projectedEvidenceCount)
+        .slice(0, 10),
+    },
   };
 }
 
@@ -4083,6 +4258,14 @@ function compactFinalOutputPromptPayload(
       rationale: compactStatement(proposal.rationale),
     }),
   });
+  // Proposals are authored from failures but never applied within this single-pass
+  // run. reject/defer proposals are unresolved scope carried to the next maturation
+  // round; the stop gate refuses "stop" while they remain (see
+  // stopDecisionAllowedDecisions). Surface this honestly so the host LLM never
+  // describes the seed as already revised.
+  const unappliedRevisionActionCount = input.revisionProposal.proposals.filter(
+    (proposal) => proposal.action === "reject" || proposal.action === "defer",
+  ).length;
   const actionabilityClaimCounts = input.claimProjection.projection_rows.reduce(
     (counts, row) => {
       counts[row.actionability_claim] =
@@ -4098,6 +4281,8 @@ function compactFinalOutputPromptPayload(
       projection_kind: "final_output_compact_summary_projection",
       partial_projection_policy:
         "When any *_partial_projection field is true, prose must say prompt-visible details are partial and defer exhaustive truth to artifact refs.",
+      revision_proposal_application_policy:
+        "Revision proposals are proposed-only and are NOT applied to the seed or maturation in this run. Never describe the seed as revised, fixed, split, renamed, or pruned per a proposal; present proposals as next-round directives. When unresolved_action_count > 0, prose must say the run is not complete and carries reject/defer work to the next maturation round.",
       deterministic_runtime_append_sections: [
         "seed_answerability",
         "claim_projection",
@@ -4226,6 +4411,8 @@ function compactFinalOutputPromptPayload(
     },
     revision_proposal_summary: {
       validation_status: input.revisionProposalValidation.validation_status,
+      application_status: "proposed_not_applied_carried_to_next_round",
+      unresolved_action_count: unappliedRevisionActionCount,
       proposal_count: revisionProposalProjection.total_count,
       proposal_projection_limit: revisionProposalProjection.projection_limit,
       proposal_included_count: revisionProposalProjection.included_count,
@@ -5381,6 +5568,10 @@ function deterministicOntologySeedTimeoutRecovery(args: {
 export interface DocumentExcerptProjectionTruncation {
   observation_id: string;
   source_ref: string;
+  // The bounded observation's material kind (code is now full-excerpt eligible too),
+  // so the runtime event and final-output section name the right material instead of
+  // always saying "document".
+  target_material_kind: string;
   captured_chars: number;
   projection_budget_chars: number;
 }
@@ -5498,12 +5689,29 @@ function chunkArray<T>(items: T[], size: number): T[][] {
  *   - the prompt projects a SINGLE observation — a multi-document bundle or a mixed
  *     directory (both already-accepted inputs) would otherwise multiply the bounded
  *     catalog into a context-overflowing prompt; and
- *   - the observation is a text-readable document (`isTextReadableDocumentExtension`) —
- *     a binary document (.pdf/.docx) captured only the small structural sample, so
- *     expanding it would resend decoded binary bytes rather than the bounded excerpt.
+ *   - the observation's content_excerpt holds the whole source text
+ *     (`isFullExcerptProjectionEligible`: a text-readable document .md/.txt/.adoc,
+ *     or code captured as text) — a binary document (.pdf/.docx) captured only the
+ *     small structural sample, and spreadsheet/database carry a structural inventory
+ *     rather than raw text, so those keep the bounded excerpt.
  * Multi-document / over-window budget-aware selection is deferred (see
  * development-records/design/20260616-large-input-observation).
  */
+function isFullExcerptProjectionEligible(
+  targetMaterialKind: string | undefined,
+  extension: string | null | undefined,
+): boolean {
+  // code observations capture the source as text in content_excerpt; documents do
+  // so only for text-readable extensions (.md/.txt/.adoc). Binary documents and
+  // spreadsheet/database structural inventories are NOT whole-text, so they stay
+  // bounded (a prior gap silently truncated code source at the base limit).
+  if (targetMaterialKind === "code") return true;
+  return (
+    targetMaterialKind === "document" &&
+    isTextReadableDocumentExtension(extension)
+  );
+}
+
 function effectiveContentExcerptCharLimit(
   baseLimit: number | undefined,
   targetMaterialKind: string | undefined,
@@ -5513,8 +5721,7 @@ function effectiveContentExcerptCharLimit(
 ): number | undefined {
   if (
     expandDocument &&
-    targetMaterialKind === "document" &&
-    isTextReadableDocumentExtension(extension)
+    isFullExcerptProjectionEligible(targetMaterialKind, extension)
   ) {
     // Model-aware budget when the seat resolved one; else the static FLOOR — a
     // model-unaware caller keeps the prior whole-document budget (no regression).
@@ -5620,9 +5827,9 @@ export function observationPromptPayload(
         if (
           options.recordDocumentExcerptProjectionTruncation &&
           expandDocument &&
-          observation.target_material_kind === "document" &&
           compacted.prompt_content_excerpt_truncated === true &&
-          isTextReadableDocumentExtension(
+          isFullExcerptProjectionEligible(
+            observation.target_material_kind,
             typeof observation.structural_data.extension === "string"
               ? observation.structural_data.extension
               : null,
@@ -5633,6 +5840,7 @@ export function observationPromptPayload(
           options.recordDocumentExcerptProjectionTruncation({
             observation_id: observation.observation_id,
             source_ref: observation.source_ref,
+            target_material_kind: observation.target_material_kind,
             captured_chars: typeof captured === "string" ? captured.length : 0,
             projection_budget_chars: typeof limit === "number"
               ? limit
@@ -5663,18 +5871,25 @@ export function singleDocumentProjectionTruncation(
 ): DocumentExcerptProjectionTruncation[] {
   if (promptSourceObservations.observations.length !== 1) return [];
   const observation = promptSourceObservations.observations[0]!;
-  if (observation.target_material_kind !== "document") return [];
   const extension =
     typeof observation.structural_data.extension === "string"
       ? observation.structural_data.extension
       : null;
-  if (!isTextReadableDocumentExtension(extension)) return [];
+  // Mirror the fresh-run eligibility (document text-readable OR code) so a resumed
+  // run records code truncation provenance too — a document-only check silently
+  // dropped the runtime event/final-output section for a large single code file.
+  if (
+    !isFullExcerptProjectionEligible(observation.target_material_kind, extension)
+  ) {
+    return [];
+  }
   const excerpt = observation.structural_data.content_excerpt;
   if (typeof excerpt !== "string" || excerpt.length <= budget) return [];
   return [
     {
       observation_id: observation.observation_id,
       source_ref: observation.source_ref,
+      target_material_kind: observation.target_material_kind,
       captured_chars: excerpt.length,
       projection_budget_chars: budget,
     },
@@ -7997,7 +8212,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const systemPrompt = [
         baseSystem,
         `Assess every competency question exactly once. answer_status must be one of: ${ANSWER_STATUSES.join(", ")}.`,
-        "Input uses a compact assessment projection: full question text is prompt-visible, evidence_observation_ids identify cited evidence, and runtime retains the full competency question artifact and validation authority.",
+        "Input uses a compact assessment projection: full question text is prompt-visible, evidence_observation_ids identify cited evidence, source_evidence carries the cited observation bodies — judge answer_status on this evidence content, not on labels alone — and runtime retains the full competency question artifact and validation authority.",
         "Runtime derives required_seed_refs, evidence_refs, and downstream_effect from the question row and answer_status; the author must supply answer_summary, missing_source_or_confirmation when applicable, ambiguity_notes, and rationale.",
         "JSON shape: {\"assessments\":[{\"question_id\":\"...\",\"answer_status\":\"...\",\"answer_summary\":\"...\",\"missing_source_or_confirmation\":\"...|null\",\"ambiguity_notes\":[\"...\"],\"rationale\":\"...\"}]}",
       ].join("\n");
@@ -8256,6 +8471,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Use OntologySeed and downstream runtime validations as the primary authority. Do not treat the seed as an action-ready ontology.",
           `Allowed decision values for this run: ${allowedDecisions.join(", ")}.`,
           "Return decision must be copied from the allowed decision values. If material failures, partial/deferred/rejected claims, or unresolved questions remain, do not return stop.",
+          "Revision proposals are proposed-only and not applied in this run; reject/defer proposals are unresolved scope carried to the next maturation round. When they are present, do not return stop and name them in next_actions.",
           "JSON shape: {\"decision\":\"stop|continue|ask_user\",\"rationale\":\"...\",\"next_actions\":[\"...\"]}",
         ].join("\n"),
         userPayload: {
@@ -9589,6 +9805,39 @@ async function observeAcceptedMaturationClosureSourceRequests(args: {
 }
 
 /**
+ * Surfaces unresolved (reject/defer) revision proposals in final output (#2): these
+ * are proposed-only — never applied to the seed/maturation in this run — and the stop
+ * gate already treats them as deterministically unresolved work carried to the next
+ * round. The disclosure must be deterministic, not left to the final-output LLM's prose
+ * (which could omit it or imply completion), so the runtime appends this section
+ * unconditionally when such proposals remain. Operational wording only (action enum,
+ * target type/id, proposal id) — no host-authored prose — so it never trips final-output
+ * provenance forbidden fragments. Exported for the disclosure unit test.
+ */
+export function appendFinalOutputUnresolvedRevisionSection(
+  finalOutputText: string,
+  revisionProposal: ReconstructRevisionProposalArtifact,
+): string {
+  const unresolved = revisionProposal.proposals.filter(
+    (proposal) => proposal.action === "reject" || proposal.action === "defer",
+  );
+  if (unresolved.length === 0) return finalOutputText;
+  const content = [
+    "## Unresolved Revision Proposals",
+    "",
+    "Revision proposals are proposed-only and are NOT applied to the seed or maturation " +
+      "in this run. The following reject/defer proposals remain unresolved and are carried " +
+      "to the next maturation round; the run is not complete while they remain.",
+    "",
+    ...unresolved.map((proposal) =>
+      `- ${proposal.action} ${proposal.target_type} ${proposal.target_id} (${proposal.proposal_id})`
+    ),
+    "",
+  ].join("\n");
+  return upsertMarkdownSection(finalOutputText, content);
+}
+
+/**
  * Surfaces seed-stage document projection truncation in final output (C2): a
  * captured document whose tail exceeded the model-window projection budget did
  * not reach seed authoring. No-op when nothing was truncated. The durable
@@ -9602,19 +9851,20 @@ function appendFinalOutputDocumentProjectionTruncationSection(
   truncations: DocumentExcerptProjectionTruncation[],
 ): string {
   if (truncations.length === 0) return finalOutputText;
-  const heading = "## Document Projection Truncation";
+  const heading = "## Source Projection Truncation";
   const content = [
     heading,
     "",
-    "A captured document exceeded the seed-stage projection budget for the active " +
-      "model window, so its tail was not projected into seed authoring. The full " +
-      "captured content is retained in source-observations; only the seed-stage " +
-      "prompt projection was bounded. Recovering the omitted tail is a later stage.",
+    "A captured source file (document or code) exceeded the seed-stage projection " +
+      "budget for the active model window, so its tail was not projected into seed " +
+      "authoring. The full captured content is retained in source-observations; only " +
+      "the seed-stage prompt projection was bounded. Recovering the omitted tail is a " +
+      "later stage.",
     "",
     ...truncations.map((truncation) =>
-      `- ${truncation.source_ref} (${truncation.observation_id}): captured ` +
-      `${truncation.captured_chars} chars, projected ` +
-      `${truncation.projection_budget_chars} chars`
+      `- ${truncation.source_ref} (${truncation.observation_id}, ` +
+      `${truncation.target_material_kind}): captured ${truncation.captured_chars} ` +
+      `chars, projected ${truncation.projection_budget_chars} chars`
     ),
     "",
   ].join("\n");
@@ -11367,6 +11617,7 @@ export async function runReconstruct(
         competencyQuestionsValidation,
         competencyQuestionsValidationRef: competencyQuestionsValidationPath,
         claimRealizationMap,
+        sourceObservations: promptSourceObservations,
       }),
     );
   const competencyQuestionAssessmentValidationPath = path.join(
@@ -12903,13 +13154,14 @@ export async function runReconstruct(
     appendRuntimeStatusEventSync({
       pipeline: "reconstruct",
       sessionRoot,
-      sourceLabel: "document-projection-budget",
+      sourceLabel: "source-projection-budget",
       stageId: "seed_authoring",
       message:
-        `document ${truncation.source_ref} (${truncation.observation_id}) captured ` +
-        `${truncation.captured_chars} chars exceeds the seed-stage projection budget ` +
-        `${truncation.projection_budget_chars} chars; its tail was not projected into ` +
-        "seed authoring (full captured content retained in source-observations).",
+        `${truncation.target_material_kind} source ${truncation.source_ref} ` +
+        `(${truncation.observation_id}) captured ${truncation.captured_chars} chars ` +
+        `exceeds the seed-stage projection budget ${truncation.projection_budget_chars} ` +
+        "chars; its tail was not projected into seed authoring (full captured content " +
+        "retained in source-observations).",
     });
   }
   // Sibling for spreadsheets (P6): the inventory projection is unconditional and
@@ -12950,6 +13202,10 @@ export async function runReconstruct(
   finalOutputText = appendFinalOutputWorkbookInventoryProjectionTruncationSection(
     finalOutputText,
     workbookInventoryProjectionTruncations,
+  );
+  finalOutputText = appendFinalOutputUnresolvedRevisionSection(
+    finalOutputText,
+    revisionProposal,
   );
   const finalOutputViolations = validateFinalOutputProvenance({
     finalOutputText,

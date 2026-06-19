@@ -517,6 +517,7 @@ export function buildMaturationBaselineArtifact(args: {
         args.sourceMaterialAdmissionLedgerRef,
       source_material_admission_validation_ref:
         args.sourceMaterialAdmissionValidationRef,
+      candidate_limitation_refs: [],
       baseline_rows: [],
     };
   }
@@ -528,10 +529,12 @@ export function buildMaturationBaselineArtifact(args: {
     const resolvedEvidence = rowEvidence.length > 0
       ? rowEvidence
       : element.supporting_evidence_refs;
-    const limitationRefs = [
-      ...stringArray(seedElement?.limitation_refs),
-      ...candidate.limitation_refs,
-    ];
+    // Row-level limitations are the row's own seed-element limitations only.
+    // Candidate-level limitations are surfaced once at the baseline top-level
+    // (candidate_limitation_refs) so they constrain the actionable claim without
+    // forcing every surface×dimension row to limitation_backed (which would dead
+    // the maturation answer machine — frontier/closure/ledger/judge all skipped).
+    const limitationRefs = stringArray(seedElement?.limitation_refs);
     const coverage = questionCoverage({
       seedRefs,
       competencyQuestions: args.competencyQuestions,
@@ -615,6 +618,7 @@ export function buildMaturationBaselineArtifact(args: {
       args.sourceMaterialAdmissionLedgerRef,
     source_material_admission_validation_ref:
       args.sourceMaterialAdmissionValidationRef,
+    candidate_limitation_refs: candidate.limitation_refs,
     baseline_rows: rows.map((row) => ({
       ...row,
       blocking_reason: needsFrontier(row)
@@ -622,6 +626,50 @@ export function buildMaturationBaselineArtifact(args: {
         : row.blocking_reason,
     })),
   };
+}
+
+// M1 conservation — derive-from-authority. The closed set of required maturation
+// tuples is enumerated once from the selected purpose candidate's required_elements
+// (the same element x surface x dimension enumeration the baseline builder performs),
+// so the validator can prove every required tuple is present exactly once instead of
+// only checking that the rows that ARE present resolve. Coverage authority is the
+// TUPLE, not the (slug-derived) baseline_row_id, which is verified separately.
+function baselineTupleKey(
+  elementId: string,
+  surfaceRef: string,
+  dimensionRef: string,
+): string {
+  return JSON.stringify([elementId, surfaceRef, dimensionRef]);
+}
+
+function sameRefSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const seen = new Set(a);
+  return b.every((ref) => seen.has(ref));
+}
+
+// Exact array equality (order- and multiplicity-sensitive). Used for matrix fields
+// the builder copies VERBATIM from the baseline row, where set-equality would miss a
+// reorder or a duplicate-occurrence swap (e.g. [a,a,b] -> [a,b,b]: same length+set).
+function sameRefArray(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((ref, index) => ref === b[index]);
+}
+
+function deriveExpectedBaselineTuples(
+  selected:
+    | ReconstructSourcePurposeCandidatesArtifact["purpose_candidates"][number]
+    | null
+    | undefined,
+): Set<string> {
+  const tuples = new Set<string>();
+  for (const element of selected?.adequacy_frame.required_elements ?? []) {
+    for (const surfaceRef of element.actionability_surface_refs) {
+      for (const dimensionRef of element.maturity_dimension_refs) {
+        tuples.add(baselineTupleKey(element.element_id, surfaceRef, dimensionRef));
+      }
+    }
+  }
+  return tuples;
 }
 
 export function validateMaturationBaseline(args: {
@@ -656,6 +704,25 @@ export function validateMaturationBaseline(args: {
       code: "session_id_mismatch",
       message: "maturation baseline session_id must match source-purpose candidates",
       subjectId: baseline.session_id,
+    }));
+  }
+  // candidate_limitation_refs are the source-level authority that holds an otherwise
+  // closed run at actionable_limited; a stale/edited baseline that drops them (then
+  // copied faithfully into the matrix) would pass the matrix check yet let
+  // continuation project actionable_ready. Anchor them to the selected candidate.
+  const expectedCandidateLimitations = new Set(selected?.limitation_refs ?? []);
+  const actualCandidateLimitations = new Set(baseline.candidate_limitation_refs);
+  const candidateLimitationsMatch =
+    expectedCandidateLimitations.size === actualCandidateLimitations.size &&
+    [...expectedCandidateLimitations].every((ref) =>
+      actualCandidateLimitations.has(ref)
+    );
+  if (!candidateLimitationsMatch) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "maturation baseline candidate_limitation_refs must match the selected purpose candidate's limitation_refs",
+      subjectId: "candidate_limitation_refs",
     }));
   }
   if (!baseline.source_reconstruct_record_ref || !args.sourceReconstructRecordSha256) {
@@ -754,13 +821,63 @@ export function validateMaturationBaseline(args: {
       row.member_target_material_kind !== null &&
       row.member_source_refs.length > 0 &&
       row.cross_material_ref_refs.length > 0;
-    if (mixedTarget && !hasLineage && row.limitation_refs.length === 0) {
+    // Mixed-target lineage is row-scoped by default: each row grounds itself by its
+    // own member lineage or its own limitation, because a stray candidate limitation
+    // does not name a row's member/source. The one exception is a candidate that is
+    // ITSELF limitation-backed — the upstream purpose validator already accepted its
+    // limitation_refs as justifying gaps (e.g. unrecoverable mixed-member lineage), so
+    // its rows may lean on that acknowledgment rather than failing baseline validation.
+    // (Candidate limitations still never mark a row limitation_backed, so frontier
+    // gating is unaffected.)
+    const candidateLimitationBacked =
+      selected?.purpose_source_status === "limitation_backed" ||
+      selected?.adequacy_frame.frame_status === "limitation_backed";
+    const mixedLineageExempt =
+      row.limitation_refs.length > 0 ||
+      (candidateLimitationBacked && baseline.candidate_limitation_refs.length > 0);
+    if (mixedTarget && !hasLineage && !mixedLineageExempt) {
       violations.push(violation({
         code: "mixed_lineage_missing",
         message:
           "mixed-material baseline row must preserve member lineage or cite a limitation",
         subjectId: row.baseline_row_id,
       }));
+    }
+  }
+  // M1 coverage conservation: derive the closed required-tuple set from the selected
+  // candidate and prove every required tuple is present exactly once. The per-row loop
+  // above only checks that PRESENT rows resolve, so a deleted required row (erasing
+  // blocker/high scope) or a duplicated tuple would otherwise pass silently.
+  if (selected) {
+    const expectedTuples = deriveExpectedBaselineTuples(selected);
+    const presentTupleCounts = new Map<string, number>();
+    for (const row of baseline.baseline_rows) {
+      const key = baselineTupleKey(
+        row.purpose_element_ref,
+        row.actionability_surface_ref,
+        row.maturity_dimension_ref,
+      );
+      presentTupleCounts.set(key, (presentTupleCounts.get(key) ?? 0) + 1);
+    }
+    for (const tuple of expectedTuples) {
+      if (!presentTupleCounts.has(tuple)) {
+        violations.push(violation({
+          code: "missing_required_coverage",
+          message:
+            `required maturation tuple has no baseline row: ${tuple}`,
+          subjectId: tuple,
+        }));
+      }
+    }
+    for (const [tuple, count] of presentTupleCounts) {
+      if (count > 1 && expectedTuples.has(tuple)) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            `multiple baseline rows cover one required maturation tuple: ${tuple}`,
+          subjectId: tuple,
+        }));
+      }
     }
   }
   return {
@@ -811,6 +928,7 @@ export function buildActionabilityMatrixArtifact(args: {
     created_at: isoNow(),
     maturation_baseline_ref: args.maturationBaselineRef,
     maturation_baseline_validation_ref: args.maturationBaselineValidationRef,
+    candidate_limitation_refs: args.maturationBaseline.candidate_limitation_refs,
     rows: args.maturationBaseline.baseline_rows.map((row) => {
       const matchingAnswerClaims = answerClaims.filter((claim) =>
         answerClaimMatchesBaselineRow(claim, row)
@@ -934,6 +1052,27 @@ export function validateActionabilityMatrix(args: {
       subjectId: matrix.session_id,
     }));
   }
+  // Continuation trusts matrix.candidate_limitation_refs to keep an otherwise closed
+  // run at actionable_limited, so the matrix must faithfully carry the validated
+  // baseline's candidate limitations — a stale/edited matrix that drops them would
+  // otherwise let continuation project actionable_ready despite the source limitation.
+  const baselineCandidateLimitations = new Set(
+    args.maturationBaseline.candidate_limitation_refs,
+  );
+  const matrixCandidateLimitations = new Set(matrix.candidate_limitation_refs);
+  const candidateLimitationsMatch =
+    baselineCandidateLimitations.size === matrixCandidateLimitations.size &&
+    [...baselineCandidateLimitations].every((ref) =>
+      matrixCandidateLimitations.has(ref)
+    );
+  if (!candidateLimitationsMatch) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "actionability matrix candidate_limitation_refs must match the validated maturation baseline",
+      subjectId: "candidate_limitation_refs",
+    }));
+  }
   if (args.maturationBaselineValidation.validation_status !== "valid") {
     violations.push(violation({
       code: "prior_validation_invalid",
@@ -950,6 +1089,13 @@ export function validateActionabilityMatrix(args: {
       }));
     }
     seen.add(row.matrix_row_id);
+    if (row.baseline_row_refs.length !== 1) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message: "matrix row must reference exactly one baseline row",
+        subjectId: row.matrix_row_id,
+      }));
+    }
     const baselineRef = row.baseline_row_refs[0] ?? null;
     const baselineRow = baselineRef ? baselineRows.get(baselineRef) : null;
     if (!baselineRow) {
@@ -964,6 +1110,39 @@ export function validateActionabilityMatrix(args: {
       violations.push(violation({
         code: "conflicting_state",
         message: "matrix row must preserve baseline materiality",
+        subjectId: row.matrix_row_id,
+      }));
+    }
+    // M1 payload conservation: a matrix row can cite baseline A while mutating the
+    // identity/lineage fields it must inherit. Assert the baseline-immutable set is
+    // preserved (materiality is checked above; maturity/support/limitation/readiness
+    // legitimately change by validated rules, so are NOT asserted). The builder copies
+    // member-lineage AND competency refs VERBATIM from the baseline row, so they are
+    // compared with exact array equality (multiplicity- and order-sensitive): a
+    // set-only check would let a duplicate-occurrence swap or a competency-ref tamper
+    // pass undetected.
+    const identityPreserved =
+      row.purpose_element_ref === baselineRow.purpose_element_ref &&
+      row.actionability_surface_ref === baselineRow.actionability_surface_ref &&
+      row.maturity_dimension_ref === baselineRow.maturity_dimension_ref &&
+      row.materiality_ref === baselineRow.materiality_ref &&
+      row.member_target_material_kind === baselineRow.member_target_material_kind &&
+      sameRefArray(row.member_scope_refs, baselineRow.member_scope_refs) &&
+      sameRefArray(row.member_source_refs, baselineRow.member_source_refs) &&
+      sameRefArray(row.cross_material_ref_refs, baselineRow.cross_material_ref_refs) &&
+      sameRefArray(
+        row.competency_question_refs,
+        baselineRow.competency_question_refs,
+      ) &&
+      sameRefArray(
+        row.competency_assessment_refs,
+        baselineRow.competency_assessment_refs,
+      );
+    if (!identityPreserved) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "matrix row must preserve the baseline row's identity and member-lineage fields",
         subjectId: row.matrix_row_id,
       }));
     }
@@ -1050,6 +1229,28 @@ export function validateActionabilityMatrix(args: {
         message:
           "matrix member_readiness must follow material L4, frontier, or limitation state",
         subjectId: row.matrix_row_id,
+      }));
+    }
+  }
+  // M1 coverage conservation: every baseline row must map to exactly one matrix row.
+  // The loop above only checks that PRESENT matrix rows resolve to a baseline row, so a
+  // matrix that DROPS a baseline row (erasing its scope from the downstream claim) would
+  // otherwise pass silently.
+  const matrixCoverageCounts = new Map<string, number>();
+  for (const row of matrix.rows) {
+    for (const ref of row.baseline_row_refs) {
+      matrixCoverageCounts.set(ref, (matrixCoverageCounts.get(ref) ?? 0) + 1);
+    }
+  }
+  for (const baselineRowId of baselineRows.keys()) {
+    const count = matrixCoverageCounts.get(baselineRowId) ?? 0;
+    if (count !== 1) {
+      violations.push(violation({
+        code: count === 0 ? "missing_required_coverage" : "conflicting_state",
+        message: count === 0
+          ? `baseline row has no actionability matrix row: ${baselineRowId}`
+          : `baseline row is covered by multiple matrix rows: ${baselineRowId}`,
+        subjectId: baselineRowId,
       }));
     }
   }
@@ -3655,6 +3856,17 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   const closedRows = args.actionabilityMatrix.rows.filter((row) =>
     row.member_readiness === "closed"
   );
+  // Purpose-candidate-level limitations bound the overall claim but do not gate any
+  // single row's frontier; when present they keep the claim at actionable_limited
+  // even if every row is closed (the source itself is acknowledged as partial).
+  const candidateLimitationRefs = args.actionabilityMatrix.candidate_limitation_refs;
+  const hasCandidateLimitations = candidateLimitationRefs.length > 0;
+  // An unproven final re-question convergence is its own limitation on the claim,
+  // independent of candidate or row limitations — so it must be recorded whenever it
+  // holds, not only when it is the sole reason for actionable_limited. Otherwise the
+  // candidate-limitation branch below would preempt it and the public claim (which
+  // projects only decision.limitation_refs) would silently drop it.
+  const convergenceUnproven = finalRequestionStatus !== "no_new_material_question";
   let decisionState: ReconstructMaturationContinuationDecisionArtifact["decision_state"];
   let rationale: string;
   const convergenceLimitationRefs: string[] = [];
@@ -3670,13 +3882,18 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   } else if (limitationRows.length > 0) {
     decisionState = "actionable_limited";
     rationale = "No material frontier remains, but named limitations constrain the actionability claim.";
-  } else if (finalRequestionStatus !== "no_new_material_question") {
+  } else if (hasCandidateLimitations) {
     decisionState = "actionable_limited";
-    convergenceLimitationRefs.push(`maturation-final-requestion:${finalRequestionStatus}`);
+    rationale = "All material rows are closed, but purpose-candidate-level limitations constrain the actionability claim and signal next-round source frontier.";
+  } else if (convergenceUnproven) {
+    decisionState = "actionable_limited";
     rationale = "No material frontier remains, but final re-question convergence has not proven actionable readiness.";
   } else {
     decisionState = "actionable_ready";
     rationale = "All material rows are closed for the declared purpose.";
+  }
+  if (convergenceUnproven) {
+    convergenceLimitationRefs.push(`maturation-final-requestion:${finalRequestionStatus}`);
   }
   const nextFrontierRefs = [
     ...args.maturationQuestionFrontier.questions
@@ -3715,6 +3932,7 @@ export function buildMaturationContinuationDecisionArtifact(args: {
     limitation_refs: [
       ...new Set([
         ...args.actionabilityMatrix.rows.flatMap((row) => row.limitation_refs),
+        ...candidateLimitationRefs,
         ...args.ontologyExpansionValidation.violations.map((item) =>
           item.subject_id ?? "ontology_expansion_validation"
         ),
@@ -3819,12 +4037,69 @@ export function validateMaturationContinuationDecision(args: {
       }));
     }
   }
+  // M1 partition conservation: recompute the claim_scope partition from the matrix
+  // (closed -> included; non-closed -> excluded) and require the decision to match it.
+  // The resolve check above only verifies the listed refs exist, so a claim_scope that
+  // OMITS non-closed rows would pass and the public claim would preserve the omission.
+  const expectedIncluded = args.actionabilityMatrix.rows
+    .filter((row) => row.member_readiness === "closed")
+    .map((row) => row.matrix_row_id);
+  const expectedExcluded = args.actionabilityMatrix.rows
+    .filter((row) => row.member_readiness !== "closed")
+    .map((row) => row.matrix_row_id);
+  if (!sameRefSet(decision.claim_scope.included_row_refs, expectedIncluded)) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "continuation claim_scope included_row_refs must equal the matrix's closed rows",
+      subjectId: "claim_scope.included_row_refs",
+    }));
+  }
+  if (!sameRefSet(decision.claim_scope.excluded_row_refs, expectedExcluded)) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "continuation claim_scope excluded_row_refs must equal the matrix's non-closed rows",
+      subjectId: "claim_scope.excluded_row_refs",
+    }));
+  }
   const hasAuthorityNeed = decision.authority_request_refs.length > 0;
   if (decision.decision_state === "actionable_ready" && materialOpenRows.length > 0) {
     violations.push(violation({
       code: "conflicting_state",
       message: "actionable_ready cannot be projected while material frontier rows remain",
       subjectId: "actionable_ready",
+    }));
+  }
+  // Mirror the builder: purpose-candidate-level limitations constrain the overall
+  // claim, so a saved/edited decision cannot project actionable_ready while the
+  // matrix carries them (the bounded claim is at most actionable_limited).
+  if (
+    decision.decision_state === "actionable_ready" &&
+    args.actionabilityMatrix.candidate_limitation_refs.length > 0
+  ) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "actionable_ready cannot be projected while purpose-candidate-level limitations remain",
+      subjectId: "actionable_ready",
+    }));
+  }
+  // The public claim projects decision.limitation_refs, so every matrix candidate
+  // limitation must survive into it — a saved/edited limited decision that drops them
+  // (keeping only excluded rows or other limitation refs) would erase the source-level
+  // limitation from the downstream claim even though the validated matrix still carries it.
+  const decisionLimitationRefs = new Set(decision.limitation_refs);
+  if (
+    args.actionabilityMatrix.candidate_limitation_refs.some(
+      (ref) => !decisionLimitationRefs.has(ref),
+    )
+  ) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message:
+        "continuation decision limitation_refs must include every matrix candidate limitation",
+      subjectId: "candidate_limitation_refs",
     }));
   }
   if (

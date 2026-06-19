@@ -182,12 +182,13 @@ function defaultProfileForKind(
 }
 
 /**
- * Structural `content_excerpt` capture budgets (chars). Code and other kinds keep
- * a small leading-sample budget — the observation is a structural sample, not the
- * whole file. Text-readable document prose is captured whole so the document tail
- * (goals, milestones, decisions) reaches seed authoring instead of being lost to a
- * leading slice: a typical business/policy document is well within any modern model
- * window (e.g. ~12.5K chars ≈ ~3K tokens).
+ * Structural `content_excerpt` capture budgets (chars). Code source and text-readable
+ * document prose are captured whole so the file tail (later definitions, document
+ * goals/milestones/decisions) reaches seed authoring instead of being lost to a
+ * leading slice — both are projected whole at the seed stage, so a small capture
+ * would silently author the seed from a partial file. Other kinds (binary documents,
+ * spreadsheet/database structural inventories) keep a small leading sample — the
+ * observation is a structural sample there, not the whole file.
  *
  * Capture is MODEL-AGNOSTIC: it runs before the seed-stage (provider, model) is
  * resolved, so it captures up to a fixed `DOCUMENT_CAPTURE_CEILING_CHARS` ceiling
@@ -315,7 +316,17 @@ export function isTextReadableDocumentExtension(
 }
 
 function structuralExcerptCharLimit(kind: TargetMaterialKind, ref: string): number {
-  if (kind === "document" && isTextReadableDocumentExtension(path.extname(ref))) {
+  // Code source is text and is projected whole into seed authoring (see
+  // isFullExcerptProjectionEligible in run.ts), so it must be CAPTURED whole too —
+  // a small leading sample would make seed authoring read only the file's head while
+  // the prompt-projection truncation never fires (capture < projection budget),
+  // silently authoring the seed from a partial file. A text-readable document earns
+  // the same whole-capture budget; binary documents and structural-inventory kinds
+  // (spreadsheet/database) keep the bounded sample.
+  if (
+    kind === "code" ||
+    (kind === "document" && isTextReadableDocumentExtension(path.extname(ref)))
+  ) {
     return DOCUMENT_CAPTURE_CEILING_CHARS;
   }
   return DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;

@@ -12,8 +12,8 @@
  *     from a real model window (not mock / FLOOR-via-unknown);
  *   - the captured excerpt is the whole document and exceeds 200K
  *     (excerpt_truncated === false) — capture is not the bottleneck;
- *   - NO seed-stage projection truncation occurred (no document-projection-budget
- *     runtime event, no "Document Projection Truncation" final-output section) —
+ *   - NO seed-stage projection truncation occurred (no source-projection-budget
+ *     runtime event, no "Source Projection Truncation" final-output section) —
  *     a document above the 200K FLOOR is projected WHOLE, which only the dynamic
  *     budget (~450K for opus) explains; the static FLOOR alone would have sliced it;
  *   - the document tail (a unique late-section sentinel) is present in the captured
@@ -322,13 +322,13 @@ async function main(): Promise<number> {
   // projection-truncated — that whole projection only the dynamic budget explains.
   const events = await readNdjson(path.join(sessionRootAbs, "runtime-events.ndjson"));
   const projectionTruncationEvents = events.filter(
-    (e) => e.source?.label === "document-projection-budget",
+    (e) => e.source?.label === "source-projection-budget",
   );
   const finalOutputText = result.finalOutputPath
     ? await fs.readFile(result.finalOutputPath, "utf8").catch(() => "")
     : "";
   const finalOutputHasTruncationSection = finalOutputText.includes(
-    "## Document Projection Truncation",
+    "## Source Projection Truncation",
   );
   const projectedWhole =
     projectionTruncationEvents.length === 0 && !finalOutputHasTruncationSection;

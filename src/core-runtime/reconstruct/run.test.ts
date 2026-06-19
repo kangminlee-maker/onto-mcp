@@ -22,6 +22,9 @@ import type {
   ReconstructCompetencyQuestionsValidationArtifact,
   ReconstructHandoffDecisionValidationArtifact,
   ReconstructMetricsArtifact,
+  ReconstructFailureClassificationArtifact,
+  ReconstructRevisionProposalArtifact,
+  ReconstructRevisionProposalAction,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
   ReconstructRegistryVerificationEvidenceValidationArtifact,
@@ -45,8 +48,12 @@ import {
   createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
   recomputeWorkbookInventoryProjectionTruncations,
+  assessmentEvidenceObservationIds,
   runReconstruct,
   singleDocumentProjectionTruncation,
+  stopDecisionAllowedDecisions,
+  boundEvidenceBySerializedSize,
+  appendFinalOutputUnresolvedRevisionSection,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -597,6 +604,79 @@ describe("runReconstruct", () => {
     // — its decoded-binary excerpt stays bounded to the seed-stage budget.
     expect(projectedExcerptLengths([docObservation("obs-doc-pdf", ".pdf")]))
       .toEqual([1200]);
+  });
+
+  it("expands a single code observation to full source (a prior gap truncated code at the base limit)", () => {
+    const longSource = "export const handler = () => doWork();\n".repeat(60);
+    expect(longSource.length).toBeGreaterThan(1200);
+    const codeObservation = (id: string) => ({
+      observation_id: id,
+      target_material_kind: "code" as const,
+      adapter_id: "fixture-observer",
+      source_ref: `/src/${id}.ts`,
+      location: "file",
+      summary: `Code fixture ${id}.`,
+      structural_data: { content_excerpt: longSource, extension: ".ts" },
+    });
+    const lengths = (
+      observations: ReturnType<typeof codeObservation>[],
+    ): number[] =>
+      (observationPromptPayload(
+        {
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: "2026-06-16T00:00:00.000Z",
+          observations,
+          skipped_refs: [],
+          validation_results: [],
+        },
+        { contentExcerptCharLimit: 1200, expandSingleDocumentExcerpt: true },
+      ) as Array<any>).map(
+        (observation) => observation.structural_data.content_excerpt.length as number,
+      );
+    // Single code observation → whole source reaches seed authoring (not truncated at 1200).
+    expect(lengths([codeObservation("svc")])).toEqual([longSource.length]);
+    // Several code observations → each bounded to the base limit (no aggregate blowup).
+    expect(lengths([codeObservation("a"), codeObservation("b")])).toEqual([
+      1200,
+      1200,
+    ]);
+  });
+
+  it("surfaces code excerpt truncation when the budget is below the captured source", () => {
+    const longSource = "const x = 1;\n".repeat(200);
+    const truncations: any[] = [];
+    observationPromptPayload(
+      {
+        schema_version: "1",
+        session_id: "session-1",
+        created_at: "2026-06-16T00:00:00.000Z",
+        observations: [{
+          observation_id: "obs-code-trunc",
+          target_material_kind: "code" as const,
+          adapter_id: "fixture-observer",
+          source_ref: "/src/large.ts",
+          location: "file",
+          summary: "Large code fixture.",
+          structural_data: { content_excerpt: longSource, extension: ".ts" },
+        }],
+        skipped_refs: [],
+        validation_results: [],
+      },
+      {
+        expandSingleDocumentExcerpt: true,
+        documentExcerptCharBudget: 1000,
+        recordDocumentExcerptProjectionTruncation: (truncation) =>
+          truncations.push(truncation),
+      },
+    );
+    // Code truncation is now surfaced (it was silent before the fix).
+    expect(truncations).toHaveLength(1);
+    expect(truncations[0]).toMatchObject({
+      source_ref: "/src/large.ts",
+      captured_chars: longSource.length,
+      projection_budget_chars: 1000,
+    });
   });
 
   it("slices an expanded single document to the model-aware projection budget", () => {
@@ -3444,6 +3524,8 @@ describe("runReconstruct", () => {
       };
       revision_proposal_summary?: {
         proposal_count?: number;
+        application_status?: string;
+        unresolved_action_count?: number;
         proposal_projection_limit?: number;
         proposal_included_count?: number;
         proposal_omitted_count?: number;
@@ -3503,6 +3585,16 @@ describe("runReconstruct", () => {
           evidence_source_basenames?: string[];
           evidence_refs?: unknown;
         }>;
+      };
+      source_evidence?: unknown[];
+      source_evidence_projection?: {
+        cited_observation_count?: number;
+        projected_observation_count?: number;
+        omitted_observation_count?: number;
+        projected_chars?: number;
+        total_budget_chars?: number;
+        per_observation_excerpt_char_limit?: number;
+        omitted_observation_id_samples?: string[];
       };
     }> = [];
     const confirmationClaimSummaries: Array<
@@ -3815,7 +3907,7 @@ describe("runReconstruct", () => {
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v2");
+    ).toBe("competency_question_assessment_compact_projection:v4");
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -3845,7 +3937,7 @@ describe("runReconstruct", () => {
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v2");
+    ).toBe("competency_question_assessment_compact_projection:v4");
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -3995,7 +4087,7 @@ describe("runReconstruct", () => {
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v2");
+    ).toBe("competency_question_assessment_compact_projection:v4");
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_sha256,
@@ -4017,7 +4109,7 @@ describe("runReconstruct", () => {
       .toMatchObject({
         projection_kind: "competency_question_assessment_compact_projection",
         projection_contract_version:
-          "competency_question_assessment_compact_projection:v2",
+          "competency_question_assessment_compact_projection:v4",
         prompt_char_limit: 50_000,
         batching_policy: expect.objectContaining({
           mode: "deterministic_prompt_budget",
@@ -4079,6 +4171,23 @@ describe("runReconstruct", () => {
       competencyAssessmentPayloads[0]?.competency_questions_validation
         ?.violation_count,
     ).toBe(0);
+    // @codex R4/R5: source evidence is bounded to a deterministic per-payload SERIALIZED
+    // budget (so an evidence-rich or inventory-heavy spreadsheet question cannot overflow
+    // the prompt budget); the projection metadata surfaces the bound honestly and its
+    // invariants hold.
+    const sourceEvidenceProjection =
+      competencyAssessmentPayloads[0]?.source_evidence_projection;
+    expect(sourceEvidenceProjection?.total_budget_chars).toBe(24_000);
+    expect(sourceEvidenceProjection?.per_observation_excerpt_char_limit).toBe(4000);
+    // Total serialized evidence always stays within budget — an over-budget observation
+    // is stubbed, so even a lone evidence item cannot exceed the reserve.
+    expect(sourceEvidenceProjection?.projected_chars ?? 0).toBeLessThanOrEqual(24_000);
+    expect(
+      (sourceEvidenceProjection?.projected_observation_count ?? 0) +
+        (sourceEvidenceProjection?.omitted_observation_count ?? 0),
+    ).toBe(sourceEvidenceProjection?.cited_observation_count);
+    expect(competencyAssessmentPayloads[0]?.source_evidence)
+      .toHaveLength(sourceEvidenceProjection?.projected_observation_count ?? -1);
     expect(finalOutputPayloads[0]?.final_output_prompt_policy?.projection_kind)
       .toBe("final_output_compact_summary_projection");
     expect(
@@ -4149,6 +4258,8 @@ describe("runReconstruct", () => {
       });
     expect(finalOutputPayloads[0]?.revision_proposal_summary)
       .toMatchObject({
+        application_status: "proposed_not_applied_carried_to_next_round",
+        unresolved_action_count: expect.any(Number),
         proposal_projection_limit: 60,
         proposal_included_count: expect.any(Number),
         proposal_omitted_count: expect.any(Number),
@@ -4284,8 +4395,82 @@ describe("runReconstruct", () => {
       competencyQuestionsValidation,
       competencyQuestionsValidationRef: "/tmp/competency-questions-validation.yaml",
       claimRealizationMap,
+      sourceObservations: {
+        schema_version: "1",
+        session_id: "cq-budget-run",
+        created_at: "2026-06-04T00:00:00.000Z",
+        observations: [],
+        skipped_refs: [],
+        validation_results: [],
+      },
     })).rejects.toThrow(/compact prompt exceeds deterministic prompt budget/);
     expect(called).toBe(false);
+  });
+
+  it("collects only the evidence observation ids cited by the assessed questions' linked claims", () => {
+    const ids = assessmentEvidenceObservationIds(
+      {
+        claimRealizationMap: {
+          claim_realizations: [
+            {
+              claim_id: "c1",
+              evidence_refs: [
+                { observation_id: "obs-1" },
+                { observation_id: "obs-2" },
+              ],
+            },
+            { claim_id: "c2", evidence_refs: [{ observation_id: "obs-3" }] },
+          ],
+        },
+      } as any,
+      [{ linked_claim_ids: ["c1"] }] as any,
+    );
+    // c1 is linked → its two cited observations reach the assessor; c2 is excluded.
+    expect([...ids].sort()).toEqual(["obs-1", "obs-2"]);
+  });
+
+  it("also collects evidence observation ids cited directly by the question (@codex P2)", () => {
+    const ids = assessmentEvidenceObservationIds(
+      {
+        claimRealizationMap: {
+          claim_realizations: [
+            { claim_id: "c1", evidence_refs: [{ observation_id: "obs-1" }] },
+          ],
+        },
+      } as any,
+      [
+        {
+          linked_claim_ids: ["c1"],
+          evidence_refs: [
+            { observation_id: "obs-2" },
+            { observation_id: "obs-1" },
+          ],
+        },
+      ] as any,
+    );
+    // The question's own evidence ref (obs-2) — runtime assessment authority — reaches
+    // the assessor alongside its linked claim's evidence (obs-1), without duplication.
+    expect([...ids].sort()).toEqual(["obs-1", "obs-2"]);
+  });
+
+  it("also collects domain competency semantic assessment evidence (@codex P2)", () => {
+    const ids = assessmentEvidenceObservationIds(
+      {
+        claimRealizationMap: { claim_realizations: [] },
+      } as any,
+      [
+        {
+          linked_claim_ids: [],
+          evidence_refs: [],
+          domain_competency_semantic_assessments: [
+            { evidence_refs: [{ observation_id: "obs-domain" }] },
+          ],
+        },
+      ] as any,
+    );
+    // A domain competency semantic assessment row's own validated evidence (obs-domain)
+    // is a distinct authority path; its body must still reach the assessor.
+    expect([...ids]).toEqual(["obs-domain"]);
   });
 
   it("repairs an invalid ontology seed with focused validation context", async () => {
@@ -6009,6 +6194,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
       {
         observation_id: "obs-doc",
         source_ref: "/doc/obs-doc",
+        target_material_kind: "document",
         captured_chars: 5000,
         projection_budget_chars: 1000,
       },
@@ -6036,6 +6222,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
       {
         observation_id: "obs-big",
         source_ref: "/doc/obs-big",
+        target_material_kind: "document",
         captured_chars: 5000,
         projection_budget_chars: 1000,
       },
@@ -6070,6 +6257,151 @@ describe("observationPromptPayload projection-truncation recording", () => {
     expect(recorded).toEqual([]);
   });
 
+  // #2: the deterministic stop gate must consume unapplied revision actions so a
+  // single-pass run cannot claim "stop" while reject/defer proposals remain — they
+  // are carried to the next maturation round, not silently dropped.
+  describe("stopDecisionAllowedDecisions (revision proposal gate, #2)", () => {
+    const cleanMetrics = {
+      unresolved_question_count: 0,
+      confirmation_state_counts: { rejected: 0, partial: 0, deferred: 0 },
+    } as unknown as ReconstructMetricsArtifact;
+    const noMaterialFailures = {
+      failures: [],
+    } as unknown as ReconstructFailureClassificationArtifact;
+    const revisionProposal = (actions: ReconstructRevisionProposalAction[]) =>
+      ({
+        proposals: actions.map((action, index) => ({
+          proposal_id: `proposal-${index}`,
+          target_type: "seed",
+          target_id: "seed-1",
+          action,
+          rationale: "rationale",
+          expected_effect: "effect",
+        })),
+      }) as unknown as ReconstructRevisionProposalArtifact;
+
+    it("allows stop when no unresolved work and only refinement proposals remain", () => {
+      expect(
+        stopDecisionAllowedDecisions({
+          metrics: cleanMetrics,
+          failureClassification: noMaterialFailures,
+          revisionProposal: revisionProposal(["reuse", "extend", "rename", "split"]),
+        }),
+      ).toEqual(["stop", "continue", "ask_user"]);
+    });
+
+    it("refuses stop while a reject proposal remains unapplied", () => {
+      expect(
+        stopDecisionAllowedDecisions({
+          metrics: cleanMetrics,
+          failureClassification: noMaterialFailures,
+          revisionProposal: revisionProposal(["reject"]),
+        }),
+      ).toEqual(["continue", "ask_user"]);
+    });
+
+    it("refuses stop while a defer proposal remains unapplied", () => {
+      expect(
+        stopDecisionAllowedDecisions({
+          metrics: cleanMetrics,
+          failureClassification: noMaterialFailures,
+          revisionProposal: revisionProposal(["defer", "reuse"]),
+        }),
+      ).toEqual(["continue", "ask_user"]);
+    });
+  });
+
+  // @codex R5: assessment source evidence is bounded by serialized payload size, not
+  // observation count, so an inventory-heavy spreadsheet observation (whose structural
+  // payload the per-char excerpt limit does not bound) cannot blow the prompt reserve.
+  describe("boundEvidenceBySerializedSize (assessment source evidence cap, #1)", () => {
+    const item = (chars: number) => ({ body: "x".repeat(chars) });
+
+    it("keeps every observation when the total fits the budget", () => {
+      const result = boundEvidenceBySerializedSize(
+        [item(100), item(100), item(100)],
+        24_000,
+      );
+      expect(result.kept).toHaveLength(3);
+      expect(result.chars).toBeLessThanOrEqual(24_000);
+    });
+
+    it("stops once the serialized budget is spent, even with few observations", () => {
+      // Two ~10K observations fit (~20K); the third would exceed 24K and is dropped.
+      const result = boundEvidenceBySerializedSize(
+        [item(10_000), item(10_000), item(10_000)],
+        24_000,
+      );
+      expect(result.kept).toHaveLength(2);
+      expect(result.chars).toBeLessThanOrEqual(24_000);
+    });
+
+    it("stubs a lone over-budget observation instead of admitting it whole", () => {
+      const result = boundEvidenceBySerializedSize(
+        [
+          {
+            observation_id: "obs-big",
+            source_ref: "src/big.xlsx",
+            target_material_kind: "spreadsheet",
+            structural_data: { workbook_inventory: { body: "x".repeat(40_000) } },
+          },
+        ],
+        24_000,
+      );
+      // The over-budget observation is replaced by a metadata stub, so the single
+      // unsplittable question's payload can never exceed the prompt cap.
+      expect(result.kept).toHaveLength(1);
+      expect(result.chars).toBeLessThanOrEqual(24_000);
+      expect((result.kept[0] as { evidence_body_omitted_for_budget?: boolean })
+        .evidence_body_omitted_for_budget).toBe(true);
+      expect((result.kept[0] as { observation_id?: string }).observation_id)
+        .toBe("obs-big");
+      expect((result.kept[0] as { structural_data?: unknown }).structural_data)
+        .toBeUndefined();
+    });
+  });
+
+  // @codex R6: unresolved reject/defer revision proposals must be disclosed
+  // deterministically (the stop gate already treats them as unresolved), not left to
+  // the final-output LLM's prose which could omit them or imply completion.
+  describe("appendFinalOutputUnresolvedRevisionSection (deterministic disclosure, #2)", () => {
+    const proposal = (proposal_id: string, action: string) => ({
+      proposal_id,
+      target_type: "seed",
+      target_id: "seed-1",
+      action,
+      rationale: "r",
+      expected_effect: "e",
+    });
+
+    it("appends an unresolved-revision section for reject/defer proposals", () => {
+      const out = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
+        proposals: [
+          proposal("p1", "reject"),
+          proposal("p2", "reuse"),
+          proposal("p3", "defer"),
+        ],
+      } as never);
+      expect(out).toContain("## Unresolved Revision Proposals");
+      expect(out).toContain("reject seed seed-1 (p1)");
+      expect(out).toContain("defer seed seed-1 (p3)");
+      // refinement actions are not unresolved work and are not listed
+      expect(out).not.toContain("reuse seed seed-1 (p2)");
+    });
+
+    it("is a no-op when no reject/defer proposals remain", () => {
+      const text = "# Result\n";
+      expect(
+        appendFinalOutputUnresolvedRevisionSection(text, {
+          proposals: [proposal("p1", "reuse"), proposal("p2", "extend")],
+        } as never),
+      ).toBe(text);
+      expect(
+        appendFinalOutputUnresolvedRevisionSection(text, { proposals: [] } as never),
+      ).toBe(text);
+    });
+  });
+
   // Resume fallback (Codex P2/12751): on reuse_existing_authored_artifacts the
   // author sink is empty, so runReconstruct recomputes the single-document case
   // from the projected (redacted) observations + budget.
@@ -6084,6 +6416,26 @@ describe("observationPromptPayload projection-truncation recording", () => {
         {
           observation_id: "obs-doc",
           source_ref: "/doc/obs-doc",
+          target_material_kind: "document",
+          captured_chars: 5000,
+          projection_budget_chars: 1000,
+        },
+      ]);
+    });
+
+    it("recomputes a single sliced code file too (@codex P2 — code resume parity)", () => {
+      // Fresh runs record code truncation provenance; the resume fallback must mirror
+      // the same full-excerpt eligibility (code, not only text-readable documents).
+      expect(
+        singleDocumentProjectionTruncation(
+          artifact([{ id: "obs-code", kind: "code", ext: ".ts", excerpt: "x".repeat(5000) }]) as any,
+          1000,
+        ),
+      ).toEqual([
+        {
+          observation_id: "obs-code",
+          source_ref: "/doc/obs-code",
+          target_material_kind: "code",
           captured_chars: 5000,
           projection_budget_chars: 1000,
         },
