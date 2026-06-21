@@ -124,6 +124,22 @@ const REVISION_ACTIONS = [
   "defer",
 ] as const satisfies readonly ReconstructRevisionProposalAction[];
 
+// Shared revision-proposal predicates (M4: one blocker predicate used identically at the
+// stop gate (run.ts) and the continuation gate (maturation-validation.ts); both import from
+// here, the revision-proposal concept owner, so the two gates cannot drift). reject|defer
+// block continuation/stop; every non-reuse proposal is disclosed.
+export function isRevisionBlocker(
+  proposal: ReconstructRevisionProposalEntry,
+): boolean {
+  return proposal.action === "reject" || proposal.action === "defer";
+}
+
+export function isRevisionDisclosed(
+  proposal: ReconstructRevisionProposalEntry,
+): boolean {
+  return proposal.action !== "reuse";
+}
+
 function isoNow(): string {
   return new Date().toISOString();
 }
