@@ -28,8 +28,6 @@ export const ESCALATION_ROW_WINDOW = 15;
 export const ESCALATION_COL_WINDOW = 40;
 /** Per-cell char cap in the rendered prompt, to keep the payload bounded. */
 const ESCALATION_CELL_CHAR_CAP = 40;
-/** Default abort budget for a model call — a hung adapter downgrades, not stalls. */
-const DEFAULT_ESCALATION_TIMEOUT_MS = 30_000;
 
 export type HeaderSource = "heuristic" | "llm";
 
@@ -77,6 +75,10 @@ export interface HeaderEscalationCache {
 export interface HeaderEscalationModel {
   id: string;
   effort: string;
+  /** Route/provider identity — models are `(provider, model)` pairs, so the same
+   *  id on a different route (provider / adapter / base URL) must not replay a
+   *  decision produced by the previous route. Folds into the cache key. */
+  provider: string;
 }
 
 export interface HeaderEscalationOptions {
@@ -88,8 +90,10 @@ export interface HeaderEscalationOptions {
   dataLayerCapsHash: string;
   cache?: HeaderEscalationCache;
   /** Abort budget for the model call (ms). A hung adapter downgrades to the
-   *  heuristic instead of stalling. Default {@link DEFAULT_ESCALATION_TIMEOUT_MS}. */
-  timeoutMs?: number;
+   *  heuristic instead of stalling. Required (no code default): this operational
+   *  budget is a spec-boundary value the caller resolves from the settings chain
+   *  (INV-CFG-1), not a silent constant. */
+  timeoutMs: number;
 }
 
 /** Races the injected model call against an abort budget so a never-settling
@@ -108,20 +112,25 @@ function callLlmWithTimeout(
       settled = true;
       reject(new Error("header_escalation_timeout"));
     }, timeoutMs);
-    llm(args).then(
-      (value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      },
-    );
+    // Defer through a microtask so a synchronous throw from the adapter routes
+    // to the rejection handler (clearing the timer) rather than escaping the
+    // executor with the timer still pending.
+    Promise.resolve()
+      .then(() => llm(args))
+      .then(
+        (value) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+      );
   });
 }
 
@@ -165,6 +174,7 @@ export interface HeaderEscalationCacheKeyParts {
   extractorVersion: number;
   triggerVersion: number;
   promptHash: string;
+  provider: string;
   modelId: string;
   effort: string;
   dataLayerCapsHash: string;
@@ -172,8 +182,8 @@ export interface HeaderEscalationCacheKeyParts {
 }
 
 /** Deterministic replay key (design §11 CACHE-1): any drift in content,
- *  extractor/trigger version, prompt, model id/effort, or data-layer caps yields
- *  a fresh key, invalidating a stale decision. */
+ *  extractor/trigger version, prompt, route provider, model id/effort, or
+ *  data-layer caps yields a fresh key, invalidating a stale decision. */
 export function headerEscalationCacheKey(parts: HeaderEscalationCacheKeyParts): string {
   return crypto
     .createHash("sha256")
@@ -183,6 +193,7 @@ export function headerEscalationCacheKey(parts: HeaderEscalationCacheKeyParts): 
         parts.extractorVersion,
         parts.triggerVersion,
         parts.promptHash,
+        parts.provider,
         parts.modelId,
         parts.effort,
         parts.dataLayerCapsHash,
@@ -236,22 +247,21 @@ export async function escalateHeader(
     extractorVersion: SPREADSHEET_OBSERVER_ADAPTER_VERSION,
     triggerVersion: HEADER_ESCALATION_TRIGGER_VERSION,
     promptHash,
+    provider: options.model.provider,
     modelId: options.model.id,
     effort: options.model.effort,
     dataLayerCapsHash: options.dataLayerCapsHash,
     sheetName: candidate.sheetName,
   });
 
-  const cached = options.cache?.get(cacheKey);
+  // The cache is an optimization, never a gate: a durable backing store that
+  // throws on read must not block resolution.
+  const cached = cacheGet(options.cache, cacheKey);
   if (cached) return cached;
 
   let raw: unknown;
   try {
-    raw = await callLlmWithTimeout(
-      options.llm,
-      { prompt, promptHash },
-      options.timeoutMs ?? DEFAULT_ESCALATION_TIMEOUT_MS,
-    );
+    raw = await callLlmWithTimeout(options.llm, { prompt, promptHash }, options.timeoutMs);
   } catch {
     return { ...heuristic, downgradeReason: "llm_unavailable" };
   }
@@ -270,6 +280,31 @@ export async function escalateHeader(
     confidence: "high",
     source: "llm",
   };
-  options.cache?.set(cacheKey, resolved);
+  // A cache write failure (full disk, permissions) must not reject a valid
+  // resolution — replay support cannot change resolution availability.
+  cacheSet(options.cache, cacheKey, resolved);
   return resolved;
+}
+
+function cacheGet(
+  cache: HeaderEscalationCache | undefined,
+  key: string,
+): ResolvedHeader | undefined {
+  try {
+    return cache?.get(key);
+  } catch {
+    return undefined;
+  }
+}
+
+function cacheSet(
+  cache: HeaderEscalationCache | undefined,
+  key: string,
+  value: ResolvedHeader,
+): void {
+  try {
+    cache?.set(key, value);
+  } catch {
+    // non-fatal: the resolution is still returned.
+  }
 }

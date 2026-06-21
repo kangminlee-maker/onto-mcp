@@ -35,13 +35,14 @@ function memoryCache(): HeaderEscalationCache & { size: () => number } {
   };
 }
 
-const MODEL = { id: "claude-opus-4-8", effort: "medium" };
+const MODEL = { id: "claude-opus-4-8", effort: "medium", provider: "anthropic" };
 function baseOpts(llm: HeaderEscalationLlm, cache?: HeaderEscalationCache) {
   return {
     llm,
     model: MODEL,
     contentSha256: "sha-fixture",
     dataLayerCapsHash: "caps-fixture",
+    timeoutMs: 1000,
     ...(cache ? { cache } : {}),
   };
 }
@@ -75,6 +76,7 @@ describe("headerEscalationCacheKey (CACHE-1 drift)", () => {
     extractorVersion: 1,
     triggerVersion: 1,
     promptHash: "p",
+    provider: "anthropic",
     modelId: "m",
     effort: "medium",
     dataLayerCapsHash: "caps",
@@ -88,6 +90,7 @@ describe("headerEscalationCacheKey (CACHE-1 drift)", () => {
       { extractorVersion: 2 },
       { triggerVersion: 2 },
       { promptHash: "p2" },
+      { provider: "openai" },
       { modelId: "m2" },
       { effort: "high" },
       { dataLayerCapsHash: "caps2" },
@@ -183,6 +186,69 @@ describe("escalateHeader", () => {
       source: "heuristic",
       downgradeReason: "llm_unavailable",
     });
+  });
+
+  it("downgrades on a synchronous adapter throw (no timer leak)", async () => {
+    const syncThrow: HeaderEscalationLlm = () => {
+      throw new Error("config blew up before returning a promise");
+    };
+    const result = await escalateHeader(lowCandidate(), baseOpts(syncThrow));
+    expect(result).toMatchObject({
+      source: "heuristic",
+      downgradeReason: "llm_unavailable",
+    });
+  });
+
+  it("returns a valid resolution even when the cache write fails", async () => {
+    const throwingCache: HeaderEscalationCache = {
+      get: () => undefined,
+      set: () => {
+        throw new Error("disk full");
+      },
+    };
+    const result = await escalateHeader(
+      lowCandidate(),
+      baseOpts(async () => ({ header_row_index: 1 }), throwingCache),
+    );
+    expect(result).toMatchObject({ source: "llm", headerRowIndex: 1 });
+  });
+
+  it("ignores a throwing cache read and falls through to the model", async () => {
+    let calls = 0;
+    const throwingRead: HeaderEscalationCache = {
+      get: () => {
+        throw new Error("cache read error");
+      },
+      set: () => {},
+    };
+    const result = await escalateHeader(
+      lowCandidate(),
+      baseOpts(async () => {
+        calls += 1;
+        return { header_row_index: 0 };
+      }, throwingRead),
+    );
+    expect(calls).toBe(1);
+    expect(result.source).toBe("llm");
+  });
+
+  it("misses the cache when the route provider changes (same model id, new route)", async () => {
+    let calls = 0;
+    const llm: HeaderEscalationLlm = async () => {
+      calls += 1;
+      return { header_row_index: 1 };
+    };
+    const cache = memoryCache();
+    await escalateHeader(lowCandidate(), {
+      ...baseOpts(llm, cache),
+      model: { ...MODEL, provider: "anthropic" },
+    });
+    await escalateHeader(lowCandidate(), {
+      ...baseOpts(llm, cache),
+      model: { ...MODEL, provider: "openai" },
+    });
+    expect(calls).toBe(2);
+    expect(cache.size()).toBe(2);
   });
 
   it("caches a successful resolution and re-reads it (no second model call)", async () => {
