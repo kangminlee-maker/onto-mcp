@@ -112,6 +112,8 @@ import {
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import {
   ANSWER_STATUSES,
+  isRevisionBlocker,
+  isRevisionDisclosed,
   knownSeedRefs,
   validateFinalOutputProvenance,
   type ReconstructFinalOutputProvenanceSectionBindingInput,
@@ -1506,18 +1508,6 @@ const REVISION_ACTIONS = [
 // gate and the final-output disclosure. A proposal BLOCKS the run from claiming it is
 // resolved when it drops or postpones scope (reject|defer); every non-`reuse` proposal is
 // DISCLOSED as a next-round directive (extend|rename|split disclosed but non-blocking).
-function isRevisionBlocker(
-  proposal: ReconstructRevisionProposalArtifact["proposals"][number],
-): boolean {
-  return proposal.action === "reject" || proposal.action === "defer";
-}
-
-function isRevisionDisclosed(
-  proposal: ReconstructRevisionProposalArtifact["proposals"][number],
-): boolean {
-  return proposal.action !== "reuse";
-}
-
 function evidenceRefFromObservation(
   observation: ReconstructSourceObservation,
 ): ReconstructEvidenceRef {
@@ -12883,6 +12873,8 @@ export async function runReconstruct(
       maturationAuthorityResponsePath,
       ontologyExpansionValidationPath,
       maturationConvergenceLedgerValidationPath,
+      revisionProposalPath,
+      revisionProposalValidationPath,
       outputPath: maturationContinuationDecisionPath,
     });
   const maturationContinuationDecisionValidation =
@@ -12896,6 +12888,8 @@ export async function runReconstruct(
       maturationAuthorityResponseValidationPath,
       ontologyExpansionValidationPath,
       maturationConvergenceLedgerValidationPath,
+      revisionProposalPath,
+      revisionProposalValidationPath,
       outputPath: maturationContinuationDecisionValidationPath,
     });
   assertRuntimeValidationValid({

@@ -47,6 +47,8 @@ import type {
   ReconstructOntologySeedValidationArtifact,
   ReconstructPurposeAdequacyRequiredElement,
   ReconstructPurposeConfirmationValidationArtifact,
+  ReconstructRevisionProposalArtifact,
+  ReconstructRevisionProposalValidationArtifact,
   ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationDeltaArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
@@ -62,6 +64,7 @@ import type {
 } from "./artifact-types.js";
 import { sourceSafetyRowIdForObservation } from "./source-safety-validation.js";
 import { materialAdmissionIdForPurposeElement } from "./material-admission-validation.js";
+import { isRevisionBlocker } from "./post-seed-validation.js";
 
 const MATERIALITY_VALUES: readonly ReconstructMaturationMateriality[] = [
   "blocker",
@@ -4096,6 +4099,20 @@ export async function writeMaturationSourceDeltaValidationArtifact(args: {
   return validation;
 }
 
+// M4b: revision blockers (reject/defer) carried to the next maturation round, derived from
+// revision-proposal.yaml and GATED on a valid revision-proposal-validation. Shared by the
+// continuation builder and validator so the two derive the identical set from the same
+// validated authority (no asymmetry → no spurious conservation mismatch on the invalid path).
+function revisionBlockerLimitationRefs(
+  revisionProposal: ReconstructRevisionProposalArtifact,
+  revisionProposalValidation: ReconstructRevisionProposalValidationArtifact,
+): string[] {
+  if (revisionProposalValidation.validation_status !== "valid") return [];
+  return revisionProposal.proposals
+    .filter(isRevisionBlocker)
+    .map((proposal) => `revision-blocker:${proposal.proposal_id}`);
+}
+
 export function buildMaturationContinuationDecisionArtifact(args: {
   sessionId: string;
   actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
@@ -4111,6 +4128,8 @@ export function buildMaturationContinuationDecisionArtifact(args: {
     ReconstructMaturationAuthorityResponseArtifact;
   ontologyExpansionValidation:
     ReconstructOntologyExpansionValidationArtifact;
+  revisionProposal: ReconstructRevisionProposalArtifact;
+  revisionProposalValidation: ReconstructRevisionProposalValidationArtifact;
 }): ReconstructMaturationContinuationDecisionArtifact {
   const materialRows = args.actionabilityMatrix.rows.filter((row) =>
     row.materiality === "blocker" || row.materiality === "high"
@@ -4146,6 +4165,14 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   // candidate-limitation branch below would preempt it and the public claim (which
   // projects only decision.limitation_refs) would silently drop it.
   const convergenceUnproven = finalRequestionStatus !== "no_new_material_question";
+  // M4b: unresolved reject/defer proposals are carried-forward scope that must keep the
+  // continuation below actionable_ready, independent of row readiness. Computed once here;
+  // the field/fold below is unconditional (a higher-priority branch can win while blockers
+  // exist), only the decision_state downgrade is branch-gated.
+  const revisionBlockerRefs = revisionBlockerLimitationRefs(
+    args.revisionProposal,
+    args.revisionProposalValidation,
+  );
   let decisionState: ReconstructMaturationContinuationDecisionArtifact["decision_state"];
   let rationale: string;
   const convergenceLimitationRefs: string[] = [];
@@ -4161,6 +4188,14 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   } else if (limitationRows.length > 0) {
     decisionState = "actionable_limited";
     rationale = "No material frontier remains, but named limitations constrain the actionability claim.";
+  } else if (revisionBlockerRefs.length > 0 && closedRows.length === 0) {
+    // Unresolved revision blockers with no closed row cannot support a bounded actionable
+    // claim, and actionable_limited with zero included rows is itself invalid → blocked.
+    decisionState = "blocked";
+    rationale = "Unresolved reject/defer revision proposals remain and no closed row can support a bounded actionable claim.";
+  } else if (revisionBlockerRefs.length > 0) {
+    decisionState = "actionable_limited";
+    rationale = "All material rows are closed, but unresolved reject/defer revision proposals carry scope to the next maturation round and constrain the actionability claim.";
   } else if (hasCandidateLimitations) {
     decisionState = "actionable_limited";
     rationale = "All material rows are closed, but purpose-candidate-level limitations constrain the actionability claim and signal next-round source frontier.";
@@ -4208,6 +4243,10 @@ export function buildMaturationContinuationDecisionArtifact(args: {
         ? "Rows outside the trusted claim remain limitation-backed or frontier-required."
         : null,
     },
+    // M4b: unconditional — recorded regardless of which decision_state branch won, so the
+    // validator's superset+conservation hold even when an earlier branch (ask_user/blocked)
+    // is chosen while blockers exist (mirrors convergenceLimitationRefs).
+    revision_blocker_limitation_refs: revisionBlockerRefs,
     limitation_refs: [
       ...new Set([
         ...args.actionabilityMatrix.rows.flatMap((row) => row.limitation_refs),
@@ -4216,6 +4255,7 @@ export function buildMaturationContinuationDecisionArtifact(args: {
           item.subject_id ?? "ontology_expansion_validation"
         ),
         ...convergenceLimitationRefs,
+        ...revisionBlockerRefs,
       ]),
     ],
   };
@@ -4246,6 +4286,9 @@ export function validateMaturationContinuationDecision(args: {
   maturationConvergenceLedgerValidation:
     ReconstructMaturationConvergenceLedgerValidationArtifact;
   maturationConvergenceLedgerValidationRef?: string | null;
+  revisionProposal: ReconstructRevisionProposalArtifact;
+  revisionProposalValidation: ReconstructRevisionProposalValidationArtifact;
+  revisionProposalRef?: string | null;
 }): ReconstructMaturationContinuationDecisionValidationArtifact {
   const decision = args.maturationContinuationDecision;
   const violations: ReconstructMaturationValidationViolation[] = [];
@@ -4287,6 +4330,7 @@ export function validateMaturationContinuationDecision(args: {
     ontology_expansion: args.ontologyExpansionValidation.validation_status,
     maturation_convergence_ledger:
       args.maturationConvergenceLedgerValidation.validation_status,
+    revision_proposal: args.revisionProposalValidation.validation_status,
   })) {
     if (status !== "valid") {
       violations.push(violation({
@@ -4379,6 +4423,63 @@ export function validateMaturationContinuationDecision(args: {
       message:
         "continuation decision limitation_refs must include every matrix candidate limitation",
       subjectId: "candidate_limitation_refs",
+    }));
+  }
+  // M4b — revision-blocker conservation gate (derive-and-assert, not trust the field).
+  // onto finding-002: bind the consumed revision-proposal-validation to the consumed
+  // revision-proposal so a stale/mismatched valid validation cannot certify a different
+  // proposal set (resume/manual substitution).
+  if (
+    args.revisionProposalValidation.revision_proposal_ref &&
+    args.revisionProposalRef &&
+    path.resolve(args.revisionProposalValidation.revision_proposal_ref) !==
+      path.resolve(args.revisionProposalRef)
+  ) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "continuation decision must consume the revision-proposal validation that certifies the consumed revision-proposal",
+      subjectId: "revision_proposal_ref",
+    }));
+  }
+  // Recompute the blocker set from the validated authority (gated on valid, symmetric with
+  // the builder) and assert the decision field equals it — the field is not trusted.
+  const expectedRevisionBlockerRefs = revisionBlockerLimitationRefs(
+    args.revisionProposal,
+    args.revisionProposalValidation,
+  );
+  if (
+    !sameRefSet(
+      decision.revision_blocker_limitation_refs,
+      expectedRevisionBlockerRefs,
+    )
+  ) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "continuation decision revision_blocker_limitation_refs must equal the reject/defer proposals derived from the validated revision-proposal",
+      subjectId: "revision_blocker_limitation_refs",
+    }));
+  }
+  if (
+    expectedRevisionBlockerRefs.some((ref) => !decisionLimitationRefs.has(ref))
+  ) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message:
+        "continuation decision limitation_refs must include every revision blocker ref",
+      subjectId: "revision_blocker_limitation_refs",
+    }));
+  }
+  if (
+    decision.decision_state === "actionable_ready" &&
+    expectedRevisionBlockerRefs.length > 0
+  ) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "actionable_ready cannot be projected while unresolved revision blockers remain",
+      subjectId: "actionable_ready",
     }));
   }
   if (
@@ -5981,6 +6082,8 @@ export async function writeMaturationContinuationDecisionArtifact(args: {
   maturationAuthorityResponsePath: string;
   ontologyExpansionValidationPath: string;
   maturationConvergenceLedgerValidationPath: string;
+  revisionProposalPath: string;
+  revisionProposalValidationPath: string;
   outputPath: string;
 }): Promise<ReconstructMaturationContinuationDecisionArtifact> {
   const [
@@ -5991,6 +6094,8 @@ export async function writeMaturationContinuationDecisionArtifact(args: {
     maturationAuthorityResponse,
     ontologyExpansionValidation,
     maturationConvergenceLedgerValidation,
+    revisionProposal,
+    revisionProposalValidation,
   ] = await Promise.all([
     readYamlDocument<ReconstructActionabilityMatrixArtifact>(
       args.actionabilityMatrixPath,
@@ -6013,6 +6118,12 @@ export async function writeMaturationContinuationDecisionArtifact(args: {
     readYamlDocument<ReconstructMaturationConvergenceLedgerValidationArtifact>(
       args.maturationConvergenceLedgerValidationPath,
     ),
+    readYamlDocument<ReconstructRevisionProposalArtifact>(
+      args.revisionProposalPath,
+    ),
+    readYamlDocument<ReconstructRevisionProposalValidationArtifact>(
+      args.revisionProposalValidationPath,
+    ),
   ]);
   const artifact = buildMaturationContinuationDecisionArtifact({
     sessionId: args.sessionId,
@@ -6026,6 +6137,8 @@ export async function writeMaturationContinuationDecisionArtifact(args: {
     maturationClosureFrontierValidation,
     maturationAuthorityResponse,
     ontologyExpansionValidation,
+    revisionProposal,
+    revisionProposalValidation,
   });
   await writeYamlDocument(args.outputPath, artifact);
   return artifact;
@@ -6041,6 +6154,8 @@ export async function writeMaturationContinuationDecisionValidationArtifact(args
   maturationAuthorityResponseValidationPath: string;
   ontologyExpansionValidationPath: string;
   maturationConvergenceLedgerValidationPath: string;
+  revisionProposalPath: string;
+  revisionProposalValidationPath: string;
   outputPath: string;
 }): Promise<ReconstructMaturationContinuationDecisionValidationArtifact> {
   const [
@@ -6053,6 +6168,8 @@ export async function writeMaturationContinuationDecisionValidationArtifact(args
     maturationAuthorityResponseValidation,
     ontologyExpansionValidation,
     maturationConvergenceLedgerValidation,
+    revisionProposal,
+    revisionProposalValidation,
   ] = await Promise.all([
     readYamlDocument<ReconstructMaturationContinuationDecisionArtifact>(
       args.maturationContinuationDecisionPath,
@@ -6081,6 +6198,12 @@ export async function writeMaturationContinuationDecisionValidationArtifact(args
     readYamlDocument<ReconstructMaturationConvergenceLedgerValidationArtifact>(
       args.maturationConvergenceLedgerValidationPath,
     ),
+    readYamlDocument<ReconstructRevisionProposalArtifact>(
+      args.revisionProposalPath,
+    ),
+    readYamlDocument<ReconstructRevisionProposalValidationArtifact>(
+      args.revisionProposalValidationPath,
+    ),
   ]);
   const validation = validateMaturationContinuationDecision({
     maturationContinuationDecision,
@@ -6104,6 +6227,9 @@ export async function writeMaturationContinuationDecisionValidationArtifact(args
     maturationConvergenceLedgerValidation,
     maturationConvergenceLedgerValidationRef:
       args.maturationConvergenceLedgerValidationPath,
+    revisionProposal,
+    revisionProposalValidation,
+    revisionProposalRef: args.revisionProposalPath,
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;

@@ -2763,6 +2763,8 @@ validator_records:
       - maturation-authority-response-validation.yaml
       - ontology-expansion-validation.yaml
       - maturation-convergence-ledger-validation.yaml
+      - revision-proposal.yaml
+      - revision-proposal-validation.yaml
       - reconstruct-contract-registry.yaml
     validation_obligations:
       - validate_continuation_state_against_validated_actionability_matrix_and_frontier_state
@@ -2770,6 +2772,10 @@ validator_records:
       - validate_continue_ask_user_or_blocked_state_against_available_next_authority
       - validate_limitation_refs_and_row_scope_for_actionable_limited_state
       - reject_actionable_ready_until_final_requestion_convergence_is_proven
+      - validate_revision_blocker_limitation_refs_against_validated_revision_proposal
+      - require_revision_blocker_refs_in_continuation_limitation_refs
+      - reject_actionable_ready_when_unresolved_revision_blockers_remain
+      - bind_revision_proposal_validation_to_consumed_revision_proposal
     output_ref: maturation-continuation-decision-validation.yaml
   - validator_id: actionable-ontology-validator
     gate_ids: [actionable_ontology_gate]

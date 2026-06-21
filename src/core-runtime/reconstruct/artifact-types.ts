@@ -2553,6 +2553,11 @@ export interface ReconstructMaturationContinuationDecisionArtifact {
     excluded_row_refs: string[];
     exclusion_rationale: string | null;
   };
+  // M4b: unresolved revision blockers (reject/defer proposals) carried into the next
+  // maturation round. Derived from revision-proposal.yaml (gated by a valid
+  // revision-proposal-validation); folded into limitation_refs; prevents actionable_ready.
+  // The continuation validator re-derives this from the authority and asserts equality.
+  revision_blocker_limitation_refs: string[];
   limitation_refs: string[];
 }
 

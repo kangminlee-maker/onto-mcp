@@ -5,6 +5,8 @@ import type {
   ReconstructAnswerSupportLedgerValidationArtifact,
   ReconstructAnswerSupportJudgmentArtifact,
   ReconstructActionabilityMatrixArtifact,
+  ReconstructActionabilityMatrixRow,
+  ReconstructMaturationAuthorityResponseArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
   ReconstructCompetencyQuestionsArtifact,
@@ -12,6 +14,7 @@ import type {
   ReconstructHandoffDecisionValidationArtifact,
   ReconstructMaturationClosureFrontierArtifact,
   ReconstructMaturationClosureFrontierValidationArtifact,
+  ReconstructMaturationContinuationDecisionArtifact,
   ReconstructMaturationConvergenceLedgerValidationArtifact,
   ReconstructMaturationAnswerClaimsArtifact,
   ReconstructMaturationAnswerClaimsValidationArtifact,
@@ -19,6 +22,8 @@ import type {
   ReconstructMaturationQuestionFrontierArtifact,
   ReconstructOntologyExpansionArtifact,
   ReconstructOntologyExpansionValidationArtifact,
+  ReconstructRevisionProposalArtifact,
+  ReconstructRevisionProposalValidationArtifact,
   ReconstructOntologySeedArtifact,
   ReconstructOntologySeedValidationArtifact,
   ReconstructPurposeConfirmationValidationArtifact,
@@ -775,6 +780,53 @@ function emptyConvergenceLedgerValidation(): ReconstructMaturationConvergenceLed
     remaining_frontier_count: 0,
     final_requestion_pass_status: "not_run",
     validation_results: ["maturation_convergence_ledger_valid"],
+    violations: [],
+  };
+}
+
+// M4b fixtures: an empty (no-blocker) revision proposal + its valid validation, threaded
+// into the continuation builder/validator. revisionProposal(["p1:reject", ...]) builds a
+// blocker-bearing set for the M4b gate tests.
+function revisionProposal(
+  specs: string[] = [],
+): ReconstructRevisionProposalArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    failure_classification_ref: "failure-classification.yaml",
+    proposals: specs.map((spec, index) => {
+      const [proposalId, action] = spec.split(":");
+      return {
+        proposal_id: proposalId ?? `proposal-${index + 1}`,
+        target_type: "failure",
+        target_id: "failure-1",
+        action: (action ?? "reuse") as
+          ReconstructRevisionProposalArtifact["proposals"][number]["action"],
+        rationale: "fixture",
+        expected_effect: "fixture",
+      };
+    }),
+    directive_author: { owner: "host_llm", author_id: "mock" },
+  };
+}
+
+function revisionProposalValidation(
+  status: "valid" | "invalid" = "valid",
+  ref: string = "revision-proposal.yaml",
+): ReconstructRevisionProposalValidationArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    revision_proposal_ref: ref,
+    failure_classification_ref: "failure-classification.yaml",
+    validation_status: status,
+    proposal_count: 0,
+    action_counts: { reuse: 0, extend: 0, rename: 0, split: 0, reject: 0, defer: 0 },
+    validation_results: [
+      status === "valid" ? "revision_proposal_valid" : "revision_proposal_invalid",
+    ],
     violations: [],
   };
 }
@@ -2698,6 +2750,8 @@ describe("maturation validation", () => {
       maturationClosureFrontierValidation: closureValidation,
       maturationAuthorityResponse: authorityResponse,
       ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
     });
 
     const validation = validateMaturationContinuationDecision({
@@ -2723,6 +2777,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: emptyConvergenceLedgerValidation(),
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
     const falseReadyValidation = validateMaturationContinuationDecision({
       maturationContinuationDecision: {
@@ -2750,6 +2807,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: emptyConvergenceLedgerValidation(),
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
 
     expect(continuationDecision.decision_state).toBe("blocked");
@@ -2789,6 +2849,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: emptyConvergenceLedgerValidation(),
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
     expect(tamperedScopeValidation.validation_status).toBe("invalid");
     expect(tamperedScopeValidation.violations.some((v) =>
@@ -2991,6 +3054,8 @@ describe("maturation validation", () => {
       maturationClosureFrontierValidation: closureValidation,
       maturationAuthorityResponse: authorityResponse,
       ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
     });
     const validation = validateMaturationContinuationDecision({
       maturationContinuationDecision: decision,
@@ -3015,6 +3080,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: convergenceValidation,
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
     const falseReadyValidation = validateMaturationContinuationDecision({
       maturationContinuationDecision: {
@@ -3043,6 +3111,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: convergenceValidation,
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
     const ontologyExpansion = emptyOntologyExpansion();
     const ontologyExpansionValidation = emptyOntologyExpansionValidation();
@@ -3177,6 +3248,8 @@ describe("maturation validation", () => {
       maturationClosureFrontierValidation: closureValidation,
       maturationAuthorityResponse: authorityResponse,
       ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
     });
     const readyValidation = validateMaturationContinuationDecision({
       maturationContinuationDecision: readyDecision,
@@ -3201,6 +3274,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
 
     expect(decision.decision_state).toBe("actionable_limited");
@@ -3221,6 +3297,138 @@ describe("maturation validation", () => {
     expect(falseReadyValidation.violations.map((violation) => violation.code))
       .toContain("conflicting_state");
 
+    // M4b: unresolved reject/defer revision proposals downgrade the same all-closed,
+    // convergence-proven matrix from actionable_ready to actionable_limited, surface as
+    // revision_blocker_limitation_refs, and fold into limitation_refs.
+    const validateReady = (
+      decisionArtifact: ReconstructMaturationContinuationDecisionArtifact,
+      proposal: ReconstructRevisionProposalArtifact,
+      proposalValidation: ReconstructRevisionProposalValidationArtifact,
+      proposalRef = "revision-proposal.yaml",
+    ) =>
+      validateMaturationContinuationDecision({
+        maturationContinuationDecision: decisionArtifact,
+        maturationContinuationDecisionRef: "maturation-continuation-decision.yaml",
+        actionabilityMatrix: matrix,
+        actionabilityMatrixValidation: matrixValidation,
+        actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+        maturationQuestionFrontierValidation: frontierValidation,
+        maturationQuestionFrontierValidationRef:
+          "maturation-question-frontier-validation.yaml",
+        maturationClosureFrontierValidation: closureValidation,
+        maturationClosureFrontierValidationRef:
+          "maturation-closure-frontier-validation.yaml",
+        answerSupportLedgerValidation: noQuestionAnswerSupportValidation,
+        answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+        maturationAuthorityResponseValidation: authorityResponseValidation,
+        maturationAuthorityResponseValidationRef:
+          "maturation-authority-response-validation.yaml",
+        ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+        ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+        maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
+        maturationConvergenceLedgerValidationRef:
+          "maturation-convergence-ledger-validation.yaml",
+        revisionProposal: proposal,
+        revisionProposalValidation: proposalValidation,
+        revisionProposalRef: proposalRef,
+      });
+    const blockerProposal = revisionProposal(["p1:reject", "p2:defer"]);
+    const blockerDecision = buildMaturationContinuationDecisionArtifact({
+      sessionId: "session-1",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation: closureValidation,
+      maturationAuthorityResponse: authorityResponse,
+      ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+      revisionProposal: blockerProposal,
+      revisionProposalValidation: revisionProposalValidation(),
+    });
+    expect(blockerDecision.decision_state).toBe("actionable_limited");
+    expect(blockerDecision.revision_blocker_limitation_refs)
+      .toEqual(["revision-blocker:p1", "revision-blocker:p2"]);
+    expect(blockerDecision.limitation_refs)
+      .toEqual(expect.arrayContaining([
+        "revision-blocker:p1",
+        "revision-blocker:p2",
+      ]));
+    expect(
+      validateReady(blockerDecision, blockerProposal, revisionProposalValidation())
+        .validation_status,
+    ).toBe("valid");
+    // Gate: a hand-edited actionable_ready with a blocker present -> conflicting_state.
+    const forcedReady = validateReady(
+      { ...blockerDecision, decision_state: "actionable_ready" },
+      blockerProposal,
+      revisionProposalValidation(),
+    );
+    expect(forcedReady.validation_status).toBe("invalid");
+    expect(forcedReady.violations.map((v) => v.code)).toContain("conflicting_state");
+    // Conservation: a tampered (emptied) blocker field -> conflicting_state.
+    const tamperedField = validateReady(
+      { ...blockerDecision, revision_blocker_limitation_refs: [] },
+      blockerProposal,
+      revisionProposalValidation(),
+    );
+    expect(tamperedField.validation_status).toBe("invalid");
+    expect(tamperedField.violations.map((v) => v.code)).toContain("conflicting_state");
+    // Superset: dropping a blocker ref from limitation_refs -> missing_required_ref.
+    const droppedFold = validateReady(
+      {
+        ...blockerDecision,
+        limitation_refs: blockerDecision.limitation_refs.filter(
+          (ref) => !ref.startsWith("revision-blocker:"),
+        ),
+      },
+      blockerProposal,
+      revisionProposalValidation(),
+    );
+    expect(droppedFold.validation_status).toBe("invalid");
+    expect(droppedFold.violations.map((v) => v.code)).toContain("missing_required_ref");
+    // onto finding-002 binding: a valid validation certifying a DIFFERENT proposal ref.
+    const bindingMismatch = validateReady(
+      blockerDecision,
+      blockerProposal,
+      revisionProposalValidation("valid", "other-revision-proposal.yaml"),
+    );
+    expect(bindingMismatch.validation_status).toBe("invalid");
+    expect(bindingMismatch.violations.map((v) => v.code)).toContain("conflicting_state");
+    // Invalid revision-proposal-validation: builder emits no blockers (gated) so it stays
+    // actionable_ready; the validator raises ONLY prior_validation_invalid (symmetric
+    // derivation -> no spurious conservation conflict).
+    const invalidBuilt = buildMaturationContinuationDecisionArtifact({
+      sessionId: "session-1",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation: closureValidation,
+      maturationAuthorityResponse: authorityResponse,
+      ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+      revisionProposal: revisionProposal(["p1:reject"]),
+      revisionProposalValidation: revisionProposalValidation("invalid"),
+    });
+    expect(invalidBuilt.decision_state).toBe("actionable_ready");
+    expect(invalidBuilt.revision_blocker_limitation_refs).toEqual([]);
+    const invalidValidation = validateReady(
+      invalidBuilt,
+      revisionProposal(["p1:reject"]),
+      revisionProposalValidation("invalid"),
+    );
+    const invalidCodes = invalidValidation.violations.map((v) => v.code);
+    expect(invalidCodes).toContain("prior_validation_invalid");
+    expect(invalidValidation.violations.filter((v) =>
+      v.code === "conflicting_state" &&
+      v.subject_id === "revision_blocker_limitation_refs"
+    )).toHaveLength(0);
+
     // #22: purpose-candidate-level limitations keep the same all-closed matrix at
     // actionable_limited (not actionable_ready) and surface as a claim limitation,
     // without ever forcing a row to limitation_backed.
@@ -3239,6 +3447,8 @@ describe("maturation validation", () => {
       maturationClosureFrontierValidation: closureValidation,
       maturationAuthorityResponse: authorityResponse,
       ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
     });
     expect(candidateLimitedDecision.decision_state).toBe("actionable_limited");
     expect(candidateLimitedDecision.limitation_refs)
@@ -3273,6 +3483,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
     expect(staleReadyValidation.validation_status).toBe("invalid");
     expect(staleReadyValidation.violations.some((v) =>
@@ -3311,6 +3524,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
     expect(droppedLimitationValidation.validation_status).toBe("invalid");
     expect(droppedLimitationValidation.violations.some((v) =>
@@ -3336,6 +3552,8 @@ describe("maturation validation", () => {
       maturationClosureFrontierValidation: closureValidation,
       maturationAuthorityResponse: authorityResponse,
       ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
     });
     expect(candidateAndConvergenceDecision.decision_state).toBe("actionable_limited");
     expect(candidateAndConvergenceDecision.limitation_refs)
@@ -3453,6 +3671,8 @@ describe("maturation validation", () => {
       maturationClosureFrontierValidation: closureValidation,
       maturationAuthorityResponse: authorityResponse,
       ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
     });
     const validation = validateMaturationContinuationDecision({
       maturationContinuationDecision: decision,
@@ -3477,6 +3697,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: convergenceValidation,
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
     const falseLimitedDecision = {
       ...decision,
@@ -3506,6 +3729,9 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidation: convergenceValidation,
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: revisionProposal(),
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
     });
     const ontologyExpansion = emptyOntologyExpansion();
     const ontologyExpansionValidation = emptyOntologyExpansionValidation();
@@ -4179,5 +4405,107 @@ describe("maturation rejection branches", () => {
     expect(validation.validation_status).toBe("invalid");
     expect(validation.violations.some((v) => v.code === "semantic_only_location"))
       .toBe(true);
+  });
+});
+
+// M4b builder branch coverage for matrix shapes the all-closed readyDecision test cannot
+// reach: (1) blockers while an EARLIER branch wins (unconditional field/fold), and (2)
+// blockers with zero closed rows (must route to blocked, not an invalid actionable_limited).
+describe("M4b continuation builder branches (revision blockers)", () => {
+  function matrixWithSingleRow(
+    readiness: ReconstructActionabilityMatrixRow["member_readiness"],
+  ): ReconstructActionabilityMatrixArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      maturation_baseline_ref: "maturation-baseline.yaml",
+      maturation_baseline_validation_ref: "maturation-baseline-validation.yaml",
+      candidate_limitation_refs: [],
+      rows: [{
+        matrix_row_id: "row-1",
+        baseline_row_refs: ["baseline-row-1"],
+        purpose_element_ref: "element-1",
+        actionability_surface_ref: "surface-1",
+        maturity_dimension_ref: "dimension-1",
+        materiality: "high",
+        materiality_ref: "materiality-1",
+        member_scope_refs: [],
+        member_target_material_kind: "code",
+        member_readiness: readiness,
+        member_source_refs: [],
+        cross_material_ref_refs: [],
+        competency_question_refs: [],
+        competency_assessment_refs: [],
+        maturity_level: "L1",
+        supporting_refs: [],
+        blocking_question_refs: [],
+        limitation_refs: [],
+        next_action: "n/a",
+      }],
+    } as unknown as ReconstructActionabilityMatrixArtifact;
+  }
+
+  function buildWith(
+    matrix: ReconstructActionabilityMatrixArtifact,
+    proposal: ReconstructRevisionProposalArtifact,
+  ): ReconstructMaturationContinuationDecisionArtifact {
+    return buildMaturationContinuationDecisionArtifact({
+      sessionId: "session-1",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationConvergenceLedgerValidation: {
+        ...emptyConvergenceLedgerValidation(),
+        final_requestion_pass_status: "no_new_material_question",
+      },
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+      maturationQuestionFrontier: {
+        questions: [],
+      } as unknown as ReconstructMaturationQuestionFrontierArtifact,
+      maturationClosureFrontier: {
+        authority_requests: [],
+      } as unknown as ReconstructMaturationClosureFrontierArtifact,
+      maturationClosureFrontierValidation:
+        {} as unknown as ReconstructMaturationClosureFrontierValidationArtifact,
+      maturationAuthorityResponse: {
+        responses: [],
+      } as unknown as ReconstructMaturationAuthorityResponseArtifact,
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      revisionProposal: proposal,
+      revisionProposalValidation: revisionProposalValidation(),
+    });
+  }
+
+  it("records blockers unconditionally even when an earlier branch (frontier->blocked) wins", () => {
+    const decision = buildWith(
+      matrixWithSingleRow("frontier_required"),
+      revisionProposal(["p1:reject"]),
+    );
+    // frontier_required material row forces blocked; the blocker field/fold is still set.
+    expect(decision.decision_state).toBe("blocked");
+    expect(decision.revision_blocker_limitation_refs).toEqual(["revision-blocker:p1"]);
+    expect(decision.limitation_refs).toContain("revision-blocker:p1");
+  });
+
+  it("routes blockers with zero closed rows to blocked (not an invalid actionable_limited)", () => {
+    const decision = buildWith(
+      matrixWithSingleRow("out_of_scope"),
+      revisionProposal(["p1:defer"]),
+    );
+    // No frontier/limitation/closed rows: the blocker branch must choose blocked, because
+    // actionable_limited with zero included rows would fail validation and halt the run.
+    expect(decision.decision_state).toBe("blocked");
+    expect(decision.claim_scope.included_row_refs).toEqual([]);
+    expect(decision.revision_blocker_limitation_refs).toEqual(["revision-blocker:p1"]);
+  });
+
+  it("allows actionable_ready when only reuse/extend/rename/split proposals remain", () => {
+    const decision = buildWith(
+      matrixWithSingleRow("closed"),
+      revisionProposal(["p1:reuse", "p2:extend", "p3:rename", "p4:split"]),
+    );
+    expect(decision.revision_blocker_limitation_refs).toEqual([]);
+    expect(decision.decision_state).toBe("actionable_ready");
   });
 });
