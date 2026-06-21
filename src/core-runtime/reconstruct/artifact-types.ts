@@ -1574,6 +1574,7 @@ export const RECONSTRUCT_STAGE_IDS = [
   "candidate_disposition_validation",
   "seed_authoring_readiness",
   "seed_authoring_readiness_validation",
+  "seed_stage_prompt_source_observations",
   "ontology_seed",
   "ontology_seed_validation",
   "material_admission_validation",
@@ -3287,6 +3288,12 @@ export interface ReconstructRecordArtifactRefs {
   source_inventory: string | null;
   initial_source_frontier: string | null;
   source_observations: string | null;
+  // Pre-maturation projected source-observation set as consumed by seed authoring.
+  // Maturation appends observations to source_observations, so the resume truncation
+  // fallback (whose live sink is empty on reuse) measures this seed-stage snapshot
+  // instead of the post-maturation set — otherwise a single-document truncation is
+  // silently dropped once maturation has grown the set past one observation.
+  seed_stage_prompt_source_observations: string | null;
   source_observation_delta: string | null;
   source_observation_delta_validation: string | null;
   source_observation_reentry_validation: string | null;

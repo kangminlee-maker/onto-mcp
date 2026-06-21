@@ -698,6 +698,9 @@ interface AuthoredArtifactReuseMatch {
   target_material_profile_validation_sha256: string | null;
   source_inventory_sha256: string;
   source_observations_sha256: string;
+  // M3c: the seed-stage projected observation snapshot is hashed so a changed seed-stage
+  // projection invalidates reuse. Null on the pre-seed refreshes (snapshot not yet taken).
+  seed_stage_prompt_source_observations_sha256: string | null;
   source_safety_ledger_sha256: string | null;
   source_safety_ledger_validation_sha256: string | null;
   source_scout_pack_sha256: string | null;
@@ -1122,6 +1125,43 @@ function reuseMatchArtifactHash(value: unknown): string {
   return sha256Text(stableJson(stripVolatileArtifactFields(value)));
 }
 
+// Stable reuse digest of a source-observation set. Shared by the live source_observations
+// hash and the M3c seed-stage snapshot hash so the two are byte-comparable.
+function sourceObservationsReuseSha256(
+  artifact: ReconstructSourceObservationsArtifact,
+): string {
+  return sha256Text(stableJson({
+    observations: artifact.observations.map((observation) => ({
+      observation_id: observation.observation_id,
+      target_material_kind: observation.target_material_kind,
+      adapter_id: observation.adapter_id,
+      source_ref: path.resolve(observation.source_ref),
+      location: path.resolve(observation.location),
+      structural_data: {
+        path_kind: observation.structural_data.path_kind ?? null,
+        size_bytes: observation.structural_data.size_bytes ?? null,
+        line_count: observation.structural_data.line_count ?? null,
+        char_count: observation.structural_data.char_count ?? null,
+        content_sha256: observation.structural_data.content_sha256 ?? null,
+        excerpt_truncated: observation.structural_data.excerpt_truncated ?? null,
+        // Captured excerpt length distinguishes runs authored under different capture
+        // budgets (e.g. the 6K vs 200K document cap): for a document longer than both
+        // caps `excerpt_truncated` stays true and char_count/sha are identical, so
+        // without this a resume could reuse artifacts authored from only the old lead.
+        content_excerpt_length:
+          typeof observation.structural_data.content_excerpt === "string"
+            ? observation.structural_data.content_excerpt.length
+            : null,
+      },
+    })),
+    skipped_refs: artifact.skipped_refs.map((skipped) => ({
+      ref: path.resolve(skipped.ref),
+      target_material_kind: skipped.target_material_kind,
+      reason: skipped.reason,
+    })),
+  }));
+}
+
 function authoredArtifactReuseMatch(args: {
   sessionId: string;
   intent: string;
@@ -1131,6 +1171,8 @@ function authoredArtifactReuseMatch(args: {
     ReconstructTargetMaterialProfileValidationArtifact | null;
   sourceInventory: ReconstructSourceInventoryArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
+  seedStagePromptSourceObservations?:
+    ReconstructSourceObservationsArtifact | null;
   sourceSafetyLedger?: ReconstructSourceSafetyLedgerArtifact | null;
   sourceSafetyLedgerValidation?:
     ReconstructSourceSafetyLedgerValidationArtifact | null;
@@ -1182,36 +1224,15 @@ function authoredArtifactReuseMatch(args: {
         skip_reason: unit.skip_reason,
       })),
     )),
-    source_observations_sha256: sha256Text(stableJson({
-      observations: args.sourceObservations.observations.map((observation) => ({
-        observation_id: observation.observation_id,
-        target_material_kind: observation.target_material_kind,
-        adapter_id: observation.adapter_id,
-        source_ref: path.resolve(observation.source_ref),
-        location: path.resolve(observation.location),
-        structural_data: {
-          path_kind: observation.structural_data.path_kind ?? null,
-          size_bytes: observation.structural_data.size_bytes ?? null,
-          line_count: observation.structural_data.line_count ?? null,
-          char_count: observation.structural_data.char_count ?? null,
-          content_sha256: observation.structural_data.content_sha256 ?? null,
-          excerpt_truncated: observation.structural_data.excerpt_truncated ?? null,
-          // Captured excerpt length distinguishes runs authored under different capture
-          // budgets (e.g. the 6K vs 200K document cap): for a document longer than both
-          // caps `excerpt_truncated` stays true and char_count/sha are identical, so
-          // without this a resume could reuse artifacts authored from only the old lead.
-          content_excerpt_length:
-            typeof observation.structural_data.content_excerpt === "string"
-              ? observation.structural_data.content_excerpt.length
-              : null,
-        },
-      })),
-      skipped_refs: args.sourceObservations.skipped_refs.map((skipped) => ({
-        ref: path.resolve(skipped.ref),
-        target_material_kind: skipped.target_material_kind,
-        reason: skipped.reason,
-      })),
-    })),
+    source_observations_sha256: sourceObservationsReuseSha256(
+      args.sourceObservations,
+    ),
+    // M3c: hash the seed-stage snapshot with the SAME projection as the live set, so a
+    // changed seed-stage projection invalidates reuse; null until the snapshot is taken.
+    seed_stage_prompt_source_observations_sha256:
+      args.seedStagePromptSourceObservations
+        ? sourceObservationsReuseSha256(args.seedStagePromptSourceObservations)
+        : null,
     source_safety_ledger_sha256: args.sourceSafetyLedger
       ? reuseMatchArtifactHash(args.sourceSafetyLedger)
       : null,
@@ -1694,6 +1715,8 @@ function artifactRefsWithDefaults(args: {
     source_inventory: args.refs.source_inventory ?? null,
     initial_source_frontier: args.refs.initial_source_frontier ?? null,
     source_observations: args.refs.source_observations ?? null,
+    seed_stage_prompt_source_observations:
+      args.refs.seed_stage_prompt_source_observations ?? null,
     source_observation_delta: args.refs.source_observation_delta ?? null,
     source_observation_delta_validation:
       args.refs.source_observation_delta_validation ?? null,
@@ -1992,6 +2015,7 @@ function createRunManifest(args: {
         "source_inventory",
         "initial_source_frontier",
         "source_observations",
+        "seed_stage_prompt_source_observations",
         "source_observation_delta",
         "source_observation_delta_validation",
         "source_observation_reentry_validation",
@@ -2301,6 +2325,11 @@ function createRunManifest(args: {
       ].filter((ref): ref is string => ref !== null)),
       completedStep("seed_authoring_readiness_validation", "runtime", runtimePerformer(), [
         args.artifactRefs.seed_authoring_readiness_validation,
+      ].filter((ref): ref is string => ref !== null)),
+      // M3c: the runtime captures the pre-maturation seed-stage observation snapshot at this
+      // gate (before ontology_seed authoring), so it has its own producer step/ledger unit.
+      completedStep("seed_stage_prompt_source_observations", "runtime", runtimePerformer(), [
+        args.artifactRefs.seed_stage_prompt_source_observations,
       ].filter((ref): ref is string => ref !== null)),
       completedStep(
         "ontology_seed",
@@ -10170,6 +10199,7 @@ function appendFinalOutputArtifactTruthSection(
     sourceObservationDeltaPath: string | null;
     sourceObservationDeltaValidationPath: string | null;
     sourceObservationReentryValidationPath: string | null;
+    seedStagePromptSourceObservationsPath: string;
     sourceObservationLineageIndexPath: string;
     sourceSafetyLedgerPath: string;
     sourceSafetyLedgerValidationPath: string;
@@ -10250,6 +10280,7 @@ function appendFinalOutputArtifactTruthSection(
         `- Source observation re-entry validation: ${args.sourceObservationReentryValidationPath}`,
       ]
       : []),
+    `- Seed-stage prompt source observations: ${args.seedStagePromptSourceObservationsPath}`,
     `- Source observation lineage index: ${args.sourceObservationLineageIndexPath}`,
     `- Source safety ledger: ${args.sourceSafetyLedgerPath}`,
     `- Source safety ledger validation: ${args.sourceSafetyLedgerValidationPath}`,
@@ -10802,6 +10833,16 @@ export async function runReconstruct(
   let preSeedSourceScoutPackPath: string = sourceScoutPackPath;
   let preSeedSourceScoutPackValidationPath: string = sourceScoutPackValidationPath;
   let promptSourceObservations: ReconstructSourceObservationsArtifact = sourceObservations;
+  // M3c: the seed-stage projected observation set (post-frontier, pre-maturation) is the
+  // conserved authority for the resume single-document truncation fallback. Established at
+  // seed-authoring time below; null until then so the pre-seed reuse-match refreshes do not
+  // hash an unset snapshot.
+  const seedStagePromptSourceObservationsPath = path.join(
+    sessionRoot,
+    "seed-stage-prompt-source-observations.yaml",
+  );
+  let seedStagePromptSourceObservations:
+    ReconstructSourceObservationsArtifact | null = null;
   const writeSourceScoutSnapshotArtifacts = async (options: {
     packPath: string;
     validationPath: string;
@@ -10891,6 +10932,7 @@ export async function runReconstruct(
       targetMaterialProfileValidation,
       sourceInventory,
       sourceObservations,
+      seedStagePromptSourceObservations,
       sourceSafetyLedger,
       sourceSafetyLedgerValidation,
       sourceScoutPack,
@@ -11488,6 +11530,29 @@ export async function runReconstruct(
     validation: seedAuthoringReadinessValidation,
   });
   currentSeedAuthoringReadinessValidation = seedAuthoringReadinessValidation;
+  // M3c: snapshot the seed-stage projected observations that seed authoring consumes.
+  // A resume reuses the original snapshot (so the truncation reflects what the reused seed
+  // was authored under, not a re-derived or post-maturation set); a fresh run — or a resume
+  // whose snapshot file is missing — persists the (re-derived, pre-maturation) seed-stage
+  // set, so the canonical ref the run-manifest/record publish always resolves.
+  // Established before the reuse-match refresh below so the seed-onward provenance hashes it.
+  // A pre-M3c in-flight session does NOT reach a published manifest on reuse: its seed-onward
+  // provenance predates seed_stage_prompt_source_observations_sha256, so the reuse-match
+  // rotation fail-loud halts the resume at the first reused seed artifact (intended — re-run
+  // fresh; the migration script renames fields and does not recompute provenance hashes).
+  const persistedSeedStageSnapshot = reuseExistingAuthoredArtifacts
+    ? await readYamlDocumentIfPresent<ReconstructSourceObservationsArtifact>(
+      seedStagePromptSourceObservationsPath,
+    )
+    : null;
+  seedStagePromptSourceObservations =
+    persistedSeedStageSnapshot ?? promptSourceObservations;
+  if (!persistedSeedStageSnapshot) {
+    await writeYamlDocument(
+      seedStagePromptSourceObservationsPath,
+      seedStagePromptSourceObservations,
+    );
+  }
   refreshAuthoredArtifactReuseMatch();
 
   const ontologySeedPath = path.join(sessionRoot, "ontology-seed.yaml");
@@ -12062,6 +12127,8 @@ export async function runReconstruct(
       source_inventory: preparationRefs.source_inventory,
       initial_source_frontier: preparationRefs.initial_source_frontier,
       source_observations: preparationRefs.source_observations,
+      seed_stage_prompt_source_observations:
+        seedStagePromptSourceObservationsPath,
       source_observation_delta: sourceObservationDeltaPath,
       source_observation_delta_validation: sourceObservationDeltaValidationPath,
       source_observation_reentry_validation: sourceObservationReentryValidationPath,
@@ -13059,6 +13126,7 @@ export async function runReconstruct(
     sourcePurposeCandidatesPath,
     sourcePurposeCandidatesValidationPath,
     purposeConfirmationValidationPath,
+    seedStagePromptSourceObservationsPath,
     sourceObservationLineageIndexPath,
     sourceSafetyLedgerPath,
     sourceSafetyLedgerValidationPath,
@@ -13243,6 +13311,7 @@ export async function runReconstruct(
       sourceObservationDeltaPath,
       sourceObservationDeltaValidationPath,
       sourceObservationReentryValidationPath,
+      seedStagePromptSourceObservationsPath,
       sourceObservationLineageIndexPath,
       sourceSafetyLedgerPath,
       sourceSafetyLedgerValidationPath,
@@ -13313,10 +13382,14 @@ export async function runReconstruct(
   // even if final-output validation later throws — no silent truncation (C2).
   const recordedProjectionTruncations =
     directiveAuthor.documentExcerptProjectionTruncations ?? [];
+  // M3c: measure the seed-stage snapshot, not `promptSourceObservations`. Maturation
+  // appends source observations to the latter, so by here it is the post-maturation set;
+  // singleDocumentProjectionTruncation's `length === 1` guard would then silently drop the
+  // seed-stage single-document truncation on resume (where the live sink above is empty).
   const documentProjectionTruncations = recordedProjectionTruncations.length > 0
     ? recordedProjectionTruncations
     : singleDocumentProjectionTruncation(
-      promptSourceObservations,
+      seedStagePromptSourceObservations ?? promptSourceObservations,
       directiveAuthor.documentExcerptProjectionBudget ??
         DOCUMENT_EXCERPT_PROJECTION_FLOOR,
     );

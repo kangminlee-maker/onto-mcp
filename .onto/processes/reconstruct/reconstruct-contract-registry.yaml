@@ -900,6 +900,10 @@ artifact_authorities:
   source_observations:
     authority_ref: source-observations.yaml
     validation_ref: source-observation-directive-validation.yaml
+  seed_stage_prompt_source_observations:
+    authority_ref: seed-stage-prompt-source-observations.yaml
+    validation_ref: null
+    projection_policy: pre_maturation_seed_stage_projected_observation_snapshot_for_resume_truncation_conservation
   source_safety_ledger:
     authority_ref: source-safety-ledger.yaml
     validation_ref: source-safety-ledger-validation.yaml
