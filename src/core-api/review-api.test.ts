@@ -1628,6 +1628,75 @@ describe("createOntoReviewCoreApi", () => {
     expect(status.runControl?.retryAvailable).toBe(true);
   });
 
+  it("resolves a completed lens unit's output to the findings sidecar when the markdown is absent", async () => {
+    const projectRoot = await tempProjectRoot();
+    await writeDirectCallReviewSettings(projectRoot, {
+      artifacts: { lens_output_format: "sidecar", write_lens_markdown: false },
+    });
+    const api = createOntoReviewCoreApi({ ontoHome: path.resolve(".") });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Core API sidecar drill-down resolution test",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic"],
+    });
+    const executionPlan = await readYamlDocument<ReviewExecutionPlan>(
+      path.join(prepared.sessionRoot, "execution-plan.yaml"),
+    );
+    const logicSeat = executionPlan.lens_execution_seats.find(
+      (seat) => seat.lens_id === "logic",
+    );
+    if (!logicSeat?.sidecar_output_path) {
+      throw new Error("expected a sidecar_output_path on the lens seat");
+    }
+    expect(logicSeat.output_path).toContain("logic.md");
+    expect(logicSeat.sidecar_output_path).toContain("logic.findings.yaml");
+    // Sidecar mode: the authored `.md` is never written; only the findings
+    // sidecar exists on disk.
+    await fs.mkdir(path.dirname(logicSeat.sidecar_output_path), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      logicSeat.sidecar_output_path,
+      "schema_version: '1'\nlens_id: logic\nfindings: []\n",
+      "utf8",
+    );
+
+    const now = new Date().toISOString();
+    await writeYamlDocument(
+      path.join(prepared.sessionRoot, "active-review-attempt.yaml"),
+      {
+        schema_version: "1",
+        attempt_id: "sidecar-fixture",
+        attempt_kind: "initial_review",
+        session_id: prepared.sessionId,
+        session_root: prepared.sessionRoot,
+        project_root: projectRoot,
+        created_at: now,
+        updated_at: now,
+        status: "started",
+        active_units: ["lens:logic"],
+        requested_frontier_units: [],
+        run_control: {
+          stale_after_seconds: 1200,
+          source_tool: "onto_review",
+          request_hash: null,
+        },
+        latest_observed_artifact_ref: null,
+      },
+    );
+
+    const status = await api.getReviewStatus(prepared.sessionRoot);
+    const logic = status.unitProgress?.find((unit) => unit.unitId === "logic");
+    // Drill-down resolves to the existing findings sidecar (not the absent
+    // planned `.md`), and the present sidecar marks the unit completed.
+    expect(logic?.outputPath).toBe(logicSeat.sidecar_output_path);
+    expect(logic?.outputPath).toContain("logic.findings.yaml");
+    expect(logic?.status).toBe("completed");
+  });
+
   it("derives live lens unit progress from runtime logs and output files", async () => {
     const projectRoot = await tempProjectRoot();
     const api = createOntoReviewCoreApi({
