@@ -1883,6 +1883,17 @@ describe("validateRevisionProposal rejection branches", () => {
     expectRejection(validateRevisionProposal(withoutSeed), "unknown_id");
   });
 
+  it("rejects a stale/unknown target_type loaded from YAML (invalid_enum, not skipped)", () => {
+    // Resume/manual validation loads target_type from YAML, so the removed
+    // domain_context (or any string) can still arrive — it must be rejected,
+    // not silently skip the authority check and validate as carry-forward.
+    const base = withProposalTarget({
+      target_type: "domain_context",
+      target_id: "anything",
+    });
+    expectRejection(validateRevisionProposal(base), "invalid_enum");
+  });
+
   it("rejects an out-of-set proposal action (invalid_enum)", () => {
     const base = clone(validBase());
     (base.revisionProposal.proposals[0]! as { action: string }).action =

@@ -2008,8 +2008,21 @@ export function validateRevisionProposal(args: {
       }));
     }
     seen.add(proposal.proposal_id);
-    const targetAuthority = targetAuthorities[proposal.target_type];
-    if (targetAuthority && !targetAuthority.ids.has(proposal.target_id)) {
+    // target_type is the typed union for fresh-authored proposals, but resume /
+    // manual artifact validation loads it from YAML, so a stale value (e.g. the
+    // removed domain_context) can reach here. An unknown type has no authority to
+    // validate against, so reject it as invalid_enum instead of skipping the
+    // authority check and disclosing an unbacked target as carry-forward.
+    const targetAuthority = targetAuthorities[proposal.target_type] as
+      | { ids: Set<string>; authority: string }
+      | undefined;
+    if (!targetAuthority) {
+      violations.push(violation({
+        code: "invalid_enum",
+        message: `invalid proposal target_type: ${proposal.target_type}`,
+        subjectId: proposal.proposal_id,
+      }));
+    } else if (!targetAuthority.ids.has(proposal.target_id)) {
       violations.push(violation({
         code: "unknown_id",
         message:

@@ -4243,6 +4243,35 @@ function competencyQuestionAssessmentUserPayload(
   return finalizePayload(keptEvidence);
 }
 
+// The assessment payload reports how many cited observations had their bodies dropped to
+// fit the evidence reserve. Both the batcher (split-before-shrink) and the single-dispatch
+// routing read this same signal so they cannot diverge.
+export function assessmentOmittedObservationCount(
+  userPayload: Record<string, unknown>,
+): number {
+  return Number(
+    (userPayload.source_evidence_projection as Record<string, unknown>)
+      ?.omitted_observation_count ?? 0,
+  );
+}
+
+// codex #104 R3: competencyQuestionAssessmentUserPayload can make the full-question payload
+// fit the cap by DROPPING trailing evidence (finalizePayload), so a fit-only check would
+// single-dispatch an assessment that judges later questions without their evidence bodies —
+// bypassing the batcher's split-before-shrink. Dispatch as one assessment only when the full
+// payload fits AND no evidence was omitted; otherwise route to batching so smaller batches
+// keep room for each question's evidence.
+export function shouldDispatchSingleCompetencyAssessment(args: {
+  systemPrompt: string;
+  fullPayload: Record<string, unknown>;
+  charLimit: number;
+}): boolean {
+  return (
+    promptPayloadCharCount(args.systemPrompt, args.fullPayload) <= args.charLimit &&
+    assessmentOmittedObservationCount(args.fullPayload) === 0
+  );
+}
+
 function competencyQuestionAssessmentPromptBatches(
   input: ReconstructCompetencyQuestionAssessmentAuthorInput,
   systemPrompt: string,
@@ -4266,10 +4295,7 @@ function competencyQuestionAssessmentPromptBatches(
     // when adding a question would force evidence omission, so each (group of) question(s) gets a
     // smaller batch with room for its evidence bodies. A lone question whose evidence cannot fit
     // even alone is unavoidable (candidate.length === 1 is always accepted).
-    const omittedCount = Number(
-      (candidatePayload.source_evidence_projection as Record<string, unknown>)
-        ?.omitted_observation_count ?? 0,
-    );
+    const omittedCount = assessmentOmittedObservationCount(candidatePayload);
     const candidateFits =
       promptPayloadCharCount(systemPrompt, candidatePayload) <= batchBuildBudget;
     if (candidate.length === 1 || (candidateFits && omittedCount === 0)) {
@@ -8334,8 +8360,11 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       );
       let raw: Record<string, unknown>;
       if (
-        promptPayloadCharCount(systemPrompt, userPayload) <=
-          COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT
+        shouldDispatchSingleCompetencyAssessment({
+          systemPrompt,
+          fullPayload: userPayload,
+          charLimit: COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,
+        })
       ) {
         telemetry.recordBatchCount("competency_question_assessment", 1);
         raw = await callJsonAuthor({

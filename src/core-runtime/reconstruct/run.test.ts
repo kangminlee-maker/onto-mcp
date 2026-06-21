@@ -54,6 +54,8 @@ import {
   stopDecisionAllowedDecisions,
   boundEvidenceBySerializedSize,
   deriveCompetencyAssessmentEvidenceReserveChars,
+  assessmentOmittedObservationCount,
+  shouldDispatchSingleCompetencyAssessment,
   appendFinalOutputUnresolvedRevisionSection,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
@@ -6387,6 +6389,47 @@ describe("observationPromptPayload projection-truncation recording", () => {
       // reserve must never go negative.
       expect(deriveCompetencyAssessmentEvidenceReserveChars(49_500)).toBe(0);
       expect(deriveCompetencyAssessmentEvidenceReserveChars(80_000)).toBe(0);
+    });
+  });
+
+  // @codex R3 #104: competencyQuestionAssessmentUserPayload can make the full-question payload
+  // fit the cap by dropping trailing evidence, so a fit-only routing check would single-dispatch
+  // an assessment that judges later questions without their evidence — bypassing the batcher's
+  // split-before-shrink. The single-dispatch path must require BOTH "fits" AND "no omission".
+  describe("shouldDispatchSingleCompetencyAssessment (route omitted-evidence to batching, R3 #1)", () => {
+    const payload = (chars: number, omitted: number) => ({
+      filler: "x".repeat(chars),
+      source_evidence_projection: { omitted_observation_count: omitted },
+    });
+
+    it("reads the omitted-observation count from the payload projection (default 0)", () => {
+      expect(assessmentOmittedObservationCount(payload(0, 3))).toBe(3);
+      expect(assessmentOmittedObservationCount({})).toBe(0);
+    });
+
+    it("dispatches a single assessment when the payload fits and omits nothing", () => {
+      expect(shouldDispatchSingleCompetencyAssessment({
+        systemPrompt: "sys",
+        fullPayload: payload(100, 0),
+        charLimit: 50_000,
+      })).toBe(true);
+    });
+
+    it("routes to batching when the payload only fits because evidence was omitted", () => {
+      // fits the cap, but omitted_observation_count > 0 → must NOT single-dispatch.
+      expect(shouldDispatchSingleCompetencyAssessment({
+        systemPrompt: "sys",
+        fullPayload: payload(100, 1),
+        charLimit: 50_000,
+      })).toBe(false);
+    });
+
+    it("routes to batching when the payload exceeds the cap (existing behavior)", () => {
+      expect(shouldDispatchSingleCompetencyAssessment({
+        systemPrompt: "sys",
+        fullPayload: payload(60_000, 0),
+        charLimit: 50_000,
+      })).toBe(false);
     });
   });
 
