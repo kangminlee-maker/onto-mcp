@@ -2015,6 +2015,7 @@ function createRunManifest(args: {
         "source_inventory",
         "initial_source_frontier",
         "source_observations",
+        "seed_stage_prompt_source_observations",
         "source_observation_delta",
         "source_observation_delta_validation",
         "source_observation_reentry_validation",
@@ -10193,6 +10194,7 @@ function appendFinalOutputArtifactTruthSection(
     sourceObservationDeltaPath: string | null;
     sourceObservationDeltaValidationPath: string | null;
     sourceObservationReentryValidationPath: string | null;
+    seedStagePromptSourceObservationsPath: string;
     sourceObservationLineageIndexPath: string;
     sourceSafetyLedgerPath: string;
     sourceSafetyLedgerValidationPath: string;
@@ -10273,6 +10275,7 @@ function appendFinalOutputArtifactTruthSection(
         `- Source observation re-entry validation: ${args.sourceObservationReentryValidationPath}`,
       ]
       : []),
+    `- Seed-stage prompt source observations: ${args.seedStagePromptSourceObservationsPath}`,
     `- Source observation lineage index: ${args.sourceObservationLineageIndexPath}`,
     `- Source safety ledger: ${args.sourceSafetyLedgerPath}`,
     `- Source safety ledger validation: ${args.sourceSafetyLedgerValidationPath}`,
@@ -11523,20 +11526,26 @@ export async function runReconstruct(
   });
   currentSeedAuthoringReadinessValidation = seedAuthoringReadinessValidation;
   // M3c: snapshot the seed-stage projected observations that seed authoring consumes.
-  // Fresh runs persist the snapshot; resume reads the original (so the truncation
-  // reflects what the reused seed was authored under, not a re-derived or post-maturation
-  // set). Pre-M3c sessions lack the file, so fall back to the current seed-stage set.
+  // A resume reuses the original snapshot (so the truncation reflects what the reused seed
+  // was authored under, not a re-derived or post-maturation set); a fresh run — or a resume
+  // whose snapshot file is missing — persists the (re-derived, pre-maturation) seed-stage
+  // set, so the canonical ref the run-manifest/record publish always resolves.
   // Established before the reuse-match refresh below so the seed-onward provenance hashes it.
-  if (reuseExistingAuthoredArtifacts) {
-    seedStagePromptSourceObservations =
-      await readYamlDocumentIfPresent<ReconstructSourceObservationsArtifact>(
-        seedStagePromptSourceObservationsPath,
-      ) ?? promptSourceObservations;
-  } else {
-    seedStagePromptSourceObservations = promptSourceObservations;
+  // A pre-M3c in-flight session does NOT reach a published manifest on reuse: its seed-onward
+  // provenance predates seed_stage_prompt_source_observations_sha256, so the reuse-match
+  // rotation fail-loud halts the resume at the first reused seed artifact (intended — re-run
+  // fresh; the migration script renames fields and does not recompute provenance hashes).
+  const persistedSeedStageSnapshot = reuseExistingAuthoredArtifacts
+    ? await readYamlDocumentIfPresent<ReconstructSourceObservationsArtifact>(
+      seedStagePromptSourceObservationsPath,
+    )
+    : null;
+  seedStagePromptSourceObservations =
+    persistedSeedStageSnapshot ?? promptSourceObservations;
+  if (!persistedSeedStageSnapshot) {
     await writeYamlDocument(
       seedStagePromptSourceObservationsPath,
-      promptSourceObservations,
+      seedStagePromptSourceObservations,
     );
   }
   refreshAuthoredArtifactReuseMatch();
@@ -13112,6 +13121,7 @@ export async function runReconstruct(
     sourcePurposeCandidatesPath,
     sourcePurposeCandidatesValidationPath,
     purposeConfirmationValidationPath,
+    seedStagePromptSourceObservationsPath,
     sourceObservationLineageIndexPath,
     sourceSafetyLedgerPath,
     sourceSafetyLedgerValidationPath,
@@ -13296,6 +13306,7 @@ export async function runReconstruct(
       sourceObservationDeltaPath,
       sourceObservationDeltaValidationPath,
       sourceObservationReentryValidationPath,
+      seedStagePromptSourceObservationsPath,
       sourceObservationLineageIndexPath,
       sourceSafetyLedgerPath,
       sourceSafetyLedgerValidationPath,
