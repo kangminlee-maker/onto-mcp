@@ -112,6 +112,7 @@ import {
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import {
   ANSWER_STATUSES,
+  knownSeedRefs,
   validateFinalOutputProvenance,
   type ReconstructFinalOutputProvenanceSectionBindingInput,
   writeClaimRealizationMapValidationForOntologySeedArtifact,
@@ -533,6 +534,7 @@ export interface ReconstructRevisionProposalAuthorInput {
   failureClassification: ReconstructFailureClassificationArtifact;
   failureClassificationRef: string;
   failureClassificationValidation: ReconstructFailureClassificationValidationArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
 }
 
 export interface ReconstructStopDecisionAuthorInput {
@@ -8512,6 +8514,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeRevisionProposal(input) {
+      const validSeedRefs = [...knownSeedRefs(input.ontologySeed)].sort();
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -8521,12 +8524,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         systemPrompt: [
           baseSystem,
           `Propose bounded ontology actions for failures. action must be one of: ${REVISION_ACTIONS.join(", ")}.`,
-          "JSON shape: {\"proposals\":[{\"proposal_id\":\"...\",\"target_type\":\"claim|question|failure|seed|domain_context\",\"target_id\":\"...\",\"action\":\"...\",\"rationale\":\"...\",\"expected_effect\":\"...\"}]}",
+          "JSON shape: {\"proposals\":[{\"proposal_id\":\"...\",\"target_type\":\"claim|question|failure|seed\",\"target_id\":\"...\",\"action\":\"...\",\"rationale\":\"...\",\"expected_effect\":\"...\"}]}",
+          "Every target_id must resolve to a real authority or the proposal is rejected. For target_type failure, target_id is a failure_id from failure_classification. For target_type claim, target_id is the claim_id of one of those failures. For target_type question, target_id is the question_id of one of those failures. For target_type seed, target_id must be one of valid_seed_refs.",
         ].join("\n"),
         userPayload: {
           failure_classification_ref: input.failureClassificationRef,
           failure_classification: input.failureClassification,
           failure_classification_validation: input.failureClassificationValidation,
+          valid_seed_refs: validSeedRefs,
         },
       });
       return {
@@ -8545,8 +8550,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           const targetType = stringValue(
             proposal.target_type,
             `proposals[${index}].target_type`,
-          ) as "claim" | "question" | "failure" | "seed" | "domain_context";
-          if (!["claim", "question", "failure", "seed", "domain_context"].includes(targetType)) {
+          ) as "claim" | "question" | "failure" | "seed";
+          if (!["claim", "question", "failure", "seed"].includes(targetType)) {
             throw new Error(`RevisionProposal target_type is invalid: ${targetType}`);
           }
           return {
@@ -11805,6 +11810,7 @@ export async function runReconstruct(
       failureClassification,
       failureClassificationRef: failureClassificationPath,
       failureClassificationValidation,
+      ontologySeed,
     }),
   );
   const revisionProposalValidationPath = path.join(
@@ -11815,6 +11821,7 @@ export async function runReconstruct(
     await writeRevisionProposalValidationArtifact({
       revisionProposalPath,
       failureClassificationPath,
+      ontologySeedPath,
       outputPath: revisionProposalValidationPath,
     });
   assertRuntimeValidationValid({

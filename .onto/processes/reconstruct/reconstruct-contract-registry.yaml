@@ -2526,7 +2526,7 @@ validator_records:
   - validator_id: revision-proposal-validator
     gate_ids: [revision_proposal_gate]
     validator_version: 1
-    input_authority_refs: [revision-proposal.yaml, failure-classification.yaml, failure-classification-validation.yaml, reconstruct-contract-registry.yaml]
+    input_authority_refs: [revision-proposal.yaml, failure-classification.yaml, failure-classification-validation.yaml, ontology-seed.yaml, reconstruct-contract-registry.yaml]
     output_ref: revision-proposal-validation.yaml
   - validator_id: maturation-baseline-validator
     gate_ids: [maturation_baseline_gate]
