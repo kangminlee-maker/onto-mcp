@@ -1,0 +1,178 @@
+{
+  "summary": "완주한 reconstruct v1 골든 E2E(live gpt-5.5, 96 artifact, 100 manifest step)에 대한 silent-defect 감사 결과, 적대적 검증을 통과한(stands=true) 19건의 결함을 4부류로 정리했다. 중복 병합 후 부류별 확정 개수: mis_wiring 4, dead_unconsumed_output 7, unvalidated_bad_content 1, declared_unenforced_rule 7 (총 19). 사전 통보된 2건(assessment가 ontology_seed 미수령 일반 서술 / answer_support_judgment convergent=0 exempt)은 중복 제거했고, 본 감사의 cq-assessment mis_wiring은 source_observations 본문 부재까지 구체화한 별개 결함으로 유지했다. 심각도는 각 verdict의 adjusted_severity를 채택했다. 핵심 패턴: (1) purpose/seed confirmation의 의미적 verdict(rejected/거부 frame element/revision action)가 산출되지만 어떤 게이트도 강제·소비하지 않는 declared-but-unenforced 비대칭이 파이프라인 전반에 반복(purpose↔seed confirmation 비대칭, revision_proposal·recommended_action dead loop). (2) realization stance(grounding 신호)와 confirmation의 acceptance가 cross-check 없이 불일치해 unknown-stance claim이 cq_eligible로 통과. (3) golden gate q1/q2 매처가 결정론 id 대신 substring/greedy로 개념↔질문을 연결해 의미 충실도가 낮음(단 본 런 점수엔 영향 없음). 본 골든 런 자체는 단일 25줄 관측·rejected=[]·confirmation not_required 조건이라 대부분 결함이 잠복 상태로만 남고 실제 산출물 오염은 미발현이나, 다중 관측·사용자 거부·재방문 경로에서 silent하게 발현 가능한 구조적 갭이다. blocker는 0건이며 최고 심각도는 high 4건이다.",
+  "defects": [
+    {
+      "defect_class": "mis_wiring",
+      "title": "competency_question_assessment가 answer_status를 ontology_seed·source_observations 본문 없이 판정 — 증거 내용 부재로 '답변가능성' 충족 불가",
+      "severity": "high",
+      "location": "src/core-runtime/reconstruct/run.ts:504-511 (ReconstructCompetencyQuestionAssessmentAuthorInput), 3918-3957 (payload builder), 11264-11276 (call site)",
+      "evidence": "AuthorInput은 competencyQuestions/Ref/Validation/Ref + claimRealizationMap 5개만 받고(504-511) 호출부(11268-11275)도 ontologySeed/sourceObservations를 넘기지 않는다. payload builder(3926-3956)와 compact projection은 evidence를 evidence_observation_ids/evidence_source_basenames(ID 라벨)+rationale 산문으로만 노출하고 소스 본문·seed 본문을 전혀 포함하지 않는다(content_excerpt/structural_data NONE). 유일 의미 산출 필드인 answer_status를 LLM이 실제 증거 내용 없이 판정한다. E2E cq-1은 'source binding coverage limited'로 partially_answerable 판정하나, 입력 claim-realization-map은 binding 3종 전부 stance=observed_runtime_behavior(실현됨)로 기술 — LLM이 binding 본문을 못 봐 검증 불가. downstream: final-output author(3995-4053)가 non-answerable assessment를 생성 프롬프트에 주입(garbage-in 전파) + golden gate q2(semantic-quality-gate.ts:662-667)는 answerable 요구라 오판정이 q2 직접 실패.",
+      "fix": "assessment author input에 ontologySeed(seed claim 본문)와 source_observations 발췌(content_excerpt)를 추가·전달해 LLM이 observation_id 라벨이 아닌 실제 증거 내용으로 answer_status를 판정하도록 배선."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "revision_proposal의 action/expected_effect(reject/defer)가 seed에도 maturation 반복에도 적용되지 않음 — handoff는 validation_status만 소비, 계약 의무(consume_revision_proposal_when_present) 미강제",
+      "severity": "high",
+      "location": "src/core-runtime/reconstruct/run.ts:11325-11350 (저자/검증), 4067-4079 (유일 소비=final-output projection); reconstruct-contract-registry.yaml:2850-2853, 2938-2947; E2E revision-proposal.yaml(reject 2/defer 6)",
+      "evidence": "writeMaturationBaselineArtifact(maturation-validation.ts:4381-4431)는 seed/assessment/handoff-decision-validation만 입력받고 revision-proposal/failure-classification은 받지 않는다. revisionProposal.proposals를 읽는 곳은 validateRevisionProposal(개수·참조)·record.ts:679(집계)·run.ts:4068(final-output 산문)·12614(provenance allowlist)·terminal-validation.ts:394(validation_status만)뿐 — 어떤 maturation author도 proposals 내용을 입력으로 안 받는다. contract는 handoff-decision-validator에 consume_revision_proposal_when_present 의무를 부과하나 terminal-validation은 validation_status만 소비. E2E smoking gun: proposal-failure-cq-3-policy-authority-reject가 산출됐으나 seed-confirmation은 policy/state-model claim을 accepted로 유지(rejected_claim_ids:[]), ontology-expansion expansions:[].",
+      "fix": "revision_proposal을 maturation 반복(actionability-matrix/question-frontier author 입력)에 배선해 reject/defer가 실제 반영되게 하거나, 비강제 산출물임을 명시하고 final-output에서 'proposed-only, not yet applied to seed'로 라벨을 강제."
+    },
+    {
+      "defect_class": "mis_wiring",
+      "title": "candidate-inventory / candidate-disposition author가 purpose-confirmation·source-purpose 입력을 받지만 프롬프트에 전혀 사용하지 않음 (purpose 신호가 material-admission 경유로만 전달)",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/run.ts: 입력 인터페이스 373-377, 392-393 / 호출부 10868-10870, 10893 / 미사용 본문 6740-6875, 6877-6939",
+      "evidence": "ReconstructCandidateInventoryAuthorInput은 sourcePurposeCandidates/sourcePurposeCandidatesValidation/purposeConfirmationValidation을 선언(373-377)·전달(10868-10870)하고 CandidateDispositionAuthorInput도 sourcePurposeCandidatesValidation을 선언·전달(392-393,10893)하나, 두 author 본문(6740-6875,6877-6939)에서 이 세 필드 참조가 0건이다. 두 단계는 purpose를 compactMaterialAdmissionLedgerForPrompt(material_admission_rows)로만 받는데, 그 ledger 빌더(material-admission-validation.ts:181-211)는 selected.adequacy_frame.required_elements만으로 row를 만들고 purposeConfirmationValidation은 ref 문자열로만 소비해 confirmed/rejected frame element 결정을 반영하지 않는다. 동일 입력이 writeOntologySeed(7020-7115)에서는 실제 소비되어 실질 신호임이 대조로 확인됨.",
+      "fix": "필요한 입력(확정/거부 frame element, selected purpose statement)만 userPayload에 투영해 배선하거나, 불필요하면 author input 인터페이스·호출부에서 제거해 '제공됐으나 미소비'를 해소."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "purpose-confirmation의 confirmed/rejected_frame_element_refs가 어디서도 소비되지 않음 — 사용자의 frame element 거부 결정이 런타임 효과 0",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/run.ts:9056-9060, 9129-9136 (생산) / artifact-types.ts:1020-1021 (스키마) / 소비처 부재",
+      "evidence": "purpose-confirmation은 confirmed_frame_element_refs(E2E 6개)+rejected_frame_element_refs([])를 채우나(9056-9060 not_required 분기, 9129-9136 LLM 분기), 전 코드베이스에서 이 두 필드 값을 읽는 곳은 producer의 raw.* 접근(9130,9134)뿐. material-admission ledger 빌더(material-admission-validation.ts:166-211)는 selected.adequacy_frame.required_elements만으로 admission_row를 만들고 confirmed/rejected 목록을 참조하지 않으며, timeout-recovery projection(5194-5205)·validatePurposeConfirmation(purpose-authority-validation.ts:441-554)도 이 두 필드를 읽지 않는다. 본 런은 confirmation_required:false라 LLM 분기 미실행·rejected=[]로 잠복.",
+      "fix": "material-admission ledger 빌더가 rejected_frame_element_refs를 받아 해당 element를 admission_row에서 제외하거나 disposition=rejected로 표시하도록 배선하고, purpose-confirmation-validation에 두 ref가 source-purpose frame element id 부분집합인지 검증 추가."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "claim-realization-map stance가 cq-eligibility 게이트(seed confirmation)에 소비되지 않아 stance=unknown claim이 accepted/cq_eligible로 통과",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/run.ts:11110-11148 (realization는 confirmation 전에 저작되나 ReconstructSeedConfirmationInput run.ts:466-472가 claimRealizationMap 누락); post-seed-validation.ts:1096 (cq_eligible)",
+      "evidence": "claim-realization-map.yaml은 state_model_fixture_explanation(196)·provenance_fixture_service_seed_source(288)를 stance:unknown으로 분류(총 11 unknown)하나, 둘 다 seed-confirmation-validation.yaml의 accepted_claim_ids·cq_eligible_claim_ids에 들어간다. confirmOntologySeed input(466-472, 호출 11142-11148)은 ontologySeed+validation만 받고 claimRealizationMap을 받지 않아 realization verdict가 confirmation/eligibility에 영향 불가. cq_eligible=accepted.filter(!cqExcludedClaimIds)이고 cqExcludedClaimIds는 handoff_limitations id만(seed-claim-projections.ts:296-305)이라 unknown-stance 비-limitation claim이 통과. 설계 계약은 이 artifact를 per-seed-claim realization STANCE AUTHORITY로 명명(advisory-only 아님)인데 게이트에 미배선.",
+      "fix": "claimRealizationMap을 confirmation 검증기에 공급해 unknown/deferred_or_non_goal-stance claim을 cq_eligible에서 제외(cqExcludedClaimIds 확장)하거나, 최소한 accepted_claim_ids를 realization stance와 cross-check해 unknown accepted claim에 위반을 올린다."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "failure_classification.recommended_action(revise_seed/reject_claim/collect_evidence)가 런타임 어디서도 강제·소비되지 않고 검증기가 이 필드를 검증조차 안 함 (reuse 경로에서 무검증 통과)",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/run.ts:8111-8125 (저자만 enum 검증), 4054-4065 (유일 소비=final-output projection); post-seed-validation.ts:1881-1961 (validateFailureClassification에 검사 없음)",
+      "evidence": "validateFailureClassification는 failure_kind enum/참조/rationale/materiality만 검사하고 recommended_action을 읽지 않는다(E2E failure-classification-validation.yaml: revise_seed 2건 포함 8 failure 전부 valid). recommended_action을 읽는 결정론 분기는 전무(grep: 타입정의·저자 enum 게이트·final-output projection 3곳뿐). stopDecisionAllowedDecisions(1391-1405)는 materiality만, failure_classification_summary는 validation 카운트만 사용. reuse 경로(failure-classification.reuse-provenance.yaml 실재)는 저자 enum 게이트를 재실행하지 않아 무검증 필드가 유일 가드 없이 통과.",
+      "fix": "recommended_action을 실제 downstream 동작(reject_claim→seed 갱신, collect_evidence→다음 라운드 frontier)에 연결하거나 비강제 권고임을 명시하고, 최소한 validateFailureClassification에 recommended_action enum 검사를 추가해 reuse 경로 무효값을 게이트로 막는다."
+    },
+    {
+      "defect_class": "unvalidated_bad_content",
+      "title": "adversarial seed confirmation이 source/evidence 본문 없이 claim을 판정하고 검증기는 set 멤버십만 검사 — unsupported claim이 confirmed 가능",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/run.ts:9152-9197 (confirmOntologySeed claim_summaries + userPrompt); post-seed-validation.ts:1037-1101 (validator)",
+      "evidence": "ReconstructSeedConfirmationInput(466-472)·호출부(11142-11148)는 sourceObservations를 받지 않고, claim_summaries(9153-9164)는 claim_id/kind/name/compactStatement(≤240자)/evidence_observation_ids/source_basenames만 담아 관측 content_excerpt도 claimRealizationMap도 없이 LLM에 보낸다→인용 증거가 claim을 실제로 뒷받침하는지 확인 불가. validator(1044-1082)는 unknown_id/conflicting_state/missing_required_coverage 멤버십만, content/evidence 0검사. E2E: state_model_fixture_explanation이 realization-map에서 stance=unknown인데 confirmation서 accepted→cq_eligible로 무게이트 전파(validation_status=valid). 단 writeClaimRealizationMap(7179-7182)이 content_excerpt 받는 별도 grounding judge로 선행 존재해 blast radius 제한.",
+      "fix": "각 claim의 evidence_observation_ids에 해당하는 소스 관측 발췌를 confirmation 프롬프트에 포함하거나, content-aware 검증(claim별 rationale 요구 또는 realization stance cross-check)을 추가해 게이트가 증거 맹목이 되지 않게 한다."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "seed confirmation_status verdict(및 rejected_claim_ids)가 게이트되지 않음 — 'rejected' seed가 조용히 진행 (purpose confirmation과 비대칭)",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/run.ts:1521, 1537-1550 (gate projection / invalidGateCount); post-seed-validation.ts:1027-1101 (validateSeedConfirmationAgainstClaims)",
+      "evidence": "confirmOntologySeed는 confirmation_status∈{accepted,rejected,partial,deferred}를 author-time enum만 검증(9204-9205). validateSeedConfirmationAgainstClaims(1037-1101)는 confirmation_status를 읽지 않고 id 목록의 unknown_id/conflicting_state/missing_required_coverage만 검사하며 rejected/partial 비어있음을 요구하지 않는다. invalidGateCount(1537-1550)는 seed_confirmation_validation(구조)만 세고 raw seed_confirmation status는 세지 않는다. PURPOSE는 confirmation_status를 first-class 게이트 입력으로 강제(purpose-authority-validation.ts:483-525)하나 SEED엔 등가 강제 부재. firewall 존재: cq_eligible은 accepted만으로 구성(1096)이라 rejected_claim_ids claim은 CQ 저작서 자동 제외→garbage-in 경로는 없음. verdict 라벨이 id 목록과 불일치해도 미검출되는 cosmetic 갭.",
+      "fix": "seed confirmation_status==='rejected'(및 비어있지 않은 rejected_claim_ids)를 blocking으로 처리하는 런타임 게이트를 추가(purpose-authority-validation.ts:483-525 미러)하거나 seed_confirmation raw status를 invalidGateCount/전용 assertion에 포함."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "per-record evidence_refs가 존재할 때만 검증(required:false) — 무근거 seed record가 valid·confirmed·cq_eligible로 통과 + observation 'location'이 파일 경로 단위라 인용 자동 통과",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/ontology-seed-validation.ts:828-873 (required:false at 853), 226-239 (location 일치 검사)",
+      "evidence": "collectNestedEvidenceRefs가 모든 nested evidence_refs를 required:false로 walk(853)해, seed record가 evidence_refs 0개여도 위반이 안 난다(required:true는 candidate/purpose scaffolding에만; 실제 seed record 패밀리는 nested 경로로만 점검). 프롬프트 'Every object must have ... data binding coverage or a limitation'(run.ts:7001)은 게이트가 아닌 지시. ontologySeedClaimProjections(seed-claim-projections.ts:111)가 빈-evidence record를 claim화→confirmation accepted→cq_eligible(1096) 통과. location 검사(226-233)는 location===observation.location 동등성인데 E2E에선 양쪽 모두 전체 파일 경로(/.../src/fixture-service.ts)라 tautological. 본 런은 빈 evidence_refs 0·valid로 잠복; object_types엔 인접 data_binding_missing 부분 게이트 존재.",
+      "fix": "validateOntologySeed에서 claim-bearing record 패밀리별 evidence_refs를 required(또는 명시 handoff limitation 요구)로 만들고/또는 confirmation 검증기가 빈 evidence_refs claim을 cq_eligible에서 제외. observation location을 span 단위로 좁혀 파일-granularity loophole 차단."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "competency_question_assessment-validation이 answer_status 의미 타당성을 검증하지 않고 구조(복사된 ref 항등)만 검증 — garbage answer_status 무검증 통과",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/post-seed-validation.ts:1679-1878 (validateCompetencyQuestionAssessment); 대비 run.ts:8047-8056 (author가 ref를 question에서 복사)",
+      "evidence": "검증기는 required_seed_refs/linked_claim_ids/evidence_refs가 question의 것과 일치(1726-1778), downstream_effect가 answer_status 도출값과 일치(1812-1822)를 보나, author가 이 필드들을 question에서 그대로 복사(8047-8049)하고 downstream_effect도 downstreamEffectForAnswerStatus(8056)로 결정론 도출하므로 이 검사들은 정의상 항등(절대 실패 불가). answer_status는 enum 멤버십(1780-1788)+answerable일 때 evidence_refs/required_seed_refs 비어있지 않음(1835-1852, question서 복사돼 vacuous)만 본다. coverage_disposition cross-check 없음. 실 런타임 path에 answer_status 의미 게이트 전무(runSemanticQualityGate는 harness만 import). E2E validation: valid, violations:[].",
+      "fix": "answer_status를 question/증거와 교차 검증하는 내용 게이트 추가(answerable인데 cited observation 미실재, 또는 coverage_disposition='covered'인데 unsupported/contradicted 역행 시 위반)하거나, 구조 검증임을 검증기 계약에 정직하게 명시."
+    },
+    {
+      "defect_class": "mis_wiring",
+      "title": "failure_classification의 seed_confirmation_validation_ref 필드가 검증 산출물이 아니라 seed-confirmation.yaml(미검증 confirmation 산출물) 경로로 채워짐 — provenance 라벨 오배선",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/run.ts:8094-8095 / artifact-types.ts:2885 / E2E failure-classification.yaml",
+      "evidence": "필드명은 ...validation_ref인데 값으로 input.seedConfirmationValidation.seed_confirmation_ref(=상류 seed-confirmation.yaml 경로, artifact-types.ts:1772)를 넣어, E2E에서 seed_confirmation_validation_ref가 검증 산출물(seed-confirmation-validation.yaml)이 아닌 seed-confirmation.yaml을 가리킨다. 실제 게이트는 별도 seedConfirmationValidationPath(11150-11163)를 받아 정상. 전 런타임에서 failureClassification.seed_confirmation_validation_ref를 검증 경로로 읽는 코드는 없어 동작 영향 0(순수 provenance 라벨). 올바른 관례(3871/7519는 검증-artifact 경로)와 대조됨.",
+      "fix": "run.ts:8094를 input.seedConfirmationValidationRef(검증 산출물 경로)로 채우도록 author 입력에 추가·전달하거나, confirmation 산출물 자체를 가리키는 의도라면 필드명을 seed_confirmation_ref로 정정."
+    },
+    {
+      "defect_class": "mis_wiring",
+      "title": "Q1 binding-target 매칭이 'fixtureservice' substring으로 object_fixture_service와 object_fixture_service_record를 모두 타깃으로 잡아 record-binding이 service-binding 개념을 잘못 credit",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/semantic-quality-gate.ts:392-406 (targetObjectTypeIds) + 435-450 (conceptMatch); spec binding_target_alternates=[\"fixtureservice\"] (line 140)",
+      "evidence": "targetObjectTypeIds는 name.includes(normalizeName(alternate))를 쓰므로 normalizeName('FixtureServiceRecord')='fixtureservicerecord'가 'fixtureservice'를 포함→object_fixture_service_record까지 타깃 집합에 진입(라이브 seed로 재현: targetIds={object_fixture_service, object_fixture_service_record}). conceptMatch for-루프가 source_bindings 순서상 먼저 오는 binding_fixture_service_records(seed_ref=object_fixture_service_record)를 반환해 fixture-source-binding 개념이 matched_name='binding_fixture_service_records object_fixture_service_record'로 credit됨. PR #91 exact-seed_ref fix가 id측 substring은 닫았으나 model-chosen object NAME측 substring leak은 잔존(test suite에 name-superstring sibling 케이스 미커버). 본 E2E에선 정당한 service-binding도 존재해 q1.recall=1.0 불변, 소비 지표(matched_name 미소비)라 영향 없음.",
+      "fix": "binding_target_alternates 매칭을 정규화된 object NAME의 정확 일치(또는 단어경계 일치)로 좁히거나, alternate를 record와 구별되는 토큰으로 지정해 record object가 타깃 집합에 섞이지 않게 한다."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "answer-support-ledger author가 question frontier가 비어도 무조건 실 LLM 호출 — 형제 maturation author들의 empty-input 단락이 없어 낭비 호출+잠복 garbage surface",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/run.ts:8542-8602 (writeAnswerSupportLedger), 3482-3529 (prompt catalog); manifest step answer_support_ledger(llm_call_count:1, prompt_chars:8320, output_chars:24)",
+      "evidence": "형제 author(writeMaturationQuestionFrontier 8248, writeMaturationClosureFrontier 8409, writeAnswerSupportJudgment 8698, writeMaturationAnswerClaims 8807, writeOntologyExpansion 8903)는 upstream이 비면 LLM 호출 없이 empty artifact early-return하나, writeAnswerSupportLedger엔 이 가드가 없어 questions=0에도 prompt catalog(전 관측 supplemental)를 만들고 callJsonAuthor를 호출한다. manifest가 empty-frontier 런에서 실 gpt-5.5 호출(8320 prompt chars, 6 output tokens, duration_ms:4669) 발생을 입증(형제 answer_support_judgment·maturation_answer_claims 스텝은 telemetry 블록 없음). garbage cluster는 maturation-validation.ts:1998이 fail-closed로 차단. 출력은 하류(12121/12146)가 소비하므로 orphan은 아님(분류상 dead보다 missing-guard).",
+      "fix": "형제 author와 동일하게 input.maturationQuestionFrontier.questions.length===0이면 prompt catalog/LLM 호출 전에 empty evidence_clusters로 early-return하도록 guard 추가."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "metrics.pass_rate가 분모 불일치로 오도 지표(혼합 카운트)이며 어떤 게이트도 소비하지 않음(record 요약 미러만)",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/run.ts:1551-1562, 1601-1604; record.ts:683 (유일 소비); reconstruct-api.ts:517 (뷰 projection); E2E reconstruct-metrics.yaml(cq_count:5, unresolved:11, pass_rate:0)",
+      "evidence": "unresolvedQuestionCount = rejected+partial+skipped_refs+material_failure_count+open_questions.length+invalidGateCount로, material_failure_count(failures 객체당 1; E2E 8, distinct CQ 4)·open_questions(별개 free-text)가 competency_question_count(5)와 다른 분모라 합이 5를 초과→passedQuestions=max(0,5-11)=0→pass_rate=0이 강제. 실 게이팅은 unresolved_question_count를 직접 쓰고(terminal-validation 다수, run.ts:1399) pass_rate로 분기하는 게이트는 0개(grep). pass_rate 소비처는 record.ts:683·reconstruct-api.ts:517 순수 미러뿐.",
+      "fix": "pass_rate를 동일 분모(answer_status_counts.answerable 등 CQ 수준)로 재정의하거나 'cq_pass_rate'와 'unresolved_work_count'로 개념을 분리하고, 게이트 미사용 보고용 지표임을 명시하거나 제거."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "lens_judgment_index가 source-purpose-candidates / candidate-inventory 프롬프트에 전달되나 경로 ref만 있고 어떤 지시도 읽지 않음 (token-소모 dead input)",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/run.ts:6518 (writeSourcePurposeCandidates userPayload), 6783 (writeCandidateInventory userPayload)",
+      "evidence": "두 stage 모두 userPayload에 lens_judgment_index: input.lensJudgmentIndex를 주입(6518,6783)하나, 이 객체는 {schema_version, session_id, round_id, created_at, lens_judgment_refs:[{lens_id, artifact_ref}]}뿐이고 artifact_ref는 LLM이 열 수 없는 절대 파일 경로(E2E lens-judgment-index.yaml 9개 경로). 두 stage systemPrompt(6480-6760) 어디에도 lens/index 참조 지시가 없고(grep 매치 0), 실제 lens 의미 내용을 운반하는 lensJudgmentPromptPayload(candidate_labels 포함)는 exploration_synthesis(6334)에만 쓰인다. compactExplorationSynthesisForPrompt가 두 stage에 운반하는 것은 accepted_gaps뿐 candidate_labels는 빠져 lens 후보 라벨이 어떤 경로로도 도달 안 함. 산출물에 lens 매치 0.",
+      "fix": "lens_judgment_index를 두 페이로드에서 제거하거나, 필요하면 lensJudgmentPromptPayload처럼 실제 candidate_labels 내용을 압축해 전달하도록 교체."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "validateRevisionProposal의 target_id 참조 무결성이 target_type=='failure'에만 적용되고 claim/question/seed/domain_context target은 무검증",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/post-seed-validation.ts:1984-1993; artifact-types.ts:2917 (target_type enum 5종)",
+      "evidence": "검증 루프는 `if (proposal.target_type === \"failure\" && !failureIds.has(proposal.target_id))`만 unknown_id를 올려, claim/question/seed/domain_context target이면 target_id 실존 검사가 아예 없어 임의 문자열이 통과(validation_status=valid). E2E는 전부 target_type=failure라 잠복. 단 target_id는 어디서도 dereference되지 않아(grep: 1986/1990 검사 자신, run.ts:4074 display projection, 8176 parse뿐) garbage-in 전파 경로 없음. 또 검증 함수가 claim/question id 집합에 접근조차 안 해(writeRevisionProposalValidationArtifact는 revisionProposal+failureClassification만 읽음) 제안 fix가 추가 artifact 배선을 요한다.",
+      "fix": "validateRevisionProposal에서 target_type별 참조 집합(claim→seed-confirmation claim ids, question→assessment question ids 등)을 분기 검사해 failure 외 target에도 unknown_id 위반을 올린다."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "Lens judgment evidence 규칙('valid_observation_ids에서만 인용')이 런타임 파서에서 강제되지 않음 (selected 부분집합 대신 전체 관측으로 id 존재만 검사)",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/run.ts:6233 (system prompt) vs 6261-6265 (parser) / evidenceRefsFromIds 3067-3094",
+      "evidence": "systemPrompt(6233)는 'cite at least one evidence_observation_ids value from valid_observation_ids'를 선언하고 userPayload는 valid_observation_ids=selectedObservationIds(directive)(6239, directive-selected subset)를 전달하나, candidate_labels/semantic_gaps 파싱은 evidenceRefsFromIds({sourceObservations: input.sourceObservations, ...})(6261-6265)를 호출. evidenceRefsFromIds(3067-3094)는 evidenceRefByObservationId(전체 관측 배열)로 lookup해 id 존재+비어있지 않음만 검사, directive-selected subset과 비교하지 않는다. input.sourceObservations는 sourceObservationsForPrompt(5744-5787)가 safety tier로만 redact한 FULL set. lens-judgment 전용 content 검증기 부재. 동일 scope-mismatch가 source-purpose-candidates(3108-3112)·exploration accepted_gaps(6351-6358)에도 반복. E2E 관측 1개라 subset==full로 잠복.",
+      "fix": "evidenceRefsFromIds 호출 시 sourceObservations 대신 selected 부분집합으로 좁히거나, evidence_observation_ids ⊆ selectedObservationIds(directive) 검사를 추가해 위반 시 throw. source-purpose-candidates에도 동일 적용 검토."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "material-admission row의 downstream_authority_refs가 하드코딩 리터럴이며 실제 하류 소비 검증과 대조되지 않음 (오해유발 권위 라벨)",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/material-admission-validation.ts:201-205 (하드코딩 생성), 564 (유일 소비=length>0 체크); artifact-types.ts:1095",
+      "evidence": "빌더가 모든 row에 동일 리터럴 [candidate-inventory.yaml, candidate-disposition.yaml, ontology-seed.yaml]을 박는다(201-205; E2E 6/6 row). 이 필드를 읽는 곳은 line 564의 length>0 검사(diagnostic_affects_actionability 게이트의 conjunct 1개)뿐인데, 리터럴이 항상 non-empty라 상수-true→실효 없음. 실제 downstream 소비 강제(downstream_consumer_missing, 588-617)는 rowHasCandidate/Seed/BaselineConsumer/LimitationClosure(307-361)로 판정하며 downstream_authority_refs를 전혀 읽지 않는다. 즉 선언된 권위 목록(ontology-seed.yaml)과 실제 seed 소비 여부 사이 reconciliation 0. 실 closure는 독립 메커니즘으로 강제돼 게이트 공백은 아님.",
+      "fix": "downstream_authority_refs를 실제 소비 검사 결과와 대조해 '선언했으나 소비 안 됨'을 위반으로 올리거나, 검증에 안 쓸 거면 리터럴 메타 필드임을 주석으로 명시해 권위 신호 오해를 제거."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "source_observation_directive.open_questions 필드가 작성만 되고 하류에서 전혀 소비되지 않음 (orphan 필드, truncation 진단 노트도 미surface)",
+      "severity": "info",
+      "location": "src/core-runtime/reconstruct/run.ts:6204-6218 (작성) / artifact-types.ts:850 (스키마) / 소비처 부재",
+      "evidence": "writeSourceObservationDirective가 open_questions를 stringArray로 파싱해 directive에 기록(6204,6218; E2E 2개 존재)하나, directive 인스턴스의 .open_questions를 읽는 코드는 전무(grep 5건 중 1556/3859는 competencyQuestions의 동명 별개 필드, 6204/7566/7829는 모두 작성처). directive 하류 전달 지점(lens 6239-6243, purpose 6510, candidate 6770)은 selected_observations 또는 selectedObservationIds(directive)(5789-5799)만 사용. directive-validation.ts도 selected_observations만 검사. 추가: 6209-6211에서 selection overflow 시 openQuestions에 append되는 truncation 진단 노트조차 하류 미소비.",
+      "fix": "open_questions를 실제 하류(exploration_synthesis/seed authoring readiness 미해결 질문)로 라우팅하거나 순수 문서용임을 주석으로 명시."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "target_material_profile.selected_source_profiles[].scan_targets가 스캔 범위를 계약으로 선언하나 어떤 런타임도 그 타깃을 스캔하지 않음",
+      "severity": "info",
+      "location": "src/core-runtime/reconstruct/materialize-preparation.ts:164 (scan_targets 복사); source-profiles.ts:113 (parseScanTargets); 소비처 부재; compactTargetMaterialProfileForPrompt run.ts:3806-3812",
+      "evidence": "프로파일 md에서 파싱한 7개 scan_targets(directory/README·AGENTS·CLAUDE/test/.github·workflows/openapi/Dockerfile·k8s·terraform/package·build config)가 target-material-profile artifact에 그대로 박힌다(164; E2E 7항목). 그러나 .scan_targets 읽기 접근은 복사 사이트 하나뿐이고, 실제 관측(buildSourceObservation 360-416)은 binding된 단일 ref(fixture-service.ts) 하나만 stat·textStats로 읽어 README/tests/CI/openapi/Dockerfile을 walk하지 않는다(E2E source-observations.yaml 관측 1건, adapter_id=minimal-code-structure-observer). compactTargetMaterialProfileForPrompt(3806-3812)는 scan_targets를 의도적으로 프롬프트에서 제외. support_status=partial로 부분구현이 정직하게 공시돼 LLM 미오도, 잔여 위험은 영속 artifact만 보는 사람의 오해뿐.",
+      "fix": "scan_targets를 '프로파일이 약속하는 미구현 범위'로 필드명/주석 분리하거나 covered=false 같은 enforcement 상태를 명시."
+    }
+  ],
+  "by_class_counts": {
+    "mis_wiring": 4,
+    "dead_unconsumed_output": 7,
+    "unvalidated_bad_content": 1,
+    "declared_unenforced_rule": 7
+  },
+  "open_questions": [
+    "purpose confirmation과 seed confirmation의 verdict 강제 비대칭(rejected/거부 frame element/revision action이 산출만 되고 미강제)이 의도된 설계인지, 아니면 메우려는 defense-in-depth 갭인지 — 사용자 결정 필요. 다수 declared-but-unenforced 결함이 동일 뿌리(LLM verdict는 산출하나 게이트는 구조/멤버십만 검사)를 공유한다.",
+    "claim-realization-map이 설계 계약상 'per-seed-claim realization STANCE AUTHORITY'로 명명됐는데도 cq-eligibility 게이트에 미배선된 것이 누락인지 의도적 advisory 강등인지 — 계약 문구와 런타임 강제가 불일치한다.",
+    "본 골든 런의 단일 25줄 관측·rejected=[]·confirmation not_required 조건이 다수 결함을 잠복시키므로, 다중 관측/사용자 거부/maturation 재방문 시나리오용 회귀 픽스처를 추가해 각 결함의 발현 경로를 실증할지 결정 필요.",
+    "golden gate q1/q2의 substring/greedy 매칭은 측정-도구(harness) 결함으로 본 런 점수엔 영향이 없으나, fixture를 substring-구별 가능하게 재설계할지 vs 결정론 id-기반 매칭으로 게이트 코드를 강화할지 선택이 남아있다.",
+    "runSemanticQualityGate(q1/q2/q3)가 harness(scripts/reconstruct-pipeline-benchmark.ts)에서만 import되고 production run.ts path엔 answer_status 의미 게이트가 전무 — 의미 검증을 product 런타임으로 끌어올릴지 여부."
+  ]
+}
