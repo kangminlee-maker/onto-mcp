@@ -768,28 +768,26 @@ function sha256Text(text: string): string {
 }
 
 const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
-  // v3 added the cited source-evidence bodies surface (source_evidence); v4 bounds it to
-  // a deterministic per-payload SERIALIZED-SIZE budget (content_excerpt + structural
-  // payload, so an inventory-heavy spreadsheet observation counts too). Each version +
-  // contract change rotates the reuse-match hash so resume mode cannot reuse an assessment
-  // authored under a different (or content-blind, pre-v3) evidence projection of the same
-  // sources.
-  "competency_question_assessment_compact_projection:v4";
+  // v3 added the cited source-evidence bodies surface (source_evidence); v4 bounded it to a
+  // deterministic per-payload SERIALIZED-SIZE budget; v5 (M2) derives that evidence reserve
+  // from the WHOLE prompt budget per batch (= prompt_char_limit − measured non-evidence
+  // payload − margin) instead of a static budget, so the evidence uses the room actually
+  // left under the 50K cap. Each version + contract change rotates the reuse-match hash so
+  // resume mode cannot reuse an assessment authored under a different (or content-blind,
+  // pre-v3) evidence projection of the same sources.
+  "competency_question_assessment_compact_projection:v5";
 const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
 // Per-observation excerpt budget for the cited source-evidence bodies projected
 // into the assessment prompt, so answer_status is judged on evidence content
 // rather than observation-id labels alone.
+// Per-observation excerpt budget on each cited evidence body, kept as a real pre-cap so one
+// huge observation (e.g. a streaming spreadsheet) cannot eat the whole evidence reserve.
 const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT = 4_000;
-// Deterministic per-payload SERIALIZED budget (chars) for the cited evidence bodies, kept
-// well below the prompt cap so the rest of the payload (questions, claim map) still fits.
-// Bounding by serialized size — not observation COUNT — is required because a cited
-// spreadsheet carries a workbook inventory in structural_data whose caps are count-based,
-// so a few inventory-heavy observations would blow a count-based reserve and overflow the
-// unsplittable single-question batch.
-const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS = 24_000;
 // Cheap runaway guard on how many cited observations are projected before size-bounding
-// (the serialized budget above is the real bound; this only caps projection work).
+// (the derived reserve below is the real bound; this only caps projection work).
 const COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_CANDIDATE_LIMIT = 50;
+// Margin held back from the prompt cap when deriving the per-batch evidence reserve and when
+// building batches, so the projection metadata that grows as evidence is added still fits.
 const COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS = 1000;
 
 function competencyQuestionAssessmentProjectionContract(): Record<string, unknown> {
@@ -805,14 +803,14 @@ function competencyQuestionAssessmentProjectionContract(): Record<string, unknow
     evidence_projection:
       "evidence_observation_ids and evidence_source_basenames are prompt-visible; full evidence_refs remain runtime authority",
     source_evidence_projection:
-      "cited evidence observation bodies (from linked claim realizations, question evidence_refs, and domain competency semantic assessment evidence_refs) are projected as source_evidence, bounded greedily by serialized payload size, so answer_status is judged on content not id labels alone",
-    // The per-observation excerpt budget and the per-payload serialized evidence budget
-    // are part of the contract: tuning either changes the assessment prompt surface, so
-    // they must rotate the reuse-match sha.
+      "cited evidence observation bodies (from linked claim realizations, question evidence_refs, and domain competency semantic assessment evidence_refs) are projected as source_evidence, bounded greedily by serialized payload size to the per-batch evidence reserve, so answer_status is judged on content not id labels alone",
+    // The per-observation excerpt budget and the evidence-reserve derivation are part of the
+    // contract: tuning either changes the assessment prompt surface, so they rotate the
+    // reuse-match sha.
     source_evidence_excerpt_char_limit:
       COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
-    source_evidence_total_budget_chars:
-      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
+    source_evidence_reserve_derivation:
+      "per batch = prompt_char_limit − measured non-evidence payload (system prompt + questions + claim map + validation + policy, empty evidence) − build budget reserve, clamped >= 0; a budget stub (evidence_body_omitted_for_budget) carries no body and is counted as omitted",
     validation_projection:
       "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
     claim_realization_projection:
@@ -4052,21 +4050,44 @@ export function boundEvidenceBySerializedSize(
   return { kept, chars };
 }
 
+function isEvidenceBodyOmittedStub(item: unknown): boolean {
+  return Boolean(
+    item && typeof item === "object" &&
+      (item as Record<string, unknown>).evidence_body_omitted_for_budget === true,
+  );
+}
+
+// M2: the source-evidence reserve is the room left under the WHOLE prompt budget after the
+// measured non-evidence payload and a margin — clamped >= 0, so a large non-evidence payload
+// shrinks the evidence reserve toward zero rather than overflowing the prompt cap (the
+// terminal assert still fail-loud-halts if the non-evidence payload alone exceeds the cap).
+export function deriveCompetencyAssessmentEvidenceReserveChars(
+  nonEvidenceChars: number,
+): number {
+  return Math.max(
+    0,
+    COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT -
+      nonEvidenceChars -
+      COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,
+  );
+}
+
 function competencyQuestionAssessmentUserPayload(
   input: ReconstructCompetencyQuestionAssessmentAuthorInput,
   questions: ReconstructCompetencyQuestionsArtifact["questions"],
+  systemPrompt: string,
   batch?: {
     batch_index: number;
     batch_count: number;
   },
 ): Record<string, unknown> {
-  // Cited evidence bodies are bounded to a deterministic per-payload SERIALIZED-SIZE
-  // budget: a single question can link to many observations, and the per-question
-  // batching cannot split a lone question further, so unbounded evidence would overflow
+  // Cited evidence bodies are bounded to the per-batch evidence reserve derived under the
+  // WHOLE prompt budget (M2): a single question can link to many observations and the
+  // per-question batching cannot split a lone question, so unbounded evidence would overflow
   // the prompt cap and fail-loud-halt the run. Keep whole projected observations (each
   // including its structural payload, so an inventory-heavy spreadsheet counts toward the
-  // budget) in the selector's stable order until the serialized budget is spent; surface
-  // the omitted count so the cap is not silent.
+  // budget) in the selector's stable order until the reserve is spent; surface the omitted
+  // count so the cap is not silent.
   const citedEvidenceObservationIds = assessmentEvidenceObservationIds(
     input,
     questions,
@@ -4081,13 +4102,27 @@ function competencyQuestionAssessmentUserPayload(
       contentExcerptCharLimit: COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
     },
   ) as unknown[];
-  const { kept: sourceEvidence, chars: sourceEvidenceChars } =
-    boundEvidenceBySerializedSize(
-      projectedEvidenceCandidates,
-      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
-    );
-  const projectedEvidenceCount = sourceEvidence.length;
-  return {
+  const evidenceProjection = (args: {
+    projectedCount: number;
+    projectedChars: number;
+    reserveChars: number;
+  }): Record<string, unknown> => ({
+    cited_observation_count: citedEvidenceObservationIds.length,
+    projected_observation_count: args.projectedCount,
+    omitted_observation_count:
+      citedEvidenceObservationIds.length - args.projectedCount,
+    projected_chars: args.projectedChars,
+    evidence_reserve_chars: args.reserveChars,
+    per_observation_excerpt_char_limit:
+      COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+    omitted_observation_id_samples: citedEvidenceObservationIds
+      .slice(args.projectedCount)
+      .slice(0, 10),
+  });
+  const buildPayload = (
+    sourceEvidence: unknown[],
+    sourceEvidenceProjection: Record<string, unknown>,
+  ): Record<string, unknown> => ({
     competency_questions_ref: input.competencyQuestionsRef,
     competency_questions_validation_ref:
       input.competencyQuestionsValidationRef,
@@ -4120,21 +4155,39 @@ function competencyQuestionAssessmentUserPayload(
     // Cited evidence bodies for the questions in this (batch of) assessment, so the
     // assessor judges answer_status on actual source content, not id labels alone.
     source_evidence: sourceEvidence,
-    source_evidence_projection: {
-      cited_observation_count: citedEvidenceObservationIds.length,
-      projected_observation_count: projectedEvidenceCount,
-      omitted_observation_count:
-        citedEvidenceObservationIds.length - projectedEvidenceCount,
-      projected_chars: sourceEvidenceChars,
-      total_budget_chars:
-        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_TOTAL_BUDGET_CHARS,
-      per_observation_excerpt_char_limit:
-        COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
-      omitted_observation_id_samples: citedEvidenceObservationIds
-        .slice(projectedEvidenceCount)
-        .slice(0, 10),
-    },
-  };
+    source_evidence_projection: sourceEvidenceProjection,
+  });
+  // M2 pinned build order: (1) serialize the non-evidence payload (empty evidence) + system
+  // prompt, (2) measure it, (3) derive the evidence reserve under the whole prompt budget
+  // (LIMIT − measured − margin, clamp >= 0), (4) bind evidence to that reserve, (5) the
+  // terminal assertPromptPayloadCharLimit at dispatch stays as the fail-loud guard.
+  const nonEvidenceChars = promptPayloadCharCount(
+    systemPrompt,
+    buildPayload(
+      [],
+      evidenceProjection({ projectedCount: 0, projectedChars: 0, reserveChars: 0 }),
+    ),
+  );
+  const evidenceReserveChars = deriveCompetencyAssessmentEvidenceReserveChars(
+    nonEvidenceChars,
+  );
+  const { kept: sourceEvidence, chars: sourceEvidenceChars } =
+    boundEvidenceBySerializedSize(
+      projectedEvidenceCandidates,
+      evidenceReserveChars,
+    );
+  // R7-5: a budget stub carries no body, so it is counted as omitted (never projected).
+  const projectedEvidenceCount = sourceEvidence.filter(
+    (item) => !isEvidenceBodyOmittedStub(item),
+  ).length;
+  return buildPayload(
+    sourceEvidence,
+    evidenceProjection({
+      projectedCount: projectedEvidenceCount,
+      projectedChars: sourceEvidenceChars,
+      reserveChars: evidenceReserveChars,
+    }),
+  );
 }
 
 function competencyQuestionAssessmentPromptBatches(
@@ -4151,6 +4204,7 @@ function competencyQuestionAssessmentPromptBatches(
     const candidatePayload = competencyQuestionAssessmentUserPayload(
       input,
       candidate,
+      systemPrompt,
       { batch_index: 9999, batch_count: 9999 },
     );
     if (
@@ -8219,6 +8273,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const userPayload = competencyQuestionAssessmentUserPayload(
         input,
         input.competencyQuestions.questions,
+        systemPrompt,
       );
       let raw: Record<string, unknown>;
       if (
@@ -8255,6 +8310,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           const batchPayload = competencyQuestionAssessmentUserPayload(
             input,
             batch,
+            systemPrompt,
             {
               batch_index: index + 1,
               batch_count: batches.length,

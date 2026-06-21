@@ -53,6 +53,7 @@ import {
   singleDocumentProjectionTruncation,
   stopDecisionAllowedDecisions,
   boundEvidenceBySerializedSize,
+  deriveCompetencyAssessmentEvidenceReserveChars,
   appendFinalOutputUnresolvedRevisionSection,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
@@ -3592,7 +3593,7 @@ describe("runReconstruct", () => {
         projected_observation_count?: number;
         omitted_observation_count?: number;
         projected_chars?: number;
-        total_budget_chars?: number;
+        evidence_reserve_chars?: number;
         per_observation_excerpt_char_limit?: number;
         omitted_observation_id_samples?: string[];
       };
@@ -3907,7 +3908,7 @@ describe("runReconstruct", () => {
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v4");
+    ).toBe("competency_question_assessment_compact_projection:v5");
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -3937,7 +3938,7 @@ describe("runReconstruct", () => {
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v4");
+    ).toBe("competency_question_assessment_compact_projection:v5");
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -4087,7 +4088,7 @@ describe("runReconstruct", () => {
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v4");
+    ).toBe("competency_question_assessment_compact_projection:v5");
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_sha256,
@@ -4109,7 +4110,7 @@ describe("runReconstruct", () => {
       .toMatchObject({
         projection_kind: "competency_question_assessment_compact_projection",
         projection_contract_version:
-          "competency_question_assessment_compact_projection:v4",
+          "competency_question_assessment_compact_projection:v5",
         prompt_char_limit: 50_000,
         batching_policy: expect.objectContaining({
           mode: "deterministic_prompt_budget",
@@ -4171,17 +4172,20 @@ describe("runReconstruct", () => {
       competencyAssessmentPayloads[0]?.competency_questions_validation
         ?.violation_count,
     ).toBe(0);
-    // @codex R4/R5: source evidence is bounded to a deterministic per-payload SERIALIZED
-    // budget (so an evidence-rich or inventory-heavy spreadsheet question cannot overflow
-    // the prompt budget); the projection metadata surfaces the bound honestly and its
-    // invariants hold.
+    // M2: source evidence is bounded to the per-batch evidence reserve DERIVED under the
+    // whole prompt budget (= prompt cap − measured non-evidence payload − margin), so an
+    // evidence-rich or inventory-heavy spreadsheet question cannot overflow the prompt
+    // budget; the projection metadata surfaces the bound honestly and its invariants hold.
     const sourceEvidenceProjection =
       competencyAssessmentPayloads[0]?.source_evidence_projection;
-    expect(sourceEvidenceProjection?.total_budget_chars).toBe(24_000);
+    const evidenceReserveChars = sourceEvidenceProjection?.evidence_reserve_chars ?? 0;
+    expect(evidenceReserveChars).toBeGreaterThan(0);
+    expect(evidenceReserveChars).toBeLessThan(50_000);
     expect(sourceEvidenceProjection?.per_observation_excerpt_char_limit).toBe(4000);
-    // Total serialized evidence always stays within budget — an over-budget observation
-    // is stubbed, so even a lone evidence item cannot exceed the reserve.
-    expect(sourceEvidenceProjection?.projected_chars ?? 0).toBeLessThanOrEqual(24_000);
+    // Total serialized evidence always stays within the derived reserve — an over-budget
+    // observation is stubbed, so even a lone evidence item cannot exceed the reserve.
+    expect(sourceEvidenceProjection?.projected_chars ?? 0)
+      .toBeLessThanOrEqual(evidenceReserveChars);
     expect(
       (sourceEvidenceProjection?.projected_observation_count ?? 0) +
         (sourceEvidenceProjection?.omitted_observation_count ?? 0),
@@ -6358,6 +6362,29 @@ describe("observationPromptPayload projection-truncation recording", () => {
         .toBe("obs-big");
       expect((result.kept[0] as { structural_data?: unknown }).structural_data)
         .toBeUndefined();
+    });
+  });
+
+  describe("deriveCompetencyAssessmentEvidenceReserveChars (M2 derived reserve)", () => {
+    it("gives evidence most of the 50K cap when the non-evidence payload is small", () => {
+      // small non-evidence -> large reserve (= 50000 - 1000 - 1000), strictly under the cap.
+      const reserve = deriveCompetencyAssessmentEvidenceReserveChars(1_000);
+      expect(reserve).toBe(48_000);
+      expect(reserve).toBeLessThan(50_000);
+    });
+
+    it("shrinks the reserve as the non-evidence payload grows (the M2 fix vs a static budget)", () => {
+      const small = deriveCompetencyAssessmentEvidenceReserveChars(5_000);
+      const large = deriveCompetencyAssessmentEvidenceReserveChars(40_000);
+      expect(large).toBeLessThan(small);
+      expect(large).toBe(9_000);
+    });
+
+    it("clamps to 0 when the non-evidence payload alone approaches/exceeds the cap", () => {
+      // The terminal assertPromptPayloadCharLimit still fail-loud-halts in this case; the
+      // reserve must never go negative.
+      expect(deriveCompetencyAssessmentEvidenceReserveChars(49_500)).toBe(0);
+      expect(deriveCompetencyAssessmentEvidenceReserveChars(80_000)).toBe(0);
     });
   });
 
