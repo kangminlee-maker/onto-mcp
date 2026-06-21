@@ -4197,32 +4197,48 @@ function competencyQuestionAssessmentUserPayload(
   const evidenceReserveChars = deriveCompetencyAssessmentEvidenceReserveChars(
     nonEvidenceChars,
   );
-  const { kept: sourceEvidence, chars: sourceEvidenceChars } =
-    boundEvidenceBySerializedSize(
-      projectedEvidenceCandidates,
-      evidenceReserveChars,
-    );
   // R7-5 + codex #104: a budget stub carries no body, so it is omitted (never projected).
-  // Track the projected-body ids and derive omitted ids directly, so a stub interleaved with
-  // later kept bodies cannot misreport which observation was omitted (a prefix slice could).
-  const projectedBodyIds = new Set(
-    sourceEvidence
-      .filter((item) => !isEvidenceBodyOmittedStub(item))
-      .map((item) => (item as Record<string, unknown>).observation_id)
-      .filter((id): id is string => typeof id === "string"),
-  );
-  const omittedObservationIds = citedEvidenceObservationIds.filter(
-    (id) => !projectedBodyIds.has(id),
-  );
-  return buildPayload(
-    sourceEvidence,
-    evidenceProjection({
-      projectedCount: projectedBodyIds.size,
-      projectedChars: sourceEvidenceChars,
-      reserveChars: evidenceReserveChars,
-      omittedObservationIds,
-    }),
-  );
+  // Build the final payload for a given kept set, tracking projected-body ids and deriving
+  // omitted ids directly (so a stub interleaved with later kept bodies cannot misreport which
+  // observation was omitted — a prefix slice could).
+  const finalizePayload = (kept: unknown[]): Record<string, unknown> => {
+    const projectedBodyIds = new Set(
+      kept
+        .filter((item) => !isEvidenceBodyOmittedStub(item))
+        .map((item) => (item as Record<string, unknown>).observation_id)
+        .filter((id): id is string => typeof id === "string"),
+    );
+    const omittedObservationIds = citedEvidenceObservationIds.filter(
+      (id) => !projectedBodyIds.has(id),
+    );
+    return buildPayload(
+      kept,
+      evidenceProjection({
+        projectedCount: projectedBodyIds.size,
+        projectedChars: JSON.stringify(kept, null, 2).length,
+        reserveChars: evidenceReserveChars,
+        omittedObservationIds,
+      }),
+    );
+  };
+  let keptEvidence =
+    boundEvidenceBySerializedSize(projectedEvidenceCandidates, evidenceReserveChars)
+      .kept;
+  // codex #104: the per-item serialized size omits the array nesting/indent overhead the
+  // whole-payload pretty serializer adds, so the reserve alone can still let the FINAL payload
+  // exceed the cap. Verify the whole payload fits under the cap (minus the build margin) and
+  // drop trailing evidence until it does — the dispatch assert then never fail-loud-halts for
+  // an evidence-overhead overflow the reserve missed.
+  const payloadBudget = COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT -
+    COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;
+  while (
+    keptEvidence.length > 0 &&
+    promptPayloadCharCount(systemPrompt, finalizePayload(keptEvidence)) >
+      payloadBudget
+  ) {
+    keptEvidence = keptEvidence.slice(0, -1);
+  }
+  return finalizePayload(keptEvidence);
 }
 
 function competencyQuestionAssessmentPromptBatches(
@@ -4242,10 +4258,19 @@ function competencyQuestionAssessmentPromptBatches(
       systemPrompt,
       { batch_index: 9999, batch_count: 9999 },
     );
-    if (
-      candidate.length === 1 ||
-      promptPayloadCharCount(systemPrompt, candidatePayload) <= batchBuildBudget
-    ) {
+    // codex #104: M2's derived reserve elastically shrinks evidence to make a batch fit, so a
+    // fit check alone would keep growing the batch by SQUEEZING OUT evidence — assessing later
+    // questions from ids/metadata, regressing the v5 "judge on content" contract. Split instead
+    // when adding a question would force evidence omission, so each (group of) question(s) gets a
+    // smaller batch with room for its evidence bodies. A lone question whose evidence cannot fit
+    // even alone is unavoidable (candidate.length === 1 is always accepted).
+    const omittedCount = Number(
+      (candidatePayload.source_evidence_projection as Record<string, unknown>)
+        ?.omitted_observation_count ?? 0,
+    );
+    const candidateFits =
+      promptPayloadCharCount(systemPrompt, candidatePayload) <= batchBuildBudget;
+    if (candidate.length === 1 || (candidateFits && omittedCount === 0)) {
       current = candidate;
       continue;
     }
