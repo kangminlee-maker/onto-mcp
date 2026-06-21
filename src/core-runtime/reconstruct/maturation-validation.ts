@@ -655,6 +655,24 @@ function sameRefArray(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((ref, index) => ref === b[index]);
 }
 
+// Cross-artifact lineage binding: a consumed validation must record the upstream ref that is
+// actually supplied here, so a valid validation produced against a DIFFERENT upstream cannot
+// bless this artifact. Returns a violation when the recorded and supplied refs disagree.
+function validationLineageViolation(args: {
+  recordedUpstreamRef: string | null | undefined;
+  suppliedUpstreamRef: string | null | undefined;
+  message: string;
+}): ReconstructMaturationValidationViolation | null {
+  const recorded = args.recordedUpstreamRef ?? null;
+  const supplied = args.suppliedUpstreamRef ?? null;
+  if (recorded === supplied) return null;
+  return violation({
+    code: "conflicting_state",
+    message: args.message,
+    subjectId: recorded ?? supplied,
+  });
+}
+
 function deriveExpectedBaselineTuples(
   selected:
     | ReconstructSourcePurposeCandidatesArtifact["purpose_candidates"][number]
@@ -1200,8 +1218,6 @@ export function validateActionabilityMatrix(args: {
   // Bind the frontier validation to the frontier artifact it is consumed with: a valid
   // validation of a DIFFERENT frontier must not bless the supplied (possibly stale/edited)
   // frontier, whose questions would otherwise satisfy blocking_question_refs unvalidated.
-  // (The broader cross-artifact binding of the other consumed validations — answer-claims,
-  // expansion, baseline — is tracked as a separate follow-up.)
   if (frontierProvided && frontierAvailable) {
     const recordedFrontierRef =
       args.maturationQuestionFrontierValidation?.maturation_question_frontier_ref ?? null;
@@ -1214,6 +1230,47 @@ export function validateActionabilityMatrix(args: {
           args.maturationQuestionFrontierRef ?? null,
       }));
     }
+  }
+  // Cross-artifact lineage chain: the consumed validations must form a consistent lineage —
+  // each must have been produced against the upstream validation that is actually supplied
+  // here (baseline-validation <- frontier-validation <- answer-claims-validation <-
+  // ontology-expansion-validation). A valid validation produced against a different upstream
+  // cannot bless this matrix. (Each check is gated on the consumed validation being present &
+  // valid, so the pre-frontier baseline matrix trips none of them. Binding each validation to
+  // its OWN source artifact — beyond the frontier above — is a smaller residual; see the
+  // follow-up note.)
+  for (
+    const lineage of [
+      frontierAvailable
+        ? validationLineageViolation({
+          recordedUpstreamRef:
+            args.maturationQuestionFrontierValidation?.maturation_baseline_validation_ref,
+          suppliedUpstreamRef: args.maturationBaselineValidationRef,
+          message:
+            "actionability matrix question frontier validation must be produced against the supplied maturation baseline validation",
+        })
+        : null,
+      args.maturationAnswerClaimsValidation?.validation_status === "valid"
+        ? validationLineageViolation({
+          recordedUpstreamRef:
+            args.maturationAnswerClaimsValidation.maturation_question_frontier_validation_ref,
+          suppliedUpstreamRef: args.maturationQuestionFrontierValidationRef,
+          message:
+            "actionability matrix answer-claims validation must be produced against the supplied question frontier validation",
+        })
+        : null,
+      args.ontologyExpansionValidation?.validation_status === "valid"
+        ? validationLineageViolation({
+          recordedUpstreamRef:
+            args.ontologyExpansionValidation.maturation_answer_claims_validation_ref,
+          suppliedUpstreamRef: args.maturationAnswerClaimsValidationRef,
+          message:
+            "actionability matrix ontology expansion validation must be produced against the supplied answer-claims validation",
+        })
+        : null,
+    ]
+  ) {
+    if (lineage) violations.push(lineage);
   }
   for (const row of matrix.rows) {
     if (seen.has(row.matrix_row_id)) {

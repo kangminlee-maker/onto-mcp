@@ -1390,7 +1390,7 @@ describe("maturation validation", () => {
         { ...baseQuestion, question_id: "mq-feature-object-2" },
       ],
     };
-    const validFrontierValidation = { validation_status: "valid" } as ReconstructMaturationQuestionFrontierValidationArtifact;
+    const validFrontierValidation = { validation_status: "valid", maturation_baseline_validation_ref: "maturation-baseline-validation.yaml" } as ReconstructMaturationQuestionFrontierValidationArtifact;
     const matrix = buildActionabilityMatrixArtifact({
       sessionId: "session-1",
       maturationBaseline,
@@ -1449,7 +1449,7 @@ describe("maturation validation", () => {
         },
       ],
     };
-    const validFrontierValidation = { validation_status: "valid" } as ReconstructMaturationQuestionFrontierValidationArtifact;
+    const validFrontierValidation = { validation_status: "valid", maturation_baseline_validation_ref: "maturation-baseline-validation.yaml" } as ReconstructMaturationQuestionFrontierValidationArtifact;
     const matrix = buildActionabilityMatrixArtifact({
       sessionId: "session-1",
       maturationBaseline,
@@ -1608,7 +1608,7 @@ describe("maturation validation", () => {
         baseline_row_refs: ["other-baseline-row"],
       })),
     };
-    const validFrontierValidation = { validation_status: "valid" } as ReconstructMaturationQuestionFrontierValidationArtifact;
+    const validFrontierValidation = { validation_status: "valid", maturation_baseline_validation_ref: "maturation-baseline-validation.yaml" } as ReconstructMaturationQuestionFrontierValidationArtifact;
     const matrix = buildActionabilityMatrixArtifact({
       sessionId: "session-1",
       maturationBaseline,
@@ -1671,6 +1671,73 @@ describe("maturation validation", () => {
       v.code === "conflicting_state" &&
       v.subject_id === "maturation-question-frontier-validation.yaml"
     )).toBe(true);
+  });
+
+  it("rejects a cross-artifact lineage break in the consumed validation chain (follow-up)", () => {
+    const { maturationBaseline, baselineValidation, matrix: initialMatrix, frontier, frontierValidation } =
+      frontierScenario();
+    const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
+    const ontologyExpansion = ontologyExpansionForRow(initialMatrix.rows[0]!);
+    // Build a faithful current matrix (claims + expansion + frontier all consistent).
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+    });
+    const validateChain = (overrides: Partial<Parameters<typeof validateActionabilityMatrix>[0]>) =>
+      validateActionabilityMatrix({
+        actionabilityMatrix: matrix,
+        actionabilityMatrixRef: "actionability-matrix.yaml",
+        maturationBaseline,
+        maturationBaselineValidation: baselineValidation,
+        maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+        maturationAnswerClaims: answerClaims,
+        maturationAnswerClaimsValidation: answerClaimsValidation(),
+        maturationAnswerClaimsValidationRef:
+          "maturation-answer-claims-validation.yaml",
+        ontologyExpansion,
+        ontologyExpansionValidation: ontologyExpansionValidation(),
+        ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+        maturationQuestionFrontier: frontier,
+        maturationQuestionFrontierValidation: frontierValidation,
+        maturationQuestionFrontierValidationRef:
+          "maturation-question-frontier-validation.yaml",
+        maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+        ...overrides,
+      });
+    // Faithful chain validates.
+    expect(validateChain({}).validation_status).toBe("valid");
+    // (a) frontier validation produced against a DIFFERENT baseline validation.
+    expect(validateChain({
+      maturationQuestionFrontierValidation: {
+        ...frontierValidation,
+        maturation_baseline_validation_ref: "other-baseline-validation.yaml",
+      },
+    }).violations.some((v) => v.code === "conflicting_state")).toBe(true);
+    // (b) answer-claims validation produced against a DIFFERENT frontier validation.
+    expect(validateChain({
+      maturationAnswerClaimsValidation: {
+        ...answerClaimsValidation(),
+        maturation_question_frontier_validation_ref: "other-frontier-validation.yaml",
+      },
+    }).violations.some((v) => v.code === "conflicting_state")).toBe(true);
+    // (c) ontology-expansion validation produced against a DIFFERENT answer-claims validation.
+    expect(validateChain({
+      ontologyExpansionValidation: {
+        ...ontologyExpansionValidation(),
+        maturation_answer_claims_validation_ref: "other-claims-validation.yaml",
+      },
+    }).violations.some((v) => v.code === "conflicting_state")).toBe(true);
   });
 
   it("rejects a question frontier that omits material frontier-required rows", () => {
