@@ -1438,8 +1438,10 @@ export function stopDecisionAllowedDecisions(input: {
   // are carried to the next maturation round instead (see revision_proposal_summary
   // in the final-output projection). This enforces the contract
   // consume_revision_proposal_when_present rather than leaving it advisory-only.
-  const unappliedRevisionCount = input.revisionProposal.proposals.filter((proposal) =>
-    proposal.action === "reject" || proposal.action === "defer"
+  // The blocking set is the single isRevisionBlocker predicate, used identically here
+  // and at the final-output disclosure (M4a — no reject|defer-here vs other-there drift).
+  const unappliedRevisionCount = input.revisionProposal.proposals.filter(
+    isRevisionBlocker,
   ).length;
   const hasUnresolvedWork =
     input.metrics.unresolved_question_count > 0 ||
@@ -1476,6 +1478,22 @@ const REVISION_ACTIONS = [
   "reject",
   "defer",
 ] as const satisfies readonly ReconstructRevisionProposalAction[];
+
+// M4a — one predicate set for revision-proposal disposition, used identically at the stop
+// gate and the final-output disclosure. A proposal BLOCKS the run from claiming it is
+// resolved when it drops or postpones scope (reject|defer); every non-`reuse` proposal is
+// DISCLOSED as a next-round directive (extend|rename|split disclosed but non-blocking).
+function isRevisionBlocker(
+  proposal: ReconstructRevisionProposalArtifact["proposals"][number],
+): boolean {
+  return proposal.action === "reject" || proposal.action === "defer";
+}
+
+function isRevisionDisclosed(
+  proposal: ReconstructRevisionProposalArtifact["proposals"][number],
+): boolean {
+  return proposal.action !== "reuse";
+}
 
 function evidenceRefFromObservation(
   observation: ReconstructSourceObservation,
@@ -9874,23 +9892,40 @@ export function appendFinalOutputUnresolvedRevisionSection(
   finalOutputText: string,
   revisionProposal: ReconstructRevisionProposalArtifact,
 ): string {
-  const unresolved = revisionProposal.proposals.filter(
-    (proposal) => proposal.action === "reject" || proposal.action === "defer",
-  );
-  if (unresolved.length === 0) return finalOutputText;
+  // M4a — disclose ALL non-`reuse` proposals (they are next-round directives), splitting the
+  // blocking set (reject|defer — the run is not complete while they remain) from the
+  // non-blocking set (extend|rename|split). The blocking set is the same isRevisionBlocker
+  // predicate the stop gate uses, so the two sites can never drift.
+  const disclosed = revisionProposal.proposals.filter(isRevisionDisclosed);
+  if (disclosed.length === 0) return finalOutputText;
+  const blocking = disclosed.filter(isRevisionBlocker);
+  const nonBlocking = disclosed.filter((proposal) => !isRevisionBlocker(proposal));
+  const line = (proposal: ReconstructRevisionProposalArtifact["proposals"][number]) =>
+    `- ${proposal.action} ${proposal.target_type} ${proposal.target_id} (${proposal.proposal_id})`;
   const content = [
     "## Unresolved Revision Proposals",
     "",
     "Revision proposals are proposed-only and are NOT applied to the seed or maturation " +
-      "in this run. The following reject/defer proposals remain unresolved and are carried " +
-      "to the next maturation round; the run is not complete while they remain.",
+      "in this run; they are carried to the next maturation round as directives.",
     "",
-    ...unresolved.map((proposal) =>
-      `- ${proposal.action} ${proposal.target_type} ${proposal.target_id} (${proposal.proposal_id})`
-    ),
-    "",
-  ].join("\n");
-  return upsertMarkdownSection(finalOutputText, content);
+  ];
+  if (blocking.length > 0) {
+    content.push(
+      "Blocking (reject/defer) — the run is not complete while these remain:",
+      "",
+      ...blocking.map(line),
+      "",
+    );
+  }
+  if (nonBlocking.length > 0) {
+    content.push(
+      "Non-blocking next-round directives (extend/rename/split):",
+      "",
+      ...nonBlocking.map(line),
+      "",
+    );
+  }
+  return upsertMarkdownSection(finalOutputText, content.join("\n"));
 }
 
 /**

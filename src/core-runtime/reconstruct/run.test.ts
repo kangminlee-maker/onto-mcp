@@ -6401,26 +6401,42 @@ describe("observationPromptPayload projection-truncation recording", () => {
       expected_effect: "e",
     });
 
-    it("appends an unresolved-revision section for reject/defer proposals", () => {
+    it("discloses blocking (reject/defer) and non-blocking (extend/rename/split); never reuse (M4a)", () => {
       const out = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
         proposals: [
           proposal("p1", "reject"),
           proposal("p2", "reuse"),
           proposal("p3", "defer"),
+          proposal("p4", "extend"),
         ],
       } as never);
       expect(out).toContain("## Unresolved Revision Proposals");
+      // blocking set — the run is not complete while these remain
+      expect(out).toContain("Blocking (reject/defer)");
       expect(out).toContain("reject seed seed-1 (p1)");
       expect(out).toContain("defer seed seed-1 (p3)");
-      // refinement actions are not unresolved work and are not listed
+      // M4a: ALL non-reuse is disclosed, not only reject/defer
+      expect(out).toContain("Non-blocking next-round directives");
+      expect(out).toContain("extend seed seed-1 (p4)");
+      // reuse is never disclosed
       expect(out).not.toContain("reuse seed seed-1 (p2)");
     });
 
-    it("is a no-op when no reject/defer proposals remain", () => {
+    it("discloses extend/rename/split even when no reject/defer remain (M4a all-non-reuse)", () => {
+      const out = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
+        proposals: [proposal("p1", "reuse"), proposal("p2", "extend")],
+      } as never);
+      expect(out).toContain("## Unresolved Revision Proposals");
+      expect(out).toContain("Non-blocking next-round directives");
+      expect(out).toContain("extend seed seed-1 (p2)");
+      expect(out).not.toContain("Blocking (reject/defer)");
+    });
+
+    it("is a no-op only when every proposal is reuse (or none)", () => {
       const text = "# Result\n";
       expect(
         appendFinalOutputUnresolvedRevisionSection(text, {
-          proposals: [proposal("p1", "reuse"), proposal("p2", "extend")],
+          proposals: [proposal("p1", "reuse")],
         } as never),
       ).toBe(text);
       expect(
