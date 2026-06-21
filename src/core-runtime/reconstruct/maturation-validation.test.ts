@@ -3428,6 +3428,27 @@ describe("maturation validation", () => {
       v.code === "conflicting_state" &&
       v.subject_id === "revision_blocker_limitation_refs"
     )).toHaveLength(0);
+    // codex R1: a valid validation with a NULL revision_proposal_ref does not certify the
+    // consumed proposal -> binding conflicting_state (no unbound acceptance).
+    const unboundBinding = validateReady(
+      blockerDecision,
+      blockerProposal,
+      { ...revisionProposalValidation(), revision_proposal_ref: null },
+    );
+    expect(unboundBinding.validation_status).toBe("invalid");
+    expect(unboundBinding.violations.some((v) =>
+      v.code === "conflicting_state" && v.subject_id === "revision_proposal_ref"
+    )).toBe(true);
+    // codex R1: a pre-M4b persisted decision lacks revision_blocker_limitation_refs; the
+    // validator normalizes the missing field to [] (does not throw) and produces a result.
+    const { revision_blocker_limitation_refs: _legacy, ...legacyDecision } =
+      readyDecision;
+    const legacyValidation = validateReady(
+      legacyDecision as ReconstructMaturationContinuationDecisionArtifact,
+      revisionProposal(),
+      revisionProposalValidation(),
+    );
+    expect(legacyValidation.validation_status).toBe("valid");
 
     // #22: purpose-candidate-level limitations keep the same all-closed matrix at
     // actionable_limited (not actionable_ready) and surface as a claim limitation,

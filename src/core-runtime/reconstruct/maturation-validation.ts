@@ -4426,14 +4426,17 @@ export function validateMaturationContinuationDecision(args: {
     }));
   }
   // M4b — revision-blocker conservation gate (derive-and-assert, not trust the field).
-  // onto finding-002: bind the consumed revision-proposal-validation to the consumed
-  // revision-proposal so a stale/mismatched valid validation cannot certify a different
-  // proposal set (resume/manual substitution).
+  // onto finding-002 + codex: bind the consumed revision-proposal-validation to the consumed
+  // revision-proposal so a stale/mismatched/unbound valid validation cannot certify a
+  // different proposal set (resume/manual substitution). When the consumed proposal ref is
+  // known and the validation is being trusted (valid), require a matching NON-NULL ref —
+  // a null revision_proposal_ref (pure/manual validations) is not acceptable certification.
   if (
-    args.revisionProposalValidation.revision_proposal_ref &&
     args.revisionProposalRef &&
-    path.resolve(args.revisionProposalValidation.revision_proposal_ref) !==
-      path.resolve(args.revisionProposalRef)
+    args.revisionProposalValidation.validation_status === "valid" &&
+    (!args.revisionProposalValidation.revision_proposal_ref ||
+      path.resolve(args.revisionProposalValidation.revision_proposal_ref) !==
+        path.resolve(args.revisionProposalRef))
   ) {
     violations.push(violation({
       code: "conflicting_state",
@@ -4444,13 +4447,17 @@ export function validateMaturationContinuationDecision(args: {
   }
   // Recompute the blocker set from the validated authority (gated on valid, symmetric with
   // the builder) and assert the decision field equals it — the field is not trusted.
+  // Normalize a missing field ([] for pre-M4b persisted decisions) so revalidation produces
+  // an invalid result rather than throwing.
+  const decisionRevisionBlockerRefs =
+    decision.revision_blocker_limitation_refs ?? [];
   const expectedRevisionBlockerRefs = revisionBlockerLimitationRefs(
     args.revisionProposal,
     args.revisionProposalValidation,
   );
   if (
     !sameRefSet(
-      decision.revision_blocker_limitation_refs,
+      decisionRevisionBlockerRefs,
       expectedRevisionBlockerRefs,
     )
   ) {
