@@ -1065,6 +1065,7 @@ export function validateActionabilityMatrix(args: {
     | ReconstructMaturationQuestionFrontierValidationArtifact
     | null;
   maturationQuestionFrontierValidationRef?: string | null;
+  maturationQuestionFrontierRef?: string | null;
 }): ReconstructActionabilityMatrixValidationArtifact {
   const matrix = args.actionabilityMatrix;
   const violations: ReconstructMaturationValidationViolation[] = [];
@@ -1195,6 +1196,24 @@ export function validateActionabilityMatrix(args: {
         "actionability matrix requires valid maturation question frontier validation when one is supplied",
       subjectId: args.maturationQuestionFrontierValidationRef ?? null,
     }));
+  }
+  // Bind the frontier validation to the frontier artifact it is consumed with: a valid
+  // validation of a DIFFERENT frontier must not bless the supplied (possibly stale/edited)
+  // frontier, whose questions would otherwise satisfy blocking_question_refs unvalidated.
+  // (The broader cross-artifact binding of the other consumed validations — answer-claims,
+  // expansion, baseline — is tracked as a separate follow-up.)
+  if (frontierProvided && frontierAvailable) {
+    const recordedFrontierRef =
+      args.maturationQuestionFrontierValidation?.maturation_question_frontier_ref ?? null;
+    if (recordedFrontierRef !== (args.maturationQuestionFrontierRef ?? null)) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "actionability matrix question frontier validation must validate the supplied question frontier",
+        subjectId: args.maturationQuestionFrontierValidationRef ??
+          args.maturationQuestionFrontierRef ?? null,
+      }));
+    }
   }
   for (const row of matrix.rows) {
     if (seen.has(row.matrix_row_id)) {
@@ -5152,6 +5171,7 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     maturationQuestionFrontierValidation,
     maturationQuestionFrontierValidationRef:
       args.maturationQuestionFrontierValidationPath ?? null,
+    maturationQuestionFrontierRef: args.maturationQuestionFrontierPath ?? null,
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;

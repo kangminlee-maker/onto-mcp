@@ -1160,6 +1160,7 @@ describe("maturation validation", () => {
       maturationQuestionFrontierValidation: frontierValidation,
       maturationQuestionFrontierValidationRef:
         "maturation-question-frontier-validation.yaml",
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
     });
 
     expect(matrix.rows[0]?.maturity_level).toBe("L3_evidenced");
@@ -1204,6 +1205,7 @@ describe("maturation validation", () => {
       maturationQuestionFrontierValidation: frontierValidation,
       maturationQuestionFrontierValidationRef:
         "maturation-question-frontier-validation.yaml",
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
     });
 
     expect(matrix.rows[0]?.maturity_level).toBe("L4_validated_for_purpose");
@@ -1233,6 +1235,7 @@ describe("maturation validation", () => {
         maturationQuestionFrontierValidation: frontierValidation,
         maturationQuestionFrontierValidationRef:
           "maturation-question-frontier-validation.yaml",
+        maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
       });
     // Current-matrix recompute threads the validated frontier in -> reverse link populates.
     const matrix = buildActionabilityMatrixArtifact({
@@ -1369,6 +1372,7 @@ describe("maturation validation", () => {
       maturationQuestionFrontierValidation: frontierValidation,
       maturationQuestionFrontierValidationRef:
         "maturation-question-frontier-validation.yaml",
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
     });
     expect(validation.violations.some((v) =>
       v.code === "conflicting_state" && v.subject_id === closedRow.matrix_row_id
@@ -1633,6 +1637,39 @@ describe("maturation validation", () => {
     expect(validation.violations.some((v) =>
       v.code === "missing_required_coverage" &&
       v.subject_id === frontierRow.matrix_row_id
+    )).toBe(true);
+  });
+
+  it("rejects a frontier validation that validates a different frontier artifact (codex round-4 P2)", () => {
+    const { maturationBaseline, baselineValidation, frontier, frontierValidation } =
+      frontierScenario();
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+    });
+    // The supplied frontier validation records a DIFFERENT frontier ref than the frontier
+    // artifact being consumed -> the validation does not bless this (possibly stale) frontier.
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      // mismatched: the validation validated "maturation-question-frontier.yaml" (per
+      // frontierScenario) but we claim the consumed frontier is a different artifact.
+      maturationQuestionFrontierRef: "other-question-frontier.yaml",
+    });
+    expect(validation.violations.some((v) =>
+      v.code === "conflicting_state" &&
+      v.subject_id === "maturation-question-frontier-validation.yaml"
     )).toBe(true);
   });
 
