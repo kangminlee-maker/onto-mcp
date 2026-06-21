@@ -2891,7 +2891,7 @@ export type ReconstructRevisionProposalAction =
 
 export interface ReconstructRevisionProposalEntry {
   proposal_id: string;
-  target_type: "claim" | "question" | "failure" | "seed" | "domain_context";
+  target_type: "claim" | "question" | "failure" | "seed";
   target_id: string;
   action: ReconstructRevisionProposalAction;
   rationale: string;

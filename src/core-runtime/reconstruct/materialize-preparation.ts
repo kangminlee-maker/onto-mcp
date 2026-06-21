@@ -265,6 +265,75 @@ if (DOCUMENT_EXCERPT_PROJECTION_FLOOR > DOCUMENT_CAPTURE_CEILING_CHARS) {
 
 const TEXT_READABLE_DOCUMENT_EXTENSIONS = new Set([".md", ".txt", ".adoc"]);
 
+// M3a — explicit positive allowlist of real source-language extensions that earn whole-file
+// capture/projection. The classifier also maps config/data extensions to `code`
+// (.json/.yaml/.yml/.toml/.xml/.env/.cfg/.conf/.lock); those are deliberately NOT here and
+// default to the bounded structural sample (a quality + cost volume reduction — NOT a
+// secret-exposure closure, which is Track 2). Enumerated, no wildcard, so adding a language is
+// a deliberate edit; fail-safe is bounded for any code extension not listed.
+const CODE_WHOLE_CAPTURE_EXTENSIONS = new Set([
+  ".c",
+  ".cc",
+  ".cpp",
+  ".cs",
+  ".css",
+  ".dockerfile",
+  ".go",
+  ".graphql",
+  ".java",
+  ".js",
+  ".jsx",
+  ".kt",
+  ".mjs",
+  ".php",
+  ".prisma",
+  ".proto",
+  ".py",
+  ".rb",
+  ".rs",
+  ".scss",
+  ".sh",
+  ".swift",
+  ".ts",
+  ".tsx",
+]);
+
+// Extensionless build-language source basenames the classifier maps to `code` by name
+// (CODE_BASENAMES). These are real source/build scripts → whole capture. The config/data
+// basenames (package.json/tsconfig.json/cargo.toml/go.mod/pom.xml) are deliberately NOT here
+// — they default to the bounded sample like other config/data (M3a-default), and are small
+// enough that the sample is the whole file anyway.
+const CODE_WHOLE_CAPTURE_BASENAMES = new Set([
+  "dockerfile",
+  "makefile",
+  "rakefile",
+  "gemfile",
+]);
+
+/**
+ * Single whole-capture / full-excerpt eligibility predicate (M3a). Consumed by BOTH the
+ * capture owner (`structuralExcerptCharLimit` here) and the seed-stage prompt projection
+ * (`isFullExcerptProjectionEligible` in run.ts), so capture and projection can never disagree
+ * — a bounded capture under a whole-projection budget would silently author the seed from a
+ * partial file. Takes the source REF (path/filename) so it is basename-aware: source-language
+ * code (allowlisted extension OR build-language basename) and text-readable documents
+ * (.md/.txt/.adoc) earn whole capture; binary documents, config/data code files, and
+ * structural-inventory kinds (spreadsheet/database) stay bounded.
+ */
+export function isFullExcerptCaptureEligible(
+  kind: TargetMaterialKind | string | undefined,
+  ref: string | null | undefined,
+): boolean {
+  const lower = typeof ref === "string" ? ref.toLowerCase() : "";
+  const ext = path.extname(lower);
+  const base = path.basename(lower);
+  if (kind === "code") {
+    return CODE_WHOLE_CAPTURE_EXTENSIONS.has(ext) ||
+      CODE_WHOLE_CAPTURE_BASENAMES.has(base);
+  }
+  return kind === "document" && isTextReadableDocumentExtension(ext);
+}
+
 /**
  * Derives the seed-stage document projection budget (chars) for the active
  * (provider, model) seat from its registered context window. Pure and total
@@ -316,17 +385,13 @@ export function isTextReadableDocumentExtension(
 }
 
 function structuralExcerptCharLimit(kind: TargetMaterialKind, ref: string): number {
-  // Code source is text and is projected whole into seed authoring (see
-  // isFullExcerptProjectionEligible in run.ts), so it must be CAPTURED whole too —
-  // a small leading sample would make seed authoring read only the file's head while
-  // the prompt-projection truncation never fires (capture < projection budget),
-  // silently authoring the seed from a partial file. A text-readable document earns
-  // the same whole-capture budget; binary documents and structural-inventory kinds
-  // (spreadsheet/database) keep the bounded sample.
-  if (
-    kind === "code" ||
-    (kind === "document" && isTextReadableDocumentExtension(path.extname(ref)))
-  ) {
+  // Whole-capture eligibility is the single shared predicate (M3a): a source-language file
+  // or a text-readable document is projected whole into seed authoring, so it must be
+  // CAPTURED whole too — a small leading sample would make seed authoring read only the
+  // file's head while the prompt-projection truncation never fires (capture < projection
+  // budget), silently authoring the seed from a partial file. Config/data code files,
+  // binary documents, and structural-inventory kinds (spreadsheet/database) stay bounded.
+  if (isFullExcerptCaptureEligible(kind, ref)) {
     return DOCUMENT_CAPTURE_CEILING_CHARS;
   }
   return DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;

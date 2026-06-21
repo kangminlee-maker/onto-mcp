@@ -1787,6 +1787,14 @@ describe("validateRevisionProposal rejection branches", () => {
     };
   }
 
+  // A seed whose only seed_ref/claim is `concept-1` — knownSeedRefs() resolves
+  // to exactly {"concept-1"}, so a seed proposal targeting any other id fails.
+  function ontologySeed(): ReconstructOntologySeedArtifact {
+    return {
+      conceptual_frame: { concepts: [{ concept_id: "concept-1" }] },
+    } as unknown as ReconstructOntologySeedArtifact;
+  }
+
   function validBase() {
     const revisionProposal: ReconstructRevisionProposalArtifact = {
       schema_version: "1",
@@ -1809,7 +1817,16 @@ describe("validateRevisionProposal rejection branches", () => {
     return {
       revisionProposal,
       failureClassification: failureClassification(),
+      ontologySeed: ontologySeed(),
     };
+  }
+
+  function withProposalTarget(
+    target: { target_type: string; target_id: string },
+  ) {
+    const base = clone(validBase());
+    Object.assign(base.revisionProposal.proposals[0]!, target);
+    return base;
   }
 
   it("validates the reused base fixture cleanly", () => {
@@ -1828,6 +1845,53 @@ describe("validateRevisionProposal rejection branches", () => {
     const base = clone(validBase());
     base.revisionProposal.proposals[0]!.target_id = "failure-unknown";
     expectRejection(validateRevisionProposal(base), "unknown_id");
+  });
+
+  it("resolves a claim target via a failure's claim_id", () => {
+    const base = withProposalTarget({ target_type: "claim", target_id: "action-1" });
+    expect(validateRevisionProposal(base).validation_status).toBe("valid");
+  });
+
+  it("rejects a claim target absent from the failures' claim_ids (unknown_id)", () => {
+    const base = withProposalTarget({ target_type: "claim", target_id: "action-stale" });
+    expectRejection(validateRevisionProposal(base), "unknown_id");
+  });
+
+  it("resolves a question target via a failure's question_id", () => {
+    const base = withProposalTarget({ target_type: "question", target_id: "cq-1" });
+    expect(validateRevisionProposal(base).validation_status).toBe("valid");
+  });
+
+  it("rejects a question target absent from the failures' question_ids (unknown_id)", () => {
+    const base = withProposalTarget({ target_type: "question", target_id: "cq-stale" });
+    expectRejection(validateRevisionProposal(base), "unknown_id");
+  });
+
+  it("resolves a seed target via knownSeedRefs", () => {
+    const base = withProposalTarget({ target_type: "seed", target_id: "concept-1" });
+    expect(validateRevisionProposal(base).validation_status).toBe("valid");
+  });
+
+  it("rejects a fabricated seed target absent from the ontology seed (unknown_id)", () => {
+    const base = withProposalTarget({ target_type: "seed", target_id: "seed-hallucinated" });
+    expectRejection(validateRevisionProposal(base), "unknown_id");
+  });
+
+  it("rejects every seed target when no ontology seed is supplied (unknown_id)", () => {
+    const base = withProposalTarget({ target_type: "seed", target_id: "concept-1" });
+    const { ontologySeed: _omit, ...withoutSeed } = base;
+    expectRejection(validateRevisionProposal(withoutSeed), "unknown_id");
+  });
+
+  it("rejects a stale/unknown target_type loaded from YAML (invalid_enum, not skipped)", () => {
+    // Resume/manual validation loads target_type from YAML, so the removed
+    // domain_context (or any string) can still arrive — it must be rejected,
+    // not silently skip the authority check and validate as carry-forward.
+    const base = withProposalTarget({
+      target_type: "domain_context",
+      target_id: "anything",
+    });
+    expectRejection(validateRevisionProposal(base), "invalid_enum");
   });
 
   it("rejects an out-of-set proposal action (invalid_enum)", () => {

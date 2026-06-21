@@ -16,12 +16,54 @@ import {
   deriveDocumentExcerptProjectionBudget,
   DOCUMENT_CAPTURE_CEILING_CHARS,
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+  isFullExcerptCaptureEligible,
   materializeReconstructPreparationArtifacts,
   spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import { SPREADSHEET_OBSERVER_ADAPTER_ID } from "../spreadsheet-structure-observer.js";
+
+describe("isFullExcerptCaptureEligible (M3a shared whole-capture policy)", () => {
+  it("whole-captures source-language code; bounds config/data code (the M3a allowlist)", () => {
+    for (const ext of [".ts", ".tsx", ".js", ".py", ".go", ".rs", ".java", ".rb", ".php", ".swift", ".kt", ".sh", ".css", ".proto", ".dockerfile"]) {
+      expect(isFullExcerptCaptureEligible("code", `src/feature${ext}`)).toBe(true);
+    }
+    // config/data extensions the classifier also maps to `code` default to bounded.
+    for (const ext of [".json", ".yaml", ".yml", ".toml", ".xml", ".env", ".cfg", ".conf", ".lock"]) {
+      expect(isFullExcerptCaptureEligible("code", `src/config${ext}`)).toBe(false);
+    }
+  });
+
+  it("whole-captures build-language basenames; bounds config basenames (codex #104)", () => {
+    // extensionless build-language sources the classifier maps to `code` by basename
+    for (const ref of ["Dockerfile", "ops/Makefile", "Rakefile", "Gemfile"]) {
+      expect(isFullExcerptCaptureEligible("code", ref)).toBe(true);
+    }
+    // config/data basenames stay bounded (small files → sample == whole anyway)
+    for (const ref of ["package.json", "tsconfig.json", "Cargo.toml", "go.mod", "pom.xml"]) {
+      expect(isFullExcerptCaptureEligible("code", ref)).toBe(false);
+    }
+  });
+
+  it("whole-captures only text-readable documents; bounds binary docs and inventory kinds", () => {
+    for (const ext of [".md", ".txt", ".adoc"]) {
+      expect(isFullExcerptCaptureEligible("document", `notes${ext}`)).toBe(true);
+    }
+    for (const ext of [".pdf", ".docx", ".rtf", ".html"]) {
+      expect(isFullExcerptCaptureEligible("document", `notes${ext}`)).toBe(false);
+    }
+    expect(isFullExcerptCaptureEligible("spreadsheet", "book.xlsx")).toBe(false);
+    expect(isFullExcerptCaptureEligible("database", "db.sql")).toBe(false);
+  });
+
+  it("is case-insensitive and fail-safe (unknown extension -> bounded)", () => {
+    expect(isFullExcerptCaptureEligible("code", "src/Feature.TS")).toBe(true);
+    expect(isFullExcerptCaptureEligible("code", "DOCKERFILE")).toBe(true);
+    expect(isFullExcerptCaptureEligible("code", "src/x.unknownlang")).toBe(false);
+    expect(isFullExcerptCaptureEligible("code", undefined)).toBe(false);
+  });
+});
 
 const profilesRoot = path.resolve(".onto/processes/reconstruct/source-profiles");
 const registryPath = path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml");

@@ -20,6 +20,7 @@ import type {
   ReconstructPostSeedValidationViolation,
   ReconstructRevisionProposalAction,
   ReconstructRevisionProposalArtifact,
+  ReconstructRevisionProposalEntry,
   ReconstructRevisionProposalValidationArtifact,
   ReconstructRunGoverningSnapshot,
   ReconstructRunManifestArtifact,
@@ -244,7 +245,7 @@ function seedLimitationIds(
   );
 }
 
-function knownSeedRefs(
+export function knownSeedRefs(
   seed: ReconstructOntologySeedArtifact | undefined,
 ): Set<string> {
   if (!seed) return new Set();
@@ -1963,13 +1964,39 @@ export function validateFailureClassification(args: {
 export function validateRevisionProposal(args: {
   revisionProposal: ReconstructRevisionProposalArtifact;
   failureClassification: ReconstructFailureClassificationArtifact;
+  ontologySeed?: ReconstructOntologySeedArtifact | undefined;
   revisionProposalRef?: string | null;
   failureClassificationRef?: string | null;
 }): ReconstructRevisionProposalValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
+  // Every published proposal is carry-forward scope, so its target must resolve
+  // to a real authority — not just the `failure` case. Claim/question targets
+  // come from the failures' own claim_id/question_id; seed targets from the
+  // ontology-seed's seed_refs (knownSeedRefs). An unresolved target is a
+  // fabricated/stale carry-forward and is rejected as unknown_id.
   const failureIds = new Set(
     args.failureClassification.failures.map((failure) => failure.failure_id),
   );
+  const failureClaimIds = new Set(
+    args.failureClassification.failures
+      .map((failure) => failure.claim_id)
+      .filter((claimId): claimId is string => Boolean(claimId)),
+  );
+  const failureQuestionIds = new Set(
+    args.failureClassification.failures
+      .map((failure) => failure.question_id)
+      .filter((questionId): questionId is string => Boolean(questionId)),
+  );
+  const seedRefs = knownSeedRefs(args.ontologySeed);
+  const targetAuthorities: Record<
+    ReconstructRevisionProposalEntry["target_type"],
+    { ids: Set<string>; authority: string }
+  > = {
+    failure: { ids: failureIds, authority: "failure" },
+    claim: { ids: failureClaimIds, authority: "failure claim" },
+    question: { ids: failureQuestionIds, authority: "failure question" },
+    seed: { ids: seedRefs, authority: "ontology-seed seed_ref" },
+  };
   const seen = new Set<string>();
   const actionCounts = initCountMap(REVISION_ACTIONS);
   for (const proposal of args.revisionProposal.proposals) {
@@ -1981,13 +2008,25 @@ export function validateRevisionProposal(args: {
       }));
     }
     seen.add(proposal.proposal_id);
-    if (
-      proposal.target_type === "failure" &&
-      !failureIds.has(proposal.target_id)
-    ) {
+    // target_type is the typed union for fresh-authored proposals, but resume /
+    // manual artifact validation loads it from YAML, so a stale value (e.g. the
+    // removed domain_context) can reach here. An unknown type has no authority to
+    // validate against, so reject it as invalid_enum instead of skipping the
+    // authority check and disclosing an unbacked target as carry-forward.
+    const targetAuthority = targetAuthorities[proposal.target_type] as
+      | { ids: Set<string>; authority: string }
+      | undefined;
+    if (!targetAuthority) {
+      violations.push(violation({
+        code: "invalid_enum",
+        message: `invalid proposal target_type: ${proposal.target_type}`,
+        subjectId: proposal.proposal_id,
+      }));
+    } else if (!targetAuthority.ids.has(proposal.target_id)) {
       violations.push(violation({
         code: "unknown_id",
-        message: `proposal references unknown failure: ${proposal.target_id}`,
+        message:
+          `proposal references unknown ${targetAuthority.authority}: ${proposal.target_id}`,
         subjectId: proposal.proposal_id,
       }));
     }
@@ -2315,19 +2354,25 @@ export async function writeFailureClassificationValidationArtifact(args: {
 export async function writeRevisionProposalValidationArtifact(args: {
   revisionProposalPath: string;
   failureClassificationPath: string;
+  ontologySeedPath: string;
   outputPath: string;
 }): Promise<ReconstructRevisionProposalValidationArtifact> {
-  const [revisionProposal, failureClassification] = await Promise.all([
-    readYamlDocument<ReconstructRevisionProposalArtifact>(
-      args.revisionProposalPath,
-    ),
-    readYamlDocument<ReconstructFailureClassificationArtifact>(
-      args.failureClassificationPath,
-    ),
-  ]);
+  const [revisionProposal, failureClassification, ontologySeed] =
+    await Promise.all([
+      readYamlDocument<ReconstructRevisionProposalArtifact>(
+        args.revisionProposalPath,
+      ),
+      readYamlDocument<ReconstructFailureClassificationArtifact>(
+        args.failureClassificationPath,
+      ),
+      readYamlDocument<ReconstructOntologySeedArtifact>(
+        args.ontologySeedPath,
+      ),
+    ]);
   const validation = validateRevisionProposal({
     revisionProposal,
     failureClassification,
+    ontologySeed,
     revisionProposalRef: path.resolve(args.revisionProposalPath),
     failureClassificationRef: path.resolve(args.failureClassificationPath),
   });

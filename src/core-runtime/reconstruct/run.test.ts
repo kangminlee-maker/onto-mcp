@@ -53,6 +53,9 @@ import {
   singleDocumentProjectionTruncation,
   stopDecisionAllowedDecisions,
   boundEvidenceBySerializedSize,
+  deriveCompetencyAssessmentEvidenceReserveChars,
+  assessmentOmittedObservationCount,
+  shouldDispatchSingleCompetencyAssessment,
   appendFinalOutputUnresolvedRevisionSection,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
@@ -3592,7 +3595,7 @@ describe("runReconstruct", () => {
         projected_observation_count?: number;
         omitted_observation_count?: number;
         projected_chars?: number;
-        total_budget_chars?: number;
+        evidence_reserve_chars?: number;
         per_observation_excerpt_char_limit?: number;
         omitted_observation_id_samples?: string[];
       };
@@ -3907,7 +3910,7 @@ describe("runReconstruct", () => {
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v4");
+    ).toBe("competency_question_assessment_compact_projection:v5");
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -3937,7 +3940,7 @@ describe("runReconstruct", () => {
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v4");
+    ).toBe("competency_question_assessment_compact_projection:v5");
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -4087,7 +4090,7 @@ describe("runReconstruct", () => {
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v4");
+    ).toBe("competency_question_assessment_compact_projection:v5");
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_sha256,
@@ -4109,7 +4112,7 @@ describe("runReconstruct", () => {
       .toMatchObject({
         projection_kind: "competency_question_assessment_compact_projection",
         projection_contract_version:
-          "competency_question_assessment_compact_projection:v4",
+          "competency_question_assessment_compact_projection:v5",
         prompt_char_limit: 50_000,
         batching_policy: expect.objectContaining({
           mode: "deterministic_prompt_budget",
@@ -4171,17 +4174,20 @@ describe("runReconstruct", () => {
       competencyAssessmentPayloads[0]?.competency_questions_validation
         ?.violation_count,
     ).toBe(0);
-    // @codex R4/R5: source evidence is bounded to a deterministic per-payload SERIALIZED
-    // budget (so an evidence-rich or inventory-heavy spreadsheet question cannot overflow
-    // the prompt budget); the projection metadata surfaces the bound honestly and its
-    // invariants hold.
+    // M2: source evidence is bounded to the per-batch evidence reserve DERIVED under the
+    // whole prompt budget (= prompt cap − measured non-evidence payload − margin), so an
+    // evidence-rich or inventory-heavy spreadsheet question cannot overflow the prompt
+    // budget; the projection metadata surfaces the bound honestly and its invariants hold.
     const sourceEvidenceProjection =
       competencyAssessmentPayloads[0]?.source_evidence_projection;
-    expect(sourceEvidenceProjection?.total_budget_chars).toBe(24_000);
+    const evidenceReserveChars = sourceEvidenceProjection?.evidence_reserve_chars ?? 0;
+    expect(evidenceReserveChars).toBeGreaterThan(0);
+    expect(evidenceReserveChars).toBeLessThan(50_000);
     expect(sourceEvidenceProjection?.per_observation_excerpt_char_limit).toBe(4000);
-    // Total serialized evidence always stays within budget — an over-budget observation
-    // is stubbed, so even a lone evidence item cannot exceed the reserve.
-    expect(sourceEvidenceProjection?.projected_chars ?? 0).toBeLessThanOrEqual(24_000);
+    // Total serialized evidence always stays within the derived reserve — an over-budget
+    // observation is stubbed, so even a lone evidence item cannot exceed the reserve.
+    expect(sourceEvidenceProjection?.projected_chars ?? 0)
+      .toBeLessThanOrEqual(evidenceReserveChars);
     expect(
       (sourceEvidenceProjection?.projected_observation_count ?? 0) +
         (sourceEvidenceProjection?.omitted_observation_count ?? 0),
@@ -6154,7 +6160,9 @@ describe("observationPromptPayload projection-truncation recording", () => {
       observation_id: item.id,
       target_material_kind: item.kind,
       adapter_id: "fixture-observer",
-      source_ref: `/doc/${item.id}`,
+      // Realistic ref carries the extension so the (ref-based, M3a) eligibility predicate
+      // resolves it the way production source paths do.
+      source_ref: `/doc/${item.id}${item.ext ?? ""}`,
       location: "file",
       summary: `Fixture ${item.id}.`,
       structural_data: {
@@ -6193,7 +6201,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
     expect(recorded).toEqual([
       {
         observation_id: "obs-doc",
-        source_ref: "/doc/obs-doc",
+        source_ref: "/doc/obs-doc.md",
         target_material_kind: "document",
         captured_chars: 5000,
         projection_budget_chars: 1000,
@@ -6221,7 +6229,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
     expect(recorded).toEqual([
       {
         observation_id: "obs-big",
-        source_ref: "/doc/obs-big",
+        source_ref: "/doc/obs-big.md",
         target_material_kind: "document",
         captured_chars: 5000,
         projection_budget_chars: 1000,
@@ -6361,6 +6369,70 @@ describe("observationPromptPayload projection-truncation recording", () => {
     });
   });
 
+  describe("deriveCompetencyAssessmentEvidenceReserveChars (M2 derived reserve)", () => {
+    it("gives evidence most of the 50K cap when the non-evidence payload is small", () => {
+      // small non-evidence -> large reserve (= 50000 - 1000 - 1000), strictly under the cap.
+      const reserve = deriveCompetencyAssessmentEvidenceReserveChars(1_000);
+      expect(reserve).toBe(48_000);
+      expect(reserve).toBeLessThan(50_000);
+    });
+
+    it("shrinks the reserve as the non-evidence payload grows (the M2 fix vs a static budget)", () => {
+      const small = deriveCompetencyAssessmentEvidenceReserveChars(5_000);
+      const large = deriveCompetencyAssessmentEvidenceReserveChars(40_000);
+      expect(large).toBeLessThan(small);
+      expect(large).toBe(9_000);
+    });
+
+    it("clamps to 0 when the non-evidence payload alone approaches/exceeds the cap", () => {
+      // The terminal assertPromptPayloadCharLimit still fail-loud-halts in this case; the
+      // reserve must never go negative.
+      expect(deriveCompetencyAssessmentEvidenceReserveChars(49_500)).toBe(0);
+      expect(deriveCompetencyAssessmentEvidenceReserveChars(80_000)).toBe(0);
+    });
+  });
+
+  // @codex R3 #104: competencyQuestionAssessmentUserPayload can make the full-question payload
+  // fit the cap by dropping trailing evidence, so a fit-only routing check would single-dispatch
+  // an assessment that judges later questions without their evidence — bypassing the batcher's
+  // split-before-shrink. The single-dispatch path must require BOTH "fits" AND "no omission".
+  describe("shouldDispatchSingleCompetencyAssessment (route omitted-evidence to batching, R3 #1)", () => {
+    const payload = (chars: number, omitted: number) => ({
+      filler: "x".repeat(chars),
+      source_evidence_projection: { omitted_observation_count: omitted },
+    });
+
+    it("reads the omitted-observation count from the payload projection (default 0)", () => {
+      expect(assessmentOmittedObservationCount(payload(0, 3))).toBe(3);
+      expect(assessmentOmittedObservationCount({})).toBe(0);
+    });
+
+    it("dispatches a single assessment when the payload fits and omits nothing", () => {
+      expect(shouldDispatchSingleCompetencyAssessment({
+        systemPrompt: "sys",
+        fullPayload: payload(100, 0),
+        charLimit: 50_000,
+      })).toBe(true);
+    });
+
+    it("routes to batching when the payload only fits because evidence was omitted", () => {
+      // fits the cap, but omitted_observation_count > 0 → must NOT single-dispatch.
+      expect(shouldDispatchSingleCompetencyAssessment({
+        systemPrompt: "sys",
+        fullPayload: payload(100, 1),
+        charLimit: 50_000,
+      })).toBe(false);
+    });
+
+    it("routes to batching when the payload exceeds the cap (existing behavior)", () => {
+      expect(shouldDispatchSingleCompetencyAssessment({
+        systemPrompt: "sys",
+        fullPayload: payload(60_000, 0),
+        charLimit: 50_000,
+      })).toBe(false);
+    });
+  });
+
   // @codex R6: unresolved reject/defer revision proposals must be disclosed
   // deterministically (the stop gate already treats them as unresolved), not left to
   // the final-output LLM's prose which could omit them or imply completion.
@@ -6374,26 +6446,42 @@ describe("observationPromptPayload projection-truncation recording", () => {
       expected_effect: "e",
     });
 
-    it("appends an unresolved-revision section for reject/defer proposals", () => {
+    it("discloses blocking (reject/defer) and non-blocking (extend/rename/split); never reuse (M4a)", () => {
       const out = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
         proposals: [
           proposal("p1", "reject"),
           proposal("p2", "reuse"),
           proposal("p3", "defer"),
+          proposal("p4", "extend"),
         ],
       } as never);
       expect(out).toContain("## Unresolved Revision Proposals");
+      // blocking set — the run is not complete while these remain
+      expect(out).toContain("Blocking (reject/defer)");
       expect(out).toContain("reject seed seed-1 (p1)");
       expect(out).toContain("defer seed seed-1 (p3)");
-      // refinement actions are not unresolved work and are not listed
+      // M4a: ALL non-reuse is disclosed, not only reject/defer
+      expect(out).toContain("Non-blocking next-round directives");
+      expect(out).toContain("extend seed seed-1 (p4)");
+      // reuse is never disclosed
       expect(out).not.toContain("reuse seed seed-1 (p2)");
     });
 
-    it("is a no-op when no reject/defer proposals remain", () => {
+    it("discloses extend/rename/split even when no reject/defer remain (M4a all-non-reuse)", () => {
+      const out = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
+        proposals: [proposal("p1", "reuse"), proposal("p2", "extend")],
+      } as never);
+      expect(out).toContain("## Unresolved Revision Proposals");
+      expect(out).toContain("Non-blocking next-round directives");
+      expect(out).toContain("extend seed seed-1 (p2)");
+      expect(out).not.toContain("Blocking (reject/defer)");
+    });
+
+    it("is a no-op only when every proposal is reuse (or none)", () => {
       const text = "# Result\n";
       expect(
         appendFinalOutputUnresolvedRevisionSection(text, {
-          proposals: [proposal("p1", "reuse"), proposal("p2", "extend")],
+          proposals: [proposal("p1", "reuse")],
         } as never),
       ).toBe(text);
       expect(
@@ -6415,7 +6503,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
       ).toEqual([
         {
           observation_id: "obs-doc",
-          source_ref: "/doc/obs-doc",
+          source_ref: "/doc/obs-doc.md",
           target_material_kind: "document",
           captured_chars: 5000,
           projection_budget_chars: 1000,
@@ -6434,7 +6522,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
       ).toEqual([
         {
           observation_id: "obs-code",
-          source_ref: "/doc/obs-code",
+          source_ref: "/doc/obs-code.ts",
           target_material_kind: "code",
           captured_chars: 5000,
           projection_budget_chars: 1000,
