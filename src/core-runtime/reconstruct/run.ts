@@ -2326,6 +2326,11 @@ function createRunManifest(args: {
       completedStep("seed_authoring_readiness_validation", "runtime", runtimePerformer(), [
         args.artifactRefs.seed_authoring_readiness_validation,
       ].filter((ref): ref is string => ref !== null)),
+      // M3c: the runtime captures the pre-maturation seed-stage observation snapshot at this
+      // gate (before ontology_seed authoring), so it has its own producer step/ledger unit.
+      completedStep("seed_stage_prompt_source_observations", "runtime", runtimePerformer(), [
+        args.artifactRefs.seed_stage_prompt_source_observations,
+      ].filter((ref): ref is string => ref !== null)),
       completedStep(
         "ontology_seed",
         "host_llm",

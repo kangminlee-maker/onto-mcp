@@ -322,6 +322,16 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     upstreamUnitIds: ["seed_authoring_readiness"],
   },
   {
+    // M3c: runtime snapshot of the pre-maturation seed-stage projected observations,
+    // captured at the seed-authoring gate; the conserved authority the resume truncation
+    // fallback measures. Runtime-owned, derived from the source-observation unit.
+    unitId: "seed_stage_prompt_source_observations",
+    unitKind: "source_observation_snapshot",
+    owner: "runtime",
+    artifactKey: "seed_stage_prompt_source_observations",
+    upstreamUnitIds: ["source_observation", "seed_authoring_readiness_validation"],
+  },
+  {
     unitId: "ontology_seed",
     unitKind: "semantic_ontology_seed",
     owner: "host_llm",

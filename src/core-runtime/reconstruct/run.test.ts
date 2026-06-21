@@ -3171,6 +3171,7 @@ describe("runReconstruct", () => {
       "candidate_disposition_validation",
       "seed_authoring_readiness",
       "seed_authoring_readiness_validation",
+      "seed_stage_prompt_source_observations",
       "ontology_seed",
       "ontology_seed_validation",
       "material_admission_validation",
@@ -5919,6 +5920,18 @@ describe("runReconstruct", () => {
     }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
     expect(provenance.reuse_match.seed_stage_prompt_source_observations_sha256)
       .toEqual(expect.any(String));
+    // The snapshot has its own runtime producer step in the run-manifest (so the
+    // execution provenance / ledger can show a producing unit + hash), referencing the
+    // snapshot path — not just a dangling implemented_artifacts entry.
+    const manifest = await readYaml<ReconstructRunManifestArtifact>(
+      result.artifactRefs.reconstruct_run_manifest!,
+    );
+    const snapshotStep = manifest.steps.find(
+      (step) => step.step_id === "seed_stage_prompt_source_observations",
+    );
+    expect(snapshotStep?.status).toBe("completed");
+    expect(snapshotStep?.owner).toBe("runtime");
+    expect(snapshotStep?.artifact_refs).toContain(snapshotRef);
   });
 
   it("fails loud for non-code material whose source profile adapter is only planned", async () => {

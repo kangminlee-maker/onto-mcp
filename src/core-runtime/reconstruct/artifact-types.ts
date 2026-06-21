@@ -1574,6 +1574,7 @@ export const RECONSTRUCT_STAGE_IDS = [
   "candidate_disposition_validation",
   "seed_authoring_readiness",
   "seed_authoring_readiness_validation",
+  "seed_stage_prompt_source_observations",
   "ontology_seed",
   "ontology_seed_validation",
   "material_admission_validation",
