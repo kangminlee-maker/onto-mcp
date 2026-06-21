@@ -52,6 +52,7 @@ const RECORD_ARTIFACT_KEYS = [
   "source_inventory",
   "initial_source_frontier",
   "source_observations",
+  "seed_stage_prompt_source_observations",
   "source_observation_delta",
   "source_observation_delta_validation",
   "source_observation_reentry_validation",

@@ -5865,6 +5865,62 @@ describe("runReconstruct", () => {
     ).toBe(path.join(projectRoot, "src", "feature.ts"));
   });
 
+  // M3c: maturation appends observations to source-observations.yaml, so on resume the
+  // single-document truncation fallback must measure the pre-maturation seed-stage snapshot
+  // (not the grown set). The snapshot is a canonical artifact: persisted at seed stage,
+  // referenced by the run-manifest, and hashed into the seed-onward reuse-match.
+  it("persists the seed-stage prompt source-observations snapshot for resume truncation conservation (M3c)", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "seed-stage-snapshot-run",
+    );
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Create a bounded reconstruct Seed from the code target.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
+    });
+
+    // The canonical artifact is written and referenced by the run-manifest artifact_refs.
+    const snapshotRef = result.artifactRefs.seed_stage_prompt_source_observations;
+    expect(snapshotRef).toBe(
+      path.join(sessionRoot, "seed-stage-prompt-source-observations.yaml"),
+    );
+    const snapshot = await readYaml<ReconstructSourceObservationsArtifact>(
+      snapshotRef!,
+    );
+    const sourceObservations = await readYaml<ReconstructSourceObservationsArtifact>(
+      result.artifactRefs.source_observations!,
+    );
+    // It is the seed-stage projected set: for this single-target run (no maturation
+    // source growth) it carries the same observation ids the final set does.
+    expect(snapshot.observations.length).toBeGreaterThan(0);
+    expect(snapshot.observations.map((o) => o.observation_id).sort())
+      .toEqual(sourceObservations.observations.map((o) => o.observation_id).sort());
+    // The seed-onward reuse-match hashes the snapshot, so a changed seed-stage projection
+    // invalidates resume reuse.
+    const provenance = await readYaml<{
+      reuse_match: {
+        seed_stage_prompt_source_observations_sha256: string | null;
+      };
+    }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
+    expect(provenance.reuse_match.seed_stage_prompt_source_observations_sha256)
+      .toEqual(expect.any(String));
+  });
+
   it("fails loud for non-code material whose source profile adapter is only planned", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
@@ -6561,6 +6617,31 @@ describe("observationPromptPayload projection-truncation recording", () => {
           1000,
         ),
       ).toEqual([]);
+    });
+
+    it("emits from the seed-stage snapshot even after maturation grew the set (M3c)", () => {
+      // The bug M3c fixes: maturation appends observations, so measuring the grown set
+      // (length > 1) silently returns [] and the resume truncation event is lost. The
+      // resume fallback now measures the seed-stage snapshot, which still has the single
+      // truncated document — so the same input that yields [] when measured post-maturation
+      // yields the truncation event when measured as the snapshot.
+      const seedStageSnapshot = artifact([
+        { id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(5000) },
+      ]) as any;
+      const postMaturationSet = artifact([
+        { id: "obs-doc", kind: "document", ext: ".md", excerpt: "x".repeat(5000) },
+        { id: "obs-matured", kind: "document", ext: ".md", excerpt: "y".repeat(5000) },
+      ]) as any;
+      expect(singleDocumentProjectionTruncation(postMaturationSet, 1000)).toEqual([]);
+      expect(singleDocumentProjectionTruncation(seedStageSnapshot, 1000)).toEqual([
+        {
+          observation_id: "obs-doc",
+          source_ref: "/doc/obs-doc.md",
+          target_material_kind: "document",
+          captured_chars: 5000,
+          projection_budget_chars: 1000,
+        },
+      ]);
     });
   });
 });
