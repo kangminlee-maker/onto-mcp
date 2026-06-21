@@ -24,8 +24,12 @@ export const HEADER_ESCALATION_TRIGGER_VERSION = 1;
 
 /** Rows shown to the model — the leading window the observer also scans. */
 export const ESCALATION_ROW_WINDOW = 15;
+/** Columns shown to the model — bounds the prompt for very wide sheets. */
+export const ESCALATION_COL_WINDOW = 40;
 /** Per-cell char cap in the rendered prompt, to keep the payload bounded. */
 const ESCALATION_CELL_CHAR_CAP = 40;
+/** Default abort budget for a model call — a hung adapter downgrades, not stalls. */
+const DEFAULT_ESCALATION_TIMEOUT_MS = 30_000;
 
 export type HeaderSource = "heuristic" | "llm";
 
@@ -83,19 +87,57 @@ export interface HeaderEscalationOptions {
   /** Hash of the data-layer caps the observer used (a cache key component). */
   dataLayerCapsHash: string;
   cache?: HeaderEscalationCache;
+  /** Abort budget for the model call (ms). A hung adapter downgrades to the
+   *  heuristic instead of stalling. Default {@link DEFAULT_ESCALATION_TIMEOUT_MS}. */
+  timeoutMs?: number;
+}
+
+/** Races the injected model call against an abort budget so a never-settling
+ *  adapter rejects (→ `llm_unavailable`) instead of hanging the await. The timer
+ *  is cleared when the model settles first; a late settle after timeout is
+ *  ignored (no unhandled rejection). */
+function callLlmWithTimeout(
+  llm: HeaderEscalationLlm,
+  args: { prompt: string; promptHash: string },
+  timeoutMs: number,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("header_escalation_timeout"));
+    }, timeoutMs);
+    llm(args).then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
 }
 
 function renderRowsTable(rows: string[][], colCount: number): string {
+  const cols = Math.min(colCount, ESCALATION_COL_WINDOW);
+  const colSuffix = colCount > cols ? ` | … (+${colCount - cols} cols)` : "";
   return rows
     .slice(0, ESCALATION_ROW_WINDOW)
     .map((row, index) => {
-      const cells = Array.from({ length: colCount }, (_, col) =>
+      const cells = Array.from({ length: cols }, (_, col) =>
         (row[col] ?? "")
           .replace(/\s+/g, " ")
           .trim()
           .slice(0, ESCALATION_CELL_CHAR_CAP),
       );
-      return `row ${index}: ${cells.map((cell) => cell || "∅").join(" | ")}`;
+      return `row ${index}: ${cells.map((cell) => cell || "∅").join(" | ")}${colSuffix}`;
     })
     .join("\n");
 }
@@ -205,12 +247,19 @@ export async function escalateHeader(
 
   let raw: unknown;
   try {
-    raw = await options.llm({ prompt, promptHash });
+    raw = await callLlmWithTimeout(
+      options.llm,
+      { prompt, promptHash },
+      options.timeoutMs ?? DEFAULT_ESCALATION_TIMEOUT_MS,
+    );
   } catch {
     return { ...heuristic, downgradeReason: "llm_unavailable" };
   }
 
-  const submission = parseHeaderSubmission(raw, candidate.rows.length);
+  // Validate against the rendered window, not the full row count: the model can
+  // only legitimately pick a row it was shown.
+  const windowRowCount = Math.min(candidate.rows.length, ESCALATION_ROW_WINDOW);
+  const submission = parseHeaderSubmission(raw, windowRowCount);
   if (!submission) {
     return { ...heuristic, downgradeReason: "invalid_submission" };
   }

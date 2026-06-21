@@ -153,6 +153,38 @@ describe("escalateHeader", () => {
     });
   });
 
+  it("rejects an index outside the rendered prompt window (row never shown)", async () => {
+    const rows = Array.from({ length: 20 }, (_, r) => [`a${r}`, `b${r}`]);
+    const candidate = lowCandidate({ rows, colCount: 2 });
+    // row 17 exists in the data but was NOT in the 15-row prompt window → reject.
+    const offWindow = await escalateHeader(
+      candidate,
+      baseOpts(async () => ({ header_row_index: 17 })),
+    );
+    expect(offWindow).toMatchObject({
+      source: "heuristic",
+      downgradeReason: "invalid_submission",
+    });
+    // an index inside the window is still adopted.
+    const inWindow = await escalateHeader(
+      candidate,
+      baseOpts(async () => ({ header_row_index: 10 })),
+    );
+    expect(inWindow).toMatchObject({ source: "llm", headerRowIndex: 10 });
+  });
+
+  it("downgrades when the model hangs (never settles) instead of stalling", async () => {
+    const hung: HeaderEscalationLlm = () => new Promise<unknown>(() => {});
+    const result = await escalateHeader(lowCandidate(), {
+      ...baseOpts(hung),
+      timeoutMs: 20,
+    });
+    expect(result).toMatchObject({
+      source: "heuristic",
+      downgradeReason: "llm_unavailable",
+    });
+  });
+
   it("caches a successful resolution and re-reads it (no second model call)", async () => {
     let calls = 0;
     const llm: HeaderEscalationLlm = async () => {
@@ -199,5 +231,14 @@ describe("renderHeaderPrompt", () => {
     const prompt = renderHeaderPrompt(lowCandidate());
     expect(prompt).toContain("row 0: alpha | bravo | charlie");
     expect(prompt).toContain('{"header_row_index": <0-based row index, or null>}');
+  });
+
+  it("caps the rendered columns for a very wide sheet", () => {
+    const wideRow = Array.from({ length: 100 }, (_, c) => `c${c}`);
+    const prompt = renderHeaderPrompt(
+      lowCandidate({ rows: [wideRow, wideRow], colCount: 100 }),
+    );
+    expect(prompt).toContain("… (+60 cols)");
+    expect(prompt).not.toContain("c40"); // 41st column (index 40) is past the cap
   });
 });
