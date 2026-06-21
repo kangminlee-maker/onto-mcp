@@ -105,7 +105,7 @@ import { writeSourceObservationDirectiveValidationArtifact } from "./directive-v
 import {
   buildReconstructSourceObservation,
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
-  isTextReadableDocumentExtension,
+  isFullExcerptCaptureEligible,
   materializeReconstructPreparationArtifacts,
   spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
@@ -5773,15 +5773,13 @@ function isFullExcerptProjectionEligible(
   targetMaterialKind: string | undefined,
   extension: string | null | undefined,
 ): boolean {
-  // code observations capture the source as text in content_excerpt; documents do
-  // so only for text-readable extensions (.md/.txt/.adoc). Binary documents and
-  // spreadsheet/database structural inventories are NOT whole-text, so they stay
-  // bounded (a prior gap silently truncated code source at the base limit).
-  if (targetMaterialKind === "code") return true;
-  return (
-    targetMaterialKind === "document" &&
-    isTextReadableDocumentExtension(extension)
-  );
+  // Single shared whole-capture predicate (M3a): the capture owner
+  // (materialize-preparation) and this seed-stage projection consult the SAME eligibility,
+  // so a bounded capture can never sit under a whole-projection budget (which would silently
+  // author the seed from a partial file). Source-language code (allowlisted extensions) and
+  // text-readable documents earn the whole excerpt; config/data code files, binary documents,
+  // and structural-inventory kinds stay bounded.
+  return isFullExcerptCaptureEligible(targetMaterialKind, extension);
 }
 
 function effectiveContentExcerptCharLimit(

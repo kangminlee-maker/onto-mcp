@@ -16,12 +16,42 @@ import {
   deriveDocumentExcerptProjectionBudget,
   DOCUMENT_CAPTURE_CEILING_CHARS,
   DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+  isFullExcerptCaptureEligible,
   materializeReconstructPreparationArtifacts,
   spreadsheetUnsupportedReason,
 } from "./materialize-preparation.js";
 import type { SupportedModelRegistry } from "../discovery/supported-models.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import { SPREADSHEET_OBSERVER_ADAPTER_ID } from "../spreadsheet-structure-observer.js";
+
+describe("isFullExcerptCaptureEligible (M3a shared whole-capture policy)", () => {
+  it("whole-captures source-language code; bounds config/data code (the M3a allowlist)", () => {
+    for (const ext of [".ts", ".tsx", ".js", ".py", ".go", ".rs", ".java", ".rb", ".php", ".swift", ".kt", ".sh", ".css", ".proto"]) {
+      expect(isFullExcerptCaptureEligible("code", ext)).toBe(true);
+    }
+    // config/data extensions the classifier also maps to `code` default to bounded.
+    for (const ext of [".json", ".yaml", ".yml", ".toml", ".xml", ".env", ".cfg", ".conf", ".lock"]) {
+      expect(isFullExcerptCaptureEligible("code", ext)).toBe(false);
+    }
+  });
+
+  it("whole-captures only text-readable documents; bounds binary docs and inventory kinds", () => {
+    for (const ext of [".md", ".txt", ".adoc"]) {
+      expect(isFullExcerptCaptureEligible("document", ext)).toBe(true);
+    }
+    for (const ext of [".pdf", ".docx", ".rtf", ".html"]) {
+      expect(isFullExcerptCaptureEligible("document", ext)).toBe(false);
+    }
+    expect(isFullExcerptCaptureEligible("spreadsheet", ".xlsx")).toBe(false);
+    expect(isFullExcerptCaptureEligible("database", ".sql")).toBe(false);
+  });
+
+  it("is case-insensitive and fail-safe (unknown extension -> bounded)", () => {
+    expect(isFullExcerptCaptureEligible("code", ".TS")).toBe(true);
+    expect(isFullExcerptCaptureEligible("code", ".unknownlang")).toBe(false);
+    expect(isFullExcerptCaptureEligible("code", undefined)).toBe(false);
+  });
+});
 
 const profilesRoot = path.resolve(".onto/processes/reconstruct/source-profiles");
 const registryPath = path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml");
