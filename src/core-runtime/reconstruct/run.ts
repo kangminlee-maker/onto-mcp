@@ -4034,7 +4034,10 @@ export function assessmentEvidenceObservationIds(
 // unsplittable single-question assessment past the prompt cap. The stub keeps the
 // identifying fields and marks the body omitted.
 function boundSingleEvidenceItem(rawItem: unknown, budgetChars: number): unknown {
-  if (JSON.stringify(rawItem).length <= budgetChars) return rawItem;
+  // Size with the SAME serializer the prompt budget + terminal assert use (pretty,
+  // 2-space) so the reserve and the bound agree (codex #104: compact under-counted a
+  // nested observation, letting evidence fit the reserve but overflow the pretty prompt).
+  if (JSON.stringify(rawItem, null, 2).length <= budgetChars) return rawItem;
   const obj = (rawItem ?? {}) as Record<string, unknown>;
   return {
     observation_id: obj.observation_id,
@@ -4047,11 +4050,13 @@ function boundSingleEvidenceItem(rawItem: unknown, budgetChars: number): unknown
 }
 
 // Greedily keep projected evidence observations (in order) until the serialized budget is
-// spent. Each item is first bounded to the budget (a lone over-budget observation becomes
-// a stub, never an arbitrarily large payload), then kept only if it leaves the running
-// total within budget — except the first, which is always kept (post-stub) so the payload
-// makes progress. Bounding by serialized size (not count) is what makes inventory-heavy
-// spreadsheet observations count toward the cap. Exported for the size-bound unit test.
+// spent. Each item is first bounded to the budget (a lone over-budget observation becomes a
+// stub, never an arbitrarily large payload), then kept only if it leaves the running total
+// within budget. No item is force-kept: a 0 / near-zero derived reserve (M2, when the
+// non-evidence payload nearly fills the prompt) must keep NOTHING rather than admit even a
+// stub that would overflow (codex #104). Sized with the same pretty serializer as the prompt
+// budget. Bounding by serialized size (not count) makes inventory-heavy spreadsheet
+// observations count toward the cap. Exported for the size-bound unit test.
 export function boundEvidenceBySerializedSize(
   projected: unknown[],
   budgetChars: number,
@@ -4060,8 +4065,8 @@ export function boundEvidenceBySerializedSize(
   let chars = 0;
   for (const rawItem of projected) {
     const item = boundSingleEvidenceItem(rawItem, budgetChars);
-    const itemChars = JSON.stringify(item).length;
-    if (kept.length > 0 && chars + itemChars > budgetChars) break;
+    const itemChars = JSON.stringify(item, null, 2).length;
+    if (chars + itemChars > budgetChars) break;
     kept.push(item);
     chars += itemChars;
   }
@@ -4124,18 +4129,16 @@ function competencyQuestionAssessmentUserPayload(
     projectedCount: number;
     projectedChars: number;
     reserveChars: number;
+    omittedObservationIds: string[];
   }): Record<string, unknown> => ({
     cited_observation_count: citedEvidenceObservationIds.length,
     projected_observation_count: args.projectedCount,
-    omitted_observation_count:
-      citedEvidenceObservationIds.length - args.projectedCount,
+    omitted_observation_count: args.omittedObservationIds.length,
     projected_chars: args.projectedChars,
     evidence_reserve_chars: args.reserveChars,
     per_observation_excerpt_char_limit:
       COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
-    omitted_observation_id_samples: citedEvidenceObservationIds
-      .slice(args.projectedCount)
-      .slice(0, 10),
+    omitted_observation_id_samples: args.omittedObservationIds.slice(0, 10),
   });
   const buildPayload = (
     sourceEvidence: unknown[],
@@ -4183,7 +4186,12 @@ function competencyQuestionAssessmentUserPayload(
     systemPrompt,
     buildPayload(
       [],
-      evidenceProjection({ projectedCount: 0, projectedChars: 0, reserveChars: 0 }),
+      evidenceProjection({
+        projectedCount: 0,
+        projectedChars: 0,
+        reserveChars: 0,
+        omittedObservationIds: citedEvidenceObservationIds,
+      }),
     ),
   );
   const evidenceReserveChars = deriveCompetencyAssessmentEvidenceReserveChars(
@@ -4194,16 +4202,25 @@ function competencyQuestionAssessmentUserPayload(
       projectedEvidenceCandidates,
       evidenceReserveChars,
     );
-  // R7-5: a budget stub carries no body, so it is counted as omitted (never projected).
-  const projectedEvidenceCount = sourceEvidence.filter(
-    (item) => !isEvidenceBodyOmittedStub(item),
-  ).length;
+  // R7-5 + codex #104: a budget stub carries no body, so it is omitted (never projected).
+  // Track the projected-body ids and derive omitted ids directly, so a stub interleaved with
+  // later kept bodies cannot misreport which observation was omitted (a prefix slice could).
+  const projectedBodyIds = new Set(
+    sourceEvidence
+      .filter((item) => !isEvidenceBodyOmittedStub(item))
+      .map((item) => (item as Record<string, unknown>).observation_id)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  const omittedObservationIds = citedEvidenceObservationIds.filter(
+    (id) => !projectedBodyIds.has(id),
+  );
   return buildPayload(
     sourceEvidence,
     evidenceProjection({
-      projectedCount: projectedEvidenceCount,
+      projectedCount: projectedBodyIds.size,
       projectedChars: sourceEvidenceChars,
       reserveChars: evidenceReserveChars,
+      omittedObservationIds,
     }),
   );
 }
@@ -5771,27 +5788,27 @@ function chunkArray<T>(items: T[], size: number): T[][] {
  */
 function isFullExcerptProjectionEligible(
   targetMaterialKind: string | undefined,
-  extension: string | null | undefined,
+  sourceRef: string | null | undefined,
 ): boolean {
   // Single shared whole-capture predicate (M3a): the capture owner
-  // (materialize-preparation) and this seed-stage projection consult the SAME eligibility,
-  // so a bounded capture can never sit under a whole-projection budget (which would silently
-  // author the seed from a partial file). Source-language code (allowlisted extensions) and
-  // text-readable documents earn the whole excerpt; config/data code files, binary documents,
-  // and structural-inventory kinds stay bounded.
-  return isFullExcerptCaptureEligible(targetMaterialKind, extension);
+  // (materialize-preparation) and this seed-stage projection consult the SAME ref-based
+  // eligibility, so a bounded capture can never sit under a whole-projection budget (which
+  // would silently author the seed from a partial file). Source-language code (allowlisted
+  // extension OR build-language basename) and text-readable documents earn the whole excerpt;
+  // config/data code files, binary documents, and structural-inventory kinds stay bounded.
+  return isFullExcerptCaptureEligible(targetMaterialKind, sourceRef);
 }
 
 function effectiveContentExcerptCharLimit(
   baseLimit: number | undefined,
   targetMaterialKind: string | undefined,
   expandDocument: boolean,
-  extension: string | null | undefined,
+  sourceRef: string | null | undefined,
   documentExcerptCharBudget: number | undefined,
 ): number | undefined {
   if (
     expandDocument &&
-    isFullExcerptProjectionEligible(targetMaterialKind, extension)
+    isFullExcerptProjectionEligible(targetMaterialKind, sourceRef)
   ) {
     // Model-aware budget when the seat resolved one; else the static FLOOR — a
     // model-unaware caller keeps the prior whole-document budget (no regression).
@@ -5806,6 +5823,7 @@ function compactStructuralDataForPrompt(
   targetMaterialKind: string | undefined,
   expandDocument: boolean,
   documentExcerptCharBudget: number | undefined,
+  sourceRef: string | null | undefined,
 ): Record<string, unknown> {
   const compacted: Record<string, unknown> = { ...structuralData };
 
@@ -5827,13 +5845,11 @@ function compactStructuralDataForPrompt(
     }
   }
 
-  const extension =
-    typeof structuralData.extension === "string" ? structuralData.extension : null;
   const limit = effectiveContentExcerptCharLimit(
     contentExcerptCharLimit,
     targetMaterialKind,
     expandDocument,
-    extension,
+    sourceRef,
     documentExcerptCharBudget,
   );
   if (limit) {
@@ -5888,6 +5904,7 @@ export function observationPromptPayload(
           observation.target_material_kind,
           expandDocument,
           options.documentExcerptCharBudget,
+          observation.source_ref,
         );
         payload.structural_data = compacted;
         // An expanded text document whose excerpt the budget actually sliced — the
@@ -5900,9 +5917,7 @@ export function observationPromptPayload(
           compacted.prompt_content_excerpt_truncated === true &&
           isFullExcerptProjectionEligible(
             observation.target_material_kind,
-            typeof observation.structural_data.extension === "string"
-              ? observation.structural_data.extension
-              : null,
+            observation.source_ref,
           )
         ) {
           const captured = observation.structural_data.content_excerpt;
@@ -5941,15 +5956,14 @@ export function singleDocumentProjectionTruncation(
 ): DocumentExcerptProjectionTruncation[] {
   if (promptSourceObservations.observations.length !== 1) return [];
   const observation = promptSourceObservations.observations[0]!;
-  const extension =
-    typeof observation.structural_data.extension === "string"
-      ? observation.structural_data.extension
-      : null;
-  // Mirror the fresh-run eligibility (document text-readable OR code) so a resumed
-  // run records code truncation provenance too — a document-only check silently
-  // dropped the runtime event/final-output section for a large single code file.
+  // Mirror the fresh-run eligibility (text-readable document OR source-language code, by ref
+  // so build-language basenames count) so a resumed run records code truncation provenance
+  // too — a document-only check silently dropped the event for a large single code file.
   if (
-    !isFullExcerptProjectionEligible(observation.target_material_kind, extension)
+    !isFullExcerptProjectionEligible(
+      observation.target_material_kind,
+      observation.source_ref,
+    )
   ) {
     return [];
   }

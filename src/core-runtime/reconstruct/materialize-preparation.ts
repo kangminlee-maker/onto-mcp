@@ -277,6 +277,7 @@ const CODE_WHOLE_CAPTURE_EXTENSIONS = new Set([
   ".cpp",
   ".cs",
   ".css",
+  ".dockerfile",
   ".go",
   ".graphql",
   ".java",
@@ -297,21 +298,39 @@ const CODE_WHOLE_CAPTURE_EXTENSIONS = new Set([
   ".tsx",
 ]);
 
+// Extensionless build-language source basenames the classifier maps to `code` by name
+// (CODE_BASENAMES). These are real source/build scripts → whole capture. The config/data
+// basenames (package.json/tsconfig.json/cargo.toml/go.mod/pom.xml) are deliberately NOT here
+// — they default to the bounded sample like other config/data (M3a-default), and are small
+// enough that the sample is the whole file anyway.
+const CODE_WHOLE_CAPTURE_BASENAMES = new Set([
+  "dockerfile",
+  "makefile",
+  "rakefile",
+  "gemfile",
+]);
+
 /**
  * Single whole-capture / full-excerpt eligibility predicate (M3a). Consumed by BOTH the
  * capture owner (`structuralExcerptCharLimit` here) and the seed-stage prompt projection
  * (`isFullExcerptProjectionEligible` in run.ts), so capture and projection can never disagree
  * — a bounded capture under a whole-projection budget would silently author the seed from a
- * partial file. Source-language code (allowlisted extensions) and text-readable documents
+ * partial file. Takes the source REF (path/filename) so it is basename-aware: source-language
+ * code (allowlisted extension OR build-language basename) and text-readable documents
  * (.md/.txt/.adoc) earn whole capture; binary documents, config/data code files, and
  * structural-inventory kinds (spreadsheet/database) stay bounded.
  */
 export function isFullExcerptCaptureEligible(
   kind: TargetMaterialKind | string | undefined,
-  extension: string | null | undefined,
+  ref: string | null | undefined,
 ): boolean {
-  const ext = typeof extension === "string" ? extension.toLowerCase() : "";
-  if (kind === "code") return CODE_WHOLE_CAPTURE_EXTENSIONS.has(ext);
+  const lower = typeof ref === "string" ? ref.toLowerCase() : "";
+  const ext = path.extname(lower);
+  const base = path.basename(lower);
+  if (kind === "code") {
+    return CODE_WHOLE_CAPTURE_EXTENSIONS.has(ext) ||
+      CODE_WHOLE_CAPTURE_BASENAMES.has(base);
+  }
   return kind === "document" && isTextReadableDocumentExtension(ext);
 }
 
@@ -372,7 +391,7 @@ function structuralExcerptCharLimit(kind: TargetMaterialKind, ref: string): numb
   // file's head while the prompt-projection truncation never fires (capture < projection
   // budget), silently authoring the seed from a partial file. Config/data code files,
   // binary documents, and structural-inventory kinds (spreadsheet/database) stay bounded.
-  if (isFullExcerptCaptureEligible(kind, path.extname(ref))) {
+  if (isFullExcerptCaptureEligible(kind, ref)) {
     return DOCUMENT_CAPTURE_CEILING_CHARS;
   }
   return DEFAULT_STRUCTURAL_EXCERPT_CHAR_LIMIT;

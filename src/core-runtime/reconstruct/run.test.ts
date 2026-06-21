@@ -6158,7 +6158,9 @@ describe("observationPromptPayload projection-truncation recording", () => {
       observation_id: item.id,
       target_material_kind: item.kind,
       adapter_id: "fixture-observer",
-      source_ref: `/doc/${item.id}`,
+      // Realistic ref carries the extension so the (ref-based, M3a) eligibility predicate
+      // resolves it the way production source paths do.
+      source_ref: `/doc/${item.id}${item.ext ?? ""}`,
       location: "file",
       summary: `Fixture ${item.id}.`,
       structural_data: {
@@ -6197,7 +6199,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
     expect(recorded).toEqual([
       {
         observation_id: "obs-doc",
-        source_ref: "/doc/obs-doc",
+        source_ref: "/doc/obs-doc.md",
         target_material_kind: "document",
         captured_chars: 5000,
         projection_budget_chars: 1000,
@@ -6225,7 +6227,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
     expect(recorded).toEqual([
       {
         observation_id: "obs-big",
-        source_ref: "/doc/obs-big",
+        source_ref: "/doc/obs-big.md",
         target_material_kind: "document",
         captured_chars: 5000,
         projection_budget_chars: 1000,
@@ -6458,7 +6460,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
       ).toEqual([
         {
           observation_id: "obs-doc",
-          source_ref: "/doc/obs-doc",
+          source_ref: "/doc/obs-doc.md",
           target_material_kind: "document",
           captured_chars: 5000,
           projection_budget_chars: 1000,
@@ -6477,7 +6479,7 @@ describe("observationPromptPayload projection-truncation recording", () => {
       ).toEqual([
         {
           observation_id: "obs-code",
-          source_ref: "/doc/obs-code",
+          source_ref: "/doc/obs-code.ts",
           target_material_kind: "code",
           captured_chars: 5000,
           projection_budget_chars: 1000,
