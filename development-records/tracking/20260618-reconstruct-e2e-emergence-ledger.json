@@ -1,0 +1,172 @@
+{
+  "summary": "풍부한 live E2E(.onto/reconstruct/20260619-9ac56418: 단일 .ts code 관측 3059자 풀캡처, 56 claim·unknown-stance 11(2개 cq_eligible 누출)·assessment answerable3/partially3·maturation BLOCKED·expansions:[]·pass_rate 0·material_failure 4)를 backbone으로 v1 20건 ledger 대비 재감사. 코드(run.ts/semantic-quality-gate.ts/post-seed-validation.ts/maturation-validation.ts/terminal-validation.ts/seed-claim-projections.ts/purpose-authority-validation.ts)+산출물 직접 대조로 전 finding 검증, 모두 stands. 신규(is_v1=false) 14건, v1 발현(is_v1=true&&emerged) 9건(중복 병합 후). 핵심 신규: (A) code/spreadsheet/database 단일관측의 content_excerpt가 프롬프트 투영 시 base limit(1200/300)로 조용히 절단—full-document expansion이 targetMaterialKind==='document'&&text-readable에만 적용(.ts는 이중 제외), truncation sink도 document에만 발화→1200자 뒤 capturePayment/renew/settlement 본문이 seed authoring에 안 보여 action_capture_payment actor 오귀속·action_update_subscription_state가 'placeholder'로 강등(high). (B) 같은 ref 풀소스 재요청(requested_source_refs priority:high)이 frontier에서 구조적으로 소비 불가—re-observe 경로 부재로 BLOCKED 근본인 투영절단이 limitation으로도 surface 안 됨. (C) validatePurposeConfirmation이 confirmed/rejected_frame_element_refs를 전혀 안 읽음(producer만 read)—LLM 분기 첫 실행됐으나 멤버십·blocker커버리지·충돌 무검증으로 valid/usable 통과. (D) seed가 affected_refs로 limitation-영향 선언한 claim이 cq-exclusion(limitation_id만 제외)에서 빠져 cq_eligible 누출. (E) accepted+cq_eligible claim이 동시에 material insufficient_evidence로 분류돼 final-output에 '확정'과 '증거부족' 공존하나 어떤 validator도 모순 미조정. (F) limitation-backed material row에 대해 maturation 답변기계(frontier→ledger→judge→answer-claims) 전체가 구조적 dead—candidate-level limitation이 전 row 전파돼 frontier_required 불가→blocked 사전결정. 주요 발현: assessment content-blind 판정·unknown-stance cq_eligible 누출·revision_proposal defer/split이 실행된 maturation에 미적용(dead loop 가시화)·pass_rate=0 오도지표. blocker 0, high 신규 2(code truncation·maturation dead machine).",
+  "new_defects": [
+    {
+      "defect_class": "mis_wiring",
+      "title": "Non-document(code/spreadsheet/database) 단일관측 content_excerpt가 프롬프트 투영 시 base limit(lens/purpose 1200·directive 300)로 조용히 절단 — full-document expansion이 document kind에만 적용돼 코드 본문이 seed authoring에 미노출",
+      "severity": "high",
+      "location": "src/core-runtime/reconstruct/run.ts: effectiveContentExcerptCharLimit 5452-5469(expandDocument && targetMaterialKind==='document' && isTextReadableDocumentExtension 조건), compactStructuralDataForPrompt 5471-5496, observationPromptPayload recordDocumentExcerptProjectionTruncation 5545-5567(document에만 발화); lens writeLensJudgment 6242-6248(PROMPT_OBSERVATION_EXCERPT_LIMIT=1200), purpose 6511-6517, directive 300; .onto/reconstruct/20260619-9ac56418/source-observations.yaml(kind=code .ts, content 3059자 excerpt_truncated:false) vs ontology-seed.yaml:610/667",
+      "evidence": "검증: source-observations.yaml은 단일 code(.ts) 관측을 3059자 풀캡처(excerpt_truncated:false). effectiveContentExcerptCharLimit는 targetMaterialKind==='document'&&text-readable일 때만 풀투영(.ts는 TEXT_READABLE={.md,.txt,.adoc} 미포함으로 이중 제외)→code는 expandSingleDocumentExcerpt·단일관측이어도 1200자(lens/purpose)·300자(directive)로 절단. 1200자 경계는 constructor 중간이라 renew/capturePayment/cancel/settlement/Dunning 본문 전부 절단. 결과 seed의 action_capture_payment가 actor를 actor_customer로 오귀속(메서드에 customer 인자 없음), action_update_subscription_state는 'ontology action placeholder'로 강등. recordDocumentExcerptProjectionTruncation은 document에만 발화→code 절단은 manifest/record에 0행 기록, limitation/에러 없이 LLM이 '있는 전부'로 신뢰.",
+      "fix": "effectiveContentExcerptCharLimit 풀투영 조건을 document로 한정하지 말고 '단일관측·텍스트판독·excerpt_truncated=false'면 code/spreadsheet/database도 budget까지 투영하거나, budget 초과 시 절단을 recordDocumentExcerptProjectionTruncation으로 kind 무관 기록해 limitation으로 surface."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "limitation-backed material row에 대해 maturation 답변기계(frontier→closure→answer-support-ledger→judgment→answer-claims) 전체가 구조적으로 dead — candidate-level limitation이 전 row 전파돼 frontier_required 불가, blocked가 사전결정",
+      "severity": "high",
+      "location": "src/core-runtime/reconstruct/maturation-validation.ts:405-414(matrixRowNeedsFrontier: limitation_refs.length===0 요구), 870-874(member_readiness ternary limitationRefs>0이면 무조건 limitation_backed), 531-534(baseline candidate.limitation_refs 전 row 전파), 835(carry)·847(answer claim push-only), 3670-3672(blocked branch); run.ts:4484-4491(maturationQuestionFrontierRows), 8246-8259(short-circuit)",
+      "evidence": "검증: actionability-matrix.yaml 44 row 전부 member_readiness=limitation_backed·L4; maturation-question-frontier.yaml questions:[]; answer-support-ledger.yaml evidence_clusters:[]; answer-support-judgment.yaml judgments:[]; maturation-answer-claims.yaml answer_claims:[]; continuation decision_state=blocked('Material rows remain limitation-backed and no closed row can support a bounded actionable claim'). matrixRowNeedsFrontier는 limitation_refs.length===0일 때만 frontier_required 허용하나 baseline limitationRefs(selected purpose candidate.limitation_refs)가 전 row carry되고 answer claim은 추가만 가능·제거 불가→material row가 frontier_required·limitation_backed 동시 만족 불가→frontier 0→ledger 0→judge 0 verdict의 dead-chain. blocked는 upstream candidate.limitation_refs에 의해 사전결정. 설계상 '답변단계가 limitation-backed gap을 advance' 계약이 한 라운드 내 강제·달성 불가능.",
+      "fix": "limitation-backed material row도 frontier 대상에 포함(maturationQuestionFrontierRows를 frontier_required OR (limitation_backed && materiality high/blocker)로 확장)하거나, candidate-level limitation은 next-round source frontier로만 표시하고 답변기계는 row-level seed-element limitation에만 적용되도록 분리. 최소한 '한 라운드로 candidate limitation 제거 불가'를 명시 라벨로 surface."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "이미 관측된 동일 ref의 풀소스 재요청(lens/exploration requested_source_refs priority:high)이 frontier에서 구조적으로 소비 불가 — re-observe/deeper-read 경로 부재로 조용히 폐기",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/run.ts: writeSourceFrontier systemPrompt 6402('Do not request refs in observed_source_refs')·9277-9284(already_observed reject), firstFrontierScoutCandidates 5690-5696(!observedRefs.has), compactExplorationSynthesisForPrompt 5835-5850; rounds/round-1/exploration-synthesis.yaml requested_source_refs / source-frontier.yaml frontier_refs:[]",
+      "evidence": "검증: 9개 lens 전부가 동일 .ts 파일을 requested_source_refs로 재요청('full source may resolve... ambiguities', priority:high)하나 writeSourceFrontier는 observed ref 재요청을 금지하고 validation은 already_observed로 terminal reject, inventory 유일 ref=관측 파일이라 firstFrontierScoutCandidates 0건→frontier_refs:[]. requested_source_refs의 유일 런타임 소비처는 frontier author 프롬프트인데 observed ref엔 구조적으로 못 따름→dead. 1200자 뒤 미투영 본문을 읽으면 해결될 결손인데 어디서도 충족 안 되고, BLOCKED는 'limitation-backed'로만 남고 투영절단 근본을 surface 안 함.",
+      "fix": "observed ref의 deeper/full read 요청이면 (a)동일 ref를 더 큰 excerpt budget으로 재투영하는 re-observe 경로 개방, 또는 (b)충족 불가한 high-priority 풀소스 요청을 명시 limitation_ref/한도게이트로 surface. 최소한 frontier가 '동일 ref 풀투영 요청'을 별도 카운터로 기록."
+    },
+    {
+      "defect_class": "unvalidated_bad_content",
+      "title": "purpose confirmation의 confirmed/rejected_frame_element_refs(LLM 출력)를 validatePurposeConfirmation이 전혀 읽지 않음 — frame-element 멤버십·blocker 커버리지·confirmed/rejected 비충돌 무검증",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/run.ts:9072-9150(confirmPurpose LLM 분기 raw.confirmed/rejected_frame_element_refs를 stringArray로만 파싱), purpose-authority-validation.ts:441-554(validatePurposeConfirmation, 581-604 builder가 candidates 본문 미수신)",
+      "evidence": "검증: confirmed/rejected_frame_element_refs를 읽는 코드는 producer(run.ts:9056-9135)와 type def(artifact-types.ts:1020-1021)뿐, validator·게이트·하류 0건(grep). 이 풍부한 런은 confirmation_status=confirmed로 LLM 분기 첫 실행→confirmed 5개·rejected []가 진짜 LLM 산출이나 validatePurposeConfirmation은 session_id/candidate_id/confirmed_statement만 검사. (a)두 ref가 required_elements element_id 부분집합인지, (b)blocker(frontier_required→materiality=blocker, element-customer-billing-role/element-payment-gateway-boundary) 커버 여부, (c)confirmed∩rejected=∅ 무검증. 본 런은 정확 emit해 무해하나 환각/blocker 누락/모순 시 valid·usable 통과. builder가 selected candidate frame 본문을 안 받아 검사 자체 불가능.",
+      "fix": "validatePurposeConfirmation에 confirmed/rejected_frame_element_refs ⊆ required_elements 멤버십·confirmed∩rejected=∅·status=confirmed/revised_confirmed일 때 blocker required_element 커버 검사를 추가하고, selected 후보 frame을 validator 입력으로 공급."
+    },
+    {
+      "defect_class": "unvalidated_bad_content",
+      "title": "accepted+cq_eligible claim이 동시에 material insufficient_evidence failure로 분류되는데 어떤 validator도 모순 미조정 — final-output에 '확정'과 '증거부족'이 공존",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/post-seed-validation.ts:1881-1961(validateFailureClassification: claim_id 집합 멤버십만), 1926; .onto/reconstruct/20260619-9ac56418/failure-classification.yaml ↔ seed-confirmation-validation.yaml(accepted+cq_eligible); final-output.md:52,256",
+      "evidence": "검증: failure-classification.yaml의 material failure 3개가 seed-confirmation accepted+cq_eligible claim을 가리킴(failure-cq-4-state-role-gate-gap→policy_subscription_state_role_gate, failure-cq-3→rule_external_settlement_not_authoritative_here, failure-cq-4-role-action-matrix-gap→policy_role_gated_billing_actions). validateFailureClassification(1926: failure.claim_id && !claimIds.has)는 accepted∪rejected∪partial∪deferred 멤버십만 봐 accepted claim을 failure로 잡아도 violation 0. policy_subscription_state_role_gate는 realization stance=unknown인데 accepted/confirmed 통과. final-output.md가 같은 claim을 confirmed seed claim(256)과 material insufficient_evidence(52)로 동시 제시. golden 벤치마크는 failure_classification 미참조라 점수 미포착.",
+      "fix": "validateFailureClassification에 failure.claim_id가 seedConfirmationValidation.accepted_claim_ids에 속하면 violation(accepted_claim_failed_for_evidence)으로 강등하거나 partial/deferred 재분류 강제. 근본은 unknown-stance가 accepted로 cq_eligible 통과하는 경로(v1 #5)를 닫는 것."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "seed handoff_limitations.affected_refs가 claim을 limitation-영향으로 선언하나 cq-eligibility 게이트는 limitation_id만 제외하고 affected_refs claim은 cq_eligible로 통과",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/seed-claim-projections.ts:296-305(ontologySeedExcludedClaimIds=handoff_limitations[].limitation_id만), post-seed-validation.ts:1020,1096(cq_eligible=accepted.filter(!cqExcludedClaimIds)); 대비 ontology-seed-validation.ts:913-917,1349-1357(affected_refs는 seed admission에만 enforce); ontology-seed.yaml:1238",
+      "evidence": "검증: ontologySeedExcludedClaimIds는 limitation_id만 cqExcludedClaimIds에 넣음. ontology-seed.yaml:1238의 limitation_role_permission_contract.affected_refs는 policy_subscription_state_role_gate를 포함('role-action matrix and enforcement authority not observed')하나 affected_refs는 hasLimitationForRef로 '미바인딩 action admit'(관대) 방향에만 enforce되고 cq-exclusion(반대 방향)엔 미배선. 결과 policy_subscription_state_role_gate가 accepted→cq_eligible→cq-4 linked_claim_id→partially_answerable로 강등(semantic-quality-gate.ts:662-667은 answerable만 support). affected_refs 소비처 grep=ontology-seed-validation.ts:915·seed-claim-projections.ts:333(summary count)뿐.",
+      "fix": "ontologySeedExcludedClaimIds를 확장해 handoff_limitations[].affected_refs claim id도 cqExcludedClaimIds에 포함하거나 seed confirmation 검증기가 affected_refs claim의 accepted를 위반으로 올림."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "failure-classification/handoff validator의 registry 의무(failure가 실패/누락 gate를 cover하는지 검증)가 런타임 미구현 — registry 24 input vs 실 3 input",
+      "severity": "medium",
+      "location": ".onto/processes/reconstruct/reconstruct-contract-registry.yaml:2407-2526(failure-classification-validator validation_obligations), 2944(handoff validate_failure_classification_covers_failed_or_missing_requested_planned_gates) ↔ post-seed-validation.ts:1881-1961·2282-2313(실 3 input), terminal-validation.ts:1151-1311",
+      "evidence": "검증: registry는 failure-classification-validator가 24 input_authority_refs를 소비하고 validate_failure_trigger_against_active_runtime_validation_authorities·classify_missing_or_failed_active_validation_artifact_as_required_gate_failure를 수행한다 선언. writeFailureClassificationValidationArtifact는 failureClassification·competencyQuestionAssessment·seedConfirmationValidation 3개만 읽고 validateFailureClassification은 duplicate_id/enum/멤버십/rationale만 검사(의무명 grep 0건). 트리거 절반은 failure_classification_gate 적용성으로 간접 강제되나 '실패 gate마다 대응 failure 존재'라는 content-coverage 의무는 미강제. 이 런은 전 gate valid라 누락 미발생(잠복).",
+      "fix": "(a)validateFailureClassification에 registry 선언 active/promoted gate 상태를 실 input으로 받아 status!=valid/missing gate마다 대응 failure 존재 요구, 또는 (b)registry 의무·input_authority_refs를 현실(3 input·멤버십)에 맞게 축소해 declared=wired 정렬. 범위 사용자 확정 필요."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "material failure가 claim_id·question_id 어느 링크도 없이(둘 다 null) 통과 가능 — orphan material failure가 stop gate/unresolved count 좌우",
+      "severity": "medium",
+      "location": "src/core-runtime/reconstruct/post-seed-validation.ts:1881-1961(validateFailureClassification: 1919/1926 truthy 가드), artifact-types.ts:2870-2878(question_id/claim_id 독립 nullable); run.ts:8118-8126(author optionalString), 1555·1395-1404(material_failure_count→stop gate)",
+      "evidence": "검증: validateFailureClassification은 `if(failure.question_id && !questionIds.has)`·`if(failure.claim_id && !claimIds.has)`로 truthy일 때만 검사. failure-cq-6은 claim_id:null이라 claim 검사 skip; 둘 다 null이어도(failure_id+kind+materiality+rationale만) material failure로 valid 통과. material failure는 unresolvedQuestionCount(1555)·stopDecisionAllowedDecisions(1395-1404)를 좌우→어느 claim/question도 안 가리키는 orphan failure가 stop 결정 perturbation 가능. 이 런은 cq-6 question_id 채워져 실제 오염 경미하나 모순 진단 불가.",
+      "fix": "validateFailureClassification에 '각 failure는 question_id 또는 claim_id 중 최소 하나를 유효 멤버십으로 가져야 한다'(missing_failure_subject violation) 추가. v1 #6 recommended_action 검증과 함께 처리."
+    },
+    {
+      "defect_class": "unvalidated_bad_content",
+      "title": "confirmPurpose LLM 분기가 source/seed 본문 없이 confirmed_statement·frame 거부 판정 (content-blind purpose confirmation)",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/run.ts:457-464(ReconstructPurposeConfirmationInput에 sourceObservations 없음), 9091-9097(confirmPurpose userPrompt)",
+      "evidence": "검증: ReconstructPurposeConfirmationInput은 sourcePurposeCandidates(+ref)/validation(+ref)만 carry, sourceObservations 필드 없음. userPrompt(9091-9097)는 ref 경로문자열+selectedCandidate(요약 객체, evidence_refs는 observation_id/location 라벨만)+validation만 담아 content_excerpt 0. LLM이 frame element를 소스가 뒷받침하는지 본문 없이 판정. confirmation_required:true라 LLM 분기 첫 실행됐고 보수적 5개 전부 confirm해 무해하나 거부 필요 케이스에서 본문 부재가 오판으로 발현. validatePurposeConfirmation도 sourceObservations 미수신.",
+      "fix": "confirmPurpose userPrompt에 frame element supporting_evidence_refs의 source 발췌(content_excerpt)를 포함하거나, purpose confirmation을 증거판정 아닌 정책게이트(소스 근거는 상류 source-purpose validator가 이미 닫음)로 계약 명시해 content-aware 기대 제거."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "benchmark golden quality gate가 pre-maturation ontology_seed/assessment를 읽고 maturation expansion을 못 봄 — matured ontology 품질 측정 불가",
+      "severity": "medium",
+      "location": "scripts/reconstruct-pipeline-benchmark.ts:358-371(gate에 result.artifactRefs.ontology_seed/competency_question_assessment 공급); src/core-runtime/reconstruct/run.ts:11592,11600(pre-maturation 바인딩, 재배선 없음); maturation-validation.ts:4250(actionable_ontology 별도)",
+      "evidence": "검증: 벤치마크가 result.artifactRefs.ontology_seed/competency_question_assessment를 gate에 전달. 이 refs는 pre-maturation에 바인딩되고 maturation 후 재배선 0건(grep). semantic-quality-gate.ts:576-677 Q1/Q2는 ontologySeed/assessment만 읽고 actionable_ontology/expansion 미참조. 즉 Q1/Q2가 maturation 개선 이전 seed로 계산. 이 런은 expansions:[]·blocked라 pre=post로 갭 잠복이나, expansion 비어있지 않은 런에서 maturation gain/regression을 조용히 무시.",
+      "fix": "golden gate가 점수할 seed를 명시 결정: maturation이 확장 가능하면 post-maturation/actionable ontology를 공급(또는 pre/post 둘 다 점수·delta 보고), 아니면 pre-maturation 측정임을 문서화."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "seed-confirmation.notes(LLM 의미적 confirmation 근거 산문)가 산출만 되고 어떤 검증기·게이트·하류도 미소비",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/run.ts:9218(notes: stringArray); post-seed-validation.ts:1027-1101(validateSeedConfirmationAgainstClaims notes 미참조); compactFinalOutputPromptPayload run.ts:4157-4169(notes drop); seed-confirmation.yaml:67-74",
+      "evidence": "검증: confirmOntologySeed가 notes를 stringArray로 파싱·기록(9218). .notes 읽는 코드는 producer뿐(grep, 타 .notes는 review/assessment 별개 개념). validateSeedConfirmationAgainstClaims/record/terminal-validation 미참조. final-output input은 seedConfirmation 전체를 받으나 seed_confirmation_summary가 confirmation_status+5 count만 투영하고 notes drop. 이 런 notes 4건('Deferred claims are treated as boundary or limitation disclosures only...')의 의미 verdict 산문이 dead.",
+      "fix": "notes를 final-output provenance 산문에 surface하거나 confirmation 검증의 보조근거로 라우팅, 순수 문서용이면 스키마 주석 명시."
+    },
+    {
+      "defect_class": "dead_unconsumed_output",
+      "title": "assessment.ambiguity_notes(LLM-저작 의미 필드)가 어떤 하류도 미소비 — 6질문 전부 산출됐으나 미surface",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/run.ts:7948-7949(프롬프트 지시), 8052-8054(author 작성); artifact-types.ts:1878(스키마); unresolvedAssessmentProjection 4040-4053(ambiguity_notes 제외)",
+      "evidence": "검증: systemPrompt가 author must supply ambiguity_notes 지시·author가 stringArray 파싱. 비-test 런타임 read 코드는 producer 4곳뿐(grep; review 서브시스템 ambiguity_notes는 별개 artifact). final-output unresolvedAssessmentProjection은 answer_status/downstream_effect/linked_claim_ids/missing_source_or_confirmation/answer_summary만 투영, ambiguity_notes 제외. validateCompetencyQuestionAssessment 미검사. 이 런 cq-1~6 전부 실질 내용 채웠으나 미소비·미표시.",
+      "fix": "ambiguity_notes를 final-output unresolvedAssessmentProjection(또는 answerable assessment 한계노트)로 surface하거나 순수 문서용임을 스키마 주석 명시하고 프롬프트 부담 제거."
+    },
+    {
+      "defect_class": "declared_unenforced_rule",
+      "title": "missing_source_or_confirmation 필수성이 unsupported/deferred에만 적용되고 partially_answerable(downstream_effect=limited)엔 미적용 — null gap 사유로도 통과 가능",
+      "severity": "low",
+      "location": "src/core-runtime/reconstruct/post-seed-validation.ts:1823-1834(필수검사 unsupported||deferred 한정), 607-622(partially→limited); run.ts:4049-4050(소비), 8050-8051(nullable)",
+      "evidence": "검증: validator(1823-1834)는 answer_status가 unsupported/deferred일 때만 missing_source_or_confirmation 비어있음을 위반. partially_answerable은 limited로 매핑돼 unresolvedAssessmentProjection(4040-4053)에 포함되고 missing_source_or_confirmation(4049-4050)을 gap 사유로 소비하나 partially엔 필수검사 없음→LLM이 null이면 '한계 있으나 사유 없는' gap이 final-output에 valid 통과. 이 런은 cq-3/4/6 모두 LLM이 자발적으로 채워 잠복(emerged=false). terminal-validation도 downstream_effect만 읽고 필수성 미강제.",
+      "fix": "validateCompetencyQuestionAssessment 1823-1834 조건에 partially_answerable(또는 downstream_effect==='limited'/'blocks_handoff' 전반)을 포함해 한계 판정에 missing_source_or_confirmation 필수화."
+    },
+    {
+      "defect_class": "mis_wiring",
+      "title": "maturation_question_frontier manifest 스텝이 runtime-derived 산출물을 host_llm/direct_call로 잘못 귀속 — telemetry 없는 LLM 저자성 주장",
+      "severity": "low",
+      "location": ".onto/reconstruct/20260619-9ac56418/reconstruct-run-manifest.yaml:1875-1883; src/core-runtime/reconstruct/run.ts:8246-8259(derivedMaturationQuestionFrontier 결정론 경로), 1817-1825(directiveAuthorPerformer 무조건 host_llm), 2420-2427(completedStep 정적 적용); maturation-validation.ts:4938-4940(directive_author 미비교)",
+      "evidence": "검증: frontierRows.length===0이라 writeMaturationQuestionFrontier가 derivedMaturationQuestionFrontier(LLM 호출 0)로 산출. manifest:1875-1883은 owner:host_llm·performed_by{authority:host_llm,realization:direct_call}·execution_telemetry 없음. directiveAuthorPerformer는 호출 여부와 무관하게 무조건 host_llm/direct_call 반환→무호출인데 LLM 저작 주장. 대조: answer_support_ledger는 동일 author이나 실호출로 telemetry 존재. closure_frontier도 동일 패턴(manifest:1893). maturation-validation.ts:4938-4940은 directive_author를 spoofable로 비교 안 함(telemetry 1:1 매핑 가정인데 no-call 분기서 실패).",
+      "fix": "derived(무호출) 경로일 때 manifest 스텝 owner/performed_by를 runtime/derived로 표기하거나 host_llm 저자성을 telemetry 존재(실호출) 여부와 일치하도록 강제."
+    }
+  ],
+  "emerged_v1": [
+    {
+      "title": "[HIGH #1] competency_question_assessment가 answer_status를 ontology_seed·source_observations 본문 없이 판정 (content-blind), final-output로 전파",
+      "evidence": "검증: AuthorInput(run.ts:504-511)·호출부(11268-11275)가 ontologySeed/sourceObservations 미전달. payload(3926-3956)+compactClaimRealizationMapForAssessmentPrompt(3898-3916)는 evidence_observation_ids/basenames(ID 라벨)+rationale만 노출, content_excerpt 0(소스엔 존재). 발현: cq-3/4/6 partially_answerable·cq-1/2/5 answerable 전부 content-blind 산출. compactFinalOutputPromptPayload(3995-3999)가 partially 3건을 unresolvedAssessments로 필터→4040-4053 투영→final-output.md:42-44 gap 산문 출력. metrics pass_rate(1601-1604)·answer_status_counts(1597)가 직접 소비. assessment-validation은 구조-only라 valid 통과. = q2 construct(N1) 코드 근본."
+    },
+    {
+      "title": "[MEDIUM #5] claim_realization_map stance(unknown 11)가 seed-confirmation cq-eligibility 게이트에 미소비 — unknown-stance 비-limitation claim 2개가 confirmed→cq_eligible→cq-assessment까지 전파",
+      "evidence": "검증: ReconstructSeedConfirmationInput(466-472)에 claimRealizationMap 없음, validateSeedConfirmationAgainstClaims(1096: cq_eligible=accepted.filter(!cqExcluded), cqExcluded=limitation_id만) stance 미참조. claim-realization-map.yaml:230 policy_subscription_state_role_gate·:367 provenance_seed_source_file stance:unknown(총 11)인데 seed-confirmation-validation.yaml:94,103 cq_eligible 포함→cq-4/cq-6 linked_claim_id→partially_answerable. failure-classification.yaml이 policy_subscription_state_role_gate를 material insufficient_evidence로 별도 포착→blocked 기여(즉각 garbage seed는 회피). 전 체인 violations:[]."
+    },
+    {
+      "title": "[MEDIUM #7] adversarial seed confirmation이 source/evidence 본문 없이 claim accepted 판정, 검증기는 set 멤버십만 — unknown-grounding claim이 confirmed로 통과(LLM 분기 첫 실행)",
+      "evidence": "검증: ReconstructSeedConfirmationInput(466-472)에 claimRealizationMap·sourceObservations 없음. claim_summaries(9153-9164)는 claim_id/kind/compactStatement(≤240자)/evidence_observation_ids/basenames만, content_excerpt 0. validator(1044-1082)는 unknown_id/conflicting_state/missing_required_coverage 멤버십만. 발현: confirmation_status=partial이라 LLM 분기(9169-9197) 첫 실행; realization-map이 unknown으로 표시('does not support the claim')한 policy_subscription_state_role_gate(33)·provenance_seed_source_file(42)을 confirmed_claim_ids로 올리고 valid·cq_eligible 통과."
+    },
+    {
+      "title": "[MEDIUM #10] competency_question_assessment-validation이 answer_status 의미 타당성·linked claim stance를 미검증, 구조(question서 복사된 ref 항등)만 — cq-5 deferred→answerable, cq-6 unknown→partially 무게이트 통과",
+      "evidence": "검증: validateCompetencyQuestionAssessment(1679-1878)는 linked_claim_ids/evidence_refs/required_seed_refs가 question 것과 일치(author가 8047-8049에서 복사→항등, 절대 실패불가)+enum 멤버십+downstream_effect 도출일치만. claimRealizationMap 미수신이라 stance cross-check 불가능. 발현: cq-5 question은 coverage_disposition/lifecycle_status:deferred인데 assessment answer_status:answerable(자기모순), cq-4/cq-6은 unknown-stance claim linked인데 partially_answerable—전부 valid·violations:[]. runSemanticQualityGate는 harness 전용(production run.ts path 부재)."
+    },
+    {
+      "title": "[MEDIUM #8] seed confirmation_status verdict(partial)가 어떤 게이트도 강제·소비 안 함 — partial seed가 조용히 진행(purpose confirmation과 비대칭)",
+      "evidence": "검증: run.ts:1521 seed_confirmation=raw verdict 미러, invalidGateCount(1537-1550)는 seed_confirmation_validation(구조)만 세고 raw status 제외. validateSeedConfirmationAgainstClaims는 confirmation_status 미참조, terminal-validation grep 0건, maturation*.ts grep 0건. 발현: confirmation_status=partial(seed-confirmation.yaml:6, metrics:63)인데 게이트 미강제. PURPOSE는 purpose-authority-validation.ts:484-525에서 confirmation_status를 first-class 강제(seed_readiness_effect 구동). firewall=cq_eligible accepted만(1096)이라 partial/deferred/rejected 자동 제외→cosmetic(no garbage)."
+    },
+    {
+      "title": "[DEAD #4 emerged] purpose-confirmation confirmed/rejected_frame_element_refs가 admission·seed-readiness·disposition·seed projection 전부 미소비(selected.required_elements만)",
+      "evidence": "검증: confirmation_status=confirmed로 LLM 분기 첫 행사됨(v1은 not_required 잠복). buildMaterialAdmissionLedgerFromSourcePurpose(182)는 required_elements.map만, confirmed/rejected refs 미참조; readinessClassification(364)은 seed_readiness_effect만; validateCandidateDisposition은 confirmation 미수신; final-output projection도 frame refs drop. 이 런은 5 required_element 전부 confirm·rejected []라 admission row 5=required_element 5로 오염 없으나, reject한 element도 admitted/promoted되는 경로가 LLM 분기로 처음 실현. 사용자 frame element 결정 런타임 효과 0."
+    },
+    {
+      "title": "[DEAD·HIGH #2] revision_proposal split/defer action·stop_decision next_actions가 실행된 maturation에 미적용 — BLOCKED 결정이 proposal 무시(dead loop 가시화)",
+      "evidence": "검증: writeMaturationBaselineArtifact(4381-4397)·writeActionabilityMatrixArtifact(4526-4534) input에 revisionProposal/failureClassification 없음(maturation 산출물 revision grep 0건). revision_proposal 소비처=final-output projection(4067-4079)+writeStopDecision(11384, next_actions 'Apply the proposed split.../Defer...')의 사용자 표시뿐. 발현: 이 런은 maturation 실제 실행(decision_state=blocked, 88 blocking row)됐는데 4 proposal(2 defer+2 split, policy_subscription_state_role_gate defer 포함)이 어느 row에도 미적용·ontology-expansion expansions:[]·seed 불변. stop-decision은 같은 세션 maturation이 무시한 defer/split을 'next iteration'으로 권고."
+    },
+    {
+      "title": "[DEAD·LOW #13] answer-support-ledger author가 빈 frontier에도 실 gpt-5.5 호출(1892 tok) — 형제 author는 empty-input short-circuit",
+      "evidence": "검증: writeAnswerSupportLedger(8542-8602)에 questions.length===0 early-return 부재; 형제(closure 8409-8420·judgment 8698-8710·answer-claims 8807-8816·expansion 8903)는 전부 short-circuit. 발현: maturation-question-frontier.yaml questions:[]인데 manifest answer_support_ledger 스텝 llm_call_count:1·prompt_chars:7559·tokens_in 1892·model gpt-5.5; 형제 스텝은 execution_telemetry 블록 자체 없음. 산출 evidence_clusters:[](정직 무산출)·downstream 소비로 orphan 아님, 낭비 호출만."
+    },
+    {
+      "title": "[DEAD·LOW #14] metrics.pass_rate가 혼합 분모(partial claim+material_failure+open_questions)로 0% 강제 — 실제 answerable3/6·unsupported0인데 pass_rate=0 오도지표",
+      "evidence": "검증: unresolvedQuestionCount(1551-1557)=rejected0+partial5+skipped0+material_failure4+open_questions5+invalidGate0=14; passedQuestions=max(0,6-14)=0; pass_rate=0/6=0(metrics:55). 그러나 answer_status_counts=answerable3·partially3·unsupported0·contradicted0—절반 완전답변가능인데 0% 표기. 게이트 미소비(grep: gate/stop_decision 미참조), record.ts:683·reconstruct-api.ts:517 미러뿐. v1도 pass_rate 0이었으나 56-claim 런에서 partial5+material4 누적으로 오도 극대화."
+    },
+    {
+      "title": "[MIS·INFO/LOW #11] failure_classification.seed_confirmation_validation_ref가 검증산출물 아닌 seed-confirmation.yaml로 채워짐(provenance 라벨 오배선)",
+      "evidence": "검증: failure-classification.yaml:5 seed_confirmation_validation_ref=.../seed-confirmation.yaml(확정 artifact)인데 필드명은 validation 산출물(.../seed-confirmation-validation.yaml 별존)을 가리켜야 함. 근본=run.ts:8094-8095가 input.seedConfirmationValidation.seed_confirmation_ref(확정 경로)를 복사. validateFailureClassification(1881-1961)은 이 필드 미참조→provenance 라벨 미소비, 동작영향 0. 이 런 산출물에 mislabeled ref 실재(emerged)."
+    }
+  ],
+  "by_class_counts": {
+    "mis_wiring": 2,
+    "dead_unconsumed_output": 4,
+    "unvalidated_bad_content": 3,
+    "declared_unenforced_rule": 5
+  },
+  "open_questions": [
+    "코드 truncation high 결함: full-document expansion 게이트는 large-input .md/.txt/.adoc 트랙의 의도된 설계인데, code/spreadsheet/database 단일관측에도 budget까지 풀투영을 확장할지(범위/성능) vs 절단을 limitation으로 surface만 할지 사용자 결정 필요.",
+    "maturation 답변기계 dead(high): candidate-level limitation을 row 전파해 모든 material row를 limitation_backed로 고정하는 것이 의도된 보수성인지, 아니면 frontier에 포함해 한 라운드 내 advance를 허용할지 설계 결정 필요(후자는 maturation 비용↑).",
+    "seed affected_refs cq-exclusion: limitation-영향이나 source-grounded claim을 cq_eligible에서 제외하는 것이 옳은지(partially_answerable이 정직한 결과일 수 있음) vs 제외가 실제 partial coverage를 은폐하는지 owner 판단 필요.",
+    "failure-classification registry 24-input 의무: validator를 registry 선언에 맞춰 확장(content-coverage 강제)할지 vs registry를 현실 3-input에 맞춰 축소(declared=wired 정렬)할지 — declared≠wired 드리프트 해소 방향 사용자 확정.",
+    "대부분 신규/발현 결함이 단일 wiring/계약 변경(예: claimRealizationMap을 confirmation 검증기에 공급, content_excerpt를 assessment/confirmPurpose에 주입)이라 purpose↔seed↔assessment 게이트의 content-blind 패턴 A를 통합 fix로 닫을지 개별 처리할지 우선순위 결정 필요."
+  ]
+}
