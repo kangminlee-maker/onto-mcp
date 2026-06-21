@@ -2651,13 +2651,29 @@ async function deriveRuntimeUnitProgress(args: {
       unitKind: "lens",
       packetPath,
       outputPath: seat.output_path,
+      sidecarOutputPath: seat.sidecar_output_path ?? null,
       runningLogRef: path.join(path.dirname(seat.output_path), `.${seat.lens_id}.running.log`),
     };
   });
 
   const projections: ReviewRuntimeUnitProgressProjection[] = [];
   for (const unit of lensUnits) {
-    const output = await observeFile(unit.outputPath);
+    // In sidecar mode (review.artifacts.write_lens_markdown=false) the authored
+    // `.md` is never written and the lens's real artifact is the findings
+    // sidecar (`.findings.yaml`). Resolve the unit's output to whichever artifact
+    // actually exists, preferring the authored `.md`, so drill-down and the
+    // output-presence completion signal see the real file instead of an absent
+    // planned path.
+    const authoredOutput = await observeFile(unit.outputPath);
+    let output = authoredOutput;
+    let outputPath = unit.outputPath;
+    if (!authoredOutput.exists && unit.sidecarOutputPath) {
+      const sidecar = await observeFile(unit.sidecarOutputPath);
+      if (sidecar.exists) {
+        output = sidecar;
+        outputPath = unit.sidecarOutputPath;
+      }
+    }
     const runningLog = await observeFile(unit.runningLogRef);
     const signals = signalsByUnit.get(unit.unitId) ?? [];
     const latestSignal = latestRuntimeSignal(signals);
@@ -2727,7 +2743,7 @@ async function deriveRuntimeUnitProgress(args: {
       progressStepId: runtimeUnitStepId(unit.unitKind),
       status,
       packetPath: unit.packetPath,
-      outputPath: unit.outputPath,
+      outputPath,
       runningLogRef: runningLog.exists ? unit.runningLogRef : null,
       latestSignal: latestSignalName,
       latestSignalAt,
