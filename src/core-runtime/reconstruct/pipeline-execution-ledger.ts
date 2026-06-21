@@ -668,6 +668,7 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
       "baseline_actionability_matrix_validation",
       "maturation_answer_claims_validation",
       "ontology_expansion_validation",
+      "maturation_question_frontier_validation",
     ],
   },
   {
@@ -680,6 +681,7 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
       "maturation_baseline_validation",
       "maturation_answer_claims_validation",
       "ontology_expansion_validation",
+      "maturation_question_frontier_validation",
     ],
   },
   {

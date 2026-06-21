@@ -282,6 +282,9 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "baseline_actionability_matrix_validation",
       "maturation_answer_claims_validation",
       "ontology_expansion_validation",
+      // The current matrix reads the validated question frontier to populate
+      // blocking_question_refs, so the dependency must be guarded here too.
+      "maturation_question_frontier_validation",
     ]));
     expect(
       ledger.units.find((unit) => unit.unitId === "actionability_matrix_validation")
@@ -290,6 +293,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "actionability_matrix",
       "maturation_answer_claims_validation",
       "ontology_expansion_validation",
+      "maturation_question_frontier_validation",
     ]));
   });
 

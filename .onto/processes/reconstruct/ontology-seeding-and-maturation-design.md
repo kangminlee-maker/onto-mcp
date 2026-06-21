@@ -1738,6 +1738,14 @@ rows:
 explicitly limitation-backed without making an actionability claim for that
 limited area.
 
+`blocking_question_refs` is the reverse link from a row to the maturation
+frontier question(s) that block it from closing. It is the mirror of the
+question's forward `baseline_row_refs`, so the baseline matrix (authored before
+any question exists) leaves it empty and the current matrix populates it for each
+still-open `frontier_required` row from the validated question frontier; closed
+or limitation-backed rows carry none. The matrix validator enforces this against
+the validated frontier (`validate_blocking_question_refs_against_validated_question_frontier`).
+
 The active first-pass runtime keeps two matrix artifacts so artifact refs stay
 truthful. `baseline-actionability-matrix.yaml` is the immutable
 baseline-derived M1 matrix consumed by `maturation-question-frontier.yaml`.

@@ -12550,6 +12550,10 @@ export async function runReconstruct(
     maturationAnswerClaimsValidationPath,
     ontologyExpansionPath,
     ontologyExpansionValidationPath,
+    // The question frontier now exists, so the current matrix carries the reverse
+    // blocking_question_refs link (the pre-frontier baseline matrix above does not).
+    maturationQuestionFrontierPath,
+    maturationQuestionFrontierValidationPath,
     outputPath: actionabilityMatrixPath,
   });
   actionabilityMatrixValidation =
@@ -12561,6 +12565,8 @@ export async function runReconstruct(
       maturationAnswerClaimsValidationPath,
       ontologyExpansionPath,
       ontologyExpansionValidationPath,
+      maturationQuestionFrontierPath,
+      maturationQuestionFrontierValidationPath,
       outputPath: actionabilityMatrixValidationPath,
     });
   assertRuntimeValidationValid({

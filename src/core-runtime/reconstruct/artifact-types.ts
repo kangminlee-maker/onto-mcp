@@ -2019,6 +2019,7 @@ export interface ReconstructActionabilityMatrixValidationArtifact {
   maturation_baseline_validation_ref: string | null;
   maturation_answer_claims_validation_ref?: string | null;
   ontology_expansion_validation_ref?: string | null;
+  maturation_question_frontier_validation_ref?: string | null;
   validation_status: "valid" | "invalid";
   matrix_row_count: number;
   frontier_required_row_count: number;
