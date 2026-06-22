@@ -131,12 +131,20 @@ export interface ReconstructRequiredWhenPredicateRecord {
   predicate_evaluator_version: number;
 }
 
+export interface ConditionalValidationObligation {
+  obligation_id: string;
+  activation_condition: string;
+  input_authority_refs: string[];
+}
+
 export interface ReconstructValidatorRecord {
   validator_id: string;
   gate_ids: string[];
   validator_version: number;
   input_authority_refs: string[];
   output_ref: string;
+  validation_obligations: string[];
+  conditional_validation_obligations: ConditionalValidationObligation[];
 }
 
 export interface ReconstructContractRegistry {
@@ -692,6 +700,20 @@ function parseRequiredWhenPredicateRecord(args: {
   return record;
 }
 
+function parseConditionalValidationObligation(
+  value: unknown,
+  context: string,
+): ConditionalValidationObligation {
+  if (!isRecord(value)) {
+    throw new Error(`${context} must be an object`);
+  }
+  return {
+    obligation_id: requiredString(value, "obligation_id", context),
+    activation_condition: requiredString(value, "activation_condition", context),
+    input_authority_refs: optionalStringArray(value, "input_authority_refs"),
+  };
+}
+
 function parseValidatorRecord(
   value: unknown,
   index: number,
@@ -700,12 +722,29 @@ function parseValidatorRecord(
     throw new Error(`validator_records[${index}] must be an object`);
   }
   const context = `validator_records[${index}]`;
+  const conditionalObligationsRaw = value.conditional_validation_obligations;
+  const conditionalObligations = conditionalObligationsRaw === undefined
+    ? []
+    : (Array.isArray(conditionalObligationsRaw)
+      ? conditionalObligationsRaw
+      : (() => {
+        throw new Error(
+          `${context}.conditional_validation_obligations must be an array when present`,
+        );
+      })()).map((entry, entryIndex) =>
+        parseConditionalValidationObligation(
+          entry,
+          `${context}.conditional_validation_obligations[${entryIndex}]`,
+        )
+      );
   return {
     validator_id: requiredString(value, "validator_id", context),
     gate_ids: stringArray(value, "gate_ids", context),
     validator_version: requiredNumber(value, "validator_version", context),
     input_authority_refs: optionalStringArray(value, "input_authority_refs"),
     output_ref: requiredString(value, "output_ref", context),
+    validation_obligations: optionalStringArray(value, "validation_obligations"),
+    conditional_validation_obligations: conditionalObligations,
   };
 }
 

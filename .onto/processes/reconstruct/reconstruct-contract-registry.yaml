@@ -3201,3 +3201,43 @@ version_policy:
     - query access contract registry changes
     - readiness projection changes
     - validator record changes
+
+# G(b) prompt-projection field-parity (INV-SCHEMA-1). Declares the EXACT field/budget
+# surface of each governed runtime prompt projection so a registry-shape drift (a field or
+# budget added or dropped in the runtime contract without a registry home, or vice versa) is
+# caught in CI. Runtime SSOT for the competency-question assessment contract is
+# src/core-runtime/reconstruct/competency-projection-contract.ts; the parity guard
+# scripts/check-prompt-projection-parity.ts asserts this node equals that module's contract
+# surface (exact-set on payload_fields/policy_fields, exact-value on budget_fields) and that
+# run.ts consumes the extracted module rather than a duplicated local copy. Every element
+# declared here is guard-checked (no unguarded declared data).
+prompt_projection_contracts:
+  competency_question_assessment:
+    # Top-level keys of competencyQuestionAssessmentProjectionContract().
+    payload_fields:
+      - projection_kind
+      - projection_contract_version
+      - semantic_authority
+      - prompt_char_limit
+      - question_projection
+      - evidence_projection
+      - source_evidence_projection
+      - source_evidence_excerpt_char_limit
+      - source_evidence_reserve_derivation
+      - validation_projection
+      - claim_realization_projection
+      - runtime_derivations
+      - batching_policy
+      - fail_loud_policy
+    # Keys of the nested batching_policy object.
+    policy_fields:
+      - mode
+      - order
+      - build_budget_reserve_chars
+      - single_question_overflow
+    # The named budget constants the contract OUTPUT embeds (NOT the internal
+    # EVIDENCE_CANDIDATE_LIMIT runaway guard, which never enters the contract surface).
+    budget_fields:
+      prompt_char_limit: 50000
+      source_evidence_excerpt_char_limit: 4000
+      build_budget_reserve_chars: 1000

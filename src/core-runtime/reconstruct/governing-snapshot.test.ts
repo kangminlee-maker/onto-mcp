@@ -7,8 +7,17 @@ import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import { loadReconstructContractRegistry } from "./contract-registry.js";
 import {
   buildReconstructRunGoverningSnapshot,
+  projectValidatorRecordSnapshotFields,
   validateReconstructRunGoverningSnapshot,
 } from "./governing-snapshot.js";
+
+const VALIDATOR_RECORD_SNAPSHOT_FIELDS = [
+  "gate_ids",
+  "input_authority_refs",
+  "output_ref",
+  "validator_id",
+  "validator_version",
+];
 
 function sha256Text(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
@@ -127,6 +136,98 @@ describe("reconstruct governing snapshot", () => {
     );
 
     expect(validator?.input_authority_refs).toContain("source-observations.yaml");
+  });
+
+  it("preserves validation_obligations and structured conditional_validation_obligations on parsed validator records", async () => {
+    const registry = await loadReconstructContractRegistry({
+      registryPath: path.resolve(
+        ".onto/processes/reconstruct/reconstruct-contract-registry.yaml",
+      ),
+    });
+
+    const runControl = registry.validator_records.find((record) =>
+      record.validator_id === "reconstruct-run-control-validator"
+    );
+    expect(runControl?.validation_obligations.length ?? 0).toBeGreaterThan(0);
+    expect(runControl?.validation_obligations).toContain(
+      "validate_current_attempt_and_session_root_lock_ownership",
+    );
+
+    const candidateDisposition = registry.validator_records.find((record) =>
+      record.validator_id === "candidate-disposition-validator"
+    );
+    expect(candidateDisposition?.conditional_validation_obligations).toEqual([
+      {
+        obligation_id:
+          "validate_candidate_purpose_element_refs_against_selected_purpose_frame",
+        activation_condition: "source_purpose_candidate_runtime_is_implemented",
+        input_authority_refs: ["source-purpose-candidates-validation.yaml"],
+      },
+    ]);
+    // Validators without obligations default to empty arrays (never undefined).
+    for (const record of registry.validator_records) {
+      expect(Array.isArray(record.validation_obligations)).toBe(true);
+      expect(Array.isArray(record.conditional_validation_obligations)).toBe(true);
+    }
+  });
+
+  it("projects every validator record to exactly the 5 snapshot fields, excluding obligations", async () => {
+    const registry = await loadReconstructContractRegistry({
+      registryPath: path.resolve(
+        ".onto/processes/reconstruct/reconstruct-contract-registry.yaml",
+      ),
+    });
+
+    for (const record of registry.validator_records) {
+      const projected = projectValidatorRecordSnapshotFields(record);
+      expect(Object.keys(projected).sort()).toEqual(VALIDATOR_RECORD_SNAPSHOT_FIELDS);
+      expect(projected).not.toHaveProperty("validation_obligations");
+      expect(projected).not.toHaveProperty("conditional_validation_obligations");
+    }
+  });
+
+  it("keeps the validator_records snapshot family sha stable when loader-preserved fields grow (allow-list boundary)", async () => {
+    const projectRoot = process.cwd();
+    const registryPath = path.resolve(
+      ".onto/processes/reconstruct/reconstruct-contract-registry.yaml",
+    );
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const lensIds = loadCoreLensRegistry().full_review_lens_ids;
+    const baseline = await buildReconstructRunGoverningSnapshot({
+      projectRoot,
+      registryPath,
+      contractRegistry,
+      selectedSourceProfiles: [],
+      lensIds,
+      admittedDomainIds: [],
+    });
+
+    // Simulate a FUTURE loader field beyond today's obligation fields on every record.
+    const withFutureFields = {
+      ...contractRegistry,
+      validator_records: contractRegistry.validator_records.map((record) => ({
+        ...record,
+        __synthetic_future_field__: "must-not-enter-the-snapshot",
+      })),
+    };
+    const mutated = await buildReconstructRunGoverningSnapshot({
+      projectRoot,
+      registryPath,
+      contractRegistry: withFutureFields,
+      selectedSourceProfiles: [],
+      lensIds,
+      admittedDomainIds: [],
+    });
+
+    const familyOf = (
+      snapshot: Awaited<ReturnType<typeof buildReconstructRunGoverningSnapshot>>,
+    ) =>
+      snapshot.snapshot_families.find((family) =>
+        family.family_id === "validator_records"
+      );
+    expect(familyOf(baseline)?.sha256).toBeDefined();
+    expect(familyOf(mutated)?.sha256).toBe(familyOf(baseline)?.sha256);
+    expect(familyOf(mutated)?.item_count).toBe(familyOf(baseline)?.item_count);
   });
 
   it("admits domain competency ids and lifecycle metadata from explicit domain input", async () => {
