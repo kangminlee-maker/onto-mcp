@@ -2399,6 +2399,7 @@ export interface ReconstructOntologyExpansionValidationArtifact {
   expansion_count: number;
   operation_counts: Record<ReconstructOntologyExpansionEntry["operation"], number>;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 

@@ -3046,6 +3046,28 @@ export function validateOntologyExpansion(args: {
     defer: 0,
     reject: 0,
   };
+  // G(a) slice 9: record the two obligations whose enforcement matches the authoritative contract
+  // (ontology-seeding-and-maturation-design.md §"ontology-expansion-validation.yaml must enforce"),
+  // before the per-expansion loop so they fire on a zero-expansion artifact:
+  //   - validate_expansion_answer_claim_refs — every answer_claim_refs[] item resolves to a valid
+  //     answer claim (unknown_id) and add/refine cites ≥1 (missing_required_ref).
+  //   - require_concept_economy_rationale_when_surface_increases — the contract scopes this to
+  //     `operation: add` with `increases_surface`, which the per-expansion check enforces exactly
+  //     (missing_required_ref when rationale.trim().length < 24). A refine row that sets
+  //     increases_surface is OUT of the contract clause, not an enforcement gap.
+  // PARKED (not recorded): prevent_in_place_seed_authority_rewrite — the contract clause is unscoped
+  // ("no expansion rewrites seed authority in place") but the check only rejects refs whose
+  // path.basename(ref) === "ontology-seed.yaml", so an LLM-authored anchored ref (e.g.
+  // "ontology-seed.yaml#semantic_layer/object-new") bypasses it; narrower than the contract.
+  // Also parked: the evidence-refs obligation — evidence_refs are resolved against the cited answer
+  // claims' carried supporting_evidence_refs (a proxy), not the answer-support-ledger/seed authority
+  // the name names. See obligation-coverage-ledger.yaml notes. No laundering.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "validate_expansion_answer_claim_refs");
+  assertObligation(
+    assertedObligationIds,
+    "require_concept_economy_rationale_when_surface_increases",
+  );
   if (artifact.session_id !== args.maturationAnswerClaims.session_id) {
     violations.push(violation({
       code: "session_id_mismatch",
@@ -3165,6 +3187,7 @@ export function validateOntologyExpansion(args: {
     validation_results: violations.length === 0
       ? ["ontology_expansion_valid"]
       : ["ontology_expansion_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
