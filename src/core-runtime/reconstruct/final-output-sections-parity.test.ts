@@ -37,12 +37,19 @@ function buildRuntimeSource(): string {
     const hk = HEADING_KEY_BY_VALUE[s.heading];
     return `function appendFinalOutput_${hk}Section() { return \`## \${FINAL_OUTPUT_SECTION_HEADINGS.${hk}}\`; }`;
   }).join("\n");
+  const policy =
+    "const policy = { deterministic_runtime_append_sections: promptPolicyAppendSectionIds() };";
   const bindingRows = FINAL_OUTPUT_SECTIONS.filter((s) => s.provenance_binding_required)
-    .map((s) => `  { section_id: FINAL_OUTPUT_SECTION_IDS.${ID_KEY_BY_VALUE[s.section_id]} },`)
+    .map((s) => {
+      const idk = ID_KEY_BY_VALUE[s.section_id];
+      const hk = HEADING_KEY_BY_VALUE[s.heading];
+      const rf = s.section_id === "runtime-provenance-bindings"
+        ? " required_fragments: runtimeProvenanceBindingsRequiredFragments(),"
+        : "";
+      return `  { section_id: FINAL_OUTPUT_SECTION_IDS.${idk}, heading: FINAL_OUTPUT_SECTION_HEADINGS.${hk},${rf} },`;
+    })
     .join("\n");
-  const tail =
-    "const rf = runtimeProvenanceBindingsRequiredFragments();\nconst pp = promptPolicyAppendSectionIds();";
-  return [importLine, appendFns, `const bindings = [\n${bindingRows}\n];`, tail].join("\n");
+  return [importLine, appendFns, policy, `const bindings = [\n${bindingRows}\n];`].join("\n");
 }
 
 const GOOD_RUNTIME_SOURCE = buildRuntimeSource();
@@ -57,6 +64,7 @@ function evaluate(overrides: Partial<FinalOutputSectionsParityInputs>): string[]
     modulePromptPolicyIds: PROMPT_POLICY_APPEND_SECTION_IDS,
     moduleHeadings: MODULE_HEADINGS,
     moduleIdMap: FINAL_OUTPUT_SECTION_IDS,
+    moduleHeadingMap: FINAL_OUTPUT_SECTION_HEADINGS,
     bindingsOrder: provenanceBindingSectionIds(),
     registryNode: matchedRegistryNode(),
     runtimeSource: GOOD_RUNTIME_SOURCE,
@@ -155,6 +163,7 @@ describe("final-output-sections parity guard (G9 / INV-SCHEMA-1)", () => {
       modulePromptPolicyIds: PROMPT_POLICY_APPEND_SECTION_IDS,
       moduleHeadings: dupSections.map((s) => s.heading),
       moduleIdMap: FINAL_OUTPUT_SECTION_IDS,
+      moduleHeadingMap: FINAL_OUTPUT_SECTION_HEADINGS,
       bindingsOrder: provenanceBindingSectionIds(),
       registryNode: dupSections.map((s) => ({ ...s })),
       runtimeSource: GOOD_RUNTIME_SOURCE,
@@ -172,9 +181,48 @@ describe("final-output-sections parity guard (G9 / INV-SCHEMA-1)", () => {
     expect(evaluate({ runtimeSource: src }).some((m) => m.includes("must import promptPolicyAppendSectionIds"))).toBe(true);
   });
 
-  it("fails when run.ts does not derive required_fragments from the module", () => {
-    const src = GOOD_RUNTIME_SOURCE.replace("const rf = runtimeProvenanceBindingsRequiredFragments();", "");
-    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("runtimeProvenanceBindingsRequiredFragments"))).toBe(true);
+  it("fails when run.ts re-inlines required_fragments instead of deriving it at the field (codex G2)", () => {
+    const src = GOOD_RUNTIME_SOURCE.replace(
+      " required_fragments: runtimeProvenanceBindingsRequiredFragments(),",
+      ' required_fragments: ["seed-answerability","artifact-truth","claim-projection","runtime-artifact-truth-footer"],',
+    );
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("required_fragments = runtimeProvenanceBindingsRequiredFragments()"))).toBe(true);
+  });
+
+  it("fails when run.ts re-inlines the prompt-policy list instead of the module accessor (codex G3)", () => {
+    const src = GOOD_RUNTIME_SOURCE.replace(
+      "deterministic_runtime_append_sections: promptPolicyAppendSectionIds()",
+      'deterministic_runtime_append_sections: ["seed_answerability","claim_projection","artifact_truth","provenance_footer","provenance_bindings"]',
+    );
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("deterministic_runtime_append_sections = promptPolicyAppendSectionIds()"))).toBe(true);
+  });
+
+  it("ANTI-FOOLING: fails when a known heading is re-inlined as a SINGLE-quoted literal (codex G1)", () => {
+    const src = GOOD_RUNTIME_SOURCE + "\nconst inlined = '## Artifact Truth';";
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("heading literal(s) not of the module form"))).toBe(true);
+  });
+
+  it("ANTI-FOOLING: fails when an emitter uses the WRONG valid module heading template (key swap, codex G6)", () => {
+    const src = GOOD_RUNTIME_SOURCE.replace(
+      "`## ${FINAL_OUTPUT_SECTION_HEADINGS.artifactTruth}`",
+      "`## ${FINAL_OUTPUT_SECTION_HEADINGS.claimProjection}`",
+    );
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("emitter heading keys"))).toBe(true);
+  });
+
+  it("fails when a binding row's heading drifts from the module bindings order (codex G4)", () => {
+    // Swap the first two binding-row headings (section_ids stay in order).
+    const src = GOOD_RUNTIME_SOURCE
+      .replace("heading: FINAL_OUTPUT_SECTION_HEADINGS.seedAnswerability,", "heading: __TMPH__,")
+      .replace("heading: FINAL_OUTPUT_SECTION_HEADINGS.artifactTruth,", "heading: FINAL_OUTPUT_SECTION_HEADINGS.seedAnswerability,")
+      .replace("heading: __TMPH__,", "heading: FINAL_OUTPUT_SECTION_HEADINGS.artifactTruth,");
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("binding row heading order"))).toBe(true);
+  });
+
+  it("fails when the registry repeats a section_id row (codex G5)", () => {
+    const node = matchedRegistryNode();
+    node.push({ ...node[0]! });
+    expect(evaluate({ registryNode: node }).some((m) => m.includes("registry has duplicate section_id"))).toBe(true);
   });
 
   it("ANTI-FOOLING: fails when run.ts re-inlines a known heading as a literal", () => {
@@ -192,13 +240,13 @@ describe("final-output-sections parity guard (G9 / INV-SCHEMA-1)", () => {
     expect(evaluate({ runtimeSource: src }).some((m) => m.includes("appendFinalOutput* emitter"))).toBe(true);
   });
 
-  it("fails when the run.ts provenance-binding row order drifts from the module bindings order", () => {
-    // Swap the first two binding rows (seed-answerability <-> artifact-truth).
+  it("fails when the run.ts provenance-binding section_id order drifts from the module bindings order", () => {
+    // Swap the first two binding rows' section_ids (seed-answerability <-> artifact-truth).
     const src = GOOD_RUNTIME_SOURCE
-      .replace("FINAL_OUTPUT_SECTION_IDS.seedAnswerability", "__TMP__")
-      .replace("FINAL_OUTPUT_SECTION_IDS.artifactTruth", "FINAL_OUTPUT_SECTION_IDS.seedAnswerability")
-      .replace("__TMP__", "FINAL_OUTPUT_SECTION_IDS.artifactTruth");
-    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("provenance-binding row order"))).toBe(true);
+      .replace("section_id: FINAL_OUTPUT_SECTION_IDS.seedAnswerability", "section_id: __TMP__")
+      .replace("section_id: FINAL_OUTPUT_SECTION_IDS.artifactTruth", "section_id: FINAL_OUTPUT_SECTION_IDS.seedAnswerability")
+      .replace("section_id: __TMP__", "section_id: FINAL_OUTPUT_SECTION_IDS.artifactTruth");
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("section_id order"))).toBe(true);
   });
 });
 

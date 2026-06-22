@@ -99,20 +99,28 @@ export interface FinalOutputSectionsParityInputs {
   moduleHeadings: readonly string[];
   /** Map of FINAL_OUTPUT_SECTION_IDS key -> section_id (for the run.ts bindings-order check). */
   moduleIdMap: Record<string, string>;
+  /** Map of FINAL_OUTPUT_SECTION_HEADINGS key -> heading (for emitter/binding key checks). */
+  moduleHeadingMap: Record<string, string>;
   /** Bound section_ids in the canonical bindings order (artifact before claim). */
   bindingsOrder: readonly string[];
   registryNode: unknown;
   runtimeSource: string;
 }
 
-/** The ONLY allowed run.ts heading form: a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template. */
-const ALLOWED_HEADING_RE = /`## \$\{FINAL_OUTPUT_SECTION_HEADINGS\.\w+\}`/g;
-/** Any markdown `## ` heading opened by a string or template literal. */
-const ANY_HEADING_LITERAL_RE = /[`"]## /g;
+/** The ONLY allowed run.ts heading form: a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template;
+ * captures the heading key so the guard can assert each section heading is emitted exactly once. */
+const ALLOWED_HEADING_RE = /`## \$\{FINAL_OUTPUT_SECTION_HEADINGS\.(\w+)\}`/g;
+/** Any markdown `## ` heading opened by a string OR template literal (single/double/backtick). */
+const ANY_HEADING_LITERAL_RE = /['`"]## /g;
 /** A run.ts provenance-binding row's section_id reference, in source order. */
 const BINDING_SECTION_ID_RE = /section_id:\s*FINAL_OUTPUT_SECTION_IDS\.(\w+)/g;
+/** A run.ts provenance-binding row's heading reference, in source order. */
+const BINDING_HEADING_RE = /heading:\s*FINAL_OUTPUT_SECTION_HEADINGS\.(\w+)/g;
 /** A final-output append emitter function definition. */
 const APPEND_FN_DEF_RE = /function\s+appendFinalOutput\w+\s*\(/g;
+/** The prompt-policy / required-fragments fields must be assigned the module accessor directly. */
+const PROMPT_POLICY_FIELD_RE = /deterministic_runtime_append_sections:\s*promptPolicyAppendSectionIds\s*\(/;
+const REQUIRED_FRAGMENTS_FIELD_RE = /required_fragments:\s*runtimeProvenanceBindingsRequiredFragments\s*\(/;
 
 /** Pure parity comparison. Returns a (possibly empty) list of drift messages. */
 export function evaluateFinalOutputSectionsParity(
@@ -127,6 +135,18 @@ export function evaluateFinalOutputSectionsParity(
   if (registryRows.some((r) => r === null || typeof r !== "object")) {
     return ["final_output_append_sections rows must all be objects"];
   }
+
+  // Reject duplicate section_id rows BEFORE building maps (maps would collapse them and the
+  // set-diffs would pass while final_output_append_sections silently grew a duplicate).
+  const moduleIds = inputs.moduleSections.map((s) => s.section_id);
+  const registryIds = registryRows.map((r) => String(r.section_id));
+  const dup = (ids: string[]): string[] => {
+    const counts = new Map<string, number>();
+    for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+    return [...counts.entries()].filter(([, c]) => c > 1).map(([id]) => id);
+  };
+  if (dup(moduleIds).length) errors.push(`module has duplicate section_id(s): ${dup(moduleIds).join(", ")}`);
+  if (dup(registryIds).length) errors.push(`registry has duplicate section_id(s): ${dup(registryIds).join(", ")}`);
 
   const moduleById = new Map(inputs.moduleSections.map((s) => [s.section_id, s]));
   const registryById = new Map(
@@ -190,27 +210,40 @@ export function evaluateFinalOutputSectionsParity(
   if (headingConsistency.onlyInFirst.length) errors.push(`heading constant(s) with no descriptor row: ${headingConsistency.onlyInFirst.join(", ")}`);
   if (headingConsistency.onlyInSecond.length) errors.push(`descriptor heading(s) with no FINAL_OUTPUT_SECTION_HEADINGS constant: ${headingConsistency.onlyInSecond.join(", ")}`);
 
-  // (5) run.ts SSOT consumption.
+  // (5) run.ts SSOT consumption — imports present AND the prompt-policy / required-fragments
+  // fields are assigned the module accessor DIRECTLY (not just any call/import left in place).
   const imported = importedSymbols(importBlock(inputs.runtimeSource));
   for (const sym of REQUIRED_MODULE_IMPORTS) {
     if (!imported.has(sym)) {
       errors.push(`${RUNTIME_REF} must import ${sym} from ${MODULE_SPECIFIER}`);
     }
   }
-  if (!/runtimeProvenanceBindingsRequiredFragments\s*\(/.test(inputs.runtimeSource)) {
-    errors.push(`${RUNTIME_REF} must derive runtime-provenance-bindings required_fragments via runtimeProvenanceBindingsRequiredFragments()`);
+  if (!PROMPT_POLICY_FIELD_RE.test(inputs.runtimeSource)) {
+    errors.push(`${RUNTIME_REF} must assign deterministic_runtime_append_sections = promptPolicyAppendSectionIds() (not a re-inlined literal)`);
+  }
+  if (!REQUIRED_FRAGMENTS_FIELD_RE.test(inputs.runtimeSource)) {
+    errors.push(`${RUNTIME_REF} must assign required_fragments = runtimeProvenanceBindingsRequiredFragments() at the runtime-provenance-bindings row (not a re-inlined literal)`);
   }
 
-  // (6) completeness / anti-fooling — static source-region sweep. EVERY markdown `## ` heading
-  // literal in run.ts must be a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template, and the
-  // count of appendFinalOutput* emitter definitions must equal the section count — so a NEW (9th)
-  // section emitting an inline or non-module heading, or a new emitter fn, fails CI at the source
-  // (not just a re-inline of a known heading). (run.ts has no prose `## `, so the sweep is exact.)
+  // (6) completeness / anti-fooling — static source-region sweep:
+  //   (a) EVERY markdown `## ` heading literal (single/double/backtick) is the module template,
+  //   (b) the multiset of emitter heading KEYS equals the module heading keys exactly once each
+  //       (so a re-inline, a NEW heading, OR an emitter using the WRONG valid module template
+  //        fails), and
+  //   (c) the appendFinalOutput* emitter-definition count equals the section count.
+  // run.ts has no prose `## `, so the sweep is exact; a future legitimate `## ` prose line
+  // surfaces here and must be reconciled.
   const headingLiterals = inputs.runtimeSource.match(ANY_HEADING_LITERAL_RE) ?? [];
-  const allowedHeadings = inputs.runtimeSource.match(ALLOWED_HEADING_RE) ?? [];
-  if (headingLiterals.length !== allowedHeadings.length) {
+  const emitterHeadingKeys = [...inputs.runtimeSource.matchAll(ALLOWED_HEADING_RE)].map((m) => m[1]!);
+  if (headingLiterals.length !== emitterHeadingKeys.length) {
     errors.push(
-      `${RUNTIME_REF} has ${headingLiterals.length - allowedHeadings.length} final-output "## " heading literal(s) not of the module form \`## \${FINAL_OUTPUT_SECTION_HEADINGS.X}\` — every section heading must be emitted from the module (a new/re-inlined heading is not allowed)`,
+      `${RUNTIME_REF} has ${headingLiterals.length - emitterHeadingKeys.length} final-output "## " heading literal(s) not of the module form \`## \${FINAL_OUTPUT_SECTION_HEADINGS.X}\` — every section heading must be emitted from the module (a new/re-inlined heading is not allowed)`,
+    );
+  }
+  const headingKeyDiff = setDiff([...emitterHeadingKeys].sort(), Object.keys(inputs.moduleHeadingMap).sort());
+  if (headingKeyDiff.onlyInFirst.length || headingKeyDiff.onlyInSecond.length || dup(emitterHeadingKeys).length) {
+    errors.push(
+      `${RUNTIME_REF} emitter heading keys [${[...emitterHeadingKeys].sort().join(", ")}] != module heading keys (each exactly once) — an emitter emits the wrong, a duplicate, or a missing module heading`,
     );
   }
   const appendFnCount = (inputs.runtimeSource.match(APPEND_FN_DEF_RE) ?? []).length;
@@ -220,15 +253,27 @@ export function evaluateFinalOutputSectionsParity(
     );
   }
 
-  // (7) bindings-array order — the run.ts provenance-binding rows' section_id order must equal the
-  // module's canonical bindings order (load-bearing: it drives the rendered bindings section text
-  // and the persisted validation artifact's section_bindings + required_fragments dedup order).
-  const runtimeBindingOrder = [...inputs.runtimeSource.matchAll(BINDING_SECTION_ID_RE)]
+  // (7) bindings-array order — the run.ts provenance-binding rows' section_id AND heading order
+  // must equal the module's canonical bindings order (load-bearing: it drives the rendered
+  // bindings section text + the persisted validation artifact's section_bindings/required_fragments
+  // dedup order; and the gate keys on heading, so a binding's heading must also be module-sourced).
+  const runtimeBindingIds = [...inputs.runtimeSource.matchAll(BINDING_SECTION_ID_RE)]
     .map((m) => inputs.moduleIdMap[m[1]!])
     .filter((id): id is string => typeof id === "string");
-  if (JSON.stringify(runtimeBindingOrder) !== JSON.stringify([...inputs.bindingsOrder])) {
+  if (JSON.stringify(runtimeBindingIds) !== JSON.stringify([...inputs.bindingsOrder])) {
     errors.push(
-      `${RUNTIME_REF} provenance-binding row order [${runtimeBindingOrder.join(", ")}] != module bindings order [${inputs.bindingsOrder.join(", ")}]`,
+      `${RUNTIME_REF} provenance-binding row section_id order [${runtimeBindingIds.join(", ")}] != module bindings order [${inputs.bindingsOrder.join(", ")}]`,
+    );
+  }
+  const runtimeBindingHeadings = [...inputs.runtimeSource.matchAll(BINDING_HEADING_RE)]
+    .map((m) => inputs.moduleHeadingMap[m[1]!])
+    .filter((h): h is string => typeof h === "string");
+  const expectedBindingHeadings = inputs.bindingsOrder
+    .map((id) => inputs.moduleSections.find((s) => s.section_id === id)?.heading)
+    .filter((h): h is string => typeof h === "string");
+  if (JSON.stringify(runtimeBindingHeadings) !== JSON.stringify(expectedBindingHeadings)) {
+    errors.push(
+      `${RUNTIME_REF} provenance-binding row heading order != module bindings heading order (each binding heading must be FINAL_OUTPUT_SECTION_HEADINGS.<key> in bindings order)`,
     );
   }
 
@@ -259,6 +304,7 @@ async function main(): Promise<void> {
     modulePromptPolicyIds: PROMPT_POLICY_APPEND_SECTION_IDS,
     moduleHeadings: Object.values(FINAL_OUTPUT_SECTION_HEADINGS),
     moduleIdMap: FINAL_OUTPUT_SECTION_IDS,
+    moduleHeadingMap: FINAL_OUTPUT_SECTION_HEADINGS,
     bindingsOrder: provenanceBindingSectionIds(),
     registryNode,
     runtimeSource,
