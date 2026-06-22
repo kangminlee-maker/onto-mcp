@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
+  ReconstructActionableOntologyValidationArtifact,
   ReconstructActionabilityMatrixArtifact,
   ReconstructActionabilityMatrixValidationArtifact,
   ReconstructAnswerSupportJudgmentValidationArtifact,
@@ -28,6 +29,7 @@ import {
   validateMaturationBaseline,
   validateMaturationQuestionFrontier,
   validateMaturationConvergenceLedger,
+  validateActionableOntology,
   validateOntologyExpansion,
 } from "./maturation-validation.js";
 import {
@@ -630,6 +632,81 @@ function runMaturationConvergence(
   });
 }
 
+// Slice-17 actionable-ontology fixtures. All four recorded obligations have unconditional enforcers,
+// so a minimal type-valid projection records them; overrides flip one facet to bind one violation.
+function aoMatrixRow(id: string, overrides: Record<string, unknown> = {}): unknown {
+  return { matrix_row_id: id, member_readiness: "closed", ...overrides };
+}
+function aoProjectedRow(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    projection_row_id: "pr-1",
+    matrix_row_ref: "mr-1",
+    claim_scope: "excluded",
+    actionability_surface_ref: "static_surface",
+    maturity_dimension_ref: "structure",
+    purpose_element_ref: "pe-1",
+    materiality: "low",
+    maturity_level: "L4_validated_for_purpose",
+    member_readiness: "closed",
+    seed_ref_refs: ["s1"],
+    expansion_refs: [],
+    evidence_refs: [],
+    supporting_refs: [],
+    limitation_refs: [],
+    rationale: "fixture",
+    ...overrides,
+  };
+}
+function runActionableOntology(
+  overrides: {
+    claim?: string;
+    decisionState?: string;
+    finalPassStatus?: string;
+    includedRefs?: string[];
+    excludedRefs?: string[];
+    limitationRefs?: string[];
+    projectedRows?: unknown[];
+    matrixRows?: unknown[];
+  } = {},
+): ReconstructActionableOntologyValidationArtifact {
+  const claim = overrides.claim ?? "actionable_limited";
+  return validateActionableOntology({
+    actionableOntology: {
+      session_id: "session-harvest",
+      actionability_claim: claim,
+      claim_scope: {
+        included_row_refs: overrides.includedRefs ?? [],
+        excluded_row_refs: overrides.excludedRefs ?? [],
+        limitation_refs: overrides.limitationRefs ?? [],
+        rationale: "fixture",
+      },
+      downstream_claims: {
+        query_access: "not_claimed",
+        visualization: "not_claimed",
+        graph_exploration: "not_claimed",
+      },
+      projected_rows: overrides.projectedRows ?? [],
+    } as never,
+    actionableOntologyRef: "actionable-ontology.yaml",
+    ontologySeedValidation: { validation_status: "valid" } as never,
+    actionabilityMatrix: {
+      session_id: "session-harvest",
+      rows: overrides.matrixRows ?? [],
+    } as never,
+    actionabilityMatrixValidation: { validation_status: "valid" } as never,
+    ontologyExpansion: { expansions: [] } as never,
+    ontologyExpansionValidation: { validation_status: "valid" } as never,
+    maturationContinuationDecision: {
+      decision_state: overrides.decisionState ?? claim,
+    } as never,
+    maturationContinuationDecisionValidation: { validation_status: "valid" } as never,
+    maturationConvergenceLedgerValidation: {
+      validation_status: "valid",
+      final_requestion_pass_status: overrides.finalPassStatus ?? "no_new_material_question",
+    } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -1171,7 +1248,131 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     ).toBe(false);
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 45 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateActionableOntology records its 4 instrumented obligations (slice 17: ready-gate + claim-vs-continuation + actionable-limited-scope + projected-row-trace) and NOT the 3 parked", () => {
+    const out = runActionableOntology();
+    for (const obligation of [
+      "reject_actionable_ready_until_final_requestion_convergence_is_proven",
+      "validate_actionability_claim_against_maturation_continuation_decision",
+      "validate_actionable_limited_claim_scope_rows",
+      "require_every_projected_row_to_trace_to_seed_expansion_or_limitation",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (Explore audit): blocker/high-question closure is delegated to the continuation-decision
+    // validator; per-surface static/kinetic/dynamic closure is not checked here (only per-row); proof
+    // authorities are blanket-rejected, not validated. See obligation-coverage-ledger.yaml notes.
+    for (const parked of [
+      "reject_actionable_ready_when_material_blocker_or_high_question_remains",
+      "require_static_kinetic_dynamic_surfaces_to_be_closed_or_limitation_excluded",
+      "validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (slice 17): each recorded obligation has a non-vacuous, NON-OVERLAPPING binding —
+  // a breaching input trips a DISTINCT violation message, a clean variant clears it. (maturation-validation.test.ts also binds these.)
+  it("ENFORCEMENT BINDING (reject_actionable_ready_until_final_requestion_convergence_is_proven): actionable_ready with unproven final re-question convergence trips conflicting_state; a proven pass clears it", () => {
+    const breaching = runActionableOntology({
+      claim: "actionable_ready",
+      decisionState: "actionable_ready",
+      finalPassStatus: "material_question_found",
+    });
+    expect(
+      breaching.violations.some((v) =>
+        v.code === "conflicting_state" &&
+        /actionable_ready projection requires final re-question convergence/.test(v.message)
+      ),
+    ).toBe(true);
+    const clean = runActionableOntology({
+      claim: "actionable_ready",
+      decisionState: "actionable_ready",
+      finalPassStatus: "no_new_material_question",
+    });
+    expect(
+      clean.violations.some((v) =>
+        v.code === "conflicting_state" &&
+        /actionable_ready projection requires final re-question convergence/.test(v.message)
+      ),
+    ).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_actionability_claim_against_maturation_continuation_decision): a claim not matching the decision state trips conflicting_state; a matching claim clears it", () => {
+    const breaching = runActionableOntology({
+      claim: "actionable_ready",
+      decisionState: "actionable_limited",
+    });
+    expect(
+      breaching.violations.some((v) =>
+        v.code === "conflicting_state" &&
+        /claim must match an actionable continuation decision state/.test(v.message)
+      ),
+    ).toBe(true);
+    const clean = runActionableOntology({
+      claim: "actionable_limited",
+      decisionState: "actionable_limited",
+    });
+    expect(
+      clean.violations.some((v) =>
+        v.code === "conflicting_state" &&
+        /claim must match an actionable continuation decision state/.test(v.message)
+      ),
+    ).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_actionable_limited_claim_scope_rows): actionable_limited with no included row ref trips missing_required_ref; an included ref clears it", () => {
+    const breaching = runActionableOntology({
+      claim: "actionable_limited",
+      includedRefs: [],
+    });
+    expect(
+      breaching.violations.some((v) =>
+        v.code === "missing_required_ref" &&
+        /actionable_limited projection requires at least one included row ref/.test(v.message)
+      ),
+    ).toBe(true);
+    const clean = runActionableOntology({
+      claim: "actionable_limited",
+      includedRefs: ["mr-1"],
+      limitationRefs: ["lim-1"],
+      matrixRows: [aoMatrixRow("mr-1")],
+    });
+    expect(
+      clean.violations.some((v) =>
+        v.code === "missing_required_ref" &&
+        /actionable_limited projection requires at least one included row ref/.test(v.message)
+      ),
+    ).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (require_every_projected_row_to_trace_to_seed_expansion_or_limitation): a projected row with no seed/expansion/limitation refs trips missing_required_ref; a seed ref clears it", () => {
+    const breaching = runActionableOntology({
+      excludedRefs: ["mr-1"],
+      matrixRows: [aoMatrixRow("mr-1")],
+      projectedRows: [
+        aoProjectedRow({ seed_ref_refs: [], expansion_refs: [], limitation_refs: [] }),
+      ],
+    });
+    expect(
+      breaching.violations.some((v) =>
+        v.code === "missing_required_ref" &&
+        /each actionable ontology row must cite seed refs, expansion refs, or limitation refs/.test(v.message)
+      ),
+    ).toBe(true);
+    const clean = runActionableOntology({
+      excludedRefs: ["mr-1"],
+      matrixRows: [aoMatrixRow("mr-1")],
+      projectedRows: [aoProjectedRow({ seed_ref_refs: ["s1"] })],
+    });
+    expect(
+      clean.violations.some((v) =>
+        v.code === "missing_required_ref" &&
+        /each actionable ontology row must cite seed refs, expansion refs, or limitation refs/.test(v.message)
+      ),
+    ).toBe(false);
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 49 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1189,6 +1390,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const competencyAssessmentOut = runCompetencyQuestionAssessment();
     const materialAdmissionOut = runMaterialAdmissionLedger();
     const convergenceOut = runMaturationConvergence();
+    const actionableOntologyOut = runActionableOntology();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -1252,6 +1454,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "maturation-convergence-ledger-validator",
         obligation_id,
       })),
+      ...actionableOntologyOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "actionable-ontology-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -1268,6 +1474,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(45);
+    expect(harvestedSet.size).toBe(49);
   });
 });

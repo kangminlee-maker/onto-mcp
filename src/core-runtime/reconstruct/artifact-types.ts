@@ -2665,6 +2665,7 @@ export interface ReconstructActionableOntologyValidationArtifact {
   included_row_count: number;
   excluded_row_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 
