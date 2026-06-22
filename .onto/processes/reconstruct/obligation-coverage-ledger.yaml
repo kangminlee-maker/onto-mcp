@@ -102,38 +102,27 @@ pending:
     obligation_id: require_deferred_or_source_gap_disposition_to_cite_limitation_or_frontier
     coverage_status: pending
     tier: flat
+    note: "slice-20 audit (2026-06-23): NOT_FOUND — validateCandidateDisposition never inspects whether a deferred/source_gap disposition cites a limitation or frontier. It checks disposition_id against the registry and requires rationale+evidence, but has no deferred/source_gap-specific limitation/frontier-citation check. Owner: wire the deferred-disposition limitation/frontier requirement."
   - validator_id: candidate-disposition-validator
     obligation_id: require_exactly_one_disposition_for_each_salient_candidate
     coverage_status: pending
     tier: flat
+    note: "slice-20 audit (2026-06-23): AMBIGUOUS (salience-blind) — the validator enforces exactly-one disposition for EVERY candidate (duplicate_disposition + missing_candidate_disposition), a SUPERSET of the obligation's salient scope, but never reads the `salience` field (ReconstructCandidateInventoryCandidate.salience is a real high/medium/low field, and the contract scopes this to HIGH-salience candidates). Because the validator is salience-blind, it does not validate the obligation's scope discriminator; the named scope has no dedicated enforcer. Recording deferred pending a salience-aware check (or a contract decision to make the requirement salience-agnostic)."
   - validator_id: candidate-disposition-validator
     obligation_id: require_high_salience_non_rejected_candidates_to_carry_surface_and_purpose_element_refs
     coverage_status: pending
     tier: flat
-  - validator_id: candidate-disposition-validator
-    obligation_id: require_rationale_and_evidence_refs_for_each_disposition
-    coverage_status: pending
-    tier: flat
+    note: "slice-20 audit (2026-06-23): NOT_FOUND — the validator never inspects candidate salience, actionability_surface_refs, or purpose_element_refs, so it cannot require high-salience non-rejected candidates to carry surface+purpose-element refs."
   - validator_id: candidate-disposition-validator
     obligation_id: validate_candidate_actionability_surface_refs_against_registry_surface_values
     coverage_status: pending
     tier: flat
-  - validator_id: candidate-disposition-validator
-    obligation_id: validate_candidate_disposition_against_candidate_disposition_registry
-    coverage_status: pending
-    tier: flat
-  - validator_id: candidate-disposition-validator
-    obligation_id: validate_candidate_inventory_candidate_kind_against_candidate_kind_registry
-    coverage_status: pending
-    tier: flat
+    note: "slice-20 audit (2026-06-23): NOT_FOUND — the validator never inspects actionability_surface_refs nor validates them against any registry surface catalog. (registryCandidateKindIds/registryCandidateDispositionIds are read, but no surface-value catalog is consulted.)"
   - validator_id: candidate-disposition-validator
     obligation_id: validate_candidate_purpose_element_refs_against_selected_purpose_frame
     coverage_status: pending
     tier: activation_gated_dormant
-  - validator_id: candidate-disposition-validator
-    obligation_id: validate_promoted_candidate_target_seed_refs_are_declared_for_promoted_dispositions
-    coverage_status: pending
-    tier: flat
+    note: "slice-20 audit (2026-06-23): NOT_FOUND + activation_gated_dormant — registry marks this conditional on activation_condition source_purpose_candidate_runtime_is_implemented, and validateCandidateDisposition takes no purpose-frame input (no source-purpose-candidates-validation arg), so it never validates purpose_element_refs against a selected purpose frame. Stays dormant until that runtime + input wiring exist."
   - validator_id: claim-projection-validator
     obligation_id: reject_unwired_material_kind_support_levels_above_profile_supported
     coverage_status: pending

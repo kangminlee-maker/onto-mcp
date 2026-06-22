@@ -119,3 +119,11 @@ recorded:
     obligation_id: consume_all_active_validation_gate_statuses_emitted_by_runtime
   - validator_id: handoff-decision-validator
     obligation_id: project_missing_active_validation_artifact_as_blocked
+  - validator_id: candidate-disposition-validator
+    obligation_id: validate_candidate_inventory_candidate_kind_against_candidate_kind_registry
+  - validator_id: candidate-disposition-validator
+    obligation_id: validate_candidate_disposition_against_candidate_disposition_registry
+  - validator_id: candidate-disposition-validator
+    obligation_id: require_rationale_and_evidence_refs_for_each_disposition
+  - validator_id: candidate-disposition-validator
+    obligation_id: validate_promoted_candidate_target_seed_refs_are_declared_for_promoted_dispositions

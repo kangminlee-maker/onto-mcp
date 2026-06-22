@@ -6,6 +6,7 @@ import {
   loadReconstructContractRegistry,
   type ReconstructContractRegistry,
 } from "./contract-registry.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructOntologySeedValidationArtifact,
   ReconstructOntologySeedValidationViolation,
@@ -281,6 +282,26 @@ export function validateCandidateDisposition(args: {
 }): ReconstructCandidateDispositionValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   const violations: ReconstructCandidateDispositionValidationViolation[] = [];
+  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1): record that control reached the
+  // per-candidate / per-disposition enforcement loops below. Unconditional, before any per-row
+  // guard so a zero-candidate/zero-disposition input still stamps. Only the four obligations with a
+  // distinct, name-matching enforcer are recorded; salience-scoped and surface/purpose/limitation/
+  // frontier obligations are PARKED (this validator is salience-blind and takes no purpose-frame or
+  // surface input) — see obligation-coverage-ledger.yaml.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_candidate_inventory_candidate_kind_against_candidate_kind_registry",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_candidate_disposition_against_candidate_disposition_registry",
+  );
+  assertObligation(assertedObligationIds, "require_rationale_and_evidence_refs_for_each_disposition");
+  assertObligation(
+    assertedObligationIds,
+    "validate_promoted_candidate_target_seed_refs_are_declared_for_promoted_dispositions",
+  );
   const addShapeViolation = (_code: "schema_shape_invalid", message: string) => {
     violations.push(candidateValidationViolation({
       code: "schema_shape_invalid",
@@ -503,6 +524,7 @@ export function validateCandidateDisposition(args: {
     validation_results: violations.length === 0
       ? ["candidate_disposition_valid"]
       : ["candidate_disposition_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

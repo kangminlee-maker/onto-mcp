@@ -17,6 +17,7 @@ import type {
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructOntologyExpansionValidationArtifact,
+  ReconstructCandidateDispositionValidationArtifact,
   ReconstructHandoffDecisionValidationArtifact,
   ReconstructPurposeConfirmationValidationArtifact,
   ReconstructRegistryVerificationEvidenceValidationArtifact,
@@ -47,6 +48,7 @@ import { validatePurposeConfirmation } from "./purpose-authority-validation.js";
 import { validateMaterialAdmissionLedger } from "./material-admission-validation.js";
 import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
 import { validateHandoffDecision } from "./terminal-validation.js";
+import { validateCandidateDisposition } from "./ontology-seed-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -781,6 +783,29 @@ function runHandoffDecision(): ReconstructHandoffDecisionValidationArtifact {
     contractRegistry: {
       validation_gate_catalog: [],
       required_when_predicate_catalog: [],
+    } as never,
+  });
+}
+
+// candidate-disposition-validator (slice 20, ontology-seed-validation.ts). Structural validator; the
+// recorder is stamped before the per-candidate/per-disposition loops, so empty inventory+disposition
+// reaches it. The validation artifact carries no validator_id field, so attribute by name. Only the
+// four obligations with a distinct, name-matching enforcer are recorded; the salience-scoped ones and
+// the surface/purpose-frame/limitation-frontier ones are PARKED (the validator is salience-blind and
+// takes no purpose-frame/surface input).
+function runCandidateDisposition(): ReconstructCandidateDispositionValidationArtifact {
+  return validateCandidateDisposition({
+    candidateInventory: { candidates: [] },
+    candidateDisposition: { dispositions: [] },
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
+    registry: {
+      candidate_kind_registry: [],
+      candidate_disposition_registry: [],
     } as never,
   });
 }
@@ -1535,7 +1560,46 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // neither launders the other. Building the registry/predicate machinery inline here would duplicate
   // that fixture; the recorder-reached stamp is proven above and by the flip-test.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 58 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateCandidateDisposition records its 4 instrumented obligations (slice 20: kind-registry + disposition-registry + rationale+evidence + promoted-target) and NOT the 5 parked", () => {
+    const out = runCandidateDisposition();
+    for (const obligation of [
+      "validate_candidate_inventory_candidate_kind_against_candidate_kind_registry",
+      "validate_candidate_disposition_against_candidate_disposition_registry",
+      "require_rationale_and_evidence_refs_for_each_disposition",
+      "validate_promoted_candidate_target_seed_refs_are_declared_for_promoted_dispositions",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (Explore audit). FOUR name concepts the validator never inspects (NOT_FOUND): a
+    // deferred/source_gap disposition citing a limitation/frontier; high-salience candidates carrying
+    // surface+purpose_element refs; actionability_surface_refs vs a registry surface catalog; and
+    // purpose_element_refs vs a selected purpose frame (the last is registry-marked
+    // activation_gated_dormant and the validator takes no purpose-frame input). ONE is salience-blind:
+    // require_exactly_one_disposition_for_each_salient_candidate — the validator enforces exactly-one
+    // for EVERY candidate (duplicate_disposition + missing_candidate_disposition), a superset of the
+    // obligation's salient scope, but never reads the `salience` field, so it does not validate the
+    // obligation's scope discriminator. See obligation-coverage-ledger.yaml notes.
+    for (const parked of [
+      "require_deferred_or_source_gap_disposition_to_cite_limitation_or_frontier",
+      "require_exactly_one_disposition_for_each_salient_candidate",
+      "require_high_salience_non_rejected_candidates_to_carry_surface_and_purpose_element_refs",
+      "validate_candidate_actionability_surface_refs_against_registry_surface_values",
+      "validate_candidate_purpose_element_refs_against_selected_purpose_frame",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (slice 20): each recorded obligation has a non-vacuous, NON-OVERLAPPING enforcement
+  // binding in ontology-seed-validation.test.ts — invalid_candidate_kind (kind not in registry),
+  // invalid_disposition (disposition_id not in registry), rationale_missing + evidence_ref_missing
+  // (each disposition needs rationale and evidence), and promoted_target_missing (a promoted_to_seed_
+  // layer disposition with no target_seed_refs). The promoted binding uses a DEDICATED code distinct
+  // from target_ref_missing (which the broader represented_as_* path uses), so it is scope-specific.
+  // Building the registry/inventory fixtures inline here would duplicate that file; the recorder-
+  // reached stamp is proven above and by the flip-test.
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 62 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1556,6 +1620,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const actionableOntologyOut = runActionableOntology();
     const registryVerificationOut = runRegistryVerificationEvidence();
     const handoffDecisionOut = runHandoffDecision();
+    const candidateDispositionOut = runCandidateDisposition();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -1631,6 +1696,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "handoff-decision-validator",
         obligation_id,
       })),
+      ...candidateDispositionOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "candidate-disposition-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -1647,6 +1716,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(58);
+    expect(harvestedSet.size).toBe(62);
   });
 });
