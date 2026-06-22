@@ -550,10 +550,10 @@ pending:
     tier: flat
     note: "slice-6 audit (2026-06-22): baseline_row_refs ARE resolved against the maturation baseline (unknown_id) and purpose_element preservation is checked, but the named SEED and LIMITATION authority clauses are NOT enforced — seed_ref_refs are not accessed and limitation_refs are only checked for non-emptiness (as part of the closure obligation), never resolved against an authority. Partial; recording deferred."
   - validator_id: ontology-expansion-validator
-    obligation_id: require_concept_economy_rationale_when_surface_increases
+    obligation_id: prevent_in_place_seed_authority_rewrite
     coverage_status: pending
     tier: flat
-    note: "slice-9 audit (2026-06-22): the rationale-when-surface-increases check IS present (missing_required_ref when rationale.trim().length < 24) but is gated on operation === 'add'. concept_economy_effect === 'increases_surface' is permitted on 'refine' too (artifact-types.ts), and refine is treated as a surface-modifying op elsewhere in the validator (the add/refine evidence-preservation branches), so a refine expansion that increases surface with an empty rationale escapes — name broader than code. Recording deferred pending the refine case or name reconciliation."
+    note: "slice-9 audit (2026-06-22, codex PR #119 finding): the contract clause is unscoped ('no expansion rewrites seed authority in place'), but the check only rejects refs whose path.basename(ref) === 'ontology-seed.yaml' (seed_authority_rewrite_attempt). target_seed_or_ontology_refs are LLM-authored free strings with no normalization (run.ts stringArray), so an anchored ref such as 'ontology-seed.yaml#semantic_layer/object-new' or 'ontology-seed.yaml:semantic_layer' has a different basename and bypasses the check while still naming the seed authority in place — narrower than the contract. Recording deferred pending a broadened seed-target match + enforcement binding (a dedicated hardening change, out of Track A recording scope)."
   - validator_id: ontology-expansion-validator
     obligation_id: validate_expansion_evidence_refs_against_valid_answer_support_ledger_or_seed_authority
     coverage_status: pending

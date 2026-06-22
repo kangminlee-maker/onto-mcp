@@ -64,4 +64,4 @@ recorded:
   - validator_id: ontology-expansion-validator
     obligation_id: validate_expansion_answer_claim_refs
   - validator_id: ontology-expansion-validator
-    obligation_id: prevent_in_place_seed_authority_rewrite
+    obligation_id: require_concept_economy_rationale_when_surface_increases

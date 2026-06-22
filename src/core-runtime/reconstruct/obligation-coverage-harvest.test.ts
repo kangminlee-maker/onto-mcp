@@ -300,10 +300,14 @@ function runAnswerSupportJudgment(): ReconstructAnswerSupportJudgmentValidationA
 
 // ontology-expansion-validator (slice 9, maturation-validation.ts). Minimal inputs reach the
 // recorders (placed before the per-expansion loop). The validation artifact carries no validator_id
-// field, so attribute by name. Only the two cleanly name-matching obligations are recorded; the
-// concept-economy-rationale obligation (add-only gated) and the evidence-refs obligation (proxy
-// resolution against cited answer claims, not the answer-support-ledger/seed authority) stay parked.
-function runOntologyExpansion(): ReconstructOntologyExpansionValidationArtifact {
+// field, so attribute by name. Only the two obligations whose enforcement matches the authoritative
+// contract are recorded: validate_expansion_answer_claim_refs and (contract scopes it to
+// `operation: add` with increases_surface) require_concept_economy_rationale_when_surface_increases.
+// prevent_in_place_seed_authority_rewrite (basename-exact check misses anchored seed refs) and the
+// evidence-refs obligation (proxy resolution against cited answer claims) stay parked.
+function runOntologyExpansion(
+  overrides: { expansions?: unknown[]; answerClaims?: unknown[] } = {},
+): ReconstructOntologyExpansionValidationArtifact {
   return validateOntologyExpansion({
     ontologyExpansion: {
       schema_version: "1",
@@ -311,18 +315,40 @@ function runOntologyExpansion(): ReconstructOntologyExpansionValidationArtifact 
       created_at: now,
       answer_claims_ref: null,
       source_seed_ref: null,
-      expansions: [],
+      expansions: overrides.expansions ?? [],
       directive_author: { owner: "host_llm", author_id: "a" },
-    },
+    } as never,
     maturationAnswerClaims: {
       schema_version: "1",
       session_id: "session-harvest",
       created_at: now,
-      answer_claims: [],
+      answer_claims: overrides.answerClaims ?? [],
     } as never,
     maturationAnswerClaimsValidation: { validation_status: "valid" } as never,
   });
 }
+
+// Enforcement-binding fixtures (anti-laundering): a breaching expansion must trip the real violation,
+// and a clean variant must clear it, so the recorded stamp cannot survive deletion of the enforcer.
+const surfaceIncreaseExpansion = (rationale: string) => ({
+  expansion_id: "expansion-add",
+  operation: "add",
+  target_surface_refs: ["static_surface"],
+  target_dimension_refs: ["structure"],
+  target_seed_or_ontology_refs: ["semantic_layer.object_types/object-new"],
+  purpose_element_refs: ["purpose-element"],
+  answer_claim_refs: ["answer-claim-1"],
+  evidence_refs: [],
+  concept_economy_effect: "increases_surface",
+  rationale,
+  limitation_refs: [],
+});
+const resolvingAnswerClaim = {
+  answer_claim_id: "answer-claim-1",
+  question_id: "question-1",
+  supporting_evidence_refs: [],
+  evidence_cluster_refs: [],
+};
 
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
@@ -475,23 +501,53 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     }
   });
 
-  it("validateOntologyExpansion records its 2 instrumented obligations (slice 9: answer-claim-refs + prevent-seed-rewrite) and NOT the parked two", () => {
+  it("validateOntologyExpansion records its 2 instrumented obligations (slice 9: answer-claim-refs + rationale-when-surface-increases) and NOT the parked two", () => {
     const out = runOntologyExpansion();
     for (const obligation of [
       "validate_expansion_answer_claim_refs",
-      "prevent_in_place_seed_authority_rewrite",
+      "require_concept_economy_rationale_when_surface_increases",
     ]) {
       expect(out.asserted_obligation_ids).toContain(obligation);
     }
-    // PARKED: rationale check is gated on operation === "add" (refine + increases_surface escapes);
-    // evidence_refs are resolved against the cited answer claims' carried supporting_evidence_refs,
-    // not the answer-support-ledger/seed authority the name names. Neither is recorded.
+    // PARKED: the seed-rewrite check is basename-exact ("ontology-seed.yaml"), narrower than the
+    // unscoped contract clause (anchored refs bypass it); evidence_refs are resolved against the
+    // cited answer claims' carried supporting_evidence_refs, not the answer-support-ledger/seed
+    // authority the name names. Neither is recorded.
     expect(out.asserted_obligation_ids).not.toContain(
-      "require_concept_economy_rationale_when_surface_increases",
+      "prevent_in_place_seed_authority_rewrite",
     );
     expect(out.asserted_obligation_ids).not.toContain(
       "validate_expansion_evidence_refs_against_valid_answer_support_ledger_or_seed_authority",
     );
+  });
+
+  // ANTI-LAUNDERING (slice 9, codex PR #119): each recorded ontology-expansion obligation has a
+  // non-vacuous enforcement binding — a breaching expansion trips the real violation and a clean
+  // variant clears it, so deleting the enforcer (not just the stamp) is observable.
+  it("ENFORCEMENT BINDING (validate_expansion_answer_claim_refs): an unresolved answer_claim_ref trips unknown_id; a resolving claim clears it", () => {
+    const breaching = runOntologyExpansion({
+      expansions: [surfaceIncreaseExpansion("a".repeat(40))],
+      answerClaims: [],
+    });
+    expect(breaching.violations.some((v) => v.code === "unknown_id")).toBe(true);
+    const clean = runOntologyExpansion({
+      expansions: [surfaceIncreaseExpansion("a".repeat(40))],
+      answerClaims: [resolvingAnswerClaim],
+    });
+    expect(clean.violations.some((v) => v.code === "unknown_id")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (require_concept_economy_rationale_when_surface_increases): an add+increases_surface row with a short rationale trips missing_required_ref; a sufficient rationale clears it", () => {
+    const breaching = runOntologyExpansion({
+      expansions: [surfaceIncreaseExpansion("too short")],
+      answerClaims: [resolvingAnswerClaim],
+    });
+    expect(breaching.violations.some((v) => v.code === "missing_required_ref")).toBe(true);
+    const clean = runOntologyExpansion({
+      expansions: [surfaceIncreaseExpansion("a".repeat(40))],
+      answerClaims: [resolvingAnswerClaim],
+    });
+    expect(clean.violations.some((v) => v.code === "missing_required_ref")).toBe(false);
   });
 
   it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 31 harvested (validator_id, obligation_id) pairs", async () => {
