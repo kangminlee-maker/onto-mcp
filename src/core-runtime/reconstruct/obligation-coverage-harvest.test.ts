@@ -12,6 +12,7 @@ import type {
   ReconstructMaturationBaselineArtifact,
   ReconstructMaturationBaselineValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
+  ReconstructOntologyExpansionValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
 } from "./artifact-types.js";
@@ -21,6 +22,7 @@ import {
   validateMaturationAnswerClaims,
   validateMaturationBaseline,
   validateMaturationQuestionFrontier,
+  validateOntologyExpansion,
 } from "./maturation-validation.js";
 import {
   validateSourceObservationDelta,
@@ -296,6 +298,32 @@ function runAnswerSupportJudgment(): ReconstructAnswerSupportJudgmentValidationA
   });
 }
 
+// ontology-expansion-validator (slice 9, maturation-validation.ts). Minimal inputs reach the
+// recorders (placed before the per-expansion loop). The validation artifact carries no validator_id
+// field, so attribute by name. Only the two cleanly name-matching obligations are recorded; the
+// concept-economy-rationale obligation (add-only gated) and the evidence-refs obligation (proxy
+// resolution against cited answer claims, not the answer-support-ledger/seed authority) stay parked.
+function runOntologyExpansion(): ReconstructOntologyExpansionValidationArtifact {
+  return validateOntologyExpansion({
+    ontologyExpansion: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      answer_claims_ref: null,
+      source_seed_ref: null,
+      expansions: [],
+      directive_author: { owner: "host_llm", author_id: "a" },
+    },
+    maturationAnswerClaims: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      answer_claims: [],
+    } as never,
+    maturationAnswerClaimsValidation: { validation_status: "valid" } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -447,7 +475,26 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     }
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 29 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateOntologyExpansion records its 2 instrumented obligations (slice 9: answer-claim-refs + prevent-seed-rewrite) and NOT the parked two", () => {
+    const out = runOntologyExpansion();
+    for (const obligation of [
+      "validate_expansion_answer_claim_refs",
+      "prevent_in_place_seed_authority_rewrite",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED: rationale check is gated on operation === "add" (refine + increases_surface escapes);
+    // evidence_refs are resolved against the cited answer claims' carried supporting_evidence_refs,
+    // not the answer-support-ledger/seed authority the name names. Neither is recorded.
+    expect(out.asserted_obligation_ids).not.toContain(
+      "require_concept_economy_rationale_when_surface_increases",
+    );
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_expansion_evidence_refs_against_valid_answer_support_ledger_or_seed_authority",
+    );
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 31 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -459,6 +506,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const questionFrontierOut = runQuestionFrontier();
     const claimRealizationOut = runClaimRealizationMap();
     const judgmentOut = runAnswerSupportJudgment();
+    const ontologyExpansionOut = runOntologyExpansion();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -498,6 +546,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "answer-support-judgment-validator",
         obligation_id,
       })),
+      ...ontologyExpansionOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "ontology-expansion-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -514,6 +566,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(29);
+    expect(harvestedSet.size).toBe(31);
   });
 });

@@ -3046,6 +3046,18 @@ export function validateOntologyExpansion(args: {
     defer: 0,
     reject: 0,
   };
+  // G(a) slice 9: record the two cleanly name-matching obligations before the per-expansion
+  // loop so they fire on a zero-expansion artifact. answer_claim_refs resolution (unknown_id /
+  // missing_required_ref) and in-place seed-authority-rewrite prevention (seed_authority_rewrite_attempt)
+  // each map to a distinct audited block below. PARKED (not recorded): the concept-economy
+  // rationale obligation (its check is gated on operation === "add", so a refine expansion with
+  // concept_economy_effect === "increases_surface" escapes — name broader than code) and the
+  // evidence-refs obligation (the code resolves evidence_refs against the cited answer claims'
+  // carried supporting_evidence_refs, not against the answer-support-ledger or seed authority the
+  // name names — proxy enforcement). See obligation-coverage-ledger.yaml notes. No laundering.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "validate_expansion_answer_claim_refs");
+  assertObligation(assertedObligationIds, "prevent_in_place_seed_authority_rewrite");
   if (artifact.session_id !== args.maturationAnswerClaims.session_id) {
     violations.push(violation({
       code: "session_id_mismatch",
@@ -3165,6 +3177,7 @@ export function validateOntologyExpansion(args: {
     validation_results: violations.length === 0
       ? ["ontology_expansion_valid"]
       : ["ontology_expansion_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

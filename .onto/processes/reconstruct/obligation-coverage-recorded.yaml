@@ -61,3 +61,7 @@ recorded:
     obligation_id: require_supports_enum_for_each_judgment
   - validator_id: answer-support-judgment-validator
     obligation_id: validate_judgment_refs_resolve_to_answer_support_ledger_clusters_and_evidence
+  - validator_id: ontology-expansion-validator
+    obligation_id: validate_expansion_answer_claim_refs
+  - validator_id: ontology-expansion-validator
+    obligation_id: prevent_in_place_seed_authority_rewrite
