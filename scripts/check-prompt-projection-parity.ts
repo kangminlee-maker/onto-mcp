@@ -36,6 +36,7 @@ import { parse as parseYaml } from "yaml";
 import {
   COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,
   COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+  COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
   COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,
   competencyQuestionAssessmentProjectionContract,
 } from "../src/core-runtime/reconstruct/competency-projection-contract.js";
@@ -120,12 +121,13 @@ type CompetencyParityArgs = {
   child: Record<string, unknown>;
   contract: Record<string, unknown>;
   runtimeBudgets: Record<string, number>;
+  runtimeVersion: string;
 };
 
 /** Field/budget parity for the competency_question_assessment projection child. */
 function evaluateCompetencyChildParity(args: CompetencyParityArgs): string[] {
   const errors: string[] = [];
-  const { child, contract, runtimeBudgets } = args;
+  const { child, contract, runtimeBudgets, runtimeVersion } = args;
   const payloadKeys = Object.keys(contract);
   const batchingPolicy = contract.batching_policy;
   if (batchingPolicy === null || typeof batchingPolicy !== "object") {
@@ -182,6 +184,14 @@ function evaluateCompetencyChildParity(args: CompetencyParityArgs): string[] {
       );
     }
   }
+  // The contract OUTPUT's projection_contract_version must equal the exported version
+  // constant — a hardcoded/bumped contract-output version that diverges from the constant
+  // (which rotates the reuse hash) would otherwise pass silently.
+  if (contract.projection_contract_version !== runtimeVersion) {
+    errors.push(
+      `contract OUTPUT projection_contract_version = ${String(contract.projection_contract_version)} but exported constant = ${runtimeVersion} (module-internal drift)`,
+    );
+  }
   const declaredBudgets = child.budget_fields;
   if (!declaredBudgets || typeof declaredBudgets !== "object") {
     errors.push("registry budget_fields must be an object");
@@ -212,7 +222,11 @@ const PROJECTION_PARITY_CHECKS: Record<
   competency_question_assessment: evaluateCompetencyChildParity,
 };
 
-/** A standalone (word-boundary) reference to `symbol` appears in `source`. */
+/** A standalone (word-boundary) reference to `symbol` appears in `source`. This is a
+ * source-text tripwire, not a semantic analysis: it cannot tell a real identifier use
+ * from a mention in a comment/string. Distinguishing those needs an AST; the authoritative
+ * check that run.ts uses the real values is the behavioral test suite (run.test.ts pins the
+ * emitted prompt budget/version). This guard catches the common accidental-drift case. */
 function referencesSymbol(source: string, symbol: string): boolean {
   return new RegExp(`\\b${symbol}\\b`).test(source);
 }
@@ -255,6 +269,8 @@ export interface PromptProjectionParityInputs {
   contract: Record<string, unknown>;
   /** Runtime budget constants (the SSOT module's exported numbers). */
   runtimeBudgets: Record<string, number>;
+  /** Runtime projection version constant (the SSOT module's exported version). */
+  runtimeVersion: string;
   /** The registry parent node prompt_projection_contracts (all siblings). */
   promptProjectionContracts: unknown;
   /** run.ts source text (for the SSOT-consumption assertion). */
@@ -291,6 +307,7 @@ export function evaluatePromptProjectionParity(
         child: child as Record<string, unknown>,
         contract: inputs.contract,
         runtimeBudgets: inputs.runtimeBudgets,
+        runtimeVersion: inputs.runtimeVersion,
       }),
     );
   }
@@ -340,6 +357,7 @@ async function main(): Promise<void> {
       build_budget_reserve_chars:
         COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,
     },
+    runtimeVersion: COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
     promptProjectionContracts,
     runtimeSource,
   });

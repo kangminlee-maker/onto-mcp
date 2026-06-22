@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,
   COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,
+  COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
   COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,
   competencyQuestionAssessmentProjectionContract,
 } from "./competency-projection-contract.js";
@@ -50,6 +51,7 @@ function evaluate(overrides: Partial<PromptProjectionParityInputs>): string[] {
   return evaluatePromptProjectionParity({
     contract,
     runtimeBudgets,
+    runtimeVersion: COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
     promptProjectionContracts: matchedParent(),
     runtimeSource: GOOD_RUNTIME_SOURCE,
     ...overrides,
@@ -105,6 +107,16 @@ describe("prompt-projection parity guard (G8 / INV-SCHEMA-1)", () => {
     const driftedContract = { ...contract, prompt_char_limit: 49_000 };
     const errors = evaluate({ contract: driftedContract });
     expect(errors.some((message) => message.includes("module-internal drift"))).toBe(true);
+  });
+
+  it("fails when the contract OUTPUT projection_contract_version drifts from the exported constant", () => {
+    const driftedContract = { ...contract, projection_contract_version: "stale:v0" };
+    const errors = evaluate({ contract: driftedContract });
+    expect(
+      errors.some((message) =>
+        message.includes("projection_contract_version") && message.includes("module-internal drift")
+      ),
+    ).toBe(true);
   });
 
   it("fails on an unguarded extra key inside the projection child node", () => {
