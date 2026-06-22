@@ -65,3 +65,5 @@ recorded:
     obligation_id: validate_expansion_answer_claim_refs
   - validator_id: ontology-expansion-validator
     obligation_id: require_concept_economy_rationale_when_surface_increases
+  - validator_id: reconstruct-run-control-validator
+    obligation_id: validate_committed_write_transactions_have_artifact_refs_and_hashes

@@ -237,6 +237,7 @@ export interface ReconstructRunControlValidationArtifact {
   transaction_count: number;
   current_attempt_id: string | null;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructRunControlValidationViolation[];
 }
 
