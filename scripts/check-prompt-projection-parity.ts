@@ -97,15 +97,24 @@ function moduleImportBlock(runtimeSource: string): string | null {
   return match ? match[0]! : null;
 }
 
-function importedSymbols(importBlock: string | null): Set<string> {
-  if (!importBlock) return new Set();
+/** Imports from MODULE_SPECIFIER, split into canonical (`X`) vs aliased (`X as Y`)
+ * SOURCE names. A required symbol imported aliased is NOT bound under its own name, so
+ * the usage / redefinition checks below would be meaningless — the guard rejects it. */
+function parsedModuleImports(
+  importBlock: string | null,
+): { canonical: Set<string>; aliased: Set<string> } {
+  const canonical = new Set<string>();
+  const aliased = new Set<string>();
+  if (!importBlock) return { canonical, aliased };
   const inner = /\{([^}]*)\}/.exec(importBlock)?.[1] ?? "";
-  return new Set(
-    inner
-      .split(",")
-      .map((name) => name.trim().split(/\s+as\s+/)[0]!.trim())
-      .filter((name) => name.length > 0),
-  );
+  for (const raw of inner.split(",")) {
+    const entry = raw.trim();
+    if (entry.length === 0) continue;
+    const alias = /^(\S+)\s+as\s+\S+$/.exec(entry);
+    if (alias) aliased.add(alias[1]!);
+    else canonical.add(entry);
+  }
+  return { canonical, aliased };
 }
 
 type CompetencyParityArgs = {
@@ -208,13 +217,15 @@ const PROJECTION_PARITY_CHECKS: Record<
 function evaluateRunTsConsumption(runtimeSource: string): string[] {
   const errors: string[] = [];
   const importBlock = moduleImportBlock(runtimeSource);
-  const imported = importedSymbols(importBlock);
+  const { canonical, aliased } = parsedModuleImports(importBlock);
   // Strip the import block so "referenced outside the import" is meaningful.
   const sourceOutsideImport = importBlock
     ? runtimeSource.replace(importBlock, "")
     : runtimeSource;
   for (const symbol of REQUIRED_MODULE_IMPORTS) {
-    if (!imported.has(symbol)) {
+    if (aliased.has(symbol)) {
+      errors.push(`${RUNTIME_REF} aliases ${symbol} on import — import it under its own name so the SSOT-consumption guard stays meaningful`);
+    } else if (!canonical.has(symbol)) {
       errors.push(`${RUNTIME_REF} must import ${symbol} from ${MODULE_SPECIFIER}`);
     }
   }
@@ -222,7 +233,7 @@ function evaluateRunTsConsumption(runtimeSource: string): string[] {
   // the guard while the prompt builder drifts to a renamed local/literal). Full data-flow
   // is the behavioral test suite's job; this catches the unused-import bypass.
   for (const constant of MOVED_BUDGET_CONSTANTS) {
-    if (imported.has(constant) && !sourceOutsideImport.includes(constant)) {
+    if (canonical.has(constant) && !sourceOutsideImport.includes(constant)) {
       errors.push(`${RUNTIME_REF} imports ${constant} but never references it — the prompt builder may have drifted to a local/literal`);
     }
   }

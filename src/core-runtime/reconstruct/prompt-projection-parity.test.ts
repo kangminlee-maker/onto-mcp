@@ -166,6 +166,27 @@ describe("prompt-projection parity guard (G8 / INV-SCHEMA-1)", () => {
     ).toBe(true);
   });
 
+  it("fails when run.ts aliases a required import (binding is not the canonical name)", () => {
+    const errors = evaluate({
+      runtimeSource: [
+        "import {",
+        "  COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,",
+        "  COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,",
+        "  COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,",
+        "  competencyQuestionAssessmentProjectionContract as importedContract,",
+        '} from "./competency-projection-contract.js";',
+        "const policy = importedContract();",
+        "const budget = COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT - COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;",
+        "const excerpt = COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT;",
+      ].join("\n"),
+    });
+    expect(
+      errors.some((message) =>
+        message.includes("aliases competencyQuestionAssessmentProjectionContract on import")
+      ),
+    ).toBe(true);
+  });
+
   it("fails when run.ts does not import the extracted module at all", () => {
     const errors = evaluate({ runtimeSource: "const policy = {};" });
     expect(errors.some((message) => message.includes("must import"))).toBe(true);
