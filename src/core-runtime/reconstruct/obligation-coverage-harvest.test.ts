@@ -9,12 +9,18 @@ import type {
   ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationBaselineArtifact,
   ReconstructMaturationBaselineValidationArtifact,
+  ReconstructSourceObservationDeltaValidationArtifact,
+  ReconstructSourceObservationReentryValidationArtifact,
 } from "./artifact-types.js";
 import {
   validateActionabilityMatrix,
   validateMaturationAnswerClaims,
   validateMaturationBaseline,
 } from "./maturation-validation.js";
+import {
+  validateSourceObservationDelta,
+  validateSourceObservationReentry,
+} from "./source-observation-delta-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -174,6 +180,57 @@ function runAnswerClaims(): ReconstructMaturationAnswerClaimsValidationArtifact 
   });
 }
 
+// source-observation-delta-validator + source-observation-reentry-validator (slice 5, a NEW file).
+// Minimal inputs reach the recorders (placed before any per-row/per-observation loop). Neither
+// validation artifact carries a validator_id field, so attribute each by name. A minimal frontier
+// makes normalizeFrontierForDelta return null (pushing a violation, not throwing), so the delta fn
+// still returns its artifact.
+function runSourceObservationDelta(): ReconstructSourceObservationDeltaValidationArtifact {
+  return validateSourceObservationDelta({
+    delta: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      round_id: "round-1",
+      frontier_kind: "source_frontier",
+      frontier_ref: "frontier.yaml",
+      frontier_validation_ref: "frontier-validation.yaml",
+      source_observations_ref: "source-observations.yaml",
+      delta_rows: [],
+      accepted_frontier_ref_ids: [],
+      added_observation_ids: [],
+    } as never,
+    frontier: {} as never,
+    frontierValidation: {} as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
+  });
+}
+
+function runSourceObservationReentry(): ReconstructSourceObservationReentryValidationArtifact {
+  return validateSourceObservationReentry({
+    delta: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      round_id: "round-1",
+      source_observations_ref: "source-observations.yaml",
+      added_observation_ids: [],
+    } as never,
+    deltaValidation: { validation_status: "valid" } as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
+    sourceSafetyLedger: { safety_rows: [] } as never,
+    sourceSafetyLedgerValidation: { validation_status: "valid" } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -264,16 +321,46 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     );
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 12 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateSourceObservationDelta records its 4 instrumented obligations (slice 5: observation-refs / frontier-match / batch-lineage / source-kind-hash)", () => {
+    const out = runSourceObservationDelta();
+    for (const obligation of [
+      "validate_delta_observation_refs_exist_in_source_observations",
+      "validate_delta_rows_match_accepted_frontier_refs",
+      "validate_delta_rows_preserve_observation_batch_id_and_triggering_frontier_validation_ref",
+      "validate_delta_source_ref_material_kind_and_observation_hash_match_observed_content",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // validate_delta_frontier_kind_is_supported stays parked (kind-vs-artifact consistency only).
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_delta_frontier_kind_is_supported",
+    );
+  });
+
+  it("validateSourceObservationReentry records its 4 instrumented obligations (slice 5: delta-valid / obs-exists / safety-row / safety-valid)", () => {
+    const out = runSourceObservationReentry();
+    for (const obligation of [
+      "validate_delta_validation_passed_before_prompt_reentry",
+      "validate_each_delta_observation_exists_in_source_observations",
+      "validate_each_delta_observation_has_exact_prompt_context_source_safety_row",
+      "validate_source_safety_validation_passed_before_prompt_reentry",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 20 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
     // frontier reverse-link); it is a superset of the no-frontier current call for recording.
     const matrixCurrentOut = runMatrix({ current: true, frontier: true });
     const answerClaimsOut = runAnswerClaims();
+    const deltaOut = runSourceObservationDelta();
+    const reentryOut = runSourceObservationReentry();
 
     const harvested = [
-      // The baseline + answer-claims fns do not stamp a validator_id field; attribute them by name.
+      // The fns without a validator_id field are attributed by name.
       ...baselineOut.asserted_obligation_ids.map((obligation_id) => ({
         validator_id: "maturation-baseline-validator",
         obligation_id,
@@ -288,6 +375,14 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
       })),
       ...answerClaimsOut.asserted_obligation_ids.map((obligation_id) => ({
         validator_id: "maturation-answer-claims-validator",
+        obligation_id,
+      })),
+      ...deltaOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "source-observation-delta-validator",
+        obligation_id,
+      })),
+      ...reentryOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "source-observation-reentry-validator",
         obligation_id,
       })),
     ];
@@ -306,6 +401,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(12);
+    expect(harvestedSet.size).toBe(20);
   });
 });

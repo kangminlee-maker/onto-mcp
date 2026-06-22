@@ -865,22 +865,7 @@ pending:
     obligation_id: validate_delta_frontier_kind_is_supported
     coverage_status: pending
     tier: flat
-  - validator_id: source-observation-delta-validator
-    obligation_id: validate_delta_observation_refs_exist_in_source_observations
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-delta-validator
-    obligation_id: validate_delta_rows_match_accepted_frontier_refs
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-delta-validator
-    obligation_id: validate_delta_rows_preserve_observation_batch_id_and_triggering_frontier_validation_ref
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-delta-validator
-    obligation_id: validate_delta_source_ref_material_kind_and_observation_hash_match_observed_content
-    coverage_status: pending
-    tier: flat
+    note: "slice-5 audit (2026-06-22): normalizeFrontierForDelta validates kind-vs-artifact CONSISTENCY (frontier_kind_mismatch when the frontier artifact does not match the declared source_frontier / maturation_closure_frontier kind), but does NOT validate that the frontier_kind value itself is in a supported enumeration — an unsupported kind branches to the maturation_closure path without an explicit unsupported-kind violation. Recording deferred pending an explicit supported-kind check or name reconciliation."
   - validator_id: source-observation-lineage-index-validator
     obligation_id: require_each_lineage_row_delta_validation_to_be_valid
     coverage_status: pending
@@ -907,22 +892,6 @@ pending:
     tier: flat
   - validator_id: source-observation-lineage-index-validator
     obligation_id: validate_unique_session_level_lineage_row_ids
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-reentry-validator
-    obligation_id: validate_delta_validation_passed_before_prompt_reentry
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-reentry-validator
-    obligation_id: validate_each_delta_observation_exists_in_source_observations
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-reentry-validator
-    obligation_id: validate_each_delta_observation_has_exact_prompt_context_source_safety_row
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-reentry-validator
-    obligation_id: validate_source_safety_validation_passed_before_prompt_reentry
     coverage_status: pending
     tier: flat
   - validator_id: source-purpose-candidates-validator
