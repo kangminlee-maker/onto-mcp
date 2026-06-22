@@ -5,6 +5,7 @@ import { parse as parseYaml } from "yaml";
 import type {
   ReconstructActionabilityMatrixArtifact,
   ReconstructActionabilityMatrixValidationArtifact,
+  ReconstructAnswerSupportJudgmentValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructMaturationAnswerClaimsArtifact,
   ReconstructMaturationAnswerClaimsValidationArtifact,
@@ -16,6 +17,7 @@ import type {
 } from "./artifact-types.js";
 import {
   validateActionabilityMatrix,
+  validateAnswerSupportJudgment,
   validateMaturationAnswerClaims,
   validateMaturationBaseline,
   validateMaturationQuestionFrontier,
@@ -274,6 +276,26 @@ function runClaimRealizationMap(): ReconstructClaimRealizationMapValidationArtif
   });
 }
 
+// answer-support-judgment-validator (slice 8, maturation-validation.ts). Minimal inputs reach the
+// recorders (before the per-judgment loop). Attribute by name.
+function runAnswerSupportJudgment(): ReconstructAnswerSupportJudgmentValidationArtifact {
+  return validateAnswerSupportJudgment({
+    answerSupportJudgment: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      judgments: [],
+    } as never,
+    answerSupportLedger: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      evidence_clusters: [],
+    } as never,
+    answerSupportLedgerValidation: { validation_status: "valid" } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -413,7 +435,19 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     }
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 25 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateAnswerSupportJudgment records its 4 instrumented obligations (slice 8: convergent-coverage / rationale / supports-enum / ref-resolution)", () => {
+    const out = runAnswerSupportJudgment();
+    for (const obligation of [
+      "require_convergent_clusters_to_judge_every_cited_evidence_ref",
+      "require_rationale_ref_for_each_judgment",
+      "require_supports_enum_for_each_judgment",
+      "validate_judgment_refs_resolve_to_answer_support_ledger_clusters_and_evidence",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 29 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -424,6 +458,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const reentryOut = runSourceObservationReentry();
     const questionFrontierOut = runQuestionFrontier();
     const claimRealizationOut = runClaimRealizationMap();
+    const judgmentOut = runAnswerSupportJudgment();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -459,6 +494,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "claim-realization-map-validator",
         obligation_id,
       })),
+      ...judgmentOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "answer-support-judgment-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -475,6 +514,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(25);
+    expect(harvestedSet.size).toBe(29);
   });
 });

@@ -53,3 +53,11 @@ recorded:
     obligation_id: validate_realization_claim_ids_against_ontology_seed_claim_ids
   - validator_id: claim-realization-map-validator
     obligation_id: validate_realization_evidence_refs_against_source_observations
+  - validator_id: answer-support-judgment-validator
+    obligation_id: require_convergent_clusters_to_judge_every_cited_evidence_ref
+  - validator_id: answer-support-judgment-validator
+    obligation_id: require_rationale_ref_for_each_judgment
+  - validator_id: answer-support-judgment-validator
+    obligation_id: require_supports_enum_for_each_judgment
+  - validator_id: answer-support-judgment-validator
+    obligation_id: validate_judgment_refs_resolve_to_answer_support_ledger_clusters_and_evidence
