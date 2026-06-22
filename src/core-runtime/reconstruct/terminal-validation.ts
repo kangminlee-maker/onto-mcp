@@ -46,6 +46,7 @@ import {
   type ReconstructRequiredWhenPredicateRecord,
 } from "./contract-registry.js";
 import { validateReconstructRunGoverningSnapshot } from "./governing-snapshot.js";
+import { assertObligation } from "./obligation-assertion.js";
 
 function isoNow(): string {
   return new Date().toISOString();
@@ -1237,6 +1238,18 @@ export function validateHandoffDecision(args: {
     ]),
   );
   const violations: ReconstructPostSeedValidationViolation[] = [];
+  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1): record that control reached the
+  // active-gate consumption loop below. Unconditional, before the per-gate guard so a zero-gate
+  // input still stamps. Only the two ACTIVE-gate obligations are recorded — every PLANNED-gate
+  // obligation is parked because planned_validation_gate_catalog is never loaded into the runtime
+  // registry (projectGateStatusesOnce iterates validation_gate_catalog only); see
+  // obligation-coverage-ledger.yaml.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "consume_all_active_validation_gate_statuses_emitted_by_runtime",
+  );
+  assertObligation(assertedObligationIds, "project_missing_active_validation_artifact_as_blocked");
   for (const gate of gateProjection) {
     if (gate.applicability === "not_applicable" || gate.applicability === "self_validation_output") {
       continue;
@@ -1306,6 +1319,7 @@ export function validateHandoffDecision(args: {
     validation_results: violations.length === 0
       ? ["handoff_decision_valid"]
       : ["handoff_decision_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

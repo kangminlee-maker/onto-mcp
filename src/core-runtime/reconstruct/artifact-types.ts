@@ -3236,6 +3236,7 @@ export interface ReconstructHandoffDecisionValidationArtifact {
   material_failure_count: number;
   unresolved_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructPostSeedValidationViolation[];
 }
 
