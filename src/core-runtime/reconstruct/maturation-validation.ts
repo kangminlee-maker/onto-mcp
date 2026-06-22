@@ -1306,6 +1306,50 @@ export function validateActionabilityMatrix(args: {
     assertedObligationIds,
     "validate_matrix_row_ids_are_stable_and_baseline_row_refs_close",
   );
+  // G(a) slice 3: mode-ALIGNED recording. This fn serves two validators by mode
+  // (postFrontierInputsPresent → validator_id) and a shared enforcement region satisfies a
+  // DIFFERENTLY-NAMED obligation per mode, so each stamp's obligation_id is mode-conditional and is
+  // emitted ONLY when the mode (and, for the frontier-gated pair, the frontier branch) matches the
+  // registry's validator attribution — never minting a (validator_id, obligation_id) pair the
+  // registry lacks. Each recorded pair was audited to a distinct enforcement region (no laundering);
+  // obligations with no distinct enforcement stay parked with ledger audit notes (the current-mode
+  // expansion-alt is absent, the blocker/high-L4 rule is missing, "support" rules push no violation,
+  // the maturity-level rule is distributed across other regions, the preserve-seed rule is defensive).
+  if (postFrontierInputsPresent) {
+    // CURRENT mode → actionability-matrix-validator.
+    // identity preservation + maturity-upgrade citation region (conflicting_state identity /
+    // missing_required_ref upgrade, below).
+    assertObligation(
+      assertedObligationIds,
+      "validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas",
+    );
+    if (frontierAvailable) {
+      // the frontier reverse-link validation (the frontierAvailable `else` branch below).
+      assertObligation(
+        assertedObligationIds,
+        "validate_blocking_question_refs_against_validated_question_frontier",
+      );
+    }
+  } else {
+    // BASELINE mode → baseline-actionability-matrix-validator.
+    // strict baseline-row-ref resolution (unknown_id / conflicting_state on baseline_row_refs).
+    assertObligation(
+      assertedObligationIds,
+      "reject_matrix_rows_without_baseline_row_ref",
+    );
+    // baseline payload conservation (conflicting_state on identity / maturity-no-reduce).
+    assertObligation(
+      assertedObligationIds,
+      "validate_matrix_rows_derive_from_validated_baseline_without_maturation_deltas",
+    );
+    if (!frontierAvailable) {
+      // reject blocking refs before the frontier exists (the `!frontierAvailable` branch below).
+      assertObligation(
+        assertedObligationIds,
+        "reject_blocking_question_refs_before_question_frontier_authoring",
+      );
+    }
+  }
   for (const row of matrix.rows) {
     if (seen.has(row.matrix_row_id)) {
       violations.push(violation({

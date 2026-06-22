@@ -5,8 +5,18 @@
 recorded:
   - validator_id: actionability-matrix-validator
     obligation_id: validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
+  - validator_id: actionability-matrix-validator
+    obligation_id: validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas
+  - validator_id: actionability-matrix-validator
+    obligation_id: validate_blocking_question_refs_against_validated_question_frontier
   - validator_id: baseline-actionability-matrix-validator
     obligation_id: validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: reject_matrix_rows_without_baseline_row_ref
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: validate_matrix_rows_derive_from_validated_baseline_without_maturation_deltas
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: reject_blocking_question_refs_before_question_frontier_authoring
   - validator_id: maturation-baseline-validator
     obligation_id: validate_baseline_rows_cover_selected_purpose_frame_required_elements
   - validator_id: maturation-baseline-validator
