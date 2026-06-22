@@ -493,6 +493,21 @@ pending:
     coverage_status: pending
     tier: flat
     note: "slice-16 audit (2026-06-23): AMBIGUOUS — no name-matching positive-support enforcer. The closure-disposition enum has no 'authority_request' value (closest: deferred_external_authority), and the validator never rejects trace_audit_only or deferred rows from being counted as positive semantic support. The nearest check (conflicting_state ~3839) forbids trace_audit_only rows from citing expansions or closing blocker/high questions = contract bullet (d), a DIFFERENT rule. positiveSupportRefs (~3799) is computed and consumed only by the answered_no_semantic_change branch, not by a trace/authority exclusion gate. Recording deferred pending an explicit positive-support exclusion check (or name reconciliation against the trace_audit_only rule that IS enforced)."
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure
+    coverage_status: pending
+    tier: flat
+    note: "slice-16 audit (2026-06-23, codex PR #127): PARK — the recorded enforcer would be a weak proxy. Contract bullet (a) requires every blocker/high question to be closed, CARRIED FORWARD, or blocked WITH REFS. The code (missing_required_coverage, maturation-validation.ts ~3763) only checks the question id appears in some closure_rows[].question_refs: it (1) rejects the contract-permitted carried-forward-via-remaining_frontier_refs path, and (2) accepts a dummy out_of_scope/low closure row with no refs as 'closure' — it never validates the permitted dispositions or refs. Recording would let G10 treat the full closed/carried-forward/blocked-with-refs contract as covered. Recording deferred pending a check that validates the permitted closure dispositions + refs (and accepts carry-forward)."
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_each_source_observation_delta_row_has_convergence_closure_disposition
+    coverage_status: pending
+    tier: flat
+    note: "slice-16 audit (2026-06-23, codex PR #127): PARK — two gaps. (1) The closure-coverage enforcer (missing_required_coverage ~3710) is INSIDE the per-round loop; a source-observation-delta artifact with delta rows but an empty rounds[] array enforces nothing, so a stamp gated only on sourceObservationDelta presence would launder the zero-round shape. (2) Contract bullet (g) requires each consumed delta row to appear in exactly one source_observation_closure_rows[] row WITH A DISPOSITION, but the source-closure branch never reads sourceClosure.closure_disposition — a missing/out-of-enum disposition still passes. Recording deferred pending (a) gating on a reached source-delta round and (b) validating the closure_disposition field."
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_prior_maturation_validations_are_valid
+    coverage_status: pending
+    tier: flat
+    note: "slice-16 audit (2026-06-23, codex PR #127): PARK — incomplete prior-validation scope. The code checks the validation_status of the question-frontier, actionability-matrix, answer-support, answer-claims, and ontology-expansion validations (prior_validation_invalid ~3500-3538). But the registry declares rounds/<round-id>/source-observation-delta-validation.yaml as an input authority for delta-backed rounds, and this validator never receives or checks that validation artifact's status — an invalid source-observation-delta validation can be referenced while the obligation claims prior validations were proven. (Separately, actionability-matrix-validation is checked by code but NOT declared in the registry input_authority_refs — an inverse declared≠wired the owner may reconcile.) Recording deferred pending the source-delta validation status being added to the gate (or recording gated to non-delta runs)."
   - validator_id: maturation-question-frontier-validator
     obligation_id: validate_authority_need_rows_are_first_class_and_scope_to_questions
     coverage_status: pending

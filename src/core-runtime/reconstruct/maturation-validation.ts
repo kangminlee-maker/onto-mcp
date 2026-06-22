@@ -3491,27 +3491,17 @@ export function validateMaturationConvergenceLedger(args: {
     expansion,
   ) => expansion.expansion_id));
 
-  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1). Placed before the round loop so the
-  // unconditional enforcers (prior-validation gate / blocker-high closure coverage / round delta-ref
-  // match) record on zero-round input too. The source-observation closure obligation is gated on the
-  // source-observation-delta input being present, since that enforcer is skipped without it
-  // (matrix-frontier precedent; run.ts wires the delta path only on source-delta rounds).
+  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1). Only the closure-row delta-ref match is a
+  // clean, fully-proving structural enforcer; it is stamped before the round loop so it records on
+  // zero-round input too (vacuously true when no closure rows exist, like the slice-2/15 row checks).
+  // The other six convergence obligations are parked with audit notes — see obligation-coverage-ledger.yaml
+  // (ready-projection gate deferred per contract h; positive-support exclusion / disposition-value /
+  // carried-forward-or-blocked-with-refs / source-delta validation-status all under-enforced).
   const assertedObligationIds: string[] = [];
-  assertObligation(assertedObligationIds, "validate_prior_maturation_validations_are_valid");
-  assertObligation(
-    assertedObligationIds,
-    "require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure",
-  );
   assertObligation(
     assertedObligationIds,
     "validate_closure_source_observation_delta_refs_match_source_observation_delta_validation",
   );
-  if (args.sourceObservationDelta) {
-    assertObligation(
-      assertedObligationIds,
-      "validate_each_source_observation_delta_row_has_convergence_closure_disposition",
-    );
-  }
 
   if (ledger.session_id !== args.maturationQuestionFrontier.session_id) {
     violations.push(violation({

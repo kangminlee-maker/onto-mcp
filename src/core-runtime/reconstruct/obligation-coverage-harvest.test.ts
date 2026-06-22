@@ -580,22 +580,6 @@ function convClosureRow(overrides: Record<string, unknown> = {}): unknown {
     ...overrides,
   };
 }
-function convSrcClosureRow(overrides: Record<string, unknown> = {}): unknown {
-  return {
-    source_observation_closure_id: "sc-1",
-    observation_id: "o1",
-    delta_row_id: "d1",
-    source_ref: "/s1",
-    source_observation_delta_validation_ref: "",
-    question_refs: [],
-    evidence_cluster_refs: [],
-    answer_claim_refs: [],
-    expansion_refs: [],
-    closure_disposition: "out_of_scope",
-    limitation_refs: [],
-    ...overrides,
-  };
-}
 function convRound(overrides: Record<string, unknown> = {}): unknown {
   return {
     round_id: "r1",
@@ -619,22 +603,8 @@ function convRound(overrides: Record<string, unknown> = {}): unknown {
   };
 }
 function runMaturationConvergence(
-  overrides: {
-    rounds?: unknown[];
-    questions?: unknown[];
-    deltaRows?: unknown[] | null;
-    invalidate?:
-      | "frontier"
-      | "matrix"
-      | "answerSupport"
-      | "answerClaims"
-      | "expansion"
-      | null;
-  } = {},
+  overrides: { rounds?: unknown[] } = {},
 ): ReconstructMaturationConvergenceLedgerValidationArtifact {
-  const status = (key: string) =>
-    overrides.invalidate === key ? "invalid" : "valid";
-  const deltaRows = overrides.deltaRows === undefined ? [] : overrides.deltaRows;
   return validateMaturationConvergenceLedger({
     maturationConvergenceLedger: {
       schema_version: "1",
@@ -643,22 +613,20 @@ function runMaturationConvergence(
       rounds: overrides.rounds ?? [],
     } as never,
     maturationConvergenceLedgerRef: "maturation-convergence-ledger.yaml",
-    sourceObservationDelta: deltaRows === null
-      ? null
-      : ({ delta_rows: deltaRows } as never),
+    sourceObservationDelta: { delta_rows: [] } as never,
     maturationQuestionFrontier: {
       session_id: "session-harvest",
-      questions: overrides.questions ?? [],
+      questions: [],
     } as never,
-    maturationQuestionFrontierValidation: { validation_status: status("frontier") } as never,
+    maturationQuestionFrontierValidation: { validation_status: "valid" } as never,
     actionabilityMatrix: { rows: [] } as never,
-    actionabilityMatrixValidation: { validation_status: status("matrix") } as never,
+    actionabilityMatrixValidation: { validation_status: "valid" } as never,
     answerSupportLedger: { evidence_clusters: [] } as never,
-    answerSupportLedgerValidation: { validation_status: status("answerSupport") } as never,
+    answerSupportLedgerValidation: { validation_status: "valid" } as never,
     maturationAnswerClaims: { answer_claims: [] } as never,
-    maturationAnswerClaimsValidation: { validation_status: status("answerClaims") } as never,
+    maturationAnswerClaimsValidation: { validation_status: "valid" } as never,
     ontologyExpansion: { expansions: [] } as never,
-    ontologyExpansionValidation: { validation_status: status("expansion") } as never,
+    ontologyExpansionValidation: { validation_status: "valid" } as never,
   });
 }
 
@@ -1149,71 +1117,33 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     expect(clean.violations.some((v) => v.code === "unknown_source_ref")).toBe(false);
   });
 
-  it("validateMaturationConvergenceLedger records its 4 instrumented obligations (slice 16: prior-validations + blocker/high-closure + delta-ref-match + source-delta-closure) and NOT the 3 parked", () => {
+  it("validateMaturationConvergenceLedger records its 1 instrumented obligation (slice 16: closure delta-ref match) and NOT the 6 parked semantic/partial obligations", () => {
     const out = runMaturationConvergence();
-    for (const obligation of [
-      "validate_prior_maturation_validations_are_valid",
-      "require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure",
+    expect(out.asserted_obligation_ids).toContain(
       "validate_closure_source_observation_delta_refs_match_source_observation_delta_validation",
-      "validate_each_source_observation_delta_row_has_convergence_closure_disposition",
-    ]) {
-      expect(out.asserted_obligation_ids).toContain(obligation);
-    }
-    // PARKED: ready-projection gate is deferred (contract h), positive-support exclusion has no
-    // name-matching enforcer, and remaining-frontier "without ready projection" is a composite whose
-    // only enforced part is unknown_id resolution (see ledger notes).
+    );
+    // PARKED (codex PR #127 + Explore audit): the other six convergence obligations are under-enforced
+    // relative to their contract bullets — ready-projection gate deferred (h); positive-support
+    // exclusion has no enforcer; the remaining-frontier composite only resolves ids; blocker/high
+    // closure is a weak id-in-any-closure-row proxy (carry-forward + disposition/refs unproven);
+    // source-delta closure skips empty rounds and never validates the disposition value; and
+    // prior-validations omits the registry-declared source-observation-delta validation status. See the
+    // obligation-coverage-ledger.yaml notes.
     for (const parked of [
       "preserve_remaining_frontier_refs_without_ready_projection",
       "reject_actionable_ready_until_final_requestion_convergence_is_proven",
       "reject_trace_audit_or_authority_request_rows_as_positive_semantic_support",
+      "require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure",
+      "validate_each_source_observation_delta_row_has_convergence_closure_disposition",
+      "validate_prior_maturation_validations_are_valid",
     ]) {
       expect(out.asserted_obligation_ids).not.toContain(parked);
     }
   });
 
-  // ANTI-LAUNDERING (slice 16): the source-delta-closure obligation is gated on the
-  // source-observation-delta input — recorded only when control can reach the enforcer
-  // (matrix-frontier precedent). With no delta input, the pair is NOT minted.
-  it("validateMaturationConvergenceLedger does NOT record the source-delta-closure obligation when no source-observation delta is provided", () => {
-    const out = runMaturationConvergence({ deltaRows: null });
-    expect(out.asserted_obligation_ids).not.toContain(
-      "validate_each_source_observation_delta_row_has_convergence_closure_disposition",
-    );
-    // the three unconditional obligations still record
-    expect(out.asserted_obligation_ids).toContain(
-      "validate_prior_maturation_validations_are_valid",
-    );
-  });
-
-  // ANTI-LAUNDERING (slice 16): each recorded obligation has a non-vacuous, NON-OVERLAPPING binding —
-  // a breaching input trips a DISTINCT violation, a clean variant clears it. (The validator's own
-  // maturation-validation.test.ts also binds these convergence codes.)
-  it("ENFORCEMENT BINDING (validate_prior_maturation_validations_are_valid): an invalid upstream validation trips prior_validation_invalid; all-valid clears it", () => {
-    const breaching = runMaturationConvergence({ invalidate: "expansion" });
-    expect(breaching.violations.some((v) => v.code === "prior_validation_invalid")).toBe(true);
-    const clean = runMaturationConvergence({ invalidate: null });
-    expect(clean.violations.some((v) => v.code === "prior_validation_invalid")).toBe(false);
-  });
-
-  it("ENFORCEMENT BINDING (require_every_blocker_or_high_question_to_have_..._closure): a blocker question with no closure row trips missing_required_coverage; a closure row citing it clears it", () => {
-    const blockerQ = { question_id: "q-blk", materiality: "blocker" };
-    const breaching = runMaturationConvergence({ questions: [blockerQ] });
-    expect(
-      breaching.violations.some((v) =>
-        v.code === "missing_required_coverage" && /blocker\/high maturation question/.test(v.message)
-      ),
-    ).toBe(true);
-    const clean = runMaturationConvergence({
-      questions: [blockerQ],
-      rounds: [convRound({ closure_rows: [convClosureRow({ question_refs: ["q-blk"] })] })],
-    });
-    expect(
-      clean.violations.some((v) =>
-        v.code === "missing_required_coverage" && /blocker\/high maturation question/.test(v.message)
-      ),
-    ).toBe(false);
-  });
-
+  // ANTI-LAUNDERING (slice 16): the recorded obligation has a non-vacuous binding — a closure row whose
+  // source_observation_delta_validation_refs do not match the round ref trips conflicting_state, and a
+  // matching ref clears it. (maturation-validation.test.ts also binds this code.)
   it("ENFORCEMENT BINDING (validate_closure_source_observation_delta_refs_match...): a closure delta-ref not matching the round ref trips conflicting_state; a matching ref clears it", () => {
     const breaching = runMaturationConvergence({
       rounds: [convRound({
@@ -1241,31 +1171,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     ).toBe(false);
   });
 
-  it("ENFORCEMENT BINDING (validate_each_source_observation_delta_row_has_convergence_closure_disposition): a delta row with no source-observation closure row trips missing_required_coverage; adding the closure row clears it", () => {
-    const dRow = { delta_row_id: "d1", observation_id: "o1", source_ref: "/s1" };
-    const breaching = runMaturationConvergence({
-      deltaRows: [dRow],
-      rounds: [convRound({ source_observation_closure_rows: [] })],
-    });
-    expect(
-      breaching.violations.some((v) =>
-        v.code === "missing_required_coverage" &&
-        /source observation delta row must have a convergence source-observation closure row/.test(v.message)
-      ),
-    ).toBe(true);
-    const clean = runMaturationConvergence({
-      deltaRows: [dRow],
-      rounds: [convRound({ source_observation_closure_rows: [convSrcClosureRow()] })],
-    });
-    expect(
-      clean.violations.some((v) =>
-        v.code === "missing_required_coverage" &&
-        /source observation delta row must have a convergence source-observation closure row/.test(v.message)
-      ),
-    ).toBe(false);
-  });
-
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 48 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 45 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1362,6 +1268,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(48);
+    expect(harvestedSet.size).toBe(45);
   });
 });
