@@ -1014,6 +1014,7 @@ export interface ReconstructPurposeConfirmationValidationArtifact {
     | "must_project_blocked"
     | "must_rerun_purpose_discovery";
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructSourcePurposeValidationViolation[];
 }
 

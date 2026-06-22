@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructEvidenceRef,
   ReconstructPurposeAdequacyFrame,
@@ -448,6 +449,42 @@ export function validatePurposeConfirmation(args: {
   const confirmation = args.purposeConfirmation;
   const sourceValidation = args.sourcePurposeCandidatesValidation;
   const violations: ReconstructSourcePurposeValidationViolation[] = [];
+  // G(a) slice 11: record the three obligations whose enforcement matches the authoritative contract
+  // (ontology-seeding-and-maturation-design.md §purpose-confirmation; confirmation_required is the
+  // derived inferred/limitation_backed predicate and "the only source for the purpose-confirmation
+  // gate"). All three reach a distinct, name-matching enforcement site below; stamped unconditionally
+  // up front so they fire on any input:
+  //   - validate_confirmation_status_against_selected_purpose_candidate (selected_primary_mismatch
+  //     when purpose_candidate_id != selected_purpose_candidate_id — distinct site).
+  //   - require_confirmation_for_inferred_or_limitation_backed_purpose (when confirmation_required is
+  //     true a non-confirmed status — e.g. not_required — blocks: conflicting_state). Per the contract
+  //     the validator consumes confirmation_required rather than re-deriving inferred/limitation_backed.
+  //   - block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending
+  //     (each of those statuses blocks seed readiness even when confirmation is not required).
+  // The two former obligations are DISTINCT facets with non-overlapping breaching inputs: ob "require"
+  // is bound by confirmation_required=true + status=not_required (a status not in the "block" list);
+  // ob "block" is bound by confirmation_required=false + status=pending (no confirmation required, yet
+  // it still blocks). PARKED (not recorded), name broader than code — honest declared≠wired, NOT
+  // laundered (see obligation-coverage-ledger.yaml notes):
+  //   - require_revised_confirmation_to_preserve_source_conflict_or_trigger_purpose_discovery_rerun:
+  //     only the rerun arm is enforced (revised_pending_evidence_check → must_rerun_purpose_discovery);
+  //     the "preserve source conflict" arm is never checked — source_conflict_policy is never read.
+  //   - validate_confirmation_status_against_source_purpose_candidate_status_and_validation_confirmation_required:
+  //     the validator reads only sourceValidation.validation_status and confirmation_required, never the
+  //     candidate's own purpose_source_status the name references.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_confirmation_status_against_selected_purpose_candidate",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_confirmation_for_inferred_or_limitation_backed_purpose",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending",
+  );
   if (confirmation.session_id !== sourceValidation.session_id) {
     violations.push(violation({
       code: "session_id_mismatch",
@@ -549,6 +586,7 @@ export function validatePurposeConfirmation(args: {
     validation_results: violations.length === 0
       ? ["purpose_confirmation_valid"]
       : ["purpose_confirmation_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
