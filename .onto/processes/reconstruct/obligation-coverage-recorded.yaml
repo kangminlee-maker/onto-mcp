@@ -91,3 +91,5 @@ recorded:
     obligation_id: validate_purpose_element_refs_against_selected_purpose_frame
   - validator_id: material-admission-ledger-validator
     obligation_id: validate_source_refs_against_observed_source_refs
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_closure_source_observation_delta_refs_match_source_observation_delta_validation

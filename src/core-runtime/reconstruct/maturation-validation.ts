@@ -3490,6 +3490,19 @@ export function validateMaturationConvergenceLedger(args: {
   const expansionIds = new Set(args.ontologyExpansion.expansions.map((
     expansion,
   ) => expansion.expansion_id));
+
+  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1). Only the closure-row delta-ref match is a
+  // clean, fully-proving structural enforcer; it is stamped before the round loop so it records on
+  // zero-round input too (vacuously true when no closure rows exist, like the slice-2/15 row checks).
+  // The other six convergence obligations are parked with audit notes — see obligation-coverage-ledger.yaml
+  // (ready-projection gate deferred per contract h; positive-support exclusion / disposition-value /
+  // carried-forward-or-blocked-with-refs / source-delta validation-status all under-enforced).
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_closure_source_observation_delta_refs_match_source_observation_delta_validation",
+  );
+
   if (ledger.session_id !== args.maturationQuestionFrontier.session_id) {
     violations.push(violation({
       code: "session_id_mismatch",
@@ -3907,6 +3920,7 @@ export function validateMaturationConvergenceLedger(args: {
     validation_results: violations.length === 0
       ? ["maturation_convergence_ledger_valid"]
       : ["maturation_convergence_ledger_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
