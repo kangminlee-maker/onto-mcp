@@ -274,6 +274,34 @@ describe("validateUnitSeatToResult", () => {
   });
 });
 
+describe("unknown unit_kind guard (DAG-1 silent-drop)", () => {
+  it("validateUnitSeatToResult fails loud for a unit_kind outside ReviewUnitKind", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    const unit = { ...lensFrontierUnit(plan, "logic"), unitKind: "bogus_kind" };
+    await expect(
+      validateUnitSeatToResult({ sessionRoot: root, unit, executionPlan: plan }),
+    ).rejects.toThrow(/unknown unit_kind "bogus_kind"/);
+  });
+
+  it("mergeUnitResultIntoExecutionResult throws instead of silently dropping an unhandled unit_kind", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    const seat = plan.lens_prompt_packet_seats.find((s) => s.lens_id === "logic")!;
+    const result = {
+      ...lensResult("logic", seat.packet_path, seat.output_path),
+      unit_kind: "bogus_kind" as ReviewUnitExecutionResult["unit_kind"],
+    };
+    await expect(
+      mergeUnitResultIntoExecutionResult({
+        sessionRoot: root,
+        result,
+        base: scaffoldExecutionResult(plan),
+      }),
+    ).rejects.toThrow(/no execution-result bucket for unit_kind "bogus_kind"/);
+  });
+});
+
 describe("mergeUnitResultIntoExecutionResult", () => {
   it("creates execution-result.yaml from a base scaffold and buckets by unit_kind", async () => {
     const root = await tempSessionRoot();
