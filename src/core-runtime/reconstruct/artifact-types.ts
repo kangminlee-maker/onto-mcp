@@ -1377,6 +1377,7 @@ export interface ReconstructCandidateDispositionValidationArtifact {
   disposition_count: number;
   promoted_candidate_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructCandidateDispositionValidationViolation[];
 }
 
