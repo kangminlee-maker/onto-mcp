@@ -199,18 +199,6 @@ pending:
     obligation_id: validate_member_capability_rows_preserve_target_ref_profile_snapshot_definition_hash_source_refs_validation_ref_readiness_effect_and_next_action
     coverage_status: pending
     tier: flat
-  - validator_id: claim-realization-map-validator
-    obligation_id: require_exactly_one_realization_for_each_seed_claim
-    coverage_status: pending
-    tier: flat
-  - validator_id: claim-realization-map-validator
-    obligation_id: validate_realization_claim_ids_against_ontology_seed_claim_ids
-    coverage_status: pending
-    tier: flat
-  - validator_id: claim-realization-map-validator
-    obligation_id: validate_realization_evidence_refs_against_source_observations
-    coverage_status: pending
-    tier: flat
   - validator_id: competency-question-assessment-validator
     obligation_id: require_exactly_one_assessment_per_authoritative_question
     coverage_status: pending
