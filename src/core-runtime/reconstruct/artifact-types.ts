@@ -1882,6 +1882,7 @@ export interface ReconstructCompetencyQuestionAssessmentValidationArtifact {
   assessment_count: number;
   answer_status_counts: Record<ReconstructCompetencyQuestionAnswerStatus, number>;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructPostSeedValidationViolation[];
 }
 

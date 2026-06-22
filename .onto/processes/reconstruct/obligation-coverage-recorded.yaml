@@ -73,3 +73,9 @@ recorded:
     obligation_id: require_confirmation_for_inferred_or_limitation_backed_purpose
   - validator_id: purpose-confirmation-validator
     obligation_id: block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending
+  - validator_id: competency-question-assessment-validator
+    obligation_id: require_exactly_one_assessment_per_authoritative_question
+  - validator_id: competency-question-assessment-validator
+    obligation_id: validate_downstream_effect_consistent_with_answer_status
+  - validator_id: competency-question-assessment-validator
+    obligation_id: validate_required_seed_refs_close_against_question_seed_refs
