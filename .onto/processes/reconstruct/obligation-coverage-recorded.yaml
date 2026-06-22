@@ -1,0 +1,11 @@
+# Obligation-coverage RECORDED set (G(a) / INV-OBLIGATION-COVERAGE-1).
+# Generated; kept fresh by obligation-coverage-harvest.test.ts. Do NOT hand-edit.
+# Each pair is a (validator_id, obligation_id) dynamically proven WIRED (assertObligation
+# emits asserted_obligation_ids from real validator execution; the harvest test re-derives this).
+recorded:
+  - validator_id: actionability-matrix-validator
+    obligation_id: validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
+  - validator_id: maturation-baseline-validator
+    obligation_id: validate_baseline_rows_cover_selected_purpose_frame_required_elements

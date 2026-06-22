@@ -1971,6 +1971,7 @@ export interface ReconstructMaturationBaselineValidationArtifact {
   baseline_row_count: number;
   material_row_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 
@@ -2025,6 +2026,10 @@ export interface ReconstructActionabilityMatrixValidationArtifact {
   matrix_row_count: number;
   frontier_required_row_count: number;
   validation_results: string[];
+  // G(a): the (mode-derived) validator_id this run attributes to + the obligation ids whose
+  // enforcer block was reached. One fn serves two validators (baseline vs current matrix mode).
+  validator_id: string;
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 

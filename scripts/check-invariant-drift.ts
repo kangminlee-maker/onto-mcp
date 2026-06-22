@@ -70,6 +70,11 @@ const GUARDS: GuardRun[] = [
     invariants: ["INV-SCHEMA-1"],
     command: ["npx", "tsx", "scripts/check-final-output-sections-parity.ts"],
   },
+  {
+    guard: "G10 obligation-coverage",
+    invariants: ["INV-OBLIGATION-COVERAGE-1"],
+    command: ["npx", "tsx", "scripts/check-obligation-coverage.ts", baseRef],
+  },
 ];
 
 async function runGuard(run: GuardRun): Promise<{ run: GuardRun; ok: boolean; detail: string }> {

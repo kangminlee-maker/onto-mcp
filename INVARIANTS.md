@@ -74,6 +74,11 @@
 - **근거**: 스코프가 커지면 원래 성공기준이 새 범위에서 더 이상 검증되지 않은 상태가 된다.
 - **강제**: 지침 + 검증 게이트(드리프트/품질 리포트). `↔ AGENTS §0-8`
 
+## INV-OBLIGATION-COVERAGE-1 — 선언된 validation_obligation은 살아있는 강제자 또는 명시적 backlog를 갖는다
+- **규칙**: reconstruct registry `validator_records`의 모든 ACTIVE `validation_obligation`(flat ∪ conditional, `(validator_id, obligation_id)` 키)은 (i) 실제 validator 실행에서 `asserted_obligation_ids`로 동적 입증된 **recorded** 항목이거나, (ii) checked-in pending 원장(`obligation-coverage-ledger.yaml`)에 **parked**된 항목이어야 한다. 둘 다 아닌 새 ACTIVE obligation은 빌드 에러다. 그리고 LEGACY pending 집합은 `origin/main` 대비 **단조 비증가**(non-increasing)다 — 새로 선언된 active obligation만 pending에 진입할 수 있다.
+- **근거**: 단계가 obligation을 선언하고도 강제자를 배선하지 않는 "declared, not wired" 누락을 리뷰 라운드에서야 잡던 것을, recorded/parked 가시화 + ratchet으로 빌드 게이트에서 닫는다. (게이트는 obligation이 *조용히 미추적*이 아님과 recorded id가 *강제 블록에 도달*함을 증명할 뿐, 강제자의 *의미적 정확성*은 증명하지 않는다.)
+- **강제**: G10(`npm run check:obligation-coverage`) 정적 절(완전성·원장 정직성·역검증) + git base-diff ratchet(legacy pending 비증가·recorded→pending 강등 금지·재-park 금지, base 부재 시 fail-loud) + CI. INV 텍스트 자체는 사람 게이트(AGENTS §0-2; INVARIANTS.md는 PROTECTED_TARGETS 아님), 가드는 하드 CI 머지 게이트. recorded-set 신선도는 `obligation-coverage-harvest.test.ts`가 동적 입증한다.
+
 ---
 
 ## 강제 수단 구현 현황
@@ -91,5 +96,6 @@
 | G7 지원 모델 가드 | INV-MODEL-1 | `npm run check:supported-models` (커밋된 settings.json ⊆ supported-models.yaml; runtime도 reconstruct live 실행 경계에서 동일 게이트 `assertSettingsModelsSupported` 호출) |
 | G8 prompt-projection 패리티 | INV-SCHEMA-1 | `npm run check:prompt-projection-parity` (registry `prompt_projection_contracts` 선언 = runtime 계약 모듈 surface, exact-set + run.ts 소비 강제) |
 | G9 final-output-sections 패리티 | INV-SCHEMA-1 | `npm run check:final-output-sections-parity` (registry `final_output_append_sections` 선언 = `final-output-sections.ts` SSOT, exact-set/per-row + run.ts heading 소비 강제) |
+| G10 obligation-coverage ratchet | INV-OBLIGATION-COVERAGE-1 | `npm run check:obligation-coverage [-- baseRef]` + CI (active obligation = recorded 또는 parked; legacy pending 비증가; recorded-set 신선도는 harvest 테스트) |
 
 INV-LOOP-1·INV-SCOPE-1은 지침 강제로 남는다(무인 루프·스코프 판단은 구조화 대상 아님).

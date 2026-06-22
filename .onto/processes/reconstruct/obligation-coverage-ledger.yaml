@@ -1,0 +1,1090 @@
+# Obligation-coverage PENDING ledger (G(a) / INV-OBLIGATION-COVERAGE-1).
+# Generated; the parked backlog of active (validator_id, obligation_id) pairs not yet RECORDED
+# (no asserted_obligation_ids instrumentation in this slice). The ratchet proves this legacy set
+# is monotone non-increasing.
+#
+# tier — what the pending status means for THIS pair:
+#   flat                            : a flat obligation not yet instrumented for recording.
+#   activation_gated_dormant        : a conditional obligation whose runtime is genuinely unwired
+#                                     (its enforcement is dormant; activation_condition unmet).
+#   enforced_pending_instrumentation: the pair IS live-enforced today, but its asserted_obligation_ids
+#                                     RECORDING is deferred to a later slice (see the row's `note`).
+#                                     Parked ≠ unwired for this tier — only the recording is pending.
+pending:
+  - validator_id: actionability-matrix-validator
+    obligation_id: reject_matrix_rows_without_baseline_row_or_applicable_validated_expansion_ref
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionability-matrix-validator
+    obligation_id: require_blocker_and_high_rows_to_be_l4_limitation_backed_or_continuation_blocking
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionability-matrix-validator
+    obligation_id: support_zero_delta_baseline_only_matrix_when_no_maturation_deltas_exist
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionability-matrix-validator
+    obligation_id: validate_blocking_question_refs_against_validated_question_frontier
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionability-matrix-validator
+    obligation_id: validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionability-matrix-validator
+    obligation_id: validate_maturity_level_against_supporting_refs_blocking_questions_and_limitations
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionable-ontology-validator
+    obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionable-ontology-validator
+    obligation_id: reject_actionable_ready_when_material_blocker_or_high_question_remains
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionable-ontology-validator
+    obligation_id: require_every_projected_row_to_trace_to_seed_expansion_or_limitation
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionable-ontology-validator
+    obligation_id: require_static_kinetic_dynamic_surfaces_to_be_closed_or_limitation_excluded
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionable-ontology-validator
+    obligation_id: validate_actionability_claim_against_maturation_continuation_decision
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionable-ontology-validator
+    obligation_id: validate_actionable_limited_claim_scope_rows
+    coverage_status: pending
+    tier: flat
+  - validator_id: actionable-ontology-validator
+    obligation_id: validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-judgment-validator
+    obligation_id: require_convergent_clusters_to_judge_every_cited_evidence_ref
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-judgment-validator
+    obligation_id: require_rationale_ref_for_each_judgment
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-judgment-validator
+    obligation_id: require_supports_enum_for_each_judgment
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-judgment-validator
+    obligation_id: validate_judgment_refs_resolve_to_answer_support_ledger_clusters_and_evidence
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: require_contradictions_to_be_recorded_and_bounded
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: require_frontier_triggered_evidence_to_resolve_to_valid_lineage_index_validation
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: require_frontier_triggered_evidence_to_resolve_to_valid_reentry_validation
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: require_observation_specific_evidence_support_source_safety_row_with_claim_sufficiency_and_replay
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: require_two_independent_evidence_refs_for_convergent_source_evidence_unless_direct_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: validate_evidence_cluster_question_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: validate_external_or_runtime_authority_support_mode
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: validate_support_mode_required_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: answer-support-ledger-validator
+    obligation_id: validate_user_confirmation_support_mode
+    coverage_status: pending
+    tier: flat
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: preserve_frontier_seed_state_before_question_frontier_authoring
+    coverage_status: pending
+    tier: flat
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: reject_blocking_question_refs_before_question_frontier_authoring
+    coverage_status: pending
+    tier: flat
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: reject_matrix_rows_without_baseline_row_ref
+    coverage_status: pending
+    tier: flat
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: support_zero_delta_baseline_only_matrix_before_maturation_deltas_exist
+    coverage_status: pending
+    tier: flat
+  - validator_id: baseline-actionability-matrix-validator
+    obligation_id: validate_matrix_rows_derive_from_validated_baseline_without_maturation_deltas
+    coverage_status: pending
+    tier: flat
+  - validator_id: candidate-disposition-validator
+    obligation_id: require_deferred_or_source_gap_disposition_to_cite_limitation_or_frontier
+    coverage_status: pending
+    tier: flat
+  - validator_id: candidate-disposition-validator
+    obligation_id: require_exactly_one_disposition_for_each_salient_candidate
+    coverage_status: pending
+    tier: flat
+  - validator_id: candidate-disposition-validator
+    obligation_id: require_high_salience_non_rejected_candidates_to_carry_surface_and_purpose_element_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: candidate-disposition-validator
+    obligation_id: require_rationale_and_evidence_refs_for_each_disposition
+    coverage_status: pending
+    tier: flat
+  - validator_id: candidate-disposition-validator
+    obligation_id: validate_candidate_actionability_surface_refs_against_registry_surface_values
+    coverage_status: pending
+    tier: flat
+  - validator_id: candidate-disposition-validator
+    obligation_id: validate_candidate_disposition_against_candidate_disposition_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: candidate-disposition-validator
+    obligation_id: validate_candidate_inventory_candidate_kind_against_candidate_kind_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: candidate-disposition-validator
+    obligation_id: validate_candidate_purpose_element_refs_against_selected_purpose_frame
+    coverage_status: pending
+    tier: activation_gated_dormant
+  - validator_id: candidate-disposition-validator
+    obligation_id: validate_promoted_candidate_target_seed_refs_are_declared_for_promoted_dispositions
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: reject_unwired_material_kind_support_levels_above_profile_supported
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: require_blocked_projection_to_have_limitation_or_recovery_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: require_each_projection_row_to_cite_runtime_validation_authorities
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: validate_all_public_and_downstream_projection_surfaces_are_present
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: validate_broader_operated_system_release_health_and_incident_governance_are_bounded
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: validate_claim_level_decision_state_and_actionability_claim_alignment
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: validate_material_kind_support_profile_supported_requires_valid_target_material_profile_validation
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: validate_material_kind_support_row_uses_capability_claim_not_actionability_claim
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-projection-validator
+    obligation_id: validate_member_capability_rows_preserve_target_ref_profile_snapshot_definition_hash_source_refs_validation_ref_readiness_effect_and_next_action
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-realization-map-validator
+    obligation_id: require_exactly_one_realization_for_each_seed_claim
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-realization-map-validator
+    obligation_id: validate_realization_claim_ids_against_ontology_seed_claim_ids
+    coverage_status: pending
+    tier: flat
+  - validator_id: claim-realization-map-validator
+    obligation_id: validate_realization_evidence_refs_against_source_observations
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-question-assessment-validator
+    obligation_id: require_exactly_one_assessment_per_authoritative_question
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-question-assessment-validator
+    obligation_id: validate_answer_status_against_active_answerability_contract
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-question-assessment-validator
+    obligation_id: validate_answerability_trace_refs_close_against_seed_evidence_limitations_and_proofs
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-question-assessment-validator
+    obligation_id: validate_downstream_effect_consistent_with_answer_status
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-question-assessment-validator
+    obligation_id: validate_required_seed_refs_close_against_question_seed_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: emit_required_evidence_scope_runtime_projection
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: enforce_admitted_domain_competency_disposition_rule
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: enforce_p3_diagnostic_or_claim_based_admission_disposition_rule
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: require_unique_question_id
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_classification_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_classification_level_axis_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_constraint_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_coverage_axes_against_coverage_axis_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_domain_competency_trace_refs_against_run_manifest_context_snapshot
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_entity_identity_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_hidden_label_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_instance_assertion_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_limitation_refs_close_against_handoff_limitations
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_modeling_concern_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_ontology_handoff_axes_against_ontology_handoff_axis_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_pattern_catalog_refs_against_reference_pattern_catalog_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_query_visualization_graph_contract_refs_when_applicable
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_reasoning_formalism_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_reference_standard_refs_against_reference_standard_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_relation_type_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_seed_ref_refs_close_against_known_seed_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: competency-questions-validator
+    obligation_id: validate_terminology_facet_coverage
+    coverage_status: pending
+    tier: flat
+  - validator_id: failure-classification-validator
+    obligation_id: classify_missing_or_failed_active_validation_artifact_as_required_gate_failure
+    coverage_status: pending
+    tier: flat
+  - validator_id: failure-classification-validator
+    obligation_id: classify_missing_or_failed_promoted_maturation_validation_artifact_as_required_gate_failure
+    coverage_status: pending
+    tier: flat
+  - validator_id: failure-classification-validator
+    obligation_id: derive_planned_gate_failure_inputs_from_registry_gate_catalogs_not_hand_maintained_lists
+    coverage_status: pending
+    tier: flat
+  - validator_id: failure-classification-validator
+    obligation_id: validate_failure_trigger_against_active_runtime_validation_authorities
+    coverage_status: pending
+    tier: flat
+  - validator_id: failure-classification-validator
+    obligation_id: validate_failure_trigger_against_promoted_planned_validation_authorities
+    coverage_status: pending
+    tier: flat
+  - validator_id: handoff-decision-validator
+    obligation_id: consume_all_active_validation_gate_statuses_emitted_by_runtime
+    coverage_status: pending
+    tier: flat
+  - validator_id: handoff-decision-validator
+    obligation_id: consume_all_requested_or_promoted_planned_gate_statuses_emitted_by_runtime
+    coverage_status: pending
+    tier: flat
+  - validator_id: handoff-decision-validator
+    obligation_id: derive_terminal_planned_gate_inputs_from_registry_gate_catalogs_not_hand_maintained_lists
+    coverage_status: pending
+    tier: flat
+  - validator_id: handoff-decision-validator
+    obligation_id: do_not_require_failure_or_revision_artifacts_for_clean_stop_decisions
+    coverage_status: pending
+    tier: flat
+  - validator_id: handoff-decision-validator
+    obligation_id: project_missing_active_validation_artifact_as_blocked
+    coverage_status: pending
+    tier: flat
+  - validator_id: handoff-decision-validator
+    obligation_id: project_missing_required_promoted_or_requested_planned_gate_validation_artifact_as_blocked
+    coverage_status: pending
+    tier: flat
+  - validator_id: handoff-decision-validator
+    obligation_id: validate_accepted_maturation_execution_minimum_output_gates_are_terminal_projected
+    coverage_status: pending
+    tier: flat
+  - validator_id: handoff-decision-validator
+    obligation_id: validate_failure_classification_covers_failed_or_missing_requested_planned_gates
+    coverage_status: pending
+    tier: flat
+  - validator_id: material-admission-ledger-validator
+    obligation_id: prevent_diagnostic_or_trace_only_rows_from_silently_affecting_actionability
+    coverage_status: pending
+    tier: flat
+  - validator_id: material-admission-ledger-validator
+    obligation_id: require_admitted_required_or_supporting_rows_to_have_candidate_seed_maturation_limitation_blocked_or_out_of_scope_consumer
+    coverage_status: pending
+    tier: flat
+  - validator_id: material-admission-ledger-validator
+    obligation_id: require_rejected_ambiguous_rows_to_preserve_replayable_evidence_or_limitation
+    coverage_status: pending
+    tier: flat
+  - validator_id: material-admission-ledger-validator
+    obligation_id: validate_admission_row_uniqueness
+    coverage_status: pending
+    tier: flat
+  - validator_id: material-admission-ledger-validator
+    obligation_id: validate_phase_scoped_input_kind_disposition_and_snapshot_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: material-admission-ledger-validator
+    obligation_id: validate_purpose_element_refs_against_selected_purpose_frame
+    coverage_status: pending
+    tier: flat
+  - validator_id: material-admission-ledger-validator
+    obligation_id: validate_source_refs_against_observed_source_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-answer-claims-validator
+    obligation_id: require_convergent_source_evidence_claims_to_have_two_independent_judge_confirmed_supports
+    coverage_status: pending
+    tier: enforced_pending_instrumentation
+    note: "live-enforced in validateMaturationAnswerClaims (insufficient_independent_evidence when <2 independent judge-confirmed supports; prior_validation_invalid fail-closed when the judge is absent, #57/#58); asserted_obligation_ids recording instrumentation deferred to slice 2 to keep this slice to 2 instrumented validators. The enforced claim is bound by obligation-coverage-enforced-tier.test.ts so a judge regression reds a coverage test."
+  - validator_id: maturation-answer-claims-validator
+    obligation_id: require_partial_answers_to_have_limitation_or_frontier_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-answer-claims-validator
+    obligation_id: validate_answer_claim_question_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-answer-claims-validator
+    obligation_id: validate_answer_claim_surface_dimension_and_purpose_element_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-answer-claims-validator
+    obligation_id: validate_support_mode_against_valid_evidence_cluster_or_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-authority-response-validator
+    obligation_id: preserve_unavailable_or_rejected_authority_as_blocked_or_limitation_state
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-authority-response-validator
+    obligation_id: reject_authority_response_that_claims_source_support_without_source_observation_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-authority-response-validator
+    obligation_id: validate_authority_identity_and_snapshot_refs_are_recorded
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-authority-response-validator
+    obligation_id: validate_authority_response_refs_against_maturation_closure_frontier_authority_requests
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-authority-response-validator
+    obligation_id: validate_authority_response_status_and_scope
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-baseline-validator
+    obligation_id: preserve_immutable_source_seed_and_validation_refs_used_to_compute_baseline
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-baseline-validator
+    obligation_id: require_source_reconstruct_record_ref_and_sha256_before_maturation_baseline_consumption
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-baseline-validator
+    obligation_id: validate_baseline_rows_cover_static_kinetic_dynamic_surfaces_and_maturity_dimensions
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-baseline-validator
+    obligation_id: validate_baseline_rows_trace_to_seed_refs_limitations_or_validated_assessment_gaps
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-baseline-validator
+    obligation_id: validate_mixed_baseline_rows_preserve_member_material_and_cross_material_lineage
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_duplicate_or_already_observed_source_requests
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_semantic_only_locations
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_unsupported_material_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: require_unique_authority_request_id
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_authority_request_blocking_semantics_against_question_materiality
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_authority_request_kind_expected_response_kind_and_scope
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_authority_request_question_refs_against_material_unanswered_questions
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_closure_frontier_question_refs_against_material_unanswered_questions
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_closure_frontier_source_requests_preserve_member_and_cross_material_lineage
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: bind_revision_proposal_validation_to_consumed_revision_proposal
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: reject_actionable_ready_when_unresolved_revision_blockers_remain
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: require_revision_blocker_refs_in_continuation_limitation_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: validate_continuation_state_against_validated_actionability_matrix_and_frontier_state
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: validate_continue_ask_user_or_blocked_state_against_available_next_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: validate_limitation_refs_and_row_scope_for_actionable_limited_state
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: validate_revision_blocker_limitation_refs_against_validated_revision_proposal
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: preserve_remaining_frontier_refs_without_ready_projection
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: reject_trace_audit_or_authority_request_rows_as_positive_semantic_support
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_closure_source_observation_delta_refs_match_source_observation_delta_validation
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_each_source_observation_delta_row_has_convergence_closure_disposition
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_prior_maturation_validations_are_valid
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-question-frontier-validator
+    obligation_id: require_blocker_and_high_questions_to_have_closure_frontier_limitation_or_authority_need
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-question-frontier-validator
+    obligation_id: require_unique_question_id
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-question-frontier-validator
+    obligation_id: validate_authority_need_rows_are_first_class_and_scope_to_questions
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-question-frontier-validator
+    obligation_id: validate_competency_question_assessment_and_domain_trace_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-question-frontier-validator
+    obligation_id: validate_question_materiality_surface_dimension_and_answer_status_enums
+    coverage_status: pending
+    tier: flat
+  - validator_id: maturation-question-frontier-validator
+    obligation_id: validate_question_refs_against_baseline_seed_and_limitation_authorities
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-expansion-validator
+    obligation_id: prevent_in_place_seed_authority_rewrite
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-expansion-validator
+    obligation_id: require_concept_economy_rationale_when_surface_increases
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-expansion-validator
+    obligation_id: validate_expansion_answer_claim_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-expansion-validator
+    obligation_id: validate_expansion_evidence_refs_against_valid_answer_support_ledger_or_seed_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: require_limitation_ref_when_instance_availability_status_is_absent_or_unknown
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: require_mixed_purpose_frame_projection_elements_to_preserve_member_source_and_cross_material_lineage_or_limitation
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: require_ready_ontology_handoff_mappings_to_have_substantive_content_or_limitation_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: require_static_kinetic_dynamic_actionability_coverage_axes
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_dynamic_boundaries_have_unique_ids_and_close_target_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_instance_assertion_mapping_status
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_promoted_candidate_target_seed_refs_are_realized
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_purpose_adequacy_frame_projection_equivalence_against_selected_validated_frame
+    coverage_status: pending
+    tier: activation_gated_dormant
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_purpose_required_element_seed_ref_refs_against_known_seed_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_required_element_closure_status_consistent_with_seed_evidence_and_limitation_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_required_element_surface_dimension_closure
+    coverage_status: pending
+    tier: flat
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_seed_purpose_confirmation_projection_against_purpose_confirmation_validation
+    coverage_status: pending
+    tier: activation_gated_dormant
+  - validator_id: ontology-seed-validator
+    obligation_id: validate_seed_purpose_projection_equivalence_against_selected_source_purpose_candidate
+    coverage_status: pending
+    tier: activation_gated_dormant
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: active_contract_hashes_match_active_contract_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: active_contract_migration_status_values_are_allowed
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: active_contract_snapshots_contain_version_policy_required_fields
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: active_contract_snapshots_match_active_contract_refs_by_contract_id_and_ref
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: admitted_domain_competency_snapshots_contain_version_policy_required_fields
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: competency_id_migration_mappings_contain_required_policy_fields
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: competency_id_migration_status_values_are_allowed
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: governed_seed_fields_close_against_selected_reference_and_pattern_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: non_null_selected_source_profile_definition_refs_match_definition_sha256
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: p2_and_p3_competencies_remain_priority_metadata_until_explicit_downstream_promotion_policy_exists
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: previous_competency_ids_resolve_to_current_id_or_explicit_replacement_disposition
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: previous_source_profile_snapshots_validate_old_to_current_profile_mappings
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: required_admitted_competency_ids_derive_all_p1_from_admitted_domain_competency_snapshot
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: required_admitted_competency_ids_match_admitted_domain_competency_snapshot
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_pattern_catalog_versions_or_snapshots_are_recorded
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_reference_and_pattern_migration_status_is_supported
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_reference_standard_ids_resolve_to_reference_standard_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_reference_standard_versions_or_snapshots_are_recorded
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_registry_hash_matches_reconstruct_contract_registry
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_registry_snapshot_contains_registry_ref_and_hash
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_source_profile_migration_fields_are_recorded
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_source_profile_snapshots_contain_version_policy_required_fields
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_source_profile_snapshots_match_source_profile_records_by_profile_id_and_target_material_kind
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: source_profile_migration_refs_resolve_to_source_profile_records_or_prior_snapshots
+    coverage_status: pending
+    tier: flat
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: split_merged_replaced_competency_ids_close_against_admitted_domain_competency_snapshot
+    coverage_status: pending
+    tier: flat
+  - validator_id: purpose-confirmation-validator
+    obligation_id: block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending
+    coverage_status: pending
+    tier: flat
+  - validator_id: purpose-confirmation-validator
+    obligation_id: require_confirmation_for_inferred_or_limitation_backed_purpose
+    coverage_status: pending
+    tier: flat
+  - validator_id: purpose-confirmation-validator
+    obligation_id: require_revised_confirmation_to_preserve_source_conflict_or_trigger_purpose_discovery_rerun
+    coverage_status: pending
+    tier: flat
+  - validator_id: purpose-confirmation-validator
+    obligation_id: validate_confirmation_status_against_selected_purpose_candidate
+    coverage_status: pending
+    tier: flat
+  - validator_id: purpose-confirmation-validator
+    obligation_id: validate_confirmation_status_against_source_purpose_candidate_status_and_validation_confirmation_required
+    coverage_status: pending
+    tier: flat
+  - validator_id: reconstruct-run-control-validator
+    obligation_id: preserve_post_write_hash_observation_without_claiming_atomic_commit_when_writer_did_not_prove_atomic_rename
+    coverage_status: pending
+    tier: flat
+  - validator_id: reconstruct-run-control-validator
+    obligation_id: reject_conflicting_request_fingerprints_before_semantic_artifacts_are_consumed
+    coverage_status: pending
+    tier: flat
+  - validator_id: reconstruct-run-control-validator
+    obligation_id: validate_committed_write_transactions_have_artifact_refs_and_hashes
+    coverage_status: pending
+    tier: flat
+  - validator_id: reconstruct-run-control-validator
+    obligation_id: validate_current_attempt_and_session_root_lock_ownership
+    coverage_status: pending
+    tier: flat
+  - validator_id: reconstruct-run-control-validator
+    obligation_id: validate_session_root_request_fingerprint_target_signature_runtime_version_and_idempotency_are_replayable
+    coverage_status: pending
+    tier: flat
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: require_evidence_row_for_each_current_registry_subject_id
+    coverage_status: pending
+    tier: flat
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_active_artifact_gate_validator_predicate_and_source_profile_ids_are_unique
+    coverage_status: pending
+    tier: flat
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_active_registry_subject_lists_match_current_registry_catalogs
+    coverage_status: pending
+    tier: flat
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_every_active_gate_has_a_validator_record
+    coverage_status: pending
+    tier: flat
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_every_active_gate_required_when_predicate_resolves
+    coverage_status: pending
+    tier: flat
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_every_validator_gate_ref_resolves_to_an_active_gate
+    coverage_status: pending
+    tier: flat
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_registry_snapshot_hash_is_recorded
+    coverage_status: pending
+    tier: flat
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_registry_snapshot_hash_matches_current_registry_file
+    coverage_status: pending
+    tier: flat
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_actor_action_state_scout_rows_do_not_replace_purpose_required_elements
+    coverage_status: pending
+    tier: flat
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_blocked_validation_gap_is_projection_not_semantic_decision
+    coverage_status: pending
+    tier: flat
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_frontier_required_preserves_exploration_budget_state_without_declaring_source_insufficiency
+    coverage_status: pending
+    tier: flat
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_only_seed_ready_or_limited_seed_possible_allows_seed_authoring
+    coverage_status: pending
+    tier: flat
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_ontology_domain_required_category_rows_only_when_selected_purpose_closure_rows_resolve_to_domain_categories
+    coverage_status: pending
+    tier: flat
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_readiness_consumes_pre_seed_source_scout_validation_snapshot
+    coverage_status: pending
+    tier: flat
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_readiness_projection_uses_validated_input_refs_only
+    coverage_status: pending
+    tier: flat
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_selected_purpose_required_elements_have_closure_rows
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_frontier_kind_is_supported
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_observation_refs_exist_in_source_observations
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_rows_match_accepted_frontier_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_rows_preserve_observation_batch_id_and_triggering_frontier_validation_ref
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_source_ref_material_kind_and_observation_hash_match_observed_content
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: require_each_lineage_row_delta_validation_to_be_valid
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: require_each_lineage_row_reentry_validation_to_be_valid
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_each_lineage_added_observation_exists_in_source_observations
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_each_lineage_added_observation_was_reentered_by_its_validation
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_each_lineage_row_delta_ref_is_readable_and_session_matching
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_lineage_added_observation_ids_match_delta_added_observation_ids
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_unique_session_level_lineage_row_ids
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-reentry-validator
+    obligation_id: validate_delta_validation_passed_before_prompt_reentry
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-reentry-validator
+    obligation_id: validate_each_delta_observation_exists_in_source_observations
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-reentry-validator
+    obligation_id: validate_each_delta_observation_has_exact_prompt_context_source_safety_row
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-observation-reentry-validator
+    obligation_id: validate_source_safety_validation_passed_before_prompt_reentry
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: derive_confirmation_required_from_selected_purpose_source_status
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: expose_selected_purpose_candidate_id_and_frame_id_for_seed_projection_equivalence
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: preserve_contradictions_in_candidate_status_or_limitations
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: reject_p5_only_primary_purpose_candidate
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: require_exactly_one_primary_purpose_candidate_when_selected
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: require_mixed_purpose_frame_elements_to_carry_member_scope_refs_member_target_material_kind_member_source_refs_and_cross_material_ref_refs_or_validated_exclusion
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: require_non_p1_primary_to_have_two_evidence_kinds_and_one_p2_p3_or_p4
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: require_purpose_adequacy_frame_elements_to_have_surface_dimension_facet_and_evidence_or_limitation_state
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: require_purpose_candidate_status_field_to_be_purpose_source_status
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: validate_purpose_candidate_evidence_refs_against_source_observations
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-safety-ledger-validator
+    obligation_id: preserve_prompt_context_evidence_support_public_output_replay_and_material_claim_consumption_boundaries
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-safety-ledger-validator
+    obligation_id: validate_every_observation_has_source_safety_rows_for_each_intended_consumption
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-safety-ledger-validator
+    obligation_id: validate_exactly_four_canonical_source_safety_axes
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-safety-ledger-validator
+    obligation_id: validate_source_safety_subject_refs_against_observed_source_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-safety-ledger-validator
+    obligation_id: validate_visibility_tier_is_derived_not_independent_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-post-maturation-validator
+    obligation_id: validate_post_maturation_scout_snapshot_is_immutable_audit_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-post-maturation-validator
+    obligation_id: validate_prompt_visible_rows_have_source_safety_validation_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-post-maturation-validator
+    obligation_id: validate_signal_rows_resolve_to_source_observations
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-post-maturation-validator
+    obligation_id: validate_snapshot_lineage_validation_ref_and_hash_match_current_lineage_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-post-maturation-validator
+    obligation_id: validate_snapshot_scope_derives_from_target_material_profile_validation
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-pre-seed-validator
+    obligation_id: validate_pre_seed_scout_snapshot_is_immutable_consumed_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-pre-seed-validator
+    obligation_id: validate_prompt_visible_rows_have_source_safety_validation_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-pre-seed-validator
+    obligation_id: validate_signal_rows_resolve_to_source_observations
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-pre-seed-validator
+    obligation_id: validate_snapshot_lineage_validation_ref_and_hash_match_current_lineage_authority
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-pre-seed-validator
+    obligation_id: validate_snapshot_scope_derives_from_target_material_profile_validation
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-validator
+    obligation_id: validate_group_and_coverage_refs_resolve
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-validator
+    obligation_id: validate_prompt_visible_rows_have_source_safety_validation_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-validator
+    obligation_id: validate_scout_pack_is_profile_local_and_contains_no_selected_purpose_required_element_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-validator
+    obligation_id: validate_scout_scope_derives_from_target_material_profile_validation
+    coverage_status: pending
+    tier: flat
+  - validator_id: source-scout-pack-validator
+    obligation_id: validate_signal_rows_resolve_to_source_observations
+    coverage_status: pending
+    tier: flat
+  - validator_id: target-material-profile-validator
+    obligation_id: every_selected_source_profile_snapshot_contains_version_policy_required_fields
+    coverage_status: pending
+    tier: flat
+  - validator_id: target-material-profile-validator
+    obligation_id: every_selected_source_profile_snapshot_matches_source_profile_records_by_profile_id_and_target_material_kind
+    coverage_status: pending
+    tier: flat
+  - validator_id: target-material-profile-validator
+    obligation_id: mixed_targets_preserve_member_to_aggregate_purpose_requirement_mapping_or_limitation
+    coverage_status: pending
+    tier: flat
+  - validator_id: target-material-profile-validator
+    obligation_id: mixed_targets_preserve_per_member_selected_profile_id_contract_status_runtime_implementation_status_and_support_state
+    coverage_status: pending
+    tier: flat
+  - validator_id: target-material-profile-validator
+    obligation_id: mixed_targets_preserve_per_member_source_profile_snapshot_ref_definition_hash_and_source_refs
+    coverage_status: pending
+    tier: flat
+  - validator_id: target-material-profile-validator
+    obligation_id: partial_composite_member_support_limits_aggregate_ready_projection
+    coverage_status: pending
+    tier: flat
