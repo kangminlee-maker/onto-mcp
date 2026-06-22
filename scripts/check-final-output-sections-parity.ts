@@ -12,14 +12,18 @@
  *       activation) keyed by section_id;
  *   (3) heading uniqueness (the provenance gate keys on heading);
  *   (4) the prompt-policy id set equals the module's non-null prompt_policy_id set;
- *   (5) run.ts CONSUMES the module — imports the heading/id maps + the ordered accessors, and
- *       holds NO inline `## <Heading>` literal for any of the 8 sections (so a re-inlined or
- *       drifted heading cannot bypass the parity), and derives the bindings required_fragments
- *       from the module.
- * The authoritative completeness/anti-fooling check for a future 9th section that EMITS a heading
- * is the behavioral fixture matrix (run.test.ts) that activates every append path and compares
- * the emitted `## ` heading set to the module; this static guard catches the common re-inlining
- * and parity-drift cases (the source-text boundary is the same one G8 documented).
+ *   (5) run.ts CONSUMES the module — imports the heading/id maps + the ordered accessors and
+ *       derives the bindings required_fragments from the module;
+ *   (6) completeness / anti-fooling (static source-region sweep): EVERY `## ` heading literal in
+ *       run.ts is a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template (no inline/re-inlined or
+ *       NEW heading), and the appendFinalOutput* emitter-definition count equals the section
+ *       count — so a 9th section (new emitter or non-module heading) fails CI at the source;
+ *   (7) the run.ts provenance-binding row order equals the module's canonical bindings order.
+ * The static sweep (6) is the enforceable completeness mechanism (it catches a new emitted heading
+ * at the source); the parity-test behavioral checks additionally confirm each conditional emitter
+ * sources its module heading. The source-text boundary is the same one G8 documented (run.ts has
+ * no prose `## `, so the sweep is exact today; a future legitimate `## ` prose line would surface
+ * here and must be reconciled).
  *
  * npm: `check:final-output-sections-parity`.
  */
@@ -31,7 +35,9 @@ import { parse as parseYaml } from "yaml";
 import {
   FINAL_OUTPUT_SECTIONS,
   FINAL_OUTPUT_SECTION_HEADINGS,
+  FINAL_OUTPUT_SECTION_IDS,
   PROMPT_POLICY_APPEND_SECTION_IDS,
+  provenanceBindingSectionIds,
   type FinalOutputSectionDescriptor,
 } from "../src/core-runtime/reconstruct/final-output-sections.js";
 
@@ -91,9 +97,22 @@ export interface FinalOutputSectionsParityInputs {
   moduleSections: readonly FinalOutputSectionDescriptor[];
   modulePromptPolicyIds: readonly string[];
   moduleHeadings: readonly string[];
+  /** Map of FINAL_OUTPUT_SECTION_IDS key -> section_id (for the run.ts bindings-order check). */
+  moduleIdMap: Record<string, string>;
+  /** Bound section_ids in the canonical bindings order (artifact before claim). */
+  bindingsOrder: readonly string[];
   registryNode: unknown;
   runtimeSource: string;
 }
+
+/** The ONLY allowed run.ts heading form: a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template. */
+const ALLOWED_HEADING_RE = /`## \$\{FINAL_OUTPUT_SECTION_HEADINGS\.\w+\}`/g;
+/** Any markdown `## ` heading opened by a string or template literal. */
+const ANY_HEADING_LITERAL_RE = /[`"]## /g;
+/** A run.ts provenance-binding row's section_id reference, in source order. */
+const BINDING_SECTION_ID_RE = /section_id:\s*FINAL_OUTPUT_SECTION_IDS\.(\w+)/g;
+/** A final-output append emitter function definition. */
+const APPEND_FN_DEF_RE = /function\s+appendFinalOutput\w+\s*\(/g;
 
 /** Pure parity comparison. Returns a (possibly empty) list of drift messages. */
 export function evaluateFinalOutputSectionsParity(
@@ -164,6 +183,13 @@ export function evaluateFinalOutputSectionsParity(
   if (ppDiff.onlyInFirst.length) errors.push(`PROMPT_POLICY_APPEND_SECTION_IDS has id(s) with no bound section: ${ppDiff.onlyInFirst.join(", ")}`);
   if (ppDiff.onlyInSecond.length) errors.push(`PROMPT_POLICY_APPEND_SECTION_IDS is missing a bound prompt_policy_id: ${ppDiff.onlyInSecond.join(", ")}`);
 
+  // module-internal: every heading constant is used by a descriptor (no orphan heading).
+  const moduleHeadingSet = new Set(inputs.moduleHeadings);
+  const descriptorHeadingSet = new Set(inputs.moduleSections.map((s) => s.heading));
+  const headingConsistency = setDiff([...moduleHeadingSet], [...descriptorHeadingSet]);
+  if (headingConsistency.onlyInFirst.length) errors.push(`heading constant(s) with no descriptor row: ${headingConsistency.onlyInFirst.join(", ")}`);
+  if (headingConsistency.onlyInSecond.length) errors.push(`descriptor heading(s) with no FINAL_OUTPUT_SECTION_HEADINGS constant: ${headingConsistency.onlyInSecond.join(", ")}`);
+
   // (5) run.ts SSOT consumption.
   const imported = importedSymbols(importBlock(inputs.runtimeSource));
   for (const sym of REQUIRED_MODULE_IMPORTS) {
@@ -174,11 +200,36 @@ export function evaluateFinalOutputSectionsParity(
   if (!/runtimeProvenanceBindingsRequiredFragments\s*\(/.test(inputs.runtimeSource)) {
     errors.push(`${RUNTIME_REF} must derive runtime-provenance-bindings required_fragments via runtimeProvenanceBindingsRequiredFragments()`);
   }
-  // No inline `## <Heading>` literal for any section — headings must be module-sourced.
-  for (const heading of inputs.moduleHeadings) {
-    if (inputs.runtimeSource.includes(`## ${heading}`)) {
-      errors.push(`${RUNTIME_REF} contains an inline "## ${heading}" literal — emit it from FINAL_OUTPUT_SECTION_HEADINGS instead`);
-    }
+
+  // (6) completeness / anti-fooling — static source-region sweep. EVERY markdown `## ` heading
+  // literal in run.ts must be a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template, and the
+  // count of appendFinalOutput* emitter definitions must equal the section count — so a NEW (9th)
+  // section emitting an inline or non-module heading, or a new emitter fn, fails CI at the source
+  // (not just a re-inline of a known heading). (run.ts has no prose `## `, so the sweep is exact.)
+  const headingLiterals = inputs.runtimeSource.match(ANY_HEADING_LITERAL_RE) ?? [];
+  const allowedHeadings = inputs.runtimeSource.match(ALLOWED_HEADING_RE) ?? [];
+  if (headingLiterals.length !== allowedHeadings.length) {
+    errors.push(
+      `${RUNTIME_REF} has ${headingLiterals.length - allowedHeadings.length} final-output "## " heading literal(s) not of the module form \`## \${FINAL_OUTPUT_SECTION_HEADINGS.X}\` — every section heading must be emitted from the module (a new/re-inlined heading is not allowed)`,
+    );
+  }
+  const appendFnCount = (inputs.runtimeSource.match(APPEND_FN_DEF_RE) ?? []).length;
+  if (appendFnCount !== inputs.moduleSections.length) {
+    errors.push(
+      `${RUNTIME_REF} defines ${appendFnCount} appendFinalOutput* emitter(s) but the module declares ${inputs.moduleSections.length} sections — a new emitter needs a module descriptor + registry row`,
+    );
+  }
+
+  // (7) bindings-array order — the run.ts provenance-binding rows' section_id order must equal the
+  // module's canonical bindings order (load-bearing: it drives the rendered bindings section text
+  // and the persisted validation artifact's section_bindings + required_fragments dedup order).
+  const runtimeBindingOrder = [...inputs.runtimeSource.matchAll(BINDING_SECTION_ID_RE)]
+    .map((m) => inputs.moduleIdMap[m[1]!])
+    .filter((id): id is string => typeof id === "string");
+  if (JSON.stringify(runtimeBindingOrder) !== JSON.stringify([...inputs.bindingsOrder])) {
+    errors.push(
+      `${RUNTIME_REF} provenance-binding row order [${runtimeBindingOrder.join(", ")}] != module bindings order [${inputs.bindingsOrder.join(", ")}]`,
+    );
   }
 
   return errors;
@@ -207,6 +258,8 @@ async function main(): Promise<void> {
     moduleSections: FINAL_OUTPUT_SECTIONS,
     modulePromptPolicyIds: PROMPT_POLICY_APPEND_SECTION_IDS,
     moduleHeadings: Object.values(FINAL_OUTPUT_SECTION_HEADINGS),
+    moduleIdMap: FINAL_OUTPUT_SECTION_IDS,
+    bindingsOrder: provenanceBindingSectionIds(),
     registryNode,
     runtimeSource,
   });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FINAL_OUTPUT_SECTIONS,
   FINAL_OUTPUT_SECTION_HEADINGS,
+  FINAL_OUTPUT_SECTION_IDS,
   PROMPT_POLICY_APPEND_SECTION_IDS,
   promptPolicyAppendSectionIds,
   provenanceBindingSectionIds,
@@ -18,21 +19,33 @@ import {
 } from "./run.js";
 
 const MODULE_HEADINGS = Object.values(FINAL_OUTPUT_SECTION_HEADINGS);
+const HEADING_KEY_BY_VALUE = Object.fromEntries(
+  Object.entries(FINAL_OUTPUT_SECTION_HEADINGS).map(([k, v]) => [v, k]),
+);
+const ID_KEY_BY_VALUE = Object.fromEntries(
+  Object.entries(FINAL_OUTPUT_SECTION_IDS).map(([k, v]) => [v, k]),
+);
 
-// A realistic run.ts: imports the module symbols, references the derivation accessor, and holds
-// NO inline `## <Heading>` literal (all headings are emitted via the module constant).
-const GOOD_RUNTIME_SOURCE = [
-  "import {",
-  "  FINAL_OUTPUT_SECTION_HEADINGS,",
-  "  FINAL_OUTPUT_SECTION_IDS,",
-  "  promptPolicyAppendSectionIds,",
-  "  runtimeProvenanceBindingsRequiredFragments,",
-  '} from "./final-output-sections.js";',
-  "const h = `## ${FINAL_OUTPUT_SECTION_HEADINGS.seedAnswerability}`;",
-  "const ids = FINAL_OUTPUT_SECTION_IDS.artifactTruth;",
-  "const pp = promptPolicyAppendSectionIds();",
-  "const rf = runtimeProvenanceBindingsRequiredFragments();",
-].join("\n");
+// A faithful synthetic run.ts (generated from the module so it stays in sync): one append
+// emitter per section emitting its module heading template, the 5 binding rows in module order,
+// the required-fragments derivation, and the module imports. Satisfies every run.ts-structure
+// check (heading sweep, append-fn count, bindings order, consumption).
+function buildRuntimeSource(): string {
+  const importLine =
+    'import { FINAL_OUTPUT_SECTION_HEADINGS, FINAL_OUTPUT_SECTION_IDS, promptPolicyAppendSectionIds, runtimeProvenanceBindingsRequiredFragments } from "./final-output-sections.js";';
+  const appendFns = FINAL_OUTPUT_SECTIONS.map((s) => {
+    const hk = HEADING_KEY_BY_VALUE[s.heading];
+    return `function appendFinalOutput_${hk}Section() { return \`## \${FINAL_OUTPUT_SECTION_HEADINGS.${hk}}\`; }`;
+  }).join("\n");
+  const bindingRows = FINAL_OUTPUT_SECTIONS.filter((s) => s.provenance_binding_required)
+    .map((s) => `  { section_id: FINAL_OUTPUT_SECTION_IDS.${ID_KEY_BY_VALUE[s.section_id]} },`)
+    .join("\n");
+  const tail =
+    "const rf = runtimeProvenanceBindingsRequiredFragments();\nconst pp = promptPolicyAppendSectionIds();";
+  return [importLine, appendFns, `const bindings = [\n${bindingRows}\n];`, tail].join("\n");
+}
+
+const GOOD_RUNTIME_SOURCE = buildRuntimeSource();
 
 function matchedRegistryNode(): Record<string, unknown>[] {
   return FINAL_OUTPUT_SECTIONS.map((s) => ({ ...s }));
@@ -43,6 +56,8 @@ function evaluate(overrides: Partial<FinalOutputSectionsParityInputs>): string[]
     moduleSections: FINAL_OUTPUT_SECTIONS,
     modulePromptPolicyIds: PROMPT_POLICY_APPEND_SECTION_IDS,
     moduleHeadings: MODULE_HEADINGS,
+    moduleIdMap: FINAL_OUTPUT_SECTION_IDS,
+    bindingsOrder: provenanceBindingSectionIds(),
     registryNode: matchedRegistryNode(),
     runtimeSource: GOOD_RUNTIME_SOURCE,
     ...overrides,
@@ -139,59 +154,73 @@ describe("final-output-sections parity guard (G9 / INV-SCHEMA-1)", () => {
       moduleSections: dupSections,
       modulePromptPolicyIds: PROMPT_POLICY_APPEND_SECTION_IDS,
       moduleHeadings: dupSections.map((s) => s.heading),
+      moduleIdMap: FINAL_OUTPUT_SECTION_IDS,
+      bindingsOrder: provenanceBindingSectionIds(),
       registryNode: dupSections.map((s) => ({ ...s })),
       runtimeSource: GOOD_RUNTIME_SOURCE,
     });
     expect(errors.some((m) => m.includes("not unique"))).toBe(true);
   });
 
-  it("fails when run.ts does not import a required module symbol", () => {
-    const src = GOOD_RUNTIME_SOURCE.replace("  promptPolicyAppendSectionIds,\n", "");
-    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("must import promptPolicyAppendSectionIds"))).toBe(true);
+  it("fails when the prompt-policy id set drifts from the bound section policy ids (clause 4)", () => {
+    const errors = evaluate({ modulePromptPolicyIds: ["seed_answerability", "claim_projection", "artifact_truth", "provenance_footer", "ghost_policy"] });
+    expect(errors.some((m) => m.includes("PROMPT_POLICY_APPEND_SECTION_IDS"))).toBe(true);
   });
 
-  it("fails when run.ts holds an inline `## <Heading>` literal", () => {
-    const src = GOOD_RUNTIME_SOURCE + '\nconst inline = "## Artifact Truth";';
-    expect(evaluate({ runtimeSource: src }).some((m) => m.includes('inline "## Artifact Truth"'))).toBe(true);
+  it("fails when run.ts does not import a required module symbol", () => {
+    const src = GOOD_RUNTIME_SOURCE.replace("promptPolicyAppendSectionIds, ", "");
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("must import promptPolicyAppendSectionIds"))).toBe(true);
   });
 
   it("fails when run.ts does not derive required_fragments from the module", () => {
     const src = GOOD_RUNTIME_SOURCE.replace("const rf = runtimeProvenanceBindingsRequiredFragments();", "");
     expect(evaluate({ runtimeSource: src }).some((m) => m.includes("runtimeProvenanceBindingsRequiredFragments"))).toBe(true);
   });
+
+  it("ANTI-FOOLING: fails when run.ts re-inlines a known heading as a literal", () => {
+    const src = GOOD_RUNTIME_SOURCE + '\nconst inlined = "## Artifact Truth";';
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes('heading literal(s) not of the module form'))).toBe(true);
+  });
+
+  it("ANTI-FOOLING: fails when run.ts emits a NEW non-module `## ` heading (a 9th section)", () => {
+    const src = GOOD_RUNTIME_SOURCE + '\nconst novel = "## Brand New Untracked Section";';
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes('heading literal(s) not of the module form'))).toBe(true);
+  });
+
+  it("ANTI-FOOLING: fails when run.ts adds a NEW appendFinalOutput* emitter (count drift)", () => {
+    const src = GOOD_RUNTIME_SOURCE + "\nfunction appendFinalOutputGhostSection() {}";
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("appendFinalOutput* emitter"))).toBe(true);
+  });
+
+  it("fails when the run.ts provenance-binding row order drifts from the module bindings order", () => {
+    // Swap the first two binding rows (seed-answerability <-> artifact-truth).
+    const src = GOOD_RUNTIME_SOURCE
+      .replace("FINAL_OUTPUT_SECTION_IDS.seedAnswerability", "__TMP__")
+      .replace("FINAL_OUTPUT_SECTION_IDS.artifactTruth", "FINAL_OUTPUT_SECTION_IDS.seedAnswerability")
+      .replace("__TMP__", "FINAL_OUTPUT_SECTION_IDS.artifactTruth");
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("provenance-binding row order"))).toBe(true);
+  });
 });
 
-describe("final-output conditional emitters source their heading from the module (behavioral)", () => {
-  it("emits the module heading for the document projection truncation section", () => {
-    const out = appendFinalOutputDocumentProjectionTruncationSection("# Result\n", [
-      {
-        observation_id: "obs-1",
-        source_ref: "src/big.ts",
-        target_material_kind: "code",
-        captured_chars: 9000,
-        projection_budget_chars: 1200,
-      },
+describe("final-output conditional emitters: heading-set equals the module's conditional set (behavioral)", () => {
+  it("emits exactly the 3 conditional module headings when all 3 paths are activated", () => {
+    let out = "# Result\n";
+    out = appendFinalOutputDocumentProjectionTruncationSection(out, [
+      { observation_id: "obs-1", source_ref: "src/big.ts", target_material_kind: "code", captured_chars: 9000, projection_budget_chars: 1200 },
     ]);
-    expect(out).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.sourceProjectionTruncation}`);
-  });
-
-  it("emits the module heading for the workbook inventory truncation section", () => {
-    const out = appendFinalOutputWorkbookInventoryProjectionTruncationSection("# Result\n", [
-      {
-        observation_id: "obs-2",
-        source_ref: "data/book.xlsx",
-        sections: [{ section: "sheets", kept: 5, total: 14 }],
-      },
+    out = appendFinalOutputWorkbookInventoryProjectionTruncationSection(out, [
+      { observation_id: "obs-2", source_ref: "data/book.xlsx", sections: [{ section: "sheets", kept: 5, total: 14 }] },
     ]);
-    expect(out).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.workbookInventoryProjectionTruncation}`);
-  });
-
-  it("emits the module heading for the unresolved revision section", () => {
-    const out = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
-      proposals: [
-        { proposal_id: "p1", target_type: "seed", target_id: "seed-1", action: "reject", rationale: "r", expected_effect: "e" },
-      ],
+    out = appendFinalOutputUnresolvedRevisionSection(out, {
+      proposals: [{ proposal_id: "p1", target_type: "seed", target_id: "seed-1", action: "reject", rationale: "r", expected_effect: "e" }],
     } as never);
-    expect(out).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.unresolvedRevisionProposals}`);
+
+    const emittedHeadings = new Set(
+      [...out.matchAll(/^## (.+)$/gm)].map((m) => m[1]!),
+    );
+    const expectedConditional = new Set(
+      FINAL_OUTPUT_SECTIONS.filter((s) => s.emit_owner === "conditional_markdown").map((s) => s.heading),
+    );
+    expect(emittedHeadings).toEqual(expectedConditional);
   });
 });
