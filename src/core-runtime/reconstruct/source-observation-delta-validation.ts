@@ -23,6 +23,7 @@ import type {
 } from "./artifact-types.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
 import { sourceSafetyRowIdForObservation } from "./source-safety-validation.js";
+import { assertObligation } from "./obligation-assertion.js";
 
 type SourceObservationDeltaFrontierArtifact =
   | ReconstructSourceFrontierArtifact
@@ -311,6 +312,27 @@ export function validateSourceObservationDelta(args: {
   assertArrayField(args.delta.accepted_frontier_ref_ids, "source-observation-delta", "accepted_frontier_ref_ids");
   assertArrayField(args.delta.added_observation_ids, "source-observation-delta", "added_observation_ids");
   const violations: ReconstructSourceObservationDeltaValidationViolation[] = [];
+  // G(a) slice 5: record the four delta obligations with a distinct enforcement region, before any
+  // per-row loop so they are proven wired on a zero-row delta. validate_delta_frontier_kind_is_supported
+  // stays parked (ledger audit note): normalizeFrontierForDelta checks kind-vs-artifact CONSISTENCY,
+  // not that the kind value itself is in a supported set, so an unsupported kind can fall through.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_delta_observation_refs_exist_in_source_observations",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_delta_rows_match_accepted_frontier_refs",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_delta_rows_preserve_observation_batch_id_and_triggering_frontier_validation_ref",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_delta_source_ref_material_kind_and_observation_hash_match_observed_content",
+  );
   if (args.delta.schema_version !== "1") {
     violations.push(violation({
       code: "schema_shape_invalid",
@@ -519,6 +541,7 @@ export function validateSourceObservationDelta(args: {
     validation_results: violations.length === 0
       ? ["source_observation_delta_valid"]
       : ["source_observation_delta_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
@@ -536,6 +559,26 @@ export function validateSourceObservationReentry(args: {
   assertArrayField(args.sourceSafetyLedger.safety_rows, "source-safety-ledger", "safety_rows");
   assertArrayField(args.delta.added_observation_ids, "source-observation-delta", "added_observation_ids");
   const violations: ReconstructSourceObservationReentryValidationViolation[] = [];
+  // G(a) slice 5: record the four re-entry obligations. R1/R4 are top-level gate checks; R2/R3 are
+  // per-observation, so all four are stamped before the loop to be proven wired on a zero-observation
+  // delta. Each was audited to a distinct enforcement region (no laundering).
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_delta_validation_passed_before_prompt_reentry",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_each_delta_observation_exists_in_source_observations",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_each_delta_observation_has_exact_prompt_context_source_safety_row",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_source_safety_validation_passed_before_prompt_reentry",
+  );
   if (args.delta.schema_version !== "1") {
     violations.push(reentryViolation({
       code: "schema_shape_invalid",
@@ -622,6 +665,7 @@ export function validateSourceObservationReentry(args: {
     validation_results: violations.length === 0
       ? ["source_observation_reentry_valid"]
       : ["source_observation_reentry_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

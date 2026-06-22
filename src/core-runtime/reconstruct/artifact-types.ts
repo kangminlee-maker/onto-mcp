@@ -545,6 +545,7 @@ export interface ReconstructSourceObservationDeltaValidationArtifact {
   accepted_frontier_ref_count: number;
   added_observation_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructSourceObservationDeltaValidationViolation[];
 }
 
@@ -571,6 +572,7 @@ export interface ReconstructSourceObservationReentryValidationArtifact {
   validation_status: "valid" | "invalid";
   reentered_observation_ids: string[];
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructSourceObservationReentryValidationViolation[];
 }
 

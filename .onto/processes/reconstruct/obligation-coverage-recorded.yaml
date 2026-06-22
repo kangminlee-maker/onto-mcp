@@ -27,3 +27,19 @@ recorded:
     obligation_id: require_convergent_source_evidence_claims_to_have_two_independent_judge_confirmed_supports
   - validator_id: maturation-answer-claims-validator
     obligation_id: validate_answer_claim_question_refs
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_observation_refs_exist_in_source_observations
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_rows_match_accepted_frontier_refs
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_rows_preserve_observation_batch_id_and_triggering_frontier_validation_ref
+  - validator_id: source-observation-delta-validator
+    obligation_id: validate_delta_source_ref_material_kind_and_observation_hash_match_observed_content
+  - validator_id: source-observation-reentry-validator
+    obligation_id: validate_delta_validation_passed_before_prompt_reentry
+  - validator_id: source-observation-reentry-validator
+    obligation_id: validate_each_delta_observation_exists_in_source_observations
+  - validator_id: source-observation-reentry-validator
+    obligation_id: validate_each_delta_observation_has_exact_prompt_context_source_safety_row
+  - validator_id: source-observation-reentry-validator
+    obligation_id: validate_source_safety_validation_passed_before_prompt_reentry
