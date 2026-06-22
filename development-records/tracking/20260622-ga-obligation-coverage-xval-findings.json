@@ -1,0 +1,385 @@
+{
+  "workflow": "wf_fe9e9434-59c (ga-design-exploration; 5 substrate maps -> 4 approaches -> judge synthesis; 10 agents)",
+  "design": "development-records/design/20260622-ga-obligation-coverage-design.md",
+  "note": "G(a) obligation-coverage design exploration. Recommended = Obligation-Coverage Ratchet (9/10).",
+  "scored_approaches": [
+    {
+      "name": "Runtime asserted_obligation_ids + per-validator coverage gate (M1-trio first slice)",
+      "score_0_to_10": 7,
+      "verdict": "Sound dynamic substrate, correct hash-safety reasoning, but its scope-bounding lever (an INSTRUMENTED_VALIDATORS allowlist in code) is weaker than a checked-in ledger: the 'declared-but-uncovered' set is implicit (everything-not-in-allowlist) and not a visible, diffable, ratcheted artifact, so it does not make the backlog monotonically shrink as a first-class gate condition."
+    },
+    {
+      "name": "Coverage-by-Execution: assertObligation() recorder + harvest existing unit tests + set-difference gate",
+      "score_0_to_10": 8,
+      "verdict": "Strongest substrate design: the assertObligation() helper centralizes the recording concept (one deletion boundary), block-TOP placement gives true PASS/FAIL-independence, and harvesting off the EXISTING 31 reconstruct *.test.ts avoids building a dispatcher/fixture that rots. Honest about rubber-stamp and fixture-path limits. Loses a point only because, like #1, its in-scope set is code-declared rather than a visible ratcheted ledger \u2014 the backlog is real but not enforced-to-shrink."
+    },
+    {
+      "name": "Tested-Enforcer Binding Registry (obligation_id -> {validator_id, enforcerHandle, redLineTest})",
+      "score_0_to_10": 6,
+      "verdict": "Uniquely proves the enforcer REJECTS bad input (red-line negative test), strictly stronger on the 'is the enforcer real' axis than a reached-control token. But it re-introduces a curated obligation_id->enforcer binding STRING \u2014 the exact 'static map = declared-only' pattern the design rejected \u2014 now backstopped by 'fn rejects SOME input', and shared violation codes (missing_required_coverage fires for two sibling obligations at maturation-validation.ts:824-837 and :885) make 'the RIGHT obligation fired' unprovable without fragile subject_id matching. The ~248 unenforced active obligations become a large allowlist escape hatch with no ratchet."
+    },
+    {
+      "name": "Obligation-Coverage Ratchet (asserted_obligation_ids + monotone-shrink pending tier)",
+      "score_0_to_10": 9,
+      "verdict": "Best fit to the explicit decision criterion: makes 'declared-but-uncovered' a VISIBLE checked-in ledger (.onto/.../obligation-coverage-ledger.yaml) and a RATCHET (pending may not grow vs origin/main, may not re-park a recorded id) guarantees monotone shrink without forcing 297 at once. Inherits #2's correct dynamic recording substrate, the verified hash-safety of the M1 artifacts (off the authoredArtifactReuseMatch five), and reuses the failure vocabulary verbatim. Honest about its core limit (records reached-control, not semantic correctness). The ratchet predicate is the one subtle thing to get exactly right."
+    }
+  ],
+  "recommended_approach": "Hybrid: Approach 4 (Obligation-Coverage Ratchet) as the spine \u2014 visible checked-in pending ledger + monotone ratchet \u2014 recording the obligation ids via Approach 2's centralized assertObligation(acc, id) helper placed at block-TOP and harvested from the EXISTING reconstruct *.test.ts fixtures (no new dispatcher). Borrow Approach 3's red-line negative-input assertion as a per-obligation TEST EXPECTATION (not as the gate's binding mechanism) to narrow the rubber-stamp hole for the first slice only.",
+  "rationale": "The prompt's decisive instruction is to favor an approach that makes 'declared-but-uncovered' VISIBLE and monotonically shrinking over one that covers 297 at once. Only Approach 4 turns the backlog into a first-class, diffable, ratcheted artifact; Approaches 1 and 2 keep the in-scope set implicit in code (everything-not-in-allowlist), which is correct but invisible and not enforced-to-shrink. I verified the load-bearing substrate against the real code: (1) the recording field is genuinely unbuilt \u2014 grep asserted_obligation in src/ scripts/ = 0 hits, so this is ADD-substrate work, not a static map (which the design rejects at 20260619-...-design.md:73-78). (2) The M1 trio is hash-safe for the first slice: the reuse hash hazard is real and narrow \u2014 reuseMatchArtifactHash (run.ts:1078-1080) strips ONLY created_at/emitted_at (stripVolatileArtifactFields run.ts:1059-1076), and the FIVE hashed validation artifacts are exactly targetMaterialProfileValidation/sourceSafetyLedgerValidation/sourceScoutPackValidation/sourceObservationLineageIndexValidation/seedAuthoringReadinessValidation (run.ts:1167/1193/1199/1202/1206); the maturation-baseline and actionability-matrix validation artifacts are NOT in authoredArtifactReuseMatch's signature, so adding a field to them rotates nothing. (3) The registry side is already hash-neutral via the projectValidatorRecordSnapshotFields ALLOW-LIST (governing-snapshot.ts:446-459) added by #108, and obligations are preserved on ReconstructValidatorRecord (contract-registry.ts:146-147, parsed via optionalStringArray + parseConditionalValidationObligation at 725-747). (4) The M1 enforcer block is a real, recordable check-unit: validateMaturationBaseline's coverage block (maturation-validation.ts:868-903) emits missing_required_coverage/conflicting_state and is the live enforcer for validate_baseline_rows_cover_selected_purpose_frame_required_elements; validateActionabilityMatrix's id/ref blocks (1278-1320) enforce validate_matrix_row_ids_are_stable_and_baseline_row_refs_close. (5) The gate skeleton and registration are pure reuse: clone scripts/check-final-output-sections-parity.ts (pure evaluate()->string[] + thin main + direct-invoke guard), add a GUARDS[] row to check-invariant-drift.ts:30-73, add check:obligation-coverage to package.json (51-53 pattern). I picked Approach 2's centralized assertObligation() helper over inline pushes (Approach 4's literal push) because it gives ONE deletion boundary and forces block-TOP, pass/fail-independent placement \u2014 without it, a push placed inside an `if (violation)` branch would falsely read clean runs as uncovered. I demote Approach 3 from the spine because its binding STRING re-creates the declared-only pattern and shared violation codes (missing_required_coverage fires for two sibling baseline obligations) make per-obligation attribution fragile; but its red-line negative test is the only thing that touches the rubber-stamp hole, so I keep it as a per-obligation test expectation in the first slice. Net: this proves WIRED-ness dynamically and makes the gap monotonically shrink; it does NOT prove the enforcer is semantically CORRECT \u2014 that residual (R5's \uad6c\uc870\uc99d\uba85 \ubd88\uac00) is named, not hidden.",
+  "design_skeleton": {
+    "goal": "Make the repo's canonical 'declared validation_obligation with no live enforcer' a BUILD ERROR, not a review round: every ACTIVE registry obligation must be either dynamically proven-asserted on its own validator path (recorded asserted_obligation_ids harvested from real validator execution) OR explicitly parked in a checked-in pending ledger that can only ever shrink \u2014 so the uncovered set is VISIBLE and monotonically shrinking, never a 297-line big-bang.",
+    "scope": "IN SCOPE: (1) a new asserted_obligation_ids: string[] field on the in-scope Reconstruct*ValidationArtifact interfaces (artifact-types.ts), starting with ReconstructMaturationBaselineValidationArtifact (:1960-1975) and ReconstructActionabilityMatrixValidationArtifact (:2015-2029). (2) a centralized assertObligation(acc, id) recorder helper (one small module, the deletion boundary) called at block-TOP inside the M1 validate* bodies (maturation-validation.ts:872 coverage block, :1278 id/ref blocks), returned in the artifact literal at :904-925 next to validation_results. (3) a checked-in pending ledger .onto/processes/reconstruct/obligation-coverage-ledger.yaml listing every ACTIVE (validator_id, obligation_id) NOT yet recorded, coverage_status: pending. (4) scripts/check-obligation-coverage.ts (clone of check-final-output-sections-parity.ts) with a pure evaluateObligationCoverage()->string[], a harvest that re-runs the existing maturation-validation.test.ts validators and reads back asserted_obligation_ids, and the RATCHET. (5) check:obligation-coverage npm script + one GUARDS[] row in check-invariant-drift.ts. (6) one new INV (INV-OBLIGATION-COVERAGE-1) in INVARIANTS.md with an INVARIANT-CHANGE marker. OUT OF SCOPE: instrumenting the other ~37 active validators (each later PR shrinks the ledger); the 5 conditional obligations stay tier-tagged-but-exempt until their activation_condition predicate is implemented; planned_validator_records stays report-only; semantic-correctness proof of enforcers (rubber-stamp residual is named, not closed); NO new obligation concepts (G(a) wires the 297 already declared).",
+    "architecture": "THREE LAYERS keyed on (validator_id, obligation_id) \u2014 never global obligation_id (verified: 7 strings recur across validators, e.g. reject_actionable_ready... at registry :2752/:2774/:2811). LAYER 1 RECORDING (runtime, per-validator): assertObligation(acc, id) pushes the obligation id when control reaches the authored check-BLOCK, pass/fail-independent; emitted as asserted_obligation_ids on the validation artifact. The field is a validation OUTPUT, off the validator_records snapshot family, and (for the M1 trio) off the authoredArtifactReuseMatch five \u2014 so it rotates NO reuse hash. LAYER 2 HARVEST (CI): the gate imports the in-scope validate* and reads asserted_obligation_ids off the artifacts the EXISTING maturation-validation.test.ts fixtures already produce (validateMaturationBaseline, validateActionabilityMatrix called directly there) \u2014 the field is the truth; the harness only reads it back, mirroring registry-verification-validation.ts:244-289's expected-vs-actual listDelta. NO new validator dispatcher is built. LAYER 3 GATE+RATCHET: evaluateObligationCoverage() loads EXPECTED active obligations via loadReconstructContractRegistry (validation_obligations preserved at contract-registry.ts:146; conditional overlay JOINed by obligation_id, tier-tagged, exempt until predicate live; planned_validator_records read via raw-YAML walk, report-only), reads the harvested asserted set and the pending ledger, then fails CI on: (a) an ACTIVE obligation that is NEITHER recorded NOR in the ledger (anti-fooling completeness, mirrors G9 item-6 'a 9th section fails CI'); (b) a recorded id that maps to no current active registry obligation for that validator (reverse-validation per onto issue-001, code conflicting_state/registry_claim_mismatch, reused verbatim from registry-verification-validation.ts:291); (c) the RATCHET \u2014 the ledger may not GROW vs origin/main except by genuinely newly-declared-active obligations, and may not contain any id already recorded (you cannot re-park a covered obligation). Registered as a net-new GUARDS[] row (check-invariant-drift.ts:30-73) mapped to a NEW INV-OBLIGATION-COVERAGE-1 (NOT INV-SCHEMA-1, which is schema-shape; this is enforcement-coverage). Reuses failure vocabulary verbatim (missing_required_coverage/duplicate_id/conflicting_state already a closed union at artifact-types.ts:1938-1955); net-new obligation concepts = 0.",
+    "first_slice": "ONE PR, ~19-id blast radius, fully GREEN on merge (the rest parked in the ledger). Steps: (1) add assertObligation(acc, id) helper module (deletion boundary). (2) add asserted_obligation_ids: string[] to ReconstructMaturationBaselineValidationArtifact (artifact-types.ts:1960) and ReconstructActionabilityMatrixValidationArtifact (:2015) \u2014 both MATURATION-stage, CONFIRMED absent from the authoredArtifactReuseMatch five (run.ts:1167/1193/1199/1202/1206), so NO stripVolatileArtifactFields change. (3) call assertObligation at the M1 coverage block top (maturation-validation.ts:872, before the if(selected) predicate) recording validate_baseline_rows_cover_selected_purpose_frame_required_elements, and at the matrix id/ref blocks (:1278) recording validate_matrix_row_ids_are_stable_and_baseline_row_refs_close \u2014 record ONLY the obligations M1 genuinely asserts; do NOT over-claim the sibling obligations whose block does not yet exist (those go to the ledger). (4) seed obligation-coverage-ledger.yaml with every OTHER active (validator_id, obligation_id) as coverage_status: pending. (5) add scripts/check-obligation-coverage.ts (clone check-final-output-sections-parity.ts) with evaluateObligationCoverage() + co-located self-test + the ratchet. (6) add a harvest assertion in maturation-validation.test.ts (asserts the two validators return the expected asserted_obligation_ids). (7) register check:obligation-coverage (package.json) + a GUARDS[] row (check-invariant-drift.ts). (8) add INV-OBLIGATION-COVERAGE-1 to INVARIANTS.md with the INVARIANT-CHANGE marker (touches G4-protected surface). VERIFY: full vitest + check:ts-core + the new guard green; flip-test (delete the flagship assertObligation call -> guard RED); negative-input red-line test (a violating baseline -> missing_required_coverage AND the id recorded, narrowing rubber-stamp for these two); add an unenforced active obligation to the YAML not in the ledger -> guard RED; governing-snapshot.test + reuse-provenance tests byte-identical (proving the new field rotates no reuse hash). Each later PR moves ids pending->recorded; the ratchet forbids regression.",
+    "success_criteria": [
+      "A NEW active obligation added to the registry YAML with neither a recorded assertion nor a pending-ledger entry FAILS check:obligation-coverage in CI (proven by a deliberate add-and-expect-red test in the guard's self-test).",
+      "Deleting the flagship assertObligation call from the M1 coverage block (maturation-validation.ts:872) FLIPS the guard RED \u2014 proving the proof is dynamic (recorded from real execution), not a static declared-only map.",
+      "The pending ledger is monotone: the ratchet rejects any PR whose ledger GROWS vs origin/main (except by newly-declared-active obligations) or RE-PARKS an already-recorded id \u2014 verified by a self-test feeding a grown ledger.",
+      "The new asserted_obligation_ids field rotates NO reuse hash: governing-snapshot.test and the reuse-provenance/reuse_match_hash tests are byte-identical to main (the M1 trio is off the authoredArtifactReuseMatch five and off the validator_records snapshot allow-list).",
+      "Coverage is keyed on (validator_id, obligation_id): a unit test proves one validator's recorded id cannot 'cover' the same obligation string declared on a different validator (the 7 cross-validator duplicates), and that the 5 conditional ids are JOINed (not double-counted) and exempt until their activation_condition predicate is implemented.",
+      "Reverse-validation works: a recorded asserted id that no longer maps to a current active registry obligation for its validator FAILS the guard (conflicting_state/registry_claim_mismatch), catching a rename/typo on either side.",
+      "Concept economy holds: net-new = exactly one field (asserted_obligation_ids), one recorder helper, one ledger artifact, one guard script, one INV; zero new obligation concepts and zero new failure codes (all reused from artifact-types.ts:1938-1955)."
+    ]
+  },
+  "open_questions": [
+    "INV identity: confirm a NEW INV-OBLIGATION-COVERAGE-1 (enforcement-coverage) vs overloading INV-SCHEMA-1 (schema-shape, used by G8/G9). A new INV needs an INVARIANT-CHANGE marker and touches the G4-protected INVARIANTS.md/invariants.yml surface \u2014 owner must approve the marker and the exact INV id (handoff already flags INV-REGISTRY-PARITY-1 as an alternative name).",
+    "Ratchet predicate exactness: define precisely when the pending ledger is ALLOWED to grow. 'Never grow' blocks legitimately adding a new active obligation to the YAML; 'grow only by newly-declared-active obligations' is correct but requires the gate to diff the registry's active obligation set vs origin/main too. Owner must decide whether the gate computes the newly-declared set from the registry diff or trusts an explicit per-entry justification field in the ledger.",
+    "Rubber-stamp residual policy: assertObligation records 'control reached a labeled block', NOT 'the block semantically enforces the obligation'. For the M1 trio the red-line negative test narrows this, but the project-wide policy (does every later validator's instrumentation REQUIRE a paired negative-input test, or is reached-control sufficient?) must be set by the owner \u2014 it materially changes per-validator authoring cost.",
+    "Zero-obligation active validators: confirm the current state (source-frontier, source-observation-directive, seed-confirmation, revision-proposal carry zero obligations and are vacuously covered) is INTENDED, or whether the gate should flag an active validator with a gate_id but zero declared obligations as under-declared. The substrate allows either (loader defaults to []).",
+    "Pending-wall permanence: the ratchet guarantees non-increase but does NOT force the ~248 pending set toward zero on any schedule. Owner must decide whether that is acceptable (gate proves 'no NEW silent gaps' + visible backlog) or whether a separate burn-down target/owner is assigned, so the gate's value posture is explicit.",
+    "Harvest source coupling: the first slice harvests asserted_obligation_ids by reusing maturation-validation.test.ts. Owner must confirm the harvest reads back the field from the EXISTING test fixtures (not a bespoke re-staged fixture), and decide the policy for an obligation whose block is only reachable under an input shape no current test drives (treat as a coverage hole to fix by adding a fixture, never by suppressing).",
+    "SSOT for the id strings: obligation ids are opaque free-form prose with no namespace; a matched-pair rename on both the YAML and the inline string literal passes the bidirectional check while silently mis-binding. Owner should decide whether to generate a TS const from the registry YAML so both the recorder and the gate cite ONE symbol, vs accepting inline string literals with the reverse-validation as the only guard."
+  ],
+  "substrate_constraints": {
+    "obligation-data": [
+      "Coverage key MUST be (validator_id, obligation_id), NOT a global obligation_id \u2014 7 obligation strings recur across validators (10 occurrences), so a global set would let an enforcer 'cover' an obligation on a path where it was never asserted.",
+      "The gate MUST read obligations from TWO places per validator: .validation_obligations (flat string[]) and .conditional_validation_obligations[].obligation_id. The 5 conditional ids are an ACTIVATION OVERLAY that ALSO appear in the same validator's flat list \u2014 join by obligation_id, do not double-count, and use the overlay to assign 'conditional/activation-gated' tier.",
+      "Three tiers come from STRUCTURE, not id-parsing: validator_records.flat = mandatory-active; conditional_validation_obligations = active-but-activation-gated (mandatory once predicate implemented); planned_validator_records.flat = planned-coverage status (not forced active). Tier is determined by which YAML section/array the obligation lives in.",
+      "The gate MUST tolerate empty obligation arrays: 4 active validators (source-frontier, source-observation-directive, seed-confirmation, revision-proposal) declare ZERO obligations. The loader already defaults these to [] (optionalStringArray / conditional default). Decide explicitly whether zero-obligation active validators are allowed (current state) or reported as under-declared.",
+      "Obligation ids are opaque free-form prose strings with no namespace/schema/version \u2014 intent cannot be parsed from the id. Coverage MUST be string set-difference between a registry-derived id list and an enforcer-recorded id list (asserted_obligation_ids), and both sides MUST reference ONE SSOT id list or a rename/typo silently breaks coverage.",
+      "asserted_obligation_ids does not exist and NO obligation id is referenced in src/ today \u2014 even the M1 'named enforcers' do not record the ids they assert. G(a) must ADD the recording substrate (per design, on the 41 *ValidationArtifact interfaces in artifact-types.ts) before any coverage check is non-vacuous; a static obligation_id->handle map is explicitly rejected as 'declared-only'.",
+      "The loader must surface planned_validator_records (separate top-level key) to the gate; contract-registry.ts currently parses only validator_records into ReconstructValidatorRecord[]. Either extend the loader or have the gate walk raw YAML for the planned tier.",
+      "Instrumentation is incremental-friendly: obligation load is concentrated (~3 validators hold ~24% of active obligations; pre-handoff=27, competency-questions=23, ontology-seed=13). Start the gate on already-named enforcers (M1's maturation-baseline/baseline-actionability-matrix = 12 obligations) and report uncovered-but-active obligations as a known-gap list rather than blocking on all 267 at once."
+    ],
+    "obligation-to-code": [
+      "Assertion semantics must be PASS/FAIL-independent: asserted_obligation_ids must record that a validator EXECUTED an obligation's check-unit, not that it emitted a violation \u2014 otherwise a clean (valid, violations=[]) run records zero assertions and the gate falsely reports every obligation unenforced. This rules out deriving coverage from the existing violations[] output.",
+      "The recordable unit is an author-placed instrumentation token per check-BLOCK (e.g. an assertObligation('id') accumulator), NOT a violation code: obligation->code is many:many (run-control 5 obligations vs 14 codes/22 pushes; maturation obligations share missing_required_coverage / conflicting_state across siblings), so no automatic code-value->obligation_id mapping is sound.",
+      "asserted_obligation_ids must be added to the per-validator validation artifact interfaces (artifact-types.ts ~48 Reconstruct*ValidationArtifact) and POPULATED inside each validator body \u2014 the substrate is type-addable but every validator function must be edited; it cannot be back-derived from validation_results (coarse single-element pass/fail) or from source text.",
+      "The gate must scope by tier exactly: validation_obligations (267 across 40 validators) = mandatory-active and each must have a recorded assertion on its validator path; conditional_validation_obligations (5) = mandatory only once the activation predicate is implemented; planned_validator_records (8) = a separate planned-coverage status, never forced active.",
+      "Zero-obligation active validators (source-frontier-validator, source-observation-directive-validator, seed-confirmation-validator, revision-proposal-validator) must be treated as vacuously covered, not as coverage holes.",
+      "Obligations declared on MULTIPLE validators (e.g. validate_matrix_row_ids_are_stable_and_baseline_row_refs_close on both baseline-actionability-matrix-validator and actionability-matrix-validator) require per-validator-path coverage: a recorded assertion must be attributed to the (validator_id, obligation_id) pair, not to the obligation_id globally.",
+      "The proof must be DYNAMIC (execute each validator path and capture invoked handles), not a static obligation_id->handle table and not a static source-text scan like G8/G9 \u2014 a static map is itself unverifiable 'declared-only' text, and obligation->code-block boundaries are not statically recoverable.",
+      "The gate registers as a net-new GuardRun in scripts/check-invariant-drift.ts mapped to INV-SCHEMA-1 (G8/G9 precedent), but every active (validator_id, obligation_id) pair lacking a recorded assertion on its driven path must be a CI FAILURE \u2014 the canonical 'declared validation_obligation with no live enforcer' becomes a build error.",
+      "registry-verification-validator's require_evidence_row_for_each_current_registry_subject_id loop (registry-verification-validation.ts:351-388, one block -> one code) is the canonical template for what a cleanly-recordable assertion looks like; G(a)'s instrumentation should target the same block-granularity that obligations were authored at."
+    ],
+    "artifact-substrate": [
+      "A runtime `asserted_obligation_ids` field MUST NOT be added to any of the five source/seed-stage validation artifacts that feed `authoredArtifactReuseMatch` (targetMaterialProfileValidation, sourceSafetyLedgerValidation, sourceScoutPackValidation, sourceObservationLineageIndexValidation, seedAuthoringReadinessValidation \u2014 run.ts:1167/1193/1199/1202/1206) without ALSO excluding it from the hash, because `reuseMatchArtifactHash` (run.ts:1078) hashes the whole object minus only created_at/emitted_at. Either (a) place the field only on artifacts NOT in the reuse-match set (e.g. the maturation-stage enforcers, which are absent from the set), or (b) extend `stripVolatileArtifactFields` (run.ts:1059) to strip `asserted_obligation_ids` so it stays out of the reuse hash, with a regression test proving the five family shas are byte-identical to main.",
+      "`asserted_obligation_ids` is a PER-ARTIFACT field (one per `Reconstruct*ValidationArtifact` interface that records assertions), not a single shared object \u2014 the artifacts are distinct types with no common base. It must be populated inside the existing pure `validate*` body at the same point `violations`/`validation_status` are decided, so the recording cannot diverge from what production actually asserts (the design's 'dynamic proof, not declared-only map' requirement).",
+      "The recording site of truth must be the runtime field, not a standalone CI fixture: a fixture that re-stages and re-executes 48 validator paths is a second realization of the same call graph that rots independently. If a fixture/harness is used, it must READ BACK the runtime-written `asserted_obligation_ids`, mirroring the registry-verification validator's expected-vs-actual id-set delta pattern (registry-verification-validation.ts:244-289), not re-derive assertions on its own.",
+      "The loader/registry half is already reuse-hash-safe and must stay that way: `validation_obligations`/`conditional_validation_obligations` are preserved on `ReconstructValidatorRecord` (contract-registry.ts:146-147) but excluded from the snapshot via the `projectValidatorRecordSnapshotFields` allow-list (governing-snapshot.ts:446-459). G(a) must read obligations through the loader for the expected set and MUST NOT add obligations to the validator_records snapshot family.",
+      "Tier scoping is mandatory in the gate's expected-set construction: `validation_obligations` (40 blocks across 48 validators) = mandatory-active; `conditional_validation_obligations` (3 blocks, structured shape) = mandatory only once the activation predicate is implemented; `planned_validator_records` (1 section) = a separate planned-coverage status that is NOT forced active. Conflating these collapses the gate into an un-landable red wall given ~292 obligations have no enforcer yet.",
+      "The gate must be bidirectional (per the prior onto review issue-001 at .onto/review/20260619-fa98af28): fail when an active obligation has no recorded assertion AND fail when a recorded `asserted_obligation_ids` value is unknown/stale/duplicate/assigned to the wrong validator/not assertable under its current tier \u2014 recorded ids are now part of the coverage domain and can drift independently of the registry."
+    ],
+    "existing-coverage-machinery": [
+      "G(a) MUST be DYNAMIC: a static obligation_id->handle table is rejected by the design as 'declared-only'. The gate must consume evidence that each ACTIVE obligation was actually asserted on its validator path (recorded asserted_obligation_ids OR a CI fixture that executes the validator and captures invoked handles). The static skeleton (registry-side structural checks) is reusable from G8/G9 but does NOT discharge the dynamic requirement.",
+      "The asserted_obligation_ids substrate does NOT exist and must be invented. The natural carrier is the uniform `validation_results: string[]` / a new sibling field on the per-stage *ValidationArtifact interfaces; recording must occur on BOTH valid and invalid runs (an invalid run must still prove the obligation was checked, else it reads as uncovered).",
+      "Obligation ids read for the coverage gate MUST NOT enter governing-snapshot / the reuse hash (governing-snapshot.ts:602-609 explicitly excludes them to keep the family sha byte-identical). G(a) is a CI-time static+fixture gate, not a runtime snapshot/reuse-hash field.",
+      "Tier scoping is mandatory and the registry already encodes it: validator_records.validation_obligations = fail-CI-active; conditional_validation_obligations = mandatory only once the activation predicate is implemented; planned_validator_records = a separate report-only planned-coverage status (and is NOT in the parsed ReconstructContractRegistry type, so the planned tier needs a separate raw-YAML read or a loader extension).",
+      "Register as a net-NEW guard, following the exact G8/G9 contract: a pure exported evaluate*()->string[] comparator with a co-located self-test, a thin main() with the direct-invoke guard, a new `check:*` npm script, and a new GUARDS[] entry in scripts/check-invariant-drift.ts mapped to an INV id. Reuse listDelta/duplicateIds/setDiff and the violation()+validation_status artifact shape from registry-verification-validation.ts; do NOT introduce a parallel coverage machine.",
+      "Reuse the existing failure vocabulary verbatim \u2014 missing_required_coverage (obligation with no recorded assertion), duplicate_id, conflicting_state / registry_claim_mismatch (recorded id not mapping to a current registry obligation per onto issue-001's reverse-validation). Net-new obligation/failure concepts = 0 (design \u00a74 concept-economy).",
+      "The M1 helpers (validateMaturationBaseline:696, validateActionabilityMatrix:1071) are the already-live named enforcers for the two P1 obligations and must be wired as the recorded enforcers; their current validation_results is a fixed 2-value array, so the recording channel must be ADDED to them (and to every other active validator) \u2014 coverage is only meaningful once recording is universal across the active tier.",
+      "There is no registry-driven validator dispatcher \u2014 validators are called per-stage in run.ts. So the 'CI fixture executes each validator path' alternative has no runner to reuse and must be built; the per-validator validate*/write*ValidationArtifact functions are the execution targets. Whichever dynamic-proof route is chosen, the execution substrate is invented, not reused.",
+      "The gate must also reverse-validate recorded asserted_obligation_ids back against the current registry/tier/owner/activation rules (onto self-review issue-001 in .onto/review/20260619-fa98af28): a recorded id that no longer corresponds to an active registry obligation is itself drift, not silently accepted."
+    ],
+    "bounding-and-prior-deferral": [
+      "DYNAMIC PROOF ONLY: a static obligation_id->assertion_handle map is forbidden (it re-creates 'declared != wired'). The proof must be that validators RECORD the obligation ids they actually asserted (asserted_obligation_ids in the validation artifact, or a CI fixture that drives each validator path and captures invoked handles); the gate fails CI when an in-scope ACTIVE obligation has no recorded assertion. Evidence: design \u00a73 G(a) (20260619-...-design.md:75); recording field absent today (asserted_obligation_ids = 0 hits in src/).",
+      "TIER-SCOPED, NOT ALL-297-AT-ONCE: scope = validator_records.validation_obligations (40 active validators, 267 flat) as mandatory-active; conditional_validation_obligations (5) mandatory only once each activation_condition predicate is implemented; planned_validator_records (8 validators, 25 obligations) as a separate planned-coverage STATUS, never forced active. The gate must distinguish these tiers so it is neither vacuous (gating nothing) nor a 297-line chore (gating everything before enforcers exist).",
+      "FIRST SLICE MUST BE THE M1-ENFORCED TRIO (19 obligations): start with only maturation-baseline-validator (6), baseline-actionability-matrix-validator (6), actionability-matrix-validator (7) \u2014 the validators whose obligations M1 (validateMaturationBaseline:696 / validateActionabilityMatrix:1071) already enforce at runtime. This delivers the P1 silent-defect-as-build-error value on an existing substrate with a ~19-id blast radius; obligations on validators with no enforcer yet must be declared 'planned coverage', not silently passed.",
+      "NON-VACUOUS COMPLETENESS: mirror the G9 static source-region sweep (check-final-output-sections-parity.ts:17-21) \u2014 the gate must detect a NEWLY ADDED active in-scope obligation that has no recorded assertion (coverage over the obligation SET, not spot-checks of known ids), so that adding an obligation to the YAML without an enforcer fails CI. It must not be foolable by an obligation that is declared-covered but whose recording is a coarse pass/fail token.",
+      "RECORDING SUBSTRATE IS PER-VALIDATOR CODE, NOT ONE GATE: validation_results: string[] exists on 42 validation-artifact interfaces but today carries only a coarse '<name>_valid'/'<name>_invalid' token (maturation-validation.ts:921-923). G(a) must add structured asserted_obligation_ids emission to each in-scope validator (a typed field + builder code change across artifact-types.ts + the validator functions), threaded through write-fns/run.ts call sites \u2014 this is the real surface cost the deferral named; bound it by tier.",
+      "HASH-SAFE / NO REUSE-HASH ROTATION: any new validation-artifact field G(a) adds must NOT rotate the governing-snapshot/reuse hash (the #108 lesson). asserted_obligation_ids is a validation OUTPUT (not part of the validator_records snapshot family), so it should be naturally excluded, but the G(a) design must verify governing-snapshot.test + reuse-provenance tests stay green, mirroring the projectValidatorRecordSnapshotFields allow-list discipline from #108.",
+      "REGISTER AS A NEW GUARD IN check-invariant-drift.ts WITH A DELIBERATE INV: add a {guard, invariants, command} entry that process.exit(1) on uncovered active obligations (G8/G9 precedent at check-invariant-drift.ts:30-71). Do NOT reuse INV-SCHEMA-1 unreflectively \u2014 G(a) is enforcement-coverage, not schema-shape; decide between a new INV (e.g. INV-OBLIGATION-COVERAGE-1, INVARIANT-CHANGE-marked) and an existing one, since no current invariant expresses 'declared obligation -> live recorded enforcer'.",
+      "CONCEPT ECONOMY: reuse the existing failure/recording vocabulary (validation_results, the missing_required_coverage / conflicting_state codes) and the loader fields already preserved by #108; introduce at most one new field concept (asserted_obligation_ids) plus one guard script + one INV. Net-new obligation CONCEPTS must be 0 \u2014 G(a) wires existing declared obligations, it does not invent new ones."
+    ]
+  },
+  "hard_slice": {
+    "ultracode": {
+      "workflow": "wf_e20a58ed-1eb (6 lenses -> adversarial verify; 23 agents)",
+      "confirmed_count": 14,
+      "raised": 17,
+      "severities": {
+        "high": 7,
+        "medium": 7
+      },
+      "confirmed": [
+        {
+          "lens": "mechanism",
+          "severity": "high",
+          "title": "Shared matrix obligation is keyed to TWO validators but enforced by ONE function \u2014 the (validator_id, obligation_id) coverage/ratchet is unrealizable for this exact first-slice pair"
+        },
+        {
+          "lens": "mechanism",
+          "severity": "high",
+          "title": "HARVEST layer is not realizable as stated: the existing maturation-validation.test.ts has zero exports, so the gate cannot 'read asserted_obligation_ids off the existing fixtures' without either importing a .test.ts or building the forbidden dispatcher"
+        },
+        {
+          "lens": "mechanism",
+          "severity": "medium",
+          "title": "Recorder placement is ambiguous between guard-gated and unconditional sites; placed inside the if(selected) guard or the matrix.rows loop, recording is NOT pass/fail-independent and a clean run under-records"
+        },
+        {
+          "lens": "completeness",
+          "severity": "high",
+          "title": "Conditional-obligation \"overlay/JOIN\" premise is false: the 5 conditional ids are DISTINCT, not in any validator's flat list \u2014 the gate's expected-set mechanism either drops 5 active obligations or breaks the green-first-slice promise"
+        },
+        {
+          "lens": "completeness",
+          "severity": "medium",
+          "title": "New-INV owner-gating is attributed to G4 build enforcement, but INVARIANTS.md / invariants.yml are not in the G4 PROTECTED_TARGETS \u2014 the marker is not actually build-enforced for a new INV"
+        },
+        {
+          "lens": "completeness",
+          "severity": "medium",
+          "title": "Dup-obligation harvest attribution is unspecified: validateActionabilityMatrix serves TWO validator_ids that both declare the recorded string, but the artifact carries no validator_id \u2014 the (validator_id,obligation_id) keying the gate relies on has no data channel and the ledger seed/blast-radius is ambiguous"
+        },
+        {
+          "lens": "authority-economy",
+          "severity": "medium",
+          "title": "G4 marker / G4-protected-surface claim for INV-OBLIGATION-COVERAGE-1 is false against the real guard: INVARIANTS.md is not protected and no invariants.yml registry exists"
+        },
+        {
+          "lens": "authority-economy",
+          "severity": "medium",
+          "title": "The ratchet (origin/main diff) pulls in git/merge-base machinery the \u00a74 'clone G9, net-new = 1 guard script' economy framing omits; G9's pure evaluate()->string[] uses no git"
+        },
+        {
+          "lens": "authority-economy",
+          "severity": "medium",
+          "title": "The pending ledger is a genuinely new CLASS of authority artifact (checked-in, hand-maintained, gate-trusted allowlist) with no precedent \u2014 its own honesty/completeness guard is deferred to a self-referential ratchet, which the design treats as settled"
+        },
+        {
+          "lens": "drift-guard-soundness",
+          "severity": "high",
+          "title": "Harvest cannot attribute the M1 matrix obligation to its (validator_id, obligation_id) key \u2014 one validate* fn serves two validator_ids, so the keying soundness claim fails for the FIRST slice"
+        },
+        {
+          "lens": "drift-guard-soundness",
+          "severity": "high",
+          "title": "Design's conditional-obligation 'overlay/JOIN' substrate fact is inverted \u2014 the 5 conditional ids are NOT in the flat list, so following the design silently drops them from the expected set (vacuous gate for exactly the activation-gated tier)"
+        },
+        {
+          "lens": "scope-risk",
+          "severity": "high",
+          "title": "Conditional obligations are NOT a flat-list overlay \u2014 the design's core 'JOIN by obligation_id, don't double-count' rule is built on a false premise, mis-sizing the expected set and the ledger seed"
+        },
+        {
+          "lens": "scope-risk",
+          "severity": "high",
+          "title": "Layer-2 HARVEST is incompatible with the standalone-guard execution model: the in-memory test fixtures write nothing to disk, so a cloned static guard cannot 'read off the artifacts the existing tests produce'"
+        },
+        {
+          "lens": "scope-risk",
+          "severity": "medium",
+          "title": "The recorded id validate_matrix_row_ids... is declared on TWO validators both enforced by ONE function with no validator_id discriminator \u2014 the harvest cannot attribute the recording to a (validator_id,obligation_id) pair, so the second pair is unprovably-but-actually covered yet stays parked"
+        }
+      ]
+    },
+    "onto": {
+      "session": "20260622-b7ba27c7 (core-axis 6 lenses)",
+      "issue_count": 8,
+      "issues": [
+        {
+          "id": "issue-001",
+          "severity": "medium",
+          "statement": "The conditional-obligation expected set can be incomplete because the design assumes conditional ids also exist in the flat validation_obligations list."
+        },
+        {
+          "id": "issue-002",
+          "severity": "medium",
+          "statement": "The ratchet proves non-growth, not monotone shrink or eventual coverage closure."
+        },
+        {
+          "id": "issue-003",
+          "severity": "medium",
+          "statement": "The design covers first-slice semantic challenge tests but leaves later recorded-coverage promotion under-specified."
+        },
+        {
+          "id": "issue-004",
+          "severity": "medium",
+          "statement": "The ratchet proves non-regression for existing obligations, but the design overstates total monotone shrink under future obligation growth."
+        },
+        {
+          "id": "issue-005",
+          "severity": "medium",
+          "statement": "Shared-root issue across finding-005, finding-008, finding-010, finding-007: The reusable recorded-status rule lacks a required behavioral witness binding each recorded obligation id to the intended violation-producing enforcer. / The design does not prove that a recorded obligation id is placed at a pass/fail-independent top-of-enforcer location rather than on some reachable path. / The design treats `asserted_obligation_ids` as enforcement coverage even though the artifact only establishes reached-control unless additional structural or behavioral evidence is required."
+        },
+        {
+          "id": "issue-006",
+          "severity": "medium",
+          "statement": "The design both permits parked active obligations to pass CI and claims declared-but-unenforced obligations become build errors."
+        },
+        {
+          "id": "issue-007",
+          "severity": "low",
+          "statement": "The term monotone shrink overstates the ratchet's actual non-growth semantics."
+        },
+        {
+          "id": "issue-008",
+          "severity": "medium",
+          "statement": "The pending-growth predicate depends on a base-ref comparison path that is not yet structurally specified."
+        }
+      ]
+    },
+    "corrections_folded_into_v2": [
+      "Conditional obligations are DISJOINT (UNION not overlay/JOIN): 267 flat + 5 conditional = 272 distinct pairs; v1 would have dropped the 5 conditional (verified 0 overlap)",
+      "HARVEST is a dynamic vitest harness (maturation-validation.test.ts has 0 exports + writes nothing to disk), not a pure static guard reading existing fixtures",
+      "Matrix obligation served by one fn for TWO validators -> attribute by mode (baseline vs post-frontier, both test-driven) + stamp validator_id",
+      "Recorder calls must be UNCONDITIONAL (before the if(selected)/for-loop guards) for pass/fail-independence",
+      "INVARIANTS.md is NOT in G4 PROTECTED_TARGETS and no invariants.yml exists -> new INV is AGENTS 0-2 human-gated, not build-gated",
+      "Ratchet proves NON-INCREASE for legacy pending (not 'monotone shrink'); needs a git base-diff (impure, not a pure G9 clone); split predicate (legacy may not grow / no re-park / newly-declared via currentActiveKeys - baseActiveKeys); fail-loud on base-unavailable",
+      "Pending ledger is a new authority KIND; its honesty (every row resolves to a current active obligation) + the pending->recorded promotion rule (paired red-line test or waiver) are first-class in slice 1",
+      "Honest guarantee: 'active obligation neither recorded nor parked fails CI' AND 'live-enforcement coverage proven only for recorded ids' (no overclaim)"
+    ]
+  },
+  "hard_slice_round2_on_v2": {
+    "ultracode": {
+      "workflow": "wf_77fe7409-56d (verify v2 corrections + hunt new defects; 26 agents)",
+      "confirmed_count": 14,
+      "raised": 20,
+      "new_defects": 12,
+      "confirmed": [
+        {
+          "lens": "corrections-soundness",
+          "severity": "high",
+          "new": true,
+          "title": "C1's blanket \"activation-gated-exempt\" tier mis-classifies the 5th conditional obligation, which is ALREADY activated and live-enforced"
+        },
+        {
+          "lens": "corrections-soundness",
+          "severity": "medium",
+          "new": true,
+          "title": "C3's mode-discriminator attribution pattern does not generalize to the three obligation strings shared across THREE validators"
+        },
+        {
+          "lens": "corrections-soundness",
+          "severity": "medium",
+          "new": true,
+          "title": "C5 header claim 'no invariants.yml exists' is factually false \u2014 a CI workflow file by that exact name exists (the substance of C5 is still sound)"
+        },
+        {
+          "lens": "new-defects-mechanism",
+          "severity": "medium",
+          "new": true,
+          "title": "C2's harvest\u2194static-guard coupling fork (\u00a78 Q4 option A) reintroduces a stale-fixture / CI-ordering hazard with no repo precedent"
+        },
+        {
+          "lens": "new-defects-mechanism",
+          "severity": "medium",
+          "new": true,
+          "title": "C3 wires the stage discriminator at the wrong layer: the cited call sites (run.ts:12365/12724) invoke a wrapper, not validateActionabilityMatrix directly \u2014 the discriminator must thread through writeActionabilityMatrixValidationArtifact"
+        },
+        {
+          "lens": "new-defects-mechanism",
+          "severity": "non_material",
+          "new": true,
+          "title": "v2-corrections header (C5) overstates 'no invariants.yml exists'; a `.github/workflows/invariants.yml` workflow does exist (the substantive claim still holds)"
+        },
+        {
+          "lens": "ratchet-soundness",
+          "severity": "high",
+          "new": true,
+          "title": "Re-park detection (ratchet clause d-ii) is vacuous under the \u00a78-Q4 \"re-import and run the harness\" option \u2014 the silent recorded\u2192pending downgrade is uncaught"
+        },
+        {
+          "lens": "ratchet-soundness",
+          "severity": "medium",
+          "new": true,
+          "title": "\u00a71's \"legacy set can only shrink\" contradicts the C6-corrected \u00a73-d/\u00a75/\u00a78 \"non-increase\" \u2014 the C6 fold was applied inconsistently, leaving an honesty overclaim"
+        },
+        {
+          "lens": "ratchet-soundness",
+          "severity": "medium",
+          "new": true,
+          "title": "Computing baseActiveKeys is under-specified: loadReconstructContractRegistry only reads a disk path, but the base registry is git-show content \u2014 the impure base-parse step is unstated"
+        },
+        {
+          "lens": "ledger-and-coverage",
+          "severity": "high",
+          "new": true,
+          "title": "Recorded/parked arithmetic is off-by-one and unit-inconsistent: dual-attribution (C3) makes the recorded SET 3 pairs, not 2, so the \u00a76 seed of 270 parked pairs double-counts a recorded matrix pair and trips clause-(b)"
+        },
+        {
+          "lens": "authority-economy",
+          "severity": "medium",
+          "new": false,
+          "title": "C5 rests on a false premise: invariants.yml DOES exist and is the CI merge gate \u2014 the new guard's build-wiring is unaccounted"
+        },
+        {
+          "lens": "authority-economy",
+          "severity": "medium",
+          "new": false,
+          "title": "Design conflates \"INV is human-gated\" with \"guard is not build-gated\" \u2014 the guard MUST run in CI for the guarantee to hold"
+        },
+        {
+          "lens": "authority-economy",
+          "severity": "non_material",
+          "new": true,
+          "title": "\"planned report-only\" is unreachable via loadReconstructContractRegistry \u2014 the loader drops planned_validator_records entirely"
+        },
+        {
+          "lens": "scope-and-open-questions",
+          "severity": "high",
+          "new": true,
+          "title": "Ratchet base-side registry parse (clause d / \u00a78-Q2) needs a NEW mechanism the cited precedents do not provide \u2014 loadReconstructContractRegistry is path-only and the marker never reads base content"
+        }
+      ]
+    },
+    "onto": {
+      "session": "20260622-744a695e",
+      "issue_count": 6,
+      "issues": [
+        {
+          "id": "issue-001",
+          "severity": "medium",
+          "statement": "First-slice recorded/pending counts still under-cover one `(validator_id, obligation_id)` pair."
+        },
+        {
+          "id": "issue-002",
+          "severity": "low",
+          "statement": "The INV/G4 correction wording is imprecise: it conflates absence of an invariant registry with absence of the CI workflow named `invariants.yml`."
+        },
+        {
+          "id": "issue-003",
+          "severity": "medium",
+          "statement": "The first-slice recorded/pending counts are internally inconsistent under the design's own pair-keyed coverage rule."
+        },
+        {
+          "id": "issue-004",
+          "severity": "low",
+          "statement": "The INV/G4 correction contains an overbroad false existence claim about `invariants.yml`."
+        },
+        {
+          "id": "issue-005",
+          "severity": "low",
+          "statement": "The INV/G4 correction is semantically inaccurate unless `invariants.yml` is qualified as a registry file."
+        },
+        {
+          "id": "issue-006",
+          "severity": "medium",
+          "statement": "The INV/G4 correction is structurally only half-correct: `INVARIANTS.md` is not G4-protected, but the design falsely states that no `invariants.yml` exists."
+        }
+      ]
+    },
+    "v3_corrections": [
+      "Conditional tier is NOT uniformly exempt: the answer-support-judge pair (require_convergent_source_evidence_claims, answer_support_judge_runtime_is_implemented) is ALREADY live-enforced (#57/#58) -> RECORDED-eligible; the other 4 dormant; activation conditions have no machine evaluator -> hand-classified + self-tested",
+      "Arithmetic off-by-one: dual-attribution -> recorded set = 3 pairs (2 obligation strings), parked = 269 (not 270)",
+      "Ratchet base side needs git show <mergeBase>:<file> -> temp -> loadReconstructContractRegistry (path-only loader + line-diff marker cannot read base content); + a checked-in obligation-coverage-recorded.yaml so re-park/downgrade is detectable; fail-loud on base-unavailable",
+      "C3 discriminator threads through the WRAPPER writeActionabilityMatrixValidationArtifact (5259), not the validateActionabilityMatrix call sites directly",
+      ".github/workflows/invariants.yml DOES exist (the CI merge gate) -- not an invariant registry; the guard CI step goes there + passes the base ref; distinguish INV-text-human-gated from guard-must-run-in-CI",
+      "Section-1 'shrink' -> 'non-increase' (consistency with the C6 fold)",
+      "Loader DROPS planned_validator_records -> they are invisible/out-of-scope (not 'report-only')",
+      "matrix mode-attribution is matrix-specific; the scout-pack 3-validator-shared-fn obligations need their own per-call-site stamp design in a later slice"
+    ],
+    "convergence": "round 1 = architectural/factual; round 2 = mechanism-precision (12 new defects from v2 corrections); core architecture stable; residual = implementation-detail the first-slice build will surface."
+  }
+}

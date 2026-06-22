@@ -65,6 +65,7 @@ import type {
 import { sourceSafetyRowIdForObservation } from "./source-safety-validation.js";
 import { materialAdmissionIdForPurposeElement } from "./material-admission-validation.js";
 import { isRevisionBlocker } from "./post-seed-validation.js";
+import { assertObligation } from "./obligation-assertion.js";
 
 const MATERIALITY_VALUES: readonly ReconstructMaturationMateriality[] = [
   "blocker",
@@ -708,6 +709,7 @@ export function validateMaturationBaseline(args: {
   sourceReconstructRecordSha256?: string | null;
 }): ReconstructMaturationBaselineValidationArtifact {
   const violations: ReconstructMaturationValidationViolation[] = [];
+  const assertedObligationIds: string[] = [];
   const baseline = args.maturationBaseline;
   const selected = selectedPurposeCandidate({
     sourcePurposeCandidates: args.sourcePurposeCandidates,
@@ -869,6 +871,12 @@ export function validateMaturationBaseline(args: {
   // candidate and prove every required tuple is present exactly once. The per-row loop
   // above only checks that PRESENT rows resolve, so a deleted required row (erasing
   // blocker/high scope) or a duplicated tuple would otherwise pass silently.
+  // G(a): record reaching the coverage block UNCONDITIONALLY (before the `if (selected)`
+  // guard) so the obligation is proven wired even for inputs with no selected candidate.
+  assertObligation(
+    assertedObligationIds,
+    "validate_baseline_rows_cover_selected_purpose_frame_required_elements",
+  );
   if (selected) {
     const expectedTuples = deriveExpectedBaselineTuples(selected);
     const presentTupleCounts = new Map<string, number>();
@@ -921,6 +929,7 @@ export function validateMaturationBaseline(args: {
     validation_results: violations.length === 0
       ? ["maturation_baseline_valid"]
       : ["maturation_baseline_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
@@ -1090,6 +1099,7 @@ export function validateActionabilityMatrix(args: {
 }): ReconstructActionabilityMatrixValidationArtifact {
   const matrix = args.actionabilityMatrix;
   const violations: ReconstructMaturationValidationViolation[] = [];
+  const assertedObligationIds: string[] = [];
   const baselineRows = new Map(
     args.maturationBaseline.baseline_rows.map((row) => [row.baseline_row_id, row]),
   );
@@ -1275,6 +1285,13 @@ export function validateActionabilityMatrix(args: {
   ) {
     if (lineage) violations.push(lineage);
   }
+  // G(a): record reaching the matrix row-id/baseline-ref-close block UNCONDITIONALLY (before
+  // the per-row loop) so the obligation is proven wired even for an empty matrix. One fn serves
+  // two validators; the recorded id attributes to whichever validator this mode is (below).
+  assertObligation(
+    assertedObligationIds,
+    "validate_matrix_row_ids_are_stable_and_baseline_row_refs_close",
+  );
   for (const row of matrix.rows) {
     if (seen.has(row.matrix_row_id)) {
       violations.push(violation({
@@ -1555,6 +1572,12 @@ export function validateActionabilityMatrix(args: {
     validation_results: violations.length === 0
       ? ["actionability_matrix_valid"]
       : ["actionability_matrix_invalid"],
+    // G(a) attribution: the mode (computed above as postFrontierInputsPresent) selects which of
+    // the two validators served by this fn owns the recorded obligation pair.
+    validator_id: postFrontierInputsPresent
+      ? "actionability-matrix-validator"
+      : "baseline-actionability-matrix-validator",
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
