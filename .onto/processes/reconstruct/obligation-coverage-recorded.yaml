@@ -101,3 +101,17 @@ recorded:
     obligation_id: validate_actionable_limited_claim_scope_rows
   - validator_id: actionable-ontology-validator
     obligation_id: require_every_projected_row_to_trace_to_seed_expansion_or_limitation
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_registry_snapshot_hash_is_recorded
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_active_artifact_gate_validator_predicate_and_source_profile_ids_are_unique
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_active_registry_subject_lists_match_current_registry_catalogs
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_every_active_gate_has_a_validator_record
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_every_validator_gate_ref_resolves_to_an_active_gate
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: validate_every_active_gate_required_when_predicate_resolves
+  - validator_id: registry-verification-evidence-validator
+    obligation_id: require_evidence_row_for_each_current_registry_subject_id

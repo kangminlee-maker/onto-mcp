@@ -716,37 +716,10 @@ pending:
     tier: flat
     note: "slice-10 audit (2026-06-22): AMBIGUOUS — compound obligation, only 1 of 5 named quantities validated. Of session_root, request_fingerprint, target signature, runtime version, and idempotency key, the validator validates only session_root (session_root_missing presence + expected-root match); request_fingerprint, target_signature_ref, runtime_version, and idempotency_key_hash are never inspected, and validateReconstructRunControl's signature accepts no expected values for them. Recording deferred pending validation of the remaining four replayable quantities."
   - validator_id: registry-verification-evidence-validator
-    obligation_id: require_evidence_row_for_each_current_registry_subject_id
-    coverage_status: pending
-    tier: flat
-  - validator_id: registry-verification-evidence-validator
-    obligation_id: validate_active_artifact_gate_validator_predicate_and_source_profile_ids_are_unique
-    coverage_status: pending
-    tier: flat
-  - validator_id: registry-verification-evidence-validator
-    obligation_id: validate_active_registry_subject_lists_match_current_registry_catalogs
-    coverage_status: pending
-    tier: flat
-  - validator_id: registry-verification-evidence-validator
-    obligation_id: validate_every_active_gate_has_a_validator_record
-    coverage_status: pending
-    tier: flat
-  - validator_id: registry-verification-evidence-validator
-    obligation_id: validate_every_active_gate_required_when_predicate_resolves
-    coverage_status: pending
-    tier: flat
-  - validator_id: registry-verification-evidence-validator
-    obligation_id: validate_every_validator_gate_ref_resolves_to_an_active_gate
-    coverage_status: pending
-    tier: flat
-  - validator_id: registry-verification-evidence-validator
-    obligation_id: validate_registry_snapshot_hash_is_recorded
-    coverage_status: pending
-    tier: flat
-  - validator_id: registry-verification-evidence-validator
     obligation_id: validate_registry_snapshot_hash_matches_current_registry_file
     coverage_status: pending
     tier: flat
+    note: "slice-18 audit (2026-06-23): AMBIGUOUS — the hash-matches-current-file check (registry_hash_mismatch) is gated on the caller-supplied optional expectedRegistrySha256. validateRegistryVerificationEvidence never derives the on-disk registry hash itself, so it carries no internal 'matches current file' guarantee; the match is enforced only when the caller supplies sha256File(registryPath) (writeRegistryVerificationEvidenceValidationArtifact does so at the production call site, but the validator function does not). Recording deferred pending an internal hash-vs-file derivation. The validator's other 7 obligations are recorded (structural, unconditional). DEFER to the registry record's input_authority_refs for the authoritative input set."
   - validator_id: seed-authoring-readiness-validator
     obligation_id: validate_actor_action_state_scout_rows_do_not_replace_purpose_required_elements
     coverage_status: pending
