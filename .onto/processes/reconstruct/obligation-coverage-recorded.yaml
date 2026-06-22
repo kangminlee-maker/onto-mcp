@@ -93,3 +93,11 @@ recorded:
     obligation_id: validate_source_refs_against_observed_source_refs
   - validator_id: maturation-convergence-ledger-validator
     obligation_id: validate_closure_source_observation_delta_refs_match_source_observation_delta_validation
+  - validator_id: actionable-ontology-validator
+    obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
+  - validator_id: actionable-ontology-validator
+    obligation_id: validate_actionability_claim_against_maturation_continuation_decision
+  - validator_id: actionable-ontology-validator
+    obligation_id: validate_actionable_limited_claim_scope_rows
+  - validator_id: actionable-ontology-validator
+    obligation_id: require_every_projected_row_to_trace_to_seed_expansion_or_limitation

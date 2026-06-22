@@ -4875,6 +4875,28 @@ export function validateActionableOntology(args: {
   ) => expansion.expansion_id));
   const projectedMatrixRefs = new Set<string>();
   const projectionIds = new Set<string>();
+
+  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1). The four obligations below have a distinct,
+  // name-matching enforcer reached unconditionally (the per-row trace check fires per projected row, so
+  // its stamp also records on zero-row input). The other three convergence/projection obligations are
+  // parked with audit notes — see obligation-coverage-ledger.yaml (material blocker/high closure is
+  // delegated to the continuation-decision validator; per-surface static/kinetic/dynamic closure is not
+  // checked here; proof-authority recheck is a blanket downstream-claim reject, not a validation).
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "reject_actionable_ready_until_final_requestion_convergence_is_proven",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_actionability_claim_against_maturation_continuation_decision",
+  );
+  assertObligation(assertedObligationIds, "validate_actionable_limited_claim_scope_rows");
+  assertObligation(
+    assertedObligationIds,
+    "require_every_projected_row_to_trace_to_seed_expansion_or_limitation",
+  );
+
   if (artifact.session_id !== args.actionabilityMatrix.session_id) {
     violations.push(violation({
       code: "session_id_mismatch",
@@ -5052,6 +5074,7 @@ export function validateActionableOntology(args: {
     validation_results: violations.length === 0
       ? ["actionable_ontology_valid"]
       : ["actionable_ontology_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

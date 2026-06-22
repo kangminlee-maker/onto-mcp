@@ -38,33 +38,20 @@ pending:
     tier: flat
     note: "slice-3 audit (2026-06-22): enforcement is DISTRIBUTED across regions already owned by other recorded obligations — the member_readiness gate (limitations), the maturity-upgrade citation (supporting_refs; recorded as validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas), and the blocking-question validation (recorded as validate_blocking_question_refs_against_validated_question_frontier). No distinct owner region; recording deferred pending a decision on whether this is a composite obligation or maps to the member_readiness gate specifically."
   - validator_id: actionable-ontology-validator
-    obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
-    coverage_status: pending
-    tier: flat
-  - validator_id: actionable-ontology-validator
     obligation_id: reject_actionable_ready_when_material_blocker_or_high_question_remains
     coverage_status: pending
     tier: flat
-  - validator_id: actionable-ontology-validator
-    obligation_id: require_every_projected_row_to_trace_to_seed_expansion_or_limitation
-    coverage_status: pending
-    tier: flat
+    note: "slice-17 audit (2026-06-23): DELEGATED/NOT_FOUND in this validator. validateActionableOntology directly rejects actionable_ready when final re-question convergence is unproven (recorded separately as reject_actionable_ready_until_final_requestion_convergence_is_proven) and requires the claim to match the continuation decision_state, but it never directly checks that no material blocker/high QUESTION remains open — that closure is enforced by validateMaturationContinuationDecision / the convergence ledger (both required valid here via prior_validation_invalid). Recording deferred pending a direct remaining-blocker/high-question check here, or re-attribution to the continuation-decision validator."
   - validator_id: actionable-ontology-validator
     obligation_id: require_static_kinetic_dynamic_surfaces_to_be_closed_or_limitation_excluded
     coverage_status: pending
     tier: flat
-  - validator_id: actionable-ontology-validator
-    obligation_id: validate_actionability_claim_against_maturation_continuation_decision
-    coverage_status: pending
-    tier: flat
-  - validator_id: actionable-ontology-validator
-    obligation_id: validate_actionable_limited_claim_scope_rows
-    coverage_status: pending
-    tier: flat
+    note: "slice-17 audit (2026-06-23): NOT_FOUND for the named per-surface scope. The validator checks per-ROW closure (included projected rows must have matrixRow.member_readiness == closed, ~4996) and full per-row coverage (every matrix row projected exactly once, ~5024), but there is no per-SURFACE check that each of static_surface / kinetic_surface / dynamic_surface is independently closed-or-limitation-excluded (contract: design §Actionability Matrix ~533 'each surface must be independently closed'; continuation-state table ~1116). Surface-level maturity is validated upstream by the actionability-matrix validator, not rechecked here. Recording deferred pending a per-surface closed-or-excluded check (or re-attribution to the matrix validator)."
   - validator_id: actionable-ontology-validator
     obligation_id: validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims
     coverage_status: pending
     tier: flat
+    note: "slice-17 audit (2026-06-23): BLANKET-REJECT, not a proof-authority validation. The code rejects ANY downstream_claims value != not_claimed (invalid_enum ~4947-4955), so the active projection can never claim query/visualization/graph-exploration proof. Contract (design ~896-901) says actionable-ontology-validation 'rechecks the same proof authority before projecting' — i.e. it should VALIDATE the applicable proof authority when a downstream surface is claimed, but no proof-authority recheck is implemented (the gate forbids the claim outright rather than validating it). Recording deferred pending real proof-authority rechecking (this is the deferred-capability sibling of the convergence ready-gate)."
   - validator_id: answer-support-ledger-validator
     obligation_id: require_contradictions_to_be_recorded_and_bounded
     coverage_status: pending
