@@ -1,0 +1,61 @@
+{
+  "design_reviewed": "development-records/design/20260622-gc-append-sections-parity-design.md",
+  "note": "G(c) hard-slice cross-validation before build. All findings medium (0 blocker/high). Resolutions folded into design v2 §2/§3.0/§3.1/§5/§6/§7 and the implementation.",
+  "ultracode": {
+    "workflow": "wf_6a306415-b7e (gc-design-cross-validation; 6 lenses -> adversarial verify; 21 agents)",
+    "material_raised": 15,
+    "confirmed_count": 8,
+    "confirmed_themes": [
+      {
+        "theme": "heading SSOT incompleteness (the 5 BOUND sections each have their own emitter '## Heading' inline literal, separate from binding.heading)",
+        "findings": 4,
+        "lenses": ["mechanism", "interactions", "completeness", "authority-economy"],
+        "resolution": "v2: ALL 8 emitter headings source from the module (bare heading + '## ' prefix); guard forbids inline '## <heading>' literal; consolidates 4 copies -> 1."
+      },
+      {
+        "theme": "two orders differ (prompt-policy: claim-before-artifact; bindings: artifact-before-claim) -> a single module row order cannot drive both, and 'byte-identical' was unprotected (arrayContaining is order-insensitive)",
+        "findings": 2,
+        "lenses": ["mechanism", "interactions"],
+        "resolution": "v2: module pins PROMPT_POLICY_APPEND_SECTION_IDS (prompt-policy order) and the bound-row order (bindings order) INDEPENDENTLY; exact-ordered toEqual test on deterministic_runtime_append_sections + order assertions."
+      },
+      {
+        "theme": "required_fragments cross-check (clause 5) did not name its source surface",
+        "findings": 1,
+        "lenses": ["drift-guard-soundness"],
+        "resolution": "v2: run.ts DERIVES runtime-provenance-bindings.required_fragments from the module's other-4 section_ids (drift-proof by construction)."
+      },
+      {
+        "theme": "the 2 truncation conditional sections have ZERO behavioral test coverage (non-exported, never populated in fixtures)",
+        "findings": 1,
+        "lenses": ["completeness"],
+        "resolution": "v2: export the 2 truncation emitters + behavioral matrix test asserting each emits its module heading."
+      }
+    ]
+  },
+  "onto": {
+    "session": "20260622-4e9d7738 (core-axis 6 lenses; codex_cli OAuth gpt-5.5 subscription)",
+    "issue_count": 9,
+    "issue_clusters": [
+      {
+        "cluster": "Q-C completeness mechanism unresolved (the strongest, 5 issues): success criterion claims a 9th-section gate but the leaned mechanism does not catch a section added AROUND the module",
+        "issues": ["issue-001", "issue-002", "issue-004", "issue-007", "issue-008"],
+        "resolution": "v2 §3.1.4: enforceable pair = static source-region sweep (no inline heading literal) + behavioral fixture matrix activating every append path; §5 stays strong, backed by both; source-text boundary documented (G8 R5 lesson)."
+      },
+      {
+        "cluster": "activation omitted from the guard's per-row equality",
+        "issues": ["issue-003", "issue-009"],
+        "resolution": "v2 §3.1.2: activation IS in the per-row equality + self-tests."
+      },
+      {
+        "cluster": "heading uniqueness + required_fragments literals underspecified",
+        "issues": ["issue-005"],
+        "resolution": "v2 §3.1.1 heading uniqueness asserted; §3.0/§3.1.5 required_fragments derived from the module."
+      },
+      {
+        "cluster": "append_owner naming conflates emitter ownership with provenance-binding state",
+        "issues": ["issue-006"],
+        "resolution": "v2 §3.0: field split into emit_owner (always_section | conditional_markdown) + provenance_binding_required."
+      }
+    ]
+  }
+}
