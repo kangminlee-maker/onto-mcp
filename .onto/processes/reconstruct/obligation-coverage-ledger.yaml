@@ -389,22 +389,27 @@ pending:
     obligation_id: preserve_unavailable_or_rejected_authority_as_blocked_or_limitation_state
     coverage_status: pending
     tier: flat
+    note: "slice-14 audit (2026-06-22): NOT_FOUND in validateMaturationAuthorityResponse (maturation-validation.ts). unavailable/deferred responses are only COUNTED into unavailable_response_count (return field); no violation fires when an unavailable/rejected/deferred/contradicted response fails to be preserved as a blocked/limitation state (no limitation_refs requirement). Preserving the gap as blocked/limitation is a downstream continuation/closure-decision consumer's job. Recording deferred pending a validator-side preservation check."
   - validator_id: maturation-authority-response-validator
     obligation_id: reject_authority_response_that_claims_source_support_without_source_observation_refs
     coverage_status: pending
     tier: flat
+    note: "slice-14 audit (2026-06-22, codex PR #124): a substring PROXY, not resolution. The only check is supporting_refs.some(ref => ref.includes('source-observations')) (support_mode_missing_authority) — it never loads source-observations.yaml or resolves observation ids, and a misleading ref such as 'not-source-observations' satisfies the substring while citing no real source observation. A breaching input (claims source support, no real source-observation ref) escapes, so this is not contract-complete. Recording deferred pending resolution against source-observations.yaml."
   - validator_id: maturation-authority-response-validator
     obligation_id: validate_authority_identity_and_snapshot_refs_are_recorded
     coverage_status: pending
     tier: flat
+    note: "slice-14 audit (2026-06-22): AMBIGUOUS — only the identity arm is enforced. The validator requires authority_identity.authority_id/label/role to be non-empty (missing_required_ref), but never checks authority_snapshot_ref or authority_version_or_timestamp are recorded. Name says 'identity AND snapshot refs'; the snapshot arm is unenforced. Recording deferred pending a snapshot-ref recorded check."
   - validator_id: maturation-authority-response-validator
     obligation_id: validate_authority_response_refs_against_maturation_closure_frontier_authority_requests
     coverage_status: pending
     tier: flat
+    note: "slice-14 audit (2026-06-22, codex PR #124): the validator does resolve authority_request_ref against maturationClosureFrontier.authority_requests (unknown_id) + kind match (conflicting_state), but recording it is unsafe on two counts. (1) The validator record under-declares its inputs — it lists maturation-authority-response.yaml + maturation-closure-frontier-VALIDATION.yaml + registry, but NOT maturation-closure-frontier.yaml, the artifact whose authority_requests the check needs; a registry-driven consumer would not provide it (declared≠wired). (2) No cross-artifact binding: the validator resolves against whichever frontier the caller passes and never checks response.closure_frontier_ref or frontier-validation.maturation_closure_frontier_ref name that same frontier, so a reused authority-response from another frontier validates against a mismatched frontier with matching ids (same class as the #100 matrix cross-artifact-binding follow-up). Recording deferred pending the frontier-artifact input declaration + response↔frontier↔frontier-validation binding."
   - validator_id: maturation-authority-response-validator
     obligation_id: validate_authority_response_status_and_scope
     coverage_status: pending
     tier: flat
+    note: "slice-14 audit (2026-06-22): AMBIGUOUS — name broader than code. The only status-specific enforcement is response_status=='provided' requiring supporting_refs or response_source_ref (missing_required_ref); the other statuses (unavailable/rejected/deferred/contradicted) carry no status validation, and there is no explicit 'scope' check (the authority_kind match belongs to validate_authority_response_refs_against_maturation_closure_frontier_authority_requests). Recording deferred pending full status/scope validation."
   - validator_id: maturation-baseline-validator
     obligation_id: preserve_immutable_source_seed_and_validation_refs_used_to_compute_baseline
     coverage_status: pending
