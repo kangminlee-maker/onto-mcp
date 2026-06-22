@@ -13,6 +13,7 @@ import type {
   ReconstructMaturationBaselineValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructOntologyExpansionValidationArtifact,
+  ReconstructRunControlValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
 } from "./artifact-types.js";
@@ -29,6 +30,7 @@ import {
   validateSourceObservationReentry,
 } from "./source-observation-delta-validation.js";
 import { validateClaimRealizationMapForOntologySeed } from "./post-seed-validation.js";
+import { validateReconstructRunControl } from "./run-control-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -350,6 +352,45 @@ const resolvingAnswerClaim = {
   evidence_cluster_refs: [],
 };
 
+// reconstruct-run-control-validator (slice 10, run-control-validation.ts). Minimal inputs reach the
+// recorder (placed before the per-transaction loop). The validation artifact carries no validator_id
+// field, so attribute by name. Only validate_committed_write_transactions_have_artifact_refs_and_hashes
+// is recorded; the other four obligations (commit_method never read, fingerprints not compared, lock
+// ownership not linked, only session_root of five replay quantities checked) stay parked.
+function runReconstructRunControl(
+  overrides: { writeTransactions?: unknown[] } = {},
+): ReconstructRunControlValidationArtifact {
+  return validateReconstructRunControl({
+    runControl: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      session_root: "/tmp/session-harvest",
+      created_at: now,
+      updated_at: now,
+      runtime_version: "test",
+      request_rows: [],
+      attempt_rows: [],
+      lock_rows: [],
+      write_transactions: overrides.writeTransactions ?? [],
+      resume_rows: [],
+    } as never,
+  });
+}
+
+// Enforcement-binding fixture (anti-laundering): a committed transaction missing committed_hash trips
+// transaction_hash_missing; supplying the hash clears it. The recorder cannot launder the enforcer.
+const committedTransaction = (committedHash: string | null) => ({
+  transaction_id: "txn-1",
+  owner_attempt_id: "attempt-1",
+  artifact_ref: "ontology-seed.yaml",
+  temp_ref: null,
+  expected_prior_hash: null,
+  committed_hash: committedHash,
+  commit_method: "observed_file_hash",
+  transaction_status: "committed",
+  recovery_ref: null,
+});
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -550,7 +591,36 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     expect(clean.violations.some((v) => v.code === "missing_required_ref")).toBe(false);
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 31 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateReconstructRunControl records its 1 instrumented obligation (slice 10: committed-write-txn refs+hashes) and NOT the parked four", () => {
+    const out = runReconstructRunControl();
+    expect(out.asserted_obligation_ids).toContain(
+      "validate_committed_write_transactions_have_artifact_refs_and_hashes",
+    );
+    // PARKED: commit_method never read; fingerprints not compared (status enum trusted); lock
+    // owner_attempt_id not linked to the current attempt; only session_root of the five replay
+    // quantities validated. None recorded.
+    for (const parked of [
+      "preserve_post_write_hash_observation_without_claiming_atomic_commit_when_writer_did_not_prove_atomic_rename",
+      "reject_conflicting_request_fingerprints_before_semantic_artifacts_are_consumed",
+      "validate_current_attempt_and_session_root_lock_ownership",
+      "validate_session_root_request_fingerprint_target_signature_runtime_version_and_idempotency_are_replayable",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  it("ENFORCEMENT BINDING (validate_committed_write_transactions_have_artifact_refs_and_hashes): a committed transaction without committed_hash trips transaction_hash_missing; supplying the hash clears it", () => {
+    const breaching = runReconstructRunControl({
+      writeTransactions: [committedTransaction(null)],
+    });
+    expect(breaching.violations.some((v) => v.code === "transaction_hash_missing")).toBe(true);
+    const clean = runReconstructRunControl({
+      writeTransactions: [committedTransaction("sha256-abc")],
+    });
+    expect(clean.violations.some((v) => v.code === "transaction_hash_missing")).toBe(false);
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 32 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -563,6 +633,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const claimRealizationOut = runClaimRealizationMap();
     const judgmentOut = runAnswerSupportJudgment();
     const ontologyExpansionOut = runOntologyExpansion();
+    const runControlOut = runReconstructRunControl();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -606,6 +677,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "ontology-expansion-validator",
         obligation_id,
       })),
+      ...runControlOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "reconstruct-run-control-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -622,6 +697,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(31);
+    expect(harvestedSet.size).toBe(32);
   });
 });

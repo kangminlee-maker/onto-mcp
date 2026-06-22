@@ -6,6 +6,7 @@ import {
   assertArrayField,
   atomicWriteYamlDocument as writeYamlDocument,
 } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructRecordArtifactRefs,
   ReconstructRunBootstrapDiagnosticArtifact,
@@ -227,6 +228,31 @@ export function validateReconstructRunControl(args: {
   assertArrayField(args.runControl.write_transactions, "run-control", "write_transactions");
   assertArrayField(args.runControl.resume_rows, "run-control", "resume_rows");
   const violations: ReconstructRunControlValidationViolation[] = [];
+  // G(a) slice 10: record the one obligation whose enforcement matches the authoritative contract
+  // (ontology-seeding-and-maturation-design.md §"reconstruct-run-control-validation.yaml must prove")
+  // — committed write transactions carry artifact_refs and hashes — stamped before the per-transaction
+  // loop so it fires on a zero-transaction artifact. The block below trips invalid_transaction (missing
+  // artifact_ref/owner_attempt_id) and transaction_hash_missing (committed without committed_hash).
+  // PARKED (not recorded), each name broader than this validator's actual check — these are honest
+  // declared≠wired surfacings, NOT laundered (see obligation-coverage-ledger.yaml notes):
+  //   - preserve_post_write_hash_observation_without_claiming_atomic_commit_when_writer_did_not_prove_atomic_rename:
+  //     the validator never reads commit_method; the atomic_rename-vs-observed_file_hash truthfulness
+  //     is the writer's responsibility, not validated here.
+  //   - reject_conflicting_request_fingerprints_before_semantic_artifacts_are_consumed: the validator
+  //     rejects rows already marked duplicate_conflict/rejected_conflict (conflicting_request) but never
+  //     compares request_fingerprint values — fingerprint conflict detection is in the writer.
+  //   - validate_current_attempt_and_session_root_lock_ownership: presence of an active attempt
+  //     (active_attempt_missing) + a session_root lock (session_lock_missing) + rejection of recorded
+  //     conflicting locks (conflicting_lock) are checked, but the lock's owner_attempt_id is never
+  //     cross-checked against the current attempt — the named ownership linkage is unverified.
+  //   - validate_session_root_request_fingerprint_target_signature_runtime_version_and_idempotency_are_replayable:
+  //     of the five named replayable quantities only session_root is validated; request_fingerprint,
+  //     target signature, runtime version, and idempotency key are never inspected.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_committed_write_transactions_have_artifact_refs_and_hashes",
+  );
   if (args.runControl.schema_version !== "1") {
     violations.push(violation({
       code: "schema_shape_invalid",
@@ -457,6 +483,7 @@ export function validateReconstructRunControl(args: {
     validation_results: violations.length === 0
       ? ["reconstruct_run_control_valid"]
       : ["reconstruct_run_control_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

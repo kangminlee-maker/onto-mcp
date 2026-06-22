@@ -743,22 +743,22 @@ pending:
     obligation_id: preserve_post_write_hash_observation_without_claiming_atomic_commit_when_writer_did_not_prove_atomic_rename
     coverage_status: pending
     tier: flat
+    note: "slice-10 audit (2026-06-22): NOT_FOUND in validateReconstructRunControl. The contract (design.md §run-control 'committed through an atomic write method or truthfully marked as observed_file_hash') governs commit_method, but the validator's write-transaction block (run-control-validation.ts) never reads commit_method — it checks only artifact_ref/owner_attempt_id presence and committed→committed_hash. Distinguishing atomic_rename from observed_file_hash and preventing an observed-hash transaction from claiming atomic commit is the writer's truthful-marking responsibility (recordReconstructRunControlTransactions), not validated. Recording deferred pending a validator-side commit_method check."
   - validator_id: reconstruct-run-control-validator
     obligation_id: reject_conflicting_request_fingerprints_before_semantic_artifacts_are_consumed
     coverage_status: pending
     tier: flat
-  - validator_id: reconstruct-run-control-validator
-    obligation_id: validate_committed_write_transactions_have_artifact_refs_and_hashes
-    coverage_status: pending
-    tier: flat
+    note: "slice-10 audit (2026-06-22): AMBIGUOUS — name broader than the validator's check. The validator rejects request rows already MARKED duplicate_conflict/rejected_conflict (conflicting_request) and is the stage-0 gate consumed before semantic artifacts, but it never compares request_fingerprint values; fingerprint conflict DETECTION lives in the writer (initializeReconstructRunControl). The validator trusts the recorded request_status enum. Recording deferred pending a validator-side fingerprint comparison or name reconciliation."
   - validator_id: reconstruct-run-control-validator
     obligation_id: validate_current_attempt_and_session_root_lock_ownership
     coverage_status: pending
     tier: flat
+    note: "slice-10 audit (2026-06-22): AMBIGUOUS — name broader than code. The validator checks presence of an active attempt (active_attempt_missing), presence of a session_root lock (session_lock_missing), and rejects recorded conflicting locks (conflicting_lock), but it never cross-checks the lock row's owner_attempt_id against the current attempt's attempt_id. The named 'ownership' linkage is unverified — concurrency conflicts are trusted via the recorded lock_status enum. Recording deferred pending an owner_attempt_id linkage check."
   - validator_id: reconstruct-run-control-validator
     obligation_id: validate_session_root_request_fingerprint_target_signature_runtime_version_and_idempotency_are_replayable
     coverage_status: pending
     tier: flat
+    note: "slice-10 audit (2026-06-22): AMBIGUOUS — compound obligation, only 1 of 5 named quantities validated. Of session_root, request_fingerprint, target signature, runtime version, and idempotency key, the validator validates only session_root (session_root_missing presence + expected-root match); request_fingerprint, target_signature_ref, runtime_version, and idempotency_key_hash are never inspected, and validateReconstructRunControl's signature accepts no expected values for them. Recording deferred pending validation of the remaining four replayable quantities."
   - validator_id: registry-verification-evidence-validator
     obligation_id: require_evidence_row_for_each_current_registry_subject_id
     coverage_status: pending
