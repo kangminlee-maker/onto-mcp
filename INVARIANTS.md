@@ -30,8 +30,8 @@
 ## INV-SCHEMA-1 — 단계 출력 계약/스키마는 단일 source
 - **규칙**: 각 파이프라인 단계의 출력 스키마·계약은 고정된 단일 source에서 정의하고, 런타임 validator와 submit tool이 그 source를 직접 참조한다. 정의가 여러 곳에 복제되어 어긋나는 상태(drift)를 금지한다.
 - **근거**: 스키마 정의가 여러 곳에 복제되면 단계 간 계약이 어긋난다.
-- **강제**: 역량 경계(단일 source import) + 검증 게이트 + G8(prompt-projection 패리티 가드). `↔ AGENTS §0-2`
-- **검증**: submit tool schema와 validator가 같은 source를 참조하는지 테스트로 확인. 참조 예: [src/core-runtime/review/problem-framing-spine.ts](src/core-runtime/review/problem-framing-spine.ts). prompt-projection 계약은 registry `prompt_projection_contracts` 선언과 runtime 모듈 surface가 어긋나지 않도록 `npm run check:prompt-projection-parity`(G8)가 강제한다.
+- **강제**: 역량 경계(단일 source import) + 검증 게이트 + G8(prompt-projection 패리티 가드) + G9(final-output-sections 패리티 가드). `↔ AGENTS §0-2`
+- **검증**: submit tool schema와 validator가 같은 source를 참조하는지 테스트로 확인. 참조 예: [src/core-runtime/review/problem-framing-spine.ts](src/core-runtime/review/problem-framing-spine.ts). prompt-projection 계약은 registry `prompt_projection_contracts` 선언과 runtime 모듈 surface가 어긋나지 않도록 `npm run check:prompt-projection-parity`(G8)가, final-output append-section 집합은 registry `final_output_append_sections`와 `final-output-sections.ts` SSOT가 어긋나지 않도록 `npm run check:final-output-sections-parity`(G9)가 강제한다.
 
 ## INV-MOCK-1 — 운영 경로는 mock/fixture를 import하지 않는다
 - **규칙**: mock은 검증 realization이지 제품 의미 경로가 아니다. semantic mock(판단 날조)과 boundary stub(외부 의존만 격리, 실제 제품 코드 실행)을 구분한다. 모든 mock/fixture payload는 지정 boundary 모듈에만 두고, 운영 코드는 그 모듈을 import하지 않는다. 생성된 artifact는 realization을 provenance에 기록한다.
@@ -90,5 +90,6 @@
 | G6 드리프트 리포트 | 집계 | `npm run check:invariant-drift [-- baseRef]` |
 | G7 지원 모델 가드 | INV-MODEL-1 | `npm run check:supported-models` (커밋된 settings.json ⊆ supported-models.yaml; runtime도 reconstruct live 실행 경계에서 동일 게이트 `assertSettingsModelsSupported` 호출) |
 | G8 prompt-projection 패리티 | INV-SCHEMA-1 | `npm run check:prompt-projection-parity` (registry `prompt_projection_contracts` 선언 = runtime 계약 모듈 surface, exact-set + run.ts 소비 강제) |
+| G9 final-output-sections 패리티 | INV-SCHEMA-1 | `npm run check:final-output-sections-parity` (registry `final_output_append_sections` 선언 = `final-output-sections.ts` SSOT, exact-set/per-row + run.ts heading 소비 강제) |
 
 INV-LOOP-1·INV-SCOPE-1은 지침 강제로 남는다(무인 루프·스코프 판단은 구조화 대상 아님).

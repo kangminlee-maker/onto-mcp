@@ -50,6 +50,7 @@
     "check:invariant-drift": "tsx scripts/check-invariant-drift.ts",
     "check:supported-models": "tsx scripts/check-supported-models.ts",
     "check:prompt-projection-parity": "tsx scripts/check-prompt-projection-parity.ts",
+    "check:final-output-sections-parity": "tsx scripts/check-final-output-sections-parity.ts",
     "test": "npm run test:e2e",
     "test:vitest": "vitest run",
     "test:review:live": "npm run build:ts-core && tsx scripts/review-mcp-live-e2e.ts",

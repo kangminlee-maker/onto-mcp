@@ -210,6 +210,12 @@ import {
   competencyQuestionAssessmentProjectionContract,
 } from "./competency-projection-contract.js";
 import {
+  FINAL_OUTPUT_SECTION_HEADINGS,
+  FINAL_OUTPUT_SECTION_IDS,
+  promptPolicyAppendSectionIds,
+  runtimeProvenanceBindingsRequiredFragments,
+} from "./final-output-sections.js";
+import {
   writeHandoffDecisionValidationArtifact,
   writePostMaturationGateProjectionValidationArtifact,
   writeReconstructRunManifestValidationArtifact,
@@ -4390,13 +4396,7 @@ function compactFinalOutputPromptPayload(
         "When any *_partial_projection field is true, prose must say prompt-visible details are partial and defer exhaustive truth to artifact refs.",
       revision_proposal_application_policy:
         "Revision proposals are proposed-only and are NOT applied to the seed or maturation in this run. Never describe the seed as revised, fixed, split, renamed, or pruned per a proposal; present proposals as next-round directives. When unresolved_action_count > 0, prose must say the run is not complete and carries reject/defer work to the next maturation round.",
-      deterministic_runtime_append_sections: [
-        "seed_answerability",
-        "claim_projection",
-        "artifact_truth",
-        "provenance_footer",
-        "provenance_bindings",
-      ],
+      deterministic_runtime_append_sections: promptPolicyAppendSectionIds(),
       semantic_authority:
         "host_llm_writes_user_facing_summary_without_upgrading_runtime_claims",
     },
@@ -9939,7 +9939,7 @@ export function appendFinalOutputUnresolvedRevisionSection(
   const line = (proposal: ReconstructRevisionProposalArtifact["proposals"][number]) =>
     `- ${proposal.action} ${proposal.target_type} ${proposal.target_id} (${proposal.proposal_id})`;
   const content = [
-    "## Unresolved Revision Proposals",
+    `## ${FINAL_OUTPUT_SECTION_HEADINGS.unresolvedRevisionProposals}`,
     "",
     "Revision proposals are proposed-only and are NOT applied to the seed or maturation " +
       "in this run; they are carried to the next maturation round as directives.",
@@ -9973,12 +9973,12 @@ export function appendFinalOutputUnresolvedRevisionSection(
  * no claim-value fragments — so it never trips final-output provenance forbidden
  * fragments.
  */
-function appendFinalOutputDocumentProjectionTruncationSection(
+export function appendFinalOutputDocumentProjectionTruncationSection(
   finalOutputText: string,
   truncations: DocumentExcerptProjectionTruncation[],
 ): string {
   if (truncations.length === 0) return finalOutputText;
-  const heading = "## Source Projection Truncation";
+  const heading = `## ${FINAL_OUTPUT_SECTION_HEADINGS.sourceProjectionTruncation}`;
   const content = [
     heading,
     "",
@@ -10008,12 +10008,12 @@ function appendFinalOutputDocumentProjectionTruncationSection(
  * wording only (section names + counts) — no claim-value fragments — so it never
  * trips final-output provenance forbidden fragments.
  */
-function appendFinalOutputWorkbookInventoryProjectionTruncationSection(
+export function appendFinalOutputWorkbookInventoryProjectionTruncationSection(
   finalOutputText: string,
   truncations: WorkbookInventoryProjectionTruncation[],
 ): string {
   if (truncations.length === 0) return finalOutputText;
-  const heading = "## Workbook Inventory Projection Truncation";
+  const heading = `## ${FINAL_OUTPUT_SECTION_HEADINGS.workbookInventoryProjectionTruncation}`;
   const content = [
     heading,
     "",
@@ -10038,7 +10038,7 @@ function appendFinalOutputProvenanceFooter(
   finalOutputText: string,
   requiredFragments: string[],
 ): string {
-  const heading = "## Runtime Artifact Truth Footer";
+  const heading = `## ${FINAL_OUTPUT_SECTION_HEADINGS.runtimeArtifactTruthFooter}`;
   const footer = [
     heading,
     "",
@@ -10052,7 +10052,7 @@ function appendFinalOutputProvenanceBindingsSection(
   finalOutputText: string,
   sectionBindings: ReconstructFinalOutputProvenanceSectionBindingInput[],
 ): string {
-  const heading = "## Runtime Provenance Bindings";
+  const heading = `## ${FINAL_OUTPUT_SECTION_HEADINGS.runtimeProvenanceBindings}`;
   const content = [
     heading,
     "",
@@ -10072,7 +10072,7 @@ function appendFinalOutputAnswerabilitySection(
   ontologySeed: ReconstructOntologySeedArtifact,
 ): string {
   const content = [
-    "## Seed Answerability",
+    `## ${FINAL_OUTPUT_SECTION_HEADINGS.seedAnswerability}`,
     "",
     ...ontologySeedSummaryLines(ontologySeed),
     "",
@@ -10089,7 +10089,7 @@ function appendFinalOutputClaimProjectionSection(
     claimProjectionValidation: ReconstructClaimProjectionValidationArtifact;
   },
 ): string {
-  const heading = "## Claim Projection";
+  const heading = `## ${FINAL_OUTPUT_SECTION_HEADINGS.claimProjection}`;
   const actionabilityClaimCounts = args.claimProjection.projection_rows.reduce(
     (counts, row) => {
       counts[row.actionability_claim] =
@@ -10198,7 +10198,7 @@ function appendFinalOutputArtifactTruthSection(
     manifestPath: string;
   },
 ): string {
-  const heading = "## Artifact Truth";
+  const heading = `## ${FINAL_OUTPUT_SECTION_HEADINGS.artifactTruth}`;
   const content = [
     heading,
     "",
@@ -10416,8 +10416,8 @@ function finalOutputProvenanceSectionBindings(args: {
 }): ReconstructFinalOutputProvenanceSectionBindingInput[] {
   return [
     {
-      section_id: "seed-answerability",
-      heading: "Seed Answerability",
+      section_id: FINAL_OUTPUT_SECTION_IDS.seedAnswerability,
+      heading: FINAL_OUTPUT_SECTION_HEADINGS.seedAnswerability,
       claim_summary: "Seed answerability is grounded in the seed and competency-question artifacts.",
       authority_refs: [args.ontologySeedPath, args.competencyQuestionsPath],
       validation_refs: [
@@ -10427,8 +10427,8 @@ function finalOutputProvenanceSectionBindings(args: {
       required_fragments: ["Ontology seed projected claims", "Coverage axes"],
     },
     {
-      section_id: "artifact-truth",
-      heading: "Artifact Truth",
+      section_id: FINAL_OUTPUT_SECTION_IDS.artifactTruth,
+      heading: FINAL_OUTPUT_SECTION_HEADINGS.artifactTruth,
       claim_summary: "Terminal artifact truth is grounded in run-control, the pre-handoff manifest validation, seed-readiness validation, final output provenance, and planned terminal record paths.",
       authority_refs: [
         args.runControlPath,
@@ -10523,8 +10523,8 @@ function finalOutputProvenanceSectionBindings(args: {
       ],
     },
     {
-      section_id: "claim-projection",
-      heading: "Claim Projection",
+      section_id: FINAL_OUTPUT_SECTION_IDS.claimProjection,
+      heading: FINAL_OUTPUT_SECTION_HEADINGS.claimProjection,
       claim_summary: "The public output delegates claim truth to the canonical runtime claim projection artifact.",
       authority_refs: [args.claimProjectionPath],
       validation_refs: [args.claimProjectionValidationPath],
@@ -10536,25 +10536,22 @@ function finalOutputProvenanceSectionBindings(args: {
       ],
     },
     {
-      section_id: "runtime-artifact-truth-footer",
-      heading: "Runtime Artifact Truth Footer",
+      section_id: FINAL_OUTPUT_SECTION_IDS.runtimeArtifactTruthFooter,
+      heading: FINAL_OUTPUT_SECTION_HEADINGS.runtimeArtifactTruthFooter,
       claim_summary: "The runtime footer enumerates all required provenance fragments for audit.",
       authority_refs: [args.manifestPath, args.recordPath],
       validation_refs: [args.finalOutputProvenanceValidationPath],
       required_fragments: args.finalFragments,
     },
     {
-      section_id: "runtime-provenance-bindings",
-      heading: "Runtime Provenance Bindings",
+      section_id: FINAL_OUTPUT_SECTION_IDS.runtimeProvenanceBindings,
+      heading: FINAL_OUTPUT_SECTION_HEADINGS.runtimeProvenanceBindings,
       claim_summary: "The runtime-emitted provenance binding section lists section-to-authority bindings.",
       authority_refs: [args.finalOutputProvenanceValidationPath],
       validation_refs: [args.finalOutputProvenanceValidationPath],
-      required_fragments: [
-        "seed-answerability",
-        "artifact-truth",
-        "claim-projection",
-        "runtime-artifact-truth-footer",
-      ],
+      // Derived from the module's other-4 bound section_ids (bindings order) so this
+      // load-bearing validated-text list cannot drift from the canonical set (G(c)).
+      required_fragments: runtimeProvenanceBindingsRequiredFragments(),
     },
   ];
 }

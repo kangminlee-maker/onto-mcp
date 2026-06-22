@@ -4201,14 +4201,18 @@ describe("runReconstruct", () => {
       finalOutputPayloads[0]?.final_output_prompt_policy
         ?.partial_projection_policy,
     ).toContain("artifact refs");
+    // Exact-ORDERED (G(c)): arrayContaining is order-insensitive and would miss a reorder of
+    // the prompt-surface list; pin the byte-identical order the host LLM sees.
     expect(
       finalOutputPayloads[0]?.final_output_prompt_policy
         ?.deterministic_runtime_append_sections,
-    ).toEqual(expect.arrayContaining([
+    ).toEqual([
+      "seed_answerability",
       "claim_projection",
       "artifact_truth",
       "provenance_footer",
-    ]));
+      "provenance_bindings",
+    ]);
     expect(finalOutputPayloads[0]?.execution_summary?.skipped_step_ids)
       .toEqual(expect.any(Array));
     expect(finalOutputPayloads[0]?.execution_summary?.skipped_steps)

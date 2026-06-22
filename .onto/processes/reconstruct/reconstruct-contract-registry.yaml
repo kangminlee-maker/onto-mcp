@@ -3241,3 +3241,62 @@ prompt_projection_contracts:
       prompt_char_limit: 50000
       source_evidence_excerpt_char_limit: 4000
       build_budget_reserve_chars: 1000
+
+# G(c) final-output append-section parity (INV-SCHEMA-1). Declares the canonical identity of
+# every section the reconstruct final output emits — section_id (hyphen; also the load-bearing
+# required_fragments text), heading (the provenance gate's match key), prompt_policy_id (the
+# underscore id in deterministic_runtime_append_sections; null for conditional sections),
+# emit_owner (emission surface: always_section vs conditional_markdown — distinct from the
+# binding flag), provenance_binding_required (whether the final-output provenance gate checks
+# it), and activation. Runtime SSOT is src/core-runtime/reconstruct/final-output-sections.ts;
+# the parity guard scripts/check-final-output-sections-parity.ts (G9) asserts this node equals
+# that module exactly and that run.ts consumes the module rather than inline heading literals.
+final_output_append_sections:
+  - section_id: seed-answerability
+    heading: Seed Answerability
+    prompt_policy_id: seed_answerability
+    emit_owner: always_section
+    provenance_binding_required: true
+    activation: always
+  - section_id: artifact-truth
+    heading: Artifact Truth
+    prompt_policy_id: artifact_truth
+    emit_owner: always_section
+    provenance_binding_required: true
+    activation: always
+  - section_id: claim-projection
+    heading: Claim Projection
+    prompt_policy_id: claim_projection
+    emit_owner: always_section
+    provenance_binding_required: true
+    activation: always
+  - section_id: runtime-artifact-truth-footer
+    heading: Runtime Artifact Truth Footer
+    prompt_policy_id: provenance_footer
+    emit_owner: always_section
+    provenance_binding_required: true
+    activation: always
+  - section_id: runtime-provenance-bindings
+    heading: Runtime Provenance Bindings
+    prompt_policy_id: provenance_bindings
+    emit_owner: always_section
+    provenance_binding_required: true
+    activation: always
+  - section_id: source-projection-truncation
+    heading: Source Projection Truncation
+    prompt_policy_id: null
+    emit_owner: conditional_markdown
+    provenance_binding_required: false
+    activation: document_projection_truncation_nonempty
+  - section_id: workbook-inventory-projection-truncation
+    heading: Workbook Inventory Projection Truncation
+    prompt_policy_id: null
+    emit_owner: conditional_markdown
+    provenance_binding_required: false
+    activation: workbook_inventory_projection_truncation_nonempty
+  - section_id: unresolved-revision-proposals
+    heading: Unresolved Revision Proposals
+    prompt_policy_id: null
+    emit_owner: conditional_markdown
+    provenance_binding_required: false
+    activation: disclosed_revision_proposals_nonempty
