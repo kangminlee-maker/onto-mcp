@@ -91,3 +91,11 @@ recorded:
     obligation_id: validate_purpose_element_refs_against_selected_purpose_frame
   - validator_id: material-admission-ledger-validator
     obligation_id: validate_source_refs_against_observed_source_refs
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_prior_maturation_validations_are_valid
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_closure_source_observation_delta_refs_match_source_observation_delta_validation
+  - validator_id: maturation-convergence-ledger-validator
+    obligation_id: validate_each_source_observation_delta_row_has_convergence_closure_disposition

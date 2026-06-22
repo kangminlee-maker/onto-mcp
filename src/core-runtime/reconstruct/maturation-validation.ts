@@ -3490,6 +3490,29 @@ export function validateMaturationConvergenceLedger(args: {
   const expansionIds = new Set(args.ontologyExpansion.expansions.map((
     expansion,
   ) => expansion.expansion_id));
+
+  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1). Placed before the round loop so the
+  // unconditional enforcers (prior-validation gate / blocker-high closure coverage / round delta-ref
+  // match) record on zero-round input too. The source-observation closure obligation is gated on the
+  // source-observation-delta input being present, since that enforcer is skipped without it
+  // (matrix-frontier precedent; run.ts wires the delta path only on source-delta rounds).
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "validate_prior_maturation_validations_are_valid");
+  assertObligation(
+    assertedObligationIds,
+    "require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_closure_source_observation_delta_refs_match_source_observation_delta_validation",
+  );
+  if (args.sourceObservationDelta) {
+    assertObligation(
+      assertedObligationIds,
+      "validate_each_source_observation_delta_row_has_convergence_closure_disposition",
+    );
+  }
+
   if (ledger.session_id !== args.maturationQuestionFrontier.session_id) {
     violations.push(violation({
       code: "session_id_mismatch",
@@ -3907,6 +3930,7 @@ export function validateMaturationConvergenceLedger(args: {
     validation_results: violations.length === 0
       ? ["maturation_convergence_ledger_valid"]
       : ["maturation_convergence_ledger_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

@@ -2498,6 +2498,7 @@ export interface ReconstructMaturationConvergenceLedgerValidationArtifact {
   final_requestion_pass_status:
     ReconstructMaturationFinalRequestionPass["pass_status"];
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 

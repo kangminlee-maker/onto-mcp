@@ -482,30 +482,17 @@ pending:
     obligation_id: preserve_remaining_frontier_refs_without_ready_projection
     coverage_status: pending
     tier: flat
+    note: "slice-16 audit (2026-06-23): AMBIGUOUS — composite name, only the resolution sub-check is enforced. The code validates remaining_frontier_refs resolve to frontier questions (unknown_id, maturation-validation.ts ~3874) = the FIRST clause of contract bullet (h) (design §convergence-ledger must-prove). But the 'without ready projection' framing references the ready-projection terminal gate that contract (h) explicitly DEFERS ('becomes a stronger terminal projection gate WHEN actionable ontology projection is implemented'); this validator has no ready-projection logic and no enforcer ties remaining-frontier preservation to a ready gate. A breaching input binds only the resolution check, not the composite. Recording deferred pending the ready-projection gate, or re-attribution as a plain resolve-remaining-frontier-refs obligation."
   - validator_id: maturation-convergence-ledger-validator
     obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
     coverage_status: pending
     tier: flat
+    note: "slice-16 audit (2026-06-23): NOT_FOUND in this validator — DEFERRED gate. The convergence validator only REPORTS final_requestion_pass_status (it surfaces it on the output) and checks the pass-status/new-material-ref consistency; it never gates an actionable_ready projection. Contract bullet (h) states the ready gate 'becomes a stronger terminal projection gate WHEN actionable ontology projection is implemented' — i.e. rejecting actionable_ready until convergence is proven is owned by the actionable-ontology / continuation-decision projection, not here. Recording deferred pending that projection."
   - validator_id: maturation-convergence-ledger-validator
     obligation_id: reject_trace_audit_or_authority_request_rows_as_positive_semantic_support
     coverage_status: pending
     tier: flat
-  - validator_id: maturation-convergence-ledger-validator
-    obligation_id: require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-convergence-ledger-validator
-    obligation_id: validate_closure_source_observation_delta_refs_match_source_observation_delta_validation
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-convergence-ledger-validator
-    obligation_id: validate_each_source_observation_delta_row_has_convergence_closure_disposition
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-convergence-ledger-validator
-    obligation_id: validate_prior_maturation_validations_are_valid
-    coverage_status: pending
-    tier: flat
+    note: "slice-16 audit (2026-06-23): AMBIGUOUS — no name-matching positive-support enforcer. The closure-disposition enum has no 'authority_request' value (closest: deferred_external_authority), and the validator never rejects trace_audit_only or deferred rows from being counted as positive semantic support. The nearest check (conflicting_state ~3839) forbids trace_audit_only rows from citing expansions or closing blocker/high questions = contract bullet (d), a DIFFERENT rule. positiveSupportRefs (~3799) is computed and consumed only by the answered_no_semantic_change branch, not by a trace/authority exclusion gate. Recording deferred pending an explicit positive-support exclusion check (or name reconciliation against the trace_audit_only rule that IS enforced)."
   - validator_id: maturation-question-frontier-validator
     obligation_id: validate_authority_need_rows_are_first_class_and_scope_to_questions
     coverage_status: pending
