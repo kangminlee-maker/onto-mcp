@@ -10,6 +10,12 @@
 #   enforced_pending_instrumentation: the pair IS live-enforced today, but its asserted_obligation_ids
 #                                     RECORDING is deferred to a later slice (see the row's `note`).
 #                                     Parked ≠ unwired for this tier — only the recording is pending.
+#
+# Some `flat` rows carry a `note` from a per-validator enforcement AUDIT explaining why they remain
+# parked (no distinct enforcement site located, or enforcement overlaps an already-recorded
+# obligation) — a surfaced declared≠wired finding, not merely "not yet stamped". The honest rule for
+# RECORDING a pair is that an enforcement-binding test proves a violating input trips a real violation;
+# pairs that fail that bar stay parked rather than being laundered into recorded.
 pending:
   - validator_id: actionability-matrix-validator
     obligation_id: reject_matrix_rows_without_baseline_row_or_applicable_validated_expansion_ref
@@ -456,22 +462,17 @@ pending:
     obligation_id: preserve_immutable_source_seed_and_validation_refs_used_to_compute_baseline
     coverage_status: pending
     tier: flat
-  - validator_id: maturation-baseline-validator
-    obligation_id: require_source_reconstruct_record_ref_and_sha256_before_maturation_baseline_consumption
-    coverage_status: pending
-    tier: flat
+    note: "slice-2 audit (2026-06-22): validateMaturationBaseline copies the source seed/validation refs into its validation artifact but enforces no immutability/tamper check on them — no distinct enforcement site located. Recording deferred pending an added enforcement check or an owner decision (the obligation may be enforced by a downstream validator and mis-attributed here)."
   - validator_id: maturation-baseline-validator
     obligation_id: validate_baseline_rows_cover_static_kinetic_dynamic_surfaces_and_maturity_dimensions
     coverage_status: pending
     tier: flat
+    note: "slice-2 audit (2026-06-22): no enforcement site DISTINCT from the already-recorded required-element tuple coverage (validate_baseline_rows_cover_selected_purpose_frame_required_elements) was located; the per-row surface/dimension checks validate present-row validity, not full static/kinetic/dynamic surface coverage. Recording deferred pending a distinct site or an owner decision to fold this into the recorded coverage obligation."
   - validator_id: maturation-baseline-validator
     obligation_id: validate_baseline_rows_trace_to_seed_refs_limitations_or_validated_assessment_gaps
     coverage_status: pending
     tier: flat
-  - validator_id: maturation-baseline-validator
-    obligation_id: validate_mixed_baseline_rows_preserve_member_material_and_cross_material_lineage
-    coverage_status: pending
-    tier: flat
+    note: "slice-2 audit (2026-06-22): validateMaturationBaseline validates purpose_element_ref resolution but enforces no per-row trace-to-seed_refs/limitations/validated-assessment-gaps check — no distinct enforcement site located. Recording deferred pending an added enforcement check or an owner decision."
   - validator_id: maturation-closure-frontier-validator
     obligation_id: reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope
     coverage_status: pending

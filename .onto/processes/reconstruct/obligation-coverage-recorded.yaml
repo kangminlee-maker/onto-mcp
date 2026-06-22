@@ -9,3 +9,7 @@ recorded:
     obligation_id: validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
   - validator_id: maturation-baseline-validator
     obligation_id: validate_baseline_rows_cover_selected_purpose_frame_required_elements
+  - validator_id: maturation-baseline-validator
+    obligation_id: require_source_reconstruct_record_ref_and_sha256_before_maturation_baseline_consumption
+  - validator_id: maturation-baseline-validator
+    obligation_id: validate_mixed_baseline_rows_preserve_member_material_and_cross_material_lineage

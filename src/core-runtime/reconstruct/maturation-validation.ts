@@ -748,6 +748,13 @@ export function validateMaturationBaseline(args: {
       subjectId: "candidate_limitation_refs",
     }));
   }
+  // G(a) slice 2: record reaching the source-reconstruct-record enforcement UNCONDITIONALLY (this
+  // check has no data-dependent guard) so the obligation is proven wired on every call. Audited to a
+  // distinct enforcement site (source_reconstruct_record_missing) before recording — no laundering.
+  assertObligation(
+    assertedObligationIds,
+    "require_source_reconstruct_record_ref_and_sha256_before_maturation_baseline_consumption",
+  );
   if (!baseline.source_reconstruct_record_ref || !args.sourceReconstructRecordSha256) {
     violations.push(violation({
       code: "source_reconstruct_record_missing",
@@ -780,6 +787,13 @@ export function validateMaturationBaseline(args: {
       subjectId: "baseline_rows",
     }));
   }
+  // G(a) slice 2: record reaching the per-row mixed-lineage enforcement region UNCONDITIONALLY
+  // (before the row loop) so the obligation is proven wired even for a baseline with zero rows.
+  // Audited to a distinct enforcement site (mixed_lineage_missing, below) before recording.
+  assertObligation(
+    assertedObligationIds,
+    "validate_mixed_baseline_rows_preserve_member_material_and_cross_material_lineage",
+  );
   for (const row of baseline.baseline_rows) {
     if (seen.has(row.baseline_row_id)) {
       violations.push(violation({
