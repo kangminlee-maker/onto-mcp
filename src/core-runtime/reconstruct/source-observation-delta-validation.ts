@@ -685,6 +685,39 @@ export async function validateSourceObservationLineageIndex(args: {
     observation,
   ) => [observation.observation_id, observation]));
   const addedObservationIds = new Set<string>();
+  // G(a) slice 6: record the seven lineage-index obligations before the per-row loop so they are
+  // proven wired on a zero-row index. Each was audited to a distinct enforcement region (no
+  // laundering). asserted_obligation_ids is excluded from the reuse-match identity hash (see
+  // stripVolatileArtifactFields in run.ts), so adding it to this reuse-hashed artifact is hash-neutral.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "require_each_lineage_row_delta_validation_to_be_valid",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_each_lineage_row_reentry_validation_to_be_valid",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_each_lineage_added_observation_exists_in_source_observations",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_each_lineage_added_observation_was_reentered_by_its_validation",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_each_lineage_row_delta_ref_is_readable_and_session_matching",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_lineage_added_observation_ids_match_delta_added_observation_ids",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_unique_session_level_lineage_row_ids",
+  );
   if (args.lineageIndex.schema_version !== "1") {
     violations.push(lineageIndexViolation({
       code: "schema_shape_invalid",
@@ -909,6 +942,7 @@ export async function validateSourceObservationLineageIndex(args: {
     validation_results: violations.length === 0
       ? ["source_observation_lineage_index_valid"]
       : ["source_observation_lineage_index_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

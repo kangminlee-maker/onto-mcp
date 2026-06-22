@@ -10,6 +10,7 @@ import type {
   ReconstructMaturationBaselineArtifact,
   ReconstructMaturationBaselineValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
+  ReconstructSourceObservationLineageIndexValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
 } from "./artifact-types.js";
 import {
@@ -19,8 +20,10 @@ import {
 } from "./maturation-validation.js";
 import {
   validateSourceObservationDelta,
+  validateSourceObservationLineageIndex,
   validateSourceObservationReentry,
 } from "./source-observation-delta-validation.js";
+import { reuseMatchArtifactHash } from "./run.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -231,6 +234,27 @@ function runSourceObservationReentry(): ReconstructSourceObservationReentryValid
   });
 }
 
+// source-observation-lineage-index-validator (slice 6) — async, and reuse-hashed (its validation is
+// one of authoredArtifactReuseMatch's hashed inputs). Zero lineage_rows means no readYamlDocument
+// file reads in the loop, so the recorders (before the loop) fire and the fn returns.
+async function runSourceObservationLineageIndex(): Promise<ReconstructSourceObservationLineageIndexValidationArtifact> {
+  return validateSourceObservationLineageIndex({
+    sessionId: "session-harvest",
+    lineageIndex: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      lineage_rows: [],
+    } as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -349,7 +373,43 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     }
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 20 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateSourceObservationLineageIndex records its 7 instrumented obligations (slice 6)", async () => {
+    const out = await runSourceObservationLineageIndex();
+    for (const obligation of [
+      "require_each_lineage_row_delta_validation_to_be_valid",
+      "require_each_lineage_row_reentry_validation_to_be_valid",
+      "validate_each_lineage_added_observation_exists_in_source_observations",
+      "validate_each_lineage_added_observation_was_reentered_by_its_validation",
+      "validate_each_lineage_row_delta_ref_is_readable_and_session_matching",
+      "validate_lineage_added_observation_ids_match_delta_added_observation_ids",
+      "validate_unique_session_level_lineage_row_ids",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+  });
+
+  it("HASH SAFETY: asserted_obligation_ids is excluded from the reuse-match identity hash (telemetry is identity-neutral)", () => {
+    const base = {
+      schema_version: "1",
+      session_id: "s",
+      validation_status: "valid",
+      violations: [],
+    };
+    // Adding/altering asserted_obligation_ids must NOT change the reuse-match hash — that is what makes
+    // instrumenting a reuse-hashed validation artifact (e.g. lineage-index) hash-neutral.
+    expect(reuseMatchArtifactHash({ ...base, asserted_obligation_ids: ["a", "b"] })).toBe(
+      reuseMatchArtifactHash(base),
+    );
+    expect(reuseMatchArtifactHash({ ...base, asserted_obligation_ids: ["a", "b"] })).toBe(
+      reuseMatchArtifactHash({ ...base, asserted_obligation_ids: ["x"] }),
+    );
+    // ...but a non-stripped field still changes it (the hash is not vacuously constant).
+    expect(reuseMatchArtifactHash({ ...base, validation_status: "invalid" })).not.toBe(
+      reuseMatchArtifactHash(base),
+    );
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 27 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -358,6 +418,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const answerClaimsOut = runAnswerClaims();
     const deltaOut = runSourceObservationDelta();
     const reentryOut = runSourceObservationReentry();
+    const lineageOut = await runSourceObservationLineageIndex();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -385,6 +446,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "source-observation-reentry-validator",
         obligation_id,
       })),
+      ...lineageOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "source-observation-lineage-index-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -401,6 +466,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(20);
+    expect(harvestedSet.size).toBe(27);
   });
 });

@@ -1066,7 +1066,12 @@ function stripVolatileArtifactFields(value: unknown): unknown {
       Object.keys(record)
         .filter((key) =>
           key !== "created_at" &&
-          key !== "emitted_at"
+          key !== "emitted_at" &&
+          // G(a): obligation-coverage telemetry (asserted_obligation_ids) is DERIVED from validator
+          // code, not from run inputs — exclude it from the reuse-match identity so instrumenting a
+          // reuse-hashed validation artifact (e.g. source-observation-lineage-index) does not rotate
+          // its reuse hash. Hash-neutrality is bound by a test in obligation-coverage-harvest.test.ts.
+          key !== "asserted_obligation_ids"
         )
         .sort()
         .map((key) => [key, stripVolatileArtifactFields(record[key])]),
@@ -1075,7 +1080,7 @@ function stripVolatileArtifactFields(value: unknown): unknown {
   return value;
 }
 
-function reuseMatchArtifactHash(value: unknown): string {
+export function reuseMatchArtifactHash(value: unknown): string {
   return sha256Text(stableJson(stripVolatileArtifactFields(value)));
 }
 

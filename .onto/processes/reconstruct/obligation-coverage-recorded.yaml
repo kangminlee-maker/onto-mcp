@@ -43,3 +43,17 @@ recorded:
     obligation_id: validate_each_delta_observation_has_exact_prompt_context_source_safety_row
   - validator_id: source-observation-reentry-validator
     obligation_id: validate_source_safety_validation_passed_before_prompt_reentry
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: require_each_lineage_row_delta_validation_to_be_valid
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: require_each_lineage_row_reentry_validation_to_be_valid
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_each_lineage_added_observation_exists_in_source_observations
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_each_lineage_added_observation_was_reentered_by_its_validation
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_each_lineage_row_delta_ref_is_readable_and_session_matching
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_lineage_added_observation_ids_match_delta_added_observation_ids
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_unique_session_level_lineage_row_ids
