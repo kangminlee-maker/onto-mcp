@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructCandidateInventoryArtifact,
   ReconstructMaterialAdmissionDisposition,
@@ -418,6 +419,38 @@ export function validateMaterialAdmissionLedger(args: {
   let requiredOrAdmittedRowCount = 0;
   let downstreamConsumedRowCount = 0;
 
+  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1). Placed before the per-row loop so the
+  // unconditional row-rule enforcers (uniqueness / consumer-closure / diagnostic-actionability /
+  // rejected-replay) record on zero-row input too. The two reference-integrity obligations are
+  // gated on their authoritative input being present, since the validator skips them otherwise
+  // (control never reaches the enforcer when the selected frame / observed source refs are absent).
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "validate_admission_row_uniqueness");
+  assertObligation(
+    assertedObligationIds,
+    "require_admitted_required_or_supporting_rows_to_have_candidate_seed_maturation_limitation_blocked_or_out_of_scope_consumer",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "prevent_diagnostic_or_trace_only_rows_from_silently_affecting_actionability",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_rejected_ambiguous_rows_to_preserve_replayable_evidence_or_limitation",
+  );
+  if (purposeElements.size > 0) {
+    assertObligation(
+      assertedObligationIds,
+      "validate_purpose_element_refs_against_selected_purpose_frame",
+    );
+  }
+  if (knownSourceRefs.size > 0) {
+    assertObligation(
+      assertedObligationIds,
+      "validate_source_refs_against_observed_source_refs",
+    );
+  }
+
   for (const [index, row] of ledger.admission_rows.entries()) {
     const subject = row.admission_id || `admission_rows[${index}]`;
     if (!row.admission_id) {
@@ -638,6 +671,7 @@ export function validateMaterialAdmissionLedger(args: {
     validation_results: violations.length === 0
       ? ["material_admission_valid"]
       : ["material_admission_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

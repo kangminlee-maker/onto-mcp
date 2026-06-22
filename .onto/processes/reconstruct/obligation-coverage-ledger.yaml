@@ -343,33 +343,10 @@ pending:
     coverage_status: pending
     tier: flat
   - validator_id: material-admission-ledger-validator
-    obligation_id: prevent_diagnostic_or_trace_only_rows_from_silently_affecting_actionability
-    coverage_status: pending
-    tier: flat
-  - validator_id: material-admission-ledger-validator
-    obligation_id: require_admitted_required_or_supporting_rows_to_have_candidate_seed_maturation_limitation_blocked_or_out_of_scope_consumer
-    coverage_status: pending
-    tier: flat
-  - validator_id: material-admission-ledger-validator
-    obligation_id: require_rejected_ambiguous_rows_to_preserve_replayable_evidence_or_limitation
-    coverage_status: pending
-    tier: flat
-  - validator_id: material-admission-ledger-validator
-    obligation_id: validate_admission_row_uniqueness
-    coverage_status: pending
-    tier: flat
-  - validator_id: material-admission-ledger-validator
     obligation_id: validate_phase_scoped_input_kind_disposition_and_snapshot_refs
     coverage_status: pending
     tier: flat
-  - validator_id: material-admission-ledger-validator
-    obligation_id: validate_purpose_element_refs_against_selected_purpose_frame
-    coverage_status: pending
-    tier: flat
-  - validator_id: material-admission-ledger-validator
-    obligation_id: validate_source_refs_against_observed_source_refs
-    coverage_status: pending
-    tier: flat
+    note: "slice-15 audit (2026-06-23): AMBIGUOUS — multi-facet name, one facet unenforced. The name binds THREE facets: phase-scoped input_kind, phase-scoped disposition, and snapshot_refs. Two are enforced — phase→input_kind (invalid_phase_input_kind: pre_seed_purpose_element→purpose_adequacy_element, pre_seed_material_value→material_value, post_cq_domain_competency→domain_competency_question) and input_kind→snapshot_ref (missing_snapshot_ref per input_kind). But the DISPOSITION facet is NOT enforced: the code only validates disposition against the global enum (invalid_enum), never restricting disposition VALUES by input_kind/admission_phase. The contract (ontology-seeding-and-maturation-design.md §Material value and domain competency admission, the admit-when table) restricts dispositions per input_kind (material_value ⊆ {admitted_material, trace_audit_only, out_of_scope, deferred_authority, rejected_ambiguous}; domain_competency_question ⊆ {required_blocking, supporting_material, diagnostic_only, deferred_product_decision, out_of_scope}), so e.g. a material_value row carrying required_blocking passes uncaught. Recording deferred pending a per-input_kind disposition allow-set check (or the name reconciled to drop the disposition facet)."
   - validator_id: maturation-answer-claims-validator
     obligation_id: require_partial_answers_to_have_limitation_or_frontier_refs
     coverage_status: pending

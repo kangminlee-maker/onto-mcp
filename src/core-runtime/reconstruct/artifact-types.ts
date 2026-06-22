@@ -1115,6 +1115,7 @@ export interface ReconstructMaterialAdmissionLedgerValidationArtifact {
   required_or_admitted_row_count: number;
   downstream_consumed_row_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaterialAdmissionValidationViolation[];
 }
 

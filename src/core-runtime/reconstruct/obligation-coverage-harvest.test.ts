@@ -7,6 +7,7 @@ import type {
   ReconstructActionabilityMatrixValidationArtifact,
   ReconstructAnswerSupportJudgmentValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
+  ReconstructMaterialAdmissionLedgerValidationArtifact,
   ReconstructMaturationAnswerClaimsArtifact,
   ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationBaselineArtifact,
@@ -37,6 +38,7 @@ import {
 } from "./post-seed-validation.js";
 import { validateReconstructRunControl } from "./run-control-validation.js";
 import { validatePurposeConfirmation } from "./purpose-authority-validation.js";
+import { validateMaterialAdmissionLedger } from "./material-admission-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -475,6 +477,85 @@ function runCompetencyQuestionAssessment(
   });
 }
 
+// A single fully-valid pre-seed admission row; overrides flip exactly one facet to bind one violation.
+function madRow(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    admission_id: "adm-1",
+    admission_phase: "pre_seed_purpose_element",
+    input_kind: "purpose_adequacy_element",
+    input_ref: "source-purpose-candidates.yaml#elem-1",
+    source_refs: [],
+    purpose_element_snapshot_ref: "source-purpose-candidates.yaml#elem-1",
+    value_snapshot_ref: null,
+    competency_snapshot_ref: null,
+    admission_policy_ref: "policy:v1",
+    disposition: "supporting_material",
+    materiality: "medium",
+    purpose_element_refs: [],
+    actionability_surface_refs: [],
+    maturity_dimension_refs: [],
+    downstream_authority_refs: [],
+    supersedes_admission_refs: [],
+    limitation_refs: ["limitation:noted"],
+    rationale: "fixture",
+    ...overrides,
+  };
+}
+
+// Slice-15: the selected frame exposes one element id (elem-1); observations expose one source ref.
+// withFrame=false drops purposeElements (size 0) and withObservations=false drops knownSourceRefs —
+// the two reference-integrity obligations are recorded ONLY when their authoritative input is present.
+function runMaterialAdmissionLedger(
+  overrides: { rows?: unknown[]; withFrame?: boolean; withObservations?: boolean } = {},
+): ReconstructMaterialAdmissionLedgerValidationArtifact {
+  const withFrame = overrides.withFrame ?? true;
+  const withObservations = overrides.withObservations ?? true;
+  return validateMaterialAdmissionLedger({
+    materialAdmissionLedger: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      source_purpose_candidates_ref: null,
+      source_purpose_candidates_validation_ref: null,
+      purpose_confirmation_validation_ref: null,
+      admission_rows: overrides.rows ?? [],
+    } as never,
+    materialAdmissionLedgerRef: "material-admission-ledger.yaml",
+    sourcePurposeCandidates: withFrame
+      ? ({
+          purpose_candidates: [
+            {
+              purpose_candidate_id: "cand-1",
+              rank: "primary",
+              adequacy_frame: {
+                required_elements: [
+                  {
+                    element_id: "elem-1",
+                    actionability_surface_refs: [],
+                    maturity_dimension_refs: [],
+                    member_source_refs: [],
+                    supporting_evidence_refs: [],
+                    closure_expectation: "model_or_limit",
+                  },
+                ],
+              },
+            },
+          ],
+        } as never)
+      : null,
+    sourcePurposeCandidatesValidation: withFrame
+      ? ({
+          validation_status: "valid",
+          session_id: "session-harvest",
+          selected_purpose_candidate_id: "cand-1",
+        } as never)
+      : null,
+    sourceObservations: withObservations
+      ? ({ observations: [{ observation_id: "obs-1", source_ref: "/tmp/harvest-src.txt" }] } as never)
+      : null,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -844,7 +925,125 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     ).toBe(false);
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 38 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateMaterialAdmissionLedger records its 6 instrumented obligations (slice 15: uniqueness + consumer-closure + diagnostic-actionability + rejected-replay + purpose-frame + source-refs) and NOT the parked disposition obligation", () => {
+    const out = runMaterialAdmissionLedger();
+    for (const obligation of [
+      "validate_admission_row_uniqueness",
+      "require_admitted_required_or_supporting_rows_to_have_candidate_seed_maturation_limitation_blocked_or_out_of_scope_consumer",
+      "prevent_diagnostic_or_trace_only_rows_from_silently_affecting_actionability",
+      "require_rejected_ambiguous_rows_to_preserve_replayable_evidence_or_limitation",
+      "validate_purpose_element_refs_against_selected_purpose_frame",
+      "validate_source_refs_against_observed_source_refs",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED: the name binds three facets but the disposition facet (allowed dispositions by
+    // input_kind/admission_phase) is unenforced — the validator only enum-checks disposition, never
+    // restricting values per input_kind (see ledger note). Not recorded.
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_phase_scoped_input_kind_disposition_and_snapshot_refs",
+    );
+  });
+
+  // ANTI-LAUNDERING (slice 15): the two reference-integrity obligations are gated on their
+  // authoritative input — the recorder only mints them when control can reach the enforcer (matrix
+  // frontier precedent). With no selected frame / no observed source refs, the checks are skipped and
+  // the pairs are NOT minted.
+  it("validateMaterialAdmissionLedger does NOT record purpose-frame validation without a selected frame, nor source-ref validation without observed source refs", () => {
+    const noFrame = runMaterialAdmissionLedger({ withFrame: false });
+    expect(noFrame.asserted_obligation_ids).not.toContain(
+      "validate_purpose_element_refs_against_selected_purpose_frame",
+    );
+    const noObservations = runMaterialAdmissionLedger({ withObservations: false });
+    expect(noObservations.asserted_obligation_ids).not.toContain(
+      "validate_source_refs_against_observed_source_refs",
+    );
+  });
+
+  // ANTI-LAUNDERING (slice 15): each recorded obligation has a non-vacuous, NON-OVERLAPPING enforcement
+  // binding — a breaching input trips a DISTINCT violation code, a clean variant clears it. (The
+  // validator's own material-admission-validation.test.ts also binds each of these codes.)
+  it("ENFORCEMENT BINDING (validate_admission_row_uniqueness): a duplicate admission_id trips duplicate_id; distinct ids clear it", () => {
+    const breaching = runMaterialAdmissionLedger({ rows: [madRow(), madRow()] });
+    expect(breaching.violations.some((v) => v.code === "duplicate_id")).toBe(true);
+    const clean = runMaterialAdmissionLedger({
+      rows: [madRow(), madRow({ admission_id: "adm-2" })],
+    });
+    expect(clean.violations.some((v) => v.code === "duplicate_id")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (require_admitted_required_or_supporting_..._consumer): an admitted row with no consumer or limitation trips downstream_consumer_missing; a limitation clears it", () => {
+    const breaching = runMaterialAdmissionLedger({
+      rows: [madRow({ disposition: "admitted_material", limitation_refs: [] })],
+    });
+    expect(breaching.violations.some((v) => v.code === "downstream_consumer_missing")).toBe(true);
+    const clean = runMaterialAdmissionLedger({
+      rows: [madRow({ disposition: "admitted_material", limitation_refs: ["limitation:x"] })],
+    });
+    expect(clean.violations.some((v) => v.code === "downstream_consumer_missing")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (prevent_diagnostic_or_trace_only_rows_...): a diagnostic high row carrying downstream actionability trips diagnostic_affects_actionability; dropping the downstream refs clears it", () => {
+    const breaching = runMaterialAdmissionLedger({
+      rows: [madRow({
+        disposition: "diagnostic_only",
+        materiality: "high",
+        downstream_authority_refs: ["candidate-inventory.yaml"],
+      })],
+    });
+    expect(breaching.violations.some((v) => v.code === "diagnostic_affects_actionability")).toBe(true);
+    const clean = runMaterialAdmissionLedger({
+      rows: [madRow({
+        disposition: "diagnostic_only",
+        materiality: "high",
+        downstream_authority_refs: [],
+      })],
+    });
+    expect(clean.violations.some((v) => v.code === "diagnostic_affects_actionability")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (require_rejected_ambiguous_rows_...): a rejected row with no source/limitation refs trips rejected_without_replayable_evidence; a limitation clears it", () => {
+    const breaching = runMaterialAdmissionLedger({
+      rows: [madRow({ disposition: "rejected_ambiguous", source_refs: [], limitation_refs: [] })],
+    });
+    expect(
+      breaching.violations.some((v) => v.code === "rejected_without_replayable_evidence"),
+    ).toBe(true);
+    const clean = runMaterialAdmissionLedger({
+      rows: [madRow({
+        disposition: "rejected_ambiguous",
+        source_refs: [],
+        limitation_refs: ["limitation:contradiction"],
+      })],
+    });
+    expect(
+      clean.violations.some((v) => v.code === "rejected_without_replayable_evidence"),
+    ).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_purpose_element_refs_against_selected_purpose_frame): a ref outside the selected frame trips unknown_purpose_element_ref; an in-frame ref clears it", () => {
+    const breaching = runMaterialAdmissionLedger({
+      rows: [madRow({ purpose_element_refs: ["not-in-frame"] })],
+    });
+    expect(breaching.violations.some((v) => v.code === "unknown_purpose_element_ref")).toBe(true);
+    const clean = runMaterialAdmissionLedger({
+      rows: [madRow({ purpose_element_refs: ["elem-1"] })],
+    });
+    expect(clean.violations.some((v) => v.code === "unknown_purpose_element_ref")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_source_refs_against_observed_source_refs): a source_ref not in observations trips unknown_source_ref; an observed ref clears it", () => {
+    const breaching = runMaterialAdmissionLedger({
+      rows: [madRow({ source_refs: ["/unknown/path.ts"] })],
+    });
+    expect(breaching.violations.some((v) => v.code === "unknown_source_ref")).toBe(true);
+    const clean = runMaterialAdmissionLedger({
+      rows: [madRow({ source_refs: ["/tmp/harvest-src.txt"] })],
+    });
+    expect(clean.violations.some((v) => v.code === "unknown_source_ref")).toBe(false);
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 44 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -860,6 +1059,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const runControlOut = runReconstructRunControl();
     const purposeConfirmationOut = runPurposeConfirmation();
     const competencyAssessmentOut = runCompetencyQuestionAssessment();
+    const materialAdmissionOut = runMaterialAdmissionLedger();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -915,6 +1115,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "competency-question-assessment-validator",
         obligation_id,
       })),
+      ...materialAdmissionOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "material-admission-ledger-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -931,6 +1135,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(38);
+    expect(harvestedSet.size).toBe(44);
   });
 });
