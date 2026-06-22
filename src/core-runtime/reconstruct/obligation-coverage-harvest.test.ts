@@ -46,9 +46,17 @@ function minimalBaseline(): ReconstructMaturationBaselineArtifact {
 // The validation inputs only need a validation_status to reach the recorder; cast the rest.
 const VALID = { validation_status: "valid" } as never;
 
-function runBaseline(): ReconstructMaturationBaselineValidationArtifact {
+function runBaseline(
+  overrides: {
+    baseline?: Partial<ReconstructMaturationBaselineArtifact>;
+    sourceReconstructRecordSha256?: string | null;
+  } = {},
+): ReconstructMaturationBaselineValidationArtifact {
   return validateMaturationBaseline({
-    maturationBaseline: minimalBaseline(),
+    maturationBaseline: {
+      ...minimalBaseline(),
+      ...overrides.baseline,
+    } as ReconstructMaturationBaselineArtifact,
     sourcePurposeCandidates: {
       schema_version: "1",
       session_id: "session-harvest",
@@ -63,6 +71,7 @@ function runBaseline(): ReconstructMaturationBaselineValidationArtifact {
     ontologySeedValidation: VALID,
     competencyQuestionAssessmentValidation: VALID,
     handoffDecisionValidation: VALID,
+    sourceReconstructRecordSha256: overrides.sourceReconstructRecordSha256,
   });
 }
 
@@ -99,11 +108,38 @@ function baselineValidationInput(): ReconstructMaturationBaselineValidationArtif
 }
 
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
-  it("validateMaturationBaseline records the baseline-coverage obligation", () => {
+  it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
     expect(out.asserted_obligation_ids).toContain(
       "validate_baseline_rows_cover_selected_purpose_frame_required_elements",
     );
+    expect(out.asserted_obligation_ids).toContain(
+      "require_source_reconstruct_record_ref_and_sha256_before_maturation_baseline_consumption",
+    );
+    expect(out.asserted_obligation_ids).toContain(
+      "validate_mixed_baseline_rows_preserve_member_material_and_cross_material_lineage",
+    );
+  });
+
+  // ANTI-LAUNDERING: recording a pair claims the validator GENUINELY ENFORCES it, not merely that the
+  // recorder is reached. Each recorded baseline obligation has an enforcement test that trips a real
+  // violation on a breaching input — the slice-2 audit recorded ONLY obligations that clear this bar
+  // (preserve_immutable_source_seed / trace_to_seed_refs / static_kinetic_dynamic_surfaces had no
+  // distinct enforcement site located, so they stay parked with audit notes). The cheap one is
+  // exercised inline below; mixed_lineage_missing is bound by maturation-validation.test.ts and the
+  // coverage obligation by its missing_required_coverage tuple tests.
+  it("ENFORCEMENT BINDING (require_source_reconstruct_record_ref...): a missing ref/sha256 trips source_reconstruct_record_missing, and supplying both clears it (non-vacuous)", () => {
+    const missing = runBaseline(); // minimalBaseline has a null source_reconstruct_record_ref + no sha256
+    expect(
+      missing.violations.some((v) => v.code === "source_reconstruct_record_missing"),
+    ).toBe(true);
+    const present = runBaseline({
+      baseline: { source_reconstruct_record_ref: "reconstruct-record.yaml" },
+      sourceReconstructRecordSha256: "sha256-abc",
+    });
+    expect(
+      present.violations.some((v) => v.code === "source_reconstruct_record_missing"),
+    ).toBe(false);
   });
 
   it("validateActionabilityMatrix in BASELINE mode (no post-frontier inputs) records the matrix obligation and attributes to baseline-actionability-matrix-validator", () => {
@@ -140,7 +176,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     );
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 3 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 5 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = validateActionabilityMatrix({
       actionabilityMatrix: minimalMatrix(),
@@ -192,6 +228,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(3);
+    expect(harvestedSet.size).toBe(5);
   });
 });
