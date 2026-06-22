@@ -79,3 +79,15 @@ recorded:
     obligation_id: validate_downstream_effect_consistent_with_answer_status
   - validator_id: competency-question-assessment-validator
     obligation_id: validate_required_seed_refs_close_against_question_seed_refs
+  - validator_id: material-admission-ledger-validator
+    obligation_id: validate_admission_row_uniqueness
+  - validator_id: material-admission-ledger-validator
+    obligation_id: require_admitted_required_or_supporting_rows_to_have_candidate_seed_maturation_limitation_blocked_or_out_of_scope_consumer
+  - validator_id: material-admission-ledger-validator
+    obligation_id: prevent_diagnostic_or_trace_only_rows_from_silently_affecting_actionability
+  - validator_id: material-admission-ledger-validator
+    obligation_id: require_rejected_ambiguous_rows_to_preserve_replayable_evidence_or_limitation
+  - validator_id: material-admission-ledger-validator
+    obligation_id: validate_purpose_element_refs_against_selected_purpose_frame
+  - validator_id: material-admission-ledger-validator
+    obligation_id: validate_source_refs_against_observed_source_refs
