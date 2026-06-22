@@ -55,6 +55,12 @@ export interface ObligationPair {
 export interface LedgerRow extends ObligationPair {
   coverage_status: string;
   tier: string;
+  /**
+   * Optional free-form justification. Carried for the enforced_pending_instrumentation tier (a pair
+   * that IS live-enforced but whose recording instrumentation is deferred), so the deferral is not a
+   * free-floating claim. Ignored by the pure clauses — purely documentary.
+   */
+  note?: string;
 }
 
 export interface ObligationCoverageInputs {
@@ -238,6 +244,7 @@ function parseLedger(text: string): LedgerRow[] {
       obligation_id: String(row.obligation_id),
       coverage_status: String(row.coverage_status),
       tier: String(row.tier),
+      ...(row.note === undefined ? {} : { note: String(row.note) }),
     };
   });
 }

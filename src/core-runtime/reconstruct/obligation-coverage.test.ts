@@ -82,6 +82,43 @@ describe("obligation-coverage pure clauses (G10 / INV-OBLIGATION-COVERAGE-1)", (
     const errors = evaluateObligationCoverage({ activePairs: active, recorded, ledger });
     expect(errors.some((m) => m.includes("v3::shared") && m.includes("neither recorded nor parked"))).toBe(true);
   });
+
+  it("RED: a duplicate pending row in the ledger fails honesty (b)", () => {
+    const active = [A("v1", "o1")];
+    const ledger = [PARK("v1", "o1"), PARK("v1", "o1")];
+    const errors = evaluateObligationCoverage({ activePairs: active, recorded: [], ledger });
+    expect(errors.some((m) => m.includes("duplicate pending row") && m.includes("v1::o1"))).toBe(true);
+  });
+
+  it("RED: a ledger row with coverage_status != 'pending' fails honesty (b)", () => {
+    const active = [A("v1", "o1")];
+    const ledger: LedgerRow[] = [
+      { validator_id: "v1", obligation_id: "o1", coverage_status: "recorded", tier: "flat" },
+    ];
+    const errors = evaluateObligationCoverage({ activePairs: active, recorded: [], ledger });
+    expect(errors.some((m) => m.includes("coverage_status must be 'pending'") && m.includes("v1::o1"))).toBe(true);
+  });
+
+  it("RED: a duplicate recorded pair fails reverse-validation (c)", () => {
+    const active = [A("v1", "o1")];
+    const recorded = [A("v1", "o1"), A("v1", "o1")];
+    const errors = evaluateObligationCoverage({ activePairs: active, recorded, ledger: [] });
+    expect(errors.some((m) => m.includes("recorded set has a duplicate pair") && m.includes("v1::o1"))).toBe(true);
+  });
+
+  it("tolerates an optional note on a ledger row (documentary; ignored by the pure clauses)", () => {
+    const active = [A("v1", "o1")];
+    const ledger: LedgerRow[] = [
+      {
+        validator_id: "v1",
+        obligation_id: "o1",
+        coverage_status: "pending",
+        tier: "enforced_pending_instrumentation",
+        note: "live-enforced; recording deferred",
+      },
+    ];
+    expect(evaluateObligationCoverage({ activePairs: active, recorded: [], ledger })).toEqual([]);
+  });
 });
 
 describe("obligation-coverage ratchet (pure, synthetic base/current)", () => {

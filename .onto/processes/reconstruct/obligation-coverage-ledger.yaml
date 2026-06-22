@@ -1,7 +1,15 @@
 # Obligation-coverage PENDING ledger (G(a) / INV-OBLIGATION-COVERAGE-1).
-# Generated; the parked backlog of active (validator_id, obligation_id) pairs with no live
-# recorded enforcer yet. The ratchet proves this legacy set is monotone non-increasing.
-# tier: flat | activation_gated_dormant | enforced_pending_instrumentation
+# Generated; the parked backlog of active (validator_id, obligation_id) pairs not yet RECORDED
+# (no asserted_obligation_ids instrumentation in this slice). The ratchet proves this legacy set
+# is monotone non-increasing.
+#
+# tier — what the pending status means for THIS pair:
+#   flat                            : a flat obligation not yet instrumented for recording.
+#   activation_gated_dormant        : a conditional obligation whose runtime is genuinely unwired
+#                                     (its enforcement is dormant; activation_condition unmet).
+#   enforced_pending_instrumentation: the pair IS live-enforced today, but its asserted_obligation_ids
+#                                     RECORDING is deferred to a later slice (see the row's `note`).
+#                                     Parked ≠ unwired for this tier — only the recording is pending.
 pending:
   - validator_id: actionability-matrix-validator
     obligation_id: reject_matrix_rows_without_baseline_row_or_applicable_validated_expansion_ref
@@ -407,6 +415,7 @@ pending:
     obligation_id: require_convergent_source_evidence_claims_to_have_two_independent_judge_confirmed_supports
     coverage_status: pending
     tier: enforced_pending_instrumentation
+    note: "live-enforced in validateMaturationAnswerClaims (insufficient_independent_evidence when <2 independent judge-confirmed supports; prior_validation_invalid fail-closed when the judge is absent, #57/#58); asserted_obligation_ids recording instrumentation deferred to slice 2 to keep this slice to 2 instrumented validators. The enforced claim is bound by obligation-coverage-enforced-tier.test.ts so a judge regression reds a coverage test."
   - validator_id: maturation-answer-claims-validator
     obligation_id: require_partial_answers_to_have_limitation_or_frontier_refs
     coverage_status: pending
