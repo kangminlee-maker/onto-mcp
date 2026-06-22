@@ -11,6 +11,7 @@ import type {
   ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationBaselineArtifact,
   ReconstructMaturationBaselineValidationArtifact,
+  ReconstructCompetencyQuestionAssessmentValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructOntologyExpansionValidationArtifact,
   ReconstructPurposeConfirmationValidationArtifact,
@@ -30,7 +31,10 @@ import {
   validateSourceObservationDelta,
   validateSourceObservationReentry,
 } from "./source-observation-delta-validation.js";
-import { validateClaimRealizationMapForOntologySeed } from "./post-seed-validation.js";
+import {
+  validateClaimRealizationMapForOntologySeed,
+  validateCompetencyQuestionAssessment,
+} from "./post-seed-validation.js";
 import { validateReconstructRunControl } from "./run-control-validation.js";
 import { validatePurposeConfirmation } from "./purpose-authority-validation.js";
 
@@ -425,6 +429,52 @@ function runPurposeConfirmation(
   });
 }
 
+// competency-question-assessment-validator (slice 12, post-seed-validation.ts). Minimal inputs reach
+// the recorder (stamped unconditionally before the per-assessment/per-question loops). The validation
+// artifact carries no validator_id field, so attribute by name. Three obligations are recorded; the
+// content-blind answer_status obligation and the trace-refs (limitations/proofs) obligation stay parked.
+const cqQuestion = (overrides: Record<string, unknown> = {}) => ({
+  question_id: "q1",
+  linked_claim_ids: [],
+  evidence_refs: [],
+  seed_ref_refs: [],
+  ...overrides,
+});
+const cqAssessment = (overrides: Record<string, unknown> = {}) => ({
+  question_id: "q1",
+  answer_status: "not_applicable",
+  answer_summary: "summary",
+  required_seed_refs: [],
+  linked_claim_ids: [],
+  evidence_refs: [],
+  missing_source_or_confirmation: null,
+  ambiguity_notes: [],
+  downstream_effect: "not_applicable",
+  rationale: "rationale",
+  ...overrides,
+});
+function runCompetencyQuestionAssessment(
+  overrides: { questions?: unknown[]; assessments?: unknown[] } = {},
+): ReconstructCompetencyQuestionAssessmentValidationArtifact {
+  return validateCompetencyQuestionAssessment({
+    competencyQuestionAssessment: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      competency_questions_ref: null,
+      competency_questions_validation_ref: null,
+      assessments: overrides.assessments ?? [],
+      directive_author: { owner: "host_llm", author_id: "a" },
+    } as never,
+    competencyQuestions: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      questions: overrides.questions ?? [],
+    } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -719,7 +769,82 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     expect(clean.violations.some((v) => v.code === "selected_primary_mismatch")).toBe(false);
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 35 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateCompetencyQuestionAssessment records its 3 instrumented obligations (slice 12: exactly-one + downstream-effect + required-seed-refs) and NOT the parked two", () => {
+    const out = runCompetencyQuestionAssessment();
+    for (const obligation of [
+      "require_exactly_one_assessment_per_authoritative_question",
+      "validate_downstream_effect_consistent_with_answer_status",
+      "validate_required_seed_refs_close_against_question_seed_refs",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED: answer_status is checked structurally (enum + per-status fields) but the answerability
+    // judgment is content-blind; there is no answerability_trace_refs / limitation / proof closure.
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_answer_status_against_active_answerability_contract",
+    );
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_answerability_trace_refs_close_against_seed_evidence_limitations_and_proofs",
+    );
+  });
+
+  // ANTI-LAUNDERING (slice 12): each recorded obligation has a non-vacuous enforcement binding.
+  it("ENFORCEMENT BINDING (require_exactly_one_assessment_per_authoritative_question): a duplicate assessment trips duplicate_id; a single assessment clears it", () => {
+    const breaching = runCompetencyQuestionAssessment({
+      questions: [cqQuestion()],
+      assessments: [cqAssessment(), cqAssessment()],
+    });
+    expect(breaching.violations.some((v) => v.code === "duplicate_id")).toBe(true);
+    const clean = runCompetencyQuestionAssessment({
+      questions: [cqQuestion()],
+      assessments: [cqAssessment()],
+    });
+    expect(clean.violations.some((v) => v.code === "duplicate_id")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_downstream_effect_consistent_with_answer_status): a downstream_effect that mismatches the answer_status trips invalid_enum; the expected effect clears it", () => {
+    const breaching = runCompetencyQuestionAssessment({
+      questions: [cqQuestion()],
+      assessments: [cqAssessment({ downstream_effect: "ready" })], // answer_status not_applicable expects not_applicable
+    });
+    expect(
+      breaching.violations.some((v) =>
+        v.code === "invalid_enum" && /downstream_effect must be/.test(v.message)
+      ),
+    ).toBe(true);
+    const clean = runCompetencyQuestionAssessment({
+      questions: [cqQuestion()],
+      assessments: [cqAssessment({ downstream_effect: "not_applicable" })],
+    });
+    expect(
+      clean.violations.some((v) =>
+        v.code === "invalid_enum" && /downstream_effect must be/.test(v.message)
+      ),
+    ).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_required_seed_refs_close_against_question_seed_refs): a missing question seed ref trips missing_required_coverage; carrying it clears it", () => {
+    const breaching = runCompetencyQuestionAssessment({
+      questions: [cqQuestion({ seed_ref_refs: ["seed-1"] })],
+      assessments: [cqAssessment({ required_seed_refs: [] })],
+    });
+    expect(
+      breaching.violations.some((v) =>
+        v.code === "missing_required_coverage" && /missing question seed ref/.test(v.message)
+      ),
+    ).toBe(true);
+    const clean = runCompetencyQuestionAssessment({
+      questions: [cqQuestion({ seed_ref_refs: ["seed-1"] })],
+      assessments: [cqAssessment({ required_seed_refs: ["seed-1"] })],
+    });
+    expect(
+      clean.violations.some((v) =>
+        v.code === "missing_required_coverage" && /missing question seed ref/.test(v.message)
+      ),
+    ).toBe(false);
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 38 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -734,6 +859,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const ontologyExpansionOut = runOntologyExpansion();
     const runControlOut = runReconstructRunControl();
     const purposeConfirmationOut = runPurposeConfirmation();
+    const competencyAssessmentOut = runCompetencyQuestionAssessment();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -785,6 +911,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "purpose-confirmation-validator",
         obligation_id,
       })),
+      ...competencyAssessmentOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "competency-question-assessment-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -801,6 +931,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(35);
+    expect(harvestedSet.size).toBe(38);
   });
 });

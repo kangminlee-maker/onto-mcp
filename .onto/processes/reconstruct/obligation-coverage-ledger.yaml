@@ -184,25 +184,15 @@ pending:
     coverage_status: pending
     tier: flat
   - validator_id: competency-question-assessment-validator
-    obligation_id: require_exactly_one_assessment_per_authoritative_question
-    coverage_status: pending
-    tier: flat
-  - validator_id: competency-question-assessment-validator
     obligation_id: validate_answer_status_against_active_answerability_contract
     coverage_status: pending
     tier: flat
+    note: "slice-12 audit (2026-06-22): AMBIGUOUS — structure-only, content judgment is blind. The validator checks answer_status enum validity (invalid_enum) + per-status STRUCTURAL requirements (answerable→evidence_refs + required_seed_refs; unsupported/deferred→missing_source_or_confirmation), but never verifies the answer_status reflects actual answerability from evidence CONTENT — that judgment is the content-blind host-LLM assessment step (see contract-runtime-gap-ledger silent-defect #1), not validated here. The per-status structural rules are real but the name (\"active answerability contract\") implies the content/answerability semantics the validator does not check. Recording deferred pending content-aware answerability validation or name reconciliation."
   - validator_id: competency-question-assessment-validator
     obligation_id: validate_answerability_trace_refs_close_against_seed_evidence_limitations_and_proofs
     coverage_status: pending
     tier: flat
-  - validator_id: competency-question-assessment-validator
-    obligation_id: validate_downstream_effect_consistent_with_answer_status
-    coverage_status: pending
-    tier: flat
-  - validator_id: competency-question-assessment-validator
-    obligation_id: validate_required_seed_refs_close_against_question_seed_refs
-    coverage_status: pending
-    tier: flat
+    note: "slice-12 audit (2026-06-22): NOT_FOUND for the named arms. The assessment artifact has no answerability_trace_refs, limitation_refs, or proof_refs fields. The validator closes evidence_refs (unknown_observation_ref) and required_seed_refs (recorded separately as validate_required_seed_refs_close_against_question_seed_refs) and linked_claim_ids against the question, but NEVER against limitations or proofs (proofs are separate query/visualization/graph-exploration-proofs artifacts). Of the four named arms (seed, evidence, limitations, proofs) only seed+evidence are closed, and there is no trace_refs field. Recording deferred pending limitation/proof closure (or name reconciliation; the seed arm is already covered)."
   - validator_id: competency-questions-validator
     obligation_id: emit_required_evidence_scope_runtime_projection
     coverage_status: pending

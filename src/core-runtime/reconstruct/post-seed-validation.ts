@@ -1720,6 +1720,39 @@ export function validateCompetencyQuestionAssessment(args: {
   competencyQuestionsRef?: string | null;
 }): ReconstructCompetencyQuestionAssessmentValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
+  // G(a) slice 12: record the three obligations with a distinct, name-matching enforcement site,
+  // stamped unconditionally before the per-assessment / per-question loops so they fire on a
+  // zero-assessment artifact:
+  //   - require_exactly_one_assessment_per_authoritative_question (duplicate_id on a repeat +
+  //     missing_required_coverage when a question has no assessment → exactly one).
+  //   - validate_downstream_effect_consistent_with_answer_status (downstream_effect must equal
+  //     expectedDownstreamEffect(answer_status): invalid_enum).
+  //   - validate_required_seed_refs_close_against_question_seed_refs (bidirectional closure:
+  //     unknown_id for a ref outside the question, missing_required_coverage for a missing one).
+  // PARKED (not recorded), name broader than code — honest declared≠wired, NOT laundered (see
+  // obligation-coverage-ledger.yaml notes):
+  //   - validate_answer_status_against_active_answerability_contract: the validator checks enum
+  //     validity + per-status STRUCTURAL requirements (answerable→evidence_refs/required_seed_refs,
+  //     unsupported/deferred→missing_source_or_confirmation), but never verifies the answer_status
+  //     reflects actual answerability from evidence CONTENT — the answerability judgment is the
+  //     content-blind host-LLM step, not validated here.
+  //   - validate_answerability_trace_refs_close_against_seed_evidence_limitations_and_proofs: there
+  //     is no answerability_trace_refs / limitation_refs / proof_refs field; the validator closes
+  //     only evidence_refs and required_seed_refs (the latter already recorded above), never
+  //     limitations or proofs.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "require_exactly_one_assessment_per_authoritative_question",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_downstream_effect_consistent_with_answer_status",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_required_seed_refs_close_against_question_seed_refs",
+  );
   const questionIds = new Set(
     args.competencyQuestions.questions.map((question) => question.question_id),
   );
@@ -1911,6 +1944,7 @@ export function validateCompetencyQuestionAssessment(args: {
     validation_results: violations.length === 0
       ? ["competency_question_assessment_valid"]
       : ["competency_question_assessment_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
