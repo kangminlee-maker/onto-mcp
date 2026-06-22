@@ -9,17 +9,18 @@
  * pending set may only NON-INCREASE vs origin/main.
  *
  * Pure clauses (a-c) are G9-shaped. The ratchet (d) is git-impure (check-invariant-change-marker-
- * shaped): it materializes the base registry + base recorded-set via `git show <mergeBase>:<file>`
- * and re-loads/parses them, so legacy-pending growth, a recorded→pending downgrade, or re-parking a
- * currently-recorded pair fail CI; base-unavailable FAILS LOUD. The ratchet decision is extracted
- * into the pure `evaluateRatchet` so it is unit-testable without real git.
+ * shaped): it reads the base registry + base recorded-set via `git show <mergeBase>:<file>` and
+ * version-TOLERANT-parses them (the base side needs only (validator_id, obligation_id), so a future
+ * loader-schema tightening cannot make an older origin/main unparseable), so legacy-pending growth, a
+ * still-active recorded→pending downgrade, or re-parking a currently-recorded pair fail CI; base-
+ * unavailable FAILS LOUD. The ratchet decision is extracted into the pure `evaluateRatchet` so it is
+ * unit-testable without real git.
  *
  * 사용: npx tsx scripts/check-obligation-coverage.ts [baseRef]   (baseRef default origin/main)
  * npm: `check:obligation-coverage`.
  */
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -206,10 +207,14 @@ export function evaluateRatchet(inputs: RatchetInputs): string[] {
     }
   }
 
-  // (ii) a recorded pair at base must remain recorded (no silent recorded→pending downgrade).
+  // (ii) a recorded pair at base must remain recorded — UNLESS its obligation was retired/renamed out
+  // of the registry (no longer in currentActiveKeys), a legitimate active-set shrink. Pure clause (c)
+  // forces a retired pair to LEAVE the recorded set (it resolves to no active obligation), so gating on
+  // currentActiveKeys is what makes retirement a valid state at all; a STILL-ACTIVE base-recorded pair
+  // must not silently move back to pending.
   for (const k of inputs.baseRecorded) {
-    if (!inputs.currentRecorded.has(k)) {
-      errors.push(`recorded pair was downgraded (present at base, absent in current recorded): ${k}`);
+    if (inputs.currentActiveKeys.has(k) && !inputs.currentRecorded.has(k)) {
+      errors.push(`recorded pair was downgraded (still active, present at base, absent in current recorded): ${k}`);
     }
   }
 
@@ -249,6 +254,47 @@ function parseLedger(text: string): LedgerRow[] {
   });
 }
 
+/**
+ * Minimal, version-TOLERANT enumeration of the BASE registry's active pairs. The base side only needs
+ * (validator_id, obligation_id) from non-planned validator_records; running the full current loader on
+ * an older origin/main would make a future loader-schema tightening (a new required field) fail to
+ * parse the historical registry and block otherwise-valid migrations. Mirrors activePairsFromRegistry's
+ * flat ∪ conditional enumeration over `validator_records` — `planned_validator_records` are excluded
+ * exactly as the loader drops them (this reads only the `validator_records` key) — and skips malformed
+ * obligation entries rather than minting bogus keys.
+ */
+export function parseBaseActivePairs(text: string): ObligationPair[] {
+  const doc = parseYaml(text) as { validator_records?: unknown } | null;
+  const records = doc?.validator_records;
+  if (!Array.isArray(records)) {
+    throw new Error(`base registry must have a 'validator_records' array (${REGISTRY_REF})`);
+  }
+  const seen = new Set<string>();
+  const pairs: ObligationPair[] = [];
+  for (const r of records) {
+    const rec = r as Record<string, unknown>;
+    if (typeof rec?.validator_id !== "string") continue;
+    const validator_id = rec.validator_id;
+    const flat = (Array.isArray(rec.validation_obligations) ? rec.validation_obligations : []).filter(
+      (o): o is string => typeof o === "string" && o.length > 0,
+    );
+    const conditional = (Array.isArray(rec.conditional_validation_obligations)
+      ? rec.conditional_validation_obligations
+      : [])
+      .map((c) => (c as Record<string, unknown>)?.obligation_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    for (const obligation_id of [...flat, ...conditional]) {
+      const p = { validator_id, obligation_id };
+      const k = pairKey(p);
+      if (!seen.has(k)) {
+        seen.add(k);
+        pairs.push(p);
+      }
+    }
+  }
+  return pairs;
+}
+
 async function git(args: string[]): Promise<string> {
   const result = await execFileAsync("git", args, {
     cwd: PROJECT_ROOT,
@@ -269,14 +315,6 @@ async function showBaseFile(mergeBase: string, ref: string): Promise<string | nu
     }
     throw error;
   }
-}
-
-/** Materialize content to a temp path so the path-only registry loader can read it. */
-async function writeTempFile(content: string, suffix: string): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "obligation-coverage-base-"));
-  const file = path.join(dir, `base-${suffix}`);
-  await fs.writeFile(file, content, "utf8");
-  return file;
 }
 
 function fail(errors: string[]): never {
@@ -324,9 +362,8 @@ async function main(): Promise<void> {
     if (baseRegistryText === null) {
       fail([`ratchet base registry unavailable at ${mergeBase} (cannot prove legacy-pending non-increase)`]);
     }
-    const baseRegistryFile = await writeTempFile(baseRegistryText, "registry.yaml");
-    const baseRegistry = await loadReconstructContractRegistry({ registryPath: baseRegistryFile });
-    const baseActivePairs = activePairsFromRegistry(baseRegistry);
+    // Tolerant parse of the base active surface (NOT the full current loader — see parseBaseActivePairs).
+    const baseActivePairs = parseBaseActivePairs(baseRegistryText);
 
     // The coverage artifacts may be ABSENT at base — that is the bootstrap slice (this gate did not
     // exist yet). Distinguish that from a corrupt/unreadable base (which throws below ⇒ fail loud).

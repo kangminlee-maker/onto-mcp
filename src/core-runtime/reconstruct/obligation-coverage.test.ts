@@ -5,6 +5,7 @@ import {
   evaluateObligationCoverage,
   evaluateRatchet,
   pairKey,
+  parseBaseActivePairs,
   type LedgerRow,
   type ObligationPair,
   type RatchetInputs,
@@ -193,6 +194,78 @@ describe("obligation-coverage ratchet (pure, synthetic base/current)", () => {
       coverageBaseMissing: true,
     });
     expect(errors.some((m) => m.includes("re-parked"))).toBe(true);
+  });
+
+  it("allows a RETIRED recorded obligation to leave the recorded set (no longer active) — (ii) gated on currentActiveKeys", () => {
+    // v2::shared was recorded at base; the registry retires it (absent from currentActiveKeys). Pure
+    // clause (c) forces its removal from recorded; the ratchet must NOT then flag it as a downgrade.
+    const errors = evaluateRatchet(
+      base({
+        currentActiveKeys: new Set(["v1::o1", "v1::o2"]),
+        currentRecorded: new Set([]),
+      }),
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("RED: a STILL-ACTIVE base-recorded pair leaving recorded is still a downgrade (ii)", () => {
+    // v2::shared stays active but is dropped from recorded → forbidden (silent recorded→absent).
+    const errors = evaluateRatchet(base({ currentRecorded: new Set([]) }));
+    expect(errors.some((m) => m.includes("was downgraded") && m.includes("v2::shared"))).toBe(true);
+  });
+});
+
+describe("parseBaseActivePairs (version-tolerant base enumeration)", () => {
+  it("matches activePairsFromRegistry on the CURRENT registry (same flat ∪ conditional surface)", async () => {
+    const text = await import("node:fs/promises").then((m) => m.readFile(REGISTRY_PATH, "utf8"));
+    const registry = await loadReconstructContractRegistry({ registryPath: REGISTRY_PATH });
+    const viaLoader = new Set(activePairsFromRegistry(registry).map(pairKey));
+    const viaTolerant = new Set(parseBaseActivePairs(text).map(pairKey));
+    expect(viaTolerant).toEqual(viaLoader);
+  });
+
+  it("tolerates unknown/extra fields and a hypothetical future required field on records", () => {
+    const yaml = [
+      "schema_version: 999",
+      "some_future_top_level_key: { a: 1 }",
+      "validator_records:",
+      "  - validator_id: v1",
+      "    a_new_required_field_added_later: true",
+      "    validation_obligations: [o1, o2]",
+      "    conditional_validation_obligations:",
+      "      - obligation_id: c1",
+      "        activation_predicate: whatever",
+      "  - validator_id: v2",
+      "    validation_obligations: [o1]",
+    ].join("\n");
+    const keys = new Set(parseBaseActivePairs(yaml).map(pairKey));
+    expect(keys).toEqual(new Set(["v1::o1", "v1::o2", "v1::c1", "v2::o1"]));
+  });
+
+  it("excludes planned_validator_records (only the active validator_records key is read)", () => {
+    const yaml = [
+      "validator_records:",
+      "  - validator_id: active1",
+      "    validation_obligations: [o1]",
+      "planned_validator_records:",
+      "  - validator_id: planned1",
+      "    validation_obligations: [should_not_appear]",
+    ].join("\n");
+    const keys = new Set(parseBaseActivePairs(yaml).map(pairKey));
+    expect(keys).toEqual(new Set(["active1::o1"]));
+  });
+
+  it("skips malformed obligation entries instead of minting bogus keys", () => {
+    const yaml = [
+      "validator_records:",
+      "  - validator_id: v1",
+      "    validation_obligations: [o1, '', null]",
+      "    conditional_validation_obligations:",
+      "      - { not_an_obligation_id: x }",
+      "      - obligation_id: c1",
+    ].join("\n");
+    const keys = new Set(parseBaseActivePairs(yaml).map(pairKey));
+    expect(keys).toEqual(new Set(["v1::o1", "v1::c1"]));
   });
 });
 
