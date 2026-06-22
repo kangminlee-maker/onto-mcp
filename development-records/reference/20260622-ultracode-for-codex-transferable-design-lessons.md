@@ -22,7 +22,7 @@
 
 | 묶음 | 핵심 | onto 효용 | 난이도 |
 |---|---|---|---|
-| **A. Multi-agent 렌즈 fan-out** | 동적 phase 계획 + phase 내 병렬(cap 16) + phase 간 barrier + schema 강제 | ★★★ 렌즈 속도·정확도 (1순위) | 중 |
+| **A. Multi-agent 렌즈 fan-out** ⚠️SUPERSEDED | 동적 phase 계획 + phase 내 병렬(cap 16) + phase 간 barrier + schema 강제 | ~~★★★ 1순위~~ → 교차검증 후 정정: 렌즈-간 병렬 이미 구현·렌즈-내는 국소 한정. **SSOT [[20260622-onto-review-depth-aware-multiagent-redesign]]** 따를 것 | 중 |
 | **B. CLI/오케스트레이션 시각화** | 단일 의미 이벤트 → 이중 렌더러; 상황별 진행 shape; 누적 ledger | ★★ 가시성 | 중 |
 | **C. Dynamic-workflow 설계 원칙** | 부분-우선 계획 + 합성 후 재계획 + 증거/불일치 보존 | ★★ judge/evidence 정합 | 저(문서) |
 | **D. CLI 운영** | background 기본 + detached + 4-파일 상태머신 + 잡 라이프사이클 | ★★★ 긴 라이브 런(sweep timeout) 직접 해소 | 중 |

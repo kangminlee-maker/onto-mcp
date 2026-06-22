@@ -5,6 +5,7 @@
 > 도출: 외부 레포 `~/documents/ultracode-for-codex`(v0.3.2) 학습 → onto review 적용.
 > 검증: ultracode 워크플로 `wf_8c412982-520`(23 agent, 15 confirmed findings) + onto 라이브 셀프리뷰 `20260622-6710953f`(full 9-lens, gpt-5.5; deliberation stall이나 렌즈 findings 완성).
 > Codex 수렴 R1: PR #125 — 7 findings(P2×5·P3×2) **전부 수용·반영**(#1 barrier 순서·#2 pre-barrier 전용 kind·#3 lessons supersede·#4 invariant 권위·#5 seam-aware 게이트·#6 multi-workbook caps·#7 boundary-gated local-read).
+> Codex 수렴 R2(`eb193b9`): 4 findings(P2×3·P3×1) — **본문↔staging 일관성 갭** 전부 수용(Stage 2 tri-state·Stage 1 INV-BENCH-1 repeats≥3/fixtures≥2·Cap broker-snapshot·§0 summary supersede). **새 설계 결함 0**(수렴 신호).
 > 상세 학습 원장: [[20260622-ultracode-for-codex-transferable-design-lessons]] (전체 file:line 인용 색인 포함).
 > 줄 번호 주의: `file:line`은 작성 시점 기준. 코드 갱신 시 식별자로 재확인.
 
@@ -126,12 +127,12 @@ A/C와 **분리·독립**(A/C는 web 불필요). dynamic-workflow 리서치 phas
 | Stage | 작업 | 성격 | 주요 코드 지점 |
 |---|---|---|---|
 | **0** | DAG-1 silent-drop → exhaustiveness assertion + unitKind 검증 + 회귀 테스트 🔴 | 안전·선행·재설계 무관 | `review-execution-steps.ts:375-377` 외 switch |
-| **1** | window-비례 projection caps (통째 경로 스케일; **다양한 형태 워크북 복수**[wide·tall·formula-heavy·many-sheets·CSV] + variance로 cap 산식 검증 — 단일 101MB는 preliminary only) | **진짜 레버** | `spreadsheet-structure-observer.ts:2057-2073` |
-| **2** | shardability boolean(렌즈·obligation) + fail-closed 게이트 (동작 변화 0, 스캐폴딩) | 게이트 | `core-lens-registry.yaml`, disposition |
+| **1** | window-비례 projection caps (통째 경로 스케일; **INV-BENCH-1 준수**: fixtures≥2[wide·tall·formula-heavy·many-sheets·CSV] × runs≥3, mean/std/n로 cap 산식 검증 — 미충족 데이터는 PRELIMINARY, 단일 관측/단일 파일로 cap 확정 금지) | **진짜 레버** | `spreadsheet-structure-observer.ts:2057-2073` |
+| **2** | **3-상태 shardability**(`whole`/`shardable_independent`/`shardable_with_seam`) + `seam_required`/`seam_covered` + fail-closed 게이트 (동작 변화 0, 스캐폴딩; §5.3대로 처음부터 tri-state — boolean 금지) | 게이트 | `core-lens-registry.yaml`, disposition |
 | **3** | (A) 결정론 섹션 분할 + 런타임 reduce — 입증된 국소 렌즈/obligation 1개 파일럿 | 분할 | discovery+splice `pipeline-execution-ledger.ts:231-376,442-478`; DAG-3 3지점(`:394-406` / `run-review-prompt-execution.ts:6122-6146` / `:6407-6419`); ensureUnitPacket `review-execution-steps.ts:777` |
 | **4** | (seam) 관계형 obligation 1개에 seam + cross-section 증거 | 관계 복구 | 위 + seam 패킷 |
 | **5** | (C) 적응적 carve planner — Stage 3/4 가치 입증 + 실 워크로드 필요 시 | 적응적 | planner 유닛 + allow-list 검증 |
-| **Cap** | (병렬·독립) 능력경계 원칙 정립 → governed external-read(web→MCP-read→dataset) → dynamic-workflow research 토대 | capability | executor allowlist 능력-도출 + boundary 축 배선 |
+| **Cap** | (병렬·독립) 능력경계 원칙 정립 → governed external-read(web→MCP-read→dataset) → dynamic-workflow research 토대 | capability | executor allowlist 능력-도출 + boundary 축 배선 + **runtime-broker(출처 기록·세션 스냅샷/replay·exfiltration 차단)** — §6대로 leaf에 raw 외부-read 직접 노출 금지 |
 
 ## 9. 미해결 · 참조
 
