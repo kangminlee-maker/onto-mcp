@@ -32,6 +32,8 @@
 
 ## A. Multi-agent / 렌즈 fan-out
 
+> ⚠️ **이 섹션은 교차검증 *이전* 가설이다 — SUPERSEDED.** 이후 ultracode+onto 교차검증으로 다음이 밝혀졌다: onto는 **렌즈-간 병렬·deliberation·synthesis-map을 이미 구현**했고, **렌즈-내 fan-out은 review엔 대체로 불필요**(입력이 bounded projection)하며 **관계형 렌즈엔 정확도를 해친다**. 따라서 아래 "렌즈를 subagent로 분할해 속도/정확도를 올린다"는 프레이밍과 끝의 "다음 단계"를 **그대로 실행하지 말 것**. 정정·최종 결론과 단계별 계획은 SSOT [[20260622-onto-review-depth-aware-multiagent-redesign]]를 따른다. (본 섹션은 학습 원장으로서 보존하되, 실행 지침은 SSOT가 권위.)
+
 ### A1. 런타임 동적 phase 계획 (하드코딩 아님)
 - 빌트인 `task`/`code-review`는 `phaseWiseBuiltinWorkflowScript(...)`가 생성하는 스크립트로 실행된다 — 워크플로 안에 **플래너 agent**를 두고, 그 플래너가 실행 시점에 "phase 1–4 × phase당 agent 1–4"의 JSON 계획을 만든다.
 - 플래너 지시문(`plannerGuidance`)이 phase shape를 결정한다. `task`: *"Plan phases that make the work faster and more accurate through parallel agents. Default to phase_parallel. Choose single only for tiny changes, strictly sequential investigations, or one indivisible failure mode."*
@@ -189,8 +191,11 @@
 ---
 
 ## 다음 단계 (채택 시)
-1. **A(렌즈 fan-out)** — 1순위. onto 렌즈 세트를 phase/agent로 펼치는 설계.
-2. **D(background 잡 모델)** — 당장의 sweep timeout 막힘 해소(실용 우선).
+
+> ⚠️ **SUPERSEDED — 아래 우선순위는 교차검증 전 초안.** 실제 단계별 계획(Stage 0–5 + capability 트랙)은 SSOT [[20260622-onto-review-depth-aware-multiagent-redesign]] §8을 따른다. (A는 "렌즈-간 병렬 이미 구현 + 렌즈-내는 (가)메커니즘·국소 한정"으로 정정됨.)
+
+1. ~~**A(렌즈 fan-out)** — 1순위~~ → 정정: SSOT §5/§8 참조.
+2. **D(background 잡 모델)** — 당장의 sweep timeout 막힘 해소(실용 우선·별도 트랙).
 3. B/C/E — 가시성·계약·견고화 후속.
 
 > 이 문서는 참조 고정본이다. 실제 채택은 onto 설계·승인 절차를 따른다(ultracode 교차검증 + onto 셀프리뷰, [[design-validation-ultracode-onto]] 관례).

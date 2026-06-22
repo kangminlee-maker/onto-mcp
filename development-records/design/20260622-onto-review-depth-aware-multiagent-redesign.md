@@ -4,6 +4,7 @@
 > 날짜: 2026-06-22
 > 도출: 외부 레포 `~/documents/ultracode-for-codex`(v0.3.2) 학습 → onto review 적용.
 > 검증: ultracode 워크플로 `wf_8c412982-520`(23 agent, 15 confirmed findings) + onto 라이브 셀프리뷰 `20260622-6710953f`(full 9-lens, gpt-5.5; deliberation stall이나 렌즈 findings 완성).
+> Codex 수렴 R1: PR #125 — 7 findings(P2×5·P3×2) **전부 수용·반영**(#1 barrier 순서·#2 pre-barrier 전용 kind·#3 lessons supersede·#4 invariant 권위·#5 seam-aware 게이트·#6 multi-workbook caps·#7 boundary-gated local-read).
 > 상세 학습 원장: [[20260622-ultracode-for-codex-transferable-design-lessons]] (전체 file:line 인용 색인 포함).
 > 줄 번호 주의: `file:line`은 작성 시점 기준. 코드 갱신 시 식별자로 재확인.
 
@@ -55,7 +56,7 @@ ultracode-for-codex의 "렌즈를 subagent로 분할(fan-out)" 발상을 onto에
 
 ## 4. 설계 원칙 ② — 능력경계 (read vs non-read)
 
-**read-only invariant의 핵심·기원**: 커밋 `3d9eb35`(라이브 하드닝)·INV-SCHEMA-1(`INVARIANTS.md:31`). 목적 = (1) leaf는 read-only 관측자, (2) canonical 아티팩트는 **submit path로만** 씀(worker 직접 안 씀; `worker-structured-output.ts`→`writeValidatedLensSidecarArtifact`), (3) `structured ⇒ read-only` 강제(`codex-...executor.ts:433-435`).
+**read-only invariant의 핵심·기원**: **실제 권위는 executor 샌드박스**(커밋 `3d9eb35` 라이브 하드닝; `structured ⇒ read-only` 강제 `codex-...executor.ts:433-435`) **+ binding/pre-dispatch boundary 축**(`web_research_policy`·`repo_exploration_policy`·`filesystem_scope`). 목적 = (1) leaf는 read-only 관측자, (2) canonical 아티팩트는 **submit path로만** 씀(`worker-structured-output.ts`→`writeValidatedLensSidecarArtifact`), (3) `structured ⇒ read-only` 강제. ⚠️ **INV-SCHEMA-1(`INVARIANTS.md:31`)은 인접하나 권위 아님** — 그것은 *stage-output 스키마 SSOT*(submit tool이 그 source 참조)를 다스릴 뿐, leaf 툴 권한·network/MCP read·submit-only 쓰기를 다스리지 않음. §4가 web/MCP를 재분류할 근거는 이 boundary 축들이며, **전용 capability invariant 신설을 권고**(미래 보안 변경이 엉뚱한 가드레일에 정당화되지 않도록).
 
 **원칙(정정)**: 분류는 *도구 이름*(allowlist)이 아니라 *능력*으로 한다.
 
@@ -63,11 +64,13 @@ ultracode-for-codex의 "렌즈를 subagent로 분할(fan-out)" 발상을 onto에
 
 | 능력 | 예 | leaf 정책 |
 |---|---|---|
-| local-read | repo 파일(Read/Grep/Glob) | 항상 허용·결정론·안전 |
+| local-read | repo 파일(Read/Grep/Glob) | **effective boundary 내** 허용 — `repo_exploration_policy`·`filesystem_scope.allowed_roots`에 종속(무조건 아님) |
 | external-read | web, MCP read(get/list/search/query), dataset SELECT | **허용**, 단 §6 거버넌스 tier |
 | mutation/exec/spawn/직접쓰기 | Write/Edit/Bash/Task/spawn, MCP create/update/delete | **금지** (= invariant 진짜 핵심) |
 
 현재 `[Read,Grep,Glob]` allowlist + MCP 통째차단(`claude-...executor.ts:368-370`)은 read-role인 web·MCP-read를 side-effect와 한 덩어리로 묶은 **under-grant 오류**. spawn은 non-read로 계속 금지 → **leaf가 자식 못 만듦(§5의 A/C가 올바른 길)**.
+
+> **두 층 구분(중요)**: read/non-read는 *capability 클래스*다. **실효 권한 = capability ∩ effective boundary state**(`repo_exploration_policy`·`filesystem_scope`·`web_research_policy`…). local-read도 external-read와 **동일하게** boundary에 종속 — "categorically safe"가 아니다. 능력경계 원칙은 무엇이 *원천적으로 허용 가능한지*를 정하고, boundary 정책이 *이 세션에서 실제로 어디까지*를 정한다.
 
 ## 5. 최종 설계 ① — intra-lens fan-out ((가)메커니즘)
 
@@ -77,8 +80,8 @@ ultracode-for-codex의 "렌즈를 subagent로 분할(fan-out)" 발상을 onto에
 [현재]  logic ───────────────────────────►  logic.findings.yaml   (leaf 1, 통째)
 [A 분할 — onto 런타임이 발행]
   lens-section:logic:s1  (leaf·read-only·섹션1)  ┐ 형제(=가)·워커풀 병렬
-  lens-section:logic:s2  (leaf·read-only·섹션2)  │ unitKind=issue_artifact + unit_id prefix
-  lens-section:logic:s3  (leaf·read-only·섹션3)  │ (enum 무성장 → DAG-1 트랩 회피)
+  lens-section:logic:s2  (leaf·read-only·섹션2)  │ unitKind=lens_section (pre-barrier 전용 신규 kind)
+  lens-section:logic:s3  (leaf·read-only·섹션3)  │ (barrier-무시 + pre-barrier 위치; Stage 0 선행)
   lens-seam:logic        (leaf·read-only·경계+cross-section 증거)  ┘
                           │ upstream
                           ▼
@@ -86,11 +89,12 @@ ultracode-for-codex의 "렌즈를 subagent로 분할(fan-out)" 발상을 onto에
                                                ↑ barrier가 세는 유일한 lens-kind 유닛
 ```
 
-**5.1 형태**: 섹션/seam = `unitKind=issue_artifact`(barrier-무시) + unit_id prefix 라우팅, owner=host_llm leaf. reduce = `unitKind="lens"`·owner=runtime(depth-0)·upstream=섹션+seam. lens당 lens-kind 유닛이 reduce 1개뿐 → barrier `minimum===selected` 보존(`lens-completion-policy.ts:24`).
+**5.1 형태**: 섹션/seam = **전용 pre-barrier kind `lens_section`/`lens_seam`** — `issue_artifact`(post-barrier 스테이지: `pipeline-execution-ledger.ts:161,165` upstream=issue-ledger)도, `lens`(barrier 카운트 오염)도 **아님**. 이 kind는 barrier-무시(finalizeStageGate가 `unitKind==="lens"`만 셈) + pre-barrier 위치(lens reduce 상류). **enum 성장 필요 → Stage 0 DAG-1 exhaustiveness가 하드 선행.** owner=host_llm leaf. reduce = `unitKind="lens"`·owner=runtime(depth-0)·upstream=섹션+seam, lens당 lens-kind 유닛 reduce 1개뿐 → `minimum===selected` 보존(`lens-completion-policy.ts:24`).
+**⚠️ barrier 순서 제약**: barrier는 runtime lens-reduce가 drain된 *후* 계산돼야 한다. 현재 reviewAdvance는 `finalizeStageGate`(`review-execution-steps.ts:1322`)가 `runRuntimeFixedPoint`(`:1324`) **앞** → reduce 미drain 상태로 barrier 계산 시 lens missing→halt. Stage 3는 **A·B 양 경로에서 barrier finalize를 runtime reduce drain 뒤로 이동/재계산**해야 minimum===selected가 참이다.
 
 **5.2 (A) 결정론 섹션 분할**: 구조 인벤토리로 시트/섹션 단위(depth-0). 섹션 패킷=projection을 섹션으로 제한, cross-section 증거는 seam으로.
 
-**5.3 shardability 게이트 (ILC-2 fix·fail-closed)**: `core-lens-registry.yaml` per-lens `material_shardable`(**default false**) + 스프레드시트 obligation별(`cross_sheet_reference_integrity=false`). `material_shardable && 모든 obligation per-element-shardable && shard가 element 온전`일 때만 분할, 아니면 **통째 실행**.
+**5.3 shardability 게이트 (ILC-2 fix·fail-closed·seam-aware)**: per-lens/obligation **3-상태** `material_shardability ∈ {whole | shardable_independent | shardable_with_seam}`(default `whole`). `shardable_independent`=국소/per-element(seam 불요). `shardable_with_seam`=관계형(예: `cross_sheet_reference_integrity`): 분할은 **mandatory seam(`seam_required`→`seam_covered`) 있을 때만** 허용, seam 없으면 **통째**. 관계형을 `independent`로 flip 금지(fail-closed 보호 유지). 게이트: `state≠whole && (state=independent ∨ seam_covered) && shard가 element 온전`일 때만 분할. (boolean 단일 플래그는 Stage 4 seam 경로를 표현 못 하거나 flip 시 보호 상실 → 3-상태 필수.)
 
 **5.4 seam sub-unit (ILC-3 fix)**: 경계만 보는 seam leaf에 cross-section 증거 1급 제공(`cross_sheet_key_overlap`·`cross_sheet_refs`·pivot source map). 같은 depth leaf(breadth +1). reduce는 반쪽서 재구성하는 게 아니라 seam이 관계를 직접 봄.
 
@@ -122,7 +126,7 @@ A/C와 **분리·독립**(A/C는 web 불필요). dynamic-workflow 리서치 phas
 | Stage | 작업 | 성격 | 주요 코드 지점 |
 |---|---|---|---|
 | **0** | DAG-1 silent-drop → exhaustiveness assertion + unitKind 검증 + 회귀 테스트 🔴 | 안전·선행·재설계 무관 | `review-execution-steps.ts:375-377` 외 switch |
-| **1** | window-비례 projection caps (통째 경로 스케일; 실파일 101MB로 projection-vs-window 측정) | **진짜 레버** | `spreadsheet-structure-observer.ts:2057-2073` |
+| **1** | window-비례 projection caps (통째 경로 스케일; **다양한 형태 워크북 복수**[wide·tall·formula-heavy·many-sheets·CSV] + variance로 cap 산식 검증 — 단일 101MB는 preliminary only) | **진짜 레버** | `spreadsheet-structure-observer.ts:2057-2073` |
 | **2** | shardability boolean(렌즈·obligation) + fail-closed 게이트 (동작 변화 0, 스캐폴딩) | 게이트 | `core-lens-registry.yaml`, disposition |
 | **3** | (A) 결정론 섹션 분할 + 런타임 reduce — 입증된 국소 렌즈/obligation 1개 파일럿 | 분할 | discovery+splice `pipeline-execution-ledger.ts:231-376,442-478`; DAG-3 3지점(`:394-406` / `run-review-prompt-execution.ts:6122-6146` / `:6407-6419`); ensureUnitPacket `review-execution-steps.ts:777` |
 | **4** | (seam) 관계형 obligation 1개에 seam + cross-section 증거 | 관계 복구 | 위 + seam 패킷 |
