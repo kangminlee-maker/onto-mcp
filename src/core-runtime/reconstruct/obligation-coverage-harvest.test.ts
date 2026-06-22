@@ -9,6 +9,7 @@ import type {
   ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationBaselineArtifact,
   ReconstructMaturationBaselineValidationArtifact,
+  ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
 } from "./artifact-types.js";
@@ -16,6 +17,7 @@ import {
   validateActionabilityMatrix,
   validateMaturationAnswerClaims,
   validateMaturationBaseline,
+  validateMaturationQuestionFrontier,
 } from "./maturation-validation.js";
 import {
   validateSourceObservationDelta,
@@ -231,6 +233,23 @@ function runSourceObservationReentry(): ReconstructSourceObservationReentryValid
   });
 }
 
+// maturation-question-frontier-validator (slice 6). Minimal inputs reach the recorders (placed before
+// the per-question loop). The validation artifact carries no validator_id field, so attribute by name.
+function runQuestionFrontier(): ReconstructMaturationQuestionFrontierValidationArtifact {
+  return validateMaturationQuestionFrontier({
+    maturationQuestionFrontier: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      questions: [],
+    } as never,
+    maturationBaseline: minimalBaseline(),
+    maturationBaselineValidation: baselineValidationInput(),
+    actionabilityMatrix: minimalMatrix(),
+    actionabilityMatrixValidation: { validation_status: "valid" } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -349,7 +368,17 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     }
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 20 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateMaturationQuestionFrontier records its 2 instrumented obligations (slice 6: blocker/high closure + unique question id)", () => {
+    const out = runQuestionFrontier();
+    expect(out.asserted_obligation_ids).toContain(
+      "require_blocker_and_high_questions_to_have_closure_frontier_limitation_or_authority_need",
+    );
+    expect(out.asserted_obligation_ids).toContain(
+      "require_unique_question_id",
+    );
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 22 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -358,6 +387,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const answerClaimsOut = runAnswerClaims();
     const deltaOut = runSourceObservationDelta();
     const reentryOut = runSourceObservationReentry();
+    const questionFrontierOut = runQuestionFrontier();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -385,6 +415,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "source-observation-reentry-validator",
         obligation_id,
       })),
+      ...questionFrontierOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "maturation-question-frontier-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -401,6 +435,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(20);
+    expect(harvestedSet.size).toBe(22);
   });
 });

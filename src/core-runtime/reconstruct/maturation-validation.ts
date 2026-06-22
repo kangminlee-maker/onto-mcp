@@ -1654,6 +1654,7 @@ export function validateMaturationQuestionFrontier(args: {
 }): ReconstructMaturationQuestionFrontierValidationArtifact {
   const frontier = args.maturationQuestionFrontier;
   const violations: ReconstructMaturationValidationViolation[] = [];
+  const assertedObligationIds: string[] = [];
   const baselineRows = new Map(
     args.maturationBaseline.baseline_rows.map((row) => [row.baseline_row_id, row]),
   );
@@ -1685,6 +1686,19 @@ export function validateMaturationQuestionFrontier(args: {
       subjectId: args.actionabilityMatrixValidationRef ?? null,
     }));
   }
+  // G(a) slice 6: record the two question-frontier obligations with a distinct, audited enforcement
+  // region, before the per-question loop so they fire on a zero-question frontier. The other four
+  // obligations stay parked with ledger audit notes — authority-need first-class scoping and the
+  // competency/domain-trace refs are NOT validated here (NOT_FOUND), and the answer_status enum and
+  // the seed+limitation authority clauses are unenforced (the obligation names are broader than code).
+  assertObligation(
+    assertedObligationIds,
+    "require_blocker_and_high_questions_to_have_closure_frontier_limitation_or_authority_need",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_unique_question_id",
+  );
   for (const question of frontier.questions) {
     if (seen.has(question.question_id)) {
       violations.push(violation({
@@ -1772,6 +1786,7 @@ export function validateMaturationQuestionFrontier(args: {
     validation_results: violations.length === 0
       ? ["maturation_question_frontier_valid"]
       : ["maturation_question_frontier_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

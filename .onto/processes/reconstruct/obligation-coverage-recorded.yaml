@@ -43,3 +43,7 @@ recorded:
     obligation_id: validate_each_delta_observation_has_exact_prompt_context_source_safety_row
   - validator_id: source-observation-reentry-validator
     obligation_id: validate_source_safety_validation_passed_before_prompt_reentry
+  - validator_id: maturation-question-frontier-validator
+    obligation_id: require_blocker_and_high_questions_to_have_closure_frontier_limitation_or_authority_need
+  - validator_id: maturation-question-frontier-validator
+    obligation_id: require_unique_question_id

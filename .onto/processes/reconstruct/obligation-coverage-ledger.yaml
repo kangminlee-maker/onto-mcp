@@ -558,29 +558,25 @@ pending:
     coverage_status: pending
     tier: flat
   - validator_id: maturation-question-frontier-validator
-    obligation_id: require_blocker_and_high_questions_to_have_closure_frontier_limitation_or_authority_need
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-question-frontier-validator
-    obligation_id: require_unique_question_id
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-question-frontier-validator
     obligation_id: validate_authority_need_rows_are_first_class_and_scope_to_questions
     coverage_status: pending
     tier: flat
+    note: "slice-6 audit (2026-06-22): validateMaturationQuestionFrontier reads question.authority_need only as part of the blocker/high closure check (recorded as require_blocker_and_high_questions_...); there is NO independent enforcement that authority_need rows are first-class or scoped to questions (authority_scope / expected_response_kind / blocking semantics are not validated here). A surfaced declared≠wired gap (may be enforced by maturation-closure-frontier-validator). Recording deferred."
   - validator_id: maturation-question-frontier-validator
     obligation_id: validate_competency_question_assessment_and_domain_trace_refs
     coverage_status: pending
     tier: flat
+    note: "slice-6 audit (2026-06-22): NO enforcement found — competency_question_refs / competency_assessment_refs / domain_competency_trace_refs are not accessed or resolved in validateMaturationQuestionFrontier. A surfaced declared≠wired gap. Recording deferred pending an added check or registry re-attribution."
   - validator_id: maturation-question-frontier-validator
     obligation_id: validate_question_materiality_surface_dimension_and_answer_status_enums
     coverage_status: pending
     tier: flat
+    note: "slice-6 audit (2026-06-22): materiality (invalid_enum) and surface/dimension non-emptiness (missing_required_coverage) ARE enforced, but the named answer_status enum clause is NOT — question.current_answer_status is never validated as an enum here. Partial; recording deferred pending the answer_status check or name reconciliation."
   - validator_id: maturation-question-frontier-validator
     obligation_id: validate_question_refs_against_baseline_seed_and_limitation_authorities
     coverage_status: pending
     tier: flat
+    note: "slice-6 audit (2026-06-22): baseline_row_refs ARE resolved against the maturation baseline (unknown_id) and purpose_element preservation is checked, but the named SEED and LIMITATION authority clauses are NOT enforced — seed_ref_refs are not accessed and limitation_refs are only checked for non-emptiness (as part of the closure obligation), never resolved against an authority. Partial; recording deferred."
   - validator_id: ontology-expansion-validator
     obligation_id: prevent_in_place_seed_authority_rewrite
     coverage_status: pending
