@@ -18,16 +18,18 @@ const runtimeBudgets = {
   build_budget_reserve_chars:
     COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,
 };
-// A realistic run.ts: imports the contract fn + the 3 budget constants AND references
-// each budget constant outside the import block (mirrors the real builder usage).
+// A realistic run.ts: imports the contract fn + version + the 3 budget constants AND
+// references each of those moved symbols outside the import block (mirrors the builder).
 const GOOD_RUNTIME_SOURCE = [
   "import {",
   "  COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,",
   "  COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,",
+  "  COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,",
   "  COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,",
   "  competencyQuestionAssessmentProjectionContract,",
   '} from "./competency-projection-contract.js";',
   "const policy = competencyQuestionAssessmentProjectionContract();",
+  "const version = COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION;",
   "const budget = COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT - COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;",
   "const excerpt = COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT;",
 ].join("\n");
@@ -119,7 +121,7 @@ describe("prompt-projection parity guard (G8 / INV-SCHEMA-1)", () => {
         GOOD_RUNTIME_SOURCE +
         "\nfunction competencyQuestionAssessmentProjectionContract() { return {}; }",
     });
-    expect(errors.some((message) => message.includes("redefines"))).toBe(true);
+    expect(errors.some((message) => message.includes("redeclares competencyQuestionAssessmentProjectionContract"))).toBe(true);
   });
 
   it("fails when run.ts redeclares a moved budget constant locally", () => {
@@ -128,24 +130,19 @@ describe("prompt-projection parity guard (G8 / INV-SCHEMA-1)", () => {
         GOOD_RUNTIME_SOURCE +
         "\nconst COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;",
     });
-    expect(errors.some((message) => message.includes("redeclares"))).toBe(true);
+    expect(errors.some((message) => message.includes("redeclares COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT"))).toBe(true);
   });
 
-  it("fails when run.ts imports the contract fn but NOT the budget constants (symbol-level)", () => {
+  it("fails when run.ts redeclares the moved projection version constant locally", () => {
     const errors = evaluate({
-      runtimeSource: [
-        'import { competencyQuestionAssessmentProjectionContract } from "./competency-projection-contract.js";',
-        "const policy = competencyQuestionAssessmentProjectionContract();",
-      ].join("\n"),
+      runtimeSource:
+        GOOD_RUNTIME_SOURCE +
+        '\nconst COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION = "stale:v0";',
     });
-    expect(
-      errors.some((message) =>
-        message.includes("must import COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT")
-      ),
-    ).toBe(true);
+    expect(errors.some((message) => message.includes("redeclares COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION"))).toBe(true);
   });
 
-  it("fails when run.ts imports a budget constant but never references it (dead import)", () => {
+  it("fails when run.ts does not import a moved symbol (version) symbol-level", () => {
     const errors = evaluate({
       runtimeSource: [
         "import {",
@@ -155,13 +152,36 @@ describe("prompt-projection parity guard (G8 / INV-SCHEMA-1)", () => {
         "  competencyQuestionAssessmentProjectionContract,",
         '} from "./competency-projection-contract.js";',
         "const policy = competencyQuestionAssessmentProjectionContract();",
-        // Uses only 2 of the 3 budgets — PROMPT_CHAR_LIMIT is a dead import.
-        "const excerpt = COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT + COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;",
+        "const budget = COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT - COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;",
+        "const excerpt = COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT;",
       ].join("\n"),
     });
     expect(
       errors.some((message) =>
-        message.includes("COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT but never references it")
+        message.includes("must import COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION")
+      ),
+    ).toBe(true);
+  });
+
+  it("fails when run.ts imports a moved symbol (contract fn) but never references it (dead import)", () => {
+    const errors = evaluate({
+      runtimeSource: [
+        "import {",
+        "  COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,",
+        "  COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,",
+        "  COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,",
+        "  COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,",
+        "  competencyQuestionAssessmentProjectionContract,",
+        '} from "./competency-projection-contract.js";',
+        // Uses everything EXCEPT the contract fn — it is a dead import.
+        "const version = COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION;",
+        "const budget = COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT - COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;",
+        "const excerpt = COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT;",
+      ].join("\n"),
+    });
+    expect(
+      errors.some((message) =>
+        message.includes("competencyQuestionAssessmentProjectionContract but never references it")
       ),
     ).toBe(true);
   });
@@ -172,10 +192,12 @@ describe("prompt-projection parity guard (G8 / INV-SCHEMA-1)", () => {
         "import {",
         "  COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,",
         "  COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,",
+        "  COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,",
         "  COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,",
         "  competencyQuestionAssessmentProjectionContract as importedContract,",
         '} from "./competency-projection-contract.js";',
         "const policy = importedContract();",
+        "const version = COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION;",
         "const budget = COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT - COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;",
         "const excerpt = COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT;",
       ].join("\n"),

@@ -52,15 +52,14 @@ const MODULE_SPECIFIER = "./competency-projection-contract.js";
 /** The exact child keys a competency_question_assessment node may declare. */
 const COMPETENCY_CHILD_KEYS = ["payload_fields", "policy_fields", "budget_fields"];
 
-/** Symbols run.ts MUST import from the extracted module so its prompt builder cannot
- * silently use different budget numbers (the contract fn + the three budget constants). */
-const REQUIRED_MODULE_IMPORTS = [
+/** Every symbol moved into the extracted SSOT module that run.ts MUST consume from it
+ * (the contract fn + the projection version + the three budget constants). The consumption
+ * check is UNIFORM over all of them: each must be imported under its own name, referenced
+ * outside the import (no dead import), and not locally re-declared — so run.ts cannot drift
+ * its prompt surface to a stale literal/local for ANY of them. */
+const MODULE_SSOT_SYMBOLS = [
   "competencyQuestionAssessmentProjectionContract",
-  "COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT",
-  "COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT",
-  "COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS",
-];
-const MOVED_BUDGET_CONSTANTS = [
+  "COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION",
   "COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT",
   "COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT",
   "COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS",
@@ -213,7 +212,13 @@ const PROJECTION_PARITY_CHECKS: Record<
   competency_question_assessment: evaluateCompetencyChildParity,
 };
 
-/** run.ts SSOT-consumption assertions for the extracted competency module. */
+/** A standalone (word-boundary) reference to `symbol` appears in `source`. */
+function referencesSymbol(source: string, symbol: string): boolean {
+  return new RegExp(`\\b${symbol}\\b`).test(source);
+}
+
+/** run.ts SSOT-consumption assertions for the extracted competency module — applied
+ * UNIFORMLY to every moved symbol (contract fn + version + budgets). */
 function evaluateRunTsConsumption(runtimeSource: string): string[] {
   const errors: string[] = [];
   const importBlock = moduleImportBlock(runtimeSource);
@@ -222,27 +227,24 @@ function evaluateRunTsConsumption(runtimeSource: string): string[] {
   const sourceOutsideImport = importBlock
     ? runtimeSource.replace(importBlock, "")
     : runtimeSource;
-  for (const symbol of REQUIRED_MODULE_IMPORTS) {
+  for (const symbol of MODULE_SSOT_SYMBOLS) {
+    // (a) imported under its own name (not aliased, not missing).
     if (aliased.has(symbol)) {
       errors.push(`${RUNTIME_REF} aliases ${symbol} on import — import it under its own name so the SSOT-consumption guard stays meaningful`);
     } else if (!canonical.has(symbol)) {
       errors.push(`${RUNTIME_REF} must import ${symbol} from ${MODULE_SPECIFIER}`);
+    } else if (!referencesSymbol(sourceOutsideImport, symbol)) {
+      // (b) actually USED — a dead import cannot satisfy the guard while the prompt
+      // builder drifts to a renamed local/literal. Full data-flow is the behavioral
+      // test suite's job; this catches the unused-import bypass.
+      errors.push(`${RUNTIME_REF} imports ${symbol} but never references it — the prompt builder may have drifted to a local/literal`);
     }
-  }
-  // Each budget constant must be USED, not just imported (a dead import cannot satisfy
-  // the guard while the prompt builder drifts to a renamed local/literal). Full data-flow
-  // is the behavioral test suite's job; this catches the unused-import bypass.
-  for (const constant of MOVED_BUDGET_CONSTANTS) {
-    if (canonical.has(constant) && !sourceOutsideImport.includes(constant)) {
-      errors.push(`${RUNTIME_REF} imports ${constant} but never references it — the prompt builder may have drifted to a local/literal`);
-    }
-  }
-  if (/function\s+competencyQuestionAssessmentProjectionContract\s*\(/.test(runtimeSource)) {
-    errors.push(`${RUNTIME_REF} redefines competencyQuestionAssessmentProjectionContract locally — the extracted module is the single source of truth`);
-  }
-  for (const constant of MOVED_BUDGET_CONSTANTS) {
-    if (new RegExp(`const\\s+${constant}\\s*=`).test(runtimeSource)) {
-      errors.push(`${RUNTIME_REF} redeclares ${constant} locally — import it from ${MODULE_SPECIFIER}`);
+    // (c) not locally re-declared (const or function form) under the same name.
+    if (
+      new RegExp(`const\\s+${symbol}\\s*=`).test(runtimeSource) ||
+      new RegExp(`function\\s+${symbol}\\s*\\(`).test(runtimeSource)
+    ) {
+      errors.push(`${RUNTIME_REF} redeclares ${symbol} locally — the extracted module is the single source of truth; import it from ${MODULE_SPECIFIER}`);
     }
   }
   return errors;
