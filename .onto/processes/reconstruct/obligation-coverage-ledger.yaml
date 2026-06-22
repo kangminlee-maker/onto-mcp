@@ -65,22 +65,6 @@ pending:
     obligation_id: validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims
     coverage_status: pending
     tier: flat
-  - validator_id: answer-support-judgment-validator
-    obligation_id: require_convergent_clusters_to_judge_every_cited_evidence_ref
-    coverage_status: pending
-    tier: flat
-  - validator_id: answer-support-judgment-validator
-    obligation_id: require_rationale_ref_for_each_judgment
-    coverage_status: pending
-    tier: flat
-  - validator_id: answer-support-judgment-validator
-    obligation_id: require_supports_enum_for_each_judgment
-    coverage_status: pending
-    tier: flat
-  - validator_id: answer-support-judgment-validator
-    obligation_id: validate_judgment_refs_resolve_to_answer_support_ledger_clusters_and_evidence
-    coverage_status: pending
-    tier: flat
   - validator_id: answer-support-ledger-validator
     obligation_id: require_contradictions_to_be_recorded_and_bounded
     coverage_status: pending

@@ -2293,6 +2293,7 @@ export interface ReconstructAnswerSupportJudgmentValidationArtifact {
   // raw count projection — NOT a sufficiency verdict; B-6 owns sufficiency.
   supported_judgment_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 

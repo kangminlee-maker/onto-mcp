@@ -5787,6 +5787,27 @@ export function validateAnswerSupportJudgment(args: {
   const judgedKeysByCluster = new Map<string, Set<string>>();
   const seen = new Set<string>();
   let supportedJudgmentCount = 0;
+  // G(a) slice 8: record the four judgment obligations before the per-judgment loop (and the D
+  // convergent-coverage loop) so they fire on a zero-judgment artifact. Each maps to a distinct
+  // audited block — A ref resolution (unknown_id) / B supports enum (invalid_enum) / C rationale_ref
+  // (missing_required_ref) / D convergent coverage (missing_required_coverage). No laundering.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_judgment_refs_resolve_to_answer_support_ledger_clusters_and_evidence",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_supports_enum_for_each_judgment",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_rationale_ref_for_each_judgment",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_convergent_clusters_to_judge_every_cited_evidence_ref",
+  );
   for (const judgment of artifact.judgments) {
     if (seen.has(judgment.judgment_id)) {
       violations.push(violation({
@@ -5884,6 +5905,7 @@ export function validateAnswerSupportJudgment(args: {
     validation_results: violations.length === 0
       ? ["answer_support_judgment_valid"]
       : ["answer_support_judgment_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
