@@ -19,11 +19,16 @@
  *       NEW heading), and the appendFinalOutput* emitter-definition count equals the section
  *       count — so a 9th section (new emitter or non-module heading) fails CI at the source;
  *   (7) the run.ts provenance-binding row order equals the module's canonical bindings order.
- * The static sweep (6) is the enforceable completeness mechanism (it catches a new emitted heading
- * at the source); the parity-test behavioral checks additionally confirm each conditional emitter
- * sources its module heading. The source-text boundary is the same one G8 documented (run.ts has
- * no prose `## `, so the sweep is exact today; a future legitimate `## ` prose line would surface
- * here and must be reconciled).
+ * The static sweep (6) is the enforceable completeness mechanism for the common cases (inline /
+ * re-inlined / new heading, count drift, and the heading-key multiset). Its source-text boundary
+ * is the same one G8 R5 documented: it cannot defend against every adversarial rewrite — e.g. a
+ * BALANCED pairwise swap of two emitters' valid module templates leaves the multiset intact. The
+ * AUTHORITATIVE backstop for those is BEHAVIORAL: the parity-test asserts each conditional emitter
+ * emits its OWN module heading (catching a conditional swap), and the runtime provenance gate
+ * (post-seed-validation, keyed on binding.heading) + the run.test.ts pipeline heading assertions
+ * fail for any bound-section heading swap (the swapped section no longer carries its required
+ * fragments). run.ts has no prose `## ` today, so the sweep is exact; a future legitimate `## `
+ * prose line surfaces here and must be reconciled.
  *
  * npm: `check:final-output-sections-parity`.
  */
@@ -110,8 +115,10 @@ export interface FinalOutputSectionsParityInputs {
 /** The ONLY allowed run.ts heading form: a `## ${FINAL_OUTPUT_SECTION_HEADINGS.<key>}` template;
  * captures the heading key so the guard can assert each section heading is emitted exactly once. */
 const ALLOWED_HEADING_RE = /`## \$\{FINAL_OUTPUT_SECTION_HEADINGS\.(\w+)\}`/g;
-/** Any markdown `## ` heading opened by a string OR template literal (single/double/backtick). */
-const ANY_HEADING_LITERAL_RE = /['`"]## /g;
+/** Any markdown `## ` heading inside a string/template — opened by a quote (single/double/
+ * backtick) OR embedded after a newline (a literal `\n## ` or an actual line break in a template),
+ * so a heading hidden mid-string (`"...\n## Ghost"`) is also counted. */
+const ANY_HEADING_LITERAL_RE = /(?:['`"]|\\n|\n)## /g;
 /** A run.ts provenance-binding row's section_id reference, in source order. */
 const BINDING_SECTION_ID_RE = /section_id:\s*FINAL_OUTPUT_SECTION_IDS\.(\w+)/g;
 /** A run.ts provenance-binding row's heading reference, in source order. */
@@ -176,13 +183,18 @@ export function evaluateFinalOutputSectionsParity(
   if (policyDiff.onlyInFirst.length) errors.push(`prompt_policy_id missing from registry: ${policyDiff.onlyInFirst.join(", ")}`);
   if (policyDiff.onlyInSecond.length) errors.push(`prompt_policy_id extra in registry: ${policyDiff.onlyInSecond.join(", ")}`);
 
-  // (2) per-row attribute equality.
+  // (2) per-row attribute equality. The registry row must DECLARE every attribute explicitly
+  // (no `?? null` masking — a row that omits a field must not compare equal to the module's value).
   for (const [id, mod] of moduleById) {
     const reg = registryById.get(id);
     if (!reg) continue;
     for (const attr of ROW_ATTRS) {
-      const modVal = (mod as Record<string, unknown>)[attr] ?? null;
-      const regVal = reg[attr] ?? null;
+      if (!(attr in reg)) {
+        errors.push(`section ${id}: registry row is missing the ${attr} field`);
+        continue;
+      }
+      const modVal = (mod as Record<string, unknown>)[attr];
+      const regVal = reg[attr];
       if (modVal !== regVal) {
         errors.push(`section ${id}: ${attr} = ${JSON.stringify(regVal)} in registry, ${JSON.stringify(modVal)} in module`);
       }

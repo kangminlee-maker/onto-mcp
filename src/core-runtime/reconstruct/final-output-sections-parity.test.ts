@@ -219,10 +219,21 @@ describe("final-output-sections parity guard (G9 / INV-SCHEMA-1)", () => {
     expect(evaluate({ runtimeSource: src }).some((m) => m.includes("binding row heading order"))).toBe(true);
   });
 
-  it("fails when the registry repeats a section_id row (codex G5)", () => {
+  it("fails when the registry repeats a section_id row (codex round-1 G5)", () => {
     const node = matchedRegistryNode();
     node.push({ ...node[0]! });
     expect(evaluate({ registryNode: node }).some((m) => m.includes("registry has duplicate section_id"))).toBe(true);
+  });
+
+  it("ANTI-FOOLING: fails when a NEW heading is embedded mid-string (\\n## Ghost) (codex round-2 G3)", () => {
+    const src = GOOD_RUNTIME_SOURCE + '\nconst hidden = "section body\\n## Ghost Section\\nmore";';
+    expect(evaluate({ runtimeSource: src }).some((m) => m.includes("heading literal(s) not of the module form"))).toBe(true);
+  });
+
+  it("fails when a registry row omits a field instead of declaring it (codex round-2 G5)", () => {
+    const node = matchedRegistryNode();
+    delete node[5]!.prompt_policy_id; // conditional row omits the explicit null
+    expect(evaluate({ registryNode: node }).some((m) => m.includes("missing the prompt_policy_id field"))).toBe(true);
   });
 
   it("ANTI-FOOLING: fails when run.ts re-inlines a known heading as a literal", () => {
@@ -250,22 +261,32 @@ describe("final-output-sections parity guard (G9 / INV-SCHEMA-1)", () => {
   });
 });
 
-describe("final-output conditional emitters: heading-set equals the module's conditional set (behavioral)", () => {
-  it("emits exactly the 3 conditional module headings when all 3 paths are activated", () => {
-    let out = "# Result\n";
-    out = appendFinalOutputDocumentProjectionTruncationSection(out, [
-      { observation_id: "obs-1", source_ref: "src/big.ts", target_material_kind: "code", captured_chars: 9000, projection_budget_chars: 1200 },
-    ]);
-    out = appendFinalOutputWorkbookInventoryProjectionTruncationSection(out, [
-      { observation_id: "obs-2", source_ref: "data/book.xlsx", sections: [{ section: "sheets", kept: 5, total: 14 }] },
-    ]);
-    out = appendFinalOutputUnresolvedRevisionSection(out, {
-      proposals: [{ proposal_id: "p1", target_type: "seed", target_id: "seed-1", action: "reject", rationale: "r", expected_effect: "e" }],
-    } as never);
+describe("final-output conditional emitters: each emits its OWN module heading + the set matches (behavioral)", () => {
+  const docOut = appendFinalOutputDocumentProjectionTruncationSection("# Result\n", [
+    { observation_id: "obs-1", source_ref: "src/big.ts", target_material_kind: "code", captured_chars: 9000, projection_budget_chars: 1200 },
+  ]);
+  const wbOut = appendFinalOutputWorkbookInventoryProjectionTruncationSection("# Result\n", [
+    { observation_id: "obs-2", source_ref: "data/book.xlsx", sections: [{ section: "sheets", kept: 5, total: 14 }] },
+  ]);
+  const revOut = appendFinalOutputUnresolvedRevisionSection("# Result\n", {
+    proposals: [{ proposal_id: "p1", target_type: "seed", target_id: "seed-1", action: "reject", rationale: "r", expected_effect: "e" }],
+  } as never);
 
-    const emittedHeadings = new Set(
-      [...out.matchAll(/^## (.+)$/gm)].map((m) => m[1]!),
-    );
+  // Per-emitter assertions (each emits ITS OWN heading) catch a balanced pairwise swap that the
+  // static multiset sweep cannot — codex round-2 G1.
+  it("document-truncation emitter emits its own module heading", () => {
+    expect(docOut).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.sourceProjectionTruncation}`);
+  });
+  it("workbook-inventory emitter emits its own module heading", () => {
+    expect(wbOut).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.workbookInventoryProjectionTruncation}`);
+  });
+  it("unresolved-revision emitter emits its own module heading", () => {
+    expect(revOut).toContain(`## ${FINAL_OUTPUT_SECTION_HEADINGS.unresolvedRevisionProposals}`);
+  });
+
+  it("emits exactly the 3 conditional module headings when all 3 paths are activated (set equality)", () => {
+    const out = docOut + wbOut + revOut;
+    const emittedHeadings = new Set([...out.matchAll(/^## (.+)$/gm)].map((m) => m[1]!));
     const expectedConditional = new Set(
       FINAL_OUTPUT_SECTIONS.filter((s) => s.emit_owner === "conditional_markdown").map((s) => s.heading),
     );
