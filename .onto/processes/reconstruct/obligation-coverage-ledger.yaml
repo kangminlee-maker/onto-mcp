@@ -404,26 +404,20 @@ pending:
     coverage_status: pending
     tier: flat
   - validator_id: maturation-answer-claims-validator
-    obligation_id: require_convergent_source_evidence_claims_to_have_two_independent_judge_confirmed_supports
-    coverage_status: pending
-    tier: enforced_pending_instrumentation
-    note: "live-enforced in validateMaturationAnswerClaims (insufficient_independent_evidence when <2 independent judge-confirmed supports; prior_validation_invalid fail-closed when the judge is absent, #57/#58); asserted_obligation_ids recording instrumentation deferred to slice 2 to keep this slice to 2 instrumented validators. The enforced claim is bound by obligation-coverage-enforced-tier.test.ts so a judge regression reds a coverage test."
-  - validator_id: maturation-answer-claims-validator
     obligation_id: require_partial_answers_to_have_limitation_or_frontier_refs
     coverage_status: pending
     tier: flat
-  - validator_id: maturation-answer-claims-validator
-    obligation_id: validate_answer_claim_question_refs
-    coverage_status: pending
-    tier: flat
+    note: "slice-4 audit (2026-06-22): validateMaturationAnswerClaims enforces 'partially_answered → limitation_refs' (missing_required_ref), but the 'OR frontier' alternative is unrepresentable — ReconstructMaturationAnswerClaim has no frontier_refs field. Name/artifact mismatch; recording deferred pending the frontier alternative being added or the name reconciled with the limitation-only check."
   - validator_id: maturation-answer-claims-validator
     obligation_id: validate_answer_claim_surface_dimension_and_purpose_element_refs
     coverage_status: pending
     tier: flat
+    note: "slice-4 audit (2026-06-22): all three ref arrays are presence-validated (missing_required_coverage) and target_surface_refs are resolved against the question (conflicting_state), but target_dimension_refs and purpose_element_refs are NOT resolved against the question — only presence-checked. Recording deferred pending dimension/purpose resolution checks or an owner decision (partial enforcement)."
   - validator_id: maturation-answer-claims-validator
     obligation_id: validate_support_mode_against_valid_evidence_cluster_or_authority
     coverage_status: pending
     tier: flat
+    note: "slice-4 audit (2026-06-22): support_mode is validated against evidence clusters (invalid_enum, conflicting_state on cluster-mode mismatch, support_mode_missing_authority when no cluster is cited), but the 'OR authority' alternative branch is not implemented — there is no validation path against an authority artifact. Recording deferred pending the authority branch or name reconciliation."
   - validator_id: maturation-authority-response-validator
     obligation_id: preserve_unavailable_or_rejected_authority_as_blocked_or_limitation_state
     coverage_status: pending

@@ -2350,6 +2350,7 @@ export interface ReconstructMaturationAnswerClaimsValidationArtifact {
   answer_claim_count: number;
   answered_question_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 
