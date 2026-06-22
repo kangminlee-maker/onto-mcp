@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructOntologySeedArtifact,
   ReconstructOntologySeedValidationArtifact,
@@ -781,6 +782,24 @@ function validateClaimRealizationMapAgainstClaims(args: {
   const stanceCounts = initCountMap(CLAIM_REALIZATION_STANCES);
   const observations = observationsById(args.sourceObservations);
 
+  // G(a) slice 7: record the three claim-realization obligations before the per-realization loop so
+  // they are proven wired on a zero-realization map. Each was audited to a distinct enforcement region
+  // (no laundering): require_exactly_one = duplicate_id (in-loop) + missing_required_coverage (the
+  // coverage loop below); claim_ids = unknown_id; evidence_refs = validateEvidenceRef vs source obs.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "require_exactly_one_realization_for_each_seed_claim",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_realization_claim_ids_against_ontology_seed_claim_ids",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_realization_evidence_refs_against_source_observations",
+  );
+
   for (const realization of args.claimRealizationMap.claim_realizations) {
     const subjectId = realization.claim_id;
     if (seen.has(subjectId)) {
@@ -859,6 +878,7 @@ function validateClaimRealizationMapAgainstClaims(args: {
     validation_results: violations.length === 0
       ? ["claim_realization_map_valid"]
       : ["claim_realization_map_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

@@ -5,6 +5,7 @@ import { parse as parseYaml } from "yaml";
 import type {
   ReconstructActionabilityMatrixArtifact,
   ReconstructActionabilityMatrixValidationArtifact,
+  ReconstructClaimRealizationMapValidationArtifact,
   ReconstructMaturationAnswerClaimsArtifact,
   ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationBaselineArtifact,
@@ -23,6 +24,7 @@ import {
   validateSourceObservationDelta,
   validateSourceObservationReentry,
 } from "./source-observation-delta-validation.js";
+import { validateClaimRealizationMapForOntologySeed } from "./post-seed-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -250,6 +252,28 @@ function runQuestionFrontier(): ReconstructMaturationQuestionFrontierValidationA
   });
 }
 
+// claim-realization-map-validator (slice 7, post-seed-validation.ts). The exported wrapper delegates
+// to the real validator; minimal inputs reach the recorders (before the per-realization loop).
+// ontologySeedClaimProjections is null-safe, so a minimal seed does not throw. Attribute by name.
+function runClaimRealizationMap(): ReconstructClaimRealizationMapValidationArtifact {
+  return validateClaimRealizationMapForOntologySeed({
+    claimRealizationMap: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      claim_realizations: [],
+      directive_author: { owner: "mock", author_id: "mock" },
+    } as never,
+    ontologySeed: { schema_version: "1", session_id: "session-harvest" } as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -378,7 +402,18 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     );
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 22 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateClaimRealizationMap records its 3 instrumented obligations (slice 7: exactly-one / claim-ids / evidence-refs)", () => {
+    const out = runClaimRealizationMap();
+    for (const obligation of [
+      "require_exactly_one_realization_for_each_seed_claim",
+      "validate_realization_claim_ids_against_ontology_seed_claim_ids",
+      "validate_realization_evidence_refs_against_source_observations",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 25 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -388,6 +423,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const deltaOut = runSourceObservationDelta();
     const reentryOut = runSourceObservationReentry();
     const questionFrontierOut = runQuestionFrontier();
+    const claimRealizationOut = runClaimRealizationMap();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -419,6 +455,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "maturation-question-frontier-validator",
         obligation_id,
       })),
+      ...claimRealizationOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "claim-realization-map-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -435,6 +475,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(22);
+    expect(harvestedSet.size).toBe(25);
   });
 });

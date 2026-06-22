@@ -47,3 +47,9 @@ recorded:
     obligation_id: require_blocker_and_high_questions_to_have_closure_frontier_limitation_or_authority_need
   - validator_id: maturation-question-frontier-validator
     obligation_id: require_unique_question_id
+  - validator_id: claim-realization-map-validator
+    obligation_id: require_exactly_one_realization_for_each_seed_claim
+  - validator_id: claim-realization-map-validator
+    obligation_id: validate_realization_claim_ids_against_ontology_seed_claim_ids
+  - validator_id: claim-realization-map-validator
+    obligation_id: validate_realization_evidence_refs_against_source_observations

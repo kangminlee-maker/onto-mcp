@@ -1709,6 +1709,7 @@ export interface ReconstructClaimRealizationMapValidationArtifact {
   realized_claim_count: number;
   stance_counts: Record<ReconstructClaimRealizationStance, number>;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructPostSeedValidationViolation[];
 }
 
