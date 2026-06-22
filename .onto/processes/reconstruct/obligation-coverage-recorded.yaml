@@ -67,3 +67,9 @@ recorded:
     obligation_id: require_concept_economy_rationale_when_surface_increases
   - validator_id: reconstruct-run-control-validator
     obligation_id: validate_committed_write_transactions_have_artifact_refs_and_hashes
+  - validator_id: purpose-confirmation-validator
+    obligation_id: validate_confirmation_status_against_selected_purpose_candidate
+  - validator_id: purpose-confirmation-validator
+    obligation_id: require_confirmation_for_inferred_or_limitation_backed_purpose
+  - validator_id: purpose-confirmation-validator
+    obligation_id: block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending

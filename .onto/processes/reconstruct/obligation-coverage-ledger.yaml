@@ -720,25 +720,15 @@ pending:
     coverage_status: pending
     tier: flat
   - validator_id: purpose-confirmation-validator
-    obligation_id: block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending
-    coverage_status: pending
-    tier: flat
-  - validator_id: purpose-confirmation-validator
-    obligation_id: require_confirmation_for_inferred_or_limitation_backed_purpose
-    coverage_status: pending
-    tier: flat
-  - validator_id: purpose-confirmation-validator
     obligation_id: require_revised_confirmation_to_preserve_source_conflict_or_trigger_purpose_discovery_rerun
     coverage_status: pending
     tier: flat
-  - validator_id: purpose-confirmation-validator
-    obligation_id: validate_confirmation_status_against_selected_purpose_candidate
-    coverage_status: pending
-    tier: flat
+    note: "slice-11 audit (2026-06-22): AMBIGUOUS — two-armed name, only one arm enforced. The rerun arm IS enforced (revised_pending_evidence_check → seed_readiness_effect must_rerun_purpose_discovery + conflicting_state, purpose-authority-validation.ts), but the 'preserve source conflict' arm is never checked: the validator never reads source_conflict_policy (or the confirmation's revised_statement vs source conflict) — only the rerun side-effect of revised_pending_evidence_check is realized. Recording deferred pending a source-conflict-preservation check."
   - validator_id: purpose-confirmation-validator
     obligation_id: validate_confirmation_status_against_source_purpose_candidate_status_and_validation_confirmation_required
     coverage_status: pending
     tier: flat
+    note: "slice-11 audit (2026-06-22): AMBIGUOUS — name broader than code. The validator reads sourceValidation.validation_status (conflicting_state when not valid) and sourceValidation.confirmation_required (the gate branch), but never the candidate's own purpose_source_status (explicit_source_declared/convergent_inferred/limitation_backed/unresolved) the name references. Per the contract confirmation_required is the only authoritative gate input, so the candidate-status arm is intentionally not read here — name names a quantity this validator does not inspect. Recording deferred pending name reconciliation (the confirmation_required arm is already recorded via require_confirmation_for_inferred_or_limitation_backed_purpose)."
   - validator_id: reconstruct-run-control-validator
     obligation_id: preserve_post_write_hash_observation_without_claiming_atomic_commit_when_writer_did_not_prove_atomic_rename
     coverage_status: pending

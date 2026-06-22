@@ -13,6 +13,7 @@ import type {
   ReconstructMaturationBaselineValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructOntologyExpansionValidationArtifact,
+  ReconstructPurposeConfirmationValidationArtifact,
   ReconstructRunControlValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
@@ -31,6 +32,7 @@ import {
 } from "./source-observation-delta-validation.js";
 import { validateClaimRealizationMapForOntologySeed } from "./post-seed-validation.js";
 import { validateReconstructRunControl } from "./run-control-validation.js";
+import { validatePurposeConfirmation } from "./purpose-authority-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -391,6 +393,38 @@ const committedTransaction = (committedHash: string | null) => ({
   recovery_ref: null,
 });
 
+// purpose-confirmation-validator (slice 11, purpose-authority-validation.ts). Minimal inputs reach the
+// recorder (stamped unconditionally before the branches). The validation artifact carries no
+// validator_id field, so attribute by name. Three obligations are recorded; the revised-confirmation
+// "preserve source conflict" arm and the candidate-status arm of ob 5 stay parked.
+function runPurposeConfirmation(
+  overrides: {
+    confirmationStatus?: string;
+    confirmationRequired?: boolean;
+    purposeCandidateId?: string;
+    selectedCandidateId?: string;
+    confirmedStatement?: string | null;
+  } = {},
+): ReconstructPurposeConfirmationValidationArtifact {
+  return validatePurposeConfirmation({
+    purposeConfirmation: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      purpose_candidate_id: overrides.purposeCandidateId ?? "cand-1",
+      confirmation_status: overrides.confirmationStatus ?? "not_required",
+      confirmed_statement: overrides.confirmedStatement ?? null,
+    } as never,
+    sourcePurposeCandidatesValidation: {
+      session_id: "session-harvest",
+      validation_status: "valid",
+      selected_purpose_candidate_id: overrides.selectedCandidateId ?? "cand-1",
+      confirmation_required: overrides.confirmationRequired ?? false,
+      source_purpose_candidates_ref: "source-purpose-candidates.yaml",
+    } as never,
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -620,7 +654,72 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     expect(clean.violations.some((v) => v.code === "transaction_hash_missing")).toBe(false);
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 32 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validatePurposeConfirmation records its 3 instrumented obligations (slice 11: selected-candidate + require-confirmation + block-seed-readiness) and NOT the parked two", () => {
+    const out = runPurposeConfirmation();
+    for (const obligation of [
+      "validate_confirmation_status_against_selected_purpose_candidate",
+      "require_confirmation_for_inferred_or_limitation_backed_purpose",
+      "block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED: the revised-confirmation "preserve source conflict" arm is never checked (only the rerun
+    // arm); ob 5's candidate-status arm is never read (only validation_status + confirmation_required).
+    expect(out.asserted_obligation_ids).not.toContain(
+      "require_revised_confirmation_to_preserve_source_conflict_or_trigger_purpose_discovery_rerun",
+    );
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_confirmation_status_against_source_purpose_candidate_status_and_validation_confirmation_required",
+    );
+  });
+
+  // ANTI-LAUNDERING (slice 11): the three recorded obligations have non-vacuous, NON-OVERLAPPING
+  // enforcement bindings — in particular "block" and "require" are bound by disjoint inputs so neither
+  // launders the other's enforcer.
+  it("ENFORCEMENT BINDING (block_seed_readiness_when_confirmation_is_pending_...): a pending status blocks seed readiness even when confirmation is not required; not_required clears it", () => {
+    const breaching = runPurposeConfirmation({
+      confirmationRequired: false,
+      confirmationStatus: "pending",
+    });
+    expect(breaching.purpose_projection_status).toBe("blocked");
+    expect(breaching.seed_readiness_effect).toBe("must_project_blocked");
+    const clean = runPurposeConfirmation({
+      confirmationRequired: false,
+      confirmationStatus: "not_required",
+    });
+    expect(clean.purpose_projection_status).toBe("usable");
+  });
+
+  it("ENFORCEMENT BINDING (require_confirmation_for_inferred_or_limitation_backed_purpose): when confirmation_required, a not_required status blocks; a confirmed status with a statement clears it", () => {
+    const breaching = runPurposeConfirmation({
+      confirmationRequired: true,
+      confirmationStatus: "not_required",
+    });
+    expect(breaching.validation_status).toBe("invalid");
+    expect(breaching.seed_readiness_effect).toBe("must_project_blocked");
+    const clean = runPurposeConfirmation({
+      confirmationRequired: true,
+      confirmationStatus: "confirmed",
+      confirmedStatement: "the user confirmed the inferred purpose",
+    });
+    expect(clean.validation_status).toBe("valid");
+    expect(clean.purpose_projection_status).toBe("usable");
+  });
+
+  it("ENFORCEMENT BINDING (validate_confirmation_status_against_selected_purpose_candidate): a non-selected candidate id trips selected_primary_mismatch; the selected id clears it", () => {
+    const breaching = runPurposeConfirmation({
+      purposeCandidateId: "cand-A",
+      selectedCandidateId: "cand-B",
+    });
+    expect(breaching.violations.some((v) => v.code === "selected_primary_mismatch")).toBe(true);
+    const clean = runPurposeConfirmation({
+      purposeCandidateId: "cand-A",
+      selectedCandidateId: "cand-A",
+    });
+    expect(clean.violations.some((v) => v.code === "selected_primary_mismatch")).toBe(false);
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 35 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -634,6 +733,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const judgmentOut = runAnswerSupportJudgment();
     const ontologyExpansionOut = runOntologyExpansion();
     const runControlOut = runReconstructRunControl();
+    const purposeConfirmationOut = runPurposeConfirmation();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -681,6 +781,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "reconstruct-run-control-validator",
         obligation_id,
       })),
+      ...purposeConfirmationOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "purpose-confirmation-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -697,6 +801,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(32);
+    expect(harvestedSet.size).toBe(35);
   });
 });
