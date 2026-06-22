@@ -298,37 +298,35 @@ pending:
     tier: flat
     note: "slice-13 audit (2026-06-22, codex PR #123): UNWIRED ON THIS VALIDATOR over the promoted/requested authority set. validateFailureClassification receives none of the promoted-planned validation authorities. Backlog: wire the trigger check over the AUTHORITATIVE promoted-authority set = the registry record's conditional_input_authority_refs whose consumed_for lists this obligation, resolved via the dynamic_input_authority_rule (read the registry for the exact refs — this note deliberately does not enumerate them, since the registry is the SSOT and a prose list drifts). Recording deferred."
   - validator_id: handoff-decision-validator
-    obligation_id: consume_all_active_validation_gate_statuses_emitted_by_runtime
-    coverage_status: pending
-    tier: flat
-  - validator_id: handoff-decision-validator
     obligation_id: consume_all_requested_or_promoted_planned_gate_statuses_emitted_by_runtime
     coverage_status: pending
     tier: flat
+    note: "slice-19 audit (2026-06-23): NOT_FOUND — depends on planned_validation_gate_catalog, which is declared in the registry YAML but NEVER loaded into the runtime ReconstructContractRegistry (the loader does not parse it; grep: zero references to planned_validation_gate_catalog in src/core-runtime/reconstruct). projectGateStatusesOnce iterates contractRegistry.validation_gate_catalog (active gates) only, so requested/promoted planned gate statuses are never consumed. This is a genuine declared-but-unwired surfacing (owner: load planned gates into the registry, or re-scope the obligation)."
   - validator_id: handoff-decision-validator
     obligation_id: derive_terminal_planned_gate_inputs_from_registry_gate_catalogs_not_hand_maintained_lists
     coverage_status: pending
     tier: flat
+    note: "slice-19 audit (2026-06-23): NOT_FOUND — same root cause as consume-planned: planned_validation_gate_catalog is never loaded, so terminal planned gate inputs are not derived from any registry catalog. The active gate projection derives from validation_gate_catalog, but the planned-gate derivation this obligation names does not exist in the runtime."
   - validator_id: handoff-decision-validator
     obligation_id: do_not_require_failure_or_revision_artifacts_for_clean_stop_decisions
     coverage_status: pending
     tier: flat
-  - validator_id: handoff-decision-validator
-    obligation_id: project_missing_active_validation_artifact_as_blocked
-    coverage_status: pending
-    tier: flat
+    note: "slice-19 audit (2026-06-23): defensive NEGATIVE obligation — the validator does not require failure-classification/revision-proposal artifacts for a clean stop (those gates are conditional via registry required_when predicates, skipped when not_applicable). There is no positive bindable violation for 'do not require' (a clean stop simply clears); the property is delegated to the registry predicate catalog, not a distinct enforcer in validateHandoffDecision. Recording deferred (no non-vacuous breaching binding)."
   - validator_id: handoff-decision-validator
     obligation_id: project_missing_required_promoted_or_requested_planned_gate_validation_artifact_as_blocked
     coverage_status: pending
     tier: flat
+    note: "slice-19 audit (2026-06-23): NOT_FOUND — depends on planned_validation_gate_catalog (never loaded). Missing planned gate validation artifacts are never consulted or projected as blocked; only missing ACTIVE artifacts are (recorded as project_missing_active_validation_artifact_as_blocked)."
   - validator_id: handoff-decision-validator
     obligation_id: validate_accepted_maturation_execution_minimum_output_gates_are_terminal_projected
     coverage_status: pending
     tier: flat
+    note: "slice-19 audit (2026-06-23): AMBIGUOUS — no distinct 'accepted maturation execution minimum output gates' selection exists. projectGateStatusesOnce terminal-projects ALL applicable active gates from validation_gate_catalog, but there is no maturation-minimum filter or maturation-context gate selection naming this obligation, and the planned/maturation gates it implies are unloaded. No name-matching enforcer."
   - validator_id: handoff-decision-validator
     obligation_id: validate_failure_classification_covers_failed_or_missing_requested_planned_gates
     coverage_status: pending
     tier: flat
+    note: "slice-19 audit (2026-06-23): NOT_FOUND — depends on planned_validation_gate_catalog (never loaded). The validator consumes failureClassificationValidation only as metadata (material_failure_count) and for predicate evaluation; it never validates that failure classification COVERS failed/missing planned gates."
   - validator_id: material-admission-ledger-validator
     obligation_id: validate_phase_scoped_input_kind_disposition_and_snapshot_refs
     coverage_status: pending

@@ -17,6 +17,7 @@ import type {
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructOntologyExpansionValidationArtifact,
+  ReconstructHandoffDecisionValidationArtifact,
   ReconstructPurposeConfirmationValidationArtifact,
   ReconstructRegistryVerificationEvidenceValidationArtifact,
   ReconstructRunControlValidationArtifact,
@@ -45,6 +46,7 @@ import { validateReconstructRunControl } from "./run-control-validation.js";
 import { validatePurposeConfirmation } from "./purpose-authority-validation.js";
 import { validateMaterialAdmissionLedger } from "./material-admission-validation.js";
 import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
+import { validateHandoffDecision } from "./terminal-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -744,6 +746,41 @@ function runRegistryVerificationEvidence(
       validator_records: [],
       required_when_predicate_catalog: [],
       source_profile_records: [],
+    } as never,
+  });
+}
+
+// handoff-decision-validator (slice 19, terminal-validation.ts). Terminal gate-projection validator;
+// the recorder is stamped before the per-gate consumption loop, so an empty gate catalog still reaches
+// it. The validation artifact carries no validator_id field, so attribute by name. Only the two
+// ACTIVE-gate obligations are recorded — every PLANNED-gate obligation is PARKED because
+// planned_validation_gate_catalog is declared in the registry YAML but NEVER loaded into the runtime
+// registry (the loader does not parse it; projectGateStatusesOnce iterates validation_gate_catalog
+// only), so planned gates are not consumed/projected here.
+function runHandoffDecision(): ReconstructHandoffDecisionValidationArtifact {
+  return validateHandoffDecision({
+    stopDecision: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      decision: "continue",
+    } as never,
+    metrics: { unresolved_question_count: 0 } as never,
+    manifestValidation: { validation_status: "valid" } as never,
+    targetMaterialProfileValidation: null,
+    sourceObservationDirectiveValidation: null,
+    sourceFrontierValidation: null,
+    candidateDispositionValidation: null,
+    ontologySeedValidation: null,
+    claimRealizationMapValidation: null,
+    competencyQuestionsValidation: null,
+    competencyQuestionAssessmentValidation: null,
+    seedConfirmationValidation: null,
+    failureClassificationValidation: null,
+    revisionProposalValidation: null,
+    contractRegistry: {
+      validation_gate_catalog: [],
+      required_when_predicate_catalog: [],
     } as never,
   });
 }
@@ -1461,7 +1498,44 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     expect(clean.violations.some((v) => v.code === "registry_claim_mismatch")).toBe(false);
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 56 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateHandoffDecision records its 2 instrumented active-gate obligations (slice 19: consume-active-gate-statuses + project-missing-active-as-blocked) and NOT the 6 parked planned-gate/defensive obligations", () => {
+    const out = runHandoffDecision();
+    for (const obligation of [
+      "consume_all_active_validation_gate_statuses_emitted_by_runtime",
+      "project_missing_active_validation_artifact_as_blocked",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (Explore audit). FOUR depend on planned_validation_gate_catalog, which is declared in the
+    // registry YAML but never loaded into the runtime registry (the loader never parses it;
+    // projectGateStatusesOnce iterates validation_gate_catalog only) → NOT_FOUND in this validator:
+    // consume-planned / derive-planned-inputs / project-missing-planned / failure-covers-planned.
+    // ONE is AMBIGUOUS (no distinct "accepted-maturation minimum output gates" filter — all applicable
+    // active gates are projected, but no maturation-minimum selection). ONE is a defensive negative
+    // ("do not require failure/revision for clean stop") delegated to the registry required_when
+    // predicates with no positive bindable violation. See obligation-coverage-ledger.yaml notes.
+    for (const parked of [
+      "consume_all_requested_or_promoted_planned_gate_statuses_emitted_by_runtime",
+      "derive_terminal_planned_gate_inputs_from_registry_gate_catalogs_not_hand_maintained_lists",
+      "do_not_require_failure_or_revision_artifacts_for_clean_stop_decisions",
+      "project_missing_required_promoted_or_requested_planned_gate_validation_artifact_as_blocked",
+      "validate_accepted_maturation_execution_minimum_output_gates_are_terminal_projected",
+      "validate_failure_classification_covers_failed_or_missing_requested_planned_gates",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (slice 19): the two recorded obligations have non-vacuous, NON-OVERLAPPING
+  // enforcement bindings in terminal-validation.test.ts — an active gate whose validation is INVALID
+  // trips handoff_required_validation_invalid (proves consume-all-active-gate-statuses; lines ~1077,
+  // 1120), and an active gate whose validation artifact is MISSING trips handoff_required_validation_
+  // missing AND drives readiness_projection to "blocked" (proves project-missing-active-as-blocked;
+  // lines ~1058/1091 + ~503/1141). Distinct breaching inputs (gate present-but-invalid vs absent), so
+  // neither launders the other. Building the registry/predicate machinery inline here would duplicate
+  // that fixture; the recorder-reached stamp is proven above and by the flip-test.
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 58 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1481,6 +1555,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const convergenceOut = runMaturationConvergence();
     const actionableOntologyOut = runActionableOntology();
     const registryVerificationOut = runRegistryVerificationEvidence();
+    const handoffDecisionOut = runHandoffDecision();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -1552,6 +1627,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "registry-verification-evidence-validator",
         obligation_id,
       })),
+      ...handoffDecisionOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "handoff-decision-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -1568,6 +1647,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(56);
+    expect(harvestedSet.size).toBe(58);
   });
 });

@@ -115,3 +115,7 @@ recorded:
     obligation_id: validate_every_active_gate_required_when_predicate_resolves
   - validator_id: registry-verification-evidence-validator
     obligation_id: require_evidence_row_for_each_current_registry_subject_id
+  - validator_id: handoff-decision-validator
+    obligation_id: consume_all_active_validation_gate_statuses_emitted_by_runtime
+  - validator_id: handoff-decision-validator
+    obligation_id: project_missing_active_validation_artifact_as_blocked
