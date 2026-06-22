@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructRegistryVerificationEvidenceArtifact,
   ReconstructRegistryVerificationEvidenceRow,
@@ -202,6 +203,35 @@ export function validateRegistryVerificationEvidence(args: {
   assertArrayField(args.contractRegistry.validation_gate_catalog, "contract-registry", "validation_gate_catalog");
   assertArrayField(args.contractRegistry.required_when_predicate_catalog, "contract-registry", "required_when_predicate_catalog");
   const violations: ReconstructRegistryVerificationEvidenceValidationViolation[] = [];
+  // G(a) obligation recorder (INV-OBLIGATION-COVERAGE-1): record that control
+  // reached each enforcer block below. Unconditional, before any per-row/per-loop
+  // guard so a zero-row clean input still stamps every recorded obligation.
+  // (validate_registry_snapshot_hash_matches_current_registry_file is PARKED: the
+  // match check is gated on the caller-supplied optional expectedRegistrySha256,
+  // not enforced internally — see obligation-coverage-ledger.yaml.)
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "validate_registry_snapshot_hash_is_recorded");
+  assertObligation(
+    assertedObligationIds,
+    "validate_active_artifact_gate_validator_predicate_and_source_profile_ids_are_unique",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_active_registry_subject_lists_match_current_registry_catalogs",
+  );
+  assertObligation(assertedObligationIds, "validate_every_active_gate_has_a_validator_record");
+  assertObligation(
+    assertedObligationIds,
+    "validate_every_validator_gate_ref_resolves_to_an_active_gate",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_every_active_gate_required_when_predicate_resolves",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_evidence_row_for_each_current_registry_subject_id",
+  );
   const expectedRegistryRef = args.expectedRegistryRef
     ? path.resolve(args.expectedRegistryRef)
     : null;
@@ -424,6 +454,7 @@ export function validateRegistryVerificationEvidence(args: {
     validation_results: violations.length === 0
       ? ["registry_verification_evidence_valid"]
       : ["registry_verification_evidence_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

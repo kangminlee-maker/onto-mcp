@@ -325,6 +325,7 @@ export interface ReconstructRegistryVerificationEvidenceValidationArtifact {
   predicate_count: number;
   source_profile_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructRegistryVerificationEvidenceValidationViolation[];
 }
 

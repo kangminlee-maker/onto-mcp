@@ -18,6 +18,7 @@ import type {
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructOntologyExpansionValidationArtifact,
   ReconstructPurposeConfirmationValidationArtifact,
+  ReconstructRegistryVerificationEvidenceValidationArtifact,
   ReconstructRunControlValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
@@ -43,6 +44,7 @@ import {
 import { validateReconstructRunControl } from "./run-control-validation.js";
 import { validatePurposeConfirmation } from "./purpose-authority-validation.js";
 import { validateMaterialAdmissionLedger } from "./material-admission-validation.js";
+import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -703,6 +705,45 @@ function runActionableOntology(
     maturationConvergenceLedgerValidation: {
       validation_status: "valid",
       final_requestion_pass_status: overrides.finalPassStatus ?? "no_new_material_question",
+    } as never,
+  });
+}
+
+// registry-verification-evidence-validator (slice 18, registry-verification-validation.ts). The
+// validator is structural: every recorded check is unconditional, so a minimal type-valid evidence +
+// empty registry reaches the recorder. The validation artifact carries no validator_id field, so
+// attribute by name. validate_registry_snapshot_hash_matches_current_registry_file stays PARKED — its
+// match check is gated on the caller-supplied optional expectedRegistrySha256 (the validator never
+// computes the on-disk hash itself; writeRegistryVerificationEvidenceValidationArtifact supplies it),
+// so the validator carries no internal hash-vs-file guarantee.
+function rveEvidence(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    schema_version: "1",
+    session_id: "session-harvest",
+    created_at: now,
+    registry_ref: "reconstruct-contract-registry.yaml",
+    registry_sha256: "0".repeat(64),
+    active_artifact_authority_ids: [],
+    active_validation_gate_ids: [],
+    active_validator_ids: [],
+    required_when_predicate_ids: [],
+    source_profile_ids: [],
+    evidence_rows: [],
+    ...overrides,
+  };
+}
+function runRegistryVerificationEvidence(
+  overrides: Record<string, unknown> = {},
+): ReconstructRegistryVerificationEvidenceValidationArtifact {
+  return validateRegistryVerificationEvidence({
+    evidence: rveEvidence(overrides) as never,
+    contractRegistry: {
+      registry_id: "reconstruct-contract-registry",
+      artifact_authorities: {},
+      validation_gate_catalog: [],
+      validator_records: [],
+      required_when_predicate_catalog: [],
+      source_profile_records: [],
     } as never,
   });
 }
@@ -1372,7 +1413,55 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     ).toBe(false);
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 49 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateRegistryVerificationEvidence records its 7 instrumented obligations (slice 18: hash-recorded + id-uniqueness + subject-lists-match + gate-has-validator + validator-gate-resolves + gate-predicate-resolves + evidence-row-per-subject) and NOT the parked hash-matches-file obligation", () => {
+    const out = runRegistryVerificationEvidence();
+    for (const obligation of [
+      "validate_registry_snapshot_hash_is_recorded",
+      "validate_active_artifact_gate_validator_predicate_and_source_profile_ids_are_unique",
+      "validate_active_registry_subject_lists_match_current_registry_catalogs",
+      "validate_every_active_gate_has_a_validator_record",
+      "validate_every_validator_gate_ref_resolves_to_an_active_gate",
+      "validate_every_active_gate_required_when_predicate_resolves",
+      "require_evidence_row_for_each_current_registry_subject_id",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (Explore audit): the hash-matches-current-file check (registry_hash_mismatch) only fires
+    // when the caller supplies expectedRegistrySha256 — the validator never derives the on-disk hash
+    // itself, so it carries no internal "matches current file" guarantee. Not recorded.
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_registry_snapshot_hash_matches_current_registry_file",
+    );
+  });
+
+  // ANTI-LAUNDERING (slice 18): each recorded obligation has a non-vacuous enforcement binding. All
+  // seven violation codes are bound by dedicated cases in registry-verification-validation.test.ts
+  // (registry_hash_missing, duplicate_id, registry_claim_mismatch, active_gate_without_validator,
+  // validator_unknown_gate, predicate_missing_for_gate, evidence_row_missing). Three representative
+  // shapes are exercised inline below across the validator's check families (hash format, claim-list
+  // uniqueness, claim-vs-registry delta) so the recorder cannot launder a deleted enforcer.
+  it("ENFORCEMENT BINDING (validate_registry_snapshot_hash_is_recorded): a non-sha256 registry_sha256 trips registry_hash_missing; a valid 64-hex clears it", () => {
+    const breaching = runRegistryVerificationEvidence({ registry_sha256: "not-a-real-hash" });
+    expect(breaching.violations.some((v) => v.code === "registry_hash_missing")).toBe(true);
+    const clean = runRegistryVerificationEvidence({ registry_sha256: "0".repeat(64) });
+    expect(clean.violations.some((v) => v.code === "registry_hash_missing")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_active_..._ids_are_unique): a duplicated active_validator_id trips duplicate_id; distinct ids clear it", () => {
+    const breaching = runRegistryVerificationEvidence({ active_validator_ids: ["v1", "v1"] });
+    expect(breaching.violations.some((v) => v.code === "duplicate_id")).toBe(true);
+    const clean = runRegistryVerificationEvidence({ active_validator_ids: [] });
+    expect(clean.violations.some((v) => v.code === "duplicate_id")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_active_registry_subject_lists_match...): an active id absent from the current registry trips registry_claim_mismatch; an empty list (matching the empty registry) clears it", () => {
+    const breaching = runRegistryVerificationEvidence({ active_validator_ids: ["ghost-validator"] });
+    expect(breaching.violations.some((v) => v.code === "registry_claim_mismatch")).toBe(true);
+    const clean = runRegistryVerificationEvidence({ active_validator_ids: [] });
+    expect(clean.violations.some((v) => v.code === "registry_claim_mismatch")).toBe(false);
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 56 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1391,6 +1480,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const materialAdmissionOut = runMaterialAdmissionLedger();
     const convergenceOut = runMaturationConvergence();
     const actionableOntologyOut = runActionableOntology();
+    const registryVerificationOut = runRegistryVerificationEvidence();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -1458,6 +1548,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "actionable-ontology-validator",
         obligation_id,
       })),
+      ...registryVerificationOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "registry-verification-evidence-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -1474,6 +1568,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(49);
+    expect(harvestedSet.size).toBe(56);
   });
 });
