@@ -2098,6 +2098,7 @@ export interface ReconstructMaturationQuestionFrontierValidationArtifact {
   question_count: number;
   material_frontier_question_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 
