@@ -60,6 +60,11 @@ const GUARDS: GuardRun[] = [
     invariants: ["INV-MODEL-1"],
     command: ["npx", "tsx", "scripts/check-supported-models.ts"],
   },
+  {
+    guard: "G8 prompt-projection-parity",
+    invariants: ["INV-SCHEMA-1"],
+    command: ["npx", "tsx", "scripts/check-prompt-projection-parity.ts"],
+  },
 ];
 
 async function runGuard(run: GuardRun): Promise<{ run: GuardRun; ok: boolean; detail: string }> {

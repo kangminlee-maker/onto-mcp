@@ -15,6 +15,7 @@ import {
   resolveRegistryRef,
   type ReconstructContractRegistry,
   type ReconstructDomainCompetencyAdmissionPolicy,
+  type ReconstructValidatorRecord,
 } from "./contract-registry.js";
 import {
   isPathInsideRoot,
@@ -432,6 +433,31 @@ async function buildAdmittedDomainSnapshots(args: {
   return snapshots;
 }
 
+/**
+ * The exact field allow-list embedded in the `validator_records` governing-snapshot
+ * family (and therefore in the authored-artifact reuse hash). The loader preserves
+ * additional fields on a parsed validator record (e.g. validation_obligations,
+ * conditional_validation_obligations) so callers can read them, but those MUST NOT
+ * enter the snapshot/reuse hash or every prior authored artifact would be forced to
+ * re-author. This is an ALLOW-LIST, not a strip-list: any future parsed field is
+ * excluded by default and must be consciously added here to enter the snapshot, so
+ * the no-rotation guarantee holds for the whole field class, not just today's two.
+ */
+export function projectValidatorRecordSnapshotFields(
+  validator: ReconstructValidatorRecord,
+): Pick<
+  ReconstructValidatorRecord,
+  "validator_id" | "gate_ids" | "validator_version" | "input_authority_refs" | "output_ref"
+> {
+  return {
+    validator_id: validator.validator_id,
+    gate_ids: validator.gate_ids,
+    validator_version: validator.validator_version,
+    input_authority_refs: validator.input_authority_refs,
+    output_ref: validator.output_ref,
+  };
+}
+
 function snapshotFamily(args: {
   familyId: string;
   sourceRef: string | null;
@@ -575,7 +601,10 @@ export async function buildReconstructRunGoverningSnapshot(args: {
       snapshotFamily({
         familyId: "validator_records",
         sourceRef: "reconstruct-contract-registry.yaml#validator_records",
-        value: args.contractRegistry.validator_records,
+        // Allow-list projection: obligation fields the loader now preserves are
+        // excluded so the family sha (and the reuse hash it feeds) stays byte-identical.
+        value: args.contractRegistry.validator_records
+          .map(projectValidatorRecordSnapshotFields),
         selectedIds: args.contractRegistry.validator_records
           .map((validator) => validator.validator_id),
       }),

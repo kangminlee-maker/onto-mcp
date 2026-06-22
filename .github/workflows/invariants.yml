@@ -28,6 +28,8 @@ jobs:
         run: npx tsx scripts/check-invariant-change-marker.ts "origin/${{ github.base_ref }}"
       - name: G7 supported-model guard (INV-MODEL-1)
         run: npx tsx scripts/check-supported-models.ts
+      - name: G8 prompt-projection parity (INV-SCHEMA-1)
+        run: npx tsx scripts/check-prompt-projection-parity.ts
       - name: Full vitest suite (unit + integration merge gate)
         # vitest.config include set; superset of the G3 invariant subset above.
         # Live/benchmark scripts (npm test, benchmark:*) stay out — they need credentials.
