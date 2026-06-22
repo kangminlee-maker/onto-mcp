@@ -21,26 +21,22 @@ pending:
     obligation_id: reject_matrix_rows_without_baseline_row_or_applicable_validated_expansion_ref
     coverage_status: pending
     tier: flat
+    note: "slice-3 audit (2026-06-22): the validator strictly requires exactly one resolvable baseline_row_ref per row (the strict check is recorded under baseline-actionability-matrix-validator/reject_matrix_rows_without_baseline_row_ref); the 'OR applicable validated expansion ref' ALTERNATIVE in this current-mode name is NOT implemented — no path admits an expansion-only row. Recording deferred pending that alternative being built or the name reconciled with the strict check."
   - validator_id: actionability-matrix-validator
     obligation_id: require_blocker_and_high_rows_to_be_l4_limitation_backed_or_continuation_blocking
     coverage_status: pending
     tier: flat
+    note: "slice-3 audit (2026-06-22): NO enforcement found in validateActionabilityMatrix — there is no check that blocker/high materiality rows are L4, limitation_backed, or continuation-blocking. A surfaced declared≠wired gap; may be enforced by maturation-continuation-decision-validator / actionable-ontology-validator (owner decision: add here, or re-attribute in the registry)."
   - validator_id: actionability-matrix-validator
     obligation_id: support_zero_delta_baseline_only_matrix_when_no_maturation_deltas_exist
     coverage_status: pending
     tier: flat
-  - validator_id: actionability-matrix-validator
-    obligation_id: validate_blocking_question_refs_against_validated_question_frontier
-    coverage_status: pending
-    tier: flat
-  - validator_id: actionability-matrix-validator
-    obligation_id: validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas
-    coverage_status: pending
-    tier: flat
+    note: "slice-3 audit (2026-06-22): a 'support' (non-rejection) obligation — satisfied by the ABSENCE of a violation when a matrix mirrors the baseline with no deltas, so there is no bindable violation code to anchor a recording. Stays parked (recording would require an explicit affirmative check)."
   - validator_id: actionability-matrix-validator
     obligation_id: validate_maturity_level_against_supporting_refs_blocking_questions_and_limitations
     coverage_status: pending
     tier: flat
+    note: "slice-3 audit (2026-06-22): enforcement is DISTRIBUTED across regions already owned by other recorded obligations — the member_readiness gate (limitations), the maturity-upgrade citation (supporting_refs; recorded as validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas), and the blocking-question validation (recorded as validate_blocking_question_refs_against_validated_question_frontier). No distinct owner region; recording deferred pending a decision on whether this is a composite obligation or maps to the member_readiness gate specifically."
   - validator_id: actionable-ontology-validator
     obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
     coverage_status: pending
@@ -125,22 +121,12 @@ pending:
     obligation_id: preserve_frontier_seed_state_before_question_frontier_authoring
     coverage_status: pending
     tier: flat
-  - validator_id: baseline-actionability-matrix-validator
-    obligation_id: reject_blocking_question_refs_before_question_frontier_authoring
-    coverage_status: pending
-    tier: flat
-  - validator_id: baseline-actionability-matrix-validator
-    obligation_id: reject_matrix_rows_without_baseline_row_ref
-    coverage_status: pending
-    tier: flat
+    note: "slice-3 audit (2026-06-22): a defensive (non-mutation) obligation — satisfied by the ABSENCE of post-frontier inputs in baseline mode, with no bindable violation code. Stays parked."
   - validator_id: baseline-actionability-matrix-validator
     obligation_id: support_zero_delta_baseline_only_matrix_before_maturation_deltas_exist
     coverage_status: pending
     tier: flat
-  - validator_id: baseline-actionability-matrix-validator
-    obligation_id: validate_matrix_rows_derive_from_validated_baseline_without_maturation_deltas
-    coverage_status: pending
-    tier: flat
+    note: "slice-3 audit (2026-06-22): a 'support' (non-rejection) obligation with no bindable violation code (the baseline-mode sibling of the current-mode support rule). Stays parked."
   - validator_id: candidate-disposition-validator
     obligation_id: require_deferred_or_source_gap_disposition_to_cite_limitation_or_frontier
     coverage_status: pending

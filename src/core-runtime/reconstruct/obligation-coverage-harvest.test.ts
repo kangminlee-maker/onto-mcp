@@ -4,6 +4,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
   ReconstructActionabilityMatrixArtifact,
+  ReconstructActionabilityMatrixValidationArtifact,
   ReconstructMaturationAnswerClaimsArtifact,
   ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationBaselineArtifact,
@@ -107,6 +108,47 @@ function baselineValidationInput(): ReconstructMaturationBaselineValidationArtif
   };
 }
 
+// CURRENT mode = post-frontier inputs present (answer claims flip postFrontierInputsPresent). The
+// frontier is a SEPARATE axis: the with-frontier variant additionally supplies a VALID question-
+// frontier validation so frontierAvailable=true and the frontier reverse-link obligation
+// (validate_blocking_question_refs...) is enforced and recorded under the current validator.
+function runMatrix(opts: {
+  current?: boolean;
+  frontier?: boolean;
+} = {}): ReconstructActionabilityMatrixValidationArtifact {
+  return validateActionabilityMatrix({
+    actionabilityMatrix: minimalMatrix(),
+    maturationBaseline: minimalBaseline(),
+    maturationBaselineValidation: baselineValidationInput(),
+    ...(opts.current
+      ? {
+        maturationAnswerClaims: {
+          schema_version: "1",
+          session_id: "session-harvest",
+          created_at: now,
+          answer_claims: [],
+        } as ReconstructMaturationAnswerClaimsArtifact,
+        maturationAnswerClaimsValidation: {
+          validation_status: "invalid",
+        } as ReconstructMaturationAnswerClaimsValidationArtifact,
+      }
+      : {}),
+    ...(opts.frontier
+      ? {
+        maturationQuestionFrontier: {
+          schema_version: "1",
+          session_id: "session-harvest",
+          created_at: now,
+          questions: [],
+        } as never,
+        maturationQuestionFrontierValidation: {
+          validation_status: "valid",
+        } as never,
+      }
+      : {}),
+  });
+}
+
 describe("G(a) obligation harvest — validators record their obligation ids", () => {
   it("validateMaturationBaseline records its 3 instrumented obligations (coverage + slice-2 source-reconstruct + mixed-lineage)", () => {
     const out = runBaseline();
@@ -142,61 +184,57 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     ).toBe(false);
   });
 
-  it("validateActionabilityMatrix in BASELINE mode (no post-frontier inputs) records the matrix obligation and attributes to baseline-actionability-matrix-validator", () => {
-    const out = validateActionabilityMatrix({
-      actionabilityMatrix: minimalMatrix(),
-      maturationBaseline: minimalBaseline(),
-      maturationBaselineValidation: baselineValidationInput(),
-    });
+  // ANTI-LAUNDERING (matrix): each recorded matrix obligation was audited to a DISTINCT enforcement
+  // region (no laundering) and is bound by an enforcement test in maturation-validation.test.ts —
+  // reject-baseline-ref (exactly-one baseline_row_ref), derive-without/and-deltas (identity preserve +
+  // maturity-upgrade citation), reject/validate-blocking (the pre/post-frontier branches, PR #100).
+  // Obligations with no distinct enforcement (current-mode expansion-alt, blocker/high-L4 rule,
+  // "support" rules, the distributed maturity-level rule, the defensive preserve-seed rule) stay
+  // parked with ledger audit notes rather than being stamped.
+  it("validateActionabilityMatrix in BASELINE mode records its 4 instrumented obligations (row-ids + slice-3 reject-baseline-ref + derive-without-deltas + reject-blocking-before-frontier)", () => {
+    const out = runMatrix();
     expect(out.validator_id).toBe("baseline-actionability-matrix-validator");
-    expect(out.asserted_obligation_ids).toContain(
+    for (const obligation of [
       "validate_matrix_row_ids_are_stable_and_baseline_row_refs_close",
-    );
+      "reject_matrix_rows_without_baseline_row_ref",
+      "validate_matrix_rows_derive_from_validated_baseline_without_maturation_deltas",
+      "reject_blocking_question_refs_before_question_frontier_authoring",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
   });
 
-  it("validateActionabilityMatrix in CURRENT mode (post-frontier inputs present) records the matrix obligation and attributes to actionability-matrix-validator", () => {
-    const out = validateActionabilityMatrix({
-      actionabilityMatrix: minimalMatrix(),
-      maturationBaseline: minimalBaseline(),
-      maturationBaselineValidation: baselineValidationInput(),
-      // Supplying answer-claim inputs flips postFrontierInputsPresent → current-matrix mode.
-      maturationAnswerClaims: {
-        schema_version: "1",
-        session_id: "session-harvest",
-        created_at: now,
-        answer_claims: [],
-      } as ReconstructMaturationAnswerClaimsArtifact,
-      maturationAnswerClaimsValidation: {
-        validation_status: "invalid",
-      } as ReconstructMaturationAnswerClaimsValidationArtifact,
-    });
+  it("validateActionabilityMatrix in CURRENT mode WITHOUT a frontier records derive-and-deltas but NOT the frontier-gated blocking obligation", () => {
+    const out = runMatrix({ current: true });
     expect(out.validator_id).toBe("actionability-matrix-validator");
     expect(out.asserted_obligation_ids).toContain(
-      "validate_matrix_row_ids_are_stable_and_baseline_row_refs_close",
+      "validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas",
+    );
+    // frontierAvailable=false → the frontier reverse-link obligation must NOT be recorded; the stamp
+    // is gated on the frontier branch, so no (validator_id, obligation_id) pair the enforcement region
+    // did not actually reach is minted.
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_blocking_question_refs_against_validated_question_frontier",
     );
   });
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 5 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateActionabilityMatrix in CURRENT mode WITH a valid frontier additionally records the frontier reverse-link obligation", () => {
+    const out = runMatrix({ current: true, frontier: true });
+    expect(out.validator_id).toBe("actionability-matrix-validator");
+    expect(out.asserted_obligation_ids).toContain(
+      "validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas",
+    );
+    expect(out.asserted_obligation_ids).toContain(
+      "validate_blocking_question_refs_against_validated_question_frontier",
+    );
+  });
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 10 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
-    const matrixBaselineOut = validateActionabilityMatrix({
-      actionabilityMatrix: minimalMatrix(),
-      maturationBaseline: minimalBaseline(),
-      maturationBaselineValidation: baselineValidationInput(),
-    });
-    const matrixCurrentOut = validateActionabilityMatrix({
-      actionabilityMatrix: minimalMatrix(),
-      maturationBaseline: minimalBaseline(),
-      maturationBaselineValidation: baselineValidationInput(),
-      maturationAnswerClaims: {
-        schema_version: "1",
-        session_id: "session-harvest",
-        created_at: now,
-        answer_claims: [],
-      } as ReconstructMaturationAnswerClaimsArtifact,
-      maturationAnswerClaimsValidation: {
-        validation_status: "invalid",
-      } as ReconstructMaturationAnswerClaimsValidationArtifact,
-    });
+    const matrixBaselineOut = runMatrix();
+    // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
+    // frontier reverse-link); it is a superset of the no-frontier current call for recording.
+    const matrixCurrentOut = runMatrix({ current: true, frontier: true });
 
     const harvested = [
       // The baseline fn does not stamp a validator_id field; attribute it by name.
@@ -228,6 +266,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(5);
+    expect(harvestedSet.size).toBe(10);
   });
 });
