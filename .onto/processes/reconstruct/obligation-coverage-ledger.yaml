@@ -289,22 +289,27 @@ pending:
     obligation_id: classify_missing_or_failed_active_validation_artifact_as_required_gate_failure
     coverage_status: pending
     tier: flat
+    note: "slice-13 audit (2026-06-22): NOT_FOUND in validateFailureClassification (post-seed-validation.ts). The validator receives the already-AUTHORED failure_classification artifact and only validates its rows structurally (duplicate_id, failure_kind invalid_enum, question_id/claim_id unknown_id resolution, rationale_missing) — none of which is a registered obligation. It never reads active validation artifacts to detect their missing/failed state nor classifies them as required-gate failures (per contract design.md:2304 that consumption is the failure-classification pipeline/writer's job, not this validator). Whole validator is declared≠wired at the obligation level. Recording deferred pending validator-side classification."
   - validator_id: failure-classification-validator
     obligation_id: classify_missing_or_failed_promoted_maturation_validation_artifact_as_required_gate_failure
     coverage_status: pending
     tier: flat
+    note: "slice-13 audit (2026-06-22): NOT_FOUND. The validator never receives or inspects promoted-maturation validation artifacts (baseline/matrix/frontier validations); it validates authored failure rows only. The promoted-gate classification is a pipeline/writer + handoff-decision-validation concern (design.md:2325-2335), not enforced here. Recording deferred."
   - validator_id: failure-classification-validator
     obligation_id: derive_planned_gate_failure_inputs_from_registry_gate_catalogs_not_hand_maintained_lists
     coverage_status: pending
     tier: flat
+    note: "slice-13 audit (2026-06-22): NOT_FOUND. The validator does not receive the registry (no validation_gate_catalog / planned_validation_gate_catalog input) and does not derive planned gate failure inputs from it. Per design.md:2336-2340 that derivation is the authority for terminal readiness/failure classification but lives upstream (registry-driven derivation), not in this validator. Recording deferred."
   - validator_id: failure-classification-validator
     obligation_id: validate_failure_trigger_against_active_runtime_validation_authorities
     coverage_status: pending
     tier: flat
+    note: "slice-13 audit (2026-06-22): AMBIGUOUS — name broader than code. The validator does resolve failure.question_id against the competency-question-assessment and failure.claim_id against the seed-confirmation-validation (unknown_id), but those are the failure's SUBJECT refs (which question/claim), not its TRIGGER (the missing/failed gate validation artifact the contract names), and only two specific authorities are checked rather than the full active-runtime-validation-authority set. Recording deferred pending a trigger-against-authorities check or name reconciliation."
   - validator_id: failure-classification-validator
     obligation_id: validate_failure_trigger_against_promoted_planned_validation_authorities
     coverage_status: pending
     tier: flat
+    note: "slice-13 audit (2026-06-22): NOT_FOUND. The validator's only inputs are competency-question-assessment and seed-confirmation-validation (both active); it never receives or checks any promoted PLANNED validation authority (maturation baseline/matrix/frontier validations). Recording deferred."
   - validator_id: handoff-decision-validator
     obligation_id: consume_all_active_validation_gate_statuses_emitted_by_runtime
     coverage_status: pending
