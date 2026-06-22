@@ -65,6 +65,7 @@ import type {
   ReviewLensCompletionBarrierArtifact,
   ReviewSessionMetadata,
   ReviewUnitExecutionResult,
+  ReviewUnitKind,
 } from "./artifact-types.js";
 
 /**
@@ -84,6 +85,25 @@ import type {
  * step calls `completeReviewSession`, which lives in the cli layer, so the
  * core-api wrapper runs it when reviewAdvance signals `ready_to_assemble`.
  */
+
+/**
+ * Single-source runtime mirror of the closed {@link ReviewUnitKind} union. The
+ * `satisfies Record<ReviewUnitKind, true>` makes adding an enum member a compile
+ * error here, so a new kind cannot be planned/executed until it is wired into the
+ * result buckets ({@link mergeUnitResultIntoExecutionResult}) and the seat gate.
+ * This is the guard against the silent-drop where an unhandled unit_kind would
+ * leave the frontier permanently stalled with no error.
+ */
+const REVIEW_UNIT_KINDS = {
+  lens: true,
+  issue_artifact: true,
+  deliberation: true,
+  synthesize: true,
+} satisfies Record<ReviewUnitKind, true>;
+
+function isReviewUnitKind(value: string): value is ReviewUnitKind {
+  return Object.prototype.hasOwnProperty.call(REVIEW_UNIT_KINDS, value);
+}
 
 async function readOptionalYamlArtifact<T>(filePath: string): Promise<T | null> {
   if (!(await fileExists(filePath))) return null;
@@ -225,6 +245,11 @@ export async function validateUnitSeatToResult(args: {
   executionPlan?: ReviewExecutionPlan;
 }): Promise<ReviewUnitExecutionResult> {
   const { unit } = args;
+  if (!isReviewUnitKind(unit.unitKind)) {
+    throw new Error(
+      `validateUnitSeatToResult: unit ${unit.unitId} has unknown unit_kind "${unit.unitKind}" (not a ReviewUnitKind); a new kind must be wired into the result buckets and frontier routing before it can be executed.`,
+    );
+  }
   const executionPlan =
     args.executionPlan ?? (await loadExecutionPlan(args.sessionRoot));
   const recordedAt = args.recordedAt ?? isoNow();
@@ -372,8 +397,12 @@ export async function mergeUnitResultIntoExecutionResult(args: {
                 result,
               ),
             };
-      default:
-        return artifact;
+      default: {
+        const exhaustive: never = result.unit_kind;
+        throw new Error(
+          `mergeUnitResultIntoExecutionResult: no execution-result bucket for unit_kind "${String(exhaustive)}" (unit ${result.unit_id}); extend this switch when adding a ReviewUnitKind.`,
+        );
+      }
     }
   })();
 
