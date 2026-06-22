@@ -12,12 +12,15 @@
  *   (3) the registry budget_fields EXACTLY equal the budgets the contract OUTPUT embeds
  *       (and those embedded values equal the exported budget constants — module-internal
  *       consistency), so a hardcoded contract-output edit cannot pass;
- *   (4) run.ts CONSUMES the extracted module — it imports the contract fn AND all three
- *       budget constants from it (symbol-level) and holds NO duplicate local definition —
- *       so the registry/module parity certifies the actual runtime prompt surface, not a
- *       stale fork (onto issue-001);
- *   (5) NO unguarded sibling exists under prompt_projection_contracts — every declared
- *       projection must have a runtime parity check here, or the guard fails.
+ *   (4) the projection child node has NO unguarded extra key beyond payload/policy/budget;
+ *   (5) run.ts CONSUMES the extracted module — it imports the contract fn AND all three
+ *       budget constants from it (symbol-level) AND actually references each budget
+ *       constant outside the import, and holds NO duplicate local definition — so the
+ *       registry/module parity certifies the actual runtime prompt surface, not a stale
+ *       fork (onto issue-001);
+ *   (6) NO unguarded sibling exists under prompt_projection_contracts — the supported
+ *       projection keys ARE the keys of PROJECTION_PARITY_CHECKS, so a sibling cannot be
+ *       silenced without wiring a real parity check.
  * Adding/dropping a field or budget on either side without updating the other fails CI.
  *
  * The pure comparison (evaluatePromptProjectionParity) is exported for the self-test;
@@ -46,10 +49,8 @@ const REGISTRY_REF =
 const RUNTIME_REF = "src/core-runtime/reconstruct/run.ts";
 const MODULE_SPECIFIER = "./competency-projection-contract.js";
 
-/** The only projection sibling with a runtime parity check wired here. Adding a new
- * sibling to the registry's prompt_projection_contracts node REQUIRES adding it (and a
- * module parity check) here, or the guard fails on the unguarded sibling. */
-const SUPPORTED_PROJECTION_KEYS = ["competency_question_assessment"];
+/** The exact child keys a competency_question_assessment node may declare. */
+const COMPETENCY_CHILD_KEYS = ["payload_fields", "policy_fields", "budget_fields"];
 
 /** Symbols run.ts MUST import from the extracted module so its prompt builder cannot
  * silently use different budget numbers (the contract fn + the three budget constants). */
@@ -88,18 +89,152 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-/** Names imported from MODULE_SPECIFIER in run.ts source (the `{ ... }` block). */
-function moduleImportedSymbols(runtimeSource: string): Set<string> {
-  const block = new RegExp(
+/** The `{ ... }` import block from MODULE_SPECIFIER, or null if run.ts does not import it. */
+function moduleImportBlock(runtimeSource: string): string | null {
+  const match = new RegExp(
     `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${MODULE_SPECIFIER.replace(/[.]/g, "\\$&")}["']`,
   ).exec(runtimeSource);
-  if (!block) return new Set();
+  return match ? match[0]! : null;
+}
+
+function importedSymbols(importBlock: string | null): Set<string> {
+  if (!importBlock) return new Set();
+  const inner = /\{([^}]*)\}/.exec(importBlock)?.[1] ?? "";
   return new Set(
-    block[1]!
+    inner
       .split(",")
       .map((name) => name.trim().split(/\s+as\s+/)[0]!.trim())
       .filter((name) => name.length > 0),
   );
+}
+
+type CompetencyParityArgs = {
+  child: Record<string, unknown>;
+  contract: Record<string, unknown>;
+  runtimeBudgets: Record<string, number>;
+};
+
+/** Field/budget parity for the competency_question_assessment projection child. */
+function evaluateCompetencyChildParity(args: CompetencyParityArgs): string[] {
+  const errors: string[] = [];
+  const { child, contract, runtimeBudgets } = args;
+  const payloadKeys = Object.keys(contract);
+  const batchingPolicy = contract.batching_policy;
+  if (batchingPolicy === null || typeof batchingPolicy !== "object") {
+    errors.push("runtime contract: batching_policy is not an object");
+  }
+  const batchingPolicyRecord =
+    batchingPolicy && typeof batchingPolicy === "object"
+      ? (batchingPolicy as Record<string, unknown>)
+      : {};
+  const policyKeys = Object.keys(batchingPolicyRecord);
+
+  // (4) no unguarded extra child key.
+  const extraChildKeys = Object.keys(child).filter(
+    (key) => !COMPETENCY_CHILD_KEYS.includes(key),
+  );
+  if (extraChildKeys.length) {
+    errors.push(
+      `competency_question_assessment has unguarded extra key(s): ${extraChildKeys.join(", ")} (only ${COMPETENCY_CHILD_KEYS.join("/")} are guard-checked)`,
+    );
+  }
+
+  // (1) payload_fields exact-set.
+  if (!isStringArray(child.payload_fields)) {
+    errors.push("registry payload_fields must be a string array");
+  } else {
+    const { missing, extra, duplicates } = setDiff(child.payload_fields, payloadKeys);
+    if (missing.length) errors.push(`payload_fields missing (in contract, not registry): ${missing.join(", ")}`);
+    if (extra.length) errors.push(`payload_fields extra (in registry, not contract): ${extra.join(", ")}`);
+    if (duplicates.length) errors.push(`payload_fields duplicated: ${duplicates.join(", ")}`);
+  }
+
+  // (2) policy_fields exact-set.
+  if (!isStringArray(child.policy_fields)) {
+    errors.push("registry policy_fields must be a string array");
+  } else {
+    const { missing, extra, duplicates } = setDiff(child.policy_fields, policyKeys);
+    if (missing.length) errors.push(`policy_fields missing (in batching_policy, not registry): ${missing.join(", ")}`);
+    if (extra.length) errors.push(`policy_fields extra (in registry, not batching_policy): ${extra.join(", ")}`);
+    if (duplicates.length) errors.push(`policy_fields duplicated: ${duplicates.join(", ")}`);
+  }
+
+  // (3) budget_fields exact-value — certify the CONTRACT OUTPUT (the actual prompt
+  // surface), and cross-check the output equals the exported constants so a hardcoded
+  // contract-output edit or a divergent constant is caught.
+  const contractBudgets: Record<string, unknown> = {
+    prompt_char_limit: contract.prompt_char_limit,
+    source_evidence_excerpt_char_limit: contract.source_evidence_excerpt_char_limit,
+    build_budget_reserve_chars: batchingPolicyRecord.build_budget_reserve_chars,
+  };
+  for (const [key, expected] of Object.entries(runtimeBudgets)) {
+    if (contractBudgets[key] !== expected) {
+      errors.push(
+        `contract OUTPUT ${key} = ${String(contractBudgets[key])} but exported constant = ${expected} (module-internal drift)`,
+      );
+    }
+  }
+  const declaredBudgets = child.budget_fields;
+  if (!declaredBudgets || typeof declaredBudgets !== "object") {
+    errors.push("registry budget_fields must be an object");
+  } else {
+    const declaredBudgetMap = declaredBudgets as Record<string, unknown>;
+    const { missing, extra } = setDiff(
+      Object.keys(declaredBudgetMap),
+      Object.keys(contractBudgets),
+    );
+    if (missing.length) errors.push(`budget_fields missing: ${missing.join(", ")}`);
+    if (extra.length) errors.push(`budget_fields extra: ${extra.join(", ")}`);
+    for (const [key, expected] of Object.entries(contractBudgets)) {
+      if (declaredBudgetMap[key] !== expected) {
+        errors.push(`budget_fields.${key} = ${String(declaredBudgetMap[key])}, contract output = ${String(expected)}`);
+      }
+    }
+  }
+
+  return errors;
+}
+
+/** Per-projection parity checks. The SUPPORTED projection keys ARE the keys of this map,
+ * so a registry sibling cannot be silenced without wiring a real parity check here. */
+const PROJECTION_PARITY_CHECKS: Record<
+  string,
+  (args: CompetencyParityArgs) => string[]
+> = {
+  competency_question_assessment: evaluateCompetencyChildParity,
+};
+
+/** run.ts SSOT-consumption assertions for the extracted competency module. */
+function evaluateRunTsConsumption(runtimeSource: string): string[] {
+  const errors: string[] = [];
+  const importBlock = moduleImportBlock(runtimeSource);
+  const imported = importedSymbols(importBlock);
+  // Strip the import block so "referenced outside the import" is meaningful.
+  const sourceOutsideImport = importBlock
+    ? runtimeSource.replace(importBlock, "")
+    : runtimeSource;
+  for (const symbol of REQUIRED_MODULE_IMPORTS) {
+    if (!imported.has(symbol)) {
+      errors.push(`${RUNTIME_REF} must import ${symbol} from ${MODULE_SPECIFIER}`);
+    }
+  }
+  // Each budget constant must be USED, not just imported (a dead import cannot satisfy
+  // the guard while the prompt builder drifts to a renamed local/literal). Full data-flow
+  // is the behavioral test suite's job; this catches the unused-import bypass.
+  for (const constant of MOVED_BUDGET_CONSTANTS) {
+    if (imported.has(constant) && !sourceOutsideImport.includes(constant)) {
+      errors.push(`${RUNTIME_REF} imports ${constant} but never references it — the prompt builder may have drifted to a local/literal`);
+    }
+  }
+  if (/function\s+competencyQuestionAssessmentProjectionContract\s*\(/.test(runtimeSource)) {
+    errors.push(`${RUNTIME_REF} redefines competencyQuestionAssessmentProjectionContract locally — the extracted module is the single source of truth`);
+  }
+  for (const constant of MOVED_BUDGET_CONSTANTS) {
+    if (new RegExp(`const\\s+${constant}\\s*=`).test(runtimeSource)) {
+      errors.push(`${RUNTIME_REF} redeclares ${constant} locally — import it from ${MODULE_SPECIFIER}`);
+    }
+  }
+  return errors;
 }
 
 export interface PromptProjectionParityInputs {
@@ -118,107 +253,37 @@ export function evaluatePromptProjectionParity(
   inputs: PromptProjectionParityInputs,
 ): string[] {
   const errors: string[] = [];
-  const payloadKeys = Object.keys(inputs.contract);
-  const batchingPolicy = inputs.contract.batching_policy;
-  if (batchingPolicy === null || typeof batchingPolicy !== "object") {
-    errors.push("runtime contract: batching_policy is not an object");
-  }
-  const batchingPolicyRecord =
-    batchingPolicy && typeof batchingPolicy === "object"
-      ? (batchingPolicy as Record<string, unknown>)
-      : {};
-  const policyKeys = Object.keys(batchingPolicyRecord);
 
-  // (5) parent node + no unguarded siblings.
+  // (6) parent node + no unguarded siblings (supported keys == checker-map keys).
   if (!inputs.promptProjectionContracts || typeof inputs.promptProjectionContracts !== "object") {
-    return [...errors, "registry is missing the prompt_projection_contracts node"];
+    return ["registry is missing the prompt_projection_contracts node"];
   }
   const parent = inputs.promptProjectionContracts as Record<string, unknown>;
-  const unguarded = Object.keys(parent).filter(
-    (key) => !SUPPORTED_PROJECTION_KEYS.includes(key),
-  );
+  const supported = Object.keys(PROJECTION_PARITY_CHECKS);
+  const unguarded = Object.keys(parent).filter((key) => !supported.includes(key));
   if (unguarded.length) {
     errors.push(
-      `prompt_projection_contracts has unguarded sibling(s) with no runtime parity check: ${unguarded.join(", ")} (add a module parity check + extend SUPPORTED_PROJECTION_KEYS)`,
+      `prompt_projection_contracts has unguarded sibling(s) with no runtime parity check: ${unguarded.join(", ")} (add a PROJECTION_PARITY_CHECKS entry)`,
     );
   }
-  const declared = parent.competency_question_assessment;
-  if (!declared || typeof declared !== "object") {
-    return [
-      ...errors,
-      "registry is missing prompt_projection_contracts.competency_question_assessment",
-    ];
-  }
-  const declaredNode = declared as Record<string, unknown>;
 
-  // (1) payload_fields exact-set.
-  if (!isStringArray(declaredNode.payload_fields)) {
-    errors.push("registry payload_fields must be a string array");
-  } else {
-    const { missing, extra, duplicates } = setDiff(declaredNode.payload_fields, payloadKeys);
-    if (missing.length) errors.push(`payload_fields missing (in contract, not registry): ${missing.join(", ")}`);
-    if (extra.length) errors.push(`payload_fields extra (in registry, not contract): ${extra.join(", ")}`);
-    if (duplicates.length) errors.push(`payload_fields duplicated: ${duplicates.join(", ")}`);
-  }
-
-  // (2) policy_fields exact-set.
-  if (!isStringArray(declaredNode.policy_fields)) {
-    errors.push("registry policy_fields must be a string array");
-  } else {
-    const { missing, extra, duplicates } = setDiff(declaredNode.policy_fields, policyKeys);
-    if (missing.length) errors.push(`policy_fields missing (in batching_policy, not registry): ${missing.join(", ")}`);
-    if (extra.length) errors.push(`policy_fields extra (in registry, not batching_policy): ${extra.join(", ")}`);
-    if (duplicates.length) errors.push(`policy_fields duplicated: ${duplicates.join(", ")}`);
-  }
-
-  // (3) budget_fields exact-value — certify the CONTRACT OUTPUT (the actual prompt
-  // surface), and cross-check the output equals the exported constants so a hardcoded
-  // contract-output edit or a divergent constant is caught.
-  const contractBudgets: Record<string, unknown> = {
-    prompt_char_limit: inputs.contract.prompt_char_limit,
-    source_evidence_excerpt_char_limit: inputs.contract.source_evidence_excerpt_char_limit,
-    build_budget_reserve_chars: batchingPolicyRecord.build_budget_reserve_chars,
-  };
-  for (const [key, expected] of Object.entries(inputs.runtimeBudgets)) {
-    if (contractBudgets[key] !== expected) {
-      errors.push(
-        `contract OUTPUT ${key} = ${String(contractBudgets[key])} but exported constant = ${expected} (module-internal drift)`,
-      );
+  for (const key of supported) {
+    const child = parent[key];
+    if (!child || typeof child !== "object") {
+      errors.push(`registry is missing prompt_projection_contracts.${key}`);
+      continue;
     }
-  }
-  const declaredBudgets = declaredNode.budget_fields;
-  if (!declaredBudgets || typeof declaredBudgets !== "object") {
-    errors.push("registry budget_fields must be an object");
-  } else {
-    const declaredBudgetMap = declaredBudgets as Record<string, unknown>;
-    const { missing, extra } = setDiff(
-      Object.keys(declaredBudgetMap),
-      Object.keys(contractBudgets),
+    errors.push(
+      ...PROJECTION_PARITY_CHECKS[key]!({
+        child: child as Record<string, unknown>,
+        contract: inputs.contract,
+        runtimeBudgets: inputs.runtimeBudgets,
+      }),
     );
-    if (missing.length) errors.push(`budget_fields missing: ${missing.join(", ")}`);
-    if (extra.length) errors.push(`budget_fields extra: ${extra.join(", ")}`);
-    for (const [key, expected] of Object.entries(contractBudgets)) {
-      if (declaredBudgetMap[key] !== expected) {
-        errors.push(`budget_fields.${key} = ${String(declaredBudgetMap[key])}, contract output = ${String(expected)}`);
-      }
-    }
   }
 
-  // (4) run.ts consumes the extracted module (symbol-level); no duplicate local definition.
-  const imported = moduleImportedSymbols(inputs.runtimeSource);
-  for (const symbol of REQUIRED_MODULE_IMPORTS) {
-    if (!imported.has(symbol)) {
-      errors.push(`${RUNTIME_REF} must import ${symbol} from ${MODULE_SPECIFIER}`);
-    }
-  }
-  if (/function\s+competencyQuestionAssessmentProjectionContract\s*\(/.test(inputs.runtimeSource)) {
-    errors.push(`${RUNTIME_REF} redefines competencyQuestionAssessmentProjectionContract locally — the extracted module is the single source of truth`);
-  }
-  for (const constant of MOVED_BUDGET_CONSTANTS) {
-    if (new RegExp(`const\\s+${constant}\\s*=`).test(inputs.runtimeSource)) {
-      errors.push(`${RUNTIME_REF} redeclares ${constant} locally — import it from ${MODULE_SPECIFIER}`);
-    }
-  }
+  // (5) run.ts consumes the extracted module (symbol-level + used + no duplicate).
+  errors.push(...evaluateRunTsConsumption(inputs.runtimeSource));
 
   return errors;
 }

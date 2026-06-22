@@ -18,6 +18,8 @@ const runtimeBudgets = {
   build_budget_reserve_chars:
     COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,
 };
+// A realistic run.ts: imports the contract fn + the 3 budget constants AND references
+// each budget constant outside the import block (mirrors the real builder usage).
 const GOOD_RUNTIME_SOURCE = [
   "import {",
   "  COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,",
@@ -26,6 +28,8 @@ const GOOD_RUNTIME_SOURCE = [
   "  competencyQuestionAssessmentProjectionContract,",
   '} from "./competency-projection-contract.js";',
   "const policy = competencyQuestionAssessmentProjectionContract();",
+  "const budget = COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT - COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;",
+  "const excerpt = COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT;",
 ].join("\n");
 
 function matchedChild(): Record<string, unknown> {
@@ -101,6 +105,14 @@ describe("prompt-projection parity guard (G8 / INV-SCHEMA-1)", () => {
     expect(errors.some((message) => message.includes("module-internal drift"))).toBe(true);
   });
 
+  it("fails on an unguarded extra key inside the projection child node", () => {
+    const child = { ...matchedChild(), value_policy: ["unguarded"] };
+    const errors = evaluate({
+      promptProjectionContracts: { competency_question_assessment: child },
+    });
+    expect(errors.some((message) => message.includes("unguarded extra key"))).toBe(true);
+  });
+
   it("fails when run.ts redefines the contract function locally", () => {
     const errors = evaluate({
       runtimeSource:
@@ -129,6 +141,27 @@ describe("prompt-projection parity guard (G8 / INV-SCHEMA-1)", () => {
     expect(
       errors.some((message) =>
         message.includes("must import COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT")
+      ),
+    ).toBe(true);
+  });
+
+  it("fails when run.ts imports a budget constant but never references it (dead import)", () => {
+    const errors = evaluate({
+      runtimeSource: [
+        "import {",
+        "  COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,",
+        "  COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT,",
+        "  COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,",
+        "  competencyQuestionAssessmentProjectionContract,",
+        '} from "./competency-projection-contract.js";',
+        "const policy = competencyQuestionAssessmentProjectionContract();",
+        // Uses only 2 of the 3 budgets — PROMPT_CHAR_LIMIT is a dead import.
+        "const excerpt = COMPETENCY_QUESTION_ASSESSMENT_EVIDENCE_EXCERPT_LIMIT + COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;",
+      ].join("\n"),
+    });
+    expect(
+      errors.some((message) =>
+        message.includes("COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT but never references it")
       ),
     ).toBe(true);
   });
