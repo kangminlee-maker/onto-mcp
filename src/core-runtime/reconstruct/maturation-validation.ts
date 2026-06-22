@@ -2790,6 +2790,7 @@ export function validateMaturationAnswerClaims(args: {
 }): ReconstructMaturationAnswerClaimsValidationArtifact {
   const artifact = args.maturationAnswerClaims;
   const violations: ReconstructMaturationValidationViolation[] = [];
+  const assertedObligationIds: string[] = [];
   const questions = questionMap(args.maturationQuestionFrontier);
   const clusters = new Map(
     args.answerSupportLedger.evidence_clusters.map((cluster) => [
@@ -2839,6 +2840,21 @@ export function validateMaturationAnswerClaims(args: {
       subjectId: args.maturationQuestionFrontierValidationRef ?? null,
     }));
   }
+  // G(a) slice 4: record the two answer-claims obligations with a distinct, audited enforcement region,
+  // UNCONDITIONALLY before the per-claim loop so they are proven wired even on a zero-claim input. The
+  // judge pair is the live-enforced #57/#58 gate (insufficient_independent_evidence / fail-closed
+  // prior_validation_invalid in the convergent-source block below) — recording it here closes its
+  // enforced_pending_instrumentation tier. The other three obligations stay parked with ledger audit
+  // notes (the "OR frontier"/"OR authority" alternatives are unimplemented; dimension/purpose refs are
+  // presence-checked, not resolved against the question), rather than being laundered into recorded.
+  assertObligation(
+    assertedObligationIds,
+    "require_convergent_source_evidence_claims_to_have_two_independent_judge_confirmed_supports",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_answer_claim_question_refs",
+  );
   for (const claim of artifact.answer_claims) {
     if (seen.has(claim.answer_claim_id)) {
       violations.push(violation({
@@ -2990,6 +3006,7 @@ export function validateMaturationAnswerClaims(args: {
     validation_results: violations.length === 0
       ? ["maturation_answer_claims_valid"]
       : ["maturation_answer_claims_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

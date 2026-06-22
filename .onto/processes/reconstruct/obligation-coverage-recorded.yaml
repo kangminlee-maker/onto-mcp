@@ -23,3 +23,7 @@ recorded:
     obligation_id: require_source_reconstruct_record_ref_and_sha256_before_maturation_baseline_consumption
   - validator_id: maturation-baseline-validator
     obligation_id: validate_mixed_baseline_rows_preserve_member_material_and_cross_material_lineage
+  - validator_id: maturation-answer-claims-validator
+    obligation_id: require_convergent_source_evidence_claims_to_have_two_independent_judge_confirmed_supports
+  - validator_id: maturation-answer-claims-validator
+    obligation_id: validate_answer_claim_question_refs
