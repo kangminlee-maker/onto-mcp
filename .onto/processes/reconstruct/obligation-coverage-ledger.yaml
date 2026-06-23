@@ -127,6 +127,26 @@ pending:
     coverage_status: pending
     tier: flat
     note: "slice-23 audit (2026-06-23): GATED on optional authority args. The field-by-field preservation check (~755-772, member_capability_lineage_mismatch) is comprehensive and name-matching but only fires inside the `if (args.targetMaterialProfile && args.targetMaterialProfileValidation)` block (~706); both are optional args with no internal guarantee they are supplied (slice-18/22 caller-supplied-optional principle). Recording deferred pending an internal guarantee the target-profile authority is always present (or a conditional-stamp + self-test design)."
+  - validator_id: claim-projection-validator
+    obligation_id: require_blocked_projection_to_have_limitation_or_recovery_refs
+    coverage_status: pending
+    tier: flat
+    note: "slice-23 R1 audit (2026-06-23, codex P2): subset of named scope. The unconditional guard (~924-934, blocked_projection_missing_recovery_ref) keys only on claim_level=='blocked', but material_kind_support rows express blocked via machine_status=='blocked' while keeping claim_level=='not_applicable'. Their blocked-recovery check (~893-912) is gated on the optional requiredValidationStatuses arg, so when it is absent a blocked material-support row can drop its limitation refs and pass. Recording deferred pending the unconditional check also covering material_kind_support machine_status=='blocked'."
+  - validator_id: claim-projection-validator
+    obligation_id: require_each_projection_row_to_cite_runtime_validation_authorities
+    coverage_status: pending
+    tier: flat
+    note: "slice-23 R1 audit (2026-06-23, codex P2): presence-only proxy. The unconditional check (~861-867, required_validation_ref_missing) only requires required_validation_refs to be non-empty; arbitrary strings (e.g. ghost-validation.yaml) pass. Whether the refs are the ACTUAL runtime validation authorities is checked only when the optional expectedRequiredValidationRefs is supplied (~868-892), which the validator does not internally derive. Recording deferred pending a mandatory/derived authority-set match (cf. slice-21 user_confirmation presence-only park)."
+  - validator_id: claim-projection-validator
+    obligation_id: validate_all_public_and_downstream_projection_surfaces_are_present
+    coverage_status: pending
+    tier: flat
+    note: "slice-23 R1 audit (2026-06-23, codex P2): presence-only, not one-per-surface. The check (~949-956, missing_required_surface) verifies each PROJECTION_SURFACE appears at least once, but the contract (design ~1172) requires every status/result/API/MCP/handoff/material-kind-support claim to consume ONE pre-publication projection row. A duplicate surface (two rows, unique ids) passes the presence check. The one-row-per-surface guarantee is enforced only via the gated expectedClaimProjection derived-match. Recording deferred pending an unconditional one-row-per-surface check."
+  - validator_id: claim-projection-validator
+    obligation_id: validate_claim_level_decision_state_and_actionability_claim_alignment
+    coverage_status: pending
+    tier: flat
+    note: "slice-23 R1 audit (2026-06-23, codex P2): one-directional. The unconditional checks (~829-860) enforce decision_state=>actionability_claim (actionable_ready=>ready, actionable_limited=>limited) and claim_level actionable_ready=>actionable_ready decision, but NOT the reverse: a row with decision_state=='continue', claim_level=='maturation_in_progress', actionability_claim=='ready' is accepted. Full alignment is enforced only via the gated expectedClaimProjection derived-match. Recording deferred pending bidirectional alignment (actionability_claim=='ready' requires actionable_ready decision_state)."
   - validator_id: competency-question-assessment-validator
     obligation_id: validate_answer_status_against_active_answerability_contract
     coverage_status: pending

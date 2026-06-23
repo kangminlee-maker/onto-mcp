@@ -573,20 +573,20 @@ export function validateClaimProjection(args: {
   expectedClaimProjection?: ReconstructClaimProjectionArtifact | null;
 }): ReconstructClaimProjectionValidationArtifact {
   const violations: ReconstructClaimProjectionValidationViolation[] = [];
-  // G(a) slice 23 — record the obligations this validator genuinely enforces UNCONDITIONALLY (RECORD
-  // 6/9). The other 3 stay parked (see obligation-coverage-ledger.yaml notes): the operated-system /
-  // incident-governance bounding obligation is PARTIAL (only operated_system_release_health is checked;
-  // rollback_quota_incident_governance is never validated), and the two material-kind-support lineage
-  // obligations (profile_supported-requires-valid-validation and member-row preservation) only fire
-  // inside the `if (args.targetMaterialProfile && args.targetMaterialProfileValidation)` block — gated on
-  // optional authority args the validator has no internal guarantee receives (slice-18/22 principle).
-  // Stamped before any per-row guard so the recorder fires on zero-row input.
+  // G(a) slice 23 — record the obligations this validator FULLY enforces with a complete unconditional
+  // check (RECORD 2/9). claim-projection's other unconditional checks are only PARTIAL — its strong
+  // enforcement is the gated `expectedClaimProjection` derived-match — so 7 stay parked (see obligation-
+  // coverage-ledger.yaml notes): governance-bounding is PARTIAL (rollback_quota_incident_governance
+  // unchecked); two material-kind-support lineage obligations are GATED on optional targetMaterialProfile
+  // +validation args (slice-18/22); and codex R1 parked four more as partial — blocked-recovery keys only
+  // on claim_level==blocked (misses material_kind_support machine_status==blocked), cite-validation-refs
+  // is presence-only without the optional expectedRequiredValidationRefs, surfaces-present is presence-only
+  // (contract design ~1172 wants ONE row per surface), and claim/decision/actionability alignment is
+  // one-directional (a continue+ready row passes). The two RECORDED checks fully enforce their named scope
+  // whenever a material_kind_support row is present (the required surface). Stamped before any per-row
+  // guard so the recorder fires on zero-row input.
   const assertedObligationIds: string[] = [];
   assertObligation(assertedObligationIds, "reject_unwired_material_kind_support_levels_above_profile_supported");
-  assertObligation(assertedObligationIds, "require_blocked_projection_to_have_limitation_or_recovery_refs");
-  assertObligation(assertedObligationIds, "require_each_projection_row_to_cite_runtime_validation_authorities");
-  assertObligation(assertedObligationIds, "validate_all_public_and_downstream_projection_surfaces_are_present");
-  assertObligation(assertedObligationIds, "validate_claim_level_decision_state_and_actionability_claim_alignment");
   assertObligation(assertedObligationIds, "validate_material_kind_support_row_uses_capability_claim_not_actionability_claim");
   const seenIds = new Set<string>();
   const surfaces = new Set<ReconstructClaimProjectionSurface>();

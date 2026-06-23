@@ -1768,47 +1768,44 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // #9 (tamperedField -> conflicting_state), and #5 (droppedFold -> missing_required_ref) with distinct
   // breaching inputs. Building those fixtures inline here would duplicate that file.
 
-  it("validateClaimProjection records its 6 instrumented obligations (slice 23: unwired-support-level reject + blocked-recovery + cite-validation-refs + surfaces-present + claim/decision/actionability alignment + material-kind-support uses-capability-not-actionability) and NOT the 3 parked", () => {
+  it("validateClaimProjection records its 2 instrumented obligations (slice 23: unwired-support-level reject + material-kind-support uses-capability-not-actionability) and NOT the 7 parked", () => {
     const out = runClaimProjection();
     for (const obligation of [
       "reject_unwired_material_kind_support_levels_above_profile_supported",
-      "require_blocked_projection_to_have_limitation_or_recovery_refs",
-      "require_each_projection_row_to_cite_runtime_validation_authorities",
-      "validate_all_public_and_downstream_projection_surfaces_are_present",
-      "validate_claim_level_decision_state_and_actionability_claim_alignment",
       "validate_material_kind_support_row_uses_capability_claim_not_actionability_claim",
     ]) {
       expect(out.asserted_obligation_ids).toContain(obligation);
     }
-    // PARKED (Explore audit, slice 23). PARTIAL: validate_broader_operated_system_release_health_and_
-    // incident_governance_are_bounded (only operated_system_release_health is bounded; the sibling
-    // rollback_quota_incident_governance field is never validated). GATED on optional authority args
-    // (slice-18/22 principle — fire only inside `if (args.targetMaterialProfile && args.targetMaterial
-    // ProfileValidation)`): validate_material_kind_support_profile_supported_requires_valid_target_
-    // material_profile_validation (also INDIRECT — only via the expected-row support_claim match) and
-    // validate_member_capability_rows_preserve_... (the field-by-field lineage preservation). See
-    // obligation-coverage-ledger.yaml.
+    // PARKED (Explore audit + codex R1, slice 23). claim-projection's strong enforcement is the gated
+    // expectedClaimProjection derived-match; its unconditional checks are mostly partial. PARTIAL:
+    // governance-bounding (only operated_system_release_health; rollback_quota_incident_governance never
+    // validated). GATED on optional authority args (slice-18/22): profile_supported-requires-valid-
+    // validation (also INDIRECT) and member-row preservation. codex R1 parked four more partial checks:
+    // blocked-recovery keys only on claim_level==blocked (misses material_kind_support machine_status==
+    // blocked); cite-validation-refs is presence-only without the optional expectedRequiredValidationRefs;
+    // surfaces-present is presence-only (contract design ~1172 wants ONE row per surface); and claim/
+    // decision/actionability alignment is one-directional (continue+ready passes). See ledger notes.
     for (const parked of [
       "validate_broader_operated_system_release_health_and_incident_governance_are_bounded",
       "validate_material_kind_support_profile_supported_requires_valid_target_material_profile_validation",
       "validate_member_capability_rows_preserve_target_ref_profile_snapshot_definition_hash_source_refs_validation_ref_readiness_effect_and_next_action",
+      "require_blocked_projection_to_have_limitation_or_recovery_refs",
+      "require_each_projection_row_to_cite_runtime_validation_authorities",
+      "validate_all_public_and_downstream_projection_surfaces_are_present",
+      "validate_claim_level_decision_state_and_actionability_claim_alignment",
     ]) {
       expect(out.asserted_obligation_ids).not.toContain(parked);
     }
   });
 
-  // ANTI-LAUNDERING (slice 23): each recorded obligation has a non-vacuous, NON-OVERLAPPING enforcement
-  // binding in claim-projection-validation.test.ts. Existing: blocked-recovery ("rejects blocked rows
-  // without recovery or limitation refs" -> blocked_projection_missing_recovery_ref), cite-validation-refs
-  // ("rejects a row that cites no required validation refs" -> required_validation_ref_missing), surfaces-
-  // present ("rejects missing public projection surfaces" -> missing_required_surface), and alignment (two
-  // tests -> decision_state_actionability_mismatch + ready_projection_without_ready_decision). New (slice
-  // 23): unwired-support-level (a member support_claim above profile_supported -> member_capability_lineage
-  // _mismatch, unconditional) and material-kind-support-uses-capability-not-actionability (a material_kind_
-  // support row carrying actionability_claim -> decision_state_actionability_mismatch). Building those
-  // fixtures inline here would duplicate that file.
+  // ANTI-LAUNDERING (slice 23): the two recorded obligations are FULLY enforced whenever a material_kind_
+  // support row is present (the required surface), and each has a NON-OVERLAPPING binding in claim-
+  // projection-validation.test.ts: unwired-support-level (a member support_claim above profile_supported
+  // -> member_capability_lineage_mismatch, unconditional) and material-kind-support-uses-capability-not-
+  // actionability (a material_kind_support row carrying actionability_claim -> decision_state_actionability
+  // _mismatch). Building those fixtures inline here would duplicate that file.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 76 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 72 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1940,6 +1937,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(76);
+    expect(harvestedSet.size).toBe(72);
   });
 });
