@@ -262,8 +262,8 @@ export interface WorkbookStructuralInventory {
      *  over count cap, or any member over the char cap. */
     members_truncated: boolean;
     /** Origin-normalized (minus the used-range start column) profiled column indices the
-     *  sqref covers (parser-computed; design-C §3). Whole-column refs cover all profiled
-     *  columns of the sheet. */
+     *  sqref covers (parser-computed; design-C §3). A whole-column ref (B:B / $B:$D) covers only
+     *  ITS column span (clamped to the profiled window), not the whole sheet (Codex round2 #1). */
     applies_to_columns: number[];
   }>;
   external_links: Array<{ target: string; kind: string }>;
@@ -1360,6 +1360,9 @@ function buildValidationRuleSummary(rule: {
   operator: string;
   formula1: string;
   formula2: string;
+  /** Optional pre-parsed inline-list members (computed once at capture). Reused here so the
+   *  member count is not re-split from formula1 (Codex round2 #4). */
+  members?: { members?: string[]; truncated: boolean };
 }): string {
   const clip = (text: string): string =>
     text.length > XLSX_VALIDATION_FORMULA_CHARS
@@ -1368,14 +1371,13 @@ function buildValidationRuleSummary(rule: {
   // For a type=list INLINE formula1, do NOT echo the declared values here: they are carried by
   // the bounded `members` field (VALIDATION_MEMBER_* caps). Echoing them in rule_summary would be
   // a second, differently-bounded value channel that leaks over-cap declared labels into the
-  // prompt/admission artifact when `members` is suppressed (Codex #2). Summarize as a member
-  // count; a range-ref or non-list formula1 keeps the clipped display.
+  // prompt/admission artifact when `members` is suppressed (Codex round1 #2). Summarize as a
+  // member count (reusing the bounded parse, never a fresh full split); a range-ref or non-list
+  // formula1 keeps the clipped display.
   const renderFormula1 = (f1: string): string => {
-    const t = f1.trim();
-    if (rule.type === "list" && t.startsWith('"')) {
-      const inner = t.replace(/^"/, "").replace(/"$/, "");
-      const count = inner.length === 0 ? 0 : inner.split(",").length;
-      return `list(${count} members)`;
+    if (rule.type === "list" && f1.trim().startsWith('"')) {
+      const m = rule.members ?? parseInlineListMembers(f1);
+      return m.members ? `list(${m.members.length} members)` : "list(capped)";
     }
     return clip(f1);
   };
@@ -1405,6 +1407,12 @@ function parseInlineListMembers(formula1: string): {
   const inner = trimmed.endsWith('"') && trimmed.length >= 2
     ? trimmed.slice(1, -1)
     : trimmed.slice(1);
+  // Bound the work BEFORE splitting (Codex round2 #4): a valid in-cap list is at most
+  // COUNT_CAP × (CHAR_CAP + 1) chars, so anything longer cannot be in-cap — return truncated
+  // without materializing every member of a crafted/huge streamed inline list.
+  if (inner.length > VALIDATION_MEMBER_COUNT_CAP * (VALIDATION_MEMBER_CHAR_CAP + 1)) {
+    return { truncated: true };
+  }
   const members = inner.split(",").map((m) => m.trim());
   if (members.length > VALIDATION_MEMBER_COUNT_CAP) return { truncated: true };
   if (members.some((m) => m.length > VALIDATION_MEMBER_CHAR_CAP)) return { truncated: true };
@@ -1468,12 +1476,15 @@ function createWorksheetParser(args: {
   // design-C: capture each validation's RAW fields during streaming; resolve
   // validation_type / members / applies_to_columns at getResult time, when dimStartCol is
   // final and the profiled-column count is known (so normalization is in the right frame).
+  // design-C (Codex round2 #5): members + the clipped rule_summary are computed at CAPTURE from
+  // the full formula text (which is transient, one validation at a time), so this never retains
+  // raw formula1/formula2 for up to XLSX_DATAVALIDATION_CAP entries until getResult.
   const rawValidations: Array<{
     sqref: string;
     type: string;
-    operator: string;
-    formula1: string;
-    formula2: string;
+    members?: string[];
+    membersTruncated: boolean;
+    rule_summary: string;
   }> = [];
   // Tier-1 exact-text formula dedup, accumulated at extraction time. The key is the
   // resolved formula text (followers resolve to the master verbatim), so a fill-down
@@ -1666,12 +1677,25 @@ function createWorksheetParser(args: {
         if (dvActive) {
           dvActive = false;
           if (rawValidations.length < XLSX_DATAVALIDATION_CAP) {
+            // Parse declared enum members from the FULL formula1 now (bounded by
+            // parseInlineListMembers) and build the clipped rule_summary here, retaining only
+            // bounded results — the raw formula text is not accumulated (Codex round2 #5).
+            const parsedMembers =
+              dvType === "list" ? parseInlineListMembers(dvFormula1) : { truncated: true };
             rawValidations.push({
               sqref: dvSqref,
               type: dvType,
-              operator: dvOperator,
-              formula1: dvFormula1,
-              formula2: dvFormula2,
+              ...(parsedMembers.members !== undefined
+                ? { members: parsedMembers.members }
+                : {}),
+              membersTruncated: parsedMembers.truncated,
+              rule_summary: buildValidationRuleSummary({
+                type: dvType,
+                operator: dvOperator,
+                formula1: dvFormula1,
+                formula2: dvFormula2,
+                members: parsedMembers,
+              }),
             });
           } else {
             capsHit = true;
@@ -1763,35 +1787,21 @@ function createWorksheetParser(args: {
       parser.close();
     },
     getResult: (): ParsedWorksheet => {
-      // design-C authority resolution: now that dimStartCol and the full grid are final,
-      // compute the profiled-column count (same frame as profileSheetRows) and resolve each
-      // captured validation's structured type, normalized covered columns, and inline enum
-      // members. The aggregate site places these verbatim — no further normalization.
+      // design-C authority resolution: members + rule_summary were already resolved at capture
+      // (Codex round2 #5); now that dimStartCol and the full grid are final, compute the
+      // profiled-column count (same frame as profileSheetRows) and the normalized covered columns.
       const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
       const profiledCols = Math.min(colCount, caps.max_columns_profiled);
       const data_validations: ParsedWorksheet["data_validations"] = rawValidations.map(
-        (v) => {
-          const isList = v.type === "list";
-          const parsedMembers = isList
-            ? parseInlineListMembers(v.formula1)
-            : { truncated: true };
-          return {
-            sheet: sheetName,
-            range: v.sqref,
-            rule_summary: buildValidationRuleSummary({
-              type: v.type,
-              operator: v.operator,
-              formula1: v.formula1,
-              formula2: v.formula2,
-            }),
-            validation_type: v.type,
-            ...(parsedMembers.members !== undefined
-              ? { members: parsedMembers.members }
-              : {}),
-            members_truncated: parsedMembers.truncated,
-            applies_to_columns: parseSqrefColumns(v.sqref, dimStartCol, profiledCols),
-          };
-        },
+        (v) => ({
+          sheet: sheetName,
+          range: v.sqref,
+          rule_summary: v.rule_summary,
+          validation_type: v.type,
+          ...(v.members !== undefined ? { members: v.members } : {}),
+          members_truncated: v.membersTruncated,
+          applies_to_columns: parseSqrefColumns(v.sqref, dimStartCol, profiledCols),
+        }),
       );
       return {
       dimensions: declaredDims ?? { rows: maxRow, cols: maxCol },

@@ -470,6 +470,17 @@ function renderSpreadsheetStructuralView(
             `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${cardinality}${distinct}${members})`,
           );
         }
+        // design-C (Codex round2 #3): a list-validated column is low-cardinality → low residual,
+        // so the residual-priority column cap can TRIM it — which would drop its DECLARED enum
+        // from the prompt. Surface any fully-trimmed list-validation enum here so the controlled
+        // vocabulary is never lost to the column cap (data_validations has its own prompt cap).
+        const survivingIdx = new Set(data.columns.map((col) => col.index));
+        for (const dv of sheetValidations) {
+          if (dv.applies_to_columns.some((i) => survivingIdx.has(i))) continue;
+          lines.push(
+            `  - (declared enum on trimmed column ${dv.applies_to_columns.join(",")}): enum=[${dv.members!.join(", ")}]`,
+          );
+        }
       }
     }
   }

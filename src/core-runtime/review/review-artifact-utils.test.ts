@@ -310,6 +310,64 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     expect((rendered.match(/enum=/g) ?? []).length).toBe(1);
   });
 
+  it("surfaces a declared enum even when its low-residual column is trimmed by the column cap (Codex round2 #3)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const sheetName = "Wide";
+    const N = 65; // > max_columns_per_sheet (64)
+    // Columns 0..63 are maximal-residual (ratio 1.0); the LAST column is low-residual, so the
+    // residual-priority cap trims it — and it is the list-validated one (the common case: a
+    // controlled-vocab column is low-cardinality → low residual → first to be trimmed).
+    const columns = Array.from({ length: N }, (_, i) => ({
+      name: `c${i}`,
+      index: i,
+      inferred_type: "string" as const,
+      non_empty_ratio: 1,
+      distinct_count: i < N - 1 ? 10 : 2,
+      distinct_count_is_estimate: false,
+      non_empty_count: i < N - 1 ? 10 : 100,
+    }));
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: [{ ...base.sheets[0]!, name: sheetName }],
+      per_sheet_data: [
+        {
+          ...base.per_sheet_data[0]!,
+          sheet: sheetName,
+          layout_kind: "tabular",
+          header_rows: [0],
+          columns,
+        },
+      ],
+      data_validations: [
+        {
+          sheet: sheetName,
+          range: "BM2:BM100",
+          rule_summary: "type=list",
+          validation_type: "list",
+          members: ["x", "y"],
+          members_truncated: false,
+          applies_to_columns: [N - 1],
+        },
+      ],
+    };
+    const xlsx = path.join(root, "wide-dv.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+    // c64's own column line is dropped by the 64-column cap, but its DECLARED enum must still
+    // reach the prompt via the trimmed-column disclosure (not lost to the cap).
+    expect(rendered).not.toContain("c64 (");
+    expect(rendered).toContain("declared enum on trimmed column 64");
+    expect(rendered).toContain("enum=[x, y]");
+  });
+
   it("does not surface count-only tables/merged_ranges trims as bounded samples (A3 / RC-2)", async () => {
     const root = await makeTmpDir();
     const seed = path.join(root, "seed.csv");
