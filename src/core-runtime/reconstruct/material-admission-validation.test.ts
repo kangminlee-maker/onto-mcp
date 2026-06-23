@@ -115,6 +115,7 @@ function sourcePurposeValidation(): ReconstructSourcePurposeCandidatesValidation
     selected_purpose_frame_id: "frame-1",
     confirmation_required: false,
     validation_results: ["source_purpose_candidates_valid"],
+    asserted_obligation_ids: [],
     violations: [],
   };
 }

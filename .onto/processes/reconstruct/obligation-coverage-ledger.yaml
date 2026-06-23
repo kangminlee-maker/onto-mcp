@@ -753,42 +753,22 @@ pending:
     obligation_id: derive_confirmation_required_from_selected_purpose_source_status
     coverage_status: pending
     tier: flat
+    note: "slice-24 audit (2026-06-23): PROJECTION-ONLY. The validator derives confirmation_required (~420-423: selected.purpose_source_status != explicit_source_declared) and emits it in the return object (~434); there is no violation and no breaching input that trips one, so there is no non-vacuous enforcement binding to record. Contract design.md:405 frames it as a derived runtime predicate field, not a check. Recording deferred pending a downstream consumer-validator that gates on it (cf. purpose-confirmation slice-11, which records consuming confirmation_required)."
   - validator_id: source-purpose-candidates-validator
     obligation_id: expose_selected_purpose_candidate_id_and_frame_id_for_seed_projection_equivalence
     coverage_status: pending
     tier: flat
-  - validator_id: source-purpose-candidates-validator
-    obligation_id: preserve_contradictions_in_candidate_status_or_limitations
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-purpose-candidates-validator
-    obligation_id: reject_p5_only_primary_purpose_candidate
-    coverage_status: pending
-    tier: flat
+    note: "slice-24 audit (2026-06-23): PROJECTION-ONLY. selected_purpose_candidate_id and selected_purpose_frame_id are computed and emitted in the return object (~420,432-433) with no violation; nothing a breaching input trips. Contract design.md:408 asks that they be 'explicit so seed validation can prove projection equivalence' — the equivalence check belongs to seed validation, not here. Recording deferred to the seed-validation consumer."
   - validator_id: source-purpose-candidates-validator
     obligation_id: require_exactly_one_primary_purpose_candidate_when_selected
     coverage_status: pending
     tier: flat
-  - validator_id: source-purpose-candidates-validator
-    obligation_id: require_mixed_purpose_frame_elements_to_carry_member_scope_refs_member_target_material_kind_member_source_refs_and_cross_material_ref_refs_or_validated_exclusion
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-purpose-candidates-validator
-    obligation_id: require_non_p1_primary_to_have_two_evidence_kinds_and_one_p2_p3_or_p4
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-purpose-candidates-validator
-    obligation_id: require_purpose_adequacy_frame_elements_to_have_surface_dimension_facet_and_evidence_or_limitation_state
-    coverage_status: pending
-    tier: flat
+    note: "slice-24 audit (2026-06-23): superset-blind-to-discriminator (slice-20 pattern). The code enforces exactly-one-primary UNCONDITIONALLY (~173-186: missing_primary_purpose if 0, multiple_primary_purpose if >1), but the contract (design.md:390) scopes the rule to 'exactly one primary candidate WHEN THE PURPOSE IS SELECTED'. The validator never reads the selected/not-selected discriminator and has no dedicated when-selected violation code, so it validates a broader unconditional rule rather than the obligation's named scope. Recording deferred pending a selected-scoped enforcer (or contract re-scoping to unconditional)."
   - validator_id: source-purpose-candidates-validator
     obligation_id: require_purpose_candidate_status_field_to_be_purpose_source_status
     coverage_status: pending
     tier: flat
-  - validator_id: source-purpose-candidates-validator
-    obligation_id: validate_purpose_candidate_evidence_refs_against_source_observations
-    coverage_status: pending
-    tier: flat
+    note: "slice-24 audit (2026-06-23): PARTIAL. The only enforcement is the artifact-level alias-field rejection (~153-160, alias_field_present: rejects source_purpose_status/inference_status keys). There is no per-candidate check that candidate.purpose_source_status is a valid enum value (PURPOSE_SOURCE_STATUSES), which the obligation name ('candidate status field to be purpose_source_status') implies. Recording deferred pending per-candidate purpose_source_status enum validation."
   - validator_id: source-safety-ledger-validator
     obligation_id: preserve_prompt_context_evidence_support_public_output_replay_and_material_claim_consumption_boundaries
     coverage_status: pending

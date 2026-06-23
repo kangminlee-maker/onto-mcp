@@ -148,6 +148,22 @@ export function validateSourcePurposeCandidates(args: {
 }): ReconstructSourcePurposeCandidatesValidationArtifact {
   const artifact = args.sourcePurposeCandidates;
   const violations: ReconstructSourcePurposeValidationViolation[] = [];
+  // G(a) slice 24 — record the obligations this validator FULLY enforces with a distinct violation
+  // (RECORD 6/10). The other 4 stay parked (see obligation-coverage-ledger.yaml notes): derive_
+  // confirmation_required and expose_selected_..._id are PROJECTION-ONLY (computed into the return
+  // object with no violation → no breaching binding); require_purpose_candidate_status_field_to_be_
+  // purpose_source_status is PARTIAL (only the artifact-level alias-field rejection is enforced, no
+  // per-candidate purpose_source_status enum check); and require_exactly_one_primary_..._when_selected
+  // is enforced UNCONDITIONALLY (blind to the "when selected" discriminator the contract scopes it to —
+  // slice-20 superset-blind park). Stamped before any per-candidate guard so the recorder fires on
+  // zero-candidate input.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "preserve_contradictions_in_candidate_status_or_limitations");
+  assertObligation(assertedObligationIds, "reject_p5_only_primary_purpose_candidate");
+  assertObligation(assertedObligationIds, "require_mixed_purpose_frame_elements_to_carry_member_scope_refs_member_target_material_kind_member_source_refs_and_cross_material_ref_refs_or_validated_exclusion");
+  assertObligation(assertedObligationIds, "require_non_p1_primary_to_have_two_evidence_kinds_and_one_p2_p3_or_p4");
+  assertObligation(assertedObligationIds, "require_purpose_adequacy_frame_elements_to_have_surface_dimension_facet_and_evidence_or_limitation_state");
+  assertObligation(assertedObligationIds, "validate_purpose_candidate_evidence_refs_against_source_observations");
   const evidenceIndex = observationEvidenceIndex(args.sourceObservations);
   const rawArtifact = artifact as unknown as Record<string, unknown>;
   if ("source_purpose_status" in rawArtifact || "inference_status" in rawArtifact) {
@@ -435,6 +451,7 @@ export function validateSourcePurposeCandidates(args: {
     validation_results: violations.length === 0
       ? ["source_purpose_candidates_valid"]
       : ["source_purpose_candidates_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

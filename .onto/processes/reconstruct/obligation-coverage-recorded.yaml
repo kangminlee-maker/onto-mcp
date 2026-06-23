@@ -147,3 +147,15 @@ recorded:
     obligation_id: reject_unwired_material_kind_support_levels_above_profile_supported
   - validator_id: claim-projection-validator
     obligation_id: validate_material_kind_support_row_uses_capability_claim_not_actionability_claim
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: preserve_contradictions_in_candidate_status_or_limitations
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: reject_p5_only_primary_purpose_candidate
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: require_mixed_purpose_frame_elements_to_carry_member_scope_refs_member_target_material_kind_member_source_refs_and_cross_material_ref_refs_or_validated_exclusion
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: require_non_p1_primary_to_have_two_evidence_kinds_and_one_p2_p3_or_p4
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: require_purpose_adequacy_frame_elements_to_have_surface_dimension_facet_and_evidence_or_limitation_state
+  - validator_id: source-purpose-candidates-validator
+    obligation_id: validate_purpose_candidate_evidence_refs_against_source_observations

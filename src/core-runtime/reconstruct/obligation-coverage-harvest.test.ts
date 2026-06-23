@@ -10,6 +10,7 @@ import type {
   ReconstructAnswerSupportLedgerValidationArtifact,
   ReconstructMaturationContinuationDecisionValidationArtifact,
   ReconstructClaimProjectionValidationArtifact,
+  ReconstructSourcePurposeCandidatesValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructMaterialAdmissionLedgerValidationArtifact,
   ReconstructMaturationConvergenceLedgerValidationArtifact,
@@ -49,7 +50,10 @@ import {
   validateCompetencyQuestionAssessment,
 } from "./post-seed-validation.js";
 import { validateReconstructRunControl } from "./run-control-validation.js";
-import { validatePurposeConfirmation } from "./purpose-authority-validation.js";
+import {
+  validatePurposeConfirmation,
+  validateSourcePurposeCandidates,
+} from "./purpose-authority-validation.js";
 import { validateMaterialAdmissionLedger } from "./material-admission-validation.js";
 import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
 import { validateHandoffDecision } from "./terminal-validation.js";
@@ -895,6 +899,27 @@ function runClaimProjection(): ReconstructClaimProjectionValidationArtifact {
       session_id: "session-harvest",
       source_authority_refs: [],
       projection_rows: [],
+    } as never,
+  });
+}
+
+function runSourcePurposeCandidates(): ReconstructSourcePurposeCandidatesValidationArtifact {
+  // The six recorded obligations are stamped unconditionally at the top (before the per-candidate loop),
+  // so a zero-candidate artifact reaches every recorder while the function runs to completion.
+  return validateSourcePurposeCandidates({
+    sourcePurposeCandidates: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      target_material_kind: "code",
+      purpose_candidates: [],
+      selection: { primary_purpose_candidate_id: null },
+    } as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
     } as never,
   });
 }
@@ -1805,7 +1830,45 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // actionability (a material_kind_support row carrying actionability_claim -> decision_state_actionability
   // _mismatch). Building those fixtures inline here would duplicate that file.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 72 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateSourcePurposeCandidates records its 6 instrumented obligations (slice 24: contradiction-preserve + p5-only-reject + mixed-lineage + non-P1-evidence + frame-elements + evidence-refs) and NOT the 4 parked", () => {
+    const out = runSourcePurposeCandidates();
+    for (const obligation of [
+      "preserve_contradictions_in_candidate_status_or_limitations",
+      "reject_p5_only_primary_purpose_candidate",
+      "require_mixed_purpose_frame_elements_to_carry_member_scope_refs_member_target_material_kind_member_source_refs_and_cross_material_ref_refs_or_validated_exclusion",
+      "require_non_p1_primary_to_have_two_evidence_kinds_and_one_p2_p3_or_p4",
+      "require_purpose_adequacy_frame_elements_to_have_surface_dimension_facet_and_evidence_or_limitation_state",
+      "validate_purpose_candidate_evidence_refs_against_source_observations",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (Explore audit, slice 24). PROJECTION-ONLY (a value DERIVED/EXPOSED in the return with no
+    // violation -> no breaching binding): derive_confirmation_required_from_selected_purpose_source_status
+    // and expose_selected_purpose_candidate_id_and_frame_id_for_seed_projection_equivalence. AMBIGUOUS /
+    // superset-blind: require_exactly_one_primary_purpose_candidate_when_selected (code enforces exactly-
+    // one-primary unconditionally; contract design.md:390 scopes it to "when selected"; no discriminator
+    // read). PARTIAL: require_purpose_candidate_status_field_to_be_purpose_source_status (only the artifact-
+    // level alias-field rejection; no per-candidate purpose_source_status enum check). See ledger notes.
+    for (const parked of [
+      "derive_confirmation_required_from_selected_purpose_source_status",
+      "expose_selected_purpose_candidate_id_and_frame_id_for_seed_projection_equivalence",
+      "require_exactly_one_primary_purpose_candidate_when_selected",
+      "require_purpose_candidate_status_field_to_be_purpose_source_status",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (slice 24): each recorded obligation has a non-vacuous, NON-OVERLAPPING enforcement
+  // binding already in purpose-authority-validation.test.ts: contradiction_unresolved (contradicting_
+  // source_refs without limitation_backed/unresolved), p5_only_primary (a primary with all-P5 evidence),
+  // mixed_lineage_missing (a mixed-target element missing member lineage), insufficient_inferred_evidence
+  // (a non-P1 primary with <2 evidence kinds / no P2-P4), required_element_missing (a frame element missing
+  // surface/dimension/facet or evidence-or-limitation state), and unknown_observation_ref (a candidate
+  // evidence ref that does not resolve to source-observations). Building those fixtures inline here would
+  // duplicate that file.
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 78 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1830,6 +1893,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const answerSupportLedgerOut = runAnswerSupportLedger();
     const continuationDecisionOut = runMaturationContinuationDecision();
     const claimProjectionOut = runClaimProjection();
+    const sourcePurposeCandidatesOut = runSourcePurposeCandidates();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -1921,6 +1985,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "claim-projection-validator",
         obligation_id,
       })),
+      ...sourcePurposeCandidatesOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "source-purpose-candidates-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -1937,6 +2005,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(72);
+    expect(harvestedSet.size).toBe(78);
   });
 });
