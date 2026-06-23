@@ -142,6 +142,4 @@ recorded:
   - validator_id: maturation-continuation-decision-validator
     obligation_id: require_revision_blocker_refs_in_continuation_limitation_refs
   - validator_id: maturation-continuation-decision-validator
-    obligation_id: validate_limitation_refs_and_row_scope_for_actionable_limited_state
-  - validator_id: maturation-continuation-decision-validator
     obligation_id: validate_revision_blocker_limitation_refs_against_validated_revision_proposal
