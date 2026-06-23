@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructSourceObservationsArtifact,
   ReconstructSourceSafetyAuthorizationState,
@@ -392,6 +393,28 @@ export function validateSourceSafetyLedger(args: {
 }): ReconstructSourceSafetyLedgerValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   const violations: ReconstructSourceSafetyValidationViolation[] = [];
+  // G(a) deferred-7 slice 1: record the four obligations this validator fully enforces. Stamped here,
+  // before the per-row loop, so they fire on zero-row input (the enforcement sites exist unconditionally).
+  // asserted_obligation_ids is in-memory-only telemetry (Stage 0 #145): it is stripped at the write
+  // boundary and excluded from reuseMatchArtifactHash, so stamping this reuse-hashed validation artifact
+  // does not rotate reuse provenance. PARKED: preserve_..._consumption_boundaries — the only enforcement
+  // (the intended_consumption enum + per-consumption required rows) is owned by
+  // validate_every_observation_has_source_safety_rows_for_each_intended_consumption; there is no
+  // independent "no substitution" check, so it cannot bind non-overlappingly.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_every_observation_has_source_safety_rows_for_each_intended_consumption",
+  );
+  assertObligation(assertedObligationIds, "validate_exactly_four_canonical_source_safety_axes");
+  assertObligation(
+    assertedObligationIds,
+    "validate_source_safety_subject_refs_against_observed_source_refs",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_visibility_tier_is_derived_not_independent_authority",
+  );
   const rawLedger = args.sourceSafetyLedger as unknown;
   if (!isRecord(rawLedger) || !Array.isArray(rawLedger.safety_rows)) {
     violations.push(violation({
@@ -565,6 +588,7 @@ export function validateSourceSafetyLedger(args: {
     validation_results: violations.length === 0
       ? ["source_safety_ledger_valid"]
       : ["source_safety_ledger_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
