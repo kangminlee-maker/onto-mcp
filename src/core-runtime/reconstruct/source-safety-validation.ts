@@ -393,19 +393,20 @@ export function validateSourceSafetyLedger(args: {
 }): ReconstructSourceSafetyLedgerValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   const violations: ReconstructSourceSafetyValidationViolation[] = [];
-  // G(a) deferred-7 slice 1: record the four obligations this validator fully enforces. Stamped here,
+  // G(a) deferred-7 slice 1: record the three obligations this validator fully enforces. Stamped here,
   // before the per-row loop, so they fire on zero-row input (the enforcement sites exist unconditionally).
   // asserted_obligation_ids is in-memory-only telemetry (Stage 0 #145): it is stripped at the write
   // boundary and excluded from reuseMatchArtifactHash, so stamping this reuse-hashed validation artifact
-  // does not rotate reuse provenance. PARKED: preserve_..._consumption_boundaries — the only enforcement
-  // (the intended_consumption enum + per-consumption required rows) is owned by
-  // validate_every_observation_has_source_safety_rows_for_each_intended_consumption; there is no
-  // independent "no substitution" check, so it cannot bind non-overlappingly.
+  // does not rotate reuse provenance. PARKED (see obligation-coverage-ledger.yaml):
+  //  - preserve_..._consumption_boundaries: no independent "no substitution" enforcer (the per-consumption
+  //    required rows are the only related check), so it cannot bind non-overlappingly.
+  //  - validate_every_observation_has_source_safety_rows_for_each_intended_consumption (codex #147 P1):
+  //    the required-row pass only proves each source_safety:<obs>:<consumption> ID STRING is present; it
+  //    never binds that ID suffix to the row's visibility_derivation.intended_consumption (the field
+  //    deriveSourceSafetyVisibilityTier uses). So a public_output-ID row can carry prompt_context
+  //    derivation and a tier derived for the wrong consumption, pass, and mislead downstream lookup-by-ID.
+  //    PARK pending an ID-suffix ↔ intended_consumption binding.
   const assertedObligationIds: string[] = [];
-  assertObligation(
-    assertedObligationIds,
-    "validate_every_observation_has_source_safety_rows_for_each_intended_consumption",
-  );
   assertObligation(assertedObligationIds, "validate_exactly_four_canonical_source_safety_axes");
   assertObligation(
     assertedObligationIds,

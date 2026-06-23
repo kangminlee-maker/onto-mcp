@@ -2293,32 +2293,35 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // not a compared governing_snapshot field, or (canonical URIs) name a registry policy the rebuild
   // never reads (see obligation-coverage-ledger.yaml notes).
 
-  it("validateSourceSafetyLedger records its 4 instrumented obligations (deferred-7 slice 1) and NOT the parked consumption-boundaries obligation", () => {
+  it("validateSourceSafetyLedger records its 3 instrumented obligations (deferred-7 slice 1) and NOT the two parked obligations", () => {
     const out = runSourceSafetyLedger();
     for (const obligation of [
-      "validate_every_observation_has_source_safety_rows_for_each_intended_consumption",
       "validate_exactly_four_canonical_source_safety_axes",
       "validate_source_safety_subject_refs_against_observed_source_refs",
       "validate_visibility_tier_is_derived_not_independent_authority",
     ]) {
       expect(out.asserted_obligation_ids).toContain(obligation);
     }
-    // PARKED: the consumption-boundaries obligation has no independent enforcer — its only enforcement
-    // (per-consumption required rows) is owned by the every-observation obligation above.
-    expect(out.asserted_obligation_ids).not.toContain(
+    // PARKED: consumption-boundaries has no independent no-substitution enforcer; and the every-observation
+    // required-row check (codex #147 P1) is a weak proxy — it proves the safety_row_id STRING is present
+    // but never binds that ID's consumption suffix to the row's visibility_derivation.intended_consumption.
+    for (const parked of [
       "preserve_prompt_context_evidence_support_public_output_replay_and_material_claim_consumption_boundaries",
-    );
+      "validate_every_observation_has_source_safety_rows_for_each_intended_consumption",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
   });
 
-  // ANTI-LAUNDERING (deferred-7 slice 1): each of the 4 recorded obligations has a non-vacuous, ISOLATED
-  // enforcement binding in source-safety-validation.test.ts (and the validator's own checks): a missing
-  // per-consumption row trips source_observation_safety_row_missing; a wrong/extra canonical axis set
-  // trips visibility_axis_set_invalid; an unobserved subject_ref trips source_observation_missing; a
-  // valid-but-non-derived visibility_tier trips visibility_derivation_mismatch — each with a clean variant
-  // that clears it. (asserted_obligation_ids is in-memory-only telemetry — its byte-invariance to reuse
-  // provenance is proven in artifact-io.test.ts [channel 2] and run.test.ts [channel 1, reuseMatchArtifactHash].)
+  // ANTI-LAUNDERING (deferred-7 slice 1): each of the 3 recorded obligations has a non-vacuous, ISOLATED
+  // enforcement binding in source-safety-validation.test.ts (and the validator's own checks): a wrong/extra
+  // canonical axis set trips visibility_axis_set_invalid; an unobserved subject_ref trips
+  // source_observation_missing; a valid-but-non-derived visibility_tier trips visibility_derivation_mismatch
+  // — each with a clean variant that clears it. (asserted_obligation_ids is in-memory-only telemetry — its
+  // byte-invariance to reuse provenance is proven in artifact-io.test.ts [channel 2] and run.test.ts
+  // [channel 1, reuseMatchArtifactHash].)
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 104 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 103 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2480,6 +2483,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(104);
+    expect(harvestedSet.size).toBe(103);
   });
 });

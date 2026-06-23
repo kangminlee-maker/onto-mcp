@@ -204,8 +204,6 @@ recorded:
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: selected_pattern_catalog_versions_or_snapshots_are_recorded
   - validator_id: source-safety-ledger-validator
-    obligation_id: validate_every_observation_has_source_safety_rows_for_each_intended_consumption
-  - validator_id: source-safety-ledger-validator
     obligation_id: validate_exactly_four_canonical_source_safety_axes
   - validator_id: source-safety-ledger-validator
     obligation_id: validate_source_safety_subject_refs_against_observed_source_refs
