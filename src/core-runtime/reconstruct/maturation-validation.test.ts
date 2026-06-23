@@ -597,6 +597,7 @@ function emptyAnswerSupportValidation(): ReconstructAnswerSupportLedgerValidatio
     evidence_cluster_count: 0,
     supported_question_count: 0,
     validation_results: ["answer_support_ledger_valid"],
+    asserted_obligation_ids: [],
     violations: [],
   };
 }
@@ -2367,6 +2368,180 @@ describe("maturation validation", () => {
     expect(validation.validation_status).toBe("invalid");
     expect(validation.violations.map((violation) => violation.code))
       .toContain("missing_required_ref");
+  });
+
+  // G(a) slice 21 ENFORCEMENT BINDINGS — non-vacuous, NON-OVERLAPPING breaching inputs for four of the
+  // five recorded obligations (frontier-triggered re-entry is bound by "rejects answer support that
+  // consumes a delta observation missing from re-entry-approved ids" above). Each trips its own violation
+  // code on a breach and clears it on a clean variant.
+  function answerSupportLedgerWith(
+    cluster: ReconstructAnswerSupportLedgerArtifact["evidence_clusters"][number],
+  ): ReconstructAnswerSupportLedgerArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      evidence_clusters: [cluster],
+      directive_author: { owner: "host_llm", author_id: "test-author" },
+    };
+  }
+
+  it("ENFORCEMENT BINDING (slice 21 validate_evidence_cluster_question_refs): a cluster question_ref that does not resolve to the validated frontier trips unknown_id; a resolving ref clears it", () => {
+    const { frontier, frontierValidation } = frontierScenario();
+    const observations = sourceObservations(["src/feature.ts"]);
+    const safety = sourceSafetyAuthority(observations);
+    const baseArgs = {
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      sourceObservations: observations,
+      ...safety,
+    };
+    const cluster = (questionRef: string) => ({
+      evidence_cluster_id: "cluster-source-evidence",
+      question_refs: [questionRef],
+      support_mode: "direct_authority" as const,
+      proposed_answer_summary: "Observed source supports the feature object.",
+      evidence_refs: [evidence],
+      proof_refs: [],
+      user_confirmation_refs: [],
+      authority_response_refs: [],
+      independence_basis: "single direct source authority",
+      contradiction_refs: [],
+      limitation_refs: [],
+    });
+    const breach = validateAnswerSupportLedger({
+      ...baseArgs,
+      answerSupportLedger: answerSupportLedgerWith(cluster("mq-ghost")),
+    });
+    expect(breach.violations.some((v) => v.code === "unknown_id")).toBe(true);
+    const clean = validateAnswerSupportLedger({
+      ...baseArgs,
+      answerSupportLedger: answerSupportLedgerWith(cluster("mq-feature-object")),
+    });
+    expect(clean.violations.some((v) => v.code === "unknown_id")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (slice 21 validate_user_confirmation_support_mode): a user_confirmation cluster missing confirmation authority trips support_mode_missing_authority; valid refs + confirmation clear it", () => {
+    const { frontier, frontierValidation } = frontierScenario();
+    const baseArgs = {
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      sourceObservations: sourceObservations(["src/feature.ts"]),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+    };
+    const cluster = (userConfirmationRefs: string[]) => ({
+      evidence_cluster_id: "cluster-user-confirmation",
+      question_refs: ["mq-feature-object"],
+      support_mode: "user_confirmation" as const,
+      proposed_answer_summary: "User confirmed the feature object purpose.",
+      evidence_refs: [],
+      proof_refs: [],
+      user_confirmation_refs: userConfirmationRefs,
+      authority_response_refs: [],
+      independence_basis: "user confirmation authority",
+      contradiction_refs: [],
+      limitation_refs: [],
+    });
+    const breach = validateAnswerSupportLedger({
+      ...baseArgs,
+      answerSupportLedger: answerSupportLedgerWith(cluster([])),
+    });
+    expect(breach.violations.some((v) => v.code === "support_mode_missing_authority")).toBe(true);
+    const clean = validateAnswerSupportLedger({
+      ...baseArgs,
+      answerSupportLedger: answerSupportLedgerWith(cluster(["user-confirmation-1"])),
+    });
+    expect(clean.violations.some((v) => v.code === "support_mode_missing_authority")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (slice 21 require_two_independent_evidence_refs_for_convergent_source_evidence): a convergent cluster with one evidence record trips insufficient_independent_evidence; two independent records clear it", () => {
+    const { frontier, frontierValidation } = frontierScenario();
+    const observations = sourceObservations(["src/feature.ts", "src/other.ts"]);
+    const safety = sourceSafetyAuthority(observations);
+    const secondEvidence: ReconstructEvidenceRef = {
+      observation_id: "obs-code-2",
+      target_material_kind: "code",
+      source_ref: "src/other.ts",
+      location: "src/other.ts",
+    };
+    const baseArgs = {
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      sourceObservations: observations,
+      ...safety,
+    };
+    const cluster = (evidenceRefs: ReconstructEvidenceRef[]) => ({
+      evidence_cluster_id: "cluster-convergent",
+      question_refs: ["mq-feature-object"],
+      support_mode: "convergent_source_evidence" as const,
+      proposed_answer_summary: "Convergent evidence supports the feature object.",
+      evidence_refs: evidenceRefs,
+      proof_refs: [],
+      user_confirmation_refs: [],
+      authority_response_refs: [],
+      independence_basis: "two independent source records",
+      contradiction_refs: [],
+      limitation_refs: [],
+    });
+    const breach = validateAnswerSupportLedger({
+      ...baseArgs,
+      answerSupportLedger: answerSupportLedgerWith(cluster([evidence])),
+    });
+    expect(breach.violations.some((v) => v.code === "insufficient_independent_evidence")).toBe(true);
+    const clean = validateAnswerSupportLedger({
+      ...baseArgs,
+      answerSupportLedger: answerSupportLedgerWith(cluster([evidence, secondEvidence])),
+    });
+    expect(clean.violations.some((v) => v.code === "insufficient_independent_evidence")).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (slice 21 require_observation_specific_evidence_support_source_safety_row...): evidence whose observation lacks a sufficient/replay-allowed safety row trips missing_required_ref; a proper row clears it", () => {
+    const { frontier, frontierValidation } = frontierScenario();
+    const observations = sourceObservations(["src/feature.ts"]);
+    const cluster = {
+      evidence_cluster_id: "cluster-source-evidence",
+      question_refs: ["mq-feature-object"],
+      support_mode: "direct_authority" as const,
+      proposed_answer_summary: "Observed source supports the feature object.",
+      evidence_refs: [evidence],
+      proof_refs: [],
+      user_confirmation_refs: [],
+      authority_response_refs: [],
+      independence_basis: "single direct source authority",
+      contradiction_refs: [],
+      limitation_refs: [],
+    };
+    const baseArgs = {
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      sourceObservations: observations,
+      answerSupportLedger: answerSupportLedgerWith(cluster),
+    };
+    // breach: a present-but-empty safety ledger has no observation-specific row for obs-code-1.
+    const breach = validateAnswerSupportLedger({
+      ...baseArgs,
+      ...sourceSafetyAuthority(sourceObservations([])),
+    });
+    expect(breach.violations.some((v) => v.code === "missing_required_ref")).toBe(true);
+    // clean: a proper safety ledger carries the sufficient/replay-allowed rows for the cited observation.
+    const clean = validateAnswerSupportLedger({
+      ...baseArgs,
+      ...sourceSafetyAuthority(observations),
+    });
+    expect(clean.violations.some((v) => v.code === "missing_required_ref")).toBe(false);
   });
 
   it("does not close material questions with frontier hints as answer support", () => {

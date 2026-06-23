@@ -127,3 +127,13 @@ recorded:
     obligation_id: require_rationale_and_evidence_refs_for_each_disposition
   - validator_id: candidate-disposition-validator
     obligation_id: validate_promoted_candidate_target_seed_refs_are_declared_for_promoted_dispositions
+  - validator_id: answer-support-ledger-validator
+    obligation_id: validate_evidence_cluster_question_refs
+  - validator_id: answer-support-ledger-validator
+    obligation_id: validate_user_confirmation_support_mode
+  - validator_id: answer-support-ledger-validator
+    obligation_id: require_two_independent_evidence_refs_for_convergent_source_evidence_unless_direct_authority
+  - validator_id: answer-support-ledger-validator
+    obligation_id: require_frontier_triggered_evidence_to_resolve_to_valid_reentry_validation
+  - validator_id: answer-support-ledger-validator
+    obligation_id: require_observation_specific_evidence_support_source_safety_row_with_claim_sufficiency_and_replay
