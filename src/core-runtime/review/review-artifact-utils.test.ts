@@ -228,6 +228,209 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     expect(rendered).toContain("protected/hidden sheet(s) beyond the rendered sample");
   });
 
+  it("renders per-column cardinality and maps declared type=list enum members to the covering column (design-C §5#9)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const sheetName = "Data";
+    const mkCol = (
+      name: string,
+      index: number,
+      distinct_count: number,
+      distinct_count_is_estimate: boolean,
+      non_empty_count: number,
+    ) => ({
+      name,
+      index,
+      inferred_type: "string" as const,
+      non_empty_ratio: 1,
+      distinct_count,
+      distinct_count_is_estimate,
+      non_empty_count,
+    });
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: [{ ...base.sheets[0]!, name: sheetName }],
+      per_sheet_data: [
+        {
+          ...base.per_sheet_data[0]!,
+          sheet: sheetName,
+          layout_kind: "tabular",
+          header_rows: [0],
+          columns: [
+            mkCol("amount", 0, 100, false, 100), // no validation → no enum
+            mkCol("region", 1, 256, true, 190000), // list-validated, distinct capped → 256+/190000
+            mkCol("memo", 2, 50, false, 50), // no validation → no enum
+          ],
+        },
+      ],
+      data_validations: [
+        {
+          sheet: sheetName,
+          range: "B2:B190001",
+          rule_summary: "list",
+          validation_type: "list",
+          members: ["Seoul", "Busan"], // DECLARED enum (from inline formula1), maps to col index 1
+          members_truncated: false,
+          applies_to_columns: [1],
+        },
+        {
+          // a range-ref list validation on col 0 → members unresolved/absent → must surface NO enum
+          sheet: sheetName,
+          range: "A2:A190001",
+          rule_summary: "list (range)",
+          validation_type: "list",
+          members_truncated: true,
+          applies_to_columns: [0],
+        },
+      ],
+    };
+
+    const xlsx = path.join(root, "card.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+
+    const lines = rendered.split("\n");
+    const lineFor = (n: string) => lines.find((l) => l.includes(`- ${n} (`)) ?? "";
+    // Per-column cardinality is a COUNT (distinct/non_empty); the distinct-cap estimate shows "+".
+    expect(lineFor("region")).toContain("cardinality=256+/190000");
+    expect(lineFor("amount")).toContain("cardinality=100/100");
+    // The DECLARED enum members are surfaced in the data_validations SECTION (independent of
+    // per-column rendering), not on the column line (Codex round3 #2/#3/#4/#7).
+    expect(lineFor("region")).not.toContain("enum=");
+    expect(rendered).toContain("Data!B2:B190001:");
+    expect(rendered).toContain("enum=[Seoul, Busan]");
+    // Exactly one enum surfaces: the range-ref (members-absent) validation emits none.
+    expect((rendered.match(/enum=/g) ?? []).length).toBe(1);
+  });
+
+  it("surfaces a declared enum even when its low-residual column is trimmed by the column cap (Codex round2 #3)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const sheetName = "Wide";
+    const N = 65; // > max_columns_per_sheet (64)
+    // Columns 0..63 are maximal-residual (ratio 1.0); the LAST column is low-residual, so the
+    // residual-priority cap trims it — and it is the list-validated one (the common case: a
+    // controlled-vocab column is low-cardinality → low residual → first to be trimmed).
+    const columns = Array.from({ length: N }, (_, i) => ({
+      name: `c${i}`,
+      index: i,
+      inferred_type: "string" as const,
+      non_empty_ratio: 1,
+      distinct_count: i < N - 1 ? 10 : 2,
+      distinct_count_is_estimate: false,
+      non_empty_count: i < N - 1 ? 10 : 100,
+    }));
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: [{ ...base.sheets[0]!, name: sheetName }],
+      per_sheet_data: [
+        {
+          ...base.per_sheet_data[0]!,
+          sheet: sheetName,
+          layout_kind: "tabular",
+          header_rows: [0],
+          columns,
+        },
+      ],
+      data_validations: [
+        {
+          sheet: sheetName,
+          range: "BM2:BM100",
+          rule_summary: "type=list",
+          validation_type: "list",
+          members: ["x", "y"],
+          members_truncated: false,
+          applies_to_columns: [N - 1],
+        },
+      ],
+    };
+    const xlsx = path.join(root, "wide-dv.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+    // c64's own column line is dropped by the 64-column cap, but its DECLARED enum must still
+    // reach the prompt via the data_validations section (which is not column-gated) — Codex round3.
+    expect(rendered).not.toContain("c64 (");
+    expect(rendered).toContain("Wide!BM2:BM100:");
+    expect(rendered).toContain("enum=[x, y]");
+  });
+
+  it("renders EVERY declared enum when one column has multiple disjoint list validations (Codex round3 #4)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const sheetName = "Multi";
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: [{ ...base.sheets[0]!, name: sheetName }],
+      per_sheet_data: [
+        {
+          ...base.per_sheet_data[0]!,
+          sheet: sheetName,
+          layout_kind: "tabular",
+          header_rows: [0],
+          columns: [
+            {
+              name: "status",
+              index: 0,
+              inferred_type: "string",
+              non_empty_ratio: 1,
+              distinct_count: 4,
+              distinct_count_is_estimate: false,
+              non_empty_count: 100,
+            },
+          ],
+        },
+      ],
+      data_validations: [
+        {
+          sheet: sheetName,
+          range: "A2:A50",
+          rule_summary: "type=list",
+          validation_type: "list",
+          members: ["open", "closed"],
+          members_truncated: false,
+          applies_to_columns: [0],
+        },
+        {
+          sheet: sheetName,
+          range: "A51:A100",
+          rule_summary: "type=list",
+          validation_type: "list",
+          members: ["draft", "final"],
+          members_truncated: false,
+          applies_to_columns: [0],
+        },
+      ],
+    };
+    const xlsx = path.join(root, "multi-dv.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+    // Both disjoint validations on the same column surface their enums (no first-only .find()).
+    expect(rendered).toContain("enum=[open, closed]");
+    expect(rendered).toContain("enum=[draft, final]");
+    expect((rendered.match(/enum=/g) ?? []).length).toBe(2);
+  });
+
   it("does not surface count-only tables/merged_ranges trims as bounded samples (A3 / RC-2)", async () => {
     const root = await makeTmpDir();
     const seed = path.join(root, "seed.csv");

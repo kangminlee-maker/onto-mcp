@@ -361,7 +361,14 @@ function renderSpreadsheetStructuralView(
   if (inventory.data_validations.length) {
     lines.push("", `data_validations: ${inventory.data_validations.length}`);
     for (const dv of inv.data_validations) {
-      lines.push(`  - ${dv.sheet}!${dv.range}: ${dv.rule_summary}`);
+      // design-C: surface the DECLARED type=list enum members HERE (this loop runs over EVERY
+      // validation, independent of per-sheet column/sheet rendering) so they reach the prompt even
+      // when the column is trimmed by the column cap, the sheet is dropped by the sheet cap, the
+      // sheet has no profiled columns, or one column carries multiple disjoint list validations
+      // (Codex round3 #2/#3/#4/#7). Members are DECLARED labels (bounded), not observed data.
+      const enumLabels =
+        dv.members && dv.members.length > 0 ? ` enum=[${dv.members.join(", ")}]` : "";
+      lines.push(`  - ${dv.sheet}!${dv.range}: ${dv.rule_summary}${enumLabels}`);
     }
   }
   if (inventory.error_cells.length) {
@@ -451,8 +458,14 @@ function renderSpreadsheetStructuralView(
           const distinct = vocab
             ? `; distinct≈${vocab.distinct_count}${vocab.distinct_count_is_estimate ? "+" : ""}`
             : "";
+          // design-C per-column cardinality: distinct/non_empty COUNT over scanned rows. Declared
+          // type=list enum members are surfaced in the data_validations section (above), NOT here —
+          // so they survive column/sheet trimming and multi-validation columns (Codex round3).
+          const cardinality = `; cardinality=${col.distinct_count}${
+            col.distinct_count_is_estimate ? "+" : ""
+          }/${col.non_empty_count}`;
           lines.push(
-            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${distinct})`,
+            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${cardinality}${distinct})`,
           );
         }
       }

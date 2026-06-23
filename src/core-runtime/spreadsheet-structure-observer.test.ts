@@ -7,13 +7,20 @@ import { zipSync, strToU8 } from "fflate";
 import {
   buildCsvInventory,
   buildXlsxInventory,
+  columnResidualKey,
+  compareColumnResidualDesc,
   DEFAULT_DATA_LAYER_CAPS,
+  DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS,
   observeSpreadsheetSource,
   parseCsv,
   projectInventoryForAdmission,
   projectInventoryForPrompt,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
+  SPREADSHEET_OBSERVER_ADAPTER_VERSION,
+  VALIDATION_MEMBER_CHAR_CAP,
+  VALIDATION_MEMBER_COUNT_CAP,
   type DataLayerCaps,
+  type InventoryColumn,
   type WorkbookStructuralInventory,
 } from "./spreadsheet-structure-observer.js";
 
@@ -162,6 +169,7 @@ describe("buildCsvInventory — caps (CAPS-1) and risk signals", () => {
       max_distinct_tracked_per_column: 3,
       max_columns_profiled: 512,
       max_sheet_pairs: 64,
+      max_sheets_observed: 2048,
     };
     const r = inv(`${rows.join("\n")}\n`, "/abs/c.csv", caps);
     const entry = r.distinct_value_vocab.find((v) => v.column === "c");
@@ -326,9 +334,16 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(r.merged_ranges.map((m) => m.range)).toContain("A1:B1");
     expect(r.data_validations[0]!.range).toBe("B2:B3");
     expect(r.data_validations[0]!.rule_summary).toContain("type=list");
-    // The rule BOUNDS (formula1) are captured, not just the kind, so the reviewer can
-    // actually audit data_validation_coverage (#5).
-    expect(r.data_validations[0]!.rule_summary).toContain('formula1="eng,sales"');
+    // design-C (Codex #2): a type=list INLINE formula1 is summarized by member COUNT here — the
+    // declared values live in the bounded `members` field, never echoed in rule_summary (a second,
+    // differently-bounded value channel). The reviewer audits coverage via `members` + this count.
+    expect(r.data_validations[0]!.rule_summary).toContain("formula1=list(2 members)");
+    expect(r.data_validations[0]!.rule_summary).not.toContain("eng,sales");
+    // design-C: structured validation_type, inline enum members, normalized columns.
+    expect(r.data_validations[0]!.validation_type).toBe("list");
+    expect(r.data_validations[0]!.members).toEqual(["eng", "sales"]);
+    expect(r.data_validations[0]!.members_truncated).toBe(false);
+    expect(r.data_validations[0]!.applies_to_columns).toEqual([1]); // column B (role)
     expect(r.named_ranges.map((n) => n.name)).toContain("HeadcountRange");
     expect(r.external_links).toHaveLength(1);
     const table = r.tables.find((t) => t.name === "PeopleTable")!;
@@ -362,6 +377,10 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(dv.rule_summary).toContain("operator=between");
     expect(dv.rule_summary).toContain("formula1=1");
     expect(dv.rule_summary).toContain("formula2=10");
+    // design-C: a non-list validation never yields enum members.
+    expect(dv.validation_type).toBe("whole");
+    expect(dv.members).toBeUndefined();
+    expect(dv.members_truncated).toBe(true);
   });
 
   it("bounds observed sheet count at max_sheets_observed and discloses capture_truncated (B4)", () => {
@@ -461,6 +480,11 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(JSON.stringify(r)).not.toContain("LATEMARKER");
     // Declared dimension is still reported truthfully.
     expect(r.sheets[0]!.dimensions.rows).toBe(600);
+    // design-C honesty (§8): non_empty_count is a LOWER BOUND when the row cap truncated the
+    // scan — it reflects only the scanned window (cap 50, incl. header), never the declared 599
+    // data rows. Bound it to the scanned window and tie it to capture_truncated (asserted above).
+    expect(col.non_empty_count).toBeLessThanOrEqual(50);
+    expect(col.non_empty_count).toBeLessThan(599);
   });
 
   it("returns an honest unsupported_reason on a non-OOXML input (not a crash)", () => {
@@ -930,7 +954,7 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
   function emptyInventory(): WorkbookStructuralInventory {
     return {
       adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
-      adapter_version: 2,
+      adapter_version: 3,
       source_ref: "/abs/book.xlsx",
       content_sha256: "deadbeef",
       workbook_kind: "xlsx",
@@ -1040,6 +1064,9 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
           index: i,
           inferred_type: "string" as const,
           non_empty_ratio: 1,
+          distinct_count: 1,
+          distinct_count_is_estimate: false,
+          non_empty_count: 1,
         })),
         header_confidence: "high",
       },
@@ -1075,7 +1102,7 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
         sheet,
         layout_kind: "tabular",
         header_rows: [1],
-        columns: [{ name: "c0", index: 0, inferred_type: "string" as const, non_empty_ratio: 1 }],
+        columns: [{ name: "c0", index: 0, inferred_type: "string" as const, non_empty_ratio: 1, distinct_count: 1, distinct_count_is_estimate: false, non_empty_count: 1 }],
         header_confidence: "high",
       });
     }
@@ -1086,5 +1113,317 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
     expect(r.sections).toContainEqual({ section: "per_sheet_data", kept: 50, total: 200 });
     // 200 distinct patterns == the default cap, so formula_patterns is NOT trimmed.
     expect(r.inventory.formula_patterns).toHaveLength(200);
+  });
+});
+
+// ───────────────────────── design-C: per-column cardinality + declared enum labels ─────────────────────────
+
+function designCEmptyInventory(): WorkbookStructuralInventory {
+  return {
+    adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
+    adapter_version: SPREADSHEET_OBSERVER_ADAPTER_VERSION,
+    source_ref: "/abs/book.xlsx",
+    content_sha256: "deadbeef",
+    workbook_kind: "xlsx",
+    inspection_method: "structure_inspected_only",
+    sheets: [],
+    named_ranges: [],
+    tables: [],
+    pivot_tables: [],
+    formula_patterns: [],
+    formula_cells_total: 0,
+    formula_cells_total_is_lower_bound: false,
+    merged_ranges: [],
+    data_validations: [],
+    external_links: [],
+    error_cells: [],
+    macro_present: false,
+    risk_signals: [],
+    per_sheet_data: [],
+    distinct_value_vocab: [],
+    cross_sheet_key_overlap: [],
+    data_layer_caps: DEFAULT_DATA_LAYER_CAPS,
+    capture_truncated: false,
+    unsupported_reason: null,
+  };
+}
+
+describe("design-C — per-column cardinality (residual signal)", () => {
+  it("emits exact distinct/non_empty counts for a fully-distinct column (ratio 1.0)", () => {
+    // 60 unique values + a header → distinct_count==non_empty_count==60, not an estimate.
+    const rows = ["id"];
+    for (let i = 0; i < 60; i += 1) rows.push(`u${i}`);
+    const r = inv(`${rows.join("\n")}\n`, "/abs/card.csv");
+    const col = r.per_sheet_data[0]!.columns.find((c) => c.name === "id")!;
+    expect(col.distinct_count).toBe(60);
+    expect(col.non_empty_count).toBe(60);
+    expect(col.distinct_count_is_estimate).toBe(false);
+    expect(columnResidualKey(col).ratio).toBe(1);
+  });
+
+  it("flags distinct_count_is_estimate at the distinct cap (lower bound)", () => {
+    const rows = ["id"];
+    for (let i = 0; i < 300; i += 1) rows.push(`u${i}`);
+    const caps: DataLayerCaps = { ...DEFAULT_DATA_LAYER_CAPS, max_distinct_tracked_per_column: 256 };
+    const r = inv(`${rows.join("\n")}\n`, "/abs/cap.csv", caps);
+    const col = r.per_sheet_data[0]!.columns.find((c) => c.name === "id")!;
+    expect(col.distinct_count).toBe(256);
+    expect(col.distinct_count_is_estimate).toBe(true);
+    expect(col.non_empty_count).toBe(300);
+  });
+
+  it("exactly-256 distinct is honest (not an estimate)", () => {
+    const rows = ["id"];
+    for (let i = 0; i < 256; i += 1) rows.push(`u${i}`);
+    const caps: DataLayerCaps = { ...DEFAULT_DATA_LAYER_CAPS, max_distinct_tracked_per_column: 256 };
+    const r = inv(`${rows.join("\n")}\n`, "/abs/exact.csv", caps);
+    const col = r.per_sheet_data[0]!.columns.find((c) => c.name === "id")!;
+    expect(col.distinct_count).toBe(256);
+    expect(col.distinct_count_is_estimate).toBe(false);
+  });
+
+  it("an all-empty profiled column has ratio 0 (no NaN) via columnResidualKey", () => {
+    // Two columns; the second is entirely empty below the header.
+    const r = inv("a,b\n1,\n2,\n3,\n", "/abs/empty.csv");
+    const col = r.per_sheet_data[0]!.columns.find((c) => c.name === "b")!;
+    expect(col.non_empty_count).toBe(0);
+    const key = columnResidualKey(col);
+    expect(Number.isNaN(key.ratio)).toBe(false);
+    expect(key.ratio).toBe(0);
+  });
+
+  it("non-tabular sheets carry no per-column cardinality (columns empty)", () => {
+    const r = inv("1,2,3\n4,5,6\n", "/abs/matrix.csv");
+    expect(r.per_sheet_data[0]!.layout_kind).toBe("matrix_no_header");
+    expect(r.per_sheet_data[0]!.columns).toEqual([]);
+  });
+});
+
+describe("design-C — columnResidualKey total order & selection", () => {
+  const makeCol = (
+    index: number,
+    distinct: number,
+    nonEmpty: number,
+    estimate = false,
+  ): InventoryColumn => ({
+    name: `c${index}`,
+    index,
+    inferred_type: "string",
+    non_empty_ratio: 1,
+    distinct_count: distinct,
+    distinct_count_is_estimate: estimate,
+    non_empty_count: nonEmpty,
+  });
+
+  it("orders by estimate desc, ratio desc, index asc (deterministic ties)", () => {
+    const est = makeCol(5, 256, 256, true); // estimate → MAXIMAL, first
+    const hi = makeCol(2, 10, 10); // ratio 1.0
+    const mid = makeCol(0, 5, 10); // ratio 0.5
+    const tieA = makeCol(3, 6, 12); // ratio 0.5, index 3
+    const tieB = makeCol(1, 6, 12); // ratio 0.5, index 1
+    const sorted = [hi, mid, tieA, tieB, est].slice().sort(compareColumnResidualDesc);
+    // estimate(5) first; then ratio 1.0 (hi, index 2); then the ratio-0.5 group by index
+    // asc: mid(0), tieB(1), tieA(3).
+    expect(sorted.map((c) => c.index)).toEqual([5, 2, 0, 1, 3]);
+  });
+
+  it("an estimate column stays MAXIMAL (kept) even at a tiny ratio", () => {
+    const lowRatioEstimate = makeCol(9, 256, 100000, true); // ratio ~0.0026 but estimate
+    const highRatio = makeCol(1, 100, 100); // ratio 1.0
+    const sorted = [highRatio, lowRatioEstimate].slice().sort(compareColumnResidualDesc);
+    expect(sorted[0]!.index).toBe(9); // estimate first regardless of ratio
+  });
+
+  it("projectInventoryForPrompt re-selects the highest-cardinality columns within the cap, emits in original index order, and is non-mutating", () => {
+    const caps = { ...DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS, max_columns_per_sheet: 3 };
+    // 6 columns; residual priority is the REVERSE of index order, so a positional head-N
+    // would pick the wrong 3 — proving selection is residual-driven, not positional.
+    const columns: InventoryColumn[] = [
+      makeCol(0, 1, 100), // ratio 0.01
+      makeCol(1, 2, 100), // 0.02
+      makeCol(2, 3, 100), // 0.03
+      makeCol(3, 50, 100), // 0.50
+      makeCol(4, 80, 100), // 0.80
+      makeCol(5, 100, 100), // 1.00
+    ];
+    const inv0 = designCEmptyInventory();
+    inv0.per_sheet_data = [
+      { sheet: "S", layout_kind: "tabular", header_rows: [0], columns, header_confidence: "high" },
+    ];
+    const r = projectInventoryForPrompt(inv0, caps);
+    const kept = r.inventory.per_sheet_data[0]!.columns.map((c) => c.index);
+    // Top-3 by ratio are indexes 5,4,3; emitted in ORIGINAL index order → [3,4,5].
+    expect(kept).toEqual([3, 4, 5]);
+    expect(r.sections).toContainEqual({ section: "per_sheet_data.columns", kept: 3, total: 6 });
+    // Input is not mutated.
+    expect(inv0.per_sheet_data[0]!.columns.map((c) => c.index)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it("MIRROR-PARITY: a fresh recompute selects the IDENTICAL columns subset (head-N would differ)", () => {
+    const caps = { ...DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS, max_columns_per_sheet: 2 };
+    const columns: InventoryColumn[] = [
+      makeCol(0, 90, 100), // 0.90 (high, but index 0 — head-N would keep it)
+      makeCol(1, 5, 100), // 0.05
+      makeCol(2, 10, 100), // 0.10
+      makeCol(3, 95, 100), // 0.95 (highest, index 3 — head-N would DROP it)
+    ];
+    const inv0 = designCEmptyInventory();
+    inv0.per_sheet_data = [
+      { sheet: "S", layout_kind: "tabular", header_rows: [0], columns, header_confidence: "high" },
+    ];
+    const seed = projectInventoryForPrompt(inv0, caps);
+    const mirror = projectInventoryForPrompt(inv0, caps);
+    const seedCols = seed.inventory.per_sheet_data[0]!.columns.map((c) => c.index);
+    const mirrorCols = mirror.inventory.per_sheet_data[0]!.columns.map((c) => c.index);
+    expect(seedCols).toEqual(mirrorCols);
+    // Residual selection keeps indexes 0 and 3 (top-2 ratios); a positional head-N would
+    // have kept 0 and 1 — so the subsets genuinely differ from head-N.
+    expect(seedCols).toEqual([0, 3]);
+  });
+});
+
+describe("design-C — declared type=list enum labels (authority detection)", () => {
+  const listValidationSheet = (
+    dimRef: string,
+    sqref: string,
+    formula1: string,
+    type = "list",
+  ): string =>
+    `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="${dimRef}"/><sheetData>` +
+    `<row r="1"><c r="A1" t="inlineStr"><is><t>h1</t></is></c><c r="B1" t="inlineStr"><is><t>h2</t></is></c><c r="C1" t="inlineStr"><is><t>h3</t></is></c></row>` +
+    `<row r="2"><c r="A2" t="inlineStr"><is><t>x</t></is></c><c r="B2" t="inlineStr"><is><t>y</t></is></c><c r="C2" t="inlineStr"><is><t>z</t></is></c></row>` +
+    `</sheetData>` +
+    `<dataValidations count="1"><dataValidation type="${type}" sqref="${sqref}"><formula1>${formula1}</formula1></dataValidation></dataValidations>` +
+    `</worksheet>`;
+
+  const buildOne = (sheetXml: string) => {
+    const bytes = zipSync(makeMinimalXlsxParts(sheetXml));
+    return buildXlsxInventory({
+      sourceRef: "/abs/dv.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+    });
+  };
+
+  it("inline literal formula1 → members parsed; range covers the right column", () => {
+    const r = buildOne(listValidationSheet("A1:C2", "B1:B2", '"alpha,beta,gamma"'));
+    const dv = r.data_validations[0]!;
+    expect(dv.validation_type).toBe("list");
+    expect(dv.members).toEqual(["alpha", "beta", "gamma"]);
+    expect(dv.members_truncated).toBe(false);
+    expect(dv.applies_to_columns).toEqual([1]);
+  });
+
+  it("OFFSET sheet (data at B2) normalizes applies_to_columns by dimStartCol", () => {
+    // Dimension starts at column B (index 1). A validation on absolute column C (index 2)
+    // normalizes to profiled column index 1.
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="B2:D3"/><sheetData>` +
+      `<row r="2"><c r="B2" t="inlineStr"><is><t>h1</t></is></c><c r="C2" t="inlineStr"><is><t>h2</t></is></c><c r="D2" t="inlineStr"><is><t>h3</t></is></c></row>` +
+      `<row r="3"><c r="B3" t="inlineStr"><is><t>p</t></is></c><c r="C3" t="inlineStr"><is><t>q</t></is></c><c r="D3" t="inlineStr"><is><t>s</t></is></c></row>` +
+      `</sheetData>` +
+      `<dataValidations count="1"><dataValidation type="list" sqref="C2:C3"><formula1>"on,off"</formula1></dataValidation></dataValidations>` +
+      `</worksheet>`;
+    const dv = buildOne(sheet).data_validations[0]!;
+    expect(dv.members).toEqual(["on", "off"]);
+    expect(dv.applies_to_columns).toEqual([1]); // C(abs 2) - dimStartCol(1) = 1
+  });
+
+  it("multi-range sqref → union of normalized columns", () => {
+    const dv = buildOne(listValidationSheet("A1:C2", "A1:A2 C1:C2", '"p,q"')).data_validations[0]!;
+    expect(dv.members).toEqual(["p", "q"]);
+    expect(dv.applies_to_columns).toEqual([0, 2]);
+  });
+
+  it("whole-column sqref (B:B) maps to ITS column only, not the whole sheet (Codex #1)", () => {
+    const dv = buildOne(listValidationSheet("A1:C2", "B:B", '"a,b"')).data_validations[0]!;
+    // column B only — the declared enum must NOT attach to neighbours A and C.
+    expect(dv.applies_to_columns).toEqual([1]);
+  });
+
+  it("whole-column SPAN ($B:$D) maps to its columns within the profiled window", () => {
+    // A1:C2 profiles 3 columns (A,B,C). $B:$D covers absolute B,C,D; D (index 3) is beyond the
+    // profiled window and is dropped, leaving normalized [1,2] (Codex #1 + #4 clamp).
+    const dv = buildOne(listValidationSheet("A1:C2", "$B:$D", '"a,b"')).data_validations[0]!;
+    expect(dv.applies_to_columns).toEqual([1, 2]);
+  });
+
+  it("range-ref formula1 → no members, members_truncated", () => {
+    const dv = buildOne(listValidationSheet("A1:C2", "B1:B2", "Lists!$A$1:$A$5")).data_validations[0]!;
+    expect(dv.validation_type).toBe("list");
+    expect(dv.members).toBeUndefined();
+    expect(dv.members_truncated).toBe(true);
+  });
+
+  it("over the member COUNT cap → no members, truncated", () => {
+    const many = Array.from({ length: VALIDATION_MEMBER_COUNT_CAP + 1 }, (_, i) => `m${i}`).join(",");
+    const dv = buildOne(listValidationSheet("A1:C2", "B1:B2", `"${many}"`)).data_validations[0]!;
+    expect(dv.members).toBeUndefined();
+    expect(dv.members_truncated).toBe(true);
+    // Codex #2: the over-cap declared values must NOT leak via rule_summary either — it shows a
+    // member COUNT, not the values (m0,m1,…). The bounded `members` field is the only value channel.
+    expect(dv.rule_summary).toContain("formula1=list(");
+    expect(dv.rule_summary).not.toContain("m0,m1");
+  });
+
+  it("a member over the CHAR cap → no members, truncated", () => {
+    const long = "x".repeat(VALIDATION_MEMBER_CHAR_CAP + 1);
+    const dv = buildOne(listValidationSheet("A1:C2", "B1:B2", `"ok,${long}"`)).data_validations[0]!;
+    expect(dv.members).toBeUndefined();
+    expect(dv.members_truncated).toBe(true);
+  });
+
+  it("a member exactly at the CHAR cap is kept", () => {
+    const exact = "x".repeat(VALIDATION_MEMBER_CHAR_CAP);
+    const dv = buildOne(listValidationSheet("A1:C2", "B1:B2", `"${exact}"`)).data_validations[0]!;
+    expect(dv.members).toEqual([exact]);
+    expect(dv.members_truncated).toBe(false);
+  });
+
+  it("type != list → never any members", () => {
+    const dv = buildOne(listValidationSheet("A1:C2", "B1:B2", '"a,b"', "custom")).data_validations[0]!;
+    expect(dv.validation_type).toBe("custom");
+    expect(dv.members).toBeUndefined();
+    expect(dv.members_truncated).toBe(true);
+  });
+
+  it("CSV carries no data validations (no declared schema authority)", () => {
+    const r = inv("a,b\nx,y\n", "/abs/c.csv");
+    expect(r.data_validations).toEqual([]);
+  });
+});
+
+describe("design-C — aggregate-only boundary + admission passthrough", () => {
+  it("members survive admission unchanged (declared schema, bounded); non-list emits zero members", () => {
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:B2"/><sheetData>` +
+      `<row r="1"><c r="A1" t="inlineStr"><is><t>h1</t></is></c><c r="B1" t="inlineStr"><is><t>h2</t></is></c></row>` +
+      `<row r="2"><c r="A2" t="inlineStr"><is><t>x</t></is></c><c r="B2" t="inlineStr"><is><t>y</t></is></c></row>` +
+      `</sheetData>` +
+      `<dataValidations count="2">` +
+      `<dataValidation type="list" sqref="A1:A2"><formula1>"red,green"</formula1></dataValidation>` +
+      `<dataValidation type="whole" operator="between" sqref="B1:B2"><formula1>1</formula1><formula2>9</formula2></dataValidation>` +
+      `</dataValidations></worksheet>`;
+    const bytes = zipSync(makeMinimalXlsxParts(sheet));
+    const full = buildXlsxInventory({ sourceRef: "/abs/b.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    const admitted = projectInventoryForAdmission(full);
+    const list = admitted.data_validations.find((d) => d.validation_type === "list")!;
+    const whole = admitted.data_validations.find((d) => d.validation_type === "whole")!;
+    expect(list.members).toEqual(["red", "green"]); // declared labels pass through
+    expect(whole.members).toBeUndefined(); // non-list → zero members
+    // Bounds invariant: every emitted member set obeys both caps.
+    for (const dv of admitted.data_validations) {
+      if (dv.members) {
+        expect(dv.members.length).toBeLessThanOrEqual(VALIDATION_MEMBER_COUNT_CAP);
+        for (const m of dv.members) expect(m.length).toBeLessThanOrEqual(VALIDATION_MEMBER_CHAR_CAP);
+      }
+    }
+  });
+
+  it("adapter_version is 3 (design-C schema bump)", () => {
+    expect(SPREADSHEET_OBSERVER_ADAPTER_VERSION).toBe(3);
+    const r = inv("a,b\n1,2\n", "/abs/v.csv");
+    expect(r.adapter_version).toBe(3);
   });
 });

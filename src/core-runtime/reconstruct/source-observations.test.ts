@@ -95,7 +95,7 @@ function makeInventory(
     macro_present: false,
     risk_signals: [],
     per_sheet_data: [
-      { sheet: "Sheet1", layout_kind: "tabular", header_rows: [1], header_confidence: "high", columns: [{ name: "id", index: 0, inferred_type: "integer", non_empty_ratio: 1 }] },
+      { sheet: "Sheet1", layout_kind: "tabular", header_rows: [1], header_confidence: "high", columns: [{ name: "id", index: 0, inferred_type: "integer", non_empty_ratio: 1, distinct_count: 3, distinct_count_is_estimate: false, non_empty_count: 3 }] },
     ],
     distinct_value_vocab: [],
     cross_sheet_key_overlap: [],
@@ -104,6 +104,7 @@ function makeInventory(
       max_distinct_tracked_per_column: 256,
       max_columns_profiled: 512,
       max_sheet_pairs: 64,
+      max_sheets_observed: 2048,
     },
     capture_truncated: false,
     unsupported_reason: null,
@@ -200,6 +201,58 @@ describe("validateSourceObservationBoundary — P6 spreadsheet honesty gate", ()
 
   // ── Negative: each assertion fires on a genuinely incoherent observation. ──
 
+  it("E (Codex #3): rejects data_validation members that are not an array of strings", () => {
+    // Replayed / host-supplied artifacts are untyped: a non-string member must be REJECTED, not
+    // silently passed (members:[123] → m.length undefined slips the bounds) or thrown
+    // (members:"abc" → .some on a string). The honesty gate must stay total and catch both.
+    const nonStringMember = makeInventory({
+      data_validations: [
+        {
+          sheet: "sheet1",
+          range: "B2:B3",
+          rule_summary: "type=list",
+          validation_type: "list",
+          members: [123 as unknown as string],
+          members_truncated: false,
+          applies_to_columns: [1],
+        },
+      ],
+    });
+    const r1 = validateSourceObservationBoundary(spreadsheetObservation(nonStringMember));
+    expect(r1.valid).toBe(false);
+    expect(r1.violations).toContain("data_validation members must be an array of strings");
+
+    const nonArrayMembers = makeInventory({
+      data_validations: [
+        {
+          sheet: "sheet1",
+          range: "B2:B3",
+          rule_summary: "type=list",
+          validation_type: "list",
+          members: "abc" as unknown as string[],
+          members_truncated: false,
+          applies_to_columns: [1],
+        },
+      ],
+    });
+    // Must not THROW (the array guard runs before any .some).
+    const r2 = validateSourceObservationBoundary(spreadsheetObservation(nonArrayMembers));
+    expect(r2.valid).toBe(false);
+    expect(r2.violations).toContain("data_validation members must be an array of strings");
+  });
+
+  it("E (Codex round3 #5): rejects a non-array data_validations without throwing", () => {
+    // A replayed/host-supplied object inventory whose data_validations is missing or non-array
+    // must degrade to valid:false — not throw "not iterable" out of the boundary check.
+    const malformed = makeInventory({
+      data_validations:
+        "oops" as unknown as WorkbookStructuralInventory["data_validations"],
+    });
+    const r = validateSourceObservationBoundary(spreadsheetObservation(malformed));
+    expect(r.valid).toBe(false);
+    expect(r.violations).toContain("data_validations is missing or not an array");
+  });
+
   it("B: rejects a supported workbook with a blank top-level content_sha256", () => {
     const inventory = makeInventory({ content_sha256: "" });
     const result = validateSourceObservationBoundary(spreadsheetObservation(inventory));
@@ -227,13 +280,13 @@ describe("validateSourceObservationBoundary — P6 spreadsheet honesty gate", ()
     ["pivot_tables", { pivot_tables: [{ name: "P", sheet: "S", location: "A1", source_sheet: null, source_ref: null, row_fields: [], column_fields: [], page_fields: [], data_fields: [] }] }],
     ["formula_patterns", { formula_patterns: [{ pattern: "=SUM(A:A)", sample_cell: "B2", occurrence_count: 1, applied_ranges: ["B2"], sheets: ["S"], cross_sheet_refs: [] }] }],
     ["merged_ranges", { merged_ranges: [{ sheet: "S", range: "A1:B1" }] }],
-    ["data_validations", { data_validations: [{ sheet: "S", range: "A1", rule_summary: "list" }] }],
+    ["data_validations", { data_validations: [{ sheet: "S", range: "A1", rule_summary: "list", validation_type: "list", members_truncated: false, applies_to_columns: [0] }] }],
     ["external_links", { external_links: [{ target: "other.xlsx", kind: "external" }] }],
     ["error_cells", { error_cells: [{ sheet: "S", cell: "C3", token: "#REF!" }] }],
     ["distinct_value_vocab", { distinct_value_vocab: [{ sheet: "S", column: "id", distinct_count: 3, distinct_count_is_estimate: false }] }],
     ["cross_sheet_key_overlap", { cross_sheet_key_overlap: [{ key_name: "id", sheets: ["S", "T"], pairwise_overlap: [{ a: "S", b: "T", count: 2 }] }] }],
     ["risk_signals", { risk_signals: [{ kind: "external_links_present", location: "book", literal: "1 link" }] }],
-    ["per_sheet_data columns", { per_sheet_data: [{ sheet: "S", layout_kind: "tabular", header_rows: [1], header_confidence: "high", columns: [{ name: "id", index: 0, inferred_type: "integer", non_empty_ratio: 1 }] }] }],
+    ["per_sheet_data columns", { per_sheet_data: [{ sheet: "S", layout_kind: "tabular", header_rows: [1], header_confidence: "high", columns: [{ name: "id", index: 0, inferred_type: "integer", non_empty_ratio: 1, distinct_count: 3, distinct_count_is_estimate: false, non_empty_count: 3 }] }] }],
   ];
   for (const [surface, override] of C_SURFACES) {
     it(`C: rejects an unsupported inventory claiming inspected structure via ${surface}`, () => {
@@ -343,6 +396,58 @@ describe("validateSourceObservationBoundary — P6 spreadsheet honesty gate", ()
       structural_data: { content_excerpt: "a,b,c" },
     });
     expect(result.valid).toBe(true);
+  });
+
+  // ── design-C value-aware bound (members are the only value-bearing field). ──
+
+  it("passes a list validation carrying bounded inline enum members", () => {
+    const inventory = makeInventory({
+      data_validations: [
+        { sheet: "S", range: "A1:A9", rule_summary: 'type=list; formula1="a,b"', validation_type: "list", members: ["a", "b"], members_truncated: false, applies_to_columns: [0] },
+      ],
+    });
+    const result = validateSourceObservationBoundary(spreadsheetObservation(inventory));
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects members present on a non-list validation_type (forged/incoherent)", () => {
+    const inventory = makeInventory({
+      data_validations: [
+        { sheet: "S", range: "A1:A9", rule_summary: "type=whole", validation_type: "whole", members: ["a", "b"], members_truncated: false, applies_to_columns: [0] },
+      ],
+    });
+    const result = validateSourceObservationBoundary(spreadsheetObservation(inventory));
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "data_validation members present but validation_type is not 'list'",
+    );
+  });
+
+  it("rejects members exceeding the count cap", () => {
+    const tooMany = Array.from({ length: 51 }, (_, i) => `m${i}`);
+    const inventory = makeInventory({
+      data_validations: [
+        { sheet: "S", range: "A1:A9", rule_summary: "type=list", validation_type: "list", members: tooMany, members_truncated: false, applies_to_columns: [0] },
+      ],
+    });
+    const result = validateSourceObservationBoundary(spreadsheetObservation(inventory));
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "data_validation members exceed VALIDATION_MEMBER_COUNT_CAP",
+    );
+  });
+
+  it("rejects a member exceeding the char cap", () => {
+    const inventory = makeInventory({
+      data_validations: [
+        { sheet: "S", range: "A1:A9", rule_summary: "type=list", validation_type: "list", members: ["x".repeat(65)], members_truncated: false, applies_to_columns: [0] },
+      ],
+    });
+    const result = validateSourceObservationBoundary(spreadsheetObservation(inventory));
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "data_validation member exceeds VALIDATION_MEMBER_CHAR_CAP",
+    );
   });
 });
 

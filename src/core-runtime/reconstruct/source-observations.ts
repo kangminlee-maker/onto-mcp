@@ -4,6 +4,8 @@ import {
   SPREADSHEET_CAPTURE_TRUNCATED_PHRASE,
   SPREADSHEET_MACRO_PRESENT_PHRASE,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
+  VALIDATION_MEMBER_CHAR_CAP,
+  VALIDATION_MEMBER_COUNT_CAP,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
 
@@ -138,6 +140,46 @@ function validateSpreadsheetObservationHonesty(
     !observation.summary.includes(SPREADSHEET_MACRO_PRESENT_PHRASE)
   ) {
     violations.push("macro_present not disclosed in observation summary");
+  }
+
+  // E (design-C value-aware bound): the ONLY value-bearing field is
+  // data_validations[].members — the declared type=list enum labels. This enforces BOUNDS +
+  // INTERNAL CONSISTENCY only: any entry carrying members must be validation_type === "list"
+  // with count <= VALIDATION_MEMBER_COUNT_CAP and each member <= VALIDATION_MEMBER_CHAR_CAP.
+  // formula1 PROVENANCE (that members came from an inline literal, not observed cells) is an
+  // emission-time guarantee in the observer, NOT replay-verifiable here — a forged
+  // members+type=list pair is outside this honesty model (documented limitation).
+  // Codex round3 #5: a replayed / host-supplied artifact may carry a non-array (or missing)
+  // data_validations; guard before iterating so a malformed observation degrades to valid:false
+  // rather than throwing "not iterable" out of the boundary check.
+  if (!Array.isArray(inventory.data_validations)) {
+    violations.push("data_validations is missing or not an array");
+  }
+  for (const dv of Array.isArray(inventory.data_validations)
+    ? inventory.data_validations
+    : []) {
+    if (dv.members === undefined) continue;
+    // Replayed / host-supplied artifacts are untyped despite the cast: a non-string member would
+    // make the length bounds silently pass (members:[123] → m.length undefined) or throw
+    // (members:"abc" → no .some). Reject non-string-array members before the bounds (Codex #3).
+    if (
+      !Array.isArray(dv.members) ||
+      (dv.members as unknown[]).some((m) => typeof m !== "string")
+    ) {
+      violations.push("data_validation members must be an array of strings");
+      continue;
+    }
+    if (dv.validation_type !== "list") {
+      violations.push(
+        "data_validation members present but validation_type is not 'list'",
+      );
+    }
+    if (dv.members.length > VALIDATION_MEMBER_COUNT_CAP) {
+      violations.push("data_validation members exceed VALIDATION_MEMBER_COUNT_CAP");
+    }
+    if (dv.members.some((m) => m.length > VALIDATION_MEMBER_CHAR_CAP)) {
+      violations.push("data_validation member exceeds VALIDATION_MEMBER_CHAR_CAP");
+    }
   }
 }
 

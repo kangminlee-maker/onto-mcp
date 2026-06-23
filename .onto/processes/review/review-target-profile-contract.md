@@ -170,7 +170,10 @@ data-validation rules incl. operator + formula bounds, protections, risk signals
 Two distinct axes, deliberately not coupled:
 
 - **`inspectable`** — the workbook was read (`unsupported_reason === null`) AND has
-  renderable structure, *including plain tabular data* (columns / distinct-value vocab).
+  renderable structure, *including plain tabular data* (columns / per-column cardinality /
+  distinct-value counts). The aggregate-only rule is NARROWED, not preserved: the single
+  value-bearing field is `data_validations[].members` — bounded DECLARED type=list enum labels
+  parsed from a formula1 literal (never observed/free/high-cardinality cell values).
   A clean CSV or a formula-free data `.xlsx` is `inspectable` and stays
   `support_status: supported`. It is NOT coupled to whether any obligation is backed.
 - **`backed_goals`** — the POSITIVE subset of the six obligations whose specific evidence
