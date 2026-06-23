@@ -1440,4 +1440,116 @@ describe("validateOntologySeed rejection branches", () => {
     expect(result.validation_status).toBe("invalid");
     expect(result.violations.some((v) => v.code === "data_binding_missing")).toBe(true);
   });
+
+  // G(a) slice-26 enforcement bindings: three recorded obligations whose isolated breaching binding was
+  // not yet covered above. Each mutates exactly one facet so a clean variant clears the targeted code.
+  it("ENFORCEMENT BINDING (validate_purpose_required_element_seed_ref_refs_against_known_seed_refs): a required_element seed_ref_ref that is not a known seed ref trips unknown_ref; an in-seed ref clears it", async () => {
+    const registry = await loadRegistry();
+    const breachingSeed = structuredClone(ontologySeed());
+    ((breachingSeed.purpose as any).purpose_adequacy_frame.required_elements as any[]).push({
+      element_id: "purpose-element-unknown-ref",
+      element_kind: "validation_handoff",
+      description: "A required element citing a seed ref that does not exist.",
+      seed_ref_refs: ["seed-ref-does-not-exist"],
+      evidence_refs: [evidenceRef()],
+      limitation_refs: [],
+    });
+    const breaching = validateOntologySeed({
+      ontologySeed: breachingSeed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+    expect(breaching.violations.some((v) =>
+      v.code === "unknown_ref" && /required_elements\[\d+\]\.seed_ref_refs/.test(v.message)
+    )).toBe(true);
+
+    const cleanSeed = structuredClone(ontologySeed());
+    ((cleanSeed.purpose as any).purpose_adequacy_frame.required_elements as any[]).push({
+      element_id: "purpose-element-known-ref",
+      element_kind: "validation_handoff",
+      description: "A required element citing an existing seed ref.",
+      seed_ref_refs: ["object-dashboard"],
+      evidence_refs: [evidenceRef()],
+      limitation_refs: [],
+    });
+    const clean = validateOntologySeed({
+      ontologySeed: cleanSeed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+    expect(clean.violations.some((v) =>
+      v.code === "unknown_ref" && /required_elements\[\d+\]\.seed_ref_refs/.test(v.message)
+    )).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (validate_instance_assertion_mapping_status): an out-of-enum instance_availability_status trips invalid_enum; a valid status clears it", async () => {
+    const registry = await loadRegistry();
+    const breachingSeed = structuredClone(ontologySeed());
+    ((breachingSeed.ontology_handoff as any).instance_assertion_mapping as any)
+      .instance_availability_status = "definitely_present";
+    const breaching = validateOntologySeed({
+      ontologySeed: breachingSeed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+    expect(breaching.violations.some((v) =>
+      v.code === "invalid_enum" && /instance_availability_status/.test(v.message)
+    )).toBe(true);
+
+    const clean = validateOntologySeed({
+      ontologySeed: ontologySeed(),
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+    expect(clean.violations.some((v) =>
+      v.code === "invalid_enum" && /instance_availability_status/.test(v.message)
+    )).toBe(false);
+  });
+
+  it("ENFORCEMENT BINDING (require_limitation_ref_when_instance_availability_status_is_absent_or_unknown): an absent status with no limitation_refs trips missing_required_field; citing a declared limitation clears it", async () => {
+    const registry = await loadRegistry();
+    const breachingSeed = structuredClone(ontologySeed());
+    const breachingMapping =
+      (breachingSeed.ontology_handoff as any).instance_assertion_mapping as any;
+    breachingMapping.instance_availability_status = "absent";
+    breachingMapping.limitation_refs = [];
+    const breaching = validateOntologySeed({
+      ontologySeed: breachingSeed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+    expect(breaching.violations.some((v) =>
+      v.code === "missing_required_field" &&
+      /absent or unknown instance availability must cite/.test(v.message)
+    )).toBe(true);
+
+    const cleanSeed = structuredClone(ontologySeed());
+    cleanSeed.handoff_limitations.push({
+      limitation_id: "limitation-instance-availability",
+      limitation_kind: "insufficient_evidence",
+      description: "Instance availability is absent in this fixture iteration.",
+      affected_refs: ["object-dashboard"],
+      missing_source_refs: [],
+      mitigation_or_next_action: "Revisit instance assertions in maturation.",
+      evidence_refs: [evidenceRef()],
+    });
+    const cleanMapping = (cleanSeed.ontology_handoff as any).instance_assertion_mapping as any;
+    cleanMapping.instance_availability_status = "absent";
+    cleanMapping.limitation_refs = ["limitation-instance-availability"];
+    const clean = validateOntologySeed({
+      ontologySeed: cleanSeed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+    expect(clean.violations.some((v) =>
+      v.code === "missing_required_field" &&
+      /absent or unknown instance availability must cite/.test(v.message)
+    )).toBe(false);
+  });
 });

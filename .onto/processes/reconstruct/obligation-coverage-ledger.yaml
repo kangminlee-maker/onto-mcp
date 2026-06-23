@@ -485,57 +485,40 @@ pending:
     tier: flat
     note: "slice-9 audit (2026-06-22): expansion evidence_refs ARE validated (unknown_id when not carried from cited answer claims; missing_required_ref when add/refine drops carried evidence), but against a PROXY — the cited answer claims' carried supporting_evidence_refs — not against the answer-support-ledger artifact or seed authority the name names. Neither is resolved in this validator. Partial/proxy; recording deferred pending direct ledger/seed-authority resolution or name reconciliation."
   - validator_id: ontology-seed-validator
-    obligation_id: require_limitation_ref_when_instance_availability_status_is_absent_or_unknown
-    coverage_status: pending
-    tier: flat
-  - validator_id: ontology-seed-validator
     obligation_id: require_mixed_purpose_frame_projection_elements_to_preserve_member_source_and_cross_material_lineage_or_limitation
     coverage_status: pending
     tier: flat
-  - validator_id: ontology-seed-validator
-    obligation_id: require_ready_ontology_handoff_mappings_to_have_substantive_content_or_limitation_refs
-    coverage_status: pending
-    tier: flat
-  - validator_id: ontology-seed-validator
-    obligation_id: require_static_kinetic_dynamic_actionability_coverage_axes
-    coverage_status: pending
-    tier: flat
+    note: "slice-26 audit (2026-06-23): NOT_FOUND in validateOntologySeed — the function never reads the named member-lineage fields (member_scope_refs / member_target_material_kind / member_source_refs / cross_material_ref_refs) on purpose_adequacy_frame.required_elements, and never discriminates on a `mixed` target. The mixed-target authority (target-material-profile-validation.yaml) is a registry-declared input_authority_ref but is NOT in this validator's function signature (declared≠wired). The analogous mixed-lineage enforcement is RECORDED on source-purpose-candidates-validator (require_mixed_purpose_frame_elements_to_carry_...). Recording deferred until the fields are read here."
   - validator_id: ontology-seed-validator
     obligation_id: validate_dynamic_boundaries_have_unique_ids_and_close_target_refs
     coverage_status: pending
     tier: flat
-  - validator_id: ontology-seed-validator
-    obligation_id: validate_instance_assertion_mapping_status
-    coverage_status: pending
-    tier: flat
-  - validator_id: ontology-seed-validator
-    obligation_id: validate_promoted_candidate_target_seed_refs_are_realized
-    coverage_status: pending
-    tier: flat
+    note: "slice-26 audit (2026-06-23): NOT_FOUND — validateOntologySeed never reads dynamic_layer.dynamic_boundaries[]; no uniqueness, boundary_kind enum, target_ref resolution, evidence_refs, or limitation_refs check exists for boundary rows. No bindable violation. Recording deferred pending implementation of dynamic-boundary validation."
   - validator_id: ontology-seed-validator
     obligation_id: validate_purpose_adequacy_frame_projection_equivalence_against_selected_validated_frame
     coverage_status: pending
     tier: activation_gated_dormant
-  - validator_id: ontology-seed-validator
-    obligation_id: validate_purpose_required_element_seed_ref_refs_against_known_seed_refs
-    coverage_status: pending
-    tier: flat
+    note: "slice-26 audit (2026-06-23): activation_gated_dormant — gated on source_purpose_candidate_runtime_is_implemented; its conditional input (source-purpose-candidates-validation.yaml) is not received by validateOntologySeed's signature. No active enforcement; PARK until the source-purpose-candidate runtime is wired."
   - validator_id: ontology-seed-validator
     obligation_id: validate_required_element_closure_status_consistent_with_seed_evidence_and_limitation_refs
     coverage_status: pending
     tier: flat
+    note: "slice-26 audit (2026-06-23): PARTIAL — the validator enforces a PROXY (each required_element must cite seed_ref_refs OR limitation_refs, and those refs are resolved) but never reads the named `closure_status` field, so it cannot enforce the contract's status-specific consistency (modeled ⇒ seed+evidence; limitation_backed/frontier_required ⇒ limitation refs). Scope-discriminator (closure_status) unread → PARK."
   - validator_id: ontology-seed-validator
     obligation_id: validate_required_element_surface_dimension_closure
     coverage_status: pending
     tier: flat
+    note: "slice-26 audit (2026-06-23): NOT_FOUND — the required_elements loop reads element_id/element_kind/description/seed_ref_refs/limitation_refs/evidence_refs but never the named actionability_surface_refs[] or maturity_dimension_refs[] fields, so the surface/dimension closure enum-resolution the contract (operational-ontology-seed-contract §5.2) requires is unenforced. No bindable violation. PARK."
   - validator_id: ontology-seed-validator
     obligation_id: validate_seed_purpose_confirmation_projection_against_purpose_confirmation_validation
     coverage_status: pending
     tier: activation_gated_dormant
+    note: "slice-26 audit (2026-06-23): activation_gated_dormant — gated on purpose_confirmation_runtime_is_implemented; its conditional input (purpose-confirmation-validation.yaml) is not received by validateOntologySeed's signature. No active enforcement; PARK until the purpose-confirmation runtime is wired."
   - validator_id: ontology-seed-validator
     obligation_id: validate_seed_purpose_projection_equivalence_against_selected_source_purpose_candidate
     coverage_status: pending
     tier: activation_gated_dormant
+    note: "slice-26 audit (2026-06-23): activation_gated_dormant — gated on source_purpose_candidate_runtime_is_implemented; its conditional input (source-purpose-candidates-validation.yaml) is not received by validateOntologySeed's signature. No active enforcement; PARK until the source-purpose-candidate runtime is wired."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: active_contract_hashes_match_active_contract_refs
     coverage_status: pending

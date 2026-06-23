@@ -971,6 +971,28 @@ export function validateOntologySeed(args: {
   const addShapeViolation = (_code: "schema_shape_invalid", message: string) => {
     violations.push(seedValidationViolation({ code: "schema_shape_invalid", message }));
   };
+  // G(a) slice 26: record the six obligations this validator FULLY enforces with a distinct,
+  // name-matching site (stamped before the per-root/per-row guards so a zero-row seed still records).
+  // Parked (see obligation-coverage-ledger.yaml notes): surface_dimension_closure / closure_status /
+  // mixed-member-lineage / dynamic_boundaries name fields this function never reads; the three
+  // purpose-projection/confirmation obligations are activation_gated_dormant (their conditional inputs
+  // — source-purpose-candidates-validation / purpose-confirmation-validation — are never received here).
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "require_static_kinetic_dynamic_actionability_coverage_axes");
+  assertObligation(
+    assertedObligationIds,
+    "validate_purpose_required_element_seed_ref_refs_against_known_seed_refs",
+  );
+  assertObligation(assertedObligationIds, "validate_promoted_candidate_target_seed_refs_are_realized");
+  assertObligation(assertedObligationIds, "validate_instance_assertion_mapping_status");
+  assertObligation(
+    assertedObligationIds,
+    "require_limitation_ref_when_instance_availability_status_is_absent_or_unknown",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_ready_ontology_handoff_mappings_to_have_substantive_content_or_limitation_refs",
+  );
   const seed = readRecord(args.ontologySeed, "ontology_seed", addShapeViolation);
   const disposition = readRecord(
     args.candidateDisposition,
@@ -2231,6 +2253,7 @@ export function validateOntologySeed(args: {
     validation_results: violations.length === 0
       ? ["ontology_seed_valid"]
       : ["ontology_seed_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
