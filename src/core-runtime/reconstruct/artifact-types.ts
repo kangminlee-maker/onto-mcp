@@ -969,6 +969,7 @@ export interface ReconstructSourcePurposeCandidatesValidationArtifact {
   selected_purpose_frame_id: string | null;
   confirmation_required: boolean;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructSourcePurposeValidationViolation[];
 }
 
