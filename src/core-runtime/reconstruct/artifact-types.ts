@@ -509,6 +509,7 @@ export interface ReconstructSourceObservationLineageIndexValidationArtifact {
   lineage_row_count: number;
   added_observation_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructSourceObservationLineageIndexValidationViolation[];
 }
 

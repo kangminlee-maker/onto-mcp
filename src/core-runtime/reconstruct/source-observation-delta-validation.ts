@@ -680,6 +680,26 @@ export async function validateSourceObservationLineageIndex(args: {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   assertArrayField(args.lineageIndex.lineage_rows, "source-observation-lineage-index", "lineage_rows");
   const violations: ReconstructSourceObservationLineageIndexValidationViolation[] = [];
+  // G(a) deferred-7 slice 3: record only the uniqueness obligation this validator fully enforces. Stamped
+  // before the per-row loop so it fires on zero rows. asserted_obligation_ids is in-memory-only telemetry
+  // (Stage 0 #145) on a reuse-hashed + scout-captured artifact, so stamping does not rotate reuse.
+  // validate_unique_session_level_lineage_row_ids → duplicate_id (the `seen` set below rejects any repeated
+  // lineage_row_id, including a repeated blank/absent id).
+  //
+  // PARKED (codex #149 R1, all false-pass edges of this gap-prone lineage validator):
+  //  - require_each_lineage_row_{delta,reentry}_validation_to_be_valid, validate_each_lineage_row_delta_ref_
+  //    is_readable_and_session_matching, validate_lineage_added_observation_ids_match_delta_added_observation_
+  //    ids: a ref pointing at an EXISTING EMPTY/null YAML makes readYamlDocument return null WITHOUT throwing,
+  //    so the catch (..._missing) never fires AND the `if (delta)` / `if (deltaValidation)` / `if (reentry
+  //    Validation)` guards skip every check — the row passes valid. Not fully enforced until non-object reads
+  //    are rejected.
+  //  - validate_each_lineage_added_observation_exists_in_source_observations: checks membership in the PASSED
+  //    sourceObservations object only; it is never bound to the delta/re-entry chain's source_observations_ref
+  //    or session, so a wrong/stale source-observations file with the same ids passes (caller-supplied authority).
+  //  - validate_each_lineage_added_observation_was_reentered_by_its_validation: shares the
+  //    lineage_added_observation_mismatch code with the added-ids-match obligation (no distinct binding; slice-21).
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "validate_unique_session_level_lineage_row_ids");
   const seen = new Set<string>();
   const observationsById = new Map(args.sourceObservations.observations.map((
     observation,
@@ -909,6 +929,7 @@ export async function validateSourceObservationLineageIndex(args: {
     validation_results: violations.length === 0
       ? ["source_observation_lineage_index_valid"]
       : ["source_observation_lineage_index_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
