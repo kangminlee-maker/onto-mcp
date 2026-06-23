@@ -64,6 +64,9 @@ import {
 import { validateMaterialAdmissionLedger } from "./material-admission-validation.js";
 import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
 import { validateHandoffDecision, validateReconstructRunManifest } from "./terminal-validation.js";
+import { buildReconstructRunGoverningSnapshot } from "./governing-snapshot.js";
+import { loadReconstructContractRegistry } from "./contract-registry.js";
+import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   validateCandidateDisposition,
   validateOntologySeed,
@@ -1057,28 +1060,63 @@ function runCompetencyQuestionsThin(): ReconstructCompetencyQuestionsValidationA
   });
 }
 
-// Pre-handoff run-manifest validator (slice 28). The 5 recorded reference-standard / pattern-catalog
-// snapshot obligations are AUTHORITY-GATED: they stamp only inside the governing-snapshot branch, which
-// runs when projectRoot/registryPath/contractRegistry/selectedSourceProfiles/lensIds are ALL supplied
-// (the rebuild-and-compare needs that authority). Leaving governing_snapshot unset makes
-// validateReconstructRunGoverningSnapshot early-return (manifest_snapshot_missing) WITHOUT any file I/O,
-// so the harvest reaches the stamps deterministically with minimal inputs.
+// Pre-handoff run-manifest validator (slice 28). The 4 recorded reference-standard / pattern-catalog
+// snapshot obligations stamp INSIDE validateReconstructRunGoverningSnapshot, at the per-field `checks`
+// loop — past the missing-snapshot and registry-hash early-returns — so the recorder is reached ONLY
+// when the comparisons actually run. The harvest therefore builds a faithful governing_snapshot from the
+// real registry/lens authority so the loop runs.
+async function harvestRunManifestAuthority(): Promise<{
+  projectRoot: string;
+  registryPath: string;
+  contractRegistry: Awaited<ReturnType<typeof loadReconstructContractRegistry>>;
+  selectedSourceProfiles: [];
+  lensIds: string[];
+  admittedDomainIds: [];
+}> {
+  const registryPath = path.resolve(
+    ".onto/processes/reconstruct/reconstruct-contract-registry.yaml",
+  );
+  const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+  const lensIds = loadCoreLensRegistry().full_review_lens_ids;
+  return {
+    projectRoot: process.cwd(),
+    registryPath,
+    contractRegistry,
+    selectedSourceProfiles: [],
+    lensIds,
+    admittedDomainIds: [],
+  };
+}
+
 async function runReconstructRunManifest(): Promise<ReconstructRunManifestValidationArtifact> {
+  const authority = await harvestRunManifestAuthority();
+  const governing_snapshot = await buildReconstructRunGoverningSnapshot(authority);
+  return validateReconstructRunManifest({
+    manifest: {
+      session_id: "session-harvest",
+      steps: [],
+      governing_snapshot,
+    } as never,
+    ...authority,
+  });
+}
+
+// Authority present but NO governing_snapshot: the callee early-returns (manifest_snapshot_missing)
+// BEFORE the per-field checks loop, so NONE of the 4 snapshot-freeze obligations stamp. Proves the
+// recorder sits at the comparison site, not on the early-return path (codex #143 R1 Finding 1).
+async function runReconstructRunManifestAuthorityNoSnapshot(): Promise<ReconstructRunManifestValidationArtifact> {
+  const authority = await harvestRunManifestAuthority();
   return validateReconstructRunManifest({
     manifest: {
       session_id: "session-harvest",
       steps: [],
     } as never,
-    projectRoot: "harvest-root",
-    registryPath: "harvest-registry.yaml",
-    contractRegistry: {} as never,
-    selectedSourceProfiles: [],
-    lensIds: [],
+    ...authority,
   });
 }
 
-// Thin entry: NO governing-snapshot authority args. Proves the gating — none of the 5 snapshot-freeze
-// obligations are stamped when the rebuild-and-compare authority is unavailable.
+// Thin entry: NO governing-snapshot authority args. The gated branch is not taken, so none of the 4
+// snapshot-freeze obligations are stamped.
 async function runReconstructRunManifestThin(): Promise<ReconstructRunManifestValidationArtifact> {
   return validateReconstructRunManifest({
     manifest: {
@@ -2181,21 +2219,21 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // Each has a clean variant that clears it. The coverage/facet-coverage obligations are PARKED (codex
   // #142 R2: presence-only or inactive-coverage), so they are deliberately NOT cited as recorded coverage.
 
-  it("validateReconstructRunManifest records its 5 instrumented obligations (slice 28: reference-standard + pattern-catalog snapshot freeze) and NOT the 22 parked", async () => {
+  it("validateReconstructRunManifest records its 4 instrumented obligations (slice 28: reference-standard + pattern-catalog id/version snapshot freeze) and NOT the 23 parked", async () => {
     const out = await runReconstructRunManifest();
     for (const obligation of [
       "selected_reference_standard_ids_resolve_to_reference_standard_registry",
       "selected_reference_standard_versions_or_snapshots_are_recorded",
       "selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry",
       "selected_pattern_catalog_versions_or_snapshots_are_recorded",
-      "selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy",
     ]) {
       expect(out.asserted_obligation_ids).toContain(obligation);
     }
-    // PARKED: the other 22 governing_snapshot obligations are enforced only via per-field stableJson
+    // PARKED: the other 23 governing_snapshot obligations are enforced only via per-field stableJson
     // equality against the authority rebuild. Representative parks: shared-field (active_contracts hosts
     // 4 obligations; selected_source_profiles hosts 6 — no isolated binding), build-time allow-list
-    // ("values are allowed/supported"), non-promotion policy not compared, and NOT_FOUND quantities.
+    // ("values are allowed/supported"), non-promotion policy not compared, NOT_FOUND quantities, and the
+    // canonical-URI obligation whose registry canonical_uri_policy the rebuild never reads (codex #143).
     for (const parked of [
       "active_contract_hashes_match_active_contract_refs",
       "active_contract_migration_status_values_are_allowed",
@@ -2205,34 +2243,39 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
       "previous_competency_ids_resolve_to_current_id_or_explicit_replacement_disposition",
       "selected_registry_hash_matches_reconstruct_contract_registry",
       "selected_reference_and_pattern_migration_status_is_supported",
+      "selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy",
     ]) {
       expect(out.asserted_obligation_ids).not.toContain(parked);
     }
   });
 
-  // The 5 recorded obligations are AUTHORITY-GATED on the governing-snapshot rebuild-and-compare path;
-  // a thin manifest validation with no registry/profile/lens authority stamps NONE of them.
-  it("validateReconstructRunManifest (thin, no governing-snapshot authority) records NONE of the 5 snapshot-freeze obligations", async () => {
-    const out = await runReconstructRunManifestThin();
-    for (const gated of [
+  // GATING (codex #143 R1 Finding 1): the 4 recorded obligations stamp at the per-field checks loop,
+  // PAST the early-returns. Authority present but no governing_snapshot → callee early-returns
+  // (manifest_snapshot_missing) → NONE stamp; and a thin call with no authority at all stamps NONE.
+  it("validateReconstructRunManifest records NONE of the 4 snapshot-freeze obligations on the early-return paths (authority-but-no-snapshot, and thin)", async () => {
+    const gated = [
       "selected_reference_standard_ids_resolve_to_reference_standard_registry",
       "selected_reference_standard_versions_or_snapshots_are_recorded",
       "selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry",
       "selected_pattern_catalog_versions_or_snapshots_are_recorded",
-      "selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy",
-    ]) {
-      expect(out.asserted_obligation_ids).not.toContain(gated);
+    ];
+    const noSnapshot = await runReconstructRunManifestAuthorityNoSnapshot();
+    const thin = await runReconstructRunManifestThin();
+    for (const obligation of gated) {
+      expect(noSnapshot.asserted_obligation_ids).not.toContain(obligation);
+      expect(thin.asserted_obligation_ids).not.toContain(obligation);
     }
   });
 
-  // ANTI-LAUNDERING (slice 28): each of the 5 recorded obligations has a non-vacuous, ISOLATED
+  // ANTI-LAUNDERING (slice 28): each of the 4 recorded obligations has a non-vacuous, ISOLATED
   // enforcement binding in governing-snapshot.test.ts — a per-field mutation of the recorded snapshot
   // trips manifest_snapshot_mismatch with a DISTINCT subject_id (governing_snapshot.<field>), and a
-  // faithful rebuild clears it. The 22 parked obligations either share a per-field equality with sibling
-  // obligations (no isolatable binding), are enforced at snapshot-build time, or name a quantity that is
-  // not a compared governing_snapshot field (see obligation-coverage-ledger.yaml notes).
+  // faithful rebuild clears it. The 23 parked obligations either share a per-field equality with sibling
+  // obligations (no isolatable binding), are enforced at snapshot-build time, name a quantity that is
+  // not a compared governing_snapshot field, or (canonical URIs) name a registry policy the rebuild
+  // never reads (see obligation-coverage-ledger.yaml notes).
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 101 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 100 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2389,6 +2432,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(101);
+    expect(harvestedSet.size).toBe(100);
   });
 });

@@ -152,36 +152,16 @@ export async function validateReconstructRunManifest(args: {
     args.lensIds
   ) {
     // AUTHORITY-GATED record (slice 28): the governing-snapshot drift check rebuilds the expected
-    // snapshot from the live registry/profile/lens authority and compares each recorded field by
-    // exact value, so it only runs when that authority is supplied. Stamp the five snapshot-freeze
-    // obligations whose named scope is FULLY entailed by their isolated per-field equality
-    // (subject_id = governing_snapshot.<field>): the selected reference-standard / pattern-catalog
-    // ids resolve to (equal) the registry projection, their version/snapshot maps carry an entry per
-    // selected id, and the canonical URIs equal the policy-derived URN template. The remaining 22
-    // obligations stay PARKED (see obligation-coverage-ledger.yaml): shared-field obligations cannot
-    // bind a single one, migration-status "allowed/supported" is enforced at snapshot-build time, the
-    // p2/p3 non-promotion policy and governed-seed/previous-id closures are not compared fields, and
-    // the registry ref+hash presence overlaps the hash-match early return.
-    assertObligation(
-      assertedObligationIds,
-      "selected_reference_standard_ids_resolve_to_reference_standard_registry",
-    );
-    assertObligation(
-      assertedObligationIds,
-      "selected_reference_standard_versions_or_snapshots_are_recorded",
-    );
-    assertObligation(
-      assertedObligationIds,
-      "selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry",
-    );
-    assertObligation(
-      assertedObligationIds,
-      "selected_pattern_catalog_versions_or_snapshots_are_recorded",
-    );
-    assertObligation(
-      assertedObligationIds,
-      "selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy",
-    );
+    // snapshot from the live registry/profile/lens authority and compares each recorded field by exact
+    // value, so it only runs when that authority is supplied. The four recorded snapshot-freeze
+    // obligations (selected reference-standard / pattern-catalog ids resolve to the registry projection;
+    // their version/snapshot maps carry an entry per selected id) are stamped INSIDE the callee, at the
+    // per-field `checks` loop — past the missing-snapshot and registry-hash early-returns — so they
+    // record only when the comparisons actually run. The remaining 23 obligations stay PARKED (see
+    // obligation-coverage-ledger.yaml): shared-field obligations cannot bind a single one, the canonical
+    // URI obligation names a registry policy the rebuild never reads, "allowed/supported/contains" are
+    // enforced at snapshot-build time, the p2/p3 non-promotion policy and governed-seed/previous-id
+    // closures are not compared fields, and the registry ref+hash presence overlaps the hash-match path.
     violations.push(...await validateReconstructRunGoverningSnapshot({
       projectRoot: args.projectRoot,
       registryPath: args.registryPath,
@@ -190,6 +170,7 @@ export async function validateReconstructRunManifest(args: {
       lensIds: args.lensIds,
       admittedDomainIds: args.admittedDomainIds ?? [],
       snapshot: args.manifest.governing_snapshot,
+      assertedObligationIds,
     }));
   } else if (!args.manifest.governing_snapshot) {
     violations.push(violation({
