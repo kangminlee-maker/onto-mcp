@@ -2397,34 +2397,33 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // codes, each with a clean variant). asserted_obligation_ids is in-memory-only telemetry (byte-invariance
   // proven in artifact-io.test.ts + run.test.ts).
 
-  it("validateSourceObservationLineageIndex records its 6 instrumented obligations (deferred-7 slice 3) and NOT the parked reentered-membership obligation", async () => {
+  it("validateSourceObservationLineageIndex records ONLY validate_unique_session_level_lineage_row_ids (deferred-7 slice 3) and NOT the six gap-prone obligations", async () => {
     const out = await runSourceObservationLineageIndex();
-    for (const obligation of [
+    expect(out.asserted_obligation_ids).toContain("validate_unique_session_level_lineage_row_ids");
+    // PARKED (codex #149 R1): the delta/reentry-validation-valid, delta-ref-readable, and added-ids-match
+    // obligations have a null-read false-pass (an existing empty YAML returns null without throwing, so the
+    // *_missing catch never fires and the `if (artifact)`-gated checks skip); the added-obs-exists obligation
+    // trusts the caller-supplied sourceObservations without binding it to the chain's source_observations_ref;
+    // the reentered-membership obligation shares lineage_added_observation_mismatch with added-ids-match.
+    for (const parked of [
       "require_each_lineage_row_delta_validation_to_be_valid",
       "require_each_lineage_row_reentry_validation_to_be_valid",
       "validate_each_lineage_added_observation_exists_in_source_observations",
       "validate_each_lineage_row_delta_ref_is_readable_and_session_matching",
       "validate_lineage_added_observation_ids_match_delta_added_observation_ids",
-      "validate_unique_session_level_lineage_row_ids",
-    ]) {
-      expect(out.asserted_obligation_ids).toContain(obligation);
-    }
-    // PARKED: validate_each_lineage_added_observation_was_reentered_by_its_validation emits the SAME
-    // lineage_added_observation_mismatch code as the recorded added-ids-match obligation (shared code, no
-    // distinct binding — slice-21 isolation).
-    expect(out.asserted_obligation_ids).not.toContain(
       "validate_each_lineage_added_observation_was_reentered_by_its_validation",
-    );
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
   });
 
-  // ANTI-LAUNDERING (deferred-7 slice 3): each of the 6 recorded obligations has a non-vacuous binding in
-  // source-observation-delta-validation.test.ts with a DISTINCT violation code — lineage_delta_validation_
-  // invalid / lineage_reentry_validation_invalid (a readable-but-invalid validation; an unreadable/absent ref
-  // is caught by the *_missing siblings), lineage_observation_missing, lineage_delta_missing (+ session/round/
-  // frontier matches), lineage_added_observation_mismatch (added-ids set-equality), duplicate_id — each with a
-  // clean variant. asserted_obligation_ids is in-memory-only telemetry (byte-invariance proven in Stage 0).
+  // ANTI-LAUNDERING (deferred-7 slice 3): the one recorded obligation (unique row ids) has a non-vacuous
+  // binding in source-observation-delta-validation.test.ts — two rows with the same lineage_row_id trip
+  // duplicate_id; distinct ids clear it. Uniqueness (incl. duplicate-blank ids) is the named scope and is
+  // fully enforced; blank-id REJECTION is a separate unregistered validity concern (codex #149 Finding 3).
+  // asserted_obligation_ids is in-memory-only telemetry (byte-invariance proven in Stage 0).
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 111 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 106 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2596,6 +2595,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(111);
+    expect(harvestedSet.size).toBe(106);
   });
 });

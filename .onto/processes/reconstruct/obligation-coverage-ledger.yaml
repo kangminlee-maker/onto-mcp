@@ -698,10 +698,35 @@ pending:
     tier: flat
     note: "slice-5 audit (2026-06-22): normalizeFrontierForDelta validates kind-vs-artifact CONSISTENCY (frontier_kind_mismatch when the frontier artifact does not match the declared source_frontier / maturation_closure_frontier kind), but does NOT validate that the frontier_kind value itself is in a supported enumeration — an unsupported kind branches to the maturation_closure path without an explicit unsupported-kind violation. Recording deferred pending an explicit supported-kind check or name reconciliation."
   - validator_id: source-observation-lineage-index-validator
+    obligation_id: require_each_lineage_row_delta_validation_to_be_valid
+    coverage_status: pending
+    tier: flat
+    note: "deferred-7 slice-3 audit (2026-06-23, codex #149 R1 P2): PARK (null-read false-pass). A delta-validation ref pointing at an EXISTING EMPTY/null YAML makes readYamlDocument return null WITHOUT throwing, so the catch (lineage_delta_validation_missing, ~728-734) never fires AND the validity check (~769: `if (deltaValidation && status!=='valid')`) is skipped — the row passes valid with a non-valid/absent delta validation. Not fully enforced until non-object reads are rejected."
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: require_each_lineage_row_reentry_validation_to_be_valid
+    coverage_status: pending
+    tier: flat
+    note: "deferred-7 slice-3 audit (2026-06-23, codex #149 R1 P2): PARK (null-read false-pass). Same as the delta-validation obligation: an existing empty/null re-entry-validation YAML returns null without throwing, so lineage_reentry_validation_missing (~742-747) never fires and the `if (reentryValidation && status!=='valid')` check (~817) is skipped. Not fully enforced until non-object reads are rejected."
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_each_lineage_added_observation_exists_in_source_observations
+    coverage_status: pending
+    tier: flat
+    note: "deferred-7 slice-3 audit (2026-06-23, codex #149 R1 P2): PARK (caller-supplied authority). The check (~884-890 → lineage_observation_missing) verifies each added id is present in the PASSED sourceObservations object, but never binds that object/ref or session to the delta/re-entry chain's source_observations_ref. A wrong or stale source-observations file containing the same ids therefore passes and is trusted downstream as the validated observations authority. Not fully enforced until the observations authority is bound to the chain."
+  - validator_id: source-observation-lineage-index-validator
     obligation_id: validate_each_lineage_added_observation_was_reentered_by_its_validation
     coverage_status: pending
     tier: flat
-    note: "deferred-7 slice-3 audit (2026-06-23): PARK (shared violation code). The reentered-membership check (~891-897: reentryValidation && !reentered.has(observationId)) emits the SAME lineage_added_observation_mismatch code as the recorded validate_lineage_added_observation_ids_match_delta_added_observation_ids (set-equality, ~862-867). Although the two fire from distinct sites, they share one violation code, so this obligation has no distinct breaching binding (slice-21 ENFORCEMENT-BINDING isolation). Parked to keep the added-ids-match obligation the sole owner of the code; record deferred pending a dedicated reentered-mismatch violation code."
+    note: "deferred-7 slice-3 audit (2026-06-23): PARK (shared violation code). The reentered-membership check (~891-897: reentryValidation && !reentered.has(observationId)) emits the SAME lineage_added_observation_mismatch code as validate_lineage_added_observation_ids_match_delta_added_observation_ids (set-equality, ~862-867). They fire from distinct sites but share one code, so this obligation has no distinct breaching binding (slice-21). It is also subject to the null-read false-pass (an empty re-entry-validation file skips the check). Record deferred pending a dedicated reentered-mismatch code and non-object-read rejection."
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_each_lineage_row_delta_ref_is_readable_and_session_matching
+    coverage_status: pending
+    tier: flat
+    note: "deferred-7 slice-3 audit (2026-06-23, codex #149 R1 P2): PARK (null-read false-pass). 'readable' is not enforced: a delta ref pointing at an existing empty/null YAML returns null without throwing, so lineage_delta_missing (~716-720) never fires and the session/round/frontier matches (~748-767, all gated on `if (delta && ...)`) are skipped — an empty-but-present delta file passes. Not fully enforced until non-object reads are rejected."
+  - validator_id: source-observation-lineage-index-validator
+    obligation_id: validate_lineage_added_observation_ids_match_delta_added_observation_ids
+    coverage_status: pending
+    tier: flat
+    note: "deferred-7 slice-3 audit (2026-06-23, codex #149 R1 P2): PARK (null-read false-pass). The set-equality match (~862-867 → lineage_added_observation_mismatch) is gated on `if (delta)`; an existing empty/null delta YAML returns null without throwing, so the match is skipped and arbitrary added_observation_ids pass. Not fully enforced until non-object reads are rejected."
   - validator_id: source-purpose-candidates-validator
     obligation_id: derive_confirmation_required_from_selected_purpose_source_status
     coverage_status: pending
