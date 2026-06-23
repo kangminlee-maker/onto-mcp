@@ -195,3 +195,13 @@ recorded:
     obligation_id: validate_domain_competency_trace_refs_against_run_manifest_context_snapshot
   - validator_id: competency-questions-validator
     obligation_id: enforce_admitted_domain_competency_disposition_rule
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_reference_standard_ids_resolve_to_reference_standard_registry
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_reference_standard_versions_or_snapshots_are_recorded
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_pattern_catalog_versions_or_snapshots_are_recorded
+  - validator_id: pre-handoff-run-manifest-validator
+    obligation_id: selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy

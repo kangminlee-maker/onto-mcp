@@ -108,6 +108,7 @@ export async function validateReconstructRunManifest(args: {
 }): Promise<ReconstructRunManifestValidationArtifact> {
   assertArrayField(args.manifest.steps, "run-manifest", "steps");
   const violations: ReconstructPostSeedValidationViolation[] = [];
+  const assertedObligationIds: string[] = [];
   const stepById = new Map(args.manifest.steps.map((step) => [step.step_id, step]));
   for (const stageId of RECONSTRUCT_STAGE_IDS) {
     if (!stepById.has(stageId)) {
@@ -150,6 +151,37 @@ export async function validateReconstructRunManifest(args: {
     args.selectedSourceProfiles &&
     args.lensIds
   ) {
+    // AUTHORITY-GATED record (slice 28): the governing-snapshot drift check rebuilds the expected
+    // snapshot from the live registry/profile/lens authority and compares each recorded field by
+    // exact value, so it only runs when that authority is supplied. Stamp the five snapshot-freeze
+    // obligations whose named scope is FULLY entailed by their isolated per-field equality
+    // (subject_id = governing_snapshot.<field>): the selected reference-standard / pattern-catalog
+    // ids resolve to (equal) the registry projection, their version/snapshot maps carry an entry per
+    // selected id, and the canonical URIs equal the policy-derived URN template. The remaining 22
+    // obligations stay PARKED (see obligation-coverage-ledger.yaml): shared-field obligations cannot
+    // bind a single one, migration-status "allowed/supported" is enforced at snapshot-build time, the
+    // p2/p3 non-promotion policy and governed-seed/previous-id closures are not compared fields, and
+    // the registry ref+hash presence overlaps the hash-match early return.
+    assertObligation(
+      assertedObligationIds,
+      "selected_reference_standard_ids_resolve_to_reference_standard_registry",
+    );
+    assertObligation(
+      assertedObligationIds,
+      "selected_reference_standard_versions_or_snapshots_are_recorded",
+    );
+    assertObligation(
+      assertedObligationIds,
+      "selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry",
+    );
+    assertObligation(
+      assertedObligationIds,
+      "selected_pattern_catalog_versions_or_snapshots_are_recorded",
+    );
+    assertObligation(
+      assertedObligationIds,
+      "selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy",
+    );
     violations.push(...await validateReconstructRunGoverningSnapshot({
       projectRoot: args.projectRoot,
       registryPath: args.registryPath,
@@ -182,6 +214,7 @@ export async function validateReconstructRunManifest(args: {
     validation_results: violations.length === 0
       ? ["reconstruct_run_manifest_valid"]
       : ["reconstruct_run_manifest_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
