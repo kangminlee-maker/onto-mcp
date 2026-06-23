@@ -4465,18 +4465,19 @@ export function validateMaturationContinuationDecision(args: {
 }): ReconstructMaturationContinuationDecisionValidationArtifact {
   const decision = args.maturationContinuationDecision;
   const violations: ReconstructMaturationValidationViolation[] = [];
-  // G(a) slice 22 — record the obligations this validator genuinely enforces (RECORD 7/9; this
-  // validator was built up by the M1/M4b conservation work so most obligations are born wired). The
-  // other 2 stay parked (see obligation-coverage-ledger.yaml notes): the "continuation_state against
-  // validated matrix and frontier_state" obligation is AMBIGUOUS (its intent is split across the
-  // blanket prior-validation loop, the claim_scope partition, and the material-rows gate with no
-  // distinct non-overlapping block), and "continue/ask_user/blocked against available next authority"
-  // is PARTIAL (the named `blocked` state has no enforcement). Stamped before any per-row/per-state
-  // guard so the recorder fires on zero-row input.
+  // G(a) slice 22 — record the obligations this validator genuinely enforces (RECORD 5/9; this
+  // validator was built up by the M1/M4b conservation work so several obligations are born wired). The
+  // other 4 stay parked (see obligation-coverage-ledger.yaml notes): the "continuation_state against
+  // validated matrix and frontier_state" obligation is AMBIGUOUS (intent split across the blanket
+  // prior-validation loop, the claim_scope partition, and the material-rows gate); "continue/ask_user/
+  // blocked against available next authority" is PARTIAL (the named `blocked` state has no enforcement);
+  // the revision-proposal binding is gated on the caller-supplied optional `revisionProposalRef` so the
+  // validator has no internal guarantee it runs (codex R1, slice-18 principle); and the "material
+  // blocker/high row remains unclosed" gate only catches `frontier_required` rows, not the
+  // `limitation_backed` half of "unclosed" (codex R1, subset-of-named-scope). Stamped before any
+  // per-row/per-state guard so the recorder fires on zero-row input.
   const assertedObligationIds: string[] = [];
-  assertObligation(assertedObligationIds, "bind_revision_proposal_validation_to_consumed_revision_proposal");
   assertObligation(assertedObligationIds, "reject_actionable_ready_until_final_requestion_convergence_is_proven");
-  assertObligation(assertedObligationIds, "reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed");
   assertObligation(assertedObligationIds, "reject_actionable_ready_when_unresolved_revision_blockers_remain");
   assertObligation(assertedObligationIds, "require_revision_blocker_refs_in_continuation_limitation_refs");
   assertObligation(assertedObligationIds, "validate_limitation_refs_and_row_scope_for_actionable_limited_state");

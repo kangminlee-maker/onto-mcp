@@ -415,6 +415,16 @@ pending:
     coverage_status: pending
     tier: flat
     note: "slice-22 audit (2026-06-23): PARTIAL. The validator enforces continue (requires >=1 next_frontier_ref) and ask_user (requires >=1 authority_request_ref), but the named `blocked` state has NO enforcement against next-authority availability. Contract (design ~1539: deferred_external_authority projects ask_user/blocked/limitation depending on availability) expects blocked to be validated against unavailability, but no such check exists. Recording deferred pending a `blocked`-state enforcer."
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: bind_revision_proposal_validation_to_consumed_revision_proposal
+    coverage_status: pending
+    tier: flat
+    note: "slice-22 R1 audit (2026-06-23, codex P2): caller-supplied-optional-arg gate. The binding check (revisionProposalValidation.revision_proposal_ref must match the consumed proposal) only runs when the caller supplies the optional `revisionProposalRef`; the validator has no internal guarantee it is provided, so for direct/pure calls the obligation is advertised but the check is inert. Same disposition as slice-18 expectedRegistrySha256 (run-control slice-10 principle). Recording deferred pending an internal guarantee that the consumed proposal ref is always present."
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed
+    coverage_status: pending
+    tier: flat
+    note: "slice-22 R1 audit (2026-06-23, codex P2): subset of named scope. The gate builds materialOpenRows from blocker/high rows with member_readiness=='frontier_required' only, but the obligation names 'unclosed' which also covers 'limitation_backed' (a distinct non-closed member_readiness value). A hand-edited actionable_ready decision with a limitation_backed blocker/high row therefore bypasses the gate. Recording deferred pending the gate covering all non-closed material rows (frontier_required + limitation_backed)."
   - validator_id: maturation-convergence-ledger-validator
     obligation_id: preserve_remaining_frontier_refs_without_ready_projection
     coverage_status: pending

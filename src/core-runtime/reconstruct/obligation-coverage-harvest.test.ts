@@ -1714,12 +1714,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // public_output rows stay valid, so deleting the evidence_support sufficiency/replay check reds the test)
   // — each with a clean variant that clears it. Building those fixtures inline here would duplicate that file.
 
-  it("validateMaturationContinuationDecision records its 7 instrumented obligations (slice 22: revision-proposal binding + 3 actionable_ready gates + revision-blocker fold/equality + actionable_limited scope) and NOT the 2 parked", () => {
+  it("validateMaturationContinuationDecision records its 5 instrumented obligations (slice 22: final-re-question gate + unresolved-revision-blocker gate + revision-blocker fold/equality + actionable_limited scope) and NOT the 4 parked", () => {
     const out = runMaturationContinuationDecision();
     for (const obligation of [
-      "bind_revision_proposal_validation_to_consumed_revision_proposal",
       "reject_actionable_ready_until_final_requestion_convergence_is_proven",
-      "reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed",
       "reject_actionable_ready_when_unresolved_revision_blockers_remain",
       "require_revision_blocker_refs_in_continuation_limitation_refs",
       "validate_limitation_refs_and_row_scope_for_actionable_limited_state",
@@ -1727,15 +1725,20 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     ]) {
       expect(out.asserted_obligation_ids).toContain(obligation);
     }
-    // PARKED (Explore audit, slice 22). validate_continuation_state_against_validated_actionability_matrix
-    // _and_frontier_state is AMBIGUOUS: its broad intent is split across the blanket prior-validation loop,
-    // the claim_scope partition recompute, and the material-rows gate, with no distinct non-overlapping
-    // block (overlaps the recorded material-row + actionable_limited gates). validate_continue_ask_user_or
-    // _blocked_state_against_available_next_authority is PARTIAL: continue + ask_user are enforced but the
-    // named `blocked` state has no next-authority-availability check. See obligation-coverage-ledger.yaml.
+    // PARKED (Explore audit + codex R1, slice 22). AMBIGUOUS: validate_continuation_state_against_validated
+    // _actionability_matrix_and_frontier_state (broad intent split across the blanket prior-validation loop,
+    // claim_scope partition, and material-rows gate; no distinct non-overlapping block). PARTIAL: validate_
+    // continue_ask_user_or_blocked_state_against_available_next_authority (continue + ask_user enforced; the
+    // named `blocked` state has no check). codex R1 added two more: bind_revision_proposal_validation_to_
+    // consumed_revision_proposal is gated on the caller-supplied optional revisionProposalRef (no internal
+    // guarantee — slice-18 principle); reject_actionable_ready_when_material_blocker_or_high_row_remains_
+    // unclosed only catches frontier_required rows, not the limitation_backed half of "unclosed". See
+    // obligation-coverage-ledger.yaml.
     for (const parked of [
       "validate_continuation_state_against_validated_actionability_matrix_and_frontier_state",
       "validate_continue_ask_user_or_blocked_state_against_available_next_authority",
+      "bind_revision_proposal_validation_to_consumed_revision_proposal",
+      "reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed",
     ]) {
       expect(out.asserted_obligation_ids).not.toContain(parked);
     }
@@ -1743,15 +1746,13 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
 
   // ANTI-LAUNDERING (slice 22): each recorded obligation has a non-vacuous, NON-OVERLAPPING enforcement
   // binding already in maturation-validation.test.ts (this validator was built up by M1/M4b so the gates
-  // shipped with tests): #3 material-row gate = "keeps continuation blocked while material frontier rows
-  // remain open" (falseReadyValidation -> conflicting_state); #2 = "requires final re-question convergence
-  // before actionable ready" (conflicting_state); #8 = "rejects actionable limited when no rows can be
-  // included" (missing_required_ref); and the revision-blocker block binds #4 (forcedReady ->
-  // conflicting_state), #9 (tamperedField -> conflicting_state), #5 (droppedFold -> missing_required_ref),
-  // and #1 (bindingMismatch + unboundBinding -> conflicting_state, subject revision_proposal_ref) with
-  // distinct breaching inputs. Building those fixtures inline here would duplicate that file.
+  // shipped with tests): #2 = "requires final re-question convergence before actionable ready"
+  // (conflicting_state); #8 = "rejects actionable limited when no rows can be included"
+  // (missing_required_ref); and the revision-blocker block binds #4 (forcedReady -> conflicting_state),
+  // #9 (tamperedField -> conflicting_state), and #5 (droppedFold -> missing_required_ref) with distinct
+  // breaching inputs. Building those fixtures inline here would duplicate that file.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 73 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 71 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1878,6 +1879,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(73);
+    expect(harvestedSet.size).toBe(71);
   });
 });
