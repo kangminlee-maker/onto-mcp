@@ -72,6 +72,11 @@ pending:
     coverage_status: pending
     tier: flat
     note: "slice-21 audit (2026-06-23): AMBIGUOUS/overlapping. The generic required-refs-per-support-mode check is distributed across the per-mode support_mode_missing_authority guards and overlaps the modes owned by validate_user_confirmation_support_mode (user_confirmation) and validate_external_or_runtime_authority_support_mode (runtime_proof/authority_response); only direct_authority's evidence_refs guard is un-owned, but the generic obligation name is not 1:1 with that single mode and cannot be bound non-overlappingly without laundering the others. Recording deferred (would need a dedicated direct-authority-required-refs obligation or a single generic violation code)."
+  - validator_id: answer-support-ledger-validator
+    obligation_id: validate_user_confirmation_support_mode
+    coverage_status: pending
+    tier: flat
+    note: "slice-21 R1 audit (2026-06-23, codex P2): PARTIAL / presence-only. The user_confirmation branch only requires user_confirmation_refs to be non-empty AND a globally-valid purpose-confirmation-validation; it never resolves the cited refs to the confirmation authority, so an arbitrary ref (e.g. ghost-confirmation) passes whenever any valid purpose-confirmation exists. Contrast authority_response, which resolves authority_response_refs to provided responses. Recording deferred pending ref-resolution of user_confirmation_refs against the confirmation authority (WIRE candidate)."
   - validator_id: baseline-actionability-matrix-validator
     obligation_id: preserve_frontier_seed_state_before_question_frontier_authoring
     coverage_status: pending

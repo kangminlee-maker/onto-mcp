@@ -1630,31 +1630,33 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // Building the registry/inventory fixtures inline here would duplicate that file; the recorder-
   // reached stamp is proven above and by the flip-test.
 
-  it("validateAnswerSupportLedger records its 5 instrumented obligations (slice 21: question-refs + user-confirmation + convergent-two-independent + frontier-triggered-reentry + observation-specific-safety-row) and NOT the 4 parked", () => {
+  it("validateAnswerSupportLedger records its 4 instrumented obligations (slice 21: question-refs + convergent-two-independent + frontier-triggered-reentry + observation-specific-safety-row) and NOT the 5 parked", () => {
     const out = runAnswerSupportLedger();
     for (const obligation of [
       "validate_evidence_cluster_question_refs",
-      "validate_user_confirmation_support_mode",
       "require_two_independent_evidence_refs_for_convergent_source_evidence_unless_direct_authority",
       "require_frontier_triggered_evidence_to_resolve_to_valid_reentry_validation",
       "require_observation_specific_evidence_support_source_safety_row_with_claim_sufficiency_and_replay",
     ]) {
       expect(out.asserted_obligation_ids).toContain(obligation);
     }
-    // PARKED (Explore audit, slice 21). require_contradictions_to_be_recorded_and_bounded is DELEGATED:
-    // this validator never reads contradiction_refs; the bounded check lives in validateMaturationAnswer
-    // Claims. require_frontier_triggered_evidence_to_resolve_to_valid_lineage_index_validation is PARTIAL:
-    // the valid-lineage-index-validation check is an unscoped global precondition, not scoped to the
-    // frontier_triggered discriminator (only re-entry reads that scope). validate_external_or_runtime_
-    // authority_support_mode is PARTIAL: runtime_proof is presence-only and authority_response delegates
-    // closure-frontier-request resolution. validate_support_mode_required_refs is AMBIGUOUS/overlapping:
-    // its per-mode refs are owned by the user-confirmation + external/runtime obligations and only direct_
-    // authority is un-owned, which is not 1:1 with the generic name. See obligation-coverage-ledger.yaml.
+    // PARKED (Explore audit, slice 21 + codex R1). require_contradictions_to_be_recorded_and_bounded is
+    // DELEGATED: this validator never reads contradiction_refs; the bounded check lives in
+    // validateMaturationAnswerClaims. require_frontier_triggered_evidence_to_resolve_to_valid_lineage_
+    // index_validation is PARTIAL: the valid-lineage-index-validation check is an unscoped global
+    // precondition, not scoped to the frontier_triggered discriminator (only re-entry reads that scope).
+    // validate_external_or_runtime_authority_support_mode is PARTIAL: runtime_proof is presence-only and
+    // authority_response delegates closure-frontier-request resolution. validate_support_mode_required_refs
+    // is AMBIGUOUS/overlapping: its per-mode refs are owned by sibling obligations and only direct_authority
+    // is un-owned, not 1:1 with the generic name. validate_user_confirmation_support_mode is PARTIAL /
+    // presence-only (codex R1): it never resolves user_confirmation_refs to the confirmation authority — an
+    // arbitrary ref passes whenever a valid purpose-confirmation exists. See obligation-coverage-ledger.yaml.
     for (const parked of [
       "require_contradictions_to_be_recorded_and_bounded",
       "require_frontier_triggered_evidence_to_resolve_to_valid_lineage_index_validation",
       "validate_external_or_runtime_authority_support_mode",
       "validate_support_mode_required_refs",
+      "validate_user_confirmation_support_mode",
     ]) {
       expect(out.asserted_obligation_ids).not.toContain(parked);
     }
@@ -1663,14 +1665,14 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // ANTI-LAUNDERING (slice 21): each recorded obligation has a non-vacuous, NON-OVERLAPPING enforcement
   // binding in maturation-validation.test.ts. Frontier-triggered re-entry is bound by "rejects answer
   // support that consumes a delta observation missing from re-entry-approved ids" (missing_required_ref via
-  // the isFrontierTriggeredObservation branch). The other four are bound by the "ENFORCEMENT BINDING (slice
+  // the isFrontierTriggeredObservation branch). The other three are bound by the "ENFORCEMENT BINDING (slice
   // 21 ...)" tests added there: unknown_id (a cluster question_ref absent from the validated frontier),
-  // support_mode_missing_authority (a user_confirmation cluster missing confirmation authority), insufficient
-  // _independent_evidence (a convergent cluster with one evidence record), and missing_required_ref (evidence
-  // whose observation has no sufficient/replay-allowed source-safety row) — each with a clean variant that
-  // clears it. Building those fixtures inline here would duplicate that file.
+  // insufficient_independent_evidence (a convergent cluster with one evidence record), and missing_required_
+  // ref where ONLY the observation's evidence_support safety row is made insufficient (material_claim and
+  // public_output rows stay valid, so deleting the evidence_support sufficiency/replay check reds the test)
+  // — each with a clean variant that clears it. Building those fixtures inline here would duplicate that file.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 67 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 66 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1792,6 +1794,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(67);
+    expect(harvestedSet.size).toBe(66);
   });
 });

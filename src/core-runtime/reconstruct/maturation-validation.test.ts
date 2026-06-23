@@ -62,6 +62,7 @@ import {
 } from "./maturation-validation.js";
 import {
   buildSourceSafetyLedgerFromSourceObservations,
+  sourceSafetyRowIdForObservation,
   validateSourceSafetyLedger,
 } from "./source-safety-validation.js";
 
@@ -2425,42 +2426,6 @@ describe("maturation validation", () => {
     expect(clean.violations.some((v) => v.code === "unknown_id")).toBe(false);
   });
 
-  it("ENFORCEMENT BINDING (slice 21 validate_user_confirmation_support_mode): a user_confirmation cluster missing confirmation authority trips support_mode_missing_authority; valid refs + confirmation clear it", () => {
-    const { frontier, frontierValidation } = frontierScenario();
-    const baseArgs = {
-      answerSupportLedgerRef: "answer-support-ledger.yaml",
-      maturationQuestionFrontier: frontier,
-      maturationQuestionFrontierValidation: frontierValidation,
-      maturationQuestionFrontierValidationRef:
-        "maturation-question-frontier-validation.yaml",
-      sourceObservations: sourceObservations(["src/feature.ts"]),
-      purposeConfirmationValidation: validPurposeConfirmation(),
-    };
-    const cluster = (userConfirmationRefs: string[]) => ({
-      evidence_cluster_id: "cluster-user-confirmation",
-      question_refs: ["mq-feature-object"],
-      support_mode: "user_confirmation" as const,
-      proposed_answer_summary: "User confirmed the feature object purpose.",
-      evidence_refs: [],
-      proof_refs: [],
-      user_confirmation_refs: userConfirmationRefs,
-      authority_response_refs: [],
-      independence_basis: "user confirmation authority",
-      contradiction_refs: [],
-      limitation_refs: [],
-    });
-    const breach = validateAnswerSupportLedger({
-      ...baseArgs,
-      answerSupportLedger: answerSupportLedgerWith(cluster([])),
-    });
-    expect(breach.violations.some((v) => v.code === "support_mode_missing_authority")).toBe(true);
-    const clean = validateAnswerSupportLedger({
-      ...baseArgs,
-      answerSupportLedger: answerSupportLedgerWith(cluster(["user-confirmation-1"])),
-    });
-    expect(clean.violations.some((v) => v.code === "support_mode_missing_authority")).toBe(false);
-  });
-
   it("ENFORCEMENT BINDING (slice 21 require_two_independent_evidence_refs_for_convergent_source_evidence): a convergent cluster with one evidence record trips insufficient_independent_evidence; two independent records clear it", () => {
     const { frontier, frontierValidation } = frontierScenario();
     const observations = sourceObservations(["src/feature.ts", "src/other.ts"]);
@@ -2505,7 +2470,7 @@ describe("maturation validation", () => {
     expect(clean.violations.some((v) => v.code === "insufficient_independent_evidence")).toBe(false);
   });
 
-  it("ENFORCEMENT BINDING (slice 21 require_observation_specific_evidence_support_source_safety_row...): evidence whose observation lacks a sufficient/replay-allowed safety row trips missing_required_ref; a proper row clears it", () => {
+  it("ENFORCEMENT BINDING (slice 21 require_observation_specific_evidence_support_source_safety_row...): making ONLY the evidence_support safety row not claim-sufficient trips missing_required_ref while the material_claim/public_output rows stay valid (isolated); a sufficient row clears it", () => {
     const { frontier, frontierValidation } = frontierScenario();
     const observations = sourceObservations(["src/feature.ts"]);
     const cluster = {
@@ -2530,17 +2495,29 @@ describe("maturation validation", () => {
       sourceObservations: observations,
       answerSupportLedger: answerSupportLedgerWith(cluster),
     };
-    // breach: a present-but-empty safety ledger has no observation-specific row for obs-code-1.
+    const safety = sourceSafetyAuthority(observations);
+    // breach: make ONLY the evidence_support row insufficient; the material_claim + public_output rows
+    // stay valid, so the missing_required_ref here is uniquely from the evidence_support sufficiency/
+    // replay check (deleting that specific check reds this test — it does not overlap the sibling rows).
+    const breachLedger = structuredClone(safety.sourceSafetyLedger);
+    const evidenceSupportRowId = sourceSafetyRowIdForObservation(
+      observations.observations[0]!,
+      "evidence_support",
+    );
+    const evidenceSupportRow = breachLedger.safety_rows.find(
+      (row) => row.safety_row_id === evidenceSupportRowId,
+    )!;
+    evidenceSupportRow.proof_sufficiency_state = "insufficient_for_claim";
     const breach = validateAnswerSupportLedger({
       ...baseArgs,
-      ...sourceSafetyAuthority(sourceObservations([])),
+      sourceSafetyLedger: breachLedger,
+      sourceSafetyLedgerRef: safety.sourceSafetyLedgerRef,
+      sourceSafetyLedgerValidation: safety.sourceSafetyLedgerValidation,
+      sourceSafetyLedgerValidationRef: safety.sourceSafetyLedgerValidationRef,
     });
     expect(breach.violations.some((v) => v.code === "missing_required_ref")).toBe(true);
-    // clean: a proper safety ledger carries the sufficient/replay-allowed rows for the cited observation.
-    const clean = validateAnswerSupportLedger({
-      ...baseArgs,
-      ...sourceSafetyAuthority(observations),
-    });
+    // clean: a proper safety ledger carries the sufficient/replay-allowed evidence_support row.
+    const clean = validateAnswerSupportLedger({ ...baseArgs, ...safety });
     expect(clean.violations.some((v) => v.code === "missing_required_ref")).toBe(false);
   });
 

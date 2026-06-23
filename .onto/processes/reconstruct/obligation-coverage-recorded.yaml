@@ -130,8 +130,6 @@ recorded:
   - validator_id: answer-support-ledger-validator
     obligation_id: validate_evidence_cluster_question_refs
   - validator_id: answer-support-ledger-validator
-    obligation_id: validate_user_confirmation_support_mode
-  - validator_id: answer-support-ledger-validator
     obligation_id: require_two_independent_evidence_refs_for_convergent_source_evidence_unless_direct_authority
   - validator_id: answer-support-ledger-validator
     obligation_id: require_frontier_triggered_evidence_to_resolve_to_valid_reentry_validation
