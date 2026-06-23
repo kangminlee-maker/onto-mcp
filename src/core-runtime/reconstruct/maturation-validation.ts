@@ -2260,6 +2260,28 @@ export function validateAnswerSupportLedger(args: {
 }): ReconstructAnswerSupportLedgerValidationArtifact {
   const ledger = args.answerSupportLedger;
   const violations: ReconstructMaturationValidationViolation[] = [];
+  // G(a) slice 21 — record the obligations this validator genuinely enforces (RECORD 4/9). The
+  // other 5 stay parked (see obligation-coverage-ledger.yaml notes): contradictions-bounded is
+  // enforced by validateMaturationAnswerClaims (DELEGATED); the frontier→valid-lineage-index-
+  // validation check is an unscoped global precondition (PARTIAL); the external/runtime + generic
+  // support-mode-required-refs obligations have no distinct, non-overlapping enforcement here; and
+  // user_confirmation is presence-only (it never resolves user_confirmation_refs to the confirmation
+  // authority — an arbitrary ref passes whenever a valid purpose-confirmation exists; PARTIAL, codex
+  // R1). Stamped before any per-cluster guard so the recorder fires on zero-row input.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "validate_evidence_cluster_question_refs");
+  assertObligation(
+    assertedObligationIds,
+    "require_two_independent_evidence_refs_for_convergent_source_evidence_unless_direct_authority",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_frontier_triggered_evidence_to_resolve_to_valid_reentry_validation",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "require_observation_specific_evidence_support_source_safety_row_with_claim_sufficiency_and_replay",
+  );
   const questions = questionMap(args.maturationQuestionFrontier);
   const evidenceIndex = evidenceRefIndex(args.sourceObservations);
   const lineageObservationIds = new Set(
@@ -2783,6 +2805,7 @@ export function validateAnswerSupportLedger(args: {
     validation_results: violations.length === 0
       ? ["answer_support_ledger_valid"]
       : ["answer_support_ledger_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

@@ -108,6 +108,7 @@ function validLedgerValidation(): ReconstructAnswerSupportLedgerValidationArtifa
     evidence_cluster_count: 1,
     supported_question_count: 1,
     validation_results: [],
+    asserted_obligation_ids: [],
     violations: [],
   };
 }

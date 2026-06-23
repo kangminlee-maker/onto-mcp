@@ -56,38 +56,27 @@ pending:
     obligation_id: require_contradictions_to_be_recorded_and_bounded
     coverage_status: pending
     tier: flat
+    note: "slice-21 audit (2026-06-23): DELEGATED. validateAnswerSupportLedger never reads contradiction_refs. The contract clause (Answer Support Rules: contradictions must prevent answer-claim validation unless the claim records how the contradiction is bounded) is enforced downstream in validateMaturationAnswerClaims (contradictory-cluster -> limitation_refs check), not in this validator. Recording deferred to the answer-claims validator that owns the bounded check."
   - validator_id: answer-support-ledger-validator
     obligation_id: require_frontier_triggered_evidence_to_resolve_to_valid_lineage_index_validation
     coverage_status: pending
     tier: flat
-  - validator_id: answer-support-ledger-validator
-    obligation_id: require_frontier_triggered_evidence_to_resolve_to_valid_reentry_validation
-    coverage_status: pending
-    tier: flat
-  - validator_id: answer-support-ledger-validator
-    obligation_id: require_observation_specific_evidence_support_source_safety_row_with_claim_sufficiency_and_replay
-    coverage_status: pending
-    tier: flat
-  - validator_id: answer-support-ledger-validator
-    obligation_id: require_two_independent_evidence_refs_for_convergent_source_evidence_unless_direct_authority
-    coverage_status: pending
-    tier: flat
-  - validator_id: answer-support-ledger-validator
-    obligation_id: validate_evidence_cluster_question_refs
-    coverage_status: pending
-    tier: flat
+    note: "slice-21 audit (2026-06-23): PARTIAL. The valid-lineage-index-validation requirement is an UNSCOPED global precondition (fires when a lineage index validation is present-and-invalid, or when lineage-marked evidence lacks one) rather than scoped to the obligation's frontier_triggered discriminator (membership in the lineage index added_observation_ids). The frontier_triggered scope is read only for the re-entry obligation (recorded); there is no dedicated frontier-triggered-scoped lineage-index-validation enforcement here. Recording deferred."
   - validator_id: answer-support-ledger-validator
     obligation_id: validate_external_or_runtime_authority_support_mode
     coverage_status: pending
     tier: flat
+    note: "slice-21 audit (2026-06-23): PARTIAL. runtime_proof is presence-only (proof_refs non-empty; the contract's validated query/test/formula/execution/artifact proof that demonstrates the answer is not checked) and authority_response checks response_status == provided but delegates answers-a-closure-frontier-authority-request to maturation-authority-response validation. No distinct name-matching enforcement of the support-mode authority beyond presence/status. Recording deferred."
   - validator_id: answer-support-ledger-validator
     obligation_id: validate_support_mode_required_refs
     coverage_status: pending
     tier: flat
+    note: "slice-21 audit (2026-06-23): AMBIGUOUS/overlapping. The generic required-refs-per-support-mode check is distributed across the per-mode support_mode_missing_authority guards and overlaps the modes owned by validate_user_confirmation_support_mode (user_confirmation) and validate_external_or_runtime_authority_support_mode (runtime_proof/authority_response); only direct_authority's evidence_refs guard is un-owned, but the generic obligation name is not 1:1 with that single mode and cannot be bound non-overlappingly without laundering the others. Recording deferred (would need a dedicated direct-authority-required-refs obligation or a single generic violation code)."
   - validator_id: answer-support-ledger-validator
     obligation_id: validate_user_confirmation_support_mode
     coverage_status: pending
     tier: flat
+    note: "slice-21 R1 audit (2026-06-23, codex P2): PARTIAL / presence-only. The user_confirmation branch only requires user_confirmation_refs to be non-empty AND a globally-valid purpose-confirmation-validation; it never resolves the cited refs to the confirmation authority, so an arbitrary ref (e.g. ghost-confirmation) passes whenever any valid purpose-confirmation exists. Contrast authority_response, which resolves authority_response_refs to provided responses. Recording deferred pending ref-resolution of user_confirmation_refs against the confirmation authority (WIRE candidate)."
   - validator_id: baseline-actionability-matrix-validator
     obligation_id: preserve_frontier_seed_state_before_question_frontier_authoring
     coverage_status: pending

@@ -2402,6 +2402,7 @@ describe("runReconstruct", () => {
       evidence_cluster_count: evidenceClusterCount,
       supported_question_count: evidenceClusterCount,
       validation_results: [],
+      asserted_obligation_ids: [],
       violations: [],
     };
   }

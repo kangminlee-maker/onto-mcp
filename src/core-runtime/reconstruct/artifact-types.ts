@@ -2319,6 +2319,7 @@ export interface ReconstructAnswerSupportLedgerValidationArtifact {
   evidence_cluster_count: number;
   supported_question_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 
