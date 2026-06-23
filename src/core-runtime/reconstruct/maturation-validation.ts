@@ -1855,23 +1855,19 @@ export function validateMaturationClosureFrontier(args: {
 }): ReconstructMaturationClosureFrontierValidationArtifact {
   const frontier = args.maturationClosureFrontier;
   const violations: ReconstructMaturationValidationViolation[] = [];
-  // G(a) slice 25 — clean structural validator: record all 10 obligations, each a distinct,
-  // name-matching violation that fires unconditionally inside the source-request / authority-request
-  // loops (no optional-arg gating, no projections). #10 (mixed lineage) fires for the real schema
-  // discriminator target_material_kind === "mixed"; its valid-profile precondition is benign (an
-  // invalid profile separately trips prior_validation_invalid above). Stamped before any per-request
-  // guard so the recorder fires on zero-request input.
+  // G(a) slice 25 — RECORD only the 3 obligations that fully enforce their named scope with no
+  // runtime/registry/edge gaps (codex R1 found this validator is NOT cleanly structural — 7 obligations
+  // have deeper gaps, see obligation-coverage-ledger.yaml notes): #2 dup-source only de-dupes the id, not
+  // same-target-ref duplicates (runtime re-entry throws); #4 accepts exists:false/skipped inventory rows
+  // (runtime buildReconstructSourceObservation returns null); #10 mixed-lineage never fires (source
+  // requests carry concrete per-ref kinds, never "mixed"); #1 authority-dedup keys on the whole
+  // question_refs set, missing per-question overlap; #8/#9 don't reject empty question_refs; and #6/#8/#9
+  // read the maturation-question-frontier ARTIFACT which the registry does not declare as an input
+  // authority (declared≠wired, slice-14 pattern). Stamped before any per-request guard (zero-row input).
   const assertedObligationIds: string[] = [];
-  assertObligation(assertedObligationIds, "reject_duplicate_or_already_observed_source_requests");
-  assertObligation(assertedObligationIds, "reject_unsupported_material_refs");
   assertObligation(assertedObligationIds, "reject_semantic_only_locations");
-  assertObligation(assertedObligationIds, "validate_closure_frontier_question_refs_against_material_unanswered_questions");
-  assertObligation(assertedObligationIds, "validate_closure_frontier_source_requests_preserve_member_and_cross_material_lineage");
   assertObligation(assertedObligationIds, "require_unique_authority_request_id");
   assertObligation(assertedObligationIds, "validate_authority_request_kind_expected_response_kind_and_scope");
-  assertObligation(assertedObligationIds, "validate_authority_request_question_refs_against_material_unanswered_questions");
-  assertObligation(assertedObligationIds, "validate_authority_request_blocking_semantics_against_question_materiality");
-  assertObligation(assertedObligationIds, "reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope");
   const materialQuestions = materialQuestionIds(args.maturationQuestionFrontier);
   const questions = questionMap(args.maturationQuestionFrontier);
   const sourceRequestsSeen = new Set<string>();

@@ -364,6 +364,41 @@ pending:
     coverage_status: pending
     tier: flat
     note: "slice-2 audit (2026-06-22): validateMaturationBaseline validates purpose_element_ref resolution but enforces no per-row trace-to-seed_refs/limitations/validated-assessment-gaps check — no distinct enforcement site located. Recording deferred pending an added enforcement check or an owner decision."
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_duplicate_or_already_observed_source_requests
+    coverage_status: pending
+    tier: flat
+    note: "slice-25 R1 audit (2026-06-23, codex P2): PARTIAL. The validator de-dupes source_request_id and rejects already-observed refs, but two requests with DISTINCT ids targeting the same unobserved requested_source_ref both enter accepted_source_request_ids. In a real run that passes validation and then the re-entry observer throws on the second accepted id (run.ts ~9870-9884). Contract (design ~1372-1373) requires rejecting duplicate source requests (same target). Recording deferred pending same-target-ref duplicate rejection."
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_unsupported_material_refs
+    coverage_status: pending
+    tier: flat
+    note: "slice-25 R1 audit (2026-06-23, codex P2): PARTIAL. The validator treats ANY inventory row as supported and only rejects a missing row; rows with exists:false, scan_status:skipped, or a non-concrete kind still validate and are accepted. The runtime then builds a detection and buildReconstructSourceObservation returns null for non-existent/non-concrete refs, throwing (materialize-preparation.ts ~434-436; run.ts ~9908-9911). Recording deferred pending rejection of skipped/non-existent/non-concrete inventory entries."
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_closure_frontier_question_refs_against_material_unanswered_questions
+    coverage_status: pending
+    tier: flat
+    note: "slice-25 R1 audit (2026-06-23, codex P2): PARTIAL + declared≠wired. (a) An empty source-request question_refs array fires no violation, so a request resolves to zero material questions and still validates. (b) The check reads questions/materialQuestions from the maturation-question-frontier ARTIFACT, but the registry input_authority_refs (registry ~2613-2619) declares only maturation-question-frontier-validation.yaml, not the artifact — a registry-driven consumer cannot supply it (slice-14 pattern). Recording deferred pending non-empty-refs enforcement + the frontier artifact declared as an input."
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_closure_frontier_source_requests_preserve_member_and_cross_material_lineage
+    coverage_status: pending
+    tier: flat
+    note: "slice-25 R1 audit (2026-06-23, codex P2): dead discriminator. The mixed-lineage check fires only when an individual source request has target_material_kind === 'mixed', but real mixed targets are an aggregate detection while inventory units / source requests carry concrete per-ref kinds (materialize-preparation.ts ~46-56, ~729-732) that exclude 'mixed'. A mixed target requesting a concrete member source (e.g. code) with empty lineage validates anyway. Contract (design ~1374-1376) requires lineage for mixed-material source requests. Recording deferred pending enforcement keyed on the real (aggregate) mixed-target signal or the target profile."
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_authority_request_question_refs_against_material_unanswered_questions
+    coverage_status: pending
+    tier: flat
+    note: "slice-25 R1 audit (2026-06-23, codex P2): PARTIAL + declared≠wired. Same two issues as the source-request question_refs obligation: an empty authority-request question_refs array fires no violation, and the materiality check reads the maturation-question-frontier ARTIFACT which the registry does not declare as an input authority (registry ~2613-2619). Recording deferred pending non-empty-refs enforcement + the frontier artifact declared as an input."
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_authority_request_blocking_semantics_against_question_materiality
+    coverage_status: pending
+    tier: flat
+    note: "slice-25 R1 audit (2026-06-23, codex P2): declared≠wired. The blocker-must-block check reads question.materiality from the maturation-question-frontier ARTIFACT, but the registry input_authority_refs (registry ~2613-2619) declares only maturation-question-frontier-validation.yaml, not the artifact — a registry-driven consumer cannot reproduce the check (slice-14 pattern). Recording deferred pending the frontier artifact declared as an input authority."
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope
+    coverage_status: pending
+    tier: flat
+    note: "slice-25 R1 audit (2026-06-23, codex P2): scope-too-coarse. The dedupe keys on the ENTIRE sorted question_refs array, so a request covering [q1,q2] and another covering [q1] with the same authority kind and scope both validate even though they duplicate the same (question, kind, scope) for q1. Contract (design ~1379-1380) is per-question. Recording deferred pending per-question dedupe."
   - validator_id: maturation-continuation-decision-validator
     obligation_id: validate_continuation_state_against_validated_actionability_matrix_and_frontier_state
     coverage_status: pending

@@ -4580,23 +4580,10 @@ describe("maturation rejection branches", () => {
       .toBe(true);
   });
 
-  // G(a) slice 25 ENFORCEMENT BINDINGS — non-vacuous, NON-OVERLAPPING breaching inputs for the
-  // closure-frontier obligations not already bound above (already_observed / unsupported_source_ref /
-  // semantic_only_location / mixed_lineage_missing are covered). Each trips its own violation.
-  it("ENFORCEMENT BINDING (slice 25 source duplicate): a duplicate source_request_id trips duplicate_id", () => {
-    const { closureFrontier, runClosure } = validClosureSourceRequestScenario();
-    const mutated = structuredClone(closureFrontier);
-    mutated.source_requests.push(structuredClone(mutated.source_requests[0]!));
-    expect(runClosure(mutated).violations.some((v) => v.code === "duplicate_id")).toBe(true);
-  });
-
-  it("ENFORCEMENT BINDING (slice 25 source question_refs): an unknown source-request question_ref trips unknown_id", () => {
-    const { closureFrontier, runClosure } = validClosureSourceRequestScenario();
-    const mutated = structuredClone(closureFrontier);
-    mutated.source_requests[0]!.question_refs = ["mq-ghost"];
-    expect(runClosure(mutated).violations.some((v) => v.code === "unknown_id")).toBe(true);
-  });
-
+  // G(a) slice 25 ENFORCEMENT BINDINGS — non-vacuous, NON-OVERLAPPING breaching inputs for the two
+  // RECORDED authority obligations (require_unique_authority_request_id, kind/response/scope). The
+  // source-side recorded obligation (semantic_only_location) is bound above. The other closure-frontier
+  // obligations are PARKED (codex R1: runtime/registry/edge gaps) and intentionally NOT bound here.
   function authorityRequest() {
     return {
       authority_request_id: "authority-request-1",
@@ -4644,42 +4631,6 @@ describe("maturation rejection branches", () => {
     ).toBe(true);
   });
 
-  it("ENFORCEMENT BINDING (slice 25 authority question_refs): an unknown authority question_ref trips unknown_id", () => {
-    expect(
-      runWithAuthority([{ ...authorityRequest(), question_refs: ["mq-ghost"] }])
-        .violations.some((v) => v.code === "unknown_id"),
-    ).toBe(true);
-  });
-
-  it("ENFORCEMENT BINDING (slice 25 dedupe by question/kind/scope): two distinct-id authority requests with the same (question, kind, scope) trip duplicate_id", () => {
-    const a = authorityRequest();
-    const b = { ...authorityRequest(), authority_request_id: "authority-request-2" };
-    expect(runWithAuthority([a, b]).violations.some((v) => v.code === "duplicate_id")).toBe(true);
-  });
-
-  it("ENFORCEMENT BINDING (slice 25 blocking semantics): a blocker-question authority request that does not block trips conflicting_state", () => {
-    const { frontierValidation } = validClosureSourceRequestScenario();
-    const { frontier } = frontierScenario();
-    const blockerFrontier = structuredClone(frontier);
-    blockerFrontier.questions[0]!.materiality = "blocker";
-    blockerFrontier.questions[0]!.current_answer_status = "unsupported";
-    const closure = structuredClone(validClosureSourceRequestScenario().closureFrontier);
-    closure.authority_requests = [{ ...authorityRequest(), blocking_if_unavailable: false }];
-    const validation = validateMaturationClosureFrontier({
-      maturationClosureFrontier: closure,
-      maturationClosureFrontierRef: "maturation-closure-frontier.yaml",
-      maturationQuestionFrontier: blockerFrontier,
-      maturationQuestionFrontierValidation: frontierValidation,
-      maturationQuestionFrontierValidationRef:
-        "maturation-question-frontier-validation.yaml",
-      sourceInventory: sourceInventory(["src/feature.ts", "src/feature-extra.ts"]),
-      sourceInventoryRef: "source-inventory.yaml",
-      sourceObservations: sourceObservations(["src/feature.ts"]),
-      sourceObservationsRef: "source-observations.yaml",
-      targetMaterialProfileValidation: validTargetMaterialProfileValidation(),
-    });
-    expect(validation.violations.some((v) => v.code === "conflicting_state")).toBe(true);
-  });
 });
 
 // M4b builder branch coverage for matrix shapes the all-closed readyDecision test cannot
