@@ -51,6 +51,7 @@ function continuationValidation(): ReconstructMaturationContinuationDecisionVali
     blocking_row_count: 1,
     next_frontier_count: 0,
     validation_results: ["maturation_continuation_decision_valid"],
+    asserted_obligation_ids: [],
     violations: [],
   };
 }

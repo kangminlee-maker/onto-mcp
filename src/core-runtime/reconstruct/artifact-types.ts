@@ -2598,6 +2598,7 @@ export interface ReconstructMaturationContinuationDecisionValidationArtifact {
   blocking_row_count: number;
   next_frontier_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 

@@ -406,41 +406,15 @@ pending:
     coverage_status: pending
     tier: flat
   - validator_id: maturation-continuation-decision-validator
-    obligation_id: bind_revision_proposal_validation_to_consumed_revision_proposal
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-continuation-decision-validator
-    obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-continuation-decision-validator
-    obligation_id: reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-continuation-decision-validator
-    obligation_id: reject_actionable_ready_when_unresolved_revision_blockers_remain
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-continuation-decision-validator
-    obligation_id: require_revision_blocker_refs_in_continuation_limitation_refs
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-continuation-decision-validator
     obligation_id: validate_continuation_state_against_validated_actionability_matrix_and_frontier_state
     coverage_status: pending
     tier: flat
+    note: "slice-22 audit (2026-06-23): AMBIGUOUS. The name is broad ('continuation_state against validated matrix AND frontier_state') and its intent is split across three non-overlapping enforcement regions with no single block that matches it 1:1: the blanket prior-validation loop (requires all 8 upstream validations valid, of which matrix/question-frontier/closure-frontier are three), the claim_scope partition recompute (decision included/excluded refs must equal the matrix closed/non-closed rows — overlaps the actionable_limited row-scope obligation), and the material-open-rows gate (overlaps reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed). Recording deferred (would need splitting into narrower obligations e.g. require_prior_validation_status_valid / validate_claim_scope_partition_against_matrix, or absorbing into the existing recorded gates)."
   - validator_id: maturation-continuation-decision-validator
     obligation_id: validate_continue_ask_user_or_blocked_state_against_available_next_authority
     coverage_status: pending
     tier: flat
-  - validator_id: maturation-continuation-decision-validator
-    obligation_id: validate_limitation_refs_and_row_scope_for_actionable_limited_state
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-continuation-decision-validator
-    obligation_id: validate_revision_blocker_limitation_refs_against_validated_revision_proposal
-    coverage_status: pending
-    tier: flat
+    note: "slice-22 audit (2026-06-23): PARTIAL. The validator enforces continue (requires >=1 next_frontier_ref) and ask_user (requires >=1 authority_request_ref), but the named `blocked` state has NO enforcement against next-authority availability. Contract (design ~1539: deferred_external_authority projects ask_user/blocked/limitation depending on availability) expects blocked to be validated against unavailability, but no such check exists. Recording deferred pending a `blocked`-state enforcer."
   - validator_id: maturation-convergence-ledger-validator
     obligation_id: preserve_remaining_frontier_refs_without_ready_projection
     coverage_status: pending

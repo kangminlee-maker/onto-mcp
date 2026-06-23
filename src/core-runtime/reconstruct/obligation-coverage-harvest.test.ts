@@ -8,6 +8,7 @@ import type {
   ReconstructActionabilityMatrixValidationArtifact,
   ReconstructAnswerSupportJudgmentValidationArtifact,
   ReconstructAnswerSupportLedgerValidationArtifact,
+  ReconstructMaturationContinuationDecisionValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructMaterialAdmissionLedgerValidationArtifact,
   ReconstructMaturationConvergenceLedgerValidationArtifact,
@@ -30,6 +31,7 @@ import {
   validateActionabilityMatrix,
   validateAnswerSupportJudgment,
   validateAnswerSupportLedger,
+  validateMaturationContinuationDecision,
   validateMaturationAnswerClaims,
   validateMaturationBaseline,
   validateMaturationQuestionFrontier,
@@ -837,6 +839,46 @@ function runAnswerSupportLedger(): ReconstructAnswerSupportLedgerValidationArtif
       session_id: "session-harvest",
       created_at: now,
       observations: [],
+    } as never,
+  });
+}
+
+function runMaturationContinuationDecision(): ReconstructMaturationContinuationDecisionValidationArtifact {
+  // The seven recorded obligations are stamped unconditionally at the top (before the per-row/per-state
+  // guards), so a minimal `blocked` decision with empty matrix/proposal reaches every recorder while the
+  // function still runs to completion (no per-state branch fires for `blocked`).
+  const validValidation = { validation_status: "valid" } as never;
+  return validateMaturationContinuationDecision({
+    maturationContinuationDecision: {
+      session_id: "session-harvest",
+      decision_state: "blocked",
+      blocking_row_refs: [],
+      next_frontier_refs: [],
+      authority_request_refs: [],
+      limitation_refs: [],
+      revision_blocker_limitation_refs: [],
+      maturation_convergence_ledger_validation_ref: null,
+      claim_scope: { included_row_refs: [], excluded_row_refs: [] },
+    } as never,
+    actionabilityMatrix: {
+      session_id: "session-harvest",
+      rows: [],
+      candidate_limitation_refs: [],
+    } as never,
+    actionabilityMatrixValidation: validValidation,
+    maturationQuestionFrontierValidation: validValidation,
+    maturationClosureFrontierValidation: validValidation,
+    answerSupportLedgerValidation: validValidation,
+    maturationAuthorityResponseValidation: validValidation,
+    ontologyExpansionValidation: validValidation,
+    maturationConvergenceLedgerValidation: {
+      validation_status: "valid",
+      final_requestion_pass_status: "no_new_material_question",
+    } as never,
+    revisionProposal: { proposals: [] } as never,
+    revisionProposalValidation: {
+      validation_status: "valid",
+      revision_proposal_ref: null,
     } as never,
   });
 }
@@ -1672,7 +1714,44 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // public_output rows stay valid, so deleting the evidence_support sufficiency/replay check reds the test)
   // — each with a clean variant that clears it. Building those fixtures inline here would duplicate that file.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 66 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateMaturationContinuationDecision records its 7 instrumented obligations (slice 22: revision-proposal binding + 3 actionable_ready gates + revision-blocker fold/equality + actionable_limited scope) and NOT the 2 parked", () => {
+    const out = runMaturationContinuationDecision();
+    for (const obligation of [
+      "bind_revision_proposal_validation_to_consumed_revision_proposal",
+      "reject_actionable_ready_until_final_requestion_convergence_is_proven",
+      "reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed",
+      "reject_actionable_ready_when_unresolved_revision_blockers_remain",
+      "require_revision_blocker_refs_in_continuation_limitation_refs",
+      "validate_limitation_refs_and_row_scope_for_actionable_limited_state",
+      "validate_revision_blocker_limitation_refs_against_validated_revision_proposal",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (Explore audit, slice 22). validate_continuation_state_against_validated_actionability_matrix
+    // _and_frontier_state is AMBIGUOUS: its broad intent is split across the blanket prior-validation loop,
+    // the claim_scope partition recompute, and the material-rows gate, with no distinct non-overlapping
+    // block (overlaps the recorded material-row + actionable_limited gates). validate_continue_ask_user_or
+    // _blocked_state_against_available_next_authority is PARTIAL: continue + ask_user are enforced but the
+    // named `blocked` state has no next-authority-availability check. See obligation-coverage-ledger.yaml.
+    for (const parked of [
+      "validate_continuation_state_against_validated_actionability_matrix_and_frontier_state",
+      "validate_continue_ask_user_or_blocked_state_against_available_next_authority",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (slice 22): each recorded obligation has a non-vacuous, NON-OVERLAPPING enforcement
+  // binding already in maturation-validation.test.ts (this validator was built up by M1/M4b so the gates
+  // shipped with tests): #3 material-row gate = "keeps continuation blocked while material frontier rows
+  // remain open" (falseReadyValidation -> conflicting_state); #2 = "requires final re-question convergence
+  // before actionable ready" (conflicting_state); #8 = "rejects actionable limited when no rows can be
+  // included" (missing_required_ref); and the revision-blocker block binds #4 (forcedReady ->
+  // conflicting_state), #9 (tamperedField -> conflicting_state), #5 (droppedFold -> missing_required_ref),
+  // and #1 (bindingMismatch + unboundBinding -> conflicting_state, subject revision_proposal_ref) with
+  // distinct breaching inputs. Building those fixtures inline here would duplicate that file.
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 73 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1695,6 +1774,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const handoffDecisionOut = runHandoffDecision();
     const candidateDispositionOut = runCandidateDisposition();
     const answerSupportLedgerOut = runAnswerSupportLedger();
+    const continuationDecisionOut = runMaturationContinuationDecision();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -1778,6 +1858,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "answer-support-ledger-validator",
         obligation_id,
       })),
+      ...continuationDecisionOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "maturation-continuation-decision-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -1794,6 +1878,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(66);
+    expect(harvestedSet.size).toBe(73);
   });
 });

@@ -4465,6 +4465,22 @@ export function validateMaturationContinuationDecision(args: {
 }): ReconstructMaturationContinuationDecisionValidationArtifact {
   const decision = args.maturationContinuationDecision;
   const violations: ReconstructMaturationValidationViolation[] = [];
+  // G(a) slice 22 — record the obligations this validator genuinely enforces (RECORD 7/9; this
+  // validator was built up by the M1/M4b conservation work so most obligations are born wired). The
+  // other 2 stay parked (see obligation-coverage-ledger.yaml notes): the "continuation_state against
+  // validated matrix and frontier_state" obligation is AMBIGUOUS (its intent is split across the
+  // blanket prior-validation loop, the claim_scope partition, and the material-rows gate with no
+  // distinct non-overlapping block), and "continue/ask_user/blocked against available next authority"
+  // is PARTIAL (the named `blocked` state has no enforcement). Stamped before any per-row/per-state
+  // guard so the recorder fires on zero-row input.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "bind_revision_proposal_validation_to_consumed_revision_proposal");
+  assertObligation(assertedObligationIds, "reject_actionable_ready_until_final_requestion_convergence_is_proven");
+  assertObligation(assertedObligationIds, "reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed");
+  assertObligation(assertedObligationIds, "reject_actionable_ready_when_unresolved_revision_blockers_remain");
+  assertObligation(assertedObligationIds, "require_revision_blocker_refs_in_continuation_limitation_refs");
+  assertObligation(assertedObligationIds, "validate_limitation_refs_and_row_scope_for_actionable_limited_state");
+  assertObligation(assertedObligationIds, "validate_revision_blocker_limitation_refs_against_validated_revision_proposal");
   const matrixRows = new Map(args.actionabilityMatrix.rows.map((row) => [
     row.matrix_row_id,
     row,
@@ -4739,6 +4755,7 @@ export function validateMaturationContinuationDecision(args: {
     validation_results: violations.length === 0
       ? ["maturation_continuation_decision_valid"]
       : ["maturation_continuation_decision_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

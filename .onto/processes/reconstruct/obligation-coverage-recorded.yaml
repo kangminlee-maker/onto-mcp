@@ -135,3 +135,17 @@ recorded:
     obligation_id: require_frontier_triggered_evidence_to_resolve_to_valid_reentry_validation
   - validator_id: answer-support-ledger-validator
     obligation_id: require_observation_specific_evidence_support_source_safety_row_with_claim_sufficiency_and_replay
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: bind_revision_proposal_validation_to_consumed_revision_proposal
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: reject_actionable_ready_until_final_requestion_convergence_is_proven
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: reject_actionable_ready_when_unresolved_revision_blockers_remain
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: require_revision_blocker_refs_in_continuation_limitation_refs
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: validate_limitation_refs_and_row_scope_for_actionable_limited_state
+  - validator_id: maturation-continuation-decision-validator
+    obligation_id: validate_revision_blocker_limitation_refs_against_validated_revision_proposal
