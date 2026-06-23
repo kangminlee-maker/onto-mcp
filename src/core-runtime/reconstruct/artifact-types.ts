@@ -2854,6 +2854,7 @@ export interface ReconstructClaimProjectionValidationArtifact {
   strongest_claim_level: ReconstructClaimProjectionLevel;
   decision_state_counts: Record<ReconstructClaimProjectionDecisionState, number>;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructClaimProjectionValidationViolation[];
 }
 

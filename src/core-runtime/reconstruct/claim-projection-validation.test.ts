@@ -861,6 +861,40 @@ describe("validateClaimProjection rejection branches", () => {
     ).toBe(true);
   });
 
+  // G(a) slice 23 ENFORCEMENT BINDING (reject_unwired_material_kind_support_levels_above_profile_supported):
+  // member support claims above profile_supported (golden/real/release) are unwired (design ~1188-1190 —
+  // the runtime may publish only unsupported/profile_supported until stronger evidence gates are wired).
+  // This fires UNCONDITIONALLY (no target-profile arg), isolating it from the gated lineage block.
+  it("rejects a material-kind support member claim above profile_supported (member_capability_lineage_mismatch)", () => {
+    const artifact = structuredClone(projection());
+    materialRow(artifact).member_capability_rows[0]!.support_claim = "release_supported";
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "member_capability_lineage_mismatch"),
+    ).toBe(true);
+    const clean = validateClaimProjection({ claimProjection: structuredClone(projection()) });
+    expect(
+      clean.violations.some((v) => v.code === "member_capability_lineage_mismatch"),
+    ).toBe(false);
+  });
+
+  // G(a) slice 23 ENFORCEMENT BINDING (validate_material_kind_support_row_uses_capability_claim_not_
+  // actionability_claim): a material_kind_support row must use the member-capability mechanism and carry
+  // NO actionability claim state. Setting an actionability_claim trips the surface-specific guard
+  // (~655-667); the general alignment checks exclude material_kind_support, so this isolates the facet.
+  it("rejects a material-kind support row that carries actionability claim state (decision_state_actionability_mismatch)", () => {
+    const artifact = structuredClone(projection());
+    materialRow(artifact).actionability_claim = "ready";
+    const validation = validateClaimProjection({ claimProjection: artifact });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "decision_state_actionability_mismatch"),
+    ).toBe(true);
+  });
+
   it("rejects actionable_ready claim_level without actionable_ready decision_state (ready_projection_without_ready_decision)", () => {
     const artifact = structuredClone(projection());
     const row = nonMaterialRow(artifact);
