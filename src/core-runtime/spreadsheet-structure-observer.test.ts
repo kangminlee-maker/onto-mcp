@@ -478,6 +478,11 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(JSON.stringify(r)).not.toContain("LATEMARKER");
     // Declared dimension is still reported truthfully.
     expect(r.sheets[0]!.dimensions.rows).toBe(600);
+    // design-C honesty (§8): non_empty_count is a LOWER BOUND when the row cap truncated the
+    // scan — it reflects only the scanned window (cap 50, incl. header), never the declared 599
+    // data rows. Bound it to the scanned window and tie it to capture_truncated (asserted above).
+    expect(col.non_empty_count).toBeLessThanOrEqual(50);
+    expect(col.non_empty_count).toBeLessThan(599);
   });
 
   it("returns an honest unsupported_reason on a non-OOXML input (not a crash)", () => {

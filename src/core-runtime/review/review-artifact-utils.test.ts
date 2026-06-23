@@ -228,6 +228,88 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     expect(rendered).toContain("protected/hidden sheet(s) beyond the rendered sample");
   });
 
+  it("renders per-column cardinality and maps declared type=list enum members to the covering column (design-C §5#9)", async () => {
+    const root = await makeTmpDir();
+    const seed = path.join(root, "seed.csv");
+    await fs.writeFile(seed, "name,role\na,b\n", "utf8");
+    const base = await observeSpreadsheetSource(seed);
+    const sheetName = "Data";
+    const mkCol = (
+      name: string,
+      index: number,
+      distinct_count: number,
+      distinct_count_is_estimate: boolean,
+      non_empty_count: number,
+    ) => ({
+      name,
+      index,
+      inferred_type: "string" as const,
+      non_empty_ratio: 1,
+      distinct_count,
+      distinct_count_is_estimate,
+      non_empty_count,
+    });
+    const widened: WorkbookStructuralInventory = {
+      ...base,
+      sheets: [{ ...base.sheets[0]!, name: sheetName }],
+      per_sheet_data: [
+        {
+          ...base.per_sheet_data[0]!,
+          sheet: sheetName,
+          layout_kind: "tabular",
+          header_rows: [0],
+          columns: [
+            mkCol("amount", 0, 100, false, 100), // no validation → no enum
+            mkCol("region", 1, 256, true, 190000), // list-validated, distinct capped → 256+/190000
+            mkCol("memo", 2, 50, false, 50), // no validation → no enum
+          ],
+        },
+      ],
+      data_validations: [
+        {
+          sheet: sheetName,
+          range: "B2:B190001",
+          rule_summary: "list",
+          validation_type: "list",
+          members: ["Seoul", "Busan"], // DECLARED enum (from inline formula1), maps to col index 1
+          members_truncated: false,
+          applies_to_columns: [1],
+        },
+        {
+          // a range-ref list validation on col 0 → members unresolved/absent → must surface NO enum
+          sheet: sheetName,
+          range: "A2:A190001",
+          rule_summary: "list (range)",
+          validation_type: "list",
+          members_truncated: true,
+          applies_to_columns: [0],
+        },
+      ],
+    };
+
+    const xlsx = path.join(root, "card.xlsx");
+    await fs.writeFile(xlsx, "stub", "utf8");
+    const rendered = await renderReviewTargetMaterializedInput(
+      "file",
+      [xlsx],
+      undefined,
+      new Map([[path.resolve(xlsx), widened]]),
+    );
+
+    const lines = rendered.split("\n");
+    const lineFor = (n: string) => lines.find((l) => l.includes(`- ${n} (`)) ?? "";
+    // Per-column cardinality is a COUNT (distinct/non_empty); the distinct-cap estimate shows "+".
+    expect(lineFor("region")).toContain("cardinality=256+/190000");
+    expect(lineFor("amount")).toContain("cardinality=100/100");
+    // The DECLARED enum members attach to ONLY the covering normalized column (index 1)…
+    expect(lineFor("region")).toContain("enum=[Seoul, Busan]");
+    // …never to its neighbours (proves the applies_to_columns→col.index mapping is correct).
+    expect(lineFor("amount")).not.toContain("enum=");
+    expect(lineFor("memo")).not.toContain("enum=");
+    // Exactly one enum surfaces: the range-ref (members-absent) validation on col 0 emits none.
+    expect((rendered.match(/enum=/g) ?? []).length).toBe(1);
+  });
+
   it("does not surface count-only tables/merged_ranges trims as bounded samples (A3 / RC-2)", async () => {
     const root = await makeTmpDir();
     const seed = path.join(root, "seed.csv");
