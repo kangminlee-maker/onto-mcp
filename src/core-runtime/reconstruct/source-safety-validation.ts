@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructSourceObservationsArtifact,
   ReconstructSourceSafetyAuthorizationState,
@@ -392,6 +393,29 @@ export function validateSourceSafetyLedger(args: {
 }): ReconstructSourceSafetyLedgerValidationArtifact {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   const violations: ReconstructSourceSafetyValidationViolation[] = [];
+  // G(a) deferred-7 slice 1: record the three obligations this validator fully enforces. Stamped here,
+  // before the per-row loop, so they fire on zero-row input (the enforcement sites exist unconditionally).
+  // asserted_obligation_ids is in-memory-only telemetry (Stage 0 #145): it is stripped at the write
+  // boundary and excluded from reuseMatchArtifactHash, so stamping this reuse-hashed validation artifact
+  // does not rotate reuse provenance. PARKED (see obligation-coverage-ledger.yaml):
+  //  - preserve_..._consumption_boundaries: no independent "no substitution" enforcer (the per-consumption
+  //    required rows are the only related check), so it cannot bind non-overlappingly.
+  //  - validate_every_observation_has_source_safety_rows_for_each_intended_consumption (codex #147 P1):
+  //    the required-row pass only proves each source_safety:<obs>:<consumption> ID STRING is present; it
+  //    never binds that ID suffix to the row's visibility_derivation.intended_consumption (the field
+  //    deriveSourceSafetyVisibilityTier uses). So a public_output-ID row can carry prompt_context
+  //    derivation and a tier derived for the wrong consumption, pass, and mislead downstream lookup-by-ID.
+  //    PARK pending an ID-suffix ↔ intended_consumption binding.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "validate_exactly_four_canonical_source_safety_axes");
+  assertObligation(
+    assertedObligationIds,
+    "validate_source_safety_subject_refs_against_observed_source_refs",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_visibility_tier_is_derived_not_independent_authority",
+  );
   const rawLedger = args.sourceSafetyLedger as unknown;
   if (!isRecord(rawLedger) || !Array.isArray(rawLedger.safety_rows)) {
     violations.push(violation({
@@ -565,6 +589,7 @@ export function validateSourceSafetyLedger(args: {
     validation_results: violations.length === 0
       ? ["source_safety_ledger_valid"]
       : ["source_safety_ledger_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

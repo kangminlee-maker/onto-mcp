@@ -749,22 +749,12 @@ pending:
     obligation_id: preserve_prompt_context_evidence_support_public_output_replay_and_material_claim_consumption_boundaries
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-1 audit (2026-06-23): PARK (overlapping). The only enforcement is the per-row intended_consumption enum (invalid_enum, ~520-526) plus the per-observation-per-consumption required-row presence — and that presence check is itself a weak proxy (see validate_every_observation...). There is no independent check that one consumption row may not substitute for another's authority, so this obligation cannot bind a non-overlapping breaching input. Record deferred pending a dedicated no-substitution enforcer."
   - validator_id: source-safety-ledger-validator
     obligation_id: validate_every_observation_has_source_safety_rows_for_each_intended_consumption
     coverage_status: pending
     tier: flat
-  - validator_id: source-safety-ledger-validator
-    obligation_id: validate_exactly_four_canonical_source_safety_axes
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-safety-ledger-validator
-    obligation_id: validate_source_safety_subject_refs_against_observed_source_refs
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-safety-ledger-validator
-    obligation_id: validate_visibility_tier_is_derived_not_independent_authority
-    coverage_status: pending
-    tier: flat
+    note: "deferred-7 slice-1 audit (2026-06-23, codex #147 P1): PARK (weak proxy). The required-row check (requiredSafetyRowIds per observation × INTENDED_CONSUMPTIONS, ~414-420/541-549 → source_observation_safety_row_missing) only proves each source_safety:<observation_id>:<intended_consumption> ID STRING is present; it never binds that ID's consumption suffix to the row's visibility_derivation.intended_consumption — the field deriveSourceSafetyVisibilityTier actually consumes. So with every required ID present, a public_output/material_claim-ID row can carry prompt_context as its derivation consumption and a derived consumption_allowed tier, pass this validator, and mislead downstream consumers that look up the tier by row ID. Record deferred pending an ID-suffix to intended_consumption binding."
   - validator_id: source-scout-pack-post-maturation-validator
     obligation_id: validate_post_maturation_scout_snapshot_is_immutable_audit_authority
     coverage_status: pending

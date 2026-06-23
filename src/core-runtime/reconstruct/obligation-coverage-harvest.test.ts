@@ -30,6 +30,7 @@ import type {
   ReconstructRegistryVerificationEvidenceValidationArtifact,
   ReconstructRunControlValidationArtifact,
   ReconstructRunManifestValidationArtifact,
+  ReconstructSourceSafetyLedgerValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
 } from "./artifact-types.js";
@@ -64,6 +65,7 @@ import {
 import { validateMaterialAdmissionLedger } from "./material-admission-validation.js";
 import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
 import { validateHandoffDecision, validateReconstructRunManifest } from "./terminal-validation.js";
+import { validateSourceSafetyLedger } from "./source-safety-validation.js";
 import { buildReconstructRunGoverningSnapshot } from "./governing-snapshot.js";
 import { loadReconstructContractRegistry } from "./contract-registry.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
@@ -1122,6 +1124,22 @@ async function runReconstructRunManifestThin(): Promise<ReconstructRunManifestVa
     manifest: {
       session_id: "session-harvest",
       steps: [],
+    } as never,
+  });
+}
+
+// Deferred-7 slice 1: source-safety-ledger-validator. The four recorded obligations stamp before the
+// per-row loop, so a zero-row ledger reaches the recorder. This is a reuse-hashed validation artifact —
+// the asserted_obligation_ids field is in-memory-only (Stage 0 #145), so it is invisible on disk and to
+// reuseMatchArtifactHash; the byte-invariance is proven globally in artifact-io.test.ts + run.test.ts.
+function runSourceSafetyLedger(): ReconstructSourceSafetyLedgerValidationArtifact {
+  return validateSourceSafetyLedger({
+    sourceSafetyLedger: { session_id: "session-harvest", safety_rows: [] } as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
     } as never,
   });
 }
@@ -2275,7 +2293,35 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // not a compared governing_snapshot field, or (canonical URIs) name a registry policy the rebuild
   // never reads (see obligation-coverage-ledger.yaml notes).
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 100 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateSourceSafetyLedger records its 3 instrumented obligations (deferred-7 slice 1) and NOT the two parked obligations", () => {
+    const out = runSourceSafetyLedger();
+    for (const obligation of [
+      "validate_exactly_four_canonical_source_safety_axes",
+      "validate_source_safety_subject_refs_against_observed_source_refs",
+      "validate_visibility_tier_is_derived_not_independent_authority",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED: consumption-boundaries has no independent no-substitution enforcer; and the every-observation
+    // required-row check (codex #147 P1) is a weak proxy — it proves the safety_row_id STRING is present
+    // but never binds that ID's consumption suffix to the row's visibility_derivation.intended_consumption.
+    for (const parked of [
+      "preserve_prompt_context_evidence_support_public_output_replay_and_material_claim_consumption_boundaries",
+      "validate_every_observation_has_source_safety_rows_for_each_intended_consumption",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (deferred-7 slice 1): each of the 3 recorded obligations has a non-vacuous, ISOLATED
+  // enforcement binding in source-safety-validation.test.ts (and the validator's own checks): a wrong/extra
+  // canonical axis set trips visibility_axis_set_invalid; an unobserved subject_ref trips
+  // source_observation_missing; a valid-but-non-derived visibility_tier trips visibility_derivation_mismatch
+  // — each with a clean variant that clears it. (asserted_obligation_ids is in-memory-only telemetry — its
+  // byte-invariance to reuse provenance is proven in artifact-io.test.ts [channel 2] and run.test.ts
+  // [channel 1, reuseMatchArtifactHash].)
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 103 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2305,6 +2351,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const ontologySeedOut = runOntologySeed();
     const competencyQuestionsOut = runCompetencyQuestions();
     const runManifestOut = await runReconstructRunManifest();
+    const sourceSafetyOut = runSourceSafetyLedger();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -2416,6 +2463,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "pre-handoff-run-manifest-validator",
         obligation_id,
       })),
+      ...sourceSafetyOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "source-safety-ledger-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -2432,6 +2483,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(100);
+    expect(harvestedSet.size).toBe(103);
   });
 });

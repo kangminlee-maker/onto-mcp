@@ -636,6 +636,7 @@ export interface ReconstructSourceSafetyLedgerValidationArtifact {
   safety_row_count: number;
   no_prompt_use_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructSourceSafetyValidationViolation[];
 }
 
