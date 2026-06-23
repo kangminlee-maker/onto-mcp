@@ -1422,6 +1422,7 @@ export interface ReconstructOntologySeedValidationArtifact {
   evidence_ref_count: number;
   limitation_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructOntologySeedValidationViolation[];
 }
 

@@ -22,6 +22,7 @@ import type {
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructOntologyExpansionValidationArtifact,
+  ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructHandoffDecisionValidationArtifact,
   ReconstructPurposeConfirmationValidationArtifact,
@@ -59,7 +60,10 @@ import {
 import { validateMaterialAdmissionLedger } from "./material-admission-validation.js";
 import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
 import { validateHandoffDecision } from "./terminal-validation.js";
-import { validateCandidateDisposition } from "./ontology-seed-validation.js";
+import {
+  validateCandidateDisposition,
+  validateOntologySeed,
+} from "./ontology-seed-validation.js";
 import { validateClaimProjection } from "./claim-projection-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
@@ -954,6 +958,25 @@ function runMaturationClosureFrontier(): ReconstructMaturationClosureFrontierVal
       observations: [],
     } as never,
     targetMaterialProfileValidation: { validation_status: "valid" } as never,
+  });
+}
+
+// ontology-seed-validator (slice 26, ontology-seed-validation.ts). The six recorded obligations are
+// stamped unconditionally at the top (before the per-root/per-row guards), so an empty seed + empty
+// disposition + empty observations + a coverage-axis-only registry reaches every recorder while the
+// function still runs to completion. The validation artifact carries no validator_id field, so attribute
+// by name. Enforcement bindings live in ontology-seed-validation.test.ts (cited below).
+function runOntologySeed(): ReconstructOntologySeedValidationArtifact {
+  return validateOntologySeed({
+    ontologySeed: {},
+    candidateDisposition: {},
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
+    registry: { coverage_axis_registry: [] } as never,
   });
 }
 
@@ -1936,7 +1959,48 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // id (duplicate_id) and kind/response/scope (invalid_enum + missing_required_ref), each with a clean
   // authority-base variant that clears. The 7 parked obligations' partial checks are NOT cited as coverage.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 81 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateOntologySeed records its 6 instrumented obligations (slice 26: coverage-axes + purpose-element-seed-refs + promoted-realized + instance-status + instance-limitation + ready-handoff-mappings) and NOT the 7 parked", () => {
+    const out = runOntologySeed();
+    for (const obligation of [
+      "require_static_kinetic_dynamic_actionability_coverage_axes",
+      "validate_purpose_required_element_seed_ref_refs_against_known_seed_refs",
+      "validate_promoted_candidate_target_seed_refs_are_realized",
+      "validate_instance_assertion_mapping_status",
+      "require_limitation_ref_when_instance_availability_status_is_absent_or_unknown",
+      "require_ready_ontology_handoff_mappings_to_have_substantive_content_or_limitation_refs",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (Explore audit, slice 26). NOT_FOUND — the validator never reads these named fields:
+    // surface_dimension_closure (actionability_surface_refs/maturity_dimension_refs), mixed-member-lineage
+    // (member_*_refs; its target-material-profile authority is also absent from the signature), and
+    // dynamic_boundaries[]. PARTIAL — closure_status consistency proxies seed/limitation-ref presence but
+    // never reads the closure_status field. activation_gated_dormant (conditional inputs never received):
+    // the two purpose-projection-equivalence obligations + the purpose-confirmation-projection obligation.
+    // See obligation-coverage-ledger.yaml notes.
+    for (const parked of [
+      "validate_required_element_surface_dimension_closure",
+      "require_mixed_purpose_frame_projection_elements_to_preserve_member_source_and_cross_material_lineage_or_limitation",
+      "validate_dynamic_boundaries_have_unique_ids_and_close_target_refs",
+      "validate_required_element_closure_status_consistent_with_seed_evidence_and_limitation_refs",
+      "validate_purpose_adequacy_frame_projection_equivalence_against_selected_validated_frame",
+      "validate_seed_purpose_confirmation_projection_against_purpose_confirmation_validation",
+      "validate_seed_purpose_projection_equivalence_against_selected_source_purpose_candidate",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (slice 26): each of the six recorded obligations has a non-vacuous, NON-OVERLAPPING
+  // enforcement binding in ontology-seed-validation.test.ts — coverage-axes (missing_required_field on
+  // static_surface), required-element seed-ref (unknown_ref on a required_element seed_ref_ref),
+  // promoted-realized (promoted_candidate_ref_unknown on an unrealized target_seed_ref), instance-status
+  // (invalid_enum on instance_availability_status), instance-limitation (missing_required_field when an
+  // absent status drops limitation_refs), and ready-handoff-mappings (missing_required_field on an empty
+  // ready mapping shell) — each with a clean variant that clears it. Building a full valid seed inline
+  // here would duplicate that file; the recorder-reached stamp is proven above and by the flip-test.
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 87 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1963,6 +2027,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const claimProjectionOut = runClaimProjection();
     const sourcePurposeCandidatesOut = runSourcePurposeCandidates();
     const closureFrontierOut = runMaturationClosureFrontier();
+    const ontologySeedOut = runOntologySeed();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -2062,6 +2127,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "maturation-closure-frontier-validator",
         obligation_id,
       })),
+      ...ontologySeedOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "ontology-seed-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -2078,6 +2147,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(81);
+    expect(harvestedSet.size).toBe(87);
   });
 });
