@@ -31,6 +31,7 @@ import type {
   ReconstructRunControlValidationArtifact,
   ReconstructRunManifestValidationArtifact,
   ReconstructSourceSafetyLedgerValidationArtifact,
+  ReconstructTargetMaterialProfileValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
 } from "./artifact-types.js";
@@ -66,6 +67,7 @@ import { validateMaterialAdmissionLedger } from "./material-admission-validation
 import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
 import { validateHandoffDecision, validateReconstructRunManifest } from "./terminal-validation.js";
 import { validateSourceSafetyLedger } from "./source-safety-validation.js";
+import { validateTargetMaterialProfile } from "./material-profile-validation.js";
 import { buildReconstructRunGoverningSnapshot } from "./governing-snapshot.js";
 import { loadReconstructContractRegistry } from "./contract-registry.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
@@ -1141,6 +1143,30 @@ function runSourceSafetyLedger(): ReconstructSourceSafetyLedgerValidationArtifac
       created_at: now,
       observations: [],
     } as never,
+  });
+}
+
+// Deferred-7 slice 2: target-material-profile-validator. The two recorded obligations stamp before the
+// per-selected-profile loop, so a zero-profile input reaches the recorder. version_policy is supplied so
+// requiredSelectedProfileFields does not throw before the return. Reuse-hashed + scout-captured artifact —
+// asserted_obligation_ids is in-memory-only (Stage 0), byte-invariant to reuse.
+function runTargetMaterialProfile(): ReconstructTargetMaterialProfileValidationArtifact {
+  return validateTargetMaterialProfile({
+    targetMaterialProfile: {
+      session_id: "session-harvest",
+      target_material_kind: "document",
+      target_refs: [],
+      selected_source_profiles: [],
+      target_material_kind_candidates: [],
+      detection: { per_ref: [] },
+      support_status: "unknown",
+      unsupported_reason: "harvest",
+    } as never,
+    contractRegistry: {
+      source_profile_records: [],
+      version_policy: { selected_source_profile_snapshot_required_fields: ["profile_id"] },
+    } as never,
+    registryRef: "registry.yaml",
   });
 }
 
@@ -2321,7 +2347,35 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // byte-invariance to reuse provenance is proven in artifact-io.test.ts [channel 2] and run.test.ts
   // [channel 1, reuseMatchArtifactHash].)
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 103 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateTargetMaterialProfile records its 2 instrumented obligations (deferred-7 slice 2) and NOT the 4 parked mixed/partial-composite obligations", () => {
+    const out = runTargetMaterialProfile();
+    for (const obligation of [
+      "every_selected_source_profile_snapshot_contains_version_policy_required_fields",
+      "every_selected_source_profile_snapshot_matches_source_profile_records_by_profile_id_and_target_material_kind",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED: member→aggregate purpose mapping + partial-member ready-projection limiting are NOT_FOUND;
+    // the two mixed per-member preservation obligations are PARTIAL (field-match is unscoped over ALL
+    // selected profiles, not the named mixed scope, and name facets absent from the schema).
+    for (const parked of [
+      "mixed_targets_preserve_member_to_aggregate_purpose_requirement_mapping_or_limitation",
+      "mixed_targets_preserve_per_member_selected_profile_id_contract_status_runtime_implementation_status_and_support_state",
+      "mixed_targets_preserve_per_member_source_profile_snapshot_ref_definition_hash_and_source_refs",
+      "partial_composite_member_support_limits_aggregate_ready_projection",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (deferred-7 slice 2): the two recorded obligations have non-vacuous, ISOLATED bindings
+  // in material-profile-validation.test.ts — a selected profile missing a version_policy required field
+  // trips selected_profile_required_field_missing; a selected profile whose profile_id/target_material_kind
+  // or field values diverge from the registry record trips selected_profile_registry_mismatch (distinct
+  // codes, each with a clean variant). asserted_obligation_ids is in-memory-only telemetry (byte-invariance
+  // proven in artifact-io.test.ts + run.test.ts).
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 105 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2352,6 +2406,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const competencyQuestionsOut = runCompetencyQuestions();
     const runManifestOut = await runReconstructRunManifest();
     const sourceSafetyOut = runSourceSafetyLedger();
+    const targetMaterialProfileOut = runTargetMaterialProfile();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -2467,6 +2522,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "source-safety-ledger-validator",
         obligation_id,
       })),
+      ...targetMaterialProfileOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "target-material-profile-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -2483,6 +2542,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(103);
+    expect(harvestedSet.size).toBe(105);
   });
 });

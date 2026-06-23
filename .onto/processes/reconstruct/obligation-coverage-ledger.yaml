@@ -816,26 +816,22 @@ pending:
     coverage_status: pending
     tier: flat
   - validator_id: target-material-profile-validator
-    obligation_id: every_selected_source_profile_snapshot_contains_version_policy_required_fields
-    coverage_status: pending
-    tier: flat
-  - validator_id: target-material-profile-validator
-    obligation_id: every_selected_source_profile_snapshot_matches_source_profile_records_by_profile_id_and_target_material_kind
-    coverage_status: pending
-    tier: flat
-  - validator_id: target-material-profile-validator
     obligation_id: mixed_targets_preserve_member_to_aggregate_purpose_requirement_mapping_or_limitation
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-2 audit (2026-06-23): PARK (NOT_FOUND). The mixed branch (~154-178) only checks that the selected profiles include the registry mixed row and one per candidate kind (mixed_candidate_profile_missing); there is no member→aggregate purpose-requirement mapping or limitation check, and ReconstructSelectedSourceProfileRef carries no purpose_requirement / purpose_mapping / limitation_refs field. The named mapping is not inspected here."
   - validator_id: target-material-profile-validator
     obligation_id: mixed_targets_preserve_per_member_selected_profile_id_contract_status_runtime_implementation_status_and_support_state
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-2 audit (2026-06-23): PARK (PARTIAL, scope + missing facet). contract_status and runtime_implementation_status ARE match-checked against the registry (~241-246 → selected_profile_registry_mismatch), but that check runs for ALL selected profiles, not the named mixed_targets/per_member scope (the validator never gates this on target_material_kind=='mixed'), and the named support_state facet is not a field on ReconstructSelectedSourceProfileRef / ReconstructSourceProfileRecord at all. The mixed-scoped per-member preservation is not the enforced quantity (slice-20 scope-discriminator pattern)."
   - validator_id: target-material-profile-validator
     obligation_id: mixed_targets_preserve_per_member_source_profile_snapshot_ref_definition_hash_and_source_refs
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-2 audit (2026-06-23): PARK (PARTIAL, scope + missing facet). definition_sha256 and profile_ref ARE match-checked against the registry (~241-246), but unscoped (all selected profiles, not the named mixed scope), and the named source_refs facet is not a field on the selected-profile snapshot (scan_targets exists but is neither source_refs nor a required/matched field). The mixed-scoped per-member preservation is not the enforced quantity."
   - validator_id: target-material-profile-validator
     obligation_id: partial_composite_member_support_limits_aggregate_ready_projection
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-2 audit (2026-06-23): PARK (NOT_FOUND). support_status is an aggregate field on the target-material-profile artifact, not on the selected members; the validator checks only that a supported/partial/composite aggregate selects ≥1 profile (~180-193 → selected_profile_missing). There is no check that a partial_composite MEMBER's support state downgrades/limits the aggregate ready projection. The member→aggregate support-limiting rule is not inspected here."

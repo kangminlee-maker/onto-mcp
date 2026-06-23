@@ -70,6 +70,7 @@ export interface ReconstructTargetMaterialProfileValidationArtifact {
   target_ref_count: number;
   selected_source_profile_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructTargetMaterialProfileValidationViolation[];
 }
 
