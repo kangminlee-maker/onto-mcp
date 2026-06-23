@@ -1,114 +1,95 @@
-# 스프레드시트 의미론적 투영 — formula-pattern dedup + raw-잔차 측정 (Stage 1 설계)
+# 스프레드시트 의미론적 투영 — formula-pattern dedup (Stage 1, v2 교차검증 반영)
 
-> 상태: 설계 (교차검증 대기). 구현 미착수.
+> 상태: 설계 SSOT (교차검증 완료, 구현 대기).
 > 날짜: 2026-06-23
-> 상위: [[20260622-onto-review-depth-aware-multiagent-redesign]] §8 Stage 1 (window-비례 caps) — **재정의됨**: window 스케일은 증상 대응, 진짜 lever는 **의미론적 압축**.
-> 결정: dedupe는 **추출 시점(X, 스키마 변경)** — observer는 review+reconstruct 공유, blast radius 큼.
+> 상위: [[20260622-onto-review-depth-aware-multiagent-redesign]] §8 Stage 1.
+> 검증: ultracode `wf_98d1ede7-318`(19 agent, 12 confirmed) + onto 라이브 `20260623-b3094e6f`(core-axis 6-lens, 9 material). **결과로 범위 대폭 축소**: raw_residual(셀카운트) 제거·tier-2 지연.
+> 결정: dedupe는 **추출 시점(X, 스키마 변경)**. 잔차는 **뒤로 미룸**(사용자 결정 2026-06-23).
 > 줄 번호: 작성 시점 기준, 식별자로 재확인.
+
+## 0. 한 줄
+
+스프레드시트 = `y=f(x)+b`. **f**(수식 패턴)는 fill-down으로 거의 중복이라 **distinct 패턴 수십 개**로 무손실 붕괴 가능. Stage 1 = **tier-1 exact-text formula dedup + 정직한 true-total + 완전한 consumer migration** — 이게 건전한 핵심. (잔차 측정·tier-2·window-budget은 지연.)
 
 ## 1. 문제와 통찰
 
-스프레드시트 = `y = f(x) + b` — **f**=수식/온톨로지(도메인 로직), **b**=특정 조건의 샘플/golden, **y**=셀에 채워진 값(현상). 같은 수식이 190K행에 채워지면 그건 **논리적으로 1개 패턴**이지 27K개가 아니다. 따라서 **distinct formula pattern + label schema + 대표 샘플**만으로 도메인 로직 100% 파악·테이블 크기 무관·tiny.
+같은 수식이 190K행에 채워지면 **논리적으로 1개 패턴**. 현재 observer는 `formula_cells {sheet,cell,formula,cross_sheet_refs}` **per-cell·dedup 없음**(`spreadsheet-structure-observer.ts:165,1443-1464`); shared-formula follower는 master 텍스트를 **verbatim 복제**(`:1448-1452`); 프롬프트 투영은 head-N 600 샘플(`:2124-2128`). → 중복 사본을 채우다 600에서 잘라 **distinct 패턴 누락**.
 
-**현재 gap** (observer 매핑):
-- `formula_cells {sheet,cell,formula,cross_sheet_refs}` **per-cell·A1 literal·dedup 없음** (`spreadsheet-structure-observer.ts:165,1443-1464`). shared formula follower는 master 텍스트 **verbatim 복제**(`:1449-1452`) → 채워내린 수식은 텍스트 동일하나 N개 셀로 저장.
-- 프롬프트 투영 = head-N 샘플(시트당 30·총 600, `:2124-2128`) — **중복 사본을 채우다 600에서 잘라 정작 distinct 패턴 누락**(27K 중 2.2%).
-- **raw 잔차(비-derived·비-schema-bound 자유값) 측정 개념 부재** — 압축 가능성의 진짜 결정자가 미측정.
+**핵심(교차검증으로 확정)**: follower가 master 텍스트를 *동일하게* 복제하므로 — **tier-1 exact-text dedup만으로 fill-down 전체가 무손실 붕괴**(텍스트 동일 → 1패턴·occurrence=N). 헤드라인 win(27K→수십)을 tier-1만으로 달성.
 
-**🔴 2개 구조적 발견**:
-1. 추출 캡이 **true total을 잃는다**: `XLSX_FORMULA_CAP=5000`/시트(`:771`)인데 `formula_cells_total` 미보존(시트는 `sheet_count_total` 있음). `max_rows_scanned_per_sheet=100,000`(`:74`). → capped 워크북서 잔차 분모 미상.
-2. **R1C1/상대정규화 헬퍼 부재**: `parseCellRef`(`:791`)·`columnLettersToIndex`(`:782`) 프리미티브만 → 패턴 키 정규화기 신규 필요.
+## 2. 교차검증으로 *제외/지연*된 것 (중요)
 
-## 2. 3겹 분해 (무엇을 어떻게)
+- **raw_residual (셀카운트) 제거** — 계산 불가·부정직으로 양쪽 거부:
+  - **RRS-1(blocker)**: `rows×cols − formula − …`가 3개 모순 row-도메인(선언 dims vs 100K 스캔 vs 캡 초과 formula)을 빼서 **음수 가능**.
+  - **RRS-2(blocker)**: `empty`·`schema_bounded` 셀카운트가 **인벤토리에 없음**(distinct count + 반올림 ratio뿐) → 정직히 못 만듦.
+  - **RRS-3/onto#002**: 항들이 반대 방향 절단 → `is_lower_bound` boolean 부정직.
+  - **RRS-4/onto#006**: 셀 *개수*는 row 수에 지배 → "60종×190K행"(압축가능)과 "60 unique×60행"(불가)을 구분 못함. 올바른 신호는 **cardinality(distinct/total)**.
+  - **CE-2**: 게다가 firm consumer 없음(유일 소비처 design-C는 지연·희귀). → 공유 인벤토리에 넣지 않음.
+  - → **잔차는 design-C(window-budget)에서, cardinality 기반으로, 스캔 그리드 위에서 정직하게** 다룬다. Stage 1 범위 밖.
+- **tier-2 R1C1 정규화 지연** — **IH-1(코드검증)**: follower가 master verbatim 텍스트 저장 + master ref-span/anchor **미캡처**(`:1382-1388`은 `a.t`/`a.si`만 읽음) → follower를 자기 cellRef로 정규화하면 **1 fill-down이 N개로 조각남**. tier-2는 **master-anchor 캡처라는 진짜 fix 후에만**, 이득도 적음(비공유 동일로직). → 지연.
+- **window-budget(design-C) 지연** — 잔차와 함께.
 
-| 겹 | 내용 | 처리 | 크기 |
-|---|---|---|---|
-| **로직 (f)** | distinct formula pattern + label schema(헤더·validation 규칙·named range·table) | lossless 캡처 | tiny·크기 무관 |
-| **bounded-raw** | label/validation 강제 categorical 컬럼 | distinct vocab(이미 존재 `distinct_value_vocab`, ≤50 distinct) | 작음 |
-| **free-raw 잔차** | 어떤 f·schema로도 환원 불가한 고카디널리티 자유값 | **측정**; 크면 그때만 window-budget/sampling | 진짜 결정자 |
+## 3. 설계 — tier-1 formula dedup (추출 시점)
 
-기존 자산: schema 캡처(`:395-456,1218-1233`)·`distinct_value_vocab`(`:536-606`)·per-sheet 프로파일(`:479-621`) **이미 존재** → 신규는 **f 패턴 dedup + 잔차 측정**뿐.
-
-## 3. 설계 A — formula pattern dedup (추출 시점)
-
-**스키마 변경**: `formula_cells`(per-cell) → **`formula_patterns`**(distinct 패턴).
+**스키마 변경**: `formula_cells`(per-cell) 제거 → **`formula_patterns`** + **`formula_cells_total`**.
 
 ```
 formula_patterns: Array<{
-  pattern: string;            // 정규화된 R1C1-상대 형(패턴 키이자 표시형)
-  sample_formula: string;     // 대표 A1 원형 1개 (b 앵커, 가독성)
-  sample_cell: string;        // 대표 셀 주소 1개
-  occurrence_count: number;   // 이 패턴이 적용된 셀 수 (true total 보존 → 발견#1 해결)
-  applied_ranges: string[];   // 적용 범위 요약 (bounded, 예: 몇 개 A1 범위/시트)
+  pattern: string;            // Stage 1=수식 텍스트(tier-1 exact-text 키). tier-2 도입 시 R1C1로 승격.
+  sample_cell: string;        // 대표 셀 주소 1개 (b 앵커)
+  occurrence_count: number;   // 이 패턴 셀 수 (캡 후에도 누적 — 아래)
+  applied_ranges: string[];   // 적용 범위 요약 (bounded, display-only — exact 권위 아님)
   sheets: string[];           // 등장 시트
-  cross_sheet_refs: string[]; // 패턴의 cross-sheet 참조 (disposition 백킹 보존)
+  cross_sheet_refs: string[]; // 패턴의 cross-sheet 참조 (sheet-level; 기존과 동일 의미)
 }>
-formula_cells_total: number;  // 워크북 전체 수식 셀 수 (= Σ occurrence_count, capped면 lower-bound 표기)
+formula_cells_total: number;            // = Σ occurrence_count (retained 패턴 전부)
+formula_cells_total_is_lower_bound: boolean; // distinct-pattern 캡으로 신규 패턴 드롭 시 true
 ```
 
-**정규화기 (신규)** `normalizeFormulaToPattern(formula, cellRef) -> patternKey`:
-- 수식 텍스트의 셀 참조를 토큰화(A1·`$A$1`·범위 `A1:B2`·시트접두 `Sheet!`/`'S'!`·table `T[col]`·named range).
-- **상대 참조** → 셀 위치 기준 R1C1 상대(`R[dr]C[dc]`), **절대($)** → 절대(`R{r}C{c}`), **cross-sheet** → 시트명 유지, **named range/table** → 그대로(이미 위치 독립).
-- 2-tier: **tier-1 exact-text**(shared follower 즉시 붕괴, 싼 큰 win) → **tier-2 R1C1**(위치 다른 동일 로직 붕괴).
-- 실패(파싱 불가 토큰) → fail-soft: 해당 수식은 자기 자신을 패턴 키로(고유 보존, 환원 안 함). 정직성 우선.
+- **pattern 키**: Stage 1은 **수식 텍스트 그대로**(tier-1). follower=master 텍스트라 fill-down은 동일 키로 붕괴. (tier-2 R1C1 승격은 §7 지연 단계.)
+- **캡 의미 전환 (NORM-2 수용)**: 기존 `XLSX_FORMULA_CAP=5000`/시트(`:771`, raw push)를 **distinct-pattern 캡**으로. 단 **이미 본 패턴의 occurrence_count는 캡 후에도 계속 누적**, `formula_cells_total`은 **모든 수식 셀에 대해 증가**. `formula_cells_total_is_lower_bound`는 **신규 distinct 패턴이 캡으로 드롭될 때만** true. → §3 "true total 보존"이 정직.
+- **value-minimization (onto#008 수용)**: `pattern`/`sample_cell`/`applied_ranges`는 **수식 텍스트·셀 주소**뿐, raw *데이터 값* 미포함 → 누수 없음(인벤토리 aggregate-only 계약 유지). 명문화.
+- **fail-soft**: (tier-1엔 파싱 없음) — tier-2 도입 시 파싱 실패는 자기 텍스트를 키로(과소-dedup, 안전). 키 네임스페이스 분리(`exact:`/`r1c1:`, onto#010) 도입.
 
-**누적**: SAX 파스 중 `Map<patternKey, {…}>`에 occurrence/range/sample 집계(`:1443-1464` 대체). → 27K 셀 → distinct 패턴 수십 개. **`XLSX_FORMULA_CAP`은 distinct-pattern 캡으로 의미 전환**(거의 안 걸림); occurrence_count가 true total 보존.
+## 4. 완전한 consumer migration (§핵심 — 4중 수렴 SCS-2/RIMPACT-1/IH-2/onto#003)
 
-## 4. 설계 B — raw-잔차 측정 (추출 시점)
+`formula_cells`는 비-optional 타입 필드라 제거 시 미migration 접근은 **컴파일 에러**(loud). 전 read-site:
 
-per-sheet 셀 분류 → 잔차 정량화:
-- **formula-derived**: `formula_patterns` occurrence_count 합.
-- **schema-bounded**: categorical 컬럼(`distinct_value_vocab` 대상)의 셀.
-- **free-raw 잔차**: 나머지 (= rows×cols − formula-derived − error − schema-bounded − empty).
+| # | site | 변경 | 성격 |
+|---|---|---|---|
+| 1 | `spreadsheet-review-disposition.ts:72` `formula_integrity` backing | `inv.formula_cells.length>0` → `inv.formula_cells_total>0` | **MATERIAL** — 누락 시 수식 워크북마다 obligation 조용히 소실 |
+| 2 | `spreadsheet-review-disposition.ts:76` `cross_sheet_reference_integrity` | `.some(c=>c.cross_sheet_refs…)` → `inv.formula_patterns.some(p=>p.cross_sheet_refs.length>0)` | 기존 명시 |
+| 3 | `spreadsheet-structure-observer.ts:222` `inventoryHasInspectedStructure` (→ reconstruct 정직게이트 `source-observations.ts:119`) | `formula_cells.length>0` → `formula_patterns.length>0` | honesty gate (compile-강제) |
+| 4 | `spreadsheet-structure-observer.ts:260` `inventoryHasRenderableStructure` (→ review attachability `disposition.ts:131`) | 동상 | honesty gate |
+| 5 | `review-artifact-utils.ts:271,289,411-425` render | per-cell 평탄 리스트 → **패턴 요약**(pattern·occurrence·sample·xrefs) | 기존 명시 |
+| 6 | inits `observer:702`(CSV), `:1886`(unsupported) | `formula_cells:[]` → `formula_patterns:[], formula_cells_total:0, formula_cells_total_is_lower_bound:false` | mechanical |
+| 7 | `target-material-kind.ts:401-402` 주석 권위 | "formula_integrity ← formula_cells" → formula_cells_total/formula_patterns | declared=wired |
+| 8 | **`reconstruct/run.ts:1094-1109` `sourceObservationsReuseSha256`** | **adapter_version를 reuse 해시에 추가** (SCS-1) | **MATERIAL** — 누락 시 resume가 구-스키마 seed 재사용(silent) |
 
-**신규 필드** (per-sheet 또는 워크북 summary):
-```
-raw_residual: {
-  free_raw_cell_count: number;          // 자유 raw 셀 수
-  free_raw_distinct_cardinality?: number; // (선택) 자유 컬럼 distinct 합 — 진짜 정보량 근사
-  formula_derived_cell_count: number;
-  schema_bounded_cell_count: number;
-  is_lower_bound: boolean;              // 행/패턴 캡 hit 시 true (정직 disclosure, 발견#1)
-}
-```
-**정직성**: row/pattern 캡 hit 시 `is_lower_bound=true` + 잔차는 "≥N"로만 사용(INV-BENCH-1 정신: 미상은 결론 아님). 발견#1 해결: 캡 워크북서도 "정확 측정 불가"를 명시.
+- **SCS-1 상세**: content_sha256=raw-byte 해시라 스키마 변경을 못 담음; `adapter_id`는 상수("spreadsheet-structure-observer")이고 `SPREADSHEET_OBSERVER_ADAPTER_VERSION`(`:41,694`)은 `workbook_inventory` 안이라 해시서 빠짐 → adapter_version을 `content_excerpt_length`(`run.ts:1101-1108`) 선례처럼 reuse 투영에 추가. resume 회귀테스트(N→N+1 bump 시 reuse-mismatch fail-loud `run.ts:1255-1257` 발화).
+- **완전성 가드**: migration 후 `src/core-runtime/` 비-테스트 소스에 snake_case `formula_cells` 잔존 0 단언(grep 테스트).
+- **reconstruct seed**: 패턴이 더 좋은 입력(distinct 관계 vs 600-샘플) → seed 품질↑. 형태 변경에 맞춰 seed 프롬프트 투영 갱신 + 라이브 seed 1회.
 
-## 5. 설계 C — window-budget (2차 fallback, 잔차 클 때만)
+## 5. 단계화
 
-`free_raw_cell_count`(또는 cardinality)가 임계 초과 시에만, 그 **잔차에 한해** window-비례 sampling. 예산은 reconstruct의 `deriveDocumentExcerptProjectionBudget`(window×0.5−reserve, floor/ceiling) 상수 **재사용**(신규 결정수치 회피). 대부분 워크북은 A·B로 해결되어 이 경로 미진입.
+- **1.1 (본 설계의 전부)**: tier-1 exact-text formula_patterns + formula_cells_total(+is_lower_bound, 캡 후 누적) + §4 완전 migration(1–8) + 회귀/라이브 검증. → 헤드라인 win(27K→수십·true total) 달성, 건전.
+- **(지연) 1.2 tier-2 R1C1**: master ref-span/anchor 캡처(`:1382-1388`+`sharedFormulas` 맵 `:1263`에 {text,masterCell}) → follower 재앵커 후 정규화 + quote-mask(NORM-1) + 네임스페이스 키. 별도 단계.
+- **(지연) design-C 잔차+window-budget**: cardinality(distinct/total) 압축성 신호를 스캔 그리드 위에서 정직하게, 소비처(window-budget)와 함께 atomically.
 
-## 6. 스키마 변경 + blast radius
+## 6. 미해결·위험
 
-- **inventory 스키마**: `formula_cells` 제거 → `formula_patterns` + `formula_cells_total` + per-sheet `raw_residual` 추가. `SPREADSHEET_OBSERVER_ADAPTER_VERSION` bump(`:694`).
-- **consumers 마이그레이션**:
-  - review render `renderSpreadsheetStructuralView`(`review-artifact-utils.ts:270-278,412-425`): per-cell 평탄 리스트 → **패턴 요약**(pattern·occurrence·range·sample) + raw_residual summary.
-  - review disposition `spreadsheet-review-disposition.ts`: `cross_sheet_reference_integrity` 백킹이 `formula_cells.some(c=>c.cross_sheet_refs…)` → `formula_patterns.some(p=>p.cross_sheet_refs…)` (cross_sheet_key_overlap는 별개·무영향).
-  - reconstruct seed: inventory 소비 — **패턴이 더 좋은 입력**(distinct 관계, 600-샘플 아님) → seed 품질↑. 단 형태 변경에 맞춰 seed 프롬프트 투영 갱신.
-- **테스트**: observer 테스트(`spreadsheet-structure-observer.test.ts`)·review render·disposition·reconstruct(`run.test.ts`·`source-observations.test.ts`) 갱신.
-- **계약/SSOT**: workbook_inventory 계약 문서 갱신(declared=wired 유지).
+- **values-as-text**(deferred, [[spreadsheet-material-handling-track]] 기억): paste-as-values(`<v>`만)가 derived인데 raw로 분류 — 잔차가 지연됐으므로 Stage 1 영향 없음.
+- reconstruct seed 형태 변경 회귀: §4 #8 + 라이브 seed 검증으로 차단.
+- 캡 의미 전환(distinct-pattern)으로 기존 `XLSX_FORMULA_CAP` 소비처/테스트 영향 확인.
 
-## 7. 단계화 (각 단계 검증; 큰 단계는 교차검증)
+## 7. 검증 계획
 
-- **1.1** exact-text dedup + `formula_cells_total` 보존 + `formula_patterns`(tier-1만) — 쉬운 큰 win, 발견#1 부분 해결. consumers 1차 마이그레이션.
-- **1.2** R1C1 정규화기(tier-2) — 위치 다른 동일 로직 붕괴. 정규화기 단위테스트(상대/절대/cross-sheet/range/named/table/fail-soft).
-- **1.3** raw_residual 측정 + is_lower_bound 정직 disclosure.
-- **1.4** (잔차 클 때만) window-budget fallback.
+- tier-1 dedup 단위테스트: fill-down(master+빈 follower N개 → 1패턴·occurrence=N), 서로 다른 두 fill-down 블록은 **병합 안 함**, cross_sheet_refs 보존, distinct-pattern 캡 hit → total 누적·is_lower_bound.
+- migration 회귀: 수식-only 합성 워크북이 inspectable 유지 **AND** formula_integrity 백킹 유지(`disposition.test.ts` 확장); unsupported 인벤토리는 admission 거부 유지.
+- **resume 회귀**(SCS-1): adapter_version N→N+1 bump 시 stale seed 재사용 안 함.
+- 완전성 grep 가드 + full vitest + 가드(import-boundary/review·reconstruct conformance) + 라이브 seed 1회.
+- INV-BENCH-1: "27K→수십" 압축률 주장은 fixture≥2×runs≥3 측정 시에만 결정-등급, 그 전엔 PRELIMINARY.
 
-## 8. 미해결·위험
+## 8. 참조
 
-- **values-as-text**(deferred, 따로 기억됨): paste-as-values 셀(`<v>`만·`<f>` 없음)이 실은 derived인데 raw로 분류 → 잔차 과대. 탐지=패턴추론(어려움). **본 설계 범위 밖**, 잔차에 "values-as-text 가능성" 주석만.
-- 정규화기 정확도(Excel 수식 문법 폭): fail-soft로 정직 보존하되, 과소-dedup은 안전(틀린 병합보다 나음).
-- reconstruct seed 형태 변경의 회귀: 단계 1.1에서 consumer 마이그레이션 + 라이브 seed 검증.
-- adapter_version bump = 캐시/재관측 영향(content_sha 동일해도 스키마 다름) — 재관측 트리거 확인.
-
-## 9. 검증 계획
-
-- 정규화기 단위테스트(케이스 매트릭스).
-- observer 테스트: 합성 워크북(채워내린 수식 → 1 패턴·occurrence=N; 위치 다른 동일 로직 → 1 패턴; cross-sheet 보존; capped → is_lower_bound).
-- review render/disposition/reconstruct 회귀 + 라이브 seed 1회.
-- INV-BENCH-1: 압축률(셀→패턴) 주장은 fixture≥2×runs≥3 측정 시에만 결정-등급; 그 전엔 PRELIMINARY.
-- full vitest + 가드(import-boundary/review·reconstruct conformance).
-
-## 10. 참조
-
-매핑 근거: `spreadsheet-structure-observer.ts`(inventory `:139-183`, formula 추출 `:1443-1464`, caps `:771`, shared `:1449-1452`, profile `:479-621`, vocab `:536-606`, projection `:1993-2007,2113-2220`), `review-artifact-utils.ts:250-460`. 관련 트랙 [[spreadsheet-material-handling-track]]·[[large-input-observation-track]].
+매핑/검증 근거: observer(inventory `:139-183`, formula 추출 `:1443-1464`, shared `:1448-1452`·`:1382-1388`, caps `:771`, gates `:222,260`, inits `:702,1886`), disposition(`:72,76,131`), source-observations(`:119`), target-material-kind(`:401-402`), run(`:1094-1109,1251-1257`), review-artifact-utils(`:271,289,411-425`). 교차검증 ultracode `wf_98d1ede7-318`·onto `20260623-b3094e6f`. 관련 [[spreadsheet-material-handling-track]]·[[onto-review-multiagent-redesign]].
