@@ -3,7 +3,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { assertArrayField, atomicWriteFile, atomicWriteYamlDocument } from "./artifact-io.js";
+import {
+  assertArrayField,
+  atomicWriteFile,
+  atomicWriteYamlDocument,
+  stripInMemoryOnlyArtifactFields,
+} from "./artifact-io.js";
 
 const tmpRoots: string[] = [];
 
@@ -130,6 +135,60 @@ describe("atomicWriteYamlDocument", () => {
     await atomicWriteYamlDocument(target, { ok: true });
 
     expect(await listDir(root)).toEqual(["doc.yaml"]);
+  });
+
+  // The G(a) obligation-coverage telemetry is in-memory-only: it must never reach disk, so a
+  // reuse-hashed / scout-captured validation artifact can be instrumented without rotating reuse
+  // provenance. The persisted bytes must be identical whether or not the field is present.
+  it("omits in-memory-only telemetry (asserted_obligation_ids) from the persisted document", async () => {
+    const root = await makeTmpDir();
+    const withField = path.join(root, "with.yaml");
+    const withoutField = path.join(root, "without.yaml");
+    const validation = {
+      schema_version: "1",
+      validation_status: "valid",
+      violations: [],
+    };
+
+    await atomicWriteYamlDocument(withField, {
+      ...validation,
+      asserted_obligation_ids: ["obligation_a", "obligation_b"],
+    });
+    await atomicWriteYamlDocument(withoutField, validation);
+
+    const persisted = await fs.readFile(withField, "utf8");
+    expect(persisted).not.toContain("asserted_obligation_ids");
+    // Byte-invariance (scout-pack sha256File channel): the on-disk bytes are identical with or without
+    // the stamp, so instrumenting the artifact cannot change its raw-file reuse hash.
+    expect(persisted).toBe(await fs.readFile(withoutField, "utf8"));
+  });
+});
+
+describe("stripInMemoryOnlyArtifactFields", () => {
+  it("drops asserted_obligation_ids from the top level and preserves every other field", () => {
+    expect(
+      stripInMemoryOnlyArtifactFields({
+        schema_version: "1",
+        asserted_obligation_ids: ["x"],
+        violations: [{ code: "y" }],
+      }),
+    ).toEqual({ schema_version: "1", violations: [{ code: "y" }] });
+  });
+
+  it("returns the input unchanged (same reference, no copy) when no telemetry field is present", () => {
+    const artifact = { schema_version: "1", violations: [] };
+    expect(stripInMemoryOnlyArtifactFields(artifact)).toBe(artifact);
+  });
+
+  it("is top-level only: a nested asserted_obligation_ids is left intact (reuse channels hash top-level files)", () => {
+    const nested = { outer: { asserted_obligation_ids: ["x"] } };
+    expect(stripInMemoryOnlyArtifactFields(nested)).toBe(nested);
+  });
+
+  it("passes through non-object values", () => {
+    expect(stripInMemoryOnlyArtifactFields(null)).toBe(null);
+    expect(stripInMemoryOnlyArtifactFields("s")).toBe("s");
+    expect(stripInMemoryOnlyArtifactFields([1, 2])).toEqual([1, 2]);
   });
 });
 

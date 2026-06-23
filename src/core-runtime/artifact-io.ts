@@ -42,15 +42,48 @@ export async function atomicWriteFile(
 }
 
 /**
- * Serialize `value` to YAML and write it atomically. Byte-for-byte identical
- * output to a direct `stringifyYaml(value)` write — only the write mechanism
+ * Fields stamped on in-memory artifacts for same-process consumers but NEVER persisted. Persisting one
+ * changes the on-disk bytes, which feeds reuse-provenance: the scout-pack snapshot hashes the raw
+ * validation-file bytes via `sha256File`, so a persisted field rotates that snapshot (the
+ * `reuseMatchArtifactHash` in-memory digest is neutralized separately, in run.ts
+ * `stripVolatileArtifactFields`). The only such field today is the G(a) obligation-coverage telemetry
+ * (`asserted_obligation_ids`): validators stamp it and the coverage harvest reads it off the in-memory
+ * return value — no consumer reads it from disk. Keeping it out of persistence lets the reuse-hashed /
+ * scout-captured validators be instrumented with zero hash rotation and no resume migration.
+ * See development-records/design/20260623-deferred7-obligation-telemetry-design.md.
+ */
+const IN_MEMORY_ONLY_ARTIFACT_FIELDS: readonly string[] = ["asserted_obligation_ids"];
+
+/**
+ * Return `value` with any in-memory-only telemetry fields dropped from the top level. Top-level only by
+ * design: validation artifacts carry these fields at top level and the reuse channels only hash
+ * standalone validation files, so a recursive walk would add an O(size) cost on every large artifact
+ * write (e.g. a 190K-row workbook inventory) for no benefit. Returns the input unchanged (no copy) when
+ * no such field is present — the common case for every non-validation artifact.
+ */
+export function stripInMemoryOnlyArtifactFields(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (!IN_MEMORY_ONLY_ARTIFACT_FIELDS.some((key) => key in record)) return value;
+  const persisted: Record<string, unknown> = { ...record };
+  for (const key of IN_MEMORY_ONLY_ARTIFACT_FIELDS) delete persisted[key];
+  return persisted;
+}
+
+/**
+ * Serialize `value` to YAML and write it atomically, dropping in-memory-only telemetry fields
+ * (see `stripInMemoryOnlyArtifactFields`). Byte-for-byte identical to a direct `stringifyYaml(value)`
+ * write for any value without those fields — only the write mechanism (and the telemetry omission)
  * changes.
  */
 export async function atomicWriteYamlDocument(
   filePath: string,
   value: unknown,
 ): Promise<void> {
-  await atomicWriteFile(filePath, stringifyYaml(value));
+  await atomicWriteFile(
+    filePath,
+    stringifyYaml(stripInMemoryOnlyArtifactFields(value)),
+  );
 }
 
 /**

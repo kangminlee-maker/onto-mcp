@@ -1066,7 +1066,12 @@ function stripVolatileArtifactFields(value: unknown): unknown {
       Object.keys(record)
         .filter((key) =>
           key !== "created_at" &&
-          key !== "emitted_at"
+          key !== "emitted_at" &&
+          // In-memory-only G(a) obligation-coverage telemetry — stamped on the artifact for the harvest
+          // but never part of reuse identity (the persisted copy is dropped at the write boundary; see
+          // artifact-io stripInMemoryOnlyArtifactFields). Excluding it here keeps the in-memory reuse
+          // digest invariant so instrumenting a reuse-hashed validation artifact never rotates reuse.
+          key !== "asserted_obligation_ids"
         )
         .sort()
         .map((key) => [key, stripVolatileArtifactFields(record[key])]),
@@ -1075,7 +1080,9 @@ function stripVolatileArtifactFields(value: unknown): unknown {
   return value;
 }
 
-function reuseMatchArtifactHash(value: unknown): string {
+// Exported as a test seam so the obligation-telemetry byte-invariance test can prove that stamping
+// `asserted_obligation_ids` on a reuse-hashed validation artifact leaves its reuse digest unchanged.
+export function reuseMatchArtifactHash(value: unknown): string {
   return sha256Text(stableJson(stripVolatileArtifactFields(value)));
 }
 
