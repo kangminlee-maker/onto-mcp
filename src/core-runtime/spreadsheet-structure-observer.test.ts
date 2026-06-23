@@ -334,9 +334,11 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     expect(r.merged_ranges.map((m) => m.range)).toContain("A1:B1");
     expect(r.data_validations[0]!.range).toBe("B2:B3");
     expect(r.data_validations[0]!.rule_summary).toContain("type=list");
-    // The rule BOUNDS (formula1) are captured, not just the kind, so the reviewer can
-    // actually audit data_validation_coverage (#5).
-    expect(r.data_validations[0]!.rule_summary).toContain('formula1="eng,sales"');
+    // design-C (Codex #2): a type=list INLINE formula1 is summarized by member COUNT here — the
+    // declared values live in the bounded `members` field, never echoed in rule_summary (a second,
+    // differently-bounded value channel). The reviewer audits coverage via `members` + this count.
+    expect(r.data_validations[0]!.rule_summary).toContain("formula1=list(2 members)");
+    expect(r.data_validations[0]!.rule_summary).not.toContain("eng,sales");
     // design-C: structured validation_type, inline enum members, normalized columns.
     expect(r.data_validations[0]!.validation_type).toBe("list");
     expect(r.data_validations[0]!.members).toEqual(["eng", "sales"]);
@@ -1334,9 +1336,17 @@ describe("design-C — declared type=list enum labels (authority detection)", ()
     expect(dv.applies_to_columns).toEqual([0, 2]);
   });
 
-  it("whole-column sqref (B:B) covers all profiled columns", () => {
+  it("whole-column sqref (B:B) maps to ITS column only, not the whole sheet (Codex #1)", () => {
     const dv = buildOne(listValidationSheet("A1:C2", "B:B", '"a,b"')).data_validations[0]!;
-    expect(dv.applies_to_columns).toEqual([0, 1, 2]);
+    // column B only — the declared enum must NOT attach to neighbours A and C.
+    expect(dv.applies_to_columns).toEqual([1]);
+  });
+
+  it("whole-column SPAN ($B:$D) maps to its columns within the profiled window", () => {
+    // A1:C2 profiles 3 columns (A,B,C). $B:$D covers absolute B,C,D; D (index 3) is beyond the
+    // profiled window and is dropped, leaving normalized [1,2] (Codex #1 + #4 clamp).
+    const dv = buildOne(listValidationSheet("A1:C2", "$B:$D", '"a,b"')).data_validations[0]!;
+    expect(dv.applies_to_columns).toEqual([1, 2]);
   });
 
   it("range-ref formula1 → no members, members_truncated", () => {
@@ -1351,6 +1361,10 @@ describe("design-C — declared type=list enum labels (authority detection)", ()
     const dv = buildOne(listValidationSheet("A1:C2", "B1:B2", `"${many}"`)).data_validations[0]!;
     expect(dv.members).toBeUndefined();
     expect(dv.members_truncated).toBe(true);
+    // Codex #2: the over-cap declared values must NOT leak via rule_summary either — it shows a
+    // member COUNT, not the values (m0,m1,…). The bounded `members` field is the only value channel.
+    expect(dv.rule_summary).toContain("formula1=list(");
+    expect(dv.rule_summary).not.toContain("m0,m1");
   });
 
   it("a member over the CHAR cap → no members, truncated", () => {

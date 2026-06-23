@@ -151,6 +151,16 @@ function validateSpreadsheetObservationHonesty(
   // members+type=list pair is outside this honesty model (documented limitation).
   for (const dv of inventory.data_validations) {
     if (dv.members === undefined) continue;
+    // Replayed / host-supplied artifacts are untyped despite the cast: a non-string member would
+    // make the length bounds silently pass (members:[123] → m.length undefined) or throw
+    // (members:"abc" → no .some). Reject non-string-array members before the bounds (Codex #3).
+    if (
+      !Array.isArray(dv.members) ||
+      (dv.members as unknown[]).some((m) => typeof m !== "string")
+    ) {
+      violations.push("data_validation members must be an array of strings");
+      continue;
+    }
     if (dv.validation_type !== "list") {
       violations.push(
         "data_validation members present but validation_type is not 'list'",

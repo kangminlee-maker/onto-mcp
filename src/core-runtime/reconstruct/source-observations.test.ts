@@ -201,6 +201,46 @@ describe("validateSourceObservationBoundary — P6 spreadsheet honesty gate", ()
 
   // ── Negative: each assertion fires on a genuinely incoherent observation. ──
 
+  it("E (Codex #3): rejects data_validation members that are not an array of strings", () => {
+    // Replayed / host-supplied artifacts are untyped: a non-string member must be REJECTED, not
+    // silently passed (members:[123] → m.length undefined slips the bounds) or thrown
+    // (members:"abc" → .some on a string). The honesty gate must stay total and catch both.
+    const nonStringMember = makeInventory({
+      data_validations: [
+        {
+          sheet: "sheet1",
+          range: "B2:B3",
+          rule_summary: "type=list",
+          validation_type: "list",
+          members: [123 as unknown as string],
+          members_truncated: false,
+          applies_to_columns: [1],
+        },
+      ],
+    });
+    const r1 = validateSourceObservationBoundary(spreadsheetObservation(nonStringMember));
+    expect(r1.valid).toBe(false);
+    expect(r1.violations).toContain("data_validation members must be an array of strings");
+
+    const nonArrayMembers = makeInventory({
+      data_validations: [
+        {
+          sheet: "sheet1",
+          range: "B2:B3",
+          rule_summary: "type=list",
+          validation_type: "list",
+          members: "abc" as unknown as string[],
+          members_truncated: false,
+          applies_to_columns: [1],
+        },
+      ],
+    });
+    // Must not THROW (the array guard runs before any .some).
+    const r2 = validateSourceObservationBoundary(spreadsheetObservation(nonArrayMembers));
+    expect(r2.valid).toBe(false);
+    expect(r2.violations).toContain("data_validation members must be an array of strings");
+  });
+
   it("B: rejects a supported workbook with a blank top-level content_sha256", () => {
     const inventory = makeInventory({ content_sha256: "" });
     const result = validateSourceObservationBoundary(spreadsheetObservation(inventory));

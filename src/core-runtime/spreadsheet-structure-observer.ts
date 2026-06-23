@@ -1365,9 +1365,23 @@ function buildValidationRuleSummary(rule: {
     text.length > XLSX_VALIDATION_FORMULA_CHARS
       ? `${text.slice(0, XLSX_VALIDATION_FORMULA_CHARS)}…`
       : text;
+  // For a type=list INLINE formula1, do NOT echo the declared values here: they are carried by
+  // the bounded `members` field (VALIDATION_MEMBER_* caps). Echoing them in rule_summary would be
+  // a second, differently-bounded value channel that leaks over-cap declared labels into the
+  // prompt/admission artifact when `members` is suppressed (Codex #2). Summarize as a member
+  // count; a range-ref or non-list formula1 keeps the clipped display.
+  const renderFormula1 = (f1: string): string => {
+    const t = f1.trim();
+    if (rule.type === "list" && t.startsWith('"')) {
+      const inner = t.replace(/^"/, "").replace(/"$/, "");
+      const count = inner.length === 0 ? 0 : inner.split(",").length;
+      return `list(${count} members)`;
+    }
+    return clip(f1);
+  };
   const parts = [`type=${rule.type || "any"}`];
   if (rule.operator) parts.push(`operator=${rule.operator}`);
-  if (rule.formula1) parts.push(`formula1=${clip(rule.formula1)}`);
+  if (rule.formula1) parts.push(`formula1=${renderFormula1(rule.formula1)}`);
   if (rule.formula2) parts.push(`formula2=${clip(rule.formula2)}`);
   return parts.join("; ");
 }
@@ -1410,26 +1424,31 @@ function parseSqrefColumns(
   profiledCols: number,
 ): number[] {
   const cols = new Set<number>();
-  let sawWholeColumn = false;
+  // Add an ABSOLUTE column span, normalized to the used-range origin and CLAMPED to the profiled
+  // window [dimStartCol, dimStartCol + profiledCols) before iterating — so a crafted huge range
+  // (e.g. A1:ZZZZZZ1) cannot make this walk millions of columns (Codex #4).
+  const addAbsSpan = (startAbs: number, endAbs: number): void => {
+    const lo = Math.max(startAbs, dimStartCol);
+    const hi = Math.min(endAbs, dimStartCol + profiledCols - 1);
+    for (let abs = lo; abs <= hi; abs += 1) cols.add(abs - dimStartCol);
+  };
   for (const sub of sqref.split(/\s+/)) {
     const ref = sub.trim();
     if (ref.length === 0) continue;
     const d = parseDimension(ref);
     if (d) {
-      const startCol = d.startCol;
-      const endCol = startCol + d.dims.cols - 1;
-      for (let abs = startCol; abs <= endCol; abs += 1) {
-        const c = abs - dimStartCol;
-        if (c >= 0 && c < profiledCols) cols.add(c);
-      }
-    } else if (/^\$?[A-Z]+:\$?[A-Z]+$/.test(ref)) {
-      // Whole-column range (B:B / $B:$D): no row component, so parseDimension declined.
-      // Cover all profiled columns deterministically.
-      sawWholeColumn = true;
+      addAbsSpan(d.startCol, d.startCol + d.dims.cols - 1);
+      continue;
     }
-  }
-  if (sawWholeColumn) {
-    for (let c = 0; c < profiledCols; c += 1) cols.add(c);
+    // Whole-column range (B:B / $B:$D): no row component, so parseDimension declined. Map it to
+    // ITS column span (not the whole sheet) so the declared enum attaches only to those columns
+    // (Codex #1).
+    const m = /^\$?([A-Z]+):\$?([A-Z]+)$/.exec(ref);
+    if (m) {
+      const a = columnLettersToIndex(m[1]!);
+      const b = columnLettersToIndex(m[2]!);
+      addAbsSpan(Math.min(a, b), Math.max(a, b));
+    }
   }
   return [...cols].sort((a, b) => a - b);
 }
