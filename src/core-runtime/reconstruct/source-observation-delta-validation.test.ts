@@ -150,6 +150,7 @@ function maturationClosureFrontierValidation():
     accepted_source_request_ids: ["source-request-feature"],
     rejected_source_requests: [],
     validation_results: ["maturation_closure_frontier_valid"],
+    asserted_obligation_ids: [],
     violations: [],
   };
 }

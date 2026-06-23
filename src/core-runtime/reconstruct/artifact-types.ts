@@ -2188,6 +2188,7 @@ export interface ReconstructMaturationClosureFrontierValidationArtifact {
     reason: string;
   }>;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
 

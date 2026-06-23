@@ -159,3 +159,23 @@ recorded:
     obligation_id: require_purpose_adequacy_frame_elements_to_have_surface_dimension_facet_and_evidence_or_limitation_state
   - validator_id: source-purpose-candidates-validator
     obligation_id: validate_purpose_candidate_evidence_refs_against_source_observations
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_duplicate_or_already_observed_source_requests
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_unsupported_material_refs
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_semantic_only_locations
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_closure_frontier_question_refs_against_material_unanswered_questions
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_closure_frontier_source_requests_preserve_member_and_cross_material_lineage
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: require_unique_authority_request_id
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_authority_request_kind_expected_response_kind_and_scope
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_authority_request_question_refs_against_material_unanswered_questions
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: validate_authority_request_blocking_semantics_against_question_materiality
+  - validator_id: maturation-closure-frontier-validator
+    obligation_id: reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope

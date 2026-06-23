@@ -1855,6 +1855,23 @@ export function validateMaturationClosureFrontier(args: {
 }): ReconstructMaturationClosureFrontierValidationArtifact {
   const frontier = args.maturationClosureFrontier;
   const violations: ReconstructMaturationValidationViolation[] = [];
+  // G(a) slice 25 — clean structural validator: record all 10 obligations, each a distinct,
+  // name-matching violation that fires unconditionally inside the source-request / authority-request
+  // loops (no optional-arg gating, no projections). #10 (mixed lineage) fires for the real schema
+  // discriminator target_material_kind === "mixed"; its valid-profile precondition is benign (an
+  // invalid profile separately trips prior_validation_invalid above). Stamped before any per-request
+  // guard so the recorder fires on zero-request input.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "reject_duplicate_or_already_observed_source_requests");
+  assertObligation(assertedObligationIds, "reject_unsupported_material_refs");
+  assertObligation(assertedObligationIds, "reject_semantic_only_locations");
+  assertObligation(assertedObligationIds, "validate_closure_frontier_question_refs_against_material_unanswered_questions");
+  assertObligation(assertedObligationIds, "validate_closure_frontier_source_requests_preserve_member_and_cross_material_lineage");
+  assertObligation(assertedObligationIds, "require_unique_authority_request_id");
+  assertObligation(assertedObligationIds, "validate_authority_request_kind_expected_response_kind_and_scope");
+  assertObligation(assertedObligationIds, "validate_authority_request_question_refs_against_material_unanswered_questions");
+  assertObligation(assertedObligationIds, "validate_authority_request_blocking_semantics_against_question_materiality");
+  assertObligation(assertedObligationIds, "reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope");
   const materialQuestions = materialQuestionIds(args.maturationQuestionFrontier);
   const questions = questionMap(args.maturationQuestionFrontier);
   const sourceRequestsSeen = new Set<string>();
@@ -2074,6 +2091,7 @@ export function validateMaturationClosureFrontier(args: {
     validation_results: violations.length === 0
       ? ["maturation_closure_frontier_valid"]
       : ["maturation_closure_frontier_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

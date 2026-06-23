@@ -364,46 +364,6 @@ pending:
     coverage_status: pending
     tier: flat
     note: "slice-2 audit (2026-06-22): validateMaturationBaseline validates purpose_element_ref resolution but enforces no per-row trace-to-seed_refs/limitations/validated-assessment-gaps check — no distinct enforcement site located. Recording deferred pending an added enforcement check or an owner decision."
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: reject_duplicate_or_already_observed_source_requests
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: reject_semantic_only_locations
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: reject_unsupported_material_refs
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: require_unique_authority_request_id
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: validate_authority_request_blocking_semantics_against_question_materiality
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: validate_authority_request_kind_expected_response_kind_and_scope
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: validate_authority_request_question_refs_against_material_unanswered_questions
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: validate_closure_frontier_question_refs_against_material_unanswered_questions
-    coverage_status: pending
-    tier: flat
-  - validator_id: maturation-closure-frontier-validator
-    obligation_id: validate_closure_frontier_source_requests_preserve_member_and_cross_material_lineage
-    coverage_status: pending
-    tier: flat
   - validator_id: maturation-continuation-decision-validator
     obligation_id: validate_continuation_state_against_validated_actionability_matrix_and_frontier_state
     coverage_status: pending
