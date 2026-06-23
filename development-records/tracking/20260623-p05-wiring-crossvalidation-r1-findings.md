@@ -1,0 +1,45 @@
+# P0.5 배선 교차검증 R1 findings (박제)
+
+> 날짜: 2026-06-23. 대상: design/20260623-p0.5-header-escalation-wiring.md (R1, sha256 5f9497f0…).
+> ultracode `wf_b542704b-c3e`(36 agent, 26 confirmed, verdict=material-edits-needed; **blocker 4 + material 9 + minor 2**) + onto `20260623-07bdd774`(halted_partial, material 4 medium). 코드 추적으로 R1 배선이 근본적으로 틀렸음 실증. R1→R2 개정 입력.
+
+## Blockers (ultracode, 코드-추적)
+
+- **B1 reuse-hash blind**: `sourceObservationsReuseSha256`(run.ts:1097-1138)는 `workbook_inventory_adapter_version`(1127)+raw content_sha256(1112)만 폴딩, per_sheet_data/header_rows/columns/header_source 미해시 → escalation해도 seed_stage snapshot 해시 불변 → silent stale-seed 재사용(escalation on/off·다른 seat·trigger-version bump 전부 동일 해시). §5 주장 거짓. **FIX**: per-sheet {header_rows,header_source,header_confidence,column names}+HEADER_ESCALATION_TRIGGER_VERSION를 projection/digest에 폴딩; §9 테스트가 heuristic→llm flip서 digest 변동 실단언.
+- **B2 wrong variable + clobber**: seed author·하류(maturation 12438/answer-support 12616/final-output 12715/13067)가 읽는 건 `promptSourceObservations`(run.ts:11535), `seedStagePromptSourceObservations`(reuse-hash+resume fallback 13350 전용) 아님 → §2 step5대로면 **dead feature**(복구 컬럼이 프롬프트 미도달). 게다가 `refreshSourceSafetyArtifacts`가 heuristic base서 `sourceObservationsForPrompt`(6157-6177)로 재도출+post-seed 재실행(12513/12558) → one-shot 변형 clobber(seed≠maturation 분기). **FIX**: 단일 chokepoint `sourceObservationsForPrompt`에 **캐시-기반 결정론 재적용**(매 재도출마다 해소헤더 재적용·재-LLM 없음), base는 heuristic 유지, snapshot은 상속. 타깃=promptSourceObservations.
+- **B3 seat not at hook**: seat(semanticAuthorLlmConfig{provider,model_id,reasoning_effort})·settings·registry는 reconstruct-api.ts(:646/675-680)서 해소돼 `createDirectCallReconstructDirectiveAuthor`(run.ts:6476-6478) closure에 갇힘. RunReconstructParams(691-704)·ReconstructDirectiveAuthor(242-322)는 seat-derived로 `documentExcerptProjectionBudget`(1241-1243) 하나만 노출 → hook서 HeaderEscalationModel 구성·callLlm 어댑트·timeoutMs 해소 불가. §7이 reconstruct-api.ts 누락. **FIX**: documentExcerptProjectionBudget 선례 따라 directive author에 escalation entry point(closure llmConfig+callLlmRecorded) 추가 OR {seat,LLM,cache,timeout}를 RunReconstructParams로 thread; §7에 reconstruct-api.ts 추가.
+- **B4 source-safety 우회**: §2 step1이 후보를 'inventory'서 무제한 열거. `sourceObservationsForPrompt`(6172)는 fail-closed(visibility_tier==='consumption_allowed'만 프롬프트 진입)인데 getSpreadsheetLeadingRows가 raw 셀 재read+renderHeaderPrompt가 verbatim 렌더 → no_prompt_use/internal_only 소스의 raw가 LLM에. §4 'governed'는 #105 행-인덱스 경계지 visibility_tier 아님. **FIX**: 후보를 **promptSourceObservations(consumption_allowed)서만** 열거, raw inventory/persisted 금지; §2 step1/§4 명문.
+
+## Material (ultracode M1-M9 + onto 수렴)
+
+- **M1** 샘플 재프로파일 부정직 cardinality: distinct_count_is_estimate는 256 distinct cap에만(observer:681), row-sample 절단엔 안 켜짐; capture_truncated는 workbook-level → 샘플 재프로파일이 silent 하한을 EXACT로 표기·columnResidualKey(:134) 오염. "신규 정직개념 0" 거짓. **FIX**: per-sheet/per-column sample-bounded 플래그 + profileSheetRows 'scanned-subset' 입력 + getLeadingRows가 cap-hit 보고.
+- **M2** getLeadingRows 비용 미바운드: xlsx SAX는 within-sheet early-abort 없음(row cap은 STORE만 멈춤·시트 XML 전체 소비 :1731·pushArchive 전체 압축해제 965-968) → 753MB '누적'에 sampleCap=15여도 full decompress+SAX(~11s/1.4GB) 재발=2nd full scan. "전체 재스캔 회피 확정" 거짓. **FIX**: 진짜 unzip-level early-abort(isDone()로 chunk loop break+sink no-op)=신규 observer 코드.
+- **M3** escalation fan-out 무제한: low 시트당 순차 1 LLM(파일 절반)·count/시간 캡 없음 → worst N×timeoutMs seed stall; 성공만 캐시 → all-timeout이 매 런 N×timeoutMs 재지불. **FIX**: per-run 시트 캡(columns-lost/residual 우선순위)+총 wall-clock 예산(나머지 downgrade)+캡을 cache/dataLayerCapsHash에 폴딩·INV-BENCH-1 PRELIMINARY.
+- **M4** fail-soft가 LLM만(onto issue-002 수렴): #105 try/catch는 callLlmWithTimeout만(escalation.ts:263-267); getLeadingRows·forced profileSheetRows는 prep-actor서 guard 밖·throw 가능(moved/locked/corrupt/OOM)·저수준 파서는 observeSpreadsheetSource crash isolation(2292-2333) 미상속 → seed 차단. **FIX**: per-sheet prep body(fetch+escalate+re-profile+replace) 전체를 fail-soft·per-sheet 격리·heuristic 유지·additive downgrade(refetch_failed/observation_unavailable).
+- **M5** content-drift TOCTOU: getLeadingRows가 seed-stage CURRENT 바이트 read·persisted inventory는 materialize content_sha256 → 파일 변경 시 content-B 헤더를 content-A 인벤토리에 patch→reuse-hash 폴딩=silent 오염. **FIX**: materialize서 size+mtime(or 윈도 해시) 캡처·적용 전 mismatch downgrade(full re-hash 회피).
+- **M6** top-level aggregate stale: distinct_value_vocab·cross_sheet_key_overlap은 top-level(observer:2199-2200)·headerless때 빌드(col_N/inflated) → step5가 per_sheet_data만 교체 → 실 컬럼명과 stale 공존(overlap은 undercount). **FIX**: escalated 시트의 vocab 재도출·overlap을 re-profiled column_value_sets서 recompute; sample-cap provenance; col_N vocab 비잔존 테스트.
+- **M7** mock realization 미명세: ONTO_LLM_MOCK 런은 seat 미해소 → escalation이 real callLlm이면 빈config 라이브콜(경계/비용/결정성 깨짐) or mock이면 프롬프트 미매칭 throw→항상 heuristic downgrade → load-bearing 경로 결정론 미실행(§9 단일 라이브=sample-of-1). **FIX**: mock deletion boundary에 header-escalation realization+injectable seam+결정론 full-pipeline 테스트(low→snapshot 교체+reuse-hash 변동+persisted-raw-0); 라이브 품질주장 PRELIMINARY.
+- **M8** header_source declared-but-unwired(onto 006/003/005 수렴): reuse digest 제외(B1)·게이트 없음·유일 소비처 review render는 §8 out-of-scope+LLM-free 재관측이라 영구 'heuristic'. §6 "필드라 wired"=category error. **FIX**: 공유 prompt projection(review-artifact-utils:447-450)에 header_source 렌더("header: LLM-resolved"=실 honesty 목적) OR 이 슬라이스서 defer.
+- **M9** INV-CFG-1 timeout 키 부재: 설정체인 유일 timeout_ms는 review 런타임-유닛값(settings-chain.ts:128·자체 code-default)·LlmCallConfig per-call timeout 없음·worker는 Number(env)||600_000(=금지된 silent default). review 키 재사용=cross-concept 오용. **FIX**: reconstruct측 키(reconstruct.header_escalation.timeout_ms) 정의·reconstruct-api.ts서 해소·missing fail-loud(escalation 전 해소)·G2 스캐너가 Number(env)||const reject 확인.
+- **minor**: m1 escalation을 callLlmRecorded(텔레메트리) 경유(+attempt kind header_escalation; B3 entry point가 흡수). m2 SPREADSHEET_OBSERVER_ADAPTER_VERSION 3→4 bump(header_source 스키마 변경; B1과 orthogonal).
+
+## R2 핵심 (사용자 승인 2026-06-23)
+
+**한 수**: 배선을 snapshot이 아니라 **`sourceObservationsForPrompt` chokepoint**에 — escalation 스텝(seed-stage 1회)이 consumption_allowed low 시트의 헤더를 LLM 해소+캐시; chokepoint가 매 재도출마다 캐시된 escalated 시트 인벤토리를 결정론 재적용. → B1(snapshot이 chokepoint서 파생→해시 반영+per-sheet 필드 폴딩)·B2(모든 소비자·clobber 없음)·B4(consumption_allowed만) 동시 해소. + B3 seat threading(reconstruct-api)·M1 sample-bounded 플래그·M2 unzip early-abort·M3 fan-out 캡·M4 전체 fail-soft·M5 drift guard·M6 vocab/overlap 재도출·M7 mock realization·M8 header_source 공유 렌더·M9 reconstruct timeout 키·m2 adapter_version 3→4.
+
+---
+
+## R2 재검증 결과 — 수렴 실패 → ⏸️ HELD (2026-06-23)
+
+ultracode `wf_0645d58b-e05`(45 agent, 28 confirmed: blocker 6[신규5+residual1]+material 18+minor 4, verdict=material-edits-needed) + onto `20260623-708d3a9a`(completed·deliberation 수행, blocker 0·material 6 medium). **패널이 R2 chokepoint "한 수" 자체가 실현 불가임을 코드-추적으로 입증; onto(doc-레벨)는 medium만 = design-C처럼 코드-레벨은 패널이 진실.**
+
+- **B4 CLOSED** (거버넌스 — 후보를 consumption_allowed promptSourceObservations서만). **B1/B2 여전히 open**(F1/D1), **B3 부분**(seat threading OK·callLlmRecorded 미명세).
+- **신규 blocker (chokepoint 재아키텍처가 들임)**:
+  - **F1**: #105 `HeaderEscalationCache`는 `ResolvedHeader`(행 인덱스) type-lock → escalated per_sheet_data 못 담음; key는 leading-rows promptHash 필요(chokepoint 재계산 불가). §2a 저장키≠§2b 조회키. → 별도 run-scoped 인벤토리 store(ref,sheet,content_sha,route) 필요; #105 캐시는 LLM-decision replay 전용.
+  - **D1**: cache-populate↔apply 분리; `promptSourceObservations`는 `refreshSourceSafetyArtifacts`(run.ts:10865, 호출 10870/11204/11256/12513/12558) 안에서만 재할당 → 11256~snapshot(11502)/seed(11535) 사이 refresh 없음(dead-zone) → snapshot·seed가 heuristic = B1/B2 재발. §10 사실오류(첫 재도출=10918). → 10870 직후 pin + populate 후 명시 refresh.
+  - **F2**: `callLlmRecorded`가 `unitIdForAuthoredArtifactName`(6284)서 closed map 밖 이름에 throw → catch가 삼킴 → 영구 silent dead feature; mock은 우회→거짓 통과. → stage id+UNIT_ID+NO_CALL_EXEMPT 등록·mock 실 adapter 경유·unregistered LOUD 테스트.
+  - **R2-SEAT-04**: 전체 fail-soft가 프로그래밍 결함(F2 throw·seat 버그·TypeError)까지 삼킴 → 100% dead여도 green. → fail-soft를 operational 예외만; 예기치 못한 fault loud; mock이 실 adapter로 flip 1회 단언.
+- **residual 핵심**: M6 cross_sheet_overlap 재계산 **infeasible**(전체-워크북 value-set 필요·미영속) → 재계산 주장 폐기(escalated 시트 overlap 누락=정직 한계). M1 sample-bounded가 `columnResidualKey`(139-141) calc point 미반영. M9 주장한 G2 timeout-reject 게이트 **부재**(check-no-hardcoded-spec-defaults.ts에 timeout detection 없음). M5 drift-guard **구현불가**(observer가 mtime 미캡처; size+mtime fool 가능; 건전 anchor=leading-window 해시 신규 영속 필드). M8 header_source 노출 경로 오인. M3 cache key sampleCap 누락. D4/F5 캐시 durability(session-only→same-session resume seed≠maturation). R2-SEAT-05 cache route key가 execution_adapter/base_url 누락.
+
+**메타-결론(왜 수렴 못 했나)**: 에스컬(LLM·stateful·새-모양 주입)이 reconstruct 관측 파이프라인(결정론·LLM-free·매번 재도출·고정-모양 캐시/텔레메트리/해시)과 **결이 반대** → 층마다 안전장치 거부("벽 뒤의 벽"). 수렴엔 **전 층 일괄 아키텍처-스터디 후 단번 설계** 또는 **결을 따르는 결정론-영속 산출물 재구상** = R3 패치 아닌 전용 세션. **owner 결정=reconstruct-side HOLD.** 모듈(#105) ready 유지·배선만 보류. 재개 시 B4(거버넌스 필터) 유지·위 신규/residual 전부 입력.
+

@@ -32,7 +32,8 @@
 |---|---|---|---|---|
 | review materialized-input | 타깃을 검증용으로 admit | `renderReviewTargetMaterializedInput`→**`fs.readFile utf8` 그대로**(spreadsheet는 S1/P3에서 구조 인벤토리 projection으로 대체됨). per-material admission/검증 계약 **없음** | review엔 per-material source-내용 admission 계약 자체가 없음(바이너리 illegible로 가려져 있었음) | review측 per-material admission 계약 도입 시 (C-review) |
 | review target profile | `review-target-profile-contract.md` **Active** | v1 **결정론 heuristic**(artifact role/closure). 계약 §6: "**per-material validator/adapter 구현 전까지 material validation 주장 금지**" | material별 검증 미구현(전 kind) | per-material 검증 도입 시 |
-| review spreadsheet 지원 | — | `reviewMaterialSupportStatus(spreadsheet)=partial`(차단 안 함, 구조 맹목) | 구조 인지 없는 "partial" | C-review(S1 인벤토리 소비) 시 |
+| review spreadsheet 지원 | — | ✅ **closed** — `reviewMaterialSupportStatus(spreadsheet)=supported`, per-ref `SpreadsheetRefDisposition` SSOT + 6 obligation(formula_integrity 등) | (구조 인지 review) | ✅ closed (C-review **PR #98** `0b4fe5f`) |
+| P0.5 header escalation 배선 | §10 C′/ESC-1: 모호 헤더 시트 LLM 해소 | ⏸️ **HELD** — 모듈 `spreadsheet-header-escalation.ts`(#105) ready·**미배선**. R1(blocker4)→R2(blocker6) 수렴 실패(에스컬이 reconstruct 관측 파이프라인 결과 반대=결정론/재도출/고정-캐시와 충돌) | reconstruct seed-stage에 LLM-enrichment 미배선; low 시트 컬럼 복구 안 됨 | **전용 아키텍처-우선 세션** (findings: `20260623-p05-wiring-crossvalidation-r1-findings.md`; B4 거버넌스만 R2서 closed) |
 
 ## 4. evolve / shared 계약
 
