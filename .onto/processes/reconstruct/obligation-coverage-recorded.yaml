@@ -208,8 +208,6 @@ recorded:
   - validator_id: competency-questions-validator
     obligation_id: validate_pattern_catalog_refs_against_reference_pattern_catalog_registry
   - validator_id: competency-questions-validator
-    obligation_id: validate_query_visualization_graph_contract_refs_when_applicable
-  - validator_id: competency-questions-validator
     obligation_id: validate_domain_competency_trace_refs_against_run_manifest_context_snapshot
   - validator_id: competency-questions-validator
     obligation_id: enforce_admitted_domain_competency_disposition_rule

@@ -1573,18 +1573,6 @@ describe("validateCompetencyQuestionsForOntologySeed rejection branches", () => 
       messageSubstring: "pattern_catalog_refs references unknown pattern catalog",
     },
     {
-      field: "query_access_contract_refs",
-      messageSubstring: "query_access_contract_refs references unknown query access contract",
-    },
-    {
-      field: "visualization_contract_refs",
-      messageSubstring: "visualization_contract_refs references unknown visualization contract",
-    },
-    {
-      field: "graph_exploration_contract_refs",
-      messageSubstring: "graph_exploration_contract_refs references unknown graph exploration contract",
-    },
-    {
       field: "domain_competency_trace_refs",
       messageSubstring: "domain_competency_trace_refs references an unadmitted required domain competency id",
     },

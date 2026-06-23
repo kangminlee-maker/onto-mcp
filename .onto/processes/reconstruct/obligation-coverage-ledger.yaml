@@ -177,6 +177,11 @@ pending:
     coverage_status: pending
     tier: flat
     note: "slice-27 audit (2026-06-23): NOT_FOUND — the per-question loop never reads a hidden_label_facets[] field; the contract (§15) folds hidden-label/search-label policy into terminology coverage (terminology_facets[], recorded as validate_terminology_facet_coverage). No separate hidden_label field exists or is read; recording deferred pending name reconciliation or a dedicated field."
+  - validator_id: competency-questions-validator
+    obligation_id: validate_query_visualization_graph_contract_refs_when_applicable
+    coverage_status: pending
+    tier: flat
+    note: "slice-27 audit (2026-06-23) + codex #142: PARTIAL/presence-only — the validator resolves PRESENT query_access/visualization/graph_exploration_contract_refs against the registry (unknown_id), but never enforces the '_when_applicable' arm: when a seed makes a query/visualization/graph contract applicable, the matching refs must be present (or limitation-backed), and an empty applicable array is silently accepted. The ref-resolution half is wired but the applicability-presence half is not, so the named scope is not fully enforced. Recording deferred pending the presence check (a behavior change beyond instrumentation)."
   - validator_id: failure-classification-validator
     obligation_id: classify_missing_or_failed_active_validation_artifact_as_required_gate_failure
     coverage_status: pending
