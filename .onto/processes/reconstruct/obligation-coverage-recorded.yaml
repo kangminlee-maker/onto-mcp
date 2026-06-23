@@ -186,22 +186,6 @@ recorded:
   - validator_id: competency-questions-validator
     obligation_id: validate_seed_ref_refs_close_against_known_seed_refs
   - validator_id: competency-questions-validator
-    obligation_id: validate_reasoning_formalism_facet_coverage
-  - validator_id: competency-questions-validator
-    obligation_id: validate_entity_identity_facet_coverage
-  - validator_id: competency-questions-validator
-    obligation_id: validate_instance_assertion_facet_coverage
-  - validator_id: competency-questions-validator
-    obligation_id: validate_terminology_facet_coverage
-  - validator_id: competency-questions-validator
-    obligation_id: validate_relation_type_facet_coverage
-  - validator_id: competency-questions-validator
-    obligation_id: validate_classification_facet_coverage
-  - validator_id: competency-questions-validator
-    obligation_id: validate_constraint_facet_coverage
-  - validator_id: competency-questions-validator
-    obligation_id: validate_modeling_concern_facet_coverage
-  - validator_id: competency-questions-validator
     obligation_id: validate_limitation_refs_close_against_handoff_limitations
   - validator_id: competency-questions-validator
     obligation_id: validate_reference_standard_refs_against_reference_standard_registry
@@ -211,5 +195,3 @@ recorded:
     obligation_id: validate_domain_competency_trace_refs_against_run_manifest_context_snapshot
   - validator_id: competency-questions-validator
     obligation_id: enforce_admitted_domain_competency_disposition_rule
-  - validator_id: competency-questions-validator
-    obligation_id: validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition

@@ -1242,17 +1242,21 @@ function validateCompetencyQuestionsAgainstEligibleClaims(args: {
   sourceObservationsRef?: string | null;
 }): ReconstructCompetencyQuestionsValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
-  // G(a) slice 27: record the 18 obligations this validator FULLY enforces with a distinct,
-  // name-matching site. Authority-backed stamps are GATED on the authoritative input being supplied
-  // (codex #142: the thin validateCompetencyQuestions path passes no registry/seed/governing-snapshot,
-  // so a zero-question artifact must NOT claim those obligations were enforced against an authority that
-  // was never present). Each stamp is placed before the per-question loop so a zero-question set still
-  // records once the authority is present. The enforcement code (validateRefArray / coverage checks)
-  // always runs; only the stamp is authority-gated. Parked (see obligation-coverage-ledger.yaml notes):
-  // emit_required_evidence_scope_runtime_projection (PROJECTION_ONLY — no violation); the two facet
-  // obligations whose question field does not exist (classification_level_axis / hidden_label); the
-  // p3-diagnostic disposition rule (no enforcing code); and validate_query_visualization_graph_contract_
-  // refs_when_applicable (presence-only — resolves present refs but never requires refs when applicable).
+  // G(a) slice 27: record the 9 obligations this validator FULLY enforces with a distinct,
+  // name-matching site. These are the REF-RESOLUTION obligations ("validate X refs against/close-to
+  // authority Y" — every PRESENT ref must resolve to its registry/seed/manifest authority), plus
+  // question-id uniqueness and the exactly-one admitted-competency disposition rule. Authority-backed
+  // stamps are GATED on the authoritative input being supplied (codex #142 R1): the thin
+  // validateCompetencyQuestions path passes no registry/seed/governing-snapshot, so a zero-question
+  // artifact must NOT claim those obligations were enforced against an absent authority. Each stamp is
+  // before the per-question loop so a zero-question set still records once the authority is present; the
+  // enforcement code always runs, only the stamp is gated.
+  // Parked (see obligation-coverage-ledger.yaml notes): emit_required_evidence_scope (PROJECTION_ONLY);
+  // classification_level_axis / hidden_label facet coverage (NOT_FOUND — fields absent); p3-diagnostic
+  // (no code); query/visualization/graph refs (presence-only — codex #142 R1); and — codex #142 R2 — the
+  // 8 *_facet_coverage obligations (presence-only: resolve present facets but never require facets when
+  // the axis is applicable) and validate_required_ontology_handoff_axis_coverage_or_limitation_backed_
+  // disposition (counts inactive/unsupported questions as coverage; no active/limitation-backed filter).
   const assertedObligationIds: string[] = [];
   // Pure question-set check — enforceable with no external authority.
   assertObligation(assertedObligationIds, "require_unique_question_id");
@@ -1263,14 +1267,6 @@ function validateCompetencyQuestionsAgainstEligibleClaims(args: {
       assertedObligationIds,
       "validate_ontology_handoff_axes_against_ontology_handoff_axis_registry",
     );
-    assertObligation(assertedObligationIds, "validate_reasoning_formalism_facet_coverage");
-    assertObligation(assertedObligationIds, "validate_entity_identity_facet_coverage");
-    assertObligation(assertedObligationIds, "validate_instance_assertion_facet_coverage");
-    assertObligation(assertedObligationIds, "validate_terminology_facet_coverage");
-    assertObligation(assertedObligationIds, "validate_relation_type_facet_coverage");
-    assertObligation(assertedObligationIds, "validate_classification_facet_coverage");
-    assertObligation(assertedObligationIds, "validate_constraint_facet_coverage");
-    assertObligation(assertedObligationIds, "validate_modeling_concern_facet_coverage");
     assertObligation(
       assertedObligationIds,
       "validate_reference_standard_refs_against_reference_standard_registry",
@@ -1286,14 +1282,6 @@ function validateCompetencyQuestionsAgainstEligibleClaims(args: {
     assertObligation(
       assertedObligationIds,
       "validate_limitation_refs_close_against_handoff_limitations",
-    );
-  }
-  // Required ontology-handoff axis coverage needs BOTH the registry (allowed axis set) and the seed
-  // (which axes are required) to derive the required set.
-  if (args.contractRegistry && args.ontologySeed) {
-    assertObligation(
-      assertedObligationIds,
-      "validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition",
     );
   }
   // Run-manifest governing-snapshot authority — only when the snapshot is supplied.

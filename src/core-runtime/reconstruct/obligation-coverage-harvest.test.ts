@@ -2076,59 +2076,33 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // ready mapping shell) — each with a clean variant that clears it. Building a full valid seed inline
   // here would duplicate that file; the recorder-reached stamp is proven above and by the flip-test.
 
-  it("validateCompetencyQuestions records its 18 instrumented obligations (slice 27: unique-id + 12 registry-backed + 2 seed-backed + required-axis-coverage + 2 governing-snapshot-backed) and NOT the 5 parked", () => {
+  it("validateCompetencyQuestions records its 9 instrumented obligations (slice 27: unique-id + 7 ref-resolution + admitted-disposition) and NOT the 14 parked", () => {
     const out = runCompetencyQuestions();
     for (const obligation of [
       "require_unique_question_id",
       "validate_coverage_axes_against_coverage_axis_registry",
       "validate_ontology_handoff_axes_against_ontology_handoff_axis_registry",
       "validate_seed_ref_refs_close_against_known_seed_refs",
-      "validate_reasoning_formalism_facet_coverage",
-      "validate_entity_identity_facet_coverage",
-      "validate_instance_assertion_facet_coverage",
-      "validate_terminology_facet_coverage",
-      "validate_relation_type_facet_coverage",
-      "validate_classification_facet_coverage",
-      "validate_constraint_facet_coverage",
-      "validate_modeling_concern_facet_coverage",
       "validate_limitation_refs_close_against_handoff_limitations",
       "validate_reference_standard_refs_against_reference_standard_registry",
       "validate_pattern_catalog_refs_against_reference_pattern_catalog_registry",
       "validate_domain_competency_trace_refs_against_run_manifest_context_snapshot",
       "enforce_admitted_domain_competency_disposition_rule",
-      "validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition",
     ]) {
       expect(out.asserted_obligation_ids).toContain(obligation);
     }
-    // PARKED (Explore audit + codex #142, slice 27). emit_required_evidence_scope_runtime_projection =
-    // PROJECTION_ONLY (emitted to required_evidence_scope_projection with no violation). classification_
-    // level_axis / hidden_label facet coverage = NOT_FOUND (those question fields do not exist / are not
-    // read). p3-diagnostic admission rule = NOT_FOUND (no enforcing code). query/visualization/graph
-    // contract refs = PARTIAL/presence-only (resolves present refs but never requires refs when the seed
-    // makes the interface applicable). See obligation-coverage-ledger.yaml notes.
+    // PARKED (Explore audit + codex #142 R1/R2, slice 27). PROJECTION_ONLY: emit_required_evidence_scope.
+    // NOT_FOUND (fields absent / no code): classification_level_axis + hidden_label facet coverage,
+    // p3-diagnostic. PRESENCE-ONLY (resolve present refs but never require refs when the axis/interface is
+    // applicable — codex R1+R2): query/visualization/graph contract refs + the 8 *_facet_coverage
+    // obligations. INACTIVE-COVERAGE (counts inactive/unsupported questions as coverage — codex R2):
+    // validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition. See ledger notes.
     for (const parked of [
       "emit_required_evidence_scope_runtime_projection",
       "validate_classification_level_axis_facet_coverage",
       "validate_hidden_label_facet_coverage",
       "enforce_p3_diagnostic_or_claim_based_admission_disposition_rule",
       "validate_query_visualization_graph_contract_refs_when_applicable",
-    ]) {
-      expect(out.asserted_obligation_ids).not.toContain(parked);
-    }
-  });
-
-  // AUTHORITY GATING (slice 27, codex #142): the thin validateCompetencyQuestions path supplies no
-  // contract registry / ontology seed / governing snapshot, so the 17 authority-backed obligations must
-  // NOT be stamped there — only the unconditional require_unique_question_id records. This proves a
-  // no-authority artifact cannot keep the recorded ledger fresh without ever validating against the
-  // declared authorities.
-  it("validateCompetencyQuestions (thin, no-authority path) records ONLY require_unique_question_id and NOT the 17 authority-backed obligations", () => {
-    const out = runCompetencyQuestionsThin();
-    expect(out.asserted_obligation_ids).toContain("require_unique_question_id");
-    for (const gated of [
-      "validate_coverage_axes_against_coverage_axis_registry",
-      "validate_ontology_handoff_axes_against_ontology_handoff_axis_registry",
-      "validate_seed_ref_refs_close_against_known_seed_refs",
       "validate_reasoning_formalism_facet_coverage",
       "validate_entity_identity_facet_coverage",
       "validate_instance_assertion_facet_coverage",
@@ -2137,30 +2111,45 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
       "validate_classification_facet_coverage",
       "validate_constraint_facet_coverage",
       "validate_modeling_concern_facet_coverage",
+      "validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // AUTHORITY GATING (slice 27, codex #142 R1): the thin validateCompetencyQuestions path supplies no
+  // contract registry / ontology seed / governing snapshot, so the 8 authority-backed obligations must
+  // NOT be stamped there — only the unconditional require_unique_question_id records. This proves a
+  // no-authority artifact cannot keep the recorded ledger fresh without ever validating against the
+  // declared authorities.
+  it("validateCompetencyQuestions (thin, no-authority path) records ONLY require_unique_question_id and NOT the 8 authority-backed obligations", () => {
+    const out = runCompetencyQuestionsThin();
+    expect(out.asserted_obligation_ids).toContain("require_unique_question_id");
+    for (const gated of [
+      "validate_coverage_axes_against_coverage_axis_registry",
+      "validate_ontology_handoff_axes_against_ontology_handoff_axis_registry",
+      "validate_seed_ref_refs_close_against_known_seed_refs",
       "validate_limitation_refs_close_against_handoff_limitations",
       "validate_reference_standard_refs_against_reference_standard_registry",
       "validate_pattern_catalog_refs_against_reference_pattern_catalog_registry",
       "validate_domain_competency_trace_refs_against_run_manifest_context_snapshot",
       "enforce_admitted_domain_competency_disposition_rule",
-      "validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition",
     ]) {
       expect(out.asserted_obligation_ids).not.toContain(gated);
     }
   });
 
-  // ANTI-LAUNDERING (slice 27): each of the 18 recorded obligations has a non-vacuous, NON-OVERLAPPING
-  // enforcement binding in post-seed-validation.test.ts. The 15 per-question ref fields each trip
-  // unknown_id with a DISTINCT field-named message (parameterized "ENFORCEMENT BINDING (cq ref field
+  // ANTI-LAUNDERING (slice 27): each of the 9 recorded obligations has a non-vacuous, NON-OVERLAPPING
+  // enforcement binding in post-seed-validation.test.ts. The 7 per-question ref-resolution fields each
+  // trip unknown_id with a DISTINCT field-named message (parameterized "ENFORCEMENT BINDING (cq ref field
   // ...)" test that mutates exactly one field per case: coverage_axis_refs, ontology_handoff_axis_refs,
-  // seed_ref_refs, the 8 *_facets fields, limitation_refs, reference_standard_refs, pattern_catalog_refs,
-  // and domain_competency_trace_refs). require_unique_question_id is bound by the duplicate_id test;
-  // enforce_admitted_domain_competency_disposition_rule by the "appear exactly once" test (missing +
-  // duplicate disposition row); and the required-axis-coverage obligation by the "ENFORCEMENT BINDING
-  // (required ontology handoff axis coverage)" test. Each has a clean variant that clears it. Building all
-  // fixtures inline here would duplicate that file; the recorder-reached stamp is proven above and by the
-  // flip-test.
+  // seed_ref_refs, limitation_refs, reference_standard_refs, pattern_catalog_refs, and domain_competency_
+  // trace_refs). require_unique_question_id is bound by the duplicate_id test; enforce_admitted_domain_
+  // competency_disposition_rule by the "appear exactly once" test (missing + duplicate disposition row).
+  // Each has a clean variant that clears it. The coverage/facet-coverage obligations are PARKED (codex
+  // #142 R2: presence-only or inactive-coverage), so they are deliberately NOT cited as recorded coverage.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 105 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 96 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2312,6 +2301,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(105);
+    expect(harvestedSet.size).toBe(96);
   });
 });
