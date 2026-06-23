@@ -11,6 +11,7 @@ import type {
   ReconstructMaturationContinuationDecisionValidationArtifact,
   ReconstructClaimProjectionValidationArtifact,
   ReconstructSourcePurposeCandidatesValidationArtifact,
+  ReconstructMaturationClosureFrontierValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructMaterialAdmissionLedgerValidationArtifact,
   ReconstructMaturationConvergenceLedgerValidationArtifact,
@@ -34,6 +35,7 @@ import {
   validateAnswerSupportJudgment,
   validateAnswerSupportLedger,
   validateMaturationContinuationDecision,
+  validateMaturationClosureFrontier,
   validateMaturationAnswerClaims,
   validateMaturationBaseline,
   validateMaturationQuestionFrontier,
@@ -921,6 +923,37 @@ function runSourcePurposeCandidates(): ReconstructSourcePurposeCandidatesValidat
       created_at: now,
       observations: [],
     } as never,
+  });
+}
+
+function runMaturationClosureFrontier(): ReconstructMaturationClosureFrontierValidationArtifact {
+  // All ten obligations are stamped unconditionally at the top (before the source-/authority-request
+  // loops), so an empty-request frontier reaches every recorder.
+  return validateMaturationClosureFrontier({
+    maturationClosureFrontier: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      round_id: "round-harvest",
+      question_frontier_ref: "maturation-question-frontier.yaml",
+      source_requests: [],
+      authority_requests: [],
+      directive_author: { owner: "host_llm", author_id: "harvest" },
+    } as never,
+    maturationQuestionFrontier: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      questions: [],
+    } as never,
+    maturationQuestionFrontierValidation: { validation_status: "valid" } as never,
+    sourceInventory: { inventory_units: [] } as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
+    targetMaterialProfileValidation: { validation_status: "valid" } as never,
   });
 }
 
@@ -1868,7 +1901,42 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // evidence ref that does not resolve to source-observations). Building those fixtures inline here would
   // duplicate that file.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 78 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateMaturationClosureFrontier records its 3 instrumented obligations (slice 25: semantic-only locations + unique authority id + authority kind/response/scope) and NOT the 7 parked", () => {
+    const out = runMaturationClosureFrontier();
+    for (const obligation of [
+      "reject_semantic_only_locations",
+      "require_unique_authority_request_id",
+      "validate_authority_request_kind_expected_response_kind_and_scope",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (codex R1, slice 25 — this validator is NOT cleanly structural; 7 obligations have deeper
+    // runtime/registry/edge gaps, see obligation-coverage-ledger.yaml notes): reject_duplicate_or_already_
+    // observed (only id de-dup, not same-target-ref), reject_unsupported_material_refs (accepts skipped/
+    // non-existent inventory rows), validate_closure_frontier_source_requests_preserve_..._lineage (mixed
+    // discriminator never matches at runtime), reject_duplicate_authority_requests_... (keys on the whole
+    // question_refs set, not per-question), and the two question-refs obligations + blocking-semantics
+    // (empty-refs gap + the maturation-question-frontier ARTIFACT is not a declared registry input).
+    for (const parked of [
+      "reject_duplicate_or_already_observed_source_requests",
+      "reject_unsupported_material_refs",
+      "validate_closure_frontier_question_refs_against_material_unanswered_questions",
+      "validate_closure_frontier_source_requests_preserve_member_and_cross_material_lineage",
+      "validate_authority_request_question_refs_against_material_unanswered_questions",
+      "validate_authority_request_blocking_semantics_against_question_materiality",
+      "reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (slice 25): the 3 recorded obligations have non-vacuous bindings in maturation-
+  // validation.test.ts: semantic_only_location (pre-existing "rejects a closure source request whose
+  // location is semantic-only"), and the "ENFORCEMENT BINDING (slice 25 ...)" tests for unique authority
+  // id (duplicate_id) and kind/response/scope (invalid_enum + missing_required_ref), each with a clean
+  // authority-base variant that clears. The 7 parked obligations' partial checks are NOT cited as coverage.
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 81 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1894,6 +1962,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const continuationDecisionOut = runMaturationContinuationDecision();
     const claimProjectionOut = runClaimProjection();
     const sourcePurposeCandidatesOut = runSourcePurposeCandidates();
+    const closureFrontierOut = runMaturationClosureFrontier();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -1989,6 +2058,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "source-purpose-candidates-validator",
         obligation_id,
       })),
+      ...closureFrontierOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "maturation-closure-frontier-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -2005,6 +2078,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(78);
+    expect(harvestedSet.size).toBe(81);
   });
 });

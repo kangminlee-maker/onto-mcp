@@ -1891,6 +1891,7 @@ describe("runReconstruct", () => {
       accepted_source_request_ids: acceptedSourceRequestIds,
       rejected_source_requests: [],
       validation_results: [],
+      asserted_obligation_ids: [],
       violations: [],
     };
   }

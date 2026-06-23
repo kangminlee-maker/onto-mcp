@@ -1855,6 +1855,19 @@ export function validateMaturationClosureFrontier(args: {
 }): ReconstructMaturationClosureFrontierValidationArtifact {
   const frontier = args.maturationClosureFrontier;
   const violations: ReconstructMaturationValidationViolation[] = [];
+  // G(a) slice 25 — RECORD only the 3 obligations that fully enforce their named scope with no
+  // runtime/registry/edge gaps (codex R1 found this validator is NOT cleanly structural — 7 obligations
+  // have deeper gaps, see obligation-coverage-ledger.yaml notes): #2 dup-source only de-dupes the id, not
+  // same-target-ref duplicates (runtime re-entry throws); #4 accepts exists:false/skipped inventory rows
+  // (runtime buildReconstructSourceObservation returns null); #10 mixed-lineage never fires (source
+  // requests carry concrete per-ref kinds, never "mixed"); #1 authority-dedup keys on the whole
+  // question_refs set, missing per-question overlap; #8/#9 don't reject empty question_refs; and #6/#8/#9
+  // read the maturation-question-frontier ARTIFACT which the registry does not declare as an input
+  // authority (declared≠wired, slice-14 pattern). Stamped before any per-request guard (zero-row input).
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "reject_semantic_only_locations");
+  assertObligation(assertedObligationIds, "require_unique_authority_request_id");
+  assertObligation(assertedObligationIds, "validate_authority_request_kind_expected_response_kind_and_scope");
   const materialQuestions = materialQuestionIds(args.maturationQuestionFrontier);
   const questions = questionMap(args.maturationQuestionFrontier);
   const sourceRequestsSeen = new Set<string>();
@@ -2074,6 +2087,7 @@ export function validateMaturationClosureFrontier(args: {
     validation_results: violations.length === 0
       ? ["maturation_closure_frontier_valid"]
       : ["maturation_closure_frontier_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
