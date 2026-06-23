@@ -22,8 +22,12 @@
 // a separate, named step (design §10 / §11 ESC-1) and is NOT part of this module.
 //
 // The DATA-OBSERVATION layer is aggregate-counts-only by default — `distinct_value_vocab`
-// carries `distinct_count` but NOT raw `top_values`, and no raw sample rows / cell
-// values are emitted. The inventory is a structural / aggregate index, not a data dump.
+// carries `distinct_count` but NOT raw `top_values`, no raw sample rows / cell values are
+// emitted, and per-column cardinality (distinct_count / non_empty_count) is COUNTS only.
+// The ONE narrowed exception (design-C, NOT a preserved guarantee): `data_validations[].members`
+// carries the DECLARED type=list enum labels parsed from an INLINE formula1 literal — bounded,
+// and never sourced from observed cell values (so off-list / free / high-cardinality raw values
+// are still never emitted). The inventory is a structural / aggregate index, not a data dump.
 //   Scope note: column/header NAMES are emitted as structural schema (a header is,
 //   by definition, labels — not data). Deterministic header detection can misread a
 //   headerless all-text sheet's first DATA row as a header, surfacing that one row
@@ -42,7 +46,10 @@ export const SPREADSHEET_OBSERVER_ADAPTER_ID = "spreadsheet-structure-observer";
 // (tier-1 exact-text dedup) + an honest `formula_cells_total`. A bump invalidates a
 // resume's reuse hash (run.ts sourceObservationsReuseSha256) so a stale old-schema seed
 // is never silently reused.
-export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 2;
+// v3 (design-C): per-column cardinality (distinct_count / distinct_count_is_estimate /
+// non_empty_count on every profiled column) + declared type=list enum members on
+// data_validations (validation_type / members / members_truncated / applies_to_columns).
+export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 3;
 
 export type WorkbookKind = "xlsx" | "xlsm" | "csv" | "tsv" | "xls" | "xlsb" | "ods";
 
@@ -82,6 +89,17 @@ export const DEFAULT_DATA_LAYER_CAPS: DataLayerCaps = {
   max_sheets_observed: 2048,
 };
 
+// design-C declared type=list enum-member bounds.
+/** Max declared enum members emitted per type=list validation. Reuses the existing
+ *  categorical gate ceiling (the distinct_value_vocab `<= 50` rule below) so "a bounded
+ *  controlled vocabulary" means the same count everywhere. Over this → members absent +
+ *  members_truncated. */
+export const VALIDATION_MEMBER_COUNT_CAP = 50;
+/** Max characters per declared enum member. PRELIMINARY / bench-calibrated: enum labels are
+ *  short, so a long "member" signals the formula1 is not really an enum (e.g. a long range
+ *  expression). Any member over this → members absent + members_truncated. */
+export const VALIDATION_MEMBER_CHAR_CAP = 64;
+
 export interface InventorySheet {
   name: string;
   used_range: string | null;
@@ -95,6 +113,43 @@ export interface InventoryColumn {
   index: number;
   inferred_type: InferredColumnType;
   non_empty_ratio: number;
+  /** Per-column cardinality (design-C residual signal). Distinct value COUNT over the
+   *  SCANNED rows; exact, or `max_distinct_tracked_per_column` (256) when the distinct
+   *  cap was hit (then a lower bound). NOT a value list — only the count. */
+  distinct_count: number;
+  /** True when `distinct_count` hit the distinct cap (it is then a `>= cap` lower bound). */
+  distinct_count_is_estimate: boolean;
+  /** Non-empty cell COUNT over the SCANNED rows — the cardinality base. Exact within the
+   *  scanned rows; a lower bound when the sheet's rows were row-cap truncated (signalled by
+   *  the sheet-level `capture_truncated`, not a per-column flag). */
+  non_empty_count: number;
+}
+
+/** The ONE pure cardinality-priority calc point (design-C §2.1): selection, display, and the
+ *  route-less mirror all read THIS so they cannot drift. Total order is
+ *  (is_estimate ? 1 : 0) DESC, then ratio DESC, then column.index ASC, where
+ *  ratio = non_empty_count === 0 ? 0 : distinct_count / non_empty_count (never NaN). A
+ *  distinct-cap estimate is a lower bound, so it is treated as MAXIMALly informative (kept
+ *  first) — the is_estimate term lives ONLY here, never duplicated at a call site. */
+export function columnResidualKey(col: InventoryColumn): {
+  estimate: number;
+  ratio: number;
+  index: number;
+} {
+  const ratio =
+    col.non_empty_count === 0 ? 0 : col.distinct_count / col.non_empty_count;
+  return { estimate: col.distinct_count_is_estimate ? 1 : 0, ratio, index: col.index };
+}
+
+/** Descending residual-priority comparator over {@link columnResidualKey} (highest priority
+ *  first): estimate DESC, ratio DESC, index ASC. Deterministic — equal estimate+ratio break
+ *  by index, so the order is total. */
+export function compareColumnResidualDesc(a: InventoryColumn, b: InventoryColumn): number {
+  const ka = columnResidualKey(a);
+  const kb = columnResidualKey(b);
+  if (ka.estimate !== kb.estimate) return kb.estimate - ka.estimate;
+  if (ka.ratio !== kb.ratio) return kb.ratio - ka.ratio;
+  return ka.index - kb.index;
 }
 
 export interface PerSheetData {
@@ -188,7 +243,29 @@ export interface WorkbookStructuralInventory {
    *  still counts every cell but `formula_patterns` is an incomplete distinct set. */
   formula_cells_total_is_lower_bound: boolean;
   merged_ranges: Array<{ sheet: string; range: string }>;
-  data_validations: Array<{ sheet: string; range: string; rule_summary: string }>;
+  /** Data-validation rules. `members` is the ONLY value-bearing field (design-C): the
+   *  DECLARED type=list enum labels, parsed from an INLINE formula1 literal — never from
+   *  observed cell values (so off-list / violating values cannot leak). Bounded by
+   *  VALIDATION_MEMBER_COUNT_CAP / VALIDATION_MEMBER_CHAR_CAP; a range-ref formula1, over-count,
+   *  or any over-length member leaves `members` absent with `members_truncated: true`. */
+  data_validations: Array<{
+    sheet: string;
+    range: string;
+    rule_summary: string;
+    /** Structured validation kind ("list"/"date"/…); the dvType preserved structurally so
+     *  consumers need not re-parse `rule_summary` (which stays display-only). */
+    validation_type: string;
+    /** Declared type=list enum labels (bounded). Present ONLY for an inline-formula1 list
+     *  validation within the caps; absent otherwise. NEVER observed cell values. */
+    members?: string[];
+    /** True when members were NOT emitted: not a list, a range-ref formula1 (unresolved),
+     *  over count cap, or any member over the char cap. */
+    members_truncated: boolean;
+    /** Origin-normalized (minus the used-range start column) profiled column indices the
+     *  sqref covers (parser-computed; design-C §3). Whole-column refs cover all profiled
+     *  columns of the sheet. */
+    applies_to_columns: number[];
+  }>;
   external_links: Array<{ target: string; kind: string }>;
   error_cells: Array<{ sheet: string; cell: string; token: string }>;
   macro_present: boolean;
@@ -598,11 +675,18 @@ function profileSheetRows(args: {
       index: c,
       inferred_type: inferred,
       non_empty_ratio: Math.round(denom * 1000) / 1000,
+      // design-C per-column cardinality, O(1) from the scan above: distinct value COUNT
+      // (cap-aware lower bound when distinctEstimate) over the SCANNED non-empty cells.
+      distinct_count: distinctEstimate ? caps.max_distinct_tracked_per_column : distinct.size,
+      distinct_count_is_estimate: distinctEstimate,
+      non_empty_count: nonEmpty,
     });
 
     // Categorical → controlled-vocab candidate. Deterministic rule: a bounded,
     // repeating set of non-unique values. AGGREGATE COUNT ONLY: no raw top_values
-    // are emitted here.
+    // are emitted here (the per-column distinct_count above is likewise a COUNT, not a
+    // value list; declared type=list enum LABELS live only on data_validations.members,
+    // sourced from formula1 — never from these observed values).
     if (distinctEstimate) {
       // Hit the distinct cap → count is a lower-bound estimate; flag truncation (CAPS-1).
       dataLayerTruncated = true;
@@ -1229,7 +1313,19 @@ interface ParsedWorksheet {
   used_range: string | null;
   protected: boolean;
   merged_ranges: Array<{ sheet: string; range: string }>;
-  data_validations: Array<{ sheet: string; range: string; rule_summary: string }>;
+  /** Data validations with design-C authority detection already computed in the parser
+   *  (where dimStartCol is live): validation_type (structured dvType), origin-normalized
+   *  applies_to_columns, and inline type=list enum members. The aggregate site places these
+   *  verbatim — no further normalization needed. */
+  data_validations: Array<{
+    sheet: string;
+    range: string;
+    rule_summary: string;
+    validation_type: string;
+    members?: string[];
+    members_truncated: boolean;
+    applies_to_columns: number[];
+  }>;
   /** Per-sheet deduplicated formula patterns (tier-1 exact-text). No `sheets` at the
    *  per-sheet level — the workbook merge adds it when combining across sheets. */
   formula_patterns: Array<{
@@ -1276,6 +1372,68 @@ function buildValidationRuleSummary(rule: {
   return parts.join("; ");
 }
 
+/** design-C declared enum members from a dataValidation formula1 (type=list only).
+ *  Returns members ONLY when formula1 is an INLINE quoted literal (`"a,b,c"`): strip the
+ *  outer quotes, split on the list separator (`,`), trim. A RANGE-REF formula1 (members live
+ *  in other cells, e.g. `Lists!$A$1:$A$5`) is UNRESOLVED → `{ members: undefined,
+ *  truncated: true }`. Over the count cap, or any member over the char cap → also truncated
+ *  with members absent (a long "member" signals it is not an enum). Never reads observed
+ *  cell values. */
+function parseInlineListMembers(formula1: string): {
+  members?: string[];
+  truncated: boolean;
+} {
+  const trimmed = formula1.trim();
+  // Inline literal: starts (and, well-formed, ends) with a double quote. Anything else
+  // (a range ref, a defined name) is unresolved here.
+  if (!trimmed.startsWith('"')) return { truncated: true };
+  // Strip the outer quotes (drop a trailing quote if present).
+  const inner = trimmed.endsWith('"') && trimmed.length >= 2
+    ? trimmed.slice(1, -1)
+    : trimmed.slice(1);
+  const members = inner.split(",").map((m) => m.trim());
+  if (members.length > VALIDATION_MEMBER_COUNT_CAP) return { truncated: true };
+  if (members.some((m) => m.length > VALIDATION_MEMBER_CHAR_CAP)) return { truncated: true };
+  return { members, truncated: false };
+}
+
+/** design-C: the origin-NORMALIZED profiled column indices a validation sqref covers.
+ *  Split sqref on whitespace (a multi-range sqref like "A1:A5 C1:C5"), parse each sub-range
+ *  with parseDimension (NOT parseCellRef — sqref entries are ranges), union the column spans,
+ *  normalize each by `- dimStartCol` (same frame as the cell-column normalization), and keep
+ *  only `0 <= c < profiledCols`. A whole-column ref (`B:B`) fails parseDimension (no row), so
+ *  it is treated as covering ALL profiled columns of the sheet (deterministic cover, not a
+ *  decline). Result is sorted ascending and de-duplicated. */
+function parseSqrefColumns(
+  sqref: string,
+  dimStartCol: number,
+  profiledCols: number,
+): number[] {
+  const cols = new Set<number>();
+  let sawWholeColumn = false;
+  for (const sub of sqref.split(/\s+/)) {
+    const ref = sub.trim();
+    if (ref.length === 0) continue;
+    const d = parseDimension(ref);
+    if (d) {
+      const startCol = d.startCol;
+      const endCol = startCol + d.dims.cols - 1;
+      for (let abs = startCol; abs <= endCol; abs += 1) {
+        const c = abs - dimStartCol;
+        if (c >= 0 && c < profiledCols) cols.add(c);
+      }
+    } else if (/^\$?[A-Z]+:\$?[A-Z]+$/.test(ref)) {
+      // Whole-column range (B:B / $B:$D): no row component, so parseDimension declined.
+      // Cover all profiled columns deterministically.
+      sawWholeColumn = true;
+    }
+  }
+  if (sawWholeColumn) {
+    for (let c = 0; c < profiledCols; c += 1) cols.add(c);
+  }
+  return [...cols].sort((a, b) => a - b);
+}
+
 /** A streaming worksheet parser: pipe decompressed chunks through `write`, then
  *  `finalize`, then read `getResult`. The worksheet is never materialized whole;
  *  the per-sheet cell scan is bounded by `caps` (cell VALUE work stops at the row
@@ -1288,7 +1446,16 @@ function createWorksheetParser(args: {
 }): { write: (text: string) => void; finalize: () => void; getResult: () => ParsedWorksheet } {
   const { sharedStrings, sheetName, caps, dateXfIndexes } = args;
   const merged_ranges: ParsedWorksheet["merged_ranges"] = [];
-  const data_validations: ParsedWorksheet["data_validations"] = [];
+  // design-C: capture each validation's RAW fields during streaming; resolve
+  // validation_type / members / applies_to_columns at getResult time, when dimStartCol is
+  // final and the profiled-column count is known (so normalization is in the right frame).
+  const rawValidations: Array<{
+    sqref: string;
+    type: string;
+    operator: string;
+    formula1: string;
+    formula2: string;
+  }> = [];
   // Tier-1 exact-text formula dedup, accumulated at extraction time. The key is the
   // resolved formula text (followers resolve to the master verbatim), so a fill-down
   // collapses to one entry. occurrence_count counts every cell of a retained pattern;
@@ -1479,16 +1646,13 @@ function createWorksheetParser(args: {
       case "dataValidation":
         if (dvActive) {
           dvActive = false;
-          if (data_validations.length < XLSX_DATAVALIDATION_CAP) {
-            data_validations.push({
-              sheet: sheetName,
-              range: dvSqref,
-              rule_summary: buildValidationRuleSummary({
-                type: dvType,
-                operator: dvOperator,
-                formula1: dvFormula1,
-                formula2: dvFormula2,
-              }),
+          if (rawValidations.length < XLSX_DATAVALIDATION_CAP) {
+            rawValidations.push({
+              sqref: dvSqref,
+              type: dvType,
+              operator: dvOperator,
+              formula1: dvFormula1,
+              formula2: dvFormula2,
             });
           } else {
             capsHit = true;
@@ -1579,7 +1743,38 @@ function createWorksheetParser(args: {
     finalize: () => {
       parser.close();
     },
-    getResult: (): ParsedWorksheet => ({
+    getResult: (): ParsedWorksheet => {
+      // design-C authority resolution: now that dimStartCol and the full grid are final,
+      // compute the profiled-column count (same frame as profileSheetRows) and resolve each
+      // captured validation's structured type, normalized covered columns, and inline enum
+      // members. The aggregate site places these verbatim — no further normalization.
+      const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
+      const profiledCols = Math.min(colCount, caps.max_columns_profiled);
+      const data_validations: ParsedWorksheet["data_validations"] = rawValidations.map(
+        (v) => {
+          const isList = v.type === "list";
+          const parsedMembers = isList
+            ? parseInlineListMembers(v.formula1)
+            : { truncated: true };
+          return {
+            sheet: sheetName,
+            range: v.sqref,
+            rule_summary: buildValidationRuleSummary({
+              type: v.type,
+              operator: v.operator,
+              formula1: v.formula1,
+              formula2: v.formula2,
+            }),
+            validation_type: v.type,
+            ...(parsedMembers.members !== undefined
+              ? { members: parsedMembers.members }
+              : {}),
+            members_truncated: parsedMembers.truncated,
+            applies_to_columns: parseSqrefColumns(v.sqref, dimStartCol, profiledCols),
+          };
+        },
+      );
+      return {
       dimensions: declaredDims ?? { rows: maxRow, cols: maxCol },
       used_range: declaredUsedRange,
       protected: protectedSheet,
@@ -1599,7 +1794,8 @@ function createWorksheetParser(args: {
       rows,
       rows_truncated: rowsTruncated,
       caps_hit: capsHit,
-    }),
+      };
+    },
   };
 }
 
@@ -2102,6 +2298,12 @@ export async function observeSpreadsheetSource(
  * excluded. Both consumers route through this so the aggregate-only default (the
  * inventory is a structural/aggregate index, not a data dump) is enforced in ONE
  * place and cannot drift between them.
+ *
+ * design-C narrowing: `data_validations[].members` IS value-bearing but passes through
+ * unchanged — it is DECLARED schema (the type=list enum labels from formula1), not observed
+ * data, and is already bounded at emission (VALIDATION_MEMBER_COUNT_CAP / _CHAR_CAP, never
+ * sourced from cell values). Per-column cardinality (distinct_count / non_empty_count) is a
+ * COUNT, not a value, so it likewise passes through.
  */
 export function projectInventoryForAdmission(
   inventory: WorkbookStructuralInventory,
@@ -2226,7 +2428,22 @@ export function projectInventoryForPrompt(
   let columnsTotal = 0;
   const perSheetData = keptSheets.map((sheet) => {
     columnsTotal += sheet.columns.length;
-    const columns = sheet.columns.slice(0, caps.max_columns_per_sheet);
+    // design-C: when a sheet has more columns than the fixed cap, RE-SELECT which columns
+    // survive by residual priority (highest cardinality first, the most informative residual
+    // signal) instead of a positional head-N — then emit the survivors in ORIGINAL index
+    // order for readability. Pure: sort a COPY, never mutate the input. The kept COUNT is
+    // unchanged (cap), so the truncation disclosure (kept/total) stays accurate.
+    let columns: InventoryColumn[];
+    if (sheet.columns.length <= caps.max_columns_per_sheet) {
+      columns = sheet.columns;
+    } else {
+      const selected = new Set(
+        [...sheet.columns]
+          .sort(compareColumnResidualDesc)
+          .slice(0, caps.max_columns_per_sheet),
+      );
+      columns = sheet.columns.filter((col) => selected.has(col));
+    }
     columnsKept += columns.length;
     return { ...sheet, columns };
   });

@@ -508,7 +508,9 @@ export async function buildReconstructSourceObservation(
  * §2.2) — a deterministic, LLM-free structural inventory. The observation carries
  * NO raw cell values: it never emits the generic path's `content_excerpt` (which for
  * a workbook would be raw data values) and the inventory's aggregate-only vocab
- * leaves `top_values` absent. `content_sha256` is the RAW-byte hash (§11 HASH-1)
+ * leaves `top_values` absent. The one NARROWED exception (design-C, not raw data) is
+ * `data_validations[].members` — the bounded, DECLARED type=list enum labels parsed from a
+ * formula1 literal (never observed values). `content_sha256` is the RAW-byte hash (§11 HASH-1)
  * surfaced at the structural_data top level because the downstream source-scout-pack
  * reads it there; the full inventory is nested under `workbook_inventory` as the
  * structural substrate the seed-authoring prompt observes. xlsx-family kinds are
@@ -550,7 +552,8 @@ async function buildSpreadsheetSourceObservation(args: {
   const basename = path.basename(detection.ref);
   const extension = path.extname(detection.ref).toLowerCase();
   // Route through the single shared projection: the structural_data inventory
-  // carries aggregate counts / structure only, never raw cell values.
+  // carries aggregate counts / structure only, never raw cell values (the sole narrowed
+  // exception is data_validations[].members — bounded declared type=list enum labels).
   const inventory = projectInventoryForAdmission(
     await observeSpreadsheetSource(detection.ref),
   );

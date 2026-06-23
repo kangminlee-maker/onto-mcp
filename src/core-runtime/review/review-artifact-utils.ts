@@ -443,6 +443,11 @@ function renderSpreadsheetStructuralView(
         `layout_kind: ${data.layout_kind}; header_rows: ${data.header_rows ? data.header_rows.join(",") : "none"}${lowConfidence}`,
       );
       if (data.columns.length > 0) {
+        // design-C: declared type=list enum members mapped to the columns their sqref covers
+        // (members are DECLARED labels, not observed data). Built once per sheet.
+        const sheetValidations = inv.data_validations.filter(
+          (dv) => dv.sheet === sheet.name && dv.members && dv.members.length > 0,
+        );
         lines.push("columns:");
         for (const col of data.columns) {
           const vocab = inv.distinct_value_vocab.find(
@@ -451,8 +456,18 @@ function renderSpreadsheetStructuralView(
           const distinct = vocab
             ? `; distinct≈${vocab.distinct_count}${vocab.distinct_count_is_estimate ? "+" : ""}`
             : "";
+          // design-C per-column cardinality: distinct/non_empty COUNT over scanned rows.
+          const cardinality = `; cardinality=${col.distinct_count}${
+            col.distinct_count_is_estimate ? "+" : ""
+          }/${col.non_empty_count}`;
+          const memberDv = sheetValidations.find((dv) =>
+            dv.applies_to_columns.includes(col.index),
+          );
+          const members = memberDv?.members
+            ? `; enum=[${memberDv.members.join(", ")}]`
+            : "";
           lines.push(
-            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${distinct})`,
+            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${cardinality}${distinct}${members})`,
           );
         }
       }
