@@ -1242,6 +1242,56 @@ function validateCompetencyQuestionsAgainstEligibleClaims(args: {
   sourceObservationsRef?: string | null;
 }): ReconstructCompetencyQuestionsValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
+  // G(a) slice 27: record the 9 obligations this validator FULLY enforces with a distinct,
+  // name-matching site. These are the REF-RESOLUTION obligations ("validate X refs against/close-to
+  // authority Y" — every PRESENT ref must resolve to its registry/seed/manifest authority), plus
+  // question-id uniqueness and the exactly-one admitted-competency disposition rule. Authority-backed
+  // stamps are GATED on the authoritative input being supplied (codex #142 R1): the thin
+  // validateCompetencyQuestions path passes no registry/seed/governing-snapshot, so a zero-question
+  // artifact must NOT claim those obligations were enforced against an absent authority. Each stamp is
+  // before the per-question loop so a zero-question set still records once the authority is present; the
+  // enforcement code always runs, only the stamp is gated.
+  // Parked (see obligation-coverage-ledger.yaml notes): emit_required_evidence_scope (PROJECTION_ONLY);
+  // classification_level_axis / hidden_label facet coverage (NOT_FOUND — fields absent); p3-diagnostic
+  // (no code); query/visualization/graph refs (presence-only — codex #142 R1); and — codex #142 R2 — the
+  // 8 *_facet_coverage obligations (presence-only: resolve present facets but never require facets when
+  // the axis is applicable) and validate_required_ontology_handoff_axis_coverage_or_limitation_backed_
+  // disposition (counts inactive/unsupported questions as coverage; no active/limitation-backed filter).
+  const assertedObligationIds: string[] = [];
+  // Pure question-set check — enforceable with no external authority.
+  assertObligation(assertedObligationIds, "require_unique_question_id");
+  // Registry-backed ref resolution — only when the contract registry authority is supplied.
+  if (args.contractRegistry) {
+    assertObligation(assertedObligationIds, "validate_coverage_axes_against_coverage_axis_registry");
+    assertObligation(
+      assertedObligationIds,
+      "validate_ontology_handoff_axes_against_ontology_handoff_axis_registry",
+    );
+    assertObligation(
+      assertedObligationIds,
+      "validate_reference_standard_refs_against_reference_standard_registry",
+    );
+    assertObligation(
+      assertedObligationIds,
+      "validate_pattern_catalog_refs_against_reference_pattern_catalog_registry",
+    );
+  }
+  // Seed-backed closure — only when the ontology seed authority is supplied.
+  if (args.ontologySeed) {
+    assertObligation(assertedObligationIds, "validate_seed_ref_refs_close_against_known_seed_refs");
+    assertObligation(
+      assertedObligationIds,
+      "validate_limitation_refs_close_against_handoff_limitations",
+    );
+  }
+  // Run-manifest governing-snapshot authority — only when the snapshot is supplied.
+  if (args.governingSnapshot) {
+    assertObligation(
+      assertedObligationIds,
+      "validate_domain_competency_trace_refs_against_run_manifest_context_snapshot",
+    );
+    assertObligation(assertedObligationIds, "enforce_admitted_domain_competency_disposition_rule");
+  }
   const normalizedCompetencyQuestions = normalizeCompetencyQuestionsAtBoundary(
     args.competencyQuestions,
   );
@@ -1709,6 +1759,7 @@ function validateCompetencyQuestionsAgainstEligibleClaims(args: {
     validation_results: violations.length === 0
       ? ["competency_questions_valid"]
       : ["competency_questions_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

@@ -1835,6 +1835,7 @@ export interface ReconstructCompetencyQuestionsValidationArtifact {
     required_evidence_scope: string[];
   }>;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructPostSeedValidationViolation[];
 }
 

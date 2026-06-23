@@ -1533,6 +1533,55 @@ describe("validateCompetencyQuestionsForOntologySeed rejection branches", () => 
       "prior_validation_invalid",
     );
   });
+
+  // G(a) slice-27 enforcement bindings: each RECORDED per-question ref-resolution field resolves against
+  // its registry/seed/manifest authority and trips unknown_id with a DISTINCT field-named message.
+  // Mutating exactly one field reds only that obligation; the clean base clears it. (domain_competency_
+  // trace_refs resolves against the run-manifest governing snapshot; with no governingSnapshot the
+  // admitted set is empty, so any trace ref is unadmitted.) The *_facet_coverage and required-axis-
+  // coverage obligations are PARKED (codex #142 R2: presence-only / inactive-coverage), so they are not
+  // bound here as recorded coverage.
+  const CQ_REF_FIELD_BINDINGS: Array<{ field: string; messageSubstring: string }> = [
+    { field: "coverage_axis_refs", messageSubstring: "coverage_axis_refs references unknown coverage axis" },
+    {
+      field: "ontology_handoff_axis_refs",
+      messageSubstring: "ontology_handoff_axis_refs references unknown ontology handoff axis",
+    },
+    { field: "seed_ref_refs", messageSubstring: "seed_ref_refs references unknown seed ref" },
+    { field: "limitation_refs", messageSubstring: "limitation_refs references unknown limitation" },
+    {
+      field: "reference_standard_refs",
+      messageSubstring: "reference_standard_refs references unknown reference standard",
+    },
+    {
+      field: "pattern_catalog_refs",
+      messageSubstring: "pattern_catalog_refs references unknown pattern catalog",
+    },
+    {
+      field: "domain_competency_trace_refs",
+      messageSubstring: "domain_competency_trace_refs references an unadmitted required domain competency id",
+    },
+  ];
+  for (const { field, messageSubstring } of CQ_REF_FIELD_BINDINGS) {
+    it(`ENFORCEMENT BINDING (cq ref field ${field}): an unknown ref trips unknown_id with the field-named message; the clean base clears it`, () => {
+      const base = clone(validBase());
+      (base.competencyQuestions.questions[0]! as Record<string, unknown>)[field] = [
+        "definitely-not-a-registered-ref",
+      ];
+      const breaching = validateCompetencyQuestionsForOntologySeed(base);
+      expect(
+        breaching.violations.some(
+          (v) => v.code === "unknown_id" && v.message.includes(messageSubstring),
+        ),
+      ).toBe(true);
+      const clean = validateCompetencyQuestionsForOntologySeed(validBase());
+      expect(
+        clean.violations.some(
+          (v) => v.code === "unknown_id" && v.message.includes(messageSubstring),
+        ),
+      ).toBe(false);
+    });
+  }
 });
 
 describe("validateCompetencyQuestionAssessment rejection branches", () => {
