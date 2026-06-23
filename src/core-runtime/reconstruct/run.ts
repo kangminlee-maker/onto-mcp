@@ -1079,9 +1079,22 @@ function reuseMatchArtifactHash(value: unknown): string {
   return sha256Text(stableJson(stripVolatileArtifactFields(value)));
 }
 
+/** The spreadsheet observer's `adapter_version` nested under `structural_data.workbook_inventory`,
+ *  or null when the observation carries no inventory (a non-spreadsheet observation, or an array/
+ *  malformed payload). Folded into the reuse digest so a schema bump invalidates stale reuse. */
+function workbookInventoryAdapterVersion(inventory: unknown): number | null {
+  if (inventory === null || typeof inventory !== "object" || Array.isArray(inventory)) {
+    return null;
+  }
+  const version = (inventory as { adapter_version?: unknown }).adapter_version;
+  return typeof version === "number" ? version : null;
+}
+
 // Stable reuse digest of a source-observation set. Shared by the live source_observations
-// hash and the M3c seed-stage snapshot hash so the two are byte-comparable.
-function sourceObservationsReuseSha256(
+// hash and the M3c seed-stage snapshot hash so the two are byte-comparable. Exported for the
+// resume-regression test (a spreadsheet adapter_version bump must change this digest so a
+// stale old-schema seed cannot be silently reused).
+export function sourceObservationsReuseSha256(
   artifact: ReconstructSourceObservationsArtifact,
 ): string {
   return sha256Text(stableJson({
@@ -1106,6 +1119,14 @@ function sourceObservationsReuseSha256(
           typeof observation.structural_data.content_excerpt === "string"
             ? observation.structural_data.content_excerpt.length
             : null,
+        // Spreadsheet observer schema version (nested in workbook_inventory): content_sha256
+        // is a raw-byte hash and cannot reflect a structural schema change, so without this a
+        // resume could silently reuse a seed authored under the OLD inventory shape (e.g. the
+        // Stage 1.1 formula_cells → formula_patterns migration). Bumping adapter_version must
+        // change this reuse hash so the stale artifact fails the resume provenance check.
+        workbook_inventory_adapter_version: workbookInventoryAdapterVersion(
+          observation.structural_data.workbook_inventory,
+        ),
       },
     })),
     skipped_refs: artifact.skipped_refs.map((skipped) => ({

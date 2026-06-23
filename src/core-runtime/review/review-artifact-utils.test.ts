@@ -104,7 +104,9 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
   it("renders formula text for sheets dropped by the per_sheet_data sheet cap (formula residual)", async () => {
     const root = await makeTmpDir();
     // A real single-sheet csv yields a fully-typed base inventory; widen it to 55 sheets
-    // with a formula ONLY on the last sheet — beyond the 50-sheet per_sheet_data cap.
+    // with a formula PATTERN spanning ONLY the last sheet — beyond the 50-sheet
+    // per_sheet_data cap. (Stage 1.1: formula_patterns carry the sheets they span, so the
+    // text reaches the prompt independent of which per_sheet_data bodies survive.)
     const seed = path.join(root, "seed.csv");
     await fs.writeFile(seed, "name,role\na,b\n", "utf8");
     const base = await observeSpreadsheetSource(seed);
@@ -120,9 +122,18 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
         ...templatePsd,
         sheet: `Sheet${i + 1}`,
       })),
-      formula_cells: [
-        { sheet: "Sheet55", cell: "A2", formula: "=RESIDUAL_55", cross_sheet_refs: ["Other!A1"] },
+      formula_patterns: [
+        {
+          pattern: "=RESIDUAL_55",
+          sample_cell: "A2",
+          occurrence_count: 1,
+          applied_ranges: ["A2"],
+          sheets: ["Sheet55"],
+          cross_sheet_refs: ["Other!A1"],
+        },
       ],
+      formula_cells_total: 1,
+      formula_cells_total_is_lower_bound: false,
     };
 
     // stat() must pass (readTextOrDirectoryListing); the injected inventory is reused
@@ -139,8 +150,9 @@ describe("spreadsheet target rendering (P3 review seam, §3.2)", () => {
     );
 
     // Sheet55's body is trimmed by the 50-sheet cap, but its formula TEXT must still reach
-    // the prompt — formulas are rendered up front, grouped by sheet, before per-sheet bodies.
-    expect(rendered).toContain("formulas (sample of");
+    // the prompt — patterns are rendered up front (before per-sheet bodies) and carry the
+    // sheets they span.
+    expect(rendered).toContain("distinct patterns over 1 cells");
     expect(rendered).toContain("Sheet55");
     expect(rendered).toContain("=RESIDUAL_55");
     expect(rendered).toContain("Other!A1");

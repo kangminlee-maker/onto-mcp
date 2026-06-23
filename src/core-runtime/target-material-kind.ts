@@ -398,8 +398,8 @@ export function reviewMaterialSupportStatus(kind: TargetMaterialKind): {
  * is backed by a `WorkbookStructuralInventory` field that review renders into
  * materialized-input (see review-artifact-utils `renderSpreadsheetStructuralView`):
  *
- * - formula_integrity            ← formula_cells (formula text) + error_cells
- * - cross_sheet_reference_integrity ← formula_cells[].cross_sheet_refs + cross_sheet_key_overlap
+ * - formula_integrity            ← formula_cells_total (>0) + formula_patterns (formula text) + error_cells
+ * - cross_sheet_reference_integrity ← formula_patterns[].cross_sheet_refs + cross_sheet_key_overlap
  * - named_range_hygiene          ← named_ranges (name/scope/refers_to)
  * - data_validation_coverage     ← data_validations (range/rule_summary)
  * - access_and_protection_hygiene ← sheets[].hidden/protected + macro_present

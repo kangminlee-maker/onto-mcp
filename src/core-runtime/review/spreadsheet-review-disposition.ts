@@ -69,11 +69,11 @@ export function isStructuralRiskSignal(kind: string): boolean {
  */
 function computeBackedGoals(inv: WorkbookStructuralInventory): string[] {
   const goals: string[] = [];
-  if (inv.formula_cells.length > 0) {
+  if (inv.formula_cells_total > 0) {
     goals.push("formula_integrity");
   }
   if (
-    inv.formula_cells.some((cell) => cell.cross_sheet_refs.length > 0) ||
+    inv.formula_patterns.some((pattern) => pattern.cross_sheet_refs.length > 0) ||
     inv.cross_sheet_key_overlap.length > 0
   ) {
     goals.push("cross_sheet_reference_integrity");

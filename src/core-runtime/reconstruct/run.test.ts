@@ -48,6 +48,7 @@ import {
   createDirectCallReconstructDirectiveAuthor,
   observationPromptPayload,
   recomputeWorkbookInventoryProjectionTruncations,
+  sourceObservationsReuseSha256,
   assessmentEvidenceObservationIds,
   runReconstruct,
   singleDocumentProjectionTruncation,
@@ -6088,7 +6089,9 @@ describe("runReconstruct", () => {
 });
 
 describe("observationPromptPayload — workbook_inventory bounded prompt projection", () => {
-  const spreadsheetArtifact = (formulaCellCount: number) => ({
+  // Stage 1.1: the prompt projection caps DISTINCT formula PATTERNS (default 200), not
+  // per-cell formulas. The fixture builds `patternCount` distinct patterns.
+  const spreadsheetArtifact = (patternCount: number) => ({
     schema_version: "1" as const,
     session_id: "session-1",
     created_at: "2026-06-16T00:00:00.000Z",
@@ -6108,7 +6111,7 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
           content_sha256: "deadbeef",
           workbook_inventory: {
             adapter_id: "spreadsheet-structure-observer",
-            adapter_version: 1,
+            adapter_version: 2,
             source_ref: "/data/book.xlsx",
             content_sha256: "deadbeef",
             workbook_kind: "xlsx",
@@ -6117,12 +6120,16 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
             named_ranges: [],
             tables: [],
             pivot_tables: [],
-            formula_cells: Array.from({ length: formulaCellCount }, (_, i) => ({
-              sheet: "A",
-              cell: `A${i}`,
-              formula: "=1",
+            formula_patterns: Array.from({ length: patternCount }, (_, i) => ({
+              pattern: `=ROW()+${i}`,
+              sample_cell: `A${i}`,
+              occurrence_count: 1,
+              applied_ranges: [`A${i}`],
+              sheets: ["A"],
               cross_sheet_refs: [],
             })),
+            formula_cells_total: patternCount,
+            formula_cells_total_is_lower_bound: false,
             merged_ranges: [],
             data_validations: [],
             external_links: [],
@@ -6149,18 +6156,20 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
   });
 
   it("caps an oversized workbook_inventory and attaches an honest truncation manifest", () => {
-    const payload = observationPromptPayload(spreadsheetArtifact(100) as any) as Array<{
+    const payload = observationPromptPayload(spreadsheetArtifact(250) as any) as Array<{
       structural_data: Record<string, any>;
     }>;
     const sd = payload[0]!.structural_data;
-    // Default per-sheet cap is 30 → 100 cells on one sheet trimmed to 30.
-    expect(sd.workbook_inventory.formula_cells).toHaveLength(30);
+    // Default pattern cap is 200 → 250 distinct patterns trimmed to 200.
+    expect(sd.workbook_inventory.formula_patterns).toHaveLength(200);
     expect(sd.workbook_inventory_projection_truncated).toBe(true);
     expect(sd.workbook_inventory_projection_sections).toContainEqual({
-      section: "formula_cells",
-      kept: 30,
-      total: 100,
+      section: "formula_patterns",
+      kept: 200,
+      total: 250,
     });
+    // The honest true-total is never trimmed by the SIZE projection.
+    expect(sd.workbook_inventory.formula_cells_total).toBe(250);
     // Provenance envelope is preserved in the prompt view.
     expect(sd.content_sha256).toBe("deadbeef");
   });
@@ -6170,7 +6179,7 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
       structural_data: Record<string, any>;
     }>;
     const sd = payload[0]!.structural_data;
-    expect(sd.workbook_inventory.formula_cells).toHaveLength(3);
+    expect(sd.workbook_inventory.formula_patterns).toHaveLength(3);
     expect(sd.workbook_inventory_projection_truncated).toBeUndefined();
     expect(sd.workbook_inventory_projection_sections).toBeUndefined();
   });
@@ -6178,7 +6187,7 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
   // P6: the durable record of a bounded prompt projection, recomputed
   // deterministically from the persisted observations (no per-call-site sink).
   it("recompute records a bounded inventory with its section manifest", () => {
-    const artifact = spreadsheetArtifact(100);
+    const artifact = spreadsheetArtifact(250);
     const truncations = recomputeWorkbookInventoryProjectionTruncations(
       artifact.observations as any,
     );
@@ -6186,9 +6195,9 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
     expect(truncations[0]!.observation_id).toBe("obs-sheet");
     expect(truncations[0]!.source_ref).toBe("/data/book.xlsx");
     expect(truncations[0]!.sections).toContainEqual({
-      section: "formula_cells",
-      kept: 30,
-      total: 100,
+      section: "formula_patterns",
+      kept: 200,
+      total: 250,
     });
   });
 
@@ -6215,6 +6224,25 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
       },
     ] as any);
     expect(truncations).toEqual([]);
+  });
+
+  // SCS-1 (Stage 1.1): content_sha256 is a raw-byte hash and cannot reflect a structural
+  // SCHEMA change, so the source-observations reuse digest folds in the observer's
+  // adapter_version. Bumping it MUST change the digest, so a resume cannot silently reuse a
+  // seed authored under the old inventory shape (the reuse_match_hash mismatch then fails
+  // the resume provenance check loudly).
+  it("changes sourceObservationsReuseSha256 when the workbook adapter_version bumps (resume regression)", () => {
+    const base = spreadsheetArtifact(3);
+    const bumped = spreadsheetArtifact(3);
+    // Only the nested observer adapter_version differs (e.g. 2 → 3); content_sha256 and
+    // every other observed field are byte-identical.
+    (bumped.observations[0]!.structural_data.workbook_inventory as any).adapter_version = 3;
+
+    const baseHash = sourceObservationsReuseSha256(base as any);
+    const bumpedHash = sourceObservationsReuseSha256(bumped as any);
+    expect(bumpedHash).not.toBe(baseHash);
+    // Determinism: the same artifact hashes identically.
+    expect(sourceObservationsReuseSha256(spreadsheetArtifact(3) as any)).toBe(baseHash);
   });
 });
 

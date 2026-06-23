@@ -314,10 +314,12 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
     // aggregate vocab for the categorical "role"/"dept" columns (counts only)
     expect(r.distinct_value_vocab.some((v) => v.sheet === "People" && v.column === "role")).toBe(true);
 
-    // formulas + cross-sheet refs
-    expect(r.formula_cells).toHaveLength(1);
-    expect(r.formula_cells[0]!.cell).toBe("D2");
-    expect(r.formula_cells[0]!.cross_sheet_refs).toContain("Depts");
+    // formula patterns + cross-sheet refs (Stage 1.1: deduped, with an honest cell total)
+    expect(r.formula_patterns).toHaveLength(1);
+    expect(r.formula_patterns[0]!.sample_cell).toBe("D2");
+    expect(r.formula_patterns[0]!.occurrence_count).toBe(1);
+    expect(r.formula_cells_total).toBe(1);
+    expect(r.formula_patterns[0]!.cross_sheet_refs).toContain("Depts");
 
     // error cells, merged ranges, data validations, named ranges, external links, tables
     expect(r.error_cells.map((e) => e.token)).toContain("#DIV/0!");
@@ -407,8 +409,8 @@ describe("buildXlsxInventory — structure + data (P4)", () => {
       `</sheetData></worksheet>`;
     const bytes = zipSync(makeMinimalXlsxParts(sheet));
     const r = buildXlsxInventory({ sourceRef: "/abs/k.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
-    expect(r.formula_cells).toHaveLength(1);
-    const refs = r.formula_cells[0]!.cross_sheet_refs;
+    expect(r.formula_patterns).toHaveLength(1);
+    const refs = r.formula_patterns[0]!.cross_sheet_refs;
     expect(refs).toContain("결제상세");
     expect(refs).toContain("매출");
     expect(refs).not.toContain("REF");
@@ -724,7 +726,7 @@ describe("Codex review fixes — round 2 (P4 hardening)", () => {
     expect(d.columns.map((c) => c.name)).toEqual(["name", "age"]); // no leading phantom col_1
   });
 
-  it("records shared-formula follower cells, resolving them to the master (R2 #4)", () => {
+  it("collapses a shared-formula fill-down (master + followers) into ONE pattern with occurrence_count = N (Stage 1.1)", () => {
     const bytes = zipSync(
       makeMinimalXlsxParts(
         `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A2"/><sheetData>` +
@@ -734,9 +736,78 @@ describe("Codex review fixes — round 2 (P4 hardening)", () => {
       ),
     );
     const r = buildXlsxInventory({ sourceRef: "/abs/sf.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
-    expect(r.formula_cells).toHaveLength(2); // master + follower, not just the master
-    expect(r.formula_cells.map((f) => f.formula)).toEqual(["Other!A1+1", "Other!A1+1"]);
-    expect(r.formula_cells[1]!.cross_sheet_refs).toContain("Other"); // follower keeps the dependency
+    // tier-1 exact-text dedup: the follower resolves to the master's verbatim text, so
+    // the fill-down is a SINGLE pattern (not 2 per-cell rows), while formula_cells_total
+    // honestly counts every formula cell.
+    expect(r.formula_patterns).toHaveLength(1);
+    const p = r.formula_patterns[0]!;
+    expect(p.pattern).toBe("Other!A1+1");
+    expect(p.occurrence_count).toBe(2); // master + 1 follower
+    expect(p.sample_cell).toBe("A1"); // first occurrence
+    expect(p.applied_ranges).toEqual(["A1", "A2"]);
+    expect(r.formula_cells_total).toBe(2);
+    expect(r.formula_cells_total_is_lower_bound).toBe(false);
+    expect(p.cross_sheet_refs).toContain("Other"); // the fill-down keeps its dependency
+  });
+
+  it("does NOT merge two DIFFERENT fill-down blocks (distinct formula text → 2 patterns)", () => {
+    // Two shared-formula blocks with DIFFERENT text. Each is its own pattern; tier-1
+    // exact-text dedup must not collapse them together.
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:B2"/><sheetData>` +
+          `<row r="1"><c r="A1"><f t="shared" si="0" ref="A1:A2">A1*2</f><v>2</v></c>` +
+          `<c r="B1"><f t="shared" si="1" ref="B1:B2">B1*3</f><v>3</v></c></row>` +
+          `<row r="2"><c r="A2"><f t="shared" si="0"/><v>4</v></c>` +
+          `<c r="B2"><f t="shared" si="1"/><v>6</v></c></row>` +
+          `</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/two.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.formula_patterns).toHaveLength(2);
+    const byText = new Map(r.formula_patterns.map((p) => [p.pattern, p.occurrence_count]));
+    expect(byText.get("A1*2")).toBe(2);
+    expect(byText.get("B1*3")).toBe(2);
+    expect(r.formula_cells_total).toBe(4);
+  });
+
+  it("preserves cross_sheet_refs on the deduped pattern (Stage 1.1)", () => {
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A2"/><sheetData>` +
+          `<row r="1"><c r="A1"><f t="shared" si="0" ref="A1:A2">Sales!A1+Costs!B1</f><v>2</v></c></row>` +
+          `<row r="2"><c r="A2"><f t="shared" si="0"/><v>3</v></c></row>` +
+          `</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/xref.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.formula_patterns).toHaveLength(1);
+    const refs = r.formula_patterns[0]!.cross_sheet_refs;
+    expect(refs).toContain("Sales");
+    expect(refs).toContain("Costs");
+  });
+
+  it("counts every formula cell in formula_cells_total even with deep occurrence accumulation (cap honesty)", () => {
+    // A larger fill-down (one pattern over many cells): occurrence_count accumulates and
+    // formula_cells_total counts every cell. applied_ranges stays bounded (≤8). The
+    // distinct-pattern cap is 5000 — far above one pattern — so is_lower_bound is false.
+    const N = 50;
+    const rowsXml = Array.from({ length: N }, (_, i) =>
+      i === 0
+        ? `<row r="1"><c r="A1"><f t="shared" si="0" ref="A1:A${N}">B1+1</f><v>1</v></c></row>`
+        : `<row r="${i + 1}"><c r="A${i + 1}"><f t="shared" si="0"/><v>1</v></c></row>`,
+    ).join("");
+    const bytes = zipSync(
+      makeMinimalXlsxParts(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A${N}"/><sheetData>${rowsXml}</sheetData></worksheet>`,
+      ),
+    );
+    const r = buildXlsxInventory({ sourceRef: "/abs/big.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    expect(r.formula_patterns).toHaveLength(1);
+    expect(r.formula_patterns[0]!.occurrence_count).toBe(N);
+    expect(r.formula_patterns[0]!.applied_ranges.length).toBe(8); // bounded display list
+    expect(r.formula_cells_total).toBe(N);
+    expect(r.formula_cells_total_is_lower_bound).toBe(false);
   });
 
   it("preserves all rich inline-string runs (R2 #5)", () => {
@@ -851,7 +922,7 @@ describe("Codex review fixes — round 4 (P4 hardening)", () => {
       ),
     );
     const r = buildXlsxInventory({ sourceRef: "/abs/apos.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
-    expect(r.formula_cells[0]!.cross_sheet_refs).toContain("Bob's Sheet"); // unescaped, not "Bob"
+    expect(r.formula_patterns[0]!.cross_sheet_refs).toContain("Bob's Sheet"); // unescaped, not "Bob"
   });
 });
 
@@ -859,7 +930,7 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
   function emptyInventory(): WorkbookStructuralInventory {
     return {
       adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
-      adapter_version: 1,
+      adapter_version: 2,
       source_ref: "/abs/book.xlsx",
       content_sha256: "deadbeef",
       workbook_kind: "xlsx",
@@ -868,7 +939,9 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
       named_ranges: [],
       tables: [],
       pivot_tables: [],
-      formula_cells: [],
+      formula_patterns: [],
+      formula_cells_total: 0,
+      formula_cells_total_is_lower_bound: false,
       merged_ranges: [],
       data_validations: [],
       external_links: [],
@@ -894,33 +967,39 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
 
   it("leaves a small under-cap inventory fully intact", () => {
     const inv = emptyInventory();
-    inv.formula_cells = [
-      { sheet: "A", cell: "A1", formula: "=1+1", cross_sheet_refs: [] },
-      { sheet: "B", cell: "B2", formula: "=A!A1", cross_sheet_refs: ["A"] },
+    inv.formula_patterns = [
+      { pattern: "=1+1", sample_cell: "A1", occurrence_count: 1, applied_ranges: ["A1"], sheets: ["A"], cross_sheet_refs: [] },
+      { pattern: "=A!A1", sample_cell: "B2", occurrence_count: 1, applied_ranges: ["B2"], sheets: ["B"], cross_sheet_refs: ["A"] },
     ];
+    inv.formula_cells_total = 2;
     inv.pivot_tables = [
       { name: "P", sheet: "A", location: "A1", source_sheet: "A", source_ref: null, row_fields: ["x"], column_fields: [], page_fields: [], data_fields: ["sum"] },
     ];
     const r = projectInventoryForPrompt(inv);
     expect(r.truncated).toBe(false);
     expect(r.sections).toEqual([]);
-    expect(r.inventory.formula_cells).toEqual(inv.formula_cells);
+    expect(r.inventory.formula_patterns).toEqual(inv.formula_patterns);
+    expect(r.inventory.formula_cells_total).toBe(2);
     expect(r.inventory.pivot_tables).toEqual(inv.pivot_tables);
   });
 
-  it("caps formula_cells PER SHEET so the cross-sheet picture survives, not just the first sheet", () => {
+  it("caps formula_patterns to max_formula_patterns and keeps the honest cell total (Stage 1.1)", () => {
     const inv = emptyInventory();
-    // 100 cells on sheet A then 100 on sheet B. A global head-N would keep only A;
-    // per-sheet caps must keep a sample of BOTH.
-    for (let i = 0; i < 100; i += 1) {
-      inv.formula_cells.push({ sheet: "A", cell: `A${i}`, formula: "=1", cross_sheet_refs: [] });
+    // 250 distinct patterns; the prompt cap keeps the first max_formula_patterns, while
+    // formula_cells_total (the honest cell count) passes through untrimmed.
+    for (let i = 0; i < 250; i += 1) {
+      inv.formula_patterns.push({
+        pattern: `=ROW()+${i}`,
+        sample_cell: `A${i}`,
+        occurrence_count: 1,
+        applied_ranges: [`A${i}`],
+        sheets: ["A"],
+        cross_sheet_refs: [],
+      });
     }
-    for (let i = 0; i < 100; i += 1) {
-      inv.formula_cells.push({ sheet: "B", cell: `B${i}`, formula: "=2", cross_sheet_refs: [] });
-    }
+    inv.formula_cells_total = 250;
     const r = projectInventoryForPrompt(inv, {
-      max_formula_cells_per_sheet: 5,
-      max_formula_cells_total: 600,
+      max_formula_patterns: 200,
       max_sheets: 50,
       max_columns_per_sheet: 64,
       max_distinct_value_vocab: 200,
@@ -935,12 +1014,10 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
       max_merged_ranges: 50,
       max_risk_signals: 50,
     });
-    const sheetsKept = new Set(r.inventory.formula_cells.map((c) => c.sheet));
-    expect(sheetsKept).toEqual(new Set(["A", "B"]));
-    expect(r.inventory.formula_cells.filter((c) => c.sheet === "A")).toHaveLength(5);
-    expect(r.inventory.formula_cells.filter((c) => c.sheet === "B")).toHaveLength(5);
+    expect(r.inventory.formula_patterns).toHaveLength(200);
+    expect(r.inventory.formula_cells_total).toBe(250); // never trimmed by the SIZE projection
     expect(r.truncated).toBe(true);
-    expect(r.sections).toContainEqual({ section: "formula_cells", kept: 10, total: 200 });
+    expect(r.sections).toContainEqual({ section: "formula_patterns", kept: 200, total: 250 });
   });
 
   it("records an honest per-section manifest and preserves the persisted envelope", () => {
@@ -980,15 +1057,20 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
     expect(inv.distinct_value_vocab).toHaveLength(300);
   });
 
-  it("bounds a high-sheet-count workbook with global sheet + formula ceilings (Codex P2)", () => {
+  it("bounds a high-sheet-count workbook with the global sheet ceiling (Codex P2)", () => {
     const inv = emptyInventory();
-    // 200 sheets × 10 formulas each: the per-sheet cap (30) is never hit, so without
-    // a global ceiling all 2000 formulas + 200 sheets would reach the prompt.
+    // 200 sheets: the per_sheet_data sheet ceiling caps the rendered layout at 50.
+    // Formula patterns are deduped (one pattern per sheet here) and stay under the cap.
     for (let s = 0; s < 200; s += 1) {
       const sheet = `S${s}`;
-      for (let i = 0; i < 10; i += 1) {
-        inv.formula_cells.push({ sheet, cell: `A${i}`, formula: "=1", cross_sheet_refs: [] });
-      }
+      inv.formula_patterns.push({
+        pattern: `=ROW()+${s}`,
+        sample_cell: "A1",
+        occurrence_count: 1,
+        applied_ranges: ["A1"],
+        sheets: [sheet],
+        cross_sheet_refs: [],
+      });
       inv.per_sheet_data.push({
         sheet,
         layout_kind: "tabular",
@@ -997,11 +1079,12 @@ describe("projectInventoryForPrompt — bounded prompt projection (size axis)", 
         header_confidence: "high",
       });
     }
+    inv.formula_cells_total = 200;
     const r = projectInventoryForPrompt(inv);
-    expect(r.inventory.formula_cells.length).toBeLessThanOrEqual(600);
     expect(r.inventory.per_sheet_data).toHaveLength(50);
     expect(r.truncated).toBe(true);
     expect(r.sections).toContainEqual({ section: "per_sheet_data", kept: 50, total: 200 });
-    expect(r.sections).toContainEqual({ section: "formula_cells", kept: 600, total: 2000 });
+    // 200 distinct patterns == the default cap, so formula_patterns is NOT trimmed.
+    expect(r.inventory.formula_patterns).toHaveLength(200);
   });
 });

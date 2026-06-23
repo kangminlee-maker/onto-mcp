@@ -38,7 +38,11 @@ import { Unzip, UnzipInflate } from "fflate";
 import { SaxesParser, type SaxesTagPlain } from "saxes";
 
 export const SPREADSHEET_OBSERVER_ADAPTER_ID = "spreadsheet-structure-observer";
-export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 1;
+// v2 (Stage 1.1): per-cell `formula_cells` replaced by deduplicated `formula_patterns`
+// (tier-1 exact-text dedup) + an honest `formula_cells_total`. A bump invalidates a
+// resume's reuse hash (run.ts sourceObservationsReuseSha256) so a stale old-schema seed
+// is never silently reused.
+export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 2;
 
 export type WorkbookKind = "xlsx" | "xlsm" | "csv" | "tsv" | "xls" | "xlsb" | "ods";
 
@@ -162,7 +166,27 @@ export interface WorkbookStructuralInventory {
     page_fields: string[];
     data_fields: string[];
   }>;
-  formula_cells: Array<{ sheet: string; cell: string; formula: string; cross_sheet_refs: string[] }>;
+  /** Deduplicated formula patterns (Stage 1.1, tier-1 exact-text dedup). A fill-down
+   *  (one shared-formula master replicated verbatim across N cells) collapses to a
+   *  SINGLE pattern with `occurrence_count = N`. `pattern` is the formula text verbatim;
+   *  `sample_cell` is the first occurrence; `applied_ranges` is a bounded (≤8), display-only
+   *  list of cell addresses; `sheets` are the distinct sheets it appears on; `cross_sheet_refs`
+   *  is the sheet-level union. Carries only formula text + cell addresses + sheet names — never
+   *  raw DATA cell values (the inventory is aggregate-only). */
+  formula_patterns: Array<{
+    pattern: string;
+    sample_cell: string;
+    occurrence_count: number;
+    applied_ranges: string[];
+    sheets: string[];
+    cross_sheet_refs: string[];
+  }>;
+  /** Honest count of EVERY formula cell observed (Σ occurrence_count over retained patterns,
+   *  plus any cells whose new distinct pattern was dropped at the distinct-pattern cap). */
+  formula_cells_total: number;
+  /** True when the distinct-pattern cap dropped a new pattern, so `formula_cells_total`
+   *  still counts every cell but `formula_patterns` is an incomplete distinct set. */
+  formula_cells_total_is_lower_bound: boolean;
   merged_ranges: Array<{ sheet: string; range: string }>;
   data_validations: Array<{ sheet: string; range: string; rule_summary: string }>;
   external_links: Array<{ target: string; kind: string }>;
@@ -219,7 +243,7 @@ export function inventoryHasInspectedStructure(
     inventory.named_ranges.length > 0 ||
     inventory.tables.length > 0 ||
     inventory.pivot_tables.length > 0 ||
-    inventory.formula_cells.length > 0 ||
+    inventory.formula_patterns.length > 0 ||
     inventory.merged_ranges.length > 0 ||
     inventory.data_validations.length > 0 ||
     inventory.external_links.length > 0 ||
@@ -257,7 +281,7 @@ export function inventoryHasRenderableStructure(
     inventory.named_ranges.length > 0 ||
     inventory.tables.length > 0 ||
     inventory.pivot_tables.length > 0 ||
-    inventory.formula_cells.length > 0 ||
+    inventory.formula_patterns.length > 0 ||
     inventory.merged_ranges.length > 0 ||
     inventory.data_validations.length > 0 ||
     inventory.external_links.length > 0 ||
@@ -699,7 +723,9 @@ export function buildCsvInventory(args: {
     named_ranges: [],
     tables: [],
     pivot_tables: [],
-    formula_cells: [],
+    formula_patterns: [],
+    formula_cells_total: 0,
+    formula_cells_total_is_lower_bound: false,
     merged_ranges: [],
     data_validations: [],
     external_links: [],
@@ -768,7 +794,13 @@ export function buildCsvInventory(args: {
  *  is dropped (capture_truncated + risk signal) rather than held in memory. */
 const XLSX_PART_BYTE_BUDGET = 128 * 1024 * 1024;
 
+// Repurposed (Stage 1.1) as a DISTINCT-pattern cap: the max number of distinct formula
+// texts retained per sheet. occurrence_count keeps accumulating past it, and every cell is
+// still counted in formula_cells_total; a new distinct pattern beyond it is dropped and
+// flagged via formula_patterns_capped (an honest lower bound).
 const XLSX_FORMULA_CAP = 5000;
+// Bounded, display-only list of cell addresses per pattern (no exact authority).
+const XLSX_FORMULA_APPLIED_RANGE_CAP = 8;
 const XLSX_MERGE_CAP = 2000;
 const XLSX_DATAVALIDATION_CAP = 1000;
 const XLSX_ERROR_CELL_CAP = 1000;
@@ -1198,7 +1230,19 @@ interface ParsedWorksheet {
   protected: boolean;
   merged_ranges: Array<{ sheet: string; range: string }>;
   data_validations: Array<{ sheet: string; range: string; rule_summary: string }>;
-  formula_cells: Array<{ sheet: string; cell: string; formula: string; cross_sheet_refs: string[] }>;
+  /** Per-sheet deduplicated formula patterns (tier-1 exact-text). No `sheets` at the
+   *  per-sheet level — the workbook merge adds it when combining across sheets. */
+  formula_patterns: Array<{
+    pattern: string;
+    sample_cell: string;
+    occurrence_count: number;
+    applied_ranges: string[];
+    cross_sheet_refs: string[];
+  }>;
+  /** Every formula cell on this sheet, counted regardless of the distinct-pattern cap. */
+  formula_cells_total: number;
+  /** A new distinct pattern was dropped at the distinct-pattern cap (occurrence still counted). */
+  formula_patterns_capped: boolean;
   error_cells: Array<{ sheet: string; cell: string; token: string }>;
   rows: string[][];
   rows_truncated: boolean;
@@ -1245,7 +1289,18 @@ function createWorksheetParser(args: {
   const { sharedStrings, sheetName, caps, dateXfIndexes } = args;
   const merged_ranges: ParsedWorksheet["merged_ranges"] = [];
   const data_validations: ParsedWorksheet["data_validations"] = [];
-  const formula_cells: ParsedWorksheet["formula_cells"] = [];
+  // Tier-1 exact-text formula dedup, accumulated at extraction time. The key is the
+  // resolved formula text (followers resolve to the master verbatim), so a fill-down
+  // collapses to one entry. occurrence_count counts every cell of a retained pattern;
+  // formulaCellsTotal counts EVERY formula cell (cap-independent). XLSX_FORMULA_CAP is
+  // repurposed as a DISTINCT-pattern cap; dropping a new pattern at the cap sets
+  // formulaPatternsCapped (an honest lower-bound flag), not capsHit.
+  const formulaPatterns = new Map<
+    string,
+    { sample_cell: string; occurrence_count: number; applied_ranges: string[]; cross_sheet_refs: string[] }
+  >();
+  let formulaCellsTotal = 0;
+  let formulaPatternsCapped = false;
   const error_cells: ParsedWorksheet["error_cells"] = [];
   const rows: string[][] = [];
   let protectedSheet = false;
@@ -1451,15 +1506,29 @@ function createWorksheetParser(args: {
           else formulaText = sharedFormulas.get(fSi) ?? "";
         }
         if (cellHasFormula) {
-          if (formula_cells.length < XLSX_FORMULA_CAP) {
-            formula_cells.push({
-              sheet: sheetName,
-              cell: cellRef,
-              formula: formulaText,
+          // tier-1 exact-text dedup, keyed on the resolved formula text (followers
+          // resolve to the master verbatim, so fill-downs collapse to one entry).
+          formulaCellsTotal += 1; // counts every formula cell, cap-independent.
+          const existing = formulaPatterns.get(formulaText);
+          if (existing) {
+            existing.occurrence_count += 1;
+            if (existing.applied_ranges.length < XLSX_FORMULA_APPLIED_RANGE_CAP) {
+              existing.applied_ranges.push(cellRef);
+            }
+            for (const ref of extractCrossSheetRefs(formulaText, sheetName)) {
+              if (!existing.cross_sheet_refs.includes(ref)) existing.cross_sheet_refs.push(ref);
+            }
+          } else if (formulaPatterns.size < XLSX_FORMULA_CAP) {
+            formulaPatterns.set(formulaText, {
+              sample_cell: cellRef,
+              occurrence_count: 1,
+              applied_ranges: [cellRef],
               cross_sheet_refs: extractCrossSheetRefs(formulaText, sheetName),
             });
           } else {
-            capsHit = true;
+            // Distinct-pattern cap hit: the cell is still counted in formulaCellsTotal,
+            // but the new distinct pattern is dropped — an honest lower bound.
+            formulaPatternsCapped = true;
           }
         }
         if (cellType === "e") {
@@ -1516,7 +1585,16 @@ function createWorksheetParser(args: {
       protected: protectedSheet,
       merged_ranges,
       data_validations,
-      formula_cells,
+      // Materialize each entry with its key (the formula text) as `pattern`.
+      formula_patterns: [...formulaPatterns.entries()].map(([pattern, entry]) => ({
+        pattern,
+        sample_cell: entry.sample_cell,
+        occurrence_count: entry.occurrence_count,
+        applied_ranges: entry.applied_ranges,
+        cross_sheet_refs: entry.cross_sheet_refs,
+      })),
+      formula_cells_total: formulaCellsTotal,
+      formula_patterns_capped: formulaPatternsCapped,
       error_cells,
       rows,
       rows_truncated: rowsTruncated,
@@ -1749,7 +1827,11 @@ export function buildXlsxInventory(args: {
   const per_sheet_data: PerSheetData[] = [];
   const distinct_value_vocab: DistinctValueVocabEntry[] = [];
   const crossSheetInput: Array<{ sheet: string; valueSets: Map<string, Set<string>> }> = [];
-  const formula_cells: WorkbookStructuralInventory["formula_cells"] = [];
+  // Workbook-level formula patterns deduped by pattern text ACROSS sheets (the per-sheet
+  // map is keyed within a sheet; the same fill-down on two sheets shares one entry here).
+  const formulaPatternsByText = new Map<string, WorkbookStructuralInventory["formula_patterns"][number]>();
+  let formulaCellsTotal = 0;
+  let formulaCellsTotalIsLowerBound = false;
   const merged_ranges: WorkbookStructuralInventory["merged_ranges"] = [];
   const data_validations: WorkbookStructuralInventory["data_validations"] = [];
   const error_cells: WorkbookStructuralInventory["error_cells"] = [];
@@ -1777,7 +1859,34 @@ export function buildXlsxInventory(args: {
     }
 
     if (parsed.rows_truncated || parsed.caps_hit) captureTruncated = true;
-    formula_cells.push(...parsed.formula_cells);
+    // Merge per-sheet formula patterns into the workbook-level set, deduped by pattern
+    // text across sheets: sum occurrences, union sheets/cross_sheet_refs, merge
+    // applied_ranges bounded to the cap, keep the first sample_cell.
+    for (const p of parsed.formula_patterns) {
+      const existing = formulaPatternsByText.get(p.pattern);
+      if (existing) {
+        existing.occurrence_count += p.occurrence_count;
+        if (!existing.sheets.includes(sheetEntry.name)) existing.sheets.push(sheetEntry.name);
+        for (const ref of p.cross_sheet_refs) {
+          if (!existing.cross_sheet_refs.includes(ref)) existing.cross_sheet_refs.push(ref);
+        }
+        for (const range of p.applied_ranges) {
+          if (existing.applied_ranges.length >= XLSX_FORMULA_APPLIED_RANGE_CAP) break;
+          existing.applied_ranges.push(range);
+        }
+      } else {
+        formulaPatternsByText.set(p.pattern, {
+          pattern: p.pattern,
+          sample_cell: p.sample_cell,
+          occurrence_count: p.occurrence_count,
+          applied_ranges: p.applied_ranges.slice(0, XLSX_FORMULA_APPLIED_RANGE_CAP),
+          sheets: [sheetEntry.name],
+          cross_sheet_refs: [...p.cross_sheet_refs],
+        });
+      }
+    }
+    formulaCellsTotal += parsed.formula_cells_total;
+    if (parsed.formula_patterns_capped) formulaCellsTotalIsLowerBound = true;
     merged_ranges.push(...parsed.merged_ranges);
     data_validations.push(...parsed.data_validations);
     error_cells.push(...parsed.error_cells);
@@ -1839,7 +1948,9 @@ export function buildXlsxInventory(args: {
     named_ranges,
     tables,
     pivot_tables,
-    formula_cells,
+    formula_patterns: [...formulaPatternsByText.values()],
+    formula_cells_total: formulaCellsTotal,
+    formula_cells_total_is_lower_bound: formulaCellsTotalIsLowerBound,
     merged_ranges,
     data_validations,
     external_links,
@@ -1883,7 +1994,9 @@ function unsupportedInventory(args: {
     named_ranges: [],
     tables: [],
     pivot_tables: [],
-    formula_cells: [],
+    formula_patterns: [],
+    formula_cells_total: 0,
+    formula_cells_total_is_lower_bound: false,
     merged_ranges: [],
     data_validations: [],
     external_links: [],
@@ -2026,14 +2139,10 @@ export function projectInventoryForAdmission(
 // like the document budget's CJK calibration).
 
 export interface WorkbookInventoryPromptCaps {
-  /** formula_cells kept PER SHEET — a per-sheet sample preserves the cross-sheet
-   *  reference picture (the inventory's reason for being) that a single global head-N
-   *  would bias toward the first sheet. */
-  max_formula_cells_per_sheet: number;
-  /** GLOBAL ceiling on formula_cells after the per-sheet sample. The per-sheet cap
-   *  alone is unbounded by sheet count — a workbook with hundreds of sheets would
-   *  still emit (per_sheet_cap × sheet_count) formulas, so this caps the total. */
-  max_formula_cells_total: number;
+  /** formula_patterns kept (Stage 1.1). Patterns are already deduped (a fill-down is one
+   *  entry), so a single global head-N over the small distinct set is enough — no per-sheet
+   *  split is needed. `formula_cells_total` (+ is_lower_bound) is unaffected by this cap. */
+  max_formula_patterns: number;
   /** Max sheets kept in per_sheet_data. The per-column cap bounds each sheet, but a
    *  high-sheet-count workbook still needs a sheet ceiling. */
   max_sheets: number;
@@ -2055,8 +2164,7 @@ export interface WorkbookInventoryPromptCaps {
 }
 
 export const DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS: WorkbookInventoryPromptCaps = {
-  max_formula_cells_per_sheet: 30,
-  max_formula_cells_total: 600,
+  max_formula_patterns: 200,
   max_sheets: 50,
   max_columns_per_sheet: 64,
   max_distinct_value_vocab: 200,
@@ -2087,22 +2195,6 @@ export interface WorkbookInventoryProjectionResult {
   sections: WorkbookInventorySectionTruncation[];
 }
 
-/** Keep the first `perGroup` items of each `key`-group, preserving original order.
- *  Pure (input untouched). */
-function capPerGroup<T>(items: T[], key: (item: T) => string, perGroup: number): T[] {
-  const counts = new Map<string, number>();
-  const kept: T[] = [];
-  for (const item of items) {
-    const k = key(item);
-    const n = counts.get(k) ?? 0;
-    if (n < perGroup) {
-      kept.push(item);
-      counts.set(k, n + 1);
-    }
-  }
-  return kept;
-}
-
 /**
  * Bounded, representative prompt projection of a workbook inventory (SIZE axis).
  * Pure, deterministic, total: it never mutates the input and never throws, mirroring
@@ -2119,14 +2211,11 @@ export function projectInventoryForPrompt(
     if (kept < total) sections.push({ section, kept, total });
   };
 
-  // Per-sheet sample first (cross-sheet picture), then a GLOBAL ceiling so a
-  // high-sheet-count workbook stays bounded regardless of sheet count.
-  const formulaCells = capPerGroup(
-    inventory.formula_cells,
-    (cell) => cell.sheet,
-    caps.max_formula_cells_per_sheet,
-  ).slice(0, caps.max_formula_cells_total);
-  record("formula_cells", formulaCells.length, inventory.formula_cells.length);
+  // Formula patterns are already deduped (a fill-down is one entry), so a single head-N
+  // over the small distinct set bounds the prompt. formula_cells_total (+ is_lower_bound)
+  // pass through unchanged below — the honest true-total is never trimmed.
+  const formulaPatterns = inventory.formula_patterns.slice(0, caps.max_formula_patterns);
+  record("formula_patterns", formulaPatterns.length, inventory.formula_patterns.length);
 
   // per_sheet_data: cap the number of SHEETS first (bounds a high-sheet-count
   // workbook), then cap each kept sheet's columns[]. columnsTotal sums only kept
@@ -2201,7 +2290,7 @@ export function projectInventoryForPrompt(
   return {
     inventory: {
       ...inventory,
-      formula_cells: formulaCells,
+      formula_patterns: formulaPatterns,
       per_sheet_data: perSheetData,
       distinct_value_vocab: distinctValueVocab,
       pivot_tables: pivotTables,
