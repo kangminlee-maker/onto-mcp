@@ -322,6 +322,7 @@ function continuationDecisionValidation(
     validation_results: validationStatus === "valid"
       ? ["maturation_continuation_decision_valid"]
       : ["maturation_continuation_decision_invalid"],
+    asserted_obligation_ids: [],
     violations: [],
   };
 }

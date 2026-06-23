@@ -4465,6 +4465,24 @@ export function validateMaturationContinuationDecision(args: {
 }): ReconstructMaturationContinuationDecisionValidationArtifact {
   const decision = args.maturationContinuationDecision;
   const violations: ReconstructMaturationValidationViolation[] = [];
+  // G(a) slice 22 — record the obligations this validator genuinely enforces (RECORD 4/9, all clean
+  // derive-and-assert / single-facet gates from the M1/M4b conservation work). The other 5 stay parked
+  // (see obligation-coverage-ledger.yaml notes): "continuation_state against validated matrix and
+  // frontier_state" is AMBIGUOUS (intent split across the blanket prior-validation loop / claim_scope
+  // partition / material-rows gate); "continue/ask_user/blocked against available next authority" is
+  // PARTIAL (the named `blocked` state has no enforcement); the revision-proposal binding is gated on the
+  // caller-supplied optional `revisionProposalRef` (no internal guarantee — codex R1, slice-18); the
+  // "material blocker/high row remains unclosed" gate only catches `frontier_required`, not the
+  // `limitation_backed` half of "unclosed" (codex R1, subset-of-scope); and "limitation_refs and
+  // row_scope for actionable_limited" only firmly enforces row_scope — the limitation-ref facet is a weak
+  // excluded-OR-limitation presence check that a limitation_backed excluded row with dropped
+  // limitation_refs satisfies (codex R2, name-broader-than-code). Stamped before any per-row/per-state
+  // guard so the recorder fires on zero-row input.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "reject_actionable_ready_until_final_requestion_convergence_is_proven");
+  assertObligation(assertedObligationIds, "reject_actionable_ready_when_unresolved_revision_blockers_remain");
+  assertObligation(assertedObligationIds, "require_revision_blocker_refs_in_continuation_limitation_refs");
+  assertObligation(assertedObligationIds, "validate_revision_blocker_limitation_refs_against_validated_revision_proposal");
   const matrixRows = new Map(args.actionabilityMatrix.rows.map((row) => [
     row.matrix_row_id,
     row,
@@ -4739,6 +4757,7 @@ export function validateMaturationContinuationDecision(args: {
     validation_results: violations.length === 0
       ? ["maturation_continuation_decision_valid"]
       : ["maturation_continuation_decision_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
