@@ -1242,6 +1242,55 @@ function validateCompetencyQuestionsAgainstEligibleClaims(args: {
   sourceObservationsRef?: string | null;
 }): ReconstructCompetencyQuestionsValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
+  // G(a) slice 27: record the 19 obligations this validator FULLY enforces with a distinct,
+  // name-matching site (stamped before the per-question loop so a zero-question set still records).
+  // Most are per-question ref-resolution checks (validateRefArray on a DISTINCT question field with a
+  // field-named unknown_id message); the rest are coverage/uniqueness/disposition checks. Parked (see
+  // obligation-coverage-ledger.yaml notes): emit_required_evidence_scope_runtime_projection
+  // (PROJECTION_ONLY — emits required_evidence_scope_projection with no violation), the two facet
+  // obligations whose question field does not exist (classification_level_axis / hidden_label), and the
+  // p3-diagnostic disposition rule (no enforcing code).
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "require_unique_question_id");
+  assertObligation(assertedObligationIds, "validate_coverage_axes_against_coverage_axis_registry");
+  assertObligation(
+    assertedObligationIds,
+    "validate_ontology_handoff_axes_against_ontology_handoff_axis_registry",
+  );
+  assertObligation(assertedObligationIds, "validate_seed_ref_refs_close_against_known_seed_refs");
+  assertObligation(assertedObligationIds, "validate_reasoning_formalism_facet_coverage");
+  assertObligation(assertedObligationIds, "validate_entity_identity_facet_coverage");
+  assertObligation(assertedObligationIds, "validate_instance_assertion_facet_coverage");
+  assertObligation(assertedObligationIds, "validate_terminology_facet_coverage");
+  assertObligation(assertedObligationIds, "validate_relation_type_facet_coverage");
+  assertObligation(assertedObligationIds, "validate_classification_facet_coverage");
+  assertObligation(assertedObligationIds, "validate_constraint_facet_coverage");
+  assertObligation(assertedObligationIds, "validate_modeling_concern_facet_coverage");
+  assertObligation(
+    assertedObligationIds,
+    "validate_limitation_refs_close_against_handoff_limitations",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_reference_standard_refs_against_reference_standard_registry",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_pattern_catalog_refs_against_reference_pattern_catalog_registry",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_query_visualization_graph_contract_refs_when_applicable",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_domain_competency_trace_refs_against_run_manifest_context_snapshot",
+  );
+  assertObligation(assertedObligationIds, "enforce_admitted_domain_competency_disposition_rule");
+  assertObligation(
+    assertedObligationIds,
+    "validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition",
+  );
   const normalizedCompetencyQuestions = normalizeCompetencyQuestionsAtBoundary(
     args.competencyQuestions,
   );
@@ -1709,6 +1758,7 @@ function validateCompetencyQuestionsAgainstEligibleClaims(args: {
     validation_results: violations.length === 0
       ? ["competency_questions_valid"]
       : ["competency_questions_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
