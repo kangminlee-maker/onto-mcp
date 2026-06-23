@@ -3198,6 +3198,7 @@ export interface ReconstructRunManifestValidationArtifact {
   completed_step_count: number;
   skipped_step_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructPostSeedValidationViolation[];
 }
 

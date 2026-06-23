@@ -734,6 +734,88 @@ describe("reconstruct governing snapshot", () => {
     );
   });
 
+  // ANTI-LAUNDERING (slice 28): the 4 recorded pre-handoff-run-manifest obligations
+  // (selected reference-standard + pattern-catalog ids / versions) each bind to an ISOLATED per-field
+  // equality — mutating exactly one recorded field trips manifest_snapshot_mismatch with that field's
+  // distinct subject_id, and a faithful rebuild clears all four (non-vacuous). This is the enforcement
+  // evidence cited by obligation-coverage-harvest.test.ts. (The canonical-URI field is parked — codex
+  // #143 — because the rebuild uses a fixed URN convention and never reads the registry policy; its
+  // mismatch behavior is covered separately by the "omit selected reference authority bindings" test.)
+  it("trips an isolated manifest_snapshot_mismatch per recorded reference-standard/pattern-catalog field and clears on a faithful rebuild", async () => {
+    const projectRoot = process.cwd();
+    const registryPath = path.resolve(
+      ".onto/processes/reconstruct/reconstruct-contract-registry.yaml",
+    );
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const lensIds = loadCoreLensRegistry().full_review_lens_ids;
+    const buildArgs = {
+      projectRoot,
+      registryPath,
+      contractRegistry,
+      selectedSourceProfiles: [],
+      lensIds,
+      admittedDomainIds: [],
+    };
+    const snapshot = await buildReconstructRunGoverningSnapshot(buildArgs);
+
+    const mutations: Array<{
+      subject: string;
+      mutate: (s: typeof snapshot) => typeof snapshot;
+    }> = [
+      {
+        subject: "governing_snapshot.selected_reference_standard_ids",
+        mutate: (s) => ({
+          ...s,
+          selected_reference_standard_ids: [
+            ...s.selected_reference_standard_ids,
+            "bogus_unresolved_standard",
+          ],
+        }),
+      },
+      {
+        subject: "governing_snapshot.selected_reference_standard_version_or_snapshot_ids",
+        mutate: (s) => ({ ...s, selected_reference_standard_version_or_snapshot_ids: {} }),
+      },
+      {
+        subject: "governing_snapshot.selected_pattern_catalog_ids",
+        mutate: (s) => ({
+          ...s,
+          selected_pattern_catalog_ids: [
+            ...s.selected_pattern_catalog_ids,
+            "bogus_unresolved_pattern_catalog",
+          ],
+        }),
+      },
+      {
+        subject: "governing_snapshot.selected_pattern_catalog_version_or_snapshot_ids",
+        mutate: (s) => ({ ...s, selected_pattern_catalog_version_or_snapshot_ids: {} }),
+      },
+    ];
+
+    for (const { subject, mutate } of mutations) {
+      const violations = await validateReconstructRunGoverningSnapshot({
+        ...buildArgs,
+        snapshot: mutate(snapshot),
+      });
+      expect(violations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: "manifest_snapshot_mismatch",
+            subject_id: subject,
+          }),
+        ]),
+      );
+    }
+
+    const cleanViolations = await validateReconstructRunGoverningSnapshot({
+      ...buildArgs,
+      snapshot,
+    });
+    for (const { subject } of mutations) {
+      expect(cleanViolations.some((v) => v.subject_id === subject)).toBe(false);
+    }
+  });
+
   it("validates historical governing snapshots by recorded shape when the current registry changed", async () => {
     const projectRoot = process.cwd();
     const registryPath = path.resolve(

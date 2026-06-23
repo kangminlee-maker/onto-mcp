@@ -108,6 +108,7 @@ export async function validateReconstructRunManifest(args: {
 }): Promise<ReconstructRunManifestValidationArtifact> {
   assertArrayField(args.manifest.steps, "run-manifest", "steps");
   const violations: ReconstructPostSeedValidationViolation[] = [];
+  const assertedObligationIds: string[] = [];
   const stepById = new Map(args.manifest.steps.map((step) => [step.step_id, step]));
   for (const stageId of RECONSTRUCT_STAGE_IDS) {
     if (!stepById.has(stageId)) {
@@ -150,6 +151,17 @@ export async function validateReconstructRunManifest(args: {
     args.selectedSourceProfiles &&
     args.lensIds
   ) {
+    // AUTHORITY-GATED record (slice 28): the governing-snapshot drift check rebuilds the expected
+    // snapshot from the live registry/profile/lens authority and compares each recorded field by exact
+    // value, so it only runs when that authority is supplied. The four recorded snapshot-freeze
+    // obligations (selected reference-standard / pattern-catalog ids resolve to the registry projection;
+    // their version/snapshot maps carry an entry per selected id) are stamped INSIDE the callee, at the
+    // per-field `checks` loop — past the missing-snapshot and registry-hash early-returns — so they
+    // record only when the comparisons actually run. The remaining 23 obligations stay PARKED (see
+    // obligation-coverage-ledger.yaml): shared-field obligations cannot bind a single one, the canonical
+    // URI obligation names a registry policy the rebuild never reads, "allowed/supported/contains" are
+    // enforced at snapshot-build time, the p2/p3 non-promotion policy and governed-seed/previous-id
+    // closures are not compared fields, and the registry ref+hash presence overlaps the hash-match path.
     violations.push(...await validateReconstructRunGoverningSnapshot({
       projectRoot: args.projectRoot,
       registryPath: args.registryPath,
@@ -158,6 +170,7 @@ export async function validateReconstructRunManifest(args: {
       lensIds: args.lensIds,
       admittedDomainIds: args.admittedDomainIds ?? [],
       snapshot: args.manifest.governing_snapshot,
+      assertedObligationIds,
     }));
   } else if (!args.manifest.governing_snapshot) {
     violations.push(violation({
@@ -182,6 +195,7 @@ export async function validateReconstructRunManifest(args: {
     validation_results: violations.length === 0
       ? ["reconstruct_run_manifest_valid"]
       : ["reconstruct_run_manifest_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

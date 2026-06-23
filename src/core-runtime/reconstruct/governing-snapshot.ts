@@ -23,6 +23,7 @@ import {
 import {
   assertReconstructDomainId,
 } from "./domain-id.js";
+import { assertObligation } from "./obligation-assertion.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -818,6 +819,10 @@ export async function validateReconstructRunGoverningSnapshot(args: {
   admittedDomainIds: string[];
   snapshot: ReconstructRunGoverningSnapshot | null | undefined;
   validationMode?: "live_terminal" | "historical_replay";
+  // pre-handoff-run-manifest-validator obligation recorder (G(a) slice 28). Stamped ONLY once control
+  // reaches the per-field `checks` loop below — i.e. after the missing-snapshot and registry-hash
+  // early-returns — so a non-enforced path can never claim the snapshot-freeze obligations.
+  assertedObligationIds?: string[];
 }): Promise<ReconstructPostSeedValidationViolation[]> {
   if (!args.snapshot) {
     return [
@@ -847,6 +852,30 @@ export async function validateReconstructRunGoverningSnapshot(args: {
     ];
   }
   const violations: ReconstructPostSeedValidationViolation[] = [];
+  // Reached only when the registry hash matched: the per-field equality comparisons below now run, so
+  // record the four snapshot-freeze obligations whose named scope maps 1:1 to a non-shared per-field
+  // check and is fully entailed by equality to the authority projection (selected ids == registry ids
+  // → resolve; version/snapshot map carries an entry per selected id → recorded). The pattern-catalog
+  // canonical-URI obligation is intentionally NOT stamped here: the rebuild derives the URI from a fixed
+  // URN convention of the id and never reads the registry canonical_uri_policy it names (PARKED).
+  if (args.assertedObligationIds) {
+    assertObligation(
+      args.assertedObligationIds,
+      "selected_reference_standard_ids_resolve_to_reference_standard_registry",
+    );
+    assertObligation(
+      args.assertedObligationIds,
+      "selected_reference_standard_versions_or_snapshots_are_recorded",
+    );
+    assertObligation(
+      args.assertedObligationIds,
+      "selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry",
+    );
+    assertObligation(
+      args.assertedObligationIds,
+      "selected_pattern_catalog_versions_or_snapshots_are_recorded",
+    );
+  }
   const checks: Array<{ subject: string; actual: unknown; expected: unknown }> = [
     {
       subject: "governing_snapshot.registry",

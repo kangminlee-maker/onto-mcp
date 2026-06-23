@@ -497,114 +497,134 @@ pending:
     coverage_status: pending
     tier: activation_gated_dormant
     note: "slice-26 audit (2026-06-23): activation_gated_dormant — gated on source_purpose_candidate_runtime_is_implemented; its conditional input (source-purpose-candidates-validation.yaml) is not received by validateOntologySeed's signature. No active enforcement; PARK until the source-purpose-candidate runtime is wired."
+  # slice-28 audit (2026-06-23; codex #143 R1): validateReconstructRunManifest delegates all 27
+  # governing_snapshot obligations to validateReconstructRunGoverningSnapshot, which rebuilds the
+  # EXPECTED snapshot from live authority and enforces each recorded snapshot field via ONE stableJson
+  # equality (subject_id = governing_snapshot.<field>; stamped at the checks loop, past the early-returns).
+  # RECORDED only the 4 reference-standard / pattern-catalog ID + VERSION obligations that map 1:1 to a
+  # NON-shared per-field equality whose authority-projection embodies the named scope (selected ids ==
+  # registry ids → resolve; version/snapshot map has an entry per selected id → recorded). The 23 below
+  # stay PARKED: most share a per-field equality with 2-6 sibling obligations (no isolated breaching
+  # binding), the "allowed/supported/contains-required-fields" constraints are enforced at snapshot-build
+  # time (the recorded-vs-rebuild equality passes if the authority itself omits a field), the canonical-URI
+  # obligation names a registry canonical_uri_policy the rebuild never reads (it uses a fixed URN
+  # convention; codex #143 R1 Finding 2), and a few named quantities are not compared snapshot fields at
+  # all (NOT_FOUND).
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: active_contract_hashes_match_active_contract_refs
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (shared-field). Enforced only via the single governing_snapshot.active_contracts stableJson equality (the rebuild computes each contract sha256 from its ref via sha256File), a field shared by obls active_contract_migration_status_values_are_allowed / active_contract_snapshots_contain_version_policy_required_fields / active_contract_snapshots_match_active_contract_refs_by_contract_id_and_ref — no isolated per-obligation breaching binding for the hashes-match-refs facet. DEFER to the registry input_authority_refs for the authoritative input set."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: active_contract_migration_status_values_are_allowed
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. The 'values are allowed' allow-list is enforced at snapshot-build time, not by the recorded-vs-rebuild equality (which only requires recorded.active_contracts to byte-equal the rebuild); the active_contracts field is also shared with obls 1/3/4 — not bindable in isolation."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: active_contract_snapshots_contain_version_policy_required_fields
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. 'contains version-policy required fields' is a build-time schema property; the equality passes if the rebuilt authority itself omits a field, so it does not independently enforce field presence. active_contracts field shared with obls 1/2/4."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: active_contract_snapshots_match_active_contract_refs_by_contract_id_and_ref
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (shared-field). Enforced via the governing_snapshot.active_contracts equality shared with obls 1/2/3; no isolated breaching binding for the contract_id+ref match facet."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: admitted_domain_competency_snapshots_contain_version_policy_required_fields
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. 'contains version-policy required fields' is a build-time schema property (equality passes if the authority omits a field); the governing_snapshot.admitted_domain_competency_snapshots field is also shared with split_merged_replaced_competency_ids_close_against_admitted_domain_competency_snapshot."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: competency_id_migration_mappings_contain_required_policy_fields
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. Field-isolated on governing_snapshot.competency_id_migration_mappings, but 'contains required policy fields' is an internal-schema property guaranteed at snapshot build (buildAdmittedDomainSnapshots), not by the recorded-vs-rebuild equality, which passes if the authority itself omits a field."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: competency_id_migration_status_values_are_allowed
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. The competency-id migration-status allow-list is enforced at snapshot-build time, not by the recorded-vs-rebuild equality of the competency_id_migration_mappings field (which only requires byte-equality to the rebuild)."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: governed_seed_fields_close_against_selected_reference_and_pattern_refs
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (NOT_FOUND). Governed seed fields are not a governing_snapshot compared field; validateReconstructRunGoverningSnapshot performs no seed-vs-reference/pattern closure. The closure named here is not inspected by this validator."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: non_null_selected_source_profile_definition_refs_match_definition_sha256
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (shared-field). The governing_snapshot.selected_source_profiles equality is shared by obls 9/12/23/24/25/26 (six source-profile obligations) and carries no isolated breaching binding for the definition_ref↔definition_sha256 match facet."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: p2_and_p3_competencies_remain_priority_metadata_until_explicit_downstream_promotion_policy_exists
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (AMBIGUOUS). Field-isolated on governing_snapshot.admitted_competency_priorities, but the equality only compares recorded priorities to the rebuild; it does not enforce the named non-promotion TEMPORAL policy (p2/p3 remain priority metadata until an explicit downstream promotion policy exists). No bindable violation for the policy clause."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: previous_competency_ids_resolve_to_current_id_or_explicit_replacement_disposition
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (NOT_FOUND). Previous competency ids and their current-id/replacement disposition are not a compared governing_snapshot field; the rebuild does not resolve previous→current ids, so the named resolution is not inspected here."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: previous_source_profile_snapshots_validate_old_to_current_profile_mappings
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (shared-field). The old→current profile-mapping validation is not a distinct check; the governing_snapshot.selected_source_profiles equality (shared with obls 9/23/24/25/26) is the only enforcement, with no isolated binding."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: required_admitted_competency_ids_derive_all_p1_from_admitted_domain_competency_snapshot
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. The p1-derivation is a build property (the rebuild flattens required_admitted_competency_ids from the snapshots); the governing_snapshot.required_admitted_competency_ids equality only compares the resulting id set and is shared with required_admitted_competency_ids_match_admitted_domain_competency_snapshot — no isolated binding for the derive-all-p1 facet."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: required_admitted_competency_ids_match_admitted_domain_competency_snapshot
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (shared-field). Enforced via the governing_snapshot.required_admitted_competency_ids equality shared with required_admitted_competency_ids_derive_all_p1_from_admitted_domain_competency_snapshot; no isolated per-obligation breaching binding."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy
     coverage_status: pending
     tier: flat
-  - validator_id: pre-handoff-run-manifest-validator
-    obligation_id: selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry
-    coverage_status: pending
-    tier: flat
-  - validator_id: pre-handoff-run-manifest-validator
-    obligation_id: selected_pattern_catalog_versions_or_snapshots_are_recorded
-    coverage_status: pending
-    tier: flat
+    note: "slice-28 audit (2026-06-23, codex #143 R1 P2): PARK (name-broader-than-code, policy not read). The field-isolated governing_snapshot.selected_pattern_catalog_canonical_uris equality compares the recorded URIs against a rebuild that derives each URI from a FIXED URN convention of the pattern_catalog_ref_id (selectedPatternCatalogCanonicalUri) and never reads the registry's declared canonical_uri_policy. The registry policy (reconstruct-contract-registry.yaml: canonical_uri_policy=selected_run_manifest_value_required + canonical_uri_validation_rule) explicitly says the registry does NOT compare against a symbolic URI literal and requires the run-manifest-recorded value bound to ref_id+version_or_snapshot_id — the opposite of what the code enforces. So 'satisfy registry policy' is not enforced here; PARK until a policy-reading check exists."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: selected_reference_and_pattern_migration_status_is_supported
     coverage_status: pending
     tier: flat
-  - validator_id: pre-handoff-run-manifest-validator
-    obligation_id: selected_reference_standard_ids_resolve_to_reference_standard_registry
-    coverage_status: pending
-    tier: flat
-  - validator_id: pre-handoff-run-manifest-validator
-    obligation_id: selected_reference_standard_versions_or_snapshots_are_recorded
-    coverage_status: pending
-    tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (NOT_FOUND). Reference/pattern migration status is not a distinct compared field — governing_snapshot.migration_status_values holds only source_profile + contract value sets — and 'is supported' is a build-time policy, not enforced by the recorded-vs-rebuild equality."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: selected_registry_hash_matches_reconstruct_contract_registry
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (AMBIGUOUS, mode-dependent). The dedicated registry_sha256 early-return (governing-snapshot.ts ~836) is not isolatable: a wrong-hash mutation is also caught by the governing_snapshot.registry field equality, and the breach overlaps selected_registry_snapshot_contains_registry_ref_and_hash; in historical_replay mode the hash-match falls back to a presence-only shape check. No single isolated breaching binding."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: selected_registry_snapshot_contains_registry_ref_and_hash
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. In live mode the registry ref+hash presence is enforced only via the governing_snapshot.registry field equality, which overlaps the hash-match early return (obl selected_registry_hash_matches_reconstruct_contract_registry); the dedicated presence shape check runs only in the historical_replay fallback. Not an isolatable live check."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: selected_source_profile_migration_fields_are_recorded
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. 'migration fields are recorded' is a build-time/presence property; enforcement is the governing_snapshot.selected_source_profiles equality shared with obls 9/12/24/25/26 — no isolated binding."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: selected_source_profile_snapshots_contain_version_policy_required_fields
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK. 'contains version-policy required fields' is a build-time schema property (equality passes if the authority omits a field); governing_snapshot.selected_source_profiles field shared with obls 9/12/23/25/26."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: selected_source_profile_snapshots_match_source_profile_records_by_profile_id_and_target_material_kind
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (shared-field). Enforced via the governing_snapshot.selected_source_profiles equality shared with obls 9/12/23/24/26; no isolated breaching binding for the profile_id+target_material_kind match facet."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: source_profile_migration_refs_resolve_to_source_profile_records_or_prior_snapshots
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (shared-field). The migration-ref resolution is not a distinct check; the governing_snapshot.selected_source_profiles equality (shared with obls 9/12/23/24/25) is the only enforcement, with no isolated binding."
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: split_merged_replaced_competency_ids_close_against_admitted_domain_competency_snapshot
     coverage_status: pending
     tier: flat
+    note: "slice-28 audit (2026-06-23): PARK (shared-field). Closure of split/merged/replaced competency ids is not a distinct check; the governing_snapshot.admitted_domain_competency_snapshots equality (shared with admitted_domain_competency_snapshots_contain_version_policy_required_fields) is the only enforcement, with no isolated binding."
   - validator_id: purpose-confirmation-validator
     obligation_id: require_revised_confirmation_to_preserve_source_conflict_or_trigger_purpose_discovery_rerun
     coverage_status: pending
