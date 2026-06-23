@@ -164,6 +164,35 @@ describe("computeSpreadsheetDisposition", () => {
     );
   });
 
+  it("a formula-only workbook (formulas, otherwise minimal) still backs formula_integrity and is inspectable (Stage 1.1 migration)", () => {
+    // After the formula_cells → formula_patterns + formula_cells_total migration, a workbook
+    // whose only structural evidence is formulas must still back formula_integrity and be
+    // inspectable/renderable (formula_cells_total > 0; formula_patterns is non-empty).
+    const { bytes, contentSha256 } = xlsxFromParts({
+      "xl/workbook.xml": workbookXml(),
+      "xl/_rels/workbook.xml.rels": workbookRels,
+      "xl/worksheets/sheet1.xml": strToU8(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A2"/><sheetData>` +
+          // a 2-cell fill-down → one pattern, occurrence_count 2, formula_cells_total 2
+          `<row r="1"><c r="A1"><f t="shared" si="0" ref="A1:A2">B1*2</f><v>2</v></c></row>` +
+          `<row r="2"><c r="A2"><f t="shared" si="0"/><v>4</v></c></row>` +
+          `</sheetData></worksheet>`,
+      ),
+    });
+    const inv = buildXlsxInventory({
+      sourceRef: "/abs/formulas.xlsx",
+      bytes,
+      contentSha256,
+      workbookKind: "xlsx",
+    });
+    expect(inv.formula_patterns).toHaveLength(1);
+    expect(inv.formula_cells_total).toBe(2);
+    const disp = computeSpreadsheetDisposition(inv, "/abs/formulas.xlsx");
+    expect(disp.inspectable).toBe(true);
+    expect(disp.reason).toBeNull();
+    expect(disp.backed_goals).toContain("formula_integrity");
+  });
+
   it("an unobserved ref (undefined inventory) is not inspectable and names the ref", () => {
     const disp = computeSpreadsheetDisposition(undefined, "/abs/dir");
     expect(disp.inspectable).toBe(false);

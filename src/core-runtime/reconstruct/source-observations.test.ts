@@ -74,7 +74,7 @@ function makeInventory(
 ): WorkbookStructuralInventory {
   return {
     adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
-    adapter_version: 1,
+    adapter_version: 2,
     source_ref: "/tmp/workbook.xlsx",
     content_sha256: VALID_SHA,
     workbook_kind: "xlsx",
@@ -85,7 +85,9 @@ function makeInventory(
     named_ranges: [],
     tables: [],
     pivot_tables: [],
-    formula_cells: [],
+    formula_patterns: [],
+    formula_cells_total: 0,
+    formula_cells_total_is_lower_bound: false,
     merged_ranges: [],
     data_validations: [],
     external_links: [],
@@ -223,7 +225,7 @@ describe("validateSourceObservationBoundary — P6 spreadsheet honesty gate", ()
     ["named_ranges", { named_ranges: [{ name: "Rng", scope: "workbook", refers_to: "S!A1" }] }],
     ["tables", { tables: [{ name: "T", sheet: "S", range: "A1:B2" }] }],
     ["pivot_tables", { pivot_tables: [{ name: "P", sheet: "S", location: "A1", source_sheet: null, source_ref: null, row_fields: [], column_fields: [], page_fields: [], data_fields: [] }] }],
-    ["formula_cells", { formula_cells: [{ sheet: "S", cell: "B2", formula: "=SUM(A:A)", cross_sheet_refs: [] }] }],
+    ["formula_patterns", { formula_patterns: [{ pattern: "=SUM(A:A)", sample_cell: "B2", occurrence_count: 1, applied_ranges: ["B2"], sheets: ["S"], cross_sheet_refs: [] }] }],
     ["merged_ranges", { merged_ranges: [{ sheet: "S", range: "A1:B1" }] }],
     ["data_validations", { data_validations: [{ sheet: "S", range: "A1", rule_summary: "list" }] }],
     ["external_links", { external_links: [{ target: "other.xlsx", kind: "external" }] }],

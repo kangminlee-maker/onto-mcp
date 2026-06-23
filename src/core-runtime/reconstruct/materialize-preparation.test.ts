@@ -537,8 +537,10 @@ describe("materializeReconstructPreparationArtifacts", () => {
     const sd = observation.structural_data as Record<string, any>;
     expect(sd.workbook_inventory.workbook_kind).toBe("xlsx");
     expect(sd.workbook_inventory.inspection_method).toBe("structure_inspected_only");
-    expect(sd.workbook_inventory.formula_cells).toHaveLength(1);
-    expect(sd.workbook_inventory.formula_cells[0].formula).toContain("1+1");
+    // Stage 1.1: deduplicated formula_patterns + an honest formula_cells_total.
+    expect(sd.workbook_inventory.formula_patterns).toHaveLength(1);
+    expect(sd.workbook_inventory.formula_patterns[0].pattern).toContain("1+1");
+    expect(sd.workbook_inventory.formula_cells_total).toBe(1);
     expect(sd.content_sha256).toBe(sd.workbook_inventory.content_sha256);
   });
 

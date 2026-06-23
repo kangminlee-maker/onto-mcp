@@ -264,17 +264,22 @@ function renderSpreadsheetStructuralView(
     projectInventoryForAdmission(inventory),
   );
 
-  // One rendered formula line: cell address + formula TEXT + any cross-sheet references —
-  // the obligation-backing detail for formula_integrity / cross_sheet_reference_integrity
-  // (a count alone is not auditable).
-  const renderFormulaCellLine = (
-    cell: WorkbookStructuralInventory["formula_cells"][number],
+  // One rendered formula PATTERN line (Stage 1.1): the deduped formula TEXT + how many
+  // cells carry it (occurrence_count) + a representative cell + the sheets it spans + any
+  // cross-sheet references — the obligation-backing detail for formula_integrity /
+  // cross_sheet_reference_integrity (a count alone is not auditable). A fill-down that was
+  // tens of thousands of per-cell rows now renders as one auditable line.
+  const renderFormulaPatternLine = (
+    pattern: WorkbookStructuralInventory["formula_patterns"][number],
   ): string => {
     const xref =
-      cell.cross_sheet_refs.length > 0
-        ? `  [cross-sheet → ${cell.cross_sheet_refs.join(", ")}]`
+      pattern.cross_sheet_refs.length > 0
+        ? `  [cross-sheet → ${pattern.cross_sheet_refs.join(", ")}]`
         : "";
-    return `  - ${cell.cell}: ${cell.formula}${xref}`;
+    return (
+      `  - ${pattern.pattern}  (×${pattern.occurrence_count}, e.g. ${pattern.sample_cell}` +
+      `; sheets: ${pattern.sheets.join(", ")})${xref}`
+    );
   };
 
   // Friendly labels for the bounded-sample note. A3: count-only sections
@@ -286,7 +291,7 @@ function renderSpreadsheetStructuralView(
     per_sheet_data: "sheet bodies",
     "per_sheet_data.columns": "columns",
     distinct_value_vocab: "distinct-value columns",
-    formula_cells: "formula samples",
+    formula_patterns: "formula patterns",
     named_ranges: "named_ranges",
     data_validations: "data_validations",
     external_links: "external_links",
@@ -403,24 +408,21 @@ function renderSpreadsheetStructuralView(
     }
   }
 
-  // formula_integrity / cross_sheet_reference_integrity backing: ALL projected formula cells
-  // grouped by sheet, emitted up front (before the per-sheet bodies) so the formula TEXT
-  // survives the embed cut. Grouping over the full projected set covers both rendered-sheet
-  // and beyond-cap-sheet formulas, so a workbook whose formulas live only on a trimmed sheet
-  // still shows its formula text (formerly the separate "beyond sample" residual; F5).
-  if (inv.formula_cells.length > 0) {
-    const bySheet = new Map<string, WorkbookStructuralInventory["formula_cells"]>();
-    for (const cell of inv.formula_cells) {
-      const existing = bySheet.get(cell.sheet);
-      if (existing) existing.push(cell);
-      else bySheet.set(cell.sheet, [cell]);
-    }
-    lines.push("", `formulas (sample of ${inv.formula_cells.length}, by sheet):`);
-    for (const [sheetName, cells] of bySheet) {
-      lines.push(`### sheet: ${sheetName} — formulas (sample of ${cells.length}):`);
-      for (const cell of cells) {
-        lines.push(renderFormulaCellLine(cell));
-      }
+  // formula_integrity / cross_sheet_reference_integrity backing: the deduplicated formula
+  // PATTERNS (Stage 1.1), emitted up front (before the per-sheet bodies) so the formula TEXT
+  // survives the embed cut. A fill-down (one master replicated across N cells) is one pattern
+  // here; formula_cells_total reports the honest cell count (lower-bound when the distinct-
+  // pattern cap dropped a new pattern), so the reviewer sees both the distinct logic and its
+  // true reach. Each pattern carries the sheets it spans, so a workbook whose formulas live
+  // only on a trimmed sheet still shows its formula text.
+  if (inv.formula_patterns.length > 0) {
+    const lowerBound = inv.formula_cells_total_is_lower_bound ? ", lower-bound" : "";
+    lines.push(
+      "",
+      `formulas: ${inv.formula_patterns.length} distinct patterns over ${inv.formula_cells_total} cells${lowerBound}:`,
+    );
+    for (const pattern of inv.formula_patterns) {
+      lines.push(renderFormulaPatternLine(pattern));
     }
   }
 
