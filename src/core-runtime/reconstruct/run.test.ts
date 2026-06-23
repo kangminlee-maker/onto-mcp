@@ -58,6 +58,7 @@ import {
   assessmentOmittedObservationCount,
   shouldDispatchSingleCompetencyAssessment,
   appendFinalOutputUnresolvedRevisionSection,
+  reuseMatchArtifactHash,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -6689,6 +6690,37 @@ describe("observationPromptPayload projection-truncation recording", () => {
           projection_budget_chars: 1000,
         },
       ]);
+    });
+  });
+
+  // Byte-invariance hard gate for the deferred-7 obligation-telemetry design (Stage 0): the in-memory
+  // reuse digest (reuseMatchArtifactHash, channel 1) must ignore the G(a) `asserted_obligation_ids`
+  // stamp, so instrumenting a reuse-hashed validation artifact never rotates its reuse provenance.
+  // (Channel 2 — the scout-pack sha256File of the persisted file — is proven byte-invariant in
+  // artifact-io.test.ts via atomicWriteYamlDocument.)
+  describe("reuse digest is invariant to obligation-coverage telemetry", () => {
+    const validation = {
+      schema_version: "1",
+      session_id: "s",
+      validation_status: "valid",
+      violations: [],
+    };
+
+    it("reuseMatchArtifactHash ignores a top-level asserted_obligation_ids stamp", () => {
+      expect(
+        reuseMatchArtifactHash({
+          ...validation,
+          asserted_obligation_ids: ["obligation_a", "obligation_b"],
+        }),
+      ).toBe(reuseMatchArtifactHash(validation));
+    });
+
+    it("is invariant regardless of stamp order or content", () => {
+      const base = reuseMatchArtifactHash(validation);
+      expect(reuseMatchArtifactHash({ ...validation, asserted_obligation_ids: [] })).toBe(base);
+      expect(
+        reuseMatchArtifactHash({ ...validation, asserted_obligation_ids: ["z", "a"] }),
+      ).toBe(base);
     });
   });
 });
