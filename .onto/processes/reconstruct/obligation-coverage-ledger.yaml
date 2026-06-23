@@ -497,17 +497,19 @@ pending:
     coverage_status: pending
     tier: activation_gated_dormant
     note: "slice-26 audit (2026-06-23): activation_gated_dormant — gated on source_purpose_candidate_runtime_is_implemented; its conditional input (source-purpose-candidates-validation.yaml) is not received by validateOntologySeed's signature. No active enforcement; PARK until the source-purpose-candidate runtime is wired."
-  # slice-28 audit (2026-06-23): validateReconstructRunManifest delegates all 27 governing_snapshot
-  # obligations to validateReconstructRunGoverningSnapshot, which rebuilds the EXPECTED snapshot from
-  # live authority and enforces each recorded snapshot field via ONE stableJson equality
-  # (subject_id = governing_snapshot.<field>). RECORDED only the 5 reference-standard / pattern-catalog
-  # obligations that map 1:1 to a NON-shared per-field equality whose authority-projection embodies the
-  # named scope (selected ids == registry ids → resolve; version/snapshot map has an entry per selected
-  # id → recorded; canonical URIs == policy URN template → satisfy policy). The 22 below stay PARKED:
-  # most share a per-field equality with 2-6 sibling obligations (no isolated breaching binding), the
-  # "allowed/supported/contains-required-fields" constraints are enforced at snapshot-build time (the
-  # recorded-vs-rebuild equality passes if the authority itself omits a field), and a few named
-  # quantities are not compared snapshot fields at all (NOT_FOUND).
+  # slice-28 audit (2026-06-23; codex #143 R1): validateReconstructRunManifest delegates all 27
+  # governing_snapshot obligations to validateReconstructRunGoverningSnapshot, which rebuilds the
+  # EXPECTED snapshot from live authority and enforces each recorded snapshot field via ONE stableJson
+  # equality (subject_id = governing_snapshot.<field>; stamped at the checks loop, past the early-returns).
+  # RECORDED only the 4 reference-standard / pattern-catalog ID + VERSION obligations that map 1:1 to a
+  # NON-shared per-field equality whose authority-projection embodies the named scope (selected ids ==
+  # registry ids → resolve; version/snapshot map has an entry per selected id → recorded). The 23 below
+  # stay PARKED: most share a per-field equality with 2-6 sibling obligations (no isolated breaching
+  # binding), the "allowed/supported/contains-required-fields" constraints are enforced at snapshot-build
+  # time (the recorded-vs-rebuild equality passes if the authority itself omits a field), the canonical-URI
+  # obligation names a registry canonical_uri_policy the rebuild never reads (it uses a fixed URN
+  # convention; codex #143 R1 Finding 2), and a few named quantities are not compared snapshot fields at
+  # all (NOT_FOUND).
   - validator_id: pre-handoff-run-manifest-validator
     obligation_id: active_contract_hashes_match_active_contract_refs
     coverage_status: pending
