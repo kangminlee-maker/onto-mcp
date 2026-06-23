@@ -5,6 +5,7 @@ import { atomicWriteYamlDocument as writeYamlDocument, assertArrayField } from "
 import {
   isTargetMaterialKind,
 } from "../target-material-kind.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructTargetMaterialProfileArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
@@ -105,6 +106,24 @@ export function validateTargetMaterialProfile(args: {
   assertArrayField(args.targetMaterialProfile.detection?.per_ref, "target-material-profile", "detection.per_ref");
   const profile = args.targetMaterialProfile;
   const violations: ReconstructTargetMaterialProfileValidationViolation[] = [];
+  // G(a) deferred-7 slice 2: record the two obligations this validator fully enforces over every selected
+  // source profile. Stamped before the per-profile loop so they fire on zero selected profiles. The
+  // validation artifact is reuse-hashed (run.ts target_material_profile_validation_sha256) AND
+  // scout-captured — asserted_obligation_ids is in-memory-only (Stage 0 #145), so stamping it does not
+  // rotate reuse. PARKED (see obligation-coverage-ledger.yaml): the four mixed_targets_/partial_composite_
+  // obligations — member→aggregate purpose mapping and partial-member ready-projection limiting are
+  // NOT_FOUND (no field, no check), and the two per-member preservation obligations are PARTIAL (the
+  // field-match runs for ALL selected profiles, not the named mixed scope, and names facets absent from
+  // the schema: support_state / source_refs).
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "every_selected_source_profile_snapshot_contains_version_policy_required_fields",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "every_selected_source_profile_snapshot_matches_source_profile_records_by_profile_id_and_target_material_kind",
+  );
   const projectRoot = projectRootFromRegistryPath(args.registryRef);
 
   if (!isTargetMaterialKind(profile.target_material_kind)) {
@@ -266,6 +285,7 @@ export function validateTargetMaterialProfile(args: {
     validation_results: violations.length === 0
       ? ["target_material_profile_valid"]
       : ["target_material_profile_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

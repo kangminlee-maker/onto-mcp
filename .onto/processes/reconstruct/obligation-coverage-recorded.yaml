@@ -209,3 +209,7 @@ recorded:
     obligation_id: validate_source_safety_subject_refs_against_observed_source_refs
   - validator_id: source-safety-ledger-validator
     obligation_id: validate_visibility_tier_is_derived_not_independent_authority
+  - validator_id: target-material-profile-validator
+    obligation_id: every_selected_source_profile_snapshot_contains_version_policy_required_fields
+  - validator_id: target-material-profile-validator
+    obligation_id: every_selected_source_profile_snapshot_matches_source_profile_records_by_profile_id_and_target_material_kind
