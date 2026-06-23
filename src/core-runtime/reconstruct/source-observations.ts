@@ -149,7 +149,15 @@ function validateSpreadsheetObservationHonesty(
   // formula1 PROVENANCE (that members came from an inline literal, not observed cells) is an
   // emission-time guarantee in the observer, NOT replay-verifiable here — a forged
   // members+type=list pair is outside this honesty model (documented limitation).
-  for (const dv of inventory.data_validations) {
+  // Codex round3 #5: a replayed / host-supplied artifact may carry a non-array (or missing)
+  // data_validations; guard before iterating so a malformed observation degrades to valid:false
+  // rather than throwing "not iterable" out of the boundary check.
+  if (!Array.isArray(inventory.data_validations)) {
+    violations.push("data_validations is missing or not an array");
+  }
+  for (const dv of Array.isArray(inventory.data_validations)
+    ? inventory.data_validations
+    : []) {
     if (dv.members === undefined) continue;
     // Replayed / host-supplied artifacts are untyped despite the cast: a non-string member would
     // make the length bounds silently pass (members:[123] → m.length undefined) or throw

@@ -1349,6 +1349,10 @@ interface ParsedWorksheet {
 /** Maximum characters kept from a single validation bounds expression: a list source can
  *  be arbitrarily long, but the prompt only needs enough to audit the constraint shape. */
 const XLSX_VALIDATION_FORMULA_CHARS = 200;
+// Length bound for a validation sqref before whitespace-splitting it into sub-ranges, so a
+// crafted huge whitespace-union cannot allocate an unbounded array (Codex round3 #6). A real
+// sqref references a handful of ranges; this is a generous safety ceiling.
+const XLSX_VALIDATION_SQREF_CHARS = 8192;
 
 /** Build an auditable data-validation rule summary from the captured constraint fields.
  *  formula1/formula2 are the rule BOUNDS (list source, min/max, date) — the constraint
@@ -1423,9 +1427,11 @@ function parseInlineListMembers(formula1: string): {
  *  Split sqref on whitespace (a multi-range sqref like "A1:A5 C1:C5"), parse each sub-range
  *  with parseDimension (NOT parseCellRef — sqref entries are ranges), union the column spans,
  *  normalize each by `- dimStartCol` (same frame as the cell-column normalization), and keep
- *  only `0 <= c < profiledCols`. A whole-column ref (`B:B`) fails parseDimension (no row), so
- *  it is treated as covering ALL profiled columns of the sheet (deterministic cover, not a
- *  decline). Result is sorted ascending and de-duplicated. */
+ *  only `0 <= c < profiledCols`. A whole-column ref (`B:B` / `$B:$D`) fails parseDimension (no
+ *  row), so its column-letter span is parsed directly and mapped to ITS columns only — not the
+ *  whole sheet (Codex round2 #1). Result is sorted ascending and de-duplicated. The sqref is
+ *  length-bounded and iteration stops once every profiled column is covered, so a crafted huge
+ *  whitespace-union cannot consume unbounded memory/CPU (Codex round3 #6). */
 function parseSqrefColumns(
   sqref: string,
   dimStartCol: number,
@@ -1440,7 +1446,14 @@ function parseSqrefColumns(
     const hi = Math.min(endAbs, dimStartCol + profiledCols - 1);
     for (let abs = lo; abs <= hi; abs += 1) cols.add(abs - dimStartCol);
   };
-  for (const sub of sqref.split(/\s+/)) {
+  // Bound before splitting: cap the sqref length (a pathological union can be huge) and stop once
+  // every profiled column is already covered — neither can add more (Codex round3 #6).
+  const bounded =
+    sqref.length > XLSX_VALIDATION_SQREF_CHARS
+      ? sqref.slice(0, XLSX_VALIDATION_SQREF_CHARS)
+      : sqref;
+  for (const sub of bounded.split(/\s+/)) {
+    if (cols.size >= profiledCols) break;
     const ref = sub.trim();
     if (ref.length === 0) continue;
     const d = parseDimension(ref);

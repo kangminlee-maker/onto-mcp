@@ -241,6 +241,18 @@ describe("validateSourceObservationBoundary — P6 spreadsheet honesty gate", ()
     expect(r2.violations).toContain("data_validation members must be an array of strings");
   });
 
+  it("E (Codex round3 #5): rejects a non-array data_validations without throwing", () => {
+    // A replayed/host-supplied object inventory whose data_validations is missing or non-array
+    // must degrade to valid:false — not throw "not iterable" out of the boundary check.
+    const malformed = makeInventory({
+      data_validations:
+        "oops" as unknown as WorkbookStructuralInventory["data_validations"],
+    });
+    const r = validateSourceObservationBoundary(spreadsheetObservation(malformed));
+    expect(r.valid).toBe(false);
+    expect(r.violations).toContain("data_validations is missing or not an array");
+  });
+
   it("B: rejects a supported workbook with a blank top-level content_sha256", () => {
     const inventory = makeInventory({ content_sha256: "" });
     const result = validateSourceObservationBoundary(spreadsheetObservation(inventory));

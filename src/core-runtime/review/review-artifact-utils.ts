@@ -361,7 +361,14 @@ function renderSpreadsheetStructuralView(
   if (inventory.data_validations.length) {
     lines.push("", `data_validations: ${inventory.data_validations.length}`);
     for (const dv of inv.data_validations) {
-      lines.push(`  - ${dv.sheet}!${dv.range}: ${dv.rule_summary}`);
+      // design-C: surface the DECLARED type=list enum members HERE (this loop runs over EVERY
+      // validation, independent of per-sheet column/sheet rendering) so they reach the prompt even
+      // when the column is trimmed by the column cap, the sheet is dropped by the sheet cap, the
+      // sheet has no profiled columns, or one column carries multiple disjoint list validations
+      // (Codex round3 #2/#3/#4/#7). Members are DECLARED labels (bounded), not observed data.
+      const enumLabels =
+        dv.members && dv.members.length > 0 ? ` enum=[${dv.members.join(", ")}]` : "";
+      lines.push(`  - ${dv.sheet}!${dv.range}: ${dv.rule_summary}${enumLabels}`);
     }
   }
   if (inventory.error_cells.length) {
@@ -443,11 +450,6 @@ function renderSpreadsheetStructuralView(
         `layout_kind: ${data.layout_kind}; header_rows: ${data.header_rows ? data.header_rows.join(",") : "none"}${lowConfidence}`,
       );
       if (data.columns.length > 0) {
-        // design-C: declared type=list enum members mapped to the columns their sqref covers
-        // (members are DECLARED labels, not observed data). Built once per sheet.
-        const sheetValidations = inv.data_validations.filter(
-          (dv) => dv.sheet === sheet.name && dv.members && dv.members.length > 0,
-        );
         lines.push("columns:");
         for (const col of data.columns) {
           const vocab = inv.distinct_value_vocab.find(
@@ -456,29 +458,14 @@ function renderSpreadsheetStructuralView(
           const distinct = vocab
             ? `; distinct≈${vocab.distinct_count}${vocab.distinct_count_is_estimate ? "+" : ""}`
             : "";
-          // design-C per-column cardinality: distinct/non_empty COUNT over scanned rows.
+          // design-C per-column cardinality: distinct/non_empty COUNT over scanned rows. Declared
+          // type=list enum members are surfaced in the data_validations section (above), NOT here —
+          // so they survive column/sheet trimming and multi-validation columns (Codex round3).
           const cardinality = `; cardinality=${col.distinct_count}${
             col.distinct_count_is_estimate ? "+" : ""
           }/${col.non_empty_count}`;
-          const memberDv = sheetValidations.find((dv) =>
-            dv.applies_to_columns.includes(col.index),
-          );
-          const members = memberDv?.members
-            ? `; enum=[${memberDv.members.join(", ")}]`
-            : "";
           lines.push(
-            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${cardinality}${distinct}${members})`,
-          );
-        }
-        // design-C (Codex round2 #3): a list-validated column is low-cardinality → low residual,
-        // so the residual-priority column cap can TRIM it — which would drop its DECLARED enum
-        // from the prompt. Surface any fully-trimmed list-validation enum here so the controlled
-        // vocabulary is never lost to the column cap (data_validations has its own prompt cap).
-        const survivingIdx = new Set(data.columns.map((col) => col.index));
-        for (const dv of sheetValidations) {
-          if (dv.applies_to_columns.some((i) => survivingIdx.has(i))) continue;
-          lines.push(
-            `  - (declared enum on trimmed column ${dv.applies_to_columns.join(",")}): enum=[${dv.members!.join(", ")}]`,
+            `  - ${col.name} (${col.inferred_type}; non_empty=${col.non_empty_ratio.toFixed(2)}${cardinality}${distinct})`,
           );
         }
       }
