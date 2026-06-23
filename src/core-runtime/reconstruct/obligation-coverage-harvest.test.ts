@@ -33,6 +33,7 @@ import type {
   ReconstructSourceSafetyLedgerValidationArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
+  ReconstructSourceObservationLineageIndexValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
 } from "./artifact-types.js";
 import {
@@ -51,6 +52,7 @@ import {
 import {
   validateSourceObservationDelta,
   validateSourceObservationReentry,
+  validateSourceObservationLineageIndex,
 } from "./source-observation-delta-validation.js";
 import {
   validateClaimRealizationMapForOntologySeed,
@@ -1167,6 +1169,26 @@ function runTargetMaterialProfile(): ReconstructTargetMaterialProfileValidationA
       version_policy: { selected_source_profile_snapshot_required_fields: ["profile_id"] },
     } as never,
     registryRef: "registry.yaml",
+  });
+}
+
+// Deferred-7 slice 3: source-observation-lineage-index-validator. The six recorded obligations stamp
+// before the per-row loop, so an empty lineage index reaches the recorder with no file I/O. Reuse-hashed +
+// scout-captured artifact — asserted_obligation_ids is in-memory-only (Stage 0). Async validator.
+async function runSourceObservationLineageIndex(): Promise<ReconstructSourceObservationLineageIndexValidationArtifact> {
+  return validateSourceObservationLineageIndex({
+    sessionId: "session-harvest",
+    lineageIndex: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      lineage_rows: [],
+    } as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
   });
 }
 
@@ -2375,7 +2397,34 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // codes, each with a clean variant). asserted_obligation_ids is in-memory-only telemetry (byte-invariance
   // proven in artifact-io.test.ts + run.test.ts).
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 105 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateSourceObservationLineageIndex records its 6 instrumented obligations (deferred-7 slice 3) and NOT the parked reentered-membership obligation", async () => {
+    const out = await runSourceObservationLineageIndex();
+    for (const obligation of [
+      "require_each_lineage_row_delta_validation_to_be_valid",
+      "require_each_lineage_row_reentry_validation_to_be_valid",
+      "validate_each_lineage_added_observation_exists_in_source_observations",
+      "validate_each_lineage_row_delta_ref_is_readable_and_session_matching",
+      "validate_lineage_added_observation_ids_match_delta_added_observation_ids",
+      "validate_unique_session_level_lineage_row_ids",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED: validate_each_lineage_added_observation_was_reentered_by_its_validation emits the SAME
+    // lineage_added_observation_mismatch code as the recorded added-ids-match obligation (shared code, no
+    // distinct binding — slice-21 isolation).
+    expect(out.asserted_obligation_ids).not.toContain(
+      "validate_each_lineage_added_observation_was_reentered_by_its_validation",
+    );
+  });
+
+  // ANTI-LAUNDERING (deferred-7 slice 3): each of the 6 recorded obligations has a non-vacuous binding in
+  // source-observation-delta-validation.test.ts with a DISTINCT violation code — lineage_delta_validation_
+  // invalid / lineage_reentry_validation_invalid (a readable-but-invalid validation; an unreadable/absent ref
+  // is caught by the *_missing siblings), lineage_observation_missing, lineage_delta_missing (+ session/round/
+  // frontier matches), lineage_added_observation_mismatch (added-ids set-equality), duplicate_id — each with a
+  // clean variant. asserted_obligation_ids is in-memory-only telemetry (byte-invariance proven in Stage 0).
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 111 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2407,6 +2456,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const runManifestOut = await runReconstructRunManifest();
     const sourceSafetyOut = runSourceSafetyLedger();
     const targetMaterialProfileOut = runTargetMaterialProfile();
+    const lineageIndexOut = await runSourceObservationLineageIndex();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -2526,6 +2576,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "target-material-profile-validator",
         obligation_id,
       })),
+      ...lineageIndexOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "source-observation-lineage-index-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -2542,6 +2596,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(105);
+    expect(harvestedSet.size).toBe(111);
   });
 });

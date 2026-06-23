@@ -680,6 +680,33 @@ export async function validateSourceObservationLineageIndex(args: {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   assertArrayField(args.lineageIndex.lineage_rows, "source-observation-lineage-index", "lineage_rows");
   const violations: ReconstructSourceObservationLineageIndexValidationViolation[] = [];
+  // G(a) deferred-7 slice 3: record the six obligations this validator fully enforces over every lineage
+  // row. Stamped before the per-row loop so they fire on zero rows. The validation artifact is reuse-hashed
+  // (run.ts source_observation_lineage_index_validation_sha256) AND scout-captured — asserted_obligation_ids
+  // is in-memory-only (Stage 0 #145), so stamping does not rotate reuse. Each recorded obligation has a
+  // distinct violation code: delta/reentry-validation-valid (a non-valid OR unreadable validation is rejected
+  // — readable+invalid → lineage_{delta,reentry}_validation_invalid, unreadable/absent ref → ..._missing),
+  // added-obs-exists (lineage_observation_missing), delta-ref-readable+session (lineage_delta_missing +
+  // session/round/frontier matches), added-ids-match-delta (set equality), unique-row-ids (duplicate_id).
+  // PARKED: validate_each_lineage_added_observation_was_reentered_by_its_validation — it emits the SAME
+  // lineage_added_observation_mismatch code as the recorded added-ids-match obligation (shared code, not a
+  // distinct binding; slice-21 isolation), so it is parked to keep that obligation the sole owner of the code.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "require_each_lineage_row_delta_validation_to_be_valid");
+  assertObligation(assertedObligationIds, "require_each_lineage_row_reentry_validation_to_be_valid");
+  assertObligation(
+    assertedObligationIds,
+    "validate_each_lineage_added_observation_exists_in_source_observations",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_each_lineage_row_delta_ref_is_readable_and_session_matching",
+  );
+  assertObligation(
+    assertedObligationIds,
+    "validate_lineage_added_observation_ids_match_delta_added_observation_ids",
+  );
+  assertObligation(assertedObligationIds, "validate_unique_session_level_lineage_row_ids");
   const seen = new Set<string>();
   const observationsById = new Map(args.sourceObservations.observations.map((
     observation,
@@ -909,6 +936,7 @@ export async function validateSourceObservationLineageIndex(args: {
     validation_results: violations.length === 0
       ? ["source_observation_lineage_index_valid"]
       : ["source_observation_lineage_index_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

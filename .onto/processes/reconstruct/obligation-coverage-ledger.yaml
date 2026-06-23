@@ -698,33 +698,10 @@ pending:
     tier: flat
     note: "slice-5 audit (2026-06-22): normalizeFrontierForDelta validates kind-vs-artifact CONSISTENCY (frontier_kind_mismatch when the frontier artifact does not match the declared source_frontier / maturation_closure_frontier kind), but does NOT validate that the frontier_kind value itself is in a supported enumeration — an unsupported kind branches to the maturation_closure path without an explicit unsupported-kind violation. Recording deferred pending an explicit supported-kind check or name reconciliation."
   - validator_id: source-observation-lineage-index-validator
-    obligation_id: require_each_lineage_row_delta_validation_to_be_valid
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-lineage-index-validator
-    obligation_id: require_each_lineage_row_reentry_validation_to_be_valid
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-lineage-index-validator
-    obligation_id: validate_each_lineage_added_observation_exists_in_source_observations
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-lineage-index-validator
     obligation_id: validate_each_lineage_added_observation_was_reentered_by_its_validation
     coverage_status: pending
     tier: flat
-  - validator_id: source-observation-lineage-index-validator
-    obligation_id: validate_each_lineage_row_delta_ref_is_readable_and_session_matching
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-lineage-index-validator
-    obligation_id: validate_lineage_added_observation_ids_match_delta_added_observation_ids
-    coverage_status: pending
-    tier: flat
-  - validator_id: source-observation-lineage-index-validator
-    obligation_id: validate_unique_session_level_lineage_row_ids
-    coverage_status: pending
-    tier: flat
+    note: "deferred-7 slice-3 audit (2026-06-23): PARK (shared violation code). The reentered-membership check (~891-897: reentryValidation && !reentered.has(observationId)) emits the SAME lineage_added_observation_mismatch code as the recorded validate_lineage_added_observation_ids_match_delta_added_observation_ids (set-equality, ~862-867). Although the two fire from distinct sites, they share one violation code, so this obligation has no distinct breaching binding (slice-21 ENFORCEMENT-BINDING isolation). Parked to keep the added-ids-match obligation the sole owner of the code; record deferred pending a dedicated reentered-mismatch violation code."
   - validator_id: source-purpose-candidates-validator
     obligation_id: derive_confirmation_required_from_selected_purpose_source_status
     coverage_status: pending
