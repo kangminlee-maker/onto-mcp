@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructClaimProjectionActionabilityClaim,
   ReconstructClaimProjectionArtifact,
@@ -572,6 +573,21 @@ export function validateClaimProjection(args: {
   expectedClaimProjection?: ReconstructClaimProjectionArtifact | null;
 }): ReconstructClaimProjectionValidationArtifact {
   const violations: ReconstructClaimProjectionValidationViolation[] = [];
+  // G(a) slice 23 — record the obligations this validator genuinely enforces UNCONDITIONALLY (RECORD
+  // 6/9). The other 3 stay parked (see obligation-coverage-ledger.yaml notes): the operated-system /
+  // incident-governance bounding obligation is PARTIAL (only operated_system_release_health is checked;
+  // rollback_quota_incident_governance is never validated), and the two material-kind-support lineage
+  // obligations (profile_supported-requires-valid-validation and member-row preservation) only fire
+  // inside the `if (args.targetMaterialProfile && args.targetMaterialProfileValidation)` block — gated on
+  // optional authority args the validator has no internal guarantee receives (slice-18/22 principle).
+  // Stamped before any per-row guard so the recorder fires on zero-row input.
+  const assertedObligationIds: string[] = [];
+  assertObligation(assertedObligationIds, "reject_unwired_material_kind_support_levels_above_profile_supported");
+  assertObligation(assertedObligationIds, "require_blocked_projection_to_have_limitation_or_recovery_refs");
+  assertObligation(assertedObligationIds, "require_each_projection_row_to_cite_runtime_validation_authorities");
+  assertObligation(assertedObligationIds, "validate_all_public_and_downstream_projection_surfaces_are_present");
+  assertObligation(assertedObligationIds, "validate_claim_level_decision_state_and_actionability_claim_alignment");
+  assertObligation(assertedObligationIds, "validate_material_kind_support_row_uses_capability_claim_not_actionability_claim");
   const seenIds = new Set<string>();
   const surfaces = new Set<ReconstructClaimProjectionSurface>();
   const decisionStateCounts = Object.fromEntries(
@@ -967,6 +983,7 @@ export function validateClaimProjection(args: {
     validation_results: violations.length === 0
       ? ["claim_projection_valid"]
       : ["claim_projection_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

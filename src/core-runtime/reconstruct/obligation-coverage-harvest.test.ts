@@ -9,6 +9,7 @@ import type {
   ReconstructAnswerSupportJudgmentValidationArtifact,
   ReconstructAnswerSupportLedgerValidationArtifact,
   ReconstructMaturationContinuationDecisionValidationArtifact,
+  ReconstructClaimProjectionValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructMaterialAdmissionLedgerValidationArtifact,
   ReconstructMaturationConvergenceLedgerValidationArtifact,
@@ -53,6 +54,7 @@ import { validateMaterialAdmissionLedger } from "./material-admission-validation
 import { validateRegistryVerificationEvidence } from "./registry-verification-validation.js";
 import { validateHandoffDecision } from "./terminal-validation.js";
 import { validateCandidateDisposition } from "./ontology-seed-validation.js";
+import { validateClaimProjection } from "./claim-projection-validation.js";
 
 // G(a) DYNAMIC HARVEST: run the two real validators and assert they RECORD their obligation ids
 // (asserted_obligation_ids) from the recorder positions placed BEFORE the per-row guards. The
@@ -879,6 +881,20 @@ function runMaturationContinuationDecision(): ReconstructMaturationContinuationD
     revisionProposalValidation: {
       validation_status: "valid",
       revision_proposal_ref: null,
+    } as never,
+  });
+}
+
+function runClaimProjection(): ReconstructClaimProjectionValidationArtifact {
+  // The six recorded obligations are stamped unconditionally at the top (before the per-row loop), so a
+  // zero-row projection reaches every recorder; the gated material-kind-support lineage obligations are
+  // parked (no target-profile arg supplied here).
+  return validateClaimProjection({
+    claimProjection: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      source_authority_refs: [],
+      projection_rows: [],
     } as never,
   });
 }
@@ -1752,7 +1768,47 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // #9 (tamperedField -> conflicting_state), and #5 (droppedFold -> missing_required_ref) with distinct
   // breaching inputs. Building those fixtures inline here would duplicate that file.
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 70 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateClaimProjection records its 6 instrumented obligations (slice 23: unwired-support-level reject + blocked-recovery + cite-validation-refs + surfaces-present + claim/decision/actionability alignment + material-kind-support uses-capability-not-actionability) and NOT the 3 parked", () => {
+    const out = runClaimProjection();
+    for (const obligation of [
+      "reject_unwired_material_kind_support_levels_above_profile_supported",
+      "require_blocked_projection_to_have_limitation_or_recovery_refs",
+      "require_each_projection_row_to_cite_runtime_validation_authorities",
+      "validate_all_public_and_downstream_projection_surfaces_are_present",
+      "validate_claim_level_decision_state_and_actionability_claim_alignment",
+      "validate_material_kind_support_row_uses_capability_claim_not_actionability_claim",
+    ]) {
+      expect(out.asserted_obligation_ids).toContain(obligation);
+    }
+    // PARKED (Explore audit, slice 23). PARTIAL: validate_broader_operated_system_release_health_and_
+    // incident_governance_are_bounded (only operated_system_release_health is bounded; the sibling
+    // rollback_quota_incident_governance field is never validated). GATED on optional authority args
+    // (slice-18/22 principle — fire only inside `if (args.targetMaterialProfile && args.targetMaterial
+    // ProfileValidation)`): validate_material_kind_support_profile_supported_requires_valid_target_
+    // material_profile_validation (also INDIRECT — only via the expected-row support_claim match) and
+    // validate_member_capability_rows_preserve_... (the field-by-field lineage preservation). See
+    // obligation-coverage-ledger.yaml.
+    for (const parked of [
+      "validate_broader_operated_system_release_health_and_incident_governance_are_bounded",
+      "validate_material_kind_support_profile_supported_requires_valid_target_material_profile_validation",
+      "validate_member_capability_rows_preserve_target_ref_profile_snapshot_definition_hash_source_refs_validation_ref_readiness_effect_and_next_action",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (slice 23): each recorded obligation has a non-vacuous, NON-OVERLAPPING enforcement
+  // binding in claim-projection-validation.test.ts. Existing: blocked-recovery ("rejects blocked rows
+  // without recovery or limitation refs" -> blocked_projection_missing_recovery_ref), cite-validation-refs
+  // ("rejects a row that cites no required validation refs" -> required_validation_ref_missing), surfaces-
+  // present ("rejects missing public projection surfaces" -> missing_required_surface), and alignment (two
+  // tests -> decision_state_actionability_mismatch + ready_projection_without_ready_decision). New (slice
+  // 23): unwired-support-level (a member support_claim above profile_supported -> member_capability_lineage
+  // _mismatch, unconditional) and material-kind-support-uses-capability-not-actionability (a material_kind_
+  // support row carrying actionability_claim -> decision_state_actionability_mismatch). Building those
+  // fixtures inline here would duplicate that file.
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 76 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -1776,6 +1832,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const candidateDispositionOut = runCandidateDisposition();
     const answerSupportLedgerOut = runAnswerSupportLedger();
     const continuationDecisionOut = runMaturationContinuationDecision();
+    const claimProjectionOut = runClaimProjection();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -1863,6 +1920,10 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "maturation-continuation-decision-validator",
         obligation_id,
       })),
+      ...claimProjectionOut.asserted_obligation_ids.map((obligation_id) => ({
+        validator_id: "claim-projection-validator",
+        obligation_id,
+      })),
     ];
 
     const recordedText = await fs.readFile(
@@ -1879,6 +1940,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(70);
+    expect(harvestedSet.size).toBe(76);
   });
 });
