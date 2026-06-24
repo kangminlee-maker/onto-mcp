@@ -217,3 +217,9 @@ recorded:
     obligation_id: validate_unique_session_level_lineage_row_ids
   - validator_id: seed-authoring-readiness-validator
     obligation_id: validate_blocked_validation_gap_is_projection_not_semantic_decision
+  - validator_id: source-scout-pack-validator
+    obligation_id: validate_signal_rows_resolve_to_source_observations
+  - validator_id: source-scout-pack-pre-seed-validator
+    obligation_id: validate_signal_rows_resolve_to_source_observations
+  - validator_id: source-scout-pack-post-maturation-validator
+    obligation_id: validate_signal_rows_resolve_to_source_observations

@@ -31,6 +31,7 @@ import type {
   ReconstructRunControlValidationArtifact,
   ReconstructRunManifestValidationArtifact,
   ReconstructSeedAuthoringReadinessValidationArtifact,
+  ReconstructSourceScoutPackValidationArtifact,
   ReconstructSourceSafetyLedgerValidationArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
@@ -72,6 +73,7 @@ import { validateHandoffDecision, validateReconstructRunManifest } from "./termi
 import { validateSourceSafetyLedger } from "./source-safety-validation.js";
 import { validateTargetMaterialProfile } from "./material-profile-validation.js";
 import { validateSeedAuthoringReadiness } from "./seed-authoring-readiness-validation.js";
+import { validateSourceScoutPack } from "./source-scout-pack-validation.js";
 import { buildReconstructRunGoverningSnapshot } from "./governing-snapshot.js";
 import { loadReconstructContractRegistry } from "./contract-registry.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
@@ -1222,6 +1224,43 @@ function runSeedAuthoringReadiness(): ReconstructSeedAuthoringReadinessValidatio
       session_id: "session-harvest",
       selected_purpose_candidate_id: "none",
     } as never,
+  });
+}
+
+// Deferred-7 slice 5 (LAST): source-scout-pack family. ONE mode-agnostic fn validateSourceScoutPack is shared by
+// 3 validator_ids; the single recorded obligation (signal-rows-resolve) is registered for all 3, stamped before
+// the per-row loop, so an empty pack reaches the recorder. Async; reads files via sha256File (null ref → null,
+// no throw). Reuse-hashed + scout-captured artifact — asserted_obligation_ids is in-memory-only (Stage 0).
+async function runSourceScoutPack(): Promise<ReconstructSourceScoutPackValidationArtifact> {
+  return validateSourceScoutPack({
+    sourceScoutPack: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      signal_rows: [],
+      profile_scout_coverage_slots: [],
+      scout_scope: {
+        scope_state: "supported_single_member_code_or_document",
+        target_material_kind: "code",
+        target_ref_count: 1,
+        selected_source_profile_refs: [],
+        limitation_refs: [],
+      },
+      input_snapshot_hashes: {},
+      source_observation_lineage_index_validation_ref: null,
+    } as never,
+    sourceObservations: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      created_at: now,
+      observations: [],
+    } as never,
+    sourceSafetyLedger: {
+      schema_version: "1",
+      session_id: "session-harvest",
+      safety_rows: [],
+    } as never,
+    sourceSafetyLedgerValidation: { validation_status: "valid" } as never,
+    targetMaterialProfileValidation: { validation_status: "valid" } as never,
   });
 }
 
@@ -2490,7 +2529,36 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // #150 gated-optional-arg and duplicate-element_id Map-collapse edges that parked the other two RECORD
   // candidates. asserted_obligation_ids is in-memory-only telemetry (byte-invariance proven in Stage 0).
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 107 harvested (validator_id, obligation_id) pairs", async () => {
+  it("validateSourceScoutPack records ONLY validate_signal_rows_resolve_to_source_observations (deferred-7 slice 5, shared ×3) and NOT the eight gap-prone obligations", async () => {
+    const out = await runSourceScoutPack();
+    expect(out.asserted_obligation_ids).toContain("validate_signal_rows_resolve_to_source_observations");
+    // PARKED (deferred-7 slice-5 audit): this ONE mode-agnostic fn is shared by 3 validator_ids. prompt_visible_
+    // rows_have_source_safety_validation_refs — the named per-row source_safety_ledger_validation_ref field is
+    // built but never read (validator checks source_safety_row_id instead); group_and_coverage — "group" has no
+    // enforcement surface; profile_local_no_purpose — profile-local unchecked + substring proxy; scout/snapshot_
+    // scope_derives — scout_scope copied, never derived from the validation; snapshot_lineage — slice-3 null-read
+    // + caller-authority; pre_seed/post_maturation immutable — only input freshness checked, not snapshot immutability.
+    for (const parked of [
+      "validate_prompt_visible_rows_have_source_safety_validation_refs",
+      "validate_group_and_coverage_refs_resolve",
+      "validate_scout_pack_is_profile_local_and_contains_no_selected_purpose_required_element_refs",
+      "validate_scout_scope_derives_from_target_material_profile_validation",
+      "validate_snapshot_scope_derives_from_target_material_profile_validation",
+      "validate_snapshot_lineage_validation_ref_and_hash_match_current_lineage_authority",
+      "validate_pre_seed_scout_snapshot_is_immutable_consumed_authority",
+      "validate_post_maturation_scout_snapshot_is_immutable_audit_authority",
+    ]) {
+      expect(out.asserted_obligation_ids).not.toContain(parked);
+    }
+  });
+
+  // ANTI-LAUNDERING (deferred-7 slice 5): the one recorded obligation (signal_rows_resolve) has a non-vacuous
+  // binding in source-scout-pack-validation.test.ts — "rejects a signal row that references an unknown
+  // observation" trips signal_observation_missing (per-row, unconditional). Because validateSourceScoutPack is
+  // mode-agnostic and this obligation is registered for all 3 validator_ids, the harvest attributes the stamp to
+  // all 3 (no registry-absent pair). asserted_obligation_ids is in-memory-only telemetry (byte-invariance Stage 0).
+
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 110 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2524,6 +2592,7 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const targetMaterialProfileOut = runTargetMaterialProfile();
     const lineageIndexOut = await runSourceObservationLineageIndex();
     const seedAuthoringReadinessOut = runSeedAuthoringReadiness();
+    const scoutPackOut = await runSourceScoutPack();
 
     const harvested = [
       // The fns without a validator_id field are attributed by name.
@@ -2651,6 +2720,17 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
         validator_id: "seed-authoring-readiness-validator",
         obligation_id,
       })),
+      // Deferred-7 slice 5: ONE mode-agnostic fn shared by 3 validator_ids — attribute its asserted set to all 3.
+      ...[
+        "source-scout-pack-validator",
+        "source-scout-pack-pre-seed-validator",
+        "source-scout-pack-post-maturation-validator",
+      ].flatMap((validator_id) =>
+        scoutPackOut.asserted_obligation_ids.map((obligation_id) => ({
+          validator_id,
+          obligation_id,
+        }))
+      ),
     ];
 
     const recordedText = await fs.readFile(
@@ -2667,6 +2747,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(107);
+    expect(harvestedSet.size).toBe(110);
   });
 });
