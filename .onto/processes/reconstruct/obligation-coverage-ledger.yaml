@@ -764,62 +764,62 @@ pending:
     obligation_id: validate_post_maturation_scout_snapshot_is_immutable_audit_authority
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (immutability/audit-authority not enforced). The shared validateSourceScoutPack checks INPUT-artifact snapshot hashes (source-observations/safety match current files = freshness) but never pins the snapshot's own content hash nor checks any audit-authority state, so a mutated post-maturation snapshot re-hashed to current inputs passes."
   - validator_id: source-scout-pack-post-maturation-validator
     obligation_id: validate_prompt_visible_rows_have_source_safety_validation_refs
     coverage_status: pending
     tier: flat
-  - validator_id: source-scout-pack-post-maturation-validator
-    obligation_id: validate_signal_rows_resolve_to_source_observations
-    coverage_status: pending
-    tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (named per-row field unread). The named per-row field source_safety_ledger_validation_ref is built but never read by validateSourceScoutPack; it checks source_safety_row_id (ledger row) + global validation_status + consumption_allowed tier instead. A prompt-visible row with a valid source_safety_row_id but null/wrong source_safety_ledger_validation_ref passes → the named validation-ref field is unenforced."
   - validator_id: source-scout-pack-post-maturation-validator
     obligation_id: validate_snapshot_lineage_validation_ref_and_hash_match_current_lineage_authority
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (slice-3 null-read + caller-authority). source_observation_lineage_index_validation_ref/hash match is checked, but sha256File(null)=null so a null lineage ref + null pack snapshot hash passes without a violation, and the 'current lineage authority' is the caller-supplied ref (not derived from the chain). Lineage validation is a required pre/post input, so the null-pass is a false-pass."
   - validator_id: source-scout-pack-post-maturation-validator
     obligation_id: validate_snapshot_scope_derives_from_target_material_profile_validation
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (not derived from validation). scout_scope is copied from the pack; validateSourceScoutPack only checks internal consistency (unsupported_scope_overclaimed: scope_state vs the scout's own target_ref_count/material_kind) and the validation's validation_status=valid. It never recomputes/derives scout_scope from the target-material-profile-validation content (scoutScopeState() exists but is unused in the validator)."
   - validator_id: source-scout-pack-pre-seed-validator
     obligation_id: validate_pre_seed_scout_snapshot_is_immutable_consumed_authority
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (immutability/consumed-authority not enforced). The shared validateSourceScoutPack checks INPUT-artifact snapshot hashes (source-observations/safety match current files = freshness) but never pins the snapshot's own content hash nor checks any consumed-authority state, so a mutated pre-seed snapshot re-hashed to current inputs passes."
   - validator_id: source-scout-pack-pre-seed-validator
     obligation_id: validate_prompt_visible_rows_have_source_safety_validation_refs
     coverage_status: pending
     tier: flat
-  - validator_id: source-scout-pack-pre-seed-validator
-    obligation_id: validate_signal_rows_resolve_to_source_observations
-    coverage_status: pending
-    tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (named per-row field unread). The named per-row field source_safety_ledger_validation_ref is built but never read by validateSourceScoutPack; it checks source_safety_row_id (ledger row) + global validation_status + consumption_allowed tier instead. A prompt-visible row with a valid source_safety_row_id but null/wrong source_safety_ledger_validation_ref passes → the named validation-ref field is unenforced."
   - validator_id: source-scout-pack-pre-seed-validator
     obligation_id: validate_snapshot_lineage_validation_ref_and_hash_match_current_lineage_authority
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (slice-3 null-read + caller-authority). source_observation_lineage_index_validation_ref/hash match is checked, but sha256File(null)=null so a null lineage ref + null pack snapshot hash passes without a violation, and the 'current lineage authority' is the caller-supplied ref (not derived from the chain). Lineage validation is a required pre/post input, so the null-pass is a false-pass."
   - validator_id: source-scout-pack-pre-seed-validator
     obligation_id: validate_snapshot_scope_derives_from_target_material_profile_validation
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (not derived from validation). scout_scope is copied from the pack; validateSourceScoutPack only checks internal consistency (unsupported_scope_overclaimed) and the validation's validation_status=valid. It never recomputes/derives scout_scope from the target-material-profile-validation content (scoutScopeState() exists but is unused in the validator)."
   - validator_id: source-scout-pack-validator
     obligation_id: validate_group_and_coverage_refs_resolve
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (compound, 'group' half has no enforcement surface). Only coverage_slot→signal_row resolution (coverage_slot_signal_missing) is checked; there is no 'group' structure in the scout-pack artifact (the word appears nowhere in the validator), so the 'group ... refs resolve' half is unenforced."
   - validator_id: source-scout-pack-validator
     obligation_id: validate_prompt_visible_rows_have_source_safety_validation_refs
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (named per-row field unread). The named per-row field source_safety_ledger_validation_ref is built but never read by validateSourceScoutPack; it checks source_safety_row_id (ledger row) + global validation_status + consumption_allowed tier instead. A prompt-visible row with a valid source_safety_row_id but null/wrong source_safety_ledger_validation_ref passes → the named validation-ref field is unenforced."
   - validator_id: source-scout-pack-validator
     obligation_id: validate_scout_pack_is_profile_local_and_contains_no_selected_purpose_required_element_refs
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (compound, 'profile-local' half unchecked + substring proxy). validateNoSelectedPurposeLeak is a JSON.stringify().includes('purpose_required_element_ref') substring search (no-purpose-leak half, fragile to field-name variants); the 'profile-local' half is never checked by the validator."
   - validator_id: source-scout-pack-validator
     obligation_id: validate_scout_scope_derives_from_target_material_profile_validation
     coverage_status: pending
     tier: flat
-  - validator_id: source-scout-pack-validator
-    obligation_id: validate_signal_rows_resolve_to_source_observations
-    coverage_status: pending
-    tier: flat
+    note: "deferred-7 slice-5 audit (2026-06-24): PARK (not derived from validation). scout_scope is copied from the pack; validateSourceScoutPack only checks internal consistency (unsupported_scope_overclaimed) and the validation's validation_status=valid. It never recomputes/derives scout_scope from the target-material-profile-validation content (scoutScopeState() exists but is unused in the validator)."
   - validator_id: target-material-profile-validator
     obligation_id: mixed_targets_preserve_member_to_aggregate_purpose_requirement_mapping_or_limitation
     coverage_status: pending

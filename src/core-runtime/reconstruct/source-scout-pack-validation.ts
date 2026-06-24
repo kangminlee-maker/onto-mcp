@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { assertArrayField, atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructSourceObservationsArtifact,
   ReconstructSourceSafetyLedgerArtifact,
@@ -555,6 +556,44 @@ export async function validateSourceScoutPack(args: {
   assertArrayField(args.sourceObservations.observations, "source-observations", "observations");
   assertArrayField(args.sourceScoutPack.profile_scout_coverage_slots, "source-scout-pack", "profile_scout_coverage_slots");
   const violations: ReconstructSourceScoutPackValidationViolation[] = [];
+  // G(a) deferred-7 slice 5 (LAST): ONE mode-agnostic fn is shared by THREE registry validator_ids
+  // (source-scout-pack[-pre-seed|-post-maturation]-validator) — no mode arg, one uniform check set. The harvest
+  // attributes this asserted set to ALL 3 validator_ids; recording only an obligation registered for all 3
+  // (no registry-absent pair). asserted_obligation_ids is in-memory-only telemetry (Stage 0 #145) on a
+  // reuse-hashed (run.ts source_scout_pack_validation_sha256) + scout-captured (sha256File raw-file) artifact,
+  // so stamping rotates neither channel. Stamped before the per-row loop so it fires on zero signal rows.
+  //
+  // RECORD 1 (shared across all 3 modes, uniformly enforced):
+  //  - validate_signal_rows_resolve_to_source_observations → signal_observation_missing (per-row, UNCONDITIONAL:
+  //    every signal row's observation_id must resolve in source-observations; +per-row content-sha match). The
+  //    passed observations are bound to the chain via source_observations_hash_mismatch (pack snapshot hash vs
+  //    sha256File(ref)); the resolution check itself does not depend on that pinning.
+  //
+  // PARKED 8 (ledger notes carry detail):
+  //  - validate_prompt_visible_rows_have_source_safety_validation_refs (×3): the named per-row field
+  //    source_safety_ledger_validation_ref is BUILT but never read by the validator — it checks source_safety_
+  //    row_id (ledger row) + global validation_status + tier instead, so the named validation-ref field is
+  //    unenforced (a row with valid row_id but null/wrong validation_ref passes).
+  //  - validate_group_and_coverage_refs_resolve (base): "group" has no enforcement surface (no group structure);
+  //    only coverage_slot→signal_row resolution (coverage_slot_signal_missing) is checked → compound, half missing.
+  //  - validate_scout_pack_is_profile_local_and_contains_no_selected_purpose_required_element_refs (base):
+  //    validateNoSelectedPurposeLeak is a JSON substring search (no-purpose-leak half, fragile); "profile-local"
+  //    is never checked → compound, half missing.
+  //  - validate_scout_scope_derives_from_target_material_profile_validation (base) /
+  //    validate_snapshot_scope_derives_from_target_material_profile_validation (pre-seed+post-maturation):
+  //    scout_scope is copied from the pack; only internal consistency (unsupported_scope_overclaimed) is checked,
+  //    never recomputed/derived from the target-material-profile-validation content (scoutScopeState() unused here).
+  //  - validate_snapshot_lineage_validation_ref_and_hash_match_current_lineage_authority (pre-seed+post-maturation):
+  //    slice-3 null-read + caller-authority — sha256File(null)=null so a null lineage ref + null pack hash passes,
+  //    and the "current lineage authority" is the caller-supplied ref, not derived from the chain.
+  //  - validate_pre_seed_scout_snapshot_is_immutable_consumed_authority (pre-seed) /
+  //    validate_post_maturation_scout_snapshot_is_immutable_audit_authority (post-maturation): only INPUT-artifact
+  //    hashes (freshness) are checked; snapshot immutability / consumed-or-audit authority state is not enforced.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_signal_rows_resolve_to_source_observations",
+  );
   // signal_rows is this validator's primary subject and is already shape-checked
   // gracefully below (→ schema_shape_invalid violation), so it is NOT asserted.
   const rawPack = args.sourceScoutPack as unknown;
@@ -858,6 +897,7 @@ export async function validateSourceScoutPack(args: {
     validation_results: violations.length === 0
       ? ["source_scout_pack_valid"]
       : ["source_scout_pack_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }

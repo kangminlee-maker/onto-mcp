@@ -806,6 +806,7 @@ export interface ReconstructSourceScoutPackValidationArtifact {
   prompt_visible_signal_count: number;
   coverage_slot_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructSourceScoutPackValidationViolation[];
 }
 
