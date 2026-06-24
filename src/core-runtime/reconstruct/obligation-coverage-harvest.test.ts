@@ -2456,23 +2456,23 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
   // fully enforced; blank-id REJECTION is a separate unregistered validity concern (codex #149 Finding 3).
   // asserted_obligation_ids is in-memory-only telemetry (byte-invariance proven in Stage 0).
 
-  it("validateSeedAuthoringReadiness records its 3 instrumented obligations (deferred-7 slice 4) and NOT the five gap-prone obligations", () => {
+  it("validateSeedAuthoringReadiness records ONLY validate_blocked_validation_gap_is_projection_not_semantic_decision (deferred-7 slice 4) and NOT the seven gap-prone obligations", () => {
     const out = runSeedAuthoringReadiness();
-    for (const recorded of [
+    expect(out.asserted_obligation_ids).toContain(
+      "validate_blocked_validation_gap_is_projection_not_semantic_decision",
+    );
+    // PARKED (deferred-7 slice-4 audit, codex #150 R1): consumes_pre_seed — the three identity checks are
+    // gated on the optional sourceScoutPackValidationRef/Validation, so an unconditional stamp over-claims for
+    // gap-only runs; required_elements_have_closure_rows — expected/actual rows are Map-keyed by required_
+    // element_ref, so duplicate element_ids collapse and a missing duplicate is not caught; uses_validated_
+    // input_refs_only — projection ref fields never compared (gap mechanism's binding is the recorded blocked-
+    // gap obligation, no distinct binding); actor_action_state_scout_rows — boundary note presence-only, material
+    // source unchecked; frontier_required_preserves_exploration_budget_state — exploration_budget_state copied
+    // not compared (compound); ontology_domain_required_category_rows_only_when — one-directional, spurious rows
+    // not rejected; only_seed_ready_or_limited — DELEGATED to the sibling assertSeedAuthoringReadinessAllowsSeed.
+    for (const parked of [
       "validate_readiness_consumes_pre_seed_source_scout_validation_snapshot",
       "validate_selected_purpose_required_elements_have_closure_rows",
-      "validate_blocked_validation_gap_is_projection_not_semantic_decision",
-    ]) {
-      expect(out.asserted_obligation_ids).toContain(recorded);
-    }
-    // PARKED (deferred-7 slice-4 audit): uses_validated_input_refs_only — the validated_upstream_refs /
-    // llm_authority_refs projection fields are never compared (gap mechanism's binding is the recorded
-    // blocked-validation-gap obligation, no distinct binding); actor_action_state_scout_rows — boundary note
-    // is presence-only and material-source is unchecked; frontier_required_preserves_exploration_budget_state
-    // — exploration_budget_state is copied not compared (compound); ontology_domain_required_category_rows_
-    // only_when — one-directional, spurious rows not rejected; only_seed_ready_or_limited — DELEGATED to the
-    // sibling assertSeedAuthoringReadinessAllowsSeed gate.
-    for (const parked of [
       "validate_readiness_projection_uses_validated_input_refs_only",
       "validate_actor_action_state_scout_rows_do_not_replace_purpose_required_elements",
       "validate_frontier_required_preserves_exploration_budget_state_without_declaring_source_insufficiency",
@@ -2483,15 +2483,14 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     }
   });
 
-  // ANTI-LAUNDERING (deferred-7 slice 4): each of the three recorded obligations has a non-vacuous binding in
-  // seed-authoring-readiness-validation.test.ts — consumes_pre_seed → "rejects latest-current SourceScoutPack
-  // validation as seed-readiness authority" (source_scout_pre_seed_identity_mismatch); required_elements_have_
-  // closure_rows → "rejects closure_row_missing when an expected closure row is dropped"; blocked_validation_
-  // gap_is_projection → "rejects tampered readiness classification" + "projects blocked_validation_gap before
-  // semantic readiness states" (readiness_classification_mismatch). asserted_obligation_ids is in-memory-only
-  // telemetry (byte-invariance proven in Stage 0).
+  // ANTI-LAUNDERING (deferred-7 slice 4): the one recorded obligation (blocked_validation_gap_is_projection)
+  // has a non-vacuous binding in seed-authoring-readiness-validation.test.ts — "rejects tampered readiness
+  // classification" + "projects blocked_validation_gap before semantic readiness states" trip readiness_
+  // classification_mismatch. The comparison is unconditional and single-scalar, so it is immune to the codex
+  // #150 gated-optional-arg and duplicate-element_id Map-collapse edges that parked the other two RECORD
+  // candidates. asserted_obligation_ids is in-memory-only telemetry (byte-invariance proven in Stage 0).
 
-  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 109 harvested (validator_id, obligation_id) pairs", async () => {
+  it("FRESHNESS: the checked-in obligation-coverage-recorded.yaml equals the 107 harvested (validator_id, obligation_id) pairs", async () => {
     const baselineOut = runBaseline();
     const matrixBaselineOut = runMatrix();
     // current WITH frontier captures both current-mode matrix obligations (derive-and-deltas + the
@@ -2668,6 +2667,6 @@ describe("G(a) obligation harvest — validators record their obligation ids", (
     const recordedSet = new Set(recordedDoc.recorded.map(sortKey));
 
     expect([...harvestedSet].sort()).toEqual([...recordedSet].sort());
-    expect(harvestedSet.size).toBe(109);
+    expect(harvestedSet.size).toBe(107);
   });
 });

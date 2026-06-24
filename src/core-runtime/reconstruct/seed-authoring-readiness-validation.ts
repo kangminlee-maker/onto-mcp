@@ -719,26 +719,30 @@ export function validateSeedAuthoringReadiness(args: {
 }): ReconstructSeedAuthoringReadinessValidationArtifact {
   const violations: ReconstructSeedAuthoringReadinessValidationViolation[] = [];
   const artifact = args.seedAuthoringReadiness;
-  // G(a) deferred-7 slice 4: record only the obligations this validator FULLY enforces. Stamped at the top
-  // (no per-row guard) so they fire on any input. This validator receives already-parsed objects and runs a
+  // G(a) deferred-7 slice 4: record only the obligation this validator FULLY + UNCONDITIONALLY enforces.
+  // Stamped at the top so it fires on any input. This validator receives already-parsed objects and runs a
   // recompute-and-compare against buildSeedAuthoringReadinessFromArtifacts(args), so the slice-3 null-read
   // false-pass does NOT apply here. asserted_obligation_ids is in-memory-only telemetry (Stage 0 #145) on a
   // reuse-hashed artifact (run.ts seed_authoring_readiness_validation_sha256), so stamping does not rotate reuse.
   //
-  // RECORD 3 (each a distinct binding):
-  //  - validate_readiness_consumes_pre_seed_source_scout_validation_snapshot → source_scout_pre_seed_identity_
-  //    mismatch (basename of the consumed validation ref + scout_pack_ref must be the .pre-seed snapshot, and
-  //    the scout_pack_ref must be the concrete pre-seed sibling of the validation ref).
-  //  - validate_selected_purpose_required_elements_have_closure_rows → closure_row_missing (every selected-
-  //    purpose required element of the recomputed expected set must have a closure row in the artifact).
+  // RECORD 1:
   //  - validate_blocked_validation_gap_is_projection_not_semantic_decision → readiness_classification_mismatch
   //    (+ closure_row_invalid_state): blocked_validation_gap is recomputed deterministically from input
-  //    validation status and compared, so it cannot be overridden by a hand-authored semantic decision.
+  //    validation status and compared UNCONDITIONALLY (single scalar), so it cannot be overridden by a
+  //    hand-authored semantic decision (tests: "rejects tampered readiness classification" + "projects
+  //    blocked_validation_gap before semantic readiness states"). Immune to both codex #150 edges below.
   //
-  // PARKED 5 (ledger notes carry the codex-referenced detail):
+  // PARKED 7 (ledger notes carry the codex-referenced detail):
+  //  - validate_readiness_consumes_pre_seed_source_scout_validation_snapshot: codex #150 P2 — the three
+  //    source_scout_pre_seed_identity_mismatch checks are GATED on sourceScoutPackValidationRef/Validation being
+  //    present; an absent/null snapshot is handled by the validation-gap mechanism, not the identity check, so an
+  //    unconditional top stamp would over-claim pre-seed consumption for gap-only executions.
+  //  - validate_selected_purpose_required_elements_have_closure_rows: codex #150 P2 — expected and actual
+  //    closure rows are keyed by required_element_ref in a Map, so duplicate element_ids (not rejected upstream)
+  //    collapse and one closure row can satisfy multiple required elements → a missing duplicate is not caught.
   //  - validate_readiness_projection_uses_validated_input_refs_only: the closure-row validated_upstream_refs /
   //    llm_authority_refs projection fields are never compared; the only input-validation gate is the gap
-  //    mechanism, whose binding is readiness_classification_mismatch (obligation above) — no distinct binding.
+  //    mechanism, whose binding is readiness_classification_mismatch (recorded above) — no distinct binding.
   //  - validate_actor_action_state_scout_rows_do_not_replace_purpose_required_elements: the boundary note is
   //    presence-only, and closure_row_dangling_required_element rejects foreign-ref rows but never verifies a
   //    row's material is purpose-derived rather than scout-derived (a scout row under a valid ref passes).
@@ -752,14 +756,6 @@ export function validateSeedAuthoringReadiness(args: {
   //    assertSeedAuthoringReadinessAllowsSeed gate; validateSeedAuthoringReadiness returns valid for
   //    frontier_required, so the allow-gate is not enforced by this function.
   const assertedObligationIds: string[] = [];
-  assertObligation(
-    assertedObligationIds,
-    "validate_readiness_consumes_pre_seed_source_scout_validation_snapshot",
-  );
-  assertObligation(
-    assertedObligationIds,
-    "validate_selected_purpose_required_elements_have_closure_rows",
-  );
   assertObligation(
     assertedObligationIds,
     "validate_blocked_validation_gap_is_projection_not_semantic_decision",

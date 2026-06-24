@@ -216,8 +216,4 @@ recorded:
   - validator_id: source-observation-lineage-index-validator
     obligation_id: validate_unique_session_level_lineage_row_ids
   - validator_id: seed-authoring-readiness-validator
-    obligation_id: validate_readiness_consumes_pre_seed_source_scout_validation_snapshot
-  - validator_id: seed-authoring-readiness-validator
-    obligation_id: validate_selected_purpose_required_elements_have_closure_rows
-  - validator_id: seed-authoring-readiness-validator
     obligation_id: validate_blocked_validation_gap_is_projection_not_semantic_decision

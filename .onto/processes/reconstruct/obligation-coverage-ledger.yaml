@@ -681,10 +681,20 @@ pending:
     tier: flat
     note: "deferred-7 slice-4 audit (2026-06-24): PARK (asymmetric 'only when'). The validator checks only the expected→actual direction (every recomputed ontology domain category id must be present, ontology_domain_category_missing). It never loops actual→expected to reject spurious/orphan category rows, so domain category rows present when the selected-purpose closure does not resolve to them are not rejected — the 'only when ... resolve to domain categories' direction is unenforced."
   - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_readiness_consumes_pre_seed_source_scout_validation_snapshot
+    coverage_status: pending
+    tier: flat
+    note: "deferred-7 slice-4 audit (2026-06-24, codex #150 R1 P2): PARK (gated-on-optional-arg). The three source_scout_pre_seed_identity_mismatch checks (validation-ref basename + scout_pack_ref basename + concrete pre-seed sibling) are all conditional on args.sourceScoutPackValidationRef / args.sourceScoutPackValidation being present; an absent/null snapshot is handled by the validation-gap mechanism (validationGapSubjects → blocked_validation_gap), not the identity check. An unconditional top-of-function stamp would therefore over-claim pre-seed snapshot consumption for gap-only executions that never consume or verify a snapshot. Recording deferred pending a stamp gated on an actual snapshot-consumption check."
+  - validator_id: seed-authoring-readiness-validator
     obligation_id: validate_readiness_projection_uses_validated_input_refs_only
     coverage_status: pending
     tier: flat
     note: "deferred-7 slice-4 audit (2026-06-24): PARK (field never compared + shared mechanism). The closure-row validated_upstream_refs / llm_authority_refs projection fields are populated by the build but never compared in validateSeedAuthoringReadiness (only closure_state and material_admission_row_ref are). The only enforcement that gates on input validation status is the validation-gap mechanism, whose binding is readiness_classification_mismatch — already recorded for validate_blocked_validation_gap_is_projection_not_semantic_decision (no distinct binding for 'uses validated input refs only')."
+  - validator_id: seed-authoring-readiness-validator
+    obligation_id: validate_selected_purpose_required_elements_have_closure_rows
+    coverage_status: pending
+    tier: flat
+    note: "deferred-7 slice-4 audit (2026-06-24, codex #150 R1 P2): PARK (duplicate-element_id Map collapse). validateSeedAuthoringReadiness keys both expected and actual closure rows by required_element_ref in a Map; if a selected purpose frame contains two required elements with the same element_id (source-purpose validation enforces non-empty element_id but does NOT reject duplicates), the duplicates collapse and a single closure row satisfies both, so closure_row_missing is never raised for the omitted duplicate. 'every selected-purpose required element has a closure row' is not fully enforced. Recording deferred pending duplicate-element_id rejection or per-occurrence coverage."
   - validator_id: source-observation-delta-validator
     obligation_id: validate_delta_frontier_kind_is_supported
     coverage_status: pending
