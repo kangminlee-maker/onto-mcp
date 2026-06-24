@@ -40,7 +40,7 @@ const GUARDS: GuardRun[] = [
   },
   {
     guard: "G3 invariant-tests",
-    invariants: ["INV-AUTH-1", "INV-SCHEMA-1", "INV-TEST-1"],
+    invariants: ["INV-AUTH-1", "INV-SCHEMA-1", "INV-TEST-1", "INV-SHARD-1"],
     command: [
       "npx",
       "vitest",
@@ -48,6 +48,7 @@ const GUARDS: GuardRun[] = [
       "--reporter=dot",
       "src/core-runtime/llm/model-switcher.invariant.test.ts",
       "src/core-runtime/review/problem-framing-spine.invariant.test.ts",
+      "src/core-runtime/review/obligation-shardability.invariant.test.ts",
     ],
   },
   {

@@ -79,6 +79,11 @@
 - **근거**: 단계가 obligation을 선언하고도 강제자를 배선하지 않는 "declared, not wired" 누락을 리뷰 라운드에서야 잡던 것을, recorded/parked 가시화 + ratchet으로 빌드 게이트에서 닫는다. (게이트는 obligation이 *조용히 미추적*이 아님과 recorded id가 *강제 블록에 도달*함을 증명할 뿐, 강제자의 *의미적 정확성*은 증명하지 않는다.)
 - **강제**: G10(`npm run check:obligation-coverage`) 정적 절(완전성·원장 정직성·역검증) + git base-diff ratchet(legacy pending 비증가·recorded→pending 강등 금지·재-park 금지, base 부재 시 fail-loud) + CI. INV 텍스트 자체는 사람 게이트(AGENTS §0-2; INVARIANTS.md는 PROTECTED_TARGETS 아님), 가드는 하드 CI 머지 게이트. recorded-set 신선도는 `obligation-coverage-harvest.test.ts`가 동적 입증한다.
 
+## INV-SHARD-1 — review obligation의 shardability 선언은 exhaustive·fail-closed다
+- **규칙**: 각 material kind의 review obligation(`reviewMaterialGoals(kind)`)은 정확히 1개의 `material_shardability` 선언(`whole`/`shardable_independent`/`shardable_with_seam`)을 갖는다(exhaustive·중복·orphan 없음). 관계형 obligation(cross-section 증거 — 봉인된 `RELATIONAL_OBLIGATIONS` 권위)은 `shardable_independent`로 선언될 수 없고(🔴 ILC-2), `shardable_with_seam`은 관계형 obligation에만 허용된다. relational ground truth는 shardability 선택과 분리된 **봉인 권위**에서 도출되며 선언 필드가 아니다(동반-flip 차단).
+- **근거**: Stage 3 섹션 분할 전에, 관계형 obligation을 독립 shard로 쪼개 cross-section 증거를 파괴하는 ILC-2를 fail-closed로 잠근다. relational을 선언 필드로 두면 shardability와 함께 co-flip되어 보호가 무력화되므로 봉인 권위로 분리한다. 실 분할은 Stage 3 소관 — Stage 2는 선언+validator+순수 게이트 함수뿐(동작 변화 0).
+- **강제**: G3 불변식 테스트(`src/core-runtime/review/obligation-shardability.invariant.test.ts`) — 모든 kind에서 validator(`validateObligationShardability`)가 `[]`임을 잠그고, 주입된 위반(relational_independent·seam_on_local·missing/orphan/duplicate)을 실제로 잡음을 mutation-test로 입증하며, 봉인 `RELATIONAL_OBLIGATIONS` 멤버십을 고정한다. 실 분할(Stage 3)은 순수 게이트 `isObligationShardable`을 호출한다. INVARIANTS.md·테스트는 PROTECTED_TARGETS 아님(G4 마커 불요). 관련 코드: [src/core-runtime/review/obligation-shardability.ts](src/core-runtime/review/obligation-shardability.ts).
+
 ---
 
 ## 강제 수단 구현 현황
@@ -89,7 +94,7 @@
 |---|---|---|
 | G1 import 경계 | INV-MOCK-1 (+repo-layout 레이어링) | `npm run check:import-boundary` |
 | G2 스펙 기본값 스캐너 | INV-AUTH-1, INV-CFG-1 | `npm run check:spec-defaults` (인가 정규화는 가시적 waiver) |
-| G3 불변식 테스트 | INV-AUTH-1, INV-SCHEMA-1, INV-TEST-1 | `src/**/*.invariant.test.ts` (vitest) |
+| G3 불변식 테스트 | INV-AUTH-1, INV-SCHEMA-1, INV-TEST-1, INV-SHARD-1 | `src/**/*.invariant.test.ts` (vitest) |
 | G4 보호 키 변경 마커 | INV-AUTH-1, INV-CFG-1, INV-MATERIAL-1, INV-MODEL-1 | `npm run check:invariant-change [-- baseRef]` + CI |
 | G5 벤치마크 게이트 | INV-BENCH-1, INV-EXP-1 | 하니스 내장(decision gate: runs≥3·fixtures≥2 미충족 시 `comparison_conclusion=null` + PRELIMINARY) |
 | G6 드리프트 리포트 | 집계 | `npm run check:invariant-drift [-- baseRef]` |
