@@ -1298,6 +1298,7 @@ export interface ReconstructSeedAuthoringReadinessValidationArtifact {
     ReconstructSeedAuthoringMaxRoundExhaustionInterpretation | null;
   closure_row_count: number;
   validation_results: string[];
+  asserted_obligation_ids: string[];
   violations: ReconstructSeedAuthoringReadinessValidationViolation[];
 }
 

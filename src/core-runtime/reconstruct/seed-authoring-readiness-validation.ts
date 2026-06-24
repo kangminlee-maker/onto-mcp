@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { atomicWriteYamlDocument as writeYamlDocument } from "../artifact-io.js";
+import { assertObligation } from "./obligation-assertion.js";
 import type {
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructEvidenceRef,
@@ -718,6 +719,47 @@ export function validateSeedAuthoringReadiness(args: {
 }): ReconstructSeedAuthoringReadinessValidationArtifact {
   const violations: ReconstructSeedAuthoringReadinessValidationViolation[] = [];
   const artifact = args.seedAuthoringReadiness;
+  // G(a) deferred-7 slice 4: record only the obligation this validator FULLY + UNCONDITIONALLY enforces.
+  // Stamped at the top so it fires on any input. This validator receives already-parsed objects and runs a
+  // recompute-and-compare against buildSeedAuthoringReadinessFromArtifacts(args), so the slice-3 null-read
+  // false-pass does NOT apply here. asserted_obligation_ids is in-memory-only telemetry (Stage 0 #145) on a
+  // reuse-hashed artifact (run.ts seed_authoring_readiness_validation_sha256), so stamping does not rotate reuse.
+  //
+  // RECORD 1:
+  //  - validate_blocked_validation_gap_is_projection_not_semantic_decision → readiness_classification_mismatch
+  //    (+ closure_row_invalid_state): blocked_validation_gap is recomputed deterministically from input
+  //    validation status and compared UNCONDITIONALLY (single scalar), so it cannot be overridden by a
+  //    hand-authored semantic decision (tests: "rejects tampered readiness classification" + "projects
+  //    blocked_validation_gap before semantic readiness states"). Immune to both codex #150 edges below.
+  //
+  // PARKED 7 (ledger notes carry the codex-referenced detail):
+  //  - validate_readiness_consumes_pre_seed_source_scout_validation_snapshot: codex #150 P2 — the three
+  //    source_scout_pre_seed_identity_mismatch checks are GATED on sourceScoutPackValidationRef/Validation being
+  //    present; an absent/null snapshot is handled by the validation-gap mechanism, not the identity check, so an
+  //    unconditional top stamp would over-claim pre-seed consumption for gap-only executions.
+  //  - validate_selected_purpose_required_elements_have_closure_rows: codex #150 P2 — expected and actual
+  //    closure rows are keyed by required_element_ref in a Map, so duplicate element_ids (not rejected upstream)
+  //    collapse and one closure row can satisfy multiple required elements → a missing duplicate is not caught.
+  //  - validate_readiness_projection_uses_validated_input_refs_only: the closure-row validated_upstream_refs /
+  //    llm_authority_refs projection fields are never compared; the only input-validation gate is the gap
+  //    mechanism, whose binding is readiness_classification_mismatch (recorded above) — no distinct binding.
+  //  - validate_actor_action_state_scout_rows_do_not_replace_purpose_required_elements: the boundary note is
+  //    presence-only, and closure_row_dangling_required_element rejects foreign-ref rows but never verifies a
+  //    row's material is purpose-derived rather than scout-derived (a scout row under a valid ref passes).
+  //  - validate_frontier_required_preserves_exploration_budget_state_without_declaring_source_insufficiency:
+  //    compound — source_sufficiency_state is recompute-compared, but exploration_budget_state is COPIED from
+  //    the artifact (not compared), so the "preserves exploration_budget_state" half is unenforced.
+  //  - validate_ontology_domain_required_category_rows_only_when_selected_purpose_closure_rows_resolve_to_
+  //    domain_categories: asymmetric — only expected→actual presence (ontology_domain_category_missing) is
+  //    checked; spurious/orphan category rows are never rejected, so the "only when" direction is unenforced.
+  //  - validate_only_seed_ready_or_limited_seed_possible_allows_seed_authoring: DELEGATED to the sibling
+  //    assertSeedAuthoringReadinessAllowsSeed gate; validateSeedAuthoringReadiness returns valid for
+  //    frontier_required, so the allow-gate is not enforced by this function.
+  const assertedObligationIds: string[] = [];
+  assertObligation(
+    assertedObligationIds,
+    "validate_blocked_validation_gap_is_projection_not_semantic_decision",
+  );
   if (artifact.session_id !== args.sourcePurposeCandidates.session_id) {
     violations.push(violation({
       code: "session_id_mismatch",
@@ -903,6 +945,7 @@ export function validateSeedAuthoringReadiness(args: {
     validation_results: violations.length === 0
       ? ["seed_authoring_readiness_valid"]
       : ["seed_authoring_readiness_invalid"],
+    asserted_obligation_ids: assertedObligationIds,
     violations,
   };
 }
