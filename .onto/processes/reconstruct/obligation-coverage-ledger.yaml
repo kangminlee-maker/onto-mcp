@@ -664,34 +664,27 @@ pending:
     obligation_id: validate_actor_action_state_scout_rows_do_not_replace_purpose_required_elements
     coverage_status: pending
     tier: flat
-  - validator_id: seed-authoring-readiness-validator
-    obligation_id: validate_blocked_validation_gap_is_projection_not_semantic_decision
-    coverage_status: pending
-    tier: flat
+    note: "deferred-7 slice-4 audit (2026-06-24): PARK (presence-only + material-source unchecked). The required boundary note 'Actor-action-state scout rows are prioritization evidence, not selected-purpose required elements.' is enforced presence-only (semantic_authority_boundary_missing). closure_row_dangling_required_element rejects closure rows whose required_element_ref is not a selected-purpose element, but never verifies a row's material is purpose-derived rather than scout-derived — a scout-sourced row labeled with a valid required_element_ref passes. 'do not replace' is not fully enforced."
   - validator_id: seed-authoring-readiness-validator
     obligation_id: validate_frontier_required_preserves_exploration_budget_state_without_declaring_source_insufficiency
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-4 audit (2026-06-24): PARK (compound, only one half enforced). validateSeedAuthoringReadiness recompute-compares source_sufficiency_state (source_sufficiency_state_mismatch), so the 'without declaring source insufficiency' half is enforced; but exploration_budget_state is COPIED from the artifact into the validation output and never compared to the recomputed expected, so the 'preserves exploration_budget_state' half is unenforced. Recording deferred pending an exploration_budget_state comparison."
   - validator_id: seed-authoring-readiness-validator
     obligation_id: validate_only_seed_ready_or_limited_seed_possible_allows_seed_authoring
     coverage_status: pending
     tier: flat
+    note: "deferred-7 slice-4 audit (2026-06-24): PARK (DELEGATED). The allow/deny gate is enforced by the sibling assertSeedAuthoringReadinessAllowsSeed (throws unless readiness_classification is seed_ready or limited_seed_possible), NOT by validateSeedAuthoringReadiness — which returns validation_status=valid for frontier_required/blocked classifications (see test 'projects frontier_required without making validation invalid'). asserted_obligation_ids telemetry is on the validator's return, so the delegated gate cannot be recorded here."
   - validator_id: seed-authoring-readiness-validator
     obligation_id: validate_ontology_domain_required_category_rows_only_when_selected_purpose_closure_rows_resolve_to_domain_categories
     coverage_status: pending
     tier: flat
-  - validator_id: seed-authoring-readiness-validator
-    obligation_id: validate_readiness_consumes_pre_seed_source_scout_validation_snapshot
-    coverage_status: pending
-    tier: flat
+    note: "deferred-7 slice-4 audit (2026-06-24): PARK (asymmetric 'only when'). The validator checks only the expected→actual direction (every recomputed ontology domain category id must be present, ontology_domain_category_missing). It never loops actual→expected to reject spurious/orphan category rows, so domain category rows present when the selected-purpose closure does not resolve to them are not rejected — the 'only when ... resolve to domain categories' direction is unenforced."
   - validator_id: seed-authoring-readiness-validator
     obligation_id: validate_readiness_projection_uses_validated_input_refs_only
     coverage_status: pending
     tier: flat
-  - validator_id: seed-authoring-readiness-validator
-    obligation_id: validate_selected_purpose_required_elements_have_closure_rows
-    coverage_status: pending
-    tier: flat
+    note: "deferred-7 slice-4 audit (2026-06-24): PARK (field never compared + shared mechanism). The closure-row validated_upstream_refs / llm_authority_refs projection fields are populated by the build but never compared in validateSeedAuthoringReadiness (only closure_state and material_admission_row_ref are). The only enforcement that gates on input validation status is the validation-gap mechanism, whose binding is readiness_classification_mismatch — already recorded for validate_blocked_validation_gap_is_projection_not_semantic_decision (no distinct binding for 'uses validated input refs only')."
   - validator_id: source-observation-delta-validator
     obligation_id: validate_delta_frontier_kind_is_supported
     coverage_status: pending
