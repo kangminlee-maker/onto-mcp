@@ -30,6 +30,7 @@ import {
   toRelativePath,
   truncateForEmbedding,
 } from "../review/review-artifact-utils.js";
+import { DEFAULT_MAX_EMBED_LINES } from "../review/review-prompt-budget.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { writeAndThrowStructuredFailureRecord } from "../review/failure-records.js";
 import { resolveInstallationPath } from "../discovery/installation-paths.js";
@@ -318,7 +319,9 @@ If there are no findings, submit \`findings: []\` and a concise \`no_findings_ra
 ${args.humanOutputPath ? `The runtime may render a human-readable projection at ${toRelativePath(args.humanOutputPath, args.projectRoot)}.` : "No human-readable lens markdown projection is requested for this session."}`;
 }
 
-const DEFAULT_MAX_EMBED_LINES = 300;
+// DEFAULT_MAX_EMBED_LINES is owned by review-prompt-budget.ts (the single
+// conversion point), imported above and shared with the prepare-time budget
+// resolution so the no-regression floor lives in one place.
 
 // Core role IDs derived from .onto/authority/core-lens-registry.yaml (single source of truth)
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
@@ -992,15 +995,23 @@ export async function runMaterializeReviewPromptPacketsCli(
     args: argv,
   });
 
-  let maxEmbedLines =
-    typeof values["max-embed-lines"] === "string" && values["max-embed-lines"].length > 0
-      ? Number.parseInt(values["max-embed-lines"], 10)
-      : DEFAULT_MAX_EMBED_LINES;
-  if (!Number.isFinite(maxEmbedLines) || maxEmbedLines < 1) {
-    console.warn(
-      `[onto] Invalid max-embed-lines value (${values["max-embed-lines"]}), using default ${DEFAULT_MAX_EMBED_LINES}.`,
-    );
-    maxEmbedLines = DEFAULT_MAX_EMBED_LINES;
+  // Explicit CLI --max-embed-lines wins (an operator override). An invalid value
+  // falls back (warned) so it does NOT mask the plan's window-proportional budget.
+  // The plan's persisted max_embed_lines (Stage 1) is applied below, after the
+  // plan is read; absent both → DEFAULT (no regression).
+  let cliMaxEmbedLines: number | undefined;
+  if (
+    typeof values["max-embed-lines"] === "string" &&
+    values["max-embed-lines"].length > 0
+  ) {
+    const parsed = Number.parseInt(values["max-embed-lines"], 10);
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      cliMaxEmbedLines = parsed;
+    } else {
+      console.warn(
+        `[onto] Invalid max-embed-lines value (${values["max-embed-lines"]}), using default ${DEFAULT_MAX_EMBED_LINES}.`,
+      );
+    }
   }
 
   const projectRoot = path.resolve(requireString(values["project-root"], "project-root"));
@@ -1024,6 +1035,17 @@ export async function runMaterializeReviewPromptPacketsCli(
     sessionMetadataPath,
   );
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
+  // Stage 1 embed-budget precedence: explicit CLI override wins; else the plan's
+  // window-proportional max_embed_lines (persisted at prepare time); else DEFAULT
+  // (model-unaware run — no regression).
+  const planMaxEmbedLines =
+    typeof executionPlan.max_embed_lines === "number" &&
+    Number.isFinite(executionPlan.max_embed_lines) &&
+    executionPlan.max_embed_lines >= 1
+      ? executionPlan.max_embed_lines
+      : undefined;
+  const maxEmbedLines =
+    cliMaxEmbedLines ?? planMaxEmbedLines ?? DEFAULT_MAX_EMBED_LINES;
   const promptPacketsRoot =
     executionPlan.prompt_packets_root ?? path.join(sessionRoot, "prompt-packets");
   const materializedInputText = await readOptionalText(binding.materialized_input_path);

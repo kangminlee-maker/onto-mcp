@@ -70,6 +70,7 @@ import {
 } from "../target-material-kind.js";
 import {
   observeSpreadsheetSource,
+  type WorkbookInventoryPromptCaps,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
 import {
@@ -118,6 +119,13 @@ export interface BootstrapInvocationBindingArtifactsParams {
   recursiveReferenceExpansionPolicy?: BoundaryAccessPolicy;
   filesystemAllowedRoots?: string[];
   bindingNotes?: string[];
+  /**
+   * Stage 1 window-proportional embed line budget, resolved once by the caller
+   * from the lens model's context window and persisted into the execution plan
+   * so the packet stage reads it. undefined → plan omits the field → packet
+   * stage uses the DEFAULT embed-line budget (no regression).
+   */
+  maxEmbedLines?: number;
 }
 
 export interface MaterializeReviewExecutionPreparationArtifactsParams {
@@ -136,6 +144,13 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
   roleDefinitionRefs?: string[];
   executionRuleRefs?: string[];
   directoryListingOptions?: DirectoryListingOptions;
+  /**
+   * Stage 1 window-proportional inventory prompt caps, resolved once by the
+   * caller from the lens model's context window. Threaded to BOTH renderers so
+   * target-snapshot.md and materialized-input.md share the same projection size
+   * and stay byte-identical. undefined → DEFAULT caps (no regression).
+   */
+  inventoryPromptCaps?: WorkbookInventoryPromptCaps;
 }
 
 /**
@@ -213,7 +228,7 @@ function derivePlanTimeLlmResolution(config: OntoSettings): ResolvedLlmPlan | un
   return Object.keys(plan).length > 0 ? plan : undefined;
 }
 
-function resolveReviewExecutionSettingsForArtifacts(
+export function resolveReviewExecutionSettingsForArtifacts(
   config: OntoSettings,
 ): ResolvedReviewExecutionSettings {
   const defaults = defaultReviewExecution();
@@ -957,6 +972,12 @@ export async function bootstrapInvocationBindingArtifacts(
     effective_boundary_state: effectiveBoundaryState,
     max_concurrent_lenses: maxConcurrentLenses,
     minimum_participating_lenses: params.resolvedLensIds.length,
+    // Stage 1: persist the window-proportional embed budget so the packet stage
+    // reads it without re-resolving. Omitted when unresolved (model-unaware run)
+    // → packet stage falls back to the DEFAULT budget (no regression).
+    ...(params.maxEmbedLines !== undefined
+      ? { max_embed_lines: params.maxEmbedLines }
+      : {}),
   };
 
   const actorInvocationProfiles: ReviewActorInvocationProfilesArtifact = {
@@ -1548,6 +1569,7 @@ export async function materializeReviewExecutionPreparationArtifacts(
         resolvedTargetRefs,
         params.directoryListingOptions,
         inventoryByRef,
+        params.inventoryPromptCaps,
       ),
       "utf8",
     ),
@@ -1560,6 +1582,7 @@ export async function materializeReviewExecutionPreparationArtifacts(
         materializedRefs,
         params.directoryListingOptions,
         inventoryByRef,
+        params.inventoryPromptCaps,
       ),
       "utf8",
     ),

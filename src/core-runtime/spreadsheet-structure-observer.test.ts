@@ -11,6 +11,7 @@ import {
   compareColumnResidualDesc,
   DEFAULT_DATA_LAYER_CAPS,
   DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS,
+  deriveWorkbookInventoryPromptCaps,
   observeSpreadsheetSource,
   parseCsv,
   projectInventoryForAdmission,
@@ -1425,5 +1426,40 @@ describe("design-C — aggregate-only boundary + admission passthrough", () => {
     expect(SPREADSHEET_OBSERVER_ADAPTER_VERSION).toBe(3);
     const r = inv("a,b\n1,2\n", "/abs/v.csv");
     expect(r.adapter_version).toBe(3);
+  });
+});
+
+describe("deriveWorkbookInventoryPromptCaps — Stage 1 window-proportional caps", () => {
+  const capDims = Object.keys(
+    DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS,
+  ) as Array<keyof typeof DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS>;
+
+  it("multiplier 1 returns values byte-equal to DEFAULT for every dim (no regression)", () => {
+    const caps = deriveWorkbookInventoryPromptCaps(1);
+    expect(caps).toEqual(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS);
+    for (const dim of capDims) {
+      expect(caps[dim]).toBe(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS[dim]);
+    }
+  });
+
+  it("multiplier 2 doubles every dim (ceil of int*2)", () => {
+    const caps = deriveWorkbookInventoryPromptCaps(2);
+    for (const dim of capDims) {
+      expect(caps[dim]).toBe(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS[dim] * 2);
+    }
+  });
+
+  it("preserves shape ratios (ceil) for a fractional multiplier", () => {
+    const m = 2.5;
+    const caps = deriveWorkbookInventoryPromptCaps(m);
+    for (const dim of capDims) {
+      expect(caps[dim]).toBe(
+        Math.ceil(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS[dim] * m),
+      );
+    }
+    // max_pairwise_per_overlap (DEFAULT 16) * 2.5 = 40, an exact int.
+    expect(caps.max_pairwise_per_overlap).toBe(40);
+    // max_sheets (DEFAULT 50) * 2.5 = 125.
+    expect(caps.max_sheets).toBe(125);
   });
 });
