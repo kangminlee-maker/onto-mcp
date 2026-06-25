@@ -20,12 +20,42 @@ import {
 import {
   bootstrapInvocationBindingArtifacts,
   materializeReviewExecutionPreparationArtifacts,
+  resolveReviewExecutionSettingsForArtifacts,
   writeInvocationInterpretationArtifact,
 } from "../review/materializers.js";
+import {
+  DEFAULT_MAX_EMBED_LINES,
+  deriveReviewMaxEmbedLines,
+  resolveReviewLensContextWindowTokens,
+  reviewWindowMultiplier,
+} from "../review/review-prompt-budget.js";
+import { deriveWorkbookInventoryPromptCaps } from "../spreadsheet-structure-observer.js";
+import { loadSupportedModelRegistry } from "../discovery/supported-models.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { detectCodexEnvSignal } from "../discovery/host-detection.js";
 import { resolveOntoHome } from "../discovery/onto-home.js";
+import type { OntoSettings } from "../discovery/settings-chain.js";
 import { resolveSettingsChain } from "../discovery/settings-chain.js";
+
+/**
+ * Stage 1 — resolve the window-proportional review prompt budget multiplier from
+ * the lens model's registered context window. The registry load and model
+ * resolution are best-effort: any failure (missing/malformed authority,
+ * unresolved model, no registered window) returns multiplier 1, so the budget
+ * floors to DEFAULT caps + DEFAULT embed lines (no regression). Never throws.
+ */
+function resolveReviewPromptBudget(
+  ontoConfig: OntoSettings,
+): { multiplier: number } {
+  try {
+    const registry = loadSupportedModelRegistry();
+    const execution = resolveReviewExecutionSettingsForArtifacts(ontoConfig);
+    const window = resolveReviewLensContextWindowTokens(execution, registry);
+    return { multiplier: reviewWindowMultiplier(window) };
+  } catch {
+    return { multiplier: 1 };
+  }
+}
 
 function requireString(
   value: string | boolean | undefined,
@@ -250,6 +280,22 @@ export async function runPrepareReviewSessionCli(
   const ontoHome = resolveOntoHome(optionalString(values["onto-home"]) || undefined);
   const ontoConfig = await resolveSettingsChain(ontoHome, projectRoot);
 
+  // Stage 1 — resolve the window-proportional review prompt budget ONCE, here,
+  // and thread it to both consumers: the spreadsheet inventory prompt caps
+  // (into the materialize call) and the embed line budget (persisted into the
+  // execution plan for the packet stage). The lens MODEL's registered context
+  // window drives a single multiplier. Any failure (registry load, unresolved
+  // model, no registered window) falls through to multiplier 1 → DEFAULT caps +
+  // DEFAULT embed lines (no regression). Never throws.
+  const reviewPromptBudget = resolveReviewPromptBudget(ontoConfig);
+  const inventoryPromptCaps = deriveWorkbookInventoryPromptCaps(
+    reviewPromptBudget.multiplier,
+  );
+  const maxEmbedLines = deriveReviewMaxEmbedLines(
+    reviewPromptBudget.multiplier,
+    DEFAULT_MAX_EMBED_LINES,
+  );
+
   const bindingParams = {
     projectRoot,
     ontoConfig,
@@ -285,6 +331,7 @@ export async function runPrepareReviewSessionCli(
     filesystemAllowedRoots: values["filesystem-allowed-root"],
     bindingNotes: values["binding-note"],
     ontoHome,
+    maxEmbedLines,
     ...(typeof values["session-id"] === "string" && values["session-id"].length > 0
       ? { sessionId: values["session-id"] }
       : {}),
@@ -362,6 +409,7 @@ export async function runPrepareReviewSessionCli(
       roleDefinitionRefs: values["role-definition-ref"],
       executionRuleRefs: values["execution-rule-ref"],
       directoryListingOptions,
+      inventoryPromptCaps,
     });
 
   console.log(

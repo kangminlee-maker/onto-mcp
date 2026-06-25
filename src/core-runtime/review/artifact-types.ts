@@ -386,6 +386,14 @@ export interface ReviewExecutionPlan {
   review_record_path: string;
   max_concurrent_lenses?: number;
   minimum_participating_lenses?: number;
+  /**
+   * Stage 1 window-proportional embed line budget, resolved once at prepare time
+   * from the lens model's context window and persisted so the packet stage reads
+   * it (no re-resolution). Optional for backward-compat with plans serialized
+   * before this field and for model-unaware runs; absent → packet stage uses the
+   * DEFAULT embed-line budget (no regression).
+   */
+  max_embed_lines?: number;
   boundary_policy: BoundaryPolicy;
   boundary_presentation: BoundaryPresentation;
   boundary_enforcement_profile: BoundaryEnforcementProfile;

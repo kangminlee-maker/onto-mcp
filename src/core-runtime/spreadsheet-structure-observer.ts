@@ -2424,6 +2424,52 @@ export const DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS: WorkbookInventoryPromptCaps
   max_risk_signals: 50,
 };
 
+/**
+ * Scale every prompt-projection cap by a single window multiplier (Stage 1
+ * window-proportional review budget). Pure, model-agnostic: the only input is a
+ * numeric multiplier (the caller derives it from the lens model's context
+ * window), so no model literal reaches these caps (INV-CFG-1). Each dim is
+ * `ceil(DEFAULT[dim] * multiplier)`, so the relative projection SHAPE (the cap
+ * ratios) is preserved and only the SIZE grows with the window. multiplier = 1
+ * returns values byte-equal to DEFAULT (ceil(int * 1) === int), which is the
+ * no-regression floor for model-unaware runs.
+ */
+export function deriveWorkbookInventoryPromptCaps(
+  multiplier: number,
+): WorkbookInventoryPromptCaps {
+  const scale = (dim: number): number => Math.ceil(dim * multiplier);
+  return {
+    max_formula_patterns: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_formula_patterns),
+    max_sheets: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_sheets),
+    max_columns_per_sheet: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_columns_per_sheet,
+    ),
+    max_distinct_value_vocab: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_distinct_value_vocab,
+    ),
+    max_pivot_tables: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_pivot_tables),
+    max_cross_sheet_overlaps: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_cross_sheet_overlaps,
+    ),
+    max_pairwise_per_overlap: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_pairwise_per_overlap,
+    ),
+    max_named_ranges: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_named_ranges),
+    max_tables: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_tables),
+    max_data_validations: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_data_validations,
+    ),
+    max_external_links: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_external_links,
+    ),
+    max_error_cells: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_error_cells),
+    max_merged_ranges: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_merged_ranges,
+    ),
+    max_risk_signals: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_risk_signals),
+  };
+}
+
 /** One dropped-detail record per section the projection actually trimmed. The seed
  *  author reads these to declare an honest limitation about partial structural
  *  evidence (handoff B2 / §11 honesty). */
