@@ -280,6 +280,9 @@ export interface WorkbookStructuralInventory {
    *  "N of M observed" instead of mis-reporting the capped count as the total; absent when
    *  no sheet cap was hit (the full set is in `sheets`). */
   sheet_count_total?: number;
+  /** CUT-2 EXPERIMENTAL (throwaway, §3.1): segmented value-tile projection per sheet. Present ONLY when
+   *  `buildXlsxInventory` was called with `experimentalValueTiles`; absent in production. */
+  cut2_value_tiles?: SheetValueTileProjection[];
   unsupported_reason: string | null;
 }
 
@@ -1841,6 +1844,243 @@ function createWorksheetParser(args: {
   };
 }
 
+// ════════════════════════ CUT-2 EXPERIMENTAL — segmented value-tile projection ════════════════════════
+//
+// THROWAWAY / UNWIRED. design `20260625-rescoped-comprehension-engine-design.md` §3.1: the engine's
+// ONLY new deterministic surface. This block proves (a)-Q1 PURE-DERIVABILITY — that the projection is a
+// pure function of the SINGLE observer pass's `rows[][]` grid (the exact same input `profileSheetRows`
+// already consumes; zero source re-scan) — and is exercised only when `buildXlsxInventory` is called with
+// the optional `experimentalValueTiles` arg. Production callers never pass it, so the production artifact
+// is byte-identical (the `cut2_value_tiles` field stays absent). Remove this block if Cut-2 does not
+// proceed past the owner gate. NOT a raw-value dump (P12: aggregate signatures only; bounded distinct).
+export interface ValueTileOpts {
+  /** Row-window size of one segment (the detection grid). Benchmark-backed SSOT candidate (§3.1/P6);
+   *  detection grid is ⊥ to localization resolution — the bracketed refine pins the exact boundary row
+   *  regardless of this window (§13). */
+  window: number;
+  /** Hard cap on segments retained per column (P12 bounded memory: O(columns × segments), not O(cells)). */
+  segmentsPerColumnCap: number;
+  /** Hard cap on distinct values retained per segment (bounded signature, not a raw dump). */
+  distinctPerSegmentCap: number;
+}
+
+export const DEFAULT_VALUE_TILE_OPTS: ValueTileOpts = {
+  window: 1024,
+  segmentsPerColumnCap: 256,
+  distinctPerSegmentCap: 32,
+};
+
+/** A normalized SERIALIZATION shape of one raw cell string (not the value, the shape). The dominant
+ *  shape per segment is the contradiction-ground (R8): a shape change between adjacent segments is a
+ *  boundary candidate. Derived purely from the value string already in `rows[][]` — so a DISPLAY-only
+ *  numFmt change on uniform date serials (which the pass already collapsed to ISO) is invisible here;
+ *  that is the separate-scan/fold exception Cut-2 characterizes, not a value-string signature. */
+function serializationShape(raw: string): string {
+  const v = raw.trim();
+  if (v.length === 0) return "EMPTY";
+  if (/^(true|false)$/i.test(v)) return "BOOL";
+  if (/^-?\d+$/.test(v)) return "INT";
+  if (/^-?\d+\.\d+$/.test(v)) return "DEC";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return "ISO_DATE";
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(v)) return "ISO_DATETIME";
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(v)) return "SLASH_DATE";
+  if (/^\d{1,2}\.\d{1,2}\.\d{2,4}$/.test(v)) return "DOT_DATE";
+  if (/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(v)) return "EMAIL";
+  return "TEXT";
+}
+
+export interface ValueTileSegment {
+  /** 1-based inclusive sheet-row range of this segment (anchored at the grid's first row = 1). */
+  row_start: number;
+  row_end: number;
+  non_empty: number;
+  /** Per-InferredColumnType counts over non-empty cells (reuses `classifyValue`). */
+  type_counts: Record<string, number>;
+  /** Per-serialization-shape counts over non-empty cells. */
+  shape_counts: Record<string, number>;
+  /** Deterministic dominant shape (max count; ties broken by shape name ASC). null when all-empty. */
+  dominant_shape: string | null;
+  /** Bounded distinct value set within the segment (capped → is_lower_bound). */
+  distinct_count: number;
+  distinct_is_lower_bound: boolean;
+}
+
+/** A boundary candidate between two adjacent same-column segments whose dominant shape differs, refined
+ *  to the EXACT transition row by a bracketed scan over only those two windows (§13 intra_tile_note). */
+export interface IntraTileNote {
+  prev_shape: string;
+  new_shape: string;
+  /** Last row (1-based) carrying the prev shape before the transition. */
+  last_prev_format_row: number;
+  /** First row (1-based) carrying the new shape. */
+  first_new_format_row: number;
+}
+
+export interface ColumnValueTiles {
+  column_index: number;
+  segments: ValueTileSegment[];
+  /** True when `segmentsPerColumnCap` stopped new-segment creation (segments are an honest lower bound). */
+  segments_capped: boolean;
+  intra_tile_notes: IntraTileNote[];
+}
+
+export interface SheetValueTileProjection {
+  sheet: string;
+  window: number;
+  columns: ColumnValueTiles[];
+  /** Structural memory witness (P12): the number of segment records the result actually retains — bounds the
+   *  projection's OWN footprint as O(columns × segments), independent of the cell count. */
+  retained_segments: number;
+  /** Sum of per-segment distinct COUNTS. NOTE: the distinct-value Sets are LOCAL to each segment loop and
+   *  discarded (only the integer `distinct_count` is kept per segment) — so no distinct VALUES are retained;
+   *  this is a conservative upper proxy for the per-segment distinct work, not retained memory. */
+  summed_segment_distinct_count: number;
+}
+
+/** Pick the exact transition row inside the bracket [a.row_start, b.row_end] of two adjacent segments:
+ *  the last row whose shape == prev before the first row whose shape == new. Scans only the two windows
+ *  (bounded), so the localization resolution is row-precise regardless of `window` (P6). */
+function refineBoundary(
+  rows: string[][],
+  col: number,
+  bracketStartRow: number,
+  bracketEndRow: number,
+  prevShape: string,
+  newShape: string,
+): IntraTileNote | null {
+  // rows[] is 0-based; sheet rows are 1-based. bracket rows are 1-based inclusive.
+  let firstNew = -1;
+  for (let r = bracketStartRow - 1; r <= bracketEndRow - 1 && r < rows.length; r += 1) {
+    const cell = (rows[r] ?? [])[col] ?? "";
+    if (cell.trim().length === 0) continue;
+    if (serializationShape(cell) === newShape) {
+      firstNew = r;
+      break;
+    }
+  }
+  if (firstNew < 0) return null;
+  let lastPrev = -1;
+  for (let r = firstNew - 1; r >= bracketStartRow - 1; r -= 1) {
+    const cell = (rows[r] ?? [])[col] ?? "";
+    if (cell.trim().length === 0) continue;
+    if (serializationShape(cell) === prevShape) {
+      lastPrev = r;
+      break;
+    }
+  }
+  if (lastPrev < 0) return null;
+  return {
+    prev_shape: prevShape,
+    new_shape: newShape,
+    last_prev_format_row: lastPrev + 1,
+    first_new_format_row: firstNew + 1,
+  };
+}
+
+/** CUT-2: project the segmented value-tile surface from the already-materialized `rows[][]` grid. PURE
+ *  (no source re-scan, no file read) and DETERMINISTIC (fixed iteration order). Holds only bounded
+ *  per-segment aggregates (P12). `rows` is `parsed.rows` from the single streaming pass — the same input
+ *  `profileSheetRows` consumes. */
+export function projectSegmentedValueTiles(args: {
+  sheetName: string;
+  rows: string[][];
+  caps: DataLayerCaps;
+  opts: ValueTileOpts;
+}): SheetValueTileProjection {
+  const { sheetName, rows, caps, opts } = args;
+  const colCount = Math.min(
+    rows.reduce((m, r) => Math.max(m, r.length), 0),
+    caps.max_columns_profiled,
+  );
+  const window = Math.max(1, opts.window);
+  const columns: ColumnValueTiles[] = [];
+  let retainedSegments = 0;
+  let summedSegmentDistinct = 0;
+
+  for (let col = 0; col < colCount; col += 1) {
+    const segments: ValueTileSegment[] = [];
+    let segmentsCapped = false;
+    for (let segStart = 0; segStart < rows.length; segStart += window) {
+      if (segments.length >= opts.segmentsPerColumnCap) {
+        segmentsCapped = true;
+        break;
+      }
+      const segEnd = Math.min(segStart + window, rows.length);
+      const typeCounts: Record<string, number> = {};
+      const shapeCounts: Record<string, number> = {};
+      const distinct = new Set<string>();
+      let distinctLowerBound = false;
+      let nonEmpty = 0;
+      for (let r = segStart; r < segEnd; r += 1) {
+        const cell = (rows[r] ?? [])[col] ?? "";
+        if (cell.trim().length === 0) continue;
+        nonEmpty += 1;
+        const t = classifyValue(cell);
+        typeCounts[t] = (typeCounts[t] ?? 0) + 1;
+        const s = serializationShape(cell);
+        shapeCounts[s] = (shapeCounts[s] ?? 0) + 1;
+        if (distinct.size < opts.distinctPerSegmentCap) distinct.add(cell);
+        else if (!distinct.has(cell)) distinctLowerBound = true;
+      }
+      // Deterministic dominant shape: max count, ties broken by shape name ASC.
+      let dominant: string | null = null;
+      let dominantCount = -1;
+      for (const [shape, count] of Object.entries(shapeCounts).sort((a, b) =>
+        a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0,
+      )) {
+        if (count > dominantCount) {
+          dominantCount = count;
+          dominant = shape;
+        }
+      }
+      segments.push({
+        row_start: segStart + 1,
+        row_end: segEnd,
+        non_empty: nonEmpty,
+        type_counts: typeCounts,
+        shape_counts: shapeCounts,
+        dominant_shape: dominant,
+        distinct_count: distinct.size,
+        distinct_is_lower_bound: distinctLowerBound,
+      });
+      retainedSegments += 1;
+      summedSegmentDistinct += distinct.size;
+    }
+    // Boundary candidates: adjacent non-empty segments whose dominant shape differs → refine to the exact
+    // transition row over the two-window bracket.
+    const intraTileNotes: IntraTileNote[] = [];
+    for (let i = 1; i < segments.length; i += 1) {
+      const prev = segments[i - 1]!;
+      const cur = segments[i]!;
+      if (
+        prev.dominant_shape !== null &&
+        cur.dominant_shape !== null &&
+        prev.dominant_shape !== cur.dominant_shape
+      ) {
+        const note = refineBoundary(
+          rows,
+          col,
+          prev.row_start,
+          cur.row_end,
+          prev.dominant_shape,
+          cur.dominant_shape,
+        );
+        if (note) intraTileNotes.push(note);
+      }
+    }
+    columns.push({ column_index: col, segments, segments_capped: segmentsCapped, intra_tile_notes: intraTileNotes });
+  }
+
+  return {
+    sheet: sheetName,
+    window,
+    columns,
+    retained_segments: retainedSegments,
+    summed_segment_distinct_count: summedSegmentDistinct,
+  };
+}
+// ══════════════════════════════════ END CUT-2 EXPERIMENTAL ══════════════════════════════════
+
 /** Build the inventory from xlsx/xlsm bytes (design §11.2). Deterministic and
  *  read-only. `content_sha256` is the RAW-byte hash, supplied by the caller. */
 export function buildXlsxInventory(args: {
@@ -1849,8 +2089,15 @@ export function buildXlsxInventory(args: {
   contentSha256: string;
   workbookKind: WorkbookKind;
   caps?: DataLayerCaps;
+  /** CUT-2 EXPERIMENTAL (throwaway, §3.1): when present, derive the segmented value-tile projection
+   *  per sheet from the same `parsed.rows` grid `profileSheetRows` consumes, and surface it under
+   *  `cut2_value_tiles`. Absent in production (the field then stays absent → byte-identical artifact). */
+  experimentalValueTiles?: ValueTileOpts;
 }): WorkbookStructuralInventory {
   const caps = args.caps ?? DEFAULT_DATA_LAYER_CAPS;
+  const cut2ValueTiles: SheetValueTileProjection[] | undefined = args.experimentalValueTiles
+    ? []
+    : undefined;
   const risk_signals: InventoryRiskSignal[] = [];
   let captureTruncated = false;
   // Macro presence is evidence-based: the actual xl/vbaProject.bin part, detected
@@ -2130,6 +2377,18 @@ export function buildXlsxInventory(args: {
     error_cells.push(...parsed.error_cells);
 
     const profile = profileSheetRows({ sheetName: sheetEntry.name, rows: parsed.rows, caps });
+    // CUT-2 EXPERIMENTAL: prove the value-tile projection is a PURE FUNCTION of `parsed.rows` (the exact
+    // grid `profileSheetRows` just consumed) — zero source re-scan, computed at the same site.
+    if (cut2ValueTiles) {
+      cut2ValueTiles.push(
+        projectSegmentedValueTiles({
+          sheetName: sheetEntry.name,
+          rows: parsed.rows,
+          caps,
+          opts: args.experimentalValueTiles!,
+        }),
+      );
+    }
     if (profile.data_layer_truncated || profile.col_count > caps.max_columns_profiled) {
       captureTruncated = true;
     }
@@ -2201,6 +2460,7 @@ export function buildXlsxInventory(args: {
     data_layer_caps: caps,
     capture_truncated: captureTruncated,
     ...(sheetCountTotal !== undefined ? { sheet_count_total: sheetCountTotal } : {}),
+    ...(cut2ValueTiles !== undefined ? { cut2_value_tiles: cut2ValueTiles } : {}),
     unsupported_reason: null,
   };
 }
