@@ -5829,6 +5829,75 @@ describe("runReconstruct", () => {
     expect(resumePrompts).toHaveLength(0);
   });
 
+  it("rejects resume reuse when the authoring model identity differs (DET-1/CG-2)", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "model-identity-rotation-run",
+    );
+    const targetRef = path.join(projectRoot, "src", "feature.ts");
+    const firstAttemptLlmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Classify unsafe or incomplete assessments")) {
+        throw new Error("failure classification timed out");
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
+    };
+
+    // First run authored under model-a; interrupted after the CQ-assessment provenance
+    // is written (so a resume has something to reuse).
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with model-identity provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        llmCall: firstAttemptLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        llmCall: firstAttemptLlmCall,
+      }),
+    })).rejects.toThrow(/failure classification timed out/);
+
+    // Resume under a DIFFERENT authoring model. The model identity is folded into the
+    // reuse key, so the stored model-a provenance must mismatch the model-b key and force
+    // regeneration rather than silently reusing the prior model's authored artifacts.
+    const resumePrompts: string[] = [];
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with model-identity provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      resumeMode: "reuse_existing_authored_artifacts",
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-b" },
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-b" },
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+    })).rejects.toThrow(/resume provenance mismatch/);
+    expect(resumePrompts).toHaveLength(0);
+  });
+
   it("uses ontology-seed.yaml as the only active direct-call seed artifact", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(

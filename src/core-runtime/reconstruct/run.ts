@@ -258,6 +258,15 @@ export interface ReconstructDirectiveAuthor {
    * runReconstruct clears it per run (like executionTelemetry).
    */
   readonly documentExcerptProjectionTruncations?: DocumentExcerptProjectionTruncation[];
+  /**
+   * Canonical authoring-model identity ("<provider>/<model_id>") folded into the
+   * resume reuse key (DET-1/CG-2). Resuming under a DIFFERENT authoring model must
+   * regenerate authored artifacts rather than silently reuse the prior model's
+   * output; the model identity reaches the reuse key only through this field
+   * (the realization tag is the literal "direct_call" and carries no model info).
+   * "unspecified" when the author was built without a resolved model config.
+   */
+  readonly reuseModelIdentity?: string;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -329,6 +338,9 @@ export interface ReconstructConfirmationProvider {
   readonly owner: "host_or_user";
   /** Runtime-owned execution telemetry recorded by this provider's LLM calls. */
   readonly executionTelemetry?: ReconstructExecutionTelemetryCollector;
+  /** Canonical confirmation-model identity ("<provider>/<model_id>") folded into the
+   * resume reuse key (DET-1/CG-2; see ReconstructDirectiveAuthor.reuseModelIdentity). */
+  readonly reuseModelIdentity?: string;
   confirmPurpose(
     input: ReconstructPurposeConfirmationInput,
   ): Promise<ReconstructPurposeConfirmationArtifact>;
@@ -729,6 +741,14 @@ interface AuthoredArtifactReuseMatch {
   confirmation_provider_realization: ReconstructConfirmationProviderRealization;
   directive_author_id: string;
   confirmation_provider_id: string;
+  // DET-1 (CG-2): canonical authoring-model identity ("<provider>/<model_id>") for the
+  // semantic author + confirmation provider. The realization tag above is the literal
+  // "direct_call" and carries no model info, so without these a resume under a DIFFERENT
+  // supported model recomputes the same key and silently reuses the prior model's authored
+  // artifacts. Folding them rotates the key on a model swap. "unspecified" when no resolved
+  // provider+model_id (e.g. an author built without a config); a live run resolves both.
+  semantic_author_model_identity: string;
+  confirmation_provider_model_identity: string;
   // The seed-stage document projection budget shapes the authored prompts (how
   // much of a captured document reaches seed authoring), so a budget change — e.g.
   // a different semantic-author model/window, or a fall back to the FLOOR — must
@@ -1245,6 +1265,10 @@ function authoredArtifactReuseMatch(args: {
     confirmation_provider_realization: args.confirmationProviderRealization,
     directive_author_id: args.directiveAuthor.authorId,
     confirmation_provider_id: args.confirmationProvider.providerId,
+    semantic_author_model_identity:
+      args.directiveAuthor.reuseModelIdentity ?? "unspecified",
+    confirmation_provider_model_identity:
+      args.confirmationProvider.reuseModelIdentity ?? "unspecified",
     document_excerpt_projection_budget:
       args.directiveAuthor.documentExcerptProjectionBudget ??
         DOCUMENT_EXCERPT_PROJECTION_FLOOR,
@@ -6461,6 +6485,21 @@ export function isLlmTimeoutError(error: unknown): boolean {
       .test(error.message);
 }
 
+/**
+ * Canonical authoring-model identity for the resume reuse key (DET-1/CG-2). The
+ * realization tag is the literal "direct_call" and carries no model info, and the
+ * live LlmCallConfig is otherwise closed over inside the factory; this surfaces
+ * "<provider>/<model_id>" so a model swap on resume rotates the reuse key.
+ * "unspecified" when the factory was built without a resolved provider+model_id.
+ */
+function reconstructAuthoringModelIdentity(
+  llmConfig: Partial<LlmCallConfig>,
+): string {
+  return llmConfig.provider && llmConfig.model_id
+    ? `${llmConfig.provider}/${llmConfig.model_id}`
+    : "unspecified";
+}
+
 export function createDirectCallReconstructDirectiveAuthor(args: {
   llmConfig?: Partial<LlmCallConfig>;
   /**
@@ -6516,6 +6555,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
     documentExcerptProjectionTruncations,
+    reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
@@ -9439,6 +9479,7 @@ export function createDirectCallReconstructConfirmationProvider(args: {
     providerId,
     owner: "host_or_user",
     executionTelemetry: telemetry,
+    reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     async confirmPurpose(input) {
       const selectedCandidate = input.sourcePurposeCandidates.purpose_candidates
         .find((candidate) =>
