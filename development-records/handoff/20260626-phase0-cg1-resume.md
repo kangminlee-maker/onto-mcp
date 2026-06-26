@@ -1,5 +1,7 @@
 # RESUME — Phase 0 CG-1 (authoring prompt-template identity → resume reuse key)
 
+> ⛔ **SUPERSEDED (2026-06-27)** — CG-1 완료(`e868fa4`)·judge-model fold(`09de149`)·P0 종결. **현 START-HERE = `development-records/handoff/20260627-p1-start-resume.md`(P1).** 이 문서는 CG-1 이력으로만 보존.
+
 > **START-HERE.** `/clear` 후 fresh 세션이 **이 문서 하나로** CG-1을 이어받는다. 날짜 2026-06-26. 브랜치 `feat/comprehension-cut2-de-risk`. HEAD=`86debbf`.
 > CG-1은 **CG-2(`0f04116`)의 직접 후속·동형 패턴**. 설계 재론 금지 — 구현만.
 
