@@ -5915,6 +5915,78 @@ describe("runReconstruct", () => {
     expect(resumePrompts).toHaveLength(0);
   });
 
+  it("rejects resume reuse when only the answer-support judge model differs (DET-1/CG-1 gate)", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "judge-model-rotation-run",
+    );
+    const targetRef = path.join(projectRoot, "src", "feature.ts");
+    const firstAttemptLlmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Classify unsafe or incomplete assessments")) {
+        throw new Error("failure classification timed out");
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
+    };
+
+    // First run: author + confirmation under model-a, JUDGE under judge-a. Interrupted
+    // after CQ-assessment provenance is written so a resume has something to reuse.
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with judge-model provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        judgeLlmConfig: { provider: "anthropic", model_id: "claude-judge-a" },
+        llmCall: firstAttemptLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        llmCall: firstAttemptLlmCall,
+      }),
+    })).rejects.toThrow(/failure classification timed out/);
+
+    // Resume with the author + confirmation model UNCHANGED (model-a) but the JUDGE model
+    // swapped (judge-a -> judge-b). Only judge_model_identity differs, so the fold must
+    // still rotate the reuse key and force regeneration rather than silently reusing the
+    // prior judge's authored artifacts.
+    const resumePrompts: string[] = [];
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with judge-model provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      resumeMode: "reuse_existing_authored_artifacts",
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        judgeLlmConfig: { provider: "anthropic", model_id: "claude-judge-b" },
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+    })).rejects.toThrow(/resume provenance mismatch/);
+    expect(resumePrompts).toHaveLength(0);
+  });
+
   it("authoringPromptContractSha256 is deterministic and covers base + every stage (DET-1/CG-1)", () => {
     const first = authoringPromptContractSha256();
     expect(first).toBe(authoringPromptContractSha256());

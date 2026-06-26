@@ -267,6 +267,15 @@ export interface ReconstructDirectiveAuthor {
    * "unspecified" when the author was built without a resolved model config.
    */
   readonly reuseModelIdentity?: string;
+  /**
+   * Canonical answer-support JUDGE model identity ("<provider>/<model_id>") folded
+   * into the resume reuse key (DET-1/CG-1 gate). The judge is an opt-in
+   * semantic-independence lever that may run under a DIFFERENT model than the author
+   * (judgeLlmConfig); answer-support-judgment is a reuse-eligible authored artifact,
+   * so without this a resume under a swapped judge model silently reuses the prior
+   * judge's verdict. Defaults to the author identity when no judge override.
+   */
+  readonly reuseJudgeModelIdentity?: string;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -749,6 +758,12 @@ interface AuthoredArtifactReuseMatch {
   // provider+model_id (e.g. an author built without a config); a live run resolves both.
   semantic_author_model_identity: string;
   confirmation_provider_model_identity: string;
+  // DET-1 (CG-1 gate): the answer-support JUDGE may run under a different model than
+  // the author (judgeLlmConfig, an opt-in independence lever). answer-support-judgment
+  // is reuse-eligible, so without folding the judge identity a resume under a swapped
+  // judge model recomputes the same key and silently reuses the prior judge's verdict.
+  // Equals the author identity when no judge override; "unspecified" without a config.
+  judge_model_identity: string;
   // DET-1 (CG-1): sha256 of the authoring prompt-template contract — every host-LLM
   // authoring prompt template (RECONSTRUCT_AUTHORING_PROMPT_CONTRACT). Editing any
   // authoring prompt rotates this sha, so a resume after a prompt edit regenerates
@@ -1275,6 +1290,8 @@ function authoredArtifactReuseMatch(args: {
       args.directiveAuthor.reuseModelIdentity ?? "unspecified",
     confirmation_provider_model_identity:
       args.confirmationProvider.reuseModelIdentity ?? "unspecified",
+    judge_model_identity:
+      args.directiveAuthor.reuseJudgeModelIdentity ?? "unspecified",
     // DET-1 (CG-1): the authoring prompt-template contract is module-static, so
     // (unlike the model identity) it is read directly from the catalog rather than
     // off the author instance.
@@ -7107,6 +7124,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     documentExcerptProjectionBudget,
     documentExcerptProjectionTruncations,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
+    reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
