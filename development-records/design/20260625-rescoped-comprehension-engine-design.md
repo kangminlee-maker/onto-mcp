@@ -167,9 +167,9 @@ tenet으로 배제 게이트를 없앤 뒤 "예산 한정 하 *어디에 의미 
 
 | 블로커 | 무엇 | status | 게이트/owner |
 |---|---|---|---|
-| **B1** | reuse-hash | in-scope | Cut-4a **layer1-cross-epoch-reuse** + crash-resume (Layer 1 키=`content_sha256+adapter_version`가 곧 reuse-hash) |
-| **F1** | cache type-lock | in-scope | Cut-4a **llm-touch-validator** (LLM-파생물 Layer 1 혼입 fail-closed = 타입 잠금) |
-| **D1** | populate/apply dead-zone | in-scope | Cut-4a **crash-resume-within-epoch** (진행 저널 populate/apply 노드 단위 증명) |
+| **B1** | reuse-hash | in-scope | Cut-4a **layer1-cross-epoch-reuse** + crash-resume (Layer 1 키=`content_sha256+adapter_version`가 곧 reuse-hash) — ⚠️ Cut-4a 실측: general 메커니즘만; **escalation 필드(header_rows·header_confidence·`HEADER_ESCALATION_TRIGGER_VERSION`) 미fold = 미실증·OPEN #144**(§7.5·§10.8) |
+| **F1** | cache type-lock | in-scope | Cut-4a **llm-touch-validator** (LLM-파생물 Layer 1 혼입 fail-closed = 타입 잠금) — ⚠️ Cut-4a 실측: layer-placement 원칙만; container-fit·store-key≠lookup-key 대칭 미실증(#144) |
+| **D1** | populate/apply dead-zone | in-scope | Cut-4a **crash-resume-within-epoch** (진행 저널 populate/apply) — ⚠️ Cut-4a 실측: **에포크-digest 레벨만**·노드-단위 미실증(§7.5 잔여3) |
 | **M6** | cross-sheet recompute | out-of-scope | P0.5 배선 트랙(#144, ⏸️HELD) — layering과 직교 |
 | **M2** | unzip early-abort | out-of-scope | P0.5 배선 트랙(#144, ⏸️HELD) — layering과 직교 |
 
@@ -345,7 +345,30 @@ window=1024가 본 fixture서 seg/col=49로 합리적 1차값(SSOT 후보는 ben
 - **(4) vision false-positive율 = *구조* FP 0/21**(vision_fp_test_fair=true·양 패밀리): stress 2종(`headerless` = 헛 헤더 0·`ambiguous year-band` = 2-level 복구, explorer-D `[Plan,Actual,Plan,Actual]` 오판) + benign-control 정답 유지 → R3 트리거 헛발화 = *비용*(헛 호출)이지 *오류* 아님. ⚠️ **범위 narrow**: "0/21 reads" = **FP-opportunity 0/6**(2 archetype × 3 within-model reps)일 뿐(21 denom을 독립증거로 읽지 말 것)·채점이 **row/column-label·band-pairing fidelity 미계측·미채점**(구조 FP만)·렌더=geometry-only proxy라 **style-induced FP class 미실증**(#2 연계)·stress fixture는 *mild*(easy header-decline/명시 merged year cells, maximal-difficulty 아님).
 - **(3) R3 트리거 정밀도 정량화**(r3_matrix_sound=true·결정론): naive 룰 = **precision 0.50**(benign 2/4 헛발화)·**recall 0.67**(headerless 놓침). ⚠️ **oracle caveat**: 룰의 "title 행" 분지 = `authored.has_title_rows` **authored-oracle proxy**(실 observer title detector 없음)이고 **INERT**(모든 title fixture가 `header_zone_merge`도 발화 → 매트릭스는 사실상 *header_zone_merge-only*·0.50/0.67은 실 observer 신호가 전적 구동). 또 `header_zone_merge`("merge 최상행 ≤6")는 절대-행이라 data-region merge `A4:A5`에 헛발화(header-relative zone이 정련). **핵심 종합 = 두 신호 상보적**(explorer-D `low`가 headerless·구조복잡이 confidently-wrong-merge) → **정련 = 캘리브 게이트(`low` OR `high-with-header-zone-merge`) = 실 observer 신호만(oracle 없음)**; over-trigger는 *이 fixture서* 구조 FP=0이라 비용-bound(절대 안전 아님; image-token 예산이 허용치). benign-control 매트릭스 = 캘리브 SSOT 입력.
 
-**잔여(여전히)**: synthetic 소형·vision = 단일 Claude(**cross-model transfer 이연**; 3 reps는 within-model)·**stress 2 archetype뿐**(FP=0이 일반 FP=0 증명 아님)·image-token 예산 미측정·**#2 실-xlsx style/numFmt fidelity 이연**(별도 렌더러 스파이크)·**(1) 완전 닫음 follow-up**(raw vision transcript 영속 + fs-sandbox 강제-blind + materialized scorer)·column-label/band-pairing fidelity 계측. **(B) 판정(게이트 후) = 1/3/4 *부분 닫음(특성화 — exhaustive 아님·(1)은 substantively 개선이나 완전 닫음 아님)*·#2 이연.** **다음 = Cut-4a(resume 계약) — owner go.**
+**잔여(여전히)**: synthetic 소형·vision = 단일 Claude(**cross-model transfer 이연**; 3 reps는 within-model)·**stress 2 archetype뿐**(FP=0이 일반 FP=0 증명 아님)·image-token 예산 미측정·**#2 실-xlsx style/numFmt fidelity 이연**(별도 렌더러 스파이크)·**(1) 완전 닫음 follow-up**(raw vision transcript 영속 + fs-sandbox 강제-blind + materialized scorer)·column-label/band-pairing fidelity 계측. **(B) 판정(게이트 후) = 1/3/4 *부분 닫음(특성화 — exhaustive 아님·(1)은 substantively 개선이나 완전 닫음 아님)*·#2 이연.** **다음 = §7.5 Cut-4a.**
+
+### 7.5 Cut-4a 결과 (2026-06-26) — resume 계약: staged non-circular fingerprint *실현가능 입증* + §4.4 7 테스트 by-construction 통과; 기존 코드 비순환 확인 + ★기존 shipping model/prompt 미fold 갭 발견(게이트)
+
+> **build+run = 순수 결정론·LLM 0·비용 ~0**(품질 무관 = §7 Cut-4a 정의). production 배선 0(reference impl — run.ts 미배선). **교차검증 게이트(ultracode + onto 병행) 실행·반영 완료 = §10.8 박제** — 합의 = **gate_pass_with_minor_revisions**(realizability·non-circularity headline 무반증; 정정 = doc precision). 아래 결과·잔여는 게이트 narrow 반영본. (memberRefs로 제출된 `.cut4a-*.txt`는 *게이트 전* 하니스/출력 스냅샷이라 RC-1 정정 *이전* 분류[10 ⓐ]를 담음 — 정정은 본문이 canonical; onto structure-004.)
+
+**하니스**(scratchpad `cut4a-harness.ts`, 휘발·순수 TS): staged `llm_touch_fingerprint` **reference impl**(ⓐ Layer1 결정론 pre-image + ⓑ 실행-전 LLM-touch pre-image → gating digest; **ⓒ 에포크-내 LLM 출력은 함수 *입력 타입*에 슬롯이 없어 키에 도달 불가** = 비순환을 *타입 construction*으로 강제) + §4.4 7 테스트 배터리 + 실코드 audit.
+
+**§4.4 결정성 테스트 = 10/10 by-construction 통과**:
+| 테스트 | 결과 |
+|---|---|
+| **crash-resume-within-epoch** | 동일 입력 → 동일 fingerprint → 재사용 |
+| **epoch-rotation-on-any-config-change** | ⓑ **14 필드 전부** 회전(비회전 0) |
+| **model-identity-rotation (DET-1)** | `model_id` 단독 변경(content·cv 불변) → 회전 = **수동 bump 없이 stale 차단** |
+| **triage-policy-rotation ↔ allocation-no-rotate** | policy digest(입력ⓑ) 변경 → 회전 / allocation·leaf·reduce(출력ⓒ) 변경 → **불변**(ⓒ는 타입상 키 미도달) = policy↔allocation 경계 강제 |
+| **non-circular-key** | 키 필드 ∩ ⓒ-출력 = **∅** · 전 키 필드 ∈ ⓐ∪ⓑ∪cv |
+| **layer1-cross-epoch-reuse** | comprehension-version cv-1→cv-2: **Layer1 digest 불변(결정론 관측 재사용) · Layer2 fingerprint 회전** |
+| **llm-touch-validator** | type-lock(LLM-파생물 Layer1 오배치 → fail-closed) + coverage(새 LLM-touch 입력이 ⓑ 누락 → fail-closed) 둘 다 |
+
+**★ 실코드 audit**(`authoredArtifactReuseMatch`, run.ts:1173-1251) — **게이트 정정 반영**: 핵심 결론 = **비순환 성립**(기존 reuse 키가 *게이트되는 단계 자신의 ⓒ in-epoch 출력*을 한 필드도 안 fold; authored seed는 별도 `artifact_sha256`로 게이팅). ⚠️ 단 **비순환의 *이유*를 정확히**(게이트 RC-2): "자신의 LLM 출력 미fold"가 아니라 **"게이트 단계의 *자기/동단계* ⓒ 미fold"** — 키는 *더 이른 upstream LLM 단계*(purpose/directive/frontier)의 *결정론 투영*은 합당히 fold(이는 sound resume 무효화이지 순환 아님). ⚠️ **필드 count 정정**(게이트 RC-1): `seed_authoring_readiness_validation`·`source_observation_lineage_index_validation`·부차 readiness 입력은 **upstream LLM 출력**(source-purpose-candidates `callJsonAuthor` run.ts:6923)**의 결정론 투영** → 순수 Layer-1(LLM-0) 아님 = **"deterministic-projection-of-upstream-LLM (Layer-2-eligible)"** 라벨이 맞고 "10 ⓐ" 과대(보수적 — 과-무효화이지 과소-무효화 아님; Cut-4b llm-touch type-lock가 이런 필드의 Layer-1 cross-epoch 배치를 거부해야). B1/F1/D1(§4.5)은 **부분만**: **B1** general reuse-rotation 메커니즘만 모델(harness Layer1=`{content_sha256,adapter_version,inventory,scout}`라 B1 *깨진 전제* 인코딩; **실 B1 결함=`sourceObservationsReuseSha256`가 header_rows/header_confidence/`HEADER_ESCALATION_TRIGGER_VERSION` 미fold = 미테스트·OPEN #144**) · **F1** layer-placement 원칙만 모델(container-fit·store-key≠lookup-key 대칭 미실증·#144) · **D1** 에포크-digest 레벨만(노드-단위 미실증).
+
+**★★ 게이트가 발견한 *기존 shipping* DET-1 갭(Cut-4a가 만든 것 아님·wiring 0·코드 검증)** — 가장 중요: (CG-2) **reconstruct resume 키가 오늘 authoring-model identity를 안 fold**: `semantic_author_realization`/`confirmation_provider_realization`이 리터럴 `"direct_call"`(run.ts:324-325, model_id/route/provider 0)·`authoredArtifactReuseMatch`에 model_id 필드 없음·live `LlmCallConfig.model_id`는 closure var(미fold) → **런 중단 후 *다른 지원 모델*로 재개 시 이전 모델 산출물 silent 재사용**(키 회전 0). DET-1 "model_id 단독 회전"은 *reference impl에서만* 성립. (CG-1) 동류 — ~20 authoring `systemPrompt` 템플릿+`baseSystem` 중 competency contract sha 1개만 fold → **authoring prompt 편집+재개=stale 재사용**. **둘 다 설계의 llm-touch coverage validator가 wire-time fail-closed로 잡을 바로 그 silent-stale 부류** = DET-1 재설계 정당성의 *실증 사례*. (비순환엔 무영향.) ▶ **production 배선 전 선결**(Cut-4a llm-touch coverage validator 실배선이 이 두 갭을 닫음).
+
+**잔여(정직)**: (1) **reference impl**(run.ts 실배선 아님; 비순환은 *타입 construction* 증명 → 실 배선이 보존해야 = non-circular-key validator 구조 가드) (2) **현재 shipping 커버리지 갭**(위 CG-2/CG-1: authoring-model identity·authoring prompt 템플릿 미fold = *오늘* 갭, 미래 엔진만이 아님) + comprehension-엔진 stage ⓑ(triage policy·vision geometry/mode·deep-mode·equivalence)는 미구축이라 부재=정상 (3) **D1 노드 레벨·B1 escalation 필드·F1 container/key-대칭 미실증**(#144 P0.5 귀속) (4) equivalence pre-image §5.1 미봉인 (5) **★ llm-touch-validator coverage = *dependency-discovery 미해결*(양 패밀리 수렴: ultracode F4 + onto coverage-001·evolution-002)**: 하니스가 입증한 건 *closure 목록이 주어졌을 때*의 fail-closed뿐 — validator가 검사할 **전체 LLM-touch dep 집합을 *어떻게 열거/발견*하는가**(model_id·systemPrompt는 telemetry엔 있으나 reuse 키엔 없음 = CG-2/CG-1과 동근)는 미해결·load-bearing → catalog/discovery 메커니즘 = Cut-4b/production 선결("validator가 실효" ⊃ "정책 모양 통과"). **다음 = §10.8 Cut-4a 게이트.**
 
 ---
 
@@ -489,3 +512,20 @@ Cut-3b (B)-비계 닫음(§7.4) 두 리뷰어 병행. **Cut-3와 동일 패턴: 
 
 **합의 판정 = `gate_pass_with_minor_revisions`**(양 측): **headline 생존**((B) 1/3/4 *특성화* = load-bearing 사실 전부 양 패밀리 독립 재도출) but **§7.4 wording-only narrow 필요**. Cut-3와 동일하게 두 패밀리 *독립 수렴* — ultracode가 적대 재도출 + 실측 blindness 입증, onto가 claim-vs-evidence 과신(강제-blind·FP범위·oracle) 포착. **(1) recording = `recording_closed=false`**(substantively 개선이나 literal deliverable 미완 → "✅닫음"→"부분")·(3)(4) = 특성화. **코드/실험 결과 stand·재실행 0**(모든 정정 = doc wording). **다음 = Cut-4a(resume 계약) — owner go.**
 > 교훈: Cut-3b는 Cut-3 게이트가 깐 "load-bearing LLM 단계를 결정론만큼 엄밀히 기록" 요구를 *부분* 충족 — 해시·3 reps·structured·citable wf id·실측 blindness로 크게 개선했으나, *완전* recording(영속 raw transcript + fs-sandbox 강제-blind + materialized scorer)은 미달. **그럼에도 ultracode의 적대 재도출이 headlines를 영속 artifact만으로 독립 확인**(messy `[3,4]`≠`[4,5]`가 blindness의 결정적 증거) → 불완전 기록도 결론 무효화 안 함을 입증.
+
+### 10.8 Cut-4a 게이트 교차검증 — ultracode + onto 병행(onto는 MCP 재연결 후 순차) (2026-06-26)
+Cut-4a(resume 계약, §7.5) 게이트. **onto MCP가 세션 중 disconnect → ultracode 먼저 실행·반영, onto는 재연결 후 순차 실행**(Cut-3/3b의 동시-병행과 달리 *순차* — onto는 ultracode-narrow된 §7.5를 검증하므로 독립성 일부↓; 그럼에도 핵심 수렴은 독립 재포착).
+- **ultracode** Workflow `wf_af969a00-eed`(33 agent · 5 적대 차원[테스트가 by-construction-trivial 아닌지·실코드 ⓐ/ⓑ/ⓒ 분류·shipping 잠복 갭·B1/F1/D1 커버·정직성] → 17 confirmed → **4 material(medium)**): **`gate_pass_with_minor_revisions`** · `tests_demonstrate_realizability=true` · `audit_classification_sound=**false**`. **headline(realizability·non-circularity) 무반증**; 정정 = doc precision/disclosure.
+- **★ 최고가치 발견 = 기존 shipping DET-1 갭**(Cut-4a가 만든 것 아님·wiring 0·코드 검증): **CG-2** authoring-model identity 미fold(`semantic_author_realization`=리터럴 `"direct_call"`·키에 model_id 없음 → 다른 모델로 재개 시 silent 재사용) + **CG-1** ~20 authoring prompt 템플릿 중 1개만 fold. = 설계 DET-1 재설계가 겨냥한 silent-stale 부류의 *실증*. ▶ production 전 llm-touch coverage validator 실배선이 선결.
+
+| material | 진단 | 반영(§7.5) |
+|---|---|---|
+| **CG-2/CG-1**(coverage honesty) | 기존 shipping이 authoring model_id·prompt 템플릿 미fold = *오늘* 갭(미래 엔진만 아님) | 잔여(2)에 **현재 shipping 갭** 별도 명기 + ★★ 단락 추가 |
+| **RC-1**(misclassification) | `seed_authoring_readiness`·lineage index 등은 upstream LLM(`callJsonAuthor`) 출력의 결정론 *투영* → 순수 ⓐ 아님 | "10 ⓐ" → "deterministic-projection-of-upstream-LLM(Layer-2-eligible)" 재라벨(보수적) |
+| **F2**(B1 과신) | harness Layer1이 B1 깨진 전제 인코딩; 실 B1 결함(escalation 필드 미fold)=미테스트·OPEN #144 | "B1 모델됨"→general 메커니즘만·escalation 필드 미실증 |
+| (RC-2/F1/F3/D1/H1 low·nit) | 비순환 이유 정밀화·F1 container/key-대칭 미실증·실현→실현가능·audit=hand-classification | 이유 narrow·F1/D1 hedge·§4.5 D1 셀 align |
+
+**onto** `.onto/review/20260626-37c39787`(6 lens core-axis · gpt-5.5 · finding-relation-graph서 halt = lens 6/6 + finding-ledger 완비 → lens-level 직독): **5 findings(4 medium·1 low)·high/blocker 0** → 전부 §7.5 narrowing. **★ 교차패밀리 수렴**(ultracode-narrow된 §7.5를 봤음에도 *독립 재포착*): onto coverage-001·evolution-002·semantics-003 = **llm-touch-validator coverage 과신**(≡ ultracode F4) — 하니스는 *closure 목록 주어졌을 때*의 fail-closed만 입증·**dependency-discovery 미해결**; evolution lens가 **CG-2/CG-1를 독립 재포착**("model_id·systemPrompt는 telemetry엔 있으나 reuse 키엔 없음"). onto 고유 2건(structure): (004) memberRef 하니스/결과가 RC-1 정정 *전* 분류[10 ⓐ]를 canonical로 담음(§7.5↔artifact 불일치) (005) §7.5 상태 문장↔§10.8 coherence. **전부 §7.5 반영**(잔여(5) validator dependency-discovery·intro의 스냅샷/게이트-실행 정정).
+
+**합의 판정 = `gate_pass_with_minor_revisions`**(양 측): no redesign·**realizability+non-circularity headline 무반증**·정정 전부 doc precision. **★ 두 패밀리 독립 수렴 = llm-touch-validator coverage가 *dependency-discovery* 없이는 정책-모양뿐**(load-bearing·Cut-4b/production 선결) + **기존 shipping DET-1 갭 CG-2/CG-1 재확인**(model/prompt 미fold). **다음 = Cut-4b(comprehension 품질).**
+> 교훈: (1) 가장 결정론적인 cut(순수 로직 10/10)에서도 적대 게이트가 *실 shipping 코드*의 진짜 잠복 DET-1 갭(CG-2/CG-1)을 발견 — de-risk가 아티팩트뿐 아니라 인접 production 정확성까지 비춘다. (2) *순차* 교차검증(onto가 ultracode-narrow된 doc을 봄)인데도 핵심(validator coverage·shipping 갭)을 **독립 재포착** = 수렴 신뢰 유지(단 Cut-3/3b의 *동시-병행*보다 독립성 약함을 명기).
