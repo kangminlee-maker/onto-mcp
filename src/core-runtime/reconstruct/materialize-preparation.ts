@@ -22,6 +22,7 @@ import {
   validateSourceObservationBoundary,
   type ReconstructSourceObservation,
 } from "./source-observations.js";
+import { buildDeterministicComprehensionArtifact } from "./comprehension-artifact.js";
 import {
   loadReconstructSourceProfiles,
   type ReconstructSourceProfile,
@@ -558,8 +559,16 @@ async function buildSpreadsheetSourceObservation(args: {
     await observeSpreadsheetSource(detection.ref),
   );
   const summary = buildSpreadsheetObservationSummary(basename, inventory);
+  const observationId = stableObservationId({ sourceRef: detection.ref, location });
+  // P1-C1 §5.7: the ComprehensionArtifact COMPANIONS the inventory (joined by observation_id) — a
+  // deterministic-only edition in this cut (LLM-touch fields are explicit not_applicable). It is
+  // validated by validateSourceObservationBoundary below (construction throws on an invalid contract).
+  const comprehensionArtifact = buildDeterministicComprehensionArtifact({
+    observationId,
+    inventory,
+  });
   const observation: ReconstructSourceObservation = {
-    observation_id: stableObservationId({ sourceRef: detection.ref, location }),
+    observation_id: observationId,
     round_id: lineage?.roundId ?? "initial_source_frontier",
     observation_batch_id:
       lineage?.observationBatchId ?? "source-observation-batch:initial",
@@ -579,6 +588,7 @@ async function buildSpreadsheetSourceObservation(args: {
       // admission, which reads structural_data.content_sha256.
       content_sha256: inventory.content_sha256,
       workbook_inventory: inventory,
+      comprehension_artifact: comprehensionArtifact,
     },
   };
 

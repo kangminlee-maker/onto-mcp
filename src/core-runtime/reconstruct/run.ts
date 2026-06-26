@@ -230,6 +230,7 @@ import {
   ontologySeedExcludedClaimIds,
 } from "./seed-claim-projections.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
+import { COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR } from "./comprehension-artifact.js";
 import {
   attemptKindForAuthoredArtifactName,
   createReconstructExecutionTelemetryCollector,
@@ -1138,6 +1139,28 @@ function workbookInventoryAdapterVersion(inventory: unknown): number | null {
   return typeof version === "number" ? version : null;
 }
 
+/** The value-tile opts (window + caps) nested under `structural_data.workbook_inventory`, or null.
+ *  Folded into the reuse digest so re-calibrating opts (e.g. window 1024→512) — which changes segment
+ *  boundaries in the inventory CONTENT but not content_sha256 (raw bytes) or adapter_version (schema
+ *  shape) — still rotates the reuse hash (P1-C1 §12 T1; tautological: edit opts → digest changes). */
+function workbookInventoryValueTileConfig(inventory: unknown): unknown {
+  if (inventory === null || typeof inventory !== "object" || Array.isArray(inventory)) {
+    return null;
+  }
+  return (inventory as { value_tile_config?: unknown }).value_tile_config ?? null;
+}
+
+/** The data-layer caps nested under `structural_data.workbook_inventory`, or null. Folded into the
+ *  reuse digest because the caps shape the inventory content (profiled columns, scanned rows, segment
+ *  count) yet are invisible to content_sha256/adapter_version, so observing the SAME file under
+ *  different caps must not silently reuse a seed authored under the old caps (P1-C1 §12 T1). */
+function workbookInventoryDataLayerCaps(inventory: unknown): unknown {
+  if (inventory === null || typeof inventory !== "object" || Array.isArray(inventory)) {
+    return null;
+  }
+  return (inventory as { data_layer_caps?: unknown }).data_layer_caps ?? null;
+}
+
 // Stable reuse digest of a source-observation set. Shared by the live source_observations
 // hash and the M3c seed-stage snapshot hash so the two are byte-comparable. Exported for the
 // resume-regression test (a spreadsheet adapter_version bump must change this digest so a
@@ -1146,6 +1169,11 @@ export function sourceObservationsReuseSha256(
   artifact: ReconstructSourceObservationsArtifact,
 ): string {
   return sha256Text(stableJson({
+    // P1-C1 §12 T2: fold the ComprehensionArtifact contract SHAPE (version + baseline field set) so
+    // editing the contract rotates the reuse key tautologically — a seed authored under an older/
+    // weaker companion contract fails the resume provenance check. (Artifact INSTANCE values are
+    // inventory-derived and already covered by the workbook_inventory fold below.)
+    comprehension_artifact_contract: COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR,
     observations: artifact.observations.map((observation) => ({
       observation_id: observation.observation_id,
       target_material_kind: observation.target_material_kind,
@@ -1173,6 +1201,15 @@ export function sourceObservationsReuseSha256(
         // Stage 1.1 formula_cells → formula_patterns migration). Bumping adapter_version must
         // change this reuse hash so the stale artifact fails the resume provenance check.
         workbook_inventory_adapter_version: workbookInventoryAdapterVersion(
+          observation.structural_data.workbook_inventory,
+        ),
+        // P1-C1 §12 T1: value-tile opts + data-layer caps shape the inventory CONTENT but are
+        // invisible to content_sha256 (raw bytes) and adapter_version (schema shape), so fold them
+        // here — re-calibrating opts/caps without an adapter bump still rotates the resume key.
+        workbook_inventory_value_tile_config: workbookInventoryValueTileConfig(
+          observation.structural_data.workbook_inventory,
+        ),
+        workbook_inventory_data_layer_caps: workbookInventoryDataLayerCaps(
           observation.structural_data.workbook_inventory,
         ),
       },
@@ -5799,6 +5836,8 @@ export function recomputeWorkbookInventoryProjectionTruncations(
     }
     const projection = projectInventoryForPrompt(
       inventory as WorkbookStructuralInventory,
+      undefined,
+      { includeValueTiles: true }, // P1-C1 #5: reconstruct prompts include the bounded value tile
     );
     if (projection.truncated) {
       truncations.push({
@@ -5934,6 +5973,8 @@ function compactStructuralDataForPrompt(
   if (inventory !== null && typeof inventory === "object" && !Array.isArray(inventory)) {
     const projection = projectInventoryForPrompt(
       inventory as WorkbookStructuralInventory,
+      undefined,
+      { includeValueTiles: true }, // P1-C1 #5: reconstruct prompts include the bounded value tile
     );
     compacted.workbook_inventory = projection.inventory;
     if (projection.truncated) {

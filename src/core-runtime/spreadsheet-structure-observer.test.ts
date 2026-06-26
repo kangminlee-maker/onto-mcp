@@ -15,14 +15,20 @@ import {
   parseCsv,
   projectInventoryForAdmission,
   projectInventoryForPrompt,
+  projectSegmentedValueTiles,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
   SPREADSHEET_OBSERVER_ADAPTER_VERSION,
   VALIDATION_MEMBER_CHAR_CAP,
   VALIDATION_MEMBER_COUNT_CAP,
   type DataLayerCaps,
   type InventoryColumn,
+  type SheetValueTileProjection,
   type WorkbookStructuralInventory,
 } from "./spreadsheet-structure-observer.js";
+import {
+  buildDeterministicComprehensionArtifact,
+  validateComprehensionArtifact,
+} from "./reconstruct/comprehension-artifact.js";
 
 const shaBytes = (b: Uint8Array) =>
   crypto.createHash("sha256").update(Buffer.from(b)).digest("hex");
@@ -1421,9 +1427,272 @@ describe("design-C — aggregate-only boundary + admission passthrough", () => {
     }
   });
 
-  it("adapter_version is 3 (design-C schema bump)", () => {
-    expect(SPREADSHEET_OBSERVER_ADAPTER_VERSION).toBe(3);
+  it("adapter_version is 4 (P1-C1 value-tile schema bump)", () => {
+    expect(SPREADSHEET_OBSERVER_ADAPTER_VERSION).toBe(4);
     const r = inv("a,b\n1,2\n", "/abs/v.csv");
-    expect(r.adapter_version).toBe(3);
+    expect(r.adapter_version).toBe(4);
+  });
+});
+
+describe("CUT-2 value-tile — domain-agnostic display-format boundary (T5)", () => {
+  // xf1 → 164 (m/d/yyyy), xf2 → 165 (d/m/yyyy): BOTH are date formats, so the date serials collapse
+  // to ISO and the VALUE-string shape is uniform (ISO_DATE) — ONLY the display format changes.
+  const DATE_STYLES =
+    `<?xml version="1.0"?><styleSheet xmlns="${SML_NS}">` +
+    `<numFmts count="2"><numFmt numFmtId="164" formatCode="m/d/yyyy"/><numFmt numFmtId="165" formatCode="d/m/yyyy"/></numFmts>` +
+    `<cellXfs count="3"><xf numFmtId="0" xfId="0"/><xf numFmtId="164" xfId="0"/><xf numFmtId="165" xfId="0"/></cellXfs></styleSheet>`;
+  const TILE_OPTS = { window: 2, segmentsPerColumnCap: 256, distinctPerSegmentCap: 32 };
+
+  it("catches a display-only m/d/yyyy→d/m/yyyy change at the EXACT row WITHOUT naming it, and emits NO value_shape boundary", () => {
+    // 8 date serials in one column; xf1 (m/d/yyyy) rows 1-4, xf2 (d/m/yyyy) rows 5-8.
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A8"/><sheetData>` +
+      `<row r="1"><c r="A1" s="1"><v>45292</v></c></row>` +
+      `<row r="2"><c r="A2" s="1"><v>45293</v></c></row>` +
+      `<row r="3"><c r="A3" s="1"><v>45294</v></c></row>` +
+      `<row r="4"><c r="A4" s="1"><v>45295</v></c></row>` +
+      `<row r="5"><c r="A5" s="2"><v>45296</v></c></row>` +
+      `<row r="6"><c r="A6" s="2"><v>45297</v></c></row>` +
+      `<row r="7"><c r="A7" s="2"><v>45298</v></c></row>` +
+      `<row r="8"><c r="A8" s="2"><v>45299</v></c></row>` +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync({ ...makeMinimalXlsxParts(sheet), "xl/styles.xml": strToU8(DATE_STYLES) });
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/fmt.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      valueTileOpts: TILE_OPTS,
+    });
+    const col = r.segmented_value_tiles![0]!.columns[0]!;
+    const fmtNotes = col.intra_tile_notes.filter((n) => n.boundary_kind === "display_format");
+    const shapeNotes = col.intra_tile_notes.filter((n) => n.boundary_kind === "value_shape");
+    expect(shapeNotes).toHaveLength(0); // display-only change → NOT a value_shape boundary
+    expect(fmtNotes).toHaveLength(1);
+    const note = fmtNotes[0]!;
+    expect(note.prev_shape).toBe("m/d/yyyy");
+    expect(note.new_shape).toBe("d/m/yyyy"); // distinct identities, no "US/UK" naming
+    expect(note.last_prev_format_row).toBe(4); // exact transition rows
+    expect(note.first_new_format_row).toBe(5);
+  });
+
+  it("treats two DIFFERENT cellXfs sharing the SAME formatCode as one identity (no phantom boundary)", () => {
+    const styles =
+      `<?xml version="1.0"?><styleSheet xmlns="${SML_NS}">` +
+      `<numFmts count="2"><numFmt numFmtId="164" formatCode="m/d/yyyy"/><numFmt numFmtId="165" formatCode="m/d/yyyy"/></numFmts>` +
+      `<cellXfs count="3"><xf numFmtId="0" xfId="0"/><xf numFmtId="164" xfId="0"/><xf numFmtId="165" xfId="0"/></cellXfs></styleSheet>`;
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A4"/><sheetData>` +
+      `<row r="1"><c r="A1" s="1"><v>45292</v></c></row>` +
+      `<row r="2"><c r="A2" s="1"><v>45293</v></c></row>` +
+      `<row r="3"><c r="A3" s="2"><v>45294</v></c></row>` +
+      `<row r="4"><c r="A4" s="2"><v>45295</v></c></row>` +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync({ ...makeMinimalXlsxParts(sheet), "xl/styles.xml": strToU8(styles) });
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/dupxf.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      valueTileOpts: TILE_OPTS,
+    });
+    const col = r.segmented_value_tiles![0]!.columns[0]!;
+    expect(col.intra_tile_notes.filter((n) => n.boundary_kind === "display_format")).toHaveLength(0);
+  });
+
+  it("sanitizes domain literals out of the format-identity (no quoted text reaches the tile)", () => {
+    // A custom currency format carrying a domain literal: "USD"#,##0 — the literal must be stripped.
+    const styles =
+      `<?xml version="1.0"?><styleSheet xmlns="${SML_NS}">` +
+      `<numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;USD&quot;#,##0"/></numFmts>` +
+      `<cellXfs count="2"><xf numFmtId="0" xfId="0"/><xf numFmtId="164" xfId="0"/></cellXfs></styleSheet>`;
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A3"/><sheetData>` +
+      `<row r="1"><c r="A1" s="1"><v>1000</v></c></row>` +
+      `<row r="2"><c r="A2" s="1"><v>2000</v></c></row>` +
+      `<row r="3"><c r="A3" s="1"><v>3000</v></c></row>` +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync({ ...makeMinimalXlsxParts(sheet), "xl/styles.xml": strToU8(styles) });
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/cur.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      valueTileOpts: TILE_OPTS,
+    });
+    const col = r.segmented_value_tiles![0]!.columns[0]!;
+    const allFormatKeys = col.segments.flatMap((s) => Object.keys(s.format_counts));
+    expect(allFormatKeys.length).toBeGreaterThan(0);
+    for (const k of allFormatKeys) {
+      expect(k.toLowerCase()).not.toContain("usd"); // domain literal stripped
+      expect(k).not.toContain('"');
+    }
+    expect(allFormatKeys).toContain("#,##0"); // the sanitized display grammar remains
+  });
+
+  it("captures no format dimension when format capture is OFF (formatRows absent) — value-shape only", () => {
+    const rows = [["2024-01-01"], ["2024-01-02"], ["2024-01-03"], ["2024-01-04"]];
+    const proj: SheetValueTileProjection = projectSegmentedValueTiles({
+      sheetName: "S",
+      rows,
+      caps: DEFAULT_DATA_LAYER_CAPS,
+      opts: TILE_OPTS,
+    });
+    for (const c of proj.columns) {
+      expect(c.segments.every((s) => Object.keys(s.format_counts).length === 0)).toBe(true);
+      expect(c.segments.every((s) => s.dominant_format === null)).toBe(true);
+      expect(c.intra_tile_notes.filter((n) => n.boundary_kind === "display_format")).toHaveLength(0);
+    }
+  });
+
+  it("surfaces a benign trailing total-row format change as a boundary (FP measured; classification is downstream)", () => {
+    // rows 1-5 share xf1 (#,##0); row 6 is a total in xf2 (#,##0.00). The display change IS surfaced
+    // (faithful reading) — whether it is a real anomaly is the consumer's call, not the sidecar's.
+    const styles =
+      `<?xml version="1.0"?><styleSheet xmlns="${SML_NS}">` +
+      `<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="#,##0.00"/></numFmts>` +
+      `<cellXfs count="3"><xf numFmtId="0" xfId="0"/><xf numFmtId="164" xfId="0"/><xf numFmtId="165" xfId="0"/></cellXfs></styleSheet>`;
+    const sheet =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A6"/><sheetData>` +
+      `<row r="1"><c r="A1" s="1"><v>10</v></c></row>` +
+      `<row r="2"><c r="A2" s="1"><v>20</v></c></row>` +
+      `<row r="3"><c r="A3" s="1"><v>30</v></c></row>` +
+      `<row r="4"><c r="A4" s="1"><v>40</v></c></row>` +
+      `<row r="5"><c r="A5" s="1"><v>50</v></c></row>` +
+      `<row r="6"><c r="A6" s="2"><v>150</v></c></row>` +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync({ ...makeMinimalXlsxParts(sheet), "xl/styles.xml": strToU8(styles) });
+    const r = buildXlsxInventory({
+      sourceRef: "/abs/total.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      valueTileOpts: { window: 5, segmentsPerColumnCap: 256, distinctPerSegmentCap: 32 },
+    });
+    const col = r.segmented_value_tiles![0]!.columns[0]!;
+    const fmtNotes = col.intra_tile_notes.filter((n) => n.boundary_kind === "display_format");
+    expect(fmtNotes).toHaveLength(1); // surfaced (not suppressed) — downstream decides if benign
+    expect(fmtNotes[0]!.last_prev_format_row).toBe(5);
+    expect(fmtNotes[0]!.first_new_format_row).toBe(6);
+    expect(fmtNotes[0]!.prev_shape).toBe("#,##0");
+    expect(fmtNotes[0]!.new_shape).toBe("#,##0.00");
+  });
+});
+
+describe("projectInventoryForPrompt — value-tile is reconstruct-only (T8 review scope-out)", () => {
+  const STYLES =
+    `<?xml version="1.0"?><styleSheet xmlns="${SML_NS}">` +
+    `<numFmts count="2"><numFmt numFmtId="164" formatCode="m/d/yyyy"/><numFmt numFmtId="165" formatCode="d/m/yyyy"/></numFmts>` +
+    `<cellXfs count="3"><xf numFmtId="0" xfId="0"/><xf numFmtId="164" xfId="0"/><xf numFmtId="165" xfId="0"/></cellXfs></styleSheet>`;
+  const SHEET =
+    `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:A4"/><sheetData>` +
+    `<row r="1"><c r="A1" s="1"><v>45292</v></c></row>` +
+    `<row r="2"><c r="A2" s="1"><v>45293</v></c></row>` +
+    `<row r="3"><c r="A3" s="2"><v>45294</v></c></row>` +
+    `<row r="4"><c r="A4" s="2"><v>45295</v></c></row>` +
+    `</sheetData></worksheet>`;
+  const makeInv = () => {
+    const bytes = zipSync({ ...makeMinimalXlsxParts(SHEET), "xl/styles.xml": strToU8(STYLES) });
+    return buildXlsxInventory({
+      sourceRef: "/abs/vt.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      valueTileOpts: { window: 2, segmentsPerColumnCap: 256, distinctPerSegmentCap: 32 },
+    });
+  };
+
+  it("producer always carries value tiles + value_tile_config", () => {
+    const inv = makeInv();
+    expect(inv.segmented_value_tiles).toBeDefined();
+    expect(inv.value_tile_config).toBeDefined();
+  });
+
+  it("omits value tiles AND value_tile_config from the prompt projection by default (review path)", () => {
+    const proj = projectInventoryForPrompt(makeInv());
+    expect((proj.inventory as Record<string, unknown>).segmented_value_tiles).toBeUndefined();
+    expect((proj.inventory as Record<string, unknown>).value_tile_config).toBeUndefined();
+  });
+
+  it("includes value tiles when the caller opts in (reconstruct path), but NEVER value_tile_config", () => {
+    const proj = projectInventoryForPrompt(makeInv(), undefined, { includeValueTiles: true });
+    expect((proj.inventory as Record<string, unknown>).segmented_value_tiles).toBeDefined();
+    expect((proj.inventory as Record<string, unknown>).value_tile_config).toBeUndefined();
+  });
+
+  it("bounds the opted-in value tile to boundary witnesses (segments dropped, notes kept)", () => {
+    const proj = projectInventoryForPrompt(makeInv(), undefined, { includeValueTiles: true });
+    const vt = (proj.inventory as Record<string, unknown>)
+      .segmented_value_tiles as SheetValueTileProjection[];
+    expect(vt.length).toBeGreaterThan(0);
+    for (const sheet of vt) {
+      for (const col of sheet.columns) {
+        expect(col.intra_tile_notes.length).toBeGreaterThan(0); // only boundary-bearing columns kept
+        expect(col.segments).toEqual([]); // verbose per-segment aggregates dropped from the prompt
+      }
+    }
+    const notes = vt.flatMap((s) => s.columns.flatMap((c) => c.intra_tile_notes));
+    expect(notes.some((n) => n.boundary_kind === "display_format")).toBe(true); // witness reached prompt
+  });
+});
+
+describe("P1-C1 deterministic sidecar E2E (inventory → ComprehensionArtifact → reconstruct projection)", () => {
+  const STYLES =
+    `<?xml version="1.0"?><styleSheet xmlns="${SML_NS}">` +
+    `<numFmts count="2"><numFmt numFmtId="164" formatCode="m/d/yyyy"/><numFmt numFmtId="165" formatCode="d/m/yyyy"/></numFmts>` +
+    `<cellXfs count="3"><xf numFmtId="0" xfId="0"/><xf numFmtId="164" xfId="0"/><xf numFmtId="165" xfId="0"/></cellXfs></styleSheet>`;
+  // col A: date serials, DISPLAY-format flips at row 5 (m/d/yyyy → d/m/yyyy); col B: INT → TEXT
+  // VALUE-shape flips at row 5. One workbook exercising BOTH boundary kinds end-to-end.
+  const SHEET =
+    `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:B8"/><sheetData>` +
+    `<row r="1"><c r="A1" s="1"><v>45292</v></c><c r="B1"><v>1</v></c></row>` +
+    `<row r="2"><c r="A2" s="1"><v>45293</v></c><c r="B2"><v>2</v></c></row>` +
+    `<row r="3"><c r="A3" s="1"><v>45294</v></c><c r="B3"><v>3</v></c></row>` +
+    `<row r="4"><c r="A4" s="1"><v>45295</v></c><c r="B4"><v>4</v></c></row>` +
+    `<row r="5"><c r="A5" s="2"><v>45296</v></c><c r="B5" t="inlineStr"><is><t>x</t></is></c></row>` +
+    `<row r="6"><c r="A6" s="2"><v>45297</v></c><c r="B6" t="inlineStr"><is><t>y</t></is></c></row>` +
+    `<row r="7"><c r="A7" s="2"><v>45298</v></c><c r="B7" t="inlineStr"><is><t>z</t></is></c></row>` +
+    `<row r="8"><c r="A8" s="2"><v>45299</v></c><c r="B8" t="inlineStr"><is><t>w</t></is></c></row>` +
+    `</sheetData></worksheet>`;
+  const OPTS = { window: 2, segmentsPerColumnCap: 256, distinctPerSegmentCap: 32 };
+  const buildInv = () => {
+    const bytes = zipSync({ ...makeMinimalXlsxParts(SHEET), "xl/styles.xml": strToU8(STYLES) });
+    return buildXlsxInventory({
+      sourceRef: "/abs/e2e.xlsx",
+      bytes,
+      contentSha256: shaBytes(bytes),
+      workbookKind: "xlsx",
+      valueTileOpts: OPTS,
+    });
+  };
+
+  it("threads BOTH boundary kinds inventory→artifact→reconstruct prompt (byte-stable); review stays scoped out", () => {
+    const inv1 = buildInv();
+    const inv2 = buildInv();
+    // 1) deterministic + byte-stable across runs
+    expect(JSON.stringify(inv1.segmented_value_tiles)).toBe(JSON.stringify(inv2.segmented_value_tiles));
+
+    // 2) ComprehensionArtifact carries both witnesses and validates (fail-closed completeness)
+    const artifact = buildDeterministicComprehensionArtifact({ observationId: "obs-e2e", inventory: inv1 });
+    const violations: string[] = [];
+    validateComprehensionArtifact(artifact, violations);
+    expect(violations).toEqual([]);
+    const witness = artifact.value_signature_tile_witness as {
+      boundaries: Array<{ boundary_kind: string }>;
+    };
+    expect(witness.boundaries.some((b) => b.boundary_kind === "display_format")).toBe(true);
+    expect(witness.boundaries.some((b) => b.boundary_kind === "value_shape")).toBe(true);
+
+    // 3) reconstruct prompt projection REACHES the boundary witnesses (opt-in, bounded)
+    const recon = projectInventoryForPrompt(inv1, undefined, { includeValueTiles: true });
+    const reconNotes = (
+      (recon.inventory as Record<string, unknown>).segmented_value_tiles as SheetValueTileProjection[]
+    ).flatMap((s) => s.columns.flatMap((c) => c.intra_tile_notes));
+    expect(reconNotes.some((n) => n.boundary_kind === "display_format")).toBe(true);
+    expect(reconNotes.some((n) => n.boundary_kind === "value_shape")).toBe(true);
+
+    // 4) review path does NOT receive value tiles (scope-out / byte-stability guard)
+    const review = projectInventoryForPrompt(inv1);
+    expect((review.inventory as Record<string, unknown>).segmented_value_tiles).toBeUndefined();
   });
 });

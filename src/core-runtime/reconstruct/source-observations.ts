@@ -8,6 +8,10 @@ import {
   VALIDATION_MEMBER_COUNT_CAP,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
+import {
+  validateComprehensionArtifact,
+  type ComprehensionArtifact,
+} from "./comprehension-artifact.js";
 
 export interface ReconstructSourceObservation {
   observation_id: string;
@@ -181,6 +185,42 @@ function validateSpreadsheetObservationHonesty(
       violations.push("data_validation member exceeds VALIDATION_MEMBER_CHAR_CAP");
     }
   }
+
+  // E2 (P1-C1 value-tile safety): segmented_value_tiles is aggregate-only — type/shape/format
+  // counts, capped distinct COUNTS (never values), lower-bound flags, row anchors. Its only
+  // string-bearing fields are format-identities (the SANITIZED display-format grammar). A quoted
+  // literal there would mean a domain literal (e.g. "USD", "Customer:") leaked past
+  // normalizeFormatCode — reject it so a forged/replayed artifact cannot smuggle source text into
+  // a prompt-visible tile. (Bounds are structural: caps live in value_tile_config.)
+  const valueTiles = inventory.segmented_value_tiles;
+  if (valueTiles !== undefined) {
+    if (!Array.isArray(valueTiles)) {
+      violations.push("segmented_value_tiles must be an array when present");
+    } else {
+      let unsanitized = false;
+      for (const sheet of valueTiles) {
+        for (const col of sheet.columns ?? []) {
+          for (const seg of col.segments ?? []) {
+            if (Object.keys(seg.format_counts ?? {}).some((fid) => fid.includes('"'))) {
+              unsanitized = true;
+            }
+          }
+          for (const note of col.intra_tile_notes ?? []) {
+            if (
+              note.boundary_kind === "display_format" &&
+              ((typeof note.prev_shape === "string" && note.prev_shape.includes('"')) ||
+                (typeof note.new_shape === "string" && note.new_shape.includes('"')))
+            ) {
+              unsanitized = true;
+            }
+          }
+        }
+      }
+      if (unsanitized) {
+        violations.push("value-tile format-identity must be sanitized (no quoted literal)");
+      }
+    }
+  }
 }
 
 export function validateSourceObservationBoundary(
@@ -229,6 +269,14 @@ export function validateSourceObservationBoundary(
 
   if (observation.adapter_id === SPREADSHEET_OBSERVER_ADAPTER_ID) {
     validateSpreadsheetObservationHonesty(observation, violations);
+  }
+
+  // P1-C1 §5.7: validate the companion ComprehensionArtifact when present (construction + replay).
+  // Completeness is fail-closed (a silently-missing baseline field is a violation), so an invalid
+  // contract throws at construction (the materialize loop) and is rejected on replay.
+  const comprehensionArtifact = observation.structural_data.comprehension_artifact;
+  if (comprehensionArtifact !== undefined) {
+    validateComprehensionArtifact(comprehensionArtifact as ComprehensionArtifact, violations);
   }
 
   return {

@@ -6451,6 +6451,40 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
     // Determinism: the same artifact hashes identically.
     expect(sourceObservationsReuseSha256(spreadsheetArtifact(3) as any)).toBe(baseHash);
   });
+
+  // P1-C1 §12 T1: the value-tile opts (window + caps) shape the inventory CONTENT (segment
+  // boundaries) but are invisible to content_sha256 (raw bytes) and adapter_version (schema shape).
+  // Re-calibrating them MUST rotate the reuse digest so an old seed authored under the previous opts
+  // cannot be silently reused — even without an adapter_version bump.
+  it("changes sourceObservationsReuseSha256 when the value-tile opts change (resume regression)", () => {
+    const base = spreadsheetArtifact(3);
+    const recalibrated = spreadsheetArtifact(3);
+    (base.observations[0]!.structural_data.workbook_inventory as any).value_tile_config = {
+      window: 1024,
+      segmentsPerColumnCap: 256,
+      distinctPerSegmentCap: 32,
+    };
+    (recalibrated.observations[0]!.structural_data.workbook_inventory as any).value_tile_config = {
+      window: 512, // re-calibrated; same file, different segment boundaries
+      segmentsPerColumnCap: 256,
+      distinctPerSegmentCap: 32,
+    };
+    expect(sourceObservationsReuseSha256(recalibrated as any)).not.toBe(
+      sourceObservationsReuseSha256(base as any),
+    );
+  });
+
+  it("changes sourceObservationsReuseSha256 when the data-layer caps change (resume regression)", () => {
+    const base = spreadsheetArtifact(3);
+    const widened = spreadsheetArtifact(3);
+    (widened.observations[0]!.structural_data.workbook_inventory as any).data_layer_caps = {
+      ...(widened.observations[0]!.structural_data.workbook_inventory as any).data_layer_caps,
+      max_columns_profiled: 999, // widened; same file, different profiled-column frame
+    };
+    expect(sourceObservationsReuseSha256(widened as any)).not.toBe(
+      sourceObservationsReuseSha256(base as any),
+    );
+  });
 });
 
 describe("observationPromptPayload projection-truncation recording", () => {
