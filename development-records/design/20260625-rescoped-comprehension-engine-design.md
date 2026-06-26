@@ -303,7 +303,49 @@ window=1024가 본 fixture서 seg/col=49로 합리적 1차값(SSOT 후보는 ben
 
 **이연 follow-up(trusted pruning 전 선결 — Cut-2b 범위 밖)**: (1) depth-0 영역마다 **§3.4 전체 라이프사이클 필드 mandatory-or-explicit** 기록(unknown/deferred 명시 포함) (2) **sniff-trigger/re-entry 복구 fixture 1개**(escalation 발화 → Layer-2 재진입, capped/deferred + lineage 기록 = 복구성 *실증*) (3) **교차모델 triage**(model transfer 검증).
 
-**일반화 잔여(단일 fixture·명료 archetype)**: 실 워크북의 *모호한* 컬럼·cryptic 다수 시 **과-escalation(pruning↓·비용↑)** 또는 비용압박 silent-prune 유혹(정직 계약의 비용압박/스케일 내구성 미검)·이질성 1종·pruning 40%는 구성 의존. **다음 = Cut-3(vision PoC) — owner go 후.**
+**일반화 잔여(단일 fixture·명료 archetype)**: 실 워크북의 *모호한* 컬럼·cryptic 다수 시 **과-escalation(pruning↓·비용↑)** 또는 비용압박 silent-prune 유혹(정직 계약의 비용압박/스케일 내구성 미검)·이질성 1종·pruning 40%는 구성 의존.
+
+### 7.3 Cut-3 결과 (2026-06-26) — explorer-V(렌더+vision) PoC: (A) *방향* sound·이연 / (B) rigor·recording 비계 부분→narrow
+
+> **build+run = vision LLM 포함**(렌더러 부분은 결정론·LLM 0; vision 탐지 = 멀티모달 Claude 서브에이전트, model transfer **미검** — Cut-2b 동일). production 배선 0. **교차검증 게이트(ultracode + onto 병행) 실행·반영 완료 = §10.6 박제** — 합의 = **gate_pass_with_minor_revisions**(headline 생존 = 양 패밀리 PNG 직접 재검증; redesign 아님). **두 패밀리가 *독립 수렴*으로 동일 honesty 갭 포착**(vision 비-artifact·렌더 fidelity·vision n=1·fixture 비대칭) → 아래 **판정 2분할**(A 방향 sound / B rigor 부분) + 잔여 확장.
+
+**하니스**(scratchpad `cut3-render.ts`, 휘발): ① 결정론 — 3 fixture(`clean` 단일헤더 tabular / `messy` title 2행 + 병합 2-level 헤더 report / `alltext` 헤더 1행이나 타입대비 0 = R3 low 케이스) build → **실 observer** ground truth + grid→HTML→**Chrome headless `--screenshot`** PNG + 재실행 SHA. ② vision — 3 blind Claude 서브에이전트(PNG만 읽음, explorer-D 출력 미공개).
+
+**신규 능력 게이트(§6 #2/#3) — 부분 feasibility(과신 narrow 후)**:
+- **#2 렌더러 — narrow(게이트 F3/M3·onto coverage-003)**: 입증된 것 = **Chrome headless(149.0.7827.196) `--screenshot`의 within-machine byte-stable 재현성**(동일 grid→HTML 입력 재실행 SHA256 동일, 3/3). ⚠️ **이는 §6 #2 게이트("xlsx→이미지 렌더러·결정론 *충실도*")의 *충실도* 절반이 아니다**: 하니스는 xlsx 바이트를 **렌더러에 안 먹인다**(observer만 소비; PNG는 author의 `gridToHtml`로 grid+merges 직접 페인트) → 실 xlsx의 style/numFmt/폭·숨김 rasterization 충실도 *미실증*. P5는 *방향* 1차 신호일 뿐(§4.3 descriptor→pixel 순수함수 *아님*; 게다가 aggregate-only 스트리밍 observer §9 P12가 explorer-D 소유라는 *완전 cell-grid render 디스크립터*를 산출 가능한지 자체가 미실증). cross-machine 결정성 + 실-xlsx fidelity + descriptor 산출 = 전부 잔여.
+- **#3 vision**: 멀티모달 모델이 PNG **단독**으로 라벨/레이아웃 읽기 = feasible(Read-the-PNG 경로). ⚠️ 단 vision 판독 결과는 **canonical artifact로 영속되지 않음**(아래 (B) 참조).
+
+**vision vs explorer-D (per fixture, authored-truth 채점)**:
+
+| fixture | explorer-D | vision (PNG 단독) | authored truth | 판정 |
+|---|---|---|---|---|
+| **clean** | high · **정확**(헤더 r1) | **정확**(헤더 r1, Region 행라벨, clean_table, high) | 헤더 r1 · tabular | **둘 다 정확** — vision이 쉬운 케이스 안 깨뜨림 |
+| **alltext** (R3 low) | **low** · 정확(헤더 r1; 타입대비 0이라 저신뢰) | **정확·high**(Name/Role/Department/Location, names 행라벨) | 헤더 r1 · tabular | **vision이 explorer-D가 low인 바로 그 지점서 confident-correct** — R3 게이트의 정상 정전(正錢) 케이스 |
+| **messy** (2-level) | **high · WRONG**(헤더 r4 단일, cols `Region/Quarter/col_3/col_4/Total` — 2-level·title 전부 누락) | **정확**(2-level 헤더 `Region \| Quarter{Q1,Q2,Q3} \| Total`, r1-2 title, region 행라벨) | 헤더 r4-5 2-level · report | **vision이 explorer-D가 confidently-wrong한 구조를 복구** |
+
+⚠️ **vision 열 = prose-기록 n=1 판독**(채점기/transcript/Workflow id 없음 — Cut-2 `wf_9fbdd2dd`·Cut-2b `wf_85424616`와 비대칭; truth JSON엔 `explorer_d`+`authored_truth`만, vision 필드 없음). 단 *입력*(PNG)은 영속 결정론 artifact라 **load-bearing messy 케이스는 독립 재검증 가능**(게이트 양 패밀리가 cut3-messy.png를 직접 Read해 2-level 구조 확인).
+
+**판정 — 두 부분으로 분할**(게이트 반영):
+- **(A) explorer-V *방향* = sound on fixtures** (양 패밀리 독립 확인): explorer-V는 explorer-D가 (i) *불확실*(alltext·low)·(ii) *confidently-wrong*(messy·2-level)인 곳서 가치 추가, *정확*한 곳(clean)선 일치. messy 2-level 복구가 결정적(explorer-D는 `header_rows=[3]`·`col_3/col_4`·high인데 vision이 `Region|Quarter{Q1,Q2,Q3}|Total`+title+행라벨 복구). ultracode `direction_sound=true`(PNG 재검증)·onto 동의.
+- **(B) rigor·recording 비계 = 부분 실증 → narrow + 이연**(게이트 4 material medium, 양 패밀리 수렴): ① **vision 비-artifact·blindness 미강제**(M1·H2·onto 5/6 lens 지배 테마): "blind"는 honor-system(하니스가 subagent 격리 안 함; truth JSON이 같은 런서 `authored_truth.note` 병치 → messy note가 기록된 vision 보고와 근접-일치 = §10.5 동일패밀리 과신 smell). ② **vision n=1·안정성 미검**(F1·H4·M4·onto coverage-002): fixture당 1회 비반복 — 렌더는 3/3 SHA·Cut-2b는 3/3런인데 vision만 변동성 미측정·미공개. ③ **렌더 fidelity 미실증**(#2 narrow 상동). ④ **fixture 비대칭**(F2·onto coverage-001): explorer-D엔 적대적(약점 messy)이나 vision엔 우호적 — vision이 *confident-wrong*할 fixture 0 → **vision false-positive율 미측정**(vision-assist 동기 자체가 "confidently-wrong은 위험"인데 그 실패모드가 미특성화).
+
+**★ R3 게이트-갭 = REAL·STRUCTURAL(게이트 코드레벨 확정·ultracode R3-1)**: §3.2/R3은 vision을 `header_confidence:low`에만 게이팅. 그런데 `detectHeaderRow`는 confidence를 `scoreHeaderRow`(fill×label) + `hasDataTypeContrast`로만 산출하고 **`merged_ranges`는 confidence 입력이 *전혀 아님*** → **강한 라벨 행 위에 숫자 데이터면 병합/title 무관하게 `high`** 반환(게이트가 messy WITH/WITHOUT merges·다른 2-level fixture로 라이브 재현 = fixture artifact 아닌 *일반화* 확인) → low-only 게이트는 이 confidently-wrong 케이스에 **발화하지 않음 = 구조적 blind-spot**. **정련 = *candidate*(미검증)**(onto coverage-001): (a) 게이트를 **구조-복잡 신호(헤더존 병합·title 행)**에도 트리거 (b) confidence 캘리브 강화(2-level/병합/title서 `high` 금지). ⚠️ **채택 전 선결 = benign 복합-레이아웃 control 미니매트릭스**(병합-title이나 explorer-D 정답·비-헤더 병합·2-level wrong·대형 benign 포맷 리포트 — 각 트리거율 + image-token 비용 보고) — 없으면 "임의 병합서 vision 남발"로 gated-vision 전제 자가모순. = P9(저신뢰 라벨=독해) *confidence 정직성* 측면.
+
+**잔여(정직)**: (1) synthetic 소형 fixture 3종 = 3 archetype만(실 14시트 저신뢰 시트 미검) (2) vision = 단일 Claude 서브에이전트(model-agnostic *미검*; production = INV-MODEL-1·Cut-4 이연) (3) 렌더 결정성 = **within-machine only**(P5 cross-machine 이연) (4) image-token 예산 미측정 (5) 단일 시트 PoC (6) messy의 vision row-번호 오프셋(blank 행 렌더링 → vision이 *image-row* 기준 보고; 구조 판독은 정확하나 sheet-row 정밀 매핑은 렌더 충실도 nuance). **+ 게이트 신규(양 패밀리 수렴)**: (7) **vision 비-artifact**(transcript/Workflow id 없음·prose hand-score) + **blindness honor-system 미강제**(authored_truth 병치) (8) **vision n=1·within-model run-variance 미측정**(model-agnostic와 별개; 렌더 3/3·Cut-2b 3/3과 비대칭) (9) **실-xlsx style/numFmt rasterization fidelity 미실증**(하니스 = grid+merges HTML proxy) + observer가 완전 cell-grid render 디스크립터 산출 가능한지 미실증 (10) **fixture 비대칭 → vision false-positive율 미측정**(confident-wrong vision fixture 0) (11) **filename leak**(`cut3-messy.png` 등 archetype 라벨이 path로 노출·blind 비계 미포함) + 하니스 주석 stale("2 fixtures"→3) = throwaway 위생(다음 cut서 neutral/hashed). **이연(vision-assist 신뢰 전 선결)** = (7)~(10): 강제-blind + 반복 vision transcript 영속·실-xlsx→pixel fidelity + benign-control 매트릭스·vision false-positive 특성화. **다음 = §7.4 Cut-3b(B 비계 1/3/4 닫음).**
+
+### 7.4 Cut-3b 결과 (2026-06-26) — (B) 비계 (1)(3)(4) *부분 닫음*; #2(실-xlsx fidelity) 이연 유지
+
+> 게이트(§10.6) (B) 이연 4건 중 **수렴도 높고 tractable한 3건을 throwaway Cut-3b로 *부분 닫음(특성화)***(smallest-viable·기존 grid→HTML render 경로 재사용). **#2(실-xlsx style/numFmt rasterization fidelity)는 LibreOffice급 렌더러 스파이크 + observer cell-grid 디스크립터 산출(§9 P12 aggregate-only 긴장)이라 별도 이연** — vision-assist 신뢰와 직교(vision은 주어진 이미지를 읽음).
+> **교차검증 게이트(ultracode + onto 병행) 실행·반영 완료 = §10.7 박제** — 합의 = **gate_pass_with_minor_revisions**(load-bearing 사실 전부 양 패밀리 독립 재도출·redesign 아님; wording-only narrow). **두 패밀리 *독립 수렴* 3 테마**(아래 ⚠️ 반영): (1) "강제-blind/✅닫음" 과신(ultracode `recording_closed=false`) (3) R3 title-arm=authored-oracle proxy·**INERT** (4) vision FP=0 범위=구조 only·denom 희석. ★ ultracode가 **blindness 실측 입증**(messy vision reads `[3,4]`≠authored `[4,5]` → PNG 읽음·answer key 안 읽음)으로 headlines 무오염 확인.
+
+**하니스**(scratchpad `cut3b-harness.ts` 결정론 + Workflow `wf_4b90ed01-3ad` vision): ① 결정론 — **7-fixture 매트릭스**(원본 3 + **benign-control 2**[병합/title 있으나 explorer-D 정답: titled-clean·data-region merge] + **vision-stress 2**[vision을 *틀리게* 설계: headerless 워드리스트·ambiguous year-band]) build → 실 observer + **content-hash 파일명** PNG(아키타입 leak 제거) + R3 트리거 혼동행렬. ② vision — **21 blind 구조화 read**(fixture당 3·**PNG 경로만**·authored_truth는 채점 JS에만·에이전트 미전달·structured schema → by-eye 채점 제거).
+
+**부분 닫음(특성화) — 게이트 반영 narrow**:
+- **(1) 기록규율 = *substantively 개선·완전 닫음 아님*(ultracode `recording_closed=false`)**(M1·H2·M2·F1·H4): 실제 개선 = 해시 파일명(아키타입 leak 0)·**fixture당 3 reps**·structured schema(prose 대체)·**citable Workflow id `wf_4b90ed01-3ad`**·**stability 7/7 unanimous(3/3)**. ⚠️ 단 **literal deliverable(§10.6 (B)① = raw vision transcript 영속 + *강제*-blind) 미완**: blindness는 **honor-system at workflow boundary**(fs 미샌드박스·answer key `cut3b-truth.json` 同디렉토리; "강제"가 아니라 *answer-not-in-prompt + 해시*)·raw per-read transcript는 워크플로 에이전트 jsonl에만(clean artifact로 미추출, scored summary만 영속)·read→verdict scorer는 워크플로 Score phase(standalone 미materialized)·by-eye 제거도 부분(messy `[3,4]`≠authored `[4,5]`를 무인코딩 row-offset tolerance로 correct 처리, §7.3 #6 연계). **★ 그러나 headlines 무오염 = 양 패밀리 독립 재도출 + blindness 실측 입증**(messy vision이 image-grounded `[3,4]` 보고 → answer key 안 읽음) → **non-material**. follow-up(완전 닫음 전) = raw transcript 영속 + fs-sandbox blind + materialized scorer.
+- **(4) vision false-positive율 = *구조* FP 0/21**(vision_fp_test_fair=true·양 패밀리): stress 2종(`headerless` = 헛 헤더 0·`ambiguous year-band` = 2-level 복구, explorer-D `[Plan,Actual,Plan,Actual]` 오판) + benign-control 정답 유지 → R3 트리거 헛발화 = *비용*(헛 호출)이지 *오류* 아님. ⚠️ **범위 narrow**: "0/21 reads" = **FP-opportunity 0/6**(2 archetype × 3 within-model reps)일 뿐(21 denom을 독립증거로 읽지 말 것)·채점이 **row/column-label·band-pairing fidelity 미계측·미채점**(구조 FP만)·렌더=geometry-only proxy라 **style-induced FP class 미실증**(#2 연계)·stress fixture는 *mild*(easy header-decline/명시 merged year cells, maximal-difficulty 아님).
+- **(3) R3 트리거 정밀도 정량화**(r3_matrix_sound=true·결정론): naive 룰 = **precision 0.50**(benign 2/4 헛발화)·**recall 0.67**(headerless 놓침). ⚠️ **oracle caveat**: 룰의 "title 행" 분지 = `authored.has_title_rows` **authored-oracle proxy**(실 observer title detector 없음)이고 **INERT**(모든 title fixture가 `header_zone_merge`도 발화 → 매트릭스는 사실상 *header_zone_merge-only*·0.50/0.67은 실 observer 신호가 전적 구동). 또 `header_zone_merge`("merge 최상행 ≤6")는 절대-행이라 data-region merge `A4:A5`에 헛발화(header-relative zone이 정련). **핵심 종합 = 두 신호 상보적**(explorer-D `low`가 headerless·구조복잡이 confidently-wrong-merge) → **정련 = 캘리브 게이트(`low` OR `high-with-header-zone-merge`) = 실 observer 신호만(oracle 없음)**; over-trigger는 *이 fixture서* 구조 FP=0이라 비용-bound(절대 안전 아님; image-token 예산이 허용치). benign-control 매트릭스 = 캘리브 SSOT 입력.
+
+**잔여(여전히)**: synthetic 소형·vision = 단일 Claude(**cross-model transfer 이연**; 3 reps는 within-model)·**stress 2 archetype뿐**(FP=0이 일반 FP=0 증명 아님)·image-token 예산 미측정·**#2 실-xlsx style/numFmt fidelity 이연**(별도 렌더러 스파이크)·**(1) 완전 닫음 follow-up**(raw vision transcript 영속 + fs-sandbox 강제-blind + materialized scorer)·column-label/band-pairing fidelity 계측. **(B) 판정(게이트 후) = 1/3/4 *부분 닫음(특성화 — exhaustive 아님·(1)은 substantively 개선이나 완전 닫음 아님)*·#2 이연.** **다음 = Cut-4a(resume 계약) — owner go.**
 
 ---
 
@@ -412,3 +454,38 @@ Cut-2b 게이트(§7.2 triage viability 결론 + 하니스 방법론 + triage �
 
 **합의 판정 = `gate_pass_with_minor_revisions`**: 두 리뷰어 **상보적**(Cut-2와 동일 패턴) — ultracode가 *실험 건전성·비-rigged·ground-truth 무누수* 독립 확인(allocation+marking 코어 sound), onto가 *§7.2 claim-vs-evidence 과신*(safety·model-agnostic) 포착. **양쪽 모두 (A) allocation+marking viability sound 동의**; 분기는 *materiality 판단*(ultracode=by-design·외부커버 → 비material / onto=§3.4가 복구성을 안전의 load-bearing으로 규정 → material). **onto가 옳다**(설계 §3.4 자체가 sniff/re-entry를 trusted pruning 전제로 둠) → §7.2 verdict를 narrow(safety 미실증·이연·model transfer 미검)·follow-up 3건 명시. **코드/실험 결과 stand·재실행 0** → Cut-2b 게이트 통과(조건부: B 안전경로는 후속 선결). **다음 = Cut-3(vision PoC) — owner go 후.**
 > 교훈(병행 가치 재확인): 동일 모델패밀리 내 self-audit(triage+safety 모두 Claude)는 *상관*되어 "safe" 합의가 구조적 보장과 혼동될 수 있음 — **교차패밀리 리뷰어(onto=gpt-5.5)가 그 과신을 적발**. ultracode 단독이면 gate_pass_clean으로 닫혔을 것.
+
+### 10.6 Cut-3 게이트 교차검증 — ultracode + onto 병행 (2026-06-26)
+Cut-3 게이트(§7.3 explorer-V PoC 결론 + 렌더 하니스 방법론 + vision-vs-explorer-D + R3 게이트-갭) 두 리뷰어 병행. **Cut-2/2b와 다른 점**: ultracode 측이 `gate_pass_clean`이 *아님*(4 confirmed material) — 두 패밀리가 **독립 수렴**으로 동일 honesty 갭 포착(가장 강한 신호).
+- **ultracode** Workflow `wf_4ff930b6-692`(39 agent · 5 적대 차원[방법론·렌더결정성/P5·vision결론·R3갭·정직성] → **33 candidate → refute 검증 → 13 confirmed → 4 material(전부 medium)**): **`gate_pass_with_minor_revisions`** · `direction_sound=true`(검증 에이전트가 cut3-messy.png를 *직접 Read*해 2-level 구조 독립 확인) · `render_claim_honest=false` · `r3_gate_gap_real=true`. **핵심 코드레벨 확인**: R3 갭이 *구조적*(`detectHeaderRow`가 `merged_ranges`를 confidence 입력으로 안 씀 → 강한 라벨+숫자면 병합/title 무관 `high`; messy WITH/WITHOUT merges + 다른 2-level fixture 라이브 재현 = 일반화). adversarial verify가 review단계 high 다수를 medium/low 강등(예: filename-leak M2 high→low·렌더 M3 high→low·fixture비대칭 F2 high→low) = 정직한 refute.
+- **onto** `.onto/review/20260626-2a7c6669`(6 lens core-axis · gpt-5.5 codex_cli · finding-relation-graph 단계서 halt = lens 6/6 + finding-ledger 완비, deliberation/synthesis 미실행 → **lens-level 직독**, Cut-2b 선례): **12 findings(10 medium·2 low)·high/blocker 0** → 전부 §7.3 claim-vs-evidence narrowing. **지배 테마 = vision 비-artifact**(axiology·evolution·logic·semantics·structure = **5/6 lens** 독립 수렴: 정확도 표가 bundle-검증 불가 prose, vision 원출력 미영속).
+
+**교차패밀리 수렴(병행의 결정적 가치)** — 두 리뷰어가 *독립적으로* 동일 4 테마 포착 + 각 고유 1건:
+
+| 테마 | ultracode | onto | 반영(§7.3) |
+|---|---|---|---|
+| **vision 비-artifact·blindness 미강제** | M1·H2·R3-5 (medium) | 지배 5/6 lens | (B)① + 잔여(7); 강제-blind+반복 transcript 영속 이연 |
+| **렌더 = HTML proxy ≠ xlsx fidelity** | F3·M3 (medium) | coverage-003 | #2 narrow + 잔여(9) |
+| **vision n=1·안정성 미검** | F1·H4·M4 (medium/low) | coverage-002 | (B)② + 잔여(8) |
+| **fixture 비대칭·vision FP율 미측정** | F2 (low) | coverage-001(부분) | (B)④ + 잔여(10) |
+| **R3 갭 sound·정련 미완** | R3-1(구조적 확정) | coverage-001(control 매트릭스) | R3 = candidate·benign-control 선결 |
+| **stale 주석·filename leak** | R3-6 nit·M2 low (고유) | finding-010 (주석만) | 잔여(11) throwaway 위생 |
+
+**합의 판정 = `gate_pass_with_minor_revisions`**(양 측 동일 verdict): **headline 생존**(A 방향 = 양 패밀리가 PNG 직접 재검증·redesign 아님) but **§7.3 실질 narrow 필요**(B rigor 비계). Cut-2/2b와 차이 = ultracode 측도 material 4(not clean) → 더 무거운 minor-revisions. **판정 2분할 반영**: (A) explorer-V 방향 sound·이연 / (B) vision 비-artifact·n=1·렌더 fidelity·fixture 비대칭 = doc narrow(지금) + 4건 이연(vision-assist 신뢰 전). **load-bearing 결론(렌더 byte-stability·R3 구조적 갭·vision의 confidently-wrong 복구) 전부 영속 artifact+PNG로 재검증 가능** → material 어느 것도 headline 반증 안 함. **다음 = Cut-4a(resume 계약) — owner go 후.**
+> 교훈(Cut-2b와 대조): Cut-2b는 onto만 과신 포착(ultracode clean)이었으나, Cut-3는 **두 패밀리가 *독립 수렴*으로 동일 honesty 갭 포착** — 가장 신뢰도 높은 신호. 공통 근본 = "load-bearing LLM 단계(vision)를 결정론 절반(렌더 SHA·explorer-D json)만큼 엄밀히 *기록*하지 않음"(transcript·반복·강제-blind 부재). Cut-2b의 `wf_85424616` 3/3런 선례를 vision이 따랐어야.
+
+### 10.7 Cut-3b 게이트 교차검증 — ultracode + onto 병행 (2026-06-26)
+Cut-3b (B)-비계 닫음(§7.4) 두 리뷰어 병행. **Cut-3와 동일 패턴: 두 패밀리 *독립 수렴*으로 동일 3 테마 포착**(가장 신뢰도 높은 신호).
+- **ultracode** Workflow `wf_90a23655-9b2`(38 agent · 5 적대 차원[기록규율/blindness·vision-FP·R3-매트릭스·정직성·방법론] → 20 confirmed → **1 material(medium)**): **`gate_pass_with_minor_revisions`** · `recording_closed=**false**` · `vision_fp_test_fair=true` · `r3_matrix_sound=true`. **★ load-bearing 사실 전부 적대 *재도출* 확인**: FP=0/21·7/7 unanimous·R3 매트릭스 byte-재현 + **blindness 실측 입증**(messy vision reads `[3,4]`≠authored `[4,5]` → PNG 읽음·co-located answer key 안 읽음; total_reads 21 = 7×3 정확·잉여 truth-file read 0).
+- **onto** `.onto/review/20260626-351e62bb`(6 lens core-axis · gpt-5.5 · finding-relation-graph서 halt = lens 6/6 + finding-ledger 완비 → lens-level 직독, Cut-3 동일): **15 findings(14 medium·1 low)·high/blocker 0** → 전부 §7.4 claim-vs-evidence narrowing.
+
+**교차패밀리 수렴 3 테마**(전부 §7.4 narrow 반영):
+
+| 테마 | ultracode | onto | 반영(§7.4) |
+|---|---|---|---|
+| **"강제-blind/✅닫음" 과신** | F3·F6·H1 (recording_closed=false) | A: 003·004·007·014 | (1) = *substantively 개선·완전 닫음 아님*; blindness=honor-system(fs 미샌드박스·answer key 同디렉토리)·raw transcript 미영속·scorer off-record; **단 headlines 무오염**(양 패밀리 재도출 + 실측 blindness) → non-material. follow-up=raw transcript 영속+fs-sandbox+materialized scorer |
+| **vision FP=0 범위 협소** | VFP-2·VFP-3·F2·H3 | B: 002·005·009·013 | (4) = *구조* FP 0/21(=FP-opportunity 0/6, 2 archetype×3 within-model); column-label/band-pairing fidelity 미채점; geometry-only proxy라 style-induced FP 미실증(#2 연계); stress=mild |
+| **R3 title-arm = oracle·INERT** | F2·F3·H2·F5 | C: 001·006·008·010·011·012 | (3) = title 분지=authored-oracle proxy·INERT(매트릭스 사실상 merge-only)·0.50/0.67은 실 observer 신호 구동; 추천 캘리브 게이트는 oracle 없음(`low` OR `high-with-merge`); `≤6`=절대행 A4:A5 헛발화→header-relative; "절대 안전"→"이 fixture서 구조FP0·비용bound" |
+
+**합의 판정 = `gate_pass_with_minor_revisions`**(양 측): **headline 생존**((B) 1/3/4 *특성화* = load-bearing 사실 전부 양 패밀리 독립 재도출) but **§7.4 wording-only narrow 필요**. Cut-3와 동일하게 두 패밀리 *독립 수렴* — ultracode가 적대 재도출 + 실측 blindness 입증, onto가 claim-vs-evidence 과신(강제-blind·FP범위·oracle) 포착. **(1) recording = `recording_closed=false`**(substantively 개선이나 literal deliverable 미완 → "✅닫음"→"부분")·(3)(4) = 특성화. **코드/실험 결과 stand·재실행 0**(모든 정정 = doc wording). **다음 = Cut-4a(resume 계약) — owner go.**
+> 교훈: Cut-3b는 Cut-3 게이트가 깐 "load-bearing LLM 단계를 결정론만큼 엄밀히 기록" 요구를 *부분* 충족 — 해시·3 reps·structured·citable wf id·실측 blindness로 크게 개선했으나, *완전* recording(영속 raw transcript + fs-sandbox 강제-blind + materialized scorer)은 미달. **그럼에도 ultracode의 적대 재도출이 headlines를 영속 artifact만으로 독립 확인**(messy `[3,4]`≠`[4,5]`가 blindness의 결정적 증거) → 불완전 기록도 결론 무효화 안 함을 입증.
