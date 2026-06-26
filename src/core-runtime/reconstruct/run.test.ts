@@ -59,6 +59,9 @@ import {
   shouldDispatchSingleCompetencyAssessment,
   appendFinalOutputUnresolvedRevisionSection,
   reuseMatchArtifactHash,
+  authoringPromptContractSha256,
+  AUTHORING_PROMPT_CONTRACT_VERSION,
+  RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -3950,6 +3953,20 @@ describe("runReconstruct", () => {
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
     ).toHaveLength(64);
+    // DET-1 (CG-1): the authoring prompt-template contract sha is folded into every
+    // authored artifact's reuse key, so an authoring-prompt edit rotates the key.
+    for (
+      const reuseProvenance of [
+        sourcePurposeReuseProvenance,
+        ontologySeedReuseProvenance,
+        competencyQuestionAssessmentReuseProvenance,
+      ]
+    ) {
+      expect(
+        (reuseProvenance.reuse_match as Record<string, unknown> | undefined)
+          ?.authoring_prompt_contract_sha256,
+      ).toBe(authoringPromptContractSha256());
+    }
 
     await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
       .rejects.toMatchObject({ code: "ENOENT" });
@@ -5896,6 +5913,53 @@ describe("runReconstruct", () => {
       }),
     })).rejects.toThrow(/resume provenance mismatch/);
     expect(resumePrompts).toHaveLength(0);
+  });
+
+  it("authoringPromptContractSha256 is deterministic and covers base + every stage (DET-1/CG-1)", () => {
+    const first = authoringPromptContractSha256();
+    expect(first).toBe(authoringPromptContractSha256());
+    expect(first).toHaveLength(64);
+    expect(AUTHORING_PROMPT_CONTRACT_VERSION).toBe(
+      "reconstruct_authoring_prompt_contract:v1",
+    );
+    // The shared base system + every authoring stage template (incl. both branches of
+    // each conditional builder) is declared exactly once. The count is pinned so adding
+    // or removing a catalog entry forces a deliberate update here.
+    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(34);
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.base_system).toContain(
+      "You are authoring reconstruct semantic artifacts.",
+    );
+    for (const template of Object.values(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)) {
+      expect(template.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("editing any authoring prompt template rotates the contract sha (DET-1/CG-1)", () => {
+    // This is the soundness property: editing a prompt template auto-rotates the sha
+    // (no manual version bump), so a resume after an authoring-prompt edit regenerates
+    // instead of silently reusing artifacts authored under the prior template.
+    const baseline = authoringPromptContractSha256();
+    for (const key of Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)) {
+      const edited = {
+        ...RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+        [key]: `${RECONSTRUCT_AUTHORING_PROMPT_CONTRACT[key]} (edited)`,
+      };
+      expect(authoringPromptContractSha256(edited)).not.toBe(baseline);
+    }
+  });
+
+  it("no authoring systemPrompt is assembled inline outside the contract (DET-1/CG-1 fail-closed)", async () => {
+    // Fail-closed coverage guard: a NEW authoring prompt added as an inline array
+    // literal (bypassing the catalog) would never reach authoringPromptContractSha256,
+    // reopening the silent-stale-reuse hole. Every authoring systemPrompt must be a
+    // reference to RECONSTRUCT_AUTHORING_PROMPT_CONTRACT, so no inline assembly may
+    // survive in run.ts (the catalog builders themselves use `return [`, not these).
+    const runSource = await fs.readFile(
+      path.resolve("src/core-runtime/reconstruct/run.ts"),
+      "utf8",
+    );
+    expect(runSource).not.toMatch(/systemPrompt:\s*\[/);
+    expect(runSource).not.toMatch(/[Ss]ystemPrompt\s*=\s*\[/);
   });
 
   it("uses ontology-seed.yaml as the only active direct-call seed artifact", async () => {
