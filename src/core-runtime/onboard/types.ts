@@ -77,9 +77,17 @@ export interface RegisterOptions {
 /**
  * A host target knows how to detect itself, describe an intended registration,
  * and apply it. Implementations write only to host-owned configuration.
+ *
+ * `id` is the host *kind* (used by `--hosts` matching and {@link ALL_HOST_IDS}).
+ * `key` is the unique *instance* identity used for interactive selection; it
+ * defaults to `id`. They differ when one host kind has several concrete targets
+ * — e.g. Claude Code with multiple `CLAUDE_CONFIG_DIR` profiles, where every
+ * target keeps `id: "claude-code"` but carries a distinct `key`.
  */
 export interface HostTarget {
   readonly id: HostId;
+  /** Unique selection identity (defaults to `id` when omitted). */
+  readonly key?: string;
   readonly displayName: string;
   detect(): DetectionStatus;
   plan(entry: RegistrationEntry, options: RegisterOptions): HostPlan;
