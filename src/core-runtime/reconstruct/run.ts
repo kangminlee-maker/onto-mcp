@@ -230,7 +230,28 @@ import {
   ontologySeedExcludedClaimIds,
 } from "./seed-claim-projections.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
-import { COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR } from "./comprehension-artifact.js";
+import {
+  COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR,
+  COMPREHENSION_ARTIFACT_CONTRACT_VERSION,
+  buildLlmComprehensionArtifact,
+  validateComprehensionArtifact,
+  type ComprehensionArtifact,
+  type LeafReadLabel,
+  type LeafReadProducedResult,
+} from "./comprehension-artifact.js";
+import {
+  LEAF_READ_SYSTEM_PROMPT,
+  extractLowConfidenceLeafEvidence,
+  leafReadPromptSha256,
+  readLowConfidenceLeaf,
+  type LeafReadOutcome,
+  type LeafReadRegionEvidence,
+} from "./leaf-reader.js";
+import {
+  assertGatingKeyExcludesInEpochOutput,
+  llmTouchFingerprint,
+  type LlmTouchPreExecutionPreImage,
+} from "./llm-touch-fingerprint.js";
 import {
   attemptKindForAuthoredArtifactName,
   createReconstructExecutionTelemetryCollector,
@@ -277,6 +298,13 @@ export interface ReconstructDirectiveAuthor {
    * judge's verdict. Defaults to the author identity when no judge override.
    */
   readonly reuseJudgeModelIdentity?: string;
+  /**
+   * P1-C2-A leaf-read: read a PROVISIONAL label for a low-confidence (unstructured) spreadsheet
+   * region (§3.2). Optional — an author without it leaves low-confidence regions to the
+   * deterministic companion (no divergence). The implementation runs the FIRST LLM-touch; the run
+   * keys its reuse on the llm_touch_fingerprint, never on this output.
+   */
+  readLeafLabels?(evidence: LeafReadRegionEvidence): Promise<LeafReadOutcome>;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -776,6 +804,12 @@ interface AuthoredArtifactReuseMatch {
   // a different semantic-author model/window, or a fall back to the FLOOR — must
   // invalidate reuse even when the captured observations are byte-identical.
   document_excerpt_projection_budget: number;
+  // P1-C2-A (R2/R8): the order-independent aggregate of the per-observation leaf-read
+  // llm_touch_fingerprints (ⓐ+ⓑ). Folding the fingerprint VALUE — never the leaf-read OUTPUT —
+  // rotates the seed key when the leaf-reader model/prompt or a low-confidence region changes, so a
+  // resume after a leaf-reader model swap regenerates instead of reusing a stale-labelled seed.
+  // null when no low-confidence region triggered a leaf-read.
+  leaf_read_aggregate_fingerprint_sha256: string | null;
 }
 
 interface AuthoredArtifactReuseProvenance {
@@ -1168,11 +1202,14 @@ function workbookInventoryDataLayerCaps(inventory: unknown): unknown {
 export function sourceObservationsReuseSha256(
   artifact: ReconstructSourceObservationsArtifact,
 ): string {
-  return sha256Text(stableJson({
+  const reuseKey = {
     // P1-C1 §12 T2: fold the ComprehensionArtifact contract SHAPE (version + baseline field set) so
     // editing the contract rotates the reuse key tautologically — a seed authored under an older/
-    // weaker companion contract fails the resume provenance check. (Artifact INSTANCE values are
-    // inventory-derived and already covered by the workbook_inventory fold below.)
+    // weaker companion contract fails the resume provenance check.
+    // P1-C2-A (R1/R2): the EMBEDDED comprehension artifact stays the DETERMINISTIC companion
+    // (LLM-free, inventory-derived, covered by the workbook_inventory fold below), so this invariant
+    // holds. The LLM leaf-read lives in a SEPARATE Layer-2 artifact whose model/prompt identity is
+    // folded — as a fingerprint VALUE, never the instance — into authoredArtifactReuseMatch.
     comprehension_artifact_contract: COMPREHENSION_ARTIFACT_CONTRACT_DESCRIPTOR,
     observations: artifact.observations.map((observation) => ({
       observation_id: observation.observation_id,
@@ -1219,7 +1256,12 @@ export function sourceObservationsReuseSha256(
       target_material_kind: skipped.target_material_kind,
       reason: skipped.reason,
     })),
-  }));
+  };
+  // P1-C2-A (R3): regression guard — this digest must never carry in-epoch LLM output (the embedded
+  // artifact instance's spine_claims / confidence_by_claim / …); only the deterministic descriptor +
+  // inventory pre-image. Fail closed if a future edit serializes a leaf-read instance here.
+  assertGatingKeyExcludesInEpochOutput("sourceObservationsReuseSha256", reuseKey);
+  return sha256Text(stableJson(reuseKey));
 }
 
 function authoredArtifactReuseMatch(args: {
@@ -1247,8 +1289,9 @@ function authoredArtifactReuseMatch(args: {
   confirmationProviderRealization: ReconstructConfirmationProviderRealization;
   directiveAuthor: ReconstructDirectiveAuthor;
   confirmationProvider: ReconstructConfirmationProvider;
+  leafReadAggregateFingerprint?: string | null;
 }): AuthoredArtifactReuseMatch {
-  return {
+  const match: AuthoredArtifactReuseMatch = {
     session_id: args.sessionId,
     intent_sha256: sha256Text(args.intent),
     target_refs_sha256: sha256Text(stableJson(args.targetRefs.map((ref) => path.resolve(ref)).sort())),
@@ -1336,7 +1379,144 @@ function authoredArtifactReuseMatch(args: {
     document_excerpt_projection_budget:
       args.directiveAuthor.documentExcerptProjectionBudget ??
         DOCUMENT_EXCERPT_PROJECTION_FLOOR,
+    leaf_read_aggregate_fingerprint_sha256:
+      args.leafReadAggregateFingerprint ?? null,
   };
+  // P1-C2-A (R3): the seed gating key must never carry in-epoch LLM output — only the fingerprint
+  // VALUE folded above. Fail closed if a future edit serializes a comprehension-artifact instance
+  // (spine_claims / confidence_by_claim / …) into the reuse match (the self-gating circularity).
+  assertGatingKeyExcludesInEpochOutput("authoredArtifactReuseMatch", match);
+  return match;
+}
+
+/** Non-authoritative manual-invalidation knob for the leaf-read epoch (ⓑ); bump to force a rotation
+ *  independent of model/prompt identity. */
+const LEAF_READ_COMPREHENSION_VERSION = "p1-c2-a:1";
+
+interface LeafReadStageResult {
+  /** llm-edition ComprehensionArtifacts produced for low-confidence regions, by observation_id. */
+  artifactsByObservation: Map<string, ComprehensionArtifact>;
+  /** Order-independent aggregate (R8) of the per-observation leaf-read fingerprints; null when no
+   *  low-confidence region triggered a leaf-read. Folded into the seed reuse key (R2). */
+  aggregateFingerprint: string | null;
+}
+
+/**
+ * P1-C2-A post-observation leaf-read stage (§11 Step D). For each spreadsheet observation with a
+ * low-confidence (unstructured) region, run the FIRST LLM-touch (the leaf-reader) and build a
+ * SEPARATE Layer-2 ComprehensionArtifact (the embedded deterministic companion is untouched, R1).
+ * Returns the produced artifacts (joined by observation_id) and the order-independent aggregate of
+ * the per-observation llm_touch_fingerprints — the VALUE the seed reuse key folds (R2/R8), never the
+ * leaf-read output. A failed/empty read leaves the region to the deterministic companion (degrade);
+ * the fingerprint is still computed (pre-execution ⓐ+ⓑ) so a model swap rotates the seed key even
+ * when the read produced nothing.
+ */
+export async function runSpreadsheetLeafReadStage(args: {
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  directiveAuthor: ReconstructDirectiveAuthor;
+  sessionRoot: string;
+}): Promise<LeafReadStageResult> {
+  const artifactsByObservation = new Map<string, ComprehensionArtifact>();
+  const perObservationFingerprints: { observation_id: string; fingerprint: string }[] = [];
+  const readLeaf = args.directiveAuthor.readLeafLabels?.bind(args.directiveAuthor);
+  if (!readLeaf) return { artifactsByObservation, aggregateFingerprint: null };
+
+  // ⓑ pre-execution LLM-touch pre-image — known before any leaf-read call (model/prompt identity).
+  // The route residue (adapter/billing/effort) is not threaded yet; the model identity + prompt hash
+  // + version are the load-bearing rotation triggers (DET-1).
+  const preExecution: LlmTouchPreExecutionPreImage = {
+    leaf_reader_model_identity: args.directiveAuthor.reuseModelIdentity ?? "unspecified",
+    execution_adapter: null,
+    declared_billing_mode: null,
+    reasoning_effort: null,
+    leaf_prompt_sha256: leafReadPromptSha256(),
+    schema_tool_version: `leaf-read:v${COMPREHENSION_ARTIFACT_CONTRACT_VERSION}`,
+    comprehension_version: LEAF_READ_COMPREHENSION_VERSION,
+  };
+
+  for (const observation of args.sourceObservations.observations) {
+    if (observation.target_material_kind !== "spreadsheet") continue;
+    const inventory = observation.structural_data.workbook_inventory as
+      | WorkbookStructuralInventory
+      | undefined;
+    if (!inventory) continue;
+    const regions = extractLowConfidenceLeafEvidence(inventory);
+    if (regions.length === 0) continue;
+
+    // The fingerprint is per-observation (ⓐ from this observation's inventory + run-global ⓑ) and is
+    // recorded regardless of read outcome — the decision to leaf-read is what the seed key tracks.
+    const fingerprint = llmTouchFingerprint(
+      {
+        content_sha256:
+          typeof observation.structural_data.content_sha256 === "string"
+            ? observation.structural_data.content_sha256
+            : "",
+        adapter_version: workbookInventoryAdapterVersion(inventory) ?? 0,
+        value_tile_config: workbookInventoryValueTileConfig(inventory),
+        data_layer_caps: workbookInventoryDataLayerCaps(inventory),
+      },
+      preExecution,
+    ).fingerprint_sha256;
+    perObservationFingerprints.push({
+      observation_id: observation.observation_id,
+      fingerprint,
+    });
+
+    const labels: LeafReadLabel[] = [];
+    for (const region of regions) {
+      let outcome: LeafReadOutcome;
+      try {
+        outcome = await readLeaf(region);
+      } catch (error) {
+        // The author's readLeafLabels already degrades hard failures to {kind:'failed'}; a throw
+        // here is unexpected — degrade defensively (never abort the run for a leaf-read, §11 R9).
+        outcome = { kind: "failed", reason: `leaf-read threw: ${(error as Error).message}` };
+      }
+      if (outcome.kind === "produced") labels.push(...outcome.result.labels);
+    }
+    if (labels.length === 0) continue; // all regions unread/failed → deterministic companion stands.
+
+    const leafRead: LeafReadProducedResult = {
+      labels,
+      limiting_region_ref: `${observation.observation_id}:low_confidence`,
+      limiting_reason: "low header_confidence region(s); labels read provisionally from value-tile signatures",
+    };
+    const artifact = buildLlmComprehensionArtifact({
+      observationId: observation.observation_id,
+      inventory,
+      leafRead,
+      fingerprint,
+    });
+    const violations: string[] = [];
+    validateComprehensionArtifact(artifact, violations);
+    if (violations.length > 0) {
+      throw new Error(
+        `leaf-read comprehension artifact failed validation for ${observation.observation_id}: ${violations.join("; ")}`,
+      );
+    }
+    artifactsByObservation.set(observation.observation_id, artifact);
+
+    // Persist as a sidecar joined by observation_id (consumed by the prompt projection in Step E;
+    // audit trail meanwhile). The seed reuse key folds the fingerprint VALUE, not this file.
+    const comprehensionDir = path.join(args.sessionRoot, "comprehension");
+    await fs.mkdir(comprehensionDir, { recursive: true });
+    await writeYamlDocument(
+      path.join(comprehensionDir, `${observation.observation_id}.leaf-read.yaml`),
+      artifact,
+    );
+  }
+
+  const aggregateFingerprint =
+    perObservationFingerprints.length === 0
+      ? null
+      : sha256Text(
+          stableJson(
+            perObservationFingerprints
+              .slice()
+              .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0)),
+          ),
+        );
+  return { artifactsByObservation, aggregateFingerprint };
 }
 
 async function writeFreshAuthoredYamlDocument<T>(
@@ -7096,7 +7276,14 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
   final_output: FINAL_OUTPUT_SYSTEM_PROMPT,
   purpose_confirmation: PURPOSE_CONFIRMATION_SYSTEM_PROMPT,
   seed_confirmation: SEED_CONFIRMATION_SYSTEM_PROMPT,
+  // P1-C2-A: the leaf-read prompt is an authoring template too — cataloguing it (CG-1) makes editing
+  // it rotate the reuse key. (The leaf-read artifact's own reuse is additionally gated by the
+  // llm_touch_fingerprint, which folds leafReadPromptSha256().)
+  leaf_read: LEAF_READ_SYSTEM_PROMPT,
 };
+
+/** Max tokens for the bounded leaf-read JSON (a short labels/unread object). */
+const LEAF_READ_MAX_TOKENS = 2048;
 
 /**
  * sha256 of the authoring prompt-template contract (DET-1 / CG-1). Folded into
@@ -7166,6 +7353,28 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     documentExcerptProjectionTruncations,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
+
+    async readLeafLabels(evidence) {
+      // The leaf-read is the run's FIRST LLM-touch (§3.2). It goes through callJsonAuthor (shared
+      // JSON-author path: telemetry + repair) so the mock fixture (INV-MOCK-1) and the live caller
+      // are both covered by the injected llmCall. The model identity reaches the resume key only via
+      // the llm_touch_fingerprint (ⓑ), never through this output.
+      return readLowConfidenceLeaf({
+        evidence,
+        callLlm: async (systemPrompt, userPayload) =>
+          JSON.stringify(
+            await callJsonAuthor({
+              llmCall,
+              llmConfig,
+              artifactName: "leaf-read",
+              systemPrompt,
+              userPayload,
+              maxTokens: LEAF_READ_MAX_TOKENS,
+              telemetry,
+            }),
+          ),
+      });
+    },
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
@@ -11267,6 +11476,17 @@ export async function runReconstruct(
     lensIds,
     admittedDomainIds: params.domain ? [params.domain] : [],
   });
+  // P1-C2-A (§11 Step D): run the first LLM-touch — the leaf-read over low-confidence spreadsheet
+  // regions — and capture the order-independent aggregate fingerprint the seed reuse key folds
+  // (R2/R8) so a leaf-reader model/prompt swap rotates the seed. Runs once on the initial observation
+  // set; the embedded deterministic companion is untouched (R1). A no-op when no low-confidence
+  // spreadsheet region exists (the two run shapes are then identical).
+  const leafReadStage = await runSpreadsheetLeafReadStage({
+    sourceObservations,
+    directiveAuthor,
+    sessionRoot,
+  });
+  const leafReadAggregateFingerprint = leafReadStage.aggregateFingerprint;
   const refreshAuthoredArtifactReuseMatch = (): void => {
     currentAuthoredArtifactReuseMatch = authoredArtifactReuseMatch({
       sessionId,
@@ -11290,6 +11510,7 @@ export async function runReconstruct(
       confirmationProviderRealization: params.confirmationProviderRealization,
       directiveAuthor,
       confirmationProvider,
+      leafReadAggregateFingerprint,
     });
   };
   refreshAuthoredArtifactReuseMatch();

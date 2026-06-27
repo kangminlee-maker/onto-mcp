@@ -5997,7 +5997,8 @@ describe("runReconstruct", () => {
     // The shared base system + every authoring stage template (incl. both branches of
     // each conditional builder) is declared exactly once. The count is pinned so adding
     // or removing a catalog entry forces a deliberate update here.
-    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(34);
+    // 35 = 34 + leaf_read (P1-C2-A: the leaf-read prompt is an authoring template too).
+    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(35);
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.base_system).toContain(
       "You are authoring reconstruct semantic artifacts.",
     );
