@@ -305,6 +305,13 @@ export interface ReconstructDirectiveAuthor {
    * keys its reuse on the llm_touch_fingerprint, never on this output.
    */
   readLeafLabels?(evidence: LeafReadRegionEvidence): Promise<LeafReadOutcome>;
+  /**
+   * P1-C2-A Step E: provide the leaf-read provisional labels (observation_id → short label strings)
+   * so this author renders them as a NON-AUTHORITATIVE hint in every observation prompt. Set once by
+   * runReconstruct after the leaf-read stage; the labels reach the prompt TEXT only, never the
+   * observation artifact or the reuse key. Optional — a no-op author simply omits it.
+   */
+  setLeafReadProvisionalLabels?(labels: ReadonlyMap<string, readonly string[]>): void;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -6059,6 +6066,13 @@ interface ObservationPromptPayloadOptions {
   recordDocumentExcerptProjectionTruncation?: (
     truncation: DocumentExcerptProjectionTruncation,
   ) => void;
+  /**
+   * P1-C2-A Step E: provisional leaf-read labels per observation_id, surfaced as a NON-AUTHORITATIVE
+   * prompt hint for low-confidence (unstructured) regions. Rendered into the prompt TEXT only — never
+   * into the observation artifact or the reuse key (the reuse key already folds the leaf-read
+   * fingerprint, and serializes only a fixed field subset, so these labels cannot leak into it).
+   */
+  provisionalLabelsByObservation?: ReadonlyMap<string, readonly string[]>;
 }
 
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
@@ -6183,6 +6197,9 @@ function compactStructuralDataForPrompt(
 
 // Exported for the multi-document excerpt-budget regression test (the single-
 // document expansion gate); not part of the product surface.
+/** Bounded cap on provisional leaf-read labels rendered into one observation's prompt (Step E). */
+const MAX_PROVISIONAL_LABELS_PER_OBSERVATION = 64;
+
 export function observationPromptPayload(
   sourceObservations: ReconstructSourceObservationsArtifact,
   options: ObservationPromptPayloadOptions = {},
@@ -6250,6 +6267,19 @@ export function observationPromptPayload(
               : options.documentExcerptCharBudget ??
                 DOCUMENT_EXCERPT_PROJECTION_FLOOR,
           });
+        }
+        // P1-C2-A Step E: surface the provisional leaf-read labels (low-confidence regions) as an
+        // explicit NON-AUTHORITATIVE hint. Bounded; prompt-text only (never the artifact/reuse key).
+        const provisionalLabels = options.provisionalLabelsByObservation?.get(
+          observation.observation_id,
+        );
+        if (provisionalLabels && provisionalLabels.length > 0) {
+          payload.provisional_labels = {
+            authority: "non_authoritative",
+            note:
+              "Provisional labels read for low-confidence (unstructured) regions whose header the deterministic observer could not resolve. Treat as hints, not facts; the value-tile signatures above are authoritative for structure.",
+            labels: provisionalLabels.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION),
+          };
         }
       }
       return payload;
@@ -7345,9 +7375,26 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   };
   const telemetry = createReconstructExecutionTelemetryCollector();
 
+  // P1-C2-A Step E: the leaf-read provisional labels (set after the leaf-read stage). projected into
+  // every observation prompt as a non-authoritative hint; never folded into the reuse key.
+  let leafReadProvisionalLabels: ReadonlyMap<string, readonly string[]> | null = null;
+  const projectObservationsForPrompt = (
+    obs: ReconstructSourceObservationsArtifact,
+    opts: ObservationPromptPayloadOptions = {},
+  ): unknown =>
+    observationPromptPayload(obs, {
+      ...opts,
+      ...(leafReadProvisionalLabels
+        ? { provisionalLabelsByObservation: leafReadProvisionalLabels }
+        : {}),
+    });
+
   return {
     authorId,
     owner: "host_llm",
+    setLeafReadProvisionalLabels(labels: ReadonlyMap<string, readonly string[]>): void {
+      leafReadProvisionalLabels = labels;
+    },
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
     documentExcerptProjectionTruncations,
@@ -7399,7 +7446,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             sourceScoutPackRef: input.sourceScoutPackRef,
             sourceScoutPackValidationRef: input.sourceScoutPackValidationRef,
           }),
-          source_observations: observationPromptPayload(input.sourceObservations, {
+          source_observations: projectObservationsForPrompt(input.sourceObservations, {
             contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
           }),
         },
@@ -7485,7 +7532,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           valid_observation_ids: selectedObservationIds(input.sourceObservationDirective),
           source_observation_directive_ref: input.sourceObservationDirectiveRef,
           selected_observations: input.sourceObservationDirective.selected_observations,
-          source_observations: observationPromptPayload(input.sourceObservations, {
+          source_observations: projectObservationsForPrompt(input.sourceObservations, {
             observationIds: selectedObservationIds(input.sourceObservationDirective),
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
             expandSingleDocumentExcerpt: true,
@@ -7726,7 +7773,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         source_observations_ref: input.sourceObservationsRef,
         selected_observation_ids: selectedObservationIdsForPurpose,
         selected_observations: input.sourceObservationDirective.selected_observations,
-        source_observations: observationPromptPayload(input.sourceObservations, {
+        source_observations: projectObservationsForPrompt(input.sourceObservations, {
           observationIds: selectedObservationIdsForPurpose,
           contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
           expandSingleDocumentExcerpt: true,
@@ -7770,7 +7817,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             selected_observation_ids: selectedObservationIdsForPurpose,
             selected_observations:
               input.sourceObservationDirective.selected_observations,
-            source_observations: observationPromptPayload(input.sourceObservations, {
+            source_observations: projectObservationsForPrompt(input.sourceObservations, {
               observationIds: selectedObservationIdsForPurpose,
               contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
               expandSingleDocumentExcerpt: true,
@@ -7964,7 +8011,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           material_admission_ledger_ref: input.materialAdmissionLedgerRef,
           material_admission_rows:
             compactMaterialAdmissionLedgerForPrompt(input.materialAdmissionLedger),
-          source_observations: observationPromptPayload(input.sourceObservations, {
+          source_observations: projectObservationsForPrompt(input.sourceObservations, {
             observationIds: requiredCoverageObservationIds,
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
             expandSingleDocumentExcerpt: true,
@@ -8014,7 +8061,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             session_id: input.sessionId,
             intent: input.intent,
             missing_coverage_observation_ids: missingCoverageObservationIds,
-            missing_observations: observationPromptPayload(input.sourceObservations, {
+            missing_observations: projectObservationsForPrompt(input.sourceObservations, {
               observationIds: missingCoverageObservationIds,
               contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
               expandSingleDocumentExcerpt: true,
@@ -8079,7 +8126,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           material_admission_ledger_ref: input.materialAdmissionLedgerRef,
           material_admission_rows:
             compactMaterialAdmissionLedgerForPrompt(input.materialAdmissionLedger),
-          source_observations: observationPromptPayload(input.sourceObservations, {
+          source_observations: projectObservationsForPrompt(input.sourceObservations, {
             observationIds: candidateObservationIds,
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
             expandSingleDocumentExcerpt: true,
@@ -8169,7 +8216,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           candidate_target_ref_obligations:
             candidateTargetRefObligations(input.candidateDisposition),
           source_observations_ref: input.sourceObservationsRef,
-          source_observations: observationPromptPayload(input.sourceObservations, {
+          source_observations: projectObservationsForPrompt(input.sourceObservations, {
             observationIds: seedObservationIds,
             includeStructuralData: false,
           }),
@@ -8240,7 +8287,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 compactCandidateDispositionForPrompt(input.candidateDisposition),
               candidate_target_ref_obligations:
                 candidateTargetRefObligations(input.candidateDisposition),
-              source_observations: observationPromptPayload(input.sourceObservations, {
+              source_observations: projectObservationsForPrompt(input.sourceObservations, {
                 observationIds: seedObservationIds,
                 includeStructuralData: false,
               }),
@@ -8284,7 +8331,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           ontology_seed_summary:
             compactOntologySeedForClaimPrompt(input.ontologySeed),
           ontology_seed_validation: input.ontologySeedValidation,
-          source_observations: observationPromptPayload(input.sourceObservations, {
+          source_observations: projectObservationsForPrompt(input.sourceObservations, {
             observationIds: claimEvidenceObservationIds(claims),
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
           }),
@@ -8596,7 +8643,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               compactOntologySeedForClaimPrompt(input.ontologySeed),
             ontology_seed_validation: input.ontologySeedValidation,
             source_observations_ref: input.sourceObservationsRef,
-            source_observations: observationPromptPayload(input.sourceObservations, {
+            source_observations: projectObservationsForPrompt(input.sourceObservations, {
               observationIds: args.observationIds,
               contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
             }),
@@ -9636,7 +9683,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
           },
           prompt_visible_observation_ids: promptObservationIds,
-          source_observations: observationPromptPayload(input.sourceObservations, {
+          source_observations: projectObservationsForPrompt(input.sourceObservations, {
             observationIds: promptObservationIds,
             contentExcerptCharLimit:
               POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
@@ -9780,7 +9827,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               (ref) => ref.observation_id,
             ),
           })),
-          source_observations: observationPromptPayload(
+          source_observations: projectObservationsForPrompt(
             input.sourceObservations,
             {
               observationIds: judgePromptObservationIds,
@@ -11487,6 +11534,22 @@ export async function runReconstruct(
     sessionRoot,
   });
   const leafReadAggregateFingerprint = leafReadStage.aggregateFingerprint;
+  // P1-C2-A Step E: hand the produced provisional labels to the author so it renders them as a
+  // non-authoritative hint in every observation prompt (prompt text only — the reuse key already
+  // folds the fingerprint above; these labels never reach it).
+  const provisionalLabelsByObservation = new Map<string, string[]>();
+  for (const [observationId, artifact] of leafReadStage.artifactsByObservation) {
+    const claims = artifact.spine_claims;
+    if (Array.isArray(claims) && claims.length > 0) {
+      provisionalLabelsByObservation.set(
+        observationId,
+        claims.map((claim) => `col${claim.column_index}: ${claim.tentative_label}`),
+      );
+    }
+  }
+  if (provisionalLabelsByObservation.size > 0) {
+    directiveAuthor.setLeafReadProvisionalLabels?.(provisionalLabelsByObservation);
+  }
   const refreshAuthoredArtifactReuseMatch = (): void => {
     currentAuthoredArtifactReuseMatch = authoredArtifactReuseMatch({
       sessionId,

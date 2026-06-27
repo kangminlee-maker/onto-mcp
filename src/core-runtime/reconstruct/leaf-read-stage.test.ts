@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { runSpreadsheetLeafReadStage, type ReconstructDirectiveAuthor } from "./run.js";
+import { observationPromptPayload, runSpreadsheetLeafReadStage, type ReconstructDirectiveAuthor } from "./run.js";
 import { readLowConfidenceLeaf } from "./leaf-reader.js";
 import { callReconstructMockLlm } from "./mock-llm-realization.js";
 
@@ -121,5 +121,43 @@ describe("runSpreadsheetLeafReadStage (P1-C2-A §11 Step D — live wiring)", ()
     });
     expect(result.artifactsByObservation.size).toBe(0);
     expect(result.aggregateFingerprint).toBeNull();
+  });
+});
+
+describe("Step E — provisional labels reach the authoring prompt (observationPromptPayload)", () => {
+  const oneObservation = () =>
+    ({
+      observations: [
+        {
+          observation_id: "obs-lo",
+          target_material_kind: "spreadsheet",
+          source_ref: "/x/book.xlsx",
+          location: "/x/book.xlsx",
+          summary: "spreadsheet",
+          structural_data: { basename: "book.xlsx" },
+        },
+      ],
+      skipped_refs: [],
+    }) as unknown as Parameters<typeof observationPromptPayload>[0];
+
+  it("renders a NON-AUTHORITATIVE provisional_labels hint when labels are provided", () => {
+    const payload = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["obs-lo", ["col0: transaction date", "col1: amount"]]]),
+    }) as Array<Record<string, any>>;
+    expect(payload[0].provisional_labels).toMatchObject({ authority: "non_authoritative" });
+    expect(payload[0].provisional_labels.labels).toEqual(["col0: transaction date", "col1: amount"]);
+    expect(payload[0].provisional_labels.note).toMatch(/hints, not facts/);
+  });
+
+  it("omits provisional_labels entirely when no labels are provided (existing prompt unchanged)", () => {
+    const payload = observationPromptPayload(oneObservation(), {}) as Array<Record<string, unknown>>;
+    expect(payload[0].provisional_labels).toBeUndefined();
+  });
+
+  it("does not attach labels for an observation with no provided labels", () => {
+    const payload = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["other-obs", ["ghost"]]]),
+    }) as Array<Record<string, unknown>>;
+    expect(payload[0].provisional_labels).toBeUndefined();
   });
 });
