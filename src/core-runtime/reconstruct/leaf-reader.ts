@@ -23,8 +23,13 @@ import {
 //  - The label/role/note TEXT is the LLM's only contribution. The confidence tags are DETERMINISTIC:
 //    the read is always forced confidence='low' and is_lower_bound=true — the LLM cannot claim a
 //    strong reading on a structurally weak region (graceful degrade, non-authoritative).
-//  - Input is bounded + aggregate-only (value-tile shapes/format-identities + header-candidate rows);
-//    NO raw cell values or literal formatCodes reach the LLM (source-safety, P1-C1 §3.4 inherited).
+//  - Input is bounded deterministic structural metadata: value-tile shapes/format-identities,
+//    header-candidate rows, and (for a resolved high-confidence column) the deterministic column
+//    HEADER LABEL + inferred type/distinct count. NO raw DATA cell values and no literal formatCodes
+//    reach the LLM (source-safety, P1-C1 §3.4). The header label is column IDENTITY (already visible
+//    to the authoring LLM via the inventory), not row data; PII/value redaction is out of scope by
+//    owner governance. So `captured_note` is free LLM text but is grounded ONLY on these aggregate
+//    signals + the header label — it has no raw data value to restate.
 //  - Localization stays grounded on the deterministic value-tile (degrade is naming-only); a wrong
 //    label cannot corrupt correlation because this cut feeds no reduce/merge.
 //  - Failure (LLM hard error) and empty reads are explicit outcomes, never a silent success (§11 R9).
@@ -44,13 +49,14 @@ export const LEAF_READ_SYSTEM_PROMPT = [
   "(low-confidence), or a high-confidence column whose structure is incomplete (free-text or",
   "high-residual content the deterministic summary does not pin down). The evidence is value-shape /",
   "display-format signatures, the rows where a signature changes, candidate header row indices, and —",
-  "for resolved columns — the deterministic column name / inferred type / distinct count. You are NOT",
-  "given raw cell values.",
+  "for a resolved column — the deterministic column HEADER LABEL / inferred type / distinct count. You",
+  "are NOT given raw DATA cell values: the header label is column identity, not row data.",
   "",
   "For each column you can read, return:",
   " - tentative_label: a SHORT label naming what the column most likely holds;",
   ' - semantic_role (optional): one of "category" | "measure" | "identifier" | "free_text" |',
-  '   "reference" when the signatures make the analytical role clear;',
+  '   "reference" — a SINGLE-COLUMN guess from the signals; "identifier"/"reference" are tentative',
+  "   hints only (relationships are judged downstream, not here);",
   " - captured_note (optional): a SHORT note on structure or meaning the signatures reveal that the",
   "   deterministic summary did not (e.g. a hidden grouping, or what a format boundary signifies).",
   "Omit a column you cannot read rather than guessing. Return STRICT JSON:",
@@ -59,8 +65,9 @@ export const LEAF_READ_SYSTEM_PROMPT = [
   '  "unread_columns": [{ "column_index": <int>, "reason": "<why unreadable>" }] }',
   "",
   "Your reads are provisional and non-authoritative; the runtime tags every read low-confidence.",
-  "Base every label, role, and note ONLY on the aggregate signatures provided — you have no raw cell",
-  "values, so a note must never invent or restate a literal cell value.",
+  "Base every label, role, and note ONLY on the deterministic signals provided (header label, inferred",
+  "type, distinct count, value-shape/format signatures, boundary rows) — you are given NO raw DATA cell",
+  "values, so a note must never invent or restate a literal data value.",
 ].join("\n");
 
 export function leafReadPromptSha256(): string {
@@ -71,7 +78,8 @@ export function leafReadPromptSha256(): string {
  *  structure-incomplete column in a HIGH-confidence sheet must not ship a false 'low header' lineage). */
 export type LeafReadTrigger = "low_confidence_header" | "structure_incomplete";
 
-/** Bounded, source-safe evidence for one leaf-read region (one sheet). NO raw cell values. */
+/** Bounded, source-safe evidence for one leaf-read region (one sheet). Deterministic structural
+ *  metadata + the column HEADER LABEL only; NO raw DATA cell values (source-safety, P1-C1 §3.4). */
 export interface LeafReadRegionEvidence {
   sheet: string;
   /** Why this region is read (P1-C2-B′). Defaults to low_confidence_header for the P1-C2-A path. */

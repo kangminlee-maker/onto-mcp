@@ -1405,8 +1405,12 @@ function authoredArtifactReuseMatch(args: {
 }
 
 /** Non-authoritative manual-invalidation knob for the leaf-read epoch (ⓑ); bump to force a rotation
- *  independent of model/prompt identity. */
-const LEAF_READ_COMPREHENSION_VERSION = "p1-c2-a:1";
+ *  independent of model/prompt identity. ⚠️ The read-set-shaping LOGIC (the isStructureIncomplete
+ *  predicate + the residual ordering in leaf-reader.ts) is NOT auto-folded — only the trigger CONFIG
+ *  (structure_leaf_trigger_config) and the prompt hash are. A change to that predicate/ordering code
+ *  MUST bump this knob (until a predicate-fingerprint fold lands; gate follow-up). Bumped from
+ *  "p1-c2-a:1" because P1-C2-B′ changed the read-set logic (low-confidence-only → +structure-incomplete). */
+const LEAF_READ_COMPREHENSION_VERSION = "p1-c2-b-prime:1";
 
 interface LeafReadStageResult {
   /** llm-edition ComprehensionArtifacts produced for structure-incomplete regions, by observation_id. */
@@ -6316,15 +6320,28 @@ export function observationPromptPayload(
         const hasLabels = provisionalLabels && provisionalLabels.length > 0;
         const hasCapped = cappedColumns && cappedColumns.length > 0;
         if (hasLabels || hasCapped) {
+          // Both lists are display-bounded for prompt size, but the bound must NEVER be a SILENT drop
+          // (gate RB6 + two-family gate finding): the *_total counts are AUTHORITATIVE, so a consumer
+          // can always tell when a list is shorter than its true count. This matters most for the
+          // not_examined_capped census — its whole contract is completeness; a silently-trimmed census
+          // would reproduce the over-trust it exists to prevent (a 64-long list read as the COMPLETE
+          // unexamined set). The labels list is similarly disclosed so re-tuning max_columns above the
+          // display cap cannot silently drop ACTUALLY-READ captures.
           payload.provisional_labels = {
             authority: "non_authoritative",
             note:
-              "Provisional reads for regions the deterministic observer could not fully capture (low-confidence headers or structure-incomplete columns). Treat 'labels' as hints, not facts; the value-tile signatures above are authoritative for structure. Columns under 'not_examined_capped' were read-candidates the fan-out cap left UNREAD — not examined (do not assume they were understood).",
+              "Provisional reads for regions the deterministic observer could not fully capture (low-confidence headers or structure-incomplete columns). Treat 'labels' as hints, not facts; the value-tile signatures above are authoritative for structure. Columns under 'not_examined_capped' were read-candidates the fan-out cap left UNREAD — not examined (do not assume they were understood). The '*_total' counts are AUTHORITATIVE: when a list is shorter than its total, the remaining columns were omitted only for prompt size and are STILL in that state — treat the totals, not the rendered list lengths, as the true census.",
             ...(hasLabels
-              ? { labels: provisionalLabels.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION) }
+              ? {
+                  labels: provisionalLabels.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION),
+                  labels_total: provisionalLabels.length,
+                }
               : {}),
             ...(hasCapped
-              ? { not_examined_capped: cappedColumns.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION) }
+              ? {
+                  not_examined_capped: cappedColumns.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION),
+                  not_examined_capped_total: cappedColumns.length,
+                }
               : {}),
           };
         }

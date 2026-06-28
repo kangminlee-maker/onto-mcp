@@ -178,6 +178,24 @@ describe("Step E — provisional labels reach the authoring prompt (observationP
     expect(payload[0].provisional_labels.labels).toEqual(["col0: amount [role: measure] — monetary total"]);
     expect(payload[0].provisional_labels.not_examined_capped).toEqual(["col7 (status)"]);
   });
+
+  it("P1-C2-B′ gate fix: a census/labels list beyond the display cap is NEVER a silent drop — the *_total count is authoritative", () => {
+    // 70 capped + 70 labels (> the 64 display cap). The rendered arrays are bounded for prompt size,
+    // but the *_total fields disclose the TRUE counts so the consumer can detect the lists are partial
+    // (the honesty contract the two-family gate found silently violated by an unmarked slice).
+    const capped = Array.from({ length: 70 }, (_, i) => `col${i} (h${i})`);
+    const labels = Array.from({ length: 70 }, (_, i) => `col${i}: label ${i}`);
+    const payload = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["obs-lo", labels]]),
+      cappedColumnsByObservation: new Map([["obs-lo", capped]]),
+    }) as Array<Record<string, any>>;
+    const pl = payload[0].provisional_labels;
+    expect(pl.not_examined_capped).toHaveLength(64); // bounded for prompt size…
+    expect(pl.not_examined_capped_total).toBe(70); // …but the true count is disclosed (no silent drop).
+    expect(pl.labels).toHaveLength(64);
+    expect(pl.labels_total).toBe(70);
+    expect(pl.note).toMatch(/_total.*AUTHORITATIVE/s);
+  });
 });
 
 // A source-observations artifact with ONE HIGH-confidence tabular spreadsheet observation whose
