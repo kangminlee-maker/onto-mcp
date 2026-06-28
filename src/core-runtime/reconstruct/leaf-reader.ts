@@ -256,23 +256,20 @@ export function extractStructureLeafEvidence(
 }
 
 /** Deterministic "structure trivially captures this column" predicate (P1-C2-B′ §2.1). A column is a
- *  leaf-read candidate UNLESS structure already says everything: a single constant value, or empty.
- *  (Cost is no concern, so the default leans toward reading — missing a capturable fact is the defect
- *  to avoid, not an extra read.)
+ *  leaf-read candidate UNLESS structure already says everything: a single constant value, empty, or a
+ *  single uniform formula. (Cost is no concern, so the default leans toward reading — missing a
+ *  capturable fact is the defect to avoid, not an extra read.)
  *
- *  DEFERRED (two-family gate follow-up): design §2.1 also lists a UNIFORM-FORMULA column (every data
- *  cell a single fill-down formula) as trivially-complete — structure fully captures it, so it need
- *  not be leaf-read. It is NOT skipped here because the inventory exposes formula coverage only at the
- *  WORKBOOK level (`formula_patterns` with ≤8 display-only cell addresses, not a per-column count), so
- *  a column cannot be PROVEN fully formula-driven from the current data. A heuristic skip
- *  (sample_cell's column + occurrence_count) could WRONGLY skip a non-uniform column — a MISS, the one
- *  failure this cut exists to prevent — whereas the current over-read is harmless (cost-no-concern) and
- *  safe (never misses; it only inflates the capped census). A safe skip needs a per-column formula
- *  signal from the shared observer = a separate cut. Until then the over-read stands. */
+ *  Uniform-formula skip (gate follow-up #3): the observer marks `is_uniform_formula` when EXACTLY one
+ *  single-column formula pattern provably covers the column's data cells (a fill-down whose references
+ *  shift but whose structure is one repeated formula; Excel shared-formula dedup collapses these). The
+ *  observer is conservative — a partial-formula / multi-formula / multi-column column is NOT marked, so
+ *  this never wrongly skips. (See InventoryColumn.is_uniform_formula for the residual title-row caveat.) */
 function isStructureIncomplete(column: InventoryColumn): boolean {
   if (column.inferred_type === "empty") return false;
   if (column.non_empty_count === 0) return false;
   if (column.distinct_count <= 1 && !column.distinct_count_is_estimate) return false; // single constant
+  if (column.is_uniform_formula) return false; // one repeated formula → structure fully captures it (#3)
   return true;
 }
 

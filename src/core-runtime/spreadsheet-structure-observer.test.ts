@@ -1427,10 +1427,49 @@ describe("design-C — aggregate-only boundary + admission passthrough", () => {
     }
   });
 
-  it("adapter_version is 4 (P1-C1 value-tile schema bump)", () => {
-    expect(SPREADSHEET_OBSERVER_ADAPTER_VERSION).toBe(4);
+  it("adapter_version is 5 (P1-C2-B′ #3 is_uniform_formula schema bump)", () => {
+    expect(SPREADSHEET_OBSERVER_ADAPTER_VERSION).toBe(5);
     const r = inv("a,b\n1,2\n", "/abs/v.csv");
-    expect(r.adapter_version).toBe(4);
+    expect(r.adapter_version).toBe(5);
+  });
+
+  it("marks a single uniform-formula (shared fill-down) column is_uniform_formula; literal/distinct/partial columns are NOT (#3)", () => {
+    // A = literals (no formula). B = shared fill-down (one master + followers → ONE deduped pattern
+    // over all 5 data cells → uniform). C = a non-shared distinct-text fill-down (=A2+10, =A3+10 → 5
+    // patterns → NOT uniform, conservative). D = a shared fill-down over only 4 of 5 data cells + one
+    // literal (count mismatch → NOT uniform). The three formula texts are distinct so they never dedup
+    // across columns (a cross-column collision would demote B to multi-column).
+    const v = (n: number) => `<v>${n}</v>`;
+    const sheet =
+      `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>` +
+      `<row r="1"><c r="A1" t="inlineStr"><is><t>x</t></is></c><c r="B1" t="inlineStr"><is><t>shared</t></is></c><c r="C1" t="inlineStr"><is><t>distinct</t></is></c><c r="D1" t="inlineStr"><is><t>partial</t></is></c></row>` +
+      [2, 3, 4, 5, 6]
+        .map((row, i) => {
+          const b = row === 2 ? `<f t="shared" si="0" ref="B2:B6">A${row}*2</f>` : `<f t="shared" si="0"/>`;
+          const c = `<f>A${row}+10</f>`; // distinct text per row → no dedup → multiple patterns
+          const d =
+            row === 6
+              ? v(99) // last D cell is a literal → D's single pattern covers only 4 of 5 cells
+              : `${row === 2 ? `<f t="shared" si="1" ref="D2:D5">A${row}*3</f>` : `<f t="shared" si="1"/>`}${v(row * 3)}`;
+          return (
+            `<row r="${row}">` +
+            `<c r="A${row}">${v(i + 1)}</c>` +
+            `<c r="B${row}">${b}${v(row * 2)}</c>` +
+            `<c r="C${row}">${c}${v(row + 10)}</c>` +
+            `<c r="D${row}">${d}</c>` +
+            `</row>`
+          );
+        })
+        .join("") +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync(makeMinimalXlsxParts(sheet));
+    const r = buildXlsxInventory({ sourceRef: "/abs/uf.xlsx", bytes, contentSha256: shaBytes(bytes), workbookKind: "xlsx" });
+    const cols = r.per_sheet_data[0]!.columns;
+    const byIdx = (i: number) => cols.find((c) => c.index === i)!;
+    expect(byIdx(1).is_uniform_formula).toBe(true); // B: one shared pattern covers all 5 data cells
+    expect(byIdx(0).is_uniform_formula).toBeFalsy(); // A: literals
+    expect(byIdx(2).is_uniform_formula).toBeFalsy(); // C: distinct-text fill-down → 5 patterns (conservative)
+    expect(byIdx(3).is_uniform_formula).toBeFalsy(); // D: a non-formula data cell → count mismatch (4 ≠ 5)
   });
 });
 

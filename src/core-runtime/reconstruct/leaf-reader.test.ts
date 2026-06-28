@@ -188,6 +188,7 @@ describe("extractStructureLeafEvidence (P1-C2-B′ §2.1 — deterministic struc
     expect(reads(oneHiCol({ distinct_count: 1 }))).toBe(false); // single constant → trivially complete
     expect(reads(oneHiCol({ inferred_type: "empty" }))).toBe(false); // empty type → trivially complete
     expect(reads(oneHiCol({ non_empty_count: 0 }))).toBe(false); // no data → trivially complete
+    expect(reads(oneHiCol({ is_uniform_formula: true }))).toBe(false); // one repeated formula → skip (#3)
   });
 
   // P1-C2-B′ gate follow-up #1: the read-set-shaping LOGIC source is hashed into the resume key so a

@@ -49,7 +49,11 @@ export const SPREADSHEET_OBSERVER_ADAPTER_ID = "spreadsheet-structure-observer";
 // v3 (design-C): per-column cardinality (distinct_count / distinct_count_is_estimate /
 // non_empty_count on every profiled column) + declared type=list enum members on
 // data_validations (validation_type / members / members_truncated / applies_to_columns).
-export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 4;
+// v4 (P1-C1): segmented value-tile projection promoted to production.
+// v5 (P1-C2-B′ #3): per-column `is_uniform_formula` — true when a single single-column formula
+// pattern provably covers the column's data cells (a repeated/shared fill-down). The leaf-read
+// trigger skips such columns (structure fully captures them). Additive optional field.
+export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 5;
 
 export type WorkbookKind = "xlsx" | "xlsm" | "csv" | "tsv" | "xls" | "xlsb" | "ods";
 
@@ -123,6 +127,16 @@ export interface InventoryColumn {
    *  scanned rows; a lower bound when the sheet's rows were row-cap truncated (signalled by
    *  the sheet-level `capture_truncated`, not a per-column flag). */
   non_empty_count: number;
+  /** P1-C2-B′ #3 (adapter v5): true when this column is provably a SINGLE uniform formula — exactly
+   *  one single-column formula pattern covers it with occurrence_count === non_empty_count (a fill-down
+   *  whose references shift but whose structure is one repeated formula; Excel shared-formula dedup
+   *  already collapses these to one pattern). Structure fully captures such a column, so the leaf-read
+   *  trigger skips it. Absent/false unless PROVEN (xlsx only; conservative — a partial-formula column,
+   *  a multi-formula column [a row-range break = real structure], or a multi-column fill is NOT marked,
+   *  erring to read). NOTE: occurrence_count is whole-sheet, so a formula sitting in a title/header row
+   *  identical to the data fill-down could in theory over-skip — semantically absurd for real headers
+   *  (labels), and the only loss is a redundant leaf-read of an already-captured formula column. */
+  is_uniform_formula?: boolean;
 }
 
 /** The ONE pure cardinality-priority calc point (design-C §2.1): selection, display, and the
@@ -1374,6 +1388,10 @@ interface ParsedWorksheet {
     occurrence_count: number;
     applied_ranges: string[];
     cross_sheet_refs: string[];
+    /** P1-C2-B′ #3: the origin-normalized column all this pattern's cells occupy, or null for a
+     *  multi-column fill. Used per-sheet to mark a single uniform-formula column; not merged to the
+     *  workbook level (column attribution is per-sheet). */
+    applies_to_single_column: number | null;
   }>;
   /** Every formula cell on this sheet, counted regardless of the distinct-pattern cap. */
   formula_cells_total: number;
@@ -1556,7 +1574,15 @@ function createWorksheetParser(args: {
   // formulaPatternsCapped (an honest lower-bound flag), not capsHit.
   const formulaPatterns = new Map<
     string,
-    { sample_cell: string; occurrence_count: number; applied_ranges: string[]; cross_sheet_refs: string[] }
+    {
+      sample_cell: string;
+      occurrence_count: number;
+      applied_ranges: string[];
+      cross_sheet_refs: string[];
+      // P1-C2-B′ #3: the origin-normalized column this pattern's cells occupy, or null once a cell in
+      // a DIFFERENT column is seen (multi-column fill). Used to detect a single uniform-formula column.
+      single_col: number | null;
+    }
   >();
   let formulaCellsTotal = 0;
   let formulaPatternsCapped = false;
@@ -1787,6 +1813,9 @@ function createWorksheetParser(args: {
           const existing = formulaPatterns.get(formulaText);
           if (existing) {
             existing.occurrence_count += 1;
+            // Single-column attribution (#3): a cell in a different column demotes the pattern to
+            // multi-column (null), so it can never mark a column as a single uniform formula.
+            if (existing.single_col !== null && existing.single_col !== cellCol) existing.single_col = null;
             if (existing.applied_ranges.length < XLSX_FORMULA_APPLIED_RANGE_CAP) {
               existing.applied_ranges.push(cellRef);
             }
@@ -1799,6 +1828,7 @@ function createWorksheetParser(args: {
               occurrence_count: 1,
               applied_ranges: [cellRef],
               cross_sheet_refs: extractCrossSheetRefs(formulaText, sheetName),
+              single_col: cellCol,
             });
           } else {
             // Distinct-pattern cap hit: the cell is still counted in formulaCellsTotal,
@@ -1890,6 +1920,7 @@ function createWorksheetParser(args: {
         occurrence_count: entry.occurrence_count,
         applied_ranges: entry.applied_ranges,
         cross_sheet_refs: entry.cross_sheet_refs,
+        applies_to_single_column: entry.single_col,
       })),
       formula_cells_total: formulaCellsTotal,
       formula_patterns_capped: formulaPatternsCapped,
@@ -2509,6 +2540,29 @@ export function buildXlsxInventory(args: {
     error_cells.push(...parsed.error_cells);
 
     const profile = profileSheetRows({ sheetName: sheetEntry.name, rows: parsed.rows, caps });
+    // P1-C2-B′ #3 (gate follow-up): deterministic uniform-formula detection. A column is structurally
+    // complete when EXACTLY ONE single-column formula pattern covers its data cells (occurrence_count
+    // === non_empty_count) — a fill-down whose refs shift but whose structure is one repeated formula
+    // (Excel stores these as shared formulas, already deduped to one pattern with an exact count). The
+    // leaf-read trigger skips such columns. Conservative: a partial-formula column, a multi-formula
+    // column (a row-range break is real structure), or a multi-column fill fails the match and is READ
+    // (safe over-read; never a wrong skip). Same origin-normalized column frame as profile.columns.
+    if (parsed.formula_patterns.length > 0) {
+      const singleColFormula = new Map<number, { total: number; patterns: number }>();
+      for (const p of parsed.formula_patterns) {
+        if (p.applies_to_single_column === null) continue;
+        const agg = singleColFormula.get(p.applies_to_single_column) ?? { total: 0, patterns: 0 };
+        agg.total += p.occurrence_count;
+        agg.patterns += 1;
+        singleColFormula.set(p.applies_to_single_column, agg);
+      }
+      for (const col of profile.columns) {
+        const agg = singleColFormula.get(col.index);
+        if (agg && agg.patterns === 1 && col.non_empty_count > 0 && agg.total === col.non_empty_count) {
+          col.is_uniform_formula = true;
+        }
+      }
+    }
     // P1-C1: the value-tile projection is a PURE FUNCTION of `parsed.rows` (the exact grid
     // `profileSheetRows` just consumed) + `parsed.formatRows` (per-cell cellXf, same pass) — zero
     // source re-scan, computed at the same site. Always produced now (bounded by caps + opts).
