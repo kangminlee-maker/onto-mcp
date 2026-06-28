@@ -188,12 +188,26 @@ function elementHasSourceEvidence(args: {
 function limitationRefsForElement(args: {
   element: ReconstructPurposeAdequacyRequiredElement;
   row: ReconstructMaterialAdmissionRow | null;
+  frontierRefs: string[];
 }): string[] {
   if (!args.row) return [];
   if (args.row.limitation_refs.length > 0) return args.row.limitation_refs;
   if (
-    purposeElementProjectsHandoffLimitation(args.element) &&
-    elementHasSourceEvidence(args)
+    elementHasSourceEvidence(args) && (
+      purposeElementProjectsHandoffLimitation(args.element) ||
+      // Defect-2: a frontier_required element that has source evidence but no
+      // available frontier (no accepted frontier refs) is structurally a handoff
+      // limitation — frontier deepening cannot happen, so its closure converts to a
+      // recorded limitation rather than collapsing to `missing` (which would force
+      // frontier_required + no_concrete_frontier = a permanent gate-throw deadlock on
+      // single-source input). Routing through the existing handoff-limitation path
+      // makes it limitation_backed -> limited_seed_possible, exactly like an element
+      // the author explicitly declared as projecting handoff_limitations. Evidence
+      // presence is the safety boundary: a frontier_required element WITHOUT evidence
+      // stays `missing` (a genuine hole the gate still refuses).
+      (args.element.closure_expectation === "frontier_required" &&
+        args.frontierRefs.length === 0)
+    )
   ) {
     return [`purpose_handoff_limitation:${slug(args.element.element_id)}`];
   }
@@ -533,7 +547,7 @@ export function buildSeedAuthoringReadinessFromArtifacts(args: {
   const frontierRefs = acceptedFrontierRefIds(args.sourceFrontierValidations ?? []);
   const closureRows = purposeElements.map((element) => {
     const row = materialRowsByElement.get(element.element_id) ?? null;
-    const limitationRefs = limitationRefsForElement({ element, row });
+    const limitationRefs = limitationRefsForElement({ element, row, frontierRefs });
     return {
       closure_row_id: `seed-authoring-closure:${slug(element.element_id)}`,
       required_element_ref: element.element_id,

@@ -366,7 +366,14 @@ describe("seed authoring readiness validation", () => {
     ).not.toThrow();
   });
 
-  it("projects frontier_required without making validation invalid", () => {
+  it("degrades a frontier_required element with evidence and no available frontier to limited_seed_possible (Defect-2)", () => {
+    // Defect-2: this element expects frontier deepening (closure_expectation=frontier_required)
+    // and has source evidence, but the single-source run produced no accepted frontier
+    // (frontier_availability=no_concrete_frontier). It does NOT declare handoff_limitations in
+    // expected_seed_ref_families — the only difference from the "explicit handoff-limitation"
+    // case below. Before the fix this collapsed to `missing` -> frontier_required -> permanent
+    // gate-throw deadlock. The fix routes it through the existing handoff-limitation path
+    // (synthetic purpose_handoff_limitation ref -> limitation_backed -> limited_seed_possible).
     const { sourcePurpose, purposeValidation, materialAdmissionLedger, readiness } =
       buildReadiness(requiredElement({
         element_id: "purpose-element-frontier-state",
@@ -388,12 +395,98 @@ describe("seed authoring readiness validation", () => {
       sourceFrontierValidations: [sourceFrontierValidation()],
     });
 
-    expect(readiness.readiness_classification).toBe("frontier_required");
-    expect(readiness.source_sufficiency_state).toBe("insufficient_for_claim_scope");
-    expect(readiness.exploration_budget_state).toBe("max_round_exhausted");
+    expect(readiness.readiness_classification).toBe("limited_seed_possible");
+    expect(readiness.closure_rows[0]?.closure_state).toBe("limitation_backed");
+    expect(readiness.closure_rows[0]?.limitation_refs).toEqual([
+      "purpose_handoff_limitation:purpose-element-frontier-state",
+    ]);
+    expect(readiness.frontier_availability).toBe("no_concrete_frontier");
+    expect(readiness.source_sufficiency_state).toBe("sufficient_for_claim_scope");
     expect(readiness.max_round_exhaustion_interpretation)
-      .toBe("exhausted_with_open_frontier");
+      .toBe("exhausted_after_sufficient_selected_scope");
     expect(validation.validation_status).toBe("valid");
+    expect(() =>
+      assertSeedAuthoringReadinessAllowsSeed({ readiness, validation })
+    ).not.toThrow();
+  });
+
+  it("does NOT degrade a frontier_required element that has no evidence (genuine hole stays missing -> frontier_required)", () => {
+    // Safety boundary (Defect-2): evidence presence is what separates a degradeable
+    // frontier-collapse from a genuine hole. With no supporting evidence and no source refs,
+    // the element must stay `missing` and the gate must still refuse — degrade must not leak
+    // a synthetic limitation ref to an empty hole.
+    const { sourcePurpose, purposeValidation, materialAdmissionLedger, readiness } =
+      buildReadiness(requiredElement({
+        element_id: "purpose-element-frontier-hole",
+        element_kind: "state",
+        description: "Frontier element with no grounding evidence.",
+        closure_expectation: "frontier_required",
+        supporting_evidence_refs: [],
+        member_source_refs: [],
+      }));
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: readiness,
+      sourcePurposeCandidates: sourcePurpose,
+      sourcePurposeCandidatesValidation: purposeValidation,
+      targetMaterialProfileValidation: targetMaterialProfileValidation(),
+      sourceScoutPackValidation: sourceScoutPackValidation(),
+      sourceObservationDirectiveValidation: sourceObservationDirectiveValidation(),
+      purposeConfirmationValidation: purposeConfirmationValidation(),
+      materialAdmissionLedger,
+      candidateDispositionValidation: candidateDispositionValidation(),
+      sourceFrontierValidations: [sourceFrontierValidation()],
+    });
+
+    expect(readiness.closure_rows[0]?.closure_state).toBe("missing");
+    expect(readiness.closure_rows[0]?.limitation_refs).toEqual([]);
+    expect(readiness.readiness_classification).toBe("frontier_required");
+    expect(() =>
+      assertSeedAuthoringReadinessAllowsSeed({ readiness, validation })
+    ).toThrow();
+  });
+
+  it("does NOT degrade a frontier_required element when a concrete frontier is available (frontier_backed -> frontier_required)", () => {
+    // When exploration accepted a frontier ref, the element is frontier_backed and the run
+    // must keep exploring (frontier_required) rather than degrade — degrade is only for
+    // no_concrete_frontier. This also keeps the legitimate frontier_required path covered.
+    const { sourcePurpose, purposeValidation, materialAdmissionLedger, readiness } =
+      buildReadiness(
+        requiredElement({
+          element_id: "purpose-element-frontier-open",
+          element_kind: "state",
+          description: "Frontier element with an accepted frontier ref.",
+          closure_expectation: "frontier_required",
+        }),
+        {
+          sourceFrontierValidations: [{
+            ...sourceFrontierValidation(),
+            accepted_frontier_ref_ids: ["frontier-ref-1"],
+            no_next_frontier_accepted: false,
+          }],
+        },
+      );
+
+    const validation = validateSeedAuthoringReadiness({
+      seedAuthoringReadiness: readiness,
+      sourcePurposeCandidates: sourcePurpose,
+      sourcePurposeCandidatesValidation: purposeValidation,
+      targetMaterialProfileValidation: targetMaterialProfileValidation(),
+      sourceScoutPackValidation: sourceScoutPackValidation(),
+      sourceObservationDirectiveValidation: sourceObservationDirectiveValidation(),
+      purposeConfirmationValidation: purposeConfirmationValidation(),
+      materialAdmissionLedger,
+      candidateDispositionValidation: candidateDispositionValidation(),
+      sourceFrontierValidations: [{
+        ...sourceFrontierValidation(),
+        accepted_frontier_ref_ids: ["frontier-ref-1"],
+        no_next_frontier_accepted: false,
+      }],
+    });
+
+    expect(readiness.closure_rows[0]?.closure_state).toBe("frontier_backed");
+    expect(readiness.frontier_availability).toBe("concrete_frontier_available");
+    expect(readiness.readiness_classification).toBe("frontier_required");
     expect(() =>
       assertSeedAuthoringReadinessAllowsSeed({ readiness, validation })
     ).toThrow(/does not allow/);
