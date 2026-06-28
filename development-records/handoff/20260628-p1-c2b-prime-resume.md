@@ -1,10 +1,10 @@
-# RESUME — P1-C2-B′ (결정론 "구조-불완전" 트리거 + LLM capture): Steps 2-4
+# RESUME — P1-C2-B′ (결정론 "구조-불완전" 트리거 + LLM capture): ✅ Steps 1-4 완결
 
-> **START-HERE.** `/clear` 후 fresh 세션이 **이 문서 하나로** P1-C2-B′ Steps 2-4를 이어받는다. 날짜 2026-06-28. 브랜치 `feat/comprehension-cut2-de-risk`. HEAD=`819e867`.
-> P1-C2-B′ = owner 재절단판(원안 P1-C2-B "LLM 의미 triage"는 교차검증 2회 redesign_narrow → owner가 결합 자체를 제거). **Step 1(결정론 트리거) 완료·커밋. Steps 2-4 잔여 = mock-first 빌드.**
+> **START-HERE.** 날짜 2026-06-28. 브랜치 `feat/comprehension-cut2-de-risk`. HEAD=`5259962`.
+> P1-C2-B′ = owner 재절단판(원안 P1-C2-B "LLM 의미 triage"는 교차검증 2회 redesign_narrow → owner가 결합 자체를 제거). **✅ Steps 1-4 전부 완결·커밋(mock-first). 다음 = ★분기점(101MB 실-LLM seed 품질·한도/승인 시점) 또는 교차검증 게이트.**
 
 ## 현 상태 (한 줄)
-**✅ P1-C2-A 완결**(커밋 `24404fc` A-C·`01841b8` D·`27b2220` E) = leaf-read가 저신뢰 영역서 라이브 발화·resume-sound·잠정 라벨이 authoring 도달. **✅ P1-C2-B′ Step 1 완결**(커밋 `819e867`) = 결정론 "구조-불완전" 트리거. **다음 = Steps 2-4**(capture 일반화·stage 배선·Step E·커밋).
+**✅ P1-C2-A 완결**(커밋 `24404fc` A-C·`01841b8` D·`27b2220` E). **✅ P1-C2-B′ 완결**: Step 1(`819e867` 결정론 트리거)·**Steps 2-4(`5259962`)** = leaf-read label→**CAPTURE 일반화**(role/note·domain-agnostic enum)·stage가 `extractStructureLeafEvidence` 배선(저신뢰 무회귀+구조-불완전 고신뢰 컬럼·cap)·트리거 config를 fingerprint ⓑ에 fold(재튜닝→회전)·Step E가 capture 투영 + **정직 `not_examined_capped` census**(RB6). 검증=ts-core clean·**full vitest 2036**(baseline 2028+8)·정적 게이트 6종.
 
 ## ★ 왜 P1-C2-B′인가 (이 피벗을 *반드시* 이해하고 시작)
 원안 P1-C2-B = "LLM이 의미 깊이를 *배분*해 어디를 읽을지 결정". **게이트 2회 모두 redesign_narrow**(설계 `development-records/design/20260628-p1-cut2b-semantic-triage-design.md` §11/§11.1): 근본 = **LLM 판단(비결정 allocation)이 read-set을 좌우 → DET-1 silent-stale resume P0 재생성**(이 프로젝트가 계속 싸운 부류; 내가 fix를 2번 시도해 2번 실패).
@@ -28,7 +28,14 @@
 - `LeafReadRegionEvidence.trigger`(`low_confidence_header`|`structure_incomplete` = RB8 false-provenance 닫음) + optional 결정론 컬럼신호(name/type/distinct·**raw값 0**). `StructureLeafTriggerOpts`·`DEFAULT_STRUCTURE_LEAF_TRIGGER_OPTS{max_columns:64}`(PRELIMINARY).
 - 테스트=`leaf-reader.test.ts`("extractStructureLeafEvidence" describe 3건: 무회귀+skip·residual 우선순위+capped·결정론).
 
-## ▶ Steps 2-4 (mock-first·설계 §6)
+## ✅ Steps 2-4 완료 (커밋 `5259962`) — 구현 요약
+- **Step 2**: `readLowConfidenceLeaf`→**`readStructureLeaf`** rename·프롬프트 일반화(첫 줄=mock 디스패치 키 유지)·`semantic_role`(category|measure|identifier|free_text|reference·`LeafSemanticRole` frame-neutral enum·미인식 role drop·label 유지)+`captured_note`(trim·240자 bound·aggregate-only=source-safe). `ProvisionalLabelClaim`/`LeafReadLabel`에 optional role/note(producer/attempt 모델 무변경). mock 분기 capture 반환. `LLM_TOUCH_IN_EPOCH_OUTPUT_FIELDS`에 role/note 추가(gating-key 누출 fail-closed).
+- **Step 3**: stage가 `extractStructureLeafEvidence(inventory, triggerOpts)` 사용(저신뢰 무회귀+구조-불완전 cap). `structure_leaf_trigger_config`를 fingerprint **ⓑ**에 fold(max_columns 재튜닝→reuse key 회전). `runSpreadsheetLeafReadStage`에 optional `triggerOpts`(default `DEFAULT_STRUCTURE_LEAF_TRIGGER_OPTS`).
+- **Step 4**: `provisionalLabelsByObservation` 라인이 role/note 운반(`col0: amount [role: measure] — note`)·**별도 `cappedColumnsByObservation` 채널**(`setLeafReadCappedColumns`)이 `not_examined_capped` census 투영(소비자 over-trust 차단·RB6). `LeafReadStageResult.cappedColumnsByObservation` 추가.
+- **테스트**: leaf-reader +3(capture role/note·미인식 role drop·structure_incomplete limiting_reason)·fingerprint +1(trigger-config-rotation)·stage +4(capped census·labels+capped 동시·고신뢰 capped·config-rotation resume).
+- **잔여(이 cut 밖)**: ★분기점=101MB 실 seed 품질(실-LLM·한도/승인)·trivially-complete의 formula skip 미구현(harmless over-read)·raw-value 패턴(source-safety 경계).
+
+## ▶ 원안 Steps 2-4 명세 (참조용·구현 완료)
 
 ### Step 2 — capture 일반화 (label→capture) + mock
 `readLowConfidenceLeaf`(leaf-reader.ts:253) → **`readStructureLeaf`** 일반화(또는 확장): LLM이 *구조 못잡은 것* 포착 = 컬럼별 `{tentative_label, semantic_role?(category|measure|identifier|free_text|reference), captured_note?}`. **저신뢰 강제 태깅 유지**(confidence='low'·is_lower_bound=true·non-authoritative). 프롬프트=`LEAF_READ_SYSTEM_PROMPT` 일반화(첫 줄=mock 디스패치 키 안정 유지) + CG-1 카탈로그(`RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.leaf_read`, run.ts) 갱신. **mock 분기**(`mock-llm-realization.ts` `callReconstructMockLlm` "Read provisional column labels..." 분기) capture 반환으로 일반화. **source-safe**(raw값 0). `LeafReadLabel`/`LeafReadProducedResult`(comprehension-artifact.ts) 확장 시 ProvisionalLabelClaim에 role/note 추가(기존 producer/attempt 모델 무변경).
