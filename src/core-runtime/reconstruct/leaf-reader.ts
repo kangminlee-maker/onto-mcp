@@ -5,17 +5,24 @@ import {
   type SheetValueTileProjection,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
-import type { LeafReadLabel, LeafReadProducedResult } from "./comprehension-artifact.js";
+import {
+  LEAF_SEMANTIC_ROLES,
+  type LeafReadLabel,
+  type LeafReadProducedResult,
+  type LeafSemanticRole,
+} from "./comprehension-artifact.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// leaf-reader (§3.2 / P1-C2-A) — the FIRST LLM-touch. For a low-confidence (unstructured) region
-// the deterministic observer leaves the label blank ("which row is the header?" is a reading
-// question, not a deterministic one). The leaf-reader asks the LLM for a PROVISIONAL label.
+// leaf-reader (§3.2 / P1-C2-A · P1-C2-B′) — the FIRST LLM-touch. For a region the deterministic
+// observer could not fully capture — a low-confidence (unstructured) region, OR a high-confidence
+// column whose structure is incomplete (P1-C2-B′ §3) — the leaf-reader asks the LLM to CAPTURE what
+// structure missed: a provisional label, an optional analytical role, and an optional note on the
+// structure/meaning the aggregate signatures reveal.
 //
 // Honesty (§2.2/§2.3):
-//  - The label TEXT is the LLM's only contribution. The confidence tags are DETERMINISTIC: a
-//    low-confidence region forces confidence='low' and is_lower_bound=true — the LLM cannot claim
-//    a strong label on a structurally weak region (graceful degrade, non-authoritative).
+//  - The label/role/note TEXT is the LLM's only contribution. The confidence tags are DETERMINISTIC:
+//    the read is always forced confidence='low' and is_lower_bound=true — the LLM cannot claim a
+//    strong reading on a structurally weak region (graceful degrade, non-authoritative).
 //  - Input is bounded + aggregate-only (value-tile shapes/format-identities + header-candidate rows);
 //    NO raw cell values or literal formatCodes reach the LLM (source-safety, P1-C1 §3.4 inherited).
 //  - Localization stays grounded on the deterministic value-tile (degrade is naming-only); a wrong
@@ -32,16 +39,28 @@ import type { LeafReadLabel, LeafReadProducedResult } from "./comprehension-arti
 export const LEAF_READ_SYSTEM_PROMPT = [
   "Read provisional column labels for a low-confidence spreadsheet region.",
   "",
-  "You are given bounded, aggregate-only evidence about columns whose header could not be resolved",
-  "deterministically: value-shape / display-format signatures, the rows where a signature changes,",
-  "and candidate header row indices. You are NOT given raw cell values.",
+  "You are given bounded, aggregate-only evidence about spreadsheet columns the deterministic",
+  "observer could NOT fully capture — either a region whose header could not be resolved",
+  "(low-confidence), or a high-confidence column whose structure is incomplete (free-text or",
+  "high-residual content the deterministic summary does not pin down). The evidence is value-shape /",
+  "display-format signatures, the rows where a signature changes, candidate header row indices, and —",
+  "for resolved columns — the deterministic column name / inferred type / distinct count. You are NOT",
+  "given raw cell values.",
   "",
-  "For each column you can read, return a SHORT provisional label naming what the column most likely",
-  "holds. Omit a column you cannot read rather than guessing. Return STRICT JSON:",
-  '{ "labels": [{ "column_index": <int>, "tentative_label": "<short label>" }],',
+  "For each column you can read, return:",
+  " - tentative_label: a SHORT label naming what the column most likely holds;",
+  ' - semantic_role (optional): one of "category" | "measure" | "identifier" | "free_text" |',
+  '   "reference" when the signatures make the analytical role clear;',
+  " - captured_note (optional): a SHORT note on structure or meaning the signatures reveal that the",
+  "   deterministic summary did not (e.g. a hidden grouping, or what a format boundary signifies).",
+  "Omit a column you cannot read rather than guessing. Return STRICT JSON:",
+  '{ "labels": [{ "column_index": <int>, "tentative_label": "<short label>",',
+  '              "semantic_role": "<role>"?, "captured_note": "<short note>"? }],',
   '  "unread_columns": [{ "column_index": <int>, "reason": "<why unreadable>" }] }',
   "",
-  "Your labels are provisional and non-authoritative; the runtime tags every label low-confidence.",
+  "Your reads are provisional and non-authoritative; the runtime tags every read low-confidence.",
+  "Base every label, role, and note ONLY on the aggregate signatures provided — you have no raw cell",
+  "values, so a note must never invent or restate a literal cell value.",
 ].join("\n");
 
 export function leafReadPromptSha256(): string {
@@ -243,14 +262,24 @@ function isStructureIncomplete(column: InventoryColumn): boolean {
 interface LeafReadRawLabel {
   column_index: number;
   tentative_label: string;
+  semantic_role?: string;
+  captured_note?: string;
 }
 
+/** Bound on a captured note (the LLM's free-text gist of structure the deterministic summary missed).
+ *  It is derived from aggregate signatures only (no raw cell values reach the LLM), so this caps prose
+ *  length, not source exposure. */
+const MAX_CAPTURED_NOTE_CHARS = 240;
+const LEAF_SEMANTIC_ROLE_SET = new Set<string>(LEAF_SEMANTIC_ROLES);
+
 /**
- * Run the LLM leaf-read for one low-confidence region. `callLlm` is injected (mock fixture in tests,
- * real authoring caller in production). The LLM contributes only the label TEXT; confidence and
- * is_lower_bound are forced (low / true) for the low-confidence region.
+ * Run the LLM leaf-read (CAPTURE) for one region the deterministic observer could not fully capture.
+ * `callLlm` is injected (mock fixture in tests, real authoring caller in production). The LLM
+ * contributes only the label / role / note TEXT; confidence and is_lower_bound are forced (low /
+ * true) regardless of the trigger. An unrecognised semantic_role is dropped (the label is kept);
+ * a captured_note is trimmed and length-bounded.
  */
-export async function readLowConfidenceLeaf(args: {
+export async function readStructureLeaf(args: {
   evidence: LeafReadRegionEvidence;
   callLlm: (systemPrompt: string, userPayload: unknown) => Promise<string>;
 }): Promise<LeafReadOutcome> {
@@ -286,25 +315,44 @@ export async function readLowConfidenceLeaf(args: {
         typeof l.tentative_label === "string" &&
         l.tentative_label.trim() !== "",
     )
-    .map((l) => ({
-      sheet: evidence.sheet,
-      column_index: l.column_index,
-      tentative_label: l.tentative_label.trim(),
-      // Forced honesty tags (§2.2): the region is structurally low-confidence, so the read is always
-      // a non-authoritative lower bound regardless of any confidence the model asserts.
-      confidence: "low",
-      is_lower_bound: true,
-    }));
+    .map((l) => {
+      // Capture (P1-C2-B′ §3): an unrecognised role is dropped (label kept); a note is trimmed +
+      // length-bounded. The LLM saw only aggregate signatures, so a note carries no raw cell value.
+      const role: LeafSemanticRole | undefined =
+        typeof l.semantic_role === "string" && LEAF_SEMANTIC_ROLE_SET.has(l.semantic_role)
+          ? (l.semantic_role as LeafSemanticRole)
+          : undefined;
+      const note =
+        typeof l.captured_note === "string" && l.captured_note.trim() !== ""
+          ? l.captured_note.trim().slice(0, MAX_CAPTURED_NOTE_CHARS)
+          : undefined;
+      const label: LeafReadLabel = {
+        sheet: evidence.sheet,
+        column_index: l.column_index,
+        tentative_label: l.tentative_label.trim(),
+        // Forced honesty tags (§2.2): the region is structurally incomplete, so the read is always a
+        // non-authoritative lower bound regardless of any confidence the model asserts.
+        confidence: "low",
+        is_lower_bound: true,
+      };
+      if (role) label.semantic_role = role;
+      if (note) label.captured_note = note;
+      return label;
+    });
 
   if (labels.length === 0) {
     return { kind: "unread", reason: "leaf-read produced no readable labels for this region" };
   }
+  const limitingReason =
+    evidence.trigger === "structure_incomplete"
+      ? "structure-incomplete region; columns captured provisionally from value-tile signatures"
+      : "low header_confidence region; labels read provisionally from value-tile signatures";
   return {
     kind: "produced",
     result: {
       labels,
       limiting_region_ref: `${evidence.sheet}!region`,
-      limiting_reason: "low header_confidence region; labels read provisionally from value-tile signatures",
+      limiting_reason: limitingReason,
     },
   };
 }

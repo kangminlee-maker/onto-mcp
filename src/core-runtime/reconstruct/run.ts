@@ -240,12 +240,14 @@ import {
   type LeafReadProducedResult,
 } from "./comprehension-artifact.js";
 import {
+  DEFAULT_STRUCTURE_LEAF_TRIGGER_OPTS,
   LEAF_READ_SYSTEM_PROMPT,
-  extractLowConfidenceLeafEvidence,
+  extractStructureLeafEvidence,
   leafReadPromptSha256,
-  readLowConfidenceLeaf,
+  readStructureLeaf,
   type LeafReadOutcome,
   type LeafReadRegionEvidence,
+  type StructureLeafTriggerOpts,
 } from "./leaf-reader.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
@@ -312,6 +314,12 @@ export interface ReconstructDirectiveAuthor {
    * observation artifact or the reuse key. Optional — a no-op author simply omits it.
    */
   setLeafReadProvisionalLabels?(labels: ReadonlyMap<string, readonly string[]>): void;
+  /**
+   * P1-C2-B′ §2.2 Step E: provide the honest "not examined (capped)" census (observation_id →
+   * "colN (name)" strings) so this author renders it as an explicit NON-AUTHORITATIVE census in every
+   * observation prompt. Set once by runReconstruct after the leaf-read stage; prompt TEXT only.
+   */
+  setLeafReadCappedColumns?(capped: ReadonlyMap<string, readonly string[]>): void;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -1401,11 +1409,15 @@ function authoredArtifactReuseMatch(args: {
 const LEAF_READ_COMPREHENSION_VERSION = "p1-c2-a:1";
 
 interface LeafReadStageResult {
-  /** llm-edition ComprehensionArtifacts produced for low-confidence regions, by observation_id. */
+  /** llm-edition ComprehensionArtifacts produced for structure-incomplete regions, by observation_id. */
   artifactsByObservation: Map<string, ComprehensionArtifact>;
   /** Order-independent aggregate (R8) of the per-observation leaf-read fingerprints; null when no
-   *  low-confidence region triggered a leaf-read. Folded into the seed reuse key (R2). */
+   *  region triggered a leaf-read. Folded into the seed reuse key (R2). */
   aggregateFingerprint: string | null;
+  /** P1-C2-B′ §2.2 honest "not examined (capped)" census, by observation_id — read-candidates the
+   *  fan-out cap left UNREAD (formatted "colN (name)"); surfaced to the consumer in Step E so it
+   *  never assumes they were understood (gate RB6). Empty when nothing was capped. */
+  cappedColumnsByObservation: Map<string, string[]>;
 }
 
 /**
@@ -1422,15 +1434,21 @@ export async function runSpreadsheetLeafReadStage(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   directiveAuthor: ReconstructDirectiveAuthor;
   sessionRoot: string;
+  /** P1-C2-B′ §2.2 deterministic structure-incompleteness trigger config (bounded fan-out). Folded
+   *  into the fingerprint ⓑ so re-tuning rotates the reuse key. Defaults to the PRELIMINARY constant. */
+  triggerOpts?: StructureLeafTriggerOpts;
 }): Promise<LeafReadStageResult> {
+  const triggerOpts = args.triggerOpts ?? DEFAULT_STRUCTURE_LEAF_TRIGGER_OPTS;
   const artifactsByObservation = new Map<string, ComprehensionArtifact>();
+  const cappedColumnsByObservation = new Map<string, string[]>();
   const perObservationFingerprints: { observation_id: string; fingerprint: string }[] = [];
   const readLeaf = args.directiveAuthor.readLeafLabels?.bind(args.directiveAuthor);
-  if (!readLeaf) return { artifactsByObservation, aggregateFingerprint: null };
+  if (!readLeaf) return { artifactsByObservation, aggregateFingerprint: null, cappedColumnsByObservation };
 
-  // ⓑ pre-execution LLM-touch pre-image — known before any leaf-read call (model/prompt identity).
-  // The route residue (adapter/billing/effort) is not threaded yet; the model identity + prompt hash
-  // + version are the load-bearing rotation triggers (DET-1).
+  // ⓑ pre-execution LLM-touch pre-image — known before any leaf-read call (model/prompt identity +
+  // the deterministic trigger config that shaped the read-set). The route residue (adapter/billing/
+  // effort) is not threaded yet; the model identity + prompt hash + version + trigger config are the
+  // load-bearing rotation triggers (DET-1).
   const preExecution: LlmTouchPreExecutionPreImage = {
     leaf_reader_model_identity: args.directiveAuthor.reuseModelIdentity ?? "unspecified",
     execution_adapter: null,
@@ -1439,6 +1457,7 @@ export async function runSpreadsheetLeafReadStage(args: {
     leaf_prompt_sha256: leafReadPromptSha256(),
     schema_tool_version: `leaf-read:v${COMPREHENSION_ARTIFACT_CONTRACT_VERSION}`,
     comprehension_version: LEAF_READ_COMPREHENSION_VERSION,
+    structure_leaf_trigger_config: triggerOpts,
   };
 
   for (const observation of args.sourceObservations.observations) {
@@ -1447,7 +1466,16 @@ export async function runSpreadsheetLeafReadStage(args: {
       | WorkbookStructuralInventory
       | undefined;
     if (!inventory) continue;
-    const regions = extractLowConfidenceLeafEvidence(inventory);
+    // Deterministic structure-incompleteness trigger (P1-C2-B′): low-confidence sheets are still
+    // ALWAYS read (no regression) PLUS structure-incomplete high-confidence columns up to the cap.
+    const { regions, capped_columns } = extractStructureLeafEvidence(inventory, triggerOpts);
+    // Record the honest capped census regardless of whether any region was read (Step E marking).
+    if (capped_columns.length > 0) {
+      cappedColumnsByObservation.set(
+        observation.observation_id,
+        capped_columns.map((c) => `col${c.column_index}${c.column_name ? ` (${c.column_name})` : ""}`),
+      );
+    }
     if (regions.length === 0) continue;
 
     // The fingerprint is per-observation (ⓐ from this observation's inventory + run-global ⓑ) and is
@@ -1485,8 +1513,9 @@ export async function runSpreadsheetLeafReadStage(args: {
 
     const leafRead: LeafReadProducedResult = {
       labels,
-      limiting_region_ref: `${observation.observation_id}:low_confidence`,
-      limiting_reason: "low header_confidence region(s); labels read provisionally from value-tile signatures",
+      limiting_region_ref: `${observation.observation_id}:structure_incomplete`,
+      limiting_reason:
+        "low header_confidence and/or structure-incomplete region(s); columns captured provisionally from value-tile signatures",
     };
     const artifact = buildLlmComprehensionArtifact({
       observationId: observation.observation_id,
@@ -1523,7 +1552,7 @@ export async function runSpreadsheetLeafReadStage(args: {
               .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0)),
           ),
         );
-  return { artifactsByObservation, aggregateFingerprint };
+  return { artifactsByObservation, aggregateFingerprint, cappedColumnsByObservation };
 }
 
 async function writeFreshAuthoredYamlDocument<T>(
@@ -6067,12 +6096,19 @@ interface ObservationPromptPayloadOptions {
     truncation: DocumentExcerptProjectionTruncation,
   ) => void;
   /**
-   * P1-C2-A Step E: provisional leaf-read labels per observation_id, surfaced as a NON-AUTHORITATIVE
-   * prompt hint for low-confidence (unstructured) regions. Rendered into the prompt TEXT only — never
-   * into the observation artifact or the reuse key (the reuse key already folds the leaf-read
-   * fingerprint, and serializes only a fixed field subset, so these labels cannot leak into it).
+   * P1-C2-A Step E: provisional leaf-read captures per observation_id (label + optional role/note),
+   * surfaced as a NON-AUTHORITATIVE prompt hint for regions the deterministic observer could not
+   * fully capture. Rendered into the prompt TEXT only — never into the observation artifact or the
+   * reuse key (the reuse key already folds the leaf-read fingerprint, and serializes only a fixed
+   * field subset, so these captures cannot leak into it).
    */
   provisionalLabelsByObservation?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * P1-C2-B′ §2.2 Step E: read-candidate columns the fan-out cap left UNREAD, per observation_id
+   * (formatted "colN (name)"). Surfaced as an explicit "not examined (capped)" census so the
+   * consumer never assumes a capped column was understood (gate RB6). Prompt TEXT only.
+   */
+  cappedColumnsByObservation?: ReadonlyMap<string, readonly string[]>;
 }
 
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
@@ -6268,17 +6304,28 @@ export function observationPromptPayload(
                 DOCUMENT_EXCERPT_PROJECTION_FLOOR,
           });
         }
-        // P1-C2-A Step E: surface the provisional leaf-read labels (low-confidence regions) as an
-        // explicit NON-AUTHORITATIVE hint. Bounded; prompt-text only (never the artifact/reuse key).
+        // P1-C2-A/B′ Step E: surface the provisional leaf-read captures AND the honest "not examined
+        // (capped)" census as an explicit NON-AUTHORITATIVE hint. Bounded; prompt-text only (never
+        // the artifact/reuse key).
         const provisionalLabels = options.provisionalLabelsByObservation?.get(
           observation.observation_id,
         );
-        if (provisionalLabels && provisionalLabels.length > 0) {
+        const cappedColumns = options.cappedColumnsByObservation?.get(
+          observation.observation_id,
+        );
+        const hasLabels = provisionalLabels && provisionalLabels.length > 0;
+        const hasCapped = cappedColumns && cappedColumns.length > 0;
+        if (hasLabels || hasCapped) {
           payload.provisional_labels = {
             authority: "non_authoritative",
             note:
-              "Provisional labels read for low-confidence (unstructured) regions whose header the deterministic observer could not resolve. Treat as hints, not facts; the value-tile signatures above are authoritative for structure.",
-            labels: provisionalLabels.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION),
+              "Provisional reads for regions the deterministic observer could not fully capture (low-confidence headers or structure-incomplete columns). Treat 'labels' as hints, not facts; the value-tile signatures above are authoritative for structure. Columns under 'not_examined_capped' were read-candidates the fan-out cap left UNREAD — not examined (do not assume they were understood).",
+            ...(hasLabels
+              ? { labels: provisionalLabels.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION) }
+              : {}),
+            ...(hasCapped
+              ? { not_examined_capped: cappedColumns.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION) }
+              : {}),
           };
         }
       }
@@ -7375,9 +7422,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   };
   const telemetry = createReconstructExecutionTelemetryCollector();
 
-  // P1-C2-A Step E: the leaf-read provisional labels (set after the leaf-read stage). projected into
-  // every observation prompt as a non-authoritative hint; never folded into the reuse key.
+  // P1-C2-A/B′ Step E: the leaf-read captures + honest capped census (set after the leaf-read stage).
+  // projected into every observation prompt as a non-authoritative hint; never folded into the reuse key.
   let leafReadProvisionalLabels: ReadonlyMap<string, readonly string[]> | null = null;
+  let leafReadCappedColumns: ReadonlyMap<string, readonly string[]> | null = null;
   const projectObservationsForPrompt = (
     obs: ReconstructSourceObservationsArtifact,
     opts: ObservationPromptPayloadOptions = {},
@@ -7387,6 +7435,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       ...(leafReadProvisionalLabels
         ? { provisionalLabelsByObservation: leafReadProvisionalLabels }
         : {}),
+      ...(leafReadCappedColumns ? { cappedColumnsByObservation: leafReadCappedColumns } : {}),
     });
 
   return {
@@ -7394,6 +7443,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     owner: "host_llm",
     setLeafReadProvisionalLabels(labels: ReadonlyMap<string, readonly string[]>): void {
       leafReadProvisionalLabels = labels;
+    },
+    setLeafReadCappedColumns(capped: ReadonlyMap<string, readonly string[]>): void {
+      leafReadCappedColumns = capped;
     },
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
@@ -7406,7 +7458,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       // JSON-author path: telemetry + repair) so the mock fixture (INV-MOCK-1) and the live caller
       // are both covered by the injected llmCall. The model identity reaches the resume key only via
       // the llm_touch_fingerprint (ⓑ), never through this output.
-      return readLowConfidenceLeaf({
+      return readStructureLeaf({
         evidence,
         callLlm: async (systemPrompt, userPayload) =>
           JSON.stringify(
@@ -11543,12 +11595,23 @@ export async function runReconstruct(
     if (Array.isArray(claims) && claims.length > 0) {
       provisionalLabelsByObservation.set(
         observationId,
-        claims.map((claim) => `col${claim.column_index}: ${claim.tentative_label}`),
+        claims.map((claim) => {
+          // P1-C2-B′ §3: project the capture (label + optional role/note) as one bounded hint line.
+          let line = `col${claim.column_index}: ${claim.tentative_label}`;
+          if (claim.semantic_role) line += ` [role: ${claim.semantic_role}]`;
+          if (claim.captured_note) line += ` — ${claim.captured_note}`;
+          return line;
+        }),
       );
     }
   }
   if (provisionalLabelsByObservation.size > 0) {
     directiveAuthor.setLeafReadProvisionalLabels?.(provisionalLabelsByObservation);
+  }
+  // P1-C2-B′ §2.2 Step E: hand the honest "not examined (capped)" census to the author so the
+  // consumer sees what was selected-but-not-read (never assumes a capped column was understood).
+  if (leafReadStage.cappedColumnsByObservation.size > 0) {
+    directiveAuthor.setLeafReadCappedColumns?.(leafReadStage.cappedColumnsByObservation);
   }
   const refreshAuthoredArtifactReuseMatch = (): void => {
     currentAuthoredArtifactReuseMatch = authoredArtifactReuseMatch({

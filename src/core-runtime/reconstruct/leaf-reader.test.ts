@@ -4,7 +4,7 @@ import {
   extractLowConfidenceLeafEvidence,
   extractStructureLeafEvidence,
   leafReadPromptSha256,
-  readLowConfidenceLeaf,
+  readStructureLeaf,
   type LeafReadRegionEvidence,
 } from "./leaf-reader.js";
 import { callReconstructMockLlm } from "./mock-llm-realization.js";
@@ -73,6 +73,7 @@ const preExec = (modelIdentity: string): LlmTouchPreExecutionPreImage => ({
   leaf_prompt_sha256: leafReadPromptSha256(),
   schema_tool_version: "leaf-read:v1",
   comprehension_version: "cv-1",
+  structure_leaf_trigger_config: { max_columns: 64 },
 });
 
 const layer1 = () => ({ content_sha256: "aaa", adapter_version: 4, value_tile_config: {}, data_layer_caps: {} });
@@ -168,7 +169,7 @@ describe("extractStructureLeafEvidence (P1-C2-B′ §2.1 — deterministic struc
 describe("leaf-reader — read outcomes (mock LLM)", () => {
   it("PRODUCED: forces low confidence + is_lower_bound on every label (deterministic honesty tags)", async () => {
     const [region] = extractLowConfidenceLeafEvidence(inv());
-    const out = await readLowConfidenceLeaf({ evidence: region, callLlm: mockCall });
+    const out = await readStructureLeaf({ evidence: region, callLlm: mockCall });
     expect(out.kind).toBe("produced");
     if (out.kind !== "produced") return;
     expect(out.result.labels.length).toBeGreaterThan(0);
@@ -181,7 +182,7 @@ describe("leaf-reader — read outcomes (mock LLM)", () => {
 
   it("FAILED: an LLM hard error degrades to an explicit failed outcome (no throw, §11 R9)", async () => {
     const [region] = extractLowConfidenceLeafEvidence(inv());
-    const out = await readLowConfidenceLeaf({
+    const out = await readStructureLeaf({
       evidence: region,
       callLlm: async () => {
         throw new Error("call timed out after 30000ms");
@@ -192,7 +193,7 @@ describe("leaf-reader — read outcomes (mock LLM)", () => {
 
   it("UNREAD: zero readable labels is an explicit unread outcome (not a silent success)", async () => {
     const [region] = extractLowConfidenceLeafEvidence(inv());
-    const out = await readLowConfidenceLeaf({
+    const out = await readStructureLeaf({
       evidence: region,
       callLlm: async () => JSON.stringify({ labels: [], unread_columns: [{ column_index: 0, reason: "ambiguous" }] }),
     });
@@ -205,7 +206,7 @@ describe("leaf-reader — read outcomes (mock LLM)", () => {
       header_candidate_rows: [1],
       columns: [{ column_index: 0, dominant_shape: "TEXT", dominant_format: null, boundaries: [] }],
     };
-    const out = await readLowConfidenceLeaf({
+    const out = await readStructureLeaf({
       evidence: region,
       callLlm: async () =>
         JSON.stringify({ labels: [{ column_index: 0, tentative_label: "name" }, { column_index: 9, tentative_label: "ghost" }], unread_columns: [] }),
@@ -214,12 +215,65 @@ describe("leaf-reader — read outcomes (mock LLM)", () => {
     if (out.kind !== "produced") return;
     expect(out.result.labels.map((l) => l.column_index)).toEqual([0]);
   });
+
+  it("CAPTURE (P1-C2-B′ §3): carries a recognised semantic_role + trimmed captured_note", async () => {
+    const region: LeafReadRegionEvidence = {
+      sheet: "Lo",
+      header_candidate_rows: [1],
+      columns: [{ column_index: 0, dominant_shape: "TEXT", dominant_format: null, boundaries: [] }],
+    };
+    const out = await readStructureLeaf({
+      evidence: region,
+      callLlm: async () =>
+        JSON.stringify({
+          labels: [{ column_index: 0, tentative_label: "amount", semantic_role: "measure", captured_note: "  monetary total per row  " }],
+          unread_columns: [],
+        }),
+    });
+    expect(out.kind).toBe("produced");
+    if (out.kind !== "produced") return;
+    expect(out.result.labels[0].semantic_role).toBe("measure");
+    expect(out.result.labels[0].captured_note).toBe("monetary total per row");
+  });
+
+  it("CAPTURE: drops an unrecognised semantic_role but keeps the label (bounded vocabulary)", async () => {
+    const region: LeafReadRegionEvidence = {
+      sheet: "Lo",
+      header_candidate_rows: [1],
+      columns: [{ column_index: 0, dominant_shape: "TEXT", dominant_format: null, boundaries: [] }],
+    };
+    const out = await readStructureLeaf({
+      evidence: region,
+      callLlm: async () =>
+        JSON.stringify({ labels: [{ column_index: 0, tentative_label: "name", semantic_role: "revenue_bucket" }], unread_columns: [] }),
+    });
+    expect(out.kind).toBe("produced");
+    if (out.kind !== "produced") return;
+    expect(out.result.labels[0].tentative_label).toBe("name");
+    expect(out.result.labels[0].semantic_role).toBeUndefined();
+  });
+
+  it("CAPTURE: a structure_incomplete trigger yields a structure-incomplete limiting_reason", async () => {
+    const region: LeafReadRegionEvidence = {
+      sheet: "Hi",
+      trigger: "structure_incomplete",
+      header_candidate_rows: [],
+      columns: [{ column_index: 0, column_name: "notes", inferred_type: "string", dominant_shape: "TEXT", dominant_format: null, boundaries: [] }],
+    };
+    const out = await readStructureLeaf({
+      evidence: region,
+      callLlm: async () => JSON.stringify({ labels: [{ column_index: 0, tentative_label: "free notes" }], unread_columns: [] }),
+    });
+    expect(out.kind).toBe("produced");
+    if (out.kind !== "produced") return;
+    expect(out.result.limiting_reason).toMatch(/structure-incomplete/);
+  });
 });
 
 describe("leaf-read subsystem — full integration (mock LLM): produced → fingerprint → artifact → non-circular", () => {
   it("PRODUCED region builds a valid llm ComprehensionArtifact gated by the fingerprint", async () => {
     const [region] = extractLowConfidenceLeafEvidence(inv());
-    const out = await readLowConfidenceLeaf({ evidence: region, callLlm: mockCall });
+    const out = await readStructureLeaf({ evidence: region, callLlm: mockCall });
     expect(out.kind).toBe("produced");
     if (out.kind !== "produced") return;
 
@@ -237,7 +291,7 @@ describe("leaf-read subsystem — full integration (mock LLM): produced → fing
 
   it("FAILED/UNREAD region degrades to a deterministic artifact with an explicit attempt status", async () => {
     const [region] = extractLowConfidenceLeafEvidence(inv());
-    const out = await readLowConfidenceLeaf({
+    const out = await readStructureLeaf({
       evidence: region,
       callLlm: async () => {
         throw new Error("budget exhausted");
@@ -256,7 +310,7 @@ describe("leaf-read subsystem — full integration (mock LLM): produced → fing
 
   it("model-identity-rotation: the SAME read under a different leaf-reader model yields a different fingerprint", async () => {
     const [region] = extractLowConfidenceLeafEvidence(inv());
-    const out = await readLowConfidenceLeaf({ evidence: region, callLlm: mockCall });
+    const out = await readStructureLeaf({ evidence: region, callLlm: mockCall });
     if (out.kind !== "produced") throw new Error("expected produced");
     const fpA = llmTouchFingerprint(layer1(), preExec("anthropic/claude-opus-4-8")).fingerprint_sha256;
     const fpB = llmTouchFingerprint(layer1(), preExec("anthropic/claude-sonnet-4-6")).fingerprint_sha256;
@@ -265,7 +319,7 @@ describe("leaf-read subsystem — full integration (mock LLM): produced → fing
 
   it("non-circular: a seed key may carry the fingerprint VALUE but NOT the produced artifact instance", async () => {
     const [region] = extractLowConfidenceLeafEvidence(inv());
-    const out = await readLowConfidenceLeaf({ evidence: region, callLlm: mockCall });
+    const out = await readStructureLeaf({ evidence: region, callLlm: mockCall });
     if (out.kind !== "produced") throw new Error("expected produced");
     const fp = llmTouchFingerprint(layer1(), preExec("anthropic/claude-opus-4-8")).fingerprint_sha256;
     const artifact = buildLlmComprehensionArtifact({ observationId: "obs-lo", inventory: inv(), leafRead: out.result, fingerprint: fp });

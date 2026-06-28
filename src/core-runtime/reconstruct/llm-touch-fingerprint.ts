@@ -48,6 +48,12 @@ export interface LlmTouchPreExecutionPreImage {
   schema_tool_version: string;
   /** Non-authoritative manual-invalidation knob (does NOT carry model/prompt identity). */
   comprehension_version: string;
+  /** P1-C2-B′ §4: the DETERMINISTIC structure-incompleteness trigger config (e.g. max_columns) that
+   *  shaped the read-set. The read-set is a pure function of the inventory AND this config, so folding
+   *  it here rotates the reuse key when the trigger is re-tuned (mirror value_tile_config). LLM-free;
+   *  it lives in ⓑ because it is a reconstruct-stage pre-execution selection config, not an
+   *  observation-derived input (which is ⓐ). */
+  structure_leaf_trigger_config: unknown;
 }
 
 /** Honest scope labels (§11 R6a) — structurally encode that this covers a DECLARED closure only. */
@@ -95,6 +101,7 @@ export function llmTouchFingerprint(
     "leaf_prompt_sha256",
     "schema_tool_version",
     "comprehension_version",
+    "structure_leaf_trigger_config",
   ];
   const fingerprint_sha256 = sha256Text(
     stableJson({ layer1_pre_image: layer1, pre_execution_pre_image: preExecution }),
@@ -119,6 +126,9 @@ export const LLM_TOUCH_IN_EPOCH_OUTPUT_FIELDS = [
   "limiting_witness",
   "leaf_read_attempt",
   "tentative_label",
+  // P1-C2-B′ §3: the captured role/note are LLM output too — guard them out of any gating key.
+  "semantic_role",
+  "captured_note",
 ] as const;
 
 const IN_EPOCH_OUTPUT_SET = new Set<string>(LLM_TOUCH_IN_EPOCH_OUTPUT_FIELDS);

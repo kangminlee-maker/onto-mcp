@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { observationPromptPayload, runSpreadsheetLeafReadStage, type ReconstructDirectiveAuthor } from "./run.js";
-import { readLowConfidenceLeaf } from "./leaf-reader.js";
+import { readStructureLeaf } from "./leaf-reader.js";
 import { callReconstructMockLlm } from "./mock-llm-realization.js";
 
 // A source-observations artifact with ONE low-confidence spreadsheet observation. Only the fields the
@@ -55,7 +55,7 @@ const mockAuthor = (modelIdentity: string): ReconstructDirectiveAuthor =>
     owner: "host_llm",
     reuseModelIdentity: modelIdentity,
     async readLeafLabels(evidence) {
-      return readLowConfidenceLeaf({
+      return readStructureLeaf({
         evidence,
         callLlm: async (systemPrompt, userPayload) =>
           (await callReconstructMockLlm(systemPrompt, JSON.stringify(userPayload))).text,
@@ -159,5 +159,85 @@ describe("Step E — provisional labels reach the authoring prompt (observationP
       provisionalLabelsByObservation: new Map([["other-obs", ["ghost"]]]),
     }) as Array<Record<string, unknown>>;
     expect(payload[0].provisional_labels).toBeUndefined();
+  });
+
+  it("P1-C2-B′: renders the honest 'not_examined_capped' census even with no labels", () => {
+    const payload = observationPromptPayload(oneObservation(), {
+      cappedColumnsByObservation: new Map([["obs-lo", ["col7 (status)", "col8 (region)"]]]),
+    }) as Array<Record<string, any>>;
+    expect(payload[0].provisional_labels.not_examined_capped).toEqual(["col7 (status)", "col8 (region)"]);
+    expect(payload[0].provisional_labels.labels).toBeUndefined();
+    expect(payload[0].provisional_labels.note).toMatch(/not examined/);
+  });
+
+  it("P1-C2-B′: renders labels AND capped census together", () => {
+    const payload = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["obs-lo", ["col0: amount [role: measure] — monetary total"]]]),
+      cappedColumnsByObservation: new Map([["obs-lo", ["col7 (status)"]]]),
+    }) as Array<Record<string, any>>;
+    expect(payload[0].provisional_labels.labels).toEqual(["col0: amount [role: measure] — monetary total"]);
+    expect(payload[0].provisional_labels.not_examined_capped).toEqual(["col7 (status)"]);
+  });
+});
+
+// A source-observations artifact with ONE HIGH-confidence tabular spreadsheet observation whose
+// columns the deterministic structure-incompleteness trigger selects over (P1-C2-B′ §2.1).
+const highConfidenceStructureIncomplete = () =>
+  ({
+    observations: [
+      {
+        observation_id: "obs-hi",
+        target_material_kind: "spreadsheet",
+        structural_data: {
+          content_sha256: "c".repeat(64),
+          workbook_inventory: {
+            sheets: [{ name: "Hi", used_range: null, dimensions: { rows: 50, cols: 3 }, hidden: false, protected: false }],
+            adapter_version: 4,
+            per_sheet_data: [
+              {
+                sheet: "Hi", layout_kind: "tabular", header_rows: [1], header_confidence: "high",
+                columns: [
+                  { name: "notes", index: 0, inferred_type: "string", non_empty_ratio: 1, distinct_count: 50, distinct_count_is_estimate: false, non_empty_count: 50 },
+                  { name: "status", index: 1, inferred_type: "string", non_empty_ratio: 1, distinct_count: 3, distinct_count_is_estimate: false, non_empty_count: 50 },
+                  { name: "flag", index: 2, inferred_type: "boolean", non_empty_ratio: 1, distinct_count: 1, distinct_count_is_estimate: false, non_empty_count: 50 },
+                ],
+              },
+            ],
+            segmented_value_tiles: [],
+          },
+        },
+      },
+    ],
+    skipped_refs: [],
+  }) as unknown as Parameters<typeof runSpreadsheetLeafReadStage>[0]["sourceObservations"];
+
+describe("runSpreadsheetLeafReadStage — structure-incompleteness trigger (P1-C2-B′)", () => {
+  it("reads structure-incomplete high-confidence columns and reports an honest capped census", async () => {
+    const result = await runSpreadsheetLeafReadStage({
+      sourceObservations: highConfidenceStructureIncomplete(),
+      directiveAuthor: mockAuthor("anthropic/claude-opus-4-8"),
+      sessionRoot: await tempSession(),
+      triggerOpts: { max_columns: 1 }, // notes (highest residual) read; status capped; flag trivially-complete.
+    });
+    const artifact = result.artifactsByObservation.get("obs-hi");
+    expect(artifact?.provenance.producer_kind).toBe("llm");
+    // status (column 1) was a read-candidate left UNREAD by the cap; flag (single constant) is NOT capped.
+    expect(result.cappedColumnsByObservation.get("obs-hi")).toEqual(["col1 (status)"]);
+  });
+
+  it("trigger-config-rotation (resume): re-tuning max_columns rotates the aggregate fingerprint", async () => {
+    const a = await runSpreadsheetLeafReadStage({
+      sourceObservations: highConfidenceStructureIncomplete(),
+      directiveAuthor: mockAuthor("m"),
+      sessionRoot: await tempSession(),
+      triggerOpts: { max_columns: 64 },
+    });
+    const b = await runSpreadsheetLeafReadStage({
+      sourceObservations: highConfidenceStructureIncomplete(),
+      directiveAuthor: mockAuthor("m"),
+      sessionRoot: await tempSession(),
+      triggerOpts: { max_columns: 1 },
+    });
+    expect(a.aggregateFingerprint).not.toBe(b.aggregateFingerprint);
   });
 });

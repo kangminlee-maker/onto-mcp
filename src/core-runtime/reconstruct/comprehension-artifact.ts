@@ -60,14 +60,30 @@ export interface LeafReadAttempt {
   lineage: string; // why this status — must be non-blank
 }
 
-/** A provisional, NON-AUTHORITATIVE label the LLM read for a low-confidence region (§3.2; §11 R7).
- *  Localization stays grounded on the deterministic value-tile (degrade is naming-only). */
+/** Bounded, domain-AGNOSTIC analytical role the leaf-read may capture (P1-C2-B′ §3; LLM-filled,
+ *  OPTIONAL). These are frame-neutral data-modeling roles, NOT domain naming — the semantic naming
+ *  stays the runtime LLM's, never a deterministic enum (cf. [[domain-agnostic-no-static-enums]]). */
+export type LeafSemanticRole = "category" | "measure" | "identifier" | "free_text" | "reference";
+export const LEAF_SEMANTIC_ROLES: readonly LeafSemanticRole[] = [
+  "category",
+  "measure",
+  "identifier",
+  "free_text",
+  "reference",
+];
+
+/** A provisional, NON-AUTHORITATIVE reading the LLM captured for a region the deterministic observer
+ *  could not fully capture (§3.2; §11 R7; P1-C2-B′ §3). Localization stays grounded on the
+ *  deterministic value-tile (degrade is naming-only). `semantic_role`/`captured_note` are the
+ *  P1-C2-B′ capture (optional; what structure missed) — they never alter producer/attempt provenance. */
 export interface ProvisionalLabelClaim {
   claim_kind: "provisional_label_read";
   authority: "non_authoritative";
   sheet: string;
   column_index: number;
   tentative_label: string;
+  semantic_role?: LeafSemanticRole;
+  captured_note?: string;
 }
 
 /** Per-claim confidence carried by the LLM leaf-read. The leaf label's lower-bound lives HERE
@@ -428,11 +444,14 @@ export function buildDeterministicComprehensionArtifact(args: {
   };
 }
 
-/** A tentative label the leaf-reader produced for one low-confidence column (§3.2). */
+/** A tentative reading the leaf-reader captured for one structure-incomplete column (§3.2; P1-C2-B′
+ *  §3). `semantic_role`/`captured_note` are the optional capture of what structure missed. */
 export interface LeafReadLabel {
   sheet: string;
   column_index: number;
   tentative_label: string;
+  semantic_role?: LeafSemanticRole;
+  captured_note?: string;
   confidence: "low" | "medium" | "high";
   is_lower_bound: boolean;
 }
@@ -467,13 +486,18 @@ export function buildLlmComprehensionArtifact(args: {
     );
   }
   const base = deriveDeterministicBaseline(args.inventory);
-  const spineClaims: ProvisionalLabelClaim[] = args.leafRead.labels.map((label) => ({
-    claim_kind: "provisional_label_read",
-    authority: "non_authoritative",
-    sheet: label.sheet,
-    column_index: label.column_index,
-    tentative_label: label.tentative_label,
-  }));
+  const spineClaims: ProvisionalLabelClaim[] = args.leafRead.labels.map((label) => {
+    const claim: ProvisionalLabelClaim = {
+      claim_kind: "provisional_label_read",
+      authority: "non_authoritative",
+      sheet: label.sheet,
+      column_index: label.column_index,
+      tentative_label: label.tentative_label,
+    };
+    if (label.semantic_role) claim.semantic_role = label.semantic_role;
+    if (label.captured_note) claim.captured_note = label.captured_note;
+    return claim;
+  });
   const confidenceByClaim: LeafClaimConfidence[] = args.leafRead.labels.map((label) => ({
     claim_ref: `${label.sheet}!col${label.column_index}`,
     confidence: label.confidence,

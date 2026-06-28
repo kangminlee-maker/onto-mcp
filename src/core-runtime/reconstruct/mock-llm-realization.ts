@@ -882,15 +882,20 @@ export function callReconstructMockLlm(
       expansions: [],
     });
   } else if (systemPrompt.includes("Read provisional column labels for a low-confidence")) {
-    // P1-C2-A §11 R10: the leaf-reader fixture branch. Returns one provisional label per known
-    // column so the produced path is deterministic. The mock model_id is a constant
-    // ("reconstruct-mock-model" in the result below), so the model-identity-rotation test must
-    // mutate the PRODUCTION LlmCallConfig, never this constant (avoids CG-2 contamination).
+    // P1-C2-A §11 R10 / P1-C2-B′ §3: the leaf-reader (CAPTURE) fixture branch. Returns one
+    // provisional label per known column PLUS a deterministic capture (role/note) so the generalized
+    // capture path is exercised. The mock model_id is a constant ("reconstruct-mock-model" in the
+    // result below), so the model-identity-rotation test must mutate the PRODUCTION LlmCallConfig,
+    // never this constant (avoids CG-2 contamination).
     const columns = (input.columns ?? []) as Array<{ column_index: number }>;
+    // Deterministic role rotation across the bounded vocabulary (mock only — no domain meaning).
+    const mockRoles = ["category", "measure", "identifier", "free_text", "reference"] as const;
     text = JSON.stringify({
-      labels: columns.map((column) => ({
+      labels: columns.map((column, i) => ({
         column_index: column.column_index,
         tentative_label: `provisional column ${column.column_index}`,
+        semantic_role: mockRoles[i % mockRoles.length],
+        captured_note: `mock capture for column ${column.column_index}`,
       })),
       unread_columns: [],
     });

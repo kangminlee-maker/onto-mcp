@@ -21,6 +21,7 @@ const preExec = (): LlmTouchPreExecutionPreImage => ({
   leaf_prompt_sha256: "prompt-hash-1",
   schema_tool_version: "leaf-read:v1",
   comprehension_version: "cv-1",
+  structure_leaf_trigger_config: { max_columns: 64 },
 });
 
 const fp = (a = layer1(), b = preExec()) => llmTouchFingerprint(a, b).fingerprint_sha256;
@@ -46,6 +47,10 @@ describe("llmTouchFingerprint — staged non-circular gating digest (§4.4)", ()
 
   it("comprehension-version is a non-authoritative knob that still rotates the key", () => {
     expect(fp(layer1(), { ...preExec(), comprehension_version: "cv-2" })).not.toBe(fp());
+  });
+
+  it("trigger-config-rotation (P1-C2-B′ §4): re-tuning the structure trigger rotates the fingerprint", () => {
+    expect(fp(layer1(), { ...preExec(), structure_leaf_trigger_config: { max_columns: 32 } })).not.toBe(fp());
   });
 
   it("layer1-rotation: changing ⓐ content_sha256 / adapter_version / config rotates the key", () => {
