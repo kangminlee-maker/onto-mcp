@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LEAF_READ_SYSTEM_PROMPT,
   extractLowConfidenceLeafEvidence,
+  extractStructureLeafEvidence,
   leafReadPromptSha256,
   readLowConfidenceLeaf,
   type LeafReadRegionEvidence,
@@ -95,6 +96,72 @@ describe("leaf-reader — bounded evidence extraction (source-safe)", () => {
 
   it("the prompt's first line is the stable mock dispatch key", () => {
     expect(LEAF_READ_SYSTEM_PROMPT.startsWith("Read provisional column labels for a low-confidence")).toBe(true);
+  });
+});
+
+// Inventory with a LOW-confidence sheet (P1-C2-A path) + a HIGH-confidence tabular sheet whose
+// InventoryColumns the deterministic structure-incompleteness trigger selects over.
+const col = (index: number, name: string, type: string, distinct: number, nonEmpty: number, estimate = false) => ({
+  name, index, inferred_type: type, non_empty_ratio: nonEmpty > 0 ? 1 : 0,
+  distinct_count: distinct, distinct_count_is_estimate: estimate, non_empty_count: nonEmpty,
+});
+const mixedInv = (): WorkbookStructuralInventory =>
+  ({
+    sheets: [
+      { name: "Lo", used_range: null, dimensions: { rows: 40, cols: 2 }, hidden: false, protected: false },
+      { name: "Hi", used_range: null, dimensions: { rows: 50, cols: 4 }, hidden: false, protected: false },
+    ],
+    per_sheet_data: [
+      { sheet: "Lo", layout_kind: "unknown", header_rows: [1, 2], header_confidence: "low", columns: [] },
+      {
+        sheet: "Hi", layout_kind: "tabular", header_rows: [1], header_confidence: "high",
+        columns: [
+          col(0, "notes", "string", 50, 50), //  free-text, residual 1.0 → read (highest priority)
+          col(1, "status", "string", 3, 50), //   coded text, residual 0.06 → read
+          col(2, "flag", "boolean", 1, 50), //     single constant → SKIP (trivially complete)
+          col(3, "blank", "empty", 0, 0), //       empty → SKIP
+        ],
+      },
+    ],
+    segmented_value_tiles: [
+      {
+        sheet: "Lo", window: 16, retained_segments: 1, summed_segment_distinct_count: 4,
+        columns: [
+          { column_index: 0, segments_capped: false, segments: [{ row_start: 1, row_end: 16, non_empty: 16, type_counts: {}, shape_counts: {}, format_counts: {}, dominant_shape: "TEXT", dominant_format: null, distinct_count: 4, distinct_is_lower_bound: false }], intra_tile_notes: [] },
+        ],
+      },
+    ],
+  }) as unknown as WorkbookStructuralInventory;
+
+describe("extractStructureLeafEvidence (P1-C2-B′ §2.1 — deterministic structure-incompleteness trigger)", () => {
+  it("reads low-confidence sheets (no regression) AND structure-incomplete high-confidence columns; skips trivially-complete", () => {
+    const out = extractStructureLeafEvidence(mixedInv());
+    const lo = out.regions.find((r) => r.sheet === "Lo");
+    const hi = out.regions.find((r) => r.sheet === "Hi");
+    expect(lo?.trigger).toBe("low_confidence_header"); // P1-C2-A guarantee preserved
+    expect(hi?.trigger).toBe("structure_incomplete");
+    // notes (free-text) + status (coded) read; flag (single constant) + blank (empty) skipped.
+    expect(hi?.columns.map((c) => c.column_index).sort()).toEqual([0, 1]);
+    expect(out.capped_columns).toEqual([]);
+    // high-confidence columns carry their deterministic signals (NOT raw values).
+    const notes = hi?.columns.find((c) => c.column_index === 0);
+    expect(notes).toMatchObject({ column_name: "notes", inferred_type: "string", distinct_count: 50 });
+  });
+
+  it("prioritises by residual (structure summarises LEAST first): notes before status", () => {
+    const out = extractStructureLeafEvidence(mixedInv(), { max_columns: 1 });
+    // cap=1 → only the highest-residual high-confidence column (notes); status is honestly capped.
+    const hi = out.regions.find((r) => r.sheet === "Hi");
+    expect(hi?.columns.map((c) => c.column_index)).toEqual([0]); // notes (residual 1.0)
+    expect(out.capped_columns).toEqual([{ sheet: "Hi", column_index: 1, column_name: "status" }]);
+    // the low-confidence sheet is STILL read regardless of the cap (no regression).
+    expect(out.regions.some((r) => r.sheet === "Lo")).toBe(true);
+  });
+
+  it("is deterministic (LLM-free): identical inventory → identical selection", () => {
+    expect(JSON.stringify(extractStructureLeafEvidence(mixedInv()))).toBe(
+      JSON.stringify(extractStructureLeafEvidence(mixedInv())),
+    );
   });
 });
 

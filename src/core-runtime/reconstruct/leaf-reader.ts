@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import type {
-  SheetValueTileProjection,
-  WorkbookStructuralInventory,
+import {
+  compareColumnResidualDesc,
+  type InventoryColumn,
+  type SheetValueTileProjection,
+  type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
 import type { LeafReadLabel, LeafReadProducedResult } from "./comprehension-artifact.js";
 
@@ -46,13 +48,26 @@ export function leafReadPromptSha256(): string {
   return createHash("sha256").update(LEAF_READ_SYSTEM_PROMPT).digest("hex");
 }
 
-/** Bounded, source-safe evidence for one low-confidence region (one sheet). NO raw cell values. */
+/** Why a region/column was selected for a leaf-read (P1-C2-B′ §2.1; honest trigger provenance — a
+ *  structure-incomplete column in a HIGH-confidence sheet must not ship a false 'low header' lineage). */
+export type LeafReadTrigger = "low_confidence_header" | "structure_incomplete";
+
+/** Bounded, source-safe evidence for one leaf-read region (one sheet). NO raw cell values. */
 export interface LeafReadRegionEvidence {
   sheet: string;
+  /** Why this region is read (P1-C2-B′). Defaults to low_confidence_header for the P1-C2-A path. */
+  trigger?: LeafReadTrigger;
   /** Candidate header rows the deterministic heuristic could not confirm (indices only). */
   header_candidate_rows: number[];
   columns: {
     column_index: number;
+    /** Column name (HIGH-confidence tabular sheets only; the deterministic header name). */
+    column_name?: string;
+    /** Deterministic structural signals (HIGH-confidence sheets) — the basis the structure-
+     *  incompleteness trigger selected on; NOT raw values (counts/type only). */
+    inferred_type?: string;
+    distinct_count?: number;
+    distinct_is_estimate?: boolean;
     dominant_shape: string | null;
     dominant_format: string | null;
     /** Boundary witnesses for this column (shape/format transitions; row numbers only). */
@@ -104,11 +119,125 @@ export function extractLowConfidenceLeafEvidence(
     if (columns.length === 0) continue;
     regions.push({
       sheet: sheet.sheet,
+      trigger: "low_confidence_header",
       header_candidate_rows: sheet.header_rows ?? [],
       columns,
     });
   }
   return regions;
+}
+
+/** Bounded-fan-out config for the structure-incompleteness trigger (P1-C2-B′ §2.2). PRELIMINARY —
+ *  folds into the resume key so re-tuning rotates it (no silent stale). */
+export interface StructureLeafTriggerOpts {
+  /** Max columns leaf-read across the workbook (cost is no concern, but context/scale is bounded). */
+  max_columns: number;
+}
+export const DEFAULT_STRUCTURE_LEAF_TRIGGER_OPTS: StructureLeafTriggerOpts = { max_columns: 64 };
+
+export interface StructureLeafEvidence {
+  regions: LeafReadRegionEvidence[];
+  /** Honest census (gate RB6): columns the trigger considered candidates but the cap left UNREAD —
+   *  never a silent drop; the consumer learns "not examined (capped)". */
+  capped_columns: { sheet: string; column_index: number; column_name: string | null }[];
+}
+
+/**
+ * Deterministic structure-incompleteness trigger (P1-C2-B′ §2.1). Selects leaf-read targets by a
+ * DETERMINISTIC predicate over inventory signals — NOT an LLM judgment of "importance" (which would
+ * make the read-set non-deterministic and reopen DET-1). The reason to read is capture-completeness:
+ * read every column UNLESS structure trivially captures it (a single constant; empty). High-residual
+ * (free-text / content-rich) columns are prioritised; the cap bounds fan-out with an honest capped
+ * census. Low-confidence sheets keep the P1-C2-A guarantee (always read; no regression).
+ *
+ * LLM-free, so the resulting read-set is a pure function of the inventory — the property that makes
+ * the existing resume contract sound (§4).
+ */
+export function extractStructureLeafEvidence(
+  inventory: WorkbookStructuralInventory,
+  opts: StructureLeafTriggerOpts = DEFAULT_STRUCTURE_LEAF_TRIGGER_OPTS,
+): StructureLeafEvidence {
+  const tilesBySheet = new Map<string, SheetValueTileProjection>();
+  for (const tile of inventory.segmented_value_tiles ?? []) tilesBySheet.set(tile.sheet, tile);
+
+  // (1) Low-confidence sheets: the P1-C2-A read-set — ALWAYS read (no cap, no regression).
+  const lowConfidenceRegions = extractLowConfidenceLeafEvidence(inventory);
+  const lowConfidenceSheets = new Set(lowConfidenceRegions.map((r) => r.sheet));
+
+  // (2) High-confidence tabular sheets: structure-incomplete columns, residual-prioritised.
+  interface Candidate {
+    sheet: string;
+    column: InventoryColumn;
+    tile: SheetValueTileProjection | undefined;
+  }
+  const candidates: Candidate[] = [];
+  for (const sheet of inventory.per_sheet_data ?? []) {
+    if (lowConfidenceSheets.has(sheet.sheet)) continue; // already fully read by (1)
+    const tile = tilesBySheet.get(sheet.sheet);
+    for (const column of sheet.columns) {
+      if (!isStructureIncomplete(column)) continue;
+      candidates.push({ sheet: sheet.sheet, column, tile });
+    }
+  }
+  // Deterministic priority: highest residual (structure summarises LEAST) first.
+  candidates.sort((a, b) => {
+    const r = compareColumnResidualDesc(a.column, b.column);
+    if (r !== 0) return r;
+    return a.sheet < b.sheet ? -1 : a.sheet > b.sheet ? 1 : 0;
+  });
+
+  const selected = candidates.slice(0, Math.max(0, opts.max_columns));
+  const capped = candidates.slice(Math.max(0, opts.max_columns));
+
+  // Group selected high-confidence candidates into per-sheet regions (enriched with value-tile
+  // boundary witnesses by column index when available).
+  const bySheet = new Map<string, LeafReadRegionEvidence>();
+  for (const { sheet, column, tile } of selected) {
+    let region = bySheet.get(sheet);
+    if (!region) {
+      region = { sheet, trigger: "structure_incomplete", header_candidate_rows: [], columns: [] };
+      bySheet.set(sheet, region);
+    }
+    const tileCol = tile?.columns.find((c) => c.column_index === column.index);
+    const lastSegment =
+      tileCol && tileCol.segments.length > 0 ? tileCol.segments[tileCol.segments.length - 1] : undefined;
+    region.columns.push({
+      column_index: column.index,
+      column_name: column.name,
+      inferred_type: column.inferred_type,
+      distinct_count: column.distinct_count,
+      distinct_is_estimate: column.distinct_count_is_estimate,
+      dominant_shape: lastSegment ? lastSegment.dominant_shape : null,
+      dominant_format: lastSegment ? lastSegment.dominant_format : null,
+      boundaries: (tileCol?.intra_tile_notes ?? []).map((note) => ({
+        boundary_kind: note.boundary_kind,
+        prev_shape: note.prev_shape,
+        new_shape: note.new_shape,
+        first_new_format_row: note.first_new_format_row,
+      })),
+    });
+  }
+
+  return {
+    regions: [...lowConfidenceRegions, ...bySheet.values()],
+    capped_columns: capped.map((c) => ({
+      sheet: c.sheet,
+      column_index: c.column.index,
+      column_name: c.column.name,
+    })),
+  };
+}
+
+/** Deterministic "structure trivially captures this column" predicate (P1-C2-B′ §2.1). A column is a
+ *  leaf-read candidate UNLESS structure already says everything: a single constant value, or empty.
+ *  (Cost is no concern, so the default leans toward reading — missing a capturable fact is the defect
+ *  to avoid, not an extra read.) NOTE: uniform-formula columns are NOT yet skipped — a harmless
+ *  over-read under cost-no-concern; a residual-based refinement is deferred. */
+function isStructureIncomplete(column: InventoryColumn): boolean {
+  if (column.inferred_type === "empty") return false;
+  if (column.non_empty_count === 0) return false;
+  if (column.distinct_count <= 1 && !column.distinct_count_is_estimate) return false; // single constant
+  return true;
 }
 
 interface LeafReadRawLabel {
