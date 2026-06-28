@@ -1,6 +1,7 @@
-# RESUME — P1-C2-B′ (결정론 "구조-불완전" 트리거 + LLM capture): ✅ Steps 1-4 + 교차검증 게이트 완결
+# RESUME — P1-C2-B′ (결정론 "구조-불완전" 트리거 + LLM capture): ✅ Steps 1-4 + 교차검증 게이트 + follow-up 4건 완결
 
-> **START-HERE.** 날짜 2026-06-28. 브랜치 `feat/comprehension-cut2-de-risk`. HEAD=`7cb2e68`.
+> ▶▶ **다음 단계 START-HERE = `20260628-p1-c2bprime-branchpoint-resume.md`**(★분기점: 101MB 실-LLM seed 품질). 이 문서는 빌드/게이트 *이력*.
+> **(빌드 이력) START-HERE.** 날짜 2026-06-28. 브랜치 `feat/comprehension-cut2-de-risk`. HEAD=`7cb2e68`(이후 follow-up `390988e`·`fc43848`).
 > P1-C2-B′ = owner 재절단판(원안 P1-C2-B "LLM 의미 triage"는 교차검증 2회 redesign_narrow → owner가 결합 자체를 제거). **✅ Steps 1-4 + 두 패밀리 게이트 + narrow 수정 전부 완결·커밋(mock-first). 다음 = ★분기점(101MB 실-LLM seed 품질·한도/승인 시점).**
 
 ## 현 상태 (한 줄)
