@@ -1,10 +1,10 @@
-# RESUME — P1-C2-B′ (결정론 "구조-불완전" 트리거 + LLM capture): ✅ Steps 1-4 완결
+# RESUME — P1-C2-B′ (결정론 "구조-불완전" 트리거 + LLM capture): ✅ Steps 1-4 + 교차검증 게이트 완결
 
-> **START-HERE.** 날짜 2026-06-28. 브랜치 `feat/comprehension-cut2-de-risk`. HEAD=`5259962`.
-> P1-C2-B′ = owner 재절단판(원안 P1-C2-B "LLM 의미 triage"는 교차검증 2회 redesign_narrow → owner가 결합 자체를 제거). **✅ Steps 1-4 전부 완결·커밋(mock-first). 다음 = ★분기점(101MB 실-LLM seed 품질·한도/승인 시점) 또는 교차검증 게이트.**
+> **START-HERE.** 날짜 2026-06-28. 브랜치 `feat/comprehension-cut2-de-risk`. HEAD=`7cb2e68`.
+> P1-C2-B′ = owner 재절단판(원안 P1-C2-B "LLM 의미 triage"는 교차검증 2회 redesign_narrow → owner가 결합 자체를 제거). **✅ Steps 1-4 + 두 패밀리 게이트 + narrow 수정 전부 완결·커밋(mock-first). 다음 = ★분기점(101MB 실-LLM seed 품질·한도/승인 시점).**
 
 ## 현 상태 (한 줄)
-**✅ P1-C2-A 완결**(커밋 `24404fc` A-C·`01841b8` D·`27b2220` E). **✅ P1-C2-B′ 완결**: Step 1(`819e867` 결정론 트리거)·**Steps 2-4(`5259962`)** = leaf-read label→**CAPTURE 일반화**(role/note·domain-agnostic enum)·stage가 `extractStructureLeafEvidence` 배선(저신뢰 무회귀+구조-불완전 고신뢰 컬럼·cap)·트리거 config를 fingerprint ⓑ에 fold(재튜닝→회전)·Step E가 capture 투영 + **정직 `not_examined_capped` census**(RB6). 검증=ts-core clean·**full vitest 2036**(baseline 2028+8)·정적 게이트 6종.
+**✅ P1-C2-A 완결**(`24404fc`·`01841b8`·`27b2220`). **✅ P1-C2-B′ 완결**: Step 1(`819e867`)·Steps 2-4(`5259962`)·**두 패밀리 교차검증 게이트 + narrow 수정(`7cb2e68`)**. 게이트=ultracode `wf_0bc61426-63f`(19agent·`redesign_narrow`·1 confirmed) + onto `20260628-4a2622a6`(6 lens·10 findings 2테마). **양 패밀리 공통=de-risking 코어(결정론 read-set→resume sound·DET-1 신규표면0·무회귀) SOUND**; 떨어진 건 새 표면 honesty만. 수정 3건: (1)census/labels `*_total` 정직공개(독립수렴 HIGH=silent 64 절단) (2)source-safety 주장 narrow(헤더라벨이 LLM 도달→raw DATA값만 금지로 정밀화·onto 지배테마) (3)comprehension_version `p1-c2-a:1`→`p1-c2-b-prime:1`. 검증=ts-core clean·**full vitest 2037**·정적 게이트 6종.
 
 ## ★ 왜 P1-C2-B′인가 (이 피벗을 *반드시* 이해하고 시작)
 원안 P1-C2-B = "LLM이 의미 깊이를 *배분*해 어디를 읽을지 결정". **게이트 2회 모두 redesign_narrow**(설계 `development-records/design/20260628-p1-cut2b-semantic-triage-design.md` §11/§11.1): 근본 = **LLM 판단(비결정 allocation)이 read-set을 좌우 → DET-1 silent-stale resume P0 재생성**(이 프로젝트가 계속 싸운 부류; 내가 fix를 2번 시도해 2번 실패).
