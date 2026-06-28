@@ -245,6 +245,7 @@ import {
   extractStructureLeafEvidence,
   leafReadPromptSha256,
   readStructureLeaf,
+  structureLeafTriggerLogicSha256,
   type LeafReadOutcome,
   type LeafReadRegionEvidence,
   type StructureLeafTriggerOpts,
@@ -1462,6 +1463,7 @@ export async function runSpreadsheetLeafReadStage(args: {
     schema_tool_version: `leaf-read:v${COMPREHENSION_ARTIFACT_CONTRACT_VERSION}`,
     comprehension_version: LEAF_READ_COMPREHENSION_VERSION,
     structure_leaf_trigger_config: triggerOpts,
+    read_set_logic_sha256: structureLeafTriggerLogicSha256(),
   };
 
   for (const observation of args.sourceObservations.observations) {

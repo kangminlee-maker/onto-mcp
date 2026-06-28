@@ -258,13 +258,42 @@ export function extractStructureLeafEvidence(
 /** Deterministic "structure trivially captures this column" predicate (P1-C2-B′ §2.1). A column is a
  *  leaf-read candidate UNLESS structure already says everything: a single constant value, or empty.
  *  (Cost is no concern, so the default leans toward reading — missing a capturable fact is the defect
- *  to avoid, not an extra read.) NOTE: uniform-formula columns are NOT yet skipped — a harmless
- *  over-read under cost-no-concern; a residual-based refinement is deferred. */
+ *  to avoid, not an extra read.)
+ *
+ *  DEFERRED (two-family gate follow-up): design §2.1 also lists a UNIFORM-FORMULA column (every data
+ *  cell a single fill-down formula) as trivially-complete — structure fully captures it, so it need
+ *  not be leaf-read. It is NOT skipped here because the inventory exposes formula coverage only at the
+ *  WORKBOOK level (`formula_patterns` with ≤8 display-only cell addresses, not a per-column count), so
+ *  a column cannot be PROVEN fully formula-driven from the current data. A heuristic skip
+ *  (sample_cell's column + occurrence_count) could WRONGLY skip a non-uniform column — a MISS, the one
+ *  failure this cut exists to prevent — whereas the current over-read is harmless (cost-no-concern) and
+ *  safe (never misses; it only inflates the capped census). A safe skip needs a per-column formula
+ *  signal from the shared observer = a separate cut. Until then the over-read stands. */
 function isStructureIncomplete(column: InventoryColumn): boolean {
   if (column.inferred_type === "empty") return false;
   if (column.non_empty_count === 0) return false;
   if (column.distinct_count <= 1 && !column.distinct_count_is_estimate) return false; // single constant
   return true;
+}
+
+/** sha256 of the read-set-shaping LOGIC source (the deterministic trigger: selection + predicate +
+ *  ordering). Folded into the llm_touch_fingerprint ⓑ so editing the read-set logic TAUTOLOGICALLY
+ *  rotates the resume key (CG-1 pattern; [[cg1-catalog-mechanism-decision]]) — NOT relying on a manual
+ *  comprehension_version bump. The read-set is a pure function of the inventory AND this logic: the
+ *  inventory inputs are covered by ⓐ (content_sha256 + adapter_version, which DETERMINE the inventory),
+ *  this covers the logic, and structure_leaf_trigger_config covers the config. Over-rotates on a
+ *  cosmetic source edit (safe: fail toward regenerate, never silent-stale). */
+export function structureLeafTriggerLogicSha256(): string {
+  const sep = " ";
+  return createHash("sha256")
+    .update(extractStructureLeafEvidence.toString())
+    .update(sep)
+    .update(extractLowConfidenceLeafEvidence.toString())
+    .update(sep)
+    .update(isStructureIncomplete.toString())
+    .update(sep)
+    .update(compareColumnResidualDesc.toString())
+    .digest("hex");
 }
 
 interface LeafReadRawLabel {

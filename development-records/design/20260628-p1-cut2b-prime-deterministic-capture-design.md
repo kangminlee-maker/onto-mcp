@@ -39,7 +39,7 @@
 - **`cls` 함정(저-distinct INT·이름 모호)**: 저-residual이라 우선순위 낮으나 trivially-complete 아님 → cap 안이면 읽힘·cap 밖이면 **정직 "capped·미독"**(놓침=maturation 보완·정직 표면화). *결정론* — LLM 판단 0.
 
 ### 2.2 bounded fan-out + 정직 truncation (게이트 RB6 상속)
-워크북당 leaf-read **cap**(우선순위순). cap 초과 컬럼 = **`capture_status: capped_not_read`+lineage**(절대 silent drop 0). region-census: 읽음 + capped + trivially-complete = 전 컬럼(소비자가 "안 읽음"을 안다).
+워크북당 leaf-read **cap**(우선순위순). cap 초과 컬럼 = **`capture_status: capped_not_read`+lineage**(절대 silent drop 0). **census 객체는 *비자명한* 읽기 상태만 표면화**: 읽음(provisional 라벨)+capped(미독). trivially-complete 컬럼(단일 상수·빈 칸·균일 수식)은 **결정론 인벤토리가 이미 완전 설명**하므로(=trivially-complete의 정의) census에 재기재하지 않음 — 소비자는 labels/capped에 없는 칸을 "구조 완전(=인벤토리가 곧 진실)"로 읽는다. *(두 패밀리 게이트 정정: 원안 "읽음+capped+trivially-complete=전 컬럼"은 census 객체가 trivially-complete를 안 담아 과장이었음; census = 비자명 상태 disclosure가 정확한 계약.)* Step E 프롬프트 projection은 두 리스트를 디스플레이-bound하되 `*_total`로 진짜 개수를 권위있게 공개(절대 silent 절단 0).
 
 ### 2.3 source-safety 경계 (정직 한계)
 leaf-read 증거 = **bounded aggregate**(value-tile signature·type·distinct count·boundary 행·name) — **raw 셀값 0**(P1-C1 §3.4 상속). → capture 가능 = *의미 역할*(category/measure/id/free-text gist)·signature-가시 구조. **raw-value 의존 패턴**(순차·체크섬 등)은 source-safety상 *이 cut 밖*(별도·정직 명시).

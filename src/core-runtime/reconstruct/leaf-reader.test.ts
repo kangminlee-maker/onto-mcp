@@ -5,6 +5,7 @@ import {
   extractStructureLeafEvidence,
   leafReadPromptSha256,
   readStructureLeaf,
+  structureLeafTriggerLogicSha256,
   type LeafReadRegionEvidence,
 } from "./leaf-reader.js";
 import { callReconstructMockLlm } from "./mock-llm-realization.js";
@@ -74,6 +75,7 @@ const preExec = (modelIdentity: string): LlmTouchPreExecutionPreImage => ({
   schema_tool_version: "leaf-read:v1",
   comprehension_version: "cv-1",
   structure_leaf_trigger_config: { max_columns: 64 },
+  read_set_logic_sha256: structureLeafTriggerLogicSha256(),
 });
 
 const layer1 = () => ({ content_sha256: "aaa", adapter_version: 4, value_tile_config: {}, data_layer_caps: {} });
@@ -163,6 +165,37 @@ describe("extractStructureLeafEvidence (P1-C2-B′ §2.1 — deterministic struc
     expect(JSON.stringify(extractStructureLeafEvidence(mixedInv()))).toBe(
       JSON.stringify(extractStructureLeafEvidence(mixedInv())),
     );
+  });
+
+  // P1-C2-B′ gate follow-up #2: pin the load-bearing inventory fields so the resume key's coverage of
+  // the read-set is explicit. The read-set is a pure function of the inventory; ⓐ (content_sha256 +
+  // adapter_version) DETERMINES the inventory, so folding ⓐ covers these fields transitively.
+  it("load-bearing fields: distinct_count / inferred_type / non_empty_count each determine selection", () => {
+    const oneHiCol = (over: Record<string, unknown>): WorkbookStructuralInventory =>
+      ({
+        sheets: [{ name: "Hi", used_range: null, dimensions: { rows: 50, cols: 1 }, hidden: false, protected: false }],
+        per_sheet_data: [
+          {
+            sheet: "Hi", layout_kind: "tabular", header_rows: [1], header_confidence: "high",
+            columns: [{ name: "c", index: 0, inferred_type: "string", non_empty_ratio: 1, distinct_count: 5, distinct_count_is_estimate: false, non_empty_count: 50, ...over }],
+          },
+        ],
+        segmented_value_tiles: [],
+      }) as unknown as WorkbookStructuralInventory;
+    const reads = (inv: WorkbookStructuralInventory) =>
+      extractStructureLeafEvidence(inv).regions.some((r) => r.sheet === "Hi");
+    expect(reads(oneHiCol({}))).toBe(true); // a normal multi-distinct column → read
+    expect(reads(oneHiCol({ distinct_count: 1 }))).toBe(false); // single constant → trivially complete
+    expect(reads(oneHiCol({ inferred_type: "empty" }))).toBe(false); // empty type → trivially complete
+    expect(reads(oneHiCol({ non_empty_count: 0 }))).toBe(false); // no data → trivially complete
+  });
+
+  // P1-C2-B′ gate follow-up #1: the read-set-shaping LOGIC source is hashed into the resume key so a
+  // predicate/ordering edit rotates it tautologically (no manual comprehension_version bump).
+  it("structureLeafTriggerLogicSha256 is a deterministic 64-hex digest of the read-set logic source", () => {
+    const a = structureLeafTriggerLogicSha256();
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    expect(structureLeafTriggerLogicSha256()).toBe(a);
   });
 });
 

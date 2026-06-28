@@ -54,6 +54,12 @@ export interface LlmTouchPreExecutionPreImage {
    *  it lives in ⓑ because it is a reconstruct-stage pre-execution selection config, not an
    *  observation-derived input (which is ⓐ). */
   structure_leaf_trigger_config: unknown;
+  /** P1-C2-B′ two-family gate follow-up: sha256 of the read-set-shaping LOGIC source (the trigger
+   *  predicate + ordering + selection functions). The read-set is a function of the inventory AND this
+   *  logic; ⓐ covers the inventory inputs and structure_leaf_trigger_config covers the CONFIG, so this
+   *  closes the remaining surface — a code edit to the predicate/ordering rotates the key tautologically
+   *  instead of relying on a manual comprehension_version bump. */
+  read_set_logic_sha256: string;
 }
 
 /** Honest scope labels (§11 R6a) — structurally encode that this covers a DECLARED closure only. */
@@ -102,6 +108,7 @@ export function llmTouchFingerprint(
     "schema_tool_version",
     "comprehension_version",
     "structure_leaf_trigger_config",
+    "read_set_logic_sha256",
   ];
   const fingerprint_sha256 = sha256Text(
     stableJson({ layer1_pre_image: layer1, pre_execution_pre_image: preExecution }),
