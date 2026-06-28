@@ -3168,6 +3168,7 @@ describe("runReconstruct", () => {
       "source_observation_reentry_validation",
       "source_observation_lineage_index",
       "source_observation_lineage_index_validation",
+      "leaf_read",
       "source_purpose_candidates",
       "source_purpose_candidates_validation",
       "purpose_confirmation",

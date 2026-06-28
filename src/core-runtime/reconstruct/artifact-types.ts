@@ -1578,6 +1578,12 @@ export const RECONSTRUCT_STAGE_IDS = [
   "source_observation_reentry_validation",
   "source_observation_lineage_index",
   "source_observation_lineage_index_validation",
+  // P1-C2 leaf-read: the first LLM-touch (capture over structure-incomplete spreadsheet regions).
+  // Owns its own telemetry unit so a leaf-read total-failure is recorded, not silently degraded
+  // (the defect this stage id fixes: "leaf-read" had no telemetry unit → callLlmRecorded threw
+  // before the LLM call → R9 swallowed it → zero capture, forever). Runs after the lineage index
+  // exists and before purpose-candidate authoring.
+  "leaf_read",
   "source_purpose_candidates",
   "source_purpose_candidates_validation",
   "purpose_confirmation",
@@ -3338,6 +3344,11 @@ export interface ReconstructRecordArtifactRefs {
   source_observation_reentry_validation: string | null;
   source_observation_lineage_index: string | null;
   source_observation_lineage_index_validation: string | null;
+  // P1-C2 leaf-read census (R9 honest-signal): always written when the leaf-read stage runs, even
+  // when zero regions/labels — the durable evidence surface that distinguishes "leaf-read attempted
+  // but produced nothing" from "leaf-read never ran". Doubles as the leaf_read manifest step's
+  // artifact ref. Null only when the stage no-ops (author has no readLeafLabels).
+  leaf_read_census: string | null;
   source_safety_ledger: string | null;
   source_safety_ledger_validation: string | null;
   source_scout_pack: string | null;

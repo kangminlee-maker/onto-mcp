@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { observationPromptPayload, runSpreadsheetLeafReadStage, type ReconstructDirectiveAuthor } from "./run.js";
+import { parse as parseYaml } from "yaml";
+import {
+  createDirectCallReconstructDirectiveAuthor,
+  observationPromptPayload,
+  runSpreadsheetLeafReadStage,
+  type ReconstructDirectiveAuthor,
+} from "./run.js";
 import { readStructureLeaf } from "./leaf-reader.js";
 import { callReconstructMockLlm } from "./mock-llm-realization.js";
 
@@ -121,6 +127,77 @@ describe("runSpreadsheetLeafReadStage (P1-C2-A §11 Step D — live wiring)", ()
     });
     expect(result.artifactsByObservation.size).toBe(0);
     expect(result.aggregateFingerprint).toBeNull();
+    // No-op → no census written → manifest leaf_read step is `skipped` (honestly distinct from
+    // "ran and produced nothing").
+    expect(result.censusPath).toBeNull();
+  });
+});
+
+// REGRESSION (leaf-read production-wiring fix): exercise the REAL direct-call author so leaf-read
+// flows readLeafLabels → callJsonAuthor → callLlmRecorded → unitIdForAuthoredArtifactName("leaf-read").
+// The prior tests inject callLlm straight into readStructureLeaf and BYPASS callJsonAuthor — which is
+// exactly why the missing "leaf-read" telemetry-unit mapping shipped: every production leaf-read call
+// threw BEFORE the LLM call and was silently degraded to {failed} → zero capture, forever.
+describe("runSpreadsheetLeafReadStage — PRODUCTION callJsonAuthor path (telemetry-unit mapping regression)", () => {
+  it("drives leaf-read through callJsonAuthor and produces a sidecar + census (throws pre-fix: 'leaf-read' unmapped)", async () => {
+    const sessionRoot = await tempSession();
+    let llmCalls = 0;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      // Stub at the llmCall boundary ONLY (not bypassing callJsonAuthor). If "leaf-read" is missing
+      // from UNIT_ID_BY_AUTHORED_ARTIFACT_NAME, callLlmRecorded throws before this stub is reached.
+      llmCall: () => {
+        llmCalls += 1;
+        return Promise.resolve({
+          text: JSON.stringify({
+            labels: [{ column_index: 0, tentative_label: "free-text notes" }],
+            unread_columns: [],
+          }),
+        });
+      },
+    });
+    const result = await runSpreadsheetLeafReadStage({
+      sourceObservations: lowConfidenceObservations(),
+      directiveAuthor: author,
+      sessionRoot,
+    });
+    // The stub WAS reached (telemetry unit resolved, no throw) and the read produced a sidecar.
+    expect(llmCalls).toBeGreaterThan(0);
+    const artifact = result.artifactsByObservation.get("obs-lo");
+    expect(artifact?.provenance.producer_kind).toBe("llm");
+    expect(artifact?.provenance.leaf_read_attempt.status).toBe("produced");
+    const files = await readdir(path.join(sessionRoot, "comprehension"));
+    expect(files).toContain("obs-lo.leaf-read.yaml");
+    // R9 honest-signal census written and records the produced read.
+    expect(result.censusPath).toBeTruthy();
+    expect(files).toContain("leaf-read-census.yaml");
+    const census = parseYaml(
+      await readFile(path.join(sessionRoot, "comprehension", "leaf-read-census.yaml"), "utf8"),
+    ) as Record<string, unknown>;
+    expect(census.regions_produced).toBe(1);
+    expect(census.produced_label_count).toBe(1);
+    expect(census.all_attempts_failed).toBe(false);
+  });
+
+  it("R9 honest-signal: a leaf-read that produces ZERO labels still writes a census with all_attempts_failed=true (not silently absent)", async () => {
+    const sessionRoot = await tempSession();
+    const author = createDirectCallReconstructDirectiveAuthor({
+      // Valid JSON but no usable labels → readStructureLeaf returns {unread} → 0 produced.
+      llmCall: () =>
+        Promise.resolve({ text: JSON.stringify({ labels: [], unread_columns: [{ column_index: 0, reason: "ambiguous" }] }) }),
+    });
+    const result = await runSpreadsheetLeafReadStage({
+      sourceObservations: lowConfidenceObservations(),
+      directiveAuthor: author,
+      sessionRoot,
+    });
+    expect(result.artifactsByObservation.size).toBe(0); // no sidecar (nothing produced)…
+    expect(result.censusPath).toBeTruthy(); // …but the census IS written (honest signal).
+    const census = parseYaml(
+      await readFile(path.join(sessionRoot, "comprehension", "leaf-read-census.yaml"), "utf8"),
+    ) as Record<string, unknown>;
+    expect(census.regions_attempted).toBe(1);
+    expect(census.produced_label_count).toBe(0);
+    expect(census.all_attempts_failed).toBe(true);
   });
 });
 

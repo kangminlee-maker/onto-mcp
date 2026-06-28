@@ -1411,7 +1411,12 @@ function authoredArtifactReuseMatch(args: {
  *  (structure_leaf_trigger_config) and the prompt hash are. A change to that predicate/ordering code
  *  MUST bump this knob (until a predicate-fingerprint fold lands; gate follow-up). Bumped from
  *  "p1-c2-a:1" because P1-C2-B′ changed the read-set logic (low-confidence-only → +structure-incomplete). */
-const LEAF_READ_COMPREHENSION_VERSION = "p1-c2-b-prime:1";
+// Bumped p1-c2-b-prime:1 → :2 with the leaf-read production-wiring fix (telemetry-unit mapping +
+// leaf_read stage id). The fix flips leaf-read from total-failure to functional WITHOUT touching the
+// trigger logic or prompt, so none of the other fingerprint inputs rotate; bumping this rotates the
+// resume key so a seed authored during the broken window (zero labels) is NOT silently reused after
+// the fix (R9-03 / DET-1 class — the silent-stale this track exists to prevent).
+const LEAF_READ_COMPREHENSION_VERSION = "p1-c2-b-prime:2";
 
 interface LeafReadStageResult {
   /** llm-edition ComprehensionArtifacts produced for structure-incomplete regions, by observation_id. */
@@ -1423,6 +1428,41 @@ interface LeafReadStageResult {
    *  fan-out cap left UNREAD (formatted "colN (name)"); surfaced to the consumer in Step E so it
    *  never assumes they were understood (gate RB6). Empty when nothing was capped. */
   cappedColumnsByObservation: Map<string, string[]>;
+  /** R9 honest-signal (leaf-read production-wiring fix): path to the always-written leaf-read census
+   *  artifact — the durable evidence surface that distinguishes "attempted but produced nothing"
+   *  (e.g. every region failed) from "never ran". Doubles as the leaf_read manifest step's artifact
+   *  ref. Null only when the stage no-ops (author has no readLeafLabels). */
+  censusPath: string | null;
+}
+
+/** R9 honest-signal census for the leaf-read stage. Always written when the stage runs (even with
+ *  zero regions/labels) so a total leaf-read failure is recorded, not silently absent. NOT folded
+ *  into any reuse key — it is a runtime evidence record (like runtime-events), not authored. */
+interface LeafReadCensus {
+  schema_version: "1";
+  comprehension_version: string;
+  /** Spreadsheet observations the stage examined. */
+  spreadsheet_observations: number;
+  regions_attempted: number;
+  /** Regions that yielded ≥1 provisional label. */
+  regions_produced: number;
+  /** Regions the LLM read but returned no usable label (honest non-defect). */
+  regions_unread: number;
+  /** Regions whose read hard-failed (the silent-defect class this census surfaces). */
+  regions_failed: number;
+  produced_label_count: number;
+  /** True when the stage attempted ≥1 region but produced ZERO labels — the "leaf-read is broken /
+   *  systematically failing" signal that used to be indistinguishable from "no regions to read". */
+  all_attempts_failed: boolean;
+  by_observation: {
+    observation_id: string;
+    regions_attempted: number;
+    regions_produced: number;
+    regions_unread: number;
+    regions_failed: number;
+    produced_labels: number;
+    capped_columns: number;
+  }[];
 }
 
 /**
@@ -1448,7 +1488,28 @@ export async function runSpreadsheetLeafReadStage(args: {
   const cappedColumnsByObservation = new Map<string, string[]>();
   const perObservationFingerprints: { observation_id: string; fingerprint: string }[] = [];
   const readLeaf = args.directiveAuthor.readLeafLabels?.bind(args.directiveAuthor);
-  if (!readLeaf) return { artifactsByObservation, aggregateFingerprint: null, cappedColumnsByObservation };
+  // No-op when the author cannot leaf-read (e.g. baseline A/B harness). No census — the leaf_read
+  // manifest step is then `skipped`, honestly distinct from "ran and produced nothing".
+  if (!readLeaf) {
+    return {
+      artifactsByObservation,
+      aggregateFingerprint: null,
+      cappedColumnsByObservation,
+      censusPath: null,
+    };
+  }
+  const census: LeafReadCensus = {
+    schema_version: "1",
+    comprehension_version: LEAF_READ_COMPREHENSION_VERSION,
+    spreadsheet_observations: 0,
+    regions_attempted: 0,
+    regions_produced: 0,
+    regions_unread: 0,
+    regions_failed: 0,
+    produced_label_count: 0,
+    all_attempts_failed: false,
+    by_observation: [],
+  };
 
   // ⓑ pre-execution LLM-touch pre-image — known before any leaf-read call (model/prompt identity +
   // the deterministic trigger config that shaped the read-set). The route residue (adapter/billing/
@@ -1466,12 +1527,14 @@ export async function runSpreadsheetLeafReadStage(args: {
     read_set_logic_sha256: structureLeafTriggerLogicSha256(),
   };
 
+  const comprehensionDir = path.join(args.sessionRoot, "comprehension");
   for (const observation of args.sourceObservations.observations) {
     if (observation.target_material_kind !== "spreadsheet") continue;
     const inventory = observation.structural_data.workbook_inventory as
       | WorkbookStructuralInventory
       | undefined;
     if (!inventory) continue;
+    census.spreadsheet_observations += 1;
     // Deterministic structure-incompleteness trigger (P1-C2-B′): low-confidence sheets are still
     // ALWAYS read (no regression) PLUS structure-incomplete high-confidence columns up to the cap.
     const { regions, capped_columns } = extractStructureLeafEvidence(inventory, triggerOpts);
@@ -1482,71 +1545,111 @@ export async function runSpreadsheetLeafReadStage(args: {
         capped_columns.map((c) => `col${c.column_index}${c.column_name ? ` (${c.column_name})` : ""}`),
       );
     }
-    if (regions.length === 0) continue;
 
-    // The fingerprint is per-observation (ⓐ from this observation's inventory + run-global ⓑ) and is
-    // recorded regardless of read outcome — the decision to leaf-read is what the seed key tracks.
-    const fingerprint = llmTouchFingerprint(
-      {
-        content_sha256:
-          typeof observation.structural_data.content_sha256 === "string"
-            ? observation.structural_data.content_sha256
-            : "",
-        adapter_version: workbookInventoryAdapterVersion(inventory) ?? 0,
-        value_tile_config: workbookInventoryValueTileConfig(inventory),
-        data_layer_caps: workbookInventoryDataLayerCaps(inventory),
-      },
-      preExecution,
-    ).fingerprint_sha256;
-    perObservationFingerprints.push({
-      observation_id: observation.observation_id,
-      fingerprint,
-    });
+    // Per-observation leaf-read outcome tally (R9 honest-signal census). Recorded for every
+    // spreadsheet observation, including those with zero regions or zero produced labels.
+    let regionsProduced = 0;
+    let regionsUnread = 0;
+    let regionsFailed = 0;
+    let producedLabels = 0;
 
-    const labels: LeafReadLabel[] = [];
-    for (const region of regions) {
-      let outcome: LeafReadOutcome;
-      try {
-        outcome = await readLeaf(region);
-      } catch (error) {
-        // The author's readLeafLabels already degrades hard failures to {kind:'failed'}; a throw
-        // here is unexpected — degrade defensively (never abort the run for a leaf-read, §11 R9).
-        outcome = { kind: "failed", reason: `leaf-read threw: ${(error as Error).message}` };
+    if (regions.length > 0) {
+      // The fingerprint is per-observation (ⓐ from this observation's inventory + run-global ⓑ) and is
+      // recorded regardless of read outcome — the decision to leaf-read is what the seed key tracks.
+      const fingerprint = llmTouchFingerprint(
+        {
+          content_sha256:
+            typeof observation.structural_data.content_sha256 === "string"
+              ? observation.structural_data.content_sha256
+              : "",
+          adapter_version: workbookInventoryAdapterVersion(inventory) ?? 0,
+          value_tile_config: workbookInventoryValueTileConfig(inventory),
+          data_layer_caps: workbookInventoryDataLayerCaps(inventory),
+        },
+        preExecution,
+      ).fingerprint_sha256;
+      perObservationFingerprints.push({
+        observation_id: observation.observation_id,
+        fingerprint,
+      });
+
+      const labels: LeafReadLabel[] = [];
+      for (const region of regions) {
+        let outcome: LeafReadOutcome;
+        try {
+          outcome = await readLeaf(region);
+        } catch (error) {
+          // The author's readLeafLabels already degrades hard failures to {kind:'failed'}; a throw
+          // here is unexpected — degrade defensively (never abort the run for a leaf-read, §11 R9).
+          outcome = { kind: "failed", reason: `leaf-read threw: ${(error as Error).message}` };
+        }
+        if (outcome.kind === "produced") {
+          labels.push(...outcome.result.labels);
+          regionsProduced += 1;
+        } else if (outcome.kind === "unread") {
+          regionsUnread += 1;
+        } else {
+          regionsFailed += 1;
+        }
       }
-      if (outcome.kind === "produced") labels.push(...outcome.result.labels);
-    }
-    if (labels.length === 0) continue; // all regions unread/failed → deterministic companion stands.
+      producedLabels = labels.length;
 
-    const leafRead: LeafReadProducedResult = {
-      labels,
-      limiting_region_ref: `${observation.observation_id}:structure_incomplete`,
-      limiting_reason:
-        "low header_confidence and/or structure-incomplete region(s); columns captured provisionally from value-tile signatures",
-    };
-    const artifact = buildLlmComprehensionArtifact({
-      observationId: observation.observation_id,
-      inventory,
-      leafRead,
-      fingerprint,
+      if (labels.length > 0) {
+        const leafRead: LeafReadProducedResult = {
+          labels,
+          limiting_region_ref: `${observation.observation_id}:structure_incomplete`,
+          limiting_reason:
+            "low header_confidence and/or structure-incomplete region(s); columns captured provisionally from value-tile signatures",
+        };
+        const artifact = buildLlmComprehensionArtifact({
+          observationId: observation.observation_id,
+          inventory,
+          leafRead,
+          fingerprint,
+        });
+        const violations: string[] = [];
+        validateComprehensionArtifact(artifact, violations);
+        if (violations.length > 0) {
+          throw new Error(
+            `leaf-read comprehension artifact failed validation for ${observation.observation_id}: ${violations.join("; ")}`,
+          );
+        }
+        artifactsByObservation.set(observation.observation_id, artifact);
+
+        // Persist as a sidecar joined by observation_id (consumed by the prompt projection in Step E;
+        // audit trail meanwhile). The seed reuse key folds the fingerprint VALUE, not this file.
+        await fs.mkdir(comprehensionDir, { recursive: true });
+        await writeYamlDocument(
+          path.join(comprehensionDir, `${observation.observation_id}.leaf-read.yaml`),
+          artifact,
+        );
+      }
+    }
+
+    census.regions_attempted += regions.length;
+    census.regions_produced += regionsProduced;
+    census.regions_unread += regionsUnread;
+    census.regions_failed += regionsFailed;
+    census.produced_label_count += producedLabels;
+    census.by_observation.push({
+      observation_id: observation.observation_id,
+      regions_attempted: regions.length,
+      regions_produced: regionsProduced,
+      regions_unread: regionsUnread,
+      regions_failed: regionsFailed,
+      produced_labels: producedLabels,
+      capped_columns: capped_columns.length,
     });
-    const violations: string[] = [];
-    validateComprehensionArtifact(artifact, violations);
-    if (violations.length > 0) {
-      throw new Error(
-        `leaf-read comprehension artifact failed validation for ${observation.observation_id}: ${violations.join("; ")}`,
-      );
-    }
-    artifactsByObservation.set(observation.observation_id, artifact);
-
-    // Persist as a sidecar joined by observation_id (consumed by the prompt projection in Step E;
-    // audit trail meanwhile). The seed reuse key folds the fingerprint VALUE, not this file.
-    const comprehensionDir = path.join(args.sessionRoot, "comprehension");
-    await fs.mkdir(comprehensionDir, { recursive: true });
-    await writeYamlDocument(
-      path.join(comprehensionDir, `${observation.observation_id}.leaf-read.yaml`),
-      artifact,
-    );
   }
+
+  // R9 honest-signal: ALWAYS persist the census when the stage ran (even zero regions/labels), so a
+  // total leaf-read failure is recorded as a durable artifact, not silently absent. Doubles as the
+  // leaf_read manifest step's artifact ref.
+  census.all_attempts_failed =
+    census.regions_attempted > 0 && census.produced_label_count === 0;
+  await fs.mkdir(comprehensionDir, { recursive: true });
+  const censusPath = path.join(comprehensionDir, "leaf-read-census.yaml");
+  await writeYamlDocument(censusPath, census);
 
   const aggregateFingerprint =
     perObservationFingerprints.length === 0
@@ -1558,7 +1661,7 @@ export async function runSpreadsheetLeafReadStage(args: {
               .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0)),
           ),
         );
-  return { artifactsByObservation, aggregateFingerprint, cappedColumnsByObservation };
+  return { artifactsByObservation, aggregateFingerprint, cappedColumnsByObservation, censusPath };
 }
 
 async function writeFreshAuthoredYamlDocument<T>(
@@ -2006,6 +2109,7 @@ function artifactRefsWithDefaults(args: {
       args.refs.source_observation_lineage_index ?? null,
     source_observation_lineage_index_validation:
       args.refs.source_observation_lineage_index_validation ?? null,
+    leaf_read_census: args.refs.leaf_read_census ?? null,
     source_safety_ledger: args.refs.source_safety_ledger ?? null,
     source_safety_ledger_validation:
       args.refs.source_safety_ledger_validation ?? null,
@@ -2551,6 +2655,23 @@ function createRunManifest(args: {
           runtimePerformer(),
           "source-observation-lineage-index-validation.yaml is emitted after the lineage index exists.",
           "No lineage index validation is available before source-observation delta collection has closed.",
+        ),
+      // P1-C2 leaf-read (first LLM-touch). Census ref present → completed (the always-written census
+      // is the durable evidence surface, even when zero labels were produced); null → skipped (the
+      // stage no-op'd because the author has no readLeafLabels).
+      args.artifactRefs.leaf_read_census
+        ? completedStep(
+          "leaf_read",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.leaf_read_census],
+        )
+        : skippedStep(
+          "leaf_read",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "leaf-read stage did not run (author has no readLeafLabels).",
+          "No leaf-read capture was attempted; the deterministic companion stands unchanged.",
         ),
       completedStep(
         "source_purpose_candidates",
@@ -11605,6 +11726,9 @@ export async function runReconstruct(
     sessionRoot,
   });
   const leafReadAggregateFingerprint = leafReadStage.aggregateFingerprint;
+  // R9 honest-signal: the always-written census path becomes the leaf_read manifest step's artifact
+  // ref (null only when the stage no-ops → that step is `skipped`).
+  const leafReadCensusPath = leafReadStage.censusPath;
   // P1-C2-A Step E: hand the produced provisional labels to the author so it renders them as a
   // non-authoritative hint in every observation prompt (prompt text only — the reuse key already
   // folds the fingerprint above; these labels never reach it).
@@ -12845,6 +12969,7 @@ export async function runReconstruct(
       source_observation_lineage_index: sourceObservationLineageIndexPath,
       source_observation_lineage_index_validation:
         sourceObservationLineageIndexValidationPath,
+      leaf_read_census: leafReadCensusPath,
       source_safety_ledger: sourceSafetyLedgerPath,
       source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
       source_scout_pack: sourceScoutPackPath,
