@@ -2746,8 +2746,34 @@ consumption. Runtime read scope can authorize internal `prompt_context`,
 `evidence_support`, and replay checks, but `public_output` and `material_claim`
 rows must remain authority-gap rows (`authorization_state: unknown`,
 `proof_sufficiency_state: insufficient_for_claim`, derived `no_prompt_use`, and
-a limitation ref) unless the observed source explicitly authorizes that exact
-intended consumption.
+a limitation ref) **unless at least one canonical authorization basis is
+satisfied for that exact intended consumption**. The canonical authorization
+bases for `public_output` and `material_claim` are:
+
+- **(A) runtime-target provenance** — the observation is the user-provided
+  reconstruct runtime-target source (`is_runtime_target_source: true`, set by the
+  observation producer only for refs the caller resolved as the request target,
+  never for frontier-discovered or maturation-closure re-entry observations). The
+  user providing a source as the reconstruct target is authorization to derive
+  material claims from it and surface them to that user. Audited with
+  `authorization_scope_ref: runtime_target_ref_read_scope`.
+- **(B) source self-declaration** — the observation carries an explicit
+  `structural_data.source_safety_consumption_authorizations` entry for that
+  consumption. Audited with
+  `authorization_scope_ref: source_safety_explicit_consumption_authorization`.
+- **(C) user/owner confirmation** — an explicit user/owner consumption grant
+  (purpose-confirmation channel). *Not wired in the initial cut.*
+- **(D) authority response** — an authority request answered `provided` through
+  the maturation authority-response flow, the canonical channel for
+  frontier-discovered secondary sources. *Not wired in the initial cut.*
+
+Authorization is the union: a `public_output`/`material_claim` row is authorized
+iff any basis A–D holds. Each basis is scoped to its own source, so a
+frontier-discovered or non-target observation that satisfies none stays an
+authority-gap row (no leak). Basis attribution is enforced, not merely declared:
+an `authorization_state: authorized` upper-tier row must be justified by basis A
+(`is_runtime_target_source`) or basis B (the explicit field); the source-safety
+validator rejects an authorized upper-tier row backed by neither.
 
 ```yaml
 schema_version: "1"

@@ -39,6 +39,58 @@ describe("validateSourceObservationBoundary", () => {
     expect(result.violations).toEqual([]);
   });
 
+  it("Defect-3: accepts is_runtime_target_source true on a non-frontier (initial-target) observation", () => {
+    const result = validateSourceObservationBoundary({
+      observation_id: "obs_initial_1",
+      round_id: "initial_source_frontier",
+      triggering_frontier_validation_ref: null,
+      is_runtime_target_source: true,
+      target_material_kind: "code",
+      adapter_id: "minimal-code-structure-observer",
+      source_ref: "/tmp/feature.ts",
+      location: "/tmp/feature.ts",
+      summary: "code material observed.",
+      structural_data: { content_sha256: "x" },
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it("Defect-3: rejects a non-boolean is_runtime_target_source (fail-closed at the artifact boundary)", () => {
+    const result = validateSourceObservationBoundary({
+      observation_id: "obs_bad_type_1",
+      is_runtime_target_source: "true" as unknown as boolean,
+      target_material_kind: "code",
+      adapter_id: "minimal-code-structure-observer",
+      source_ref: "/tmp/feature.ts",
+      location: "/tmp/feature.ts",
+      summary: "code material observed.",
+      structural_data: {},
+    });
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "is_runtime_target_source must be a boolean when present",
+    );
+  });
+
+  it("Defect-3: rejects a forged frontier observation that claims runtime-target provenance", () => {
+    const result = validateSourceObservationBoundary({
+      observation_id: "obs_forged_1",
+      round_id: "maturation-round-1",
+      triggering_frontier_validation_ref: "source-observation-reentry-validation.yaml",
+      is_runtime_target_source: true,
+      target_material_kind: "code",
+      adapter_id: "minimal-code-structure-observer",
+      source_ref: "/tmp/discovered.ts",
+      location: "/tmp/discovered.ts",
+      summary: "code material observed.",
+      structural_data: {},
+    });
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "is_runtime_target_source must not be true on a frontier re-entry observation (triggering_frontier_validation_ref present)",
+    );
+  });
+
   it("rejects ontology claims in source observations", () => {
     const result = validateSourceObservationBoundary({
       observation_id: "obs_code_1",

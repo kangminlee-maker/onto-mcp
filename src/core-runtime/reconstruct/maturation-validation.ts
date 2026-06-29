@@ -2628,10 +2628,18 @@ export function validateAnswerSupportLedger(args: {
       const observation = sourceObservationsById.get(ref.observation_id);
       const lineageRow = lineageRowByObservationId.get(ref.observation_id) ??
         null;
+      // Defect-3 G1: a per-ref lineage-index row only exists for genuine frontier
+      // RE-ENTRY observations, which the producer stamps with a
+      // triggering_frontier_validation_ref. The INITIAL observation carries the
+      // sentinel round_id "initial_source_frontier" and an "...:initial" batch id
+      // but is NOT a re-entry and never appears in the lineage index, so keying
+      // this per-ref resolution on round_id/observation_batch_id over-fired on
+      // every single-source run. triggering_frontier_validation_ref is the
+      // canonical lineage-bearing marker (set at run.ts re-observation callers).
+      // The broader index-PRESENCE predicate sourceBackedEvidenceCarriesLineage
+      // (above) is intentionally LEFT BROAD — do not narrow it here.
       const refCarriesLineage = Boolean(
-        observation?.round_id ||
-          observation?.observation_batch_id ||
-          observation?.triggering_frontier_validation_ref,
+        observation?.triggering_frontier_validation_ref,
       );
       if (
         refCarriesLineage &&

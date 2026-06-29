@@ -203,8 +203,18 @@ function buildSafetyRowForObservation(
 ): ReconstructSourceSafetyRow {
   const explicitlyAuthorized = explicitConsumptionAuthorizations(observation)
     .has(intendedConsumption);
+  // Defect-3 basis A (runtime-target provenance): a user-provided reconstruct
+  // runtime-target source authorizes the outward tiers (material_claim,
+  // public_output) by provenance. Scoped to the two upper tiers only — the
+  // internal tiers are already covered by runtimeInternalConsumption, and a
+  // non-target observation (is_runtime_target_source absent/false) never gets
+  // basis A, so this cannot leak to frontier-discovered sources.
+  const provenanceAuthorized = observation.is_runtime_target_source === true &&
+    (intendedConsumption === "material_claim" ||
+      intendedConsumption === "public_output");
   const consumptionAuthorized =
-    runtimeInternalConsumption(intendedConsumption) || explicitlyAuthorized;
+    runtimeInternalConsumption(intendedConsumption) || explicitlyAuthorized ||
+    provenanceAuthorized;
   const rowBase = {
     safety_row_id: sourceSafetyRowIdForObservation(
       observation,
@@ -558,6 +568,37 @@ export function validateSourceSafetyLedger(args: {
           message:
             `source safety row ${row.safety_row_id} visibility_tier must derive to ${expected}, got ${row.visibility_tier}`,
           subjectId: row.safety_row_id,
+        }));
+      }
+    }
+    // Defect-3 D3 (basis-attribution enforcement): an outward consumption tier
+    // (material_claim/public_output) that actually REACHES consumption_allowed MUST
+    // be justified by a canonical basis — A (the observation is the runtime target,
+    // is_runtime_target_source) or B (explicit source self-declaration). Without
+    // this, a forged/replayed row could reach consumption_allowed on a
+    // frontier-discovered/non-target source (the four axes alone don't bind to the
+    // basis). The trigger keys on the DERIVED outcome, not a single
+    // authorization_state literal: both "authorized" AND "not_required" derive to
+    // consumption_allowed for these tiers, so checking only "authorized" left a
+    // "not_required" bypass. Internal tiers are exempt (runtime read scope), and a
+    // legit non-target row derives to no_prompt_use (producer emits "unknown"), so
+    // D3 stays silent there.
+    const consumption = row.visibility_derivation.intended_consumption;
+    if (
+      (consumption === "material_claim" || consumption === "public_output") &&
+      deriveSourceSafetyVisibilityTier(row) === "consumption_allowed" &&
+      expectedObservation
+    ) {
+      const basisA = expectedObservation.is_runtime_target_source === true;
+      const basisB = explicitConsumptionAuthorizations(expectedObservation)
+        .has(consumption);
+      if (!basisA && !basisB) {
+        violations.push(violation({
+          code: "unjustified_consumption_authorization",
+          message:
+            `source safety row ${row.safety_row_id} reaches consumption_allowed for ${consumption} without a runtime-target-provenance (A) or explicit-source (B) authorization basis`,
+          subjectId: row.safety_row_id,
+          axis: "authorization_state",
         }));
       }
     }

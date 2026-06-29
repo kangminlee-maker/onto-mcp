@@ -2521,6 +2521,71 @@ describe("maturation validation", () => {
     expect(clean.violations.some((v) => v.code === "missing_required_ref")).toBe(false);
   });
 
+  it("Defect-3 G1+basisA: an initial runtime-target observation (sentinel round_id, no trigger, no explicit auth) validates via provenance with no lineage-index false-positive", () => {
+    const { frontier, frontierValidation } = frontierScenario();
+    const base = sourceObservations(["src/feature.ts"]);
+    // The shape the real producer stamps on the FIRST observation: sentinel
+    // round_id + initial batch id, NO frontier trigger, runtime-target provenance,
+    // and NO explicit source self-declaration (so authorization rests on basis A
+    // alone). The pre-fix refCarriesLineage (round_id||batch_id) tripped the
+    // "lineage-marked..." check here even though the obs is not a re-entry.
+    const observations: ReconstructSourceObservationsArtifact = {
+      ...base,
+      observations: base.observations.map((obs) => {
+        const structuralData = { ...(obs.structural_data as Record<string, unknown>) };
+        delete structuralData.source_safety_consumption_authorizations;
+        return {
+          ...obs,
+          round_id: "initial_source_frontier",
+          observation_batch_id: "source-observation-batch:initial",
+          triggering_frontier_validation_ref: null,
+          is_runtime_target_source: true,
+          structural_data: structuralData,
+        };
+      }),
+    };
+    const safety = sourceSafetyAuthority(observations);
+    const ledger = answerSupportLedgerWith({
+      evidence_cluster_id: "cluster-source-evidence",
+      question_refs: ["mq-feature-object"],
+      support_mode: "direct_authority",
+      proposed_answer_summary:
+        "Observed runtime-target source supports the feature object.",
+      evidence_refs: [evidence],
+      proof_refs: [],
+      user_confirmation_refs: [],
+      authority_response_refs: [],
+      independence_basis: "single direct source authority",
+      contradiction_refs: [],
+      limitation_refs: [],
+    });
+    const validation = validateAnswerSupportLedger({
+      answerSupportLedger: ledger,
+      answerSupportLedgerRef: "answer-support-ledger.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      sourceObservations: observations,
+      // Present-but-empty lineage index (no row for the initial obs): the OLD
+      // predicate would demand a row and fire "lineage-marked..."; the narrowed
+      // predicate (trigger-only) does not. Index PRESENCE is still required (the
+      // broad sourceBackedEvidenceCarriesLineage is intentionally left in place).
+      sourceObservationLineageIndex: sourceObservationLineageIndex([]),
+      sourceObservationLineageIndexRef: "source-observation-lineage-index.yaml",
+      sourceObservationLineageIndexValidation:
+        sourceObservationLineageIndexValidation("valid"),
+      sourceObservationLineageIndexValidationRef:
+        "source-observation-lineage-index-validation.yaml",
+      ...safety,
+    });
+
+    expect(validation.violations.map((v) => v.message)).not.toContain(
+      "lineage-marked source evidence must resolve through the source observation lineage index",
+    );
+    expect(validation.validation_status).toBe("valid");
+  });
+
   it("does not close material questions with frontier hints as answer support", () => {
     const { frontier, frontierValidation, matrix, matrixValidation } =
       frontierScenario();

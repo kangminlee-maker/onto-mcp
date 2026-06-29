@@ -432,6 +432,14 @@ export async function buildReconstructSourceObservation(
     observationBatchId?: string | null;
     triggeringFrontierValidationRef?: string | null;
   },
+  // Defect-3 basis A: the caller asserts whether this ref is the user-provided
+  // reconstruct runtime target. Set true ONLY by the initial-target
+  // materialization; frontier-discovered / maturation-closure re-entry callers
+  // omit it (conservative default false). Every observation literal below sets
+  // is_runtime_target_source from this so source-safety can grant the
+  // material_claim/public_output tiers by provenance without leaking to
+  // non-target sources.
+  options?: { isRuntimeTargetSource?: boolean },
 ): Promise<ReconstructSourceObservation | null> {
   if (!detection.exists || !isConcreteTargetMaterialKind(detection.kind)) {
     return null;
@@ -456,7 +464,13 @@ export async function buildReconstructSourceObservation(
   // Spreadsheet sources route through the shared deterministic structure
   // observer instead of the generic raw-text path (design S1 §2.2 / §11).
   if (detection.kind === "spreadsheet") {
-    return buildSpreadsheetSourceObservation({ detection, stat, location, lineage });
+    return buildSpreadsheetSourceObservation({
+      detection,
+      stat,
+      location,
+      lineage,
+      isRuntimeTargetSource: Boolean(options?.isRuntimeTargetSource),
+    });
   }
   const stats = stat.isFile()
     ? await textStats(detection.ref, structuralExcerptCharLimit(detection.kind, detection.ref))
@@ -477,6 +491,7 @@ export async function buildReconstructSourceObservation(
       lineage?.observationBatchId ?? "source-observation-batch:initial",
     triggering_frontier_validation_ref:
       lineage?.triggeringFrontierValidationRef ?? null,
+    is_runtime_target_source: Boolean(options?.isRuntimeTargetSource),
     target_material_kind: detection.kind,
     adapter_id: `minimal-${detection.kind}-structure-observer`,
     source_ref: detection.ref,
@@ -548,8 +563,12 @@ async function buildSpreadsheetSourceObservation(args: {
         triggeringFrontierValidationRef?: string | null;
       }
     | undefined;
+  // Defect-3 basis A: threaded from buildReconstructSourceObservation so the
+  // spreadsheet path (the ground-truth single-source defect path) sets the marker
+  // exactly like the generic path. Default false at the dispatcher.
+  isRuntimeTargetSource: boolean;
 }): Promise<ReconstructSourceObservation> {
-  const { detection, stat, location, lineage } = args;
+  const { detection, stat, location, lineage, isRuntimeTargetSource } = args;
   const basename = path.basename(detection.ref);
   const extension = path.extname(detection.ref).toLowerCase();
   // Route through the single shared projection: the structural_data inventory
@@ -574,6 +593,7 @@ async function buildSpreadsheetSourceObservation(args: {
       lineage?.observationBatchId ?? "source-observation-batch:initial",
     triggering_frontier_validation_ref:
       lineage?.triggeringFrontierValidationRef ?? null,
+    is_runtime_target_source: isRuntimeTargetSource,
     target_material_kind: "spreadsheet",
     adapter_id: SPREADSHEET_OBSERVER_ADAPTER_ID,
     source_ref: detection.ref,
@@ -762,7 +782,11 @@ export async function materializeReconstructPreparationArtifacts(
     }
     const refDetection = detection.per_ref.find((candidate) => candidate.ref === unit.ref);
     if (!refDetection) continue;
-    const observation = await buildReconstructSourceObservation(refDetection);
+    // Defect-3 basis A: these are the user-provided reconstruct runtime-target
+    // refs (the initial target inventory), so they are runtime-target sources.
+    const observation = await buildReconstructSourceObservation(refDetection, undefined, {
+      isRuntimeTargetSource: true,
+    });
     if (observation) {
       const unsupportedReason = spreadsheetUnsupportedReason(observation);
       if (unsupportedReason) {

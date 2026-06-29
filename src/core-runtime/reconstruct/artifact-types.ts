@@ -622,7 +622,11 @@ export interface ReconstructSourceSafetyValidationViolation {
     | "source_observation_missing"
     | "source_observation_safety_row_missing"
     | "visibility_axis_set_invalid"
-    | "visibility_derivation_mismatch";
+    | "visibility_derivation_mismatch"
+    // Defect-3 D3: an authorized material_claim/public_output row not justified by
+    // a canonical authorization basis (A runtime-target provenance or B explicit
+    // source self-declaration) — blocks forged/replayed outward authorizations.
+    | "unjustified_consumption_authorization";
   message: string;
   subject_id: string | null;
   axis: ReconstructSourceSafetyCanonicalAxis | null;
