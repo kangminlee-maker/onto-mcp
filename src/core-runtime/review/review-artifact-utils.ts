@@ -4,9 +4,11 @@ import YAML from "yaml";
 import { atomicWriteFile } from "../artifact-io.js";
 import { isSpreadsheetRef } from "../target-material-kind.js";
 import {
+  DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS,
   observeSpreadsheetSource,
   projectInventoryForAdmission,
   projectInventoryForPrompt,
+  type WorkbookInventoryPromptCaps,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
 import type { DirectoryListingOptions } from "./artifact-types.js";
@@ -249,6 +251,7 @@ export async function collectFilePathsRecursively(
  */
 function renderSpreadsheetStructuralView(
   inventory: WorkbookStructuralInventory,
+  caps?: WorkbookInventoryPromptCaps,
 ): string {
   const lines: string[] = [
     "[Spreadsheet Structural Inventory — structure inspected only; cell values and formula results are not evaluated]",
@@ -260,8 +263,12 @@ function renderSpreadsheetStructuralView(
     return `${lines.join("\n")}\n`;
   }
 
+  // Stage 1: when the caller threads window-proportional caps, size the prompt
+  // projection to the lens model's window; otherwise the DEFAULT caps keep the
+  // render byte-identical to today (no regression).
   const { inventory: inv, sections } = projectInventoryForPrompt(
     projectInventoryForAdmission(inventory),
+    caps ?? DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS,
   );
 
   // One rendered formula PATTERN line (Stage 1.1): the deduped formula TEXT + how many
@@ -478,6 +485,7 @@ export async function readTextOrDirectoryListing(
   targetPath: string,
   options?: DirectoryListingOptions,
   inventory?: WorkbookStructuralInventory,
+  inventoryPromptCaps?: WorkbookInventoryPromptCaps,
 ): Promise<string> {
   const stats = await fs.stat(targetPath);
   if (!stats.isDirectory()) {
@@ -486,10 +494,12 @@ export async function readTextOrDirectoryListing(
     // as reconstruct — raw cell values never enter the prompt, and a binary
     // workbook is never dumped as garbage utf8. When the orchestrator already
     // observed this ref (single-observation, design §3.2), reuse that inventory;
-    // otherwise observe here. The render applies the admission + prompt projections.
+    // otherwise observe here. The render applies the admission + prompt projections,
+    // sized by the optional Stage 1 window-proportional caps (undefined → DEFAULT).
     if (isSpreadsheetRef(targetPath)) {
       return renderSpreadsheetStructuralView(
         inventory ?? (await observeSpreadsheetSource(targetPath)),
+        inventoryPromptCaps,
       );
     }
     try {
@@ -533,6 +543,7 @@ export async function renderTargetSnapshot(
   resolvedTargetRefs: string[],
   options?: DirectoryListingOptions,
   inventoryByRef?: Map<string, WorkbookStructuralInventory>,
+  inventoryPromptCaps?: WorkbookInventoryPromptCaps,
 ): Promise<string> {
   const sections: string[] = [];
   for (const resolvedTargetRef of resolvedTargetRefs) {
@@ -543,6 +554,7 @@ export async function renderTargetSnapshot(
         resolvedTargetRef,
         options,
         inventoryByRef?.get(path.resolve(resolvedTargetRef)),
+        inventoryPromptCaps,
       ),
       "",
     );
@@ -555,6 +567,7 @@ export async function renderReviewTargetMaterializedInput(
   materializedRefs: string[],
   options?: DirectoryListingOptions,
   inventoryByRef?: Map<string, WorkbookStructuralInventory>,
+  inventoryPromptCaps?: WorkbookInventoryPromptCaps,
 ): Promise<string> {
   const sections: string[] = [`kind: ${materializedKind}`, ""];
   for (const materializedRef of materializedRefs) {
@@ -566,6 +579,7 @@ export async function renderReviewTargetMaterializedInput(
         materializedRef,
         options,
         inventoryByRef?.get(path.resolve(materializedRef)),
+        inventoryPromptCaps,
       ),
     );
     sections.push("");
