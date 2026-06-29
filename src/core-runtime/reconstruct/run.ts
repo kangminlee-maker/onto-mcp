@@ -4392,15 +4392,39 @@ function compactCompetencyQuestionsValidationForAssessmentPrompt(
   };
 }
 
-function compactClaimRealizationMapForAssessmentPrompt(
+// The union of the (batch) questions' linked claim ids — the claims relevant to the
+// questions under assessment. Single source for both the scoped claim_realization_map
+// projection and the evidence gather, so the prompt's claim map and evidence surface stay
+// consistent. Domain-competency questions carry no linked_claim_ids (zero-link); those rows
+// are judged on their own evidence (see assessmentEvidenceObservationIds), so an empty set
+// here intentionally yields an empty scoped claim map for a pure-domain batch.
+function assessmentLinkedClaimIds(
+  questions: ReconstructCompetencyQuestionsArtifact["questions"],
+): Set<string> {
+  return new Set(questions.flatMap((question) => question.linked_claim_ids ?? []));
+}
+
+// Defect (CQ-assessment v6): the claim_realization_map is SCOPED to the batch's linked
+// claims rather than embedding the whole map in every batch. The whole-map fixed overhead
+// grew unbounded with claim count and overflowed the 50K prompt cap before M3. claim_id +
+// linked-claim scope keeps the assessor's claim context relevant to its questions; the full
+// claim_realization_count is retained (honesty: "N total, M shown for this batch").
+// Exported for the projection-scope unit test; not part of the product surface.
+export function compactClaimRealizationMapForAssessmentPrompt(
   claimRealizationMap: ReconstructClaimRealizationMapArtifact,
+  linkedClaimIds: Set<string>,
 ): unknown {
+  const scopedRealizations = claimRealizationMap.claim_realizations.filter(
+    (realization) => linkedClaimIds.has(realization.claim_id),
+  );
   return {
     schema_version: claimRealizationMap.schema_version,
     session_id: claimRealizationMap.session_id,
     ontology_seed_ref: claimRealizationMap.ontology_seed_ref,
     claim_realization_count: claimRealizationMap.claim_realizations.length,
-    claim_realizations: claimRealizationMap.claim_realizations.map((realization) => ({
+    scoped_claim_realization_count: scopedRealizations.length,
+    claim_realization_scope: "batch_linked_claims",
+    claim_realizations: scopedRealizations.map((realization) => ({
       claim_id: realization.claim_id,
       stance: realization.stance,
       evidence_observation_ids:
@@ -4419,9 +4443,7 @@ export function assessmentEvidenceObservationIds(
   input: ReconstructCompetencyQuestionAssessmentAuthorInput,
   questions: ReconstructCompetencyQuestionsArtifact["questions"],
 ): string[] {
-  const linkedClaimIds = new Set(
-    questions.flatMap((question) => question.linked_claim_ids ?? []),
-  );
+  const linkedClaimIds = assessmentLinkedClaimIds(questions);
   const observationIds = new Set<string>();
   for (const realization of input.claimRealizationMap.claim_realizations) {
     if (!linkedClaimIds.has(realization.claim_id)) continue;
@@ -4604,6 +4626,7 @@ function competencyQuestionAssessmentUserPayload(
     claim_realization_map:
       compactClaimRealizationMapForAssessmentPrompt(
         input.claimRealizationMap,
+        assessmentLinkedClaimIds(questions),
       ),
     // Cited evidence bodies for the questions in this (batch of) assessment, so the
     // assessor judges answer_status on actual source content, not id labels alone.

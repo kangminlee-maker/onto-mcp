@@ -3919,7 +3919,7 @@ describe("runReconstruct", () => {
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v5");
+    ).toBe("competency_question_assessment_compact_projection:v6");
     expect(
       sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -3949,7 +3949,7 @@ describe("runReconstruct", () => {
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v5");
+    ).toBe("competency_question_assessment_compact_projection:v6");
     expect(
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
@@ -4113,7 +4113,7 @@ describe("runReconstruct", () => {
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_version,
-    ).toBe("competency_question_assessment_compact_projection:v5");
+    ).toBe("competency_question_assessment_compact_projection:v6");
     expect(
       competencyAssessmentPayloads[0]?.competency_question_prompt_policy
         ?.projection_contract_sha256,
@@ -4135,7 +4135,7 @@ describe("runReconstruct", () => {
       .toMatchObject({
         projection_kind: "competency_question_assessment_compact_projection",
         projection_contract_version:
-          "competency_question_assessment_compact_projection:v5",
+          "competency_question_assessment_compact_projection:v6",
         prompt_char_limit: 50_000,
         batching_policy: expect.objectContaining({
           mode: "deterministic_prompt_budget",
