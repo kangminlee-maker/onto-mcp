@@ -851,9 +851,42 @@ export function callReconstructMockLlm(
       authority_requests: [],
     });
   } else if (systemPrompt.includes("Author answer-support-ledger.yaml")) {
-    text = JSON.stringify({
-      evidence_clusters: [],
-    });
+    // Defect-3 G4: derive a deterministic direct_authority cluster from the
+    // prompt's frontier questions + prompt-visible observations. With the shared
+    // empty-frontier mock (questions:[]) this yields [] so the ~12 full-pipeline
+    // completion tests are unaffected; a non-empty-frontier fixture exercises the
+    // real G1/G2/G3 per-evidence-ref path (the path the empty mock hid).
+    const frontierQuestions = (input.questions ?? []) as Array<{
+      question_id?: string;
+    }>;
+    const promptVisibleObservationIds =
+      (input.prompt_visible_observation_ids ?? []) as string[];
+    const questionRefs = frontierQuestions
+      .map((question) => question.question_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    if (questionRefs.length === 0 || promptVisibleObservationIds.length === 0) {
+      text = JSON.stringify({ evidence_clusters: [] });
+    } else {
+      text = JSON.stringify({
+        evidence_clusters: [
+          {
+            evidence_cluster_id: "mock-evidence-cluster-1",
+            question_refs: questionRefs,
+            support_mode: "direct_authority",
+            proposed_answer_summary:
+              "Mock direct-authority support derived from the observed runtime-target source.",
+            evidence_observation_ids: [promptVisibleObservationIds[0]],
+            proof_refs: [],
+            user_confirmation_refs: [],
+            authority_response_refs: [],
+            independence_basis:
+              "Deterministic mock structural observation of the runtime-target source.",
+            contradiction_refs: [],
+            limitation_refs: [],
+          },
+        ],
+      });
+    }
   } else if (systemPrompt.includes("Author answer-support-judgment.yaml")) {
     // Mirrors the judge author payload shape: per-cluster
     // {evidence_cluster_id, evidence_observation_ids}. Returns one supported

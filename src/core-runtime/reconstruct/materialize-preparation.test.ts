@@ -143,6 +143,9 @@ describe("materializeReconstructPreparationArtifacts", () => {
         target_material_kind: "code",
         adapter_id: "minimal-code-structure-observer",
         source_ref: target,
+        // Defect-3 D1 (generic-path guard): the initial-target materialization
+        // stamps runtime-target provenance on the generic observation literal too.
+        is_runtime_target_source: true,
       }),
     );
     expect(observations.validation_results).toContain(
@@ -490,6 +493,11 @@ describe("materializeReconstructPreparationArtifacts", () => {
     const observation = observations.observations[0]!;
     expect(observation.adapter_id).toBe(SPREADSHEET_OBSERVER_ADAPTER_ID);
     expect(observation.summary).toContain("structure_inspected_only");
+    // Defect-3 D1 (spreadsheet-path guard): the user-provided target must carry the
+    // runtime-target provenance marker through the SEPARATE spreadsheet sub-builder,
+    // not only the generic literal — otherwise basis-A never fires for the
+    // ground-truth (spreadsheet) defect path and G2/G3 keep blocking.
+    expect(observation.is_runtime_target_source).toBe(true);
     const sd = observation.structural_data as Record<string, any>;
     expect(sd.workbook_inventory).toBeDefined();
     expect(sd.workbook_inventory.workbook_kind).toBe("csv");

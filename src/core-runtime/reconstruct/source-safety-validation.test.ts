@@ -16,6 +16,7 @@ const now = "2026-06-02T00:00:00.000Z";
 function sourceObservations(
   contentExcerpt = "export const feature = true;\n",
   explicitAuthorizations: ReconstructSourceSafetyIntendedConsumption[] = [],
+  isRuntimeTargetSource = false,
 ): ReconstructSourceObservationsArtifact {
   return {
     schema_version: "1",
@@ -28,6 +29,7 @@ function sourceObservations(
         adapter_id: "minimal-code-structure-observer",
         source_ref: "src/feature.ts",
         location: "src/feature.ts",
+        ...(isRuntimeTargetSource ? { is_runtime_target_source: true } : {}),
         summary: "code material observed at feature.ts",
         structural_data: {
           content_sha256: "sha256-fixture",
@@ -131,6 +133,112 @@ describe("source safety validation", () => {
       .toBe("consumption_allowed");
     expect(rowForConsumption(ledger, "material_claim").authorization_scope_ref)
       .toBe("source_safety_explicit_consumption_authorization");
+  });
+
+  it("Defect-3 basis A: a runtime-target observation authorizes material_claim/public_output by provenance (no explicit field), scoped to runtime_target_ref_read_scope", () => {
+    const observations = sourceObservations("export const feature = true;\n", [], true);
+    const ledger = buildSourceSafetyLedgerFromSourceObservations({
+      sourceObservations: observations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+
+    expect(rowForConsumption(ledger, "material_claim").visibility_tier)
+      .toBe("consumption_allowed");
+    expect(rowForConsumption(ledger, "public_output").visibility_tier)
+      .toBe("consumption_allowed");
+    // Basis A is audited as the runtime-target relation, NOT mislabeled as explicit.
+    expect(rowForConsumption(ledger, "material_claim").authorization_scope_ref)
+      .toBe("runtime_target_ref_read_scope");
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceSafetyLedgerRef: "source-safety-ledger.yaml",
+      sourceObservations: observations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+    expect(validation.validation_status).toBe("valid");
+  });
+
+  it("Defect-3 governance: a NON-runtime-target observation without explicit authorization keeps material_claim/public_output gated (no leak)", () => {
+    const observations = sourceObservations("export const feature = true;\n", [], false);
+    const ledger = buildSourceSafetyLedgerFromSourceObservations({
+      sourceObservations: observations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+
+    expect(rowForConsumption(ledger, "material_claim").visibility_tier)
+      .toBe("no_prompt_use");
+    expect(rowForConsumption(ledger, "public_output").visibility_tier)
+      .toBe("no_prompt_use");
+  });
+
+  it("Defect-3 D3: rejects a forged authorized material_claim row with neither basis A nor B", () => {
+    // A non-target observation with no explicit authorization: a tampered/replayed
+    // ledger that flips its material_claim row to authorized + consumption_allowed
+    // would re-derive consistently from the four axes, so only the basis-attribution
+    // check catches it.
+    const observations = sourceObservations("export const feature = true;\n", [], false);
+    const ledger = buildSourceSafetyLedgerFromSourceObservations({
+      sourceObservations: observations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+    const materialIndex = ledger.safety_rows.findIndex((row) =>
+      row.visibility_derivation.intended_consumption === "material_claim"
+    );
+    ledger.safety_rows[materialIndex] = {
+      ...ledger.safety_rows[materialIndex],
+      authorization_state: "authorized",
+      proof_sufficiency_state: "sufficient_for_claim",
+      replay_state: "replay_allowed",
+      visibility_tier: "consumption_allowed",
+    };
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceSafetyLedgerRef: "source-safety-ledger.yaml",
+      sourceObservations: observations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code)).toContain(
+      "unjustified_consumption_authorization",
+    );
+  });
+
+  it("Defect-3 D3: also rejects the not_required bypass (forged outward row reaching consumption_allowed without basis A/B)", () => {
+    // not_required is a valid authorization_state that ALSO derives to
+    // consumption_allowed for the outward tiers — a D3 trigger keyed only on
+    // "authorized" would miss it. D3 keys on the derived outcome, so it fires.
+    const observations = sourceObservations("export const feature = true;\n", [], false);
+    const ledger = buildSourceSafetyLedgerFromSourceObservations({
+      sourceObservations: observations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+    for (const consumption of ["material_claim", "public_output"] as const) {
+      const index = ledger.safety_rows.findIndex((row) =>
+        row.visibility_derivation.intended_consumption === consumption
+      );
+      ledger.safety_rows[index] = {
+        ...ledger.safety_rows[index],
+        authorization_state: "not_required",
+        proof_sufficiency_state: "sufficient_for_claim",
+        replay_state: "replay_allowed",
+        visibility_tier: "consumption_allowed",
+      };
+    }
+
+    const validation = validateSourceSafetyLedger({
+      sourceSafetyLedger: ledger,
+      sourceSafetyLedgerRef: "source-safety-ledger.yaml",
+      sourceObservations: observations,
+      sourceObservationsRef: "source-observations.yaml",
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.filter((v) =>
+        v.code === "unjustified_consumption_authorization"
+      ),
+    ).toHaveLength(2);
   });
 
   it("fails when visibility_tier contradicts the canonical-axis derivation", () => {

@@ -18,6 +18,12 @@ export interface ReconstructSourceObservation {
   round_id?: string | null;
   observation_batch_id?: string | null;
   triggering_frontier_validation_ref?: string | null;
+  // Defect-3 basis A (runtime-target provenance): true only for observations the
+  // producer built for a ref the caller resolved as the reconstruct runtime target
+  // (never frontier-discovered / maturation-closure re-entry). Authorizes the
+  // material_claim/public_output source-safety consumption tiers. Absent/false =
+  // not a runtime-target source (the conservative default).
+  is_runtime_target_source?: boolean;
   target_material_kind: Exclude<TargetMaterialKind, "mixed" | "unknown">;
   adapter_id: string;
   source_ref: string;
@@ -244,6 +250,30 @@ export function validateSourceObservationBoundary(
     !observation.observation_batch_id.trim()
   ) {
     violations.push("observation_batch_id must not be blank when present");
+  }
+  // Defect-3 basis A is forgery-resistant at the artifact boundary (covers
+  // persisted/replayed/host-supplied observations, not just freshly produced ones):
+  if ("is_runtime_target_source" in observation) {
+    // (a) fail-closed type: downstream source-safety treats ONLY literal boolean
+    // true as Basis A, so a non-boolean must not pass the boundary silently.
+    if (
+      observation.is_runtime_target_source !== undefined &&
+      typeof observation.is_runtime_target_source !== "boolean"
+    ) {
+      violations.push("is_runtime_target_source must be a boolean when present");
+    }
+    // (b) mutual exclusion: a runtime-target source is the user-provided initial
+    // target and is never a frontier re-entry. Rejecting target+trigger blocks a
+    // replayed/forged frontier observation from claiming runtime-target provenance.
+    if (
+      observation.is_runtime_target_source === true &&
+      typeof observation.triggering_frontier_validation_ref === "string" &&
+      observation.triggering_frontier_validation_ref.trim()
+    ) {
+      violations.push(
+        "is_runtime_target_source must not be true on a frontier re-entry observation (triggering_frontier_validation_ref present)",
+      );
+    }
   }
   if (!observation.adapter_id.trim()) {
     violations.push("adapter_id is required");
