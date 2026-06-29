@@ -108,6 +108,11 @@ export interface ReconstructExecutionTelemetryCollector {
 const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId> =
   new Map<string, ReconstructStageId>([
     ["SourceObservationDirective", "observation_directive"],
+    // P1-C2 leaf-read (the first LLM-touch). Its absence here was the defect: callLlmRecorded
+    // (run.ts) resolves the unit as its first line, BEFORE the LLM call, so an unmapped name throws
+    // and the leaf-read caller swallowed it (R9) → zero capture, silently. Mapped to its own unit so
+    // leaf-read attempts/failures are recorded, not silently degraded.
+    ["leaf-read", "leaf_read"],
     ["ExplorationSynthesis", "exploration_synthesis"],
     ["SourceFrontier", "source_frontier"],
     ["SourcePurposeCandidates", "source_purpose_candidates"],

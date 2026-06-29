@@ -49,7 +49,11 @@ export const SPREADSHEET_OBSERVER_ADAPTER_ID = "spreadsheet-structure-observer";
 // v3 (design-C): per-column cardinality (distinct_count / distinct_count_is_estimate /
 // non_empty_count on every profiled column) + declared type=list enum members on
 // data_validations (validation_type / members / members_truncated / applies_to_columns).
-export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 3;
+// v4 (P1-C1): segmented value-tile projection promoted to production.
+// v5 (P1-C2-B′ #3): per-column `is_uniform_formula` — true when a single single-column formula
+// pattern provably covers the column's data cells (a repeated/shared fill-down). The leaf-read
+// trigger skips such columns (structure fully captures them). Additive optional field.
+export const SPREADSHEET_OBSERVER_ADAPTER_VERSION = 5;
 
 export type WorkbookKind = "xlsx" | "xlsm" | "csv" | "tsv" | "xls" | "xlsb" | "ods";
 
@@ -123,6 +127,16 @@ export interface InventoryColumn {
    *  scanned rows; a lower bound when the sheet's rows were row-cap truncated (signalled by
    *  the sheet-level `capture_truncated`, not a per-column flag). */
   non_empty_count: number;
+  /** P1-C2-B′ #3 (adapter v5): true when this column is provably a SINGLE uniform formula — exactly
+   *  one single-column formula pattern covers it with occurrence_count === non_empty_count (a fill-down
+   *  whose references shift but whose structure is one repeated formula; Excel shared-formula dedup
+   *  already collapses these to one pattern). Structure fully captures such a column, so the leaf-read
+   *  trigger skips it. Absent/false unless PROVEN (xlsx only; conservative — a partial-formula column,
+   *  a multi-formula column [a row-range break = real structure], or a multi-column fill is NOT marked,
+   *  erring to read). NOTE: occurrence_count is whole-sheet, so a formula sitting in a title/header row
+   *  identical to the data fill-down could in theory over-skip — semantically absurd for real headers
+   *  (labels), and the only loss is a redundant leaf-read of an already-captured formula column. */
+  is_uniform_formula?: boolean;
 }
 
 /** The ONE pure cardinality-priority calc point (design-C §2.1): selection, display, and the
@@ -280,6 +294,14 @@ export interface WorkbookStructuralInventory {
    *  "N of M observed" instead of mis-reporting the capped count as the total; absent when
    *  no sheet cap was hit (the full set is in `sheets`). */
   sheet_count_total?: number;
+  /** P1-C1 (§3.1): segmented value-tile projection per sheet — row-window type/shape signatures plus
+   *  domain-agnostic display-format (numFmt) boundaries. Present on xlsx/xlsm inventories; absent on
+   *  CSV/TSV and unsupported workbooks (which have no styles/rows grid to project from). */
+  segmented_value_tiles?: SheetValueTileProjection[];
+  /** P1-C1 resume hardening: the value-tile opts that SHAPED segmented_value_tiles (window + caps).
+   *  These change the inventory CONTENT (segment boundaries) but are invisible to content_sha256 (raw
+   *  bytes) and adapter_version (schema shape), so the reuse digest folds them. Present on xlsx/xlsm. */
+  value_tile_config?: ValueTileOpts;
   unsupported_reason: string | null;
 }
 
@@ -328,6 +350,7 @@ export function inventoryHasInspectedStructure(
     inventory.distinct_value_vocab.length > 0 ||
     inventory.cross_sheet_key_overlap.length > 0 ||
     inventory.risk_signals.length > 0 ||
+    (inventory.segmented_value_tiles?.some((s) => s.columns.length > 0) ?? false) ||
     inventory.per_sheet_data.some((sheet) => sheet.columns.length > 0)
   );
 }
@@ -364,6 +387,7 @@ export function inventoryHasRenderableStructure(
     inventory.external_links.length > 0 ||
     inventory.distinct_value_vocab.length > 0 ||
     inventory.cross_sheet_key_overlap.length > 0 ||
+    (inventory.segmented_value_tiles?.some((s) => s.columns.length > 0) ?? false) ||
     inventory.per_sheet_data.some((sheet) => sheet.columns.length > 0)
   );
 }
@@ -1166,11 +1190,37 @@ function isDateFormatCode(code: string): boolean {
   return /[yd]/i.test(stripped);
 }
 
-/** Parse styles.xml → the set of cellXfs indexes (a cell's `s` attribute) whose
- *  number format is a date, so date-styled numeric cells can be typed as dates. */
-function parseStyles(xml: string): Set<number> {
+/** Normalize a numFmt formatCode into a deterministic, DOMAIN-AGNOSTIC, source-safe identity: the
+ *  display GRAMMAR only. Strips locale/color/elapsed brackets (`[$-409]` `[Red]` `[h]`), QUOTED
+ *  LITERALS (`"text"` — sanitizing any domain text so it never reaches a prompt), and escaped chars
+ *  (`\.`); collapses whitespace and lowercases. The code NEVER names a format (it does not decide
+ *  "US vs UK date") — it only carries the sanitized grammar so a downstream LLM can name a format
+ *  CHANGE at runtime (owner 2026-06-27). `m/d/yyyy` and `d/m/yyyy` stay DISTINCT identities (the
+ *  boundary is still caught) without any naming. Reuses the same strip rules as isDateFormatCode. */
+function normalizeFormatCode(code: string): string {
+  return code
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/"[^"]*"/g, "")
+    .replace(/\\./g, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+/** Parse styles.xml → (1) the set of cellXfs indexes (a cell's `s` attribute) whose number format
+ *  is a date, so date-styled numeric cells can be typed as dates; and (2) `xfFormatIdentity`: each
+ *  cellXf index → its domain-agnostic format-identity (sanitized display formatCode for custom
+ *  formats; `b<numFmtId>` for builtin/General — an opaque key, NOT a naming table). The value-tile
+ *  projection uses (2) to detect DISPLAY-format boundaries without the code ever naming the format. */
+function parseStyles(xml: string): {
+  dateXfIndexes: Set<number>;
+  xfFormatIdentity: Map<number, string>;
+} {
   const dateNumFmtIds = new Set<number>(BUILTIN_DATE_NUMFMT_IDS);
+  // Custom numFmt definitions (numFmtId → raw formatCode) precede cellXfs in OOXML, so they are
+  // fully known before the cellXfs loop resolves each xf's identity.
+  const customFormatCode = new Map<number, string>();
   const dateXfIndexes = new Set<number>();
+  const xfFormatIdentity = new Map<number, string>();
   let inCellXfs = false;
   let xfIndex = 0;
   const parser = new SaxesParser();
@@ -1178,8 +1228,9 @@ function parseStyles(xml: string): Set<number> {
     const a = attrsOf(node);
     if (node.name === "numFmt") {
       const id = parseInt(a.numFmtId ?? "", 10);
-      if (Number.isInteger(id) && a.formatCode && isDateFormatCode(a.formatCode)) {
-        dateNumFmtIds.add(id);
+      if (Number.isInteger(id) && a.formatCode) {
+        customFormatCode.set(id, a.formatCode);
+        if (isDateFormatCode(a.formatCode)) dateNumFmtIds.add(id);
       }
     } else if (node.name === "cellXfs") {
       inCellXfs = true; // the `s` attribute indexes into cellXfs, not cellStyleXfs
@@ -1187,6 +1238,9 @@ function parseStyles(xml: string): Set<number> {
     } else if (node.name === "xf" && inCellXfs) {
       const id = parseInt(a.numFmtId ?? "0", 10);
       if (dateNumFmtIds.has(id)) dateXfIndexes.add(xfIndex);
+      const custom = customFormatCode.get(id);
+      // custom → sanitized grammar; builtin (incl. General id 0) → opaque `b<id>` (no naming).
+      xfFormatIdentity.set(xfIndex, custom !== undefined ? normalizeFormatCode(custom) : `b${id}`);
       xfIndex += 1;
     }
   });
@@ -1194,7 +1248,7 @@ function parseStyles(xml: string): Set<number> {
     if (node.name === "cellXfs") inCellXfs = false;
   });
   parser.write(xml).close();
-  return dateXfIndexes;
+  return { dateXfIndexes, xfFormatIdentity };
 }
 
 /** Excel 1900-system serial → ISO date (YYYY-MM-DD). 25569 = serial of
@@ -1334,6 +1388,10 @@ interface ParsedWorksheet {
     occurrence_count: number;
     applied_ranges: string[];
     cross_sheet_refs: string[];
+    /** P1-C2-B′ #3: the origin-normalized column all this pattern's cells occupy, or null for a
+     *  multi-column fill. Used per-sheet to mark a single uniform-formula column; not merged to the
+     *  workbook level (column attribution is per-sheet). */
+    applies_to_single_column: number | null;
   }>;
   /** Every formula cell on this sheet, counted regardless of the distinct-pattern cap. */
   formula_cells_total: number;
@@ -1341,6 +1399,10 @@ interface ParsedWorksheet {
   formula_patterns_capped: boolean;
   error_cells: Array<{ sheet: string; cell: string; token: string }>;
   rows: string[][];
+  /** CUT-2 EXPERIMENTAL: per-cell cellXf index (the `s` attribute), index-aligned with `rows`,
+   *  captured ONLY when `xfFormatIdentity` was supplied to the parser. Resolve an index to its
+   *  domain-agnostic format-identity via the workbook's `xfFormatIdentity` map. */
+  formatRows?: number[][];
   rows_truncated: boolean;
   /** A structural cap (formula/merge/validation/error) was hit — folds into
    *  capture_truncated so the artifact doesn't read as complete (Codex P2). */
@@ -1483,8 +1545,13 @@ function createWorksheetParser(args: {
   sheetName: string;
   caps: DataLayerCaps;
   dateXfIndexes: Set<number>;
+  /** When supplied (experimental value-tile path), capture per-cell cellXf indexes into `formatRows`
+   *  (index-aligned with `rows`) for domain-agnostic display-format boundary detection. Absent in the
+   *  production path → no `formatRows` captured, artifact byte-identical. */
+  xfFormatIdentity?: Map<number, string>;
 }): { write: (text: string) => void; finalize: () => void; getResult: () => ParsedWorksheet } {
-  const { sharedStrings, sheetName, caps, dateXfIndexes } = args;
+  const { sharedStrings, sheetName, caps, dateXfIndexes, xfFormatIdentity } = args;
+  const captureFormats = xfFormatIdentity !== undefined;
   const merged_ranges: ParsedWorksheet["merged_ranges"] = [];
   // design-C: capture each validation's RAW fields during streaming; resolve
   // validation_type / members / applies_to_columns at getResult time, when dimStartCol is
@@ -1507,12 +1574,23 @@ function createWorksheetParser(args: {
   // formulaPatternsCapped (an honest lower-bound flag), not capsHit.
   const formulaPatterns = new Map<
     string,
-    { sample_cell: string; occurrence_count: number; applied_ranges: string[]; cross_sheet_refs: string[] }
+    {
+      sample_cell: string;
+      occurrence_count: number;
+      applied_ranges: string[];
+      cross_sheet_refs: string[];
+      // P1-C2-B′ #3: the origin-normalized column this pattern's cells occupy, or null once a cell in
+      // a DIFFERENT column is seen (multi-column fill). Used to detect a single uniform-formula column.
+      single_col: number | null;
+    }
   >();
   let formulaCellsTotal = 0;
   let formulaPatternsCapped = false;
   const error_cells: ParsedWorksheet["error_cells"] = [];
   const rows: string[][] = [];
+  // Per-cell cellXf index, index-aligned with `rows` (only populated when captureFormats). A cell's
+  // domain-agnostic format-identity is recovered later via xfFormatIdentity.get(index).
+  const formatRows: number[][] = [];
   let protectedSheet = false;
   let declaredDims: { rows: number; cols: number } | null = null;
   let declaredUsedRange: string | null = null;
@@ -1531,6 +1609,7 @@ function createWorksheetParser(args: {
   let fSi = "";
 
   let curRow: string[] | null = null;
+  let curFormatRow: number[] | null = null;
   let cellRef = "";
   let cellType = "";
   let cellStyle = -1;
@@ -1614,9 +1693,11 @@ function createWorksheetParser(args: {
           const targetIndex = rowNum - firstRowNum;
           while (rows.length < targetIndex && rows.length < caps.max_rows_scanned_per_sheet) {
             rows.push([]);
+            if (captureFormats) formatRows.push([]); // keep formatRows index-aligned with rows
           }
         }
         curRow = rows.length >= caps.max_rows_scanned_per_sheet ? null : [];
+        curFormatRow = curRow === null ? null : captureFormats ? [] : null;
         if (curRow === null) rowsTruncated = true;
         break;
       }
@@ -1732,6 +1813,9 @@ function createWorksheetParser(args: {
           const existing = formulaPatterns.get(formulaText);
           if (existing) {
             existing.occurrence_count += 1;
+            // Single-column attribution (#3): a cell in a different column demotes the pattern to
+            // multi-column (null), so it can never mark a column as a single uniform formula.
+            if (existing.single_col !== null && existing.single_col !== cellCol) existing.single_col = null;
             if (existing.applied_ranges.length < XLSX_FORMULA_APPLIED_RANGE_CAP) {
               existing.applied_ranges.push(cellRef);
             }
@@ -1744,6 +1828,7 @@ function createWorksheetParser(args: {
               occurrence_count: 1,
               applied_ranges: [cellRef],
               cross_sheet_refs: extractCrossSheetRefs(formulaText, sheetName),
+              single_col: cellCol,
             });
           } else {
             // Distinct-pattern cap hit: the cell is still counted in formulaCellsTotal,
@@ -1775,6 +1860,10 @@ function createWorksheetParser(args: {
           if (cellCol >= 0) {
             while (curRow.length < cellCol) curRow.push("");
             curRow[cellCol] = value;
+            if (curFormatRow) {
+              while (curFormatRow.length < cellCol) curFormatRow.push(-1);
+              curFormatRow[cellCol] = cellStyle; // cellXf index; -1 = no style (General)
+            }
           }
         }
         break;
@@ -1785,7 +1874,9 @@ function createWorksheetParser(args: {
       case "row":
         if (curRow) {
           rows.push(curRow);
+          if (captureFormats) formatRows.push(curFormatRow ?? []);
           curRow = null;
+          curFormatRow = null;
         }
         break;
       default:
@@ -1829,17 +1920,318 @@ function createWorksheetParser(args: {
         occurrence_count: entry.occurrence_count,
         applied_ranges: entry.applied_ranges,
         cross_sheet_refs: entry.cross_sheet_refs,
+        applies_to_single_column: entry.single_col,
       })),
       formula_cells_total: formulaCellsTotal,
       formula_patterns_capped: formulaPatternsCapped,
       error_cells,
       rows,
+      ...(captureFormats ? { formatRows } : {}),
       rows_truncated: rowsTruncated,
       caps_hit: capsHit,
       };
     },
   };
 }
+
+// ════════════════════════ P1-C1 — segmented value-tile projection (production) ════════════════════════
+//
+// design `20260625-rescoped-comprehension-engine-design.md` §3.1: the engine's ONLY new deterministic
+// surface, now WIRED into production (P1-C1, §7/§12). The projection is a pure function of the SINGLE
+// observer pass's `rows[][]` grid (the exact input `profileSheetRows` consumes; zero source re-scan)
+// plus `formatRows` (per-cell cellXf from the same pass), surfaced under `segmented_value_tiles`.
+// NOT a raw-value dump (P12: aggregate signatures only; bounded distinct; sanitized format-identity).
+export interface ValueTileOpts {
+  /** Row-window size of one segment (the detection grid). Benchmark-backed SSOT candidate (§3.1/P6);
+   *  detection grid is ⊥ to localization resolution — the bracketed refine pins the exact boundary row
+   *  regardless of this window (§13). */
+  window: number;
+  /** Hard cap on segments retained per column (P12 bounded memory: O(columns × segments), not O(cells)). */
+  segmentsPerColumnCap: number;
+  /** Hard cap on distinct values retained per segment (bounded signature, not a raw dump). */
+  distinctPerSegmentCap: number;
+}
+
+export const DEFAULT_VALUE_TILE_OPTS: ValueTileOpts = {
+  window: 1024,
+  segmentsPerColumnCap: 256,
+  distinctPerSegmentCap: 32,
+};
+
+/** A normalized SERIALIZATION shape of one raw cell string (not the value, the shape). The dominant
+ *  shape per segment is the contradiction-ground (R8): a shape change between adjacent segments is a
+ *  boundary candidate. Derived purely from the value string already in `rows[][]` — so a DISPLAY-only
+ *  numFmt change on uniform date serials (which the pass already collapsed to ISO) is invisible here;
+ *  that is the separate-scan/fold exception Cut-2 characterizes, not a value-string signature. */
+function serializationShape(raw: string): string {
+  const v = raw.trim();
+  if (v.length === 0) return "EMPTY";
+  if (/^(true|false)$/i.test(v)) return "BOOL";
+  if (/^-?\d+$/.test(v)) return "INT";
+  if (/^-?\d+\.\d+$/.test(v)) return "DEC";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return "ISO_DATE";
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(v)) return "ISO_DATETIME";
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(v)) return "SLASH_DATE";
+  if (/^\d{1,2}\.\d{1,2}\.\d{2,4}$/.test(v)) return "DOT_DATE";
+  if (/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(v)) return "EMAIL";
+  return "TEXT";
+}
+
+export interface ValueTileSegment {
+  /** 1-based inclusive sheet-row range of this segment (anchored at the grid's first row = 1). */
+  row_start: number;
+  row_end: number;
+  non_empty: number;
+  /** Per-InferredColumnType counts over non-empty cells (reuses `classifyValue`). */
+  type_counts: Record<string, number>;
+  /** Per-serialization-shape counts over non-empty cells. */
+  shape_counts: Record<string, number>;
+  /** Deterministic dominant shape (max count; ties broken by shape name ASC). null when all-empty. */
+  dominant_shape: string | null;
+  /** Per-format-identity counts over non-empty cells (DISPLAY format; domain-agnostic & source-safe).
+   *  Empty {} when format capture is off (production until T1). */
+  format_counts: Record<string, number>;
+  /** Deterministic dominant format-identity (max count; ties by identity ASC). null when off/all-empty. */
+  dominant_format: string | null;
+  /** Bounded distinct value set within the segment (capped → is_lower_bound). */
+  distinct_count: number;
+  distinct_is_lower_bound: boolean;
+}
+
+/** A boundary candidate between two adjacent same-column segments whose dominant shape differs, refined
+ *  to the EXACT transition row by a bracketed scan over only those two windows (§13 intra_tile_note). */
+export interface IntraTileNote {
+  /** Which signal moved at this boundary: a value-string SHAPE change, or a DISPLAY-format (numFmt)
+   *  change. `prev_shape`/`new_shape` hold the serialization shape for `value_shape`, or the
+   *  sanitized domain-agnostic format-identity for `display_format` (a downstream LLM names it). */
+  boundary_kind: "value_shape" | "display_format";
+  prev_shape: string;
+  new_shape: string;
+  /** Last row (1-based) carrying the prev shape/format before the transition. */
+  last_prev_format_row: number;
+  /** First row (1-based) carrying the new shape/format. */
+  first_new_format_row: number;
+}
+
+export interface ColumnValueTiles {
+  column_index: number;
+  segments: ValueTileSegment[];
+  /** True when `segmentsPerColumnCap` stopped new-segment creation (segments are an honest lower bound). */
+  segments_capped: boolean;
+  intra_tile_notes: IntraTileNote[];
+}
+
+export interface SheetValueTileProjection {
+  sheet: string;
+  window: number;
+  columns: ColumnValueTiles[];
+  /** Structural memory witness (P12): the number of segment records the result actually retains — bounds the
+   *  projection's OWN footprint as O(columns × segments), independent of the cell count. */
+  retained_segments: number;
+  /** Sum of per-segment distinct COUNTS. NOTE: the distinct-value Sets are LOCAL to each segment loop and
+   *  discarded (only the integer `distinct_count` is kept per segment) — so no distinct VALUES are retained;
+   *  this is a conservative upper proxy for the per-segment distinct work, not retained memory. */
+  summed_segment_distinct_count: number;
+}
+
+/** Pick the exact transition row inside the bracket [a.row_start, b.row_end] of two adjacent segments:
+ *  the last row whose shape == prev before the first row whose shape == new. Scans only the two windows
+ *  (bounded), so the localization resolution is row-precise regardless of `window` (P6). */
+function refineBoundary(args: {
+  rows: string[][];
+  col: number;
+  bracketStartRow: number;
+  bracketEndRow: number;
+  prevSig: string;
+  newSig: string;
+  boundaryKind: IntraTileNote["boundary_kind"];
+  /** rowIdx0 = 0-based row index; returns the cell's signature, or null to SKIP (empty/off). */
+  signatureOf: (rowIdx0: number, col: number) => string | null;
+}): IntraTileNote | null {
+  const { rows, col, bracketStartRow, bracketEndRow, prevSig, newSig, boundaryKind, signatureOf } = args;
+  // rows[] is 0-based; sheet rows are 1-based. bracket rows are 1-based inclusive.
+  let firstNew = -1;
+  for (let r = bracketStartRow - 1; r <= bracketEndRow - 1 && r < rows.length; r += 1) {
+    const sig = signatureOf(r, col);
+    if (sig === null) continue;
+    if (sig === newSig) {
+      firstNew = r;
+      break;
+    }
+  }
+  if (firstNew < 0) return null;
+  let lastPrev = -1;
+  for (let r = firstNew - 1; r >= bracketStartRow - 1; r -= 1) {
+    const sig = signatureOf(r, col);
+    if (sig === null) continue;
+    if (sig === prevSig) {
+      lastPrev = r;
+      break;
+    }
+  }
+  if (lastPrev < 0) return null;
+  return {
+    boundary_kind: boundaryKind,
+    prev_shape: prevSig,
+    new_shape: newSig,
+    last_prev_format_row: lastPrev + 1,
+    first_new_format_row: firstNew + 1,
+  };
+}
+
+/** CUT-2: project the segmented value-tile surface from the already-materialized `rows[][]` grid. PURE
+ *  (no source re-scan, no file read) and DETERMINISTIC (fixed iteration order). Holds only bounded
+ *  per-segment aggregates (P12). `rows` is `parsed.rows` from the single streaming pass — the same input
+ *  `profileSheetRows` consumes. */
+export function projectSegmentedValueTiles(args: {
+  sheetName: string;
+  rows: string[][];
+  caps: DataLayerCaps;
+  opts: ValueTileOpts;
+  /** Per-cell cellXf indexes (index-aligned with `rows`) + the workbook's format-identity map. When
+   *  both present, the projection ALSO detects domain-agnostic DISPLAY-format boundaries (the code
+   *  never names a format; a downstream LLM names the change). Absent → value-shape boundaries only. */
+  formatRows?: number[][];
+  xfFormatIdentity?: Map<number, string>;
+}): SheetValueTileProjection {
+  const { sheetName, rows, caps, opts, formatRows, xfFormatIdentity } = args;
+  const captureFormats = formatRows !== undefined && xfFormatIdentity !== undefined;
+  // A cell's value-string serialization shape, or null to SKIP (empty cell).
+  const valueSigOf = (rowIdx0: number, c: number): string | null => {
+    const cell = (rows[rowIdx0] ?? [])[c] ?? "";
+    return cell.trim().length === 0 ? null : serializationShape(cell);
+  };
+  // A cell's domain-agnostic format-identity, or null to SKIP (empty value cell / no style / off).
+  const formatSigOf = (rowIdx0: number, c: number): string | null => {
+    if (!captureFormats) return null;
+    const cell = (rows[rowIdx0] ?? [])[c] ?? "";
+    if (cell.trim().length === 0) return null;
+    return xfFormatIdentity!.get((formatRows![rowIdx0] ?? [])[c] ?? -1) ?? null;
+  };
+  // Deterministic dominant key: max count, ties broken by key name ASC (shared by shape + format).
+  const dominantOf = (counts: Record<string, number>): string | null => {
+    let best: string | null = null;
+    let bestCount = -1;
+    for (const [k, c] of Object.entries(counts).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
+      if (c > bestCount) {
+        bestCount = c;
+        best = k;
+      }
+    }
+    return best;
+  };
+  const colCount = Math.min(
+    rows.reduce((m, r) => Math.max(m, r.length), 0),
+    caps.max_columns_profiled,
+  );
+  const window = Math.max(1, opts.window);
+  const columns: ColumnValueTiles[] = [];
+  let retainedSegments = 0;
+  let summedSegmentDistinct = 0;
+
+  for (let col = 0; col < colCount; col += 1) {
+    const segments: ValueTileSegment[] = [];
+    let segmentsCapped = false;
+    for (let segStart = 0; segStart < rows.length; segStart += window) {
+      if (segments.length >= opts.segmentsPerColumnCap) {
+        segmentsCapped = true;
+        break;
+      }
+      const segEnd = Math.min(segStart + window, rows.length);
+      const typeCounts: Record<string, number> = {};
+      const shapeCounts: Record<string, number> = {};
+      const formatCounts: Record<string, number> = {};
+      const distinct = new Set<string>();
+      let distinctLowerBound = false;
+      let nonEmpty = 0;
+      for (let r = segStart; r < segEnd; r += 1) {
+        const cell = (rows[r] ?? [])[col] ?? "";
+        if (cell.trim().length === 0) continue;
+        nonEmpty += 1;
+        const t = classifyValue(cell);
+        typeCounts[t] = (typeCounts[t] ?? 0) + 1;
+        const s = serializationShape(cell);
+        shapeCounts[s] = (shapeCounts[s] ?? 0) + 1;
+        if (captureFormats) {
+          const fid = formatSigOf(r, col);
+          if (fid !== null) formatCounts[fid] = (formatCounts[fid] ?? 0) + 1;
+        }
+        if (distinct.size < opts.distinctPerSegmentCap) distinct.add(cell);
+        else if (!distinct.has(cell)) distinctLowerBound = true;
+      }
+      const dominant = dominantOf(shapeCounts);
+      const dominantFormat = captureFormats ? dominantOf(formatCounts) : null;
+      segments.push({
+        row_start: segStart + 1,
+        row_end: segEnd,
+        non_empty: nonEmpty,
+        type_counts: typeCounts,
+        shape_counts: shapeCounts,
+        dominant_shape: dominant,
+        format_counts: formatCounts,
+        dominant_format: dominantFormat,
+        distinct_count: distinct.size,
+        distinct_is_lower_bound: distinctLowerBound,
+      });
+      retainedSegments += 1;
+      summedSegmentDistinct += distinct.size;
+    }
+    // Boundary candidates: adjacent non-empty segments whose dominant shape differs → refine to the exact
+    // transition row over the two-window bracket.
+    const intraTileNotes: IntraTileNote[] = [];
+    for (let i = 1; i < segments.length; i += 1) {
+      const prev = segments[i - 1]!;
+      const cur = segments[i]!;
+      // value-string SHAPE boundary
+      if (
+        prev.dominant_shape !== null &&
+        cur.dominant_shape !== null &&
+        prev.dominant_shape !== cur.dominant_shape
+      ) {
+        const note = refineBoundary({
+          rows,
+          col,
+          bracketStartRow: prev.row_start,
+          bracketEndRow: cur.row_end,
+          prevSig: prev.dominant_shape,
+          newSig: cur.dominant_shape,
+          boundaryKind: "value_shape",
+          signatureOf: valueSigOf,
+        });
+        if (note) intraTileNotes.push(note);
+      }
+      // DISPLAY-format boundary (domain-agnostic format-identity; a downstream LLM names the change)
+      if (
+        captureFormats &&
+        prev.dominant_format !== null &&
+        cur.dominant_format !== null &&
+        prev.dominant_format !== cur.dominant_format
+      ) {
+        const note = refineBoundary({
+          rows,
+          col,
+          bracketStartRow: prev.row_start,
+          bracketEndRow: cur.row_end,
+          prevSig: prev.dominant_format,
+          newSig: cur.dominant_format,
+          boundaryKind: "display_format",
+          signatureOf: formatSigOf,
+        });
+        if (note) intraTileNotes.push(note);
+      }
+    }
+    columns.push({ column_index: col, segments, segments_capped: segmentsCapped, intra_tile_notes: intraTileNotes });
+  }
+
+  return {
+    sheet: sheetName,
+    window,
+    columns,
+    retained_segments: retainedSegments,
+    summed_segment_distinct_count: summedSegmentDistinct,
+  };
+}
+// ══════════════════════════════════ END CUT-2 EXPERIMENTAL ══════════════════════════════════
 
 /** Build the inventory from xlsx/xlsm bytes (design §11.2). Deterministic and
  *  read-only. `content_sha256` is the RAW-byte hash, supplied by the caller. */
@@ -1849,8 +2241,14 @@ export function buildXlsxInventory(args: {
   contentSha256: string;
   workbookKind: WorkbookKind;
   caps?: DataLayerCaps;
+  /** P1-C1 (§3.1): row-window value-tile opts. Production callers may omit → DEFAULT_VALUE_TILE_OPTS.
+   *  The segmented value-tile projection (incl. domain-agnostic display-format boundaries) is ALWAYS
+   *  produced now and surfaced under `segmented_value_tiles`. */
+  valueTileOpts?: ValueTileOpts;
 }): WorkbookStructuralInventory {
   const caps = args.caps ?? DEFAULT_DATA_LAYER_CAPS;
+  const valueTileOpts = args.valueTileOpts ?? DEFAULT_VALUE_TILE_OPTS;
+  const valueTiles: SheetValueTileProjection[] = [];
   const risk_signals: InventoryRiskSignal[] = [];
   let captureTruncated = false;
   // Macro presence is evidence-based: the actual xl/vbaProject.bin part, detected
@@ -1908,6 +2306,8 @@ export function buildXlsxInventory(args: {
   let workbookRels: ParsedRel[];
   let sharedStrings: string[];
   let dateXfIndexes: Set<number>;
+  // Domain-agnostic display-format identity per cellXf index (value-tile boundary detection).
+  let xfFormatIdentity: Map<number, string>;
   try {
     workbook = parseWorkbook(workbookXml);
     const relsXml = parts.get("xl/_rels/workbook.xml.rels");
@@ -1915,7 +2315,11 @@ export function buildXlsxInventory(args: {
     const sstXml = parts.get("xl/sharedStrings.xml");
     sharedStrings = sstXml ? parseSharedStrings(sstXml) : [];
     const stylesXml = parts.get("xl/styles.xml");
-    dateXfIndexes = stylesXml ? parseStyles(stylesXml) : new Set<number>();
+    const styles = stylesXml
+      ? parseStyles(stylesXml)
+      : { dateXfIndexes: new Set<number>(), xfFormatIdentity: new Map<number, string>() };
+    dateXfIndexes = styles.dateXfIndexes;
+    xfFormatIdentity = styles.xfFormatIdentity;
   } catch (error) {
     return unsupported(`xlsx workbook parse failed: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -2046,7 +2450,13 @@ export function buildXlsxInventory(args: {
       sinkFor: (name) => {
         const sheetEntry = sheetByPath.get(name);
         if (!sheetEntry) return null;
-        const wp = createWorksheetParser({ sharedStrings, sheetName: sheetEntry.name, caps, dateXfIndexes });
+        const wp = createWorksheetParser({
+          sharedStrings,
+          sheetName: sheetEntry.name,
+          caps,
+          dateXfIndexes,
+          xfFormatIdentity,
+        });
         return {
           write: wp.write,
           finalize: () => {
@@ -2130,6 +2540,41 @@ export function buildXlsxInventory(args: {
     error_cells.push(...parsed.error_cells);
 
     const profile = profileSheetRows({ sheetName: sheetEntry.name, rows: parsed.rows, caps });
+    // P1-C2-B′ #3 (gate follow-up): deterministic uniform-formula detection. A column is structurally
+    // complete when EXACTLY ONE single-column formula pattern covers its data cells (occurrence_count
+    // === non_empty_count) — a fill-down whose refs shift but whose structure is one repeated formula
+    // (Excel stores these as shared formulas, already deduped to one pattern with an exact count). The
+    // leaf-read trigger skips such columns. Conservative: a partial-formula column, a multi-formula
+    // column (a row-range break is real structure), or a multi-column fill fails the match and is READ
+    // (safe over-read; never a wrong skip). Same origin-normalized column frame as profile.columns.
+    if (parsed.formula_patterns.length > 0) {
+      const singleColFormula = new Map<number, { total: number; patterns: number }>();
+      for (const p of parsed.formula_patterns) {
+        if (p.applies_to_single_column === null) continue;
+        const agg = singleColFormula.get(p.applies_to_single_column) ?? { total: 0, patterns: 0 };
+        agg.total += p.occurrence_count;
+        agg.patterns += 1;
+        singleColFormula.set(p.applies_to_single_column, agg);
+      }
+      for (const col of profile.columns) {
+        const agg = singleColFormula.get(col.index);
+        if (agg && agg.patterns === 1 && col.non_empty_count > 0 && agg.total === col.non_empty_count) {
+          col.is_uniform_formula = true;
+        }
+      }
+    }
+    // P1-C1: the value-tile projection is a PURE FUNCTION of `parsed.rows` (the exact grid
+    // `profileSheetRows` just consumed) + `parsed.formatRows` (per-cell cellXf, same pass) — zero
+    // source re-scan, computed at the same site. Always produced now (bounded by caps + opts).
+    valueTiles.push(
+      projectSegmentedValueTiles({
+        sheetName: sheetEntry.name,
+        rows: parsed.rows,
+        caps,
+        opts: valueTileOpts,
+        ...(parsed.formatRows ? { formatRows: parsed.formatRows, xfFormatIdentity } : {}),
+      }),
+    );
     if (profile.data_layer_truncated || profile.col_count > caps.max_columns_profiled) {
       captureTruncated = true;
     }
@@ -2201,6 +2646,8 @@ export function buildXlsxInventory(args: {
     data_layer_caps: caps,
     capture_truncated: captureTruncated,
     ...(sheetCountTotal !== undefined ? { sheet_count_total: sheetCountTotal } : {}),
+    segmented_value_tiles: valueTiles,
+    value_tile_config: valueTileOpts,
     unsupported_reason: null,
   };
 }
@@ -2405,6 +2852,13 @@ export interface WorkbookInventoryPromptCaps {
   max_error_cells: number;
   max_merged_ranges: number;
   max_risk_signals: number;
+  /** P1-C1 #5: value-tile sheets kept in the reconstruct-only prompt projection (PRELIMINARY,
+   *  pending INV-BENCH-1 calibration). */
+  max_value_tile_sheets: number;
+  /** boundary-bearing columns kept per value-tile sheet. */
+  max_value_tile_columns_per_sheet: number;
+  /** intra_tile_notes kept per kept value-tile column. */
+  max_value_tile_notes_per_column: number;
 }
 
 export const DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS: WorkbookInventoryPromptCaps = {
@@ -2422,6 +2876,10 @@ export const DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS: WorkbookInventoryPromptCaps
   max_error_cells: 50,
   max_merged_ranges: 50,
   max_risk_signals: 50,
+  // P1-C1 #5 PRELIMINARY (live calibration = INV-BENCH-1 follow-up).
+  max_value_tile_sheets: 50,
+  max_value_tile_columns_per_sheet: 32,
+  max_value_tile_notes_per_column: 16,
 };
 
 /**
@@ -2467,6 +2925,15 @@ export function deriveWorkbookInventoryPromptCaps(
       DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_merged_ranges,
     ),
     max_risk_signals: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_risk_signals),
+    max_value_tile_sheets: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_value_tile_sheets,
+    ),
+    max_value_tile_columns_per_sheet: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_value_tile_columns_per_sheet,
+    ),
+    max_value_tile_notes_per_column: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_value_tile_notes_per_column,
+    ),
   };
 }
 
@@ -2495,7 +2962,14 @@ export interface WorkbookInventoryProjectionResult {
 export function projectInventoryForPrompt(
   inventory: WorkbookStructuralInventory,
   caps: WorkbookInventoryPromptCaps = DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS,
+  opts: { includeValueTiles?: boolean } = {},
 ): WorkbookInventoryProjectionResult {
+  // P1-C1: value-tile is RECONSTRUCT-ONLY in prompts (§12 T8). value_tile_config is an internal
+  // resume input and is NEVER prompt-projected; segmented_value_tiles is omitted from the projection
+  // unless the caller opts in (#5). The shared review path (renderSpreadsheetStructuralView) does NOT
+  // opt in → its rendered view stays byte-stable and the value tile never leaks into a review prompt.
+  const { segmented_value_tiles: rawValueTiles, value_tile_config, ...inventoryRest } = inventory;
+  void value_tile_config;
   const sections: WorkbookInventorySectionTruncation[] = [];
   const record = (section: string, kept: number, total: number): void => {
     if (kept < total) sections.push({ section, kept, total });
@@ -2592,9 +3066,38 @@ export function projectInventoryForPrompt(
   const riskSignals = inventory.risk_signals.slice(0, caps.max_risk_signals);
   record("risk_signals", riskSignals.length, inventory.risk_signals.length);
 
+  // P1-C1 #5: bounded value-tile projection (reconstruct opt-in). Keep only boundary-bearing columns
+  // (intra_tile_notes are the load-bearing witness — prev/new shape+format + the EXACT transition
+  // rows) and DROP the verbose per-segment aggregates from the prompt (segments:[]). Bounded by
+  // sheets/columns/notes caps; every trim is recorded for honest truncation disclosure.
+  let valueTilesProjected: SheetValueTileProjection[] | undefined;
+  if (opts.includeValueTiles && rawValueTiles) {
+    const keptVtSheets = rawValueTiles.slice(0, caps.max_value_tile_sheets);
+    record("segmented_value_tiles", keptVtSheets.length, rawValueTiles.length);
+    let vtColsKept = 0;
+    let vtColsTotal = 0;
+    let vtNotesKept = 0;
+    let vtNotesTotal = 0;
+    valueTilesProjected = keptVtSheets.map((s) => {
+      const boundaryCols = s.columns.filter((c) => c.intra_tile_notes.length > 0);
+      vtColsTotal += boundaryCols.length;
+      const keptCols = boundaryCols.slice(0, caps.max_value_tile_columns_per_sheet);
+      vtColsKept += keptCols.length;
+      const columns = keptCols.map((c) => {
+        vtNotesTotal += c.intra_tile_notes.length;
+        const notes = c.intra_tile_notes.slice(0, caps.max_value_tile_notes_per_column);
+        vtNotesKept += notes.length;
+        return { ...c, segments: [], intra_tile_notes: notes };
+      });
+      return { ...s, columns };
+    });
+    record("segmented_value_tiles.columns", vtColsKept, vtColsTotal);
+    record("segmented_value_tiles.intra_tile_notes", vtNotesKept, vtNotesTotal);
+  }
+
   return {
     inventory: {
-      ...inventory,
+      ...inventoryRest,
       formula_patterns: formulaPatterns,
       per_sheet_data: perSheetData,
       distinct_value_vocab: distinctValueVocab,
@@ -2607,6 +3110,9 @@ export function projectInventoryForPrompt(
       error_cells: errorCells,
       merged_ranges: mergedRanges,
       risk_signals: riskSignals,
+      // P1-C1 §12 T8/#5: value-tile included ONLY when the caller opts in (reconstruct), bounded to
+      // boundary witnesses; omitted by default so review's shared projection stays byte-stable.
+      ...(valueTilesProjected ? { segmented_value_tiles: valueTilesProjected } : {}),
     },
     truncated: sections.length > 0,
     sections,

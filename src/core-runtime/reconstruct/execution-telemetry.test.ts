@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   attemptKindForAuthoredArtifactName,
   createReconstructExecutionTelemetryCollector,
@@ -386,5 +388,58 @@ describe("reconstruct execution telemetry", () => {
     };
     expect(terminalFailureMessageFromTelemetry(telemetry))
       .toBe("emitted by a newer producer");
+  });
+});
+
+// Structural recurrence guard (leaf-read production-wiring fix). The defect: "leaf-read" was passed
+// to callJsonAuthor but absent from UNIT_ID_BY_AUTHORED_ARTIFACT_NAME, so callLlmRecorded threw
+// before the LLM call and the caller silently degraded it. The unit tests above bypassed callJsonAuthor
+// and never exercised that resolution. This guard closes the dependency at build time: it scans the
+// real call surface (every callJsonAuthor/callLlmRecorded call site — the SOLE paths to
+// unitIdForAuthoredArtifactName) and asserts every static/templated artifactName resolves to a unit.
+// A new authored-artifact merged without a mapping fails CI here, by construction.
+describe("telemetry-unit coverage guard (callJsonAuthor/callLlmRecorded surface)", () => {
+  it("every artifactName at a telemetry call site resolves to a pipeline unit", () => {
+    const runTsPath = fileURLToPath(new URL("./run.ts", import.meta.url));
+    const lines = readFileSync(runTsPath, "utf8").split("\n");
+    const callSite = /\bcall(?:JsonAuthor|LlmRecorded)\(/;
+    const names = new Set<string>();
+    for (let i = 0; i < lines.length; i++) {
+      if (!callSite.test(lines[i])) continue;
+      // Find this call's artifactName: property within its args object (next ~40 lines), then capture
+      // the value across continuation lines until the next property / object close.
+      for (let j = i; j < Math.min(i + 40, lines.length); j++) {
+        const at = lines[j].indexOf("artifactName:");
+        if (at === -1) continue;
+        let value = lines[j].slice(at + "artifactName:".length);
+        for (let k = j + 1; k < Math.min(j + 6, lines.length); k++) {
+          if (/^\s*[A-Za-z_][A-Za-z0-9_]*\s*:/.test(lines[k]) || /^\s*[})]/.test(lines[k])) break;
+          value += "\n" + lines[k];
+        }
+        // Forwarding / identifier / type annotation (no string content) → the real name is checked at
+        // the caller; skip. Anything containing a string OR template literal is a concrete name source
+        // (covers `cond ? "A" : "B"` conditionals too).
+        if (value.includes('"') || value.includes("`")) {
+          for (const m of value.matchAll(/"([^"]+)"/g)) names.add(m[1]);
+          // Concretize template placeholders so prefix-rule names (e.g. `ReconstructLensJudgment:${id}`)
+          // resolve via the startsWith branches in unitIdForAuthoredArtifactName.
+          for (const m of value.matchAll(/`([^`]+)`/g)) names.add(m[1].replace(/\$\{[^}]*\}/g, "X"));
+        }
+        break;
+      }
+    }
+    // Sanity: the scan actually found the telemetry surface (guards against a silently-broken regex).
+    expect(names.size).toBeGreaterThan(20);
+    // The regression target must be covered.
+    expect(names.has("leaf-read")).toBe(true);
+    const unresolved = [...names].filter((name) => {
+      try {
+        unitIdForAuthoredArtifactName(name);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    expect(unresolved).toEqual([]);
   });
 });

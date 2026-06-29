@@ -481,6 +481,11 @@ const NO_CALL_EXEMPT_UNIT_IDS: ReadonlySet<string> = new Set([
   "answer_support_judgment",
   "maturation_answer_claims",
   "ontology_expansion",
+  // leaf-read is a conditional LLM-touch: when no spreadsheet region triggers a read (no spreadsheet
+  // source, or structure already complete), the stage completes with no LLM call but still writes its
+  // census artifact (the R9 honest-signal). A leaf-read that DID call records leaf_read telemetry; the
+  // census itself records attempts/failures, so an exempt no-call completion still carries provenance.
+  "leaf_read",
 ]);
 
 /**

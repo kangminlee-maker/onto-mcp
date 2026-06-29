@@ -59,6 +59,9 @@ import {
   shouldDispatchSingleCompetencyAssessment,
   appendFinalOutputUnresolvedRevisionSection,
   reuseMatchArtifactHash,
+  authoringPromptContractSha256,
+  AUTHORING_PROMPT_CONTRACT_VERSION,
+  RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -3165,6 +3168,7 @@ describe("runReconstruct", () => {
       "source_observation_reentry_validation",
       "source_observation_lineage_index",
       "source_observation_lineage_index_validation",
+      "leaf_read",
       "source_purpose_candidates",
       "source_purpose_candidates_validation",
       "purpose_confirmation",
@@ -3950,6 +3954,20 @@ describe("runReconstruct", () => {
       competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
     ).toHaveLength(64);
+    // DET-1 (CG-1): the authoring prompt-template contract sha is folded into every
+    // authored artifact's reuse key, so an authoring-prompt edit rotates the key.
+    for (
+      const reuseProvenance of [
+        sourcePurposeReuseProvenance,
+        ontologySeedReuseProvenance,
+        competencyQuestionAssessmentReuseProvenance,
+      ]
+    ) {
+      expect(
+        (reuseProvenance.reuse_match as Record<string, unknown> | undefined)
+          ?.authoring_prompt_contract_sha256,
+      ).toBe(authoringPromptContractSha256());
+    }
 
     await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
       .rejects.toMatchObject({ code: "ENOENT" });
@@ -5829,6 +5847,195 @@ describe("runReconstruct", () => {
     expect(resumePrompts).toHaveLength(0);
   });
 
+  it("rejects resume reuse when the authoring model identity differs (DET-1/CG-2)", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "model-identity-rotation-run",
+    );
+    const targetRef = path.join(projectRoot, "src", "feature.ts");
+    const firstAttemptLlmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Classify unsafe or incomplete assessments")) {
+        throw new Error("failure classification timed out");
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
+    };
+
+    // First run authored under model-a; interrupted after the CQ-assessment provenance
+    // is written (so a resume has something to reuse).
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with model-identity provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        llmCall: firstAttemptLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        llmCall: firstAttemptLlmCall,
+      }),
+    })).rejects.toThrow(/failure classification timed out/);
+
+    // Resume under a DIFFERENT authoring model. The model identity is folded into the
+    // reuse key, so the stored model-a provenance must mismatch the model-b key and force
+    // regeneration rather than silently reusing the prior model's authored artifacts.
+    const resumePrompts: string[] = [];
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with model-identity provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      resumeMode: "reuse_existing_authored_artifacts",
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-b" },
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-b" },
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+    })).rejects.toThrow(/resume provenance mismatch/);
+    expect(resumePrompts).toHaveLength(0);
+  });
+
+  it("rejects resume reuse when only the answer-support judge model differs (DET-1/CG-1 gate)", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "judge-model-rotation-run",
+    );
+    const targetRef = path.join(projectRoot, "src", "feature.ts");
+    const firstAttemptLlmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Classify unsafe or incomplete assessments")) {
+        throw new Error("failure classification timed out");
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
+    };
+
+    // First run: author + confirmation under model-a, JUDGE under judge-a. Interrupted
+    // after CQ-assessment provenance is written so a resume has something to reuse.
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with judge-model provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        judgeLlmConfig: { provider: "anthropic", model_id: "claude-judge-a" },
+        llmCall: firstAttemptLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        llmCall: firstAttemptLlmCall,
+      }),
+    })).rejects.toThrow(/failure classification timed out/);
+
+    // Resume with the author + confirmation model UNCHANGED (model-a) but the JUDGE model
+    // swapped (judge-a -> judge-b). Only judge_model_identity differs, so the fold must
+    // still rotate the reuse key and force regeneration rather than silently reusing the
+    // prior judge's authored artifacts.
+    const resumePrompts: string[] = [];
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with judge-model provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      resumeMode: "reuse_existing_authored_artifacts",
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        judgeLlmConfig: { provider: "anthropic", model_id: "claude-judge-b" },
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmConfig: { provider: "anthropic", model_id: "claude-model-a" },
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+    })).rejects.toThrow(/resume provenance mismatch/);
+    expect(resumePrompts).toHaveLength(0);
+  });
+
+  it("authoringPromptContractSha256 is deterministic and covers base + every stage (DET-1/CG-1)", () => {
+    const first = authoringPromptContractSha256();
+    expect(first).toBe(authoringPromptContractSha256());
+    expect(first).toHaveLength(64);
+    expect(AUTHORING_PROMPT_CONTRACT_VERSION).toBe(
+      "reconstruct_authoring_prompt_contract:v1",
+    );
+    // The shared base system + every authoring stage template (incl. both branches of
+    // each conditional builder) is declared exactly once. The count is pinned so adding
+    // or removing a catalog entry forces a deliberate update here.
+    // 35 = 34 + leaf_read (P1-C2-A: the leaf-read prompt is an authoring template too).
+    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(35);
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.base_system).toContain(
+      "You are authoring reconstruct semantic artifacts.",
+    );
+    for (const template of Object.values(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)) {
+      expect(template.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("editing any authoring prompt template rotates the contract sha (DET-1/CG-1)", () => {
+    // This is the soundness property: editing a prompt template auto-rotates the sha
+    // (no manual version bump), so a resume after an authoring-prompt edit regenerates
+    // instead of silently reusing artifacts authored under the prior template.
+    const baseline = authoringPromptContractSha256();
+    for (const key of Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)) {
+      const edited = {
+        ...RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+        [key]: `${RECONSTRUCT_AUTHORING_PROMPT_CONTRACT[key]} (edited)`,
+      };
+      expect(authoringPromptContractSha256(edited)).not.toBe(baseline);
+    }
+  });
+
+  it("no authoring systemPrompt is assembled inline outside the contract (DET-1/CG-1 fail-closed)", async () => {
+    // Fail-closed coverage guard: a NEW authoring prompt added as an inline array
+    // literal (bypassing the catalog) would never reach authoringPromptContractSha256,
+    // reopening the silent-stale-reuse hole. Every authoring systemPrompt must be a
+    // reference to RECONSTRUCT_AUTHORING_PROMPT_CONTRACT, so no inline assembly may
+    // survive in run.ts (the catalog builders themselves use `return [`, not these).
+    const runSource = await fs.readFile(
+      path.resolve("src/core-runtime/reconstruct/run.ts"),
+      "utf8",
+    );
+    expect(runSource).not.toMatch(/systemPrompt:\s*\[/);
+    expect(runSource).not.toMatch(/[Ss]ystemPrompt\s*=\s*\[/);
+  });
+
   it("uses ontology-seed.yaml as the only active direct-call seed artifact", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
@@ -6245,6 +6452,40 @@ describe("observationPromptPayload — workbook_inventory bounded prompt project
     expect(bumpedHash).not.toBe(baseHash);
     // Determinism: the same artifact hashes identically.
     expect(sourceObservationsReuseSha256(spreadsheetArtifact(3) as any)).toBe(baseHash);
+  });
+
+  // P1-C1 §12 T1: the value-tile opts (window + caps) shape the inventory CONTENT (segment
+  // boundaries) but are invisible to content_sha256 (raw bytes) and adapter_version (schema shape).
+  // Re-calibrating them MUST rotate the reuse digest so an old seed authored under the previous opts
+  // cannot be silently reused — even without an adapter_version bump.
+  it("changes sourceObservationsReuseSha256 when the value-tile opts change (resume regression)", () => {
+    const base = spreadsheetArtifact(3);
+    const recalibrated = spreadsheetArtifact(3);
+    (base.observations[0]!.structural_data.workbook_inventory as any).value_tile_config = {
+      window: 1024,
+      segmentsPerColumnCap: 256,
+      distinctPerSegmentCap: 32,
+    };
+    (recalibrated.observations[0]!.structural_data.workbook_inventory as any).value_tile_config = {
+      window: 512, // re-calibrated; same file, different segment boundaries
+      segmentsPerColumnCap: 256,
+      distinctPerSegmentCap: 32,
+    };
+    expect(sourceObservationsReuseSha256(recalibrated as any)).not.toBe(
+      sourceObservationsReuseSha256(base as any),
+    );
+  });
+
+  it("changes sourceObservationsReuseSha256 when the data-layer caps change (resume regression)", () => {
+    const base = spreadsheetArtifact(3);
+    const widened = spreadsheetArtifact(3);
+    (widened.observations[0]!.structural_data.workbook_inventory as any).data_layer_caps = {
+      ...(widened.observations[0]!.structural_data.workbook_inventory as any).data_layer_caps,
+      max_columns_profiled: 999, // widened; same file, different profiled-column frame
+    };
+    expect(sourceObservationsReuseSha256(widened as any)).not.toBe(
+      sourceObservationsReuseSha256(base as any),
+    );
   });
 });
 

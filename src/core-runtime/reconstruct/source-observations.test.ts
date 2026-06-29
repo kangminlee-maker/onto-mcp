@@ -536,3 +536,84 @@ describe("validateSourceObservationBoundary — P6 real producer output passes t
     expect(result.valid).toBe(true);
   });
 });
+
+describe("validateSourceObservationBoundary — P1-C1 value-tile honesty (T6/T7)", () => {
+  const valueTileProjection = (formatId: string) => ({
+    sheet: "S",
+    window: 1024,
+    columns: [
+      {
+        column_index: 0,
+        segments: [
+          {
+            row_start: 1,
+            row_end: 3,
+            non_empty: 3,
+            type_counts: { integer: 3 },
+            shape_counts: { INT: 3 },
+            format_counts: { [formatId]: 3 },
+            dominant_shape: "INT",
+            dominant_format: formatId,
+            distinct_count: 3,
+            distinct_is_lower_bound: false,
+          },
+        ],
+        segments_capped: false,
+        intra_tile_notes: [],
+      },
+    ],
+    retained_segments: 1,
+    summed_segment_distinct_count: 3,
+  });
+
+  it("T6: rejects an unsanitized (quoted-literal) format-identity smuggled into a value tile", () => {
+    const forged = makeInventory({
+      segmented_value_tiles: [valueTileProjection('"USD"#,##0')], // a domain literal that bypassed sanitize
+    });
+    const result = validateSourceObservationBoundary(spreadsheetObservation(forged));
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "value-tile format-identity must be sanitized (no quoted literal)",
+    );
+  });
+
+  it("T6: passes a sanitized display-grammar format-identity", () => {
+    const safe = makeInventory({
+      segmented_value_tiles: [valueTileProjection("#,##0")],
+    });
+    expect(validateSourceObservationBoundary(spreadsheetObservation(safe)).valid).toBe(true);
+  });
+
+  it("T7: an unsupported inventory carrying value tiles claims inspected structure → rejected", () => {
+    // value-tile is registered in inventoryHasInspectedStructure, so a forged unsupported inventory
+    // whose ONLY structure is a value tile (sheets/per_sheet_data emptied) is caught by the
+    // unsupported↔empty coherence check (section C).
+    const forged = makeInventory({
+      unsupported_reason: "unsupported workbook format: .xls (BIFF)",
+      sheets: [],
+      per_sheet_data: [],
+      segmented_value_tiles: [valueTileProjection("#,##0")],
+    });
+    const result = validateSourceObservationBoundary(spreadsheetObservation(forged));
+    expect(result.valid).toBe(false);
+    expect(result.violations).toContain(
+      "unsupported spreadsheet inventory must not claim inspected structure",
+    );
+  });
+
+  it("rejects an observation carrying an invalid companion ComprehensionArtifact (§5.7 completeness)", () => {
+    const obs = spreadsheetObservation(makeInventory());
+    // A companion artifact with a SILENTLY absent baseline field (region_identity missing) — the
+    // boundary validator must reject it (construction/replay enforcement of the §5.7 contract).
+    (obs.structural_data as Record<string, unknown>).comprehension_artifact = {
+      contract_version: 1,
+      observation_id: "obs_spreadsheet_1",
+      provenance: { producer_kind: "deterministic", epoch_fingerprint_contribution: null },
+      safety_visibility_tier: "consumption_allowed",
+      // region_identity / value_signature_tile_witness / ... all silently absent
+    };
+    const result = validateSourceObservationBoundary(obs);
+    expect(result.valid).toBe(false);
+    expect(result.violations.some((v) => v.includes("comprehension_artifact"))).toBe(true);
+  });
+});
