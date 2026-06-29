@@ -2925,6 +2925,15 @@ export function deriveWorkbookInventoryPromptCaps(
       DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_merged_ranges,
     ),
     max_risk_signals: scale(DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_risk_signals),
+    max_value_tile_sheets: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_value_tile_sheets,
+    ),
+    max_value_tile_columns_per_sheet: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_value_tile_columns_per_sheet,
+    ),
+    max_value_tile_notes_per_column: scale(
+      DEFAULT_WORKBOOK_INVENTORY_PROMPT_CAPS.max_value_tile_notes_per_column,
+    ),
   };
 }
 
