@@ -15,6 +15,7 @@ import {
   observeSpreadsheetSource,
   parseCsv,
   projectInventoryForAdmission,
+  readTargetedCellValues,
   projectInventoryForPrompt,
   projectSegmentedValueTiles,
   SPREADSHEET_OBSERVER_ADAPTER_ID,
@@ -1769,5 +1770,126 @@ describe("deriveWorkbookInventoryPromptCaps — Stage 1 window-proportional caps
     expect(caps.max_pairwise_per_overlap).toBe(40);
     // max_sheets (DEFAULT 50) * 2.5 = 125.
     expect(caps.max_sheets).toBe(125);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// readTargetedCellValues (maturation value-read cut, design §15.4) — the targeted RAW-cell read.
+// The non-negotiable property: scopes are GRID-frame (origin-normalized column + 1-based grid row),
+// the SAME frame per_sheet_data[].columns[].index uses, so an OFFSET used-range (data not starting at
+// A1) resolves to the CORRECT cells (SR-1/SR-4). Crash-isolated: unreadable/corrupt sources degrade to
+// an empty read, never throw (§15.4 containment).
+// ──────────────────────────────────────────────────────────────────────────────
+describe("readTargetedCellValues (value-read cut §15.4 — grid-frame targeted read)", () => {
+  const tmpRoots: string[] = [];
+  afterAll(async () => {
+    for (const root of tmpRoots) await fs.rm(root, { recursive: true, force: true });
+  });
+  const writeTmp = async (name: string, bytes: Uint8Array | string): Promise<string> => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "targeted-cell-read-"));
+    tmpRoots.push(root);
+    const file = path.join(root, name);
+    await fs.writeFile(file, bytes as Buffer | string);
+    return file;
+  };
+
+  it("CSV: reads a whole grid column by its origin-0 index, with 1-based grid rows", async () => {
+    const csv = "name,amount,city\nAlice,100,Seoul\nBob,200,Busan\n";
+    const file = await writeTmp("data.csv", csv);
+    const res = await readTargetedCellValues({
+      sourceRef: file,
+      selections: [{ sheet: "data.csv", grid_column_index: 1 }],
+    });
+    expect(res.unreadable_reason).toBeUndefined();
+    expect(res.regions).toHaveLength(1);
+    expect(res.regions[0]!.cells.map((c) => c.value)).toEqual(["amount", "100", "200"]);
+    expect(res.regions[0]!.cells.map((c) => c.grid_row)).toEqual([1, 2, 3]);
+    expect(res.total_cells_read).toBe(3);
+    expect(res.truncated).toBe(false);
+    expect(res.content_sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("CSV: a 1-based grid row range selects only those rows (header excluded)", async () => {
+    const csv = "name,amount\nAlice,100\nBob,200\nCarol,300\n";
+    const file = await writeTmp("d.csv", csv);
+    const res = await readTargetedCellValues({
+      sourceRef: file,
+      // grid rows 2..3 = the parsed.rows[1..2] data rows (skip the header at grid row 1).
+      selections: [{ sheet: "d.csv", grid_column_index: 1, grid_row_start: 2, grid_row_end: 3 }],
+    });
+    expect(res.regions[0]!.cells.map((c) => c.value)).toEqual(["100", "200"]);
+  });
+
+  it("XLSX OFFSET used-range (B2:B4): grid_column_index 0 resolves to column B, not A (SR-1/SR-4)", async () => {
+    // Data starts at B2 (not A1). The observer normalizes to the used-range origin, so per_sheet_data
+    // column 0 IS column B and parsed.rows[0] IS sheet row 2. A naive absolute-coordinate reader would
+    // read empty column A / be off by firstRowNum-1; the grid-frame reader must read B2..B4 correctly.
+    const sheetXml =
+      `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="B2:B4"/><sheetData>` +
+      `<row r="2"><c r="B2" t="inlineStr"><is><t>amount</t></is></c></row>` +
+      `<row r="3"><c r="B3"><v>100</v></c></row>` +
+      `<row r="4"><c r="B4"><v>200</v></c></row>` +
+      `</sheetData></worksheet>`;
+    const bytes = zipSync(makeMinimalXlsxParts(sheetXml));
+    const file = await writeTmp("offset.xlsx", bytes);
+    // Confirm enumeration frame: the observer reports column index 0 under per_sheet_data.
+    const inventory = await observeSpreadsheetSource(file);
+    expect(inventory.per_sheet_data[0]!.columns.map((c) => c.index)).toContain(0);
+    const res = await readTargetedCellValues({
+      sourceRef: file,
+      selections: [{ sheet: "S1", grid_column_index: 0 }],
+    });
+    expect(res.unreadable_reason).toBeUndefined();
+    expect(res.regions[0]!.cells.map((c) => c.value)).toEqual(["amount", "100", "200"]);
+    expect(res.regions[0]!.cells.map((c) => c.grid_row)).toEqual([1, 2, 3]);
+    // Same-file re-read hash must equal the observed inventory's content_sha256 (content binding).
+    expect(res.content_sha256).toBe(inventory.content_sha256);
+  });
+
+  it("bounds the read: maxCellsPerRegion truncates and flags it (never throws)", async () => {
+    const csv = "amount\n1\n2\n3\n4\n5\n";
+    const file = await writeTmp("big.csv", csv);
+    const res = await readTargetedCellValues({
+      sourceRef: file,
+      selections: [{ sheet: "big.csv", grid_column_index: 0 }],
+      caps: { maxRegions: 8, maxCellsPerRegion: 2, cellCharCap: 200, totalReadCharCap: 20_000 },
+    });
+    expect(res.regions[0]!.cells_read).toBe(2);
+    expect(res.regions[0]!.truncated).toBe(true);
+    expect(res.truncated).toBe(true);
+  });
+
+  it("an empty / non-existent grid column reads zero cells (no throw)", async () => {
+    const csv = "name,amount\nAlice,100\n";
+    const file = await writeTmp("e.csv", csv);
+    const res = await readTargetedCellValues({
+      sourceRef: file,
+      selections: [{ sheet: "e.csv", grid_column_index: 9 }],
+    });
+    expect(res.total_cells_read).toBe(0);
+    expect(res.regions[0]!.cells_read).toBe(0);
+  });
+
+  it("a missing source degrades to an empty read with a reason — never throws (containment)", async () => {
+    const res = await readTargetedCellValues({
+      sourceRef: path.join(os.tmpdir(), "no-such-value-read-source.csv"),
+      selections: [{ sheet: "x", grid_column_index: 0 }],
+    });
+    expect(res.regions).toEqual([]);
+    expect(res.total_cells_read).toBe(0);
+    expect(res.unreadable_reason).toBeDefined();
+    expect(res.content_sha256).toBeNull();
+  });
+
+  it("a corrupt (non-zip) .xlsx degrades to a zero-cell read, preserving the byte hash (crash isolation)", async () => {
+    const file = await writeTmp("broken.xlsx", "this is plain text, not an OOXML zip archive");
+    const res = await readTargetedCellValues({
+      sourceRef: file,
+      selections: [{ sheet: "S1", grid_column_index: 0 }],
+    });
+    // No throw escapes; the unparseable archive yields zero readable cells (the value-read stage then
+    // censuses a failed read). The byte hash is still computed (the file WAS read).
+    expect(res.total_cells_read).toBe(0);
+    expect(res.content_sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 });

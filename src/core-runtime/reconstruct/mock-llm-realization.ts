@@ -932,6 +932,22 @@ export function callReconstructMockLlm(
       })),
       unread_columns: [],
     });
+  } else if (systemPrompt.includes("Select spreadsheet cell locations")) {
+    // Maturation value-read location pick (design §15.4). Echo the FIRST allowed grid scope so an
+    // incidental value-read exercises the cell-read path; an empty allowed set yields no pick (honest).
+    const allowed = (input.allowed_locations ?? []) as Array<Record<string, unknown>>;
+    text = JSON.stringify({
+      picked_locations: allowed.length > 0 ? [allowed[0]] : [],
+    });
+  } else if (systemPrompt.includes("Judge whether read spreadsheet cell values")) {
+    // Value-read judgment (design §15.4). Default INCONCLUSIVE so an incidental value-read in an
+    // existing full mock run discharges nothing (regression-0 / byte-parity — never flips a row to
+    // value_resolved). A dedicated value-read E2E drives `satisfied` via a stub llmCall, not this
+    // dispatcher. Honest "ran but discharged zero".
+    text = JSON.stringify({
+      satisfaction_status: "inconclusive",
+      rationale: "mock value-read judgment: read values do not decide the limitation",
+    });
   } else if (systemPrompt.includes("writing the final reconstruct result")) {
     text = [
       "# Reconstruct Result",

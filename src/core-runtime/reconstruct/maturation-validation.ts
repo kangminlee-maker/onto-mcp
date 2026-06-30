@@ -2546,6 +2546,53 @@ export function validateMaturationValueDischarge(args: {
         }));
       }
     }
+    // Provenance floor (design §15.4): a `satisfied` discharge must rest on a REAL, COMPLETE,
+    // content-bound read — otherwise it cannot drive value_resolved. A 0-cell read (dead/empty), a
+    // truncated read (partial view), or a content-hash mismatch vs the authorized observation's
+    // observed bytes (file changed between observation and the re-read) → reject. This makes
+    // cells_read / read_truncated / read_content_sha256 REAL consumers, not inert provenance
+    // (FRP-1 / issue-008 / GL-1). refuted/inconclusive discharges never subtract, so they are exempt.
+    if (entry.satisfaction_status === "satisfied") {
+      const evidence = entry.value_evidence_ref;
+      if (evidence.cells_read <= 0) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "a satisfied value discharge must be backed by a non-empty cell read (cells_read > 0)",
+          subjectId: entry.discharge_id,
+        }));
+      }
+      if (evidence.read_truncated) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "a satisfied value discharge cannot rest on a truncated (incomplete) cell read",
+          subjectId: entry.discharge_id,
+        }));
+      }
+      const observedContentSha256 = (
+        (observation.structural_data as Record<string, unknown> | undefined)
+          ?.workbook_inventory as Record<string, unknown> | undefined
+      )?.content_sha256;
+      // Fail-closed (design §16.2, onto issue-013): a satisfied discharge must be content-bound to the
+      // authorized observation's observed bytes. If the observation carries NO observed content hash to
+      // bind against, the binding cannot be proven → reject rather than silently skip the check.
+      if (typeof observedContentSha256 !== "string" || observedContentSha256.length === 0) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "a satisfied value discharge requires the authorized observation to carry an observed content_sha256 to content-bind against",
+          subjectId: entry.discharge_id,
+        }));
+      } else if (evidence.read_content_sha256 !== observedContentSha256) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "value discharge read_content_sha256 must match the authorized observation's observed content_sha256 (the source changed between observation and the maturation re-read)",
+          subjectId: entry.discharge_id,
+        }));
+      }
+    }
   }
   return {
     schema_version: "1",

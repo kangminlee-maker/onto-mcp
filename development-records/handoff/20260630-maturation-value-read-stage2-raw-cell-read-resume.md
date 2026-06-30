@@ -1,5 +1,15 @@
 # RESUME — maturation 값-읽기 cut: Stage 2 (real raw-value cell-read + direct-call executor)
 
+> **▶ ✅ STAGE 2 cut 완결 (2026-07-01) — 빌드 + 2차 코드 교차검증(§16 재절단) + 라벨 fix(§17) + 실-LLM A/B end-to-end 입증.** SSOT=design **§14~§17**(§16=코드 교차검증 결과+재절단·§17=A/B 결과). 진행 경로:
+> 1. **빌드**(§15.8): §14.2 scope-reader 재절단(grid-frame scope·provenance floor·containment·path-free)·full vitest 2110.
+> 2. **코드 diff 교차검증**(§16·ultracode `wf_a487da42-825`+onto `20260701-658350af`·8 lens 수렴)=`REDESIGN_NARROW`: 메커니즘이 실 101MB서 **silent no-op**(narrow→drop·whole-column→200cap truncate)·2110-pass=false-PASS(3-cell CSV가 실 shape 가림). → **§16 재절단**: enumerate **sample scope**(head 200행·`VALUE_READ_SAMPLE_ROWS`)·G2 **column containment**·discharge_id+observation_id·cell-clip truncated·no-hash fail-closed.
+> 3. **실-LLM A/B**(§17·codex gpt-5.5·rerun2 리플레이·101MB 재독): probe1=메커니즘 작동하나 **location blind**(헤더 라벨 부재→column 0 blind-pick→0 discharge). → **§17.3 라벨 fix**(enumerate가 `column_label`/`column_inferred_type` 노출·source-safe·leaf-reader 선례). probe2=**의미 컬럼 정확 선택·6/6 satisfied·content MATCH·floor 통과**. REUSE 재검증(LLM 0)→discharge `valid`·matrix **`value_resolved:6`/`limitation_backed:54`=unblock 실증**.
+> **검증**: ts clean·**full vitest 2115 pass+1 todo(회귀0)**·8 정적게이트. **변경(미커밋 working tree)**: 프로덕션 8파일(artifact-types·maturation-validation·mock-llm-realization·run·spreadsheet-structure-observer + test 3)·harness `scripts/value-read-ab-replay.mts`·design §14~17.
+> **정직 잔여**: probe N=6(60중)·full 미실행·**§16.5 head-sample(맨 위 200행 비대표) 오判 빈도 미측정**(이 6건 sound)·continuation 결정론(mock 기입증)·deferred(named-range·multi-scope·resume snapshot·§16.3 옵션 B).
+> **▶ NEXT**: 커밋/머지 / full 60행 A/B·§16.5 측정 / deferred. (이 cut과 별개=Defect-2 seed-readiness 교착 cut.)
+> 아래 §0~§6은 Stage 2 빌드 *전* 계획(이력).
+
+
 > **START-HERE.** `/clear` 후 fresh 세션이 **이 문서 + 설계 SSOT 하나로** 이어받는다. 날짜 2026-06-30.
 > **baseline = `feat/maturation-value-read` HEAD `71dacc8`** (mock-first cut 커밋·full vitest 2097 pass·9 게이트 PASS). 이 브랜치서 계속(새 브랜치 불요·미머지).
 > **설계 SSOT(정본)** = `development-records/design/20260630-maturation-value-read-cut-design.md` (§13 v3 정본·§4.4 타깃 값-읽기 런타임·§13.5 F4 read-set basis-A).

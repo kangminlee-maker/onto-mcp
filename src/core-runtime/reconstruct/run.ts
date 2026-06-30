@@ -103,6 +103,7 @@ import {
 } from "../target-material-kind.js";
 import {
   projectInventoryForPrompt,
+  readTargetedCellValues,
   type WorkbookInventorySectionTruncation,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
@@ -293,10 +294,18 @@ export interface ReconstructValueReadCandidate {
 
 export interface ReconstructValueReadStageInput {
   candidates: ReconstructValueReadCandidate[];
+  // Runtime-only resolver (design §15.4): observation_id → resolved ABSOLUTE source path. The author
+  // reads cells through the runtime keyed by observation_id; this map NEVER reaches a callJsonAuthor
+  // payload, so authorized filesystem paths stay out of every LLM prompt (issue-007/016, F4/F5).
+  sourceRefByObservationId: Record<string, string>;
 }
 
 export interface ReconstructValueReadStageOutput {
   discharges: ReconstructMaturationValueDischargeEntry[];
+  // Honest count of candidates whose read or judgment FAILED (LLM error / unreadable source / empty
+  // read), so the census records `failed > 0` instead of the old hard-coded 0 (design §15.4, issue-014).
+  // Optional — a fixture executor that never fails may omit it (treated as 0).
+  failed_count?: number;
 }
 
 export interface ReconstructDirectiveAuthor {
@@ -1722,9 +1731,26 @@ function isValueReadableLimitation(ref: string): boolean {
     ref.startsWith("purpose_handoff_limitation");
 }
 
-// Best-effort allowed-location enumeration from a spreadsheet observation's inventory. The LLM
-// picks within this set; the runtime read is bounded to it. Defensive against inventory shape
-// variance (the read-set boundary is enforced downstream, not this projection).
+// Maturation value-read cut (design §16.4, strategy A — bounded representative sample). The number of
+// leading grid rows a value-read samples per column. A column on the real target can be thousands–tens
+// of thousands of rows; a whole-column read would blow the per-region cell cap → truncated → a satisfied
+// discharge force-downgraded to inconclusive (the §16.1 DC-2 silent no-op). So enumeration emits a
+// BOUNDED head-of-column window (header + first N rows) that fits inside the read cap, and value-read
+// judges the column's VALUE CHARACTER from that sample — NOT a whole-column completeness check.
+// ★ LIMITATION (owner-mandated honesty, §16.5): the head sample is unrepresentative when a column's
+// character changes below row N (sorted/grouped data, subtotal/footer rows, late regime shifts) — those
+// are missed; and a sample can never back a completeness/accuracy claim (an audit-grade assertion). The
+// discharge's satisfied means "value character confirmed from a bounded head sample", recorded honestly;
+// whether that sample suffices is the semantic-quality question the paid live A/B measures.
+const VALUE_READ_SAMPLE_ROWS = 200;
+
+// Allowed-location enumeration from a spreadsheet observation's inventory (design §15.4 / §16.4). Emits
+// one GRID-frame bounded-sample scope per profiled column: {sheet, grid_column_index, grid_row_start:1,
+// grid_row_end:VALUE_READ_SAMPLE_ROWS}. Columns live under `per_sheet_data[]` (NOT `InventorySheet`,
+// which has none — SR-1), and their `index` is already origin-normalized — the SAME frame
+// `readTargetedCellValues` slices `parsed.rows` with. No A1/R1C1 string is emitted (SR-2/SR-3): the
+// reader never re-parses notation. The LLM picks within this set (may narrow the row range further); the
+// runtime read is bounded to it and the reader clamps the row bounds to the materialized grid.
 function enumerateAllowedValueReadLocations(
   observation: ReconstructSourceObservationsArtifact["observations"][number],
 ): ReconstructValueReadScope[] {
@@ -1732,29 +1758,29 @@ function enumerateAllowedValueReadLocations(
     ?.workbook_inventory as Record<string, unknown> | undefined;
   if (!inventory) return [];
   const locations: ReconstructValueReadScope[] = [];
-  const sheets = Array.isArray(inventory.sheets) ? inventory.sheets : [];
-  for (const sheetRaw of sheets) {
+  const perSheet = Array.isArray(inventory.per_sheet_data) ? inventory.per_sheet_data : [];
+  for (const sheetRaw of perSheet) {
     const sheet = sheetRaw as Record<string, unknown>;
-    const sheetName = typeof sheet.name === "string" ? sheet.name : null;
-    const usedRange = typeof sheet.used_range === "string" ? sheet.used_range : null;
-    locations.push({ sheet: sheetName, location_ref: usedRange });
+    const sheetName = typeof sheet.sheet === "string" ? sheet.sheet : null;
+    if (!sheetName) continue;
     const columns = Array.isArray(sheet.columns) ? sheet.columns : [];
     for (const columnRaw of columns) {
       const column = columnRaw as Record<string, unknown>;
       if (typeof column.index === "number") {
-        locations.push({ sheet: sheetName, column_index: column.index });
+        locations.push({
+          sheet: sheetName,
+          grid_column_index: column.index,
+          grid_row_start: 1,
+          grid_row_end: VALUE_READ_SAMPLE_ROWS,
+          // Selection hints (design §17.3): the deterministic header label + inferred type let the LLM
+          // pick the column whose VALUES ground the limitation instead of blind-picking column 0.
+          column_label: typeof column.name === "string" ? column.name : null,
+          column_inferred_type: typeof column.inferred_type === "string"
+            ? column.inferred_type
+            : null,
+        });
       }
     }
-  }
-  const namedRanges = Array.isArray(inventory.named_ranges) ? inventory.named_ranges : [];
-  for (const namedRangeRaw of namedRanges) {
-    const namedRange = namedRangeRaw as Record<string, unknown>;
-    const refersTo = typeof namedRange.refers_to === "string"
-      ? namedRange.refers_to
-      : typeof namedRange.name === "string"
-      ? namedRange.name
-      : null;
-    if (refersTo) locations.push({ location_ref: refersTo });
   }
   return locations;
 }
@@ -1843,14 +1869,31 @@ export async function runMaturationValueReadStage(args: {
     }
   }
   if (candidates.length === 0) return noOp;
-  const output = await readValueDischarge({ candidates });
-  const discharges = output.discharges;
-  const satisfied = discharges.filter((d) => d.satisfaction_status === "satisfied");
+  // Runtime-only resolver (design §15.4): observation_id → resolved ABSOLUTE source path. The author
+  // reads cells through the runtime keyed by observation_id; this never reaches an LLM prompt (F4/F5).
+  const sourceRefByObservationId: Record<string, string> = {};
+  for (const observation of eligibleObservations) {
+    sourceRefByObservationId[observation.observation_id] = path.resolve(observation.source_ref);
+  }
   const targetedLimitations = new Set(
     candidates.flatMap((c) =>
       c.limitation_refs.map((limitation) => `${c.baseline_row_id}:${limitation}`)
     ),
   );
+  // Containment (design §15.4, A2): the author's read/judgment can throw (LLM error, parser failure).
+  // A throw degrades to a blocked-preserving zero-discharge with an honest `failed` census — never
+  // aborts the run. A graceful author reports per-candidate failures via output.failed_count instead.
+  let discharges: ReconstructMaturationValueDischargeEntry[] = [];
+  let failedCount = 0;
+  try {
+    const output = await readValueDischarge({ candidates, sourceRefByObservationId });
+    discharges = output.discharges;
+    failedCount = output.failed_count ?? 0;
+  } catch {
+    // Total failure: treat every targeted limitation as a failed read/judgment.
+    failedCount = targetedLimitations.size;
+  }
+  const satisfied = discharges.filter((d) => d.satisfaction_status === "satisfied");
   const census: ReconstructMaturationValueDischargeCensus = {
     limitations_targeted: targetedLimitations.size,
     limitations_discharged: satisfied.length,
@@ -1859,7 +1902,7 @@ export async function runMaturationValueReadStage(args: {
     ).length,
     discharge_refuted: discharges.filter((d) => d.satisfaction_status === "refuted")
       .length,
-    failed: 0,
+    failed: failedCount,
     ran_but_discharged_zero: satisfied.length === 0,
   };
   const discharge: ReconstructMaturationValueDischargeArtifact = {
@@ -7702,6 +7745,48 @@ const SEED_CONFIRMATION_SYSTEM_PROMPT = [
   "JSON shape: {\"confirmation_status\":\"accepted|rejected|partial|deferred\",\"confirmed_claim_ids\":[\"...\"],\"rejected_claim_ids\":[\"...\"],\"partial_claim_ids\":[\"...\"],\"deferred_claim_ids\":[\"...\"],\"notes\":[\"...\"]}",
 ].join("\n");
 
+// Maturation value-read cut (design §15.4) — the SECOND LLM-touch's two authoring prompts. The opening
+// line of each is the mock dispatcher's stable key (keep it stable when editing the body). Both are
+// cataloged (CG-1) so editing either rotates authoringPromptContractSha256.
+const VALUE_READ_LOCATION_PROMPT = [
+  "Select spreadsheet cell locations to read for a value-dependent limitation.",
+  "",
+  "A baseline row is limitation-backed because the deterministic observer inspected only STRUCTURE, not",
+  "raw cell values. You are given that row's value-dependent limitation(s) and the set of ALLOWED grid",
+  "locations the runtime may read. Each allowed location is a sheet + an origin-normalized grid column",
+  "index + a bounded HEAD-of-column row window + that column's HEADER LABEL (column_label) and inferred",
+  "type (column_inferred_type). You do NOT see any source file path — the runtime reads the source.",
+  "",
+  "USE the column_label + column_inferred_type to pick the column whose RAW VALUES would actually ground",
+  "the limitation — do NOT default to column 0 (often a row-number/index column). Match the limitation's",
+  "meaning to the labelled column (e.g. an amount/price limitation → the column whose label names an",
+  "amount). You MUST pick only from the allowed COLUMNS (copy the sheet + grid_column_index verbatim); a",
+  "pick in a column outside the set is dropped. You MAY narrow the row range further (grid_row_start/",
+  "grid_row_end, 1-based) within the allowed window; keep the window small (the runtime caps the read and",
+  "a too-wide window is truncated, which cannot support a satisfied judgment). Return STRICT JSON:",
+  '{ "picked_locations": [{ "sheet": "<sheet>", "grid_column_index": <int>,',
+  '   "grid_row_start": <int>?, "grid_row_end": <int>? }] }',
+  "",
+  "Pick the smallest set that answers the limitation; an empty pick is honest when nothing is relevant.",
+].join("\n");
+
+const VALUE_READ_JUDGMENT_PROMPT = [
+  "Judge whether read spreadsheet cell values satisfy a structure-only limitation.",
+  "",
+  "You are given a baseline row's value-dependent limitation(s) and the RAW CELL VALUES the runtime read",
+  "from the authorized source (grouped by region, each cell with its grid coordinates). The values are a",
+  "BOUNDED HEAD SAMPLE of the column (leading rows only), NOT every row. Judge the column's VALUE",
+  "CHARACTER — what the values are and whether they ground the limitation — and decide SATISFY (the",
+  "values resolve what structure alone could not), REFUTE (the values contradict the seed hypothesis), or",
+  "INCONCLUSIVE (the sample does not decide it).",
+  "",
+  "Do NOT claim completeness, totals, or any property over ALL rows from this head sample — those are not",
+  "provable here; answer inconclusive if the limitation needs them. Base the judgment ONLY on the",
+  "provided read values — do not assume cells you were not shown. If the read was truncated or the sample",
+  "is insufficient, answer inconclusive. Return STRICT JSON:",
+  '{ "satisfaction_status": "satisfied|refuted|inconclusive", "rationale": "<short grounded reason>" }',
+].join("\n");
+
 // Renders every authoring prompt template once with stable SENTINEL params (so
 // per-call data is neutralized but the static skeleton — including both branches
 // of any conditional — is captured). authoringPromptContractSha256() hashes this;
@@ -7787,10 +7872,18 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
   // it rotate the reuse key. (The leaf-read artifact's own reuse is additionally gated by the
   // llm_touch_fingerprint, which folds leafReadPromptSha256().)
   leaf_read: LEAF_READ_SYSTEM_PROMPT,
+  // Maturation value-read cut (design §15.4): the two SECOND-LLM-touch prompts. Cataloguing them (CG-1)
+  // makes editing either rotate the reuse key (value-discharge is recompute-every-run, so no separate
+  // llm_touch_fingerprint is needed — design §13.7).
+  value_read_location: VALUE_READ_LOCATION_PROMPT,
+  value_read_judgment: VALUE_READ_JUDGMENT_PROMPT,
 };
 
 /** Max tokens for the bounded leaf-read JSON (a short labels/unread object). */
 const LEAF_READ_MAX_TOKENS = 2048;
+
+/** Max tokens for each bounded value-read JSON (a short location-pick / judgment object). */
+const VALUE_READ_MAX_TOKENS = 2048;
 
 /**
  * sha256 of the authoring prompt-template contract (DET-1 / CG-1). Folded into
@@ -7903,6 +7996,121 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             }),
           ),
       });
+    },
+
+    async readValueDischarge(input) {
+      // SECOND LLM-touch (design §15.4). Per candidate: (a) the LLM picks read locations within the
+      // candidate's ALLOWED grid-scope set; (b) the runtime reads those cells from the AUTHORIZED source
+      // (path resolved via observation_id — NEVER in the prompt); (c) the LLM judges whether the read
+      // values satisfy the limitation. A 0-cell or TRUNCATED read can never back a `satisfied` discharge
+      // (runtime downgrade → inconclusive). Failures are counted (no throw escapes per candidate).
+      const discharges: ReconstructMaturationValueDischargeEntry[] = [];
+      let failedCount = 0;
+      // G2 membership is keyed on the COLUMN (sheet, grid_column_index), NOT the full row-bounded key
+      // (design §16.3): the allowed set enumerates a bounded head-of-column SAMPLE scope, and the LLM may
+      // narrow the row range further within that authorized column. A row-narrowed pick must therefore
+      // stay accepted (the prior exact-key match dropped every narrowed pick → §16.1 DC-1 silent no-op).
+      // The column stays inside the authorized observation (F4), and the reader clamps the row bounds to
+      // the materialized grid + the read cap, so a narrowed pick can never escape the column or the cap.
+      const columnKey = (s: { sheet: string; grid_column_index: number }): string =>
+        `${s.sheet}::${s.grid_column_index}`;
+      for (const candidate of input.candidates) {
+        try {
+          // (a) location selection — payload carries NO source path, only allowed grid scopes.
+          const locationRaw = (await callJsonAuthor({
+            llmCall,
+            llmConfig,
+            telemetry,
+            artifactName: "MaturationValueReadLocation",
+            maxTokens: VALUE_READ_MAX_TOKENS,
+            systemPrompt: VALUE_READ_LOCATION_PROMPT,
+            userPayload: {
+              matrix_row_id: candidate.matrix_row_id,
+              limitation_refs: candidate.limitation_refs,
+              allowed_locations: candidate.allowed_locations,
+            },
+          })) as Record<string, unknown>;
+          const pickedRaw = Array.isArray(locationRaw.picked_locations)
+            ? (locationRaw.picked_locations as Array<Record<string, unknown>>)
+            : [];
+          // (G2) keep only picks whose COLUMN is in the allowed set; the LLM may narrow the row range.
+          const allowedColumns = new Set(candidate.allowed_locations.map(columnKey));
+          const validatedPicks: ReconstructValueReadScope[] = [];
+          for (const p of pickedRaw) {
+            const gridColumnIndex = Number(p.grid_column_index);
+            if (!Number.isInteger(gridColumnIndex)) continue;
+            const scope: ReconstructValueReadScope = {
+              sheet: typeof p.sheet === "string" ? p.sheet : "",
+              grid_column_index: gridColumnIndex,
+              grid_row_start: typeof p.grid_row_start === "number" ? p.grid_row_start : null,
+              grid_row_end: typeof p.grid_row_end === "number" ? p.grid_row_end : null,
+            };
+            if (allowedColumns.has(columnKey(scope))) validatedPicks.push(scope);
+          }
+          const sourceRef = input.sourceRefByObservationId[candidate.observation_id];
+          // MVP: one scope per discharge so read_scope ↔ cells_read stay coherent (PH-3); multi-scope
+          // value evidence is deferred (design §15.4). Drop the candidate if no valid pick or source.
+          const selections = validatedPicks.slice(0, 1);
+          if (!sourceRef || selections.length === 0) {
+            failedCount += 1;
+            continue;
+          }
+          // (b) bounded runtime cell-read from the authorized source.
+          const read = await readTargetedCellValues({ sourceRef, selections });
+          if (read.total_cells_read === 0 || read.content_sha256 === null) {
+            failedCount += 1;
+            continue;
+          }
+          // (c) judgment — payload carries the READ VALUES (not the path).
+          const judgmentRaw = (await callJsonAuthor({
+            llmCall,
+            llmConfig,
+            telemetry,
+            artifactName: "MaturationValueReadJudgment",
+            maxTokens: VALUE_READ_MAX_TOKENS,
+            systemPrompt: VALUE_READ_JUDGMENT_PROMPT,
+            userPayload: {
+              matrix_row_id: candidate.matrix_row_id,
+              baseline_row_id: candidate.baseline_row_id,
+              limitation_refs: candidate.limitation_refs,
+              read_regions: read.regions,
+            },
+          })) as Record<string, unknown>;
+          const rawStatus = judgmentRaw.satisfaction_status;
+          const normalizedStatus: "satisfied" | "refuted" | "inconclusive" =
+            rawStatus === "satisfied" || rawStatus === "refuted" ? rawStatus : "inconclusive";
+          // Runtime downgrade (design §15.4): a truncated read cannot back a `satisfied` discharge.
+          const effectiveStatus =
+            normalizedStatus === "satisfied" && read.truncated ? "inconclusive" : normalizedStatus;
+          const region = read.regions[0]!;
+          discharges.push({
+            // Keyed on (matrix_row_id, observation_id) so multiple eligible sources for the same row
+            // do not collide on a duplicate discharge_id (design §16.2 SR-B; latent on single-source).
+            discharge_id: `value-discharge:${candidate.matrix_row_id}:${candidate.observation_id}`,
+            target_baseline_row_refs: [candidate.baseline_row_id],
+            target_limitation_refs: candidate.limitation_refs,
+            value_evidence_ref: {
+              observation_id: candidate.observation_id,
+              read_scope: {
+                sheet: region.sheet,
+                grid_column_index: region.grid_column_index,
+                grid_row_start: region.grid_row_start,
+                grid_row_end: region.grid_row_end,
+              },
+              cells_read: read.total_cells_read,
+              read_truncated: read.truncated,
+              read_content_sha256: read.content_sha256,
+            },
+            value_evidence_authorization_ref: candidate.value_evidence_authorization_ref,
+            satisfaction_status: effectiveStatus,
+            rationale:
+              typeof judgmentRaw.rationale === "string" ? judgmentRaw.rationale : "",
+          });
+        } catch {
+          failedCount += 1;
+        }
+      }
+      return { discharges, failed_count: failedCount };
     },
 
     async writeSourceObservationDirective(input) {

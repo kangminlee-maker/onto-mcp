@@ -5226,6 +5226,9 @@ describe("maturation value-read discharge (cut design §13)", () => {
 // structural "limitation must exist on the baseline row" rule, and the source-safety precondition.
 describe("maturation value-read discharge governance (§13.5 F4/F5)", () => {
   const RUNTIME_OBS_ID = "obs-runtime-target";
+  // Observed content hash the value-read discharge must content-bind against (§16.2 fail-closed): the
+  // observation carries it under workbook_inventory and the discharge's read echoes it (same bytes).
+  const VALUE_READ_OBSERVED_SHA = "a".repeat(64);
 
   function runtimeTargetObservations(
     isRuntimeTarget: boolean,
@@ -5238,6 +5241,11 @@ describe("maturation value-read discharge governance (§13.5 F4/F5)", () => {
         // basis A only: drop the explicit self-declaration so authorization rests on
         // runtime-target provenance (so the non-target case genuinely loses consumption).
         delete structuralData.source_safety_consumption_authorizations;
+        // Carry an observed content hash so a satisfied discharge can content-bind (§16.2).
+        structuralData.workbook_inventory = {
+          ...(structuralData.workbook_inventory as Record<string, unknown> | undefined),
+          content_sha256: VALUE_READ_OBSERVED_SHA,
+        };
         return {
           ...obs,
           observation_id: RUNTIME_OBS_ID,
@@ -5281,13 +5289,13 @@ describe("maturation value-read discharge governance (§13.5 F4/F5)", () => {
           observation_id: observationId,
           read_scope: {
             sheet: "Sheet1",
-            column_index: 0,
-            row_start: 1,
-            row_end: 10,
-            location_ref: null,
+            grid_column_index: 0,
+            grid_row_start: 1,
+            grid_row_end: 10,
           },
           cells_read: 10,
           read_truncated: false,
+          read_content_sha256: VALUE_READ_OBSERVED_SHA,
         },
         value_evidence_authorization_ref: opts.authorizationRef ??
           `${observationId}:material_claim`,

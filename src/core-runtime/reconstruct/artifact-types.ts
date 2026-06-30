@@ -2403,14 +2403,29 @@ export interface ReconstructMaturationAnswerClaimsValidationArtifact {
 // deliberately NOT overloaded onto answer-claims, so it never rides the answer-support
 // judge path (ultracode M6 N/A). One entry = "authorized value evidence E satisfied
 // (or refuted / was inconclusive about) baseline limitation L on matrix row R".
+// Bounded location read inside the authorized observation, addressed in the GRID frame
+// (design §15.4) — the SAME origin-normalized frame `parsed.rows` and per_sheet_data[].columns[].index
+// use. The reader slices `parsed.rows[gridRow][grid_column_index]` directly, so there is NO A1/R1C1
+// notation to re-parse (SR-1/SR-2/SR-3) and NO firstRowNum off-by-origin (SR-4): enumeration and the
+// reader run the same parser + caps, so the frame is aligned by construction.
 export interface ReconstructValueReadScope {
-  // Bounded location actually read inside the authorized observation. All optional so a
-  // discharge can name a named-range / table / A1 location_ref without column/row indices.
-  sheet?: string | null;
-  column_index?: number | null;
-  row_start?: number | null;
-  row_end?: number | null;
-  location_ref?: string | null;
+  // The sheet whose grid this scope addresses (matches a per_sheet_data[].sheet name).
+  sheet: string;
+  // Origin-normalized grid column index (per_sheet_data[].columns[].index frame).
+  grid_column_index: number;
+  // 1-based grid row bounds (the value-tile segment frame = parsed.rows index + 1), inclusive.
+  // Null/absent = the whole column (the reader reads every materialized row, bounded by caps).
+  grid_row_start?: number | null;
+  grid_row_end?: number | null;
+  // Non-authoritative SELECTION HINT (design §17.3): the column's deterministic HEADER LABEL + inferred
+  // type, surfaced in allowed_locations so the LLM picks the column whose VALUES ground the limitation
+  // (the A/B §17.2 finding: without labels the LLM blind-picks column 0 = a row-number/index column).
+  // Source-safe — the header label is column IDENTITY already visible to the authoring LLM via the
+  // inventory (leaf-reader precedent), NOT row data. The reader IGNORES these (coordinates only), and a
+  // discharge's read_scope provenance is built from the read region (coordinates), so labels do not
+  // persist there.
+  column_label?: string | null;
+  column_inferred_type?: string | null;
 }
 
 export interface ReconstructValueEvidenceRef {
@@ -2418,9 +2433,16 @@ export interface ReconstructValueEvidenceRef {
   // and consumption_allowed — discharge governance validator enforces, design §13.5 F5).
   observation_id: string;
   read_scope: ReconstructValueReadScope;
-  // Bounded read provenance — what was actually materialized, for honesty/audit.
+  // Bounded read provenance — what was actually materialized, for honesty/audit. The discharge
+  // validator floor (design §15.4) rejects a `satisfied` discharge whose cells_read===0 or
+  // read_truncated===true, so these are REAL production consumers (not inert provenance).
   cells_read: number;
   read_truncated: boolean;
+  // Raw-byte sha256 of the file the runtime actually re-read (design §15.4 content binding). The
+  // validator rejects a `satisfied` discharge whose read hash ≠ the authorized observation's
+  // observed content_sha256 — a file changed between observation and the maturation re-read cannot
+  // silently discharge under a stale inventory frame.
+  read_content_sha256: string;
 }
 
 export interface ReconstructMaturationValueDischargeEntry {

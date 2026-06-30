@@ -465,3 +465,250 @@ else                                            → "closed"
 ### 13.9 v3 → 빌드 진입 조건
 - 아키텍처 변경 0(F1~F7=완성·정밀). F1은 2번 깨진 헤드라인이라 §13.2가 **8분기 전부 + rerun2/clean-run 추적**으로 재절단·재접지 완료.
 - **owner 검증-깊이 결정 대기**(권장 순서): (권장) **v3→빌드**(H1 rerun2 리플레이가 F1을 falsifiable 표적검증) / focused F1 재교차검증 먼저 / 3차 전체 교차검증. 빌드는 `origin/main c7ce481`서 새 브랜치·**mock/fixture LLM 우선**(월예산)·§13.6 touch-list 위험 오름차순(결정론→런타임→LLM-touch→거버넌스→E2E).
+
+---
+
+## 14. Stage 2 정본 (2026-06-30 · 실 raw-cell-read + direct-call executor) — 교차검증 입력
+
+> **Stage 1(§13 v3 mock-first cut)은 커밋 `71dacc8`에 완료·검증**(메커니즘·거버넌스·readiness·stage runner·배선·fixture executor). Stage 2 = **cut의 이름값**: direct-call author가 `readValueDischarge`를 **인가 runtime-target 원천의 raw 셀 값 실제 읽기**로 구현해 프로덕션 no-op을 해소. 위험한 의미·권한·readiness 메커니즘은 §13서 이미 3회(v1~v3) 교차검증·구현 완료 — Stage 2의 net-new는 **결정론 cell-read + 표준 LLM 배선**으로 좁다. owner=**풀 교차검증 후 빌드**.
+> baseline = `feat/maturation-value-read` HEAD `71dacc8`(이 브랜치 계속·새 브랜치 불요). 출처 핸드오프: `development-records/handoff/20260630-maturation-value-read-stage2-raw-cell-read-resume.md`.
+
+### 14.1 재접지 결과 (실코드 직접 재독 · 빌드 전 비협상 게이트)
+빌드 전 "load-bearing=가설" 규율로 다음을 직접 재독·확증(실코드 HEAD `71dacc8`):
+- **stage runner는 `readValueDischarge`에 완전 위임**(`run.ts:1798`): `directiveAuthor.readValueDischarge?.(...)` 없으면 `noOp`(null paths·byte-parity). 후보 생성(`:1823-1845`)=`limitation_backed` material(blocker|high) 행 × 한계 ∈ 값-읽기가능(`isValueReadableLimitation:1719`) × eligible 관측(runtime-target+`material_claim` consumption_allowed `:1805-1822`). **cell-read는 stage runner가 안 함 — author가 함.**
+- **candidate는 `observation_id`+`allowed_locations`만 운반**(`run.ts:281-292`), **source 파일 경로 미운반** → author가 cell-read하려면 경로 스레딩 필요(§14.4).
+- **`observation.source_ref`=원본 파일 절대경로**(`materialize-preparation.ts:578` `observeSpreadsheetSource(detection.ref)`·`detection.ref`=source_ref; 영속 아티팩트엔 `run.ts:1280` `path.resolve(observation.source_ref)`). `observeSpreadsheetSource(sourceRef)`는 `fs.readFile(sourceRef)`(`spreadsheet-structure-observer.ts:2716,2725`) → maturation 시점 **같은 경로 재독 가능**(reconstruct 단일 프로세스·입력 source 미삭제).
+- **observer는 raw 값을 materialize 후 버린다**: `createWorksheetParser`(`:1543`)가 스트리밍 중 `rows: string[][]`(raw 셀 값, `caps` bound `:1590`)을 채우고 `getResult().rows`로 노출 → `buildXlsxInventory`(`:2542,2570`)가 `profileSheetRows`+`projectSegmentedValueTiles`로 집계 후 **버림**("zero source re-scan" `:2566`). `streamWorksheets`(`:1051`)/`createWorksheetParser`=非export. → **타깃 값-보유 읽기 경로 부재**(레포 최초).
+- **frame 정합**: `parsed.rows`의 컬럼 인덱스=origin-normalized(used-range 시작 col=0·`dimStartCol :1597`), inventory `columns[].index`(profile.columns)도 동일 frame → candidate의 `column_index`(인벤토리 유도)가 `parsed.rows` 컬럼과 **직접 정합**.
+- **telemetry units 已存**(`execution-telemetry.ts:139-140`): `MaturationValueReadLocation`/`MaturationValueReadJudgment`→`maturation_value_read`. → callJsonAuthor `artifactName`은 **정확히 이 두 이름**이어야 call-graph coverage 가드 통과(미등록=Defect-1 throw).
+- **catalog 키·프롬프트 const·mock 분기 = net-new**(`run.ts`서 `value_read_*` grep 0): catalog(`RECONSTRUCT_AUTHORING_PROMPT_CONTRACT:7711`)·`callJsonAuthor`(`:7170`)·leaf-read 선례(`readLeafLabels:7886`·`LEAF_READ_SYSTEM_PROMPT` opening line=mock dispatch 키).
+- **mock dispatcher 최종 else=throw**(`mock-llm-realization.ts:942`): readValueDischarge 구현 후 full mock run이 value-read 후보를 만들면 발화→미지 프롬프트 throw → **기존 E2E 깨질 위험**(§14.6 회귀-0 표적). 영향 테스트=`run.test.ts`·`leaf-read-stage.test.ts`(둘 다 runtime-target 스프레드시트 사용).
+- **출력 provenance**: `ReconstructValueEvidenceRef`(`artifact-types.ts:2416-2424`)=`cells_read`+`read_truncated` → cell-read **실 읽기 반영 필수**(by-construction 금지).
+- **기존 test=fixture executor**(`value-read-stage.test.ts:123`): candidate를 satisfied로 echo·**실 cell-read 0**(`source_ref:"workbook.xlsx"`=비실파일). → Stage 2는 **실경로 검증 신규**.
+
+### 14.2 ① 결정론 타깃 cell-read (observer 신규 export · LLM 0)
+신규 `readTargetedCellValues(args)` — `spreadsheet-structure-observer.ts`(모듈-private `streamWorksheets`/`createWorksheetParser`/`parseCsv` 재사용 위해 동일 모듈):
+- **입력**: `{ sourceRef: string(절대경로); selections: ReconstructValueReadScope[]; caps?: CellReadCaps }`.
+- **처리**: 확장자 dispatch(`observeSpreadsheetSource` 미러). xlsx/xlsm→`fs.readFile`+`streamWorksheets`+`createWorksheetParser`로 **선택 sheet만** 재스트림→`parsed.rows`서 scope 슬라이스. csv/tsv→`parseCsv`→rows 슬라이스. scope 해석:
+  - `{sheet, location_ref:"A1:C20"}` 또는 `{location_ref:"Data!C2:C20"}`(named-range refers_to) → A1 range 파싱→cells.
+  - `{sheet, column_index:N}` → 시트 N열(행 cap).
+  - `{sheet, row_start, row_end}` → 그 행들.
+  - `{sheet, location_ref: used_range}` → 전 used-range(cap).
+- **출력**: `{ regions: [{ scope, cells: [{ ref:"A1", value:string }], cells_read, truncated }], total_cells_read, truncated, unreadable_reason?: string }`.
+- **bounded**(throw 아님·graceful 축소·A2): `MAX_REGIONS`(예 8)·`MAX_CELLS_PER_REGION`(예 200)·`CELL_CHAR_CAP`(예 200·셀당)·`TOTAL_READ_CHAR_CAP`(예 20K). 초과=cap서 절단+`truncated=true`. 파일 미독/미지원→`{regions:[],unreadable_reason}`(throw 아님).
+- **결정론**: 순수(LLM 0)·고정 반복순서. **단위테스트=실 .xlsx fixture**(spreadsheet-processing skill+실 Excel 엔진 정합으로 fixture 셀 값 확정).
+
+### 14.3 ② direct-call `readValueDischarge` (2 callJsonAuthor + 사이 cell-read)
+`createDirectCallReconstructDirectiveAuthor`(`run.ts:7813`) 내 신규 메서드(`readLeafLabels:7886` 선례·callJsonAuthor 래핑):
+- **(a) 위치선택(LLM)**: `callJsonAuthor({llmCall, llmConfig, telemetry, artifactName:"MaturationValueReadLocation", systemPrompt:VALUE_READ_LOCATION_PROMPT, userPayload:{candidates:[{matrix_row_id, limitation_refs, allowed_locations}]}, maxTokens})` → `{selections:[{matrix_row_id, picked_locations:[scope...]}]}`.
+- **(b) 검증+읽기(런타임·결정론)**: picked_locations ∩ `candidate.allowed_locations`(범위 밖 drop·G2) → `readTargetedCellValues({sourceRef:candidate.source_ref, selections:validatedPicks})`(§14.2). source_ref=candidate 스레딩(§14.4).
+- **(c) 판단(LLM)**: `callJsonAuthor({..., artifactName:"MaturationValueReadJudgment", systemPrompt:VALUE_READ_JUDGMENT_PROMPT, userPayload:{candidates, read_regions}})` → `{discharges:[{target_baseline_row_refs, target_limitation_refs, satisfaction_status, rationale}]}` → `ReconstructMaturationValueDischargeEntry[]` 구성(`value_evidence_ref.cells_read/read_truncated`=실 읽기서·`value_evidence_authorization_ref`=candidate서·`discharge_id` 결정론 생성).
+- **2 프롬프트 const**(opening line=mock dispatch 안정 키): `VALUE_READ_LOCATION_PROMPT`("Select spreadsheet cell locations to read for a value-dependent limitation."), `VALUE_READ_JUDGMENT_PROMPT`("Judge whether read spreadsheet cell values satisfy a structure-only limitation."). **catalog 키** `value_read_location`/`value_read_judgment`(`authoringPromptContractSha256` 자동 fold).
+- **실패 graceful**(A2): LLM 에러/파일 미독/cell-read 빈손 → 그 candidate discharge 생략(또는 inconclusive)·throw 0 → 이전 blocked 유지. (discharge artifact recompute-every-run·§13.7→stale 불가.)
+
+### 14.4 candidate source-path 스레딩 (최소·거버넌스 안전)
+- `ReconstructValueReadCandidate`(`run.ts:281`)에 `source_ref: string`(절대경로) 추가. stage runner candidate 루프(`:1833`)서 `source_ref: observation.source_ref`로 채움(이미 eligibleObservations 순회).
+- **거버넌스 누수 0**: `eligibleObservations`(`:1805`)=runtime-target(`is_runtime_target_source===true`)+`material_claim` consumption_allowed만 → candidate.source_ref는 **인가 원천 경로만**. cell-read는 `candidate.source_ref`만 연다(비-target 파일 안 엶·F4). discharge governance validator(`validateMaturationValueDischarge`·F5)가 `observation_id`로 독립 재검증(이미 Stage 1). source_ref(경로)는 LLM 위치선택 프롬프트에 **불요**(allowed_locations만 줌)→ 경로 누수 최소화.
+
+### 14.5 ③ mock 분기 + 회귀-0 전략 (★byte-parity 표적)
+- mock dispatcher(`callReconstructMockLlm`)에 2 분기 추가: `includes("Select spreadsheet cell locations")`·`includes("Judge whether read spreadsheet cell values")`.
+- **★회귀-0**: 기존 full mock run의 outcome 불변이 비협상. 두 방안:
+  - (A·기본) judgment mock 기본=**`inconclusive`**(또는 읽은 셀에 fixture 마커 있을 때만 satisfied) → 무관 full run은 discharge 0=기존과 동일(value-read는 honest "ran but discharged zero"). dedicated full-run E2E는 마커 fixture로 satisfied 유도.
+  - (B·검증) 빌드 후 full vitest 실측 — 기존 full run이 value-read 후보를 **아예 안 만들면**(eligible 후보 0) 분기는 dedicated 신규 테스트서만 발화 → (A) 마커 불요. **빌드 시 실측으로 A/B 확정**.
+- location mock 기본=각 candidate의 `allowed_locations[0]` 선택(범위 내·G2 통과).
+
+### 14.6 검증 = done-when (§3/§5 계승 · Stage 2 falsifiable)
+- **H1-prod(★실경로·비협상)**: stub `llmCall`(2 응답 고정)+**실 .xlsx fixture**로 direct-call `readValueDischarge` 호출 → `readTargetedCellValues`가 fixture **실 셀 값 읽음(값 단언)** → judgment satisfied → discharge → `validateMaturationValueDischarge` valid → matrix `value_resolved` → continuation `actionable_limited`. **mock 우회·by-construction 금지**(Defect-1 교훈: callJsonAuthor 실경로 통과).
+- **H1-neg(必)**: 빈/미인가 읽기·refuted·inconclusive → discharge 0 → **blocked 유지**.
+- **F4 누수 0**: 비-target 원천은 트리거(eligible 필터)+governance validator 이중 차단·cell-read는 candidate.source_ref만·위치선택 프롬프트에 비-target 값 0.
+- **G2 위치검증**: picked ∉ allowed-set → drop(읽기 안 함).
+- **bounded(G3)**: 초과 시 graceful 축소+`truncated`(throw 아님).
+- **call-graph 가드(R1)**: 2 artifactName 등록(已)→통과. **readValueDischarge 실경로 회귀**(stub llmCall·mock 우회 금지).
+- **byte-parity(X2)**: 비-spreadsheet/비-target/무후보 run no-op→불변·full vitest 회귀0.
+- **유료 실-LLM 품질(올바른 칸 선택·환각 해소 아님)=이연**(§7·design §13.7).
+
+### 14.7 빌드 순서 (위험 오름차순) + touch-list
+1. **cell-read**: `readTargetedCellValues`(observer)+`CellReadCaps`+실 xlsx fixture 단위테스트. (결정론·런타임)
+2. **candidate 스레딩**: `ReconstructValueReadCandidate.source_ref`+stage runner 채움.
+3. **2 프롬프트 const + catalog 키 + `readValueDischarge`**(direct-call author).
+4. **실경로 테스트**: stub-llmCall+실 fixture로 H1-prod/H1-neg/bounded/F4/G2.
+5. **mock 2 분기 + 회귀-0 실측**(full vitest로 run.test/leaf-read-stage outcome 불변)+(선택) full-run E2E.
+6. **전체 검증**: ts-core clean·정적 게이트(import-boundary·invariant-drift/change·골든)·full vitest 회귀0.
+
+| 영역 | site | 변경 |
+|---|---|---|
+| cell-read | `spreadsheet-structure-observer.ts`(`streamWorksheets:1051`/`createWorksheetParser:1543`/`parseCsv:438` 재사용) | 신규 export `readTargetedCellValues`+`CellReadCaps` |
+| candidate | `run.ts:281` | `source_ref: string` 추가 |
+| stage runner | `run.ts:1833-1845` | candidate에 `source_ref: observation.source_ref` |
+| 프롬프트 const | `run.ts`(leaf-read 선례 부근) | `VALUE_READ_LOCATION_PROMPT`·`VALUE_READ_JUDGMENT_PROMPT` |
+| catalog | `run.ts:7711` | `value_read_location`·`value_read_judgment` 키 |
+| direct-call | `run.ts:7886` 부근(readLeafLabels 선례) | `readValueDischarge`(2 callJsonAuthor+cell-read) |
+| mock | `mock-llm-realization.ts:942` 앞 | 2 분기(location·judgment) |
+| 테스트 | `value-read-stage.test.ts`·신규 cell-read.test·신규 readValueDischarge 실경로 test | H1-prod/H1-neg/bounded/F4/G2·회귀0 |
+
+### 14.8 교차검증 표적 (ultracode + onto 입력 · 빌드 전 비협상)
+1. **cell-read scope 해석 정확성**: column_index/row-range/named-range refers_to/A1-range가 전부 origin-normalized frame 정합? CSV 경로(named-range 없음·1 시트)? merged-range/빈 셀/타입 변환(숫자·날짜 serial) 처리?
+2. **source 파일 가용성**: maturation/resume 시점 `source_ref` 절대경로가 여전히 유효? 파일 부재·이동·권한 시 graceful(throw 0)? recompute-every-run서 재실행 시 동일 파일 가정 견고?
+3. **bounded 충분성**: per-cell granularity(인가는 source 단위·읽기는 칸 단위·per-cell 거버넌스 없음·최소 cut 허용)·char/cell cap이 누수·DoS·거대시트 막나? cap이 의미를 죽일 위험(만족판단에 필요한 칸 절단)?
+4. **회귀-0**: mock judgment 기본값(inconclusive/마커)이 기존 full run outcome 불변 보장? 기존 full run이 value-read 후보를 만드나(실측 전 가설)? throw 회피 확실?
+5. **실경로 검증 falsifiable**: stub-llmCall 테스트가 정말 cell-read를 exercise(읽은 값 단언)? mock 우회로 cell-read 死해도 통과하는 구멍(Defect-1 재현)?
+6. **F4/F5 누수**: candidate.source_ref가 비-인가 경로 운반 가능? 위치선택 프롬프트에 비-target 값/경로 누수? governance validator가 observation_id로 재검증(source_ref 신뢰 금지)?
+7. **provenance honesty**: cells_read/read_truncated가 실 읽기 반영(가짜 상수 금지)? census가 미실행 vs 0-discharge vs 실패 구분 유지?
+8. **개념경제**: cell-read가 observer 책임에 맞나(value-tile/leaf-reader와 경계)? source_ref candidate 추가가 최소? 2 프롬프트가 정당(1개로 합칠 수 있나)?
+
+---
+
+## 15. Stage 2 교차검증 결과 + v2 정본 (2026-06-30) — gate: **`REDESIGN_NARROW`** (헤드라인=아키텍처 생존 · §14.2 scope-reader 재절단)
+
+> 두 패밀리 병행·**독립 수렴**([[design-validation-ultracode-onto]]): **ultracode** `wf_090edb60-063`(42 agent·33 finding→**20 confirmed**·**gate=`redesign_narrow`·headline_survives=true**) + **onto full** `20260630-6246439f`(9 lens·**issue-ledger 16 issue**[7 high·다수 med]; `synthesize` 단계 **stale_active**[codex worker 정체·v2 라운드 동일 인프라 flakiness]→issue-ledger=trusted 산출, precedent 동일). **★load-bearing 3건(SR-1·SR-2·SR-4)을 owner가 실코드로 직접 재확정**(가설→재유도).
+
+**판정**: 헤드라인의 **아키텍처**(maturation-time targeted re-read + 2 callJsonAuthor 사이 bounded cell-read + default-off regression-0)는 **생존**(ultracode RZ-1: throw-probe 113/113 regression-0 실측·noOp 게이트 `:1845`가 호출 `:1846` 선행·eligibleObs=0 on code fixtures). 단 헤드라인의 두 구체 주장 — **"결정론 targeted re-read[가 실제로 scope를 해석]"** 과 **"real-provenance / falsifiable real-path"** — 은 **반증**. §14.2 scope-reader + provenance/falsifiability/containment/거버넌스 가드를 **빌드 전 재절단**.
+
+### 15.1 독립 수렴 지도 (gold standard · 코드-접지)
+| 테마 | ultracode | onto | 강도 |
+|---|---|---|---|
+| **★scope-resolution 메커니즘 깨짐** (column_index 프로덕션서 절대 미열거[`sheet.columns`⊄`InventorySheet:107`·컬럼은 `PerSheetData.columns:169`]; `used_range`=R1C1[`parseDimension:954`]≠A1[§14.2 파서]; `refers_to`=raw definedName[Sheet!/$/non-range]; row-frame off-by-`firstRowNum`[`:1692`·getResult 미노출]) | SR-1/2/4 high·SR-3 med·SR-6 high | issue-003/005 high·010/013 med | ★★★(owner SR-1/2/4 코드 확정) |
+| **★inert provenance / read-독립 discharge** (`cells_read`/`read_truncated`/`read_scope` **프로덕션 소비자 0**·validator `maturation-validation.ts:2462-2549`+matrix 게이트가 `satisfaction_status`만 봄→dead read+satisfied stub→valid `value_resolved`; truncation→satisfied 무바닥) | FRP-1 high·GL-3·PH-1/2/3·BS-1 (**4 lens**) | issue-008 high | ★★★ |
+| **★content binding 부재 / source 가용성 / resume** (live 경로·content_sha256 미바인딩·관측↔재독 사이 파일변경 silent·observation_id가 content 제외 `materialize-preparation.ts:64-74`·session-owned 아님) | GL-1/SA-1 med | issue-009/011/012/015 (**5 lens**·high/med) | ★★★ |
+| **fatal throw — graceful-degrade 미강제** (raw 파서 internals throw=FATAL·runReconstruct catch `:14737` 재throw→런 abort; runner `:1846` try/catch 없음·`failed:0` 하드코딩 `:1862`) | SA-2/BS-4·PH-1 med | issue-001/014 high | ★★ |
+| **경로 LLM 누수** (candidate.source_ref가 `{candidates}`로 프롬프트行) | GL family | issue-007 high·016 med | ★★ |
+| **fixture가 프로덕션 shape 가림→false-PASS** (value-read-stage.test.ts:103-148 날조 columns/A1 used_range/clean refers_to/`cells_read:5`) | SR-6 high | issue-003 high | ★★★ |
+
+### 15.2 발산 (상보)
+- **ultracode 단독**(코드-grounding·실측): RZ-1 regression-0 실증(binding constraint=**OBSERVATION leg eligibleObs=0**·matrix leg 아님→§14.6 byte-parity 근거 nuance 정정·결론 불변). PH-3(`read_scope` 단일 vs multi picked_locations 누적 불일치). PH-1 dead `census.failed` 채널.
+- **onto 단독**: absolute-path 정규화(issue-002·`path.resolve`). allowed-location 어휘가 extension에 너무 coarse(issue-010/013·segments/tables/merged/formula 범위 미열거). **content_sha256 binding을 discharge validator 게이트로**(issue-015 가장 날카로움).
+
+### 15.3 메타교훈 (★v1·v2와 동일 class 3회째)
+**§14는 column frame만 검증하고 scope-resolution의 나머지(컬럼 열거 존재·used_range 표기·row frame·provenance 소비)를 가정**했다 — 기존 fixture가 프로덕션-divergent shape(날조 columns·A1·cells_read 상수)를 만들어 전부 가렸다. = v1/v2 "사다리 일부만 읽음" class + Defect-1 "by-construction 통과·프로덕션 死" class가 **scope-reader+거버넌스 축**에서 재발. 교차검증이 정확히 그 역할 수행. [[contract-runtime-gap-ledger]]·[[design-validation-ultracode-onto]] 강화.
+
+### 15.4 v2 재절단 (★빌드 스펙 · §14.2~14.4 supersede)
+
+**핵심 1발 fix = 정규화된 grid-frame 구조 scope** (SR-1/2/3/4 동시 해소):
+- `enumerateAllowedValueReadLocations`(`run.ts:1728`)를 **raw 문자열(R1C1 used_range·raw refers_to) 대신 STRUCTURED grid-frame scope** 방출로 재작성: `{ sheet: string; grid_column_index: number; grid_row_start: number; grid_row_end: number }`. 출처 = **`inventory.per_sheet_data[]`**(sheet명 join)의 `columns[].index`(이미 origin-normalized grid frame) + 시트 dimensions(행 수). 컬럼별 scope(전 행·cap) 기본; 선택적으로 value-tile `segments[].row_start/row_end`(grid frame·origin=1)로 행-범위 정련.
+- → `ReconstructValueReadScope` 재정의: A1/R1C1/location_ref 문자열 폐기, grid 좌표만. **reader는 어떤 표기도 재파싱 안 함**(SR-2/SR-3 소멸). named-range(refers_to)는 이 cut서 **제외**(파싱 복잡·deferred). used_range는 "전 컬럼×capped 행" grid scope로 표현(R1C1 문자열 미사용).
+- `readTargetedCellValues`는 동일 `createWorksheetParser`로 재스트림→`parsed.rows`를 **같은 grid frame서 직접 슬라이스**(`parsed.rows[grid_row][grid_col]`). enumeration과 reader가 **동일 파서·동일 caps → frame 정합 by-construction**(SR-4 소멸·firstRowNum 노출 불요).
+
+**provenance 실소비자 + falsifiability** (FRP-1·GL-3·PH-*·BS-1·issue-008):
+- `readTargetedCellValues` 반환에 **실** `cells_read`·`read_truncated`·**`read_content_sha256`** 포함.
+- **런타임 가드**(`readValueDischarge` 내): backing read가 **0 cell** 또는 decisive scope `read_truncated`면 그 discharge를 `satisfied`→**`inconclusive` 강등**(value_resolved 도달 불가).
+- **validator 바닥**(`validateMaturationValueDischarge`·discharge governance validator): `satisfaction_status==="satisfied"`인데 `value_evidence_ref.cells_read===0` OR `read_truncated===true` → **reject/inconclusive**. → `cells_read`가 **실 프로덕션 소비자** 획득(inert 해소).
+- H1-prod = `cells_read`가 **실 fixture read의 정확한 칸수와 일치** 단언(상수 금지). H1-neg = 0-cell/truncated/hash-mismatch read → value_resolved 미발생.
+
+**content binding** (GL-1/SA-1·issue-015):
+- discharge validator가 `read_content_sha256` ≠ 관측 `structural_data.content_sha256`(observation_id로 조회) → **reject/inconclusive**(인가 관측 바이트에 bind·관측↔재독 skew 차단).
+
+**containment — graceful never-throw** (SA-2/BS-4·issue-001/014):
+- `readTargetedCellValues` 내부(streamWorksheets/createWorksheetParser/parseCsv)를 **try/catch**로 감싸 → `{regions:[], unreadable_reason}`(observer `observeSpreadsheetSource:2744-2780` crash-isolation 미러).
+- stage runner의 `readValueDischarge` 호출(`run.ts:1846`)을 **try/catch**로 감싸 → throw 시 **census `failed>0`** 기록·blocked-보존 무-discharge 반환(abort 0·A2). **`failed:0` 하드코딩(`:1862`) 폐기**→실 실패 카운트.
+
+**경로 누수 차단** (issue-007/016):
+- `ReconstructValueReadCandidate`는 **path-free 유지**(`{matrix_row_id, limitation_refs, observation_id, value_evidence_authorization_ref, allowed_locations}`). `readValueDischarge` 입력에 **런타임-only `sourceRefByObservationId: Map<string,string>`** 추가(stage runner가 `path.resolve(observation.source_ref)`로 채움·issue-002 absolute 정규화 동시 해소). reader가 observation_id로 경로 조회. **LLM 프롬프트 DTO(location·judgment)는 source_ref/경로 미포함**(allowed_locations[grid scope]+한계+읽은 값만). 테스트: 직렬화 callJsonAuthor 페이로드에 파일경로 0.
+
+**source 가용성 스코프 narrowing** (issue-009/011/012):
+- Stage 2 = **same-process / source-present** 한정. recompute-every-run이 재독; 파일 부재/이동/변경 → graceful zero-discharge(blocked·정직 census)·content_sha256 mismatch→inconclusive. **resume-after-source-moved = 문서화된 degraded**(snapshot 영속=이 cut 범위 밖·deferred·"build-ready for resume" 주장 안 함).
+
+**fixture = 실 observer** (SR-6·issue-003):
+- H1-prod fixture inventory를 **실 `observeSpreadsheetSource`/`buildXlsxInventory`로 실 .xlsx서 생성**(날조 shape 금지) → candidate 열거 + scope 해석이 프로덕션 inventory shape(per_sheet_data 컬럼·grid scope) 통과. 실 column/row scope가 **올바른 셀 값**으로 해석됨을 단언. (spreadsheet-processing skill+실 Excel 엔진으로 fixture 값 확정.)
+
+### 15.5 v2 빌드 순서 (위험 오름차순)
+1. **scope 계약 재정의**: `ReconstructValueReadScope`=grid 좌표 + `enumerateAllowedValueReadLocations` 재작성(per_sheet_data 컬럼·grid scope)·**실-observer 단위테스트**(날조 금지).
+2. **`readTargetedCellValues`**(observer): grid-frame 슬라이스 + crash-isolation try/catch + `read_content_sha256` 반환 + caps. 실 xlsx fixture 단위테스트.
+3. **provenance 가드**: 런타임(0-cell/truncated→inconclusive 강등) + validator 바닥(cells_read==0/truncated/hash-mismatch→reject)·`cells_read` 실소비자.
+4. **`readValueDischarge`**(direct-call): 2 프롬프트(path-free DTO)+catalog + `sourceRefByObservationId` side-channel + cell-read 사이끼움.
+5. **containment**: runner try/catch + 실 `failed` census(하드코딩 폐기).
+6. **mock 2 분기 + 회귀-0 실측** + **실-observer H1-prod/H1-neg**(cells_read 실칸수·hash bind·truncated·zero-cell 대조군).
+7. 전체 검증: ts clean·게이트·full vitest 회귀0.
+
+### 15.6 v2 done-when (§14.6 갱신)
+- **H1-prod**(★real-observer·falsifiable): 실 .xlsx fixture를 실 observer로 관측→candidate 열거(per_sheet_data 컬럼 grid scope)→stub-llmCall 위치선택→`readTargetedCellValues`가 **올바른 grid 셀 값** 읽음(값+`cells_read` 정확칸수 단언)→content_sha256 bind→judgment satisfied→discharge→validator valid→matrix value_resolved→continuation actionable_limited.
+- **H1-neg(必·다중 대조군)**: ①0-cell read ②truncated read ③hash-mismatch ④미인가 → 각각 **value_resolved 미발생**(blocked 유지). ▸ FRP-1 차단: dead read+satisfied stub→validator reject(read-독립 통과 불가).
+- **containment**: readTargetedCellValues 내부 throw·readValueDischarge throw → abort 0·census `failed>0`.
+- **경로 누수 0**: 직렬화 LLM 페이로드에 파일경로 0(단언).
+- **regression-0**: 비-eligible 런 byte-동일(RZ-1 실측 계승)·full vitest 회귀0.
+- **scope 정합(★)**: 실-observer fixture의 column/row grid scope가 올바른 셀로 해석(날조 fixture false-PASS 차단).
+
+### 15.7 v2 → 빌드 진입 조건 (owner 결정 대기)
+- 헤드라인(아키텍처) 생존·fix 전부 **코드-접지·수렴**·SR-1/2/4 owner 코드 확정. 재절단은 §14.2 scope-reader에 집중(아키텍처 변경 0).
+- **권장**: §15.4 반영 **빌드** — §15.6 **실-observer H1-prod + validator 바닥 + content-hash + cells_read 실칸수 단언**이 잘못된 재절단을 빌드 시점에 잡는 **falsifiable 게이트**(이게 검증). 대안: §15.4 scope-reader만 focused 재교차검증 후 빌드 / owner 선검토.
+- 산출물: ultracode `/private/tmp/claude-501/-Users-kangmin-cowork-onto-mcp-claude/158c9a54-7f0e-42da-ae8f-59ef053bc1b6/tasks/wufpshyq5.output` · onto `.onto/review/20260630-6246439f/`(issue-ledger trusted·synthesize stalled).
+
+### 15.8 BUILD 완료 (2026-06-30 · §15.4 전 항목 반영·검증·미커밋)
+owner=풀 교차검증 후 빌드 승인. baseline `5fd8f49`(feat/maturation-value-read). §15.4 v2 재절단을 위험 오름차순으로 빌드:
+- **grid-frame 구조 scope (SR-1/2/3/4)**: `ReconstructValueReadScope`=`{sheet, grid_column_index, grid_row_start?, grid_row_end?}`(A1/R1C1/location_ref 폐기). `enumerateAllowedValueReadLocations`=`per_sheet_data[].columns[].index`(NOT `InventorySheet.columns`=부재)서 grid scope 방출. observer 신규 export `readTargetedCellValues`(streamWorksheetGridsByName private helper·`parsed.rows[gridRow-1][grid_column_index]` 직접 슬라이스·표기 재파싱 0). **xlsx offset used-range(B2:B4) 테스트로 frame 정합 falsifiable 입증**(grid_column_index 0→B열·grid_row 1-based).
+- **provenance 실소비자 (FRP-1/issue-008/GL-1)**: `ReconstructValueEvidenceRef`에 `read_content_sha256` 추가. validator 바닥(`validateMaturationValueDischarge`)이 satisfied인데 `cells_read===0`/`read_truncated`/`read_content_sha256≠observed`→reject. 런타임 강등(`readValueDischarge`: 0-cell/truncated→inconclusive). → cells_read=실 프로덕션 소비자(inert 해소).
+- **containment (SA-2/issue-014)**: `readTargetedCellValues` crash-isolation try/catch(corrupt/oversized/missing→`{regions:[],unreadable_reason}`·throw 0) + stage runner `readValueDischarge` 호출 try/catch + **실 `failed` census**(하드코딩 `failed:0` 폐기·`failed_count` output).
+- **path-free candidate + side-channel (issue-007/016)**: candidate는 경로 미운반·`ReconstructValueReadStageInput.sourceRefByObservationId`(런타임-only resolver·`path.resolve(observation.source_ref)`)로 reader가 경로 조회. LLM 프롬프트(location·judgment DTO)에 경로 0. MVP=pick 1개(read_scope↔cells_read 정합·PH-3 해소·multi-scope 이연).
+- **2 prompt + catalog**: `VALUE_READ_LOCATION_PROMPT`/`VALUE_READ_JUDGMENT_PROMPT`(opening line=mock dispatch 키)·catalog 키 `value_read_location`/`value_read_judgment`(authoringPromptContractSha256 자동 fold·count 35→37). telemetry unit 已존(`MaturationValueReadLocation`/`Judgment`→`maturation_value_read`)→call-graph 가드 통과.
+- **mock 2 분기**: dispatcher에 location(allowed[0] echo)·judgment(기본 inconclusive→무관 full run discharge 0·regression-0).
+- **검증**: ts-core clean·**full vitest 2110 pass+1 todo**(138 files·회귀0·baseline 2097)·**8 정적 게이트 PASS**. 신규 테스트: readTargetedCellValues 7(CSV·**xlsx offset grid frame**·row range·caps·empty·missing·corrupt) + value-read-stage 11(default-off·F4·**H1-prod 실 cell-read[cells_read=3·content-hash bind·value_resolved·actionable_limited]**·H1-neg refuted/inconclusive·**validator floor 4**[0-cell/truncated/hash-skew reject]).
+- **★실경로 입증(Defect-1 회피)**: H1-prod가 stub-llmCall+실 CSV로 실 `readValueDischarge`→실 `readTargetedCellValues`→실 파일 읽음(cells_read=실칸수·mock 우회 0). 날조 fixture false-PASS 차단(SR-6: 실 observer로 inventory 빌드).
+- **정직 갭(§7 계승)**: 실-LLM 의미품질(올바른 칸 선택·환각 해소)=stub LLM이므로 미측정 → 유료 101MB A/B 이연. mock/stub은 메커니즘·배선·cell-read 실경로·provenance·거버넌스·regression-0만 입증.
+- **▶ NEXT**: 커밋 여부 owner 결정 / 유료 실-LLM A/B(품질) / (선택) §15.4 deferred(named-range scope·multi-scope evidence·source snapshot for resume).
+
+---
+
+## 16. 코드 교차검증 결과 (2026-07-01) — gate: **`REDESIGN_NARROW`** (A/B 전 메커니즘 재절단 · silent no-op on real target)
+
+> owner=교차검증 후 A/B. 빌드된 diff(`git diff HEAD`·baseline `5fd8f49`)를 두 패밀리 병행 교차검증. **ultracode** `wf_a487da42-825`(30 agent·gate=`redesign_narrow`·**realizes_faithfully=false·NOT ready for paid A/B**) + **onto full** `20260701-658350af`(9 lens·diff materialize·**issue-ledger 14 issue**[7 high]·synthesize 진행). **★8 lens 수렴**(ultracode DC-1/SR-A/GPL-1 3 lens + onto issue-001/002/006/010 5 lens).
+
+**판정**: §15.4의 *안전한 절반*(grid-frame readTargetedCellValues 슬라이스·content-sha bind·crash-isolation+runner try/catch·실 failed census·path-free side-channel)은 **충실 구현·검증**. 그러나 **location-pick/read 메커니즘은 실 101MB 타깃서 구조적 silent no-op** → A/B 신호 0. owner 원칙대로 실코드/실데이터로 확정.
+
+### 16.1 A/B-차단 결함 (수렴·실데이터 확정)
+- **DC-1/SR-A/GPL-1 [blocker·8 lens 수렴] 프롬프트↔검증 모순**: `VALUE_READ_LOCATION_PROMPT`(`run.ts:7736/7741`)는 LLM에 grid-row narrowing 권유(`grid_row_start/end`·"smallest set")하나, `enumerateAllowedValueReadLocations`(`:1756`)는 **whole-column scope만**(row null) 방출. G2 검증(`allowedKey :7978`·`allowedSet.has :8010`)은 **row bound 포함 exact-match** → narrowed pick `sheet::col::2::3` ∉ allowed `sheet::col::::` → drop → `selections` empty → `failedCount++; continue` → **discharge 0**(`:8015-8019`). §15.4 line 587이 value-tile segment row-range scope를 allowed에 넣으라 했으나 빌드는 whole-column만 + narrowing 권유 유지 = 모순.
+- **DC-2 [high] cap-truncation**: `readValueDischarge`가 caps 없이 `readTargetedCellValues` 호출(`:8021`) → `DEFAULT_CELL_READ_CAPS.maxCellsPerRegion=200`(`observer:2807`). **실 타깃 시트 4161·4879·4620행**(rerun2 source-observations·used_range R1C1:R4161C16 등) → whole-column read는 200 cap 초과 → `truncated` → satisfied가 **inconclusive로 강등**(`:8044-8046`). cap이 stage서 threadable 아님.
+- **Net**: narrow→dropped→failed, OR whole-column→truncated→inconclusive → **두 경로 다 satisfied 0** → cut 목적(unblock) 구조적 좌절.
+- **★false-PASS 확정**: 2110-pass가 헤드라인 메커니즘을 입증 못 함 — H1-prod=3-cell CSV(`read_truncated:false`)·stub/mock이 `allowed[0]`(whole-column·no row bound) echo → narrowing도 >200 truncation도 **never exercised**. §15.3/Defect-1 "fixture가 실 shape 가림" class 재현. (verification discipline: green이 메커니즘 작동 증거 아님.)
+
+### 16.2 latent / non-blocking (이 런 안전·fix 권장)
+- **SR-B/issue-003/005 [medium] discharge_id 중복**: `value-discharge:${matrix_row_id}`가 multi-observation서 충돌→`duplicate_id` reject. **rerun2=단일 eligible observation 확정→이 A/B 차단 안 함**. future multi-source 위해 `(matrix_row_id, observation_id)` 키링.
+- **issue-004 [high] cell-clip이 read_truncated 미반영**: `cellCharCap` clip 시 truncated 미set→부분 값에 satisfied. (회계 값 200자 초과 드묾이나 부정직.)
+- **TQ-1/CONT-1 failed-census 양성 커버 0**(hard-coded failed:0 revert해도 통과)·**TQ-2 cells_read===3 non-discriminating**(wrong-column 같은 카디널리티 통과)·**TQ-4 mock 분기 미테스트**·**PF-1 floor가 nested content_sha256 읽음**(inert today)·**issue-007/008/011 zero-cell=failed vs inconclusive 의미**·**issue-012 타입 중복**(ReconstructValueReadScope↔CellReadSelection)·**issue-013 no-hash path**(observed sha 부재 시 bind skip).
+
+### 16.3 재절단 방향 (v3 §16 = §15.4 amend)
+**mechanical (surgical·owner 결정 불요)**: ① G2를 **(sheet, grid_column_index) containment**로(row bound은 그 컬럼 내 허용·reader 이미 clamp `observer:2978-2983`) ② validatedPicks가 row bound 보존→readTargetedCellValues 슬라이스 ③ cell-clip→truncated 반영 ④ discharge_id에 observation_id ⑤ no-hash path fail-closed ⑥ zero-cell=inconclusive census(failed과 구분).
+**거버넌스 (★owner 결정)**: **large-column(cap 초과 4천~수만 행) 읽기 전략** — 200-cell sample로 회계 컬럼 satisfied 판단의 타당성은 config tweak이 아니라 거버넌스(false-satisfy/false-refute from unrepresentative sample). §16.4 옵션.
+
+### 16.4 owner 결정 (large-column 전략) = **A (bounded representative sample)**
+owner 결정 = **A (일부 샘플)**: enumerate가 whole-column 대신 **head-of-column sample scope**(grid_row 1..`VALUE_READ_SAMPLE_ROWS`=200) 방출 → read가 cap 내 → non-truncated → satisfied 가능. value-read는 그 샘플로 **컬럼의 값 *성격*을 격상**(structure-only → value-grounded), *전수 검증 아님*. owner 지시: **이 방식의 헛점을 반드시 남겨둘 것**(§16.5).
+
+### 16.5 ★A 전략의 헛점 (owner-mandated honesty · 비협상 기록)
+A(head sample)는 **대표성을 보장하지 않는다**. 명시 한계:
+1. **head 비대표**: 컬럼 성격이 row 200 *아래*서 바뀌면(정렬/그룹핑된 데이터·소계/footer 행·후반 regime shift) head sample이 놓친다. satisfied가 실제 전체와 다를 수 있다(false-satisfy/false-refute).
+2. **완결성 불가**: head sample은 completeness/합계/이상치 같은 *전 행 보장*을 뒷받침 못 한다. 회계 도메인의 completeness/accuracy assertion은 sample로 충족 불가 → discharge의 `satisfied`는 **"head 샘플로 값 성격 확인"** 의미이지 *감사 수준 완결성*이 아니다(프롬프트·rationale·census가 정직히 한정).
+3. **샘플 크기 임의**: `VALUE_READ_SAMPLE_ROWS=200`은 cap-맞춤 휴리스틱(PRELIMINARY)이지 도메인 정당화 아님. 적정 샘플·대표성은 **유료 실-LLM A/B가 측정할 품질 질문**(§7).
+4. **완화 경로(이연)**: 대표성이 필요해지면 §16.3 거버넌스 옵션 B(value-tile segment row-range scope 열거)로 정교화(A→B 호환). multi-window·stratified sample도 이연.
+**코드 핀**: `VALUE_READ_SAMPLE_ROWS` 주석(`run.ts`)·`VALUE_READ_LOCATION/JUDGMENT_PROMPT`("bounded head sample"·"do NOT claim completeness")·census(`ran_but_discharged_zero`·`failed`)가 이 한계를 런타임서 정직 노출.
+
+### 16.6 BUILD 완료 (2026-07-01 · §16.3 mechanical + A 전략 · 검증 · 미커밋)
+- **mechanical fix**: ① enumerate **sample scope**(`run.ts:VALUE_READ_SAMPLE_ROWS`·grid_row 1..200) ② G2 **column containment**(`columnKey`·row narrowing 수용·DC-1) ③ `discharge_id`에 `observation_id`(SR-B) ④ cell-clip→`read_truncated` 반영(observer·issue-004) ⑤ no-hash **fail-closed**(validator·issue-013) ⑥ 프롬프트 "bounded head sample"·"no completeness" 명시.
+- **검증**: ts clean·**full vitest 2114 pass+1 todo**(회귀0·baseline 2097)·**8 정적 게이트 PASS**. 신규 falsifiable 게이트: **DC-1**(narrowed pick 수용·cells_read=2·drop 안 됨)·**DC-2**(300행>200cap→sample 200 read·non-truncated·satisfied·value_resolved)·**SR-6**(실 xlsx observer fixture 풀 path→value_resolved)·**TQ-1**(readValueDischarge throw→격리·census failed>0·abort 0). + readTargetedCellValues cell-clip truncated 단위.
+- **★재절단 핵심**: §16.1 두 silent-no-op exit(narrow→drop·whole-column→truncate)를 **sample scope 1발로 동시 차단** — enumerate가 cap 내 scope 방출 + G2 containment로 narrowing 수용. 이제 실 4천~수만 행 컬럼도 head 200 sample로 non-truncated satisfied 가능.
+- **▶ NEXT**: rerun2 리플레이 A/B(실-LLM)로 **의미품질 측정**(올바른 칸·환각·satisfied 타당·§16.5 헛점 실측). harness=rerun2 baseline/matrix/source-observations(실 101MB xlsx 디스크 존재 확인) + `runMaturationValueReadStage`(실 llmCall) → discharge→matrix value_resolved→continuation unblock 여부 + 품질 검토.
+
+## 17. 유료 실-LLM A/B 결과 (2026-07-01 · N=6 probe · codex gpt-5.5) — 메커니즘 ✅ / location blind 발견
+
+harness `scripts/value-read-ab-replay.mts`(rerun2 리플레이·실 101MB xlsx 재독). N=6 probe(한계종별 1행)·codex_cli gpt-5.5·effort medium·180s·12 LLM calls.
+
+### 17.1 메커니즘 = 작동 실증 (§16 재절단 검증)
+6/6 candidate가 **실 cell-read 성공**(cells_read 9~20·**non-truncated**·grid_row 1..10/20). §16.1 두 silent-no-op exit(narrow→drop·whole-column→truncate) **둘 다 안 일어남** — sample scope가 cap 내 read 보장. 실 LLM 판단·rationale 산출. cell-read·discharge·grid-frame·governance·containment·census 전부 라이브서 작동. **§16 재절단이 silent no-op을 실제로 해소함을 실데이터로 입증**(de-risk 목적 달성).
+
+### 17.2 품질 = 0 discharge (★location selection이 blind)
+census: targeted 6·**discharged 0**·inconclusive 2·refuted 4·failed 0·`ran_but_discharged_zero: true`. matrix readiness: `limitation_backed 60`(value_resolved 0) → **여전히 blocked**. discharge validation invalid(satisfied 0이라 floor 무관).
+**근본 원인(실데이터 확정)**: LLM이 **6/6 전부 `grid_column_index:0`**을 골랐고, column 0 = "NO"(행번호)·인덱스·헤더(의미 컬럼 아님) → rationale이 정확히 "index/serial column"·"header+row numbers"라 **refuted**. **enumerate가 `{sheet, grid_column_index, grid_row_start/end}`만 방출하고 컬럼 헤더 라벨/타입을 안 줌**(`run.ts` enumerate) → LLM은 컬럼 번호만 보고 어느 컬럼이 payment amount/refund인지 **모름** → column 0 blind default. (per_sheet_data.columns엔 라벨 존재: 결제상세 col 7='교재 환불부채'·12='결제상태'·16='결제/환불' 등 — LLM에 미전달.)
+**정직 관찰**: LLM은 **sheet는 의미적으로 맞게 선택**(payment→결제상세·revenue→수익인식60일) but **column은 라벨 없이 blind**. 판단 자체는 **정직·정확**(환각 0·rationale이 읽은 값 정확 반영·refuted/inconclusive 적절). → 이는 §16.5 "head 비대표"와 **다른 신규 결함 = location selection blindness**.
+
+### 17.3 fix 방향 (소규모·source-safe) — owner 결정 대기
+**enumerate가 컬럼 헤더 라벨(`per_sheet_data.columns[].name`)+`inferred_type`을 allowed_locations에 포함** → LLM이 의미 기반 컬럼 선택(예 '결제금액'·'결제상태' 컬럼). **source-safe**: 헤더 라벨=컬럼 IDENTITY(이미 인벤토리서 authoring LLM 가시·leaf-reader 선례 "header label is column identity, NOT row data"). read_scope provenance엔 좌표만 유지(라벨은 location 프롬프트 힌트). 재실행하면 품질 측정 재시도. ⚠️ 또 재절단·교차검증·재A/B 사이클 — owner 결정.
+- **메타**: 첫 실-LLM A/B의 가치 = ①§16 메커니즘 작동 실증 ②mock으로 안 보이던 **location blindness** 발견(올바른 칸 선택 실패). [[contract-runtime-gap-ledger]] — "메커니즘 작동 ≠ 의미 품질". 산출물: `.onto/reconstruct/value-read-ab/`(gitignored)·로그 `/tmp/value-read-ab-probe.log`.
+
+### 17.4 라벨 fix(§17.3 적용) + 재-A/B (probe2 · N=6 · gpt-5.5 · 124s) = 품질 ✅
+`ReconstructValueReadScope`에 `column_label`/`column_inferred_type`(non-authoritative 힌트·source-safe·leaf-reader 선례)+enumerate가 per_sheet_data columns[].name/inferred_type 채움+location 프롬프트 "use label, don't default to column 0". (검증 ts clean·214 pass·label 배선 단언.)
+**재-A/B 결과 = 품질 대폭 개선**: census `discharged 6`(probe1 0→6)·inconclusive 0·refuted 0. LLM이 **의미 컬럼 정확 선택**: payment_transaction→col 9 '주문번호'·payment_amount→col 25 '결제·취소액(A)'·revenue_schedule→col 17 '해당 일수'·price_allocation→col 8 '강의비율'·refund→col 24 '환불부채' — 전부 satisfied·rationale 정직("no all-row completeness claimed"·§16.5 헛점 인지). **content_sha256 MATCH**(content binding 작동)·cells_read 19~49·non-truncated → **floor 통과**. → **§17.3 라벨 fix가 location blindness 해소·value-read 의미품질 실증**(올바른 칸·비환각·정직 satisfied).
+**단 validation invalid·matrix 여전히 blocked = HARNESS 리플레이 조립 미스(프로덕션 아님·실데이터 확정)**: ①`session_id_mismatch`(harness sessionId "value-read-ab" ≠ baseline "defect3-ab-fix-rerun2") ②`prior_validation_invalid`(harness가 상대 ledger ref·validation은 절대경로 ref·ref-equality 실패). 둘 다 harness가 rerun2 아티팩트의 session_id·ref를 안 맞춘 탓 — value-read 코드 결함 아님(floor·governance·content-bind 정상 작동).
+
+### 17.5 ★ End-to-end unblock 실증 (REUSE 모드 · LLM-free 결정론 재검증)
+harness fix(sessionId=baseline·refs 절대경로) + REUSE 모드(probe2 discharge 재사용·LLM 0)로 재검증:
+- **discharge validation (recomputed) = `valid`** (session_id·ref 정합 후 floor·governance 전부 통과).
+- **matrix readiness = `value_resolved: 6` · `limitation_backed: 54`** — 실-LLM의 6 satisfied discharge가 **6 baseline 행을 `limitation_backed`→`value_resolved`로 전이**(unblock 메커니즘 실증). value_resolved>0 → continuation `actionable_limited`(§13.8 H1·mock 기입증·결정론 동일 경로).
+- **= cut 전 사이클 실-LLM 입증 완결**: 실 cell-read(101MB 재독·sample scope·non-truncated) → 라벨 기반 의미 컬럼 선택(올바른 칸) → satisfied(정직·비환각·rationale 정확) → floor 통과(cells_read>0·non-truncated·content-bind MATCH) → governance valid(basis-A·consumption_allowed) → **value_resolved 전이**. §16.5 head-sample 헛점은 LLM rationale이 정직 인지("no all-row completeness claimed").
+- **정직 잔여**: probe N=6(60 중)·full 60행 미실행(같은 패턴 추정·비용)·continuation은 결정론이라 mock 기입증. **§16.5 헛점(head 비대표)의 실제 오判 빈도는 미측정**(이 6건은 sound). 산출물: `.onto/reconstruct/value-read-ab/`(gitignored)·로그 `/tmp/value-read-ab-probe2.log`.
