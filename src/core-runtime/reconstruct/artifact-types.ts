@@ -1622,6 +1622,14 @@ export const RECONSTRUCT_STAGE_IDS = [
   "maturation_baseline_validation",
   "baseline_actionability_matrix",
   "baseline_actionability_matrix_validation",
+  // Maturation value-read cut: the LLM-touch stage that reads authorized runtime-target
+  // cell values to discharge value-dependent limitations on baseline matrix rows. A single
+  // stage id (leaf_read precedent) — discharge validation is an embedded self-validation
+  // step, so terminal run-manifest validation needs exactly one matching manifest step
+  // (design §13.5 F3). Runs after the baseline matrix is produced and before the question
+  // frontier, so its value-grounded discharge reaches the actionability matrix directly
+  // without waking the empty frontier path.
+  "maturation_value_read",
   "maturation_question_frontier",
   "maturation_question_frontier_validation",
   "maturation_closure_frontier",
@@ -2016,6 +2024,12 @@ export interface ReconstructActionabilityMatrixRow {
     | "closed"
     | "limitation_backed"
     | "frontier_required"
+    // value-read discharge cleared this material row's value-dependent
+    // limitation(s) to zero residual; it is terminal (not closed = L4-validated,
+    // not frontier_required = needs a new source) and anchors a bounded
+    // actionable claim with an explicit value-read basis. See maturation
+    // value-read cut design §11.1 / §13.3.
+    | "value_resolved"
     | "out_of_scope";
   member_source_refs: string[];
   cross_material_ref_refs: string[];
@@ -2380,6 +2394,94 @@ export interface ReconstructMaturationAnswerClaimsValidationArtifact {
   validation_status: "valid" | "invalid";
   answer_claim_count: number;
   answered_question_count: number;
+  validation_results: string[];
+  asserted_obligation_ids: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+// Maturation value-read cut (design §11.2 / §13.3). A first-class discharge concept —
+// deliberately NOT overloaded onto answer-claims, so it never rides the answer-support
+// judge path (ultracode M6 N/A). One entry = "authorized value evidence E satisfied
+// (or refuted / was inconclusive about) baseline limitation L on matrix row R".
+export interface ReconstructValueReadScope {
+  // Bounded location actually read inside the authorized observation. All optional so a
+  // discharge can name a named-range / table / A1 location_ref without column/row indices.
+  sheet?: string | null;
+  column_index?: number | null;
+  row_start?: number | null;
+  row_end?: number | null;
+  location_ref?: string | null;
+}
+
+export interface ReconstructValueEvidenceRef {
+  // The authorized source observation the value was read from (must be already-observed
+  // and consumption_allowed — discharge governance validator enforces, design §13.5 F5).
+  observation_id: string;
+  read_scope: ReconstructValueReadScope;
+  // Bounded read provenance — what was actually materialized, for honesty/audit.
+  cells_read: number;
+  read_truncated: boolean;
+}
+
+export interface ReconstructMaturationValueDischargeEntry {
+  discharge_id: string;
+  // The baseline matrix row(s) this discharge targets — must resolve to real rows.
+  target_baseline_row_refs: string[];
+  // The baseline limitation ref(s) this discharge claims to satisfy — each must actually
+  // exist on the targeted row's baseline limitation_refs (validator enforces, F2).
+  target_limitation_refs: string[];
+  value_evidence_ref: ReconstructValueEvidenceRef;
+  // Canonical single authorization ref (observation_id × material_claim). Trigger,
+  // selection, and discharge all cite the same ref (onto issue-009 / §11.2).
+  value_evidence_authorization_ref: string;
+  // LLM semantic judgment. Only `satisfied` (after the artifact validates valid) drives a
+  // limitation subtract → value_resolved; refuted/inconclusive never discharge (§4.3 4조건).
+  satisfaction_status: "satisfied" | "refuted" | "inconclusive";
+  rationale: string;
+}
+
+// discharge-level census (design §11.7) — always recorded so "never ran" is distinct from
+// "ran but discharged zero". Mirrors the leaf_read_census honesty pattern.
+export interface ReconstructMaturationValueDischargeCensus {
+  limitations_targeted: number;
+  limitations_discharged: number;
+  discharge_inconclusive: number;
+  discharge_refuted: number;
+  failed: number;
+  // True when the stage ran (≥1 targeted) but produced zero validated satisfied discharge —
+  // the honest H1-neg state the continuation must still treat as blocked.
+  ran_but_discharged_zero: boolean;
+}
+
+export interface ReconstructMaturationValueDischargeArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  round_id: string;
+  discharges: ReconstructMaturationValueDischargeEntry[];
+  census: ReconstructMaturationValueDischargeCensus;
+  directive_author: {
+    owner: "host_llm";
+    author_id: string;
+  };
+}
+
+export interface ReconstructMaturationValueDischargeValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_value_discharge_ref: string | null;
+  // Governance binding (design §13.5 F5): the discharge validator replicates the
+  // answer-support-ledger preconditions (source-safety ledger + its validation present and
+  // valid) before enforcing consumption_allowed on each value_evidence_ref's observation.
+  source_safety_ledger_validation_ref: string | null;
+  source_observation_reentry_validation_ref: string | null;
+  // Baseline binding so the matrix derive-and-assert can recompute residual against the
+  // baseline limitation set the discharge claims to subtract from (F2).
+  maturation_baseline_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  discharge_count: number;
+  satisfied_discharge_count: number;
   validation_results: string[];
   asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
@@ -3402,6 +3504,14 @@ export interface ReconstructRecordArtifactRefs {
   maturation_baseline_validation: string | null;
   baseline_actionability_matrix: string | null;
   baseline_actionability_matrix_validation: string | null;
+  // Maturation value-read cut. The discharge artifact + its (embedded-step) validation, plus
+  // the always-written discharge-level census that doubles as the maturation_value_read
+  // manifest step's artifact ref (leaf_read_census precedent). census distinguishes
+  // "value-read never ran" from "ran but discharged zero" (H1-neg honest state). Null only
+  // when the stage no-ops (no value-readable limitation-backed rows / author lacks the path).
+  maturation_value_discharge: string | null;
+  maturation_value_discharge_validation: string | null;
+  maturation_value_discharge_census: string | null;
   actionability_matrix: string | null;
   actionability_matrix_validation: string | null;
   maturation_question_frontier: string | null;

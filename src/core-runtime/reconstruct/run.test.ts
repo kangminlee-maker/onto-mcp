@@ -3206,6 +3206,7 @@ describe("runReconstruct", () => {
       "post_maturation_gate_projection_validation",
       "baseline_actionability_matrix",
       "baseline_actionability_matrix_validation",
+      "maturation_value_read",
       "maturation_question_frontier",
       "maturation_question_frontier_validation",
       "maturation_closure_frontier",

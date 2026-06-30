@@ -48,6 +48,11 @@ import type {
   ReconstructMaturationContinuationDecisionValidationArtifact,
   ReconstructMaturationQuestionFrontierArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
+  ReconstructMaturationValueDischargeArtifact,
+  ReconstructMaturationValueDischargeCensus,
+  ReconstructMaturationValueDischargeEntry,
+  ReconstructMaturationValueDischargeValidationArtifact,
+  ReconstructValueReadScope,
   ReconstructMetricsArtifact,
   ReconstructOntologyExpansionArtifact,
   ReconstructOntologyExpansionValidationArtifact,
@@ -137,6 +142,7 @@ import {
   writeSourcePurposeCandidatesValidationArtifact,
 } from "./purpose-authority-validation.js";
 import {
+  deriveSourceSafetyVisibilityTier,
   sourceSafetyRowIdForObservation,
   writeSourceSafetyLedgerArtifact,
   writeSourceSafetyLedgerValidationArtifact,
@@ -176,6 +182,7 @@ import {
   writeSourceObservationReentryValidationArtifact,
 } from "./source-observation-delta-validation.js";
 import {
+  validateMaturationValueDischarge,
   writeActionableOntologyArtifact,
   writeActionableOntologyValidationArtifact,
   writeActionabilityMatrixArtifact,
@@ -264,6 +271,34 @@ import {
   type ReconstructExecutionTelemetryCollector,
 } from "./execution-telemetry.js";
 
+// Maturation value-read cut (design §13.3/§13.5). Stage-internal types for the value-read
+// capability: a deterministic trigger builds candidates (limitation-backed material rows whose
+// value-dependent limitations could be cleared by reading authorized runtime-target cells), the
+// author (LLM) picks locations within the allowed set, the runtime reads the cells, and the
+// author judges whether each limitation is satisfied. The author returns discharge entries; the
+// stage runner builds the artifact + census and governance-validates them. Authors without the
+// capability (baseline harness) leave the matrix unchanged (default-off, leaf_read precedent).
+export interface ReconstructValueReadCandidate {
+  baseline_row_id: string;
+  matrix_row_id: string;
+  // The value-dependent limitation(s) on this row a value-read could clear.
+  limitation_refs: string[];
+  // The authorized runtime-target source observation whose cells may be read.
+  observation_id: string;
+  // The canonical authorization ref the discharge must cite (observation_id × material_claim).
+  value_evidence_authorization_ref: string;
+  // Allowed read locations enumerated from the source inventory (the LLM picks within this set).
+  allowed_locations: ReconstructValueReadScope[];
+}
+
+export interface ReconstructValueReadStageInput {
+  candidates: ReconstructValueReadCandidate[];
+}
+
+export interface ReconstructValueReadStageOutput {
+  discharges: ReconstructMaturationValueDischargeEntry[];
+}
+
 export interface ReconstructDirectiveAuthor {
   readonly authorId: string;
   readonly owner: "host_llm";
@@ -308,6 +343,17 @@ export interface ReconstructDirectiveAuthor {
    * keys its reuse on the llm_touch_fingerprint, never on this output.
    */
   readLeafLabels?(evidence: LeafReadRegionEvidence): Promise<LeafReadOutcome>;
+  /**
+   * Maturation value-read cut (design §13.3). The SECOND LLM-touch: read authorized
+   * runtime-target cell values to judge whether a baseline row's value-dependent limitation is
+   * satisfied, returning value-discharge entries. Optional — an author without it leaves
+   * limitation-backed rows unchanged (default-off, leaf_read precedent). The direct-call author
+   * implements it via two callJsonAuthor calls (location selection, then judgment) with a bounded
+   * cell read between them; the run recomputes the discharge every run (no fingerprint reuse).
+   */
+  readValueDischarge?(
+    input: ReconstructValueReadStageInput,
+  ): Promise<ReconstructValueReadStageOutput>;
   /**
    * P1-C2-A Step E: provide the leaf-read provisional labels (observation_id → short label strings)
    * so this author renders them as a NON-AUTHORITATIVE hint in every observation prompt. Set once by
@@ -1664,6 +1710,199 @@ export async function runSpreadsheetLeafReadStage(args: {
   return { artifactsByObservation, aggregateFingerprint, cappedColumnsByObservation, censusPath };
 }
 
+// Maturation value-read cut (design §13). System (not domain) limitation kinds a value-read can
+// clear by reading authorized cell values. Internal vocabulary — these are deterministic system
+// identities, not domain naming (semantic naming stays with the runtime LLM).
+const VALUE_READABLE_LIMITATION_REFS: ReadonlySet<string> = new Set([
+  "structure_inspected_only",
+]);
+function isValueReadableLimitation(ref: string): boolean {
+  return VALUE_READABLE_LIMITATION_REFS.has(ref) ||
+    ref.startsWith("coverage.semantic_leaf_read_gap") ||
+    ref.startsWith("purpose_handoff_limitation");
+}
+
+// Best-effort allowed-location enumeration from a spreadsheet observation's inventory. The LLM
+// picks within this set; the runtime read is bounded to it. Defensive against inventory shape
+// variance (the read-set boundary is enforced downstream, not this projection).
+function enumerateAllowedValueReadLocations(
+  observation: ReconstructSourceObservationsArtifact["observations"][number],
+): ReconstructValueReadScope[] {
+  const inventory = (observation.structural_data as Record<string, unknown> | undefined)
+    ?.workbook_inventory as Record<string, unknown> | undefined;
+  if (!inventory) return [];
+  const locations: ReconstructValueReadScope[] = [];
+  const sheets = Array.isArray(inventory.sheets) ? inventory.sheets : [];
+  for (const sheetRaw of sheets) {
+    const sheet = sheetRaw as Record<string, unknown>;
+    const sheetName = typeof sheet.name === "string" ? sheet.name : null;
+    const usedRange = typeof sheet.used_range === "string" ? sheet.used_range : null;
+    locations.push({ sheet: sheetName, location_ref: usedRange });
+    const columns = Array.isArray(sheet.columns) ? sheet.columns : [];
+    for (const columnRaw of columns) {
+      const column = columnRaw as Record<string, unknown>;
+      if (typeof column.index === "number") {
+        locations.push({ sheet: sheetName, column_index: column.index });
+      }
+    }
+  }
+  const namedRanges = Array.isArray(inventory.named_ranges) ? inventory.named_ranges : [];
+  for (const namedRangeRaw of namedRanges) {
+    const namedRange = namedRangeRaw as Record<string, unknown>;
+    const refersTo = typeof namedRange.refers_to === "string"
+      ? namedRange.refers_to
+      : typeof namedRange.name === "string"
+      ? namedRange.name
+      : null;
+    if (refersTo) locations.push({ location_ref: refersTo });
+  }
+  return locations;
+}
+
+/**
+ * Maturation value-read stage (design §13). Default-off: with no author capability OR no candidate
+ * (no limitation-backed material row carrying a value-readable limitation backed by an authorized
+ * runtime-target spreadsheet source), it no-ops and returns null paths → the manifest step is
+ * `skipped` and the current-matrix recompute sees no discharge (byte-parity X2). Recompute-every-run
+ * (design §13.7): the discharge artifact is plain-written each run with no reuse provenance — like
+ * final_output, so no llm_touch_fingerprint is needed (stale reuse is impossible).
+ *
+ * F4 read-set gate: only `is_runtime_target_source === true` observations whose material_claim
+ * safety row is consumption_allowed are eligible — a non-target source's values never reach the
+ * value-read prompt. The discharge governance validator re-enforces this independently.
+ */
+export async function runMaturationValueReadStage(args: {
+  sessionId: string;
+  baselineMatrix: ReconstructActionabilityMatrixArtifact;
+  maturationBaseline: ReconstructMaturationBaselineArtifact;
+  maturationBaselineValidation: ReconstructMaturationBaselineValidationArtifact;
+  maturationBaselineValidationRef: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact | null;
+  sourceSafetyLedgerRef: string | null;
+  sourceSafetyLedgerValidation: ReconstructSourceSafetyLedgerValidationArtifact | null;
+  sourceSafetyLedgerValidationRef: string | null;
+  directiveAuthor: ReconstructDirectiveAuthor;
+  sessionRoot: string;
+}): Promise<{
+  dischargePath: string | null;
+  dischargeValidationPath: string | null;
+  censusPath: string | null;
+}> {
+  const noOp = {
+    dischargePath: null,
+    dischargeValidationPath: null,
+    censusPath: null,
+  };
+  const readValueDischarge = args.directiveAuthor.readValueDischarge?.bind(
+    args.directiveAuthor,
+  );
+  if (!readValueDischarge) return noOp;
+  const safetyRowsById = new Map(
+    (args.sourceSafetyLedger?.safety_rows ?? []).map((r) => [r.safety_row_id, r]),
+  );
+  const eligibleObservations = args.sourceObservations.observations.filter(
+    (observation) => {
+      if (observation.is_runtime_target_source !== true) return false;
+      const inventory = (observation.structural_data as Record<string, unknown> | undefined)
+        ?.workbook_inventory;
+      if (!inventory) return false; // value-read targets spreadsheet sources
+      const materialClaimRowId = sourceSafetyRowIdForObservation(
+        observation,
+        "material_claim",
+      );
+      const materialClaimRow = safetyRowsById.get(materialClaimRowId);
+      return Boolean(
+        materialClaimRow &&
+          materialClaimRow.proof_sufficiency_state === "sufficient_for_claim" &&
+          materialClaimRow.visibility_tier === "consumption_allowed",
+      );
+    },
+  );
+  const candidates: ReconstructValueReadCandidate[] = [];
+  for (const matrixRow of args.baselineMatrix.rows) {
+    if (matrixRow.member_readiness !== "limitation_backed") continue;
+    if (matrixRow.materiality !== "blocker" && matrixRow.materiality !== "high") {
+      continue;
+    }
+    const valueReadableLimitations = matrixRow.limitation_refs.filter(
+      isValueReadableLimitation,
+    );
+    if (valueReadableLimitations.length === 0) continue;
+    for (const observation of eligibleObservations) {
+      candidates.push({
+        baseline_row_id: matrixRow.baseline_row_refs[0] ?? matrixRow.matrix_row_id,
+        matrix_row_id: matrixRow.matrix_row_id,
+        limitation_refs: valueReadableLimitations,
+        observation_id: observation.observation_id,
+        value_evidence_authorization_ref:
+          `${observation.observation_id}:material_claim`,
+        allowed_locations: enumerateAllowedValueReadLocations(observation),
+      });
+    }
+  }
+  if (candidates.length === 0) return noOp;
+  const output = await readValueDischarge({ candidates });
+  const discharges = output.discharges;
+  const satisfied = discharges.filter((d) => d.satisfaction_status === "satisfied");
+  const targetedLimitations = new Set(
+    candidates.flatMap((c) =>
+      c.limitation_refs.map((limitation) => `${c.baseline_row_id}:${limitation}`)
+    ),
+  );
+  const census: ReconstructMaturationValueDischargeCensus = {
+    limitations_targeted: targetedLimitations.size,
+    limitations_discharged: satisfied.length,
+    discharge_inconclusive: discharges.filter((d) =>
+      d.satisfaction_status === "inconclusive"
+    ).length,
+    discharge_refuted: discharges.filter((d) => d.satisfaction_status === "refuted")
+      .length,
+    failed: 0,
+    ran_but_discharged_zero: satisfied.length === 0,
+  };
+  const discharge: ReconstructMaturationValueDischargeArtifact = {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    round_id: "maturation-value-read",
+    discharges,
+    census,
+    directive_author: { owner: "host_llm", author_id: args.directiveAuthor.authorId },
+  };
+  const dischargePath = path.join(args.sessionRoot, "maturation-value-discharge.yaml");
+  await writeYamlDocument(dischargePath, discharge);
+  const dischargeValidation = validateMaturationValueDischarge({
+    maturationValueDischarge: discharge,
+    maturationValueDischargeRef: dischargePath,
+    maturationBaseline: args.maturationBaseline,
+    maturationBaselineValidation: args.maturationBaselineValidation,
+    maturationBaselineValidationRef: args.maturationBaselineValidationRef,
+    sourceObservations: args.sourceObservations,
+    sourceObservationsRef: args.sourceObservationsRef,
+    sourceSafetyLedger: args.sourceSafetyLedger,
+    sourceSafetyLedgerRef: args.sourceSafetyLedgerRef,
+    sourceSafetyLedgerValidation: args.sourceSafetyLedgerValidation,
+    sourceSafetyLedgerValidationRef: args.sourceSafetyLedgerValidationRef,
+  });
+  const dischargeValidationPath = path.join(
+    args.sessionRoot,
+    "maturation-value-discharge-validation.yaml",
+  );
+  await writeYamlDocument(dischargeValidationPath, dischargeValidation);
+  // Always-written discharge census (leaf_read precedent): distinguishes "never ran" from "ran
+  // but discharged zero". Doubles as the maturation_value_read manifest step's artifact ref.
+  const comprehensionDir = path.join(args.sessionRoot, "comprehension");
+  await fs.mkdir(comprehensionDir, { recursive: true });
+  const censusPath = path.join(
+    comprehensionDir,
+    "maturation-value-discharge-census.yaml",
+  );
+  await writeYamlDocument(censusPath, census);
+  return { dischargePath, dischargeValidationPath, censusPath };
+}
+
 async function writeFreshAuthoredYamlDocument<T>(
   filePath: string,
   artifactName: string,
@@ -2188,6 +2427,11 @@ function artifactRefsWithDefaults(args: {
       args.refs.baseline_actionability_matrix ?? null,
     baseline_actionability_matrix_validation:
       args.refs.baseline_actionability_matrix_validation ?? null,
+    maturation_value_discharge: args.refs.maturation_value_discharge ?? null,
+    maturation_value_discharge_validation:
+      args.refs.maturation_value_discharge_validation ?? null,
+    maturation_value_discharge_census:
+      args.refs.maturation_value_discharge_census ?? null,
     actionability_matrix: args.refs.actionability_matrix ?? null,
     actionability_matrix_validation:
       args.refs.actionability_matrix_validation ?? null,
@@ -2330,6 +2574,9 @@ function createRunManifest(args: {
       maturation_baseline_validation: null,
       baseline_actionability_matrix: null,
       baseline_actionability_matrix_validation: null,
+      maturation_value_discharge: null,
+      maturation_value_discharge_validation: null,
+      maturation_value_discharge_census: null,
       actionability_matrix: null,
       actionability_matrix_validation: null,
       maturation_question_frontier: null,
@@ -2913,6 +3160,25 @@ function createRunManifest(args: {
           runtimePerformer(),
           "baseline-actionability-matrix-validation.yaml is emitted after baseline actionability matrix.",
           "Pre-handoff manifest validation must not certify future baseline actionability matrix validation.",
+        ),
+      // Maturation value-read cut (design §13.5 F3). Single stage id — discharge validation is
+      // an embedded self-validation step, so exactly one manifest step. Census ref present →
+      // completed (the always-written discharge census is the durable evidence surface even on
+      // zero discharge); null → skipped (the stage no-op'd because there were no value-readable
+      // limitation-backed rows or the author lacks the value-read path). leaf_read precedent.
+      args.artifactRefs.maturation_value_discharge_census
+        ? completedStep(
+          "maturation_value_read",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.maturation_value_discharge_census],
+        )
+        : skippedStep(
+          "maturation_value_read",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "value-read stage did not run (no value-readable limitation-backed rows or the author lacks the value-read path).",
+          "No value-read discharge was attempted; the baseline actionability matrix stands unchanged.",
         ),
       args.terminalArtifactsCompleted
         ? completedStep(
@@ -12852,6 +13118,12 @@ export async function runReconstruct(
     sessionRoot,
     "baseline-actionability-matrix-validation.yaml",
   );
+  // Maturation value-read cut. Default-off: null until the value-read stage runs and
+  // writes them (reassigned in runMaturationValueReadStage block). When the stage no-ops
+  // these stay null and the record refs / discharge subtract are absent (byte-parity X2).
+  let maturationValueDischargePath: string | null = null;
+  let maturationValueDischargeValidationPath: string | null = null;
+  let maturationValueDischargeCensusPath: string | null = null;
   const actionabilityMatrixPath = path.join(sessionRoot, "actionability-matrix.yaml");
   const actionabilityMatrixValidationPath = path.join(
     sessionRoot,
@@ -13051,6 +13323,10 @@ export async function runReconstruct(
       baseline_actionability_matrix: baselineActionabilityMatrixPath,
       baseline_actionability_matrix_validation:
         baselineActionabilityMatrixValidationPath,
+      maturation_value_discharge: maturationValueDischargePath,
+      maturation_value_discharge_validation:
+        maturationValueDischargeValidationPath,
+      maturation_value_discharge_census: maturationValueDischargeCensusPath,
       actionability_matrix: actionabilityMatrixPath,
       actionability_matrix_validation: actionabilityMatrixValidationPath,
       maturation_question_frontier: maturationQuestionFrontierPath,
@@ -13185,6 +13461,9 @@ export async function runReconstruct(
       maturation_baseline_validation: null,
       baseline_actionability_matrix: null,
       baseline_actionability_matrix_validation: null,
+      maturation_value_discharge: null,
+      maturation_value_discharge_validation: null,
+      maturation_value_discharge_census: null,
       actionability_matrix: null,
       actionability_matrix_validation: null,
       maturation_question_frontier: null,
@@ -13299,6 +13578,37 @@ export async function runReconstruct(
     artifactRef: baselineActionabilityMatrixValidationPath,
     validation: actionabilityMatrixValidation,
   });
+  // Maturation value-read stage (design §13). Reads authorized runtime-target cell values to
+  // discharge value-dependent limitations on the baseline matrix's limitation-backed rows. The
+  // discharge feeds the CURRENT matrix recompute below (not the baseline matrix), so value_resolved
+  // rows surface there. Default-off: no-op (null paths → skipped manifest step) unless the author
+  // has the capability AND a candidate exists (byte-parity X2).
+  const maturationValueReadStage = await runMaturationValueReadStage({
+    sessionId,
+    baselineMatrix: actionabilityMatrix,
+    maturationBaseline,
+    maturationBaselineValidation,
+    maturationBaselineValidationRef: maturationBaselineValidationPath,
+    sourceObservations,
+    sourceObservationsRef: preparationRefs.source_observations,
+    // Read from the durable artifacts written during source-safety preparation (the in-memory
+    // vars are closure-assigned, so read here keeps the value-read stage's inputs explicit).
+    sourceSafetyLedger: await readYamlDocument<ReconstructSourceSafetyLedgerArtifact>(
+      sourceSafetyLedgerPath,
+    ),
+    sourceSafetyLedgerRef: sourceSafetyLedgerPath,
+    sourceSafetyLedgerValidation:
+      await readYamlDocument<ReconstructSourceSafetyLedgerValidationArtifact>(
+        sourceSafetyLedgerValidationPath,
+      ),
+    sourceSafetyLedgerValidationRef: sourceSafetyLedgerValidationPath,
+    directiveAuthor,
+    sessionRoot,
+  });
+  maturationValueDischargePath = maturationValueReadStage.dischargePath;
+  maturationValueDischargeValidationPath =
+    maturationValueReadStage.dischargeValidationPath;
+  maturationValueDischargeCensusPath = maturationValueReadStage.censusPath;
   const maturationQuestionFrontier = await writeAuthoredYamlDocument(
     maturationQuestionFrontierPath,
     "maturation-question-frontier.yaml",
@@ -13644,6 +13954,11 @@ export async function runReconstruct(
     // blocking_question_refs link (the pre-frontier baseline matrix above does not).
     maturationQuestionFrontierPath,
     maturationQuestionFrontierValidationPath,
+    // Maturation value-read cut (design §13.3 F2): the value-discharge feeds the CURRENT matrix
+    // so validated satisfied discharges subtract their baseline limitations → value_resolved.
+    // Null when the value-read stage no-op'd (default-off → no subtract).
+    maturationValueDischargePath,
+    maturationValueDischargeValidationPath,
     outputPath: actionabilityMatrixPath,
   });
   actionabilityMatrixValidation =
@@ -13657,6 +13972,8 @@ export async function runReconstruct(
       ontologyExpansionValidationPath,
       maturationQuestionFrontierPath,
       maturationQuestionFrontierValidationPath,
+      maturationValueDischargePath,
+      maturationValueDischargeValidationPath,
       outputPath: actionabilityMatrixValidationPath,
     });
   assertRuntimeValidationValid({

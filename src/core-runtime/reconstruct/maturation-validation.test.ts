@@ -7,6 +7,7 @@ import type {
   ReconstructActionabilityMatrixArtifact,
   ReconstructActionabilityMatrixRow,
   ReconstructMaturationAuthorityResponseArtifact,
+  ReconstructMaturationAuthorityResponseValidationArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
   ReconstructCompetencyQuestionsArtifact,
@@ -20,6 +21,9 @@ import type {
   ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructMaturationQuestionFrontierArtifact,
+  ReconstructMaturationBaselineValidationArtifact,
+  ReconstructMaturationValueDischargeArtifact,
+  ReconstructMaturationValueDischargeValidationArtifact,
   ReconstructOntologyExpansionArtifact,
   ReconstructOntologyExpansionValidationArtifact,
   ReconstructRevisionProposalArtifact,
@@ -56,6 +60,7 @@ import {
   validateMaturationClosureFrontier,
   validateMaturationConvergenceLedger,
   validateMaturationContinuationDecision,
+  validateMaturationValueDischarge,
   validateMaturationQuestionFrontier,
   validateMaturationSourceDelta,
   validateOntologyExpansion,
@@ -4797,5 +4802,611 @@ describe("M4b continuation builder branches (revision blockers)", () => {
     );
     expect(decision.revision_blocker_limitation_refs).toEqual([]);
     expect(decision.decision_state).toBe("actionable_ready");
+  });
+});
+
+// Maturation value-read cut (design §13). Proves the headline mechanism end to end on the
+// deterministic core: a validated satisfied value-discharge clears a baseline limitation →
+// value_resolved → the continuation ladder routes blocked → actionable_limited. Includes the
+// negative/contrast controls (H1-neg, H2 derive-and-assert) and the rerun2-shaped case that
+// broke v1 and v2 (value_resolved must anchor a bounded claim even with unresolved defers).
+describe("maturation value-read discharge (cut design §13)", () => {
+  function baselineWithLimitation(limitationRefs: string[]) {
+    const base = baseline([]);
+    return {
+      ...base,
+      baseline_rows: base.baseline_rows.map((row, index) =>
+        index === 0
+          ? {
+            ...row,
+            limitation_refs: limitationRefs,
+            maturity_level: "L2_modeled" as const,
+          }
+          : row
+      ),
+    };
+  }
+
+  function validBaselineValidation(): ReconstructMaturationBaselineValidationArtifact {
+    return {
+      validation_status: "valid",
+    } as ReconstructMaturationBaselineValidationArtifact;
+  }
+
+  function discharge(
+    entries: Array<{
+      baselineRowId: string;
+      limitationRefs: string[];
+      status?: "satisfied" | "refuted" | "inconclusive";
+    }>,
+  ): ReconstructMaturationValueDischargeArtifact {
+    const satisfied = entries.filter((e) => (e.status ?? "satisfied") === "satisfied");
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "round-1",
+      discharges: entries.map((entry, index) => ({
+        discharge_id: `value-discharge-${index + 1}`,
+        target_baseline_row_refs: [entry.baselineRowId],
+        target_limitation_refs: entry.limitationRefs,
+        value_evidence_ref: {
+          observation_id: "obs-runtime-target",
+          read_scope: {
+            sheet: "Sheet1",
+            column_index: 0,
+            row_start: 1,
+            row_end: 10,
+            location_ref: null,
+          },
+          cells_read: 10,
+          read_truncated: false,
+        },
+        value_evidence_authorization_ref: "obs-runtime-target:material_claim",
+        satisfaction_status: entry.status ?? "satisfied",
+        rationale: "fixture value-read discharge",
+      })),
+      census: {
+        limitations_targeted: entries.length,
+        limitations_discharged: satisfied.length,
+        discharge_inconclusive: entries.filter((e) => e.status === "inconclusive").length,
+        discharge_refuted: entries.filter((e) => e.status === "refuted").length,
+        failed: 0,
+        ran_but_discharged_zero: satisfied.length === 0,
+      },
+      directive_author: { owner: "host_llm", author_id: "mock" },
+    };
+  }
+
+  function dischargeValidation(
+    status: "valid" | "invalid" = "valid",
+  ): ReconstructMaturationValueDischargeValidationArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      maturation_value_discharge_ref: "maturation-value-discharge.yaml",
+      source_safety_ledger_validation_ref: "source-safety-ledger-validation.yaml",
+      source_observation_reentry_validation_ref:
+        "source-observation-reentry-validation.yaml",
+      maturation_baseline_validation_ref: "maturation-baseline-validation.yaml",
+      validation_status: status,
+      discharge_count: 0,
+      satisfied_discharge_count: 0,
+      validation_results: [],
+      asserted_obligation_ids: [],
+      violations: [],
+    };
+  }
+
+  // ---- builder: discharge → value_resolved + default-off + H1-neg ----
+  it("H1 builder: a validated satisfied discharge clears the row's baseline limitation → value_resolved", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline: base,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationValueDischarge: discharge([
+        { baselineRowId: rowId, limitationRefs: ["structure_inspected_only"] },
+      ]),
+      maturationValueDischargeValidation: dischargeValidation("valid"),
+    });
+    const row = matrix.rows.find((r) => r.baseline_row_refs.includes(rowId))!;
+    expect(row.member_readiness).toBe("value_resolved");
+    expect(row.limitation_refs).toEqual([]);
+    expect(row.blocking_question_refs).toEqual([]);
+    // the validator accepts it when the same validated discharge is threaded
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline: base,
+      maturationBaselineValidation: validBaselineValidation(),
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationValueDischarge: discharge([
+        { baselineRowId: rowId, limitationRefs: ["structure_inspected_only"] },
+      ]),
+      maturationValueDischargeValidation: dischargeValidation("valid"),
+    });
+    expect(validation.validation_status).toBe("valid");
+  });
+
+  it("X2 default-off: without a discharge the limitation-bearing row stays limitation_backed", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline: base,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const row = matrix.rows[0]!;
+    expect(row.member_readiness).toBe("limitation_backed");
+    expect(row.limitation_refs).toEqual(["structure_inspected_only"]);
+  });
+
+  it("H1-neg builder: a refuted or inconclusive discharge does NOT clear the limitation", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    for (const status of ["refuted", "inconclusive"] as const) {
+      const matrix = buildActionabilityMatrixArtifact({
+        sessionId: "session-1",
+        maturationBaseline: base,
+        maturationBaselineRef: "maturation-baseline.yaml",
+        maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+        maturationValueDischarge: discharge([
+          { baselineRowId: rowId, limitationRefs: ["structure_inspected_only"], status },
+        ]),
+        maturationValueDischargeValidation: dischargeValidation("valid"),
+      });
+      expect(matrix.rows[0]!.member_readiness).toBe("limitation_backed");
+    }
+  });
+
+  it("H1-neg builder: a satisfied discharge under an INVALID discharge validation does NOT clear it", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline: base,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationValueDischarge: discharge([
+        { baselineRowId: rowId, limitationRefs: ["structure_inspected_only"] },
+      ]),
+      maturationValueDischargeValidation: dischargeValidation("invalid"),
+    });
+    expect(matrix.rows[0]!.member_readiness).toBe("limitation_backed");
+  });
+
+  // ---- validator derive-and-assert (H2): a forged value_resolved is rejected ----
+  it("H2 derive-and-assert: a matrix claiming value_resolved with no validated discharge is rejected", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    // Build a legitimate value_resolved matrix (discharge cleared the limitation)…
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline: base,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationValueDischarge: discharge([
+        { baselineRowId: rowId, limitationRefs: ["structure_inspected_only"] },
+      ]),
+      maturationValueDischargeValidation: dischargeValidation("valid"),
+    });
+    expect(matrix.rows[0]!.member_readiness).toBe("value_resolved");
+    // …then validate WITHOUT threading the discharge: the validator rebuilds an empty
+    // discharge index, so the dropped baseline limitation is unbacked AND the readiness no
+    // longer derives to value_resolved → conflicting_state.
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline: base,
+      maturationBaselineValidation: validBaselineValidation(),
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "conflicting_state"),
+    ).toBe(true);
+  });
+
+  it("H2 derive-and-assert: same forgery is rejected when the discharge validation is invalid", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline: base,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationValueDischarge: discharge([
+        { baselineRowId: rowId, limitationRefs: ["structure_inspected_only"] },
+      ]),
+      maturationValueDischargeValidation: dischargeValidation("valid"),
+    });
+    const validation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline: base,
+      maturationBaselineValidation: validBaselineValidation(),
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationValueDischarge: discharge([
+        { baselineRowId: rowId, limitationRefs: ["structure_inspected_only"] },
+      ]),
+      maturationValueDischargeValidation: dischargeValidation("invalid"),
+    });
+    expect(validation.validation_status).toBe("invalid");
+  });
+
+  // ---- continuation ladder F1 (the twice-broken headline) ----
+  function ladderMatrix(
+    rows: Array<{
+      id: string;
+      readiness: ReconstructActionabilityMatrixRow["member_readiness"];
+    }>,
+  ): ReconstructActionabilityMatrixArtifact {
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      maturation_baseline_ref: "maturation-baseline.yaml",
+      maturation_baseline_validation_ref: "maturation-baseline-validation.yaml",
+      candidate_limitation_refs: [],
+      rows: rows.map((row) => ({
+        matrix_row_id: row.id,
+        baseline_row_refs: [`baseline-${row.id}`],
+        purpose_element_ref: "element-1",
+        actionability_surface_ref: "surface-1",
+        maturity_dimension_ref: "dimension-1",
+        materiality: "high",
+        materiality_ref: "materiality-1",
+        member_scope_refs: [],
+        member_target_material_kind: "code",
+        member_readiness: row.readiness,
+        member_source_refs: [],
+        cross_material_ref_refs: [],
+        competency_question_refs: [],
+        competency_assessment_refs: [],
+        maturity_level: "L2_modeled",
+        supporting_refs: [],
+        blocking_question_refs: [],
+        limitation_refs: row.readiness === "limitation_backed"
+          ? ["structure_inspected_only"]
+          : [],
+        next_action: "n/a",
+      })),
+    } as unknown as ReconstructActionabilityMatrixArtifact;
+  }
+
+  function buildLadder(
+    matrix: ReconstructActionabilityMatrixArtifact,
+    proposal: ReconstructRevisionProposalArtifact,
+  ): ReconstructMaturationContinuationDecisionArtifact {
+    return buildMaturationContinuationDecisionArtifact({
+      sessionId: "session-1",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationConvergenceLedgerValidation: {
+        ...emptyConvergenceLedgerValidation(),
+        final_requestion_pass_status: "no_new_material_question",
+      },
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+      maturationQuestionFrontier: {
+        questions: [],
+      } as unknown as ReconstructMaturationQuestionFrontierArtifact,
+      maturationClosureFrontier: {
+        authority_requests: [],
+      } as unknown as ReconstructMaturationClosureFrontierArtifact,
+      maturationClosureFrontierValidation:
+        {} as unknown as ReconstructMaturationClosureFrontierValidationArtifact,
+      maturationAuthorityResponse: {
+        responses: [],
+      } as unknown as ReconstructMaturationAuthorityResponseArtifact,
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      revisionProposal: proposal,
+      revisionProposalValidation: revisionProposalValidation(),
+    });
+  }
+
+  function validateLadder(
+    decision: ReconstructMaturationContinuationDecisionArtifact,
+    matrix: ReconstructActionabilityMatrixArtifact,
+    proposal: ReconstructRevisionProposalArtifact,
+  ) {
+    return validateMaturationContinuationDecision({
+      maturationContinuationDecision: decision,
+      maturationContinuationDecisionRef: "maturation-continuation-decision.yaml",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidation: {
+        validation_status: "valid",
+      } as ReconstructActionabilityMatrixValidationArtifact,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationQuestionFrontierValidation: {
+        validation_status: "valid",
+      } as ReconstructMaturationQuestionFrontierValidationArtifact,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      maturationClosureFrontierValidation: {
+        validation_status: "valid",
+      } as ReconstructMaturationClosureFrontierValidationArtifact,
+      maturationClosureFrontierValidationRef:
+        "maturation-closure-frontier-validation.yaml",
+      answerSupportLedgerValidation: emptyAnswerSupportValidation(),
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationAuthorityResponseValidation: {
+        validation_status: "valid",
+      } as ReconstructMaturationAuthorityResponseValidationArtifact,
+      maturationAuthorityResponseValidationRef:
+        "maturation-authority-response-validation.yaml",
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationConvergenceLedgerValidation: {
+        ...emptyConvergenceLedgerValidation(),
+        final_requestion_pass_status: "no_new_material_question",
+      },
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+      revisionProposal: proposal,
+      revisionProposalValidation: revisionProposalValidation(),
+      revisionProposalRef: "revision-proposal.yaml",
+    });
+  }
+
+  const eighteenDefers = revisionProposal(
+    Array.from({ length: 18 }, (_, i) => `p${i + 1}:defer`),
+  );
+
+  it("F1 rerun2-shaped HEADLINE: value_resolved anchor + 18 unresolved defers → actionable_limited (defers consumed, not dropped)", () => {
+    const matrix = ladderMatrix([{ id: "row-1", readiness: "value_resolved" }]);
+    const decision = buildLadder(matrix, eighteenDefers);
+    // The break in v1/v2: with closedRows === 0 the revision-blocker arm forced blocked.
+    // value_resolved now anchors the bounded claim → actionable_limited.
+    expect(decision.decision_state).toBe("actionable_limited");
+    // The 18 defers are CONSUMED into the claim's limitations, not silently dropped.
+    expect(decision.revision_blocker_limitation_refs.length).toBe(18);
+    expect(decision.claim_scope.included_row_refs).toEqual(["row-1"]);
+    expect(validateLadder(decision, matrix, eighteenDefers).validation_status).toBe(
+      "valid",
+    );
+  });
+
+  it("F1 H1-neg control: the SAME shape with limitation_backed (no discharge) stays blocked", () => {
+    const matrix = ladderMatrix([{ id: "row-1", readiness: "limitation_backed" }]);
+    const decision = buildLadder(matrix, eighteenDefers);
+    expect(decision.decision_state).toBe("blocked");
+  });
+
+  it("F1 clean-run: value_resolved-only with no blockers → actionable_limited (not actionable_ready), validates", () => {
+    const matrix = ladderMatrix([{ id: "row-1", readiness: "value_resolved" }]);
+    const decision = buildLadder(matrix, revisionProposal([]));
+    expect(decision.decision_state).toBe("actionable_limited");
+    // F6④: the value-read basis ref keeps decision.limitation_refs non-empty so the
+    // "actionable_limited needs excluded refs or limitation refs" gate passes on an
+    // otherwise empty/empty clean run.
+    expect(
+      decision.limitation_refs.some((ref) =>
+        ref.startsWith("maturation-value-read-basis:")
+      ),
+    ).toBe(true);
+    expect(decision.claim_scope.included_row_refs).toEqual(["row-1"]);
+    expect(decision.claim_scope.excluded_row_refs).toEqual([]);
+    expect(
+      validateLadder(decision, matrix, revisionProposal([])).validation_status,
+    ).toBe("valid");
+  });
+
+  it("F1 mixed: value_resolved anchor + still-limitation_backed row → actionable_limited", () => {
+    const matrix = ladderMatrix([
+      { id: "row-1", readiness: "value_resolved" },
+      { id: "row-2", readiness: "limitation_backed" },
+    ]);
+    const decision = buildLadder(matrix, revisionProposal([]));
+    expect(decision.decision_state).toBe("actionable_limited");
+    expect(decision.claim_scope.included_row_refs).toEqual(["row-1"]);
+    expect(decision.claim_scope.excluded_row_refs).toEqual(["row-2"]);
+  });
+
+  it("F1 guard: actionable_ready is rejected by the validator when a value_resolved row remains", () => {
+    const matrix = ladderMatrix([{ id: "row-1", readiness: "value_resolved" }]);
+    const decision = buildLadder(matrix, revisionProposal([]));
+    const forgedReady = { ...decision, decision_state: "actionable_ready" as const };
+    const validation = validateLadder(forgedReady, matrix, revisionProposal([]));
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some(
+        (v) => v.code === "conflicting_state" && v.subject_id === "actionable_ready",
+      ),
+    ).toBe(true);
+  });
+});
+
+// Maturation value-read cut (design §13.5 F4/F5) — discharge governance validator. Proves the
+// read-path is basis-A only (runtime-target), the per-evidence consumption_allowed gate, the
+// structural "limitation must exist on the baseline row" rule, and the source-safety precondition.
+describe("maturation value-read discharge governance (§13.5 F4/F5)", () => {
+  const RUNTIME_OBS_ID = "obs-runtime-target";
+
+  function runtimeTargetObservations(
+    isRuntimeTarget: boolean,
+  ): ReconstructSourceObservationsArtifact {
+    const base = sourceObservations(["src/feature.ts"]);
+    return {
+      ...base,
+      observations: base.observations.map((obs) => {
+        const structuralData = { ...(obs.structural_data as Record<string, unknown>) };
+        // basis A only: drop the explicit self-declaration so authorization rests on
+        // runtime-target provenance (so the non-target case genuinely loses consumption).
+        delete structuralData.source_safety_consumption_authorizations;
+        return {
+          ...obs,
+          observation_id: RUNTIME_OBS_ID,
+          round_id: "initial_source_frontier",
+          observation_batch_id: "source-observation-batch:initial",
+          triggering_frontier_validation_ref: null,
+          is_runtime_target_source: isRuntimeTarget,
+          structural_data: structuralData,
+        };
+      }),
+    };
+  }
+
+  function baselineWithLimitation(limitationRefs: string[]) {
+    const base = baseline([]);
+    return {
+      ...base,
+      baseline_rows: base.baseline_rows.map((row, index) =>
+        index === 0 ? { ...row, limitation_refs: limitationRefs } : row
+      ),
+    };
+  }
+
+  function dischargeArtifact(opts: {
+    baselineRowId: string;
+    targetLimitationRefs: string[];
+    observationId?: string;
+    authorizationRef?: string;
+  }): ReconstructMaturationValueDischargeArtifact {
+    const observationId = opts.observationId ?? RUNTIME_OBS_ID;
+    return {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "round-1",
+      discharges: [{
+        discharge_id: "value-discharge-1",
+        target_baseline_row_refs: [opts.baselineRowId],
+        target_limitation_refs: opts.targetLimitationRefs,
+        value_evidence_ref: {
+          observation_id: observationId,
+          read_scope: {
+            sheet: "Sheet1",
+            column_index: 0,
+            row_start: 1,
+            row_end: 10,
+            location_ref: null,
+          },
+          cells_read: 10,
+          read_truncated: false,
+        },
+        value_evidence_authorization_ref: opts.authorizationRef ??
+          `${observationId}:material_claim`,
+        satisfaction_status: "satisfied",
+        rationale: "fixture value-read discharge",
+      }],
+      census: {
+        limitations_targeted: 1,
+        limitations_discharged: 1,
+        discharge_inconclusive: 0,
+        discharge_refuted: 0,
+        failed: 0,
+        ran_but_discharged_zero: false,
+      },
+      directive_author: { owner: "host_llm", author_id: "mock" },
+    };
+  }
+
+  function validate(
+    observations: ReconstructSourceObservationsArtifact,
+    base: ReturnType<typeof baselineWithLimitation>,
+    dischargeArt: ReconstructMaturationValueDischargeArtifact,
+    safetyOverride?: { validationStatus: "valid" | "invalid" },
+  ) {
+    const safety = sourceSafetyAuthority(observations);
+    return validateMaturationValueDischarge({
+      maturationValueDischarge: dischargeArt,
+      maturationValueDischargeRef: "maturation-value-discharge.yaml",
+      maturationBaseline: base,
+      maturationBaselineValidation: {
+        validation_status: "valid",
+      } as ReconstructMaturationBaselineValidationArtifact,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      sourceObservations: observations,
+      sourceObservationsRef: "source-observations.yaml",
+      sourceSafetyLedger: safety.sourceSafetyLedger,
+      sourceSafetyLedgerRef: safety.sourceSafetyLedgerRef,
+      sourceSafetyLedgerValidation: safetyOverride
+        ? {
+          ...safety.sourceSafetyLedgerValidation,
+          validation_status: safetyOverride.validationStatus,
+        }
+        : safety.sourceSafetyLedgerValidation,
+      sourceSafetyLedgerValidationRef: safety.sourceSafetyLedgerValidationRef,
+    });
+  }
+
+  it("valid: runtime-target evidence + consumption_allowed + real baseline limitation", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const validation = validate(
+      runtimeTargetObservations(true),
+      base,
+      dischargeArtifact({ baselineRowId: rowId, targetLimitationRefs: ["structure_inspected_only"] }),
+    );
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.satisfied_discharge_count).toBe(1);
+  });
+
+  it("F4: a non-runtime-target source is rejected outright (no value leak)", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const validation = validate(
+      runtimeTargetObservations(false),
+      base,
+      dischargeArtifact({ baselineRowId: rowId, targetLimitationRefs: ["structure_inspected_only"] }),
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some(
+        (v) => v.code === "conflicting_state" && v.subject_id === RUNTIME_OBS_ID,
+      ),
+    ).toBe(true);
+  });
+
+  it("structural: discharging a limitation that is NOT on the baseline row is rejected", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const validation = validate(
+      runtimeTargetObservations(true),
+      base,
+      dischargeArtifact({ baselineRowId: rowId, targetLimitationRefs: ["phantom_limitation"] }),
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "missing_required_ref"),
+    ).toBe(true);
+  });
+
+  it("precondition: an invalid source-safety-ledger validation is rejected", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const validation = validate(
+      runtimeTargetObservations(true),
+      base,
+      dischargeArtifact({ baselineRowId: rowId, targetLimitationRefs: ["structure_inspected_only"] }),
+      { validationStatus: "invalid" },
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "prior_validation_invalid"),
+    ).toBe(true);
+  });
+
+  it("canonical authorization ref: a non-canonical value_evidence_authorization_ref is rejected", () => {
+    const base = baselineWithLimitation(["structure_inspected_only"]);
+    const rowId = base.baseline_rows[0]!.baseline_row_id;
+    const validation = validate(
+      runtimeTargetObservations(true),
+      base,
+      dischargeArtifact({
+        baselineRowId: rowId,
+        targetLimitationRefs: ["structure_inspected_only"],
+        authorizationRef: "obs-runtime-target:evidence_support",
+      }),
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(
+      validation.violations.some((v) => v.code === "conflicting_state"),
+    ).toBe(true);
   });
 });
