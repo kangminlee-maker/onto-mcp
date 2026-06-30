@@ -13,10 +13,14 @@ export const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
   // deterministic per-payload SERIALIZED-SIZE budget; v5 (M2) derives that evidence reserve
   // from the WHOLE prompt budget per batch (= prompt_char_limit − measured non-evidence
   // payload − margin) instead of a static budget, so the evidence uses the room actually
-  // left under the 50K cap. Each version + contract change rotates the reuse-match hash so
-  // resume mode cannot reuse an assessment authored under a different (or content-blind,
-  // pre-v3) evidence projection of the same sources.
-  "competency_question_assessment_compact_projection:v5";
+  // left under the 50K cap. v6 scopes the claim_realization_map projection to each batch's
+  // linked claims (questions' linked_claim_ids) instead of embedding the WHOLE map in every
+  // batch — the whole-map fixed overhead grew unbounded with claim count and overflowed the
+  // 50K cap before M3 (a claim-count-dependent pre-dispatch hard stop). Each version +
+  // contract change rotates the reuse-match hash so resume mode cannot reuse an assessment
+  // authored under a different (or content-blind, pre-v3) evidence projection of the same
+  // sources — in particular a v5 assessment authored under the unscoped whole-map projection.
+  "competency_question_assessment_compact_projection:v6";
 export const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
 // Per-observation excerpt budget for the cited source-evidence bodies projected
 // into the assessment prompt, so answer_status is judged on evidence content
@@ -52,7 +56,7 @@ export function competencyQuestionAssessmentProjectionContract(): Record<string,
     validation_projection:
       "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
     claim_realization_projection:
-      "claim_id, stance, evidence observation ids, evidence source basenames, and compact rationale are prompt-visible",
+      "claim_id, stance, evidence observation ids, evidence source basenames, and compact rationale are prompt-visible, SCOPED to the batch's linked claims (union of the batch questions' linked_claim_ids); claim_realization_count retains the full map count and scoped_claim_realization_count surfaces the in-batch count, so a batch of zero-link (domain-competency) questions honestly shows an empty scoped list against the full count",
     runtime_derivations: [
       "required_seed_refs",
       "linked_claim_ids",
