@@ -10,17 +10,21 @@ import {
 import type { ComprehensionBoundaryWitness } from "./comprehension-artifact.js";
 import {
   ANCHOR_ROW_TOLERANCE,
+  accumulateSemanticMap,
   assertChildJudgmentCoverage,
   assertPreImageKeysAllowlisted,
   assertSemanticBoundaryHonesty,
+  assertSynthesisInputBounded,
   assertTaintCensusMonotone,
   computeUnanchoredUnverifiedCount,
   reconcileBoundaries,
   reduceNodeEpochContribution,
+  type AccumulateSemanticMapOpts,
   type ComprehensionSemanticNode,
   type RawSemanticBoundary,
   type SemanticBoundary,
   type SemanticEpochPreImage,
+  type SemanticSynthesisFn,
 } from "./comprehension-semantic-map.js";
 
 const SHEET = "누적";
@@ -401,5 +405,132 @@ describe("taint census (monotone)", () => {
     const child = semNode({ unanchored_unverified_count: 4 });
     const node = semNode({ unanchored_unverified_count: 1 });
     expect(() => assertTaintCensusMonotone(node, [child])).toThrow(/understated/);
+  });
+});
+
+// ── accumulateSemanticMap (S2 mock LLM E2E · §13.6/§13.8) ─────────────────────
+
+describe("accumulateSemanticMap (mock LLM realization)", () => {
+  const buildTree = () =>
+    reduceColumnLeavesWithTrace(
+      [
+        leaf(1, 10, "int", "int"),
+        leaf(11, 20, "text", "text"),
+        leaf(21, 30, "int", "int"),
+        leaf(31, 40, "text", "text"),
+        leaf(41, 50, "int", "int"),
+      ],
+      2,
+    );
+
+  // MOCK synthesize: one anchored boundary per real value-shape seam + one deliberately unanchored
+  // boundary at the region start (no seam there) so N3 (all-unanchored → adversarial) is exercised.
+  const synthesize: SemanticSynthesisFn = (input) => {
+    const boundaries: RawSemanticBoundary[] = input.value_shape_seams.map((s) => ({
+      row: s.row,
+      character_before: "seam-before",
+      character_after: "seam-after",
+    }));
+    boundaries.push({ row: input.node_ref.row_start, character_before: "u0", character_after: "u1" });
+    return {
+      semantic_summary: `[${input.node_ref.row_start}-${input.node_ref.row_end}] clusters=${input.format_clusters.join("/")} kids=${input.child_summaries.length}`,
+      boundaries,
+    };
+  };
+
+  // MOCK verify: refute the deeper unanchored boundaries (row > 15) so taint appears + propagates.
+  const opts = (seedBound: boolean): AccumulateSemanticMapOpts => ({
+    synthesize,
+    verifyUnanchored: ({ boundary }) => (boundary.row > 15 ? "adversarial_refuted" : "adversarial_confirmed"),
+    preImageBase: {
+      reduce_reader_model_identity: "mock/none",
+      reduce_prompt_sha256: "p",
+      reduce_schema_tool_version: "v1",
+      comprehension_version: "c1",
+      over_context_gate_config_sha256: "cfg",
+      over_context_gate_logic_sha256: "logic",
+    },
+    seedBound,
+  });
+
+  it("produces one validated semantic node per skeleton node (all validators pass)", () => {
+    const { trace, nodesByKey } = buildTree();
+    const map = accumulateSemanticMap(trace, nodesByKey, opts(true));
+    for (const key of trace.nodes.keys()) expect(map.has(key)).toBe(true);
+    expect(map.size).toBe(trace.nodes.size);
+    for (const node of map.values()) {
+      expect(node.authority).toBe("non_authoritative");
+      expect(node.consumed_child_judgment_keys).toEqual(node.topology_child_keys); // S2 accumulates all
+    }
+  });
+
+  it("N3: every unanchored boundary is adversarially processed — no 'unverified' survives", () => {
+    const { trace, nodesByKey } = buildTree();
+    const map = accumulateSemanticMap(trace, nodesByKey, opts(false));
+    for (const node of map.values()) {
+      for (const b of node.semantic_boundaries) {
+        if (b.anchor_status === "unanchored") expect(b.verification).not.toBe("unverified");
+        if (b.anchor_status === "anchored") expect(b.verification).toBe("structural_location_only");
+      }
+    }
+  });
+
+  it("seed-bound: refuted boundaries are EXCLUDED from the seed boundary list but counted in taint", () => {
+    const { trace, nodesByKey } = buildTree();
+    const map = accumulateSemanticMap(trace, nodesByKey, opts(true));
+    for (const node of map.values()) {
+      expect(node.semantic_boundaries.every((b) => b.verification !== "adversarial_refuted")).toBe(true);
+    }
+    const root = map.get(trace.root_key);
+    expect(root).toBeDefined();
+    // some deep unanchored boundaries were refuted (rows 21/31/41 > 15) → taint > 0 at the root.
+    expect(root!.unanchored_unverified_count).toBeGreaterThan(0);
+  });
+
+  it("non-seed: refuted boundaries are RETAINED for inspection", () => {
+    const { trace, nodesByKey } = buildTree();
+    const map = accumulateSemanticMap(trace, nodesByKey, opts(false));
+    const anyRefuted = [...map.values()].some((n) =>
+      n.semantic_boundaries.some((b) => b.verification === "adversarial_refuted"),
+    );
+    expect(anyRefuted).toBe(true);
+  });
+
+  it("taint census is monotone up the tree (root >= any child)", () => {
+    const { trace, nodesByKey } = buildTree();
+    const map = accumulateSemanticMap(trace, nodesByKey, opts(true));
+    const root = map.get(trace.root_key)!;
+    for (const childKey of trace.nodes.get(trace.root_key)!.child_keys) {
+      expect(root.unanchored_unverified_count).toBeGreaterThanOrEqual(map.get(childKey)!.unanchored_unverified_count);
+    }
+  });
+
+  it("recursive epoch contribution: changing one leaf's Layer-1 ground rotates the root contribution", () => {
+    const base = buildTree();
+    const baseRoot = accumulateSemanticMap(base.trace, base.nodesByKey, opts(true)).get(base.trace.root_key)!;
+    // Rebuild with one leaf's shape changed (different ground) — root epoch contribution must differ.
+    const changed = reduceColumnLeavesWithTrace(
+      [
+        leaf(1, 10, "int", "int"),
+        leaf(11, 20, "text", "text"),
+        leaf(21, 30, "num", "num"), // was "int"
+        leaf(31, 40, "text", "text"),
+        leaf(41, 50, "int", "int"),
+      ],
+      2,
+    );
+    const changedRoot = accumulateSemanticMap(changed.trace, changed.nodesByKey, opts(true)).get(changed.trace.root_key)!;
+    expect(changedRoot.subtree_epoch_contribution).not.toBe(baseRoot.subtree_epoch_contribution);
+  });
+
+  it("source-safety: assertSynthesisInputBounded rejects a non-string summary (accidental raw value)", () => {
+    expect(() =>
+      assertSynthesisInputBounded({
+        node_ref: { sheet: SHEET, column_index: COL, row_start: 1, row_end: 10 },
+        format_clusters: ["int"],
+        value_shape_seams: [],
+        child_summaries: [{ key: "k", summary: 42 as unknown as string }],
+      }),
+    ).toThrow(/source-safe/);
   });
 });

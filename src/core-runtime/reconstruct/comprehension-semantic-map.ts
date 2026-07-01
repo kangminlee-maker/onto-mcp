@@ -3,6 +3,7 @@ import {
   reduceNodeKey,
   type ComprehensionReduceNode,
   type ComprehensionReduceRegion,
+  type ReduceTopologyTrace,
   type SemanticNodeKey,
 } from "./comprehension-reduce.js";
 import type { ComprehensionBoundaryWitness } from "./comprehension-artifact.js";
@@ -355,4 +356,153 @@ export function assertTaintCensusMonotone(
       `comprehension-semantic-map: taint census understated at ${reduceNodeKey(node.node_ref)} — ${node.unanchored_unverified_count} < ${expectedMin} (parent may not understate children + own unverified; §13.5 N6).`,
     );
   }
+}
+
+// ── S2 accumulation engine (mock/real caller-injected · design §13.6 / §13.8) ─────────────────────
+//
+// accumulateSemanticMap walks the deterministic ReduceTopologyTrace BOTTOM-UP and, at each node,
+// synthesizes the children's judgments + this node's Layer-1 facts into a semantic judgment, then
+// classifies it deterministically. The LLM interaction is CALLER-INJECTED (SemanticSynthesisFn +
+// AdversarialVerifyFn) — mock in tests, real authoring in production — mirroring the realization-
+// agnostic leaf-reader. The over-context FRONTIER (which nodes accumulate vs are subsumed) is a later
+// cut (S3); S2 accumulates EVERY node, so consumed_child_judgment_keys == topology_child_keys.
+
+/** Bounded, SOURCE-SAFE input for the synthesis at one node (design §13.6 envelope): Layer-1
+ *  deterministic facts + children's LLM summaries only. NO raw cell values / formatCodes / examples
+ *  (leaf-reader.ts:26-32 discipline, extended to interior nodes). */
+export interface SemanticSynthesisInput {
+  node_ref: ComprehensionReduceRegion;
+  format_clusters: string[];
+  value_shape_seams: { row: number; prev_shape: string; new_shape: string }[];
+  child_summaries: { key: SemanticNodeKey; summary: string }[];
+}
+
+/** The LLM's raw synthesis output at a node (before deterministic classification). */
+export interface SemanticSynthesisOutput {
+  semantic_summary: string;
+  boundaries: RawSemanticBoundary[];
+}
+
+/** Caller-injected synthesis (mock in tests, real authoring in production). Realization-agnostic. */
+export type SemanticSynthesisFn = (input: SemanticSynthesisInput) => SemanticSynthesisOutput;
+
+/** Caller-injected adversarial verifier for ONE unanchored boundary (N3: ALL unanchored are verified —
+ *  it is the only check where structure is blind). An INDEPENDENT lens (distinct prompt/model in
+ *  production). Returns confirmed | refuted. */
+export type AdversarialVerifyFn = (input: {
+  node_ref: ComprehensionReduceRegion;
+  boundary: SemanticBoundary;
+  summary: string;
+}) => "adversarial_confirmed" | "adversarial_refuted";
+
+export interface AccumulateSemanticMapOpts {
+  synthesize: SemanticSynthesisFn;
+  /** Verifies every unanchored boundary (N3). */
+  verifyUnanchored: AdversarialVerifyFn;
+  /** The ⓑ' pre-image fields common to the epoch (per-node layer1_ground_hash + child_contributions
+   *  are filled in by the walk). */
+  preImageBase: Omit<SemanticEpochPreImage, "layer1_ground_hash" | "child_contributions">;
+  /** When true, produced nodes are seed-bound: refuted boundaries are EXCLUDED from the seed boundary
+   *  list (kept in the taint census + a refuted disclosure), and honesty is enforced for seed. */
+  seedBound?: boolean;
+}
+
+const VALUE_SHAPE_KIND = "value_shape" as const;
+
+/** SOURCE-SAFETY guard (§13.6 / C6): the synthesis input must carry only bounded deterministic facts +
+ *  child summary prose — never a raw cell value / formatCode / example. By construction the builder
+ *  only pulls safe fields; this asserts the shape so an accidental enrichment fails closed. */
+export function assertSynthesisInputBounded(input: SemanticSynthesisInput): void {
+  for (const c of input.child_summaries) {
+    if (typeof c.summary !== "string") {
+      throw new Error("comprehension-semantic-map: synthesis child summary must be a string (§13.6 source-safe envelope).");
+    }
+  }
+  for (const s of input.value_shape_seams) {
+    if (typeof s.row !== "number" || typeof s.prev_shape !== "string" || typeof s.new_shape !== "string") {
+      throw new Error("comprehension-semantic-map: synthesis seam must be {row:number, prev_shape:string, new_shape:string} — no raw values (§13.6).");
+    }
+  }
+}
+
+/** Walk the trace bottom-up, producing one validated ComprehensionSemanticNode per skeleton node. Each
+ *  node: synthesize (caller LLM) → reconcileBoundaries (deterministic anchor/coverage) → verify EVERY
+ *  unanchored boundary (N3) → recursive epoch contribution → taint census → assemble, with all three
+ *  fail-closed validators enforced. Deterministic given a deterministic synthesize/verify (the mock). */
+export function accumulateSemanticMap(
+  trace: ReduceTopologyTrace,
+  nodesByKey: ReadonlyMap<SemanticNodeKey, ComprehensionReduceNode>,
+  opts: AccumulateSemanticMapOpts,
+): Map<SemanticNodeKey, ComprehensionSemanticNode> {
+  const result = new Map<SemanticNodeKey, ComprehensionSemanticNode>();
+  const seedBound = opts.seedBound ?? false;
+
+  const visit = (key: SemanticNodeKey): ComprehensionSemanticNode => {
+    const cached = result.get(key);
+    if (cached) return cached;
+    const tnode = trace.nodes.get(key);
+    const reduceNode = nodesByKey.get(key);
+    if (!tnode || !reduceNode) {
+      throw new Error(`comprehension-semantic-map: trace/node missing for key ${key} (accumulate walk).`);
+    }
+    const children = tnode.child_keys.map(visit); // bottom-up: children first.
+
+    const input: SemanticSynthesisInput = {
+      node_ref: tnode.node_ref,
+      format_clusters: [...reduceNode.format_clusters],
+      value_shape_seams: reduceNode.boundaries
+        .filter((b) => b.boundary_kind === VALUE_SHAPE_KIND)
+        .map((b) => ({ row: b.first_new_format_row, prev_shape: b.prev_shape, new_shape: b.new_shape })),
+      child_summaries: children.map((c) => ({ key: reduceNodeKey(c.node_ref), summary: c.semantic_summary })),
+    };
+    assertSynthesisInputBounded(input);
+    const out = opts.synthesize(input);
+
+    const { boundaries: classified, coverage } = reconcileBoundaries(out.boundaries, reduceNode);
+    // N3: verify EVERY unanchored boundary (structure is blind there). Anchored stay location-only.
+    const verified: SemanticBoundary[] = classified.map((b) =>
+      b.anchor_status === "unanchored"
+        ? { ...b, verification: opts.verifyUnanchored({ node_ref: tnode.node_ref, boundary: b, summary: out.semantic_summary }) }
+        : b,
+    );
+    const refutedCount = verified.filter((b) => b.verification === "adversarial_refuted").length;
+    // Seed-bound: refuted boundaries are EXCLUDED from the seed boundary list (codex-F2) — counted in
+    // taint below. Non-seed: kept for inspection (still counted in taint via ownUnverifiedCount).
+    const keptBoundaries = seedBound ? verified.filter((b) => b.verification !== "adversarial_refuted") : verified;
+
+    const preImage: SemanticEpochPreImage = {
+      ...opts.preImageBase,
+      layer1_ground_hash: tnode.ground_hash,
+      child_contributions: children.map((c) => c.subtree_epoch_contribution),
+    };
+
+    const node: ComprehensionSemanticNode = {
+      node_ref: tnode.node_ref,
+      layer1_ground_hash: tnode.ground_hash,
+      subtree_epoch_contribution: reduceNodeEpochContribution(preImage),
+      authority: "non_authoritative",
+      provisional: true,
+      reduce_read_attempt: "produced",
+      semantic_summary: out.semantic_summary,
+      semantic_boundaries: keptBoundaries,
+      structure_boundary_coverage: coverage,
+      topology_child_keys: tnode.child_keys,
+      consumed_child_judgment_keys: tnode.child_keys, // S2: every node accumulates (frontier = S3).
+      unanchored_unverified_count: 0,
+    };
+    // Taint = children + own remaining unverified boundaries + any refuted removed for seed.
+    node.unanchored_unverified_count =
+      computeUnanchoredUnverifiedCount(node, children) + (seedBound ? refutedCount : 0);
+
+    // Fail-closed validators (§13.5).
+    assertChildJudgmentCoverage(node, tnode.child_keys);
+    assertSemanticBoundaryHonesty(node, seedBound);
+    assertTaintCensusMonotone(node, children);
+
+    result.set(key, node);
+    return node;
+  };
+
+  visit(trace.root_key);
+  return result;
 }
