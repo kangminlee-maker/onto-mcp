@@ -331,6 +331,91 @@ export function reduceColumnLeaves(
   return root;
 }
 
+// ── ReduceTopologyTrace (Layer-2 §13.1) — the ADDITIVE, non-ground tree the Layer-2 accumulated
+// semantic channel attaches to. `reduceColumnLeaves` folds to a single root and DISCARDS interior
+// nodes; the semantic channel needs a navigable node_ref → child_keys map to walk bottom-up and to
+// compute the recursive epoch contribution. This trace is emitted ALONGSIDE the same fold, changing
+// NO ground bytes (`reduceNodeGround`/`reduceColumnLeaves` outputs are byte-identical), so "Layer-1 is
+// untouched" holds (design §13.1 / §2.1). It is LLM-free.
+
+/** Deterministic identity of a reduce node = `${sheet}#${column_index}:${row_start}-${row_end}`. Same
+ *  key space the Layer-2 semantic map uses (grep-findable; one node ⇒ one key). */
+export type SemanticNodeKey = string;
+
+export function reduceNodeKey(region: ComprehensionReduceRegion): SemanticNodeKey {
+  return `${region.sheet}#${region.column_index}:${region.row_start}-${region.row_end}`;
+}
+
+export interface ReduceTopologyTraceNode {
+  node_ref: ComprehensionReduceRegion;
+  ground_hash: string;
+  /** Direct structural children (empty for a leaf). A pass-through node is NOT a distinct node — the
+   *  same node object flows up a level, so it appears once with its original child_keys. */
+  child_keys: SemanticNodeKey[];
+}
+
+export interface ReduceTopologyTrace {
+  nodes: Map<SemanticNodeKey, ReduceTopologyTraceNode>;
+  root_key: SemanticNodeKey;
+}
+
+/** Same fold as `reduceColumnLeaves`, additionally recording a `ReduceTopologyTrace` and the actual
+ *  `nodesByKey` (needed by the Layer-2 accumulation to reconcile each node's value-shape seams —
+ *  §13.2). The returned `root` is BYTE-IDENTICAL to `reduceColumnLeaves(leaves, fanin)` (byte-parity,
+ *  tested). The trace registers EVERY node — all leaves up front, then each merge output — so its node
+ *  set equals the distinct skeleton nodes (design §13.1 codex-F4: registering only merge outputs would
+ *  drop leaves and pass-through nodes). A row GROUP of size 1 is a pass-through (identity): the
+ *  already-registered node flows up unchanged, so no new node is created. */
+export function reduceColumnLeavesWithTrace(
+  leaves: ComprehensionReduceNode[],
+  fanin?: number,
+): {
+  root: ComprehensionReduceNode;
+  trace: ReduceTopologyTrace;
+  nodesByKey: Map<SemanticNodeKey, ComprehensionReduceNode>;
+} {
+  const only = leaves[0];
+  if (!only) throw new Error("comprehension-reduce: no leaves");
+  const nodes = new Map<SemanticNodeKey, ReduceTopologyTraceNode>();
+  const nodesByKey = new Map<SemanticNodeKey, ComprehensionReduceNode>();
+  const register = (node: ComprehensionReduceNode, childKeys: SemanticNodeKey[]): SemanticNodeKey => {
+    const r = node.region;
+    const key = reduceNodeKey(r);
+    nodes.set(key, {
+      node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
+      ground_hash: reduceNodeGroundHash(node),
+      child_keys: childKeys,
+    });
+    nodesByKey.set(key, node);
+    return key;
+  };
+  // Register every leaf FIRST (F4): leaves and pass-through nodes never go through mergeReduceNodes.
+  for (const leaf of leaves) register(leaf, []);
+  if (leaves.length === 1) {
+    return { root: only, trace: { nodes, root_key: reduceNodeKey(only.region) }, nodesByKey };
+  }
+  const f = fanin && fanin >= 2 ? fanin : leaves.length;
+  let level = sortCanonical(leaves);
+  while (level.length > 1) {
+    const next: ComprehensionReduceNode[] = [];
+    for (let i = 0; i < level.length; i += f) {
+      const group = level.slice(i, i + f);
+      const single = group[0];
+      if (group.length === 1 && single) {
+        next.push(single); // pass-through — already registered; identity, no new node.
+        continue;
+      }
+      const parent = mergeReduceNodes(group);
+      register(parent, group.map((c) => reduceNodeKey(c.region)));
+      next.push(parent);
+    }
+    level = next;
+  }
+  const root = level[0];
+  if (!root) throw new Error("comprehension-reduce: empty tree (unreachable)");
+  return { root, trace: { nodes, root_key: reduceNodeKey(root.region) }, nodesByKey };
+}
+
 // ── leaf construction from real value tiles (LLM-free) ────────────────────────
 
 const VALUE_SHAPE = "value_shape" as const;
