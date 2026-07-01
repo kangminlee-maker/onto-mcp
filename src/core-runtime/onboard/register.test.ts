@@ -6,6 +6,7 @@ import {
   type CommandRunner,
   type CommandRun,
 } from "./cli-host.js";
+import { getDefaultHostTargets } from "./host-target.js";
 import {
   type ApplyResult,
   type HostId,
@@ -117,6 +118,93 @@ describe("runRegister — orchestration", () => {
     const code = await runRegister(["--list"], { targets: [t], isTty: false });
     expect(code).toBe(0);
     expect(t.applied).toBe(0);
+  });
+});
+
+describe("parseRegisterArgs — multi-profile flag", () => {
+  it("defaults allClaudeProfiles to false", () => {
+    expect(parseRegisterArgs([]).allClaudeProfiles).toBe(false);
+  });
+
+  it("parses --all-claude-profiles", () => {
+    expect(parseRegisterArgs(["--all-claude-profiles"]).allClaudeProfiles).toBe(true);
+  });
+});
+
+describe("getDefaultHostTargets — claude profiles", () => {
+  it("expands one Claude Code target per profile with distinct keys", () => {
+    const targets = getDefaultHostTargets({
+      claudeProfiles: ["/home/u/.claude", "/home/u/.claude-1"],
+    });
+    const claude = targets.filter((t) => t.id === "claude-code");
+    expect(claude).toHaveLength(2);
+    expect(claude.map((t) => t.key)).toEqual([
+      "claude-code:/home/u/.claude",
+      "claude-code:/home/u/.claude-1",
+    ]);
+    expect(claude.map((t) => t.displayName)).toEqual([
+      "Claude Code (/home/u/.claude)",
+      "Claude Code (/home/u/.claude-1)",
+    ]);
+    // Codex + the two JSON-config hosts still follow the expanded Claude targets.
+    expect(targets.map((t) => t.id)).toEqual([
+      "claude-code",
+      "claude-code",
+      "codex",
+      "claude-desktop",
+      "cursor",
+    ]);
+  });
+
+  it("falls back to a single Claude Code target when no profiles are given", () => {
+    const targets = getDefaultHostTargets({});
+    expect(targets.filter((t) => t.id === "claude-code")).toHaveLength(1);
+  });
+});
+
+describe("runRegister — multi-profile", () => {
+  it("rejects --all-claude-profiles together with --claude-config-dir", async () => {
+    const code = await runRegister(
+      [
+        "--all-claude-profiles",
+        "--claude-config-dir",
+        "/x",
+        "--hosts",
+        "claude-code",
+        "--yes",
+      ],
+      { targets: [fakeTarget("claude-code", "Claude Code")], isTty: false },
+    );
+    expect(code).toBe(1);
+  });
+
+  it("expands a Claude Code target per discovered profile (via --list)", async () => {
+    const calls: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      calls.push(args.map(String).join(" "));
+    });
+    const code = await runRegister(["--all-claude-profiles", "--list"], {
+      isTty: false,
+      discoverClaudeProfiles: () => ["/home/u/.claude", "/home/u/.claude-1"],
+    });
+    spy.mockRestore();
+    expect(code).toBe(0);
+    const text = calls.join("\n");
+    expect(text.match(/Claude Code \(/g) ?? []).toHaveLength(2);
+  });
+
+  it("--hosts claude-code selects every expanded profile target", async () => {
+    const a = fakeTarget("claude-code", "Claude Code (.claude)");
+    const b = fakeTarget("claude-code", "Claude Code (.claude-1)");
+    const codex = fakeTarget("codex", "Codex CLI");
+    const code = await runRegister(["--hosts", "claude-code", "--yes"], {
+      targets: [a, b, codex],
+      isTty: false,
+    });
+    expect(code).toBe(0);
+    expect(a.applied).toBe(1);
+    expect(b.applied).toBe(1);
+    expect(codex.applied).toBe(0);
   });
 });
 

@@ -55,7 +55,19 @@ only host-owned config; it never writes onto runtime data. Override the
 launched command or server name with `--command <cmd>` / `--name <id>`.
 
 **Claude Code profiles.** Claude Code stores MCP servers per config directory
-(`CLAUDE_CONFIG_DIR`). If you run multiple profiles, target one explicitly:
+(`CLAUDE_CONFIG_DIR`). To register every profile in one command, let `onto`
+discover them — it scans `~/.claude` and `~/.claude-*` for real config dirs
+(those carrying `settings.json`, `.credentials.json`, `.claude.json`, or
+`projects/`) plus any ambient `CLAUDE_CONFIG_DIR`, and registers each:
+
+```bash
+onto register --hosts claude-code --all-claude-profiles --yes  # every profile
+onto register --all --all-claude-profiles --yes                # profiles + other hosts
+onto register --all-claude-profiles --list                     # preview discovered profiles
+```
+
+To target a single profile instead, name it explicitly (mutually exclusive with
+`--all-claude-profiles`):
 
 ```bash
 onto register --hosts claude-code --claude-config-dir ~/.claude-1 --yes

@@ -8,6 +8,7 @@ import {
   type RegistrationEntry,
 } from "./types.js";
 import { getDefaultHostTargets } from "./host-target.js";
+import { discoverClaudeProfiles } from "./claude-profile-scan.js";
 import { promptMultiSelect, promptYesNo } from "./prompt.js";
 
 /**
@@ -27,6 +28,7 @@ export interface ParsedRegisterArgs {
   name: string;
   command: string;
   claudeConfigDir: string | undefined;
+  allClaudeProfiles: boolean;
   unknownFlags: string[];
   invalidHosts: string[];
 }
@@ -50,6 +52,9 @@ const USAGE = [
   "  --command <cmd>    Executable the host launches (default: onto)",
   "  --claude-config-dir <path>  Target a Claude Code profile (sets",
   "                     CLAUDE_CONFIG_DIR; default: ambient env or ~/.claude)",
+  "  --all-claude-profiles  Auto-discover every Claude Code config dir under",
+  "                     home (~/.claude and ~/.claude-*) and register each",
+  "                     (mutually exclusive with --claude-config-dir)",
   "  --help, -h         Show this help",
 ].join("\n");
 
@@ -64,6 +69,7 @@ export function parseRegisterArgs(argv: string[]): ParsedRegisterArgs {
     name: "onto",
     command: "onto",
     claudeConfigDir: undefined,
+    allClaudeProfiles: false,
     unknownFlags: [],
     invalidHosts: [],
   };
@@ -113,6 +119,9 @@ export function parseRegisterArgs(argv: string[]): ParsedRegisterArgs {
       case "--claude-config-dir":
         parsed.claudeConfigDir = argv[++i] ?? parsed.claudeConfigDir;
         break;
+      case "--all-claude-profiles":
+        parsed.allClaudeProfiles = true;
+        break;
       default:
         parsed.unknownFlags.push(arg);
         break;
@@ -122,14 +131,23 @@ export function parseRegisterArgs(argv: string[]): ParsedRegisterArgs {
   return parsed;
 }
 
-function resolveSelection(
+/** Unique selection identity for a target (host *instance*, not just kind). */
+function targetKey(target: HostTarget): string {
+  return target.key ?? target.id;
+}
+
+/**
+ * Flag-driven selection by host *kind* (`id`). `--hosts claude-code` therefore
+ * selects every Claude Code profile target when several are expanded.
+ */
+function resolveSelectedTargets(
   parsed: ParsedRegisterArgs,
   targets: HostTarget[],
-): HostId[] {
-  if (parsed.hosts === "all") return targets.map((t) => t.id);
+): HostTarget[] {
+  if (parsed.hosts === "all") return targets;
   if (Array.isArray(parsed.hosts)) {
     const requested = new Set(parsed.hosts);
-    return targets.map((t) => t.id).filter((id) => requested.has(id));
+    return targets.filter((t) => requested.has(t.id));
   }
   return [];
 }
@@ -163,6 +181,40 @@ function printResults(results: ApplyResult[]): void {
 export interface RunRegisterDeps {
   targets?: HostTarget[];
   isTty?: boolean;
+  /** Override Claude profile discovery (defaults to scanning the home dir). */
+  discoverClaudeProfiles?: () => string[];
+}
+
+/**
+ * Build the default host targets honoring profile flags. When
+ * `--all-claude-profiles` is set, discover every Claude Code config dir under
+ * home and expand Claude Code into one target per profile; if none are found,
+ * fall back to the single default target with a note.
+ */
+function buildDefaultTargets(
+  parsed: ParsedRegisterArgs,
+  deps: RunRegisterDeps,
+): HostTarget[] {
+  if (parsed.allClaudeProfiles) {
+    const discover =
+      deps.discoverClaudeProfiles ??
+      (() => {
+        const env = process.env.CLAUDE_CONFIG_DIR;
+        return discoverClaudeProfiles(env ? { configDirEnv: env } : {});
+      });
+    const profiles = discover();
+    if (profiles.length > 0) {
+      return getDefaultHostTargets({ claudeProfiles: profiles });
+    }
+    console.error(
+      "[onto register] --all-claude-profiles: no Claude Code config dirs found " +
+        "under home; falling back to the default profile.",
+    );
+    return getDefaultHostTargets({});
+  }
+  return getDefaultHostTargets(
+    parsed.claudeConfigDir ? { claudeConfigDir: parsed.claudeConfigDir } : {},
+  );
 }
 
 export async function runRegister(
@@ -186,12 +238,15 @@ export async function runRegister(
     );
     return 1;
   }
-
-  const targets =
-    deps.targets ??
-    getDefaultHostTargets(
-      parsed.claudeConfigDir ? { claudeConfigDir: parsed.claudeConfigDir } : {},
+  if (parsed.allClaudeProfiles && parsed.claudeConfigDir) {
+    console.error(
+      "[onto register] Use either --all-claude-profiles or --claude-config-dir, " +
+        "not both.",
     );
+    return 1;
+  }
+
+  const targets = deps.targets ?? buildDefaultTargets(parsed, deps);
   const isTty = deps.isTty ?? Boolean(process.stdin.isTTY);
 
   if (parsed.list) {
@@ -209,7 +264,7 @@ export async function runRegister(
   };
 
   // Determine which hosts to register.
-  let selected = resolveSelection(parsed, targets);
+  let selectedTargets = resolveSelectedTargets(parsed, targets);
   const selectionGivenByFlag = parsed.hosts !== undefined;
 
   if (!selectionGivenByFlag) {
@@ -220,25 +275,23 @@ export async function runRegister(
       );
       return 1;
     }
-    const defaults = targets.filter((t) => t.detect() !== "absent").map((t) => t.id);
+    const defaults = targets.filter((t) => t.detect() !== "absent").map(targetKey);
     const chosen = await promptMultiSelect(
       "Select hosts to register onto with:",
       targets.map((t) => ({
-        id: t.id,
+        id: targetKey(t),
         label: t.displayName,
         detail: detectionLabel(t.detect()),
       })),
-      defaults.length > 0 ? defaults : targets.map((t) => t.id),
+      defaults.length > 0 ? defaults : targets.map(targetKey),
     );
-    selected = targets.map((t) => t.id).filter((id) => chosen.includes(id));
+    selectedTargets = targets.filter((t) => chosen.includes(targetKey(t)));
   }
 
-  if (selected.length === 0) {
+  if (selectedTargets.length === 0) {
     console.error("[onto register] No hosts selected. Nothing to do.");
     return 1;
   }
-
-  const selectedTargets = targets.filter((t) => selected.includes(t.id));
   const options: RegisterOptions = { force: parsed.force, dryRun: parsed.dryRun };
   const plans = selectedTargets.map((t) => t.plan(entry, options));
   printPlans(plans);

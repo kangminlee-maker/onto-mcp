@@ -64,6 +64,8 @@ export const defaultCommandRunner: CommandRunner = {
 
 export interface CliHostSpec {
   id: HostId;
+  /** Unique selection identity (defaults to `id`); distinguishes profile instances. */
+  key?: string;
   displayName: string;
   /** The CLI executable name, e.g. `claude` or `codex`. */
   cli: string;
@@ -112,6 +114,7 @@ export function createCliHost(
 
   return {
     id: spec.id,
+    ...(spec.key ? { key: spec.key } : {}),
     displayName: spec.displayName,
     detect,
     plan(entry: RegistrationEntry): HostPlan {
@@ -197,6 +200,10 @@ export function createCliHost(
 export interface ClaudeCodeHostOptions {
   /** Target a specific Claude Code profile by config dir (CLAUDE_CONFIG_DIR). */
   configDir?: string;
+  /** Unique selection key; set when several profiles are registered at once. */
+  key?: string;
+  /** Display label override (e.g. "Claude Code (~/.claude-2)"). */
+  displayName?: string;
   runner?: CommandRunner;
 }
 
@@ -205,13 +212,15 @@ export interface ClaudeCodeHostOptions {
  *
  * Config-dir resolution: explicit `configDir` wins; otherwise an ambient
  * `CLAUDE_CONFIG_DIR` is honored (and shown in the plan); otherwise the claude
- * default (`~/.claude`) applies.
+ * default (`~/.claude`) applies. `key`/`displayName` distinguish per-profile
+ * targets when `--all-claude-profiles` registers several at once.
  */
 export function createClaudeCodeHost(options: ClaudeCodeHostOptions = {}): HostTarget {
   const effectiveDir = options.configDir ?? process.env.CLAUDE_CONFIG_DIR;
   const spec: CliHostSpec = {
     id: "claude-code",
-    displayName: "Claude Code",
+    ...(options.key ? { key: options.key } : {}),
+    displayName: options.displayName ?? "Claude Code",
     cli: "claude",
     addArgs: (entry) => [
       "mcp",
