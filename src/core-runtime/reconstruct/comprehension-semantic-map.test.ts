@@ -302,7 +302,7 @@ describe("assertPreImageKeysAllowlisted (fail-closed allowlist)", () => {
   it("NEGATIVE CONTROL: a missing required key throws", () => {
     const bad: Record<string, unknown> = { ...preImage() };
     delete bad.reduce_prompt_sha256;
-    expect(() => assertPreImageKeysAllowlisted(bad)).toThrow(/missing required key/);
+    expect(() => assertPreImageKeysAllowlisted(bad)).toThrow(/missing OWN required key/);
   });
 
   it("NEGATIVE CONTROL: a nested object smuggled into a string field throws (codex nested guard)", () => {
@@ -532,5 +532,143 @@ describe("accumulateSemanticMap (mock LLM realization)", () => {
         child_summaries: [{ key: "k", summary: 42 as unknown as string }],
       }),
     ).toThrow(/source-safe/);
+  });
+});
+
+// ── adversarial fail-closed hardening (S1+S2 CODE cross-validation, codex + onto, F1–F8) ──────────
+// These are the MALFORMED/adversarial inputs the original by-construction tests did NOT exercise — the
+// exact gap the two-family code review surfaced (a test can encode the same wrong assumption as the
+// code). Each asserts a guard now FAILS CLOSED where it previously failed open.
+
+describe("adversarial fail-closed hardening", () => {
+  const okInput = () => ({
+    node_ref: { sheet: SHEET, column_index: COL, row_start: 1, row_end: 10 },
+    format_clusters: ["int"] as string[],
+    value_shape_seams: [] as { row: number; prev_shape: string; new_shape: string }[],
+    child_summaries: [] as { key: string; summary: string }[],
+  });
+
+  it("F1: a raw object smuggled into format_clusters fails closed", () => {
+    const bad = okInput();
+    (bad.format_clusters as unknown[]).push({ raw_value: "alice@example.com" });
+    expect(() => assertSynthesisInputBounded(bad)).toThrow(/format_clusters must be string/);
+  });
+
+  it("F1: an EXTRA field on the synthesis input fails closed", () => {
+    const bad = { ...okInput(), examples: ["2026-07-01"] } as unknown;
+    expect(() => assertSynthesisInputBounded(bad as never)).toThrow(/unexpected field 'examples'/);
+  });
+
+  it("F1: an extra key on a seam fails closed", () => {
+    const bad = okInput();
+    (bad.value_shape_seams as unknown[]).push({ row: 5, prev_shape: "a", new_shape: "b", raw: "x" });
+    expect(() => assertSynthesisInputBounded(bad)).toThrow(/unexpected field 'raw'/);
+  });
+
+  it("F2: an unknown verification value fails closed (state machine is total)", () => {
+    const node = semNode({ semantic_boundaries: [bound("unanchored", "bogus_status" as never)] });
+    expect(() => assertSemanticBoundaryHonesty(node, false)).toThrow(/unknown verification/);
+  });
+
+  it("F2: an unknown anchor_status fails closed", () => {
+    const node = semNode({ semantic_boundaries: [bound("sideways" as never, "unverified")] });
+    expect(() => assertSemanticBoundaryHonesty(node, false)).toThrow(/unknown anchor_status/);
+  });
+
+  it("F2: accumulate rejects a bogus verifyUnanchored return", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int")]);
+    const opts: AccumulateSemanticMapOpts = {
+      synthesize: () => ({ semantic_summary: "s", boundaries: [{ row: 1, character_before: "a", character_after: "b" }] }),
+      verifyUnanchored: () => "bogus" as never,
+      preImageBase: {
+        reduce_reader_model_identity: "m",
+        reduce_prompt_sha256: "p",
+        reduce_schema_tool_version: "v",
+        comprehension_version: "c",
+        over_context_gate_config_sha256: "cfg",
+        over_context_gate_logic_sha256: "logic",
+      },
+      seedBound: true,
+    };
+    expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/verifyUnanchored returned invalid/);
+  });
+
+  it("F3: an inherited-only pre-image (Object.create) fails closed", () => {
+    const proto = preImage();
+    const inherited = Object.create(proto) as Record<string, unknown>; // no OWN keys
+    expect(() => assertPreImageKeysAllowlisted(inherited)).toThrow(/missing OWN required key/);
+  });
+
+  it("F5: a cyclic trace fails closed (no stack overflow)", () => {
+    const a = leaf(1, 10, "int", "int");
+    const b = leaf(11, 20, "int", "int");
+    const ka = reduceNodeKey(a.region);
+    const kb = reduceNodeKey(b.region);
+    const trace = {
+      root_key: ka,
+      nodes: new Map([
+        [ka, { node_ref: a.region, ground_hash: reduceNodeGroundHash(a), child_keys: [kb] }],
+        [kb, { node_ref: b.region, ground_hash: reduceNodeGroundHash(b), child_keys: [ka] }],
+      ]),
+    };
+    const nodesByKey = new Map([
+      [ka, a],
+      [kb, b],
+    ]);
+    const opts: AccumulateSemanticMapOpts = {
+      synthesize: () => ({ semantic_summary: "s", boundaries: [] }),
+      verifyUnanchored: () => "adversarial_confirmed",
+      preImageBase: {
+        reduce_reader_model_identity: "m",
+        reduce_prompt_sha256: "p",
+        reduce_schema_tool_version: "v",
+        comprehension_version: "c",
+        over_context_gate_config_sha256: "cfg",
+        over_context_gate_logic_sha256: "logic",
+      },
+    };
+    expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/cycle in reduce topology/);
+  });
+
+  it("F5: an orphan trace node (unreachable from root) fails closed", () => {
+    const a = leaf(1, 10, "int", "int");
+    const orphan = leaf(11, 20, "int", "int");
+    const ka = reduceNodeKey(a.region);
+    const ko = reduceNodeKey(orphan.region);
+    const trace = {
+      root_key: ka,
+      nodes: new Map([
+        [ka, { node_ref: a.region, ground_hash: reduceNodeGroundHash(a), child_keys: [] }],
+        [ko, { node_ref: orphan.region, ground_hash: reduceNodeGroundHash(orphan), child_keys: [] }],
+      ]),
+    };
+    const nodesByKey = new Map([
+      [ka, a],
+      [ko, orphan],
+    ]);
+    const opts: AccumulateSemanticMapOpts = {
+      synthesize: () => ({ semantic_summary: "s", boundaries: [] }),
+      verifyUnanchored: () => "adversarial_confirmed",
+      preImageBase: {
+        reduce_reader_model_identity: "m",
+        reduce_prompt_sha256: "p",
+        reduce_schema_tool_version: "v",
+        comprehension_version: "c",
+        over_context_gate_config_sha256: "cfg",
+        over_context_gate_logic_sha256: "logic",
+      },
+    };
+    expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/unreachable from root/);
+  });
+
+  it("F6: a NaN taint count fails closed", () => {
+    const child = semNode({ unanchored_unverified_count: Number.NaN });
+    const node = semNode({ unanchored_unverified_count: 0 });
+    expect(() => assertTaintCensusMonotone(node, [child])).toThrow(/non-negative safe integer/);
+  });
+
+  it("F8: a duplicate consumed child-judgment key fails closed", () => {
+    const node = semNode({ consumed_child_judgment_keys: ["k1", "k1"] });
+    expect(() => assertChildJudgmentCoverage(node, ["k1"])).toThrow(/duplicate consumed/);
   });
 });

@@ -99,11 +99,26 @@ export const ANCHOR_ROW_TOLERANCE = 1;
 
 const cmpStr = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
 
-/** Canonical total order over value-shape seams (deterministic iteration + tie-break). */
+/** Legal enum surfaces — the honesty validator is TOTAL over these (a value outside them is malformed
+ *  and fails closed; review F2 / onto issue-001/007/009/014). */
+const VALID_ANCHOR_STATUS = new Set<string>(["anchored", "unanchored"]);
+const VALID_VERIFICATION = new Set<string>([
+  "structural_location_only",
+  "unverified",
+  "adversarial_confirmed",
+  "adversarial_refuted",
+]);
+const VALID_ADVERSARIAL_RESULT = new Set<string>(["adversarial_confirmed", "adversarial_refuted"]);
+
+/** Canonical TOTAL order over value-shape seams (full witness tuple so equal-row seams from different
+ *  provenance never tie by input order; review F7 — mirrors comprehension-reduce canonicalBoundaries). */
 function seamCmp(a: ComprehensionBoundaryWitness, b: ComprehensionBoundaryWitness): number {
   return (
+    cmpStr(a.sheet, b.sheet) ||
+    a.column_index - b.column_index ||
     a.first_new_format_row - b.first_new_format_row ||
     a.last_prev_format_row - b.last_prev_format_row ||
+    cmpStr(a.boundary_kind, b.boundary_kind) ||
     cmpStr(a.prev_shape, b.prev_shape) ||
     cmpStr(a.new_shape, b.new_shape)
   );
@@ -226,8 +241,11 @@ export function assertPreImageKeysAllowlisted(pre: Record<string, unknown>): voi
     }
   }
   for (const k of SEMANTIC_EPOCH_PREIMAGE_ALLOWLIST) {
-    if (!(k in pre)) {
-      throw new Error(`comprehension-semantic-map: epoch pre-image missing required key '${k}' (§13.4).`);
+    // OWN key only (review F3 / onto issue-002/005/006/…): `k in pre` accepts an INHERITED field, but
+    // the canonical spread/stableJson hashes OWN keys only — so a prototype-backed pre-image would pass
+    // validation while its required deterministic fields silently drop from the contribution key.
+    if (!Object.hasOwn(pre, k)) {
+      throw new Error(`comprehension-semantic-map: epoch pre-image missing OWN required key '${k}' (§13.4 — inherited keys are not hashed).`);
     }
     const v = pre[k];
     if (k === "child_contributions") {
@@ -261,7 +279,12 @@ function stableJson(value: unknown): string {
  *  is byte-identical (e.g. a non-lowest child's limiting_witness change — comprehension-reduce.ts keeps
  *  only witnessCandidates[0], and parent edges are first/last only — so the parent ground is stable
  *  while a child's ground hash rotates; codex tsx probe confirmed cardinality > 0). child_contributions
- *  is sorted so sibling order does not perturb the key (grouping-invariance). */
+ *  is sorted so SIBLING ORDER within a grouping does not perturb the key. NOTE (review F4): unlike the
+ *  Layer-1 GROUND (which is fanin/grouping-INVARIANT), this contribution is TOPOLOGY-DEPENDENT by
+ *  design — a node synthesizes ITS children, so a different fan-in gives genuinely different judgments,
+ *  and the contribution correctly rotates with it (a fan-in change is a re-derive, caught via
+ *  child_contributions, never silent). Production pins the topology with the deterministic over-context
+ *  frontier, whose config + logic sha are folded into the pre-image. */
 export function reduceNodeEpochContribution(pre: SemanticEpochPreImage): string {
   assertPreImageKeysAllowlisted(pre as unknown as Record<string, unknown>);
   const canonical = { ...pre, child_contributions: [...pre.child_contributions].sort() };
@@ -286,6 +309,14 @@ export function assertChildJudgmentCoverage(
     }
     return;
   }
+  // Reject duplicate consumed keys BEFORE the set comparison (review F8 / onto issue-004): a Set
+  // collapses ["k1","k1"] to {k1}, so a node consuming the same child twice would falsely satisfy
+  // coverage against {k1}. A node consumes each child at most once.
+  if (new Set(node.consumed_child_judgment_keys).size !== node.consumed_child_judgment_keys.length) {
+    throw new Error(
+      `comprehension-semantic-map: duplicate consumed child-judgment key at ${reduceNodeKey(node.node_ref)} (§13.5 N5 — each child is consumed once).`,
+    );
+  }
   const have = new Set(node.consumed_child_judgment_keys);
   const want = new Set(expectedConsumedKeys);
   const equal = have.size === want.size && [...want].every((k) => have.has(k));
@@ -302,6 +333,15 @@ export function assertChildJudgmentCoverage(
 export function assertSemanticBoundaryHonesty(node: ComprehensionSemanticNode, seedBound: boolean): void {
   const at = (b: SemanticBoundary): string => `${reduceNodeKey(node.node_ref)}@row${b.row}`;
   for (const b of node.semantic_boundaries) {
+    // TOTAL over the enum surface (review F2 / onto issue-001/007/009/014): an anchor_status or
+    // verification value OUTSIDE the known set is malformed and fails closed — otherwise a bogus
+    // caller-injected verifier output (e.g. "bogus_status") would slip through the combo checks below.
+    if (!VALID_ANCHOR_STATUS.has(b.anchor_status)) {
+      throw new Error(`comprehension-semantic-map: ${at(b)} unknown anchor_status '${b.anchor_status}' (§13.5 fail-closed enum).`);
+    }
+    if (!VALID_VERIFICATION.has(b.verification)) {
+      throw new Error(`comprehension-semantic-map: ${at(b)} unknown verification '${b.verification}' (§13.5 fail-closed enum).`);
+    }
     if (b.anchor_status === "anchored" && b.verification !== "structural_location_only") {
       throw new Error(
         `comprehension-semantic-map: ${at(b)} anchored boundary must be 'structural_location_only' (anchored corroborates LOCATION only, never content; got '${b.verification}') — §13.5 codex-F2.`,
@@ -346,10 +386,20 @@ export function computeUnanchoredUnverifiedCount(
 
 /** N6: taint monotone. A parent may never UNDERSTATE accumulated unverified taint (fail-closed,
  *  symmetric with assertHonestyFold). Over-reporting is allowed; understating throws. */
+function assertSafeCount(label: string, n: number): void {
+  // A non-finite / negative / non-integer count would defeat the monotone comparison (review F6: NaN <
+  // x is false, so a NaN taint would pass silently). Require a safe non-negative integer.
+  if (!Number.isSafeInteger(n) || n < 0) {
+    throw new Error(`comprehension-semantic-map: ${label} must be a non-negative safe integer, got ${n} (§13.5 N6 fail-closed).`);
+  }
+}
+
 export function assertTaintCensusMonotone(
   node: ComprehensionSemanticNode,
   children: readonly ComprehensionSemanticNode[],
 ): void {
+  assertSafeCount(`taint count at ${reduceNodeKey(node.node_ref)}`, node.unanchored_unverified_count);
+  for (const c of children) assertSafeCount(`child taint count at ${reduceNodeKey(c.node_ref)}`, c.unanchored_unverified_count);
   const expectedMin = computeUnanchoredUnverifiedCount(node, children);
   if (node.unanchored_unverified_count < expectedMin) {
     throw new Error(
@@ -412,15 +462,56 @@ const VALUE_SHAPE_KIND = "value_shape" as const;
 /** SOURCE-SAFETY guard (§13.6 / C6): the synthesis input must carry only bounded deterministic facts +
  *  child summary prose — never a raw cell value / formatCode / example. By construction the builder
  *  only pulls safe fields; this asserts the shape so an accidental enrichment fails closed. */
-export function assertSynthesisInputBounded(input: SemanticSynthesisInput): void {
-  for (const c of input.child_summaries) {
-    if (typeof c.summary !== "string") {
-      throw new Error("comprehension-semantic-map: synthesis child summary must be a string (§13.6 source-safe envelope).");
+const SYNTHESIS_INPUT_KEYS = ["node_ref", "format_clusters", "value_shape_seams", "child_summaries"] as const;
+const SEAM_KEYS = ["row", "prev_shape", "new_shape"] as const;
+const CHILD_SUMMARY_KEYS = ["key", "summary"] as const;
+const REGION_KEYS = ["sheet", "column_index", "row_start", "row_end"] as const;
+
+function assertExactKeys(label: string, obj: unknown, keys: readonly string[]): void {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+    throw new Error(`comprehension-semantic-map: ${label} must be a plain object (§13.6 source-safe envelope).`);
+  }
+  const own = Object.keys(obj as Record<string, unknown>);
+  const want = new Set(keys);
+  for (const k of own) {
+    if (!want.has(k)) {
+      throw new Error(`comprehension-semantic-map: ${label} has unexpected field '${k}' — only ${keys.join(", ")} allowed (§13.6 source-safe envelope; an extra field could smuggle a raw value into synthesis).`);
     }
   }
+  for (const k of keys) {
+    if (!Object.hasOwn(obj as Record<string, unknown>, k)) {
+      throw new Error(`comprehension-semantic-map: ${label} missing required field '${k}' (§13.6).`);
+    }
+  }
+}
+
+/** SOURCE-SAFETY guard (§13.6 / C6 / review F1 / onto issue-012/016) — an EXACT own-key schema, not a
+ *  partial type spot-check. The input may carry ONLY the bounded deterministic facts + child summary
+ *  prose; an extra field on the input, a non-string format cluster, a seam with extra keys, or a raw
+ *  child-summary value fails closed — so an accidental "enrichment" that smuggles a raw cell value /
+ *  formatCode / example into the synthesis prompt cannot pass. */
+export function assertSynthesisInputBounded(input: SemanticSynthesisInput): void {
+  assertExactKeys("synthesis input", input, SYNTHESIS_INPUT_KEYS);
+  assertExactKeys("synthesis input.node_ref", input.node_ref, REGION_KEYS);
+  if (!Array.isArray(input.format_clusters) || input.format_clusters.some((c) => typeof c !== "string")) {
+    throw new Error("comprehension-semantic-map: synthesis format_clusters must be string[] — no raw values (§13.6).");
+  }
+  if (!Array.isArray(input.value_shape_seams)) {
+    throw new Error("comprehension-semantic-map: synthesis value_shape_seams must be an array (§13.6).");
+  }
   for (const s of input.value_shape_seams) {
+    assertExactKeys("synthesis seam", s, SEAM_KEYS);
     if (typeof s.row !== "number" || typeof s.prev_shape !== "string" || typeof s.new_shape !== "string") {
       throw new Error("comprehension-semantic-map: synthesis seam must be {row:number, prev_shape:string, new_shape:string} — no raw values (§13.6).");
+    }
+  }
+  if (!Array.isArray(input.child_summaries)) {
+    throw new Error("comprehension-semantic-map: synthesis child_summaries must be an array (§13.6).");
+  }
+  for (const c of input.child_summaries) {
+    assertExactKeys("synthesis child summary", c, CHILD_SUMMARY_KEYS);
+    if (typeof c.key !== "string" || typeof c.summary !== "string") {
+      throw new Error("comprehension-semantic-map: synthesis child summary must be {key:string, summary:string} (§13.6 source-safe envelope).");
     }
   }
 }
@@ -436,16 +527,22 @@ export function accumulateSemanticMap(
 ): Map<SemanticNodeKey, ComprehensionSemanticNode> {
   const result = new Map<SemanticNodeKey, ComprehensionSemanticNode>();
   const seedBound = opts.seedBound ?? false;
+  const visiting = new Set<SemanticNodeKey>(); // cycle detection (review F5 / onto issue-003).
 
   const visit = (key: SemanticNodeKey): ComprehensionSemanticNode => {
     const cached = result.get(key);
     if (cached) return cached;
+    if (visiting.has(key)) {
+      throw new Error(`comprehension-semantic-map: cycle in reduce topology at ${key} — a well-formed trace is a tree (§13.5 fail-closed; review F5).`);
+    }
     const tnode = trace.nodes.get(key);
     const reduceNode = nodesByKey.get(key);
     if (!tnode || !reduceNode) {
       throw new Error(`comprehension-semantic-map: trace/node missing for key ${key} (accumulate walk).`);
     }
+    visiting.add(key);
     const children = tnode.child_keys.map(visit); // bottom-up: children first.
+    visiting.delete(key);
 
     const input: SemanticSynthesisInput = {
       node_ref: tnode.node_ref,
@@ -460,11 +557,16 @@ export function accumulateSemanticMap(
 
     const { boundaries: classified, coverage } = reconcileBoundaries(out.boundaries, reduceNode);
     // N3: verify EVERY unanchored boundary (structure is blind there). Anchored stay location-only.
-    const verified: SemanticBoundary[] = classified.map((b) =>
-      b.anchor_status === "unanchored"
-        ? { ...b, verification: opts.verifyUnanchored({ node_ref: tnode.node_ref, boundary: b, summary: out.semantic_summary }) }
-        : b,
-    );
+    // The injected verifier's return is validated (review F2): a bogus status must fail closed here,
+    // not slip into a seed-bound node.
+    const verified: SemanticBoundary[] = classified.map((b) => {
+      if (b.anchor_status !== "unanchored") return b;
+      const v = opts.verifyUnanchored({ node_ref: tnode.node_ref, boundary: b, summary: out.semantic_summary });
+      if (!VALID_ADVERSARIAL_RESULT.has(v)) {
+        throw new Error(`comprehension-semantic-map: verifyUnanchored returned invalid result '${v}' at ${key} — must be adversarial_confirmed | adversarial_refuted (§13.5 fail-closed).`);
+      }
+      return { ...b, verification: v };
+    });
     const refutedCount = verified.filter((b) => b.verification === "adversarial_refuted").length;
     // Seed-bound: refuted boundaries are EXCLUDED from the seed boundary list (codex-F2) — counted in
     // taint below. Non-seed: kept for inspection (still counted in taint via ownUnverifiedCount).
@@ -504,5 +606,12 @@ export function accumulateSemanticMap(
   };
 
   visit(trace.root_key);
+  // Reachability (review F5 / onto issue-003): every trace node MUST be reached from the root, else an
+  // orphan node would be silently dropped from the accumulated map (a completeness violation).
+  if (result.size !== trace.nodes.size) {
+    throw new Error(
+      `comprehension-semantic-map: ${trace.nodes.size - result.size} trace node(s) unreachable from root ${trace.root_key} — orphan nodes would be silently dropped (§13.5 fail-closed).`,
+    );
+  }
   return result;
 }
