@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  reduceNodeGroundHash,
   reduceNodeKey,
   type ComprehensionReduceNode,
   type ComprehensionReduceRegion,
@@ -192,7 +193,7 @@ export function reconcileBoundaries(
     };
   });
   const coverage: StructureBoundaryCoverage[] = seams.map((s, si) => ({
-    boundary_ref: s,
+    boundary_ref: { ...s }, // clone so the returned coverage does not alias the reduce node's boundary (round-3 F3).
     status: seamMatched[si] ? "covered" : "missed_by_llm",
   }));
   return { boundaries, coverage };
@@ -681,6 +682,15 @@ export function accumulateSemanticMap(
   const visiting = new Set<SemanticNodeKey>(); // cycle detection (review F5 / onto issue-003).
   assertReduceTopologyIsTree(trace); // reject DAG / diamond / duplicate edges before counting (review F2).
   const modes = classifyFrontier(trace, opts.overContextBudget); // S3 over-context partition (§13.6).
+  // Round-3 F2: the RUNTIME owns the budget→epoch binding (do not trust the caller to fold the budget
+  // into over_context_gate_config_sha256). A budget change reshapes the frontier partition and thus the
+  // judgments, so fold the actual budget into the config sha here — a budget change always rotates the key.
+  const preImageBase: Omit<SemanticEpochPreImage, "layer1_ground_hash" | "child_contributions"> = {
+    ...opts.preImageBase,
+    over_context_gate_config_sha256: createHash("sha256")
+      .update(`${opts.preImageBase.over_context_gate_config_sha256}|over_context_budget=${opts.overContextBudget}`)
+      .digest("hex"),
+  };
 
   const visit = (key: SemanticNodeKey): ComprehensionSemanticNode => {
     const cached = result.get(key);
@@ -692,6 +702,11 @@ export function accumulateSemanticMap(
     const reduceNode = nodesByKey.get(key);
     if (!tnode || !reduceNode) {
       throw new Error(`comprehension-semantic-map: trace/node missing for key ${key} (accumulate walk).`);
+    }
+    // Round-3 F1: nodesByKey MUST agree with the validated trace — a caller could pass a mismatched
+    // reduce node whose deterministic facts then feed synthesis/reconcile.
+    if (reduceNodeKey(reduceNode.region) !== key || reduceNodeGroundHash(reduceNode) !== tnode.ground_hash) {
+      throw new Error(`comprehension-semantic-map: nodesByKey['${key}'] disagrees with the trace node (region/ground mismatch) (§13.6 fail-closed).`);
     }
     const mode = modes.get(key);
     if (!mode) throw new Error(`comprehension-semantic-map: no frontier mode for ${key} (unreachable from root?).`);
@@ -710,12 +725,13 @@ export function accumulateSemanticMap(
     // (that leaves this node's ground byte-identical) still rotates the key up to the frontier ancestor.
     if (mode === "subsumed") {
       const preImage: SemanticEpochPreImage = {
-        ...opts.preImageBase,
+        ...preImageBase,
         layer1_ground_hash: tnode.ground_hash,
         child_contributions: children.map((c) => c.subtree_epoch_contribution),
       };
+      const rr = tnode.node_ref;
       const node: ComprehensionSemanticNode = {
-        node_ref: tnode.node_ref,
+        node_ref: { sheet: rr.sheet, column_index: rr.column_index, row_start: rr.row_start, row_end: rr.row_end },
         layer1_ground_hash: tnode.ground_hash,
         subtree_epoch_contribution: reduceNodeEpochContribution(preImage),
         authority: "non_authoritative",
@@ -724,7 +740,7 @@ export function accumulateSemanticMap(
         semantic_summary: "",
         semantic_boundaries: [],
         structure_boundary_coverage: [],
-        topology_child_keys: tnode.child_keys,
+        topology_child_keys: [...tnode.child_keys], // clone so the returned node does not alias the trace array (round-3 F3).
         consumed_child_judgment_keys: [],
         unanchored_unverified_count: 0,
       };
@@ -776,7 +792,7 @@ export function accumulateSemanticMap(
     const keptBoundaries = seedBound ? verified.filter((b) => b.verification !== "adversarial_refuted") : verified;
 
     const preImage: SemanticEpochPreImage = {
-      ...opts.preImageBase,
+      ...preImageBase,
       layer1_ground_hash: tnode.ground_hash,
       // EPOCH recursion is decoupled from judgment CONSUMPTION (review F1 / onto issue-003/006/011): a
       // frontier consumes no child SUMMARIES (flat read) but STILL folds ALL children's contributions,
@@ -786,7 +802,7 @@ export function accumulateSemanticMap(
     };
 
     const node: ComprehensionSemanticNode = {
-      node_ref: tnode.node_ref,
+      node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
       layer1_ground_hash: tnode.ground_hash,
       subtree_epoch_contribution: reduceNodeEpochContribution(preImage),
       authority: "non_authoritative",
@@ -795,7 +811,7 @@ export function accumulateSemanticMap(
       semantic_summary: out.semantic_summary,
       semantic_boundaries: keptBoundaries,
       structure_boundary_coverage: coverage,
-      topology_child_keys: tnode.child_keys,
+      topology_child_keys: [...tnode.child_keys], // clone so the returned node does not alias the trace array (round-3 F3).
       consumed_child_judgment_keys: consumedChildKeys, // [] for a frontier; all children for accumulating.
       unanchored_unverified_count: 0,
     };

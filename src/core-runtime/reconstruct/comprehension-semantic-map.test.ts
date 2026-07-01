@@ -938,4 +938,34 @@ describe("S3 frontier hardening", () => {
     const trace = { root_key: "alias", nodes: new Map<string, TN>([["alias", { node_ref: a.region, ground_hash: "h", child_keys: [] }]]) };
     expect(() => assertReduceTopologyIsTree(trace)).toThrow(/keys must be canonical/);
   });
+
+  // ── round-3 (data boundaries: nodesByKey consistency, budget→epoch binding, output immutability) ──
+
+  it("R3-F1: a nodesByKey entry that disagrees with the trace node fails closed", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int"), leaf(11, 20, "int", "int")]);
+    const bad = new Map(nodesByKey);
+    bad.set(trace.root_key, leaf(1, 10, "int", "int")); // wrong region/ground for the root key
+    expect(() => accumulateSemanticMap(trace, bad, s3opts(0))).toThrow(/disagrees with the trace/);
+  });
+
+  it("R3-F2: the same trace under different budgets rotates the epoch contribution (budget bound at runtime)", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace(
+      [leaf(1, 10, "int", "int"), leaf(11, 20, "text", "text"), leaf(21, 30, "int", "int")],
+      2,
+    );
+    const r0 = accumulateSemanticMap(trace, nodesByKey, s3opts(0)).get(trace.root_key)!;
+    const r100 = accumulateSemanticMap(trace, nodesByKey, s3opts(100)).get(trace.root_key)!;
+    // same preImageBase config sha, different budget → different key (the runtime folds the budget).
+    expect(r0.subtree_epoch_contribution).not.toBe(r100.subtree_epoch_contribution);
+  });
+
+  it("R3-F3: mutating a returned node cannot corrupt the trace (output node_ref/child_keys cloned)", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int"), leaf(11, 20, "text", "text")]);
+    const root = accumulateSemanticMap(trace, nodesByKey, s3opts(100)).get(trace.root_key)!;
+    const beforeChildKeys = [...trace.nodes.get(trace.root_key)!.child_keys];
+    (root.node_ref as { row_start: number }).row_start = -999;
+    root.topology_child_keys.push("injected");
+    expect(trace.nodes.get(trace.root_key)!.node_ref.row_start).not.toBe(-999);
+    expect(trace.nodes.get(trace.root_key)!.child_keys).toEqual(beforeChildKeys);
+  });
 });
