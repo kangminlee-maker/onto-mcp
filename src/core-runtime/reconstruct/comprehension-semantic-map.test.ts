@@ -840,35 +840,30 @@ describe("S3 frontier hardening", () => {
     expect(rootA.subtree_epoch_contribution).not.toBe(rootB.subtree_epoch_contribution); // ...but folds contributions
   });
 
+  // canonical-key trace builder: every map key === reduceNodeKey(node_ref) (the round-2 invariant).
+  type TN = { node_ref: ReturnType<typeof leaf>["region"]; ground_hash: string; child_keys: string[] };
+  const kOf = (n: ReturnType<typeof leaf>) => reduceNodeKey(n.region);
+  const tn = (n: ReturnType<typeof leaf>, kids: string[]): [string, TN] => [
+    kOf(n),
+    { node_ref: n.region, ground_hash: "h", child_keys: kids },
+  ];
+
   it("F2: a DAG trace (shared child under two parents) fails closed", () => {
-    const p1 = leaf(1, 10, "int", "int");
-    const p2 = leaf(11, 20, "int", "int");
-    const shared = leaf(21, 30, "int", "int");
-    const kp1 = reduceNodeKey(p1.region);
-    const kp2 = reduceNodeKey(p2.region);
-    const ks = reduceNodeKey(shared.region);
+    const root = leaf(1, 50, "int", "int");
+    const p1 = leaf(1, 20, "int", "int");
+    const p2 = leaf(21, 40, "int", "int");
+    const shared = leaf(41, 50, "int", "int");
     const trace = {
-      root_key: "root",
-      nodes: new Map<string, { node_ref: typeof p1.region; ground_hash: string; child_keys: string[] }>([
-        ["root", { node_ref: p1.region, ground_hash: "r", child_keys: [kp1, kp2] }],
-        [kp1, { node_ref: p1.region, ground_hash: "h", child_keys: [ks] }],
-        [kp2, { node_ref: p2.region, ground_hash: "h", child_keys: [ks] }],
-        [ks, { node_ref: shared.region, ground_hash: "h", child_keys: [] }],
-      ]),
+      root_key: kOf(root),
+      nodes: new Map<string, TN>([tn(root, [kOf(p1), kOf(p2)]), tn(p1, [kOf(shared)]), tn(p2, [kOf(shared)]), tn(shared, [])]),
     };
     expect(() => assertReduceTopologyIsTree(trace)).toThrow(/multiple parents|DAG/);
   });
 
   it("F2: a duplicate child edge fails closed", () => {
+    const root = leaf(1, 20, "int", "int");
     const a = leaf(1, 10, "int", "int");
-    const ka = reduceNodeKey(a.region);
-    const trace = {
-      root_key: "root",
-      nodes: new Map<string, { node_ref: typeof a.region; ground_hash: string; child_keys: string[] }>([
-        ["root", { node_ref: a.region, ground_hash: "r", child_keys: [ka, ka] }],
-        [ka, { node_ref: a.region, ground_hash: "h", child_keys: [] }],
-      ]),
-    };
+    const trace = { root_key: kOf(root), nodes: new Map<string, TN>([tn(root, [kOf(a), kOf(a)]), tn(a, [])]) };
     expect(() => assertReduceTopologyIsTree(trace)).toThrow(/duplicate child edge/);
   });
 
@@ -902,5 +897,45 @@ describe("S3 frontier hardening", () => {
   it("F5 (onto-009): a subsumed node with nonzero taint fails closed", () => {
     const node = semNode({ reduce_read_attempt: "subsumed", unanchored_unverified_count: 5 });
     expect(() => assertSubsumedNodeEmpty(node)).toThrow(/no judgment or taint/);
+  });
+
+  // ── round-2 (symmetric boundary hardening: verifier input, synthesize output, root/key invariants) ──
+
+  it("R2: a verifyUnanchored that mutates node_ref cannot corrupt result keys (verifier input cloned)", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int"), leaf(11, 20, "int", "int")]);
+    const map = accumulateSemanticMap(trace, nodesByKey, {
+      ...s3opts(0),
+      synthesize: (input) => ({
+        semantic_summary: "s",
+        boundaries: [{ row: input.node_ref.row_start, character_before: "a", character_after: "b" }],
+      }),
+      verifyUnanchored: ({ node_ref }) => {
+        (node_ref as { row_start: number }).row_start = 999; // mutate the (cloned) input — must not leak
+        return "adversarial_confirmed";
+      },
+    });
+    for (const key of map.keys()) expect(trace.nodes.has(key)).toBe(true);
+  });
+
+  it("R2: a malformed synthesize OUTPUT (non-integer row) fails closed", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int"), leaf(11, 20, "int", "int")]);
+    expect(() =>
+      accumulateSemanticMap(trace, nodesByKey, {
+        ...s3opts(0),
+        synthesize: () => ({ semantic_summary: "s", boundaries: [{ row: "11" as unknown as number, character_before: "a", character_after: "b" }] }),
+      }),
+    ).toThrow(/row must be a safe integer/);
+  });
+
+  it("R2: a trace whose root_key is absent from nodes fails closed", () => {
+    const a = leaf(1, 10, "int", "int");
+    const trace = { root_key: "missing", nodes: new Map<string, TN>([tn(a, [])]) };
+    expect(() => assertReduceTopologyIsTree(trace)).toThrow(/root_key 'missing' is not in the trace/);
+  });
+
+  it("R2: a non-canonical (alias) map key fails closed", () => {
+    const a = leaf(1, 10, "int", "int");
+    const trace = { root_key: "alias", nodes: new Map<string, TN>([["alias", { node_ref: a.region, ground_hash: "h", child_keys: [] }]]) };
+    expect(() => assertReduceTopologyIsTree(trace)).toThrow(/keys must be canonical/);
   });
 });

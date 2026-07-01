@@ -533,8 +533,18 @@ export function classifyFrontier(trace: ReduceTopologyTrace, overContextBudget: 
  *  edge within a node; every node has indegree ≤ 1; the root has indegree 0; every node is reachable
  *  from the root (no orphans; no cycle, since a cycle leaves a node either unreachable or indegree > 1). */
 export function assertReduceTopologyIsTree(trace: ReduceTopologyTrace): void {
+  // The declared root MUST name a real node (round-2: a missing root_key could pass when the node count
+  // coincidentally matched the empty reached set).
+  if (!trace.nodes.has(trace.root_key)) {
+    throw new Error(`comprehension-semantic-map: root_key '${trace.root_key}' is not in the trace (§13.6 tree).`);
+  }
   const indegree = new Map<SemanticNodeKey, number>();
   for (const [key, tnode] of trace.nodes) {
+    // Each map key MUST equal reduceNodeKey(node_ref) (round-2: an alias key would let
+    // consumed_child_judgment_keys diverge from the canonical child-summary keys).
+    if (key !== reduceNodeKey(tnode.node_ref)) {
+      throw new Error(`comprehension-semantic-map: trace key '${key}' != reduceNodeKey(node_ref) '${reduceNodeKey(tnode.node_ref)}' (§13.6 tree — keys must be canonical).`);
+    }
     const seenChild = new Set<SemanticNodeKey>();
     for (const c of tnode.child_keys) {
       if (!trace.nodes.has(c)) throw new Error(`comprehension-semantic-map: child '${c}' of '${key}' is not in the trace (§13.6 tree).`);
@@ -582,6 +592,8 @@ const SYNTHESIS_INPUT_KEYS = ["node_ref", "format_clusters", "value_shape_seams"
 const SEAM_KEYS = ["row", "prev_shape", "new_shape"] as const;
 const CHILD_SUMMARY_KEYS = ["key", "summary"] as const;
 const REGION_KEYS = ["sheet", "column_index", "row_start", "row_end"] as const;
+const SYNTHESIS_OUTPUT_KEYS = ["semantic_summary", "boundaries"] as const;
+const RAW_BOUNDARY_KEYS = ["row", "character_before", "character_after"] as const;
 
 function assertExactKeys(label: string, obj: unknown, keys: readonly string[]): void {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
@@ -628,6 +640,29 @@ export function assertSynthesisInputBounded(input: SemanticSynthesisInput): void
     assertExactKeys("synthesis child summary", c, CHILD_SUMMARY_KEYS);
     if (typeof c.key !== "string" || typeof c.summary !== "string") {
       throw new Error("comprehension-semantic-map: synthesis child summary must be {key:string, summary:string} (§13.6 source-safe envelope).");
+    }
+  }
+}
+
+/** Fail-closed on the caller-injected synthesize's OUTPUT (round-2 review: the INPUT was validated but
+ *  the OUTPUT was not, so a malformed boundary — a string row that coerces in Math.abs, an object
+ *  character field — flowed through reconcile and anchored). Exact own-key schema; a boundary row must
+ *  be a safe integer and its character fields strings. */
+export function assertSynthesisOutputBounded(out: SemanticSynthesisOutput): void {
+  assertExactKeys("synthesis output", out, SYNTHESIS_OUTPUT_KEYS);
+  if (typeof out.semantic_summary !== "string") {
+    throw new Error("comprehension-semantic-map: synthesis output semantic_summary must be a string (§13.5 fail-closed).");
+  }
+  if (!Array.isArray(out.boundaries)) {
+    throw new Error("comprehension-semantic-map: synthesis output boundaries must be an array (§13.5 fail-closed).");
+  }
+  for (const b of out.boundaries) {
+    assertExactKeys("synthesis output boundary", b, RAW_BOUNDARY_KEYS);
+    if (!Number.isSafeInteger(b.row)) {
+      throw new Error(`comprehension-semantic-map: synthesis output boundary row must be a safe integer, got ${JSON.stringify(b.row)} (§13.5 fail-closed).`);
+    }
+    if (typeof b.character_before !== "string" || typeof b.character_after !== "string") {
+      throw new Error("comprehension-semantic-map: synthesis output boundary character fields must be strings (§13.5 fail-closed).");
     }
   }
 }
@@ -715,6 +750,7 @@ export function accumulateSemanticMap(
     };
     assertSynthesisInputBounded(input);
     const out = opts.synthesize(input);
+    assertSynthesisOutputBounded(out); // round-2: validate the caller's OUTPUT, not just the input.
 
     const { boundaries: classified, coverage } = reconcileBoundaries(out.boundaries, reduceNode);
     // N3: verify EVERY unanchored boundary (structure is blind there). Anchored stay location-only.
@@ -722,7 +758,13 @@ export function accumulateSemanticMap(
     // not slip into a seed-bound node.
     const verified: SemanticBoundary[] = classified.map((b) => {
       if (b.anchor_status !== "unanchored") return b;
-      const v = opts.verifyUnanchored({ node_ref: tnode.node_ref, boundary: b, summary: out.semantic_summary });
+      // Clone node_ref + boundary for the verifier too (round-2: F3 only cloned the synthesize input;
+      // the verifier could mutate the live trace node_ref and corrupt later child-summary keys).
+      const v = opts.verifyUnanchored({
+        node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
+        boundary: { ...b },
+        summary: out.semantic_summary,
+      });
       if (!VALID_ADVERSARIAL_RESULT.has(v)) {
         throw new Error(`comprehension-semantic-map: verifyUnanchored returned invalid result '${v}' at ${key} — must be adversarial_confirmed | adversarial_refuted (§13.5 fail-closed).`);
       }
