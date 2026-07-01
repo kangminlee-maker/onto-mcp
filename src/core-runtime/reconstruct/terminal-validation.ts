@@ -24,6 +24,7 @@ import type {
   ReconstructRunControlValidationArtifact,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
+  ReconstructSourceObservationLineageCensus,
   ReconstructSeedAuthoringReadinessValidationArtifact,
   ReconstructSelectedSourceProfileRef,
   ReconstructSeedConfirmationValidationArtifact,
@@ -94,6 +95,22 @@ async function readYamlDocumentIfPresent<T>(
 const SELF_VALIDATION_OUTPUT_REFS = new Set<ReconstructStageId>([
   "pre_handoff_run_manifest_validation",
   "post_publication_run_manifest_validation",
+]);
+
+/**
+ * The conditional stages that legitimately run-but-produce-nothing yet leave no
+ * artifact-ref witness of their own (unlike leaf_read / maturation_value_read, which
+ * always write a census when they run). On a graceful-terminal manifest these are the
+ * only stages permitted `skip_kind: "legit_conditional"`, and only when an independent
+ * reachability witness (ReconstructSourceObservationLineageCensus) confirms they ran and
+ * legitimately produced nothing. See reachability-manifest design v2.
+ */
+const WITNESS_LESS_CONDITIONAL_STAGES: ReadonlySet<ReconstructStageId> = new Set([
+  "source_observation_delta",
+  "source_observation_delta_validation",
+  "source_observation_reentry_validation",
+  "source_observation_lineage_index",
+  "source_observation_lineage_index_validation",
 ]);
 
 export async function validateReconstructRunManifest(args: {
@@ -179,6 +196,77 @@ export async function validateReconstructRunManifest(args: {
         "manifest validation requires governing_snapshot when registry validation inputs are unavailable",
       subjectId: "governing_snapshot",
     }));
+  }
+  // Graceful-terminal reachability rules (design v2 §4). Enforced ONLY when the manifest is
+  // an explicit graceful terminal — a completed run has no graceful_terminal field, so this
+  // whole block is skipped and completed-path validation stays byte-identical. Authority for
+  // "did a witness-less conditional stage run and legitimately produce nothing" is an
+  // INDEPENDENT reachability witness (census) read here; the manifest builder cannot
+  // self-declare a legit no-op the witness does not confirm (closes the v1 membership-only hole).
+  if (args.manifest.graceful_terminal) {
+    // legitNoOpByStage: stage -> legit_no_op flag, for witness-less stages that RAN and produced
+    // nothing. ranStages: every witness-less stage the census shows ran (produced or not).
+    const legitNoOpByStage = new Map<ReconstructStageId, boolean>();
+    const ranStages = new Set<ReconstructStageId>();
+    const witnessRef = args.manifest.graceful_terminal.reachability_witness_ref;
+    if (witnessRef) {
+      const census = await readYamlDocumentIfPresent<
+        ReconstructSourceObservationLineageCensus
+      >(witnessRef);
+      if (!census) {
+        violations.push(violation({
+          code: "manifest_reachability_witness_missing",
+          message:
+            `graceful manifest references a reachability witness that does not exist: ${witnessRef}`,
+          subjectId: "reachability_witness_ref",
+        }));
+      } else {
+        for (const w of census.stage_witnesses) {
+          ranStages.add(w.step_id); // present in the census only because the stage ran
+          if (!w.produced) legitNoOpByStage.set(w.step_id, w.legit_no_op);
+        }
+      }
+    }
+    for (const step of args.manifest.steps) {
+      if (step.status !== "skipped") continue; // completed already ref-checked; failed out of scope
+      if (step.step_id === "invocation_binding") continue;
+      if (step.skip_kind === undefined) {
+        // M5: a bare skipped step under a graceful terminal is a masking surface (a not-reached
+        // bug hiding as a healthy pre-handoff-style skip). Require the typed discriminant.
+        violations.push(violation({
+          code: "manifest_untyped_graceful_skip",
+          message: `graceful manifest skipped step lacks skip_kind: ${step.step_id}`,
+          subjectId: step.step_id,
+        }));
+        continue;
+      }
+      if (step.skip_kind === "legit_conditional") {
+        // M2: authorized by the WITNESS (ran-and-legit-no-op), not by allowlist membership. Only
+        // the witness-less lineage stages carry this witness; any other stage claiming it, or one
+        // the witness does not confirm ran-and-legit-no-op, is a masking attempt.
+        if (
+          !WITNESS_LESS_CONDITIONAL_STAGES.has(step.step_id) ||
+          legitNoOpByStage.get(step.step_id) !== true
+        ) {
+          violations.push(violation({
+            code: "manifest_unwitnessed_conditional_skip",
+            message:
+              `legit_conditional skip for ${step.step_id} is not confirmed by the reachability witness (must be a witness-less lineage stage that ran and legitimately produced nothing)`,
+            subjectId: step.step_id,
+          }));
+        }
+      } else if (step.skip_kind === "not_reached") {
+        // A witness proving the stage RAN contradicts not_reached = masking attempt.
+        if (ranStages.has(step.step_id)) {
+          violations.push(violation({
+            code: "manifest_reached_stage_masked",
+            message:
+              `${step.step_id} is marked not_reached but the reachability witness shows it ran`,
+            subjectId: step.step_id,
+          }));
+        }
+      }
+    }
   }
   const completedStepCount =
     args.manifest.steps.filter((step) => step.status === "completed").length;

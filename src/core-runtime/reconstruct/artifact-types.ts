@@ -1719,6 +1719,10 @@ export interface ReconstructPostSeedValidationViolation {
     | "manifest_artifact_missing"
     | "manifest_snapshot_missing"
     | "manifest_snapshot_mismatch"
+    | "manifest_reachability_witness_missing"
+    | "manifest_untyped_graceful_skip"
+    | "manifest_unwitnessed_conditional_skip"
+    | "manifest_reached_stage_masked"
     | "handoff_required_validation_missing"
     | "handoff_required_validation_invalid"
     | "handoff_decision_inconsistent"
@@ -3178,11 +3182,46 @@ export interface ReconstructRunManifestStep {
   reason?: string;
   authority_impact?: string;
   /**
+   * Graceful-terminal reachability discriminant (typed, not a free-form reason).
+   * Only present on a graceful-terminal manifest (see ReconstructRunManifestArtifact.
+   * graceful_terminal), and only on `skipped` steps:
+   *   - "legit_conditional": the stage RAN but legitimately produced no artifact;
+   *     its no-op condition must be confirmed by an independent reachability witness
+   *     (the validator reads the witness — membership alone is not authority).
+   *   - "not_reached": the stage did NOT run (the graceful terminal stopped before it);
+   *     no witness may claim it ran.
+   * Absent on completed runs and on completed steps — completed runs stay byte-identical.
+   */
+  skip_kind?: "legit_conditional" | "not_reached";
+  /**
    * Runtime-owned per-unit execution telemetry recorded at the LLM call
    * boundary (duration, prompt/output chars, attempt lineage, failure
    * classes). Present only for units that made LLM calls in this run.
    */
   execution_telemetry?: import("./execution-telemetry.js").ReconstructUnitExecutionTelemetry;
+}
+
+/**
+ * Reachability witness (leaf_read-census pattern, f1a3c1b) for the witness-less
+ * conditional stages (source_observation_delta/_validation, reentry_validation,
+ * source_observation_lineage_index/_validation). ALWAYS written when the
+ * observation-lineage phase runs — even when a stage produced nothing — so that
+ * "ran and legitimately produced nothing" is a recorded fact, distinct from
+ * "never ran" (no witness) and from "ran but a bug dropped the artifact"
+ * (produced=false with legit_no_op=false). The reachability manifest validator
+ * reads this to authorize a legit_conditional skip; the manifest builder may not
+ * self-declare a legit no-op the witness does not confirm.
+ */
+export interface ReconstructReachabilityStageWitness {
+  step_id: ReconstructStageId;
+  produced: boolean;
+  legit_no_op: boolean;
+}
+
+export interface ReconstructSourceObservationLineageCensus {
+  schema_version: "1";
+  session_id: string;
+  stage_witnesses: ReconstructReachabilityStageWitness[];
 }
 
 export interface ReconstructRunSnapshotFamily {
@@ -3325,6 +3364,26 @@ export interface ReconstructRunManifestArtifact {
   runtime_boundary: {
     semantic_generation: "not_performed";
     semantic_authority: "host_llm_author";
+  };
+  /**
+   * Explicit graceful-terminal marker. Present (truthy) only when this manifest
+   * was assembled by a graceful terminal (the run stopped early with a blocked/
+   * limited disposition). When set, the validator enforces the reachability rules
+   * (skip_kind must be legit_conditional [witness-confirmed] or not_reached; bare
+   * skipped steps are rejected so a not-reached bug cannot masquerade as a healthy
+   * skip). Absent on completed runs — completed-path validation stays byte-identical.
+   */
+  graceful_terminal?: {
+    disposition: "blocked" | "limited";
+    terminal_step_id: ReconstructStageId;
+    /**
+     * Path to the reachability witness (ReconstructSourceObservationLineageCensus)
+     * for the witness-less conditional stages. The validator reads it to authorize
+     * legit_conditional skips and to detect a stage the witness says ran being
+     * masked as not_reached. Null when the run stopped before the lineage phase
+     * (then none of the witness-less stages may be legit_conditional).
+     */
+    reachability_witness_ref: string | null;
   };
 }
 
