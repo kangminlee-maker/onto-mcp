@@ -968,4 +968,43 @@ describe("S3 frontier hardening", () => {
     expect(trace.nodes.get(trace.root_key)!.node_ref.row_start).not.toBe(-999);
     expect(trace.nodes.get(trace.root_key)!.child_keys).toEqual(beforeChildKeys);
   });
+
+  // ── round-4 (canonical synthesis input, boundary_ref projection, config type) ──
+
+  it("R4: the synthesis input format_clusters is canonical (sorted) regardless of raw order", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int"), leaf(11, 20, "text", "text")]);
+    let captured: string[] = [];
+    accumulateSemanticMap(trace, nodesByKey, {
+      ...s3opts(0),
+      synthesize: (input) => {
+        captured = input.format_clusters;
+        return { semantic_summary: "s", boundaries: [] };
+      },
+    });
+    expect(captured).toEqual([...captured].sort());
+  });
+
+  it("R4: coverage boundary_ref carries ONLY the declared keys (no aliased extra props)", () => {
+    const seam = { ...witness(11, "int", "text"), extra: { nested: 1 } } as unknown as ComprehensionBoundaryWitness;
+    const { coverage } = reconcileBoundaries([], { boundaries: [seam] });
+    expect(Object.keys(coverage[0]!.boundary_ref).sort()).toEqual([
+      "boundary_kind",
+      "column_index",
+      "first_new_format_row",
+      "last_prev_format_row",
+      "new_shape",
+      "prev_shape",
+      "sheet",
+    ]);
+  });
+
+  it("R4: a non-string over_context_gate_config_sha256 fails closed", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int"), leaf(11, 20, "int", "int")]);
+    const base = s3opts(0);
+    const bad: AccumulateSemanticMapOpts = {
+      ...base,
+      preImageBase: { ...base.preImageBase, over_context_gate_config_sha256: {} as unknown as string },
+    };
+    expect(() => accumulateSemanticMap(trace, nodesByKey, bad)).toThrow(/must be a string/);
+  });
 });

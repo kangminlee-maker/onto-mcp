@@ -193,7 +193,17 @@ export function reconcileBoundaries(
     };
   });
   const coverage: StructureBoundaryCoverage[] = seams.map((s, si) => ({
-    boundary_ref: { ...s }, // clone so the returned coverage does not alias the reduce node's boundary (round-3 F3).
+    // Reconstruct from the DECLARED fields only (round-4): a bare spread would clone extra nested own
+    // props by reference (aliasing the source boundary); the explicit projection drops them and clones.
+    boundary_ref: {
+      sheet: s.sheet,
+      column_index: s.column_index,
+      boundary_kind: s.boundary_kind,
+      prev_shape: s.prev_shape,
+      new_shape: s.new_shape,
+      last_prev_format_row: s.last_prev_format_row,
+      first_new_format_row: s.first_new_format_row,
+    },
     status: seamMatched[si] ? "covered" : "missed_by_llm",
   }));
   return { boundaries, coverage };
@@ -668,6 +678,27 @@ export function assertSynthesisOutputBounded(out: SemanticSynthesisOutput): void
   }
 }
 
+/** Canonical value-shape seams for the synthesis input (round-4 / onto issue-001): the ground hash
+ *  canonicalizes (sorts + dedups) format_clusters/boundaries, but the synthesis input consumed RAW
+ *  order, so a ground-equivalent but raw-divergent reduce node could change the LLM input. Deriving the
+ *  synthesis facts canonically makes the input a pure function of the ground identity. For a real
+ *  reduceColumnLeavesWithTrace node (already canonical) this is a no-op. */
+function canonicalValueShapeSeams(
+  boundaries: readonly ComprehensionBoundaryWitness[],
+): { row: number; prev_shape: string; new_shape: string }[] {
+  const seen = new Set<string>();
+  const out: { row: number; prev_shape: string; new_shape: string }[] = [];
+  for (const b of boundaries) {
+    if (b.boundary_kind !== VALUE_SHAPE_KIND) continue;
+    const key = `${b.first_new_format_row}|${b.prev_shape}|${b.new_shape}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ row: b.first_new_format_row, prev_shape: b.prev_shape, new_shape: b.new_shape });
+  }
+  out.sort((x, y) => x.row - y.row || cmpStr(x.prev_shape, y.prev_shape) || cmpStr(x.new_shape, y.new_shape));
+  return out;
+}
+
 /** Walk the trace bottom-up, producing one validated ComprehensionSemanticNode per skeleton node. Each
  *  node: synthesize (caller LLM) → reconcileBoundaries (deterministic anchor/coverage) → verify EVERY
  *  unanchored boundary (N3) → recursive epoch contribution → taint census → assemble, with all three
@@ -682,6 +713,12 @@ export function accumulateSemanticMap(
   const visiting = new Set<SemanticNodeKey>(); // cycle detection (review F5 / onto issue-003).
   assertReduceTopologyIsTree(trace); // reject DAG / diamond / duplicate edges before counting (review F2).
   const modes = classifyFrontier(trace, opts.overContextBudget); // S3 over-context partition (§13.6).
+  // Round-4: validate the config sha is a string BEFORE the template fold (a non-string would coerce to
+  // "[object Object]" and silently pass; the folded value is later allowlist-checked but by then the
+  // original is lost).
+  if (typeof opts.preImageBase.over_context_gate_config_sha256 !== "string") {
+    throw new Error("comprehension-semantic-map: preImageBase.over_context_gate_config_sha256 must be a string (§13.4 fail-closed).");
+  }
   // Round-3 F2: the RUNTIME owns the budget→epoch binding (do not trust the caller to fold the budget
   // into over_context_gate_config_sha256). A budget change reshapes the frontier partition and thus the
   // judgments, so fold the actual budget into the config sha here — a budget change always rotates the key.
@@ -704,7 +741,13 @@ export function accumulateSemanticMap(
       throw new Error(`comprehension-semantic-map: trace/node missing for key ${key} (accumulate walk).`);
     }
     // Round-3 F1: nodesByKey MUST agree with the validated trace — a caller could pass a mismatched
-    // reduce node whose deterministic facts then feed synthesis/reconcile.
+    // reduce node whose deterministic facts then feed synthesis/reconcile. reduceNodeGroundHash is the
+    // node's full canonical identity (region + sorted clusters + canonical boundaries + honesty), and
+    // the synthesis input is derived canonically (canonicalValueShapeSeams), so a ground-equivalent node
+    // yields an identical input. NOTE (round-4, deferred): a FULL structural re-derivation — proving each
+    // parent's ground == merge(children's reduce nodes) — is not re-run here (it would re-execute the
+    // Layer-1 fold per node). The module trusts the trace/nodesByKey to be produced by
+    // reduceColumnLeavesWithTrace (which guarantees that by construction); production wiring provides it.
     if (reduceNodeKey(reduceNode.region) !== key || reduceNodeGroundHash(reduceNode) !== tnode.ground_hash) {
       throw new Error(`comprehension-semantic-map: nodesByKey['${key}'] disagrees with the trace node (region/ground mismatch) (§13.6 fail-closed).`);
     }
@@ -758,10 +801,8 @@ export function accumulateSemanticMap(
       // Clone the node_ref (review F3): the caller-injected synthesize gets a COPY, so it cannot mutate
       // the trace's node_ref and corrupt a later parent's child-summary keys.
       node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
-      format_clusters: [...reduceNode.format_clusters],
-      value_shape_seams: reduceNode.boundaries
-        .filter((b) => b.boundary_kind === VALUE_SHAPE_KIND)
-        .map((b) => ({ row: b.first_new_format_row, prev_shape: b.prev_shape, new_shape: b.new_shape })),
+      format_clusters: [...reduceNode.format_clusters].sort(), // canonical (round-4): input = fn(ground identity), not raw order.
+      value_shape_seams: canonicalValueShapeSeams(reduceNode.boundaries),
       child_summaries: isFrontier ? [] : consumedChildren.map((c) => ({ key: reduceNodeKey(c.node_ref), summary: c.semantic_summary })),
     };
     assertSynthesisInputBounded(input);
