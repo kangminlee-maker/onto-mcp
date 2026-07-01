@@ -1,7 +1,7 @@
 # Slice 3 설계 — graceful-terminal 공유 machinery + site 1 배선
 
-> 상태: **DESIGN v0 → 교차검증 gate=`redesign_narrow`(headline 생존·§13)**. 날짜 2026-07-01 · baseline `feat/maturation-value-read` HEAD `7c96687`(Slice 3 설계 커밋).
-> ⚠️ **빌드 전 §13 union narrows(5 HIGH) 반영 필수** — 아래 §3~§10은 v0 원안이며 §13이 재절단 지시.
+> 상태: **DESIGN v1 (§13 gate=`redesign_narrow` narrows 반영·재-교차검증 대기)**. 날짜 2026-07-01 · baseline `feat/maturation-value-read` HEAD `0c8c948`.
+> ⚠️ **§14 = v1 authoritative build spec** — §3~§10은 v0 원안, §13이 교차검증 결과, **§14가 각 narrow를 해소한 최종 설계로 §3~§10을 override**. 빌드·재검증은 §14 기준.
 > 상위 SSOT: `20260701-shared-graceful-terminal-step1-design.md`(Option A 확정·batch 5-site·§5.1 catch 통합·§12 교차검증) · census `20260701-reconstruct-throw-census-triage.md`(§7.3 7 표적·§7.4 두 제약).
 > 조각 B(reachability): `20260701-reachability-manifest-design.md`(v2)·**Slice 1(validator)·Slice 2(런타임 census+createRunManifest witness-gating) 커밋 완료**.
 > 진행: 이 설계 → **양-패밀리 교차검증(ultracode+onto)** → owner 승인 → 빌드([[design-validation-ultracode-onto]]). 교차검증은 Slice 2 잔여 3 주장(§9)도 함께 다룬다.
@@ -196,3 +196,75 @@ v0 설계 → 양-패밀리 교차검증(§13) → **gate=`redesign_narrow`** �
 - 산출물: ultracode `wf_65c07fe0-dd2`·onto `.onto/review/20260701-7d89385c/`(issue-ledger.yaml).
 
 포인터: 상위 `20260701-shared-graceful-terminal-step1-design.md`·census `20260701-reconstruct-throw-census-triage.md`·reachability `20260701-reachability-manifest-design.md`(v2)·Slice 2 커밋 `aee992d`. 메모리 [[unified-comprehension-engine-track]]·[[design-validation-ultracode-onto]]·[[contract-runtime-gap-ledger]]·[[domain-agnostic-no-static-enums]].
+
+## 14. v1 재절단 상세 (§13 narrows baked-in · authoritative build spec)
+> 각 N을 실코드-접지 해소. §3~§10 원안과 충돌 시 이 절이 우선. 모든 라인은 2026-07-01 재확인값.
+
+### 14.0 v1 스탠스
+Option A spine 유지. 5 HIGH + 4 MED narrows를 반영해 **(1) 정직한 eligibility (2) terminal 아티팩트가 manifest·record서 reached로 산다 (3) blocked/limited가 조회 표면서 종결로 보인다 (4) halted가 run-control 계약을 만족한다 (5) 신호가 어떤 degrade catch서도 새지 않는다**를 확정. Slice 3 범위(machinery + site 1)는 불변.
+
+### 14.1 N1 — eligibility = 관측층 결정론 분류자 (support_status 폐기)
+- **폐기**: §3.6/§6/§7의 `support_status`/`unsupported_reason` 게이트. 이유(실코드): `.xls/.xlsb/.ods`는 target-material-kind.ts:98-106서 spreadsheet·materialize-preparation.ts:76-117서 `support_status:'partial'`(never 'unsupported'). 미지원-포맷 사실은 **`spreadsheetUnsupportedReason`이 해당 inventory unit을 `scan_status:"skipped"`+`skip_reason`+`skippedRefs`로 강등**(materialize-preparation.ts:791-806)한 데 있음.
+- **신규 결정론 분류자** `isZeroObservationGracefulTerminalEligible({sourceObservations, sourceInventory})`:
+  - `sourceObservations.observations.length === 0` **AND** 모든 runtime-target inventory unit이 `scan_status === "skipped"`(=관측기가 *의도적으로* 미관측; 미지원 추출·부재/소멸). = **`scan_status:"planned"`인데 미관측 unit이 하나도 없음**.
+  - 그런 unit이 하나라도(planned인데 zero-observation) 있으면 → **eligible=false → 크래시 유지**(관측 파이프라인 버그·negative control).
+- **타입드·domain-agnostic**([[domain-agnostic-no-static-enums]] 준수): `scan_status` enum(planned|skipped)에만 의존. **skip_reason 문자열 매칭·포맷 명명 enum 없음**(리뷰어의 "skip_reason 문자열" 제안보다 강건). "graceful-safe"의 authority = 관측기가 이미 찍은 typed `skipped`.
+- site 1은 이 분류자로 분기(§14.6 N6): eligible → `GracefulTerminalSignal(blocked)`, else → 기존 `throw new Error`(크래시 불변).
+
+### 14.2 N2 — terminalArtifactsCompleted 축 분리 (graceful가 산출한 terminal 아티팩트는 reached)
+- **문제(실코드)**: `createRunManifest`의 `terminalArtifactsCompleted:false`가 `final_output`·`reconstruct_record`를 artifact_refs서 NULL화(run.ts:2729-2772·2794-2799)하고 그 step을 skippedStep으로. → graceful이 blocked final-output+record를 *실제 산출*해도 manifest가 null로 기록 → done-when(a) 모순.
+- **해소**: graceful 입력에 **`producedTerminalArtifactRefs: { final_output, reconstruct_record, final_output_provenance_validation? }`** 추가(assembleGracefulTerminal이 실제 write한 경로). createRunManifest **graceful 분기**:
+  - artifact_refs를 reachedArtifactRefs + producedTerminalArtifactRefs 그대로 사용(`terminalArtifactsCompleted:false`의 blanket null 미적용).
+  - 그 produced terminal stage(final_output·record_assembly·(opt)provenance)는 **completedStep(ref)**; 나머지 미도달 하류 pipeline stage(maturation 전체 등)는 transform이 not_reached.
+  - = "하류 stage 도달"(false)과 "terminal 아티팩트 산출"(graceful produced)을 **분리**. 개념: `terminalArtifactsCompleted` boolean은 비-graceful 유지·graceful은 producedTerminalArtifactRefs가 명시적 produced-switch.
+- 결과 manifest: reached prep stage=completed·produced terminal(final_output/record)=completed·그 사이 미도달 pipeline stage=not_reached·witness-less=not_reached(census 부재). **done-when(a)의 "final-output+record 방출" manifest서 truthful**.
+
+### 14.3 N3 — 영속·조회 terminal disposition (v0 §3.5 −1 철회)
+- **문제(실코드)**: status 폴링이 `getRunStatus`(reconstruct-api.ts:963-977)→`record.record_stage`; `ReconstructRecordStage`(artifact-types.ts:3502-3520)=선형 pipeline enum(incomplete…completed)·blocked/limited/halted **없음**. graceful run은 mid-stage로 해석→liveness `halted_or_partial`+1000ms 무한폴링·TUI 'running'.
+- **해소**: `ReconstructRecordArtifact`에 **`terminal_disposition?: "blocked" | "limited"`** 필드(bounded·재사용 어휘·record가 이미 최종상태 소유). ★v0 §3.5의 "run_terminal_disposition 미도입"을 **철회**(교차검증이 정보손실 확정).
+  - `getRunStatus`: `record.terminal_disposition` 존재 시 그로부터 **terminal status** 반환(record_stage보다 우선), 부재 시 종전 record_stage.
+  - `deriveReconstructProgress`: terminal_disposition 존재 시 liveness=**terminal**(poll interval 없음)·not-reached→skipped 유지.
+  - TUI `deriveWorkflowStatus`/`isTerminalStatus`: blocked/limited→terminal(폴링 중단).
+  - `ReconstructRunResult.status`(완료|limited|blocked)는 **즉시-반환 mirror**(단독 authority 아님·record.terminal_disposition이 durable authority).
+- done-when 추가: **폴링/재-read 표면이 terminal**임을 단언(§14.7).
+
+### 14.4 N4 — finalizer halted 계약
+- **문제(실코드)**: `finalizeReconstructRunControl`(run-control-validation.ts:916-940)이 `postPublicationRunManifestValidationPath` **필수**·946 `attempt_status:"completed"` 하드코딩·182-191 terminal-validation-trust·309-319 halted 미수용.
+- **해소**: 파라미터화(§3.3-A 확장) — `attemptStatus?: "completed" | "halted"`(기본 completed=byte-parity) + `postPublicationRunManifestValidationPath`를 **`terminalRunManifestValidationPath`**로 일반화(completed·halted 둘 다 terminal manifest validation ref 요구). accepted-set(309-319) +halted. `requiresTerminalValidationTrust`(182-191)가 halted를 completed처럼 취급(terminal validation 필요).
+- **N7와 dovetail**: halted가 요구하는 terminal manifest validation ref = §14.5 N7의 graceful-manifest validate-and-record 산물. → 별도 산출 불요·단일 검증이 두 요구 충족.
+
+### 14.5 N5 — 신호-누수 가드를 모든 degrade/swallow catch로 (bare 2곳 아님)
+- **문제(실코드)**: 신호를 삼킬 수 있는 catch가 bare 2곳(run.ts:1895·8246)보다 넓음 — degrade/retry하는 `catch(error)`(예 run.ts:1637-1643) 존재.
+- **해소**: `isGracefulTerminalSignal(e)` 공유 가드를 **무조건 rethrow하지 않는 모든 catch** 최상단에 요구. 구조가드 `check-graceful-signal-rethrow.ts`가 run.ts의 catch 블록을 **동작으로 분류**: 무조건 rethrow=안전(면제)·degrade/swallow/retry=신호 먼저 rethrow 필수(catch 파라미터명 무관). 신규 위반 catch 추가 시 fail.
+- **negative test(비협상)**: 대표 degrade catch(예 8246 루프)를 통과하도록 신호를 던져 catch(15097)까지 전파됨을 단언(신호가 degrade로 흡수 안 됨 증명).
+
+### 14.6 N6-N9 (MED)
+- **N6 신호 구성 call-site 이동**: `assertSemanticAuthoringHasObservedEvidence`(2212)는 아티팩트 *값*만 받음·path는 `preparationRefs`(12206-12211). → eligibility 판정+신호 구성을 **call site(12218)**로: caller가 preparationRefs로 `reachedArtifactRefs`를 채워 신호에 실음(helper는 eligibility bool만 반환 또는 caller가 직접 분류). reachedArtifactRefs는 **disk 존재 확인된 ref만**(§10-Q3·부재 ref는 manifest_artifact_missing 유발).
+- **N7 graceful 조립 validate-and-record**: `assembleGracefulTerminal`이 graceful manifest에 **`validateReconstructRunManifest` 호출**(Slice 1/2 anti-masking 규칙을 라이브 경로서 활성화·현재 dead)·validation 아티팩트 persist(=N4 terminal validation ref). **fail-closed**: graceful manifest가 reachability 검증 실패 시 = 진짜 배선버그 → 크래시(정직). (site 1 manifest는 by-construction honest라 통과 기대·검증이 backstop.)
+- **N8 byte-parity 정규화 비교기**: manifest `created_at`/`completed_at`(isoNow 2777-2778)·run-control finalize(isoNow 944-945)가 volatile. → 대조군은 **주입 clock(freeze) 또는 volatile 필드 정규화 후 diff** + stable-field drift가 fail함을 보이는 contrast control.
+- **N9 code enum 폐기**: `ReconstructGracefulTerminalCode` **Slice 3서 폐기**(inert·소비자 없음). `terminalStepId` + 결정론 `reason`이 판별. §3.5/§8 "정보손실 없음" 교정(persist 대상은 terminal_disposition만). 미래 소비자가 stable taxonomy 요구 시 그때 도입.
+
+### 14.7 v1 falsifiable done-when (§7 갱신)
+| 입력 | 기대 | 반증 신호 |
+|---|---|---|
+| 미지원 포맷(.xls, sole target) → site 1·**all refs scan_status=skipped** | `terminal_disposition:"blocked"`·final_output+record **manifest서 completed**·attempt `halted`·graceful manifest **validate 통과**·`prior_validation_invalid` 0 | 크래시/final_output·record null/`failed`/validation 실패 |
+| **★supported-format + zero-observation(no skip·planned 잔존)** = 배선버그 주입 | **크래시**(eligible=false·신호 미발화) | graceful blocked로 오종결(=eligibility 게이트 결함) |
+| **정상 입력 대조군** | 신호 미발화·`status:"completed"`·**정규화 byte-parity** | 정규화 후 산출물 drift |
+| **폴링/재-read**(getRunStatus·TUI) blocked run | **terminal**(폴링 중단·blocked 표기) | 'running'/무한폴링 |
+| degrade catch 통과 신호 | catch(15097)까지 전파 | failedCount 흡수 |
+- **cardinality>0**: 각 대조 입력이 실제로 해당 site/경로 밟음 단언.
+- ★두 번째 행(supported+zero-obs→크래시)이 **N1 eligibility의 핵심 negative control** — v0 negative control은 catch-level instanceof만 시험(eligibility 미시험). 이 행 없으면 틀린 predicate가 green 배포.
+
+### 14.8 v1 개념경제 원장 (정직한 증가)
+- **신규(증가)**: `GracefulTerminalSignal`·`isZeroObservationGracefulTerminalEligible`(분류자)·`producedTerminalArtifactRefs`(graceful 입력 필드)·`ReconstructRecordArtifact.terminal_disposition`(durable·**v0 −1 철회**)·finalizer `attemptStatus` param + `terminalRunManifestValidationPath` 일반화·구조가드 1·`ReconstructRunResult.status` +2값+metrics/stopDecision optional.
+- **폐기(v0 대비 감소)**: `ReconstructGracefulTerminalCode` enum(N9).
+- **재사용(보존)**: `halted`·`blocked/limited` 어휘·Slice 2 createRunManifest(graceful)·census·`validateReconstructRunManifest`(이제 라이브)·`finalizeReconstructRunControl`(파라미터화·중복 회피)·`scan_status` enum(신규 판정 authority)·48 INVARIANT 불변.
+- **정직 고백**: v1은 v0보다 개념 표면 **증가**(durable disposition·produced-terminal-refs·finalizer 계약). 정당화 = 교차검증이 v0의 "출력은 나오나 조회·manifest·validation서 사라짐"을 결함 확정 → 이 증가는 *실 요구*(inspectable·queryable·validated). 어휘 재사용·단일 분류자·파라미터화로 near-duplicate 회피.
+
+### 14.9 open 질문 (v1 재-교차검증 표적)
+- **V-Q1**: `isZeroObservationGracefulTerminalEligible`가 `scan_status:"skipped"` 전수로 충분한가 — planned인데 정당하게 빈(예 빈 시트지만 지원포맷) 케이스가 crash로 오분류되나? 그런 "정상 빈 지원포맷"이 존재하나(그럼 eligible에 포함해야)?
+- **V-Q2**: producedTerminalArtifactRefs 방식이 createRunManifest 완료-경로 byte-parity 유지하나(graceful 분기가 비-graceful 미접촉)? provenance validation을 graceful이 산출해야 하나(blocked final-output은 권위-claim 없음)?
+- **V-Q3**: `terminal_disposition` record 필드가 기존 record validator·record_stage 소비자와 정합하나(record 계약 변경 파급)?
+- **V-Q4**: finalizer `terminalRunManifestValidationPath` 일반화가 완료-경로 불변·halted가 그 ref로 terminal-validation-trust 만족하나?
+- **V-Q5**: 구조가드 catch 동작-분류(rethrow vs degrade)가 결정론적으로 판정 가능한가(정적 분석 한계)? 애매한 catch는?
+- **V-Q6(승계)**: Slice 2 잔여 3 주장(§9 a/b/c) 재확인.
