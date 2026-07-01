@@ -414,8 +414,9 @@ export function assertTaintCensusMonotone(
 // synthesizes the children's judgments + this node's Layer-1 facts into a semantic judgment, then
 // classifies it deterministically. The LLM interaction is CALLER-INJECTED (SemanticSynthesisFn +
 // AdversarialVerifyFn) — mock in tests, real authoring in production — mirroring the realization-
-// agnostic leaf-reader. The over-context FRONTIER (which nodes accumulate vs are subsumed) is a later
-// cut (S3); S2 accumulates EVERY node, so consumed_child_judgment_keys == topology_child_keys.
+// agnostic leaf-reader. The over-context FRONTIER (S3, §13.6) partitions the tree: accumulating nodes
+// (over-context) synthesize their children; a frontier node (largest fitting subtree) is one flat read;
+// its descendants are subsumed placeholders. `overContextBudget` (leaf count) sets the boundary.
 
 /** Bounded, SOURCE-SAFE input for the synthesis at one node (design §13.6 envelope): Layer-1
  *  deterministic facts + children's LLM summaries only. NO raw cell values / formatCodes / examples
@@ -452,12 +453,80 @@ export interface AccumulateSemanticMapOpts {
   /** The ⓑ' pre-image fields common to the epoch (per-node layer1_ground_hash + child_contributions
    *  are filled in by the walk). */
   preImageBase: Omit<SemanticEpochPreImage, "layer1_ground_hash" | "child_contributions">;
+  /** Over-context frontier gate (§13.6 / S3): a subtree with MORE than this many leaves is over-context
+   *  → its nodes ACCUMULATE (synthesize from children); a subtree that fits is a FRONTIER (one flat
+   *  read) and its descendants are SUBSUMED. tenet 2: accumulation is only valuable over-context. The
+   *  budget VALUE must be folded (by the caller) into preImageBase.over_context_gate_config_sha256. */
+  overContextBudget: number;
   /** When true, produced nodes are seed-bound: refuted boundaries are EXCLUDED from the seed boundary
    *  list (kept in the taint census + a refuted disclosure), and honesty is enforced for seed. */
   seedBound?: boolean;
 }
 
 const VALUE_SHAPE_KIND = "value_shape" as const;
+
+// ── over-context frontier partition (S3 · design §13.6) ──────────────────────────────────────────
+//
+// The reduce tree is partitioned into three deterministic ROLES by a single deterministic metric
+// (subtree leaf count vs OVER_CONTEXT_BUDGET):
+//  - ACCUMULATING (over-context, near the root): synthesizes its children's judgments.
+//  - FRONTIER     (the largest subtree that fits one window): ONE flat read covers the whole subtree.
+//  - SUBSUMED     (a descendant of a frontier): no independent judgment; its frontier ancestor's read
+//                 covers it. It still gets a 1:1 placeholder node (reduce_read_attempt='subsumed').
+// Leaf count is ANTI-MONOTONE up the tree (a parent's subtree ⊇ a child's), so "fits" is downward-
+// closed: if a node fits, all its descendants fit — hence the frontier is the topmost fitting layer.
+
+export type FrontierMode = "accumulating" | "frontier" | "subsumed";
+
+/** Deterministic subtree LEAF count per node (the single over-context metric — NOT row-span or ground
+ *  bytes; §13.6 codex-F5). Throws on a cyclic trace. */
+export function computeSubtreeLeafCounts(trace: ReduceTopologyTrace): Map<SemanticNodeKey, number> {
+  const counts = new Map<SemanticNodeKey, number>();
+  const compute = (key: SemanticNodeKey, visiting: Set<SemanticNodeKey>): number => {
+    const cached = counts.get(key);
+    if (cached !== undefined) return cached;
+    if (visiting.has(key)) throw new Error(`comprehension-semantic-map: cycle at ${key} while counting leaves (§13.6).`);
+    const tnode = trace.nodes.get(key);
+    if (!tnode) throw new Error(`comprehension-semantic-map: trace node missing for ${key} (leaf count).`);
+    visiting.add(key);
+    const n = tnode.child_keys.length === 0 ? 1 : tnode.child_keys.reduce((s, c) => s + compute(c, visiting), 0);
+    visiting.delete(key);
+    counts.set(key, n);
+    return n;
+  };
+  for (const key of trace.nodes.keys()) compute(key, new Set());
+  return counts;
+}
+
+/** Classify every REACHABLE node (from root) into its frontier role, top-down (§13.6). A leaf can never
+ *  accumulate (no children), so it is a frontier (or subsumed under one). Deterministic. */
+export function classifyFrontier(trace: ReduceTopologyTrace, overContextBudget: number): Map<SemanticNodeKey, FrontierMode> {
+  const leafCounts = computeSubtreeLeafCounts(trace);
+  const mode = new Map<SemanticNodeKey, FrontierMode>();
+  const shouldAccumulate = (key: SemanticNodeKey): boolean => {
+    const tnode = trace.nodes.get(key);
+    if (!tnode || tnode.child_keys.length === 0) return false; // a leaf never accumulates.
+    return (leafCounts.get(key) ?? 0) > overContextBudget;
+  };
+  const classify = (key: SemanticNodeKey, underFrontier: boolean): void => {
+    const tnode = trace.nodes.get(key);
+    if (!tnode) throw new Error(`comprehension-semantic-map: trace node missing for ${key} (classify).`);
+    const m: FrontierMode = underFrontier ? "subsumed" : shouldAccumulate(key) ? "accumulating" : "frontier";
+    mode.set(key, m);
+    const childUnder = m !== "accumulating"; // frontier/subsumed → descendants subsumed.
+    for (const c of tnode.child_keys) classify(c, childUnder);
+  };
+  classify(trace.root_key, false);
+  return mode;
+}
+
+/** Fail-closed: a SUBSUMED node carries no judgment (its frontier ancestor absorbed it). */
+export function assertSubsumedNodeEmpty(node: ComprehensionSemanticNode): void {
+  if (node.reduce_read_attempt !== "subsumed") return;
+  if (node.semantic_summary !== "" || node.semantic_boundaries.length > 0 || node.structure_boundary_coverage.length > 0) {
+    throw new Error(`comprehension-semantic-map: subsumed node ${reduceNodeKey(node.node_ref)} must carry no judgment (§13.6 — its frontier ancestor's read covers it).`);
+  }
+}
 
 /** SOURCE-SAFETY guard (§13.6 / C6): the synthesis input must carry only bounded deterministic facts +
  *  child summary prose — never a raw cell value / formatCode / example. By construction the builder
@@ -528,6 +597,7 @@ export function accumulateSemanticMap(
   const result = new Map<SemanticNodeKey, ComprehensionSemanticNode>();
   const seedBound = opts.seedBound ?? false;
   const visiting = new Set<SemanticNodeKey>(); // cycle detection (review F5 / onto issue-003).
+  const modes = classifyFrontier(trace, opts.overContextBudget); // S3 over-context partition (§13.6).
 
   const visit = (key: SemanticNodeKey): ComprehensionSemanticNode => {
     const cached = result.get(key);
@@ -540,17 +610,50 @@ export function accumulateSemanticMap(
     if (!tnode || !reduceNode) {
       throw new Error(`comprehension-semantic-map: trace/node missing for key ${key} (accumulate walk).`);
     }
+    const mode = modes.get(key);
+    if (!mode) throw new Error(`comprehension-semantic-map: no frontier mode for ${key} (unreachable from root?).`);
     visiting.add(key);
-    const children = tnode.child_keys.map(visit); // bottom-up: children first.
+    const children = tnode.child_keys.map(visit); // recurse ALWAYS — a subsumed subtree still gets 1:1 placeholder nodes.
     visiting.delete(key);
 
+    // Children whose judgment this node CONSUMES = the non-subsumed direct children. For an accumulating
+    // node that is all its children; for a frontier node that is none (children are subsumed).
+    const consumedChildKeys = tnode.child_keys.filter((k) => modes.get(k) !== "subsumed");
+    const consumedChildren = children.filter((c) => modes.get(reduceNodeKey(c.node_ref)) !== "subsumed");
+
+    // SUBSUMED: no judgment — a 1:1 placeholder (its frontier ancestor's flat read covers it).
+    if (mode === "subsumed") {
+      const preImage: SemanticEpochPreImage = { ...opts.preImageBase, layer1_ground_hash: tnode.ground_hash, child_contributions: [] };
+      const node: ComprehensionSemanticNode = {
+        node_ref: tnode.node_ref,
+        layer1_ground_hash: tnode.ground_hash,
+        subtree_epoch_contribution: reduceNodeEpochContribution(preImage),
+        authority: "non_authoritative",
+        provisional: true,
+        reduce_read_attempt: "subsumed",
+        semantic_summary: "",
+        semantic_boundaries: [],
+        structure_boundary_coverage: [],
+        topology_child_keys: tnode.child_keys,
+        consumed_child_judgment_keys: [],
+        unanchored_unverified_count: 0,
+      };
+      assertSubsumedNodeEmpty(node);
+      assertChildJudgmentCoverage(node, []);
+      result.set(key, node);
+      return node;
+    }
+
+    // FRONTIER = one flat read over the whole subtree (child_summaries omitted; children are subsumed).
+    // ACCUMULATING = synthesize the (non-subsumed) children's judgments. Both are 'produced'.
+    const isFrontier = mode === "frontier";
     const input: SemanticSynthesisInput = {
       node_ref: tnode.node_ref,
       format_clusters: [...reduceNode.format_clusters],
       value_shape_seams: reduceNode.boundaries
         .filter((b) => b.boundary_kind === VALUE_SHAPE_KIND)
         .map((b) => ({ row: b.first_new_format_row, prev_shape: b.prev_shape, new_shape: b.new_shape })),
-      child_summaries: children.map((c) => ({ key: reduceNodeKey(c.node_ref), summary: c.semantic_summary })),
+      child_summaries: isFrontier ? [] : consumedChildren.map((c) => ({ key: reduceNodeKey(c.node_ref), summary: c.semantic_summary })),
     };
     assertSynthesisInputBounded(input);
     const out = opts.synthesize(input);
@@ -575,7 +678,9 @@ export function accumulateSemanticMap(
     const preImage: SemanticEpochPreImage = {
       ...opts.preImageBase,
       layer1_ground_hash: tnode.ground_hash,
-      child_contributions: children.map((c) => c.subtree_epoch_contribution),
+      // A frontier folds no children (its ground already aggregates the subtree); an accumulating node
+      // folds the CONSUMED children's contributions (subsumed children are not consumed).
+      child_contributions: isFrontier ? [] : consumedChildren.map((c) => c.subtree_epoch_contribution),
     };
 
     const node: ComprehensionSemanticNode = {
@@ -589,17 +694,17 @@ export function accumulateSemanticMap(
       semantic_boundaries: keptBoundaries,
       structure_boundary_coverage: coverage,
       topology_child_keys: tnode.child_keys,
-      consumed_child_judgment_keys: tnode.child_keys, // S2: every node accumulates (frontier = S3).
+      consumed_child_judgment_keys: consumedChildKeys, // [] for a frontier; all children for accumulating.
       unanchored_unverified_count: 0,
     };
-    // Taint = children + own remaining unverified boundaries + any refuted removed for seed.
+    // Taint = CONSUMED children + own remaining unverified boundaries + any refuted removed for seed.
     node.unanchored_unverified_count =
-      computeUnanchoredUnverifiedCount(node, children) + (seedBound ? refutedCount : 0);
+      computeUnanchoredUnverifiedCount(node, consumedChildren) + (seedBound ? refutedCount : 0);
 
-    // Fail-closed validators (§13.5).
-    assertChildJudgmentCoverage(node, tnode.child_keys);
+    // Fail-closed validators (§13.5). expectedConsumedKeys = the non-subsumed children.
+    assertChildJudgmentCoverage(node, consumedChildKeys);
     assertSemanticBoundaryHonesty(node, seedBound);
-    assertTaintCensusMonotone(node, children);
+    assertTaintCensusMonotone(node, consumedChildren);
 
     result.set(key, node);
     return node;

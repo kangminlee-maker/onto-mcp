@@ -14,8 +14,11 @@ import {
   assertChildJudgmentCoverage,
   assertPreImageKeysAllowlisted,
   assertSemanticBoundaryHonesty,
+  assertSubsumedNodeEmpty,
   assertSynthesisInputBounded,
   assertTaintCensusMonotone,
+  classifyFrontier,
+  computeSubtreeLeafCounts,
   computeUnanchoredUnverifiedCount,
   reconcileBoundaries,
   reduceNodeEpochContribution,
@@ -450,6 +453,7 @@ describe("accumulateSemanticMap (mock LLM realization)", () => {
       over_context_gate_config_sha256: "cfg",
       over_context_gate_logic_sha256: "logic",
     },
+    overContextBudget: 0, // max accumulation: every internal node accumulates, leaves are frontier.
     seedBound,
   });
 
@@ -588,6 +592,7 @@ describe("adversarial fail-closed hardening", () => {
         over_context_gate_config_sha256: "cfg",
         over_context_gate_logic_sha256: "logic",
       },
+      overContextBudget: 0,
       seedBound: true,
     };
     expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/verifyUnanchored returned invalid/);
@@ -626,8 +631,9 @@ describe("adversarial fail-closed hardening", () => {
         over_context_gate_config_sha256: "cfg",
         over_context_gate_logic_sha256: "logic",
       },
+      overContextBudget: 0,
     };
-    expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/cycle in reduce topology/);
+    expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/cycle/);
   });
 
   it("F5: an orphan trace node (unreachable from root) fails closed", () => {
@@ -657,6 +663,7 @@ describe("adversarial fail-closed hardening", () => {
         over_context_gate_config_sha256: "cfg",
         over_context_gate_logic_sha256: "logic",
       },
+      overContextBudget: 0,
     };
     expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/unreachable from root/);
   });
@@ -670,5 +677,131 @@ describe("adversarial fail-closed hardening", () => {
   it("F8: a duplicate consumed child-judgment key fails closed", () => {
     const node = semNode({ consumed_child_judgment_keys: ["k1", "k1"] });
     expect(() => assertChildJudgmentCoverage(node, ["k1"])).toThrow(/duplicate consumed/);
+  });
+});
+
+// ── over-context frontier (S3 · §13.6) ────────────────────────────────────────
+// Tree (5 leaves, fanin 2): ROOT(1-50, 5 leaves) → [P3(1-40, 4), L5(41-50, 1)];
+// P3 → [P1(1-20, 2), P2(21-40, 2)]; P1 → [L1,L2]; P2 → [L3,L4]. 9 distinct nodes.
+
+describe("over-context frontier", () => {
+  const build = () =>
+    reduceColumnLeavesWithTrace(
+      [
+        leaf(1, 10, "int", "int"),
+        leaf(11, 20, "text", "text"),
+        leaf(21, 30, "int", "int"),
+        leaf(31, 40, "text", "text"),
+        leaf(41, 50, "int", "int"),
+      ],
+      2,
+    );
+
+  const s3opts = (overContextBudget: number): AccumulateSemanticMapOpts => ({
+    synthesize: (input) => ({ semantic_summary: `kids=${input.child_summaries.length}`, boundaries: [] }),
+    verifyUnanchored: () => "adversarial_confirmed",
+    preImageBase: {
+      reduce_reader_model_identity: "m",
+      reduce_prompt_sha256: "p",
+      reduce_schema_tool_version: "v",
+      comprehension_version: "c",
+      over_context_gate_config_sha256: "cfg",
+      over_context_gate_logic_sha256: "logic",
+    },
+    overContextBudget,
+    seedBound: true,
+  });
+
+  const modeCounts = (m: Map<string, string>) => {
+    const c: Record<string, number> = { accumulating: 0, frontier: 0, subsumed: 0 };
+    for (const v of m.values()) c[v] = (c[v] ?? 0) + 1;
+    return c;
+  };
+
+  it("computeSubtreeLeafCounts: root=5, leaves=1", () => {
+    const { trace } = build();
+    const counts = computeSubtreeLeafCounts(trace);
+    expect(counts.get(trace.root_key)).toBe(5);
+    for (const [key, tnode] of trace.nodes) {
+      if (tnode.child_keys.length === 0) expect(counts.get(key)).toBe(1);
+    }
+  });
+
+  it("classifyFrontier covers every reachable node (1:1)", () => {
+    const { trace } = build();
+    expect(classifyFrontier(trace, 2).size).toBe(trace.nodes.size);
+  });
+
+  it("budget ≥ total → root is the sole frontier, all descendants subsumed", () => {
+    const { trace } = build();
+    const m = classifyFrontier(trace, 100);
+    expect(m.get(trace.root_key)).toBe("frontier");
+    expect(modeCounts(m)).toEqual({ accumulating: 0, frontier: 1, subsumed: 8 });
+  });
+
+  it("budget 0 → every internal node accumulates, leaves are frontier, none subsumed", () => {
+    const { trace } = build();
+    const c = modeCounts(classifyFrontier(trace, 0));
+    expect(c.subsumed).toBe(0);
+    expect(c.accumulating).toBe(4); // ROOT, P3, P1, P2
+    expect(c.frontier).toBe(5); // 5 leaves
+  });
+
+  it("mid budget (4) → root accumulates, 2 frontier (P3, L5), 6 subsumed", () => {
+    const { trace } = build();
+    const m = classifyFrontier(trace, 4);
+    expect(m.get(trace.root_key)).toBe("accumulating");
+    expect(modeCounts(m)).toEqual({ accumulating: 1, frontier: 2, subsumed: 6 });
+  });
+
+  it("budget monotonicity: higher budget ⇒ ≥ subsumed", () => {
+    const { trace } = build();
+    const s = (b: number) => modeCounts(classifyFrontier(trace, b)).subsumed;
+    expect(s(0)).toBe(0);
+    expect(s(4)).toBeGreaterThan(s(0));
+    expect(s(100)).toBeGreaterThan(s(4));
+  });
+
+  it("accumulate (budget ≥ total): root produced+flat (consumed=[]), all descendants subsumed+empty; 1:1", () => {
+    const { trace, nodesByKey } = build();
+    const map = accumulateSemanticMap(trace, nodesByKey, s3opts(100));
+    expect(map.size).toBe(trace.nodes.size); // 1:1 incl subsumed
+    const root = map.get(trace.root_key)!;
+    expect(root.reduce_read_attempt).toBe("produced");
+    expect(root.consumed_child_judgment_keys).toEqual([]); // frontier consumes no child judgments
+    for (const [key, node] of map) {
+      if (key === trace.root_key) continue;
+      expect(node.reduce_read_attempt).toBe("subsumed");
+      expect(node.semantic_summary).toBe("");
+      expect(node.semantic_boundaries).toEqual([]);
+      expect(node.consumed_child_judgment_keys).toEqual([]);
+    }
+  });
+
+  it("accumulate (mid budget): frontier flat-reads (kids=0), accumulating consumes non-subsumed children", () => {
+    const { trace, nodesByKey } = build();
+    const map = accumulateSemanticMap(trace, nodesByKey, s3opts(4));
+    const root = map.get(trace.root_key)!;
+    // ROOT accumulates its 2 children (P3 frontier + L5 frontier).
+    expect(root.reduce_read_attempt).toBe("produced");
+    expect(root.consumed_child_judgment_keys.length).toBe(2);
+    expect(root.semantic_summary).toBe("kids=2");
+    // Exactly 6 subsumed placeholders (P1,P2,L1..L4).
+    const subsumed = [...map.values()].filter((n) => n.reduce_read_attempt === "subsumed");
+    expect(subsumed.length).toBe(6);
+    // Frontier nodes flat-read (kids=0).
+    const frontierSummaries = [...map.values()].filter(
+      (n) => n.reduce_read_attempt === "produced" && n.consumed_child_judgment_keys.length === 0,
+    );
+    expect(frontierSummaries.length).toBe(2); // P3, L5
+    expect(frontierSummaries.every((n) => n.semantic_summary === "kids=0")).toBe(true);
+  });
+
+  it("NEGATIVE CONTROL: a subsumed node carrying a judgment fails closed", () => {
+    const node = semNode({
+      reduce_read_attempt: "subsumed",
+      semantic_boundaries: [bound("unanchored", "unverified")],
+    });
+    expect(() => assertSubsumedNodeEmpty(node)).toThrow(/must carry no judgment/);
   });
 });
