@@ -25,7 +25,12 @@
 - **설계**: v1 양패밀리(ultracode+onto) REDESIGN_NARROW → v2 $ultracode-for-codex SOUND_WITH_REVISIONS → v2.1.
 - **코드(S1+S2)**: $ultracode-for-codex(CHANGES_REQUIRED·8 confirmed·tsx probe) + onto(16 issue) **강한 수렴** = fail-closed 가드가 malformed 입력에 fail-open → 전부 하드닝(`8c3ab64`)·11 adversarial 음성대조. **★코드-레벨 교차검증이 by-construction 테스트가 못 본 fail-open 7개 적발**(Layer-1 F3 전례 반복).
 
-## 3. ▶ NEXT = S3 (over-context frontier 게이트) — 설계 §13.6
+## 3. ✅ S3 + S3 코드 교차검증 완료 → NEXT = S4 (seed 투영) — 설계 §13.6 / §6
+
+> S3 커밋 `a96f830` + 하드닝 커밋 `c466793`(2-패밀리 코드 교차검증: codex CHANGES_REQUIRED 4 + onto 13 issue·수렴; F1 frontier epoch 재귀 분리[HIGH]·tree 검증기·node_ref clone·budget 검증·subsumed taint·6 수정 + 7 음성대조). 브랜치 HEAD `c466793`·9커밋·push·독립. full vitest 2168·회귀0.
+> **▶ NEXT = S4 (seed 투영·§6·default-off)**: accumulated map → `provisional_labels` 계층 승격(run.ts:6476/11760 flat 경로 보존·byte-parity로 off 증명)·§6 정직 투영규칙(anchored=위치only·unanchored+refuted=제외+disclosure·unanchored_unverified_count census)·material&&unanchored 적대재검증 라우팅(설계 N3=전량). 이후 실 LLM(한도)·production 배선.
+
+### (참고) S3 설계 §13.6 요약 — 이미 구현됨
 - `shouldAccumulate(node, trace)`: **단일 결정론 metric = 서브트리 leaf 수**(row_span/ground-byte 혼용 금지·codex-F5) > `OVER_CONTEXT_BUDGET`. config + predicate/ordering logic sha 둘 다 §13.4 preimage(`over_context_gate_config_sha256`·`over_context_gate_logic_sha256`)에 fold.
 - **frontier/subsumed**: over-context 서브트리=노드마다 누적, in-context 서브트리=frontier 노드 하나만 flat-read·그 아래 `reduce_read_attempt="subsumed"`(의미노드 존재하나 판단은 frontier 흡수·consumed=[]). 불변식 = "frontier 위/on 모든 뼈대 노드 populated 정확히 하나, 아래 subsumed(명시)".
 - S2의 `accumulateSemanticMap`는 현재 **전 노드 누적**(frontier 없음·consumed==topology). S3 = frontier 게이트를 walk에 배선 + subsumed 처리 + `assertChildJudgmentCoverage`가 이미 subsumed-aware(consumed=[]).
