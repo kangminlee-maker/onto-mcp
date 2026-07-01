@@ -1,7 +1,7 @@
 # Slice 3 설계 — graceful-terminal 공유 machinery + site 1 배선
 
-> 상태: **DESIGN v1 (§13 gate=`redesign_narrow` narrows 반영·재-교차검증 대기)**. 날짜 2026-07-01 · baseline `feat/maturation-value-read` HEAD `0c8c948`.
-> ⚠️ **§14 = v1 authoritative build spec** — §3~§10은 v0 원안, §13이 교차검증 결과, **§14가 각 narrow를 해소한 최종 설계로 §3~§10을 override**. 빌드·재검증은 §14 기준.
+> 상태: **DESIGN v1 → 재-교차검증(§15): narrows 방향·spine 확정·bounded 명세 정련(v2 §15.5)**. 날짜 2026-07-01 · baseline `feat/maturation-value-read` HEAD `507ba7b`.
+> ⚠️ **build spec = §14(v1) + §15.5(v2 정련이 §14 override)**. §3~§10=v0 원안·§13=1차 교차검증(redesign_narrow)·§14=v1 narrow 해소·§15=2차 재검증(narrows 확정·N2/N5/N7 명세 정련). **빌드는 §14+§15.5 기준.**
 > 상위 SSOT: `20260701-shared-graceful-terminal-step1-design.md`(Option A 확정·batch 5-site·§5.1 catch 통합·§12 교차검증) · census `20260701-reconstruct-throw-census-triage.md`(§7.3 7 표적·§7.4 두 제약).
 > 조각 B(reachability): `20260701-reachability-manifest-design.md`(v2)·**Slice 1(validator)·Slice 2(런타임 census+createRunManifest witness-gating) 커밋 완료**.
 > 진행: 이 설계 → **양-패밀리 교차검증(ultracode+onto)** → owner 승인 → 빌드([[design-validation-ultracode-onto]]). 교차검증은 Slice 2 잔여 3 주장(§9)도 함께 다룬다.
@@ -268,3 +268,38 @@ Option A spine 유지. 5 HIGH + 4 MED narrows를 반영해 **(1) 정직한 eligi
 - **V-Q4**: finalizer `terminalRunManifestValidationPath` 일반화가 완료-경로 불변·halted가 그 ref로 terminal-validation-trust 만족하나?
 - **V-Q5**: 구조가드 catch 동작-분류(rethrow vs degrade)가 결정론적으로 판정 가능한가(정적 분석 한계)? 애매한 catch는?
 - **V-Q6(승계)**: Slice 2 잔여 3 주장(§9 a/b/c) 재확인.
+
+## 15. v1 재-교차검증 결과 (2026-07-01) — narrows 방향 확정·spine 생존·bounded 명세 정련(v2)
+> 두 패밀리 병행: **ultracode** `wf_93e0dcb4-d49`(6 렌즈·22 agent·raw 15→surviving 3·gate=`gate_pass_with_minor_revisions`·narrows_resolved=true·headline 생존) + **onto full** `20260701-9f1a5ddd`(9 lens·**completed**[halt 없음]·7 issue[4 high·3 med]). **양 패밀리 합치: §13 5 HIGH narrow의 *방향·spine 확정*, 그러나 N2/N5 *명세 불완전* 수렴.**
+
+### 15.1 강한 수렴 = N2(terminal-artifact 투영)가 명세 불완전
+§14.2가 `artifact_refs`만 부분 처리·**형제 투영 3개 누락**(전부 실코드):
+- **manifest·record artifact_refs 미채움**(ultracode #2): graceful record `artifact_refs.{reconstruct_run_manifest, final_output}` 채움 미명세 → `getRunStatus`/`getRunResult`(reconstruct-api.ts:936·982-991)가 null ref→null 콘텐츠·`deriveReconstructProgress`가 null manifest→89 stage 'pending'. (즉시-반환은 정상·재-read만 깨짐.)
+- **implemented_artifacts 미투영**(onto issue-001/003·HIGH): `purpose_adequacy_scope.implemented_artifacts`도 `terminalArtifactsCompleted` 게이트에 묶임 → graceful produced terminal 아티팩트 미포함.
+- **producer 의미 미정의**(onto issue-004/006·HIGH/MED): graceful final_output/record_assembly는 **deterministic runtime 산출**인데 normal step은 `host_llm`(directiveAuthor) owner + provenance validation. graceful step은 runtime owner/performer + 그에 맞는 provenance 규칙 필요.
+
+### 15.2 onto union delta (ultracode 미포착·전부 반영)
+- **[HIGH] issue-002: N5 catch 가드 보수적-구문화(내 V-Q5 해소)**. "동작 분류"(rethrow vs degrade)는 정적 판정 불가 → **fail-closed**: *증명 가능한 무조건-직접-rethrow만 면제*·나머지 모든 catch는 `isGracefulTerminalSignal` rethrow 최상단 필수·**full catch-set 커버리지 단언**(catch 파라미터명·동작 라벨 무관).
+- **[MED] issue-005: 단일 terminal-status authority 계약**. record_stage·`terminal_disposition`·Core API status·TUI가 하나의 canonical 투영에 안 묶임(diamond) → 단일 투영 계약 + record-level validation invariant(`terminal_disposition` present ⇒ record_stage 정합).
+- **[MED] issue-007: `producedTerminalArtifactRefs` 신규 채널 폐기**(개념경제). 기존 `artifactRefs`+`reconstructRecordPath`가 이미 terminal ref 소유 → graceful 분기가 그 채널을 null화 *안 함*으로 충분·신규 public 필드 불요.
+
+### 15.3 ultracode union delta
+- **[MED] F2: N7 fail-closed의 negative control 부재**. §14.7 row1(validate 통과)은 site-1 by-construction honest라 공허 통과·row2는 assemble 前 크래시. post-eligibility invalid graceful manifest(부재 reachedArtifactRef→`manifest_artifact_missing`→invalid→finalizer throw) 주입→크래시 단언 row 필요(N1엔 준 대칭 통제).
+- **[LOW] wrapper 'reconstruct session completed' 내레이션**(reconstruct-api.ts:849-855) blocked 경로서 — cosmetic·poll-stop 무영향(terminality는 record_stage/terminal_disposition서 파생).
+
+### 15.4 ★핵심 통찰 = union이 v1보다 개념 작은 v2로 수렴
+onto issue-007(신규 필드 폐기·기존 artifactRefs 재사용)이 ultracode #2(record refs 미채움)를 **동시 해소**: graceful 분기가 **기존 `artifactRefs` 채널**(assembleGracefulTerminal이 produced terminal 경로로 채움)을 null화 안 하면 → manifest artifact_refs + implemented_artifacts + record artifact_refs가 **한 출처서** 채워짐. `producedTerminalArtifactRefs` 신규 필드 불요. **v2는 v1보다 개념 표면 감소.**
+
+### 15.5 v2 정련 지시 (bounded·빌드 전 반영·§14 override)
+- **N2′(대체)**: graceful 분기 = 신규 `producedTerminalArtifactRefs` 필드 **폐기**. 대신 createRunManifest graceful 경로가 **기존 `artifactRefs`(produced terminal 경로 포함)·`reconstructRecordPath`를 null화하지 않고** — (a) `artifact_refs`에 final_output/reconstruct_record 보존 (b) `implemented_artifacts`에 produced terminal id 포함 (c) 그 step을 **runtime owner/performer**(`runtimePerformer()`·deterministic)로 completedStep (d) 하류 미도달 stage는 not_reached. assembleGracefulTerminal은 write한 terminal 경로를 이 채널에 실음.
+- **N3′**: 단일 canonical terminal-status 투영 함수(record→status) + record validator invariant(`terminal_disposition`∈{blocked,limited} present ⇒ record_stage 정합·getRunStatus/deriveReconstructProgress/TUI 전부 이 하나서 파생).
+- **N5′**: 구조가드 fail-closed 보수화 — 증명가능 무조건-rethrow만 면제·나머지 전부 signal-rethrow 가드·full catch inventory 커버리지 리포트.
+- **N7′**: §14.7에 negative-control row 추가 — post-eligibility invalid graceful manifest 주입 → **크래시**(halted finalize 아님) 단언.
+- **N6′(producer)**: graceful final_output/provenance/record_assembly step = runtime-produced 의미(owner/performer runtime·provenance 규칙 graceful 변형)로 §14.2/§14.6에 명시.
+- **(LOW)** wrapper blocked 경로 내레이션 억제/재브랜딩.
+
+### 15.6 gate 종합 및 수렴 판정
+- **양 패밀리 합치**: §13 5 HIGH narrow **방향·해소 확정**·Option A spine **2회 연속 생존**. 잔여는 **이미 식별된 narrows(N2·N5·N7) 내부의 명세-완전성** + 개념경제(N2 필드 폐기)·단일-authority(N3) — **spine/방향 미반증·신규 subsystem 확장 없음**.
+- **severity 발산(상보)**: ultracode `gate_pass_with_minor_revisions`(명세는 build-fix) vs onto 4 HIGH(투영 완전성·가드 결정성=path failure). union = **명세 정련이 build 전 필수이나 재설계 아님**. CLAUDE.md 수렴 휴리스틱: 다른-KIND 발산→union 채택(onto의 HIGH 완전성 + ultracode의 negative-control 둘 다 반영).
+- **판정 = 방향 확정·bounded 명세 정련(v2 §15.5)**. loopback 2회 규율(v0→v1이 1회·v2는 2회째)에 따라 **owner 결정 필요**: v2 명세 반영 후 (A) 빌드 / (B) 3차 재검증 / (C) owner 선검토.
+- 산출물: ultracode `wf_93e0dcb4-d49`·onto `.onto/review/20260701-9f1a5ddd/`(issue-ledger.yaml·7 issue).
