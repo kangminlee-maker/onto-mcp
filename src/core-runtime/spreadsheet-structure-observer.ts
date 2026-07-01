@@ -2780,6 +2780,245 @@ export async function observeSpreadsheetSource(
   }
 }
 
+// ════════════════════ maturation value-read — targeted raw-cell read (design §15.4) ════════════════════
+//
+// The maturation value-read cut's ONLY raw-value read path. Unlike the aggregate-only inventory (which
+// materializes the row grid and DISCARDS it after profiling) and the value-blind leaf-reader, this
+// re-streams an AUTHORIZED runtime-target source and retains a BOUNDED slice of raw cell values for the
+// limitation-discharge judgment. Addressed in the GRID frame (origin-normalized columns + 1-based grid
+// rows) — the SAME frame `parsed.rows` and per_sheet_data[].columns[].index use — so enumeration and the
+// reader run the same parser + caps and align by construction (no A1/R1C1 re-parse, no firstRowNum skew).
+// Crash-isolated: a corrupt/oversized/unreadable source degrades to an honest empty read, never a throw.
+
+/** Bounds for one targeted cell-read (design §15.4) — keeps the raw-value footprint small. */
+export interface CellReadCaps {
+  /** Max read regions (one per picked scope) materialized in a single call. */
+  maxRegions: number;
+  /** Max non-empty cells retained per region. */
+  maxCellsPerRegion: number;
+  /** Max characters retained per cell value (longer values are clipped). */
+  cellCharCap: number;
+  /** Total character budget across all regions (the run-wide raw-value ceiling). */
+  totalReadCharCap: number;
+}
+
+export const DEFAULT_CELL_READ_CAPS: CellReadCaps = {
+  maxRegions: 8,
+  maxCellsPerRegion: 200,
+  cellCharCap: 200,
+  totalReadCharCap: 20_000,
+};
+
+/** A grid-frame selection to read (matches ReconstructValueReadScope). */
+export interface CellReadSelection {
+  sheet: string;
+  grid_column_index: number;
+  /** 1-based grid row bounds (inclusive). Null = the whole column (bounded by caps). */
+  grid_row_start?: number | null;
+  grid_row_end?: number | null;
+}
+
+/** The bounded cells materialized for one grid scope. Cells carry GRID coords (the same frame the
+ *  scope addressed: 1-based grid row, origin-normalized grid column). */
+export interface TargetedCellReadRegion {
+  sheet: string;
+  grid_column_index: number;
+  grid_row_start: number | null;
+  grid_row_end: number | null;
+  cells: Array<{ grid_row: number; grid_column_index: number; value: string }>;
+  cells_read: number;
+  truncated: boolean;
+}
+
+export interface TargetedCellReadResult {
+  regions: TargetedCellReadRegion[];
+  total_cells_read: number;
+  truncated: boolean;
+  /** Raw-byte sha256 of the file actually read (null only when the file could not be read at all). */
+  content_sha256: string | null;
+  /** Set (with regions: []) when the source could not be read — NEVER throws (design §15.4 containment). */
+  unreadable_reason?: string;
+}
+
+/** Re-stream only the named worksheets and return their origin-normalized row grids (the same
+ *  `parsed.rows` the inventory pass produced). Mirrors buildXlsxInventory's pass-1 part collection +
+ *  pass-2 worksheet streaming, scoped to the requested sheets and WITHOUT the aggregate profiling.
+ *  May throw on a corrupt archive — the caller (readTargetedCellValues) wraps this in crash isolation. */
+function streamWorksheetGridsByName(
+  bytes: Uint8Array,
+  caps: DataLayerCaps,
+  wantedSheetNames: ReadonlySet<string>,
+): Map<string, string[][]> {
+  const out = new Map<string, string[][]>();
+  const parts = streamCollectEntries({
+    bytes,
+    want: (name) =>
+      name === "xl/workbook.xml" ||
+      name === "xl/_rels/workbook.xml.rels" ||
+      name === "xl/sharedStrings.xml" ||
+      name === "xl/styles.xml",
+    onMacro: () => {},
+    onOversized: () => {},
+  });
+  const workbookXml = parts.get("xl/workbook.xml");
+  if (!workbookXml) return out;
+  const workbook = parseWorkbook(workbookXml);
+  const relsXml = parts.get("xl/_rels/workbook.xml.rels");
+  const workbookRels = relsXml ? parseRels(relsXml) : [];
+  const sstXml = parts.get("xl/sharedStrings.xml");
+  const sharedStrings = sstXml ? parseSharedStrings(sstXml) : [];
+  const stylesXml = parts.get("xl/styles.xml");
+  const dateXfIndexes = stylesXml ? parseStyles(stylesXml).dateXfIndexes : new Set<number>();
+  const relById = new Map(workbookRels.map((r) => [r.id, r]));
+  // sheet name → worksheet part path, restricted to the wanted sheets (so we stream only those).
+  const nameByPath = new Map<string, string>();
+  for (const sheetEntry of workbook.sheets) {
+    if (!wantedSheetNames.has(sheetEntry.name)) continue;
+    const rel = relById.get(sheetEntry.rid);
+    const sheetPath = rel ? resolveZipPath("xl", rel.target) : null;
+    if (sheetPath) nameByPath.set(sheetPath, sheetEntry.name);
+  }
+  if (nameByPath.size === 0) return out;
+  streamWorksheets({
+    bytes,
+    want: (name) => nameByPath.has(name),
+    sinkFor: (name) => {
+      const sheetName = nameByPath.get(name);
+      if (!sheetName) return null;
+      // No xfFormatIdentity → no per-cell format capture; we only need the value grid.
+      const wp = createWorksheetParser({ sharedStrings, sheetName, caps, dateXfIndexes });
+      return {
+        write: wp.write,
+        finalize: () => {
+          out.set(sheetName, wp.getResult().rows);
+        },
+      };
+    },
+  });
+  return out;
+}
+
+/**
+ * Read a bounded slice of RAW cell values from an authorized source, for the maturation value-read
+ * limitation-discharge judgment (design §15.4). The caller (runtime, not the LLM) supplies the resolved
+ * absolute `sourceRef` and grid-frame `selections`. Returns the materialized cells + honest read
+ * provenance (cells_read, truncated, content_sha256). NEVER throws — a corrupt/oversized/unreadable
+ * source degrades to `{ regions: [], unreadable_reason }` (mirrors observeSpreadsheetSource's crash
+ * isolation), so the value-read stage degrades gracefully to a blocked-preserving zero-discharge.
+ */
+export async function readTargetedCellValues(args: {
+  sourceRef: string;
+  selections: CellReadSelection[];
+  caps?: CellReadCaps;
+  dataLayerCaps?: DataLayerCaps;
+}): Promise<TargetedCellReadResult> {
+  const caps = args.caps ?? DEFAULT_CELL_READ_CAPS;
+  const dataCaps = args.dataLayerCaps ?? DEFAULT_DATA_LAYER_CAPS;
+  const empty = (reason: string, sha: string | null = null): TargetedCellReadResult => ({
+    regions: [],
+    total_cells_read: 0,
+    truncated: false,
+    content_sha256: sha,
+    unreadable_reason: reason,
+  });
+  const ext = path.extname(args.sourceRef).toLowerCase();
+  const workbookKind = SPREADSHEET_EXTENSION_KINDS[ext];
+  let bytes: Buffer;
+  try {
+    const stat = await fs.stat(args.sourceRef);
+    if (stat.size > MAX_SOURCE_BYTES) return empty(`source too large (${stat.size} bytes); not read`);
+    bytes = await fs.readFile(args.sourceRef);
+  } catch (error) {
+    return empty(`source unreadable (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+  }
+  const contentSha256 = sha256Hex(bytes);
+  if (workbookKind === undefined) {
+    return empty(`unrecognized spreadsheet extension: ${ext || "(none)"}`, contentSha256);
+  }
+  // CRASH ISOLATION (design §15.4): the streaming parsers can throw on a corrupt/oversized workbook or
+  // a >512MB CSV string. Degrade to an honest empty read (preserving the byte hash) — never throw out
+  // of the maturation value-read stage.
+  let rowsBySheet: Map<string, string[][]>;
+  try {
+    if (workbookKind === "csv" || workbookKind === "tsv") {
+      const text = bytes.toString("utf8");
+      const stripped = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+      const delimiter = workbookKind === "tsv" ? ("\t" as const) : detectDelimiter(stripped);
+      const { rows } = parseCsv(stripped, delimiter, dataCaps.max_rows_scanned_per_sheet + 1);
+      // A CSV is a single logical sheet keyed by the file basename (buildCsvInventory convention).
+      rowsBySheet = new Map([[path.basename(args.sourceRef), rows]]);
+    } else if (workbookKind === "xlsx" || workbookKind === "xlsm") {
+      rowsBySheet = streamWorksheetGridsByName(
+        bytes,
+        dataCaps,
+        new Set(args.selections.map((s) => s.sheet)),
+      );
+    } else {
+      return empty(`${workbookKind} extraction not yet implemented`, contentSha256);
+    }
+  } catch (error) {
+    return empty(
+      `targeted cell-read failed (${error instanceof Error ? error.message : String(error)})`,
+      contentSha256,
+    );
+  }
+
+  const regions: TargetedCellReadRegion[] = [];
+  let totalCells = 0;
+  let totalChars = 0;
+  let truncated = false;
+  for (const sel of args.selections) {
+    if (regions.length >= caps.maxRegions) {
+      truncated = true;
+      break;
+    }
+    const rows = rowsBySheet.get(sel.sheet);
+    const cells: Array<{ grid_row: number; grid_column_index: number; value: string }> = [];
+    let regionTruncated = false;
+    if (rows) {
+      // grid_row is 1-based (the value-tile segment frame); parsed.rows is 0-based. Null bounds = whole
+      // column. Clamp to the materialized grid so an out-of-range pick reads nothing (never throws).
+      const startIdx = sel.grid_row_start != null ? Math.max(0, sel.grid_row_start - 1) : 0;
+      const endIdx =
+        sel.grid_row_end != null ? Math.min(rows.length - 1, sel.grid_row_end - 1) : rows.length - 1;
+      for (let r = startIdx; r <= endIdx; r += 1) {
+        if (cells.length >= caps.maxCellsPerRegion) {
+          regionTruncated = true;
+          break;
+        }
+        if (totalChars >= caps.totalReadCharCap) {
+          regionTruncated = true;
+          truncated = true;
+          break;
+        }
+        const raw = rows[r]?.[sel.grid_column_index] ?? "";
+        if (raw === "") continue; // skip empty cells (sparse grid) — only real values count
+        // Per-cell clipping is a form of truncation: a satisfied discharge must not rest on a clipped
+        // (incomplete) cell value any more than on a row-capped read (design §16.2, onto issue-004).
+        let value = raw;
+        if (raw.length > caps.cellCharCap) {
+          value = raw.slice(0, caps.cellCharCap);
+          regionTruncated = true;
+        }
+        cells.push({ grid_row: r + 1, grid_column_index: sel.grid_column_index, value });
+        totalCells += 1;
+        totalChars += value.length;
+      }
+    }
+    if (regionTruncated) truncated = true;
+    regions.push({
+      sheet: sel.sheet,
+      grid_column_index: sel.grid_column_index,
+      grid_row_start: sel.grid_row_start ?? null,
+      grid_row_end: sel.grid_row_end ?? null,
+      cells,
+      cells_read: cells.length,
+      truncated: regionTruncated,
+    });
+  }
+  return { regions, total_cells_read: totalCells, truncated, content_sha256: contentSha256 };
+}
+
 /**
  * The single shared projection of a workbook inventory used by BOTH reconstruct and
  * review. It returns a structural + aggregate-only view: raw cell values —

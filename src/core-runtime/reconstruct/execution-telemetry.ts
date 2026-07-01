@@ -132,6 +132,12 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     ["FailureClassification", "failure_classification"],
     ["RevisionProposal", "revision_proposal"],
     ["StopDecision", "stop_decision"],
+    // Maturation value-read cut (the second LLM-touch). Both authoring calls (location
+    // selection + discharge judgment) own the single maturation_value_read unit, so a
+    // value-read total-failure is recorded, not silently degraded (leaf_read precedent —
+    // an unmapped name throws in callLlmRecorded before the LLM call).
+    ["MaturationValueReadLocation", "maturation_value_read"],
+    ["MaturationValueReadJudgment", "maturation_value_read"],
     ["MaturationQuestionFrontier", "maturation_question_frontier"],
     ["MaturationClosureFrontier", "maturation_closure_frontier"],
     ["AnswerSupportLedger", "answer_support_ledger"],

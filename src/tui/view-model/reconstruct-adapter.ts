@@ -105,6 +105,9 @@ function deriveWorkflowStatus(
   status: ReconstructSessionStatus,
 ): WorkflowStatus {
   if (status.status === "completed") return "completed";
+  // A graceful terminal (design §16.7) is terminal but not completed: surface it as `halted` so
+  // the watch loop stops polling and the operator sees an honest stop, not a "session completed".
+  if (status.status === "blocked" || status.status === "limited") return "halted";
   if (status.progress.stages.some((stage) => stage.state === "halted")) {
     return "halted";
   }

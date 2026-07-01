@@ -27,6 +27,12 @@ import {
 } from "../core-runtime/reconstruct/material-profile-validation.js";
 import {
   assembleReconstructRecord,
+  reconstructTerminalStatus,
+  type ReconstructTerminalStatus,
+} from "../core-runtime/reconstruct/record.js";
+export {
+  reconstructTerminalStatus,
+  type ReconstructTerminalStatus,
 } from "../core-runtime/reconstruct/record.js";
 import {
   createDirectCallReconstructConfirmationProvider,
@@ -164,7 +170,12 @@ export interface AssembleReconstructRecordRequest {
 export interface ReconstructSessionStatus {
   sessionId: string;
   sessionRoot: string;
-  status: ReconstructRecordArtifact["record_stage"];
+  /**
+   * Unified terminal-status (design §16.7): the record's `record_stage`, or its graceful
+   * `terminal_disposition` ("blocked" | "limited") when the run stopped early. Projected once by
+   * {@link reconstructTerminalStatus} so every consumer reads the same terminality judgment.
+   */
+  status: ReconstructTerminalStatus;
   artifactRefs: ReconstructRecordArtifactRefs;
   claimProjection: ReconstructClaimProjectionArtifact | null;
   claimProjectionValidation: ReconstructClaimProjectionValidationArtifact | null;
@@ -476,16 +487,21 @@ function deriveReconstructProgress(args: {
     [...stages].reverse().find((stage) => stage.state !== "pending") ??
     stages[0]!;
 
+  // Terminality (completed / graceful-blocked / graceful-limited) is judged once, via the single
+  // projection (design §16.7). A graceful terminal is terminal for polling (stop) but not
+  // "completed" — its liveness state stays "halted_or_partial" while the poll interval goes null.
+  const terminalStatus = reconstructTerminalStatus(args.record);
+  const isCompleted = terminalStatus === "completed";
+  const isGracefulTerminal =
+    terminalStatus === "blocked" || terminalStatus === "limited";
+  const isTerminal = isCompleted || isGracefulTerminal;
   return {
     executionProfile: args.runManifest?.execution_profile ?? null,
     currentStageId: lastReachedStage.stageId,
     stageCount: RECONSTRUCT_STAGE_IDS.length,
     liveness: {
-      state: args.record.record_stage === "completed"
-        ? "completed"
-        : "halted_or_partial",
-      recommendedPollIntervalMs:
-        args.record.record_stage === "completed" ? null : 1000,
+      state: isCompleted ? "completed" : "halted_or_partial",
+      recommendedPollIntervalMs: isTerminal ? null : 1000,
     },
     countSummary: {
       sourceObservationCount: args.metrics?.source_observation_count ?? null,
@@ -963,7 +979,7 @@ export function createOntoReconstructCoreApi(
       return {
         sessionId: path.basename(resolvedSessionRoot),
         sessionRoot: resolvedSessionRoot,
-        status: reconstructRecord.record_stage,
+        status: reconstructTerminalStatus(reconstructRecord),
         artifactRefs: reconstructRecord.artifact_refs,
         claimProjection,
         claimProjectionValidation,

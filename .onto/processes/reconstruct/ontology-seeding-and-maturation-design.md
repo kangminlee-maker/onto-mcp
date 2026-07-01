@@ -1685,7 +1685,7 @@ projected_rows:
     purpose_element_ref:
     materiality: blocker | high | medium | low | info
     maturity_level: L0_missing | L1_identified | L2_modeled | L3_evidenced | L4_validated_for_purpose
-    member_readiness: closed | limitation_backed | frontier_required | out_of_scope
+    member_readiness: closed | limitation_backed | frontier_required | value_resolved | out_of_scope
     seed_ref_refs: []
     expansion_refs: []
     evidence_refs: []
@@ -1722,7 +1722,7 @@ rows:
     materiality_ref:
     member_scope_refs: []
     member_target_material_kind:
-    member_readiness: closed | limitation_backed | frontier_required | out_of_scope
+    member_readiness: closed | limitation_backed | frontier_required | value_resolved | out_of_scope
     member_source_refs: []
     cross_material_ref_refs: []
     competency_question_refs: []
@@ -1737,6 +1737,20 @@ rows:
 `ActionableOntology` may be claimed only when every material row is L4 or
 explicitly limitation-backed without making an actionability claim for that
 limited area.
+
+`value_resolved` is the terminal readiness for a material row whose
+value-dependent limitation was discharged by the maturation value-read stage
+(reading authorized runtime-target source values to satisfy the limitation). It
+is distinct from `closed` (not L4-validated) and from `frontier_required` (needs
+a new source): the row's residual limitation set reached zero **by discharge**,
+so it anchors a bounded actionable claim on an explicit value-read basis. Only a
+validated, satisfied value-discharge that the matrix builder/validator both
+re-derive (derive-and-assert) may move a row to `value_resolved`; a continuation
+carrying `value_resolved` rows projects at most `actionable_limited` (never
+`actionable_ready`, which requires L4). value_resolved rows are claimable
+(included in `claim_scope`) like closed rows. See the maturation value-read cut
+design (`development-records/design/20260630-maturation-value-read-cut-design.md`
+§13).
 
 `blocking_question_refs` is the reverse link from a row to the maturation
 frontier question(s) that block it from closing. It is the mirror of the

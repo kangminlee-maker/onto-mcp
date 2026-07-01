@@ -290,7 +290,7 @@ describe("reconstruct run-control validation", () => {
       validationOutputPath: baseInitArgs(root).validationOutputPath,
       attemptId: resumed.attemptId,
       artifactRefs: emptyRefs(),
-      postPublicationRunManifestValidationPath: terminalValidationRef,
+      terminalRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
@@ -346,7 +346,7 @@ describe("reconstruct run-control validation", () => {
       validationOutputPath: baseInitArgs(root).validationOutputPath,
       attemptId: init.attemptId,
       artifactRefs: refs,
-      postPublicationRunManifestValidationPath: terminalValidationRef,
+      terminalRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
@@ -372,6 +372,52 @@ describe("reconstruct run-control validation", () => {
     expect(persisted.write_transactions.length).toBeGreaterThan(0);
   });
 
+  it("finalizes a graceful-terminal halt: attempt_status 'halted' passes validation (design §16.6)", async () => {
+    const root = await tempSessionRoot();
+    const init = await initializeReconstructRunControl(baseInitArgs(root));
+    const terminalValidationRef = await writeTerminalValidation(root);
+    const finalized = await finalizeReconstructRunControl({
+      runControlPath: baseInitArgs(root).outputPath,
+      validationOutputPath: baseInitArgs(root).validationOutputPath,
+      attemptId: init.attemptId,
+      artifactRefs: emptyRefs(),
+      terminalRunManifestValidationPath: terminalValidationRef,
+      attemptStatus: "halted",
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    });
+
+    // The halted attempt is accepted as a terminal attempt (currentAttempt finder + terminal-trust
+    // both admit it) — validation is valid, not "active_attempt_missing" / "terminal_validation_*".
+    expect(finalized.validation.validation_status).toBe("valid");
+    expect(finalized.runControl.attempt_rows[0]?.attempt_status).toBe("halted");
+    expect(finalized.runControl.lock_rows[0]?.lock_status).toBe("released");
+    expect(finalized.runControl.write_transactions.some((row) =>
+      row.artifact_ref === terminalValidationRef &&
+      row.transaction_status === "committed" &&
+      row.committed_hash !== null
+    )).toBe(true);
+  });
+
+  it("rejects a halt with missing terminal validation (fail-closed, symmetric to completed)", async () => {
+    const root = await tempSessionRoot();
+    const init = await initializeReconstructRunControl(baseInitArgs(root));
+    const missingTerminalValidationRef = path.join(
+      root,
+      "reconstruct-run-manifest.post-publication-validation.yaml",
+    );
+    await expect(finalizeReconstructRunControl({
+      runControlPath: baseInitArgs(root).outputPath,
+      validationOutputPath: baseInitArgs(root).validationOutputPath,
+      attemptId: init.attemptId,
+      artifactRefs: emptyRefs(),
+      terminalRunManifestValidationPath: missingTerminalValidationRef,
+      attemptStatus: "halted",
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    })).rejects.toThrow(/valid terminal run-manifest validation/);
+  });
+
   it("rejects completion before valid post-publication terminal validation exists", async () => {
     const root = await tempSessionRoot();
     const init = await initializeReconstructRunControl(baseInitArgs(root));
@@ -385,10 +431,10 @@ describe("reconstruct run-control validation", () => {
       validationOutputPath: baseInitArgs(root).validationOutputPath,
       attemptId: init.attemptId,
       artifactRefs: emptyRefs(),
-      postPublicationRunManifestValidationPath: missingTerminalValidationRef,
+      terminalRunManifestValidationPath: missingTerminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
-    })).rejects.toThrow(/cannot finalize without valid post-publication/);
+    })).rejects.toThrow(/cannot finalize without valid terminal run-manifest validation/);
 
     const persisted = await readYaml<ReconstructRunControlArtifact>(
       baseInitArgs(root).outputPath,
@@ -406,7 +452,7 @@ describe("reconstruct run-control validation", () => {
       validationOutputPath: baseInitArgs(root).validationOutputPath,
       attemptId: init.attemptId,
       artifactRefs: emptyRefs(),
-      postPublicationRunManifestValidationPath: terminalValidationRef,
+      terminalRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     })).rejects.toThrow(/validation_status=invalid/);
@@ -421,7 +467,7 @@ describe("reconstruct run-control validation", () => {
       validationOutputPath: baseInitArgs(root).validationOutputPath,
       attemptId: init.attemptId,
       artifactRefs: emptyRefs(),
-      postPublicationRunManifestValidationPath: terminalValidationRef,
+      terminalRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
@@ -452,7 +498,7 @@ describe("reconstruct run-control validation", () => {
         ...emptyRefs(),
         target_material_profile: artifactPath,
       },
-      postPublicationRunManifestValidationPath: terminalValidationRef,
+      terminalRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
@@ -543,7 +589,7 @@ describe("reconstruct run-control validation", () => {
         ...emptyRefs(),
         target_material_profile: artifactPath,
       },
-      postPublicationRunManifestValidationPath: terminalValidationRef,
+      terminalRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
@@ -601,7 +647,7 @@ describe("reconstruct run-control validation", () => {
         ...emptyRefs(),
         target_material_profile: artifactPath,
       },
-      postPublicationRunManifestValidationPath: terminalValidationRef,
+      terminalRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });

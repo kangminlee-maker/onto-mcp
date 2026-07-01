@@ -1,5 +1,7 @@
 # RESUME — Defect-2 cut: seed-authoring-readiness 교착(frontier_required + no_concrete_frontier) 해소
 
+> **🛑 STALE·DO-NOT-RESUME (2026-07-01 정정).** 이 cut은 **이미 완결**됐다 — `f55b48e`(Defect-2 seed-readiness deadlock degrade·Option X·교차검증·full vitest 2046). 후속 honesty-bridge도 **CLOSED**(`27c89e7`·measure-first가 전제 반증·빌드 0줄). de-risk 트랙(Defect-1✅·Defect-2✅·Defect-3 #156 머지✅·honesty-bridge🛑CLOSED) 전체 종결. **최신 상태·실제 NEXT = `20260629-honesty-bridge-closed-defect3-next-resume.md`**. 아래 본문은 *미착수 시점*(2026-06-28)의 계획이며 이력일 뿐 — 재개하지 말 것.
+
 > **START-HERE.** `/clear` 후 fresh 세션이 **이 문서 하나로** Defect-2 cut을 이어받는다. 날짜 2026-06-28. 브랜치 `feat/comprehension-cut2-de-risk`. HEAD=`f1a3c1b`(Defect-1 leaf-read 배선 fix 커밋 완료).
 > **진행 방식 = owner 기존 패턴**: 설계-먼저 → ultracode workflow + onto self-review 교차검증 → owner 승인 → 빌드. ([[design-validation-ultracode-onto]])
 

@@ -1622,6 +1622,14 @@ export const RECONSTRUCT_STAGE_IDS = [
   "maturation_baseline_validation",
   "baseline_actionability_matrix",
   "baseline_actionability_matrix_validation",
+  // Maturation value-read cut: the LLM-touch stage that reads authorized runtime-target
+  // cell values to discharge value-dependent limitations on baseline matrix rows. A single
+  // stage id (leaf_read precedent) — discharge validation is an embedded self-validation
+  // step, so terminal run-manifest validation needs exactly one matching manifest step
+  // (design §13.5 F3). Runs after the baseline matrix is produced and before the question
+  // frontier, so its value-grounded discharge reaches the actionability matrix directly
+  // without waking the empty frontier path.
+  "maturation_value_read",
   "maturation_question_frontier",
   "maturation_question_frontier_validation",
   "maturation_closure_frontier",
@@ -1662,6 +1670,23 @@ export const RECONSTRUCT_STAGE_IDS = [
 ] as const;
 
 export type ReconstructStageId = typeof RECONSTRUCT_STAGE_IDS[number];
+
+/**
+ * The conditional stages that can legitimately run-but-produce-nothing yet leave no
+ * artifact-ref witness of their own (unlike leaf_read / maturation_value_read, which always
+ * write a census when they run). Canonical single source shared by the graceful-terminal
+ * manifest builder (createRunManifest) and the reachability validator (validateReconstructRunManifest):
+ * on a graceful-terminal manifest these are the only stages permitted `skip_kind:
+ * "legit_conditional"`, and only when the reachability witness (ReconstructSourceObservationLineageCensus)
+ * confirms they ran and legitimately produced nothing. See reachability-manifest design v2 §2–§4.
+ */
+export const WITNESS_LESS_CONDITIONAL_STAGE_IDS = [
+  "source_observation_delta",
+  "source_observation_delta_validation",
+  "source_observation_reentry_validation",
+  "source_observation_lineage_index",
+  "source_observation_lineage_index_validation",
+] as const satisfies readonly ReconstructStageId[];
 
 export type ReconstructClaimRealizationStance =
   | "observed_runtime_behavior"
@@ -1711,6 +1736,10 @@ export interface ReconstructPostSeedValidationViolation {
     | "manifest_artifact_missing"
     | "manifest_snapshot_missing"
     | "manifest_snapshot_mismatch"
+    | "manifest_reachability_witness_missing"
+    | "manifest_untyped_graceful_skip"
+    | "manifest_unwitnessed_conditional_skip"
+    | "manifest_reached_stage_masked"
     | "handoff_required_validation_missing"
     | "handoff_required_validation_invalid"
     | "handoff_decision_inconsistent"
@@ -2016,6 +2045,12 @@ export interface ReconstructActionabilityMatrixRow {
     | "closed"
     | "limitation_backed"
     | "frontier_required"
+    // value-read discharge cleared this material row's value-dependent
+    // limitation(s) to zero residual; it is terminal (not closed = L4-validated,
+    // not frontier_required = needs a new source) and anchors a bounded
+    // actionable claim with an explicit value-read basis. See maturation
+    // value-read cut design §11.1 / §13.3.
+    | "value_resolved"
     | "out_of_scope";
   member_source_refs: string[];
   cross_material_ref_refs: string[];
@@ -2380,6 +2415,116 @@ export interface ReconstructMaturationAnswerClaimsValidationArtifact {
   validation_status: "valid" | "invalid";
   answer_claim_count: number;
   answered_question_count: number;
+  validation_results: string[];
+  asserted_obligation_ids: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+// Maturation value-read cut (design §11.2 / §13.3). A first-class discharge concept —
+// deliberately NOT overloaded onto answer-claims, so it never rides the answer-support
+// judge path (ultracode M6 N/A). One entry = "authorized value evidence E satisfied
+// (or refuted / was inconclusive about) baseline limitation L on matrix row R".
+// Bounded location read inside the authorized observation, addressed in the GRID frame
+// (design §15.4) — the SAME origin-normalized frame `parsed.rows` and per_sheet_data[].columns[].index
+// use. The reader slices `parsed.rows[gridRow][grid_column_index]` directly, so there is NO A1/R1C1
+// notation to re-parse (SR-1/SR-2/SR-3) and NO firstRowNum off-by-origin (SR-4): enumeration and the
+// reader run the same parser + caps, so the frame is aligned by construction.
+export interface ReconstructValueReadScope {
+  // The sheet whose grid this scope addresses (matches a per_sheet_data[].sheet name).
+  sheet: string;
+  // Origin-normalized grid column index (per_sheet_data[].columns[].index frame).
+  grid_column_index: number;
+  // 1-based grid row bounds (the value-tile segment frame = parsed.rows index + 1), inclusive.
+  // Null/absent = the whole column (the reader reads every materialized row, bounded by caps).
+  grid_row_start?: number | null;
+  grid_row_end?: number | null;
+  // Non-authoritative SELECTION HINT (design §17.3): the column's deterministic HEADER LABEL + inferred
+  // type, surfaced in allowed_locations so the LLM picks the column whose VALUES ground the limitation
+  // (the A/B §17.2 finding: without labels the LLM blind-picks column 0 = a row-number/index column).
+  // Source-safe — the header label is column IDENTITY already visible to the authoring LLM via the
+  // inventory (leaf-reader precedent), NOT row data. The reader IGNORES these (coordinates only), and a
+  // discharge's read_scope provenance is built from the read region (coordinates), so labels do not
+  // persist there.
+  column_label?: string | null;
+  column_inferred_type?: string | null;
+}
+
+export interface ReconstructValueEvidenceRef {
+  // The authorized source observation the value was read from (must be already-observed
+  // and consumption_allowed — discharge governance validator enforces, design §13.5 F5).
+  observation_id: string;
+  read_scope: ReconstructValueReadScope;
+  // Bounded read provenance — what was actually materialized, for honesty/audit. The discharge
+  // validator floor (design §15.4) rejects a `satisfied` discharge whose cells_read===0 or
+  // read_truncated===true, so these are REAL production consumers (not inert provenance).
+  cells_read: number;
+  read_truncated: boolean;
+  // Raw-byte sha256 of the file the runtime actually re-read (design §15.4 content binding). The
+  // validator rejects a `satisfied` discharge whose read hash ≠ the authorized observation's
+  // observed content_sha256 — a file changed between observation and the maturation re-read cannot
+  // silently discharge under a stale inventory frame.
+  read_content_sha256: string;
+}
+
+export interface ReconstructMaturationValueDischargeEntry {
+  discharge_id: string;
+  // The baseline matrix row(s) this discharge targets — must resolve to real rows.
+  target_baseline_row_refs: string[];
+  // The baseline limitation ref(s) this discharge claims to satisfy — each must actually
+  // exist on the targeted row's baseline limitation_refs (validator enforces, F2).
+  target_limitation_refs: string[];
+  value_evidence_ref: ReconstructValueEvidenceRef;
+  // Canonical single authorization ref (observation_id × material_claim). Trigger,
+  // selection, and discharge all cite the same ref (onto issue-009 / §11.2).
+  value_evidence_authorization_ref: string;
+  // LLM semantic judgment. Only `satisfied` (after the artifact validates valid) drives a
+  // limitation subtract → value_resolved; refuted/inconclusive never discharge (§4.3 4조건).
+  satisfaction_status: "satisfied" | "refuted" | "inconclusive";
+  rationale: string;
+}
+
+// discharge-level census (design §11.7) — always recorded so "never ran" is distinct from
+// "ran but discharged zero". Mirrors the leaf_read_census honesty pattern.
+export interface ReconstructMaturationValueDischargeCensus {
+  limitations_targeted: number;
+  limitations_discharged: number;
+  discharge_inconclusive: number;
+  discharge_refuted: number;
+  failed: number;
+  // True when the stage ran (≥1 targeted) but produced zero validated satisfied discharge —
+  // the honest H1-neg state the continuation must still treat as blocked.
+  ran_but_discharged_zero: boolean;
+}
+
+export interface ReconstructMaturationValueDischargeArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  round_id: string;
+  discharges: ReconstructMaturationValueDischargeEntry[];
+  census: ReconstructMaturationValueDischargeCensus;
+  directive_author: {
+    owner: "host_llm";
+    author_id: string;
+  };
+}
+
+export interface ReconstructMaturationValueDischargeValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_value_discharge_ref: string | null;
+  // Governance binding (design §13.5 F5): the discharge validator replicates the
+  // answer-support-ledger preconditions (source-safety ledger + its validation present and
+  // valid) before enforcing consumption_allowed on each value_evidence_ref's observation.
+  source_safety_ledger_validation_ref: string | null;
+  source_observation_reentry_validation_ref: string | null;
+  // Baseline binding so the matrix derive-and-assert can recompute residual against the
+  // baseline limitation set the discharge claims to subtract from (F2).
+  maturation_baseline_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  discharge_count: number;
+  satisfied_discharge_count: number;
   validation_results: string[];
   asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];
@@ -3054,11 +3199,46 @@ export interface ReconstructRunManifestStep {
   reason?: string;
   authority_impact?: string;
   /**
+   * Graceful-terminal reachability discriminant (typed, not a free-form reason).
+   * Only present on a graceful-terminal manifest (see ReconstructRunManifestArtifact.
+   * graceful_terminal), and only on `skipped` steps:
+   *   - "legit_conditional": the stage RAN but legitimately produced no artifact;
+   *     its no-op condition must be confirmed by an independent reachability witness
+   *     (the validator reads the witness — membership alone is not authority).
+   *   - "not_reached": the stage did NOT run (the graceful terminal stopped before it);
+   *     no witness may claim it ran.
+   * Absent on completed runs and on completed steps — completed runs stay byte-identical.
+   */
+  skip_kind?: "legit_conditional" | "not_reached";
+  /**
    * Runtime-owned per-unit execution telemetry recorded at the LLM call
    * boundary (duration, prompt/output chars, attempt lineage, failure
    * classes). Present only for units that made LLM calls in this run.
    */
   execution_telemetry?: import("./execution-telemetry.js").ReconstructUnitExecutionTelemetry;
+}
+
+/**
+ * Reachability witness (leaf_read-census pattern, f1a3c1b) for the witness-less
+ * conditional stages (source_observation_delta/_validation, reentry_validation,
+ * source_observation_lineage_index/_validation). ALWAYS written when the
+ * observation-lineage phase runs — even when a stage produced nothing — so that
+ * "ran and legitimately produced nothing" is a recorded fact, distinct from
+ * "never ran" (no witness) and from "ran but a bug dropped the artifact"
+ * (produced=false with legit_no_op=false). The reachability manifest validator
+ * reads this to authorize a legit_conditional skip; the manifest builder may not
+ * self-declare a legit no-op the witness does not confirm.
+ */
+export interface ReconstructReachabilityStageWitness {
+  step_id: ReconstructStageId;
+  produced: boolean;
+  legit_no_op: boolean;
+}
+
+export interface ReconstructSourceObservationLineageCensus {
+  schema_version: "1";
+  session_id: string;
+  stage_witnesses: ReconstructReachabilityStageWitness[];
 }
 
 export interface ReconstructRunSnapshotFamily {
@@ -3201,6 +3381,26 @@ export interface ReconstructRunManifestArtifact {
   runtime_boundary: {
     semantic_generation: "not_performed";
     semantic_authority: "host_llm_author";
+  };
+  /**
+   * Explicit graceful-terminal marker. Present (truthy) only when this manifest
+   * was assembled by a graceful terminal (the run stopped early with a blocked/
+   * limited disposition). When set, the validator enforces the reachability rules
+   * (skip_kind must be legit_conditional [witness-confirmed] or not_reached; bare
+   * skipped steps are rejected so a not-reached bug cannot masquerade as a healthy
+   * skip). Absent on completed runs — completed-path validation stays byte-identical.
+   */
+  graceful_terminal?: {
+    disposition: "blocked" | "limited";
+    terminal_step_id: ReconstructStageId;
+    /**
+     * Path to the reachability witness (ReconstructSourceObservationLineageCensus)
+     * for the witness-less conditional stages. The validator reads it to authorize
+     * legit_conditional skips and to detect a stage the witness says ran being
+     * masked as not_reached. Null when the run stopped before the lineage phase
+     * (then none of the witness-less stages may be legit_conditional).
+     */
+    reachability_witness_ref: string | null;
   };
 }
 
@@ -3402,6 +3602,14 @@ export interface ReconstructRecordArtifactRefs {
   maturation_baseline_validation: string | null;
   baseline_actionability_matrix: string | null;
   baseline_actionability_matrix_validation: string | null;
+  // Maturation value-read cut. The discharge artifact + its (embedded-step) validation, plus
+  // the always-written discharge-level census that doubles as the maturation_value_read
+  // manifest step's artifact ref (leaf_read_census precedent). census distinguishes
+  // "value-read never ran" from "ran but discharged zero" (H1-neg honest state). Null only
+  // when the stage no-ops (no value-readable limitation-backed rows / author lacks the path).
+  maturation_value_discharge: string | null;
+  maturation_value_discharge_validation: string | null;
+  maturation_value_discharge_census: string | null;
   actionability_matrix: string | null;
   actionability_matrix_validation: string | null;
   maturation_question_frontier: string | null;
@@ -3445,6 +3653,16 @@ export interface ReconstructRecordArtifact {
   session_id: string;
   entrypoint: "reconstruct";
   record_stage: ReconstructRecordStage;
+  /**
+   * Graceful-terminal disposition (Slice 3). Present only when the run stopped early via a
+   * GracefulTerminalSignal: the durable authority that a run terminated blocked/limited rather
+   * than crashing or completing. `record_stage` still records how far the pipeline reached (a
+   * mid-pipeline stage), so this field — not record_stage — is the terminal-status authority.
+   * The single terminal-status projection (reconstructTerminalStatus) reads this first; when set,
+   * the run is terminal (blocked/limited) and consumers must stop polling. Absent on completed and
+   * still-running records.
+   */
+  terminal_disposition?: "blocked" | "limited";
   created_at: string;
   updated_at: string;
   target_material_kind: TargetMaterialKind | null;

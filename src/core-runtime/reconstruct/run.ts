@@ -48,6 +48,11 @@ import type {
   ReconstructMaturationContinuationDecisionValidationArtifact,
   ReconstructMaturationQuestionFrontierArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
+  ReconstructMaturationValueDischargeArtifact,
+  ReconstructMaturationValueDischargeCensus,
+  ReconstructMaturationValueDischargeEntry,
+  ReconstructMaturationValueDischargeValidationArtifact,
+  ReconstructValueReadScope,
   ReconstructMetricsArtifact,
   ReconstructOntologyExpansionArtifact,
   ReconstructOntologyExpansionValidationArtifact,
@@ -78,6 +83,8 @@ import type {
   ReconstructSeedConfirmationStatus,
   ReconstructSeedConfirmationValidationArtifact,
   ReconstructStageId,
+  ReconstructSourceObservationLineageCensus,
+  ReconstructReachabilityStageWitness,
   ReconstructSourceObservationDirectiveArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
   ReconstructSourceFrontierArtifact,
@@ -89,6 +96,7 @@ import type {
   ReconstructTargetMaterialProfileArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
+import { WITNESS_LESS_CONDITIONAL_STAGE_IDS } from "./artifact-types.js";
 import { callLlm, type LlmCallConfig, type LlmCallResult } from "../llm/llm-caller.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
@@ -98,6 +106,7 @@ import {
 } from "../target-material-kind.js";
 import {
   projectInventoryForPrompt,
+  readTargetedCellValues,
   type WorkbookInventorySectionTruncation,
   type WorkbookStructuralInventory,
 } from "../spreadsheet-structure-observer.js";
@@ -137,6 +146,7 @@ import {
   writeSourcePurposeCandidatesValidationArtifact,
 } from "./purpose-authority-validation.js";
 import {
+  deriveSourceSafetyVisibilityTier,
   sourceSafetyRowIdForObservation,
   writeSourceSafetyLedgerArtifact,
   writeSourceSafetyLedgerValidationArtifact,
@@ -176,6 +186,7 @@ import {
   writeSourceObservationReentryValidationArtifact,
 } from "./source-observation-delta-validation.js";
 import {
+  validateMaturationValueDischarge,
   writeActionableOntologyArtifact,
   writeActionableOntologyValidationArtifact,
   writeActionabilityMatrixArtifact,
@@ -264,6 +275,42 @@ import {
   type ReconstructExecutionTelemetryCollector,
 } from "./execution-telemetry.js";
 
+// Maturation value-read cut (design §13.3/§13.5). Stage-internal types for the value-read
+// capability: a deterministic trigger builds candidates (limitation-backed material rows whose
+// value-dependent limitations could be cleared by reading authorized runtime-target cells), the
+// author (LLM) picks locations within the allowed set, the runtime reads the cells, and the
+// author judges whether each limitation is satisfied. The author returns discharge entries; the
+// stage runner builds the artifact + census and governance-validates them. Authors without the
+// capability (baseline harness) leave the matrix unchanged (default-off, leaf_read precedent).
+export interface ReconstructValueReadCandidate {
+  baseline_row_id: string;
+  matrix_row_id: string;
+  // The value-dependent limitation(s) on this row a value-read could clear.
+  limitation_refs: string[];
+  // The authorized runtime-target source observation whose cells may be read.
+  observation_id: string;
+  // The canonical authorization ref the discharge must cite (observation_id × material_claim).
+  value_evidence_authorization_ref: string;
+  // Allowed read locations enumerated from the source inventory (the LLM picks within this set).
+  allowed_locations: ReconstructValueReadScope[];
+}
+
+export interface ReconstructValueReadStageInput {
+  candidates: ReconstructValueReadCandidate[];
+  // Runtime-only resolver (design §15.4): observation_id → resolved ABSOLUTE source path. The author
+  // reads cells through the runtime keyed by observation_id; this map NEVER reaches a callJsonAuthor
+  // payload, so authorized filesystem paths stay out of every LLM prompt (issue-007/016, F4/F5).
+  sourceRefByObservationId: Record<string, string>;
+}
+
+export interface ReconstructValueReadStageOutput {
+  discharges: ReconstructMaturationValueDischargeEntry[];
+  // Honest count of candidates whose read or judgment FAILED (LLM error / unreadable source / empty
+  // read), so the census records `failed > 0` instead of the old hard-coded 0 (design §15.4, issue-014).
+  // Optional — a fixture executor that never fails may omit it (treated as 0).
+  failed_count?: number;
+}
+
 export interface ReconstructDirectiveAuthor {
   readonly authorId: string;
   readonly owner: "host_llm";
@@ -308,6 +355,17 @@ export interface ReconstructDirectiveAuthor {
    * keys its reuse on the llm_touch_fingerprint, never on this output.
    */
   readLeafLabels?(evidence: LeafReadRegionEvidence): Promise<LeafReadOutcome>;
+  /**
+   * Maturation value-read cut (design §13.3). The SECOND LLM-touch: read authorized
+   * runtime-target cell values to judge whether a baseline row's value-dependent limitation is
+   * satisfied, returning value-discharge entries. Optional — an author without it leaves
+   * limitation-backed rows unchanged (default-off, leaf_read precedent). The direct-call author
+   * implements it via two callJsonAuthor calls (location selection, then judgment) with a bounded
+   * cell read between them; the run recomputes the discharge every run (no fingerprint reuse).
+   */
+  readValueDischarge?(
+    input: ReconstructValueReadStageInput,
+  ): Promise<ReconstructValueReadStageOutput>;
   /**
    * P1-C2-A Step E: provide the leaf-read provisional labels (observation_id → short label strings)
    * so this author renders them as a NON-AUTHORITATIVE hint in every observation prompt. Set once by
@@ -841,7 +899,13 @@ interface AuthoredArtifactReuseProvenance {
 export interface ReconstructRunResult {
   sessionId: string;
   sessionRoot: string;
-  status: "completed";
+  /**
+   * "completed" = the run reached the terminal pipeline. "blocked"/"limited" = a graceful
+   * terminal (Slice 3): the run stopped early with an honest assembled output instead of
+   * crashing. This is an immediate-return mirror of the durable authority
+   * (ReconstructRecordArtifact.terminal_disposition); re-read/poll consumers read the record.
+   */
+  status: "completed" | "limited" | "blocked";
   finalOutputPath: string;
   finalOutputText: string;
   reconstructRecordPath: string;
@@ -851,8 +915,81 @@ export interface ReconstructRunResult {
   };
   reconstructRecord: ReconstructRecordArtifact;
   reconstructRunManifest: ReconstructRunManifestArtifact;
-  metrics: ReconstructMetricsArtifact;
-  stopDecision: ReconstructStopDecisionArtifact;
+  /**
+   * Present only on a completed run. Absent on a graceful terminal (blocked/limited) — those
+   * stages were never reached. Consumers must narrow on `status` before reading.
+   */
+  metrics?: ReconstructMetricsArtifact;
+  stopDecision?: ReconstructStopDecisionArtifact;
+}
+
+/**
+ * Graceful-terminal control signal (Slice 3, design §16.1). NOT an Error subclass — the run-level
+ * catch distinguishes it from a genuine crash by `instanceof`, converting an expected
+ * "normal-but-unmet" stop (e.g. zero observations from an unsupported/empty target) into an honest
+ * blocked/limited assembled output instead of a thrown failure. The throwing site (design §16.2)
+ * carries the deterministic disposition, the terminal stage id, and a diagnostic reason; the
+ * catch-side assembleGracefulTerminal reads the reached artifacts from disk (design §16.5).
+ */
+export class GracefulTerminalSignal {
+  readonly disposition: "blocked" | "limited";
+  readonly terminalStepId: ReconstructStageId;
+  readonly reason: string;
+  constructor(args: {
+    disposition: "blocked" | "limited";
+    terminalStepId: ReconstructStageId;
+    reason: string;
+  }) {
+    this.disposition = args.disposition;
+    this.terminalStepId = args.terminalStepId;
+    this.reason = args.reason;
+  }
+}
+
+/**
+ * Narrow guard used by every defensive catch that does not unconditionally rethrow, so a graceful
+ * terminal signal is never swallowed into a failure counter or degraded result (design §16.4, N5').
+ * The structure guard check-graceful-signal-rethrow enforces its presence.
+ */
+export function isGracefulTerminalSignal(
+  value: unknown,
+): value is GracefulTerminalSignal {
+  return value instanceof GracefulTerminalSignal;
+}
+
+/**
+ * The inside-`try` context a graceful terminal needs that is NOT visible at the run-level catch
+ * (design §16.4/§16.5). The throwing site populates a hoisted binding before it throws; the catch
+ * hands it to assembleGracefulTerminal. `reachedArtifactRefs` are the artifacts written before the
+ * halt (existence-checked before use); contractRegistry + targetMaterialProfile let the assembly
+ * rebuild the governing snapshot the manifest validator re-derives.
+ */
+interface GracefulTerminalAssemblyContext {
+  reachedArtifactRefs: Partial<ReconstructRecordArtifactRefs>;
+  contractRegistry: ReconstructContractRegistry;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+}
+
+/**
+ * The deterministic, runtime-authored final output for a graceful terminal (design §16.5-2). It
+ * restates only runtime diagnostics (disposition, terminal stage, the reason the throwing site
+ * built) — never out-of-authority source values — so it is an honest "why this stopped" statement,
+ * not a fabricated reconstruction.
+ */
+function buildGracefulTerminalFinalOutput(signal: GracefulTerminalSignal): string {
+  const dispositionLabel = signal.disposition === "blocked" ? "Blocked" : "Limited";
+  // No level-2 subheadings: the graceful terminal is a standalone deterministic statement, not a
+  // normal final-output section (those headings are registry-owned; see check-final-output-sections-parity).
+  return [
+    `# Reconstruct ${dispositionLabel} Terminal`,
+    "",
+    `This reconstruct run stopped early with a **${signal.disposition}** disposition at the \`${signal.terminalStepId}\` stage.`,
+    "",
+    "The run did not reach semantic authoring, so no ontology seed, claims, or competency questions were produced.",
+    "",
+    `**Reason:** ${signal.reason}`,
+    "",
+  ].join("\n");
 }
 
 function isoNow(): string {
@@ -1096,6 +1233,7 @@ async function readYamlDocumentIfPresent<T>(filePath: string): Promise<T | null>
   try {
     return await readYamlDocument<T>(filePath);
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     if (isMissingFile(error)) return null;
     throw error;
   }
@@ -1105,6 +1243,7 @@ async function readTextIfPresent(filePath: string): Promise<string | null> {
   try {
     return await fs.readFile(filePath, "utf8");
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     if (isMissingFile(error)) return null;
     throw error;
   }
@@ -1115,6 +1254,7 @@ async function exists(filePath: string): Promise<boolean> {
     await fs.access(filePath);
     return true;
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     if (isMissingFile(error)) return false;
     throw error;
   }
@@ -1579,6 +1719,7 @@ export async function runSpreadsheetLeafReadStage(args: {
         try {
           outcome = await readLeaf(region);
         } catch (error) {
+          if (isGracefulTerminalSignal(error)) throw error;
           // The author's readLeafLabels already degrades hard failures to {kind:'failed'}; a throw
           // here is unexpected — degrade defensively (never abort the run for a leaf-read, §11 R9).
           outcome = { kind: "failed", reason: `leaf-read threw: ${(error as Error).message}` };
@@ -1662,6 +1803,234 @@ export async function runSpreadsheetLeafReadStage(args: {
           ),
         );
   return { artifactsByObservation, aggregateFingerprint, cappedColumnsByObservation, censusPath };
+}
+
+// Maturation value-read cut (design §13). System (not domain) limitation kinds a value-read can
+// clear by reading authorized cell values. Internal vocabulary — these are deterministic system
+// identities, not domain naming (semantic naming stays with the runtime LLM).
+const VALUE_READABLE_LIMITATION_REFS: ReadonlySet<string> = new Set([
+  "structure_inspected_only",
+]);
+function isValueReadableLimitation(ref: string): boolean {
+  return VALUE_READABLE_LIMITATION_REFS.has(ref) ||
+    ref.startsWith("coverage.semantic_leaf_read_gap") ||
+    ref.startsWith("purpose_handoff_limitation");
+}
+
+// Maturation value-read cut (design §16.4, strategy A — bounded representative sample). The number of
+// leading grid rows a value-read samples per column. A column on the real target can be thousands–tens
+// of thousands of rows; a whole-column read would blow the per-region cell cap → truncated → a satisfied
+// discharge force-downgraded to inconclusive (the §16.1 DC-2 silent no-op). So enumeration emits a
+// BOUNDED head-of-column window (header + first N rows) that fits inside the read cap, and value-read
+// judges the column's VALUE CHARACTER from that sample — NOT a whole-column completeness check.
+// ★ LIMITATION (owner-mandated honesty, §16.5): the head sample is unrepresentative when a column's
+// character changes below row N (sorted/grouped data, subtotal/footer rows, late regime shifts) — those
+// are missed; and a sample can never back a completeness/accuracy claim (an audit-grade assertion). The
+// discharge's satisfied means "value character confirmed from a bounded head sample", recorded honestly;
+// whether that sample suffices is the semantic-quality question the paid live A/B measures.
+const VALUE_READ_SAMPLE_ROWS = 200;
+
+// Allowed-location enumeration from a spreadsheet observation's inventory (design §15.4 / §16.4). Emits
+// one GRID-frame bounded-sample scope per profiled column: {sheet, grid_column_index, grid_row_start:1,
+// grid_row_end:VALUE_READ_SAMPLE_ROWS}. Columns live under `per_sheet_data[]` (NOT `InventorySheet`,
+// which has none — SR-1), and their `index` is already origin-normalized — the SAME frame
+// `readTargetedCellValues` slices `parsed.rows` with. No A1/R1C1 string is emitted (SR-2/SR-3): the
+// reader never re-parses notation. The LLM picks within this set (may narrow the row range further); the
+// runtime read is bounded to it and the reader clamps the row bounds to the materialized grid.
+function enumerateAllowedValueReadLocations(
+  observation: ReconstructSourceObservationsArtifact["observations"][number],
+): ReconstructValueReadScope[] {
+  const inventory = (observation.structural_data as Record<string, unknown> | undefined)
+    ?.workbook_inventory as Record<string, unknown> | undefined;
+  if (!inventory) return [];
+  const locations: ReconstructValueReadScope[] = [];
+  const perSheet = Array.isArray(inventory.per_sheet_data) ? inventory.per_sheet_data : [];
+  for (const sheetRaw of perSheet) {
+    const sheet = sheetRaw as Record<string, unknown>;
+    const sheetName = typeof sheet.sheet === "string" ? sheet.sheet : null;
+    if (!sheetName) continue;
+    const columns = Array.isArray(sheet.columns) ? sheet.columns : [];
+    for (const columnRaw of columns) {
+      const column = columnRaw as Record<string, unknown>;
+      if (typeof column.index === "number") {
+        locations.push({
+          sheet: sheetName,
+          grid_column_index: column.index,
+          grid_row_start: 1,
+          grid_row_end: VALUE_READ_SAMPLE_ROWS,
+          // Selection hints (design §17.3): the deterministic header label + inferred type let the LLM
+          // pick the column whose VALUES ground the limitation instead of blind-picking column 0.
+          column_label: typeof column.name === "string" ? column.name : null,
+          column_inferred_type: typeof column.inferred_type === "string"
+            ? column.inferred_type
+            : null,
+        });
+      }
+    }
+  }
+  return locations;
+}
+
+/**
+ * Maturation value-read stage (design §13). Default-off: with no author capability OR no candidate
+ * (no limitation-backed material row carrying a value-readable limitation backed by an authorized
+ * runtime-target spreadsheet source), it no-ops and returns null paths → the manifest step is
+ * `skipped` and the current-matrix recompute sees no discharge (byte-parity X2). Recompute-every-run
+ * (design §13.7): the discharge artifact is plain-written each run with no reuse provenance — like
+ * final_output, so no llm_touch_fingerprint is needed (stale reuse is impossible).
+ *
+ * F4 read-set gate: only `is_runtime_target_source === true` observations whose material_claim
+ * safety row is consumption_allowed are eligible — a non-target source's values never reach the
+ * value-read prompt. The discharge governance validator re-enforces this independently.
+ */
+export async function runMaturationValueReadStage(args: {
+  sessionId: string;
+  baselineMatrix: ReconstructActionabilityMatrixArtifact;
+  maturationBaseline: ReconstructMaturationBaselineArtifact;
+  maturationBaselineValidation: ReconstructMaturationBaselineValidationArtifact;
+  maturationBaselineValidationRef: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  sourceSafetyLedger: ReconstructSourceSafetyLedgerArtifact | null;
+  sourceSafetyLedgerRef: string | null;
+  sourceSafetyLedgerValidation: ReconstructSourceSafetyLedgerValidationArtifact | null;
+  sourceSafetyLedgerValidationRef: string | null;
+  directiveAuthor: ReconstructDirectiveAuthor;
+  sessionRoot: string;
+}): Promise<{
+  dischargePath: string | null;
+  dischargeValidationPath: string | null;
+  censusPath: string | null;
+}> {
+  const noOp = {
+    dischargePath: null,
+    dischargeValidationPath: null,
+    censusPath: null,
+  };
+  const readValueDischarge = args.directiveAuthor.readValueDischarge?.bind(
+    args.directiveAuthor,
+  );
+  if (!readValueDischarge) return noOp;
+  const safetyRowsById = new Map(
+    (args.sourceSafetyLedger?.safety_rows ?? []).map((r) => [r.safety_row_id, r]),
+  );
+  const eligibleObservations = args.sourceObservations.observations.filter(
+    (observation) => {
+      if (observation.is_runtime_target_source !== true) return false;
+      const inventory = (observation.structural_data as Record<string, unknown> | undefined)
+        ?.workbook_inventory;
+      if (!inventory) return false; // value-read targets spreadsheet sources
+      const materialClaimRowId = sourceSafetyRowIdForObservation(
+        observation,
+        "material_claim",
+      );
+      const materialClaimRow = safetyRowsById.get(materialClaimRowId);
+      return Boolean(
+        materialClaimRow &&
+          materialClaimRow.proof_sufficiency_state === "sufficient_for_claim" &&
+          materialClaimRow.visibility_tier === "consumption_allowed",
+      );
+    },
+  );
+  const candidates: ReconstructValueReadCandidate[] = [];
+  for (const matrixRow of args.baselineMatrix.rows) {
+    if (matrixRow.member_readiness !== "limitation_backed") continue;
+    if (matrixRow.materiality !== "blocker" && matrixRow.materiality !== "high") {
+      continue;
+    }
+    const valueReadableLimitations = matrixRow.limitation_refs.filter(
+      isValueReadableLimitation,
+    );
+    if (valueReadableLimitations.length === 0) continue;
+    for (const observation of eligibleObservations) {
+      candidates.push({
+        baseline_row_id: matrixRow.baseline_row_refs[0] ?? matrixRow.matrix_row_id,
+        matrix_row_id: matrixRow.matrix_row_id,
+        limitation_refs: valueReadableLimitations,
+        observation_id: observation.observation_id,
+        value_evidence_authorization_ref:
+          `${observation.observation_id}:material_claim`,
+        allowed_locations: enumerateAllowedValueReadLocations(observation),
+      });
+    }
+  }
+  if (candidates.length === 0) return noOp;
+  // Runtime-only resolver (design §15.4): observation_id → resolved ABSOLUTE source path. The author
+  // reads cells through the runtime keyed by observation_id; this never reaches an LLM prompt (F4/F5).
+  const sourceRefByObservationId: Record<string, string> = {};
+  for (const observation of eligibleObservations) {
+    sourceRefByObservationId[observation.observation_id] = path.resolve(observation.source_ref);
+  }
+  const targetedLimitations = new Set(
+    candidates.flatMap((c) =>
+      c.limitation_refs.map((limitation) => `${c.baseline_row_id}:${limitation}`)
+    ),
+  );
+  // Containment (design §15.4, A2): the author's read/judgment can throw (LLM error, parser failure).
+  // A throw degrades to a blocked-preserving zero-discharge with an honest `failed` census — never
+  // aborts the run. A graceful author reports per-candidate failures via output.failed_count instead.
+  let discharges: ReconstructMaturationValueDischargeEntry[] = [];
+  let failedCount = 0;
+  try {
+    const output = await readValueDischarge({ candidates, sourceRefByObservationId });
+    discharges = output.discharges;
+    failedCount = output.failed_count ?? 0;
+  } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
+    // Total failure: treat every targeted limitation as a failed read/judgment.
+    failedCount = targetedLimitations.size;
+  }
+  const satisfied = discharges.filter((d) => d.satisfaction_status === "satisfied");
+  const census: ReconstructMaturationValueDischargeCensus = {
+    limitations_targeted: targetedLimitations.size,
+    limitations_discharged: satisfied.length,
+    discharge_inconclusive: discharges.filter((d) =>
+      d.satisfaction_status === "inconclusive"
+    ).length,
+    discharge_refuted: discharges.filter((d) => d.satisfaction_status === "refuted")
+      .length,
+    failed: failedCount,
+    ran_but_discharged_zero: satisfied.length === 0,
+  };
+  const discharge: ReconstructMaturationValueDischargeArtifact = {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    round_id: "maturation-value-read",
+    discharges,
+    census,
+    directive_author: { owner: "host_llm", author_id: args.directiveAuthor.authorId },
+  };
+  const dischargePath = path.join(args.sessionRoot, "maturation-value-discharge.yaml");
+  await writeYamlDocument(dischargePath, discharge);
+  const dischargeValidation = validateMaturationValueDischarge({
+    maturationValueDischarge: discharge,
+    maturationValueDischargeRef: dischargePath,
+    maturationBaseline: args.maturationBaseline,
+    maturationBaselineValidation: args.maturationBaselineValidation,
+    maturationBaselineValidationRef: args.maturationBaselineValidationRef,
+    sourceObservations: args.sourceObservations,
+    sourceObservationsRef: args.sourceObservationsRef,
+    sourceSafetyLedger: args.sourceSafetyLedger,
+    sourceSafetyLedgerRef: args.sourceSafetyLedgerRef,
+    sourceSafetyLedgerValidation: args.sourceSafetyLedgerValidation,
+    sourceSafetyLedgerValidationRef: args.sourceSafetyLedgerValidationRef,
+  });
+  const dischargeValidationPath = path.join(
+    args.sessionRoot,
+    "maturation-value-discharge-validation.yaml",
+  );
+  await writeYamlDocument(dischargeValidationPath, dischargeValidation);
+  // Always-written discharge census (leaf_read precedent): distinguishes "never ran" from "ran
+  // but discharged zero". Doubles as the maturation_value_read manifest step's artifact ref.
+  const comprehensionDir = path.join(args.sessionRoot, "comprehension");
+  await fs.mkdir(comprehensionDir, { recursive: true });
+  const censusPath = path.join(
+    comprehensionDir,
+    "maturation-value-discharge-census.yaml",
+  );
+  await writeYamlDocument(censusPath, census);
+  return { dischargePath, dischargeValidationPath, censusPath };
 }
 
 async function writeFreshAuthoredYamlDocument<T>(
@@ -1924,35 +2293,63 @@ function requireFirstObservation(
   return observation;
 }
 
+/**
+ * Classifies whether a zero-observation run is a graceful blocked terminal (design §16.2) rather
+ * than a crash. Eligible only when there are no observations AND every planned runtime-target
+ * inventory unit was skipped (unsupported format / vanished ref) — no unit remains "planned" yet
+ * unobserved. A supported target that simply yields no rows keeps ≥1 planned unit and stays
+ * ineligible, so the zero-observation evidence gate still crashes on genuinely empty evidence
+ * (N-elig control). Every source-inventory unit is a runtime-target source (the inventory is the
+ * initial target inventory), so `.every` over all units is the runtime-target scope. Domain-agnostic
+ * (scan_status enum only — no skip_reason string matching).
+ */
+export function isZeroObservationGracefulTerminalEligible(args: {
+  sourceObservations: Pick<ReconstructSourceObservationsArtifact, "observations">;
+  sourceInventory: Pick<ReconstructSourceInventoryArtifact, "inventory_units">;
+}): boolean {
+  if (args.sourceObservations.observations.length > 0) return false;
+  const units = args.sourceInventory.inventory_units;
+  return units.length > 0 && units.every((unit) => unit.scan_status === "skipped");
+}
+
+/**
+ * The zero-observation diagnostic (shared by the crash path and the graceful blocked terminal so
+ * both carry the same honest "why": target kind, support status, unsupported reason, and the merged
+ * set of skipped refs). Refs that vanished between detection and re-observation are recorded in
+ * source-observations.skipped_refs (not the inventory, built before re-observation), so merge both —
+ * otherwise a single-ref TOCTOU run reports a misleading skipped_refs=none.
+ */
+function buildZeroObservationDiagnostic(args: {
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): string {
+  const inventorySkipped = args.sourceInventory.inventory_units
+    .filter((unit) => unit.scan_status === "skipped")
+    .map((unit) =>
+      `${path.basename(unit.ref)}:${unit.target_material_kind}:${unit.skip_reason ?? "skipped"}`
+    );
+  assertArrayField(args.sourceObservations.skipped_refs, "source-observations", "skipped_refs");
+  const observationSkipped = args.sourceObservations.skipped_refs.map((row) =>
+    `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
+  );
+  const skipped = [...new Set([...inventorySkipped, ...observationSkipped])];
+  return [
+    "reconstruct semantic authoring requires at least one runtime source observation",
+    `target_material_kind=${args.targetMaterialProfile.target_material_kind}`,
+    `support_status=${args.targetMaterialProfile.support_status}`,
+    `unsupported_reason=${args.targetMaterialProfile.unsupported_reason ?? "none"}`,
+    `skipped_refs=${skipped.join(", ") || "none"}`,
+  ].join("; ");
+}
+
 function assertSemanticAuthoringHasObservedEvidence(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   sourceInventory: ReconstructSourceInventoryArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
 }): void {
   if (args.sourceObservations.observations.length > 0) return;
-  const inventorySkipped = args.sourceInventory.inventory_units
-    .filter((unit) => unit.scan_status === "skipped")
-    .map((unit) =>
-      `${path.basename(unit.ref)}:${unit.target_material_kind}:${unit.skip_reason ?? "skipped"}`
-    );
-  // Refs that vanished between detection and re-observation are recorded in
-  // source-observations.skipped_refs (not the inventory, which was built before
-  // the re-observation), so merge both — otherwise a single-ref TOCTOU run halts
-  // with a misleading skipped_refs=none.
-  assertArrayField(args.sourceObservations.skipped_refs, "source-observations", "skipped_refs");
-  const observationSkipped = args.sourceObservations.skipped_refs.map((row) =>
-    `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
-  );
-  const skipped = [...new Set([...inventorySkipped, ...observationSkipped])];
-  throw new Error(
-    [
-      "reconstruct semantic authoring requires at least one runtime source observation",
-      `target_material_kind=${args.targetMaterialProfile.target_material_kind}`,
-      `support_status=${args.targetMaterialProfile.support_status}`,
-      `unsupported_reason=${args.targetMaterialProfile.unsupported_reason ?? "none"}`,
-      `skipped_refs=${skipped.join(", ") || "none"}`,
-    ].join("; "),
-  );
+  throw new Error(buildZeroObservationDiagnostic(args));
 }
 
 function calculateMetrics(args: {
@@ -2077,7 +2474,7 @@ function calculateMetrics(args: {
   };
 }
 
-function artifactRefsWithDefaults(args: {
+export function artifactRefsWithDefaults(args: {
   refs: Partial<ReconstructRecordArtifactRefs>;
 }): ReconstructRecordArtifactRefs {
   return {
@@ -2188,6 +2585,11 @@ function artifactRefsWithDefaults(args: {
       args.refs.baseline_actionability_matrix ?? null,
     baseline_actionability_matrix_validation:
       args.refs.baseline_actionability_matrix_validation ?? null,
+    maturation_value_discharge: args.refs.maturation_value_discharge ?? null,
+    maturation_value_discharge_validation:
+      args.refs.maturation_value_discharge_validation ?? null,
+    maturation_value_discharge_census:
+      args.refs.maturation_value_discharge_census ?? null,
     actionability_matrix: args.refs.actionability_matrix ?? null,
     actionability_matrix_validation:
       args.refs.actionability_matrix_validation ?? null,
@@ -2308,7 +2710,112 @@ function confirmationProviderPerformer(
   };
 }
 
-function createRunManifest(args: {
+/**
+ * Reachability witness for the five witness-less observation-lineage stages (design v2 §3,
+ * leaf_read/f1a3c1b pattern). Built deterministically from the number of exploration rounds
+ * that produced a source-observation delta, and written ALWAYS when the observation-lineage
+ * phase runs (even with zero delta rounds) — so "ran and legitimately produced nothing" is a
+ * recorded fact, distinct from "never ran" (no census). A graceful terminal reads this to
+ * authorize a legit_conditional skip; the manifest builder cannot self-declare a no-op the
+ * census does not confirm.
+ *
+ * delta / delta-validation / reentry-validation are produced per round and produce nothing when
+ * the exploration loop converged without accepting new frontier refs — a legitimate no-op (the
+ * only way the loop reaches this phase with zero delta rounds is convergence; a non-convergent
+ * overrun throws and never reaches the census). The lineage index and its validation are written
+ * unconditionally once the phase closes, so they always produced.
+ */
+export function buildSourceObservationLineageCensus(args: {
+  sessionId: string;
+  deltaRoundsProduced: number;
+}): ReconstructSourceObservationLineageCensus {
+  const deltaProduced = args.deltaRoundsProduced > 0;
+  const deltaGroup: ReconstructReachabilityStageWitness[] = [
+    "source_observation_delta",
+    "source_observation_delta_validation",
+    "source_observation_reentry_validation",
+  ].map((stepId) => ({
+    step_id: stepId as ReconstructStageId,
+    produced: deltaProduced,
+    legit_no_op: !deltaProduced,
+  }));
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    stage_witnesses: [
+      ...deltaGroup,
+      { step_id: "source_observation_lineage_index", produced: true, legit_no_op: false },
+      {
+        step_id: "source_observation_lineage_index_validation",
+        produced: true,
+        legit_no_op: false,
+      },
+    ],
+  };
+}
+
+// The witness-less conditional lineage stages (canonical set in artifact-types.ts, shared with the
+// reachability validator). Only these may carry `skip_kind: "legit_conditional"` on a graceful manifest.
+const WITNESS_LESS_CONDITIONAL_STAGES: ReadonlySet<ReconstructStageId> = new Set(
+  WITNESS_LESS_CONDITIONAL_STAGE_IDS,
+);
+
+/**
+ * Input a graceful terminal (Slice 3) hands to the manifest builder so it can produce a
+ * witness-truthful reachability manifest instead of the completed-run manifest. Derived entirely
+ * from disk facts (design v2 §8): the disposition/terminal step from the terminal signal, the
+ * witness ref + its stage witnesses from the always-written lineage census.
+ */
+export interface ReconstructGracefulTerminalManifestInput {
+  disposition: "blocked" | "limited";
+  terminalStepId: ReconstructStageId;
+  /** Path to the lineage census (the reachability witness); null when the run stopped before it. */
+  reachabilityWitnessRef: string | null;
+  /** The lineage census's stage witnesses (empty when the lineage phase never ran). */
+  lineageWitnesses: ReconstructReachabilityStageWitness[];
+}
+
+/**
+ * Graceful-terminal reachability transform (design v2 §3). Rewrites one built manifest step to a
+ * witness-truthful skip_kind so an un-wired stage cannot masquerade as a healthy completion:
+ *   - completed WITH refs → kept (the artifact ref IS the witness it ran and produced).
+ *   - completed with NO refs → the graceful terminal stopped before this stage; re-gated to
+ *     skipped/not_reached. Without this, the completed-step ref check would false-flag
+ *     manifest_artifact_ref_missing on every not-reached stage — the v0/v1 P1 failure. Covers ALL
+ *     unconditional completedStep blocks uniformly (M7). invocation_binding is exempt (always
+ *     reached, ref-less by design).
+ *   - skipped witness-less lineage stage → legit_conditional when the census witnessed it ran (the
+ *     validator confirms legit_no_op independently), else not_reached (the lineage phase never ran).
+ *   - any other skipped stage → not_reached.
+ */
+function applyGracefulReachability(
+  step: ReconstructRunManifestStep,
+  ranLineageStages: ReadonlySet<ReconstructStageId>,
+): ReconstructRunManifestStep {
+  if (step.step_id === "invocation_binding") return step;
+  if (step.status === "completed") {
+    if (step.artifact_refs.length > 0) return step;
+    return {
+      ...step,
+      status: "skipped",
+      skip_kind: "not_reached",
+      reason: "stage not reached before the graceful terminal disposition",
+      authority_impact:
+        "no artifact was produced; the graceful terminal stopped the run before this stage",
+    };
+  }
+  if (step.status === "skipped") {
+    if (WITNESS_LESS_CONDITIONAL_STAGES.has(step.step_id)) {
+      return ranLineageStages.has(step.step_id)
+        ? { ...step, skip_kind: "legit_conditional" }
+        : { ...step, skip_kind: "not_reached" };
+    }
+    return { ...step, skip_kind: "not_reached" };
+  }
+  return step; // failed steps are out of graceful reachability scope
+}
+
+export function createRunManifest(args: {
   sessionId: string;
   targetRefs: string[];
   intent: string;
@@ -2320,8 +2827,22 @@ function createRunManifest(args: {
   reconstructRecordPath: string;
   governingSnapshot: ReconstructRunGoverningSnapshot;
   terminalArtifactsCompleted: boolean;
+  /**
+   * Present only for a graceful terminal (Slice 3). When set, the built steps are rewritten to a
+   * witness-truthful reachability manifest, the graceful_terminal marker is emitted, and the
+   * completion claim is downgraded to a truthful blocked/limited statement. Absent on completed and
+   * pre-handoff runs — the output is then byte-identical to before this parameter existed.
+   */
+  graceful?: ReconstructGracefulTerminalManifestInput;
 }): ReconstructRunManifestArtifact {
-  const artifactRefs = args.terminalArtifactsCompleted
+  const ranLineageStages = new Set<ReconstructStageId>(
+    (args.graceful?.lineageWitnesses ?? []).map((w) => w.step_id),
+  );
+  // A graceful terminal (design §16.3-a) reaches here with terminalArtifactsCompleted=false, but
+  // its caller (assembleGracefulTerminal) has already set the produced refs (final_output, record)
+  // to real paths and the unproduced ones to null. The blanket-null below would erase the produced
+  // refs, so the graceful path bypasses it and trusts the caller's refs verbatim.
+  const artifactRefs = args.terminalArtifactsCompleted || args.graceful
     ? args.artifactRefs
     : {
       ...args.artifactRefs,
@@ -2330,6 +2851,9 @@ function createRunManifest(args: {
       maturation_baseline_validation: null,
       baseline_actionability_matrix: null,
       baseline_actionability_matrix_validation: null,
+      maturation_value_discharge: null,
+      maturation_value_discharge_validation: null,
+      maturation_value_discharge_census: null,
       actionability_matrix: null,
       actionability_matrix_validation: null,
       maturation_question_frontier: null,
@@ -2377,12 +2901,17 @@ function createRunManifest(args: {
       confirmation_provider_realization: args.confirmationProviderRealization,
       directive_author_id: args.directiveAuthor.authorId,
       confirmation_provider_id: args.confirmationProvider.providerId,
-      allowed_completion_claim:
-        "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
+      // RM-2 (design v2 §5): a graceful terminal must NOT claim it completed the live integral path.
+      // The truthful claim states the run stopped early with the recorded disposition.
+      allowed_completion_claim: args.graceful
+        ? `Runtime stopped early with a ${args.graceful.disposition} disposition at ${args.graceful.terminalStepId}; only the reached artifacts were produced and later stages are recorded as not reached.`
+        : "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
     },
     artifact_refs: {
       ...artifactRefs,
-      reconstruct_record: args.terminalArtifactsCompleted
+      // A graceful terminal assembles a real record before the manifest (design §16.5), so its
+      // reconstruct_record ref is preserved just like a completed run's.
+      reconstruct_record: args.terminalArtifactsCompleted || args.graceful
         ? args.reconstructRecordPath
         : null,
     },
@@ -2494,6 +3023,18 @@ function createRunManifest(args: {
             "final_output",
             "final_output_provenance_validation",
             "post_publication_run_manifest_validation",
+            "reconstruct_record",
+          ]
+          : []),
+        // A graceful terminal still deterministically produces its final-output and record (design
+        // §16.3-b), so those IDs belong in implemented_artifacts even though the pipeline stopped
+        // early — otherwise a purpose-adequacy review would read them as un-implemented.
+        ...(args.graceful
+          ? [
+            "final_output",
+            ...(args.artifactRefs.final_output_provenance_validation
+              ? ["final_output_provenance_validation"]
+              : []),
             "reconstruct_record",
           ]
           : []),
@@ -2914,6 +3455,25 @@ function createRunManifest(args: {
           "baseline-actionability-matrix-validation.yaml is emitted after baseline actionability matrix.",
           "Pre-handoff manifest validation must not certify future baseline actionability matrix validation.",
         ),
+      // Maturation value-read cut (design §13.5 F3). Single stage id — discharge validation is
+      // an embedded self-validation step, so exactly one manifest step. Census ref present →
+      // completed (the always-written discharge census is the durable evidence surface even on
+      // zero discharge); null → skipped (the stage no-op'd because there were no value-readable
+      // limitation-backed rows or the author lacks the value-read path). leaf_read precedent.
+      args.artifactRefs.maturation_value_discharge_census
+        ? completedStep(
+          "maturation_value_read",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.maturation_value_discharge_census],
+        )
+        : skippedStep(
+          "maturation_value_read",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "value-read stage did not run (no value-readable limitation-backed rows or the author lacks the value-read path).",
+          "No value-read discharge was attempted; the baseline actionability matrix stands unchanged.",
+        ),
       args.terminalArtifactsCompleted
         ? completedStep(
           "maturation_question_frontier",
@@ -3312,7 +3872,19 @@ function createRunManifest(args: {
           "claim-projection-validation.yaml is emitted as a pre-publication authority before final-output authoring.",
           "Pre-handoff manifest validation must not certify claim projection validation before maturation continuation validation closes.",
         ),
-      args.terminalArtifactsCompleted
+      args.graceful
+        // Graceful terminal: the final-output is a deterministic runtime-authored blocked/limited
+        // statement, NOT an LLM completion (design §16.3-c) — so runtime owner, not host_llm. When
+        // its ref is present the step is kept completed; when absent, applyGracefulReachability
+        // downgrades this ref-less completed step to not_reached.
+        ? completedStep(
+          "final_output",
+          "runtime",
+          runtimePerformer(),
+          [args.artifactRefs.final_output]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : args.terminalArtifactsCompleted
         ? completedStep(
           "final_output",
           "host_llm",
@@ -3327,7 +3899,9 @@ function createRunManifest(args: {
           "final-output.md is emitted after claim projection validation and delegates public claim truth to the canonical claim projection artifact.",
           "Pre-handoff manifest validation must not certify future final output.",
         ),
-      args.terminalArtifactsCompleted
+      // Both runtime-owned; a graceful terminal produces these deterministically (§16.3-c). A
+      // ref-less completed step is downgraded to not_reached by applyGracefulReachability.
+      args.terminalArtifactsCompleted || args.graceful
         ? completedStep(
           "final_output_provenance_validation",
           "runtime",
@@ -3342,7 +3916,7 @@ function createRunManifest(args: {
           "final-output-provenance-validation.yaml is emitted after final output.",
           "Pre-handoff manifest validation must not certify future final-output provenance.",
         ),
-      args.terminalArtifactsCompleted
+      args.terminalArtifactsCompleted || args.graceful
         ? completedStep(
           "record_assembly",
           "runtime",
@@ -3382,11 +3956,27 @@ function createRunManifest(args: {
       return executionTelemetry
         ? { ...step, execution_telemetry: executionTelemetry }
         : step;
-    }),
+    }).map((step) =>
+      // Graceful terminal only: rewrite each step to a witness-truthful skip_kind (design v2 §3).
+      // When absent this is a no-op that returns the same step objects, so the completed/pre-handoff
+      // manifest stays byte-identical.
+      args.graceful ? applyGracefulReachability(step, ranLineageStages) : step
+    ),
     runtime_boundary: {
       semantic_generation: "not_performed",
       semantic_authority: "host_llm_author",
     },
+    // Graceful-terminal marker (design v2 §4): its presence switches the validator into the
+    // reachability rules. Absent on completed and pre-handoff runs (byte-identical to before).
+    ...(args.graceful
+      ? {
+        graceful_terminal: {
+          disposition: args.graceful.disposition,
+          terminal_step_id: args.graceful.terminalStepId,
+          reachability_witness_ref: args.graceful.reachabilityWitnessRef,
+        },
+      }
+      : {}),
   };
 }
 
@@ -3416,6 +4006,7 @@ function parseLlmJsonObject(text: string, artifactName: string): Record<string, 
     }
     return parsed as Record<string, unknown>;
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     throw new Error(
       `${artifactName} author returned invalid JSON: ${
         error instanceof Error ? error.message : String(error)
@@ -6851,6 +7442,7 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       max_tokens: args.maxTokens,
     });
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     record({
       status: "failed",
       failureClass: failureClassForLlmCallError(error, isLlmTimeoutError),
@@ -6889,6 +7481,7 @@ function jsonOutputClassifier(args: {
       args.sink.parsed = parseLlmJsonObject(text, args.artifactName);
       return { ok: true };
     } catch (error) {
+      if (isGracefulTerminalSignal(error)) throw error;
       args.sink.failureMessage = error instanceof Error
         ? error.message
         : String(error);
@@ -7436,6 +8029,48 @@ const SEED_CONFIRMATION_SYSTEM_PROMPT = [
   "JSON shape: {\"confirmation_status\":\"accepted|rejected|partial|deferred\",\"confirmed_claim_ids\":[\"...\"],\"rejected_claim_ids\":[\"...\"],\"partial_claim_ids\":[\"...\"],\"deferred_claim_ids\":[\"...\"],\"notes\":[\"...\"]}",
 ].join("\n");
 
+// Maturation value-read cut (design §15.4) — the SECOND LLM-touch's two authoring prompts. The opening
+// line of each is the mock dispatcher's stable key (keep it stable when editing the body). Both are
+// cataloged (CG-1) so editing either rotates authoringPromptContractSha256.
+const VALUE_READ_LOCATION_PROMPT = [
+  "Select spreadsheet cell locations to read for a value-dependent limitation.",
+  "",
+  "A baseline row is limitation-backed because the deterministic observer inspected only STRUCTURE, not",
+  "raw cell values. You are given that row's value-dependent limitation(s) and the set of ALLOWED grid",
+  "locations the runtime may read. Each allowed location is a sheet + an origin-normalized grid column",
+  "index + a bounded HEAD-of-column row window + that column's HEADER LABEL (column_label) and inferred",
+  "type (column_inferred_type). You do NOT see any source file path — the runtime reads the source.",
+  "",
+  "USE the column_label + column_inferred_type to pick the column whose RAW VALUES would actually ground",
+  "the limitation — do NOT default to column 0 (often a row-number/index column). Match the limitation's",
+  "meaning to the labelled column (e.g. an amount/price limitation → the column whose label names an",
+  "amount). You MUST pick only from the allowed COLUMNS (copy the sheet + grid_column_index verbatim); a",
+  "pick in a column outside the set is dropped. You MAY narrow the row range further (grid_row_start/",
+  "grid_row_end, 1-based) within the allowed window; keep the window small (the runtime caps the read and",
+  "a too-wide window is truncated, which cannot support a satisfied judgment). Return STRICT JSON:",
+  '{ "picked_locations": [{ "sheet": "<sheet>", "grid_column_index": <int>,',
+  '   "grid_row_start": <int>?, "grid_row_end": <int>? }] }',
+  "",
+  "Pick the smallest set that answers the limitation; an empty pick is honest when nothing is relevant.",
+].join("\n");
+
+const VALUE_READ_JUDGMENT_PROMPT = [
+  "Judge whether read spreadsheet cell values satisfy a structure-only limitation.",
+  "",
+  "You are given a baseline row's value-dependent limitation(s) and the RAW CELL VALUES the runtime read",
+  "from the authorized source (grouped by region, each cell with its grid coordinates). The values are a",
+  "BOUNDED HEAD SAMPLE of the column (leading rows only), NOT every row. Judge the column's VALUE",
+  "CHARACTER — what the values are and whether they ground the limitation — and decide SATISFY (the",
+  "values resolve what structure alone could not), REFUTE (the values contradict the seed hypothesis), or",
+  "INCONCLUSIVE (the sample does not decide it).",
+  "",
+  "Do NOT claim completeness, totals, or any property over ALL rows from this head sample — those are not",
+  "provable here; answer inconclusive if the limitation needs them. Base the judgment ONLY on the",
+  "provided read values — do not assume cells you were not shown. If the read was truncated or the sample",
+  "is insufficient, answer inconclusive. Return STRICT JSON:",
+  '{ "satisfaction_status": "satisfied|refuted|inconclusive", "rationale": "<short grounded reason>" }',
+].join("\n");
+
 // Renders every authoring prompt template once with stable SENTINEL params (so
 // per-call data is neutralized but the static skeleton — including both branches
 // of any conditional — is captured). authoringPromptContractSha256() hashes this;
@@ -7521,10 +8156,18 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
   // it rotate the reuse key. (The leaf-read artifact's own reuse is additionally gated by the
   // llm_touch_fingerprint, which folds leafReadPromptSha256().)
   leaf_read: LEAF_READ_SYSTEM_PROMPT,
+  // Maturation value-read cut (design §15.4): the two SECOND-LLM-touch prompts. Cataloguing them (CG-1)
+  // makes editing either rotate the reuse key (value-discharge is recompute-every-run, so no separate
+  // llm_touch_fingerprint is needed — design §13.7).
+  value_read_location: VALUE_READ_LOCATION_PROMPT,
+  value_read_judgment: VALUE_READ_JUDGMENT_PROMPT,
 };
 
 /** Max tokens for the bounded leaf-read JSON (a short labels/unread object). */
 const LEAF_READ_MAX_TOKENS = 2048;
+
+/** Max tokens for each bounded value-read JSON (a short location-pick / judgment object). */
+const VALUE_READ_MAX_TOKENS = 2048;
 
 /**
  * sha256 of the authoring prompt-template contract (DET-1 / CG-1). Folded into
@@ -7637,6 +8280,122 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             }),
           ),
       });
+    },
+
+    async readValueDischarge(input) {
+      // SECOND LLM-touch (design §15.4). Per candidate: (a) the LLM picks read locations within the
+      // candidate's ALLOWED grid-scope set; (b) the runtime reads those cells from the AUTHORIZED source
+      // (path resolved via observation_id — NEVER in the prompt); (c) the LLM judges whether the read
+      // values satisfy the limitation. A 0-cell or TRUNCATED read can never back a `satisfied` discharge
+      // (runtime downgrade → inconclusive). Failures are counted (no throw escapes per candidate).
+      const discharges: ReconstructMaturationValueDischargeEntry[] = [];
+      let failedCount = 0;
+      // G2 membership is keyed on the COLUMN (sheet, grid_column_index), NOT the full row-bounded key
+      // (design §16.3): the allowed set enumerates a bounded head-of-column SAMPLE scope, and the LLM may
+      // narrow the row range further within that authorized column. A row-narrowed pick must therefore
+      // stay accepted (the prior exact-key match dropped every narrowed pick → §16.1 DC-1 silent no-op).
+      // The column stays inside the authorized observation (F4), and the reader clamps the row bounds to
+      // the materialized grid + the read cap, so a narrowed pick can never escape the column or the cap.
+      const columnKey = (s: { sheet: string; grid_column_index: number }): string =>
+        `${s.sheet}::${s.grid_column_index}`;
+      for (const candidate of input.candidates) {
+        try {
+          // (a) location selection — payload carries NO source path, only allowed grid scopes.
+          const locationRaw = (await callJsonAuthor({
+            llmCall,
+            llmConfig,
+            telemetry,
+            artifactName: "MaturationValueReadLocation",
+            maxTokens: VALUE_READ_MAX_TOKENS,
+            systemPrompt: VALUE_READ_LOCATION_PROMPT,
+            userPayload: {
+              matrix_row_id: candidate.matrix_row_id,
+              limitation_refs: candidate.limitation_refs,
+              allowed_locations: candidate.allowed_locations,
+            },
+          })) as Record<string, unknown>;
+          const pickedRaw = Array.isArray(locationRaw.picked_locations)
+            ? (locationRaw.picked_locations as Array<Record<string, unknown>>)
+            : [];
+          // (G2) keep only picks whose COLUMN is in the allowed set; the LLM may narrow the row range.
+          const allowedColumns = new Set(candidate.allowed_locations.map(columnKey));
+          const validatedPicks: ReconstructValueReadScope[] = [];
+          for (const p of pickedRaw) {
+            const gridColumnIndex = Number(p.grid_column_index);
+            if (!Number.isInteger(gridColumnIndex)) continue;
+            const scope: ReconstructValueReadScope = {
+              sheet: typeof p.sheet === "string" ? p.sheet : "",
+              grid_column_index: gridColumnIndex,
+              grid_row_start: typeof p.grid_row_start === "number" ? p.grid_row_start : null,
+              grid_row_end: typeof p.grid_row_end === "number" ? p.grid_row_end : null,
+            };
+            if (allowedColumns.has(columnKey(scope))) validatedPicks.push(scope);
+          }
+          const sourceRef = input.sourceRefByObservationId[candidate.observation_id];
+          // MVP: one scope per discharge so read_scope ↔ cells_read stay coherent (PH-3); multi-scope
+          // value evidence is deferred (design §15.4). Drop the candidate if no valid pick or source.
+          const selections = validatedPicks.slice(0, 1);
+          if (!sourceRef || selections.length === 0) {
+            failedCount += 1;
+            continue;
+          }
+          // (b) bounded runtime cell-read from the authorized source.
+          const read = await readTargetedCellValues({ sourceRef, selections });
+          if (read.total_cells_read === 0 || read.content_sha256 === null) {
+            failedCount += 1;
+            continue;
+          }
+          // (c) judgment — payload carries the READ VALUES (not the path).
+          const judgmentRaw = (await callJsonAuthor({
+            llmCall,
+            llmConfig,
+            telemetry,
+            artifactName: "MaturationValueReadJudgment",
+            maxTokens: VALUE_READ_MAX_TOKENS,
+            systemPrompt: VALUE_READ_JUDGMENT_PROMPT,
+            userPayload: {
+              matrix_row_id: candidate.matrix_row_id,
+              baseline_row_id: candidate.baseline_row_id,
+              limitation_refs: candidate.limitation_refs,
+              read_regions: read.regions,
+            },
+          })) as Record<string, unknown>;
+          const rawStatus = judgmentRaw.satisfaction_status;
+          const normalizedStatus: "satisfied" | "refuted" | "inconclusive" =
+            rawStatus === "satisfied" || rawStatus === "refuted" ? rawStatus : "inconclusive";
+          // Runtime downgrade (design §15.4): a truncated read cannot back a `satisfied` discharge.
+          const effectiveStatus =
+            normalizedStatus === "satisfied" && read.truncated ? "inconclusive" : normalizedStatus;
+          const region = read.regions[0]!;
+          discharges.push({
+            // Keyed on (matrix_row_id, observation_id) so multiple eligible sources for the same row
+            // do not collide on a duplicate discharge_id (design §16.2 SR-B; latent on single-source).
+            discharge_id: `value-discharge:${candidate.matrix_row_id}:${candidate.observation_id}`,
+            target_baseline_row_refs: [candidate.baseline_row_id],
+            target_limitation_refs: candidate.limitation_refs,
+            value_evidence_ref: {
+              observation_id: candidate.observation_id,
+              read_scope: {
+                sheet: region.sheet,
+                grid_column_index: region.grid_column_index,
+                grid_row_start: region.grid_row_start,
+                grid_row_end: region.grid_row_end,
+              },
+              cells_read: read.total_cells_read,
+              read_truncated: read.truncated,
+              read_content_sha256: read.content_sha256,
+            },
+            value_evidence_authorization_ref: candidate.value_evidence_authorization_ref,
+            satisfaction_status: effectiveStatus,
+            rationale:
+              typeof judgmentRaw.rationale === "string" ? judgmentRaw.rationale : "",
+          });
+        } catch (error) {
+          if (isGracefulTerminalSignal(error)) throw error;
+          failedCount += 1;
+        }
+      }
+      return { discharges, failed_count: failedCount };
     },
 
     async writeSourceObservationDirective(input) {
@@ -8013,6 +8772,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           userPayload: sourcePurposeUserPayload,
         });
       } catch (error) {
+        if (isGracefulTerminalSignal(error)) throw error;
         if (!isLlmTimeoutError(error)) throw error;
         raw = await callJsonAuthor({
           llmCall,
@@ -8463,6 +9223,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           },
         });
       } catch (error) {
+        if (isGracefulTerminalSignal(error)) throw error;
         if (!isLlmTimeoutError(error) || input.repairAttempt) {
           throw error;
         }
@@ -8522,6 +9283,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             },
           });
         } catch (retryError) {
+          if (isGracefulTerminalSignal(retryError)) throw retryError;
           if (!isLlmTimeoutError(retryError)) throw retryError;
           throw new Error(
             "OntologySeedMinimalKernel timed out after the primary seed authoring timeout; deterministic seed timeout recovery is disabled because runtime must not author semantic seed content.",
@@ -8898,6 +9660,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             },
           });
         } catch (error) {
+          if (isGracefulTerminalSignal(error)) throw error;
           if (!isLlmTimeoutError(error)) throw error;
           rawBatch = deterministicQuestionBatch(args);
         }
@@ -10668,13 +11431,26 @@ async function observeAcceptedFrontierRefs(args: {
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
     });
     // A null observation (vanished ref) and an unsupported workbook format
-    // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence)
-    // are both un-observable by the current runtime; neither may be admitted as
-    // frontier evidence (mirrors the materialize-loop demotion).
+    // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence) are both
+    // un-observable by the current runtime. Site 2 graceful terminal (design site2 §9): this is a
+    // normal-but-unmet stop, not a crash. Skipping the ref is NOT viable — the delta writer requires
+    // every accepted frontier id to produce a NEW observation
+    // (source-observation-delta-validation.ts:257), so a skip-and-continue would crash deeper. Throw
+    // a graceful signal instead: it propagates out BEFORE the delta write (call site ~13030), and
+    // the run-level catch assembles an honest blocked terminal from the context that call site set.
     if (!observation || spreadsheetUnsupportedReason(observation)) {
-      throw new Error(
-        `accepted source frontier ref cannot be observed by current runtime: ${frontier.source_ref}`,
-      );
+      const unsupportedReason = observation
+        ? spreadsheetUnsupportedReason(observation)
+        : null;
+      throw new GracefulTerminalSignal({
+        disposition: "blocked",
+        terminalStepId: "source_observation_delta",
+        reason:
+          `accepted source frontier ref cannot be observed by current runtime: ${frontier.source_ref}` +
+          (unsupportedReason
+            ? ` (unsupported: ${unsupportedReason})`
+            : " (ref unavailable at observation time)"),
+      });
     }
     addedObservations.push(observation);
     observedSourceRefs.add(resolvedSourceRef);
@@ -11543,6 +12319,176 @@ export async function runReconstruct(
     artifactRef: runControlValidationPath,
     validation: runControlState.validation,
   });
+  // Graceful-terminal assembly (design §16.5). Declared here — after every catch-visible run var,
+  // before the main `try` — so it closes over the run context. A throwing site (S7) sets
+  // `gracefulTerminalContext` with the inside-`try` pieces the catch cannot see, then throws a
+  // GracefulTerminalSignal; the catch (§16.4) routes the signal here to assemble an honest
+  // blocked/limited terminal (final-output + record + witness-truthful manifest + halted run-control)
+  // instead of crashing. Deterministic paths are recomputed from sessionRoot (the inside-`try`
+  // path consts are out of scope here).
+  let gracefulTerminalContext: GracefulTerminalAssemblyContext | null = null;
+  const assembleGracefulTerminal = async (
+    signal: GracefulTerminalSignal,
+  ): Promise<ReconstructRunResult> => {
+    const ctx = gracefulTerminalContext;
+    if (!ctx) {
+      throw new Error(
+        `graceful terminal signal at ${signal.terminalStepId} has no assembly context; the throwing site must set gracefulTerminalContext before throwing`,
+      );
+    }
+    const finalOutputPath = path.join(sessionRoot, "final-output.md");
+    const recordPath = path.join(sessionRoot, "reconstruct-record.yaml");
+    const manifestPath = path.join(sessionRoot, "reconstruct-run-manifest.yaml");
+    const manifestValidationPath = path.join(
+      sessionRoot,
+      "reconstruct-run-manifest.post-publication-validation.yaml",
+    );
+    // (1) Reachability witness: the always-written lineage census, IF the run reached it. Absent at
+    // an early terminal (e.g. site 1, thrown before the census write) → no witnesses, null ref.
+    const censusPath = path.join(sessionRoot, "source-observation-lineage-census.yaml");
+    const census = await readYamlDocumentIfPresent<
+      ReconstructSourceObservationLineageCensus
+    >(censusPath);
+    const lineageWitnesses = census?.stage_witnesses ?? [];
+    const reachabilityWitnessRef = census ? censusPath : null;
+    // (2) Deterministic runtime final-output for the disposition (no out-of-authority values).
+    const finalOutputText = buildGracefulTerminalFinalOutput(signal);
+    await atomicWriteFile(finalOutputPath, finalOutputText);
+    // Only refs whose artifact actually exists on disk may become completed manifest steps (the
+    // validator checks existence, design §16.5); the produced final-output + manifest are added.
+    const reachedRefs: Partial<ReconstructRecordArtifactRefs> = {};
+    for (
+      const [key, ref] of Object.entries(ctx.reachedArtifactRefs) as [
+        keyof ReconstructRecordArtifactRefs,
+        string | null | undefined,
+      ][]
+    ) {
+      if (typeof ref !== "string") continue;
+      const existingRef = ref;
+      if (!(await exists(existingRef))) continue;
+      reachedRefs[key] = existingRef;
+    }
+    const artifactRefs = artifactRefsWithDefaults({
+      refs: {
+        ...reachedRefs,
+        final_output: finalOutputPath,
+        reconstruct_run_manifest: manifestPath,
+      },
+    });
+    // The target-material-profile is reached before any graceful terminal (it precedes source
+    // observation), so its ref is always present here; fail loud if a future site ever violates that.
+    const targetMaterialProfilePath = artifactRefs.target_material_profile;
+    if (!targetMaterialProfilePath) {
+      throw new Error(
+        "graceful terminal assembly requires the target-material-profile artifact, but it is absent",
+      );
+    }
+    // (3/4) The governing snapshot the manifest validator re-derives, then the witness-truthful
+    // graceful manifest.
+    const lensIds = loadCoreLensRegistry().full_review_lens_ids;
+    const admittedDomainIds = params.domain ? [params.domain] : [];
+    const governingSnapshot = await buildReconstructRunGoverningSnapshot({
+      projectRoot,
+      registryPath: contractRegistryPath,
+      contractRegistry: ctx.contractRegistry,
+      selectedSourceProfiles: ctx.targetMaterialProfile.selected_source_profiles,
+      lensIds,
+      admittedDomainIds,
+    });
+    const reconstructRunManifest = createRunManifest({
+      sessionId,
+      targetRefs,
+      intent: params.intent,
+      semanticAuthorRealization: params.semanticAuthorRealization,
+      confirmationProviderRealization: params.confirmationProviderRealization,
+      directiveAuthor,
+      confirmationProvider,
+      artifactRefs,
+      reconstructRecordPath: recordPath,
+      governingSnapshot,
+      terminalArtifactsCompleted: false,
+      graceful: {
+        disposition: signal.disposition,
+        terminalStepId: signal.terminalStepId,
+        reachabilityWitnessRef,
+        lineageWitnesses,
+      },
+    });
+    await writeYamlDocument(manifestPath, reconstructRunManifest);
+    // (3) Record written before validation ONLY so the manifest's record_assembly ref exists (the
+    // validator checks ref existence, not content). Crucially it does NOT yet carry
+    // terminal_disposition: if the fail-closed gate below rejects, this persisted record must project
+    // as non-terminal (in-progress) via reconstructTerminalStatus — otherwise getRunStatus/poll would
+    // read a crashed run as a clean "blocked" terminal, masking the rejection. The durable
+    // disposition is stamped only after the gate passes (post-finalize re-assembly, step 7).
+    await assembleReconstructRecord({
+      sessionRoot,
+      artifactRefs,
+      outputPath: recordPath,
+    });
+    // (5) Fail-closed terminal validation (design §16.5-5): an invalid graceful manifest crashes
+    // rather than finalizing a dishonest terminal. This IS the terminal validation run-control trusts.
+    const manifestValidation = await writeReconstructRunManifestValidationArtifact({
+      manifestPath,
+      projectRoot,
+      registryPath: contractRegistryPath,
+      contractRegistry: ctx.contractRegistry,
+      targetMaterialProfilePath,
+      lensIds,
+      admittedDomainIds,
+      outputPath: manifestValidationPath,
+    });
+    assertRuntimeValidationValid({
+      artifactName: "reconstruct-run-manifest",
+      artifactRef: manifestValidationPath,
+      validation: manifestValidation,
+    });
+    // (6) Finalize run-control as a graceful HALT (not completed), trusting the terminal validation.
+    const finalizedRunControl = await finalizeReconstructRunControl({
+      runControlPath,
+      validationOutputPath: runControlValidationPath,
+      attemptId: runControlState.attemptId,
+      artifactRefs,
+      terminalRunManifestValidationPath: manifestValidationPath,
+      attemptStatus: "halted",
+      extraArtifactRefs: [
+        prePublicationRunControlValidationPath,
+        recordPath,
+        manifestPath,
+        finalOutputPath,
+      ],
+      expectedSessionId: sessionId,
+      expectedSessionRoot: sessionRoot,
+    });
+    assertRuntimeValidationValid({
+      artifactName: "reconstruct-run-control",
+      artifactRef: runControlValidationPath,
+      validation: finalizedRunControl.validation,
+    });
+    // Re-assemble the record after finalize so it captures the finalized run-control validation.
+    const finalRecord = await assembleReconstructRecord({
+      sessionRoot,
+      artifactRefs,
+      outputPath: recordPath,
+      terminalDisposition: signal.disposition,
+    });
+    // (7) Return the graceful result: status = disposition; metrics/stopDecision were never reached.
+    return {
+      sessionId,
+      sessionRoot,
+      status: signal.disposition,
+      finalOutputPath,
+      finalOutputText,
+      reconstructRecordPath: recordPath,
+      reconstructRunManifestPath: manifestPath,
+      artifactRefs: {
+        ...finalRecord.artifact_refs,
+        reconstruct_record: recordPath,
+      },
+      reconstructRecord: finalRecord,
+      reconstructRunManifest,
+    };
+  };
   try {
   await writeRegistryVerificationEvidenceArtifact({
     sessionId,
@@ -11604,6 +12550,40 @@ export async function runReconstruct(
     artifactRef: targetMaterialProfileValidationPath,
     validation: targetMaterialProfileValidation,
   });
+  // Site 1 graceful terminal (design §16.2): a zero-observation run whose every planned target was
+  // skipped (unsupported/vanished) is a graceful BLOCKED terminal, not a crash. Populate the
+  // assembly context the catch-side needs (the inside-`try` pieces it cannot see), then throw the
+  // signal; the catch (§16.4) assembles an honest blocked terminal. A supported-but-empty target
+  // (a planned unit remains) stays ineligible and crashes below (evidence gate stays honest).
+  if (
+    isZeroObservationGracefulTerminalEligible({ sourceObservations, sourceInventory })
+  ) {
+    gracefulTerminalContext = {
+      reachedArtifactRefs: {
+        reconstruct_run_control: runControlPath,
+        reconstruct_run_control_validation: runControlValidationPath,
+        registry_verification_evidence: registryVerificationEvidencePath,
+        registry_verification_evidence_validation:
+          registryVerificationEvidenceValidationPath,
+        target_material_profile: preparationRefs.target_material_profile,
+        target_material_profile_validation: targetMaterialProfileValidationPath,
+        source_inventory: preparationRefs.source_inventory,
+        initial_source_frontier: preparationRefs.initial_source_frontier,
+        source_observations: preparationRefs.source_observations,
+      },
+      contractRegistry,
+      targetMaterialProfile,
+    };
+    throw new GracefulTerminalSignal({
+      disposition: "blocked",
+      terminalStepId: "source_observation",
+      reason: buildZeroObservationDiagnostic({
+        targetMaterialProfile,
+        sourceInventory,
+        sourceObservations,
+      }),
+    });
+  }
   assertSemanticAuthoringHasObservedEvidence({
     targetMaterialProfile,
     sourceInventory,
@@ -12060,6 +13040,49 @@ export async function runReconstruct(
       );
     }
     const previousSourceObservations = sourceObservations;
+    // Site 2 graceful terminal (design site2 §9 N1/N4): observeAcceptedFrontierRefs may throw a
+    // GracefulTerminalSignal when an accepted frontier ref is un-observable. The throw is deep inside
+    // that helper, so the run-level assembly context is set HERE (the call site, where it is visible)
+    // before the call. It lists EVERY artifact already written by this point — the prep + exploration
+    // round artifacts (directive, lens index, synthesis, frontier, prior-round delta/reentry) — so
+    // the graceful manifest reports them as reached; the assembly's disk-existence filter drops any
+    // not-yet-written (e.g. the current round's delta, still null). Lineage index/census come AFTER
+    // this call, so they are correctly absent. Cleared after a successful round so a later graceful
+    // site cannot read a stale context (a forgotten set then fails loud via assembleGracefulTerminal's
+    // `if (!ctx) throw`).
+    gracefulTerminalContext = {
+      reachedArtifactRefs: {
+        reconstruct_run_control: runControlPath,
+        reconstruct_run_control_validation: runControlValidationPath,
+        registry_verification_evidence: registryVerificationEvidencePath,
+        registry_verification_evidence_validation:
+          registryVerificationEvidenceValidationPath,
+        target_material_profile: preparationRefs.target_material_profile,
+        target_material_profile_validation: targetMaterialProfileValidationPath,
+        source_inventory: preparationRefs.source_inventory,
+        initial_source_frontier: preparationRefs.initial_source_frontier,
+        source_observations: preparationRefs.source_observations,
+        source_safety_ledger: sourceSafetyLedgerPath,
+        source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
+        source_scout_pack: sourceScoutPackPath,
+        source_scout_pack_validation: sourceScoutPackValidationPath,
+        source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
+        source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
+        leaf_read_census: leafReadCensusPath,
+        source_observation_directive: sourceObservationDirectivePath,
+        source_observation_directive_validation:
+          sourceObservationDirectiveValidationPath,
+        lens_judgment_index: lensJudgmentIndexPath,
+        exploration_synthesis: explorationSynthesisPath,
+        source_frontier: sourceFrontierPath,
+        source_frontier_validation: sourceFrontierValidationPath,
+        source_observation_delta: sourceObservationDeltaPath,
+        source_observation_delta_validation: sourceObservationDeltaValidationPath,
+        source_observation_reentry_validation: sourceObservationReentryValidationPath,
+      },
+      contractRegistry,
+      targetMaterialProfile,
+    };
     sourceObservations = await observeAcceptedFrontierRefs({
       sourceFrontier,
       sourceFrontierValidation,
@@ -12068,6 +13091,9 @@ export async function runReconstruct(
       sourceObservations,
       sourceObservationsPath: preparationRefs.source_observations,
     });
+    // Reached this line ⇒ the round observed successfully; drop the context so it cannot be read
+    // stale by a later graceful terminal that forgets to set its own.
+    gracefulTerminalContext = null;
     sourceObservationDeltaPath = path.join(
       roundRoot,
       "source-observation-delta.yaml",
@@ -12157,6 +13183,21 @@ export async function runReconstruct(
   });
   currentSourceObservationLineageIndexValidation =
     sourceObservationLineageIndexValidation;
+  // Reachability witness (design v2 §3): the observation-lineage phase has run, so record — ALWAYS,
+  // even with zero delta rounds — which of the five witness-less stages produced vs legitimately
+  // no-op'd. A later graceful terminal reads this (Slice 3) to distinguish a legit conditional skip
+  // from an un-wired stage; its absence (run stopped before here) reads as not_reached.
+  const sourceObservationLineageCensusPath = path.join(
+    sessionRoot,
+    "source-observation-lineage-census.yaml",
+  );
+  await writeYamlDocument(
+    sourceObservationLineageCensusPath,
+    buildSourceObservationLineageCensus({
+      sessionId,
+      deltaRoundsProduced: sourceObservationLineageRows.length,
+    }),
+  );
   await refreshSourceSafetyArtifacts({
     sourceObservationLineageIndexValidationPath,
   });
@@ -12852,6 +13893,12 @@ export async function runReconstruct(
     sessionRoot,
     "baseline-actionability-matrix-validation.yaml",
   );
+  // Maturation value-read cut. Default-off: null until the value-read stage runs and
+  // writes them (reassigned in runMaturationValueReadStage block). When the stage no-ops
+  // these stay null and the record refs / discharge subtract are absent (byte-parity X2).
+  let maturationValueDischargePath: string | null = null;
+  let maturationValueDischargeValidationPath: string | null = null;
+  let maturationValueDischargeCensusPath: string | null = null;
   const actionabilityMatrixPath = path.join(sessionRoot, "actionability-matrix.yaml");
   const actionabilityMatrixValidationPath = path.join(
     sessionRoot,
@@ -13051,6 +14098,10 @@ export async function runReconstruct(
       baseline_actionability_matrix: baselineActionabilityMatrixPath,
       baseline_actionability_matrix_validation:
         baselineActionabilityMatrixValidationPath,
+      maturation_value_discharge: maturationValueDischargePath,
+      maturation_value_discharge_validation:
+        maturationValueDischargeValidationPath,
+      maturation_value_discharge_census: maturationValueDischargeCensusPath,
       actionability_matrix: actionabilityMatrixPath,
       actionability_matrix_validation: actionabilityMatrixValidationPath,
       maturation_question_frontier: maturationQuestionFrontierPath,
@@ -13185,6 +14236,9 @@ export async function runReconstruct(
       maturation_baseline_validation: null,
       baseline_actionability_matrix: null,
       baseline_actionability_matrix_validation: null,
+      maturation_value_discharge: null,
+      maturation_value_discharge_validation: null,
+      maturation_value_discharge_census: null,
       actionability_matrix: null,
       actionability_matrix_validation: null,
       maturation_question_frontier: null,
@@ -13299,6 +14353,37 @@ export async function runReconstruct(
     artifactRef: baselineActionabilityMatrixValidationPath,
     validation: actionabilityMatrixValidation,
   });
+  // Maturation value-read stage (design §13). Reads authorized runtime-target cell values to
+  // discharge value-dependent limitations on the baseline matrix's limitation-backed rows. The
+  // discharge feeds the CURRENT matrix recompute below (not the baseline matrix), so value_resolved
+  // rows surface there. Default-off: no-op (null paths → skipped manifest step) unless the author
+  // has the capability AND a candidate exists (byte-parity X2).
+  const maturationValueReadStage = await runMaturationValueReadStage({
+    sessionId,
+    baselineMatrix: actionabilityMatrix,
+    maturationBaseline,
+    maturationBaselineValidation,
+    maturationBaselineValidationRef: maturationBaselineValidationPath,
+    sourceObservations,
+    sourceObservationsRef: preparationRefs.source_observations,
+    // Read from the durable artifacts written during source-safety preparation (the in-memory
+    // vars are closure-assigned, so read here keeps the value-read stage's inputs explicit).
+    sourceSafetyLedger: await readYamlDocument<ReconstructSourceSafetyLedgerArtifact>(
+      sourceSafetyLedgerPath,
+    ),
+    sourceSafetyLedgerRef: sourceSafetyLedgerPath,
+    sourceSafetyLedgerValidation:
+      await readYamlDocument<ReconstructSourceSafetyLedgerValidationArtifact>(
+        sourceSafetyLedgerValidationPath,
+      ),
+    sourceSafetyLedgerValidationRef: sourceSafetyLedgerValidationPath,
+    directiveAuthor,
+    sessionRoot,
+  });
+  maturationValueDischargePath = maturationValueReadStage.dischargePath;
+  maturationValueDischargeValidationPath =
+    maturationValueReadStage.dischargeValidationPath;
+  maturationValueDischargeCensusPath = maturationValueReadStage.censusPath;
   const maturationQuestionFrontier = await writeAuthoredYamlDocument(
     maturationQuestionFrontierPath,
     "maturation-question-frontier.yaml",
@@ -13644,6 +14729,11 @@ export async function runReconstruct(
     // blocking_question_refs link (the pre-frontier baseline matrix above does not).
     maturationQuestionFrontierPath,
     maturationQuestionFrontierValidationPath,
+    // Maturation value-read cut (design §13.3 F2): the value-discharge feeds the CURRENT matrix
+    // so validated satisfied discharges subtract their baseline limitations → value_resolved.
+    // Null when the value-read stage no-op'd (default-off → no subtract).
+    maturationValueDischargePath,
+    maturationValueDischargeValidationPath,
     outputPath: actionabilityMatrixPath,
   });
   actionabilityMatrixValidation =
@@ -13657,6 +14747,8 @@ export async function runReconstruct(
       ontologyExpansionValidationPath,
       maturationQuestionFrontierPath,
       maturationQuestionFrontierValidationPath,
+      maturationValueDischargePath,
+      maturationValueDischargeValidationPath,
       outputPath: actionabilityMatrixValidationPath,
     });
   assertRuntimeValidationValid({
@@ -14377,7 +15469,7 @@ export async function runReconstruct(
     validationOutputPath: runControlValidationPath,
     attemptId: runControlState.attemptId,
     artifactRefs,
-    postPublicationRunManifestValidationPath,
+    terminalRunManifestValidationPath: postPublicationRunManifestValidationPath,
     extraArtifactRefs: [
       preHandoffManifestPath,
       prePublicationRunControlValidationPath,
@@ -14418,6 +15510,30 @@ export async function runReconstruct(
     stopDecision,
   };
   } catch (error) {
+    // Graceful terminal (design §16.4): an expected normal-but-unmet stop, not a crash. Handled
+    // BEFORE failure-marking so it is never absorbed into a failed attempt — assemble the honest
+    // blocked/limited terminal and return it. If the assembly ITSELF fails (e.g. the §16.5-5
+    // fail-closed gate rejects an invalid manifest), that is a genuine crash: mark the attempt failed
+    // like any other error (so run-control is not left with a stuck "running" attempt / held lock),
+    // then rethrow.
+    if (isGracefulTerminalSignal(error)) {
+      try {
+        return await assembleGracefulTerminal(error);
+      } catch (assemblyError) {
+        // assembleGracefulTerminal is only ever invoked with an already-caught signal and throws
+        // genuine crashes (never a graceful signal); guard anyway so a signal is never mis-marked as
+        // a failed attempt (design §16.4 N5' — structural fail-closed).
+        if (isGracefulTerminalSignal(assemblyError)) throw assemblyError;
+        await markReconstructRunControlAttemptFailed({
+          runControlPath,
+          validationOutputPath: runControlValidationPath,
+          attemptId: runControlState.attemptId,
+          expectedSessionId: sessionId,
+          expectedSessionRoot: sessionRoot,
+        }).catch(() => undefined);
+        throw assemblyError;
+      }
+    }
     await markReconstructRunControlAttemptFailed({
       runControlPath,
       validationOutputPath: runControlValidationPath,

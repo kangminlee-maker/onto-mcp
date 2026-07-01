@@ -11,6 +11,7 @@ import type {
   ReconstructAnswerSupportJudgmentArtifact,
   ReconstructAnswerSupportJudgmentValidationArtifact,
   ReconstructActionabilityMatrixArtifact,
+  ReconstructActionabilityMatrixRow,
   ReconstructActionabilityMatrixValidationArtifact,
   ReconstructCompetencyQuestion,
   ReconstructCompetencyQuestionAssessment,
@@ -40,6 +41,8 @@ import type {
   ReconstructMaturationSourceDeltaArtifact,
   ReconstructMaturationSourceDeltaValidationArtifact,
   ReconstructMaturationValidationViolation,
+  ReconstructMaturationValueDischargeArtifact,
+  ReconstructMaturationValueDischargeValidationArtifact,
   ReconstructMaturityLevel,
   ReconstructOntologyExpansionArtifact,
   ReconstructOntologyExpansionValidationArtifact,
@@ -415,6 +418,67 @@ function matrixRowNeedsFrontier(
   return isMaterialMaturationRow(row) &&
     row.maturity_level !== "L4_validated_for_purpose" &&
     row.limitation_refs.length === 0;
+}
+
+// Maturation value-read cut (design §13.3). Shared discharge→residual+readiness derivation
+// used by BOTH the matrix builder and its validator (derive-and-assert). Pure/deterministic,
+// no I/O.
+
+// Baseline limitations cleared by VALIDATED, SATISFIED value-discharges, keyed by
+// baseline_row_id. Only a discharge artifact whose validation is `valid` contributes (global
+// gate, mirrors the answer-claims pattern), and only entries with satisfaction_status ===
+// "satisfied" subtract — refuted/inconclusive never discharge (§4.3 four conditions). The
+// validator builds this independently and never trusts the matrix's stamped residual.
+function buildValidatedDischargeIndex(
+  discharge: ReconstructMaturationValueDischargeArtifact | null | undefined,
+  dischargeValidation:
+    | ReconstructMaturationValueDischargeValidationArtifact
+    | null
+    | undefined,
+): Map<string, Set<string>> {
+  const byBaselineRowId = new Map<string, Set<string>>();
+  if (dischargeValidation?.validation_status !== "valid") return byBaselineRowId;
+  for (const entry of discharge?.discharges ?? []) {
+    if (entry.satisfaction_status !== "satisfied") continue;
+    for (const baselineRowRef of entry.target_baseline_row_refs) {
+      const bucket = byBaselineRowId.get(baselineRowRef) ?? new Set<string>();
+      for (const lim of entry.target_limitation_refs) bucket.add(lim);
+      byBaselineRowId.set(baselineRowRef, bucket);
+    }
+  }
+  return byBaselineRowId;
+}
+
+// The terminal readiness for a material row whose value-dependent limitations were cleared to
+// zero residual by value-read discharge. `dischargedForRow > 0` distinguishes a residual that
+// reached zero BY discharge (→ value_resolved) from one that was always zero (→ the natural
+// frontier_required / closed case). A forged value_resolved with no real discharge therefore
+// falls through to frontier_required/closed and is rejected by the validator's readiness
+// assert. matrixRowNeedsFrontier is unchanged (called with the residual).
+function deriveMemberReadiness(args: {
+  materiality: ReconstructMaturationMateriality;
+  maturityLevel: ReconstructMaturityLevel;
+  residualLimitationRefs: string[];
+  dischargedForRow: number;
+}): ReconstructActionabilityMatrixRow["member_readiness"] {
+  if (args.residualLimitationRefs.length > 0) return "limitation_backed";
+  if (
+    isMaterialMaturationRow({ materiality: args.materiality }) &&
+    args.maturityLevel !== "L4_validated_for_purpose" &&
+    args.dischargedForRow > 0
+  ) {
+    return "value_resolved";
+  }
+  if (
+    matrixRowNeedsFrontier({
+      materiality: args.materiality,
+      maturity_level: args.maturityLevel,
+      limitation_refs: args.residualLimitationRefs,
+    })
+  ) {
+    return "frontier_required";
+  }
+  return "closed";
 }
 
 function maturityLevelRank(level: ReconstructMaturityLevel): number {
@@ -956,6 +1020,13 @@ export function buildActionabilityMatrixArtifact(args: {
   maturationAnswerClaims?: ReconstructMaturationAnswerClaimsArtifact | null;
   maturationAnswerClaimsValidation?: ReconstructMaturationAnswerClaimsValidationArtifact | null;
   maturationAnswerClaimsValidationRef?: string | null;
+  // Maturation value-read cut: value-discharge artifact + its validation. A validated
+  // satisfied discharge subtracts its target baseline limitation(s) from the row's residual
+  // (design §13.3). Absent/null → default-off no-op: residual = baseline (byte-parity X2).
+  maturationValueDischarge?: ReconstructMaturationValueDischargeArtifact | null;
+  maturationValueDischargeValidation?:
+    | ReconstructMaturationValueDischargeValidationArtifact
+    | null;
   ontologyExpansion?: ReconstructOntologyExpansionArtifact | null;
   ontologyExpansionValidation?: ReconstructOntologyExpansionValidationArtifact | null;
   ontologyExpansionValidationRef?: string | null;
@@ -970,6 +1041,13 @@ export function buildActionabilityMatrixArtifact(args: {
   const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
     ? args.ontologyExpansion?.expansions ?? []
     : [];
+  // Maturation value-read cut: baseline limitations cleared by validated satisfied
+  // discharges, keyed by baseline_row_id (design §13.3). Empty when no discharge is threaded
+  // or its validation is not valid → the subtract below is a no-op (default-off).
+  const dischargedLimitationsByBaselineRow = buildValidatedDischargeIndex(
+    args.maturationValueDischarge,
+    args.maturationValueDischargeValidation,
+  );
   // Reverse link: a row's blocking_question_refs name the maturation frontier
   // question(s) authored for it. Questions only exist once the frontier is authored
   // from the (pre-frontier) baseline matrix, so this is populated on the current-matrix
@@ -1018,7 +1096,19 @@ export function buildActionabilityMatrixArtifact(args: {
         ...row.supporting_validation_refs,
         ...row.supporting_evidence_refs.map((ref) => ref.observation_id),
       ];
-      const limitationRefs = [...row.limitation_refs];
+      // Value-read discharge subtracts ONLY this baseline row's value-dependent limitations
+      // that a validated satisfied discharge targeted; claim/expansion limitations below are
+      // never discharged (they are separate evidence caveats). dischargedForRow counts the
+      // baseline limitations actually cleared — the value_resolved gate (design §13.3).
+      const dischargedLimsForRow =
+        dischargedLimitationsByBaselineRow.get(row.baseline_row_id) ??
+          new Set<string>();
+      const dischargedForRow = row.limitation_refs.filter((ref) =>
+        dischargedLimsForRow.has(ref)
+      ).length;
+      const limitationRefs = row.limitation_refs.filter((ref) =>
+        !dischargedLimsForRow.has(ref)
+      );
       if (matchingAnswerClaims.length > 0 && args.maturationAnswerClaimsValidationRef) {
         supportingRefs.push(args.maturationAnswerClaimsValidationRef);
       }
@@ -1048,16 +1138,17 @@ export function buildActionabilityMatrixArtifact(args: {
           "L4_validated_for_purpose",
         );
       }
-      const frontierRequired = matrixRowNeedsFrontier({
+      // Shared derivation (builder ↔ validator). A value_resolved row has residual 0 and
+      // dischargedForRow > 0, so matrixRowNeedsFrontier would return true for it — therefore
+      // blocking_question_refs / next_action below gate on memberReadiness, NOT on a raw
+      // frontierRequired boolean, or the validator's reverse-link check would reject it
+      // (design §13.1 latent-defect fix).
+      const memberReadiness = deriveMemberReadiness({
         materiality: row.materiality,
-        maturity_level: maturityLevel,
-        limitation_refs: limitationRefs,
+        maturityLevel,
+        residualLimitationRefs: limitationRefs,
+        dischargedForRow,
       });
-      const memberReadiness = limitationRefs.length > 0
-        ? "limitation_backed" as const
-        : frontierRequired
-        ? "frontier_required" as const
-        : "closed" as const;
       return {
         matrix_row_id: `matrix-${slug(row.baseline_row_id)}`,
         baseline_row_refs: [row.baseline_row_id],
@@ -1075,16 +1166,18 @@ export function buildActionabilityMatrixArtifact(args: {
         competency_assessment_refs: row.competency_assessment_refs,
         maturity_level: maturityLevel,
         supporting_refs: [...new Set(supportingRefs)],
-        // Only an open (frontier_required) row is blocked; a closed or
+        // Only an open (frontier_required) row is blocked; a closed, value_resolved, or
         // limitation-backed row carries no open blocking questions.
-        blocking_question_refs: frontierRequired
+        blocking_question_refs: memberReadiness === "frontier_required"
           ? [...new Set(blockingQuestionsByBaselineRow.get(row.baseline_row_id) ?? [])]
           : [],
         limitation_refs: [...new Set(limitationRefs)],
-        next_action: frontierRequired
+        next_action: memberReadiness === "frontier_required"
           ? "Create a maturation frontier question for this row."
           : memberReadiness === "limitation_backed"
           ? "Keep the limitation visible in continuation decisions."
+          : memberReadiness === "value_resolved"
+          ? "Preserve the value-read discharge as current actionability support (value-grounded, not L4-validated)."
           : "Preserve the closed row as current actionability support.",
       };
     }),
@@ -1101,6 +1194,13 @@ export function validateActionabilityMatrix(args: {
   maturationAnswerClaims?: ReconstructMaturationAnswerClaimsArtifact | null;
   maturationAnswerClaimsValidation?: ReconstructMaturationAnswerClaimsValidationArtifact | null;
   maturationAnswerClaimsValidationRef?: string | null;
+  // Maturation value-read cut: the discharge artifact + validation the matrix consumed. The
+  // validator rebuilds the discharge index INDEPENDENTLY and never trusts the stamped
+  // residual — derive-and-assert (design §13.3 F2).
+  maturationValueDischarge?: ReconstructMaturationValueDischargeArtifact | null;
+  maturationValueDischargeValidation?:
+    | ReconstructMaturationValueDischargeValidationArtifact
+    | null;
   ontologyExpansion?: ReconstructOntologyExpansionArtifact | null;
   ontologyExpansionValidation?: ReconstructOntologyExpansionValidationArtifact | null;
   ontologyExpansionValidationRef?: string | null;
@@ -1123,6 +1223,13 @@ export function validateActionabilityMatrix(args: {
   const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
     ? args.ontologyExpansion?.expansions ?? []
     : [];
+  // Maturation value-read cut: rebuild the validated discharge index from the consumed
+  // discharge artifact INDEPENDENTLY (derive-and-assert). The per-row readiness recompute and
+  // the dropped-baseline-limitation check below use this, never the matrix's stamped residual.
+  const dischargedLimitationsByBaselineRow = buildValidatedDischargeIndex(
+    args.maturationValueDischarge,
+    args.maturationValueDischargeValidation,
+  );
   // Reverse-link conservation for blocking_question_refs: when a validated question
   // frontier is threaded in (the current-matrix recompute), index each question by the
   // baseline rows it names so the matrix's reverse link can be proven to mirror the
@@ -1488,16 +1595,45 @@ export function validateActionabilityMatrix(args: {
         }));
       }
     }
-    const expectedReadiness = row.limitation_refs.length > 0
-      ? "limitation_backed" as const
-      : matrixRowNeedsFrontier(row)
-      ? "frontier_required" as const
-      : "closed" as const;
+    // Derive-and-assert (design §13.3 F2): recompute the discharge effect from the
+    // INDEPENDENTLY rebuilt validated discharge index — never trust the matrix's stamped
+    // residual. (a) every baseline limitation the matrix dropped from this row must have
+    // been cleared by a validated satisfied discharge; (b) member_readiness must equal the
+    // shared derivation using the recomputed dischargedForRow, so a forged value_resolved
+    // with no real discharge is rejected (it falls through to frontier_required/closed). The
+    // residual LENGTH still reads the stamped row.limitation_refs (claim/expansion caveats are
+    // trusted as before), but a forged shrink is caught by (a).
+    const dischargedLimsForRow =
+      dischargedLimitationsByBaselineRow.get(baselineRow.baseline_row_id) ??
+        new Set<string>();
+    const stampedLimitationRefs = new Set(row.limitation_refs);
+    for (const baselineLim of baselineRow.limitation_refs) {
+      if (
+        !stampedLimitationRefs.has(baselineLim) &&
+        !dischargedLimsForRow.has(baselineLim)
+      ) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "matrix row dropped a baseline limitation without a validated satisfied value-discharge",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+    }
+    const dischargedForRow = baselineRow.limitation_refs.filter((ref) =>
+      dischargedLimsForRow.has(ref)
+    ).length;
+    const expectedReadiness = deriveMemberReadiness({
+      materiality: row.materiality,
+      maturityLevel: row.maturity_level,
+      residualLimitationRefs: row.limitation_refs,
+      dischargedForRow,
+    });
     if (row.member_readiness !== expectedReadiness) {
       violations.push(violation({
         code: "conflicting_state",
         message:
-          "matrix member_readiness must follow material L4, frontier, or limitation state",
+          "matrix member_readiness must follow material L4, frontier, value-discharge, or limitation state",
         subjectId: row.matrix_row_id,
       }));
     }
@@ -2231,6 +2367,248 @@ export function validateMaturationAuthorityResponse(args: {
     validation_results: violations.length === 0
       ? ["maturation_authority_response_valid"]
       : ["maturation_authority_response_invalid"],
+    violations,
+  };
+}
+
+// Maturation value-read cut (design §13.5 F4/F5). Governance + structural validator for the
+// value-discharge artifact. Mirrors the answer-support source-safety precondition gate and the
+// per-evidence consumption_allowed check, and adds the F4 read-path constraint: value evidence
+// may come ONLY from an already-observed, runtime-target (basis A) source — reading a non-target
+// source would leak its raw values into the discharge prompt. Structural: each discharge may only
+// target a limitation that actually exists on its baseline row. The matrix derive-and-assert
+// consumes ONLY discharges whose validation here is `valid`.
+export function validateMaturationValueDischarge(args: {
+  maturationValueDischarge: ReconstructMaturationValueDischargeArtifact;
+  maturationValueDischargeRef?: string | null;
+  maturationBaseline: ReconstructMaturationBaselineArtifact;
+  maturationBaselineValidation: ReconstructMaturationBaselineValidationArtifact;
+  maturationBaselineValidationRef?: string | null;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef?: string | null;
+  sourceSafetyLedger?: ReconstructSourceSafetyLedgerArtifact | null;
+  sourceSafetyLedgerRef?: string | null;
+  sourceSafetyLedgerValidation?: ReconstructSourceSafetyLedgerValidationArtifact | null;
+  sourceSafetyLedgerValidationRef?: string | null;
+}): ReconstructMaturationValueDischargeValidationArtifact {
+  const discharge = args.maturationValueDischarge;
+  const violations: ReconstructMaturationValidationViolation[] = [];
+  const baselineRows = new Map(
+    args.maturationBaseline.baseline_rows.map((row) => [row.baseline_row_id, row]),
+  );
+  const sourceObservationsById = new Map(
+    args.sourceObservations.observations.map((o) => [o.observation_id, o]),
+  );
+  const safetyRowsById = new Map(
+    (args.sourceSafetyLedger?.safety_rows ?? []).map((r) => [r.safety_row_id, r]),
+  );
+  if (discharge.session_id !== args.maturationBaseline.session_id) {
+    violations.push(violation({
+      code: "session_id_mismatch",
+      message: "value discharge session_id must match maturation baseline",
+      subjectId: discharge.session_id,
+    }));
+  }
+  if (args.maturationBaselineValidation.validation_status !== "valid") {
+    violations.push(violation({
+      code: "prior_validation_invalid",
+      message: "value discharge requires valid maturation baseline validation",
+      subjectId: args.maturationBaselineValidationRef ?? null,
+    }));
+  }
+  const hasDischarges = discharge.discharges.length > 0;
+  // Source-safety precondition (replicates the answer-support gate, F5): discharges make
+  // material claims, so the safety ledger and its valid validation must be supplied and
+  // certify the consumed ledger before the per-evidence consumption checks run.
+  if (hasDischarges && !args.sourceSafetyLedger) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message: "value discharge requires the source safety ledger",
+      subjectId: args.sourceSafetyLedgerRef ?? null,
+    }));
+  }
+  if (hasDischarges && !args.sourceSafetyLedgerValidation) {
+    violations.push(violation({
+      code: "prior_validation_invalid",
+      message: "value discharge requires source safety ledger validation",
+      subjectId: args.sourceSafetyLedgerValidationRef ?? null,
+    }));
+  }
+  if (
+    args.sourceSafetyLedgerValidation &&
+    args.sourceSafetyLedgerValidation.validation_status !== "valid"
+  ) {
+    violations.push(violation({
+      code: "prior_validation_invalid",
+      message: "value discharge requires valid source safety ledger validation",
+      subjectId: args.sourceSafetyLedgerValidationRef ?? null,
+    }));
+  }
+  if (
+    args.sourceSafetyLedger &&
+    args.sourceSafetyLedgerValidation &&
+    args.sourceSafetyLedgerValidationRef &&
+    args.sourceSafetyLedgerValidation.source_safety_ledger_ref &&
+    path.resolve(args.sourceSafetyLedgerValidation.source_safety_ledger_ref) !==
+      path.resolve(args.sourceSafetyLedgerRef ?? "")
+  ) {
+    violations.push(violation({
+      code: "prior_validation_invalid",
+      message:
+        "value discharge source safety ledger validation must certify the consumed source safety ledger",
+      subjectId: args.sourceSafetyLedgerValidationRef ?? null,
+    }));
+  }
+  const seen = new Set<string>();
+  let satisfiedCount = 0;
+  for (const entry of discharge.discharges) {
+    if (seen.has(entry.discharge_id)) {
+      violations.push(violation({
+        code: "duplicate_id",
+        message: "value discharge entries require a unique discharge_id",
+        subjectId: entry.discharge_id,
+      }));
+    }
+    seen.add(entry.discharge_id);
+    if (entry.satisfaction_status === "satisfied") satisfiedCount += 1;
+    // Structural: each targeted limitation must actually exist on the targeted baseline row —
+    // a discharge cannot subtract a phantom limitation (matrix derive-and-assert depends on this).
+    for (const baselineRowRef of entry.target_baseline_row_refs) {
+      const baselineRow = baselineRows.get(baselineRowRef);
+      if (!baselineRow) {
+        violations.push(violation({
+          code: "unknown_id",
+          message:
+            "value discharge target_baseline_row_refs must resolve to maturation baseline rows",
+          subjectId: baselineRowRef,
+        }));
+        continue;
+      }
+      const baselineLimitations = new Set(baselineRow.limitation_refs);
+      for (const limitationRef of entry.target_limitation_refs) {
+        if (!baselineLimitations.has(limitationRef)) {
+          violations.push(violation({
+            code: "missing_required_ref",
+            message:
+              "value discharge target_limitation_refs must exist on the targeted baseline row's limitation_refs",
+            subjectId: `${baselineRowRef}:${limitationRef}`,
+          }));
+        }
+      }
+    }
+    // Governance (F4/F5): the value evidence must come from an ALREADY-OBSERVED, runtime-target
+    // (basis A) source whose material_claim safety row is consumption_allowed. A non-target
+    // source is rejected outright — reading it would leak its raw values into the prompt.
+    const observationId = entry.value_evidence_ref.observation_id;
+    const observation = sourceObservationsById.get(observationId);
+    if (!observation) {
+      violations.push(violation({
+        code: "unknown_id",
+        message:
+          "value discharge value_evidence_ref.observation_id must resolve to an already-observed source",
+        subjectId: observationId,
+      }));
+      continue;
+    }
+    if (observation.is_runtime_target_source !== true) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "value discharge may read only runtime-target sources (basis A); a non-target source cannot be read",
+        subjectId: observationId,
+      }));
+    }
+    const expectedAuthorizationRef = `${observationId}:material_claim`;
+    if (entry.value_evidence_authorization_ref !== expectedAuthorizationRef) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "value discharge value_evidence_authorization_ref must be the canonical <observation_id>:material_claim ref",
+        subjectId: entry.value_evidence_authorization_ref,
+      }));
+    }
+    if (args.sourceSafetyLedger) {
+      const materialClaimRowId = sourceSafetyRowIdForObservation(
+        observation,
+        "material_claim",
+      );
+      const materialClaimRow = safetyRowsById.get(materialClaimRowId);
+      if (
+        !materialClaimRow ||
+        materialClaimRow.proof_sufficiency_state !== "sufficient_for_claim" ||
+        materialClaimRow.visibility_tier !== "consumption_allowed"
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "value discharge evidence must have an observation-specific material_claim source-safety row that is consumption_allowed and sufficient for claim",
+          subjectId: observationId,
+        }));
+      }
+    }
+    // Provenance floor (design §15.4): a `satisfied` discharge must rest on a REAL, COMPLETE,
+    // content-bound read — otherwise it cannot drive value_resolved. A 0-cell read (dead/empty), a
+    // truncated read (partial view), or a content-hash mismatch vs the authorized observation's
+    // observed bytes (file changed between observation and the re-read) → reject. This makes
+    // cells_read / read_truncated / read_content_sha256 REAL consumers, not inert provenance
+    // (FRP-1 / issue-008 / GL-1). refuted/inconclusive discharges never subtract, so they are exempt.
+    if (entry.satisfaction_status === "satisfied") {
+      const evidence = entry.value_evidence_ref;
+      if (evidence.cells_read <= 0) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "a satisfied value discharge must be backed by a non-empty cell read (cells_read > 0)",
+          subjectId: entry.discharge_id,
+        }));
+      }
+      if (evidence.read_truncated) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "a satisfied value discharge cannot rest on a truncated (incomplete) cell read",
+          subjectId: entry.discharge_id,
+        }));
+      }
+      const observedContentSha256 = (
+        (observation.structural_data as Record<string, unknown> | undefined)
+          ?.workbook_inventory as Record<string, unknown> | undefined
+      )?.content_sha256;
+      // Fail-closed (design §16.2, onto issue-013): a satisfied discharge must be content-bound to the
+      // authorized observation's observed bytes. If the observation carries NO observed content hash to
+      // bind against, the binding cannot be proven → reject rather than silently skip the check.
+      if (typeof observedContentSha256 !== "string" || observedContentSha256.length === 0) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "a satisfied value discharge requires the authorized observation to carry an observed content_sha256 to content-bind against",
+          subjectId: entry.discharge_id,
+        }));
+      } else if (evidence.read_content_sha256 !== observedContentSha256) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "value discharge read_content_sha256 must match the authorized observation's observed content_sha256 (the source changed between observation and the maturation re-read)",
+          subjectId: entry.discharge_id,
+        }));
+      }
+    }
+  }
+  return {
+    schema_version: "1",
+    session_id: discharge.session_id,
+    created_at: isoNow(),
+    maturation_value_discharge_ref: args.maturationValueDischargeRef ?? null,
+    source_safety_ledger_validation_ref: args.sourceSafetyLedgerValidationRef ?? null,
+    source_observation_reentry_validation_ref: null,
+    maturation_baseline_validation_ref: args.maturationBaselineValidationRef ?? null,
+    validation_status: violations.length === 0 ? "valid" : "invalid",
+    discharge_count: discharge.discharges.length,
+    satisfied_discharge_count: satisfiedCount,
+    validation_results: violations.length === 0
+      ? ["maturation_value_discharge_valid"]
+      : ["maturation_value_discharge_invalid"],
+    asserted_obligation_ids: [],
     violations,
   };
 }
@@ -4335,6 +4713,16 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   const limitationRows = materialRows.filter((row) =>
     row.member_readiness === "limitation_backed"
   );
+  // Maturation value-read cut (design §13.2). value_resolved rows had their value-dependent
+  // limitations discharged to zero residual — they are a non-blocking anchor: like a closed
+  // row they can support a bounded actionable claim, so the two `closedRows === 0` blocked
+  // arms below also gate on `valueResolvedRows.length === 0`, and a value_resolved-only run
+  // routes to actionable_limited (not actionable_ready — these rows are value-grounded, not
+  // L4-validated). deriveMemberReadiness gates value_resolved on `material`, so every
+  // value_resolved row is material → this equals the all-rows value_resolved set.
+  const valueResolvedRows = materialRows.filter((row) =>
+    row.member_readiness === "value_resolved"
+  );
   const blockingRowRefs = frontierRows.map((row) => row.matrix_row_id);
   const authorityRequestRefs =
     args.maturationClosureFrontier.authority_requests.map((request) =>
@@ -4377,26 +4765,42 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   } else if (frontierRows.length > 0) {
     decisionState = "blocked";
     rationale = "Material rows remain frontier-required, but no validated next source or authority response can advance them.";
-  } else if (limitationRows.length > 0 && closedRows.length === 0) {
+  } else if (
+    limitationRows.length > 0 &&
+    closedRows.length === 0 &&
+    valueResolvedRows.length === 0
+  ) {
     decisionState = "blocked";
-    rationale = "Material rows remain limitation-backed and no closed row can support a bounded actionable claim.";
+    rationale = "Material rows remain limitation-backed and no closed or value-resolved row can support a bounded actionable claim.";
   } else if (limitationRows.length > 0) {
     decisionState = "actionable_limited";
     rationale = "No material frontier remains, but named limitations constrain the actionability claim.";
-  } else if (revisionBlockerRefs.length > 0 && closedRows.length === 0) {
-    // Unresolved revision blockers with no closed row cannot support a bounded actionable
-    // claim, and actionable_limited with zero included rows is itself invalid → blocked.
+  } else if (
+    revisionBlockerRefs.length > 0 &&
+    closedRows.length === 0 &&
+    valueResolvedRows.length === 0
+  ) {
+    // Unresolved revision blockers with no closed or value-resolved row cannot support a
+    // bounded actionable claim, and actionable_limited with zero included rows is itself
+    // invalid → blocked.
     decisionState = "blocked";
-    rationale = "Unresolved reject/defer revision proposals remain and no closed row can support a bounded actionable claim.";
+    rationale = "Unresolved reject/defer revision proposals remain and no closed or value-resolved row can support a bounded actionable claim.";
   } else if (revisionBlockerRefs.length > 0) {
     decisionState = "actionable_limited";
-    rationale = "All material rows are closed, but unresolved reject/defer revision proposals carry scope to the next maturation round and constrain the actionability claim.";
+    rationale = "All material rows are closed or value-resolved, but unresolved reject/defer revision proposals carry scope to the next maturation round and constrain the actionability claim.";
   } else if (hasCandidateLimitations) {
     decisionState = "actionable_limited";
-    rationale = "All material rows are closed, but purpose-candidate-level limitations constrain the actionability claim and signal next-round source frontier.";
+    rationale = "All material rows are closed or value-resolved, but purpose-candidate-level limitations constrain the actionability claim and signal next-round source frontier.";
   } else if (convergenceUnproven) {
     decisionState = "actionable_limited";
     rationale = "No material frontier remains, but final re-question convergence has not proven actionable readiness.";
+  } else if (valueResolvedRows.length > 0) {
+    // Value-read discharge cleared the value-dependent limitations on these material rows,
+    // but they are value-grounded (not L4-validated) — a bounded actionable claim, not full
+    // readiness. Reached only when no blocker/limitation/candidate/convergence constraint
+    // already routed to actionable_limited above (design §13.2 branch 8.5).
+    decisionState = "actionable_limited";
+    rationale = "No material frontier remains; value-read discharge resolved the value-dependent limitations, supporting a bounded actionable claim on a value-grounded (not L4-validated) basis.";
   } else {
     decisionState = "actionable_ready";
     rationale = "All material rows are closed for the declared purpose.";
@@ -4430,9 +4834,21 @@ export function buildMaturationContinuationDecisionArtifact(args: {
       response.authority_response_id
     ),
     claim_scope: {
-      included_row_refs: closedRows.map((row) => row.matrix_row_id),
+      // Value-read cut (design §13.4 F6③): the claimable set is closed ∪ value_resolved —
+      // a value_resolved row is value-grounded but claimable. The continuation validator and
+      // the actionable-ontology validator mirror this exact partition (disjoint by
+      // construction: included ∩ excluded = ∅).
+      included_row_refs: args.actionabilityMatrix.rows
+        .filter((row) =>
+          row.member_readiness === "closed" ||
+          row.member_readiness === "value_resolved"
+        )
+        .map((row) => row.matrix_row_id),
       excluded_row_refs: args.actionabilityMatrix.rows
-        .filter((row) => row.member_readiness !== "closed")
+        .filter((row) =>
+          row.member_readiness !== "closed" &&
+          row.member_readiness !== "value_resolved"
+        )
         .map((row) => row.matrix_row_id),
       exclusion_rationale: limitationRows.length > 0 || frontierRows.length > 0
         ? "Rows outside the trusted claim remain limitation-backed or frontier-required."
@@ -4451,6 +4867,13 @@ export function buildMaturationContinuationDecisionArtifact(args: {
         ),
         ...convergenceLimitationRefs,
         ...revisionBlockerRefs,
+        // Value-read cut (design §13.4 F6④): each value_resolved row contributes an explicit
+        // value-read basis ref so the public claim honestly records that its actionability
+        // rests on value-read discharge (not L4 validation), and a pure value_resolved-only
+        // run satisfies the "actionable_limited needs excluded refs or limitation refs" gate.
+        ...valueResolvedRows.map((row) =>
+          `maturation-value-read-basis:${row.matrix_row_id}`
+        ),
       ]),
     ],
   };
@@ -4573,21 +4996,28 @@ export function validateMaturationContinuationDecision(args: {
       }));
     }
   }
-  // M1 partition conservation: recompute the claim_scope partition from the matrix
-  // (closed -> included; non-closed -> excluded) and require the decision to match it.
-  // The resolve check above only verifies the listed refs exist, so a claim_scope that
-  // OMITS non-closed rows would pass and the public claim would preserve the omission.
+  // M1 partition conservation: recompute the claim_scope partition from the matrix and
+  // require the decision to match it. The resolve check above only verifies the listed refs
+  // exist, so a claim_scope that OMITS rows would pass and the public claim would preserve
+  // the omission. Value-read cut (design §13.4 F6③): the claimable (included) set is
+  // closed ∪ value_resolved; everything else is excluded (mirrors the builder exactly).
   const expectedIncluded = args.actionabilityMatrix.rows
-    .filter((row) => row.member_readiness === "closed")
+    .filter((row) =>
+      row.member_readiness === "closed" ||
+      row.member_readiness === "value_resolved"
+    )
     .map((row) => row.matrix_row_id);
   const expectedExcluded = args.actionabilityMatrix.rows
-    .filter((row) => row.member_readiness !== "closed")
+    .filter((row) =>
+      row.member_readiness !== "closed" &&
+      row.member_readiness !== "value_resolved"
+    )
     .map((row) => row.matrix_row_id);
   if (!sameRefSet(decision.claim_scope.included_row_refs, expectedIncluded)) {
     violations.push(violation({
       code: "conflicting_state",
       message:
-        "continuation claim_scope included_row_refs must equal the matrix's closed rows",
+        "continuation claim_scope included_row_refs must equal the matrix's closed and value-resolved rows",
       subjectId: "claim_scope.included_row_refs",
     }));
   }
@@ -4595,7 +5025,7 @@ export function validateMaturationContinuationDecision(args: {
     violations.push(violation({
       code: "conflicting_state",
       message:
-        "continuation claim_scope excluded_row_refs must equal the matrix's non-closed rows",
+        "continuation claim_scope excluded_row_refs must equal the matrix's non-closed, non-value-resolved rows",
       subjectId: "claim_scope.excluded_row_refs",
     }));
   }
@@ -4604,6 +5034,22 @@ export function validateMaturationContinuationDecision(args: {
     violations.push(violation({
       code: "conflicting_state",
       message: "actionable_ready cannot be projected while material frontier rows remain",
+      subjectId: "actionable_ready",
+    }));
+  }
+  // Value-read cut (design §13.4): value_resolved rows are value-grounded, not L4-validated,
+  // so a saved/edited decision cannot project actionable_ready while any remain — the bounded
+  // claim is at most actionable_limited (mirrors the builder's branch ordering).
+  if (
+    decision.decision_state === "actionable_ready" &&
+    args.actionabilityMatrix.rows.some((row) =>
+      row.member_readiness === "value_resolved"
+    )
+  ) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "actionable_ready cannot be projected while value-resolved (value-grounded, not L4) rows remain",
       subjectId: "actionable_ready",
     }));
   }
@@ -5079,10 +5525,15 @@ export function validateActionableOntology(args: {
         subjectId: row.projection_row_id,
       }));
     }
-    if (row.claim_scope === "included" && matrixRow.member_readiness !== "closed") {
+    if (
+      row.claim_scope === "included" &&
+      matrixRow.member_readiness !== "closed" &&
+      matrixRow.member_readiness !== "value_resolved"
+    ) {
       violations.push(violation({
         code: "conflicting_state",
-        message: "included actionable ontology rows must be closed in the actionability matrix",
+        message:
+          "included actionable ontology rows must be closed or value-resolved in the actionability matrix",
         subjectId: row.matrix_row_ref,
       }));
     }
@@ -5429,6 +5880,11 @@ export async function writeActionabilityMatrixArtifact(args: {
   ontologyExpansionValidationPath?: string | null;
   maturationQuestionFrontierPath?: string | null;
   maturationQuestionFrontierValidationPath?: string | null;
+  // Maturation value-read cut (design §13.3 F2): the value-discharge artifact + its validation.
+  // Threaded into the CURRENT matrix recompute (after the value-read stage), null on the baseline
+  // matrix (before value-read) → no discharge subtract (default-off).
+  maturationValueDischargePath?: string | null;
+  maturationValueDischargeValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructActionabilityMatrixArtifact> {
   const maturationBaseline =
@@ -5442,6 +5898,8 @@ export async function writeActionabilityMatrixArtifact(args: {
     ontologyExpansionValidation,
     maturationQuestionFrontier,
     maturationQuestionFrontierValidation,
+    maturationValueDischarge,
+    maturationValueDischargeValidation,
   ] = await Promise.all([
     args.maturationAnswerClaimsPath
       ? readYamlDocument<ReconstructMaturationAnswerClaimsArtifact>(
@@ -5473,6 +5931,16 @@ export async function writeActionabilityMatrixArtifact(args: {
         args.maturationQuestionFrontierValidationPath,
       )
       : Promise.resolve(null),
+    args.maturationValueDischargePath
+      ? readYamlDocument<ReconstructMaturationValueDischargeArtifact>(
+        args.maturationValueDischargePath,
+      )
+      : Promise.resolve(null),
+    args.maturationValueDischargeValidationPath
+      ? readYamlDocument<ReconstructMaturationValueDischargeValidationArtifact>(
+        args.maturationValueDischargeValidationPath,
+      )
+      : Promise.resolve(null),
   ]);
   const artifact = buildActionabilityMatrixArtifact({
     sessionId: args.sessionId,
@@ -5483,6 +5951,8 @@ export async function writeActionabilityMatrixArtifact(args: {
     maturationAnswerClaimsValidation,
     maturationAnswerClaimsValidationRef:
       args.maturationAnswerClaimsValidationPath ?? null,
+    maturationValueDischarge,
+    maturationValueDischargeValidation,
     ontologyExpansion,
     ontologyExpansionValidation,
     ontologyExpansionValidationRef: args.ontologyExpansionValidationPath ?? null,
@@ -5503,6 +5973,10 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
   ontologyExpansionValidationPath?: string | null;
   maturationQuestionFrontierPath?: string | null;
   maturationQuestionFrontierValidationPath?: string | null;
+  // Maturation value-read cut (design §13.3 F2): consume the same discharge + validation the
+  // matrix builder did, so the derive-and-assert recomputes residual independently.
+  maturationValueDischargePath?: string | null;
+  maturationValueDischargeValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructActionabilityMatrixValidationArtifact> {
   const [
@@ -5515,6 +5989,8 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     ontologyExpansionValidation,
     maturationQuestionFrontier,
     maturationQuestionFrontierValidation,
+    maturationValueDischarge,
+    maturationValueDischargeValidation,
   ] = await Promise.all([
     readYamlDocument<ReconstructActionabilityMatrixArtifact>(
       args.actionabilityMatrixPath,
@@ -5555,6 +6031,16 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
         args.maturationQuestionFrontierValidationPath,
       )
       : Promise.resolve(null),
+    args.maturationValueDischargePath
+      ? readYamlDocument<ReconstructMaturationValueDischargeArtifact>(
+        args.maturationValueDischargePath,
+      )
+      : Promise.resolve(null),
+    args.maturationValueDischargeValidationPath
+      ? readYamlDocument<ReconstructMaturationValueDischargeValidationArtifact>(
+        args.maturationValueDischargeValidationPath,
+      )
+      : Promise.resolve(null),
   ]);
   const validation = validateActionabilityMatrix({
     actionabilityMatrix,
@@ -5566,6 +6052,8 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     maturationAnswerClaimsValidation,
     maturationAnswerClaimsValidationRef:
       args.maturationAnswerClaimsValidationPath ?? null,
+    maturationValueDischarge,
+    maturationValueDischargeValidation,
     ontologyExpansion,
     ontologyExpansionValidation,
     ontologyExpansionValidationRef: args.ontologyExpansionValidationPath ?? null,
