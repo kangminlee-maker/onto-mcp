@@ -939,22 +939,47 @@ export interface SeedProjectionOpts {
   maxDisclosure?: number;
 }
 
-/** Project the accumulated semantic map into a bounded, honest seed input (§6). Pure / deterministic. */
+/** Project the accumulated semantic map into a bounded, honest seed input (§6). Pure / deterministic.
+ *  ★INPUT CONTRACT (S4 code review): the map MUST be accumulated with seedBound=FALSE — refuted
+ *  boundaries are RETAINED in semantic_boundaries so this projection is the sole place that excludes
+ *  them (into refuted_disclosure). A seedBound=true map would hide refuted from the disclosure. The
+ *  taint census is DERIVED from what the projection actually sees (refuted boundaries + failed/unread
+ *  regions) — self-consistent with the disclosure, never trusting the map's own
+ *  unanchored_unverified_count (which a caller could set to NaN / non-monotone). */
 export function projectSemanticMapToSeed(
   map: ReadonlyMap<SemanticNodeKey, ComprehensionSemanticNode>,
   opts: SeedProjectionOpts = {},
 ): SemanticSeedProjection {
+  const checkBound = (name: string, v: number | undefined): void => {
+    if (v !== undefined && (!Number.isSafeInteger(v) || v < 0)) {
+      throw new Error(`comprehension-semantic-map: seed projection ${name} must be a non-negative safe integer or absent (fail-closed; -1/NaN would silently show nothing).`);
+    }
+  };
+  checkBound("maxNodes", opts.maxNodes);
+  checkBound("maxDisclosure", opts.maxDisclosure);
+
   const nodesAll: SemanticSeedNode[] = [];
   const refuted: SemanticSeedRefutedDisclosure[] = [];
-  let taint = 0;
-  // Deterministic order (by canonical node key).
-  const entries = [...map.entries()].sort((a, b) => cmpStr(a[0], b[0]));
-  for (const [, node] of entries) {
+  let failedOrUnread = 0;
+  // Deterministic CANONICAL order — by reduceNodeKey(node_ref), NOT the caller's map key.
+  const nodes = [...map.values()].sort((a, b) => cmpStr(reduceNodeKey(a.node_ref), reduceNodeKey(b.node_ref)));
+  for (const node of nodes) {
     // Honesty precondition (fail-closed): legal (anchor_status, verification) states only. seedBound=false
     // (the map still carries refuted boundaries; THIS projection is what excludes them from seed).
     assertSemanticBoundaryHonesty(node, false);
-    taint = Math.max(taint, node.unanchored_unverified_count); // monotone → the root/max is the total.
-    if (node.reduce_read_attempt === "subsumed") continue; // no judgment (frontier ancestor covers it).
+    // The map key MUST be the canonical node key (else consumed/child keys diverge; S3 F4 class).
+    const canonicalKey = reduceNodeKey(node.node_ref);
+    if (map.get(canonicalKey) !== node) {
+      throw new Error(`comprehension-semantic-map: seed projection — a node is stored under a non-canonical map key (expected '${canonicalKey}') (§13.6 fail-closed).`);
+    }
+    if (node.reduce_read_attempt === "subsumed") {
+      assertSubsumedNodeEmpty(node); // a subsumed node must carry no judgment/taint (fail-closed).
+      continue; // no judgment (frontier ancestor covers it).
+    }
+    if (node.reduce_read_attempt === "failed" || node.reduce_read_attempt === "unread") {
+      failedOrUnread += 1; // an unverified region (the read failed) — counted in taint, no seed node.
+      continue;
+    }
     const region = node.node_ref;
     const boundaries: SemanticSeedBoundary[] = [];
     for (const b of node.semantic_boundaries) {
@@ -980,14 +1005,15 @@ export function projectSemanticMapToSeed(
       boundaries,
     });
   }
-  const maxNodes = opts.maxNodes ?? nodesAll.length;
-  const maxDisclosure = opts.maxDisclosure ?? refuted.length;
+  // Taint DERIVED from what the projection sees (refuted boundaries + failed/unread regions) — self-
+  // consistent with refuted_disclosure, never trusting the caller's count.
+  const taint = refuted.length + failedOrUnread;
   return {
     authority: "non_authoritative",
     provisional: true,
-    nodes: nodesAll.slice(0, Math.max(0, maxNodes)),
+    nodes: nodesAll.slice(0, opts.maxNodes ?? nodesAll.length),
     nodes_total: nodesAll.length,
-    refuted_disclosure: refuted.slice(0, Math.max(0, maxDisclosure)),
+    refuted_disclosure: refuted.slice(0, opts.maxDisclosure ?? refuted.length),
     refuted_disclosure_total: refuted.length,
     unanchored_unverified_total: taint,
   };

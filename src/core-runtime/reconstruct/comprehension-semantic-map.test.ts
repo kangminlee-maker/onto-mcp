@@ -1061,11 +1061,32 @@ describe("projectSemanticMapToSeed", () => {
     expect(proj.nodes_total).toBe(1);
   });
 
-  it("taint census = the root (max monotone) count", () => {
+  it("taint census is DERIVED from refuted + failed/unread, NOT the caller's count", () => {
     const proj = projectSemanticMapToSeed(
-      mapOf(nodeAt(1, 20, { unanchored_unverified_count: 5 }), nodeAt(1, 10, { unanchored_unverified_count: 2 })),
+      mapOf(
+        nodeAt(1, 10, { semantic_boundaries: [bound("unanchored", "adversarial_refuted", 5)], unanchored_unverified_count: 999 }), // 999 ignored
+        nodeAt(11, 20, { reduce_read_attempt: "failed", semantic_summary: "", semantic_boundaries: [], unanchored_unverified_count: 999 }),
+      ),
     );
-    expect(proj.unanchored_unverified_total).toBe(5);
+    expect(proj.unanchored_unverified_total).toBe(2); // 1 refuted + 1 failed — NOT 999
+    expect(proj.refuted_disclosure_total).toBe(1);
+  });
+
+  it("S4-review: a non-canonical (alias) map key fails closed", () => {
+    const node = nodeAt(1, 10, { semantic_boundaries: [bound("anchored", "structural_location_only", 5)] });
+    const aliased = new Map<string, ComprehensionSemanticNode>([["alias-key", node]]);
+    expect(() => projectSemanticMapToSeed(aliased)).toThrow(/non-canonical map key/);
+  });
+
+  it("S4-review: a subsumed node illegally carrying taint/judgment fails closed", () => {
+    const bad = mapOf(nodeAt(1, 10, { reduce_read_attempt: "subsumed", semantic_summary: "leak", semantic_boundaries: [] }));
+    expect(() => projectSemanticMapToSeed(bad)).toThrow(/must carry no judgment or taint/);
+  });
+
+  it("S4-review: a malformed display bound (NaN / negative) fails closed", () => {
+    const m = mapOf(nodeAt(1, 10, { semantic_boundaries: [bound("anchored", "structural_location_only", 5)] }));
+    expect(() => projectSemanticMapToSeed(m, { maxNodes: -1 })).toThrow(/non-negative safe integer/);
+    expect(() => projectSemanticMapToSeed(m, { maxDisclosure: Number.NaN })).toThrow(/non-negative safe integer/);
   });
 
   it("display bound: nodes_total / refuted_disclosure_total stay AUTHORITATIVE (no silent drop)", () => {
