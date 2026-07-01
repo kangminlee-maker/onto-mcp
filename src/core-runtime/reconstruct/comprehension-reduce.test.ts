@@ -202,3 +202,64 @@ describe("comprehension-reduce — monoid identity & leaf construction", () => {
     expect(buildColumnLeaves(SHEET, column([seg(1, 100, null), seg(101, 200, null)]))).toHaveLength(0);
   });
 });
+
+// ── regressions from the PR #158 adversarial code review ──────────────────────
+describe("comprehension-reduce — code-review regressions", () => {
+  it("F3: edge shapes come from the true row shape, NOT the segment dominant — no false seam, tiling-independent", () => {
+    // Segment [101,200] has dominant DEC (windowed majority) but a real INT→DEC transition at 151, so
+    // its FIRST row (101) is INT. The old code (edge = segment dominant) fabricated a false seam at 101.
+    const col = column([seg(1, 100, "INT"), seg(101, 200, "DEC")], [note("INT", "DEC", 150, 151)]);
+    const perSegment = reduceColumnLeaves(buildColumnLeaves(SHEET, col, { leafCount: 2 }));
+    const oneLeaf = reduceColumnLeaves(buildColumnLeaves(SHEET, col, { leafCount: 1 }));
+    // Only the real boundary at 151 — NOT a hallucinated 101 at the segment junction.
+    expect(perSegment.boundaries.map((b) => b.first_new_format_row).sort((a, b) => a - b)).toEqual([151]);
+    // Ground is independent of tiling granularity (leafCount).
+    expect(reduceNodeGroundHash(perSegment)).toBe(reduceNodeGroundHash(oneLeaf));
+  });
+
+  it("Blocker-2: canonical boundary order is TOTAL (tie on 4 fields, differ on last_prev) → order-independent hash", () => {
+    const base = {
+      region: { sheet: SHEET, column_index: COL, row_start: 1, row_end: 100 },
+      format_clusters: ["N", "Q"],
+      edge_first_shape: "N",
+      edge_last_shape: "Q",
+      distinct_is_lower_bound: false,
+      boundaries_are_lower_bound: false,
+      segments_capped: false,
+      limiting_witness: null,
+    } as const;
+    const w = (lastPrev: number) => ({
+      sheet: SHEET, column_index: COL, boundary_kind: "value_shape" as const,
+      prev_shape: "N", new_shape: "Q", last_prev_format_row: lastPrev, first_new_format_row: 8,
+    });
+    // Same two boundaries (tie on first_new/kind/prev/new; differ only on last_prev) in opposite order.
+    const a: ComprehensionReduceNode = { ...base, boundaries: [w(7), w(8)] };
+    const b: ComprehensionReduceNode = { ...base, boundaries: [w(8), w(7)] };
+    expect(reduceNodeGroundHash(a)).toBe(reduceNodeGroundHash(b));
+  });
+
+  it("F2: ground hash is independent of a witness object's key-insertion order", () => {
+    const base = {
+      region: { sheet: SHEET, column_index: COL, row_start: 1, row_end: 100 },
+      format_clusters: ["N", "Q"], edge_first_shape: "N", edge_last_shape: "Q",
+      distinct_is_lower_bound: false, boundaries_are_lower_bound: false, segments_capped: false, limiting_witness: null,
+    } as const;
+    const ordered = { sheet: SHEET, column_index: COL, boundary_kind: "value_shape" as const, prev_shape: "N", new_shape: "Q", last_prev_format_row: 7, first_new_format_row: 8 };
+    const scrambled = { first_new_format_row: 8, new_shape: "Q", last_prev_format_row: 7, prev_shape: "N", boundary_kind: "value_shape" as const, column_index: COL, sheet: SHEET };
+    const a: ComprehensionReduceNode = { ...base, boundaries: [ordered] };
+    const b: ComprehensionReduceNode = { ...base, boundaries: [scrambled] };
+    expect(reduceNodeGroundHash(a)).toBe(reduceNodeGroundHash(b));
+  });
+
+  it("CV-1: an inverted range (row_start > row_end) is rejected fail-closed", () => {
+    const inverted = leaf(200, 100, ["INT"], "INT", "INT");
+    expect(assertContiguousChildren([inverted]).map((v) => v.code)).toContain("inverted_range");
+    expect(() => mergeReduceNodes([inverted, leaf(201, 300, ["DEC"], "DEC", "DEC")])).toThrow();
+  });
+
+  it("assertHonestyFold rejects understating EITHER boundaries_are_lower_bound OR segments_capped", () => {
+    const child = leaf(1, 100, ["INT"], "INT", "INT", { capped: true }); // both capped flags true
+    expect(assertHonestyFold({ ...child, boundaries_are_lower_bound: false }, [child]).length).toBeGreaterThan(0);
+    expect(assertHonestyFold({ ...child, segments_capped: false }, [child]).length).toBeGreaterThan(0);
+  });
+});

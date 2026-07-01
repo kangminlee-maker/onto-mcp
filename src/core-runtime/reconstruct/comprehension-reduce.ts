@@ -63,6 +63,22 @@ export interface ComprehensionReduceNode {
 
 // ── canonical projection (resume-key subject; prose-free, byte-stable) ────────
 
+/** Re-key a boundary witness into a FIXED field order so JSON.stringify is byte-stable regardless of
+ *  how a producer happened to construct the object (nested-object canonicalization; review F2). */
+function canonicalWitness(b: ComprehensionBoundaryWitness): ComprehensionBoundaryWitness {
+  return {
+    sheet: b.sheet,
+    column_index: b.column_index,
+    boundary_kind: b.boundary_kind,
+    prev_shape: b.prev_shape,
+    new_shape: b.new_shape,
+    last_prev_format_row: b.last_prev_format_row,
+    first_new_format_row: b.first_new_format_row,
+  };
+}
+
+const cmpStr = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+
 function canonicalBoundaries(
   boundaries: ComprehensionBoundaryWitness[],
 ): ComprehensionBoundaryWitness[] {
@@ -72,14 +88,20 @@ function canonicalBoundaries(
     const k = `${b.sheet}|${b.column_index}|${b.boundary_kind}|${b.first_new_format_row}|${b.last_prev_format_row}|${b.prev_shape}|${b.new_shape}`;
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push(b);
+    out.push(canonicalWitness(b));
   }
+  // The sort key MUST be a superset of the dedup key (review R8-CANON-BOUND-SORT / F1-det): dedup keeps
+  // 7 fields, so ties on a shorter sort key fall back to input order = grouping-VARIANT hash. Ordering
+  // by all 7 dedup fields is a TOTAL order (dedup guarantees the tuple is unique).
   out.sort(
     (a, b) =>
+      cmpStr(a.sheet, b.sheet) ||
+      a.column_index - b.column_index ||
       a.first_new_format_row - b.first_new_format_row ||
-      (a.boundary_kind < b.boundary_kind ? -1 : a.boundary_kind > b.boundary_kind ? 1 : 0) ||
-      (a.prev_shape < b.prev_shape ? -1 : a.prev_shape > b.prev_shape ? 1 : 0) ||
-      (a.new_shape < b.new_shape ? -1 : a.new_shape > b.new_shape ? 1 : 0),
+      a.last_prev_format_row - b.last_prev_format_row ||
+      cmpStr(a.boundary_kind, b.boundary_kind) ||
+      cmpStr(a.prev_shape, b.prev_shape) ||
+      cmpStr(a.new_shape, b.new_shape),
   );
   return out;
 }
@@ -87,8 +109,13 @@ function canonicalBoundaries(
 /** The canonical GROUND of a node — the byte-stable subject a resume key hashes. Contains only
  *  deterministic structure (no prose, no LLM field), sorted/normalized so equal structure → equal bytes. */
 export function reduceNodeGround(node: ComprehensionReduceNode): Record<string, unknown> {
+  // Every nested object is re-keyed into a FIXED field order (region, witnesses via canonicalBoundaries,
+  // limiting_witness) so byte-stability does not silently rest on producers sharing one key-insertion
+  // order (review F2).
+  const r = node.region;
+  const w = node.limiting_witness;
   return {
-    region: node.region,
+    region: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
     format_clusters: [...node.format_clusters].sort(),
     boundaries: canonicalBoundaries(node.boundaries),
     edge_first_shape: node.edge_first_shape,
@@ -96,7 +123,9 @@ export function reduceNodeGround(node: ComprehensionReduceNode): Record<string, 
     distinct_is_lower_bound: node.distinct_is_lower_bound,
     boundaries_are_lower_bound: node.boundaries_are_lower_bound,
     segments_capped: node.segments_capped,
-    limiting_witness: node.limiting_witness,
+    limiting_witness: w
+      ? { sheet: w.sheet, column_index: w.column_index, row: w.row, reason: w.reason }
+      : null,
   };
 }
 
@@ -114,6 +143,7 @@ export interface PartitionViolation {
   code:
     | "empty"
     | "mixed_region"
+    | "inverted_range"
     | "overlap_or_interleave";
   message: string;
 }
@@ -129,6 +159,14 @@ export function assertContiguousChildren(
   if (!firstNode) return [{ code: "empty", message: "reduce requires ≥1 child" }];
   const first = firstNode.region;
   for (const c of children) {
+    if (c.region.row_start > c.region.row_end) {
+      return [
+        {
+          code: "inverted_range",
+          message: `inverted range [${c.region.row_start},${c.region.row_end}] (row_start > row_end)`,
+        },
+      ];
+    }
     if (c.region.sheet !== first.sheet || c.region.column_index !== first.column_index) {
       return [
         {
@@ -310,6 +348,22 @@ export function buildColumnLeaves(
   const valueNotes: IntraTileNote[] = (column.intra_tile_notes ?? []).filter(
     (n) => n.boundary_kind === VALUE_SHAPE,
   );
+  const notesAsc = [...valueNotes].sort((a, b) => a.first_new_format_row - b.first_new_format_row);
+  // The TRUE value-shape at a given row = the new_shape of the latest transition at/before it (or the
+  // shape BEFORE the first transition; or the uniform dominant when there are no transitions). The
+  // segment `dominant_shape` is a windowed MAJORITY — using it as the edge shape fabricates a false
+  // seam when a transition straddles a segment window (review F3, blocker); this makes the edge shape
+  // exact and tiling-independent.
+  const shapeAtRow = (row: number, uniformFallback: string | null): string | null => {
+    const firstNote = notesAsc[0];
+    if (!firstNote) return uniformFallback;
+    let shape: string = firstNote.prev_shape;
+    for (const n of notesAsc) {
+      if (n.first_new_format_row <= row) shape = n.new_shape;
+      else break;
+    }
+    return shape;
+  };
   const leafCount = Math.max(1, Math.min(opts?.leafCount ?? nonEmpty.length, nonEmpty.length));
   const per = Math.ceil(nonEmpty.length / leafCount);
   const leaves: ComprehensionReduceNode[] = [];
@@ -338,14 +392,21 @@ export function buildColumnLeaves(
       region: { sheet, column_index: column.column_index, row_start: rowStart, row_end: rowEnd },
       format_clusters: clusters,
       boundaries,
-      edge_first_shape: b0.dominant_shape,
-      edge_last_shape: bLast.dominant_shape,
+      edge_first_shape: shapeAtRow(rowStart, b0.dominant_shape),
+      edge_last_shape: shapeAtRow(rowEnd, bLast.dominant_shape),
       distinct_is_lower_bound: distinctLB,
       boundaries_are_lower_bound: capped,
       segments_capped: capped,
-      limiting_witness: distinctLB
-        ? { sheet, column_index: column.column_index, row: rowStart, reason: "distinct_count capped" }
-        : null,
+      // Localize the limiting witness for EITHER lower-bound axis (review F1: previously distinct-only).
+      limiting_witness:
+        distinctLB || capped
+          ? {
+              sheet,
+              column_index: column.column_index,
+              row: rowStart,
+              reason: distinctLB ? "distinct_count capped" : "segments capped",
+            }
+          : null,
     });
   }
   return leaves;
