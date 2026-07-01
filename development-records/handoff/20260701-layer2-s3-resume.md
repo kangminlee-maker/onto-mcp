@@ -1,6 +1,7 @@
 # handoff — Layer-2 S3 resume (over-context frontier)
 
-> 2026-07-01. **설계 v2.1 + S1 + S2 + 코드 교차검증 하드닝 = 전부 커밋**(브랜치 `feat/comprehension-reduce-layer2`·워크트리 `onto-mcp-l2`·origin/main `bc94ebc` 기반·미푸시·PR 없음).
+> 2026-07-01. **설계 v2.1 + S1 + S2 + 코드 교차검증 하드닝 = 전부 커밋**(브랜치 `feat/comprehension-reduce-layer2`·워크트리 `onto-mcp-l2`·origin/main `bc94ebc` 기반).
+> **브랜치 독립 완료**: `origin/feat/comprehension-reduce-layer2`에 push·upstream=자체 원격(origin/main 추적 아님·pull 안전). PR 미생성. 다른 세션(`feat/maturation-value-read`)과 파일 무충돌(내 파일 미접촉).
 > 설계 SSOT: `development-records/design/20260701-layer2-accumulated-semantic-channel-design.md` (**§13 = 빌드 지배 v2.1 build-spec**·§11/§14 검증기록).
 > 메모리: [[unified-comprehension-engine-track]] · [[design-validation-ultracode-onto]].
 
