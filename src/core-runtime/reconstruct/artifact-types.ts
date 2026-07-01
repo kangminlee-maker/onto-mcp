@@ -3653,6 +3653,16 @@ export interface ReconstructRecordArtifact {
   session_id: string;
   entrypoint: "reconstruct";
   record_stage: ReconstructRecordStage;
+  /**
+   * Graceful-terminal disposition (Slice 3). Present only when the run stopped early via a
+   * GracefulTerminalSignal: the durable authority that a run terminated blocked/limited rather
+   * than crashing or completing. `record_stage` still records how far the pipeline reached (a
+   * mid-pipeline stage), so this field — not record_stage — is the terminal-status authority.
+   * The single terminal-status projection (reconstructTerminalStatus) reads this first; when set,
+   * the run is terminal (blocked/limited) and consumers must stop polling. Absent on completed and
+   * still-running records.
+   */
+  terminal_disposition?: "blocked" | "limited";
   created_at: string;
   updated_at: string;
   target_material_kind: TargetMaterialKind | null;

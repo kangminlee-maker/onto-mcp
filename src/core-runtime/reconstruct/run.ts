@@ -899,7 +899,13 @@ interface AuthoredArtifactReuseProvenance {
 export interface ReconstructRunResult {
   sessionId: string;
   sessionRoot: string;
-  status: "completed";
+  /**
+   * "completed" = the run reached the terminal pipeline. "blocked"/"limited" = a graceful
+   * terminal (Slice 3): the run stopped early with an honest assembled output instead of
+   * crashing. This is an immediate-return mirror of the durable authority
+   * (ReconstructRecordArtifact.terminal_disposition); re-read/poll consumers read the record.
+   */
+  status: "completed" | "limited" | "blocked";
   finalOutputPath: string;
   finalOutputText: string;
   reconstructRecordPath: string;
@@ -909,8 +915,46 @@ export interface ReconstructRunResult {
   };
   reconstructRecord: ReconstructRecordArtifact;
   reconstructRunManifest: ReconstructRunManifestArtifact;
-  metrics: ReconstructMetricsArtifact;
-  stopDecision: ReconstructStopDecisionArtifact;
+  /**
+   * Present only on a completed run. Absent on a graceful terminal (blocked/limited) — those
+   * stages were never reached. Consumers must narrow on `status` before reading.
+   */
+  metrics?: ReconstructMetricsArtifact;
+  stopDecision?: ReconstructStopDecisionArtifact;
+}
+
+/**
+ * Graceful-terminal control signal (Slice 3, design §16.1). NOT an Error subclass — the run-level
+ * catch distinguishes it from a genuine crash by `instanceof`, converting an expected
+ * "normal-but-unmet" stop (e.g. zero observations from an unsupported/empty target) into an honest
+ * blocked/limited assembled output instead of a thrown failure. The throwing site (design §16.2)
+ * carries the deterministic disposition, the terminal stage id, and a diagnostic reason; the
+ * catch-side assembleGracefulTerminal reads the reached artifacts from disk (design §16.5).
+ */
+export class GracefulTerminalSignal {
+  readonly disposition: "blocked" | "limited";
+  readonly terminalStepId: ReconstructStageId;
+  readonly reason: string;
+  constructor(args: {
+    disposition: "blocked" | "limited";
+    terminalStepId: ReconstructStageId;
+    reason: string;
+  }) {
+    this.disposition = args.disposition;
+    this.terminalStepId = args.terminalStepId;
+    this.reason = args.reason;
+  }
+}
+
+/**
+ * Narrow guard used by every defensive catch that does not unconditionally rethrow, so a graceful
+ * terminal signal is never swallowed into a failure counter or degraded result (design §16.4, N5').
+ * The structure guard check-graceful-signal-rethrow enforces its presence.
+ */
+export function isGracefulTerminalSignal(
+  value: unknown,
+): value is GracefulTerminalSignal {
+  return value instanceof GracefulTerminalSignal;
 }
 
 function isoNow(): string {
