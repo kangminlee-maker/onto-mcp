@@ -11431,13 +11431,26 @@ async function observeAcceptedFrontierRefs(args: {
       triggeringFrontierValidationRef: args.sourceFrontierValidationPath,
     });
     // A null observation (vanished ref) and an unsupported workbook format
-    // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence)
-    // are both un-observable by the current runtime; neither may be admitted as
-    // frontier evidence (mirrors the materialize-loop demotion).
+    // (.xls/.xlsb/.ods — inventory carries only `unsupported_reason`, no evidence) are both
+    // un-observable by the current runtime. Site 2 graceful terminal (design site2 §9): this is a
+    // normal-but-unmet stop, not a crash. Skipping the ref is NOT viable — the delta writer requires
+    // every accepted frontier id to produce a NEW observation
+    // (source-observation-delta-validation.ts:257), so a skip-and-continue would crash deeper. Throw
+    // a graceful signal instead: it propagates out BEFORE the delta write (call site ~13030), and
+    // the run-level catch assembles an honest blocked terminal from the context that call site set.
     if (!observation || spreadsheetUnsupportedReason(observation)) {
-      throw new Error(
-        `accepted source frontier ref cannot be observed by current runtime: ${frontier.source_ref}`,
-      );
+      const unsupportedReason = observation
+        ? spreadsheetUnsupportedReason(observation)
+        : null;
+      throw new GracefulTerminalSignal({
+        disposition: "blocked",
+        terminalStepId: "source_observation_delta",
+        reason:
+          `accepted source frontier ref cannot be observed by current runtime: ${frontier.source_ref}` +
+          (unsupportedReason
+            ? ` (unsupported: ${unsupportedReason})`
+            : " (ref unavailable at observation time)"),
+      });
     }
     addedObservations.push(observation);
     observedSourceRefs.add(resolvedSourceRef);
@@ -13027,6 +13040,49 @@ export async function runReconstruct(
       );
     }
     const previousSourceObservations = sourceObservations;
+    // Site 2 graceful terminal (design site2 §9 N1/N4): observeAcceptedFrontierRefs may throw a
+    // GracefulTerminalSignal when an accepted frontier ref is un-observable. The throw is deep inside
+    // that helper, so the run-level assembly context is set HERE (the call site, where it is visible)
+    // before the call. It lists EVERY artifact already written by this point — the prep + exploration
+    // round artifacts (directive, lens index, synthesis, frontier, prior-round delta/reentry) — so
+    // the graceful manifest reports them as reached; the assembly's disk-existence filter drops any
+    // not-yet-written (e.g. the current round's delta, still null). Lineage index/census come AFTER
+    // this call, so they are correctly absent. Cleared after a successful round so a later graceful
+    // site cannot read a stale context (a forgotten set then fails loud via assembleGracefulTerminal's
+    // `if (!ctx) throw`).
+    gracefulTerminalContext = {
+      reachedArtifactRefs: {
+        reconstruct_run_control: runControlPath,
+        reconstruct_run_control_validation: runControlValidationPath,
+        registry_verification_evidence: registryVerificationEvidencePath,
+        registry_verification_evidence_validation:
+          registryVerificationEvidenceValidationPath,
+        target_material_profile: preparationRefs.target_material_profile,
+        target_material_profile_validation: targetMaterialProfileValidationPath,
+        source_inventory: preparationRefs.source_inventory,
+        initial_source_frontier: preparationRefs.initial_source_frontier,
+        source_observations: preparationRefs.source_observations,
+        source_safety_ledger: sourceSafetyLedgerPath,
+        source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
+        source_scout_pack: sourceScoutPackPath,
+        source_scout_pack_validation: sourceScoutPackValidationPath,
+        source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
+        source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
+        leaf_read_census: leafReadCensusPath,
+        source_observation_directive: sourceObservationDirectivePath,
+        source_observation_directive_validation:
+          sourceObservationDirectiveValidationPath,
+        lens_judgment_index: lensJudgmentIndexPath,
+        exploration_synthesis: explorationSynthesisPath,
+        source_frontier: sourceFrontierPath,
+        source_frontier_validation: sourceFrontierValidationPath,
+        source_observation_delta: sourceObservationDeltaPath,
+        source_observation_delta_validation: sourceObservationDeltaValidationPath,
+        source_observation_reentry_validation: sourceObservationReentryValidationPath,
+      },
+      contractRegistry,
+      targetMaterialProfile,
+    };
     sourceObservations = await observeAcceptedFrontierRefs({
       sourceFrontier,
       sourceFrontierValidation,
@@ -13035,6 +13091,9 @@ export async function runReconstruct(
       sourceObservations,
       sourceObservationsPath: preparationRefs.source_observations,
     });
+    // Reached this line ⇒ the round observed successfully; drop the context so it cannot be read
+    // stale by a later graceful terminal that forgets to set its own.
+    gracefulTerminalContext = null;
     sourceObservationDeltaPath = path.join(
       roundRoot,
       "source-observation-delta.yaml",

@@ -7081,3 +7081,86 @@ describe("runReconstruct graceful terminal (Slice 3 · site 1 zero-observation)"
     expect(finalOutput.length).toBeGreaterThan(0);
   });
 });
+
+describe("runReconstruct graceful terminal (Slice 4 · site 2 un-observable frontier ref)", () => {
+  it("an exploration round accepting an un-observable (.xls) frontier ref → blocked terminal; reached exploration artifacts stay completed (design site2 §9 N1/N2)", async () => {
+    const projectRoot = await tempProjectRoot();
+    // A legacy .xls target: materialize demotes it to a SKIPPED inventory unit (unsupported format).
+    // The supported feature.ts is observed (passes site 1). Then the custom frontier author accepts
+    // the .xls as a frontier expansion (frontier validation accepts any in-inventory, not-yet-observed
+    // ref); it is un-observable → site 2 fires a graceful blocked terminal at the delta boundary.
+    const xlsPath = path.join(projectRoot, "legacy.xls");
+    await fs.writeFile(xlsPath, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]));
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "site2-run");
+
+    const frontierAcceptingLlm = async (systemPrompt: string, userPrompt: string) => {
+      const base = await reconstructFixtureLlm(systemPrompt, userPrompt);
+      if (systemPrompt.includes("Convert exploration synthesis")) {
+        return {
+          ...base,
+          text: JSON.stringify({
+            frontier_refs: [
+              {
+                source_ref: xlsPath,
+                priority: "high",
+                rationale: "Expand into the legacy workbook to complete coverage.",
+              },
+            ],
+          }),
+        };
+      }
+      return base;
+    };
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts"), xlsPath],
+      intent: "Reconstruct a seed; the legacy workbook is an un-observable expansion.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: frontierAcceptingLlm,
+        authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+        providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+      }),
+    });
+
+    // Graceful blocked terminal at the delta boundary (N2).
+    expect(result.status).toBe("blocked");
+    expect(result.reconstructRecord.terminal_disposition).toBe("blocked");
+    expect(result.reconstructRunManifest.graceful_terminal).toMatchObject({
+      disposition: "blocked",
+      terminal_step_id: "source_observation_delta",
+    });
+
+    const step = (id: string) =>
+      result.reconstructRunManifest.steps.find((s) => s.step_id === id);
+    // N1 (HIGH): exploration artifacts written BEFORE site 2 are honestly COMPLETED, not falsely
+    // not_reached — proving the call-site ctx enumerated them (an omission would flip these to
+    // not_reached).
+    expect(step("observation_directive")?.status).toBe("completed");
+    expect(step("lens_judgment")?.status).toBe("completed");
+    expect(step("exploration_synthesis")?.status).toBe("completed");
+    expect(step("source_frontier")?.status).toBe("completed");
+    // The delta boundary was never crossed (the terminal fired before the delta write).
+    expect(step("source_observation_delta")?.status).not.toBe("completed");
+
+    // Honest reason names the un-observable ref; fail-closed manifest validation passed; run halted.
+    expect(result.finalOutputText).toContain("Blocked");
+    expect(result.finalOutputText).toMatch(/cannot be observed|unsupported/i);
+    const manifestValidation = await readYaml<{ validation_status: string }>(
+      path.join(sessionRoot, "reconstruct-run-manifest.post-publication-validation.yaml"),
+    );
+    expect(manifestValidation.validation_status).toBe("valid");
+    const runControl = await readYaml<{ attempt_rows: { attempt_status: string }[] }>(
+      path.join(sessionRoot, "reconstruct-run-control.yaml"),
+    );
+    expect(runControl.attempt_rows.at(-1)?.attempt_status).toBe("halted");
+  });
+});
