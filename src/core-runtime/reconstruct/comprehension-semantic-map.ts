@@ -501,12 +501,19 @@ export function computeSubtreeLeafCounts(trace: ReduceTopologyTrace): Map<Semant
 /** Classify every REACHABLE node (from root) into its frontier role, top-down (§13.6). A leaf can never
  *  accumulate (no children), so it is a frontier (or subsumed under one). Deterministic. */
 export function classifyFrontier(trace: ReduceTopologyTrace, overContextBudget: number): Map<SemanticNodeKey, FrontierMode> {
+  // A leaf-count budget must be a real non-negative integer (review F4 / onto issue-001/005/007/…):
+  // NaN/Infinity would silently collapse the frontier to the root instead of failing closed.
+  if (!Number.isSafeInteger(overContextBudget) || overContextBudget < 0) {
+    throw new Error(`comprehension-semantic-map: overContextBudget must be a non-negative safe integer (leaf count), got ${overContextBudget} (§13.6 fail-closed).`);
+  }
   const leafCounts = computeSubtreeLeafCounts(trace);
   const mode = new Map<SemanticNodeKey, FrontierMode>();
   const shouldAccumulate = (key: SemanticNodeKey): boolean => {
     const tnode = trace.nodes.get(key);
     if (!tnode || tnode.child_keys.length === 0) return false; // a leaf never accumulates.
-    return (leafCounts.get(key) ?? 0) > overContextBudget;
+    const count = leafCounts.get(key); // every node was counted above; a miss is an impossible state.
+    if (count === undefined) throw new Error(`comprehension-semantic-map: no leaf count for ${key} (impossible; §13.6).`);
+    return count > overContextBudget;
   };
   const classify = (key: SemanticNodeKey, underFrontier: boolean): void => {
     const tnode = trace.nodes.get(key);
@@ -520,11 +527,51 @@ export function classifyFrontier(trace: ReduceTopologyTrace, overContextBudget: 
   return mode;
 }
 
-/** Fail-closed: a SUBSUMED node carries no judgment (its frontier ancestor absorbed it). */
+/** Fail-closed: the trace MUST be a rooted TREE (review F2 / onto issue-002/004). A DAG / diamond /
+ *  duplicate child edge would double-count leaves, classify a shared node order-dependently, or let one
+ *  semantic node be reused through multiple parents. Checks: every child key exists; no duplicate child
+ *  edge within a node; every node has indegree ≤ 1; the root has indegree 0; every node is reachable
+ *  from the root (no orphans; no cycle, since a cycle leaves a node either unreachable or indegree > 1). */
+export function assertReduceTopologyIsTree(trace: ReduceTopologyTrace): void {
+  const indegree = new Map<SemanticNodeKey, number>();
+  for (const [key, tnode] of trace.nodes) {
+    const seenChild = new Set<SemanticNodeKey>();
+    for (const c of tnode.child_keys) {
+      if (!trace.nodes.has(c)) throw new Error(`comprehension-semantic-map: child '${c}' of '${key}' is not in the trace (§13.6 tree).`);
+      if (seenChild.has(c)) throw new Error(`comprehension-semantic-map: duplicate child edge '${c}' under '${key}' (§13.6 tree).`);
+      seenChild.add(c);
+      const d = (indegree.get(c) ?? 0) + 1;
+      indegree.set(c, d);
+      if (d > 1) throw new Error(`comprehension-semantic-map: node '${c}' has multiple parents — trace is a DAG, not a tree (§13.6).`);
+    }
+  }
+  if ((indegree.get(trace.root_key) ?? 0) !== 0) {
+    throw new Error(`comprehension-semantic-map: root '${trace.root_key}' has a parent (§13.6 tree).`);
+  }
+  const reached = new Set<SemanticNodeKey>();
+  const stack = [trace.root_key];
+  while (stack.length > 0) {
+    const k = stack.pop();
+    if (k === undefined || reached.has(k)) continue;
+    reached.add(k);
+    for (const c of trace.nodes.get(k)?.child_keys ?? []) stack.push(c);
+  }
+  if (reached.size !== trace.nodes.size) {
+    throw new Error(`comprehension-semantic-map: ${trace.nodes.size - reached.size} trace node(s) unreachable from root '${trace.root_key}' (§13.6 tree).`);
+  }
+}
+
+/** Fail-closed: a SUBSUMED node carries no judgment (its frontier ancestor absorbed it) and no taint
+ *  (review onto issue-009: a subsumed node has no unverified judgment to count). */
 export function assertSubsumedNodeEmpty(node: ComprehensionSemanticNode): void {
   if (node.reduce_read_attempt !== "subsumed") return;
-  if (node.semantic_summary !== "" || node.semantic_boundaries.length > 0 || node.structure_boundary_coverage.length > 0) {
-    throw new Error(`comprehension-semantic-map: subsumed node ${reduceNodeKey(node.node_ref)} must carry no judgment (§13.6 — its frontier ancestor's read covers it).`);
+  if (
+    node.semantic_summary !== "" ||
+    node.semantic_boundaries.length > 0 ||
+    node.structure_boundary_coverage.length > 0 ||
+    node.unanchored_unverified_count !== 0
+  ) {
+    throw new Error(`comprehension-semantic-map: subsumed node ${reduceNodeKey(node.node_ref)} must carry no judgment or taint (§13.6 — its frontier ancestor's read covers it).`);
   }
 }
 
@@ -597,6 +644,7 @@ export function accumulateSemanticMap(
   const result = new Map<SemanticNodeKey, ComprehensionSemanticNode>();
   const seedBound = opts.seedBound ?? false;
   const visiting = new Set<SemanticNodeKey>(); // cycle detection (review F5 / onto issue-003).
+  assertReduceTopologyIsTree(trace); // reject DAG / diamond / duplicate edges before counting (review F2).
   const modes = classifyFrontier(trace, opts.overContextBudget); // S3 over-context partition (§13.6).
 
   const visit = (key: SemanticNodeKey): ComprehensionSemanticNode => {
@@ -621,9 +669,16 @@ export function accumulateSemanticMap(
     const consumedChildKeys = tnode.child_keys.filter((k) => modes.get(k) !== "subsumed");
     const consumedChildren = children.filter((c) => modes.get(reduceNodeKey(c.node_ref)) !== "subsumed");
 
-    // SUBSUMED: no judgment — a 1:1 placeholder (its frontier ancestor's flat read covers it).
+    // SUBSUMED: no judgment — a 1:1 placeholder (its frontier ancestor's flat read covers it). Its
+    // epoch contribution STILL folds its children's contributions (review F1 / onto issue-003/006/011):
+    // the epoch recursion is decoupled from judgment consumption, so a non-propagating descendant change
+    // (that leaves this node's ground byte-identical) still rotates the key up to the frontier ancestor.
     if (mode === "subsumed") {
-      const preImage: SemanticEpochPreImage = { ...opts.preImageBase, layer1_ground_hash: tnode.ground_hash, child_contributions: [] };
+      const preImage: SemanticEpochPreImage = {
+        ...opts.preImageBase,
+        layer1_ground_hash: tnode.ground_hash,
+        child_contributions: children.map((c) => c.subtree_epoch_contribution),
+      };
       const node: ComprehensionSemanticNode = {
         node_ref: tnode.node_ref,
         layer1_ground_hash: tnode.ground_hash,
@@ -647,8 +702,11 @@ export function accumulateSemanticMap(
     // FRONTIER = one flat read over the whole subtree (child_summaries omitted; children are subsumed).
     // ACCUMULATING = synthesize the (non-subsumed) children's judgments. Both are 'produced'.
     const isFrontier = mode === "frontier";
+    const r = tnode.node_ref;
     const input: SemanticSynthesisInput = {
-      node_ref: tnode.node_ref,
+      // Clone the node_ref (review F3): the caller-injected synthesize gets a COPY, so it cannot mutate
+      // the trace's node_ref and corrupt a later parent's child-summary keys.
+      node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
       format_clusters: [...reduceNode.format_clusters],
       value_shape_seams: reduceNode.boundaries
         .filter((b) => b.boundary_kind === VALUE_SHAPE_KIND)
@@ -678,9 +736,11 @@ export function accumulateSemanticMap(
     const preImage: SemanticEpochPreImage = {
       ...opts.preImageBase,
       layer1_ground_hash: tnode.ground_hash,
-      // A frontier folds no children (its ground already aggregates the subtree); an accumulating node
-      // folds the CONSUMED children's contributions (subsumed children are not consumed).
-      child_contributions: isFrontier ? [] : consumedChildren.map((c) => c.subtree_epoch_contribution),
+      // EPOCH recursion is decoupled from judgment CONSUMPTION (review F1 / onto issue-003/006/011): a
+      // frontier consumes no child SUMMARIES (flat read) but STILL folds ALL children's contributions,
+      // so a non-propagating descendant change (parent ground byte-identical) rotates the frontier key —
+      // matching the accumulating path (fail-safe: over-rotate, never stale-reuse).
+      child_contributions: children.map((c) => c.subtree_epoch_contribution),
     };
 
     const node: ComprehensionSemanticNode = {

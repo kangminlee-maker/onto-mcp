@@ -13,6 +13,7 @@ import {
   accumulateSemanticMap,
   assertChildJudgmentCoverage,
   assertPreImageKeysAllowlisted,
+  assertReduceTopologyIsTree,
   assertSemanticBoundaryHonesty,
   assertSubsumedNodeEmpty,
   assertSynthesisInputBounded,
@@ -633,7 +634,7 @@ describe("adversarial fail-closed hardening", () => {
       },
       overContextBudget: 0,
     };
-    expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/cycle/);
+    expect(() => accumulateSemanticMap(trace, nodesByKey, opts)).toThrow(/parent|cycle|tree/); // topology validator catches the cycle first (root has a parent)
   });
 
   it("F5: an orphan trace node (unreachable from root) fails closed", () => {
@@ -803,5 +804,103 @@ describe("over-context frontier", () => {
       semantic_boundaries: [bound("unanchored", "unverified")],
     });
     expect(() => assertSubsumedNodeEmpty(node)).toThrow(/must carry no judgment/);
+  });
+});
+
+// ── S3 code cross-validation fixes (codex + onto, F1–F5) ─────────────────────
+// The adversarial inputs the 9 S3 tests missed — the design-sensitive frontier slice.
+
+describe("S3 frontier hardening", () => {
+  const s3opts = (overContextBudget: number): AccumulateSemanticMapOpts => ({
+    synthesize: () => ({ semantic_summary: "s", boundaries: [] }),
+    verifyUnanchored: () => "adversarial_confirmed",
+    preImageBase: {
+      reduce_reader_model_identity: "m",
+      reduce_prompt_sha256: "p",
+      reduce_schema_tool_version: "v",
+      comprehension_version: "c",
+      over_context_gate_config_sha256: "cfg",
+      over_context_gate_logic_sha256: "logic",
+    },
+    overContextBudget,
+    seedBound: true,
+  });
+
+  it("F1: a FRONTIER root's epoch contribution rotates on a non-propagating descendant change (was []-folded)", () => {
+    const l1 = leaf(1, 10, "int", "int", { distinctLB: true, witnessRow: 3 }); // lowest witness → kept by parent
+    const a = reduceColumnLeavesWithTrace([l1, leaf(11, 20, "int", "int", { distinctLB: true, witnessRow: 15 })]);
+    const b = reduceColumnLeavesWithTrace([l1, leaf(11, 20, "int", "int", { distinctLB: true, witnessRow: 18 })]);
+    // Precondition: root ground byte-identical (parent keeps L1's lowest witness), a leaf ground changed.
+    expect(reduceNodeGroundHash(a.root)).toBe(reduceNodeGroundHash(b.root));
+    // budget high → root is a FRONTIER. Its contribution MUST still rotate (folds child contributions).
+    const rootA = accumulateSemanticMap(a.trace, a.nodesByKey, s3opts(100)).get(a.trace.root_key)!;
+    const rootB = accumulateSemanticMap(b.trace, b.nodesByKey, s3opts(100)).get(b.trace.root_key)!;
+    expect(rootA.reduce_read_attempt).toBe("produced");
+    expect(rootA.consumed_child_judgment_keys).toEqual([]); // frontier consumes no summaries...
+    expect(rootA.subtree_epoch_contribution).not.toBe(rootB.subtree_epoch_contribution); // ...but folds contributions
+  });
+
+  it("F2: a DAG trace (shared child under two parents) fails closed", () => {
+    const p1 = leaf(1, 10, "int", "int");
+    const p2 = leaf(11, 20, "int", "int");
+    const shared = leaf(21, 30, "int", "int");
+    const kp1 = reduceNodeKey(p1.region);
+    const kp2 = reduceNodeKey(p2.region);
+    const ks = reduceNodeKey(shared.region);
+    const trace = {
+      root_key: "root",
+      nodes: new Map<string, { node_ref: typeof p1.region; ground_hash: string; child_keys: string[] }>([
+        ["root", { node_ref: p1.region, ground_hash: "r", child_keys: [kp1, kp2] }],
+        [kp1, { node_ref: p1.region, ground_hash: "h", child_keys: [ks] }],
+        [kp2, { node_ref: p2.region, ground_hash: "h", child_keys: [ks] }],
+        [ks, { node_ref: shared.region, ground_hash: "h", child_keys: [] }],
+      ]),
+    };
+    expect(() => assertReduceTopologyIsTree(trace)).toThrow(/multiple parents|DAG/);
+  });
+
+  it("F2: a duplicate child edge fails closed", () => {
+    const a = leaf(1, 10, "int", "int");
+    const ka = reduceNodeKey(a.region);
+    const trace = {
+      root_key: "root",
+      nodes: new Map<string, { node_ref: typeof a.region; ground_hash: string; child_keys: string[] }>([
+        ["root", { node_ref: a.region, ground_hash: "r", child_keys: [ka, ka] }],
+        [ka, { node_ref: a.region, ground_hash: "h", child_keys: [] }],
+      ]),
+    };
+    expect(() => assertReduceTopologyIsTree(trace)).toThrow(/duplicate child edge/);
+  });
+
+  it("F2: a real tree passes topology validation", () => {
+    const { trace } = reduceColumnLeavesWithTrace(
+      [leaf(1, 10, "int", "int"), leaf(11, 20, "text", "text"), leaf(21, 30, "int", "int")],
+      2,
+    );
+    expect(() => assertReduceTopologyIsTree(trace)).not.toThrow();
+  });
+
+  it("F3: a synthesize that mutates input.node_ref cannot corrupt the result keys", () => {
+    const { trace, nodesByKey } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int"), leaf(11, 20, "int", "int")]);
+    const mutating: SemanticSynthesisFn = (input) => {
+      (input.node_ref as { row_start: number }).row_start = 999; // attempt to corrupt the trace
+      return { semantic_summary: "s", boundaries: [] };
+    };
+    const map = accumulateSemanticMap(trace, nodesByKey, { ...s3opts(0), synthesize: mutating });
+    // Every result key is the original (unmutated) node key.
+    for (const key of map.keys()) expect(trace.nodes.has(key)).toBe(true);
+    expect(map.size).toBe(trace.nodes.size);
+  });
+
+  it("F4: NaN / Infinity / negative budget fails closed", () => {
+    const { trace } = reduceColumnLeavesWithTrace([leaf(1, 10, "int", "int"), leaf(11, 20, "int", "int")]);
+    expect(() => classifyFrontier(trace, Number.NaN)).toThrow(/non-negative safe integer/);
+    expect(() => classifyFrontier(trace, Number.POSITIVE_INFINITY)).toThrow(/non-negative safe integer/);
+    expect(() => classifyFrontier(trace, -1)).toThrow(/non-negative safe integer/);
+  });
+
+  it("F5 (onto-009): a subsumed node with nonzero taint fails closed", () => {
+    const node = semNode({ reduce_read_attempt: "subsumed", unanchored_unverified_count: 5 });
+    expect(() => assertSubsumedNodeEmpty(node)).toThrow(/no judgment or taint/);
   });
 });
