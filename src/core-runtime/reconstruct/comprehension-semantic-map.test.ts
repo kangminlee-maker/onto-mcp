@@ -21,6 +21,7 @@ import {
   classifyFrontier,
   computeSubtreeLeafCounts,
   computeUnanchoredUnverifiedCount,
+  projectSemanticMapToSeed,
   reconcileBoundaries,
   reduceNodeEpochContribution,
   type AccumulateSemanticMapOpts,
@@ -1006,5 +1007,77 @@ describe("S3 frontier hardening", () => {
       preImageBase: { ...base.preImageBase, over_context_gate_config_sha256: {} as unknown as string },
     };
     expect(() => accumulateSemanticMap(trace, nodesByKey, bad)).toThrow(/must be a string/);
+  });
+});
+
+// ── projectSemanticMapToSeed (S4 seed projection · §6) ────────────────────────
+
+describe("projectSemanticMapToSeed", () => {
+  const region = (rs: number, re: number) => ({ sheet: SHEET, column_index: COL, row_start: rs, row_end: re });
+  const nodeAt = (rs: number, re: number, over: Partial<ComprehensionSemanticNode> = {}) =>
+    semNode({ node_ref: region(rs, re), ...over });
+  const mapOf = (...nodes: ComprehensionSemanticNode[]) => {
+    const m = new Map<string, ComprehensionSemanticNode>();
+    for (const n of nodes) m.set(reduceNodeKey(n.node_ref), n);
+    return m;
+  };
+
+  it("anchored → 'structural_location_only' (never verified); non_authoritative + provisional", () => {
+    const proj = projectSemanticMapToSeed(mapOf(nodeAt(1, 10, { semantic_boundaries: [bound("anchored", "structural_location_only", 5)] })));
+    expect(proj.authority).toBe("non_authoritative");
+    expect(proj.provisional).toBe(true);
+    expect(proj.nodes[0]?.boundaries[0]?.disposition).toBe("structural_location_only");
+  });
+
+  it("unanchored + adversarial_confirmed → 'adversarial_confirmed'", () => {
+    const proj = projectSemanticMapToSeed(mapOf(nodeAt(1, 10, { semantic_boundaries: [bound("unanchored", "adversarial_confirmed", 5)] })));
+    expect(proj.nodes[0]?.boundaries[0]?.disposition).toBe("adversarial_confirmed");
+  });
+
+  it("unanchored + refuted → EXCLUDED from seed boundaries, disclosed + counted in taint", () => {
+    const proj = projectSemanticMapToSeed(
+      mapOf(nodeAt(1, 10, { semantic_boundaries: [bound("unanchored", "adversarial_refuted", 5)], unanchored_unverified_count: 1 })),
+    );
+    expect(proj.nodes[0]?.boundaries.length).toBe(0);
+    expect(proj.refuted_disclosure.length).toBe(1);
+    expect(proj.refuted_disclosure_total).toBe(1);
+    expect(proj.unanchored_unverified_total).toBe(1);
+  });
+
+  it("NEGATIVE CONTROL: an unverified unanchored boundary reaching projection fails closed", () => {
+    expect(() =>
+      projectSemanticMapToSeed(mapOf(nodeAt(1, 10, { semantic_boundaries: [bound("unanchored", "unverified", 5)], unanchored_unverified_count: 1 }))),
+    ).toThrow(/unverified unanchored boundary.*reached seed projection/);
+  });
+
+  it("a subsumed node contributes no seed node", () => {
+    const proj = projectSemanticMapToSeed(
+      mapOf(
+        nodeAt(1, 10, { semantic_boundaries: [bound("anchored", "structural_location_only", 5)] }),
+        nodeAt(11, 20, { reduce_read_attempt: "subsumed", semantic_summary: "", semantic_boundaries: [] }),
+      ),
+    );
+    expect(proj.nodes.length).toBe(1);
+    expect(proj.nodes_total).toBe(1);
+  });
+
+  it("taint census = the root (max monotone) count", () => {
+    const proj = projectSemanticMapToSeed(
+      mapOf(nodeAt(1, 20, { unanchored_unverified_count: 5 }), nodeAt(1, 10, { unanchored_unverified_count: 2 })),
+    );
+    expect(proj.unanchored_unverified_total).toBe(5);
+  });
+
+  it("display bound: nodes_total / refuted_disclosure_total stay AUTHORITATIVE (no silent drop)", () => {
+    const proj = projectSemanticMapToSeed(
+      mapOf(
+        nodeAt(1, 10, { semantic_boundaries: [bound("anchored", "structural_location_only", 5)] }),
+        nodeAt(11, 20, { semantic_boundaries: [bound("anchored", "structural_location_only", 15)] }),
+        nodeAt(21, 30, { semantic_boundaries: [bound("anchored", "structural_location_only", 25)] }),
+      ),
+      { maxNodes: 1 },
+    );
+    expect(proj.nodes.length).toBe(1);
+    expect(proj.nodes_total).toBe(3); // authoritative — the other 2 were bounded for size, not dropped
   });
 });

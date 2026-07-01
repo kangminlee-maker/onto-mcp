@@ -879,3 +879,116 @@ export function accumulateSemanticMap(
   }
   return result;
 }
+
+// ── S4 seed projection (design §6 / §13.8) — the accumulated map → seed authoring input ───────────
+//
+// The hierarchical semantic map is projected into a bounded, HONEST seed input. This is a PURE
+// projection (LLM-0) applied to a map accumulated with seedBound=false (all boundaries present); the
+// projection IS the seed-honesty layer. §6 honest projection rules:
+//  - anchored boundary → disposition 'structural_location_only' — a value-shape seam co-locates, but
+//    the LLM's CONTENT is NOT verified (N2); it flows as provisional, never as 'verified'/high-confidence.
+//  - unanchored + adversarial_confirmed → 'adversarial_confirmed' — survived the independent recheck;
+//    still provisional / user-gated.
+//  - unanchored + adversarial_refuted → EXCLUDED from the seed boundaries; recorded in refuted_disclosure
+//    and counted in the taint census (codex-F2 / §13.5).
+//  - unanchored + unverified → THROWS: accumulate must adversarially process EVERY unanchored boundary
+//    before seed (N3); an unverified one reaching projection is a fail-closed error.
+//  - a subsumed node contributes no judgment (its frontier ancestor's flat read covers its subtree).
+// Lists are display-bounded but carry AUTHORITATIVE totals — never a silent drop (run.ts:6469 pattern).
+// This module builds the map→seed CONTRACT only; wiring it into the live reconstruct seed path (which
+// preserves the existing flat leaf-read path, opt-in) is a later production cut (design §6, default-off).
+
+export type SeedBoundaryDisposition = "structural_location_only" | "adversarial_confirmed";
+
+export interface SemanticSeedBoundary {
+  row: number;
+  character_before: string;
+  character_after: string;
+  disposition: SeedBoundaryDisposition; // never "verified" — anchored corroborates LOCATION only (N2).
+}
+
+export interface SemanticSeedNode {
+  node_ref: ComprehensionReduceRegion;
+  semantic_summary: string;
+  boundaries: SemanticSeedBoundary[];
+}
+
+/** An unanchored boundary the independent adversarial recheck REFUTED — disclosed (not silently
+ *  dropped) and counted in the taint census, but excluded from the seed boundary set. */
+export interface SemanticSeedRefutedDisclosure {
+  node_ref: ComprehensionReduceRegion;
+  row: number;
+  character_before: string;
+  character_after: string;
+}
+
+export interface SemanticSeedProjection {
+  authority: "non_authoritative";
+  provisional: true;
+  nodes: SemanticSeedNode[];
+  nodes_total: number; //                 AUTHORITATIVE — when nodes.length < nodes_total, the rest were bounded for size, not dropped.
+  refuted_disclosure: SemanticSeedRefutedDisclosure[];
+  refuted_disclosure_total: number; //    AUTHORITATIVE.
+  unanchored_unverified_total: number; // taint census (the root's monotone count = the whole tree's).
+}
+
+export interface SeedProjectionOpts {
+  /** Display bound for the nodes list; the total is always authoritative. Default: no bound. */
+  maxNodes?: number;
+  /** Display bound for the refuted disclosure list; the total is always authoritative. */
+  maxDisclosure?: number;
+}
+
+/** Project the accumulated semantic map into a bounded, honest seed input (§6). Pure / deterministic. */
+export function projectSemanticMapToSeed(
+  map: ReadonlyMap<SemanticNodeKey, ComprehensionSemanticNode>,
+  opts: SeedProjectionOpts = {},
+): SemanticSeedProjection {
+  const nodesAll: SemanticSeedNode[] = [];
+  const refuted: SemanticSeedRefutedDisclosure[] = [];
+  let taint = 0;
+  // Deterministic order (by canonical node key).
+  const entries = [...map.entries()].sort((a, b) => cmpStr(a[0], b[0]));
+  for (const [, node] of entries) {
+    // Honesty precondition (fail-closed): legal (anchor_status, verification) states only. seedBound=false
+    // (the map still carries refuted boundaries; THIS projection is what excludes them from seed).
+    assertSemanticBoundaryHonesty(node, false);
+    taint = Math.max(taint, node.unanchored_unverified_count); // monotone → the root/max is the total.
+    if (node.reduce_read_attempt === "subsumed") continue; // no judgment (frontier ancestor covers it).
+    const region = node.node_ref;
+    const boundaries: SemanticSeedBoundary[] = [];
+    for (const b of node.semantic_boundaries) {
+      if (b.anchor_status === "anchored") {
+        boundaries.push({ row: b.row, character_before: b.character_before, character_after: b.character_after, disposition: "structural_location_only" });
+      } else if (b.verification === "adversarial_confirmed") {
+        boundaries.push({ row: b.row, character_before: b.character_before, character_after: b.character_after, disposition: "adversarial_confirmed" });
+      } else if (b.verification === "adversarial_refuted") {
+        refuted.push({
+          node_ref: { sheet: region.sheet, column_index: region.column_index, row_start: region.row_start, row_end: region.row_end },
+          row: b.row,
+          character_before: b.character_before,
+          character_after: b.character_after,
+        });
+      } else {
+        // unanchored + unverified: accumulate must have adversarially processed it before seed (N3).
+        throw new Error(`comprehension-semantic-map: unverified unanchored boundary at ${reduceNodeKey(region)}@row${b.row} reached seed projection — every unanchored boundary must be adversarially verified first (§13.5 N3 fail-closed).`);
+      }
+    }
+    nodesAll.push({
+      node_ref: { sheet: region.sheet, column_index: region.column_index, row_start: region.row_start, row_end: region.row_end },
+      semantic_summary: node.semantic_summary,
+      boundaries,
+    });
+  }
+  const maxNodes = opts.maxNodes ?? nodesAll.length;
+  const maxDisclosure = opts.maxDisclosure ?? refuted.length;
+  return {
+    authority: "non_authoritative",
+    provisional: true,
+    nodes: nodesAll.slice(0, Math.max(0, maxNodes)),
+    nodes_total: nodesAll.length,
+    refuted_disclosure: refuted.slice(0, Math.max(0, maxDisclosure)),
+    refuted_disclosure_total: refuted.length,
+    unanchored_unverified_total: taint,
+  };
+}
