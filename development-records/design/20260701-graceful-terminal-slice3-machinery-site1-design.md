@@ -1,6 +1,7 @@
 # Slice 3 설계 — graceful-terminal 공유 machinery + site 1 배선
 
-> 상태: **DESIGN v0 (교차검증 대기)**. 날짜 2026-07-01 · baseline `feat/maturation-value-read` HEAD `86b662f`(Slice 2 커밋 완료).
+> 상태: **DESIGN v0 → 교차검증 gate=`redesign_narrow`(headline 생존·§13)**. 날짜 2026-07-01 · baseline `feat/maturation-value-read` HEAD `7c96687`(Slice 3 설계 커밋).
+> ⚠️ **빌드 전 §13 union narrows(5 HIGH) 반영 필수** — 아래 §3~§10은 v0 원안이며 §13이 재절단 지시.
 > 상위 SSOT: `20260701-shared-graceful-terminal-step1-design.md`(Option A 확정·batch 5-site·§5.1 catch 통합·§12 교차검증) · census `20260701-reconstruct-throw-census-triage.md`(§7.3 7 표적·§7.4 두 제약).
 > 조각 B(reachability): `20260701-reachability-manifest-design.md`(v2)·**Slice 1(validator)·Slice 2(런타임 census+createRunManifest witness-gating) 커밋 완료**.
 > 진행: 이 설계 → **양-패밀리 교차검증(ultracode+onto)** → owner 승인 → 빌드([[design-validation-ultracode-onto]]). 교차검증은 Slice 2 잔여 3 주장(§9)도 함께 다룬다.
@@ -160,5 +161,38 @@ Slice 2 교차검증을 이 설계로 이연했으므로 함께 판정:
 **Slice 3이 결정 안 하는 것(이후 cut)**: site 2·3(전용-throw)·5(generic-assert 소스필드 분류기 §5.2)·6 배선·site 7(short-circuit vs source-level·§7 상위)·site 4(semi-semantic 보류)·question-frontier repair loop.
 
 ## 12. 다음
-이 설계 → **양-패밀리 교차검증**(ultracode + onto·Slice 2 잔여 §9 + open §10 포함) → gate 판정 → owner 승인 → §11 빌드.
+v0 설계 → 양-패밀리 교차검증(§13) → **gate=`redesign_narrow`** → **§13 narrows 반영 v1** → owner 승인 → §11 빌드.
+
+## 13. 교차검증 결과 (2026-07-01) — gate: **`redesign_narrow`** (headline 생존·5 HIGH 하위메커니즘 재절단)
+> 두 패밀리 병행([[design-validation-ultracode-onto]]): **ultracode** `wf_65c07fe0-dd2`(6 distinct-KIND 렌즈·21 agent·gate=`redesign_narrow`·`headline_survives=true`·4 material[2 high·2 med]) + **onto full** `20260701-7d89385c`(9 lens·`halted_partial`[deliberation 인프라 halt·issue-ledger 완성]·**14 issue[8 high·5 med·1 low]**). **강한 독립 수렴 + onto union delta.**
+
+**판정**: Option A 코어 spine(typed `GracefulTerminalSignal` + catch(15097) 단일 핸들러 short-circuit + `assembleGracefulTerminal` + run-control `halted` + Slice 2 reachability 재사용)은 **생존**. 그러나 5 HIGH load-bearing 하위메커니즘이 깨져 빌드 전 재절단 필요.
+
+### 13.1 강한 수렴 (양 패밀리 독립 재포착)
+- **CB-1 eligibility 게이트가 틀린 아티팩트에 매임**(ultracode CB-1 ≡ onto issue-001/005/006/007/010·dep-001): §3.6/§6/§7이 `support_status`/`unsupported_reason`로 graceful-vs-bug를 가르나 — target-material-kind.ts:98-106이 .xls/.xlsb/.ods를 spreadsheet로·materialize-preparation.ts:76-117이 runnable 타깃에 `support_status:'partial'`+non-null `unsupported_reason`(never 'unsupported') 부여·미지원-포맷 사실은 `scan_status='skipped'`/`skipped_refs`(materialize-preparation.ts:791-806)에 삶. → support_status 키면 §7 트리거(.xls) 미발화·unsupported_reason-존재 키면 **모든 런 매치→진짜 zero-observation 버그를 blocked 위장**("worse than crash"). 올바른 판별자(`sourceObservations.skipped_refs`+inventory scan_status·run.ts:2218-2231서 이미 계산)를 §3.6이 reason 문자열로만 흘림. **§11 Q6 redesign 조건 발동.**
+- **C1 graceful terminal 영속/조회 표현 부재**(ultracode C1 ≡ onto issue-009/012/014·dep-002): §3.5가 ephemeral `ReconstructRunResult.status`만 확장·`run_terminal_disposition` 폐기. 그러나 status 폴링(onto_reconstruct_status·TUI poll)이 `getRunStatus`(reconstruct-api.ts:963-977)→`record.record_stage`; `ReconstructRecordStage`(artifact-types.ts:3502-3520)에 blocked/limited/halted 멤버 0·`deriveReconstructProgress`가 not-reached→skipped·liveness `halted_or_partial`+1000ms 무한폴링·TUI `deriveWorkflowStatus`→'running'·`isTerminalStatus` false. **manifest.graceful_terminal 읽는 조회 소비자 0.** done-when(a)가 in-memory만 단언→설계가 자기 gate 통과하며 비종결 조회 표면 배포. §3.5 "−1·정보손실 없음" **거짓**.
+
+### 13.2 onto union delta (ultracode 미-material·전부 실코드 CONFIRMED·전부 반영)
+- **[HIGH·최중요·내가 놓침] issue-002/004/011: `terminalArtifactsCompleted:false`가 `final_output`·`reconstruct_record`를 NULL화**(run.ts:2729-2772·2794-2799·implemented_artifacts 제외). §3.4가 이 플래그로 createRunManifest 호출→manifest가 `final_output:null`·`reconstruct_record:null` 기록→done-when(a)의 "final-output+record 방출"과 정면 모순. **근본**=`terminalArtifactsCompleted`가 "하류 pipeline stage 도달"과 "terminal 아티팩트 산출"을 conflate. **재절단**: 축 분리(`terminalArtifactRefsCompleted`↔`postTerminalPipelineStagesReached`) 또는 graceful 전용 manifest 모드=final-output/record ref는 reached로 보존하되 하류 stage만 not_reached.
+- **[HIGH] issue-011: 신호-누수 표면 > bare catch 2곳**. degrade/swallow하는 `catch(error)`(run.ts:1637-1643 등)도 전부 rethrow 가드 필요. 구조가드는 catch를 *동작*으로 분류(무조건 rethrow=안전·degrade/swallow/retry=신호 먼저 rethrow). 대표 degrade catch 통과 negative test.
+- **[HIGH] issue-011: finalizer가 halted에 terminal-validation 링크 요구**(run-control-validation.ts:916-940 `postPublicationRunManifestValidationPath` 필수·946 `attempt_status:"completed"` 하드코딩·182-191 terminal-validation-trust·309-319 halted 미수용). §3.3 파라미터화는 `attemptStatus:"completed"|"halted"` 수용 + 두 status 모두 terminal manifest validation ref 요구(neutral 명명 `terminalRunManifestValidationPath`)로 확장.
+- **[MED] issue-003: 신호 throw 지점 path-ref 없음** — `assertSemanticAuthoringHasObservedEvidence`(2212)는 아티팩트 *값*만·경로는 `preparationRefs`(외부 12206-12211). → 신호 구성을 **call site(12218)로 이동** 또는 path-ref 번들을 helper에 주입(§3.1 reachedArtifactRefs 정직성 = 내 Q3 확정).
+- **[MED] issue-008: byte-parity 비-falsifiable** — manifest `created_at`/`completed_at` `isoNow()`(2777-2778)·run-control finalize `isoNow()`(944-945). §7 대조군에 **volatile 필드 정규화/freeze 비교기** + stable-field drift가 fail함을 보이는 contrast.
+- **[MED] issue-011: graceful 조립이 `validateReconstructRunManifest` 미호출** — Slice 1/2 anti-masking 규칙(terminal-validation.ts:196-260)이 라이브 graceful 경로서 dead(테스트 하네스서만). §3.4에 validate-and-record 스텝 추가 또는 런타임 검증 scope-out 명시.
+- **[LOW] issue-013: `ReconstructGracefulTerminalCode` enum inert**(ultracode#3 med ≡ onto low) — signal서 계산→폐기·소비자 복구 불가. Slice 3선 폐기(terminalStepId+reason이 판별) 또는 persist. §3.5/§8 "정보손실 없음" 교정.
+
+### 13.3 v1 재절단 지시 (빌드 전 baked-in 필수)
+1. **eligibility 재절단(N1·Q6 해소)**: §3.6/§6/§7 → 관측-층 결정론 분류자 `isZeroObservationGracefulTerminalEligible`(observations.length===0 AND 모든 target ref가 allowed graceful reason[unsupported extraction·absent/vanished·no supported profile]로 `skipped_refs`/inventory scan_status서 설명됨). supported/partial·skip 증거 없는 zero-obs = **크래시 유지**(negative control).
+2. **terminal-artifact 축 분리(N2)**: graceful manifest가 final-output/record ref를 reached로 보존·하류만 not_reached(`terminalArtifactsCompleted` conflation 해소).
+3. **영속 terminal disposition(N3)**: record/status 표면에 blocked/limited/halted terminal 투영(`ReconstructRecordStage` 확장 또는 record `terminal_disposition` 필드+`deriveReconstructProgress`/TUI 종결 매핑). `result.status`는 즉시-반환 mirror.
+4. **finalizer halted 계약(N4)**: `finalizeReconstructRunControl` `attemptStatus` 파라미터화 + halted도 terminal validation ref 요구·309-319 halted 수용·byte-parity.
+5. **신호-누수 가드 확장(N5)**: degrade/swallow catch 전부 `isGracefulTerminalSignal` rethrow·구조가드 동작-분류·1637-1643 포함.
+6. **(MED) 신호 구성 call site 이동(N6)**·**graceful 조립 validate-and-record(N7)**·**byte-parity 정규화 비교기(N8)**·**code enum 폐기 또는 persist(N9)**.
+- **falsifiable 추가(비협상)**: negative control = supported-format+zero-observation(no skipped_refs)→**크래시**(현 negative control은 catch-level instanceof만 시험·eligibility 게이트 미시험→틀린 predicate가 green으로 배포). polled 표면이 terminal임을 단언(N3).
+
+### 13.4 메타교훈
+- 가장 강한 수렴(eligibility·persisted-status)조차 내 v0가 open 질문(Q6·Q1)으로 *미룬* 것을 두 패밀리가 실코드로 *결함 확정*. **가장 위험한 건 내가 아예 안 본 것**: `terminalArtifactsCompleted` NULL화(onto structure/dependency/coverage가 3중 포착·ultracode consumer 렌즈는 근처까지)=[[contract-runtime-gap-ledger]] 동형(플래그 재사용이 의미 conflate).
+- 다른-KIND 발산=신호: onto 9 semantic 렌즈가 terminal-artifact/finalizer/catch-surface를 ultracode logic 렌즈보다 깊게 포착→union이 둘보다 강함(CLAUDE.md 수렴 휴리스틱 실증).
+- 산출물: ultracode `wf_65c07fe0-dd2`·onto `.onto/review/20260701-7d89385c/`(issue-ledger.yaml).
+
 포인터: 상위 `20260701-shared-graceful-terminal-step1-design.md`·census `20260701-reconstruct-throw-census-triage.md`·reachability `20260701-reachability-manifest-design.md`(v2)·Slice 2 커밋 `aee992d`. 메모리 [[unified-comprehension-engine-track]]·[[design-validation-ultracode-onto]]·[[contract-runtime-gap-ledger]]·[[domain-agnostic-no-static-enums]].
