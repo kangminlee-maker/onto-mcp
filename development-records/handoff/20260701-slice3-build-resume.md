@@ -1,5 +1,17 @@
 # RESUME — graceful-terminal Slice 3 빌드 (S2-S8 · machinery + site 1)
 
+> ✅ **완료+교차검증+정정(2026-07-01·미커밋).** S2-S8 빌드+검증+ultracode 적대적 교차검증(fixes 반영) 종결. 이 문서는 이력. baseline `05d0acf`(S1) 위 구현.
+> 검증: tsc clean · 정적게이트 통과(신규 `check:graceful-signal-rethrow`·falsifiability 실증[swallow-via-return→VIOLATION, 복원→OK]) · **full vitest 2147(2146 pass+1 todo·회귀0)** · **E2E P1+Q-terminal**(실 runReconstruct·zero-obs[empty.csv/.xls/planned-db]→blocked manifest valid·halted·terminal record).
+> **▶ ultracode 교차검증 `wf_b506e7a4-1f3`(16 agent·6 distinct-KIND 렌즈·9 raised→7 confirmed[2=동일결함 중복]·gate_pass_with_minor_revisions)=전부 정정 반영**:
+>   - **[MED·FIXED] fail-closed 마스킹**: terminal_disposition을 validate 게이트 **前** 기록→invalid manifest 크래시해도 record가 clean blocked로 투영(getRunStatus 마스킹). **정정=disposition은 게이트 통과 後(post-finalize 재조립)만 stamp**(게이트前 write는 record_assembly ref 존재용·content 미검증). 회귀테스트 추가(no-disposition→non-terminal).
+>   - **[LOW·FIXED] assembly 크래시 시 attempt 미-failed**: 게이트 크래시가 markFailed 우회→attempt running·lock held 잔존. **정정=catch에 assembly 전용 try/catch(크래시→markFailed+rethrow, 신호는 재전파 가드)**.
+>   - **[LOW·FIXED] 구조가드 return-form 과대허용**: `return <아무거나>`도 handler 통과. **정정=`return assembleGracefulTerminal(...)`만 handler**(routesToHandler·foreign-return 거부·falsifiability 실증).
+>   - **[LOW·FIXED] rename 후 stale 메시지 2개**(run-control-validation.ts:452/460 "post-publication"→"terminal run-manifest"+halted).
+>   - **[LOW·NOTED] N-validate run-level 음성대조 부재**: existence-filter(§16.5 설계)가 missing-ref 주입 무력화→invalid manifest 트리거 아키텍처적 난망. 게이트는 unit-cover(validator invalid 거부+finalize invalid-terminal-validation 거부), 양성대조(null-witness site1 manifest valid)=P1 E2E, fix#1 속성=unit. accepted limitation.
+>   - **completeness critic 정정**: byte-parity=runtime-pipeline-golden(34)로 **실행 입증**(critic 미인지). `limited`=site1 미배선 예약(설계대로·future site4). 실입력 E2E=graceful 판정 결정론·pre-LLM이라 empty.csv/.xls 실입력 통과. resume-after-halt=미테스트 엣지(halted≠completed→reuse 안 됨·재실행·미파손).
+> 변경=9파일 + 신규 2. 미커밋(브랜치 `feat/maturation-value-read`). §16.8: P1✅·N-elig✅(unit)·N-validate=게이트 활성+양성대조(음성=accepted limit)·C-parity✅(golden 실행)·Q-terminal✅·Leak✅.
+> **아래는 원래 빌드 계약(이력).**
+
 > **START-HERE.** `/clear` 후 fresh 세션이 **이 문서 + 설계 §16으로** Slice 3 빌드를 이어간다. 날짜 2026-07-01.
 > baseline = `feat/maturation-value-read` HEAD **`05d0acf`**(S1 커밋). **build 계약 = 설계 §16**(consolidated·authoritative).
 > 설계 SSOT: `development-records/design/20260701-graceful-terminal-slice3-machinery-site1-design.md` — **§16이 유일 build 계약**(§14 v1·§15 2차검증·§13 1차검증은 이력). §16.9 = 8-스테이지 순.

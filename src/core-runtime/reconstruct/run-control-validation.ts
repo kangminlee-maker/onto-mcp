@@ -184,8 +184,11 @@ function requiresTerminalValidationTrust(
 ): boolean {
   assertArrayField(runControl.attempt_rows, "run-control", "attempt_rows");
   assertArrayField(runControl.resume_rows, "run-control", "resume_rows");
+  // A graceful-terminal `halted` attempt (design §16.6) is a terminal outcome that produced its
+  // own terminal manifest validation, so it demands the same terminal-validation trust as a
+  // completed attempt — it must not slip past the fail-closed authority check.
   return runControl.attempt_rows.some((row) =>
-    row.attempt_status === "completed"
+    row.attempt_status === "completed" || row.attempt_status === "halted"
   ) || runControl.resume_rows.some((row) =>
     row.resume_decision === "resume_allowed"
   );
@@ -311,12 +314,13 @@ export function validateReconstructRunControl(args: {
     .find((row) =>
       row.attempt_status === "running" ||
       row.attempt_status === "completed" ||
-      row.attempt_status === "recovered"
+      row.attempt_status === "recovered" ||
+      row.attempt_status === "halted"
     ) ?? null;
   if (!currentAttempt) {
     violations.push(violation({
       code: "active_attempt_missing",
-      message: "run-control must have a running, completed, or recovered attempt",
+      message: "run-control must have a running, completed, recovered, or halted attempt",
     }));
   }
   const activeLocks = args.runControl.lock_rows.filter((row) =>
@@ -436,7 +440,7 @@ export function validateReconstructRunControl(args: {
       violations.push(violation({
         code: "terminal_validation_missing",
         message:
-          "completed attempts and resume_allowed rows require post-publication terminal validation authority",
+          "completed/halted attempts and resume_allowed rows require terminal run-manifest validation authority",
       }));
     } else {
       if (args.terminalValidationStatus !== "valid") {
@@ -445,7 +449,7 @@ export function validateReconstructRunControl(args: {
             ? "terminal_validation_missing"
             : "terminal_validation_invalid",
           message:
-            "post-publication terminal validation must exist and have validation_status=valid before completion or resume_allowed",
+            "terminal run-manifest validation must exist and have validation_status=valid before completion, halt, or resume_allowed",
           subjectId: terminalValidationRef,
         }));
       }
@@ -453,7 +457,7 @@ export function validateReconstructRunControl(args: {
         violations.push(violation({
           code: "expected_transaction_missing",
           message:
-            "run-control validation is missing a committed hash transaction for the post-publication terminal validation artifact",
+            "run-control validation is missing a committed hash transaction for the terminal run-manifest validation artifact",
           subjectId: terminalValidationRef,
         }));
       }
@@ -918,7 +922,19 @@ export async function finalizeReconstructRunControl(args: {
   validationOutputPath: string;
   attemptId: string;
   artifactRefs: ReconstructRecordArtifactRefs;
-  postPublicationRunManifestValidationPath: string;
+  /**
+   * The terminal run-manifest validation authority (design §16.6). Required for BOTH a normal
+   * completion (post-publication manifest validation) and a graceful-terminal halt (the
+   * assembled-terminal manifest validation, §16.5-(5)) — both are the run's terminal validation,
+   * hence the shared name.
+   */
+  terminalRunManifestValidationPath: string;
+  /**
+   * How the attempt reached its terminal state. `"completed"` (default) = normal end of pipeline —
+   * byte-identical to before. `"halted"` = a graceful terminal (design §16.6): the run stopped
+   * early but still produced a valid terminal manifest validation.
+   */
+  attemptStatus?: "completed" | "halted";
   extraArtifactRefs?: Array<string | null | undefined>;
   expectedSessionId: string;
   expectedSessionRoot: string;
@@ -926,14 +942,16 @@ export async function finalizeReconstructRunControl(args: {
   runControl: ReconstructRunControlArtifact;
   validation: ReconstructRunControlValidationArtifact;
 }> {
+  const attemptStatus = args.attemptStatus ?? "completed";
   const terminalValidationStatus = await readValidationStatusIfPresent(
-    args.postPublicationRunManifestValidationPath,
+    args.terminalRunManifestValidationPath,
   );
   if (terminalValidationStatus !== "valid") {
     throw new Error(
       [
-        "reconstruct run-control cannot finalize without valid post-publication terminal validation.",
-        `terminal_validation_ref=${args.postPublicationRunManifestValidationPath}`,
+        "reconstruct run-control cannot finalize without valid terminal run-manifest validation.",
+        `terminal_validation_ref=${args.terminalRunManifestValidationPath}`,
+        `attempt_status=${attemptStatus}`,
         `validation_status=${terminalValidationStatus ?? "missing"}`,
       ].join(" "),
     );
@@ -945,7 +963,7 @@ export async function finalizeReconstructRunControl(args: {
   runControl.updated_at = completedAt;
   runControl.attempt_rows = runControl.attempt_rows.map((row) =>
     row.attempt_id === args.attemptId
-      ? { ...row, completed_at: completedAt, attempt_status: "completed" }
+      ? { ...row, completed_at: completedAt, attempt_status: attemptStatus }
       : row
   );
   const completedAttempt = runControl.attempt_rows.find((row) =>
@@ -968,7 +986,7 @@ export async function finalizeReconstructRunControl(args: {
     args.artifactRefs,
     [
       ...(args.extraArtifactRefs ?? []),
-      args.postPublicationRunManifestValidationPath,
+      args.terminalRunManifestValidationPath,
     ],
   );
   await appendWriteTransactions({
@@ -982,7 +1000,7 @@ export async function finalizeReconstructRunControl(args: {
     outputPath: args.validationOutputPath,
     expectedSessionId: args.expectedSessionId,
     expectedSessionRoot: args.expectedSessionRoot,
-    terminalValidationRef: args.postPublicationRunManifestValidationPath,
+    terminalValidationRef: args.terminalRunManifestValidationPath,
   });
   return { runControl, validation };
 }

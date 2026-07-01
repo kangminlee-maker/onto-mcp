@@ -957,6 +957,41 @@ export function isGracefulTerminalSignal(
   return value instanceof GracefulTerminalSignal;
 }
 
+/**
+ * The inside-`try` context a graceful terminal needs that is NOT visible at the run-level catch
+ * (design §16.4/§16.5). The throwing site populates a hoisted binding before it throws; the catch
+ * hands it to assembleGracefulTerminal. `reachedArtifactRefs` are the artifacts written before the
+ * halt (existence-checked before use); contractRegistry + targetMaterialProfile let the assembly
+ * rebuild the governing snapshot the manifest validator re-derives.
+ */
+interface GracefulTerminalAssemblyContext {
+  reachedArtifactRefs: Partial<ReconstructRecordArtifactRefs>;
+  contractRegistry: ReconstructContractRegistry;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+}
+
+/**
+ * The deterministic, runtime-authored final output for a graceful terminal (design §16.5-2). It
+ * restates only runtime diagnostics (disposition, terminal stage, the reason the throwing site
+ * built) — never out-of-authority source values — so it is an honest "why this stopped" statement,
+ * not a fabricated reconstruction.
+ */
+function buildGracefulTerminalFinalOutput(signal: GracefulTerminalSignal): string {
+  const dispositionLabel = signal.disposition === "blocked" ? "Blocked" : "Limited";
+  // No level-2 subheadings: the graceful terminal is a standalone deterministic statement, not a
+  // normal final-output section (those headings are registry-owned; see check-final-output-sections-parity).
+  return [
+    `# Reconstruct ${dispositionLabel} Terminal`,
+    "",
+    `This reconstruct run stopped early with a **${signal.disposition}** disposition at the \`${signal.terminalStepId}\` stage.`,
+    "",
+    "The run did not reach semantic authoring, so no ontology seed, claims, or competency questions were produced.",
+    "",
+    `**Reason:** ${signal.reason}`,
+    "",
+  ].join("\n");
+}
+
 function isoNow(): string {
   return new Date().toISOString();
 }
@@ -1198,6 +1233,7 @@ async function readYamlDocumentIfPresent<T>(filePath: string): Promise<T | null>
   try {
     return await readYamlDocument<T>(filePath);
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     if (isMissingFile(error)) return null;
     throw error;
   }
@@ -1207,6 +1243,7 @@ async function readTextIfPresent(filePath: string): Promise<string | null> {
   try {
     return await fs.readFile(filePath, "utf8");
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     if (isMissingFile(error)) return null;
     throw error;
   }
@@ -1217,6 +1254,7 @@ async function exists(filePath: string): Promise<boolean> {
     await fs.access(filePath);
     return true;
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     if (isMissingFile(error)) return false;
     throw error;
   }
@@ -1681,6 +1719,7 @@ export async function runSpreadsheetLeafReadStage(args: {
         try {
           outcome = await readLeaf(region);
         } catch (error) {
+          if (isGracefulTerminalSignal(error)) throw error;
           // The author's readLeafLabels already degrades hard failures to {kind:'failed'}; a throw
           // here is unexpected — degrade defensively (never abort the run for a leaf-read, §11 R9).
           outcome = { kind: "failed", reason: `leaf-read threw: ${(error as Error).message}` };
@@ -1936,7 +1975,8 @@ export async function runMaturationValueReadStage(args: {
     const output = await readValueDischarge({ candidates, sourceRefByObservationId });
     discharges = output.discharges;
     failedCount = output.failed_count ?? 0;
-  } catch {
+  } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     // Total failure: treat every targeted limitation as a failed read/judgment.
     failedCount = targetedLimitations.size;
   }
@@ -2253,35 +2293,63 @@ function requireFirstObservation(
   return observation;
 }
 
+/**
+ * Classifies whether a zero-observation run is a graceful blocked terminal (design §16.2) rather
+ * than a crash. Eligible only when there are no observations AND every planned runtime-target
+ * inventory unit was skipped (unsupported format / vanished ref) — no unit remains "planned" yet
+ * unobserved. A supported target that simply yields no rows keeps ≥1 planned unit and stays
+ * ineligible, so the zero-observation evidence gate still crashes on genuinely empty evidence
+ * (N-elig control). Every source-inventory unit is a runtime-target source (the inventory is the
+ * initial target inventory), so `.every` over all units is the runtime-target scope. Domain-agnostic
+ * (scan_status enum only — no skip_reason string matching).
+ */
+export function isZeroObservationGracefulTerminalEligible(args: {
+  sourceObservations: Pick<ReconstructSourceObservationsArtifact, "observations">;
+  sourceInventory: Pick<ReconstructSourceInventoryArtifact, "inventory_units">;
+}): boolean {
+  if (args.sourceObservations.observations.length > 0) return false;
+  const units = args.sourceInventory.inventory_units;
+  return units.length > 0 && units.every((unit) => unit.scan_status === "skipped");
+}
+
+/**
+ * The zero-observation diagnostic (shared by the crash path and the graceful blocked terminal so
+ * both carry the same honest "why": target kind, support status, unsupported reason, and the merged
+ * set of skipped refs). Refs that vanished between detection and re-observation are recorded in
+ * source-observations.skipped_refs (not the inventory, built before re-observation), so merge both —
+ * otherwise a single-ref TOCTOU run reports a misleading skipped_refs=none.
+ */
+function buildZeroObservationDiagnostic(args: {
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): string {
+  const inventorySkipped = args.sourceInventory.inventory_units
+    .filter((unit) => unit.scan_status === "skipped")
+    .map((unit) =>
+      `${path.basename(unit.ref)}:${unit.target_material_kind}:${unit.skip_reason ?? "skipped"}`
+    );
+  assertArrayField(args.sourceObservations.skipped_refs, "source-observations", "skipped_refs");
+  const observationSkipped = args.sourceObservations.skipped_refs.map((row) =>
+    `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
+  );
+  const skipped = [...new Set([...inventorySkipped, ...observationSkipped])];
+  return [
+    "reconstruct semantic authoring requires at least one runtime source observation",
+    `target_material_kind=${args.targetMaterialProfile.target_material_kind}`,
+    `support_status=${args.targetMaterialProfile.support_status}`,
+    `unsupported_reason=${args.targetMaterialProfile.unsupported_reason ?? "none"}`,
+    `skipped_refs=${skipped.join(", ") || "none"}`,
+  ].join("; ");
+}
+
 function assertSemanticAuthoringHasObservedEvidence(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   sourceInventory: ReconstructSourceInventoryArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
 }): void {
   if (args.sourceObservations.observations.length > 0) return;
-  const inventorySkipped = args.sourceInventory.inventory_units
-    .filter((unit) => unit.scan_status === "skipped")
-    .map((unit) =>
-      `${path.basename(unit.ref)}:${unit.target_material_kind}:${unit.skip_reason ?? "skipped"}`
-    );
-  // Refs that vanished between detection and re-observation are recorded in
-  // source-observations.skipped_refs (not the inventory, which was built before
-  // the re-observation), so merge both — otherwise a single-ref TOCTOU run halts
-  // with a misleading skipped_refs=none.
-  assertArrayField(args.sourceObservations.skipped_refs, "source-observations", "skipped_refs");
-  const observationSkipped = args.sourceObservations.skipped_refs.map((row) =>
-    `${path.basename(row.ref)}:${row.target_material_kind}:${row.reason}`
-  );
-  const skipped = [...new Set([...inventorySkipped, ...observationSkipped])];
-  throw new Error(
-    [
-      "reconstruct semantic authoring requires at least one runtime source observation",
-      `target_material_kind=${args.targetMaterialProfile.target_material_kind}`,
-      `support_status=${args.targetMaterialProfile.support_status}`,
-      `unsupported_reason=${args.targetMaterialProfile.unsupported_reason ?? "none"}`,
-      `skipped_refs=${skipped.join(", ") || "none"}`,
-    ].join("; "),
-  );
+  throw new Error(buildZeroObservationDiagnostic(args));
 }
 
 function calculateMetrics(args: {
@@ -2770,7 +2838,11 @@ export function createRunManifest(args: {
   const ranLineageStages = new Set<ReconstructStageId>(
     (args.graceful?.lineageWitnesses ?? []).map((w) => w.step_id),
   );
-  const artifactRefs = args.terminalArtifactsCompleted
+  // A graceful terminal (design §16.3-a) reaches here with terminalArtifactsCompleted=false, but
+  // its caller (assembleGracefulTerminal) has already set the produced refs (final_output, record)
+  // to real paths and the unproduced ones to null. The blanket-null below would erase the produced
+  // refs, so the graceful path bypasses it and trusts the caller's refs verbatim.
+  const artifactRefs = args.terminalArtifactsCompleted || args.graceful
     ? args.artifactRefs
     : {
       ...args.artifactRefs,
@@ -2837,7 +2909,9 @@ export function createRunManifest(args: {
     },
     artifact_refs: {
       ...artifactRefs,
-      reconstruct_record: args.terminalArtifactsCompleted
+      // A graceful terminal assembles a real record before the manifest (design §16.5), so its
+      // reconstruct_record ref is preserved just like a completed run's.
+      reconstruct_record: args.terminalArtifactsCompleted || args.graceful
         ? args.reconstructRecordPath
         : null,
     },
@@ -2949,6 +3023,18 @@ export function createRunManifest(args: {
             "final_output",
             "final_output_provenance_validation",
             "post_publication_run_manifest_validation",
+            "reconstruct_record",
+          ]
+          : []),
+        // A graceful terminal still deterministically produces its final-output and record (design
+        // §16.3-b), so those IDs belong in implemented_artifacts even though the pipeline stopped
+        // early — otherwise a purpose-adequacy review would read them as un-implemented.
+        ...(args.graceful
+          ? [
+            "final_output",
+            ...(args.artifactRefs.final_output_provenance_validation
+              ? ["final_output_provenance_validation"]
+              : []),
             "reconstruct_record",
           ]
           : []),
@@ -3786,7 +3872,19 @@ export function createRunManifest(args: {
           "claim-projection-validation.yaml is emitted as a pre-publication authority before final-output authoring.",
           "Pre-handoff manifest validation must not certify claim projection validation before maturation continuation validation closes.",
         ),
-      args.terminalArtifactsCompleted
+      args.graceful
+        // Graceful terminal: the final-output is a deterministic runtime-authored blocked/limited
+        // statement, NOT an LLM completion (design §16.3-c) — so runtime owner, not host_llm. When
+        // its ref is present the step is kept completed; when absent, applyGracefulReachability
+        // downgrades this ref-less completed step to not_reached.
+        ? completedStep(
+          "final_output",
+          "runtime",
+          runtimePerformer(),
+          [args.artifactRefs.final_output]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : args.terminalArtifactsCompleted
         ? completedStep(
           "final_output",
           "host_llm",
@@ -3801,7 +3899,9 @@ export function createRunManifest(args: {
           "final-output.md is emitted after claim projection validation and delegates public claim truth to the canonical claim projection artifact.",
           "Pre-handoff manifest validation must not certify future final output.",
         ),
-      args.terminalArtifactsCompleted
+      // Both runtime-owned; a graceful terminal produces these deterministically (§16.3-c). A
+      // ref-less completed step is downgraded to not_reached by applyGracefulReachability.
+      args.terminalArtifactsCompleted || args.graceful
         ? completedStep(
           "final_output_provenance_validation",
           "runtime",
@@ -3816,7 +3916,7 @@ export function createRunManifest(args: {
           "final-output-provenance-validation.yaml is emitted after final output.",
           "Pre-handoff manifest validation must not certify future final-output provenance.",
         ),
-      args.terminalArtifactsCompleted
+      args.terminalArtifactsCompleted || args.graceful
         ? completedStep(
           "record_assembly",
           "runtime",
@@ -3906,6 +4006,7 @@ function parseLlmJsonObject(text: string, artifactName: string): Record<string, 
     }
     return parsed as Record<string, unknown>;
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     throw new Error(
       `${artifactName} author returned invalid JSON: ${
         error instanceof Error ? error.message : String(error)
@@ -7341,6 +7442,7 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       max_tokens: args.maxTokens,
     });
   } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
     record({
       status: "failed",
       failureClass: failureClassForLlmCallError(error, isLlmTimeoutError),
@@ -7379,6 +7481,7 @@ function jsonOutputClassifier(args: {
       args.sink.parsed = parseLlmJsonObject(text, args.artifactName);
       return { ok: true };
     } catch (error) {
+      if (isGracefulTerminalSignal(error)) throw error;
       args.sink.failureMessage = error instanceof Error
         ? error.message
         : String(error);
@@ -8287,7 +8390,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             rationale:
               typeof judgmentRaw.rationale === "string" ? judgmentRaw.rationale : "",
           });
-        } catch {
+        } catch (error) {
+          if (isGracefulTerminalSignal(error)) throw error;
           failedCount += 1;
         }
       }
@@ -8668,6 +8772,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           userPayload: sourcePurposeUserPayload,
         });
       } catch (error) {
+        if (isGracefulTerminalSignal(error)) throw error;
         if (!isLlmTimeoutError(error)) throw error;
         raw = await callJsonAuthor({
           llmCall,
@@ -9118,6 +9223,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           },
         });
       } catch (error) {
+        if (isGracefulTerminalSignal(error)) throw error;
         if (!isLlmTimeoutError(error) || input.repairAttempt) {
           throw error;
         }
@@ -9177,6 +9283,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             },
           });
         } catch (retryError) {
+          if (isGracefulTerminalSignal(retryError)) throw retryError;
           if (!isLlmTimeoutError(retryError)) throw retryError;
           throw new Error(
             "OntologySeedMinimalKernel timed out after the primary seed authoring timeout; deterministic seed timeout recovery is disabled because runtime must not author semantic seed content.",
@@ -9553,6 +9660,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             },
           });
         } catch (error) {
+          if (isGracefulTerminalSignal(error)) throw error;
           if (!isLlmTimeoutError(error)) throw error;
           rawBatch = deterministicQuestionBatch(args);
         }
@@ -12198,6 +12306,176 @@ export async function runReconstruct(
     artifactRef: runControlValidationPath,
     validation: runControlState.validation,
   });
+  // Graceful-terminal assembly (design §16.5). Declared here — after every catch-visible run var,
+  // before the main `try` — so it closes over the run context. A throwing site (S7) sets
+  // `gracefulTerminalContext` with the inside-`try` pieces the catch cannot see, then throws a
+  // GracefulTerminalSignal; the catch (§16.4) routes the signal here to assemble an honest
+  // blocked/limited terminal (final-output + record + witness-truthful manifest + halted run-control)
+  // instead of crashing. Deterministic paths are recomputed from sessionRoot (the inside-`try`
+  // path consts are out of scope here).
+  let gracefulTerminalContext: GracefulTerminalAssemblyContext | null = null;
+  const assembleGracefulTerminal = async (
+    signal: GracefulTerminalSignal,
+  ): Promise<ReconstructRunResult> => {
+    const ctx = gracefulTerminalContext;
+    if (!ctx) {
+      throw new Error(
+        `graceful terminal signal at ${signal.terminalStepId} has no assembly context; the throwing site must set gracefulTerminalContext before throwing`,
+      );
+    }
+    const finalOutputPath = path.join(sessionRoot, "final-output.md");
+    const recordPath = path.join(sessionRoot, "reconstruct-record.yaml");
+    const manifestPath = path.join(sessionRoot, "reconstruct-run-manifest.yaml");
+    const manifestValidationPath = path.join(
+      sessionRoot,
+      "reconstruct-run-manifest.post-publication-validation.yaml",
+    );
+    // (1) Reachability witness: the always-written lineage census, IF the run reached it. Absent at
+    // an early terminal (e.g. site 1, thrown before the census write) → no witnesses, null ref.
+    const censusPath = path.join(sessionRoot, "source-observation-lineage-census.yaml");
+    const census = await readYamlDocumentIfPresent<
+      ReconstructSourceObservationLineageCensus
+    >(censusPath);
+    const lineageWitnesses = census?.stage_witnesses ?? [];
+    const reachabilityWitnessRef = census ? censusPath : null;
+    // (2) Deterministic runtime final-output for the disposition (no out-of-authority values).
+    const finalOutputText = buildGracefulTerminalFinalOutput(signal);
+    await atomicWriteFile(finalOutputPath, finalOutputText);
+    // Only refs whose artifact actually exists on disk may become completed manifest steps (the
+    // validator checks existence, design §16.5); the produced final-output + manifest are added.
+    const reachedRefs: Partial<ReconstructRecordArtifactRefs> = {};
+    for (
+      const [key, ref] of Object.entries(ctx.reachedArtifactRefs) as [
+        keyof ReconstructRecordArtifactRefs,
+        string | null | undefined,
+      ][]
+    ) {
+      if (typeof ref !== "string") continue;
+      const existingRef = ref;
+      if (!(await exists(existingRef))) continue;
+      reachedRefs[key] = existingRef;
+    }
+    const artifactRefs = artifactRefsWithDefaults({
+      refs: {
+        ...reachedRefs,
+        final_output: finalOutputPath,
+        reconstruct_run_manifest: manifestPath,
+      },
+    });
+    // The target-material-profile is reached before any graceful terminal (it precedes source
+    // observation), so its ref is always present here; fail loud if a future site ever violates that.
+    const targetMaterialProfilePath = artifactRefs.target_material_profile;
+    if (!targetMaterialProfilePath) {
+      throw new Error(
+        "graceful terminal assembly requires the target-material-profile artifact, but it is absent",
+      );
+    }
+    // (3/4) The governing snapshot the manifest validator re-derives, then the witness-truthful
+    // graceful manifest.
+    const lensIds = loadCoreLensRegistry().full_review_lens_ids;
+    const admittedDomainIds = params.domain ? [params.domain] : [];
+    const governingSnapshot = await buildReconstructRunGoverningSnapshot({
+      projectRoot,
+      registryPath: contractRegistryPath,
+      contractRegistry: ctx.contractRegistry,
+      selectedSourceProfiles: ctx.targetMaterialProfile.selected_source_profiles,
+      lensIds,
+      admittedDomainIds,
+    });
+    const reconstructRunManifest = createRunManifest({
+      sessionId,
+      targetRefs,
+      intent: params.intent,
+      semanticAuthorRealization: params.semanticAuthorRealization,
+      confirmationProviderRealization: params.confirmationProviderRealization,
+      directiveAuthor,
+      confirmationProvider,
+      artifactRefs,
+      reconstructRecordPath: recordPath,
+      governingSnapshot,
+      terminalArtifactsCompleted: false,
+      graceful: {
+        disposition: signal.disposition,
+        terminalStepId: signal.terminalStepId,
+        reachabilityWitnessRef,
+        lineageWitnesses,
+      },
+    });
+    await writeYamlDocument(manifestPath, reconstructRunManifest);
+    // (3) Record written before validation ONLY so the manifest's record_assembly ref exists (the
+    // validator checks ref existence, not content). Crucially it does NOT yet carry
+    // terminal_disposition: if the fail-closed gate below rejects, this persisted record must project
+    // as non-terminal (in-progress) via reconstructTerminalStatus — otherwise getRunStatus/poll would
+    // read a crashed run as a clean "blocked" terminal, masking the rejection. The durable
+    // disposition is stamped only after the gate passes (post-finalize re-assembly, step 7).
+    await assembleReconstructRecord({
+      sessionRoot,
+      artifactRefs,
+      outputPath: recordPath,
+    });
+    // (5) Fail-closed terminal validation (design §16.5-5): an invalid graceful manifest crashes
+    // rather than finalizing a dishonest terminal. This IS the terminal validation run-control trusts.
+    const manifestValidation = await writeReconstructRunManifestValidationArtifact({
+      manifestPath,
+      projectRoot,
+      registryPath: contractRegistryPath,
+      contractRegistry: ctx.contractRegistry,
+      targetMaterialProfilePath,
+      lensIds,
+      admittedDomainIds,
+      outputPath: manifestValidationPath,
+    });
+    assertRuntimeValidationValid({
+      artifactName: "reconstruct-run-manifest",
+      artifactRef: manifestValidationPath,
+      validation: manifestValidation,
+    });
+    // (6) Finalize run-control as a graceful HALT (not completed), trusting the terminal validation.
+    const finalizedRunControl = await finalizeReconstructRunControl({
+      runControlPath,
+      validationOutputPath: runControlValidationPath,
+      attemptId: runControlState.attemptId,
+      artifactRefs,
+      terminalRunManifestValidationPath: manifestValidationPath,
+      attemptStatus: "halted",
+      extraArtifactRefs: [
+        prePublicationRunControlValidationPath,
+        recordPath,
+        manifestPath,
+        finalOutputPath,
+      ],
+      expectedSessionId: sessionId,
+      expectedSessionRoot: sessionRoot,
+    });
+    assertRuntimeValidationValid({
+      artifactName: "reconstruct-run-control",
+      artifactRef: runControlValidationPath,
+      validation: finalizedRunControl.validation,
+    });
+    // Re-assemble the record after finalize so it captures the finalized run-control validation.
+    const finalRecord = await assembleReconstructRecord({
+      sessionRoot,
+      artifactRefs,
+      outputPath: recordPath,
+      terminalDisposition: signal.disposition,
+    });
+    // (7) Return the graceful result: status = disposition; metrics/stopDecision were never reached.
+    return {
+      sessionId,
+      sessionRoot,
+      status: signal.disposition,
+      finalOutputPath,
+      finalOutputText,
+      reconstructRecordPath: recordPath,
+      reconstructRunManifestPath: manifestPath,
+      artifactRefs: {
+        ...finalRecord.artifact_refs,
+        reconstruct_record: recordPath,
+      },
+      reconstructRecord: finalRecord,
+      reconstructRunManifest,
+    };
+  };
   try {
   await writeRegistryVerificationEvidenceArtifact({
     sessionId,
@@ -12259,6 +12537,40 @@ export async function runReconstruct(
     artifactRef: targetMaterialProfileValidationPath,
     validation: targetMaterialProfileValidation,
   });
+  // Site 1 graceful terminal (design §16.2): a zero-observation run whose every planned target was
+  // skipped (unsupported/vanished) is a graceful BLOCKED terminal, not a crash. Populate the
+  // assembly context the catch-side needs (the inside-`try` pieces it cannot see), then throw the
+  // signal; the catch (§16.4) assembles an honest blocked terminal. A supported-but-empty target
+  // (a planned unit remains) stays ineligible and crashes below (evidence gate stays honest).
+  if (
+    isZeroObservationGracefulTerminalEligible({ sourceObservations, sourceInventory })
+  ) {
+    gracefulTerminalContext = {
+      reachedArtifactRefs: {
+        reconstruct_run_control: runControlPath,
+        reconstruct_run_control_validation: runControlValidationPath,
+        registry_verification_evidence: registryVerificationEvidencePath,
+        registry_verification_evidence_validation:
+          registryVerificationEvidenceValidationPath,
+        target_material_profile: preparationRefs.target_material_profile,
+        target_material_profile_validation: targetMaterialProfileValidationPath,
+        source_inventory: preparationRefs.source_inventory,
+        initial_source_frontier: preparationRefs.initial_source_frontier,
+        source_observations: preparationRefs.source_observations,
+      },
+      contractRegistry,
+      targetMaterialProfile,
+    };
+    throw new GracefulTerminalSignal({
+      disposition: "blocked",
+      terminalStepId: "source_observation",
+      reason: buildZeroObservationDiagnostic({
+        targetMaterialProfile,
+        sourceInventory,
+        sourceObservations,
+      }),
+    });
+  }
   assertSemanticAuthoringHasObservedEvidence({
     targetMaterialProfile,
     sourceInventory,
@@ -15098,7 +15410,7 @@ export async function runReconstruct(
     validationOutputPath: runControlValidationPath,
     attemptId: runControlState.attemptId,
     artifactRefs,
-    postPublicationRunManifestValidationPath,
+    terminalRunManifestValidationPath: postPublicationRunManifestValidationPath,
     extraArtifactRefs: [
       preHandoffManifestPath,
       prePublicationRunControlValidationPath,
@@ -15139,6 +15451,30 @@ export async function runReconstruct(
     stopDecision,
   };
   } catch (error) {
+    // Graceful terminal (design §16.4): an expected normal-but-unmet stop, not a crash. Handled
+    // BEFORE failure-marking so it is never absorbed into a failed attempt — assemble the honest
+    // blocked/limited terminal and return it. If the assembly ITSELF fails (e.g. the §16.5-5
+    // fail-closed gate rejects an invalid manifest), that is a genuine crash: mark the attempt failed
+    // like any other error (so run-control is not left with a stuck "running" attempt / held lock),
+    // then rethrow.
+    if (isGracefulTerminalSignal(error)) {
+      try {
+        return await assembleGracefulTerminal(error);
+      } catch (assemblyError) {
+        // assembleGracefulTerminal is only ever invoked with an already-caught signal and throws
+        // genuine crashes (never a graceful signal); guard anyway so a signal is never mis-marked as
+        // a failed attempt (design §16.4 N5' — structural fail-closed).
+        if (isGracefulTerminalSignal(assemblyError)) throw assemblyError;
+        await markReconstructRunControlAttemptFailed({
+          runControlPath,
+          validationOutputPath: runControlValidationPath,
+          attemptId: runControlState.attemptId,
+          expectedSessionId: sessionId,
+          expectedSessionRoot: sessionRoot,
+        }).catch(() => undefined);
+        throw assemblyError;
+      }
+    }
     await markReconstructRunControlAttemptFailed({
       runControlPath,
       validationOutputPath: runControlValidationPath,

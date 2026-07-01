@@ -65,6 +65,7 @@ import {
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
+import { reconstructTerminalStatus } from "./record.js";
 import {
   ontologySeedClaimProjections,
 } from "./seed-claim-projections.js";
@@ -6157,7 +6158,7 @@ describe("runReconstruct", () => {
     expect(snapshotStep?.artifact_refs).toContain(snapshotRef);
   });
 
-  it("fails loud for non-code material whose source profile adapter is only planned", async () => {
+  it("gracefully blocks (never authors) for non-code material whose source profile adapter is only planned (Slice 3 graceful terminal)", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
       projectRoot,
@@ -6165,12 +6166,14 @@ describe("runReconstruct", () => {
       "reconstruct",
       "planned-run",
     );
-    // database-source-profile is still `planned`; a sole database target must fail
-    // loud. (spreadsheet was flipped to partially_wired and now observes.)
+    // database-source-profile is still `planned`; a sole database target is skipped → zero
+    // observations. Rather than crash, the run stops at a graceful BLOCKED terminal (Slice 3); the
+    // safety invariant (a planned-adapter target never reaches authoring) still holds, and the
+    // planned status is surfaced honestly in the blocked reason.
     const dbTarget = path.join(projectRoot, "warehouse.sqlite");
     await fs.writeFile(dbTarget, "SQLite format 3 ", "utf8");
 
-    await expect(runReconstruct({
+    const result = await runReconstruct({
       projectRoot,
       targetRefs: [dbTarget],
       intent: "Create a bounded reconstruct Seed from the database target.",
@@ -6185,21 +6188,30 @@ describe("runReconstruct", () => {
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: reconstructFixtureLlm,
       }),
-    })).rejects.toThrow(/runtime_implementation_status=planned/);
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.reconstructRecord.terminal_disposition).toBe("blocked");
+    const seedStep = result.reconstructRunManifest.steps.find((s) =>
+      s.step_id === "ontology_seed"
+    );
+    expect(seedStep?.status).not.toBe("completed");
+    // The planned adapter status is surfaced honestly in the blocked terminal's reason.
+    expect(result.finalOutputText).toMatch(/runtime_implementation_status=planned/);
   });
 
-  it("fails loud for a sole unsupported workbook format (.xls) — empty inventory is not evidence (Codex F1)", async () => {
-    // End-to-end proof that the gate flip did NOT let a legacy workbook reach LLM
-    // authoring: a sole .xls target is runnable (spreadsheet partially_wired) and is
-    // observed, but its inventory carries only `unsupported_reason`, so it is demoted
-    // to a skip → zero observations → the run fails loud instead of authoring from
-    // empty evidence.
+  it("gracefully blocks (never authors) for a sole unsupported workbook format (.xls) — empty inventory is not evidence (Codex F1; Slice 3 graceful terminal)", async () => {
+    // End-to-end proof that the gate flip did NOT let a legacy workbook reach LLM authoring: a sole
+    // .xls target is runnable (spreadsheet partially_wired) and is observed, but its inventory
+    // carries only `unsupported_reason`, so it is demoted to a skip → zero observations. Rather than
+    // crash, the run stops at a graceful BLOCKED terminal (Slice 3) — the safety invariant the old
+    // crash protected (never author from empty evidence) still holds.
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "xls-run");
     const xlsTarget = path.join(projectRoot, "legacy.xls");
     await fs.writeFile(xlsTarget, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1]));
 
-    await expect(runReconstruct({
+    const result = await runReconstruct({
       projectRoot,
       targetRefs: [xlsTarget],
       intent: "Create a bounded reconstruct Seed from a legacy workbook target.",
@@ -6214,9 +6226,20 @@ describe("runReconstruct", () => {
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: reconstructFixtureLlm,
       }),
-    })).rejects.toThrow(
-      /at least one runtime source observation|extraction unsupported/,
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.reconstructRecord.terminal_disposition).toBe("blocked");
+    expect(result.reconstructRunManifest.graceful_terminal?.terminal_step_id)
+      .toBe("source_observation");
+    // The safety invariant the crash used to protect still holds: semantic authoring was NOT reached.
+    const seedStep = result.reconstructRunManifest.steps.find((s) =>
+      s.step_id === "ontology_seed"
     );
+    expect(seedStep?.status).not.toBe("completed");
+    // The unsupported reason is carried honestly (the .xls demotion) in the blocked final output.
+    expect(result.finalOutputText).toContain("Blocked");
+    expect(result.finalOutputText).toMatch(/unsupported|skipped/i);
   });
 
   it("selects every observation and leaves mixed material expansion explicit", async () => {
@@ -6971,5 +6994,90 @@ describe("observationPromptPayload projection-truncation recording", () => {
         reuseMatchArtifactHash({ ...validation, asserted_obligation_ids: ["z", "a"] }),
       ).toBe(base);
     });
+  });
+});
+
+describe("runReconstruct graceful terminal (Slice 3 · site 1 zero-observation)", () => {
+  async function runBlocked(intent = "Reconstruct a seed from the target.") {
+    const projectRoot = await tempProjectRoot();
+    // An empty CSV yields zero rows → unsupported_reason → the sole target unit is skipped, so the
+    // run reaches source-observation with zero observations and every planned unit skipped (eligible).
+    const emptyCsvPath = path.join(projectRoot, "empty.csv");
+    await fs.writeFile(emptyCsvPath, "", "utf8");
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "blocked-run");
+    const directiveAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall: reconstructFixtureLlm,
+      authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+    });
+    const confirmationProvider = createDirectCallReconstructConfirmationProvider({
+      llmCall: reconstructFixtureLlm,
+      providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+    });
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [emptyCsvPath],
+      intent,
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor,
+      confirmationProvider,
+    });
+    return { result, sessionRoot };
+  }
+
+  it("P1: a sole unsupported/empty target assembles a blocked terminal instead of crashing", async () => {
+    const { result, sessionRoot } = await runBlocked();
+
+    // Graceful blocked terminal — NOT a crash, NOT completed.
+    expect(result.status).toBe("blocked");
+    expect(result.reconstructRecord.terminal_disposition).toBe("blocked");
+    expect(reconstructTerminalStatus(result.reconstructRecord)).toBe("blocked");
+    expect(result.metrics).toBeUndefined();
+    expect(result.stopDecision).toBeUndefined();
+
+    // Honest deterministic final output (runtime authored, restates only diagnostics).
+    expect(result.finalOutputText).toContain("Blocked");
+    expect(result.finalOutputText).toContain("source_observation");
+
+    // Witness-truthful manifest with the graceful marker; final_output + record are runtime-owned.
+    expect(result.reconstructRunManifest.graceful_terminal).toMatchObject({
+      disposition: "blocked",
+      terminal_step_id: "source_observation",
+    });
+    const foStep = result.reconstructRunManifest.steps.find((s) => s.step_id === "final_output");
+    expect(foStep).toMatchObject({ status: "completed", owner: "runtime" });
+    const recordStep = result.reconstructRunManifest.steps.find((s) => s.step_id === "record_assembly");
+    expect(recordStep).toMatchObject({ status: "completed", owner: "runtime" });
+
+    // The terminal manifest validation is VALID — the §16.5-5 fail-closed gate passed on real artifacts.
+    const manifestValidation = await readYaml<{ validation_status: string }>(
+      path.join(sessionRoot, "reconstruct-run-manifest.post-publication-validation.yaml"),
+    );
+    expect(manifestValidation.validation_status).toBe("valid");
+
+    // Run-control attempt is HALTED (not completed, not failed).
+    const runControl = await readYaml<{ attempt_rows: { attempt_status: string }[] }>(
+      path.join(sessionRoot, "reconstruct-run-control.yaml"),
+    );
+    expect(runControl.attempt_rows.at(-1)?.attempt_status).toBe("halted");
+  });
+
+  it("Q-terminal: re-reading the durable record projects a terminal disposition (poll stops)", async () => {
+    const { result, sessionRoot } = await runBlocked();
+    expect(result.status).toBe("blocked");
+    const rereadRecord = await readYaml<ReconstructRecordArtifact>(
+      path.join(sessionRoot, "reconstruct-record.yaml"),
+    );
+    expect(rereadRecord.terminal_disposition).toBe("blocked");
+    expect(reconstructTerminalStatus(rereadRecord)).toBe("blocked");
+    // Non-null durable content: the final-output the record points to exists and is non-empty.
+    const finalOutput = await fs.readFile(
+      path.join(sessionRoot, "final-output.md"),
+      "utf8",
+    );
+    expect(finalOutput.length).toBeGreaterThan(0);
   });
 });

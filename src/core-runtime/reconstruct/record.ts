@@ -38,6 +38,13 @@ export interface AssembleReconstructRecordParams {
   sessionRoot: string;
   artifactRefs: Partial<ReconstructRecordArtifactRefs>;
   outputPath?: string;
+  /**
+   * Set only by a graceful terminal (design §16.5): stamps the durable disposition on the record so
+   * every terminal-status consumer projects it via {@link reconstructTerminalStatus}. Absent on a
+   * normal run (undefined = byte-identical to before). The record-validator invariant below rejects
+   * pairing it with `record_stage === "completed"` — a graceful terminal never completed.
+   */
+  terminalDisposition?: "blocked" | "limited";
 }
 
 const RECORD_ARTIFACT_KEYS = [
@@ -428,6 +435,47 @@ function buildWarnings(args: {
   return warnings;
 }
 
+/**
+ * The unified terminal-status of a reconstruct run: its `record_stage`, except that a graceful
+ * terminal (design §16.7) reports its durable `terminal_disposition` ("blocked" | "limited")
+ * instead. The two value spaces are disjoint (no record_stage is named "blocked"/"limited"), so a
+ * single string carries "which stage, or which graceful terminal".
+ */
+export type ReconstructTerminalStatus = ReconstructRecordStage | "blocked" | "limited";
+
+/**
+ * The single canonical terminal-status projection over a reconstruct record (design §16.7).
+ *
+ * "Is this run done, and how?" is judged here and nowhere else: `getRunStatus` (the `status`
+ * field), `deriveReconstructProgress` (liveness / poll interval) and the TUI `deriveWorkflowStatus`
+ * all derive from this one function, so a graceful terminal is treated uniformly as terminal
+ * without each consumer re-checking `record_stage === "completed"` (the removed "diamond").
+ * `terminal_disposition` present ⇒ blocked/limited (terminal, stop polling, NOT "completed");
+ * else the raw `record_stage` ("completed" when the pipeline finished, otherwise in-progress).
+ */
+export function reconstructTerminalStatus(
+  record: Pick<ReconstructRecordArtifact, "record_stage" | "terminal_disposition">,
+): ReconstructTerminalStatus {
+  return record.terminal_disposition ?? record.record_stage;
+}
+
+/**
+ * Record-validator invariant (design §16.7): a graceful terminal never reached the terminal stage,
+ * so `terminal_disposition` and `record_stage === "completed"` are mutually exclusive. Enforced at
+ * the write authority ({@link assembleReconstructRecord}) so no consumer can observe an incoherent
+ * pairing that {@link reconstructTerminalStatus} could not sensibly project.
+ */
+export function assertReconstructTerminalDispositionCoherent(
+  recordStage: ReconstructRecordStage,
+  terminalDisposition: "blocked" | "limited" | undefined,
+): void {
+  if (terminalDisposition && recordStage === "completed") {
+    throw new Error(
+      `reconstruct record invariant: terminal_disposition=${terminalDisposition} cannot pair with record_stage="completed"`,
+    );
+  }
+}
+
 export async function assembleReconstructRecord(
   params: AssembleReconstructRecordParams,
 ): Promise<ReconstructRecordArtifact> {
@@ -609,12 +657,18 @@ export async function assembleReconstructRecord(
     finalOutputPresent: await exists(artifactRefs.final_output),
   });
 
+  assertReconstructTerminalDispositionCoherent(recordStage, params.terminalDisposition);
+
   const record: ReconstructRecordArtifact = {
     schema_version: "1",
     reconstruct_record_id: `reconstruct-record:${sessionId}`,
     session_id: sessionId,
     entrypoint: "reconstruct",
     record_stage: recordStage,
+    // Present only on a graceful terminal; conditional spread keeps a normal record byte-identical.
+    ...(params.terminalDisposition
+      ? { terminal_disposition: params.terminalDisposition }
+      : {}),
     created_at: now,
     updated_at: now,
     target_material_kind: targetMaterialProfile?.target_material_kind ?? null,

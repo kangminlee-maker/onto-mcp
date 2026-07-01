@@ -5,7 +5,7 @@
 // ONLY in the reachability witness's `legit_no_op` flag. A membership-only authorization (the
 // refuted v1) passes BOTH; the v2 condition-witness rule passes the legit one and rejects the bug
 // one. These tests assert exactly that contrast, plus the masking / spoof / byte-parity controls.
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -257,9 +257,21 @@ describe("createRunManifest — graceful-terminal witness-gating (Slice 2)", () 
   const provider = { providerId: "provider-1", owner: "host_or_user" } as unknown as ReconstructConfirmationProvider;
   const snapshot = { registry: { registry_id: "r" }, requested_domain_ids: [] } as unknown as ReconstructRunGoverningSnapshot;
 
+  // A graceful terminal always writes a record before the manifest (design §16.3/§16.5), so
+  // record_assembly is now a completed step whose ref the validator checks on disk — every graceful
+  // build needs a real record file. Written once and reused (the content is irrelevant to reachability).
+  // NOT pushed to `tmp` — afterEach() would delete it after the first test, breaking later ones.
+  let realRecordPath: string;
+  beforeAll(async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "reach-rec-"));
+    realRecordPath = path.join(dir, "reconstruct-record.yaml");
+    await fs.writeFile(realRecordPath, "record: true\n");
+  });
+
   function build(opts: {
     refs?: Partial<ReconstructRecordArtifactRefs>;
     graceful?: ReconstructGracefulTerminalManifestInput;
+    recordPath?: string;
   }): ReconstructRunManifestArtifact {
     return createRunManifest({
       sessionId: "session-1",
@@ -270,7 +282,7 @@ describe("createRunManifest — graceful-terminal witness-gating (Slice 2)", () 
       directiveAuthor: author,
       confirmationProvider: provider,
       artifactRefs: artifactRefsWithDefaults({ refs: opts.refs ?? {} }),
-      reconstructRecordPath: "reconstruct-record.yaml",
+      reconstructRecordPath: opts.recordPath ?? realRecordPath,
       governingSnapshot: snapshot,
       terminalArtifactsCompleted: false,
       graceful: opts.graceful,
@@ -373,5 +385,45 @@ describe("createRunManifest — graceful-terminal witness-gating (Slice 2)", () 
     expect(stepOf(m, "source_purpose_candidates")).toMatchObject({ status: "completed", artifact_refs: [] });
     expect(m.steps.some((s) => s.skip_kind !== undefined)).toBe(false);
     expect(m.execution_profile.allowed_completion_claim).toContain("completed the live integral");
+  });
+
+  // ── S4 (design §16.3): the graceful terminal deterministically PRODUCES a final-output + record.
+  it("S4: a graceful terminal's produced final_output + record are runtime-owned completed steps, refs preserved, and VALIDATE", async () => {
+    const finalOutputRef = await writeArtifact("final-output.md");
+    const m = build({
+      refs: { final_output: finalOutputRef },
+      graceful: {
+        disposition: "blocked",
+        terminalStepId: "source_observation",
+        reachabilityWitnessRef: null,
+        lineageWitnesses: [],
+      },
+    });
+    // final_output: deterministic runtime authorship, NOT an LLM completion (§16.3-c).
+    const fo = stepOf(m, "final_output");
+    expect(fo).toMatchObject({ status: "completed", owner: "runtime" });
+    expect(fo.performed_by.authority).toBe("runtime");
+    expect(fo.artifact_refs).toEqual([finalOutputRef]);
+    // record_assembly: runtime completed with the preserved record path.
+    const rec = stepOf(m, "record_assembly");
+    expect(rec).toMatchObject({ status: "completed", owner: "runtime" });
+    expect(rec.artifact_refs).toEqual([realRecordPath]);
+    // Refs preserved on the manifest (the graceful path bypasses the terminal blanket-null, §16.3-a).
+    expect(m.artifact_refs.reconstruct_record).toBe(realRecordPath);
+    expect(m.artifact_refs.final_output).toBe(finalOutputRef);
+    // implemented_artifacts carries the produced terminal ids (§16.3-b).
+    expect(m.purpose_adequacy_scope.implemented_artifacts).toEqual(
+      expect.arrayContaining(["final_output", "reconstruct_record"]),
+    );
+    // The fail-closed gate the graceful assembly relies on (§16.5-5) passes on real produced artifacts.
+    const v = await validateReconstructRunManifest({ manifest: m });
+    expect(v.validation_status).toBe("valid");
+  });
+
+  it("C-parity (S4): without graceful, final_output stays host_llm-owned and no produced-terminal id leaks into implemented_artifacts", () => {
+    const m = build({ refs: { final_output: "unused-nonexistent.md" } });
+    expect(stepOf(m, "final_output").owner).toBe("host_llm");
+    expect(m.purpose_adequacy_scope.implemented_artifacts).not.toContain("final_output");
+    expect(m.artifact_refs.reconstruct_record).toBeNull();
   });
 });
