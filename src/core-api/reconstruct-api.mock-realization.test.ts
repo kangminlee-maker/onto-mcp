@@ -16,7 +16,9 @@ import type {
   ReconstructCompetencyQuestionAssessmentArtifact,
   ReconstructCompetencyQuestionsArtifact,
   ReconstructOntologySeedArtifact,
+  ReconstructSourceObservationLineageCensus,
 } from "../core-runtime/reconstruct/artifact-types.js";
+import { WITNESS_LESS_CONDITIONAL_STAGE_IDS } from "../core-runtime/reconstruct/artifact-types.js";
 
 const tmpRoots: string[] = [];
 
@@ -96,6 +98,17 @@ describe("reconstruct api mock realization (ONTO_LLM_MOCK=1)", () => {
           ReconstructCompetencyQuestionAssessmentArtifact
         >(result.artifactRefs.competency_question_assessment!),
       });
+      // Slice 2 reachability witness (design v2 §3): the observation-lineage phase ran on this real
+      // pipeline, so the census must have been written — ALWAYS — recording all five witness-less
+      // stages. This proves the census-write path is live (not dead code) and always-recorded. It is
+      // a sibling of the lineage index in the session root (not itself a manifest step ref).
+      const sessionRoot = path.dirname(result.artifactRefs.source_observation_lineage_index!);
+      const lineageCensus = await readYamlFile<ReconstructSourceObservationLineageCensus>(
+        path.join(sessionRoot, "source-observation-lineage-census.yaml"),
+      );
+      expect(lineageCensus.stage_witnesses.map((w) => w.step_id).sort())
+        .toEqual([...WITNESS_LESS_CONDITIONAL_STAGE_IDS].sort());
+
       expect(gate.source_field_rejections).toEqual([]);
       expect(gate.status).toBe("passed");
       expect(gate.q1?.recall).toBe(1);

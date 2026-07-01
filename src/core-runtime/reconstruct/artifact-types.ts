@@ -1671,6 +1671,23 @@ export const RECONSTRUCT_STAGE_IDS = [
 
 export type ReconstructStageId = typeof RECONSTRUCT_STAGE_IDS[number];
 
+/**
+ * The conditional stages that can legitimately run-but-produce-nothing yet leave no
+ * artifact-ref witness of their own (unlike leaf_read / maturation_value_read, which always
+ * write a census when they run). Canonical single source shared by the graceful-terminal
+ * manifest builder (createRunManifest) and the reachability validator (validateReconstructRunManifest):
+ * on a graceful-terminal manifest these are the only stages permitted `skip_kind:
+ * "legit_conditional"`, and only when the reachability witness (ReconstructSourceObservationLineageCensus)
+ * confirms they ran and legitimately produced nothing. See reachability-manifest design v2 §2–§4.
+ */
+export const WITNESS_LESS_CONDITIONAL_STAGE_IDS = [
+  "source_observation_delta",
+  "source_observation_delta_validation",
+  "source_observation_reentry_validation",
+  "source_observation_lineage_index",
+  "source_observation_lineage_index_validation",
+] as const satisfies readonly ReconstructStageId[];
+
 export type ReconstructClaimRealizationStance =
   | "observed_runtime_behavior"
   | "declared_design_intent"

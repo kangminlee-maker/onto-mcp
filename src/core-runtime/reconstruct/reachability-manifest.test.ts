@@ -17,6 +17,18 @@ import type {
   ReconstructStageId,
 } from "./artifact-types.js";
 import { validateReconstructRunManifest } from "./terminal-validation.js";
+import {
+  artifactRefsWithDefaults,
+  buildSourceObservationLineageCensus,
+  createRunManifest,
+  type ReconstructConfirmationProvider,
+  type ReconstructDirectiveAuthor,
+  type ReconstructGracefulTerminalManifestInput,
+} from "./run.js";
+import type {
+  ReconstructRecordArtifactRefs,
+  ReconstructRunGoverningSnapshot,
+} from "./artifact-types.js";
 
 const now = "2026-07-01T00:00:00.000Z";
 const DELTA: ReconstructStageId = "source_observation_delta";
@@ -191,5 +203,175 @@ describe("reachability manifest v2 — graceful-terminal validator", () => {
       expect(codes(v)).not.toContain(c);
     }
     expect(v.validation_status).toBe("valid");
+  });
+});
+
+// ── Slice 2: the runtime lineage census witness (leaf_read/f1a3c1b pattern). Always records all five
+// witness-less stages so "ran and produced nothing" is a fact distinct from "never ran".
+describe("buildSourceObservationLineageCensus (Slice 2 runtime witness)", () => {
+  const FIVE: ReconstructStageId[] = [
+    "source_observation_delta",
+    "source_observation_delta_validation",
+    "source_observation_reentry_validation",
+    "source_observation_lineage_index",
+    "source_observation_lineage_index_validation",
+  ];
+
+  it("always records all five witness-less stages, even with zero delta rounds", () => {
+    for (const deltaRoundsProduced of [0, 3]) {
+      const census = buildSourceObservationLineageCensus({ sessionId: "s", deltaRoundsProduced });
+      expect(census.stage_witnesses.map((w) => w.step_id).sort()).toEqual([...FIVE].sort());
+      expect(census.stage_witnesses.length).toBeGreaterThan(0); // cardinality>0
+    }
+  });
+
+  it("zero delta rounds → delta group is a legitimate no-op (produced=false, legit_no_op=true)", () => {
+    const census = buildSourceObservationLineageCensus({ sessionId: "s", deltaRoundsProduced: 0 });
+    const byId = new Map(census.stage_witnesses.map((w) => [w.step_id, w]));
+    for (const id of ["source_observation_delta", "source_observation_delta_validation", "source_observation_reentry_validation"] as const) {
+      expect(byId.get(id)).toMatchObject({ produced: false, legit_no_op: true });
+    }
+    // the lineage index + its validation are written unconditionally once the phase closes.
+    expect(byId.get("source_observation_lineage_index")).toMatchObject({ produced: true, legit_no_op: false });
+    expect(byId.get("source_observation_lineage_index_validation")).toMatchObject({ produced: true, legit_no_op: false });
+  });
+
+  it("delta rounds produced → delta group produced=true (not a no-op)", () => {
+    const census = buildSourceObservationLineageCensus({ sessionId: "s", deltaRoundsProduced: 2 });
+    const delta = census.stage_witnesses.find((w) => w.step_id === "source_observation_delta");
+    expect(delta).toMatchObject({ produced: true, legit_no_op: false });
+  });
+});
+
+// ── Slice 2: createRunManifest witness-gating. The transform must (i) re-gate every unconditional
+// completedStep whose ref is null to not_reached (so a not-reached stage is NOT false-flagged
+// manifest_artifact_ref_missing — the v0/v1 P1 failure), (ii) drive witness-less stages by the census,
+// and (iii) leave the completed/pre-handoff path byte-identical when `graceful` is absent.
+describe("createRunManifest — graceful-terminal witness-gating (Slice 2)", () => {
+  const tmp: string[] = [];
+  afterEach(async () => {
+    for (const f of tmp.splice(0)) await fs.rm(path.dirname(f), { recursive: true, force: true });
+  });
+
+  const author = { authorId: "author-1", owner: "host_llm" } as unknown as ReconstructDirectiveAuthor;
+  const provider = { providerId: "provider-1", owner: "host_or_user" } as unknown as ReconstructConfirmationProvider;
+  const snapshot = { registry: { registry_id: "r" }, requested_domain_ids: [] } as unknown as ReconstructRunGoverningSnapshot;
+
+  function build(opts: {
+    refs?: Partial<ReconstructRecordArtifactRefs>;
+    graceful?: ReconstructGracefulTerminalManifestInput;
+  }): ReconstructRunManifestArtifact {
+    return createRunManifest({
+      sessionId: "session-1",
+      targetRefs: [],
+      intent: "test",
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: author,
+      confirmationProvider: provider,
+      artifactRefs: artifactRefsWithDefaults({ refs: opts.refs ?? {} }),
+      reconstructRecordPath: "reconstruct-record.yaml",
+      governingSnapshot: snapshot,
+      terminalArtifactsCompleted: false,
+      graceful: opts.graceful,
+    });
+  }
+
+  function stepOf(m: ReconstructRunManifestArtifact, id: ReconstructStageId): ReconstructRunManifestStep {
+    const s = m.steps.find((x) => x.step_id === id);
+    if (!s) throw new Error(`missing step ${id}`);
+    return s;
+  }
+
+  async function writeCensusFile(census: ReconstructSourceObservationLineageCensus): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "reach-crm-"));
+    const p = path.join(dir, "source-observation-lineage-census.yaml");
+    await fs.writeFile(p, JSON.stringify(census)); // JSON is valid YAML
+    tmp.push(p);
+    return p;
+  }
+
+  async function writeArtifact(name: string): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "reach-art-"));
+    const p = path.join(dir, name);
+    await fs.writeFile(p, "artifact: true\n");
+    tmp.push(p);
+    return p;
+  }
+
+  it("P1/N3: an all-unreached graceful manifest re-gates unconditional completed stages (incl source_purpose_candidates, 2966-2993) to not_reached and VALIDATES", async () => {
+    const m = build({
+      graceful: {
+        disposition: "blocked",
+        terminalStepId: "source_safety",
+        reachabilityWitnessRef: null,
+        lineageWitnesses: [],
+      },
+    });
+    // The M7 stage the v1 design missed: an unconditional completedStep (2966-2993), null ref → not_reached.
+    expect(stepOf(m, "source_purpose_candidates")).toMatchObject({ status: "skipped", skip_kind: "not_reached" });
+    expect(stepOf(m, "source_frontier")).toMatchObject({ status: "skipped", skip_kind: "not_reached" }); // 2825-2880 block
+    expect(stepOf(m, "material_admission")).toMatchObject({ status: "skipped", skip_kind: "not_reached" }); // 2994-3108 block
+    // invocation_binding is exempt: always reached, ref-less by design.
+    expect(stepOf(m, "invocation_binding").status).toBe("completed");
+    // cardinality>0: the not_reached subject set is non-empty.
+    const notReached = m.steps.filter((s) => s.skip_kind === "not_reached");
+    expect(notReached.length).toBeGreaterThan(0);
+    // The whole point of the re-gate: no completed-with-empty-refs stage survives to be false-flagged.
+    const v = await validateReconstructRunManifest({ manifest: m });
+    expect(codes(v)).not.toContain("manifest_artifact_ref_missing");
+    expect(v.validation_status).toBe("valid");
+  });
+
+  it("RM-2: a graceful manifest does NOT claim it completed the live integral path", () => {
+    const m = build({
+      graceful: { disposition: "blocked", terminalStepId: "source_safety", reachabilityWitnessRef: null, lineageWitnesses: [] },
+    });
+    expect(m.graceful_terminal).toMatchObject({ disposition: "blocked", terminal_step_id: "source_safety" });
+    expect(m.execution_profile.allowed_completion_claim).not.toContain("completed the live integral");
+    expect(m.execution_profile.allowed_completion_claim).toContain("blocked");
+  });
+
+  it("witness-driven: census confirms the delta group legitimately no-op'd → legit_conditional; produced lineage index stays completed; the manifest VALIDATES", async () => {
+    const census = buildSourceObservationLineageCensus({ sessionId: "session-1", deltaRoundsProduced: 0 });
+    const witnessRef = await writeCensusFile(census);
+    // The census says the lineage index + validation produced (true), so their refs must exist on disk.
+    const lineageIndexRef = await writeArtifact("source-observation-lineage-index.yaml");
+    const lineageIndexValidationRef = await writeArtifact("source-observation-lineage-index-validation.yaml");
+    const m = build({
+      refs: {
+        source_observation_lineage_index: lineageIndexRef,
+        source_observation_lineage_index_validation: lineageIndexValidationRef,
+      },
+      graceful: {
+        disposition: "limited",
+        terminalStepId: "seed_authoring_readiness",
+        reachabilityWitnessRef: witnessRef,
+        lineageWitnesses: census.stage_witnesses,
+      },
+    });
+    // delta group: ran (census witness present) but produced nothing → legit_conditional.
+    for (const id of ["source_observation_delta", "source_observation_delta_validation", "source_observation_reentry_validation"] as const) {
+      expect(stepOf(m, id)).toMatchObject({ status: "skipped", skip_kind: "legit_conditional" });
+    }
+    // lineage index + validation: produced (ref present) → kept completed (the ref is the witness).
+    expect(stepOf(m, "source_observation_lineage_index").status).toBe("completed");
+    expect(stepOf(m, "source_observation_lineage_index_validation").status).toBe("completed");
+    const v = await validateReconstructRunManifest({ manifest: m });
+    expect(codes(v)).not.toContain("manifest_unwitnessed_conditional_skip");
+    expect(v.validation_status).toBe("valid");
+  });
+
+  // ── C1 byte-parity: `graceful` absent → the transform is fully gated. The completed-with-empty-refs
+  // stages stay `completed` (NOT re-gated), there is no graceful_terminal marker, and the completion
+  // claim is the original completed-path text. This proves the pre-change output is preserved.
+  it("C1: without `graceful` the manifest is unchanged — completed-empty stages stay completed, no marker, original claim", () => {
+    const m = build({});
+    expect(m.graceful_terminal).toBeUndefined();
+    // source_purpose_candidates is an unconditional completedStep; with a null ref and NO graceful it
+    // stays completed-with-empty-refs (the exact pre-Slice-2 behavior, gated off).
+    expect(stepOf(m, "source_purpose_candidates")).toMatchObject({ status: "completed", artifact_refs: [] });
+    expect(m.steps.some((s) => s.skip_kind !== undefined)).toBe(false);
+    expect(m.execution_profile.allowed_completion_claim).toContain("completed the live integral");
   });
 });

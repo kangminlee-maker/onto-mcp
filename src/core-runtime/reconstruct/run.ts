@@ -83,6 +83,8 @@ import type {
   ReconstructSeedConfirmationStatus,
   ReconstructSeedConfirmationValidationArtifact,
   ReconstructStageId,
+  ReconstructSourceObservationLineageCensus,
+  ReconstructReachabilityStageWitness,
   ReconstructSourceObservationDirectiveArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
   ReconstructSourceFrontierArtifact,
@@ -94,6 +96,7 @@ import type {
   ReconstructTargetMaterialProfileArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
+import { WITNESS_LESS_CONDITIONAL_STAGE_IDS } from "./artifact-types.js";
 import { callLlm, type LlmCallConfig, type LlmCallResult } from "../llm/llm-caller.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
@@ -2359,7 +2362,7 @@ function calculateMetrics(args: {
   };
 }
 
-function artifactRefsWithDefaults(args: {
+export function artifactRefsWithDefaults(args: {
   refs: Partial<ReconstructRecordArtifactRefs>;
 }): ReconstructRecordArtifactRefs {
   return {
@@ -2595,7 +2598,112 @@ function confirmationProviderPerformer(
   };
 }
 
-function createRunManifest(args: {
+/**
+ * Reachability witness for the five witness-less observation-lineage stages (design v2 §3,
+ * leaf_read/f1a3c1b pattern). Built deterministically from the number of exploration rounds
+ * that produced a source-observation delta, and written ALWAYS when the observation-lineage
+ * phase runs (even with zero delta rounds) — so "ran and legitimately produced nothing" is a
+ * recorded fact, distinct from "never ran" (no census). A graceful terminal reads this to
+ * authorize a legit_conditional skip; the manifest builder cannot self-declare a no-op the
+ * census does not confirm.
+ *
+ * delta / delta-validation / reentry-validation are produced per round and produce nothing when
+ * the exploration loop converged without accepting new frontier refs — a legitimate no-op (the
+ * only way the loop reaches this phase with zero delta rounds is convergence; a non-convergent
+ * overrun throws and never reaches the census). The lineage index and its validation are written
+ * unconditionally once the phase closes, so they always produced.
+ */
+export function buildSourceObservationLineageCensus(args: {
+  sessionId: string;
+  deltaRoundsProduced: number;
+}): ReconstructSourceObservationLineageCensus {
+  const deltaProduced = args.deltaRoundsProduced > 0;
+  const deltaGroup: ReconstructReachabilityStageWitness[] = [
+    "source_observation_delta",
+    "source_observation_delta_validation",
+    "source_observation_reentry_validation",
+  ].map((stepId) => ({
+    step_id: stepId as ReconstructStageId,
+    produced: deltaProduced,
+    legit_no_op: !deltaProduced,
+  }));
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    stage_witnesses: [
+      ...deltaGroup,
+      { step_id: "source_observation_lineage_index", produced: true, legit_no_op: false },
+      {
+        step_id: "source_observation_lineage_index_validation",
+        produced: true,
+        legit_no_op: false,
+      },
+    ],
+  };
+}
+
+// The witness-less conditional lineage stages (canonical set in artifact-types.ts, shared with the
+// reachability validator). Only these may carry `skip_kind: "legit_conditional"` on a graceful manifest.
+const WITNESS_LESS_CONDITIONAL_STAGES: ReadonlySet<ReconstructStageId> = new Set(
+  WITNESS_LESS_CONDITIONAL_STAGE_IDS,
+);
+
+/**
+ * Input a graceful terminal (Slice 3) hands to the manifest builder so it can produce a
+ * witness-truthful reachability manifest instead of the completed-run manifest. Derived entirely
+ * from disk facts (design v2 §8): the disposition/terminal step from the terminal signal, the
+ * witness ref + its stage witnesses from the always-written lineage census.
+ */
+export interface ReconstructGracefulTerminalManifestInput {
+  disposition: "blocked" | "limited";
+  terminalStepId: ReconstructStageId;
+  /** Path to the lineage census (the reachability witness); null when the run stopped before it. */
+  reachabilityWitnessRef: string | null;
+  /** The lineage census's stage witnesses (empty when the lineage phase never ran). */
+  lineageWitnesses: ReconstructReachabilityStageWitness[];
+}
+
+/**
+ * Graceful-terminal reachability transform (design v2 §3). Rewrites one built manifest step to a
+ * witness-truthful skip_kind so an un-wired stage cannot masquerade as a healthy completion:
+ *   - completed WITH refs → kept (the artifact ref IS the witness it ran and produced).
+ *   - completed with NO refs → the graceful terminal stopped before this stage; re-gated to
+ *     skipped/not_reached. Without this, the completed-step ref check would false-flag
+ *     manifest_artifact_ref_missing on every not-reached stage — the v0/v1 P1 failure. Covers ALL
+ *     unconditional completedStep blocks uniformly (M7). invocation_binding is exempt (always
+ *     reached, ref-less by design).
+ *   - skipped witness-less lineage stage → legit_conditional when the census witnessed it ran (the
+ *     validator confirms legit_no_op independently), else not_reached (the lineage phase never ran).
+ *   - any other skipped stage → not_reached.
+ */
+function applyGracefulReachability(
+  step: ReconstructRunManifestStep,
+  ranLineageStages: ReadonlySet<ReconstructStageId>,
+): ReconstructRunManifestStep {
+  if (step.step_id === "invocation_binding") return step;
+  if (step.status === "completed") {
+    if (step.artifact_refs.length > 0) return step;
+    return {
+      ...step,
+      status: "skipped",
+      skip_kind: "not_reached",
+      reason: "stage not reached before the graceful terminal disposition",
+      authority_impact:
+        "no artifact was produced; the graceful terminal stopped the run before this stage",
+    };
+  }
+  if (step.status === "skipped") {
+    if (WITNESS_LESS_CONDITIONAL_STAGES.has(step.step_id)) {
+      return ranLineageStages.has(step.step_id)
+        ? { ...step, skip_kind: "legit_conditional" }
+        : { ...step, skip_kind: "not_reached" };
+    }
+    return { ...step, skip_kind: "not_reached" };
+  }
+  return step; // failed steps are out of graceful reachability scope
+}
+
+export function createRunManifest(args: {
   sessionId: string;
   targetRefs: string[];
   intent: string;
@@ -2607,7 +2715,17 @@ function createRunManifest(args: {
   reconstructRecordPath: string;
   governingSnapshot: ReconstructRunGoverningSnapshot;
   terminalArtifactsCompleted: boolean;
+  /**
+   * Present only for a graceful terminal (Slice 3). When set, the built steps are rewritten to a
+   * witness-truthful reachability manifest, the graceful_terminal marker is emitted, and the
+   * completion claim is downgraded to a truthful blocked/limited statement. Absent on completed and
+   * pre-handoff runs — the output is then byte-identical to before this parameter existed.
+   */
+  graceful?: ReconstructGracefulTerminalManifestInput;
 }): ReconstructRunManifestArtifact {
+  const ranLineageStages = new Set<ReconstructStageId>(
+    (args.graceful?.lineageWitnesses ?? []).map((w) => w.step_id),
+  );
   const artifactRefs = args.terminalArtifactsCompleted
     ? args.artifactRefs
     : {
@@ -2667,8 +2785,11 @@ function createRunManifest(args: {
       confirmation_provider_realization: args.confirmationProviderRealization,
       directive_author_id: args.directiveAuthor.authorId,
       confirmation_provider_id: args.confirmationProvider.providerId,
-      allowed_completion_claim:
-        "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
+      // RM-2 (design v2 §5): a graceful terminal must NOT claim it completed the live integral path.
+      // The truthful claim states the run stopped early with the recorded disposition.
+      allowed_completion_claim: args.graceful
+        ? `Runtime stopped early with a ${args.graceful.disposition} disposition at ${args.graceful.terminalStepId}; only the reached artifacts were produced and later stages are recorded as not reached.`
+        : "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
     },
     artifact_refs: {
       ...artifactRefs,
@@ -3691,11 +3812,27 @@ function createRunManifest(args: {
       return executionTelemetry
         ? { ...step, execution_telemetry: executionTelemetry }
         : step;
-    }),
+    }).map((step) =>
+      // Graceful terminal only: rewrite each step to a witness-truthful skip_kind (design v2 §3).
+      // When absent this is a no-op that returns the same step objects, so the completed/pre-handoff
+      // manifest stays byte-identical.
+      args.graceful ? applyGracefulReachability(step, ranLineageStages) : step
+    ),
     runtime_boundary: {
       semantic_generation: "not_performed",
       semantic_authority: "host_llm_author",
     },
+    // Graceful-terminal marker (design v2 §4): its presence switches the validator into the
+    // reachability rules. Absent on completed and pre-handoff runs (byte-identical to before).
+    ...(args.graceful
+      ? {
+        graceful_terminal: {
+          disposition: args.graceful.disposition,
+          terminal_step_id: args.graceful.terminalStepId,
+          reachability_witness_ref: args.graceful.reachabilityWitnessRef,
+        },
+      }
+      : {}),
   };
 }
 
@@ -12631,6 +12768,21 @@ export async function runReconstruct(
   });
   currentSourceObservationLineageIndexValidation =
     sourceObservationLineageIndexValidation;
+  // Reachability witness (design v2 §3): the observation-lineage phase has run, so record — ALWAYS,
+  // even with zero delta rounds — which of the five witness-less stages produced vs legitimately
+  // no-op'd. A later graceful terminal reads this (Slice 3) to distinguish a legit conditional skip
+  // from an un-wired stage; its absence (run stopped before here) reads as not_reached.
+  const sourceObservationLineageCensusPath = path.join(
+    sessionRoot,
+    "source-observation-lineage-census.yaml",
+  );
+  await writeYamlDocument(
+    sourceObservationLineageCensusPath,
+    buildSourceObservationLineageCensus({
+      sessionId,
+      deltaRoundsProduced: sourceObservationLineageRows.length,
+    }),
+  );
   await refreshSourceSafetyArtifacts({
     sourceObservationLineageIndexValidationPath,
   });

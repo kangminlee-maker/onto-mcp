@@ -40,7 +40,7 @@ import type {
   ReconstructStopDecisionArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
-import { RECONSTRUCT_STAGE_IDS } from "./artifact-types.js";
+import { RECONSTRUCT_STAGE_IDS, WITNESS_LESS_CONDITIONAL_STAGE_IDS } from "./artifact-types.js";
 import {
   loadReconstructContractRegistry,
   type ReconstructContractRegistry,
@@ -97,21 +97,11 @@ const SELF_VALIDATION_OUTPUT_REFS = new Set<ReconstructStageId>([
   "post_publication_run_manifest_validation",
 ]);
 
-/**
- * The conditional stages that legitimately run-but-produce-nothing yet leave no
- * artifact-ref witness of their own (unlike leaf_read / maturation_value_read, which
- * always write a census when they run). On a graceful-terminal manifest these are the
- * only stages permitted `skip_kind: "legit_conditional"`, and only when an independent
- * reachability witness (ReconstructSourceObservationLineageCensus) confirms they ran and
- * legitimately produced nothing. See reachability-manifest design v2.
- */
-const WITNESS_LESS_CONDITIONAL_STAGES: ReadonlySet<ReconstructStageId> = new Set([
-  "source_observation_delta",
-  "source_observation_delta_validation",
-  "source_observation_reentry_validation",
-  "source_observation_lineage_index",
-  "source_observation_lineage_index_validation",
-]);
+// The witness-less conditional stages permitted `skip_kind: "legit_conditional"` on a
+// graceful-terminal manifest (canonical set in artifact-types.ts, shared with the builder).
+const WITNESS_LESS_CONDITIONAL_STAGES: ReadonlySet<ReconstructStageId> = new Set(
+  WITNESS_LESS_CONDITIONAL_STAGE_IDS,
+);
 
 export async function validateReconstructRunManifest(args: {
   manifest: ReconstructRunManifestArtifact;

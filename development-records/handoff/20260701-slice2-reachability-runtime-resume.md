@@ -1,8 +1,15 @@
-# RESUME — graceful-terminal Cut-1 **Slice 2** (런타임 census + createRunManifest witness-gating)
+# RESUME — graceful-terminal Cut-1 **Slice 2 ✅ 완료 → 다음 Slice 3** (런타임 census + createRunManifest witness-gating)
 
-> **START-HERE.** `/clear` 후 fresh 세션이 **이 문서 + 설계 SSOT 하나로** Slice 2를 바로 시작한다. 날짜 2026-07-01.
-> **baseline = `feat/maturation-value-read`** (Slice 1 커밋됨·이 브랜치 계속). full vitest baseline = **2123 pass**.
-> 진행 방식 = owner 승인 = "빌드하며 N-COND 테스트로 검증"(reachability v2는 추가 full 교차검증 생략·§6 테스트가 falsifiable gate). CLAUDE.md: 아래 load-bearing 주장은 **가설→빌드 전 실코드 재확인**.
+> **✅ Slice 2 완료 (미커밋·브랜치 `feat/maturation-value-read`).** 다음 세션은 **§5 = Slice 3**을 시작한다.
+> **STATUS (2026-07-01):** Slice 2 빌드+검증 종결. tsc clean·**full vitest 2130 pass**(baseline 2123 + 신규 7·회귀 0)·구조가드 4(import-boundary/spec-defaults/invariant-change/invariant-drift)+obligation-coverage 통과. **커밋 대기**(owner 승인 시).
+> **Slice 2 산물(아래 §3에서 실현):**
+> - `artifact-types.ts`: `WITNESS_LESS_CONDITIONAL_STAGE_IDS` 정본 const(빌더+validator 단일출처)·terminal-validation.ts는 이를 import(리터럴 제거).
+> - `run.ts`: `buildSourceObservationLineageCensus({sessionId, deltaRoundsProduced})` 순수 헬퍼(export)·관측-lineage phase 종료(run.ts ~12662, lineage index 뒤)서 census를 **항상** 기록(`source-observation-lineage-census.yaml`, sessionRoot·leaf_read/f1a3c1b 패턴). `createRunManifest` **export**+`graceful?: ReconstructGracefulTerminalManifestInput`(export interface) 추가: transform `applyGracefulReachability`가 완료-빈ref→not_reached(2825-2880·2966-2993·2994-3108 M7 전부 커버·invocation_binding 면제)·witness-less skipped→census 있으면 legit_conditional/없으면 not_reached·기타 skipped→not_reached; `graceful_terminal` 방출·`allowed_completion_claim` 정직화(RM-2). **비-graceful=파라미터 미전달 시 종전 완전 동일**(C1 테스트+회귀0 입증). `artifactRefsWithDefaults` export(테스트용).
+> - 테스트: `reachability-manifest.test.ts` +7(census 3·createRunManifest graceful 4: P1/N3 not_reached+validate·RM-2 claim·witness-driven legit_conditional round-trip valid·C1 byte-parity). mock E2E(`reconstruct-api.mock-realization.test.ts`)에 census 실경로 실존+5 witness 단언(dead-code 아님·ENOENT 음성대조로 falsifiable 입증).
+> **미배선(설계대로 Slice 3):** graceful 경로 **호출자 없음**(default-off). census 경로는 Slice 3가 recompute/thread(현재 write-site 로컬 const).
+>
+> ---
+> **(원본 Slice 2 지시·참조용)** `/clear` 후 fresh 세션이 이 문서 + 설계 SSOT 하나로 시작. baseline `feat/maturation-value-read`(Slice 1 커밋됨). owner 승인 = "빌드하며 N-COND 테스트로 검증". CLAUDE.md: load-bearing 주장은 가설→빌드 전 실코드 재확인.
 
 ## 0. 큰 그림 (한 줄)
 reconstruct **graceful-terminal**(정상-미충족 throw 7개를 크래시 대신 정직한 blocked/limited 조립출력으로) 안정화. 그 최고리스크 조각 = **reachability manifest**(미도달 stage를 정직히 표기하되 배선버그가 legit-skip으로 위장 불가). 설계 v0(index)·v1(실행측정+allowlist) 양 패밀리 반증 → **v2 = witness 기반**(leaf_read census 패턴 재사용). **Slice 1(validator 코어)=완료·커밋·검증**. **Slice 2(이 문서)=런타임 witness + createRunManifest 배선.**
