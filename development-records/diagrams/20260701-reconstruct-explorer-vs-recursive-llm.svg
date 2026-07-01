@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2040" height="980" viewBox="0 0 2040 980" role="img" aria-labelledby="ttl dsc" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+<title id="ttl">reconstruct 소스 이해 — 결정론 explorer vs 재귀 LLM comprehension</title>
+<desc id="dsc">Two ways reconstruct reads and comprehends its source: (live) deterministic explorer sampling loop vs (proposed) recursive LLM map-reduce tree. Shows what is wired vs design-only vs rejected.</desc>
+<defs>
+<marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5f6368"/></marker>
+<marker id="arB" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 Z" fill="#1a73e8"/></marker>
+<marker id="arR" markerWidth="12" markerHeight="12" refX="9" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 Z" fill="#d93025"/></marker>
+</defs>
+<rect x="0" y="0" width="2040" height="980" fill="#ffffff"/>
+
+<text x="24" y="40" font-size="23" font-weight="800" fill="#202124">reconstruct 소스 이해 — 결정론 explorer  vs  재귀 LLM comprehension</text>
+<text x="24" y="64" font-size="13" fill="#5f6368">판단 질문: reconstruct가 소스를 <tspan font-weight="700">읽어 의미를 얻는</tspan> 두 방식 — <tspan font-weight="700">(현 라이브)</tspan> explorer 샘플링 루프  vs  <tspan font-weight="700">(제안 방향)</tspan> 재귀 LLM map-reduce 트리. 무엇이 <tspan font-weight="700">배선</tspan>됐고 무엇이 <tspan font-weight="700">설계뿐</tspan>인가.</text>
+
+<!-- legend row 1: roles -->
+<rect x="24" y="86" width="18" height="12" rx="3" fill="#e6f4ea" stroke="#34a853" stroke-width="1.3"/><text x="48" y="96" font-size="11" fill="#3c4043">runtime (결정론)</text>
+<rect x="176" y="86" width="18" height="12" rx="3" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.3"/><text x="200" y="96" font-size="11" fill="#3c4043">LLM author</text>
+<rect x="300" y="86" width="18" height="12" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/><text x="324" y="96" font-size="11" fill="#3c4043">input (source)</text>
+<rect x="430" y="86" width="18" height="12" rx="3" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.3"/><text x="454" y="96" font-size="11" fill="#3c4043">artifact</text>
+
+<!-- legend row 2: status -->
+<rect x="24" y="106" width="18" height="12" rx="3" fill="#12a4af"/><text x="48" y="116" font-size="11" fill="#3c4043">배선 (라이브)</text>
+<rect x="150" y="106" width="18" height="12" rx="3" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-dasharray="4 2"/><text x="176" y="116" font-size="11" fill="#3c4043">설계만 (미배선)</text>
+<rect x="298" y="106" width="18" height="12" rx="3" fill="#fdecdd" stroke="#e8710a" stroke-width="1.3"/><text x="322" y="116" font-size="11" fill="#3c4043">부분 (일부만 산출)</text>
+<line x1="452" y1="112" x2="476" y2="112" stroke="#d93025" stroke-width="2.4" stroke-dasharray="5 3" marker-end="url(#arR)"/><text x="482" y="116" font-size="11" fill="#3c4043">기각된 대체안</text>
+
+<!-- ===================== SHARED SOURCE ===================== -->
+<g>
+<rect x="24" y="352" width="156" height="116" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="35" cy="366" r="4.5" fill="#1a73e8"/>
+<text x="46" y="369" font-size="11" font-weight="700" fill="#202124">Source</text>
+<text x="33" y="392" font-size="9" fill="#3c4043">raw .xlsx workbook</text>
+<text x="33" y="410" font-size="8.4" fill="#5f6368">1× 스트리밍 raw-read</text>
+<text x="33" y="424" font-size="8.4" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">content_sha256</text>
+<text x="33" y="438" font-size="8.4" fill="#5f6368">= resume substrate</text>
+<text x="33" y="456" font-size="7.8" fill="#9aa0a6">두 트랙 공유 입력</text>
+</g>
+<path d="M 180 402 C 196 360, 196 240, 204 222" fill="none" stroke="#5f6368" stroke-width="1.6" marker-end="url(#ar)"/>
+<path d="M 180 430 C 196 480, 196 560, 204 578" fill="none" stroke="#5f6368" stroke-width="1.6" marker-end="url(#ar)"/>
+
+<!-- ===================== TRACK A (LIVE explorer) ===================== -->
+<rect x="204" y="134" width="1058" height="22" rx="5" fill="#e6f4ea" stroke="#34a853" stroke-width="1.2"/>
+<text x="214" y="149" font-size="12.5" font-weight="800" fill="#1e7e34">TRACK A — 결정론 · explorer 기반  ·  현 라이브 spine (RECONSTRUCT_STAGE_IDS 전체)</text>
+<text x="214" y="172" font-size="9" fill="#5f6368">메커니즘: 결정론 관측 + LLM 렌즈판정 → 결정론 <tspan font-weight="700">frontier</tspan>가 '다음에 읽을 것' 결정 → 재관측.  프론티어가 고른 영역만 읽는 <tspan font-weight="700">샘플링</tspan> · bounded rounds · resume=관측 해시.</text>
+
+<!-- A1 -->
+<g>
+<rect x="204" y="180" width="194" height="78" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.4"/>
+<circle cx="213" cy="193" r="4.5" fill="#34a853"/>
+<text x="224" y="197" font-size="10.5" font-weight="700" fill="#202124">explorer-D 관측</text>
+<text x="213" y="212" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ source-observation</text>
+<text x="213" y="228" font-size="8" fill="#5f6368">바이트 → 정확 사실:</text>
+<text x="213" y="241" font-size="8" fill="#5f6368">값·수식·타입·distinct·피벗</text>
+</g>
+<line x1="398" y1="219" x2="420" y2="219" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- A2 -->
+<g>
+<rect x="420" y="180" width="194" height="78" rx="6" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.4"/>
+<circle cx="429" cy="193" r="4.5" fill="#f9ab00"/>
+<text x="440" y="197" font-size="10.5" font-weight="700" fill="#202124">Observation Directive</text>
+<text x="429" y="212" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ observation-directive</text>
+<text x="429" y="228" font-size="8" fill="#5f6368">다음에 볼 것 지시</text>
+<text x="429" y="241" font-size="8" fill="#5f6368">(per round)</text>
+</g>
+<line x1="614" y1="219" x2="636" y2="219" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- A3 -->
+<g>
+<rect x="636" y="180" width="194" height="78" rx="6" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.4"/>
+<circle cx="645" cy="193" r="4.5" fill="#f9ab00"/>
+<text x="656" y="197" font-size="10.5" font-weight="700" fill="#202124">Lens Judgment ×9</text>
+<text x="645" y="212" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ lens-judgment</text>
+<text x="645" y="228" font-size="8" fill="#5f6368">렌즈 레지스트리별</text>
+<text x="645" y="241" font-size="8" fill="#5f6368">의미 판정 (샘플)</text>
+</g>
+<line x1="830" y1="219" x2="852" y2="219" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- A4 -->
+<g>
+<rect x="852" y="180" width="194" height="78" rx="6" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.4"/>
+<circle cx="861" cy="193" r="4.5" fill="#f9ab00"/>
+<text x="872" y="197" font-size="10.5" font-weight="700" fill="#202124">Exploration Synthesis</text>
+<text x="861" y="212" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ exploration-synthesis</text>
+<text x="861" y="228" font-size="8" fill="#5f6368">라운드 종합</text>
+</g>
+<line x1="1046" y1="219" x2="1068" y2="219" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- A5 -->
+<g>
+<rect x="1068" y="180" width="194" height="78" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.4"/>
+<circle cx="1077" cy="193" r="4.5" fill="#34a853"/>
+<text x="1088" y="197" font-size="10.5" font-weight="700" fill="#202124">Source Frontier</text>
+<text x="1077" y="212" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ source-frontier</text>
+<text x="1077" y="228" font-size="8" fill="#5f6368">다음 관측대상 결정</text>
+<text x="1077" y="241" font-size="8" fill="#5f6368">empty ⇒ 정지</text>
+</g>
+<!-- A round loop A5 -> A2 -->
+<path d="M 1165 258 C 1165 292, 1165 300, 900 300 C 640 300, 517 300, 517 260" fill="none" stroke="#34a853" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+<text x="841" y="296" font-size="9" font-weight="600" fill="#1e7e34" text-anchor="middle">round-N (bounded rounds) — frontier가 채워지는 동안 반복</text>
+<!-- A5 -> shared -->
+<path d="M 1262 210 C 1284 210, 1286 240, 1300 248" fill="none" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="1281" y="200" font-size="8.2" fill="#5f6368" text-anchor="middle">frontier empty</text>
+<text x="1281" y="210" font-size="8.2" fill="#5f6368" text-anchor="middle">⇒ seed 저작</text>
+
+<!-- ===================== TRACK B (proposed recursive LLM) ===================== -->
+<rect x="204" y="496" width="1058" height="22" rx="5" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="214" y="511" font-size="12.5" font-weight="800" fill="#b06000">TRACK B — 재귀 LLM comprehension 기반  ·  제안 방향 (일부만 배선)</text>
+<text x="214" y="534" font-size="9" fill="#5f6368">메커니즘: 공유 raw-read → 결정론 value-tile 투영 → LLM leaf 읽기 → same-schema <tspan font-weight="700">재귀 reduce</tspan>.  map-reduce 트리로 <tspan font-weight="700">빠짐없이</tspan> 읽음 (샘플링 아님) · resume=llm-touch-fingerprint.</text>
+
+<!-- B1 value-tile (wired) -->
+<g>
+<rect x="204" y="542" width="194" height="78" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.4"/>
+<circle cx="213" cy="555" r="4.5" fill="#34a853"/>
+<text x="224" y="559" font-size="10.5" font-weight="700" fill="#202124">value-tile 투영</text>
+<text x="213" y="574" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ segmented-value-tile</text>
+<text x="213" y="590" font-size="8" fill="#5f6368">per-column value-</text>
+<text x="213" y="603" font-size="8" fill="#5f6368">signature 타일</text>
+<rect x="352" y="547" width="42" height="13" rx="6.5" fill="#12a4af"/><text x="373" y="556.5" font-size="7.6" font-weight="700" fill="#fff" text-anchor="middle">배선</text>
+</g>
+<line x1="398" y1="581" x2="420" y2="581" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- B2 semantic-triage (design-only) -->
+<g>
+<rect x="417" y="539" width="200" height="84" rx="8" fill="none" stroke="#1a73e8" stroke-width="2" stroke-dasharray="5 3"/>
+<rect x="420" y="542" width="194" height="78" rx="6" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.4"/>
+<circle cx="429" cy="555" r="4.5" fill="#f9ab00"/>
+<text x="440" y="559" font-size="10.5" font-weight="700" fill="#202124">Semantic Triage</text>
+<text x="429" y="574" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ semantic-triage</text>
+<text x="429" y="590" font-size="8" fill="#5f6368">영역별 depth 0/1 배분</text>
+<rect x="562" y="547" width="52" height="13" rx="6.5" fill="none" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="3 2"/><text x="588" y="556.5" font-size="7.4" font-weight="700" fill="#1a73e8" text-anchor="middle">설계만</text>
+</g>
+<line x1="614" y1="581" x2="636" y2="581" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- B3 leaf-read (wired) -->
+<g>
+<rect x="636" y="542" width="194" height="78" rx="6" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.4"/>
+<circle cx="645" cy="555" r="4.5" fill="#f9ab00"/>
+<text x="656" y="559" font-size="10.5" font-weight="700" fill="#202124">Leaf Read (LLM-touch)</text>
+<text x="645" y="574" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ leaf-read</text>
+<text x="645" y="590" font-size="8" fill="#5f6368">label-complete 타일을</text>
+<text x="645" y="603" font-size="8" fill="#5f6368">LLM이 읽어 잠정 라벨</text>
+<rect x="784" y="547" width="42" height="13" rx="6.5" fill="#12a4af"/><text x="805" y="556.5" font-size="7.6" font-weight="700" fill="#fff" text-anchor="middle">배선</text>
+</g>
+<line x1="830" y1="581" x2="852" y2="581" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- B4 recursive-reduce (design-only) -->
+<g>
+<rect x="849" y="539" width="200" height="84" rx="8" fill="none" stroke="#1a73e8" stroke-width="2" stroke-dasharray="5 3"/>
+<rect x="852" y="542" width="194" height="78" rx="6" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.4"/>
+<circle cx="861" cy="555" r="4.5" fill="#f9ab00"/>
+<text x="872" y="559" font-size="10.5" font-weight="700" fill="#202124">Recursive Reduce</text>
+<text x="861" y="574" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ recursive-reduce</text>
+<text x="861" y="590" font-size="8" fill="#5f6368">same-schema monoid</text>
+<text x="861" y="603" font-size="8" fill="#5f6368">k-ary 병합·이질 표면화</text>
+<rect x="994" y="547" width="52" height="13" rx="6.5" fill="none" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="3 2"/><text x="1020" y="556.5" font-size="7.4" font-weight="700" fill="#1a73e8" text-anchor="middle">설계만</text>
+</g>
+<line x1="1046" y1="581" x2="1068" y2="581" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- B5 comprehension-artifact (partial) -->
+<g>
+<rect x="1068" y="542" width="194" height="78" rx="6" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.4"/>
+<circle cx="1077" cy="555" r="4.5" fill="#9aa0a6"/>
+<text x="1088" y="559" font-size="10.5" font-weight="700" fill="#202124">Comprehension Artifact</text>
+<text x="1077" y="574" font-size="7.8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ comprehension-artifact</text>
+<text x="1077" y="590" font-size="8" fill="#5f6368">행-범위 + witness</text>
+<text x="1077" y="603" font-size="8" fill="#5f6368">+ confidence map</text>
+<rect x="1216" y="547" width="42" height="13" rx="6.5" fill="#fdecdd" stroke="#e8710a" stroke-width="1.1"/><text x="1237" y="556.5" font-size="7.4" font-weight="700" fill="#b95c00" text-anchor="middle">부분</text>
+</g>
+<!-- B recursion loop B4 -> B3 -->
+<path d="M 949 623 C 949 646, 949 652, 841 652 C 780 652, 733 652, 733 622" fill="none" stroke="#f9ab00" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+<text x="841" y="668" font-size="9" font-weight="600" fill="#b06000" text-anchor="middle">수렴 / 예산까지 재귀 — leaf 이해를 묶어 상위 lens가 재도출</text>
+<!-- B5 -> shared (feeds seed authoring) -->
+<path d="M 1262 566 C 1286 540, 1288 300, 1300 292" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#arB)"/>
+<text x="1298" y="474" font-size="8.2" fill="#1a67d2" text-anchor="end">leaf-read 잠정라벨</text>
+<text x="1298" y="484" font-size="8.2" fill="#1a67d2" text-anchor="end">→ seed authoring 주입 (배선)</text>
+
+<!-- ===================== REJECTED REPLACEMENT ===================== -->
+<path d="M 730 536 L 730 442" fill="none" stroke="#d93025" stroke-width="2.4" stroke-dasharray="5 3"/>
+<path d="M 730 330 L 730 262" fill="none" stroke="#d93025" stroke-width="2.4" stroke-dasharray="5 3" marker-end="url(#arR)"/>
+<rect x="470" y="330" width="520" height="112" rx="8" fill="#ffffff" stroke="#d93025" stroke-width="1.6" stroke-dasharray="5 3"/>
+<text x="730" y="352" font-size="11.5" font-weight="800" fill="#c5221f" text-anchor="middle">✗ 제안: exploration 샘플링 루프 → 재귀 트리로 <tspan text-decoration="line-through">대체</tspan></text>
+<text x="730" y="371" font-size="9.2" fill="#3c4043" text-anchor="middle">2건 독립 교차검증서 <tspan font-weight="700">기각</tspan> (REDESIGN · SUPERSEDED)</text>
+<text x="730" y="386" font-size="8.4" fill="#5f6368" text-anchor="middle" font-family="ui-monospace,Menlo,monospace">20260625-unified-explore-frame-recursive-comprehension-design.md §12</text>
+<text x="730" y="405" font-size="9.2" fill="#3c4043" text-anchor="middle">∴ B는 A를 <tspan font-weight="700">대체하지 않고</tspan> substrate로 편입</text>
+<text x="730" y="422" font-size="9.2" fill="#3c4043" text-anchor="middle">현 라이브 = <tspan font-weight="700">leaf-read + value-read</tspan> 두 flat cut만 배선</text>
+<text x="730" y="436" font-size="8" fill="#9aa0a6" text-anchor="middle">semantic-triage · recursive-reduce = 아직 설계뿐</text>
+
+<!-- ===================== SHARED DOWNSTREAM ===================== -->
+<rect x="1300" y="180" width="716" height="440" rx="10" fill="#fafafa" stroke="#dadce0" stroke-width="1.4"/>
+<text x="1316" y="202" font-size="12" font-weight="800" fill="#202124">공통 하류 — 양 패러다임 공유:  구성 → 성숙 → 발행</text>
+
+<!-- C1 seed -->
+<g>
+<rect x="1316" y="214" width="684" height="86" rx="6" fill="#fff8e1" stroke="#f9ab00" stroke-width="1.4"/>
+<circle cx="1327" cy="228" r="4.5" fill="#f9ab00"/>
+<text x="1338" y="232" font-size="11" font-weight="700" fill="#202124">Ontology 구성 (seed)</text>
+<text x="1327" y="250" font-size="8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ source-purpose-candidates · ontology-seed · claim-realization · competency-questions</text>
+<text x="1327" y="266" font-size="8.6" fill="#5f6368">purpose → candidate → seed 저작 + CQ (LLM author + 결정론 게이트/THROW)</text>
+<text x="1327" y="282" font-size="8.6" fill="#5f6368">A의 exploration 관측 · B의 leaf-read 잠정라벨을 <tspan font-weight="700">둘 다</tspan> authoring 프롬프트로 소비</text>
+</g>
+<line x1="1658" y1="300" x2="1658" y2="322" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- C2 maturation -->
+<g>
+<rect x="1316" y="322" width="684" height="164" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.4"/>
+<circle cx="1327" cy="336" r="4.5" fill="#34a853"/>
+<text x="1338" y="340" font-size="11" font-weight="700" fill="#202124">Maturation Loop  ·  재귀 성숙 (continuation ⟲)</text>
+<rect x="1327" y="350" width="330" height="15" rx="7.5" fill="#12a4af"/><text x="1335" y="361" font-size="7.8" font-weight="700" fill="#fff">value-read ▸ maturation-value-read · 배선(B-cut)</text>
+<text x="1327" y="382" font-size="8.6" fill="#3c4043">baseline → [<tspan font-weight="700" fill="#0a7c86">value-read</tspan>] → question / closure frontier →</text>
+<text x="1327" y="398" font-size="8.6" fill="#3c4043">authority-response → answer-support (ledger + judgment) →</text>
+<text x="1327" y="414" font-size="8.6" fill="#3c4043">ontology-expansion → actionability-matrix → convergence-ledger →</text>
+<text x="1327" y="430" font-size="8.6" fill="#3c4043">continuation-decision  <tspan font-weight="700">⟲  (수렴/블록까지 반복)</tspan></text>
+<text x="1327" y="452" font-size="8" fill="#5f6368">value-read = value 의존 baseline 한계를 실 셀값 읽어 해소 (LLM-touch · leaf-read 선례)</text>
+<path d="M 1980 462 C 1994 462, 1994 372, 1980 372" fill="none" stroke="#34a853" stroke-width="1.4" stroke-dasharray="3 2" marker-end="url(#ar)"/>
+<text x="1974" y="474" font-size="8" fill="#1e7e34" text-anchor="end">re-question until convergence</text>
+</g>
+<line x1="1658" y1="486" x2="1658" y2="508" stroke="#5f6368" stroke-width="1.8" marker-end="url(#ar)"/>
+<!-- C3 output -->
+<g>
+<rect x="1316" y="508" width="684" height="86" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.4"/>
+<circle cx="1327" cy="522" r="4.5" fill="#34a853"/>
+<text x="1338" y="526" font-size="11" font-weight="700" fill="#202124">발행 (proofs → publication)</text>
+<text x="1327" y="544" font-size="8" fill="#5f6368" font-family="ui-monospace,Menlo,monospace">▸ query/viz/graph-proofs · actionable-ontology · claim-projection · final-output · record-assembly</text>
+<text x="1327" y="560" font-size="8.6" fill="#5f6368">증명 산출 → 최종 온톨로지 · final-output.md → 실행 기록 (결정론 + 매니페스트 검증/THROW)</text>
+<text x="1327" y="578" font-size="8" fill="#9aa0a6">terminal run-manifest 검증: 모든 RECONSTRUCT_STAGE_IDS stage가 완료/스킵 매니페스트 스텝이어야 함</text>
+</g>
+
+<!-- ===================== NOTES ===================== -->
+<text x="24" y="712" font-size="11.5" font-weight="700" fill="#202124">읽어야 할 핵심 차이</text>
+<text x="24" y="730" font-size="10" fill="#5f6368"><tspan font-weight="700" fill="#1e7e34">A (샘플링):</tspan> 결정론 frontier가 '무엇을 읽을지'를 소유하고 라운드로 확장 — 고신호 영역만 본다. resume = 결정론 관측 해시 (안정).</text>
+<text x="24" y="746" font-size="10" fill="#5f6368"><tspan font-weight="700" fill="#b06000">B (빠짐없이):</tspan> map-reduce 트리가 소스를 전부 읽는다 — LLM이 각 leaf를 읽고 same-schema로 재귀 병합. resume = llm-touch-fingerprint (LLM-touch 전부를 한 digest로).</text>
+<text x="24" y="762" font-size="10" fill="#5f6368"><tspan font-weight="700" fill="#c5221f">관계:</tspan> B는 A의 대체가 아니라 <tspan font-weight="700">A에 삽입되는 읽기 substrate</tspan>. 현 라이브 삽입 지점 = leaf-read(라인리지 후·seed 前) + value-read(maturation baseline 후).</text>
+<text x="24" y="784" font-size="10" fill="#5f6368"><tspan font-weight="700">라이브 상태:</tspan> A 전체 배선 (<tspan font-family="ui-monospace,Menlo,monospace">RECONSTRUCT_STAGE_IDS · artifact-types.ts:1554</tspan>).  B 중 <tspan font-family="ui-monospace,Menlo,monospace">leaf_read(:1590)</tspan> · <tspan font-family="ui-monospace,Menlo,monospace">maturation_value_read(:1632)</tspan> flat cut만 배선 · triage/reduce는 설계뿐.</text>
+<text x="24" y="800" font-size="10" fill="#5f6368"><tspan font-weight="700">출처:</tspan> 설계 SSOT <tspan font-family="ui-monospace,Menlo,monospace">20260625-rescoped-comprehension-engine-design.md</tspan> · 기각 근거 <tspan font-family="ui-monospace,Menlo,monospace">20260625-unified-explore-frame-recursive-comprehension-design.md §12</tspan>.</text>
+</svg>
