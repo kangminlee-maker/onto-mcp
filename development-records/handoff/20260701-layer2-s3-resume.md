@@ -25,10 +25,13 @@
 - **설계**: v1 양패밀리(ultracode+onto) REDESIGN_NARROW → v2 $ultracode-for-codex SOUND_WITH_REVISIONS → v2.1.
 - **코드(S1+S2)**: $ultracode-for-codex(CHANGES_REQUIRED·8 confirmed·tsx probe) + onto(16 issue) **강한 수렴** = fail-closed 가드가 malformed 입력에 fail-open → 전부 하드닝(`8c3ab64`)·11 adversarial 음성대조. **★코드-레벨 교차검증이 by-construction 테스트가 못 본 fail-open 7개 적발**(Layer-1 F3 전례 반복).
 
-## 3. ✅ S3 + S3 코드 교차검증 완료 → NEXT = S4 (seed 투영) — 설계 §13.6 / §6
+## 3. ✅ S1~S4 전부 완료 + S3 4-라운드 코드 교차검증 종결 → NEXT = 실 LLM / production 배선 / PR
 
-> S3 커밋 `a96f830` + 하드닝 커밋 `c466793`(2-패밀리 코드 교차검증: codex CHANGES_REQUIRED 4 + onto 13 issue·수렴; F1 frontier epoch 재귀 분리[HIGH]·tree 검증기·node_ref clone·budget 검증·subsumed taint·6 수정 + 7 음성대조). 브랜치 HEAD `c466793`·9커밋·push·독립. full vitest 2168·회귀0.
-> **▶ NEXT = S4 (seed 투영·§6·default-off)**: accumulated map → `provisional_labels` 계층 승격(run.ts:6476/11760 flat 경로 보존·byte-parity로 off 증명)·§6 정직 투영규칙(anchored=위치only·unanchored+refuted=제외+disclosure·unanchored_unverified_count census)·material&&unanchored 적대재검증 라우팅(설계 N3=전량). 이후 실 LLM(한도)·production 배선.
+> **브랜치 HEAD `81a4f62`·13커밋·push·독립. full vitest 2185·회귀0·semantic-map 86.**
+> - **S1** 결정론 코어(`acecd09`) · **S2** mock 누적(`2015ca2`) · **S3** frontier(`a96f830`) · **S4** seed 투영(`81a4f62`).
+> - **S3 코드 4-라운드 교차검증(codex+onto)** = 하드닝 `c466793`(r1 6)·`8c3ab64`(S1+S2 r1)·`a612173`(r2 4·대칭경계)·`e35edae`(r3 3·data경계)·`ce7dcbd`(r4 canonical·수렴). **CORE sound 확정·수렴**(findings 6→4→3→1). 남은 축=존재않는 악의 caller 방어(codex-2 parent==merge 재파생 문서화 이연).
+> - **미배선**: `comprehension-semantic-map.ts` 전체 standalone(어떤 live 경로도 import 안 함). 실 run.ts flat leaf-read 경로(6476/11760) 미접촉.
+> **▶ NEXT (owner)**: ① **S4 코드 교차검증**(패턴 지속·선택) ② **실 LLM 의미품질**(월 한도·§9 측정분과 별개·재측정 아님) ③ **production 배선**(map→run.ts seed·default-off·opt-in·byte-parity) ④ **PR**(base main·origin/feat/comprehension-reduce-layer2). §6 material&&unanchored=전량 적대재검증(N3 owner 결정).
 
 ### (참고) S3 설계 §13.6 요약 — 이미 구현됨
 - `shouldAccumulate(node, trace)`: **단일 결정론 metric = 서브트리 leaf 수**(row_span/ground-byte 혼용 금지·codex-F5) > `OVER_CONTEXT_BUDGET`. config + predicate/ordering logic sha 둘 다 §13.4 preimage(`over_context_gate_config_sha256`·`over_context_gate_logic_sha256`)에 fold.
