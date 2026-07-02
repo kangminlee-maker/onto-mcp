@@ -113,6 +113,12 @@ const UNIT_ID_BY_AUTHORED_ARTIFACT_NAME: ReadonlyMap<string, ReconstructStageId>
     // and the leaf-read caller swallowed it (R9) → zero capture, silently. Mapped to its own unit so
     // leaf-read attempts/failures are recorded, not silently degraded.
     ["leaf-read", "leaf_read"],
+    // Layer-2 semantic_map stage (wiring design 20260702 §6 F5, Defect-1 discipline): BOTH author
+    // capability call names are mapped BEFORE any author realization lands — an unmapped
+    // callJsonAuthor artifactName throws pre-LLM and silently kills the whole stage (the leaf-read
+    // production defect this map's fail-loud contract exists to prevent).
+    ["semantic-map-synthesize", "semantic_map"],
+    ["semantic-map-verify", "semantic_map"],
     ["ExplorationSynthesis", "exploration_synthesis"],
     ["SourceFrontier", "source_frontier"],
     ["SourcePurposeCandidates", "source_purpose_candidates"],

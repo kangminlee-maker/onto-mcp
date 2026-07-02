@@ -486,6 +486,10 @@ const NO_CALL_EXEMPT_UNIT_IDS: ReadonlySet<string> = new Set([
   // census artifact (the R9 honest-signal). A leaf-read that DID call records leaf_read telemetry; the
   // census itself records attempts/failures, so an exempt no-call completion still carries provenance.
   "leaf_read",
+  // Layer-2 semantic_map (W3 review onto issue-003): same conditional-LLM-touch shape as leaf_read —
+  // a capability-present run with no evaluatable observation (or a fully preflight-capped one)
+  // completes with ZERO calls but still writes its census/sidecar (the provenance surface).
+  "semantic_map",
 ]);
 
 /**

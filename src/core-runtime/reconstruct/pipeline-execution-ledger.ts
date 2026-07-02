@@ -229,6 +229,22 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     ],
   },
   {
+    // Layer-2 semantic_map stage (W3 review: codex W3-002 ≡ onto issue-001/002/006 — 4-lens
+    // convergence on audit-graph registration). The LIVE run does not consume this ledger (it is a
+    // post-hoc audit projection derived from the record), so this row is descriptive evidence, not
+    // continuation authority; the stage re-runs each run and its reuse authority is the fingerprint
+    // folded into the seed key (leaf_read precedent). unitKind is NOT "semantic_map" — that kind
+    // name is already taken by claim_realization (pre-existing vocabulary collision). No downstream
+    // edge until W4 actually wires the seed-prompt consumption (declared≠wired discipline).
+    unitId: "semantic_map",
+    unitKind: "semantic_map_accumulation",
+    owner: "host_llm",
+    artifactKey: "semantic_map_census",
+    // DATA dependency (ultracode audit E: the earlier lineage-validation edge was a false/temporal
+    // edge — the stage reads source_observations' inventory tiles, nothing from the lineage index).
+    upstreamUnitIds: ["source_observation"],
+  },
+  {
     unitId: "source_purpose_candidates",
     unitKind: "semantic_source_purpose",
     owner: "host_llm",
@@ -1257,13 +1273,24 @@ export async function buildReconstructPipelineExecutionLedger(
         }
         return trustedUnitIds.has(unitId);
       });
+      // Pre-stage sessions (ultracode audit E, read-path): when a manifest IS provided but carries
+      // NO step for this unit, the run predates the unit's registration — the terminal validator
+      // (manifest_step_missing, W3-004) forces every CURRENT manifest to carry every stage, so an
+      // absent step can only mean "this run never had the stage". Reporting it "missing" would raise
+      // a false defect signal on every historical session each time a stage is added.
+      const predatesUnit =
+        params.reconstructRunManifest != null &&
+        manifestStatus(params.reconstructRunManifest, spec.unitId) == null &&
+        !manifestStepByUnitId.has(spec.unitId);
       const status =
         manifestStatus(params.reconstructRunManifest, spec.unitId) ??
         (outputPresent
           ? "completed"
-          : upstreamTrusted
-            ? "missing"
-            : "not_reached");
+          : predatesUnit
+            ? "not_reached"
+            : upstreamTrusted
+              ? "missing"
+              : "not_reached");
       const trust = trustForReconstructUnit({
         spec,
         status,

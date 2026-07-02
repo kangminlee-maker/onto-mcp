@@ -951,6 +951,35 @@ describe("validateReconstructRunManifest rejection branches", () => {
     )).toBe(true);
   });
 
+  it("rejects a manifest carrying an UNKNOWN stage step (W3-004 fail-open control)", async () => {
+    const base = validRunManifest();
+    const mutated = clone(base);
+    const alien = clone(mutated.steps[0]!);
+    (alien as { step_id: string }).step_id = "not_a_real_stage";
+    mutated.steps = [...mutated.steps, alien];
+    const result = await validateReconstructRunManifest({ manifest: mutated });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "manifest_step_unknown" &&
+      violation.subject_id === "not_a_real_stage"
+    )).toBe(true);
+  });
+
+  it("rejects a manifest carrying a DUPLICATE stage step (W3-004)", async () => {
+    const base = validRunManifest();
+    const mutated = clone(base);
+    const dup = clone(mutated.steps.find((step) => step.step_id === "stop_decision")!);
+    mutated.steps = [...mutated.steps, dup];
+    const result = await validateReconstructRunManifest({ manifest: mutated });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.some((violation) =>
+      violation.code === "manifest_step_duplicate" &&
+      violation.subject_id === "stop_decision"
+    )).toBe(true);
+  });
+
   it("rejects a completed step that records no artifact refs", async () => {
     const base = validRunManifest();
     const mutated = clone(base);

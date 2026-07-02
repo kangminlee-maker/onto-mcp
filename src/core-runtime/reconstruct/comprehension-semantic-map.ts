@@ -109,7 +109,23 @@ const VALID_VERIFICATION = new Set<string>([
   "adversarial_confirmed",
   "adversarial_refuted",
 ]);
-const VALID_ADVERSARIAL_RESULT = new Set<string>(["adversarial_confirmed", "adversarial_refuted"]);
+/** Single literal source for the adversarial-verdict vocabulary (wiring design 20260702 §15.1): BOTH
+ *  the exported verdict type and the runtime allowlist derive from this tuple, so the type and the
+ *  Set cannot drift apart (a separate union + Set pair stays compile-green when only one is edited;
+ *  R3 W1-01 / onto issue-001·003). Exported so the drift-guard test proves the same-source derivation. */
+export const ADVERSARIAL_RESULTS = ["adversarial_confirmed", "adversarial_refuted"] as const;
+export type SemanticBoundaryVerification = (typeof ADVERSARIAL_RESULTS)[number];
+// SOURCE-level exact-type coupling (W1 code review F01/F02): these live in the MODULE (not a test)
+// because check:ts-core EXCLUDES *.test.ts — a test-file type assertion is enforced by NO gate
+// (proven by a deliberate-type-error probe). Erased at runtime. If the union is ever redefined away
+// from the tuple, either line breaks the build.
+type _VerificationCoversTuple = (typeof ADVERSARIAL_RESULTS)[number] extends SemanticBoundaryVerification ? true : never;
+type _TupleCoversVerification = SemanticBoundaryVerification extends (typeof ADVERSARIAL_RESULTS)[number] ? true : never;
+const _verdictExact: [_VerificationCoversTuple, _TupleCoversVerification] = [true, true];
+void _verdictExact;
+// ReadonlySet<union> (not Set<string>): a member added to the SET literal that is not in the tuple
+// now fails the build too (the runtime .has() guard against JS-level bogus values is unchanged).
+const VALID_ADVERSARIAL_RESULT: ReadonlySet<SemanticBoundaryVerification> = new Set(ADVERSARIAL_RESULTS);
 
 /** Canonical TOTAL order over value-shape seams (full witness tuple so equal-row seams from different
  *  provenance never tie by input order; review F7 — mirrors comprehension-reduce canonicalBoundaries). */
@@ -448,14 +464,18 @@ export interface SemanticSynthesisOutput {
 /** Caller-injected synthesis (mock in tests, real authoring in production). Realization-agnostic. */
 export type SemanticSynthesisFn = (input: SemanticSynthesisInput) => SemanticSynthesisOutput;
 
-/** Caller-injected adversarial verifier for ONE unanchored boundary (N3: ALL unanchored are verified —
- *  it is the only check where structure is blind). An INDEPENDENT lens (distinct prompt/model in
- *  production). Returns confirmed | refuted. */
-export type AdversarialVerifyFn = (input: {
+/** Input to the adversarial verifier for ONE unanchored boundary — the named form of the former
+ *  inline shape (type-identity preserving; W1 §15.1 names it for the author capability seat). */
+export interface SemanticBoundaryVerifyInput {
   node_ref: ComprehensionReduceRegion;
   boundary: SemanticBoundary;
   summary: string;
-}) => "adversarial_confirmed" | "adversarial_refuted";
+}
+
+/** Caller-injected adversarial verifier for ONE unanchored boundary (N3: ALL unanchored are verified —
+ *  it is the only check where structure is blind). An INDEPENDENT lens (distinct prompt/model in
+ *  production). Returns confirmed | refuted. */
+export type AdversarialVerifyFn = (input: SemanticBoundaryVerifyInput) => SemanticBoundaryVerification;
 
 export interface AccumulateSemanticMapOpts {
   synthesize: SemanticSynthesisFn;
@@ -507,6 +527,17 @@ export function computeSubtreeLeafCounts(trace: ReduceTopologyTrace): Map<Semant
   };
   for (const key of trace.nodes.keys()) compute(key, new Set());
   return counts;
+}
+
+/** Tautological over-context gate LOGIC digest (design §13.4 L2R-2 / ultracode audit F — mirrors
+ *  leaf-reader structureLeafTriggerLogicSha256): hashes the SOURCE of the frontier predicate and its
+ *  metric, so editing either rotates every semantic-map fingerprint without a hand-bumped knob. */
+export function semanticMapGateLogicSha256(): string {
+  return createHash("sha256")
+    .update(classifyFrontier.toString())
+    .update(" ")
+    .update(computeSubtreeLeafCounts.toString())
+    .digest("hex");
 }
 
 /** Classify every REACHABLE node (from root) into its frontier role, top-down (§13.6). A leaf can never
@@ -699,6 +730,52 @@ function canonicalValueShapeSeams(
   return out;
 }
 
+/** SINGLE-SOURCE synthesis-input builder (W2 §3(a) / X2): the module's internal walk AND the stage
+ *  bridge both construct the LLM-facing input through this function, so the input the LLM actually
+ *  saw cannot drift from the input the module validates (the bridge additionally compares stableJson
+ *  of both — §3(b)). Child summaries are MODULE-owned outputs (a produced child's semantic_summary),
+ *  unbuildable from topology alone (X2: codex-F2 ≡ onto-004) — the caller supplies them via
+ *  `childSummaryByKey` (available bottom-up). Fail-closed on an unknown/subsumed key or a missing
+ *  consumed-child summary. The returned node_ref is a clone (review F3 — a caller-injected
+ *  synthesize cannot mutate the trace). */
+export function buildSynthesisInputForNode(
+  trace: ReduceTopologyTrace,
+  nodesByKey: ReadonlyMap<SemanticNodeKey, ComprehensionReduceNode>,
+  modes: ReadonlyMap<SemanticNodeKey, FrontierMode>,
+  key: SemanticNodeKey,
+  childSummaryByKey: ReadonlyMap<SemanticNodeKey, string>,
+): SemanticSynthesisInput {
+  const tnode = trace.nodes.get(key);
+  const reduceNode = nodesByKey.get(key);
+  if (!tnode || !reduceNode) {
+    throw new Error(`comprehension-semantic-map: trace/node missing for key ${key} (synthesis input).`);
+  }
+  const mode = modes.get(key);
+  if (!mode) {
+    throw new Error(`comprehension-semantic-map: no frontier mode for ${key} (synthesis input).`);
+  }
+  if (mode === "subsumed") {
+    throw new Error(`comprehension-semantic-map: subsumed node ${key} takes no synthesis input (§13.6 — its frontier ancestor's read covers it).`);
+  }
+  const r = tnode.node_ref;
+  const isFrontier = mode === "frontier";
+  const consumedChildKeys = tnode.child_keys.filter((k) => modes.get(k) !== "subsumed");
+  return {
+    node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
+    format_clusters: [...reduceNode.format_clusters].sort(), // canonical (round-4): input = fn(ground identity), not raw order.
+    value_shape_seams: canonicalValueShapeSeams(reduceNode.boundaries),
+    child_summaries: isFrontier
+      ? []
+      : consumedChildKeys.map((k) => {
+          const summary = childSummaryByKey.get(k);
+          if (summary === undefined) {
+            throw new Error(`comprehension-semantic-map: missing consumed-child summary for ${k} (synthesis input — children must be produced bottom-up first).`);
+          }
+          return { key: k, summary };
+        }),
+  };
+}
+
 /** Walk the trace bottom-up, producing one validated ComprehensionSemanticNode per skeleton node. Each
  *  node: synthesize (caller LLM) → reconcileBoundaries (deterministic anchor/coverage) → verify EVERY
  *  unanchored boundary (N3) → recursive epoch contribution → taint census → assemble, with all three
@@ -795,16 +872,17 @@ export function accumulateSemanticMap(
 
     // FRONTIER = one flat read over the whole subtree (child_summaries omitted; children are subsumed).
     // ACCUMULATING = synthesize the (non-subsumed) children's judgments. Both are 'produced'.
-    const isFrontier = mode === "frontier";
+    // W2 §3(a): the input is constructed through the SAME exported single-source builder the stage
+    // bridge uses (node_ref cloned inside — review F3), so the LLM-facing input cannot drift from
+    // the module-validated input by construction.
     const r = tnode.node_ref;
-    const input: SemanticSynthesisInput = {
-      // Clone the node_ref (review F3): the caller-injected synthesize gets a COPY, so it cannot mutate
-      // the trace's node_ref and corrupt a later parent's child-summary keys.
-      node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
-      format_clusters: [...reduceNode.format_clusters].sort(), // canonical (round-4): input = fn(ground identity), not raw order.
-      value_shape_seams: canonicalValueShapeSeams(reduceNode.boundaries),
-      child_summaries: isFrontier ? [] : consumedChildren.map((c) => ({ key: reduceNodeKey(c.node_ref), summary: c.semantic_summary })),
-    };
+    const input = buildSynthesisInputForNode(
+      trace,
+      nodesByKey,
+      modes,
+      key,
+      new Map(consumedChildren.map((c) => [reduceNodeKey(c.node_ref), c.semantic_summary])),
+    );
     assertSynthesisInputBounded(input);
     const out = opts.synthesize(input);
     assertSynthesisOutputBounded(out); // round-2: validate the caller's OUTPUT, not just the input.

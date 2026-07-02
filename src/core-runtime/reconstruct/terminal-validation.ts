@@ -126,6 +126,27 @@ export async function validateReconstructRunManifest(args: {
       }));
     }
   }
+  // W3 review W3-004: missing-only checking was fail-OPEN for extra/duplicate steps — a
+  // misregistered or duplicated step id validated green. Exact-set both directions.
+  const knownStageIds = new Set<string>(RECONSTRUCT_STAGE_IDS);
+  const seenStepIds = new Set<string>();
+  for (const step of args.manifest.steps) {
+    if (!knownStageIds.has(step.step_id)) {
+      violations.push(violation({
+        code: "manifest_step_unknown",
+        message: `manifest carries unknown stage ${step.step_id}`,
+        subjectId: step.step_id,
+      }));
+    }
+    if (seenStepIds.has(step.step_id)) {
+      violations.push(violation({
+        code: "manifest_step_duplicate",
+        message: `manifest carries duplicate stage ${step.step_id}`,
+        subjectId: step.step_id,
+      }));
+    }
+    seenStepIds.add(step.step_id);
+  }
   for (const step of args.manifest.steps) {
     if (step.status !== "completed") continue;
     if (step.step_id === "invocation_binding") continue;

@@ -4,6 +4,7 @@ import type {
   TargetMaterialSupportStatus,
 } from "../target-material-kind.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
+import type { SemanticSeedProjection } from "./comprehension-semantic-map.js";
 
 export interface ReconstructSelectedSourceProfileRef {
   profile_id: string;
@@ -1588,6 +1589,10 @@ export const RECONSTRUCT_STAGE_IDS = [
   // before the LLM call → R9 swallowed it → zero capture, forever). Runs after the lineage index
   // exists and before purpose-candidate authoring.
   "leaf_read",
+  // Layer-2 semantic_map stage (wiring design 20260702 §7-W3): default-off; runs right after
+  // leaf_read; its always-written census is the step's artifact ref (skipped when the author lacks
+  // the synthesizeSemanticMapNode/verifySemanticMapBoundary capability pair).
+  "semantic_map",
   "source_purpose_candidates",
   "source_purpose_candidates_validation",
   "purpose_confirmation",
@@ -1732,6 +1737,9 @@ export interface ReconstructPostSeedValidationViolation {
     | "source_ref_mismatch"
     | "location_mismatch"
     | "manifest_step_missing"
+    // W3 review W3-004 (fail-open consumer): the validator accepted unknown/duplicate step ids.
+    | "manifest_step_unknown"
+    | "manifest_step_duplicate"
     | "manifest_artifact_ref_missing"
     | "manifest_artifact_missing"
     | "manifest_snapshot_missing"
@@ -2507,6 +2515,89 @@ export interface ReconstructMaturationValueDischargeArtifact {
     owner: "host_llm";
     author_id: string;
   };
+}
+
+// ── semantic_map stage census (Layer-2 wiring design 20260702 §6 / W2) ────────────────────────────
+// Always recorded when the stage RUNS (capability pair present) — mirrors the leaf_read_census
+// honesty pattern: "never ran" (skipped manifest step, no census) is durably distinct from "ran and
+// produced nothing". Column rows localize WHICH column failed/was capped; the observation-level
+// map_present gate (X5: replace only when ALL value-tile columns succeeded) is derivable and stored.
+
+export interface ReconstructSemanticMapCensusColumn {
+  sheet: string;
+  column_index: number;
+  /** produced = tree accumulated + projected; empty = no non-empty leaves (not a failure);
+   *  failed = author/module threw (column excluded, observation falls back to flat);
+   *  capped = a deterministic cost cap excluded it BEFORE/mid-LLM (X7);
+   *  skipped_observation_fallback = a sibling column doomed the observation, remaining LLM work skipped. */
+  status: "produced" | "empty" | "failed" | "capped" | "skipped_observation_fallback";
+  reason: string | null;
+  produced_nodes: number;
+  frontier_accumulating: number;
+  frontier_frontier: number;
+  frontier_subsumed: number;
+  anchored: number;
+  unanchored: number;
+  adversarial_confirmed: number;
+  adversarial_refuted: number;
+  synthesize_calls: number;
+  verify_calls: number;
+}
+
+export interface ReconstructSemanticMapCensusObservation {
+  observation_id: string;
+  /** X5 gate: true ⇔ zero failed/capped/skipped columns AND ≥1 produced column. */
+  map_present: boolean;
+  /** onto-W2 issue-003/006: a spreadsheet observation the stage SAW but could not evaluate is
+   *  recorded (map_absent, columns=[]) with an explicit reason — never silently dropped, so
+   *  by_observation is a COMPLETE partition of the spreadsheet observations and the totals
+   *  reconcile. null for evaluated observations. System identities, not domain naming.
+   *  deterministic_phase_failed (ultracode audit A): the pre-LLM tree build / fingerprint threw —
+   *  contained per observation so a malformed inventory column cannot crash the run. */
+  skip_reason: "no_workbook_inventory" | "no_value_tiles" | "deterministic_phase_failed" | null;
+  /** Present only for deterministic_phase_failed — the contained error message. */
+  skip_detail?: string;
+  /** §6 evidence (ultracode audit I): the per-observation PRE-EXECUTION llm-touch fingerprint the
+   *  seed reuse key aggregates — recorded here so the census alone proves which epoch produced it.
+   *  null for observations skipped before fingerprinting. */
+  fingerprint: string | null;
+  columns: ReconstructSemanticMapCensusColumn[];
+}
+
+export interface ReconstructSemanticMapCensus {
+  schema_version: "1";
+  /** ALL spreadsheet observations the stage saw (evaluated + skipped) — a complete partition:
+   *  observations_total == observations_map_present + observations_map_absent (onto-W2 issue-006). */
+  observations_total: number;
+  observations_map_present: number;
+  observations_map_absent: number;
+  synthesize_calls_total: number;
+  verify_calls_total: number;
+  /** The deterministic cost-cap config in force (X7) — also folded into the reuse fingerprint (W3). */
+  max_synthesize_calls: number;
+  max_verify_calls: number;
+  /** §6 evidence (audit I): the deterministic realization identities behind this census — with the
+   *  author id these distinguish a mock-driven census from a real-model one (W5 forward need). */
+  author_id: string;
+  synthesize_model_identity: string;
+  verify_model_identity: string;
+  by_observation: ReconstructSemanticMapCensusObservation[];
+}
+
+/** The semantic-map SIDECAR artifact (`semantic-map.yaml` — F10 lineage: the prompt-injected
+ *  hierarchical projection must be reconstructable from artifact truth, never only from prompt
+ *  text). One row per map_present observation; node_epochs carry every node's resume-excluded
+ *  subtree_epoch_contribution for audit (onto-W2 issue-002/004: a durable output is written only
+ *  against a named, exported artifact contract). */
+export interface ReconstructSemanticMapSidecarObservation {
+  observation_id: string;
+  projection: SemanticSeedProjection;
+  node_epochs: { key: string; subtree_epoch_contribution: string }[];
+}
+
+export interface ReconstructSemanticMapSidecar {
+  schema_version: "1";
+  observations: ReconstructSemanticMapSidecarObservation[];
 }
 
 export interface ReconstructMaturationValueDischargeValidationArtifact {
@@ -3553,6 +3644,11 @@ export interface ReconstructRecordArtifactRefs {
   // but produced nothing" from "leaf-read never ran". Doubles as the leaf_read manifest step's
   // artifact ref. Null only when the stage no-ops (author has no readLeafLabels).
   leaf_read_census: string | null;
+  // Layer-2 semantic_map stage (W3): census always written when the stage runs (map-absent runs
+  // still record the honest partition); sidecar carries the per-observation projections + node
+  // epochs (F10 lineage). Null only when the stage no-ops (author lacks the capability pair).
+  semantic_map_census: string | null;
+  semantic_map_sidecar: string | null;
   source_safety_ledger: string | null;
   source_safety_ledger_validation: string | null;
   source_scout_pack: string | null;

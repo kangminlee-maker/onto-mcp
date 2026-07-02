@@ -50,6 +50,11 @@ import type {
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructMaturationValueDischargeArtifact,
   ReconstructMaturationValueDischargeCensus,
+  ReconstructSemanticMapCensus,
+  ReconstructSemanticMapCensusColumn,
+  ReconstructSemanticMapCensusObservation,
+  ReconstructSemanticMapSidecar,
+  ReconstructSemanticMapSidecarObservation,
   ReconstructMaturationValueDischargeEntry,
   ReconstructMaturationValueDischargeValidationArtifact,
   ReconstructValueReadScope,
@@ -261,6 +266,34 @@ import {
   type LeafReadRegionEvidence,
   type StructureLeafTriggerOpts,
 } from "./leaf-reader.js";
+// W1/W2 (wiring design 20260702 §15.1/§3): the semantic-map capability seat + W2 stage reuse the
+// module's canonical shapes and single-source builders (no live runReconstruct call site until W3).
+import {
+  ADVERSARIAL_RESULTS,
+  accumulateSemanticMap,
+  assertSynthesisInputBounded,
+  assertSynthesisOutputBounded,
+  buildSynthesisInputForNode,
+  classifyFrontier,
+  projectSemanticMapToSeed,
+  reconcileBoundaries,
+  semanticMapGateLogicSha256,
+  type FrontierMode,
+  type SemanticBoundaryVerification,
+  type SemanticBoundaryVerifyInput,
+  type SemanticEpochPreImage,
+  type SemanticSeedProjection,
+  type SemanticSynthesisInput,
+  type SemanticSynthesisOutput,
+} from "./comprehension-semantic-map.js";
+import {
+  buildColumnLeaves,
+  reduceColumnLeavesWithTrace,
+  reduceNodeKey,
+  type ComprehensionReduceNode,
+  type ReduceTopologyTrace,
+  type SemanticNodeKey,
+} from "./comprehension-reduce.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
   llmTouchFingerprint,
@@ -367,6 +400,24 @@ export interface ReconstructDirectiveAuthor {
     input: ReconstructValueReadStageInput,
   ): Promise<ReconstructValueReadStageOutput>;
   /**
+   * Layer-2 semantic-map stage (wiring design 20260702 §15.1): synthesize ONE reduce-tree node's
+   * semantic judgment from bounded deterministic facts + child summaries. Non-authoritative /
+   * provisional; the module enforces the source-safe envelope (assertSynthesisInputBounded).
+   * Optional — an author without the PAIR leaves the stage skipped (default-off;
+   * resolveSemanticMapCapability owns the pair rule). No live caller until the W2 stage wiring.
+   */
+  synthesizeSemanticMapNode?(
+    input: SemanticSynthesisInput,
+  ): Promise<SemanticSynthesisOutput>;
+  /**
+   * Independent adversarial re-check of ONE unanchored semantic boundary (design N3: ALL unanchored
+   * are re-verified — the only check where structure is blind). A distinct prompt (and optionally a
+   * distinct model) from synthesize in production. Optional — paired with synthesizeSemanticMapNode.
+   */
+  verifySemanticMapBoundary?(
+    input: SemanticBoundaryVerifyInput,
+  ): Promise<SemanticBoundaryVerification>;
+  /**
    * P1-C2-A Step E: provide the leaf-read provisional labels (observation_id → short label strings)
    * so this author renders them as a NON-AUTHORITATIVE hint in every observation prompt. Set once by
    * runReconstruct after the leaf-read stage; the labels reach the prompt TEXT only, never the
@@ -379,6 +430,14 @@ export interface ReconstructDirectiveAuthor {
    * observation prompt. Set once by runReconstruct after the leaf-read stage; prompt TEXT only.
    */
   setLeafReadCappedColumns?(capped: ReadonlyMap<string, readonly string[]>): void;
+  /**
+   * W4 (wiring design 20260702 §4): provide the semantic-map stage's per-observation seed
+   * projections so this author (a) replaces the flat provisional labels with the hierarchical
+   * render in non-seed observation prompts, and (b) adds the dedicated `semantic_map` field to the
+   * seed-authoring userPayload. Prompt/payload TEXT only — never the reuse key (the stage
+   * fingerprint is folded separately). Set once by runReconstruct after the semantic_map stage.
+   */
+  setSemanticMapProjection?(byObservation: ReadonlyMap<string, SemanticSeedProjection>): void;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -440,6 +499,30 @@ export interface ReconstructDirectiveAuthor {
     input: ReconstructOntologyExpansionAuthorInput,
   ): Promise<ReconstructOntologyExpansionArtifact>;
   writeFinalOutput(input: ReconstructFinalOutputAuthorInput): Promise<string>;
+}
+
+/**
+ * W1 (wiring design 20260702 §15.2): the semantic-map author capability is a PAIR — synthesize +
+ * verify. Both absent → the stage is skipped (default-off, readLeafLabels precedent). Exactly one
+ * present → a fail-loud configuration error: a one-sided author must NOT masquerade as a normal
+ * skip (X8 / onto-R2 issue-004 — the skip reason would silently hide a broken wiring). Pure; W1
+ * exercises it in tests only — production enforcement starts when the W2 semantic_map stage entry
+ * calls it.
+ */
+export function resolveSemanticMapCapability(
+  author: Pick<
+    ReconstructDirectiveAuthor,
+    "synthesizeSemanticMapNode" | "verifySemanticMapBoundary"
+  >,
+): "absent" | "present" {
+  const hasSynthesize = typeof author.synthesizeSemanticMapNode === "function";
+  const hasVerify = typeof author.verifySemanticMapBoundary === "function";
+  if (hasSynthesize !== hasVerify) {
+    throw new Error(
+      "reconstruct: the semantic-map author capability is a PAIR — implement BOTH synthesizeSemanticMapNode AND verifySemanticMapBoundary, or NEITHER (a one-sided author is a fail-loud configuration error, not a skip; wiring design 20260702 §15.2).",
+    );
+  }
+  return hasSynthesize ? "present" : "absent";
 }
 
 export type ReconstructSemanticAuthorRealization = "direct_call";
@@ -884,6 +967,11 @@ interface AuthoredArtifactReuseMatch {
   // resume after a leaf-reader model swap regenerates instead of reusing a stale-labelled seed.
   // null when no low-confidence region triggered a leaf-read.
   leaf_read_aggregate_fingerprint_sha256: string | null;
+  // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE (model
+  // identities + prompt-contract sha + version knob + whole stage config + inventory identity).
+  // Rotates the seed key when anything that shapes the map changes (F2 topology / X7 caps / X9
+  // projection caps / F4 verify model). null when the stage skipped or saw nothing evaluatable.
+  semantic_map_aggregate_fingerprint_sha256: string | null;
 }
 
 interface AuthoredArtifactReuseProvenance {
@@ -1446,6 +1534,7 @@ function authoredArtifactReuseMatch(args: {
   directiveAuthor: ReconstructDirectiveAuthor;
   confirmationProvider: ReconstructConfirmationProvider;
   leafReadAggregateFingerprint?: string | null;
+  semanticMapAggregateFingerprint?: string | null;
 }): AuthoredArtifactReuseMatch {
   const match: AuthoredArtifactReuseMatch = {
     session_id: args.sessionId,
@@ -1537,6 +1626,12 @@ function authoredArtifactReuseMatch(args: {
         DOCUMENT_EXCERPT_PROJECTION_FLOOR,
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,
+    // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE —
+    // model identities + prompt-contract sha + version knob + the WHOLE stage config (topology,
+    // caps, projection caps). Always-present-null (leaf-read precedent): adding this field rotates
+    // every reuse key ONCE at upgrade (F3 — documented, over-rotate is the safe direction).
+    semantic_map_aggregate_fingerprint_sha256:
+      args.semanticMapAggregateFingerprint ?? null,
   };
   // P1-C2-A (R3): the seed gating key must never carry in-epoch LLM output — only the fingerprint
   // VALUE folded above. Fail closed if a future edit serializes a comprehension-artifact instance
@@ -1803,6 +1898,694 @@ export async function runSpreadsheetLeafReadStage(args: {
           ),
         );
   return { artifactsByObservation, aggregateFingerprint, cappedColumnsByObservation, censusPath };
+}
+
+// ── semantic_map stage (Layer-2 wiring design 20260702 §2/§3/§6 · W2) ─────────────────────────────
+//
+// The W2 machinery: per seed observation, build the deterministic reduce trees from the FULL
+// in-memory inventory value tiles (F7 — never the prompt projection, which empties segments), run
+// the async author capability pair through the §3 bridge (pre-compute + triple guard), accumulate
+// through the real module (all fail-closed validators), and project per observation. Failure
+// granularity is STAGE-owned (X5): the module stays fail-closed throw-or-produced; a failed/capped
+// column dooms its OBSERVATION to the flat path (no partial-map replacement). No live runReconstruct
+// call site in W2 — W3 wires the stage + registration BEFORE W4 wires prompt injection (R2-03).
+
+/** Non-authoritative manual-invalidation knob for the semantic-map epoch (LEAF_READ_COMPREHENSION_
+ *  VERSION mirror). ⚠️ The bridge ordering / frontier-classification LOGIC is not auto-folded — a
+ *  change to that code MUST bump this knob (leaf-read read_set_logic caveat, R9-03/DET-1 class). */
+const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
+
+// Over-context gate LOGIC digest: tautological function-source hash (semanticMapGateLogicSha256,
+// leaf-reader precedent) — the earlier hand-bumped literal was a silent-stale seed on any predicate
+// edit whose author forgot the bump (ultracode audit F, 2-lens convergence with design §13.4).
+
+/** Manual version for the projection/render CONTRACT (design §5 X9 / W3 review W3-003): cap VALUES
+ *  are folded via stage_config, but the projection RULES (projectSemanticMapToSeed + the observation
+ *  merge) and — from W4 — the prompt RENDERER change what the seed actually sees without any config
+ *  change. Bump on any projection/merge/renderer semantics edit. */
+const SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION = "projection-merge:1";
+
+/** ⚠️ PRELIMINARY defaults (review-prompt-budget precedent): live calibration is a later cut. Every
+ *  value is folded into the stage fingerprint, so re-tuning rotates the seed reuse key. */
+export const DEFAULT_SEMANTIC_MAP_STAGE_CONFIG: SemanticMapStageConfig = {
+  leaf_count: 8,
+  fanin: 2,
+  over_context_budget: 2,
+  max_synthesize_calls: 200,
+  max_verify_calls: 100,
+  max_nodes: 60,
+  max_disclosure: 30,
+};
+
+/** W4 §4: the shared caveat describing semantic-map data. Rendered INLINE with each (B)
+ *  observation-prompt replace (that surface has no other note site) and carried ONCE per seed
+ *  prompt via SEMANTIC_MAP_SEED_PROMPT_NOTE (onto W4 issue-001/002/005: the per-item inline note
+ *  duplicated it N+1 times in seed prompts). Catalog entry (CG-1) — editing rotates the sha. */
+export const SEMANTIC_MAP_PROMPT_NOTE =
+  "semantic_map is a NON-AUTHORITATIVE, provisional hierarchical reading of spreadsheet column regions (accumulated bottom-up over deterministic value-shape trees). Each node carries a summary and boundary candidates; disposition structural_location_only means a value-shape seam co-locates (LOCATION corroborated, content NOT verified); adversarial_confirmed means an independent re-check agreed (still provisional). The *_total counts are AUTHORITATIVE — a shorter list was bounded for prompt size, never silently dropped. Treat as hints; the deterministic value-tile signatures remain the structural authority.";
+
+/** W4 §4(A): the seed SYSTEM-prompt append. The seed prompts enumerate their userPayload fields
+ *  exclusively (kernel: "Use ... only" — W4 review W4-003), so the first sentence explicitly
+ *  authorizes consulting the new field; the caveat body is the shared note (composition — editing
+ *  either part rotates the catalog sha). Seed payload renders OMIT the inline note (hoisted here). */
+export const SEMANTIC_MAP_SEED_PROMPT_NOTE =
+  "When userPayload.semantic_map is present you MAY additionally consult it (it extends any exclusive input-field list above). " +
+  SEMANTIC_MAP_PROMPT_NOTE;
+
+/** ⚠️ PRELIMINARY prompt-render budget (chars) for one observation's semantic-map render. Changing
+ *  it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION with it (X9). */
+export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
+
+/** W4 §4 shared renderer — BOTH prompt surfaces ((A) seed payload field, (B) observation-prompt
+ *  replace) derive from this one projection-to-prompt shape (single truth). Deterministic; bounded
+ *  by a REQUIRED char budget with AUTHORITATIVE totals + an explicit truncation flag (onto-R2
+ *  issue-012: never a silent drop). */
+export function renderSemanticMapProjection(
+  projection: SemanticSeedProjection,
+  charBudget: number,
+  /** (B) inline renders carry the caveat note; seed payload renders omit it (hoisted ONCE into the
+   *  seed system prompt — onto W4 issue-001/002/005 note-duplication). */
+  includeNote: boolean,
+): Record<string, unknown> {
+  if (!Number.isSafeInteger(charBudget) || charBudget <= 0) {
+    throw new Error(`semantic-map render: charBudget must be a positive safe integer, got ${charBudget} (issue-012 fail-loud).`);
+  }
+  // W4 code cross-validation (codex W4-002 ≡ onto issue-001/002/004/005 — two-family convergence):
+  // the budget bounds the ACTUAL prompt serialization (callJsonAuthor uses
+  // JSON.stringify(payload, null, 2)) of the WHOLE returned envelope, measured EXACTLY per
+  // admission (candidate-envelope test — an incremental per-node estimate under-counted nesting
+  // indentation; the original compact-JSON node-only model under-counted ~2x: budget 4000 → 7753
+  // real chars). Post-condition: pretty(returned) ≤ charBudget, or fail-loud below. The per-surface
+  // wrapper around this render ({observation_id} on the seed field / the provisional_labels key +
+  // preserved not_examined_capped on (B)) is O(1)-bounded per observation and NOT charged here.
+  const nodes: Record<string, unknown>[] = [];
+  const refutedRows: Record<string, unknown>[] = [];
+  const envelope: Record<string, unknown> = {
+    authority: "non_authoritative",
+    provisional: true,
+    ...(includeNote ? { note: SEMANTIC_MAP_PROMPT_NOTE } : {}),
+    nodes,
+    nodes_total: projection.nodes_total,
+    // W4 review W4-004 (design §4 honesty): the refuted DISCLOSURE rows are prompt-visible, not
+    // only their total — bounded rows first, budget-counted like nodes.
+    refuted_disclosure: refutedRows,
+    refuted_disclosure_total: projection.refuted_disclosure_total,
+    unanchored_unverified_total: projection.unanchored_unverified_total,
+    render_truncated: false,
+  };
+  const measure = (): number => JSON.stringify(envelope, null, 2).length;
+  if (measure() > charBudget) {
+    // Deterministic misconfiguration (fixed envelope+note vs the budget const), not a data
+    // condition — silently returning an over-budget "bounded" render would void the contract.
+    throw new Error(
+      `semantic-map render: charBudget ${charBudget} cannot fit the empty render envelope (${measure()} chars) — raise the budget (fail-loud, no silent overshoot).`,
+    );
+  }
+  let truncated = false;
+  // Nodes admit FIRST (the map's primary content); disclosure rows take the remaining budget —
+  // the reverse order would let max_disclosure-many rows starve the summaries the seed consumes.
+  for (const node of projection.nodes) {
+    nodes.push({
+      region: `${node.node_ref.sheet}#${node.node_ref.column_index}:${node.node_ref.row_start}-${node.node_ref.row_end}`,
+      summary: node.semantic_summary,
+      boundaries: node.boundaries.map((b) => ({
+        row: b.row,
+        before: b.character_before,
+        after: b.character_after,
+        disposition: b.disposition,
+      })),
+    });
+    if (measure() > charBudget) {
+      nodes.pop();
+      truncated = true;
+      break; // canonical order — the drop is the deterministic TAIL, and totals stay authoritative.
+    }
+  }
+  for (const refuted of projection.refuted_disclosure) {
+    refutedRows.push({
+      region: `${refuted.node_ref.sheet}#${refuted.node_ref.column_index}:${refuted.node_ref.row_start}-${refuted.node_ref.row_end}`,
+      row: refuted.row,
+      before: refuted.character_before,
+      after: refuted.character_after,
+    });
+    if (measure() > charBudget) {
+      refutedRows.pop();
+      truncated = true;
+      break;
+    }
+  }
+  // Flipping false→true SHRINKS the serialization by 1 char, so the measured bound still holds.
+  envelope.render_truncated = truncated;
+  return envelope;
+}
+
+/** Deterministic stage config. ALL fields required and validated fail-loud (R2-04: the module's
+ *  projection caps default to UNBOUNDED; the stage never relies on defaults). Every value shapes the
+ *  map, so W3 folds this whole object into the reuse fingerprint (§5). */
+export interface SemanticMapStageConfig {
+  /** buildColumnLeaves leaf grouping (≥1) — reduce-tree topology input (§5 F2). */
+  leaf_count: number;
+  /** reduceColumnLeavesWithTrace fan-in (≥2) — reduce-tree topology input (§5 F2). */
+  fanin: number;
+  /** classifyFrontier over-context budget (leaf count, ≥0). */
+  over_context_budget: number;
+  /** X7: deterministic PREFLIGHT cap on author synthesize calls (per stage run). */
+  max_synthesize_calls: number;
+  /** X7/R2-01: INCREMENTAL cap on author verify calls (verify count is a function of synthesize
+   *  OUTPUT, not pre-LLM computable; exceeding it fails the column closed → observation fallback). */
+  max_verify_calls: number;
+  /** R2-04: explicit projection display caps (authoritative totals stay uncapped). */
+  max_nodes: number;
+  max_disclosure: number;
+}
+
+function assertSemanticMapStageConfig(config: SemanticMapStageConfig): void {
+  const entries: [string, number, number][] = [
+    ["leaf_count", config.leaf_count, 1],
+    ["fanin", config.fanin, 2],
+    ["over_context_budget", config.over_context_budget, 0],
+    ["max_synthesize_calls", config.max_synthesize_calls, 0],
+    ["max_verify_calls", config.max_verify_calls, 0],
+    ["max_nodes", config.max_nodes, 0],
+    ["max_disclosure", config.max_disclosure, 0],
+  ];
+  for (const [name, value, min] of entries) {
+    if (!Number.isSafeInteger(value) || value < min) {
+      throw new Error(
+        `semantic-map stage: config.${name} must be a safe integer ≥ ${min}, got ${value} (R2-04/X7 fail-loud — a NaN/absent cap would silently unbound the stage).`,
+      );
+    }
+  }
+}
+
+/** One node's recorded bridge exchange: the EXACT input the LLM saw (stableJson of a deep clone,
+ *  captured at call time — R2-06: never a live object reference) + the author's output + every
+ *  adversarial verification keyed by its FULL input (X3: row keying collides; no fallback). */
+export interface SemanticMapBridgeRecord {
+  input_json: string;
+  output: SemanticSynthesisOutput;
+  /** consumed = replay bookkeeping (audit G): each recorded verification answers exactly ONE module
+   *  verify call, so byte-identical duplicate boundaries stay 1:1 instead of aliasing to the first. */
+  verifies: { input_json: string; verdict: SemanticBoundaryVerification; consumed?: boolean }[];
+}
+
+/** §3(b)/(c) sync closures over the pre-computed records. Exported so the drift detectors are
+ *  falsifiable in tests WITHOUT production test-hooks: feed a tampered record → must throw. */
+export function buildSemanticMapBridgeCallbacks(preByKey: ReadonlyMap<string, SemanticMapBridgeRecord>): {
+  synthesize: (input: SemanticSynthesisInput) => SemanticSynthesisOutput;
+  verifyUnanchored: (input: SemanticBoundaryVerifyInput) => SemanticBoundaryVerification;
+} {
+  return {
+    synthesize: (input) => {
+      const key = reduceNodeKey(input.node_ref);
+      const rec = preByKey.get(key);
+      if (!rec) {
+        throw new Error(`semantic-map bridge: no precomputed synthesis for ${key} (§3 fail-closed).`);
+      }
+      if (stableJson(input) !== rec.input_json) {
+        throw new Error(
+          `semantic-map bridge: module synthesis input drifted from the input the LLM saw at ${key} (§3(b) drift detector — silent divergence is the validation-bypass class).`,
+        );
+      }
+      return structuredClone(rec.output);
+    },
+    verifyUnanchored: (input) => {
+      const key = reduceNodeKey(input.node_ref);
+      const rec = preByKey.get(key);
+      const inputJson = stableJson(input);
+      // MATCH-AND-CONSUME (ultracode audit G): two byte-identical unanchored boundaries on one node
+      // produce two recorded verifications; a find-first replay would alias BOTH module calls to the
+      // FIRST verdict, silently overwriting the author's second (possibly refuted) answer. Consuming
+      // each recorded entry once keeps the replay 1:1 with the live calls.
+      const idx = rec ? rec.verifies.findIndex((v) => v.input_json === inputJson && !v.consumed) : -1;
+      if (idx < 0 || !rec) {
+        throw new Error(
+          `semantic-map bridge: no unconsumed recorded adversarial verification matching the module's verifier input at ${key} (§3(c) full-input key — row keying collides; a conservative fallback would silently pollute).`,
+        );
+      }
+      rec.verifies[idx]!.consumed = true;
+      return rec.verifies[idx]!.verdict;
+    },
+  };
+}
+
+/** Deterministic per-observation merge of per-column projections (LLM-0). Totals are the SUMS of the
+ *  per-column AUTHORITATIVE totals (never the rendered lengths); display lists re-capped after the
+ *  canonical-order merge — bounded views over honest totals (run.ts:6469 pattern). */
+export function mergeSemanticSeedProjections(
+  projections: readonly SemanticSeedProjection[],
+  caps: { max_nodes: number; max_disclosure: number },
+): SemanticSeedProjection {
+  const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+  const nodes = projections
+    .flatMap((p) => p.nodes)
+    .sort((a, b) => cmp(reduceNodeKey(a.node_ref), reduceNodeKey(b.node_ref)));
+  const refuted = projections
+    .flatMap((p) => p.refuted_disclosure)
+    .sort((a, b) => cmp(reduceNodeKey(a.node_ref), reduceNodeKey(b.node_ref)) || a.row - b.row);
+  return {
+    authority: "non_authoritative",
+    provisional: true,
+    nodes: nodes.slice(0, caps.max_nodes),
+    nodes_total: projections.reduce((s, p) => s + p.nodes_total, 0),
+    refuted_disclosure: refuted.slice(0, caps.max_disclosure),
+    refuted_disclosure_total: projections.reduce((s, p) => s + p.refuted_disclosure_total, 0),
+    unanchored_unverified_total: projections.reduce((s, p) => s + p.unanchored_unverified_total, 0),
+  };
+}
+
+/** Marker error for the X7 incremental verify cap (caught per column → capped, not failed). */
+class SemanticMapVerifyCapExceeded extends Error {
+  constructor(key: string, cap: number) {
+    super(`semantic-map stage: verify-call cap ${cap} exceeded at ${key} (X7 incremental — column fails closed to the flat path).`);
+  }
+}
+
+export interface SemanticMapStageResult {
+  /** Merged per-observation projection — ONLY observations that passed the X5 all-columns gate. */
+  projectionByObservation: Map<string, SemanticSeedProjection>;
+  /** null ⇔ the stage was skipped (author lacks the capability pair; W3 manifest step = skipped). */
+  census: ReconstructSemanticMapCensus | null;
+  censusPath: string | null;
+  sidecarPath: string | null;
+  /** W3 §5: order-independent aggregate of the per-observation PRE-EXECUTION fingerprints (model
+   *  identities + prompt-contract sha + version knob + whole stage config + inventory identity) —
+   *  the VALUE the seed reuse key folds; never the map instance. null when the stage was skipped or
+   *  saw no evaluatable observation (leaf-read null pattern). */
+  aggregateFingerprint: string | null;
+}
+
+/**
+ * W2 semantic_map stage. Default-off: an author without the capability PAIR returns the skip result
+ * (no census — "never ran" stays durably distinct from "ran and produced nothing"); a one-sided
+ * author throws (resolveSemanticMapCapability — production fail-loud starts HERE, §15.2). Census +
+ * sidecar are ALWAYS written when the stage runs (leaf_read f1a3c1b pattern). The census/sidecar
+ * carry deterministic data only; the reuse fingerprint is W3's fold.
+ *
+ * Ledger note (ultracode audit — stale-comment convergence): the stage IS registered as a
+ * pipeline-execution-ledger unit (descriptive audit row; the live run never consumes the ledger),
+ * while its REUSE authority stays the fingerprint folded into the seed key — the stage re-runs
+ * each run like leaf_read. The ledger's pre-existing `unitKind: "semantic_map"`
+ * (claim_realization's KIND) is a different vocabulary — a name collision, not a relationship.
+ */
+export async function runSemanticMapStage(args: {
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  directiveAuthor: ReconstructDirectiveAuthor;
+  sessionRoot: string;
+  config: SemanticMapStageConfig;
+  /** ⓑ' pre-image base passed through to the module's epoch recursion (per-node layer1_ground_hash +
+   *  child_contributions are filled by the walk). W3 supplies real identities at the live call site. */
+  preImageBase: Omit<SemanticEpochPreImage, "layer1_ground_hash" | "child_contributions">;
+  /** F4 (CG-2/judge-fold class): the adversarial verifier may run a DIFFERENT model in production —
+   *  its identity folds separately. Defaults to the author identity at the live call site. */
+  verifyModelIdentity: string;
+}): Promise<SemanticMapStageResult> {
+  if (resolveSemanticMapCapability(args.directiveAuthor) === "absent") {
+    return { projectionByObservation: new Map(), census: null, censusPath: null, sidecarPath: null, aggregateFingerprint: null };
+  }
+  assertSemanticMapStageConfig(args.config);
+  const synthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(args.directiveAuthor);
+  const verifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(args.directiveAuthor);
+  const cfg = args.config;
+
+  const projectionByObservation = new Map<string, SemanticSeedProjection>();
+  const census: ReconstructSemanticMapCensus = {
+    schema_version: "1",
+    observations_total: 0,
+    observations_map_present: 0,
+    observations_map_absent: 0,
+    synthesize_calls_total: 0,
+    verify_calls_total: 0,
+    max_synthesize_calls: cfg.max_synthesize_calls,
+    max_verify_calls: cfg.max_verify_calls,
+    author_id: args.directiveAuthor.authorId,
+    synthesize_model_identity: args.preImageBase.reduce_reader_model_identity,
+    verify_model_identity: args.verifyModelIdentity,
+    by_observation: [],
+  };
+  const sidecarObservations: ReconstructSemanticMapSidecarObservation[] = [];
+  const perObservationFingerprints: { observation_id: string; fingerprint: string }[] = [];
+
+  // onto-W2 issue-003/006: a spreadsheet observation the stage cannot evaluate is RECORDED with an
+  // explicit reason — by_observation stays a complete partition and the totals reconcile.
+  const recordSkippedObservation = (
+    observationId: string,
+    skipReason: NonNullable<ReconstructSemanticMapCensusObservation["skip_reason"]>,
+    skipDetail?: string,
+  ): void => {
+    census.observations_total += 1;
+    census.observations_map_absent += 1;
+    census.by_observation.push({
+      observation_id: observationId,
+      map_present: false,
+      skip_reason: skipReason,
+      ...(skipDetail ? { skip_detail: skipDetail } : {}),
+      fingerprint: null,
+      columns: [],
+    });
+  };
+
+  const seenObservationIds = new Set<string>();
+  // onto-W3 issue-004(a): cap ALLOCATION consumes a shared budget in processing order — process in
+  // CANONICAL observation_id order so WHICH observations get capped is artifact-order-independent
+  // (defense in depth: the reuse match separately folds the observations artifact hash, but the
+  // stage itself should not be permutation-sensitive).
+  const spreadsheetObservations = args.sourceObservations.observations
+    .filter((o) => o.target_material_kind === "spreadsheet")
+    .slice()
+    .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0));
+  for (const observation of spreadsheetObservations) {
+    // W3 review W3-005: aggregate order-independence and the projection map are keyed by
+    // observation_id — a duplicate would make the sort unstable and the map lossy. Fail loud.
+    if (seenObservationIds.has(observation.observation_id)) {
+      throw new Error(
+        `semantic-map stage: duplicate observation_id '${observation.observation_id}' — fingerprint aggregation and the projection map require unique ids (fail-loud; W3-005).`,
+      );
+    }
+    seenObservationIds.add(observation.observation_id);
+    const inventory = observation.structural_data.workbook_inventory as
+      | WorkbookStructuralInventory
+      | undefined;
+    if (!inventory) {
+      recordSkippedObservation(observation.observation_id, "no_workbook_inventory");
+      continue;
+    }
+    const tileSheets = inventory.segmented_value_tiles;
+    if (!tileSheets || tileSheets.length === 0) {
+      recordSkippedObservation(observation.observation_id, "no_value_tiles");
+      continue;
+    }
+    census.observations_total += 1;
+
+    // ── ultracode audit A/B (3-lens convergence, probe-confirmed): the design's §6 containment must
+    // cover the DETERMINISTIC phase too — buildColumnLeaves/reduceColumnLeavesWithTrace/
+    // classifyFrontier and the fingerprint helpers ran OUTSIDE any containment, so one malformed
+    // inventory column (e.g. absent `segments` from an older adapter) crashed the ENTIRE reconstruct
+    // run and erased the always-written census. Everything below is observation-contained: a
+    // non-graceful throw dooms THIS observation to the flat path (honest skip row) and the run,
+    // the sibling observations, and the census survive.
+    try {
+    // W3 §5 pre-execution fingerprint — computed BEFORE any of this observation's LLM calls and
+    // regardless of outcome (leaf-read precedent: the DECISION to run is what the seed key tracks).
+    // Folds: inventory identity (ⓐ) + BOTH model identities (F4) + prompt-contract sha (F6, via
+    // preImageBase) + version knob + the WHOLE stage config (F2 topology · X7 caps · X9 projection
+    // caps). VALUE only — never the map instance (denylist-guarded).
+    const fingerprintPreImage = {
+      content_sha256:
+        typeof observation.structural_data.content_sha256 === "string"
+          ? observation.structural_data.content_sha256
+          : "",
+      adapter_version: workbookInventoryAdapterVersion(inventory) ?? 0,
+      value_tile_config: workbookInventoryValueTileConfig(inventory),
+      data_layer_caps: workbookInventoryDataLayerCaps(inventory),
+      // The ENTIRE ⓑ' base is folded — a SELECTIVE fold left gate-logic/schema-tool version
+      // changes outside the seed key (silent-stale class, self-caught post-W3): everything that
+      // shapes a judgment must rotate the key (model identity, prompt-contract sha, version knob,
+      // gate config+LOGIC version, schema tool version).
+      pre_image_base: args.preImageBase,
+      verify_model_identity: args.verifyModelIdentity,
+      stage_config: cfg,
+      projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION, // X9 / W3-003
+      // W4 review W4-001 (5th recurrence of the value-shapes-prompt-but-not-key class): the render
+      // budget truncates BOTH prompt surfaces — folded by VALUE, never only via the manual knob.
+      render_char_budget: SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+    };
+    assertGatingKeyExcludesInEpochOutput("semanticMapStageFingerprint", fingerprintPreImage);
+    const observationFingerprint = sha256Text(stableJson(fingerprintPreImage));
+    perObservationFingerprints.push({
+      observation_id: observation.observation_id,
+      fingerprint: observationFingerprint,
+    });
+
+    // Deterministic column tasks (canonical order = sheet-block order, then column order) built from
+    // the FULL in-memory tiles (F7) BEFORE any LLM call — the synthesize preflight needs the counts.
+    interface ColumnTask {
+      sheet: string;
+      column_index: number;
+      trace: ReduceTopologyTrace | null; // null = empty column (no non-empty leaves)
+      nodesByKey: Map<SemanticNodeKey, ComprehensionReduceNode> | null;
+      modes: Map<SemanticNodeKey, FrontierMode> | null;
+      producedCount: number;
+    }
+    const tasks: ColumnTask[] = [];
+    for (const sheetTiles of tileSheets) {
+      for (const column of sheetTiles.columns) {
+        const leaves = buildColumnLeaves(sheetTiles.sheet, column, { leafCount: cfg.leaf_count });
+        if (leaves.length === 0) {
+          tasks.push({ sheet: sheetTiles.sheet, column_index: column.column_index, trace: null, nodesByKey: null, modes: null, producedCount: 0 });
+          continue;
+        }
+        const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves, cfg.fanin);
+        const modes = classifyFrontier(trace, cfg.over_context_budget);
+        let producedCount = 0;
+        for (const m of modes.values()) if (m !== "subsumed") producedCount += 1;
+        tasks.push({ sheet: sheetTiles.sheet, column_index: column.column_index, trace, nodesByKey, modes, producedCount });
+      }
+    }
+
+    const columnRows: ReconstructSemanticMapCensusColumn[] = [];
+    const columnProjections: SemanticSeedProjection[] = [];
+    const nodeEpochs: { key: string; subtree_epoch_contribution: string }[] = [];
+    let doomed: boolean = false;
+
+    // X7 synthesize PREFLIGHT — observation-granular against the REMAINING global budget, decided
+    // before any of this observation's LLM calls (deterministic given canonical order).
+    const observationNeed = tasks.reduce((s, t) => s + t.producedCount, 0);
+    const preflightCapped = census.synthesize_calls_total + observationNeed > cfg.max_synthesize_calls;
+
+    for (const task of tasks) {
+      if (task.trace === null || task.nodesByKey === null || task.modes === null) {
+        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, "empty", null));
+        continue;
+      }
+      if (preflightCapped) {
+        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, "capped", `synthesize preflight: observation needs ${observationNeed}, budget remaining ${cfg.max_synthesize_calls - census.synthesize_calls_total} (X7)`));
+        doomed = true;
+        continue;
+      }
+      if (doomed) {
+        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, "skipped_observation_fallback", "a sibling column failed/was capped — observation falls back to flat (X5); remaining LLM work skipped"));
+        continue;
+      }
+      const { trace, nodesByKey, modes } = task;
+      let synthesizeCalls = 0;
+      let verifyCalls = 0;
+      try {
+        // ── §3 bridge pre-compute: bottom-up over produced nodes, single-source inputs, full guards.
+        const preByKey = new Map<string, SemanticMapBridgeRecord>();
+        const summaryByKey = new Map<SemanticNodeKey, string>();
+        const order: SemanticNodeKey[] = [];
+        const seen = new Set<SemanticNodeKey>();
+        const walk = (k: SemanticNodeKey): void => {
+          if (seen.has(k)) return;
+          seen.add(k);
+          const tnode = trace.nodes.get(k);
+          if (!tnode) throw new Error(`semantic-map stage: trace node missing for ${k}.`);
+          for (const c of tnode.child_keys) walk(c);
+          order.push(k);
+        };
+        walk(trace.root_key);
+        for (const key of order) {
+          if (modes.get(key) === "subsumed") continue;
+          const input = buildSynthesisInputForNode(trace, nodesByKey, modes, key, summaryByKey);
+          assertSynthesisInputBounded(input); // source-safe envelope on the EXACT transmitted input (§3).
+          const inputJson = stableJson(structuredClone(input));
+          // Count the ATTEMPT at dispatch, not the success (W2 code review W2-X7-001: a dispatched
+          // call that throws still spent the LLM budget — post-await increment under-reports).
+          synthesizeCalls += 1;
+          const out = await synthesizeNode(input);
+          assertSynthesisOutputBounded(out);
+          summaryByKey.set(key, out.semantic_summary);
+          const record: SemanticMapBridgeRecord = { input_json: inputJson, output: structuredClone(out), verifies: [] };
+          // Pre-verify every unanchored boundary via the SAME deterministic reconciliation the module
+          // will run (exported single source) — recorded by FULL verifier input (X3).
+          const reduceNode = nodesByKey.get(key);
+          if (!reduceNode) throw new Error(`semantic-map stage: reduce node missing for ${key}.`);
+          const { boundaries: classified } = reconcileBoundaries(out.boundaries, reduceNode);
+          const nodeRef = input.node_ref;
+          for (const b of classified) {
+            if (b.anchor_status !== "unanchored") continue;
+            if (census.verify_calls_total + verifyCalls + 1 > cfg.max_verify_calls) {
+              throw new SemanticMapVerifyCapExceeded(key, cfg.max_verify_calls);
+            }
+            const verifyInput: SemanticBoundaryVerifyInput = {
+              node_ref: { sheet: nodeRef.sheet, column_index: nodeRef.column_index, row_start: nodeRef.row_start, row_end: nodeRef.row_end },
+              boundary: { ...b },
+              summary: out.semantic_summary,
+            };
+            const verifyInputJson = stableJson(structuredClone(verifyInput));
+            verifyCalls += 1; // attempt-counted at dispatch (W2-X7-001).
+            const verdict = await verifyBoundary(verifyInput);
+            if (!(ADVERSARIAL_RESULTS as readonly string[]).includes(verdict)) {
+              throw new Error(`semantic-map stage: author verify returned invalid verdict '${verdict}' at ${key} (fail-closed).`);
+            }
+            record.verifies.push({ input_json: verifyInputJson, verdict });
+          }
+          preByKey.set(key, record);
+        }
+
+        // ── the REAL module accumulate + projection (all fail-closed validators live here).
+        const callbacks = buildSemanticMapBridgeCallbacks(preByKey);
+        const map = accumulateSemanticMap(trace, nodesByKey, {
+          synthesize: callbacks.synthesize,
+          verifyUnanchored: callbacks.verifyUnanchored,
+          preImageBase: args.preImageBase,
+          overContextBudget: cfg.over_context_budget,
+          seedBound: false, // the projection is the sole refuted-exclusion layer (module input contract).
+        });
+        const projection = projectSemanticMapToSeed(map, { maxNodes: cfg.max_nodes, maxDisclosure: cfg.max_disclosure });
+
+        // ── census counts from the REAL accumulated map (not the author's raw output).
+        let anchored = 0;
+        let unanchored = 0;
+        let confirmed = 0;
+        let refuted = 0;
+        let producedNodes = 0;
+        for (const node of map.values()) {
+          if (node.reduce_read_attempt === "subsumed") continue;
+          producedNodes += 1;
+          for (const b of node.semantic_boundaries) {
+            if (b.anchor_status === "anchored") anchored += 1;
+            else {
+              unanchored += 1;
+              if (b.verification === "adversarial_confirmed") confirmed += 1;
+              else if (b.verification === "adversarial_refuted") refuted += 1;
+            }
+          }
+        }
+        let fAcc = 0;
+        let fFront = 0;
+        let fSub = 0;
+        for (const m of modes.values()) {
+          if (m === "accumulating") fAcc += 1;
+          else if (m === "frontier") fFront += 1;
+          else fSub += 1;
+        }
+        census.synthesize_calls_total += synthesizeCalls;
+        census.verify_calls_total += verifyCalls;
+        columnRows.push({
+          sheet: task.sheet,
+          column_index: task.column_index,
+          status: "produced",
+          reason: null,
+          produced_nodes: producedNodes,
+          frontier_accumulating: fAcc,
+          frontier_frontier: fFront,
+          frontier_subsumed: fSub,
+          anchored,
+          unanchored,
+          adversarial_confirmed: confirmed,
+          adversarial_refuted: refuted,
+          synthesize_calls: synthesizeCalls,
+          verify_calls: verifyCalls,
+        });
+        columnProjections.push(projection);
+        for (const [key, node] of map) {
+          nodeEpochs.push({ key, subtree_epoch_contribution: node.subtree_epoch_contribution });
+        }
+      } catch (error) {
+        if (isGracefulTerminalSignal(error)) throw error;
+        // Column-level stage-owned fallback (X5 — the strongest round-1 convergence): the module
+        // stays fail-closed; a failed/capped column dooms the OBSERVATION to the flat path. Spent
+        // calls are still counted (honest cost census).
+        census.synthesize_calls_total += synthesizeCalls;
+        census.verify_calls_total += verifyCalls;
+        const capped = error instanceof SemanticMapVerifyCapExceeded;
+        columnRows.push({
+          ...emptySemanticMapColumnRow(task.sheet, task.column_index, capped ? "capped" : "failed", (error as Error).message),
+          // Row-level spent-call honesty: the failed/capped column still SPENT these calls — the
+          // per-column rows must sum to the census totals (no hidden spend).
+          synthesize_calls: synthesizeCalls,
+          verify_calls: verifyCalls,
+        });
+        doomed = true;
+      }
+    }
+
+    const producedColumns = columnRows.filter((c) => c.status === "produced").length;
+    const mapPresent = !doomed && producedColumns >= 1;
+    if (mapPresent) {
+      const merged = mergeSemanticSeedProjections(columnProjections, { max_nodes: cfg.max_nodes, max_disclosure: cfg.max_disclosure });
+      projectionByObservation.set(observation.observation_id, merged);
+      nodeEpochs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+      sidecarObservations.push({ observation_id: observation.observation_id, projection: merged, node_epochs: nodeEpochs });
+      census.observations_map_present += 1;
+    } else {
+      census.observations_map_absent += 1;
+    }
+    const observationRow: ReconstructSemanticMapCensusObservation = {
+      observation_id: observation.observation_id,
+      map_present: mapPresent,
+      skip_reason: null,
+      fingerprint: observationFingerprint,
+      columns: columnRows,
+    };
+    census.by_observation.push(observationRow);
+    } catch (error) {
+      if (isGracefulTerminalSignal(error)) throw error;
+      // Deterministic-phase containment (ultracode audit A/B): observations_total was already
+      // counted; record the honest skip row directly (no double count). Spent LLM totals from the
+      // column loop were already added inside its own catch before rethrow paths — the only throws
+      // reaching here are pre/post-column deterministic failures.
+      census.observations_map_absent += 1;
+      census.by_observation.push({
+        observation_id: observation.observation_id,
+        map_present: false,
+        skip_reason: "deterministic_phase_failed",
+        skip_detail: (error as Error).message,
+        fingerprint: null,
+        columns: [],
+      });
+    }
+  }
+
+  // ALWAYS persist census + sidecar when the stage ran (f1a3c1b honest-signal pattern): a total
+  // semantic-map failure is a durable artifact, never silently absent. Doubles as the W3 manifest
+  // step's artifact refs.
+  const comprehensionDir = path.join(args.sessionRoot, "comprehension");
+  await fs.mkdir(comprehensionDir, { recursive: true });
+  const censusPath = path.join(comprehensionDir, "semantic-map-census.yaml");
+  await writeYamlDocument(censusPath, census);
+  const sidecarPath = path.join(comprehensionDir, "semantic-map.yaml");
+  const sidecar: ReconstructSemanticMapSidecar = { schema_version: "1", observations: sidecarObservations };
+  await writeYamlDocument(sidecarPath, sidecar);
+
+  const aggregateFingerprint =
+    perObservationFingerprints.length === 0
+      ? null
+      : sha256Text(
+          stableJson(
+            perObservationFingerprints
+              .slice()
+              .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0)),
+          ),
+        );
+
+  return { projectionByObservation, census, censusPath, sidecarPath, aggregateFingerprint };
+}
+
+function emptySemanticMapColumnRow(
+  sheet: string,
+  columnIndex: number,
+  status: ReconstructSemanticMapCensusColumn["status"],
+  reason: string | null,
+): ReconstructSemanticMapCensusColumn {
+  return {
+    sheet,
+    column_index: columnIndex,
+    status,
+    reason,
+    produced_nodes: 0,
+    frontier_accumulating: 0,
+    frontier_frontier: 0,
+    frontier_subsumed: 0,
+    anchored: 0,
+    unanchored: 0,
+    adversarial_confirmed: 0,
+    adversarial_refuted: 0,
+    synthesize_calls: 0,
+    verify_calls: 0,
+  };
 }
 
 // Maturation value-read cut (design §13). System (not domain) limitation kinds a value-read can
@@ -2507,6 +3290,8 @@ export function artifactRefsWithDefaults(args: {
     source_observation_lineage_index_validation:
       args.refs.source_observation_lineage_index_validation ?? null,
     leaf_read_census: args.refs.leaf_read_census ?? null,
+    semantic_map_census: args.refs.semantic_map_census ?? null,
+    semantic_map_sidecar: args.refs.semantic_map_sidecar ?? null,
     source_safety_ledger: args.refs.source_safety_ledger ?? null,
     source_safety_ledger_validation:
       args.refs.source_safety_ledger_validation ?? null,
@@ -3213,6 +3998,28 @@ export function createRunManifest(args: {
           directiveAuthorPerformer(args.directiveAuthor),
           "leaf-read stage did not run (author has no readLeafLabels).",
           "No leaf-read capture was attempted; the deterministic companion stands unchanged.",
+        ),
+      // Layer-2 semantic_map stage (wiring design 20260702 §6/W3). Census ref present → completed
+      // (the always-written census is the durable evidence surface, even map-absent); null →
+      // skipped (the stage no-op'd; skip reason names the canonical capability PAIR — X8).
+      args.artifactRefs.semantic_map_census
+        ? completedStep(
+          "semantic_map",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.semantic_map_census, args.artifactRefs.semantic_map_sidecar]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "semantic_map",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          // Honest disjunction (ultracode audit H): a null census means the stage never WROTE its
+          // witness — either the author lacks the capability pair (the default-off skip) or the run
+          // ended before the stage (graceful terminal). This builder only sees the ref, so it must
+          // not assert capability absence as fact.
+          "semantic-map stage wrote no census (author lacks the synthesizeSemanticMapNode/verifySemanticMapBoundary pair, or the run terminated before the stage).",
+          "No semantic-map accumulation was recorded; the flat leaf-read path stands unchanged.",
         ),
       completedStep(
         "source_purpose_candidates",
@@ -5160,6 +5967,10 @@ function competencyQuestionAssessmentUserPayload(
     input,
     questions,
   );
+  // DELIBERATE direct module call (not the author's projectObservationsForPrompt closure): the
+  // assessment JUDGE surface sees raw observation evidence only — no leaf-read provisional labels
+  // and no semantic-map render (judge context-isolation precedent; it never carried the flat
+  // labels either, so this is a scope-out, not a W4 gap — onto W4 review issue-003a).
   const projectedEvidenceCandidates = observationPromptPayload(
     input.sourceObservations,
     {
@@ -6844,6 +7655,10 @@ interface ObservationPromptPayloadOptions {
    * field subset, so these captures cannot leak into it).
    */
   provisionalLabelsByObservation?: ReadonlyMap<string, readonly string[]>;
+  /** W4 §4(B): map-present observations render the hierarchical semantic map INSTEAD of the flat
+   *  labels (D-REL); not_examined_capped is always preserved (X4 — the two censuses are different
+   *  universes). */
+  semanticMapByObservation?: ReadonlyMap<string, SemanticSeedProjection>;
   /**
    * P1-C2-B′ §2.2 Step E: read-candidate columns the fan-out cap left UNREAD, per observation_id
    * (formatted "colN (name)"). Surfaced as an explicit "not examined (capped)" census so the
@@ -7056,7 +7871,22 @@ export function observationPromptPayload(
         );
         const hasLabels = provisionalLabels && provisionalLabels.length > 0;
         const hasCapped = cappedColumns && cappedColumns.length > 0;
-        if (hasLabels || hasCapped) {
+        const semanticMap = options.semanticMapByObservation?.get(observation.observation_id);
+        if (semanticMap) {
+          // W4 §4(B) — D-REL replace: the hierarchical semantic map supersedes the flat leaf-read
+          // labels for this observation. not_examined_capped is PRESERVED (X4): the capped census
+          // and the map cover different candidate universes, so suppressing it would reproduce the
+          // over-trust it exists to prevent. Absent map → the pre-branch code below, byte-identical.
+          payload.provisional_labels = {
+            ...renderSemanticMapProjection(semanticMap, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, true),
+            ...(hasCapped
+              ? {
+                  not_examined_capped: cappedColumns.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION),
+                  not_examined_capped_total: cappedColumns.length,
+                }
+              : {}),
+          };
+        } else if (hasLabels || hasCapped) {
           // Both lists are display-bounded for prompt size, but the bound must NEVER be a SILENT drop
           // (gate RB6 + two-family gate finding): the *_total counts are AUTHORITATIVE, so a consumer
           // can always tell when a list is shorter than its true count. This matters most for the
@@ -8122,6 +8952,8 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
     coverageAxisIds: "<<coverage_axis_ids>>",
     maturationHandoffPrompt: "<<maturation_handoff_prompt>>",
   }),
+  ontology_seed_semantic_map_note: SEMANTIC_MAP_SEED_PROMPT_NOTE,
+  observation_semantic_map_note: SEMANTIC_MAP_PROMPT_NOTE,
   claim_realization_map: CLAIM_REALIZATION_MAP_SYSTEM_PROMPT,
   competency_questions: competencyQuestionsSystemPrompt({
     hasRepairAttempt: false,
@@ -8232,6 +9064,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   // P1-C2-A/B′ Step E: the leaf-read captures + honest capped census (set after the leaf-read stage).
   // projected into every observation prompt as a non-authoritative hint; never folded into the reuse key.
   let leafReadProvisionalLabels: ReadonlyMap<string, readonly string[]> | null = null;
+  // W4 §4: the semantic-map stage's per-observation seed projections (set after the stage; prompt
+  // text only — the reuse key folds the stage fingerprint, never this instance).
+  let semanticMapProjection: ReadonlyMap<string, SemanticSeedProjection> | null = null;
   let leafReadCappedColumns: ReadonlyMap<string, readonly string[]> | null = null;
   const projectObservationsForPrompt = (
     obs: ReconstructSourceObservationsArtifact,
@@ -8243,6 +9078,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         ? { provisionalLabelsByObservation: leafReadProvisionalLabels }
         : {}),
       ...(leafReadCappedColumns ? { cappedColumnsByObservation: leafReadCappedColumns } : {}),
+      ...(semanticMapProjection ? { semanticMapByObservation: semanticMapProjection } : {}),
     });
 
   return {
@@ -8253,6 +9089,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
     setLeafReadCappedColumns(capped: ReadonlyMap<string, readonly string[]>): void {
       leafReadCappedColumns = capped;
+    },
+    setSemanticMapProjection(byObservation: ReadonlyMap<string, SemanticSeedProjection>): void {
+      semanticMapProjection = byObservation;
     },
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
@@ -9131,6 +9970,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeOntologySeed(input) {
+      // W4 §4(A): the dedicated seed-payload semantic_map field — scoped to the SEED observation
+      // set (the safety/scope-gated ids below), rendered through the same single renderer as the
+      // observation-prompt surface. Empty/absent map → no field, payload byte-identical.
+      const buildSemanticMapSeedRender = (ids: readonly string[]): Record<string, unknown>[] =>
+        semanticMapProjection
+          ? ids
+              .filter((id) => semanticMapProjection!.has(id))
+              .map((id) => ({
+                observation_id: id,
+                ...renderSemanticMapProjection(semanticMapProjection!.get(id)!, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, false),
+              }))
+          : [];
       const seedObservationIds = ontologySeedObservationIds({
         candidateInventory: input.candidateInventory,
         candidateDisposition: input.candidateDisposition,
@@ -9145,7 +9996,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             ? "OntologySeedValidationRepair"
             : "OntologySeed",
           maxTokens: 9000,
-          systemPrompt: ontologySeedSystemPrompt({
+          // W4 R2-02: the seed system prompt enumerates the userPayload fields — a new field the
+          // prompt never declares would be an unexplained input. The note is appended ONLY when the
+          // payload actually carries semantic_map (map-absent prompts stay byte-identical); the note
+          // text is a CG-1 catalog entry, so editing it rotates authoring_prompt_contract_sha256.
+          systemPrompt: (buildSemanticMapSeedRender(seedObservationIds).length > 0
+            ? (base: string): string => base + "\n" + SEMANTIC_MAP_SEED_PROMPT_NOTE
+            : (base: string): string => base)(ontologySeedSystemPrompt({
             authorId,
             coverageAxisIds: coverageAxisIds(input.contractRegistry).join(", "),
             maturationHandoffPrompt:
@@ -9153,7 +10010,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             repairSections: input.repairAttempt
               ? input.repairAttempt.repair_sections.join(", ")
               : null,
-          }),
+          })),
           userPayload: {
           intent: input.intent,
           target_material_profile:
@@ -9178,6 +10035,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           material_admission_ledger_ref: input.materialAdmissionLedgerRef,
           material_admission_rows:
             compactMaterialAdmissionLedgerForPrompt(input.materialAdmissionLedger),
+          ...(buildSemanticMapSeedRender(seedObservationIds).length > 0
+            ? { semantic_map: buildSemanticMapSeedRender(seedObservationIds) }
+            : {}),
           seed_authoring_readiness_ref: input.seedAuthoringReadinessRef,
           seed_authoring_readiness_validation_ref:
             input.seedAuthoringReadinessValidationRef,
@@ -9238,13 +10098,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             telemetry,
             artifactName: "OntologySeedMinimalKernel",
             maxTokens: 6500,
-            systemPrompt: ontologySeedMinimalKernelSystemPrompt({
+            systemPrompt: (buildSemanticMapSeedRender(seedObservationIds).length > 0
+              ? (base: string): string => base + "\n" + SEMANTIC_MAP_SEED_PROMPT_NOTE
+              : (base: string): string => base)(ontologySeedMinimalKernelSystemPrompt({
               authorId,
               coverageAxisIds: coverageAxisIds(input.contractRegistry).join(", "),
               maturationHandoffPrompt:
                 ontologySeedMaturationHandoffPrompt(input.contractRegistry),
-            }),
+            })),
             userPayload: {
+              ...(buildSemanticMapSeedRender(seedObservationIds).length > 0
+                ? { semantic_map: buildSemanticMapSeedRender(seedObservationIds) }
+                : {}),
               intent: input.intent,
               target_material_profile:
                 compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
@@ -12760,6 +13625,38 @@ export async function runReconstruct(
   if (leafReadStage.cappedColumnsByObservation.size > 0) {
     directiveAuthor.setLeafReadCappedColumns?.(leafReadStage.cappedColumnsByObservation);
   }
+  // Layer-2 semantic_map stage (wiring design 20260702 §7-W3). Default-off: an author without the
+  // capability pair skips (census/fingerprint null → manifest step `skipped`). Runs BEFORE the
+  // reuse-match assembly so its fingerprint folds into every authored artifact's reuse key —
+  // registration/reuse authority PRECEDES prompt injection (R2-03: the projection reaches no prompt
+  // until W4; a W3-state capability author spends calls without prompt effect, by design).
+  const semanticMapStage = await runSemanticMapStage({
+    sourceObservations,
+    directiveAuthor,
+    sessionRoot,
+    config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+    preImageBase: {
+      reduce_reader_model_identity: directiveAuthor.reuseModelIdentity ?? "unspecified",
+      // F6: the authoring prompt-template CONTRACT sha (CG-1 catalog) — the semantic-map author
+      // prompts join the catalog with the author realization; any catalog edit rotates this
+      // tautologically (over-rotation is the safe direction).
+      reduce_prompt_sha256: authoringPromptContractSha256(),
+      reduce_schema_tool_version: "semantic-map:v1",
+      comprehension_version: SEMANTIC_MAP_COMPREHENSION_VERSION,
+      over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
+      over_context_gate_logic_sha256: semanticMapGateLogicSha256(),
+    },
+    verifyModelIdentity: directiveAuthor.reuseModelIdentity ?? "unspecified",
+  });
+  const semanticMapAggregateFingerprint = semanticMapStage.aggregateFingerprint;
+  // W4 §4: hand the per-observation projections to the author — (A) the seed userPayload field and
+  // (B) the observation-prompt replace both render from this one map (prompt text only; the reuse
+  // key already folds the stage fingerprint above).
+  // ALWAYS set — including an empty map (W4 review W4-005): a reused author instance would
+  // otherwise leak the PREVIOUS run's projections into a map-absent run (parity violation).
+  directiveAuthor.setSemanticMapProjection?.(semanticMapStage.projectionByObservation);
+  const semanticMapCensusPath = semanticMapStage.censusPath;
+  const semanticMapSidecarPath = semanticMapStage.sidecarPath;
   const refreshAuthoredArtifactReuseMatch = (): void => {
     currentAuthoredArtifactReuseMatch = authoredArtifactReuseMatch({
       sessionId,
@@ -12784,6 +13681,7 @@ export async function runReconstruct(
       directiveAuthor,
       confirmationProvider,
       leafReadAggregateFingerprint,
+      semanticMapAggregateFingerprint,
     });
   };
   refreshAuthoredArtifactReuseMatch();
@@ -13069,6 +13967,8 @@ export async function runReconstruct(
         source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
         source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
         leaf_read_census: leafReadCensusPath,
+        semantic_map_census: semanticMapCensusPath,
+        semantic_map_sidecar: semanticMapSidecarPath,
         source_observation_directive: sourceObservationDirectivePath,
         source_observation_directive_validation:
           sourceObservationDirectiveValidationPath,
@@ -14041,6 +14941,8 @@ export async function runReconstruct(
       source_observation_lineage_index_validation:
         sourceObservationLineageIndexValidationPath,
       leaf_read_census: leafReadCensusPath,
+      semantic_map_census: semanticMapCensusPath,
+      semantic_map_sidecar: semanticMapSidecarPath,
       source_safety_ledger: sourceSafetyLedgerPath,
       source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
       source_scout_pack: sourceScoutPackPath,
