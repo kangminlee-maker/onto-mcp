@@ -479,10 +479,12 @@ verifySemanticMapBoundary?(input: SemanticBoundaryVerifyInput): Promise<Semantic
   spec+테스트를 확정할 뿐 production 강제를 주장하지 않는다.
 **15.3 테스트(전부 W1 내 소비)**: 쌍-검사 4케이스(both→present·none→absent·**only-synth→throw·only-verify→throw** =
   음성대조 쌍)·모듈 타입 export 동일성(기존 `AdversarialVerifyFn` 시그니처와 assignable 양방향)·**verdict 단일출처
-  drift-가드 테스트**(R3 onto issue-002: `[...VALID_ADVERSARIAL_RESULT]` 집합 == `ADVERSARIAL_RESULTS` 튜플 원소 집합
-  deep-equal + Set의 원소 타입이 `SemanticBoundaryVerification`에 assignable — 파생 구조가 미래에 별도 선언으로 회귀하면
-  fail)·**live-path diff 0**(변경 파일 = run.ts 인터페이스 블록·comprehension-semantic-map.ts SSOT refactor+타입 export·
-  테스트 파일뿐임을 git diff로 단언).
+  drift-가드 테스트**(R3 onto issue-002)·**live-path diff 0**(변경 파일 국한을 git diff로 단언).
+  **★정정(2026-07-02·W1 코드 교차검증 F01/F02)**: 타입-레벨 drift 가드의 **집행 가능한 집 = 모듈 소스**(erased 단언 +
+  `ReadonlySet<SemanticBoundaryVerification>` 주석) — `check:ts-core`가 `*.test.ts`를 **exclude**하고 vitest는 typecheck를
+  안 해서, 테스트 파일의 타입 단언은 **어떤 게이트에도 안 걸림**(고의-타입-오류 probe로 실증). 소스-레벨 가드는 union
+  확장·Set 확장 각각에서 빌드가 깨짐을 음성대조 2건으로 실증. 테스트 파일의 런타임 검사(튜플 멤버별 accumulate 통과·
+  deep-equal)는 유지(회귀-행동 가드).
 **15.4 W1 경계(후속을 선결정하는 것 = 리뷰 표적)**: ①capability 이름 쌍(§2 traceability) ②타입 단일출처=모듈
   ③쌍 규칙(one-sided=fail-loud). 스테이지 함수·stage id·telemetry·manifest·census·프롬프트·fingerprint·knob = 전부
   W2~W4(여기 없음). 검증 = ts clean·full vitest 회귀0·15.3 전부.

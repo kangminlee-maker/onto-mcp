@@ -115,7 +115,17 @@ const VALID_VERIFICATION = new Set<string>([
  *  R3 W1-01 / onto issue-001·003). Exported so the drift-guard test proves the same-source derivation. */
 export const ADVERSARIAL_RESULTS = ["adversarial_confirmed", "adversarial_refuted"] as const;
 export type SemanticBoundaryVerification = (typeof ADVERSARIAL_RESULTS)[number];
-const VALID_ADVERSARIAL_RESULT = new Set<string>(ADVERSARIAL_RESULTS);
+// SOURCE-level exact-type coupling (W1 code review F01/F02): these live in the MODULE (not a test)
+// because check:ts-core EXCLUDES *.test.ts — a test-file type assertion is enforced by NO gate
+// (proven by a deliberate-type-error probe). Erased at runtime. If the union is ever redefined away
+// from the tuple, either line breaks the build.
+type _VerificationCoversTuple = (typeof ADVERSARIAL_RESULTS)[number] extends SemanticBoundaryVerification ? true : never;
+type _TupleCoversVerification = SemanticBoundaryVerification extends (typeof ADVERSARIAL_RESULTS)[number] ? true : never;
+const _verdictExact: [_VerificationCoversTuple, _TupleCoversVerification] = [true, true];
+void _verdictExact;
+// ReadonlySet<union> (not Set<string>): a member added to the SET literal that is not in the tuple
+// now fails the build too (the runtime .has() guard against JS-level bogus values is unchanged).
+const VALID_ADVERSARIAL_RESULT: ReadonlySet<SemanticBoundaryVerification> = new Set(ADVERSARIAL_RESULTS);
 
 /** Canonical TOTAL order over value-shape seams (full witness tuple so equal-row seams from different
  *  provenance never tie by input order; review F7 — mirrors comprehension-reduce canonicalBoundaries). */
