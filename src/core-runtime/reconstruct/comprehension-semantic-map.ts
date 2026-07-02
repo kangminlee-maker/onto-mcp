@@ -719,6 +719,52 @@ function canonicalValueShapeSeams(
   return out;
 }
 
+/** SINGLE-SOURCE synthesis-input builder (W2 §3(a) / X2): the module's internal walk AND the stage
+ *  bridge both construct the LLM-facing input through this function, so the input the LLM actually
+ *  saw cannot drift from the input the module validates (the bridge additionally compares stableJson
+ *  of both — §3(b)). Child summaries are MODULE-owned outputs (a produced child's semantic_summary),
+ *  unbuildable from topology alone (X2: codex-F2 ≡ onto-004) — the caller supplies them via
+ *  `childSummaryByKey` (available bottom-up). Fail-closed on an unknown/subsumed key or a missing
+ *  consumed-child summary. The returned node_ref is a clone (review F3 — a caller-injected
+ *  synthesize cannot mutate the trace). */
+export function buildSynthesisInputForNode(
+  trace: ReduceTopologyTrace,
+  nodesByKey: ReadonlyMap<SemanticNodeKey, ComprehensionReduceNode>,
+  modes: ReadonlyMap<SemanticNodeKey, FrontierMode>,
+  key: SemanticNodeKey,
+  childSummaryByKey: ReadonlyMap<SemanticNodeKey, string>,
+): SemanticSynthesisInput {
+  const tnode = trace.nodes.get(key);
+  const reduceNode = nodesByKey.get(key);
+  if (!tnode || !reduceNode) {
+    throw new Error(`comprehension-semantic-map: trace/node missing for key ${key} (synthesis input).`);
+  }
+  const mode = modes.get(key);
+  if (!mode) {
+    throw new Error(`comprehension-semantic-map: no frontier mode for ${key} (synthesis input).`);
+  }
+  if (mode === "subsumed") {
+    throw new Error(`comprehension-semantic-map: subsumed node ${key} takes no synthesis input (§13.6 — its frontier ancestor's read covers it).`);
+  }
+  const r = tnode.node_ref;
+  const isFrontier = mode === "frontier";
+  const consumedChildKeys = tnode.child_keys.filter((k) => modes.get(k) !== "subsumed");
+  return {
+    node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
+    format_clusters: [...reduceNode.format_clusters].sort(), // canonical (round-4): input = fn(ground identity), not raw order.
+    value_shape_seams: canonicalValueShapeSeams(reduceNode.boundaries),
+    child_summaries: isFrontier
+      ? []
+      : consumedChildKeys.map((k) => {
+          const summary = childSummaryByKey.get(k);
+          if (summary === undefined) {
+            throw new Error(`comprehension-semantic-map: missing consumed-child summary for ${k} (synthesis input — children must be produced bottom-up first).`);
+          }
+          return { key: k, summary };
+        }),
+  };
+}
+
 /** Walk the trace bottom-up, producing one validated ComprehensionSemanticNode per skeleton node. Each
  *  node: synthesize (caller LLM) → reconcileBoundaries (deterministic anchor/coverage) → verify EVERY
  *  unanchored boundary (N3) → recursive epoch contribution → taint census → assemble, with all three
@@ -815,16 +861,17 @@ export function accumulateSemanticMap(
 
     // FRONTIER = one flat read over the whole subtree (child_summaries omitted; children are subsumed).
     // ACCUMULATING = synthesize the (non-subsumed) children's judgments. Both are 'produced'.
-    const isFrontier = mode === "frontier";
+    // W2 §3(a): the input is constructed through the SAME exported single-source builder the stage
+    // bridge uses (node_ref cloned inside — review F3), so the LLM-facing input cannot drift from
+    // the module-validated input by construction.
     const r = tnode.node_ref;
-    const input: SemanticSynthesisInput = {
-      // Clone the node_ref (review F3): the caller-injected synthesize gets a COPY, so it cannot mutate
-      // the trace's node_ref and corrupt a later parent's child-summary keys.
-      node_ref: { sheet: r.sheet, column_index: r.column_index, row_start: r.row_start, row_end: r.row_end },
-      format_clusters: [...reduceNode.format_clusters].sort(), // canonical (round-4): input = fn(ground identity), not raw order.
-      value_shape_seams: canonicalValueShapeSeams(reduceNode.boundaries),
-      child_summaries: isFrontier ? [] : consumedChildren.map((c) => ({ key: reduceNodeKey(c.node_ref), summary: c.semantic_summary })),
-    };
+    const input = buildSynthesisInputForNode(
+      trace,
+      nodesByKey,
+      modes,
+      key,
+      new Map(consumedChildren.map((c) => [reduceNodeKey(c.node_ref), c.semantic_summary])),
+    );
     assertSynthesisInputBounded(input);
     const out = opts.synthesize(input);
     assertSynthesisOutputBounded(out); // round-2: validate the caller's OUTPUT, not just the input.

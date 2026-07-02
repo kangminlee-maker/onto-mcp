@@ -50,6 +50,9 @@ import type {
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructMaturationValueDischargeArtifact,
   ReconstructMaturationValueDischargeCensus,
+  ReconstructSemanticMapCensus,
+  ReconstructSemanticMapCensusColumn,
+  ReconstructSemanticMapCensusObservation,
   ReconstructMaturationValueDischargeEntry,
   ReconstructMaturationValueDischargeValidationArtifact,
   ReconstructValueReadScope,
@@ -261,14 +264,33 @@ import {
   type LeafReadRegionEvidence,
   type StructureLeafTriggerOpts,
 } from "./leaf-reader.js";
-// W1 (wiring design 20260702 §15.1): type-only — the semantic-map capability seat reuses the module's
-// canonical shapes (single source; no runtime import until the W2 stage wiring).
-import type {
-  SemanticBoundaryVerification,
-  SemanticBoundaryVerifyInput,
-  SemanticSynthesisInput,
-  SemanticSynthesisOutput,
+// W1/W2 (wiring design 20260702 §15.1/§3): the semantic-map capability seat + W2 stage reuse the
+// module's canonical shapes and single-source builders (no live runReconstruct call site until W3).
+import {
+  ADVERSARIAL_RESULTS,
+  accumulateSemanticMap,
+  assertSynthesisInputBounded,
+  assertSynthesisOutputBounded,
+  buildSynthesisInputForNode,
+  classifyFrontier,
+  projectSemanticMapToSeed,
+  reconcileBoundaries,
+  type FrontierMode,
+  type SemanticBoundaryVerification,
+  type SemanticBoundaryVerifyInput,
+  type SemanticEpochPreImage,
+  type SemanticSeedProjection,
+  type SemanticSynthesisInput,
+  type SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
+import {
+  buildColumnLeaves,
+  reduceColumnLeavesWithTrace,
+  reduceNodeKey,
+  type ComprehensionReduceNode,
+  type ReduceTopologyTrace,
+  type SemanticNodeKey,
+} from "./comprehension-reduce.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
   llmTouchFingerprint,
@@ -1853,6 +1875,424 @@ export async function runSpreadsheetLeafReadStage(args: {
           ),
         );
   return { artifactsByObservation, aggregateFingerprint, cappedColumnsByObservation, censusPath };
+}
+
+// ── semantic_map stage (Layer-2 wiring design 20260702 §2/§3/§6 · W2) ─────────────────────────────
+//
+// The W2 machinery: per seed observation, build the deterministic reduce trees from the FULL
+// in-memory inventory value tiles (F7 — never the prompt projection, which empties segments), run
+// the async author capability pair through the §3 bridge (pre-compute + triple guard), accumulate
+// through the real module (all fail-closed validators), and project per observation. Failure
+// granularity is STAGE-owned (X5): the module stays fail-closed throw-or-produced; a failed/capped
+// column dooms its OBSERVATION to the flat path (no partial-map replacement). No live runReconstruct
+// call site in W2 — W3 wires the stage + registration BEFORE W4 wires prompt injection (R2-03).
+
+/** Deterministic stage config. ALL fields required and validated fail-loud (R2-04: the module's
+ *  projection caps default to UNBOUNDED; the stage never relies on defaults). Every value shapes the
+ *  map, so W3 folds this whole object into the reuse fingerprint (§5). */
+export interface SemanticMapStageConfig {
+  /** buildColumnLeaves leaf grouping (≥1) — reduce-tree topology input (§5 F2). */
+  leaf_count: number;
+  /** reduceColumnLeavesWithTrace fan-in (≥2) — reduce-tree topology input (§5 F2). */
+  fanin: number;
+  /** classifyFrontier over-context budget (leaf count, ≥0). */
+  over_context_budget: number;
+  /** X7: deterministic PREFLIGHT cap on author synthesize calls (per stage run). */
+  max_synthesize_calls: number;
+  /** X7/R2-01: INCREMENTAL cap on author verify calls (verify count is a function of synthesize
+   *  OUTPUT, not pre-LLM computable; exceeding it fails the column closed → observation fallback). */
+  max_verify_calls: number;
+  /** R2-04: explicit projection display caps (authoritative totals stay uncapped). */
+  max_nodes: number;
+  max_disclosure: number;
+}
+
+function assertSemanticMapStageConfig(config: SemanticMapStageConfig): void {
+  const entries: [string, number, number][] = [
+    ["leaf_count", config.leaf_count, 1],
+    ["fanin", config.fanin, 2],
+    ["over_context_budget", config.over_context_budget, 0],
+    ["max_synthesize_calls", config.max_synthesize_calls, 0],
+    ["max_verify_calls", config.max_verify_calls, 0],
+    ["max_nodes", config.max_nodes, 0],
+    ["max_disclosure", config.max_disclosure, 0],
+  ];
+  for (const [name, value, min] of entries) {
+    if (!Number.isSafeInteger(value) || value < min) {
+      throw new Error(
+        `semantic-map stage: config.${name} must be a safe integer ≥ ${min}, got ${value} (R2-04/X7 fail-loud — a NaN/absent cap would silently unbound the stage).`,
+      );
+    }
+  }
+}
+
+/** One node's recorded bridge exchange: the EXACT input the LLM saw (stableJson of a deep clone,
+ *  captured at call time — R2-06: never a live object reference) + the author's output + every
+ *  adversarial verification keyed by its FULL input (X3: row keying collides; no fallback). */
+export interface SemanticMapBridgeRecord {
+  input_json: string;
+  output: SemanticSynthesisOutput;
+  verifies: { input_json: string; verdict: SemanticBoundaryVerification }[];
+}
+
+/** §3(b)/(c) sync closures over the pre-computed records. Exported so the drift detectors are
+ *  falsifiable in tests WITHOUT production test-hooks: feed a tampered record → must throw. */
+export function buildSemanticMapBridgeCallbacks(preByKey: ReadonlyMap<string, SemanticMapBridgeRecord>): {
+  synthesize: (input: SemanticSynthesisInput) => SemanticSynthesisOutput;
+  verifyUnanchored: (input: SemanticBoundaryVerifyInput) => SemanticBoundaryVerification;
+} {
+  return {
+    synthesize: (input) => {
+      const key = reduceNodeKey(input.node_ref);
+      const rec = preByKey.get(key);
+      if (!rec) {
+        throw new Error(`semantic-map bridge: no precomputed synthesis for ${key} (§3 fail-closed).`);
+      }
+      if (stableJson(input) !== rec.input_json) {
+        throw new Error(
+          `semantic-map bridge: module synthesis input drifted from the input the LLM saw at ${key} (§3(b) drift detector — silent divergence is the validation-bypass class).`,
+        );
+      }
+      return structuredClone(rec.output);
+    },
+    verifyUnanchored: (input) => {
+      const key = reduceNodeKey(input.node_ref);
+      const rec = preByKey.get(key);
+      const inputJson = stableJson(input);
+      const hit = rec?.verifies.find((v) => v.input_json === inputJson);
+      if (!hit) {
+        throw new Error(
+          `semantic-map bridge: no recorded adversarial verification matching the module's verifier input at ${key} (§3(c) full-input key — row keying collides; a conservative fallback would silently pollute).`,
+        );
+      }
+      return hit.verdict;
+    },
+  };
+}
+
+/** Deterministic per-observation merge of per-column projections (LLM-0). Totals are the SUMS of the
+ *  per-column AUTHORITATIVE totals (never the rendered lengths); display lists re-capped after the
+ *  canonical-order merge — bounded views over honest totals (run.ts:6469 pattern). */
+export function mergeSemanticSeedProjections(
+  projections: readonly SemanticSeedProjection[],
+  caps: { max_nodes: number; max_disclosure: number },
+): SemanticSeedProjection {
+  const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+  const nodes = projections
+    .flatMap((p) => p.nodes)
+    .sort((a, b) => cmp(reduceNodeKey(a.node_ref), reduceNodeKey(b.node_ref)));
+  const refuted = projections
+    .flatMap((p) => p.refuted_disclosure)
+    .sort((a, b) => cmp(reduceNodeKey(a.node_ref), reduceNodeKey(b.node_ref)) || a.row - b.row);
+  return {
+    authority: "non_authoritative",
+    provisional: true,
+    nodes: nodes.slice(0, caps.max_nodes),
+    nodes_total: projections.reduce((s, p) => s + p.nodes_total, 0),
+    refuted_disclosure: refuted.slice(0, caps.max_disclosure),
+    refuted_disclosure_total: projections.reduce((s, p) => s + p.refuted_disclosure_total, 0),
+    unanchored_unverified_total: projections.reduce((s, p) => s + p.unanchored_unverified_total, 0),
+  };
+}
+
+/** Marker error for the X7 incremental verify cap (caught per column → capped, not failed). */
+class SemanticMapVerifyCapExceeded extends Error {
+  constructor(key: string, cap: number) {
+    super(`semantic-map stage: verify-call cap ${cap} exceeded at ${key} (X7 incremental — column fails closed to the flat path).`);
+  }
+}
+
+export interface SemanticMapStageResult {
+  /** Merged per-observation projection — ONLY observations that passed the X5 all-columns gate. */
+  projectionByObservation: Map<string, SemanticSeedProjection>;
+  /** null ⇔ the stage was skipped (author lacks the capability pair; W3 manifest step = skipped). */
+  census: ReconstructSemanticMapCensus | null;
+  censusPath: string | null;
+  sidecarPath: string | null;
+}
+
+/**
+ * W2 semantic_map stage. Default-off: an author without the capability PAIR returns the skip result
+ * (no census — "never ran" stays durably distinct from "ran and produced nothing"); a one-sided
+ * author throws (resolveSemanticMapCapability — production fail-loud starts HERE, §15.2). Census +
+ * sidecar are ALWAYS written when the stage runs (leaf_read f1a3c1b pattern). The census/sidecar
+ * carry deterministic data only; the reuse fingerprint is W3's fold.
+ */
+export async function runSemanticMapStage(args: {
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  directiveAuthor: ReconstructDirectiveAuthor;
+  sessionRoot: string;
+  config: SemanticMapStageConfig;
+  /** ⓑ' pre-image base passed through to the module's epoch recursion (per-node layer1_ground_hash +
+   *  child_contributions are filled by the walk). W3 supplies real identities at the live call site. */
+  preImageBase: Omit<SemanticEpochPreImage, "layer1_ground_hash" | "child_contributions">;
+}): Promise<SemanticMapStageResult> {
+  if (resolveSemanticMapCapability(args.directiveAuthor) === "absent") {
+    return { projectionByObservation: new Map(), census: null, censusPath: null, sidecarPath: null };
+  }
+  assertSemanticMapStageConfig(args.config);
+  const synthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(args.directiveAuthor);
+  const verifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(args.directiveAuthor);
+  const cfg = args.config;
+
+  const projectionByObservation = new Map<string, SemanticSeedProjection>();
+  const census: ReconstructSemanticMapCensus = {
+    schema_version: "1",
+    observations_total: 0,
+    observations_map_present: 0,
+    observations_map_absent: 0,
+    synthesize_calls_total: 0,
+    verify_calls_total: 0,
+    max_synthesize_calls: cfg.max_synthesize_calls,
+    max_verify_calls: cfg.max_verify_calls,
+    by_observation: [],
+  };
+  const sidecarObservations: {
+    observation_id: string;
+    projection: SemanticSeedProjection;
+    node_epochs: { key: string; subtree_epoch_contribution: string }[];
+  }[] = [];
+
+  for (const observation of args.sourceObservations.observations) {
+    if (observation.target_material_kind !== "spreadsheet") continue;
+    const inventory = observation.structural_data.workbook_inventory as
+      | WorkbookStructuralInventory
+      | undefined;
+    const tileSheets = inventory?.segmented_value_tiles;
+    if (!inventory || !tileSheets || tileSheets.length === 0) continue;
+    census.observations_total += 1;
+
+    // Deterministic column tasks (canonical order = sheet-block order, then column order) built from
+    // the FULL in-memory tiles (F7) BEFORE any LLM call — the synthesize preflight needs the counts.
+    interface ColumnTask {
+      sheet: string;
+      column_index: number;
+      trace: ReduceTopologyTrace | null; // null = empty column (no non-empty leaves)
+      nodesByKey: Map<SemanticNodeKey, ComprehensionReduceNode> | null;
+      modes: Map<SemanticNodeKey, FrontierMode> | null;
+      producedCount: number;
+    }
+    const tasks: ColumnTask[] = [];
+    for (const sheetTiles of tileSheets) {
+      for (const column of sheetTiles.columns) {
+        const leaves = buildColumnLeaves(sheetTiles.sheet, column, { leafCount: cfg.leaf_count });
+        if (leaves.length === 0) {
+          tasks.push({ sheet: sheetTiles.sheet, column_index: column.column_index, trace: null, nodesByKey: null, modes: null, producedCount: 0 });
+          continue;
+        }
+        const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves, cfg.fanin);
+        const modes = classifyFrontier(trace, cfg.over_context_budget);
+        let producedCount = 0;
+        for (const m of modes.values()) if (m !== "subsumed") producedCount += 1;
+        tasks.push({ sheet: sheetTiles.sheet, column_index: column.column_index, trace, nodesByKey, modes, producedCount });
+      }
+    }
+
+    const columnRows: ReconstructSemanticMapCensusColumn[] = [];
+    const columnProjections: SemanticSeedProjection[] = [];
+    const nodeEpochs: { key: string; subtree_epoch_contribution: string }[] = [];
+    let doomed: boolean = false;
+
+    // X7 synthesize PREFLIGHT — observation-granular against the REMAINING global budget, decided
+    // before any of this observation's LLM calls (deterministic given canonical order).
+    const observationNeed = tasks.reduce((s, t) => s + t.producedCount, 0);
+    const preflightCapped = census.synthesize_calls_total + observationNeed > cfg.max_synthesize_calls;
+
+    for (const task of tasks) {
+      if (task.trace === null || task.nodesByKey === null || task.modes === null) {
+        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, "empty", null));
+        continue;
+      }
+      if (preflightCapped) {
+        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, "capped", `synthesize preflight: observation needs ${observationNeed}, budget remaining ${cfg.max_synthesize_calls - census.synthesize_calls_total} (X7)`));
+        doomed = true;
+        continue;
+      }
+      if (doomed) {
+        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, "skipped_observation_fallback", "a sibling column failed/was capped — observation falls back to flat (X5); remaining LLM work skipped"));
+        continue;
+      }
+      const { trace, nodesByKey, modes } = task;
+      let synthesizeCalls = 0;
+      let verifyCalls = 0;
+      try {
+        // ── §3 bridge pre-compute: bottom-up over produced nodes, single-source inputs, full guards.
+        const preByKey = new Map<string, SemanticMapBridgeRecord>();
+        const summaryByKey = new Map<SemanticNodeKey, string>();
+        const order: SemanticNodeKey[] = [];
+        const seen = new Set<SemanticNodeKey>();
+        const walk = (k: SemanticNodeKey): void => {
+          if (seen.has(k)) return;
+          seen.add(k);
+          const tnode = trace.nodes.get(k);
+          if (!tnode) throw new Error(`semantic-map stage: trace node missing for ${k}.`);
+          for (const c of tnode.child_keys) walk(c);
+          order.push(k);
+        };
+        walk(trace.root_key);
+        for (const key of order) {
+          if (modes.get(key) === "subsumed") continue;
+          const input = buildSynthesisInputForNode(trace, nodesByKey, modes, key, summaryByKey);
+          assertSynthesisInputBounded(input); // source-safe envelope on the EXACT transmitted input (§3).
+          const inputJson = stableJson(structuredClone(input));
+          const out = await synthesizeNode(input);
+          synthesizeCalls += 1;
+          assertSynthesisOutputBounded(out);
+          summaryByKey.set(key, out.semantic_summary);
+          const record: SemanticMapBridgeRecord = { input_json: inputJson, output: structuredClone(out), verifies: [] };
+          // Pre-verify every unanchored boundary via the SAME deterministic reconciliation the module
+          // will run (exported single source) — recorded by FULL verifier input (X3).
+          const reduceNode = nodesByKey.get(key);
+          if (!reduceNode) throw new Error(`semantic-map stage: reduce node missing for ${key}.`);
+          const { boundaries: classified } = reconcileBoundaries(out.boundaries, reduceNode);
+          const nodeRef = input.node_ref;
+          for (const b of classified) {
+            if (b.anchor_status !== "unanchored") continue;
+            if (census.verify_calls_total + verifyCalls + 1 > cfg.max_verify_calls) {
+              throw new SemanticMapVerifyCapExceeded(key, cfg.max_verify_calls);
+            }
+            const verifyInput: SemanticBoundaryVerifyInput = {
+              node_ref: { sheet: nodeRef.sheet, column_index: nodeRef.column_index, row_start: nodeRef.row_start, row_end: nodeRef.row_end },
+              boundary: { ...b },
+              summary: out.semantic_summary,
+            };
+            const verifyInputJson = stableJson(structuredClone(verifyInput));
+            const verdict = await verifyBoundary(verifyInput);
+            verifyCalls += 1;
+            if (!(ADVERSARIAL_RESULTS as readonly string[]).includes(verdict)) {
+              throw new Error(`semantic-map stage: author verify returned invalid verdict '${verdict}' at ${key} (fail-closed).`);
+            }
+            record.verifies.push({ input_json: verifyInputJson, verdict });
+          }
+          preByKey.set(key, record);
+        }
+
+        // ── the REAL module accumulate + projection (all fail-closed validators live here).
+        const callbacks = buildSemanticMapBridgeCallbacks(preByKey);
+        const map = accumulateSemanticMap(trace, nodesByKey, {
+          synthesize: callbacks.synthesize,
+          verifyUnanchored: callbacks.verifyUnanchored,
+          preImageBase: args.preImageBase,
+          overContextBudget: cfg.over_context_budget,
+          seedBound: false, // the projection is the sole refuted-exclusion layer (module input contract).
+        });
+        const projection = projectSemanticMapToSeed(map, { maxNodes: cfg.max_nodes, maxDisclosure: cfg.max_disclosure });
+
+        // ── census counts from the REAL accumulated map (not the author's raw output).
+        let anchored = 0;
+        let unanchored = 0;
+        let confirmed = 0;
+        let refuted = 0;
+        let producedNodes = 0;
+        for (const node of map.values()) {
+          if (node.reduce_read_attempt === "subsumed") continue;
+          producedNodes += 1;
+          for (const b of node.semantic_boundaries) {
+            if (b.anchor_status === "anchored") anchored += 1;
+            else {
+              unanchored += 1;
+              if (b.verification === "adversarial_confirmed") confirmed += 1;
+              else if (b.verification === "adversarial_refuted") refuted += 1;
+            }
+          }
+        }
+        let fAcc = 0;
+        let fFront = 0;
+        let fSub = 0;
+        for (const m of modes.values()) {
+          if (m === "accumulating") fAcc += 1;
+          else if (m === "frontier") fFront += 1;
+          else fSub += 1;
+        }
+        census.synthesize_calls_total += synthesizeCalls;
+        census.verify_calls_total += verifyCalls;
+        columnRows.push({
+          sheet: task.sheet,
+          column_index: task.column_index,
+          status: "produced",
+          reason: null,
+          produced_nodes: producedNodes,
+          frontier_accumulating: fAcc,
+          frontier_frontier: fFront,
+          frontier_subsumed: fSub,
+          anchored,
+          unanchored,
+          adversarial_confirmed: confirmed,
+          adversarial_refuted: refuted,
+          synthesize_calls: synthesizeCalls,
+          verify_calls: verifyCalls,
+        });
+        columnProjections.push(projection);
+        for (const [key, node] of map) {
+          nodeEpochs.push({ key, subtree_epoch_contribution: node.subtree_epoch_contribution });
+        }
+      } catch (error) {
+        if (isGracefulTerminalSignal(error)) throw error;
+        // Column-level stage-owned fallback (X5 — the strongest round-1 convergence): the module
+        // stays fail-closed; a failed/capped column dooms the OBSERVATION to the flat path. Spent
+        // calls are still counted (honest cost census).
+        census.synthesize_calls_total += synthesizeCalls;
+        census.verify_calls_total += verifyCalls;
+        const capped = error instanceof SemanticMapVerifyCapExceeded;
+        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, capped ? "capped" : "failed", (error as Error).message));
+        doomed = true;
+      }
+    }
+
+    const producedColumns = columnRows.filter((c) => c.status === "produced").length;
+    const mapPresent = !doomed && producedColumns >= 1;
+    if (mapPresent) {
+      const merged = mergeSemanticSeedProjections(columnProjections, { max_nodes: cfg.max_nodes, max_disclosure: cfg.max_disclosure });
+      projectionByObservation.set(observation.observation_id, merged);
+      nodeEpochs.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+      sidecarObservations.push({ observation_id: observation.observation_id, projection: merged, node_epochs: nodeEpochs });
+      census.observations_map_present += 1;
+    } else {
+      census.observations_map_absent += 1;
+    }
+    const observationRow: ReconstructSemanticMapCensusObservation = {
+      observation_id: observation.observation_id,
+      map_present: mapPresent,
+      columns: columnRows,
+    };
+    census.by_observation.push(observationRow);
+  }
+
+  // ALWAYS persist census + sidecar when the stage ran (f1a3c1b honest-signal pattern): a total
+  // semantic-map failure is a durable artifact, never silently absent. Doubles as the W3 manifest
+  // step's artifact refs.
+  const comprehensionDir = path.join(args.sessionRoot, "comprehension");
+  await fs.mkdir(comprehensionDir, { recursive: true });
+  const censusPath = path.join(comprehensionDir, "semantic-map-census.yaml");
+  await writeYamlDocument(censusPath, census);
+  const sidecarPath = path.join(comprehensionDir, "semantic-map.yaml");
+  await writeYamlDocument(sidecarPath, { schema_version: "1", observations: sidecarObservations });
+
+  return { projectionByObservation, census, censusPath, sidecarPath };
+}
+
+function emptySemanticMapColumnRow(
+  sheet: string,
+  columnIndex: number,
+  status: ReconstructSemanticMapCensusColumn["status"],
+  reason: string | null,
+): ReconstructSemanticMapCensusColumn {
+  return {
+    sheet,
+    column_index: columnIndex,
+    status,
+    reason,
+    produced_nodes: 0,
+    frontier_accumulating: 0,
+    frontier_frontier: 0,
+    frontier_subsumed: 0,
+    anchored: 0,
+    unanchored: 0,
+    adversarial_confirmed: 0,
+    adversarial_refuted: 0,
+    synthesize_calls: 0,
+    verify_calls: 0,
+  };
 }
 
 // Maturation value-read cut (design §13). System (not domain) limitation kinds a value-read can

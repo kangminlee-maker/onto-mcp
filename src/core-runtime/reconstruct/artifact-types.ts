@@ -2509,6 +2509,53 @@ export interface ReconstructMaturationValueDischargeArtifact {
   };
 }
 
+// ── semantic_map stage census (Layer-2 wiring design 20260702 §6 / W2) ────────────────────────────
+// Always recorded when the stage RUNS (capability pair present) — mirrors the leaf_read_census
+// honesty pattern: "never ran" (skipped manifest step, no census) is durably distinct from "ran and
+// produced nothing". Column rows localize WHICH column failed/was capped; the observation-level
+// map_present gate (X5: replace only when ALL value-tile columns succeeded) is derivable and stored.
+
+export interface ReconstructSemanticMapCensusColumn {
+  sheet: string;
+  column_index: number;
+  /** produced = tree accumulated + projected; empty = no non-empty leaves (not a failure);
+   *  failed = author/module threw (column excluded, observation falls back to flat);
+   *  capped = a deterministic cost cap excluded it BEFORE/mid-LLM (X7);
+   *  skipped_observation_fallback = a sibling column doomed the observation, remaining LLM work skipped. */
+  status: "produced" | "empty" | "failed" | "capped" | "skipped_observation_fallback";
+  reason: string | null;
+  produced_nodes: number;
+  frontier_accumulating: number;
+  frontier_frontier: number;
+  frontier_subsumed: number;
+  anchored: number;
+  unanchored: number;
+  adversarial_confirmed: number;
+  adversarial_refuted: number;
+  synthesize_calls: number;
+  verify_calls: number;
+}
+
+export interface ReconstructSemanticMapCensusObservation {
+  observation_id: string;
+  /** X5 gate: true ⇔ zero failed/capped/skipped columns AND ≥1 produced column. */
+  map_present: boolean;
+  columns: ReconstructSemanticMapCensusColumn[];
+}
+
+export interface ReconstructSemanticMapCensus {
+  schema_version: "1";
+  observations_total: number;
+  observations_map_present: number;
+  observations_map_absent: number;
+  synthesize_calls_total: number;
+  verify_calls_total: number;
+  /** The deterministic cost-cap config in force (X7) — also folded into the reuse fingerprint (W3). */
+  max_synthesize_calls: number;
+  max_verify_calls: number;
+  by_observation: ReconstructSemanticMapCensusObservation[];
+}
+
 export interface ReconstructMaturationValueDischargeValidationArtifact {
   schema_version: "1";
   session_id: string;
