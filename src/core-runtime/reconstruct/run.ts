@@ -958,6 +958,11 @@ interface AuthoredArtifactReuseMatch {
   // resume after a leaf-reader model swap regenerates instead of reusing a stale-labelled seed.
   // null when no low-confidence region triggered a leaf-read.
   leaf_read_aggregate_fingerprint_sha256: string | null;
+  // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE (model
+  // identities + prompt-contract sha + version knob + whole stage config + inventory identity).
+  // Rotates the seed key when anything that shapes the map changes (F2 topology / X7 caps / X9
+  // projection caps / F4 verify model). null when the stage skipped or saw nothing evaluatable.
+  semantic_map_aggregate_fingerprint_sha256: string | null;
 }
 
 interface AuthoredArtifactReuseProvenance {
@@ -1520,6 +1525,7 @@ function authoredArtifactReuseMatch(args: {
   directiveAuthor: ReconstructDirectiveAuthor;
   confirmationProvider: ReconstructConfirmationProvider;
   leafReadAggregateFingerprint?: string | null;
+  semanticMapAggregateFingerprint?: string | null;
 }): AuthoredArtifactReuseMatch {
   const match: AuthoredArtifactReuseMatch = {
     session_id: args.sessionId,
@@ -1611,6 +1617,12 @@ function authoredArtifactReuseMatch(args: {
         DOCUMENT_EXCERPT_PROJECTION_FLOOR,
     leaf_read_aggregate_fingerprint_sha256:
       args.leafReadAggregateFingerprint ?? null,
+    // W3 (wiring design 20260702 §5): the semantic-map stage's pre-execution fingerprint VALUE —
+    // model identities + prompt-contract sha + version knob + the WHOLE stage config (topology,
+    // caps, projection caps). Always-present-null (leaf-read precedent): adding this field rotates
+    // every reuse key ONCE at upgrade (F3 — documented, over-rotate is the safe direction).
+    semantic_map_aggregate_fingerprint_sha256:
+      args.semanticMapAggregateFingerprint ?? null,
   };
   // P1-C2-A (R3): the seed gating key must never carry in-epoch LLM output — only the fingerprint
   // VALUE folded above. Fail closed if a future edit serializes a comprehension-artifact instance
@@ -1889,6 +1901,28 @@ export async function runSpreadsheetLeafReadStage(args: {
 // column dooms its OBSERVATION to the flat path (no partial-map replacement). No live runReconstruct
 // call site in W2 — W3 wires the stage + registration BEFORE W4 wires prompt injection (R2-03).
 
+/** Non-authoritative manual-invalidation knob for the semantic-map epoch (LEAF_READ_COMPREHENSION_
+ *  VERSION mirror). ⚠️ The bridge ordering / frontier-classification LOGIC is not auto-folded — a
+ *  change to that code MUST bump this knob (leaf-read read_set_logic caveat, R9-03/DET-1 class). */
+const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
+
+/** Manual version for the over-context gate LOGIC (design §13.4 L2R-2 — config is folded as a VALUE;
+ *  the predicate/ordering code itself has no auto-fold, so edits to classifyFrontier semantics bump
+ *  this). */
+const SEMANTIC_MAP_GATE_LOGIC_VERSION = "classify-frontier:leaf-count:1";
+
+/** ⚠️ PRELIMINARY defaults (review-prompt-budget precedent): live calibration is a later cut. Every
+ *  value is folded into the stage fingerprint, so re-tuning rotates the seed reuse key. */
+export const DEFAULT_SEMANTIC_MAP_STAGE_CONFIG: SemanticMapStageConfig = {
+  leaf_count: 8,
+  fanin: 2,
+  over_context_budget: 2,
+  max_synthesize_calls: 200,
+  max_verify_calls: 100,
+  max_nodes: 60,
+  max_disclosure: 30,
+};
+
 /** Deterministic stage config. ALL fields required and validated fail-loud (R2-04: the module's
  *  projection caps default to UNBOUNDED; the stage never relies on defaults). Every value shapes the
  *  map, so W3 folds this whole object into the reuse fingerprint (§5). */
@@ -2011,6 +2045,11 @@ export interface SemanticMapStageResult {
   census: ReconstructSemanticMapCensus | null;
   censusPath: string | null;
   sidecarPath: string | null;
+  /** W3 §5: order-independent aggregate of the per-observation PRE-EXECUTION fingerprints (model
+   *  identities + prompt-contract sha + version knob + whole stage config + inventory identity) —
+   *  the VALUE the seed reuse key folds; never the map instance. null when the stage was skipped or
+   *  saw no evaluatable observation (leaf-read null pattern). */
+  aggregateFingerprint: string | null;
 }
 
 /**
@@ -2028,9 +2067,12 @@ export async function runSemanticMapStage(args: {
   /** ⓑ' pre-image base passed through to the module's epoch recursion (per-node layer1_ground_hash +
    *  child_contributions are filled by the walk). W3 supplies real identities at the live call site. */
   preImageBase: Omit<SemanticEpochPreImage, "layer1_ground_hash" | "child_contributions">;
+  /** F4 (CG-2/judge-fold class): the adversarial verifier may run a DIFFERENT model in production —
+   *  its identity folds separately. Defaults to the author identity at the live call site. */
+  verifyModelIdentity: string;
 }): Promise<SemanticMapStageResult> {
   if (resolveSemanticMapCapability(args.directiveAuthor) === "absent") {
-    return { projectionByObservation: new Map(), census: null, censusPath: null, sidecarPath: null };
+    return { projectionByObservation: new Map(), census: null, censusPath: null, sidecarPath: null, aggregateFingerprint: null };
   }
   assertSemanticMapStageConfig(args.config);
   const synthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(args.directiveAuthor);
@@ -2050,6 +2092,7 @@ export async function runSemanticMapStage(args: {
     by_observation: [],
   };
   const sidecarObservations: ReconstructSemanticMapSidecarObservation[] = [];
+  const perObservationFingerprints: { observation_id: string; fingerprint: string }[] = [];
 
   // onto-W2 issue-003/006: a spreadsheet observation the stage cannot evaluate is RECORDED with an
   // explicit reason — by_observation stays a complete partition and the totals reconcile.
@@ -2077,6 +2120,31 @@ export async function runSemanticMapStage(args: {
       continue;
     }
     census.observations_total += 1;
+
+    // W3 §5 pre-execution fingerprint — computed BEFORE any of this observation's LLM calls and
+    // regardless of outcome (leaf-read precedent: the DECISION to run is what the seed key tracks).
+    // Folds: inventory identity (ⓐ) + BOTH model identities (F4) + prompt-contract sha (F6, via
+    // preImageBase) + version knob + the WHOLE stage config (F2 topology · X7 caps · X9 projection
+    // caps). VALUE only — never the map instance (denylist-guarded).
+    const fingerprintPreImage = {
+      content_sha256:
+        typeof observation.structural_data.content_sha256 === "string"
+          ? observation.structural_data.content_sha256
+          : "",
+      adapter_version: workbookInventoryAdapterVersion(inventory) ?? 0,
+      value_tile_config: workbookInventoryValueTileConfig(inventory),
+      data_layer_caps: workbookInventoryDataLayerCaps(inventory),
+      synthesize_model_identity: args.preImageBase.reduce_reader_model_identity,
+      verify_model_identity: args.verifyModelIdentity,
+      authoring_prompt_contract_sha256: args.preImageBase.reduce_prompt_sha256,
+      semantic_map_comprehension_version: args.preImageBase.comprehension_version,
+      stage_config: cfg,
+    };
+    assertGatingKeyExcludesInEpochOutput("semanticMapStageFingerprint", fingerprintPreImage);
+    perObservationFingerprints.push({
+      observation_id: observation.observation_id,
+      fingerprint: sha256Text(stableJson(fingerprintPreImage)),
+    });
 
     // Deterministic column tasks (canonical order = sheet-block order, then column order) built from
     // the FULL in-memory tiles (F7) BEFORE any LLM call — the synthesize preflight needs the counts.
@@ -2294,7 +2362,18 @@ export async function runSemanticMapStage(args: {
   const sidecar: ReconstructSemanticMapSidecar = { schema_version: "1", observations: sidecarObservations };
   await writeYamlDocument(sidecarPath, sidecar);
 
-  return { projectionByObservation, census, censusPath, sidecarPath };
+  const aggregateFingerprint =
+    perObservationFingerprints.length === 0
+      ? null
+      : sha256Text(
+          stableJson(
+            perObservationFingerprints
+              .slice()
+              .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0)),
+          ),
+        );
+
+  return { projectionByObservation, census, censusPath, sidecarPath, aggregateFingerprint };
 }
 
 function emptySemanticMapColumnRow(
@@ -3023,6 +3102,8 @@ export function artifactRefsWithDefaults(args: {
     source_observation_lineage_index_validation:
       args.refs.source_observation_lineage_index_validation ?? null,
     leaf_read_census: args.refs.leaf_read_census ?? null,
+    semantic_map_census: args.refs.semantic_map_census ?? null,
+    semantic_map_sidecar: args.refs.semantic_map_sidecar ?? null,
     source_safety_ledger: args.refs.source_safety_ledger ?? null,
     source_safety_ledger_validation:
       args.refs.source_safety_ledger_validation ?? null,
@@ -3729,6 +3810,24 @@ export function createRunManifest(args: {
           directiveAuthorPerformer(args.directiveAuthor),
           "leaf-read stage did not run (author has no readLeafLabels).",
           "No leaf-read capture was attempted; the deterministic companion stands unchanged.",
+        ),
+      // Layer-2 semantic_map stage (wiring design 20260702 §6/W3). Census ref present → completed
+      // (the always-written census is the durable evidence surface, even map-absent); null →
+      // skipped (the stage no-op'd; skip reason names the canonical capability PAIR — X8).
+      args.artifactRefs.semantic_map_census
+        ? completedStep(
+          "semantic_map",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.semantic_map_census, args.artifactRefs.semantic_map_sidecar]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "semantic_map",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "semantic-map stage did not run (author has no synthesizeSemanticMapNode/verifySemanticMapBoundary pair).",
+          "No semantic-map accumulation was attempted; the flat leaf-read path stands unchanged.",
         ),
       completedStep(
         "source_purpose_candidates",
@@ -13276,6 +13375,32 @@ export async function runReconstruct(
   if (leafReadStage.cappedColumnsByObservation.size > 0) {
     directiveAuthor.setLeafReadCappedColumns?.(leafReadStage.cappedColumnsByObservation);
   }
+  // Layer-2 semantic_map stage (wiring design 20260702 §7-W3). Default-off: an author without the
+  // capability pair skips (census/fingerprint null → manifest step `skipped`). Runs BEFORE the
+  // reuse-match assembly so its fingerprint folds into every authored artifact's reuse key —
+  // registration/reuse authority PRECEDES prompt injection (R2-03: the projection reaches no prompt
+  // until W4; a W3-state capability author spends calls without prompt effect, by design).
+  const semanticMapStage = await runSemanticMapStage({
+    sourceObservations,
+    directiveAuthor,
+    sessionRoot,
+    config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+    preImageBase: {
+      reduce_reader_model_identity: directiveAuthor.reuseModelIdentity ?? "unspecified",
+      // F6: the authoring prompt-template CONTRACT sha (CG-1 catalog) — the semantic-map author
+      // prompts join the catalog with the author realization; any catalog edit rotates this
+      // tautologically (over-rotation is the safe direction).
+      reduce_prompt_sha256: authoringPromptContractSha256(),
+      reduce_schema_tool_version: "semantic-map:v1",
+      comprehension_version: SEMANTIC_MAP_COMPREHENSION_VERSION,
+      over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
+      over_context_gate_logic_sha256: SEMANTIC_MAP_GATE_LOGIC_VERSION,
+    },
+    verifyModelIdentity: directiveAuthor.reuseModelIdentity ?? "unspecified",
+  });
+  const semanticMapAggregateFingerprint = semanticMapStage.aggregateFingerprint;
+  const semanticMapCensusPath = semanticMapStage.censusPath;
+  const semanticMapSidecarPath = semanticMapStage.sidecarPath;
   const refreshAuthoredArtifactReuseMatch = (): void => {
     currentAuthoredArtifactReuseMatch = authoredArtifactReuseMatch({
       sessionId,
@@ -13300,6 +13425,7 @@ export async function runReconstruct(
       directiveAuthor,
       confirmationProvider,
       leafReadAggregateFingerprint,
+      semanticMapAggregateFingerprint,
     });
   };
   refreshAuthoredArtifactReuseMatch();
@@ -13585,6 +13711,8 @@ export async function runReconstruct(
         source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
         source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
         leaf_read_census: leafReadCensusPath,
+        semantic_map_census: semanticMapCensusPath,
+        semantic_map_sidecar: semanticMapSidecarPath,
         source_observation_directive: sourceObservationDirectivePath,
         source_observation_directive_validation:
           sourceObservationDirectiveValidationPath,
@@ -14557,6 +14685,8 @@ export async function runReconstruct(
       source_observation_lineage_index_validation:
         sourceObservationLineageIndexValidationPath,
       leaf_read_census: leafReadCensusPath,
+      semantic_map_census: semanticMapCensusPath,
+      semantic_map_sidecar: semanticMapSidecarPath,
       source_safety_ledger: sourceSafetyLedgerPath,
       source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
       source_scout_pack: sourceScoutPackPath,

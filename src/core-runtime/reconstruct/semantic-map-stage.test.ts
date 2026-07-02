@@ -18,6 +18,8 @@ import type {
   SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
 import type { ColumnValueTiles } from "../spreadsheet-structure-observer.js";
+import { assertGatingKeyExcludesInEpochOutput } from "./llm-touch-fingerprint.js";
+import { unitIdForAuthoredArtifactName } from "./execution-telemetry.js";
 
 // W1 (wiring design 20260702 §15.2/§15.3): the semantic-map author capability PAIR rule.
 // Production enforcement starts when the W2 semantic_map stage entry calls the resolver; W1 fixes
@@ -179,6 +181,7 @@ describe("runSemanticMapStage (W2)", () => {
       sessionRoot,
       config: CONFIG,
       preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
     });
     // 4 leaves, fanin 2 → 7 nodes; budget 1 → 4 leaf frontiers + 3 accumulating = 7 produced.
     expect(counters.synthesize).toBe(7);
@@ -207,6 +210,7 @@ describe("runSemanticMapStage (W2)", () => {
       sessionRoot,
       config: CONFIG,
       preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
     });
     expect(result.census).toBeNull();
     expect(result.censusPath).toBeNull();
@@ -226,6 +230,7 @@ describe("runSemanticMapStage (W2)", () => {
       sessionRoot,
       config: CONFIG,
       preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
     });
     expect(result.projectionByObservation.has("obs-doomed")).toBe(false); // no partial-map silent replace
     expect(result.projectionByObservation.has("obs-ok")).toBe(true);
@@ -244,6 +249,7 @@ describe("runSemanticMapStage (W2)", () => {
       sessionRoot,
       config: { ...CONFIG, max_synthesize_calls: 3 }, // needs 7
       preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
     });
     expect(counters.synthesize).toBe(0); // deterministic skip BEFORE any LLM call
     expect(result.projectionByObservation.size).toBe(0);
@@ -262,6 +268,7 @@ describe("runSemanticMapStage (W2)", () => {
       sessionRoot,
       config: { ...CONFIG, max_verify_calls: 0 }, // first unanchored boundary → cap
       preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
     });
     expect(result.projectionByObservation.size).toBe(0);
     const col = result.census!.by_observation[0]!.columns[0]!;
@@ -282,6 +289,7 @@ describe("runSemanticMapStage (W2)", () => {
       sessionRoot,
       config: CONFIG,
       preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
     });
     expect(counters.synthesize).toBe(1); // one attempt, thrown
     expect(result.census!.synthesize_calls_total).toBe(1); // the ATTEMPT is budget spend, not the success
@@ -297,6 +305,7 @@ describe("runSemanticMapStage (W2)", () => {
         sessionRoot: await tempRoot(),
         config: { ...CONFIG, max_synthesize_calls: cap },
         preImageBase: PRE_IMAGE_BASE,
+        verifyModelIdentity: "mock/none",
       });
       return { status: result.census!.by_observation[0]!.columns[0]!.status, calls: counters.synthesize };
     };
@@ -313,6 +322,7 @@ describe("runSemanticMapStage (W2)", () => {
       sessionRoot,
       config: CONFIG,
       preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
     });
     expect(result.projectionByObservation.size).toBe(0); // verify failure → column failed → flat
     expect(counters.verify).toBe(1); // one attempt, thrown
@@ -343,6 +353,7 @@ describe("runSemanticMapStage (W2)", () => {
       sessionRoot,
       config: CONFIG,
       preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
     });
     const census = result.census!;
     expect(census.observations_total).toBe(2); // COMPLETE partition — nothing silently dropped
@@ -388,11 +399,67 @@ describe("runSemanticMapStage (W2)", () => {
         sessionRoot: await tempRoot(),
         config: CONFIG,
         preImageBase: PRE_IMAGE_BASE,
+        verifyModelIdentity: "mock/none",
       });
     };
     const [a, b] = [await run(), await run()];
     expect(a.projectionByObservation.get("obs-1")).toEqual(b.projectionByObservation.get("obs-1"));
     expect(a.census).toEqual(b.census);
+  });
+});
+
+// ── W3: reuse fingerprint rotation + gating-key denylist + telemetry registration ────────────────
+
+describe("W3 fingerprint + registration", () => {
+  const runWith = async (over: Partial<SemanticMapStageConfig> = {}, preOver: Partial<typeof PRE_IMAGE_BASE> = {}, verifyModelIdentity = "mock/none") => {
+    const { author } = mockAuthor();
+    return runSemanticMapStage({
+      sourceObservations: observationsArtifact([{ observation_id: "obs-1", columns: [richColumn(0)] }]),
+      directiveAuthor: author,
+      sessionRoot: await tempRoot(),
+      config: { ...CONFIG, ...over },
+      preImageBase: { ...PRE_IMAGE_BASE, ...preOver },
+      verifyModelIdentity,
+    });
+  };
+
+  it("aggregate fingerprint is deterministic; rotates on topology config (F2), verify model (F4), version knob", async () => {
+    const base1 = (await runWith()).aggregateFingerprint;
+    const base2 = (await runWith()).aggregateFingerprint;
+    expect(base1).toBeTruthy();
+    expect(base1).toBe(base2); // deterministic — same inputs, same key
+    expect((await runWith({ fanin: 3 })).aggregateFingerprint).not.toBe(base1); // F2: silent-stale class
+    expect((await runWith({ max_verify_calls: 99 })).aggregateFingerprint).not.toBe(base1); // X7 cap folded
+    expect((await runWith({ max_nodes: 49 })).aggregateFingerprint).not.toBe(base1); // X9 projection cap folded
+    expect((await runWith({}, {}, "other/model")).aggregateFingerprint).not.toBe(base1); // F4 verify model
+    expect((await runWith({}, { comprehension_version: "c2" })).aggregateFingerprint).not.toBe(base1); // knob
+    expect((await runWith({}, { reduce_reader_model_identity: "swap/model" })).aggregateFingerprint).not.toBe(base1);
+  });
+
+  it("skipped stage → aggregate fingerprint null (leaf-read null pattern)", async () => {
+    const result = await runSemanticMapStage({
+      sourceObservations: observationsArtifact([{ observation_id: "obs-1", columns: [richColumn(0)] }]),
+      directiveAuthor: {} as unknown as ReconstructDirectiveAuthor,
+      sessionRoot: await tempRoot(),
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+    expect(result.aggregateFingerprint).toBeNull();
+  });
+
+  it("F9 denylist: a gating key carrying a Layer-2 ⓒ field fails closed", () => {
+    expect(() =>
+      assertGatingKeyExcludesInEpochOutput("w3-test", { nested: { semantic_summary: "llm text" } }),
+    ).toThrow(/semantic_summary/);
+    expect(() =>
+      assertGatingKeyExcludesInEpochOutput("w3-test", { refuted_disclosure: [] }),
+    ).toThrow(/refuted_disclosure/);
+  });
+
+  it("F5 telemetry: BOTH author capability call names resolve to the semantic_map unit (Defect-1 guard)", () => {
+    expect(unitIdForAuthoredArtifactName("semantic-map-synthesize")).toBe("semantic_map");
+    expect(unitIdForAuthoredArtifactName("semantic-map-verify")).toBe("semantic_map");
   });
 });
 

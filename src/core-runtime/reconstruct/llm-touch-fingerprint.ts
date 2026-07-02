@@ -136,6 +136,14 @@ export const LLM_TOUCH_IN_EPOCH_OUTPUT_FIELDS = [
   // P1-C2-B′ §3: the captured role/note are LLM output too — guard them out of any gating key.
   "semantic_role",
   "captured_note",
+  // Layer-2 semantic-map ⓒ fields (wiring design 20260702 §5 F9): the denylist must learn each new
+  // LLM-output vocabulary or a future edit serializing a map/projection instance into a gating key
+  // passes fail-OPEN (the recursive guard only knows enumerated names).
+  "semantic_summary",
+  "semantic_boundaries",
+  "character_before",
+  "character_after",
+  "refuted_disclosure",
 ] as const;
 
 const IN_EPOCH_OUTPUT_SET = new Set<string>(LLM_TOUCH_IN_EPOCH_OUTPUT_FIELDS);

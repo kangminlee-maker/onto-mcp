@@ -3141,6 +3141,10 @@ describe("runReconstruct", () => {
     expect(manifest.steps.find((step) =>
       step.step_id === "actionable_ontology_validation"
     )).toMatchObject({ status: "completed" });
+    // W3 (X6 expected-delta): a map-absent run's manifest gains EXACTLY one semantic_map step,
+    // honestly `skipped` (the fixture author has no capability pair) — never silently absent.
+    expect(manifest.steps.find((step) => step.step_id === "semantic_map"))
+      .toMatchObject({ status: "skipped" });
     expect(manifest.steps.map((step) => step.step_id)).toEqual([
       "invocation_binding",
       "run_control",
@@ -3170,6 +3174,7 @@ describe("runReconstruct", () => {
       "source_observation_lineage_index",
       "source_observation_lineage_index_validation",
       "leaf_read",
+      "semantic_map",
       "source_purpose_candidates",
       "source_purpose_candidates_validation",
       "purpose_confirmation",

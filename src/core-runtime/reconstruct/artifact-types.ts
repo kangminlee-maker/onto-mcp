@@ -1589,6 +1589,10 @@ export const RECONSTRUCT_STAGE_IDS = [
   // before the LLM call → R9 swallowed it → zero capture, forever). Runs after the lineage index
   // exists and before purpose-candidate authoring.
   "leaf_read",
+  // Layer-2 semantic_map stage (wiring design 20260702 §7-W3): default-off; runs right after
+  // leaf_read; its always-written census is the step's artifact ref (skipped when the author lacks
+  // the synthesizeSemanticMapNode/verifySemanticMapBoundary capability pair).
+  "semantic_map",
   "source_purpose_candidates",
   "source_purpose_candidates_validation",
   "purpose_confirmation",
@@ -3624,6 +3628,11 @@ export interface ReconstructRecordArtifactRefs {
   // but produced nothing" from "leaf-read never ran". Doubles as the leaf_read manifest step's
   // artifact ref. Null only when the stage no-ops (author has no readLeafLabels).
   leaf_read_census: string | null;
+  // Layer-2 semantic_map stage (W3): census always written when the stage runs (map-absent runs
+  // still record the honest partition); sidecar carries the per-observation projections + node
+  // epochs (F10 lineage). Null only when the stage no-ops (author lacks the capability pair).
+  semantic_map_census: string | null;
+  semantic_map_sidecar: string | null;
   source_safety_ledger: string | null;
   source_safety_ledger_validation: string | null;
   source_scout_pack: string | null;
