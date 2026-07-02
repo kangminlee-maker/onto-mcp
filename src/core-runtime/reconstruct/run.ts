@@ -430,6 +430,14 @@ export interface ReconstructDirectiveAuthor {
    * observation prompt. Set once by runReconstruct after the leaf-read stage; prompt TEXT only.
    */
   setLeafReadCappedColumns?(capped: ReadonlyMap<string, readonly string[]>): void;
+  /**
+   * W4 (wiring design 20260702 §4): provide the semantic-map stage's per-observation seed
+   * projections so this author (a) replaces the flat provisional labels with the hierarchical
+   * render in non-seed observation prompts, and (b) adds the dedicated `semantic_map` field to the
+   * seed-authoring userPayload. Prompt/payload TEXT only — never the reuse key (the stage
+   * fingerprint is folded separately). Set once by runReconstruct after the semantic_map stage.
+   */
+  setSemanticMapProjection?(byObservation: ReadonlyMap<string, SemanticSeedProjection>): void;
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -1928,6 +1936,60 @@ export const DEFAULT_SEMANTIC_MAP_STAGE_CONFIG: SemanticMapStageConfig = {
   max_nodes: 60,
   max_disclosure: 30,
 };
+
+/** W4 §4: the ONE prompt note describing the semantic-map data to the seed author — a catalog
+ *  entry of its own (CG-1), so editing it rotates authoring_prompt_contract_sha256 tautologically. */
+export const SEMANTIC_MAP_SEED_PROMPT_NOTE =
+  "semantic_map is a NON-AUTHORITATIVE, provisional hierarchical reading of spreadsheet column regions (accumulated bottom-up over deterministic value-shape trees). Each node carries a summary and boundary candidates; disposition structural_location_only means a value-shape seam co-locates (LOCATION corroborated, content NOT verified); adversarial_confirmed means an independent re-check agreed (still provisional). The *_total counts are AUTHORITATIVE — a shorter list was bounded for prompt size, never silently dropped. Treat as hints; the deterministic value-tile signatures remain the structural authority.";
+
+/** ⚠️ PRELIMINARY prompt-render budget (chars) for one observation's semantic-map render. Changing
+ *  it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION with it (X9). */
+export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
+
+/** W4 §4 shared renderer — BOTH prompt surfaces ((A) seed payload field, (B) observation-prompt
+ *  replace) derive from this one projection-to-prompt shape (single truth). Deterministic; bounded
+ *  by a REQUIRED char budget with AUTHORITATIVE totals + an explicit truncation flag (onto-R2
+ *  issue-012: never a silent drop). */
+export function renderSemanticMapProjection(
+  projection: SemanticSeedProjection,
+  charBudget: number,
+): Record<string, unknown> {
+  if (!Number.isSafeInteger(charBudget) || charBudget <= 0) {
+    throw new Error(`semantic-map render: charBudget must be a positive safe integer, got ${charBudget} (issue-012 fail-loud).`);
+  }
+  const nodes: Record<string, unknown>[] = [];
+  let used = 0;
+  let truncated = false;
+  for (const node of projection.nodes) {
+    const rendered = {
+      region: `${node.node_ref.sheet}#${node.node_ref.column_index}:${node.node_ref.row_start}-${node.node_ref.row_end}`,
+      summary: node.semantic_summary,
+      boundaries: node.boundaries.map((b) => ({
+        row: b.row,
+        before: b.character_before,
+        after: b.character_after,
+        disposition: b.disposition,
+      })),
+    };
+    const cost = JSON.stringify(rendered).length;
+    if (used + cost > charBudget) {
+      truncated = true;
+      break; // canonical order — the drop is the deterministic TAIL, and totals stay authoritative.
+    }
+    used += cost;
+    nodes.push(rendered);
+  }
+  return {
+    authority: "non_authoritative",
+    provisional: true,
+    note: SEMANTIC_MAP_SEED_PROMPT_NOTE,
+    nodes,
+    nodes_total: projection.nodes_total,
+    refuted_disclosure_total: projection.refuted_disclosure_total,
+    unanchored_unverified_total: projection.unanchored_unverified_total,
+    render_truncated: truncated,
+  };
+}
 
 /** Deterministic stage config. ALL fields required and validated fail-loud (R2-04: the module's
  *  projection caps default to UNBOUNDED; the stage never relies on defaults). Every value shapes the
@@ -7538,6 +7600,10 @@ interface ObservationPromptPayloadOptions {
    * field subset, so these captures cannot leak into it).
    */
   provisionalLabelsByObservation?: ReadonlyMap<string, readonly string[]>;
+  /** W4 §4(B): map-present observations render the hierarchical semantic map INSTEAD of the flat
+   *  labels (D-REL); not_examined_capped is always preserved (X4 — the two censuses are different
+   *  universes). */
+  semanticMapByObservation?: ReadonlyMap<string, SemanticSeedProjection>;
   /**
    * P1-C2-B′ §2.2 Step E: read-candidate columns the fan-out cap left UNREAD, per observation_id
    * (formatted "colN (name)"). Surfaced as an explicit "not examined (capped)" census so the
@@ -7750,7 +7816,22 @@ export function observationPromptPayload(
         );
         const hasLabels = provisionalLabels && provisionalLabels.length > 0;
         const hasCapped = cappedColumns && cappedColumns.length > 0;
-        if (hasLabels || hasCapped) {
+        const semanticMap = options.semanticMapByObservation?.get(observation.observation_id);
+        if (semanticMap) {
+          // W4 §4(B) — D-REL replace: the hierarchical semantic map supersedes the flat leaf-read
+          // labels for this observation. not_examined_capped is PRESERVED (X4): the capped census
+          // and the map cover different candidate universes, so suppressing it would reproduce the
+          // over-trust it exists to prevent. Absent map → the pre-branch code below, byte-identical.
+          payload.provisional_labels = {
+            ...renderSemanticMapProjection(semanticMap, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET),
+            ...(hasCapped
+              ? {
+                  not_examined_capped: cappedColumns.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION),
+                  not_examined_capped_total: cappedColumns.length,
+                }
+              : {}),
+          };
+        } else if (hasLabels || hasCapped) {
           // Both lists are display-bounded for prompt size, but the bound must NEVER be a SILENT drop
           // (gate RB6 + two-family gate finding): the *_total counts are AUTHORITATIVE, so a consumer
           // can always tell when a list is shorter than its true count. This matters most for the
@@ -8816,6 +8897,7 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
     coverageAxisIds: "<<coverage_axis_ids>>",
     maturationHandoffPrompt: "<<maturation_handoff_prompt>>",
   }),
+  ontology_seed_semantic_map_note: SEMANTIC_MAP_SEED_PROMPT_NOTE,
   claim_realization_map: CLAIM_REALIZATION_MAP_SYSTEM_PROMPT,
   competency_questions: competencyQuestionsSystemPrompt({
     hasRepairAttempt: false,
@@ -8926,6 +9008,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   // P1-C2-A/B′ Step E: the leaf-read captures + honest capped census (set after the leaf-read stage).
   // projected into every observation prompt as a non-authoritative hint; never folded into the reuse key.
   let leafReadProvisionalLabels: ReadonlyMap<string, readonly string[]> | null = null;
+  // W4 §4: the semantic-map stage's per-observation seed projections (set after the stage; prompt
+  // text only — the reuse key folds the stage fingerprint, never this instance).
+  let semanticMapProjection: ReadonlyMap<string, SemanticSeedProjection> | null = null;
   let leafReadCappedColumns: ReadonlyMap<string, readonly string[]> | null = null;
   const projectObservationsForPrompt = (
     obs: ReconstructSourceObservationsArtifact,
@@ -8937,6 +9022,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         ? { provisionalLabelsByObservation: leafReadProvisionalLabels }
         : {}),
       ...(leafReadCappedColumns ? { cappedColumnsByObservation: leafReadCappedColumns } : {}),
+      ...(semanticMapProjection ? { semanticMapByObservation: semanticMapProjection } : {}),
     });
 
   return {
@@ -8947,6 +9033,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
     setLeafReadCappedColumns(capped: ReadonlyMap<string, readonly string[]>): void {
       leafReadCappedColumns = capped;
+    },
+    setSemanticMapProjection(byObservation: ReadonlyMap<string, SemanticSeedProjection>): void {
+      semanticMapProjection = byObservation;
     },
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
@@ -9825,6 +9914,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeOntologySeed(input) {
+      // W4 §4(A): the dedicated seed-payload semantic_map field — scoped to the SEED observation
+      // set (the safety/scope-gated ids below), rendered through the same single renderer as the
+      // observation-prompt surface. Empty/absent map → no field, payload byte-identical.
+      const buildSemanticMapSeedRender = (ids: readonly string[]): Record<string, unknown>[] =>
+        semanticMapProjection
+          ? ids
+              .filter((id) => semanticMapProjection!.has(id))
+              .map((id) => ({
+                observation_id: id,
+                ...renderSemanticMapProjection(semanticMapProjection!.get(id)!, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET),
+              }))
+          : [];
       const seedObservationIds = ontologySeedObservationIds({
         candidateInventory: input.candidateInventory,
         candidateDisposition: input.candidateDisposition,
@@ -9839,7 +9940,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             ? "OntologySeedValidationRepair"
             : "OntologySeed",
           maxTokens: 9000,
-          systemPrompt: ontologySeedSystemPrompt({
+          // W4 R2-02: the seed system prompt enumerates the userPayload fields — a new field the
+          // prompt never declares would be an unexplained input. The note is appended ONLY when the
+          // payload actually carries semantic_map (map-absent prompts stay byte-identical); the note
+          // text is a CG-1 catalog entry, so editing it rotates authoring_prompt_contract_sha256.
+          systemPrompt: (buildSemanticMapSeedRender(seedObservationIds).length > 0
+            ? (base: string): string => base + "\n" + SEMANTIC_MAP_SEED_PROMPT_NOTE
+            : (base: string): string => base)(ontologySeedSystemPrompt({
             authorId,
             coverageAxisIds: coverageAxisIds(input.contractRegistry).join(", "),
             maturationHandoffPrompt:
@@ -9847,7 +9954,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             repairSections: input.repairAttempt
               ? input.repairAttempt.repair_sections.join(", ")
               : null,
-          }),
+          })),
           userPayload: {
           intent: input.intent,
           target_material_profile:
@@ -9872,6 +9979,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           material_admission_ledger_ref: input.materialAdmissionLedgerRef,
           material_admission_rows:
             compactMaterialAdmissionLedgerForPrompt(input.materialAdmissionLedger),
+          ...(buildSemanticMapSeedRender(seedObservationIds).length > 0
+            ? { semantic_map: buildSemanticMapSeedRender(seedObservationIds) }
+            : {}),
           seed_authoring_readiness_ref: input.seedAuthoringReadinessRef,
           seed_authoring_readiness_validation_ref:
             input.seedAuthoringReadinessValidationRef,
@@ -9932,13 +10042,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             telemetry,
             artifactName: "OntologySeedMinimalKernel",
             maxTokens: 6500,
-            systemPrompt: ontologySeedMinimalKernelSystemPrompt({
+            systemPrompt: (buildSemanticMapSeedRender(seedObservationIds).length > 0
+              ? (base: string): string => base + "\n" + SEMANTIC_MAP_SEED_PROMPT_NOTE
+              : (base: string): string => base)(ontologySeedMinimalKernelSystemPrompt({
               authorId,
               coverageAxisIds: coverageAxisIds(input.contractRegistry).join(", "),
               maturationHandoffPrompt:
                 ontologySeedMaturationHandoffPrompt(input.contractRegistry),
-            }),
+            })),
             userPayload: {
+              ...(buildSemanticMapSeedRender(seedObservationIds).length > 0
+                ? { semantic_map: buildSemanticMapSeedRender(seedObservationIds) }
+                : {}),
               intent: input.intent,
               target_material_profile:
                 compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
@@ -13478,6 +13593,12 @@ export async function runReconstruct(
     verifyModelIdentity: directiveAuthor.reuseModelIdentity ?? "unspecified",
   });
   const semanticMapAggregateFingerprint = semanticMapStage.aggregateFingerprint;
+  // W4 §4: hand the per-observation projections to the author — (A) the seed userPayload field and
+  // (B) the observation-prompt replace both render from this one map (prompt text only; the reuse
+  // key already folds the stage fingerprint above).
+  if (semanticMapStage.projectionByObservation.size > 0) {
+    directiveAuthor.setSemanticMapProjection?.(semanticMapStage.projectionByObservation);
+  }
   const semanticMapCensusPath = semanticMapStage.censusPath;
   const semanticMapSidecarPath = semanticMapStage.sidecarPath;
   const refreshAuthoredArtifactReuseMatch = (): void => {

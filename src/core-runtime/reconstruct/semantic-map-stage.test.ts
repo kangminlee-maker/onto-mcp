@@ -6,11 +6,16 @@ import { parse as parseYaml } from "yaml";
 import {
   buildSemanticMapBridgeCallbacks,
   mergeSemanticSeedProjections,
+  observationPromptPayload,
+  RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+  renderSemanticMapProjection,
   resolveSemanticMapCapability,
   runSemanticMapStage,
+  SEMANTIC_MAP_SEED_PROMPT_NOTE,
   type ReconstructDirectiveAuthor,
   type SemanticMapStageConfig,
 } from "./run.js";
+import type { SemanticSeedProjection } from "./comprehension-semantic-map.js";
 import type {
   SemanticBoundaryVerification,
   SemanticBoundaryVerifyInput,
@@ -675,5 +680,98 @@ describe("mergeSemanticSeedProjections (W2)", () => {
     expect(merged.unanchored_unverified_total).toBe(3);
     // canonical order: all of column 0 before column 1 (reduceNodeKey sort)
     expect(merged.nodes[0]!.node_ref.column_index).toBe(0);
+  });
+});
+
+
+// ── W4 §4: shared renderer + observation-prompt replace surface ───────────────────────────────────
+
+function seedProjection(nodes: number): SemanticSeedProjection {
+  return {
+    authority: "non_authoritative",
+    provisional: true,
+    nodes: Array.from({ length: nodes }, (_, i) => ({
+      node_ref: { sheet: "S", column_index: 0, row_start: i * 10 + 1, row_end: i * 10 + 10 },
+      semantic_summary: `summary-${i}`,
+      boundaries: [
+        { row: i * 10 + 2, character_before: "a", character_after: "b", disposition: "structural_location_only" as const },
+      ],
+    })),
+    nodes_total: nodes,
+    refuted_disclosure: [],
+    refuted_disclosure_total: 1,
+    unanchored_unverified_total: 2,
+  };
+}
+
+describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget contract)", () => {
+  it("renders bounded nodes with AUTHORITATIVE totals and no truncation under a generous budget", () => {
+    const r = renderSemanticMapProjection(seedProjection(3), 10_000) as Record<string, unknown>;
+    expect(r.authority).toBe("non_authoritative");
+    expect((r.nodes as unknown[]).length).toBe(3);
+    expect(r.nodes_total).toBe(3);
+    expect(r.refuted_disclosure_total).toBe(1);
+    expect(r.unanchored_unverified_total).toBe(2);
+    expect(r.render_truncated).toBe(false);
+    expect(r.note).toBe(SEMANTIC_MAP_SEED_PROMPT_NOTE);
+  });
+
+  it("budget truncation is a deterministic TAIL drop with an explicit flag — totals stay authoritative", () => {
+    const r = renderSemanticMapProjection(seedProjection(5), 300) as Record<string, unknown>;
+    expect((r.nodes as unknown[]).length).toBeLessThan(5);
+    expect(r.nodes_total).toBe(5); // never a silent drop
+    expect(r.render_truncated).toBe(true);
+    const first = (r.nodes as { region: string }[])[0];
+    expect(first?.region).toBe("S#0:1-10"); // canonical head retained
+  });
+
+  it("fail-loud budget (issue-012 NC): NaN/zero budget throws", () => {
+    expect(() => renderSemanticMapProjection(seedProjection(1), Number.NaN)).toThrow(/charBudget/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), 0)).toThrow(/charBudget/);
+  });
+
+  it("CG-1: the seed prompt note is a catalog entry (editing it rotates the prompt-contract sha)", () => {
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.ontology_seed_semantic_map_note).toBe(SEMANTIC_MAP_SEED_PROMPT_NOTE);
+  });
+});
+
+describe("W4 §4(B) — observation prompt replace (observationPromptPayload)", () => {
+  const oneObservation = () =>
+    ({
+      observations: [
+        {
+          observation_id: "obs-1",
+          target_material_kind: "spreadsheet",
+          source_ref: "/x/book.xlsx",
+          location: "/x/book.xlsx",
+          summary: "spreadsheet",
+          structural_data: { basename: "book.xlsx" },
+        },
+      ],
+      skipped_refs: [],
+    }) as unknown as Parameters<typeof observationPromptPayload>[0];
+
+  it("map-present: the hierarchical render REPLACES flat labels and PRESERVES not_examined_capped (X4)", () => {
+    const payload = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["obs-1", ["col0: flat label"]]]),
+      cappedColumnsByObservation: new Map([["obs-1", ["col7 (status)"]]]),
+      semanticMapByObservation: new Map([["obs-1", seedProjection(2)]]),
+    }) as Array<Record<string, any>>;
+    const pl = payload[0]!.provisional_labels;
+    expect(pl.nodes).toHaveLength(2); // hierarchical render present
+    expect(pl.labels).toBeUndefined(); // flat labels REPLACED (D-REL)
+    expect(pl.not_examined_capped).toEqual(["col7 (status)"]); // X4 preserved
+    expect(pl.not_examined_capped_total).toBe(1);
+  });
+
+  it("map-absent: byte-identical flat behavior (the new gate is bypassed entirely)", () => {
+    const withOpt = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["obs-1", ["col0: flat label"]]]),
+      semanticMapByObservation: new Map([["other-obs", seedProjection(1)]]),
+    }) as Array<Record<string, unknown>>;
+    const without = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["obs-1", ["col0: flat label"]]]),
+    }) as Array<Record<string, unknown>>;
+    expect(JSON.stringify(withOpt)).toBe(JSON.stringify(without));
   });
 });

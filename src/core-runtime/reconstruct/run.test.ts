@@ -6019,9 +6019,12 @@ describe("runReconstruct", () => {
     // The shared base system + every authoring stage template (incl. both branches of
     // each conditional builder) is declared exactly once. The count is pinned so adding
     // or removing a catalog entry forces a deliberate update here.
+    // 38 = 37 + ontology_seed_semantic_map_note (W4: the semantic-map seed prompt note is a
+    // catalog entry so editing it rotates the contract sha; appended conditionally at the call
+    // site to keep map-absent prompts byte-identical)
     // 37 = 34 + leaf_read (P1-C2-A: the leaf-read prompt is an authoring template too)
     //    + value_read_location + value_read_judgment (maturation value-read cut, design §15.4).
-    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(37);
+    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(38);
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.value_read_location).toContain(
       "Select spreadsheet cell locations to read for a value-dependent limitation.",
     );
