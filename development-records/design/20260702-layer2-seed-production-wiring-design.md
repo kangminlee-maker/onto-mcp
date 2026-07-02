@@ -544,3 +544,12 @@ verify = 짝수행 confirmed/홀수행 refuted(kept·disclosed 양 처분 실행
 (대형 워크북 캡 자기-비활성 이슈는 §10 owner-결정 잔여) ③OFF byte-parity의 "기존 대비" 절대 비교는 슬라이스별 diff
 규율로 입증(스위트 내 크로스-버전 비교는 불가) ④live 스테이지 config는 `DEFAULT_SEMANTIC_MAP_STAGE_CONFIG` 고정
 (외부 주입 없음 — 캡 재결정 cut에서 재방문).
+
+### §17.1 정정 (2026-07-02·W5 교차검증 — adversary F1·probe 확증)
+
+§17의 "양 reconcile 경로 실행·kept·disclosed 양 처분 실행" 서술은 **mock의 함수 계약**(seam-ful 입력 가정)이지
+W5 E2E의 실행 커버리지가 아니다. **probe 확증**: rich 픽스처(7행)는 production observer를 거치면 컬럼당 1 tile·
+`intra_tile_notes=[]`·value_shape seam 0 (text→number 전환이 format cluster조차 분할하지 않음 — windowed
+majority TEXT 유지) → E2E가 실제 실행하는 것은 **unanchored(row_start=1·홀수)→adversarial refuted→disclosure
+경로뿐**. anchored/confirmed·kept 실행 커버리지는 semantic-map-stage.test.ts(seam-ful trace 픽스처) 소관.
+E2E의 목적(배선 체인 전 구간 실통과)은 영향 없음. 코드 주석 2곳(run.test.ts 픽스처·mock docstring) 동일 정정.

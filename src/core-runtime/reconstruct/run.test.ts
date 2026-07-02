@@ -7205,7 +7205,12 @@ describe("W5 semantic-map mock full-pipeline E2E", () => {
   const wsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
   const sstRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
 
-  // "rich": 2 columns × 7 rows with a mid-column text→number switch (a real value-shape seam).
+  // "rich": 2 columns × 7 rows with a mid-column text→number switch. HONESTY (W5 adversary F1,
+  // probe-confirmed): through the production observer this yields ONE tile per column with NO
+  // value_shape intra-tile notes (the switch does not even split the format cluster — windowed
+  // majority stays TEXT), so the E2E semantic map is seam-LESS: the mock emits only the row_start
+  // boundary (row 1, odd → adversarial REFUTED → disclosure). The anchored-reconcile and
+  // confirmed/kept paths are exercised by semantic-map-stage.test.ts (seam-ful traces), NOT here.
   // "empty": same path/sheet, NO data rows — the stage sees the observation but builds zero
   // column tasks (map_absent), which is the W4-005 stale-leak NC's second-run condition.
   function ledgerXlsxBytes(kind: "rich" | "empty"): Uint8Array {
@@ -7326,8 +7331,10 @@ describe("W5 semantic-map mock full-pipeline E2E", () => {
     const sidecar = await readYaml<{
       observations: Array<{ observation_id: string; projection: { nodes_total: number } }>;
     }>(path.join(sessionRoot, "comprehension", "semantic-map.yaml"));
-    expect(sidecar.observations.length).toBeGreaterThan(0);
-    expect(sidecar.observations[0]!.projection.nodes_total).toBeGreaterThan(0);
+    const mapPresentSidecarObservations = sidecar.observations.filter(
+      (observation) => observation.projection.nodes_total > 0,
+    );
+    expect(mapPresentSidecarObservations.length).toBeGreaterThan(0);
 
     // (A) seed surface: the userPayload field is present and non-empty, the note is hoisted ONCE
     // into the system prompt (never inline per item), and this closes the W4 review residue
@@ -7433,6 +7440,23 @@ describe("W5 semantic-map mock full-pipeline E2E", () => {
     }>(path.join(run2.sessionRoot, "comprehension", "semantic-map-census.yaml"));
     expect(census2.observations_total).toBeGreaterThan(0);
     expect(census2.observations_map_present).toBe(0);
+    // run-LEVEL reuse-key ROTATION (codex-Spark W5 residue): the stage RAN in both runs
+    // (capability present), so BOTH persisted seed reuse keys carry a 64-hex fingerprint —
+    // the §5 key tracks the DECISION to run, not the outcome (a null here is only the
+    // capability-absent skip, asserted in the OFF test). The rotation contrast: the workbook
+    // content changed between runs, so the SAME author's key must differ (silent-stale NC;
+    // the per-axis rotation tests live in semantic-map-stage.test.ts).
+    const run1Provenance = await readYaml<{
+      reuse_match?: { semantic_map_aggregate_fingerprint_sha256?: string | null };
+    }>(path.join(run1.sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
+    const run1Fingerprint = run1Provenance.reuse_match?.semantic_map_aggregate_fingerprint_sha256;
+    expect(run1Fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    const run2Provenance = await readYaml<{
+      reuse_match?: { semantic_map_aggregate_fingerprint_sha256?: string | null };
+    }>(path.join(run2.sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
+    const run2Fingerprint = run2Provenance.reuse_match?.semantic_map_aggregate_fingerprint_sha256;
+    expect(run2Fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(run2Fingerprint).not.toBe(run1Fingerprint);
   });
 
   it("OFF parity on a map-ELIGIBLE target: capability-absent author over the same xlsx — step skipped, zero prompt traces, reuse key present-but-null", async () => {

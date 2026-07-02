@@ -38,10 +38,15 @@ export const RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID =
  * Wraps a directive author with the deterministic capability PAIR (the production direct-call
  * author deliberately does NOT implement it — real-LLM authoring is a separate owner-approved
  * cut, so the live path stays default-off). Pure functions of their input:
- *  - synthesize: one boundary anchored at the node's first value-shape seam (exercises the
- *    anchored reconcile path) plus one at row_start (unanchored wherever no seam is within ±1 —
- *    exercises the adversarial verify path);
+ *  - synthesize: one boundary at the node's first value-shape seam when one exists (reconciled
+ *    anchored) plus ALWAYS one at row_start — emission is unconditional; the deterministic
+ *    reconcile CLASSIFIES it (unanchored → adversarial verify path — whenever no seam lies
+ *    within ±1 of row_start, which holds for every non-seam-adjacent region start);
  *  - verify: confirmed on even rows, refuted on odd (exercises kept AND disclosed dispositions).
+ * The two-path description above is the mock's FUNCTION CONTRACT given seam-ful input; the W5
+ * E2E fixture is seam-less through the production observer (adversary F1, probe-confirmed), so
+ * the E2E itself traverses only the unanchored→refuted path — anchored/confirmed execution
+ * coverage lives in semantic-map-stage.test.ts.
  * Mock output verifies wiring/contracts only — never product semantic quality.
  */
 export function withMockSemanticMapCapability<T extends object>(author: T): T & {
