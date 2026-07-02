@@ -11,6 +11,7 @@ import {
   renderSemanticMapProjection,
   resolveSemanticMapCapability,
   runSemanticMapStage,
+  SEMANTIC_MAP_PROMPT_NOTE,
   SEMANTIC_MAP_SEED_PROMPT_NOTE,
   type ReconstructDirectiveAuthor,
   type SemanticMapStageConfig,
@@ -560,6 +561,10 @@ describe("W3 fingerprint + registration", () => {
     expect((await runWith({}, { reduce_schema_tool_version: "v2" })).aggregateFingerprint).not.toBe(base1);
   });
 
+  it("W4-001 golden pin: the aggregate fingerprint is CONSCIOUSLY rotated — any pre-image change (incl. the render-budget VALUE fold) fails this literal", async () => {
+    expect((await runWith()).aggregateFingerprint).toBe("5cf86504af2b72b18072204e9fbba850fc828ca5f18b423f5fb5dc9dce2ae4bb");
+  });
+
   it("skipped stage → aggregate fingerprint null (leaf-read null pattern)", async () => {
     const result = await runSemanticMapStage({
       sourceObservations: observationsArtifact([{ observation_id: "obs-1", columns: [richColumn(0)] }]),
@@ -704,20 +709,41 @@ function seedProjection(nodes: number): SemanticSeedProjection {
   };
 }
 
+function projectionWithRefuted(nodes: number, refuted: number): SemanticSeedProjection {
+  const base = seedProjection(nodes);
+  return {
+    ...base,
+    refuted_disclosure: Array.from({ length: refuted }, (_, i) => ({
+      node_ref: { sheet: "S", column_index: 1, row_start: 1, row_end: 20 },
+      row: i + 3,
+      character_before: "x",
+      character_after: "y",
+    })),
+    refuted_disclosure_total: refuted,
+  };
+}
+
 describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget contract)", () => {
   it("renders bounded nodes with AUTHORITATIVE totals and no truncation under a generous budget", () => {
-    const r = renderSemanticMapProjection(seedProjection(3), 10_000) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(seedProjection(3), 10_000, true) as Record<string, unknown>;
     expect(r.authority).toBe("non_authoritative");
     expect((r.nodes as unknown[]).length).toBe(3);
     expect(r.nodes_total).toBe(3);
     expect(r.refuted_disclosure_total).toBe(1);
     expect(r.unanchored_unverified_total).toBe(2);
     expect(r.render_truncated).toBe(false);
-    expect(r.note).toBe(SEMANTIC_MAP_SEED_PROMPT_NOTE);
+    expect(r.note).toBe(SEMANTIC_MAP_PROMPT_NOTE); // (B) inline note = the SHARED caveat
+  });
+
+  it("includeNote=false (seed surface): no inline note — the caveat is hoisted ONCE into the seed system prompt", () => {
+    const r = renderSemanticMapProjection(seedProjection(2), 10_000, false) as Record<string, unknown>;
+    expect("note" in r).toBe(false);
+    expect((r.nodes as unknown[]).length).toBe(2);
   });
 
   it("budget truncation is a deterministic TAIL drop with an explicit flag — totals stay authoritative", () => {
-    const r = renderSemanticMapProjection(seedProjection(5), 300) as Record<string, unknown>;
+    const r = renderSemanticMapProjection(seedProjection(5), 1_000, false) as Record<string, unknown>;
+    expect((r.nodes as unknown[]).length).toBeGreaterThanOrEqual(1);
     expect((r.nodes as unknown[]).length).toBeLessThan(5);
     expect(r.nodes_total).toBe(5); // never a silent drop
     expect(r.render_truncated).toBe(true);
@@ -725,13 +751,40 @@ describe("renderSemanticMapProjection (W4 shared renderer, issue-012 budget cont
     expect(first?.region).toBe("S#0:1-10"); // canonical head retained
   });
 
-  it("fail-loud budget (issue-012 NC): NaN/zero budget throws", () => {
-    expect(() => renderSemanticMapProjection(seedProjection(1), Number.NaN)).toThrow(/charBudget/);
-    expect(() => renderSemanticMapProjection(seedProjection(1), 0)).toThrow(/charBudget/);
+  it("EXACT budget contract (codex W4-002 ≡ onto issue-001/002/004/005): the WHOLE returned envelope's actual prompt serialization never exceeds the budget", () => {
+    for (const budget of [500, 900, 1_500, 4_000]) {
+      const r = renderSemanticMapProjection(projectionWithRefuted(8, 5), budget, false);
+      expect(JSON.stringify(r, null, 2).length).toBeLessThanOrEqual(budget);
+    }
+    const withNote = renderSemanticMapProjection(projectionWithRefuted(8, 5), 1_500, true);
+    expect(JSON.stringify(withNote, null, 2).length).toBeLessThanOrEqual(1_500);
   });
 
-  it("CG-1: the seed prompt note is a catalog entry (editing it rotates the prompt-contract sha)", () => {
+  it("W4-004: refuted disclosure ROWS are prompt-visible (design §4 honesty), nodes admit FIRST", () => {
+    const p = projectionWithRefuted(2, 3);
+    const full = renderSemanticMapProjection(p, 100_000, false) as Record<string, unknown>;
+    expect((full.refuted_disclosure as unknown[]).length).toBe(3);
+    expect((full.refuted_disclosure as { row: number }[])[0]?.row).toBe(3);
+    // one char under the full render: the deterministic drop is the LAST refuted row, never a node
+    const fullLen = JSON.stringify(full, null, 2).length;
+    const r = renderSemanticMapProjection(p, fullLen - 1, false) as Record<string, unknown>;
+    expect((r.nodes as unknown[]).length).toBe(2); // nodes-first priority intact
+    expect((r.refuted_disclosure as unknown[]).length).toBe(2);
+    expect(r.refuted_disclosure_total).toBe(3); // total stays authoritative
+    expect(r.render_truncated).toBe(true);
+  });
+
+  it("fail-loud budget (issue-012 NC): NaN/zero budget throws; a budget too small for the empty envelope throws instead of silently overshooting", () => {
+    expect(() => renderSemanticMapProjection(seedProjection(1), Number.NaN, true)).toThrow(/charBudget/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), 0, true)).toThrow(/charBudget/);
+    expect(() => renderSemanticMapProjection(seedProjection(1), 300, true)).toThrow(/cannot fit/);
+  });
+
+  it("CG-1: BOTH notes are catalog-backed; the seed note COMPOSES the shared caveat (editing either rotates the sha)", () => {
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.ontology_seed_semantic_map_note).toBe(SEMANTIC_MAP_SEED_PROMPT_NOTE);
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.observation_semantic_map_note).toBe(SEMANTIC_MAP_PROMPT_NOTE);
+    expect(SEMANTIC_MAP_SEED_PROMPT_NOTE.endsWith(SEMANTIC_MAP_PROMPT_NOTE)).toBe(true);
+    expect(SEMANTIC_MAP_SEED_PROMPT_NOTE).toContain("userPayload.semantic_map");
   });
 });
 
@@ -762,6 +815,7 @@ describe("W4 §4(B) — observation prompt replace (observationPromptPayload)", 
     expect(pl.labels).toBeUndefined(); // flat labels REPLACED (D-REL)
     expect(pl.not_examined_capped).toEqual(["col7 (status)"]); // X4 preserved
     expect(pl.not_examined_capped_total).toBe(1);
+    expect(pl.note).toBe(SEMANTIC_MAP_PROMPT_NOTE); // inline caveat — (B)'s only note site
   });
 
   it("map-absent: byte-identical flat behavior (the new gate is bypassed entirely)", () => {
@@ -773,5 +827,16 @@ describe("W4 §4(B) — observation prompt replace (observationPromptPayload)", 
       provisionalLabelsByObservation: new Map([["obs-1", ["col0: flat label"]]]),
     }) as Array<Record<string, unknown>>;
     expect(JSON.stringify(withOpt)).toBe(JSON.stringify(without));
+  });
+
+  it("W4-005 reset semantics: an EMPTY map (the unconditional per-run set) behaves byte-identically to never-set", () => {
+    const emptyMap = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["obs-1", ["col0: flat label"]]]),
+      semanticMapByObservation: new Map(),
+    }) as Array<Record<string, unknown>>;
+    const neverSet = observationPromptPayload(oneObservation(), {
+      provisionalLabelsByObservation: new Map([["obs-1", ["col0: flat label"]]]),
+    }) as Array<Record<string, unknown>>;
+    expect(JSON.stringify(emptyMap)).toBe(JSON.stringify(neverSet));
   });
 });

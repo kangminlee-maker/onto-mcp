@@ -6024,7 +6024,7 @@ describe("runReconstruct", () => {
     // site to keep map-absent prompts byte-identical)
     // 37 = 34 + leaf_read (P1-C2-A: the leaf-read prompt is an authoring template too)
     //    + value_read_location + value_read_judgment (maturation value-read cut, design §15.4).
-    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(38);
+    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(39);
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.value_read_location).toContain(
       "Select spreadsheet cell locations to read for a value-dependent limitation.",
     );

@@ -1937,10 +1937,20 @@ export const DEFAULT_SEMANTIC_MAP_STAGE_CONFIG: SemanticMapStageConfig = {
   max_disclosure: 30,
 };
 
-/** W4 §4: the ONE prompt note describing the semantic-map data to the seed author — a catalog
- *  entry of its own (CG-1), so editing it rotates authoring_prompt_contract_sha256 tautologically. */
-export const SEMANTIC_MAP_SEED_PROMPT_NOTE =
+/** W4 §4: the shared caveat describing semantic-map data. Rendered INLINE with each (B)
+ *  observation-prompt replace (that surface has no other note site) and carried ONCE per seed
+ *  prompt via SEMANTIC_MAP_SEED_PROMPT_NOTE (onto W4 issue-001/002/005: the per-item inline note
+ *  duplicated it N+1 times in seed prompts). Catalog entry (CG-1) — editing rotates the sha. */
+export const SEMANTIC_MAP_PROMPT_NOTE =
   "semantic_map is a NON-AUTHORITATIVE, provisional hierarchical reading of spreadsheet column regions (accumulated bottom-up over deterministic value-shape trees). Each node carries a summary and boundary candidates; disposition structural_location_only means a value-shape seam co-locates (LOCATION corroborated, content NOT verified); adversarial_confirmed means an independent re-check agreed (still provisional). The *_total counts are AUTHORITATIVE — a shorter list was bounded for prompt size, never silently dropped. Treat as hints; the deterministic value-tile signatures remain the structural authority.";
+
+/** W4 §4(A): the seed SYSTEM-prompt append. The seed prompts enumerate their userPayload fields
+ *  exclusively (kernel: "Use ... only" — W4 review W4-003), so the first sentence explicitly
+ *  authorizes consulting the new field; the caveat body is the shared note (composition — editing
+ *  either part rotates the catalog sha). Seed payload renders OMIT the inline note (hoisted here). */
+export const SEMANTIC_MAP_SEED_PROMPT_NOTE =
+  "When userPayload.semantic_map is present you MAY additionally consult it (it extends any exclusive input-field list above). " +
+  SEMANTIC_MAP_PROMPT_NOTE;
 
 /** ⚠️ PRELIMINARY prompt-render budget (chars) for one observation's semantic-map render. Changing
  *  it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION with it (X9). */
@@ -1953,15 +1963,49 @@ export const SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET = 4000;
 export function renderSemanticMapProjection(
   projection: SemanticSeedProjection,
   charBudget: number,
+  /** (B) inline renders carry the caveat note; seed payload renders omit it (hoisted ONCE into the
+   *  seed system prompt — onto W4 issue-001/002/005 note-duplication). */
+  includeNote: boolean,
 ): Record<string, unknown> {
   if (!Number.isSafeInteger(charBudget) || charBudget <= 0) {
     throw new Error(`semantic-map render: charBudget must be a positive safe integer, got ${charBudget} (issue-012 fail-loud).`);
   }
+  // W4 code cross-validation (codex W4-002 ≡ onto issue-001/002/004/005 — two-family convergence):
+  // the budget bounds the ACTUAL prompt serialization (callJsonAuthor uses
+  // JSON.stringify(payload, null, 2)) of the WHOLE returned envelope, measured EXACTLY per
+  // admission (candidate-envelope test — an incremental per-node estimate under-counted nesting
+  // indentation; the original compact-JSON node-only model under-counted ~2x: budget 4000 → 7753
+  // real chars). Post-condition: pretty(returned) ≤ charBudget, or fail-loud below. The per-surface
+  // wrapper around this render ({observation_id} on the seed field / the provisional_labels key +
+  // preserved not_examined_capped on (B)) is O(1)-bounded per observation and NOT charged here.
   const nodes: Record<string, unknown>[] = [];
-  let used = 0;
+  const refutedRows: Record<string, unknown>[] = [];
+  const envelope: Record<string, unknown> = {
+    authority: "non_authoritative",
+    provisional: true,
+    ...(includeNote ? { note: SEMANTIC_MAP_PROMPT_NOTE } : {}),
+    nodes,
+    nodes_total: projection.nodes_total,
+    // W4 review W4-004 (design §4 honesty): the refuted DISCLOSURE rows are prompt-visible, not
+    // only their total — bounded rows first, budget-counted like nodes.
+    refuted_disclosure: refutedRows,
+    refuted_disclosure_total: projection.refuted_disclosure_total,
+    unanchored_unverified_total: projection.unanchored_unverified_total,
+    render_truncated: false,
+  };
+  const measure = (): number => JSON.stringify(envelope, null, 2).length;
+  if (measure() > charBudget) {
+    // Deterministic misconfiguration (fixed envelope+note vs the budget const), not a data
+    // condition — silently returning an over-budget "bounded" render would void the contract.
+    throw new Error(
+      `semantic-map render: charBudget ${charBudget} cannot fit the empty render envelope (${measure()} chars) — raise the budget (fail-loud, no silent overshoot).`,
+    );
+  }
   let truncated = false;
+  // Nodes admit FIRST (the map's primary content); disclosure rows take the remaining budget —
+  // the reverse order would let max_disclosure-many rows starve the summaries the seed consumes.
   for (const node of projection.nodes) {
-    const rendered = {
+    nodes.push({
       region: `${node.node_ref.sheet}#${node.node_ref.column_index}:${node.node_ref.row_start}-${node.node_ref.row_end}`,
       summary: node.semantic_summary,
       boundaries: node.boundaries.map((b) => ({
@@ -1970,25 +2014,29 @@ export function renderSemanticMapProjection(
         after: b.character_after,
         disposition: b.disposition,
       })),
-    };
-    const cost = JSON.stringify(rendered).length;
-    if (used + cost > charBudget) {
+    });
+    if (measure() > charBudget) {
+      nodes.pop();
       truncated = true;
       break; // canonical order — the drop is the deterministic TAIL, and totals stay authoritative.
     }
-    used += cost;
-    nodes.push(rendered);
   }
-  return {
-    authority: "non_authoritative",
-    provisional: true,
-    note: SEMANTIC_MAP_SEED_PROMPT_NOTE,
-    nodes,
-    nodes_total: projection.nodes_total,
-    refuted_disclosure_total: projection.refuted_disclosure_total,
-    unanchored_unverified_total: projection.unanchored_unverified_total,
-    render_truncated: truncated,
-  };
+  for (const refuted of projection.refuted_disclosure) {
+    refutedRows.push({
+      region: `${refuted.node_ref.sheet}#${refuted.node_ref.column_index}:${refuted.node_ref.row_start}-${refuted.node_ref.row_end}`,
+      row: refuted.row,
+      before: refuted.character_before,
+      after: refuted.character_after,
+    });
+    if (measure() > charBudget) {
+      refutedRows.pop();
+      truncated = true;
+      break;
+    }
+  }
+  // Flipping false→true SHRINKS the serialization by 1 char, so the measured bound still holds.
+  envelope.render_truncated = truncated;
+  return envelope;
 }
 
 /** Deterministic stage config. ALL fields required and validated fail-loud (R2-04: the module's
@@ -2258,6 +2306,9 @@ export async function runSemanticMapStage(args: {
       verify_model_identity: args.verifyModelIdentity,
       stage_config: cfg,
       projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION, // X9 / W3-003
+      // W4 review W4-001 (5th recurrence of the value-shapes-prompt-but-not-key class): the render
+      // budget truncates BOTH prompt surfaces — folded by VALUE, never only via the manual knob.
+      render_char_budget: SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
     };
     assertGatingKeyExcludesInEpochOutput("semanticMapStageFingerprint", fingerprintPreImage);
     const observationFingerprint = sha256Text(stableJson(fingerprintPreImage));
@@ -5916,6 +5967,10 @@ function competencyQuestionAssessmentUserPayload(
     input,
     questions,
   );
+  // DELIBERATE direct module call (not the author's projectObservationsForPrompt closure): the
+  // assessment JUDGE surface sees raw observation evidence only — no leaf-read provisional labels
+  // and no semantic-map render (judge context-isolation precedent; it never carried the flat
+  // labels either, so this is a scope-out, not a W4 gap — onto W4 review issue-003a).
   const projectedEvidenceCandidates = observationPromptPayload(
     input.sourceObservations,
     {
@@ -7823,7 +7878,7 @@ export function observationPromptPayload(
           // and the map cover different candidate universes, so suppressing it would reproduce the
           // over-trust it exists to prevent. Absent map → the pre-branch code below, byte-identical.
           payload.provisional_labels = {
-            ...renderSemanticMapProjection(semanticMap, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET),
+            ...renderSemanticMapProjection(semanticMap, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, true),
             ...(hasCapped
               ? {
                   not_examined_capped: cappedColumns.slice(0, MAX_PROVISIONAL_LABELS_PER_OBSERVATION),
@@ -8898,6 +8953,7 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
     maturationHandoffPrompt: "<<maturation_handoff_prompt>>",
   }),
   ontology_seed_semantic_map_note: SEMANTIC_MAP_SEED_PROMPT_NOTE,
+  observation_semantic_map_note: SEMANTIC_MAP_PROMPT_NOTE,
   claim_realization_map: CLAIM_REALIZATION_MAP_SYSTEM_PROMPT,
   competency_questions: competencyQuestionsSystemPrompt({
     hasRepairAttempt: false,
@@ -9923,7 +9979,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               .filter((id) => semanticMapProjection!.has(id))
               .map((id) => ({
                 observation_id: id,
-                ...renderSemanticMapProjection(semanticMapProjection!.get(id)!, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET),
+                ...renderSemanticMapProjection(semanticMapProjection!.get(id)!, SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET, false),
               }))
           : [];
       const seedObservationIds = ontologySeedObservationIds({
@@ -13596,9 +13652,9 @@ export async function runReconstruct(
   // W4 §4: hand the per-observation projections to the author — (A) the seed userPayload field and
   // (B) the observation-prompt replace both render from this one map (prompt text only; the reuse
   // key already folds the stage fingerprint above).
-  if (semanticMapStage.projectionByObservation.size > 0) {
-    directiveAuthor.setSemanticMapProjection?.(semanticMapStage.projectionByObservation);
-  }
+  // ALWAYS set — including an empty map (W4 review W4-005): a reused author instance would
+  // otherwise leak the PREVIOUS run's projections into a map-absent run (parity violation).
+  directiveAuthor.setSemanticMapProjection?.(semanticMapStage.projectionByObservation);
   const semanticMapCensusPath = semanticMapStage.censusPath;
   const semanticMapSidecarPath = semanticMapStage.sidecarPath;
   const refreshAuthoredArtifactReuseMatch = (): void => {
