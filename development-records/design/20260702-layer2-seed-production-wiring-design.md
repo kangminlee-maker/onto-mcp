@@ -553,3 +553,30 @@ W5 E2E의 실행 커버리지가 아니다. **probe 확증**: rich 픽스처(7�
 majority TEXT 유지) → E2E가 실제 실행하는 것은 **unanchored(row_start=1·홀수)→adversarial refuted→disclosure
 경로뿐**. anchored/confirmed·kept 실행 커버리지는 semantic-map-stage.test.ts(seam-ful trace 픽스처) 소관.
 E2E의 목적(배선 체인 전 구간 실통과)은 영향 없음. 코드 주석 2곳(run.test.ts 픽스처·mock docstring) 동일 정정.
+
+---
+
+## 18. 브랜치 전체 최종검증 기록 (2026-07-02·owner 지시)
+
+대상 = `feat/layer2-seed-wiring` HEAD `71f2324` (origin/main `320b530` 기준 14 커밋·behind 0·rebase 불요).
+
+1. **diff 감사**: 16 파일·+3060/−24 — 전부 `src/core-runtime/reconstruct/*` + 이 설계 문서. 잡파일 0.
+2. **정적 게이트 전수**: check:* 스크립트 **14/14 PASS** (ts-core·review:invocation-runner·retired-root-paths·
+   mcp:review·review:route·import-boundary·spec-defaults·invariant-change·invariant-drift·supported-models·
+   prompt-projection-parity·final-output-sections-parity·obligation-coverage·graceful-signal-rethrow).
+3. **full vitest**: HEAD서 **2319 pass + 1 todo** (base 2277 → +42·회귀 0).
+4. **★교차-버전 OFF byte-parity probe** (§17 한계 ③의 "스위트 내 불가" 절대 비교를 워크트리 2개로 실행 —
+   base `320b530` 스크래치 워크트리 vs 브랜치 HEAD, 동일 결정론 probe·capability-absent 저자·mock LLM·
+   실 xlsx 타깃 full runReconstruct·26 LLM 호출 캡처):
+   - 통제: base↔base 재실행 = **0 diff** (TS/duration 정규화 후) — 비교기·파이프라인 결정론 성립.
+   - 픽스처 함정 1건 자체 발견: fflate zipSync가 mtime을 zip 바이트에 굽음(2초 DOS 창) → probe를 고정
+     mtime으로 결정론화 후 재실행 (초기 sha 차이는 입력 비결정성이지 행동 차이 아님을 실험으로 확정).
+   - **본검사: 26 호출 중 차이 = 정확히 1 call-field** — final-output 프롬프트의 manifest 임베드에
+     `semantic_map` skipped step 추가 + skipped_step_count 49→50. **= §6/§8 X6 선언 기대-델타 그대로,
+     그 외 25 호출 byte-identical.** default-off 불변식이 브랜치 전체 레벨에서 절대 비교로 입증됨.
+5. **§0 완료조건 대조**: 범위 5항(스테이지·2-표면·reuse fold·등록·mock E2E+음성대조) 전부 전달·비-범위
+   3항(실 LLM 0·leaf-read 무접촉[투영만 대체]·품질 재측정 없음) 준수. 슬라이스별 2-패밀리 교차검증
+   W1~W5 전부 통과(§16·W2~W5 각 커밋 메시지·§17.1).
+
+잔여(이 cut 밖·기록됨): 실 LLM production run=별도 owner 승인 cut·기본 캡/관측 스코프 owner 결정(§10)·
+leaf-read gating 결정(실 LLM cut).
