@@ -266,6 +266,8 @@ describe("runSemanticMapStage (W2)", () => {
     expect(col.reason).toMatch(/verify-call cap/);
     expect(counters.verify).toBe(0);
     expect(result.census!.synthesize_calls_total).toBeGreaterThan(0); // spent synthesize calls honestly counted
+    // Row↔total consistency: the capped ROW carries its spent calls (Σ rows == totals — no hidden spend).
+    expect(col.synthesize_calls).toBe(result.census!.synthesize_calls_total);
   });
 
   it("config fail-loud (R2-04): a NaN/absent cap throws at entry, before any work", async () => {

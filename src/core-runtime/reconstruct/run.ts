@@ -2234,7 +2234,13 @@ export async function runSemanticMapStage(args: {
         census.synthesize_calls_total += synthesizeCalls;
         census.verify_calls_total += verifyCalls;
         const capped = error instanceof SemanticMapVerifyCapExceeded;
-        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, capped ? "capped" : "failed", (error as Error).message));
+        columnRows.push({
+          ...emptySemanticMapColumnRow(task.sheet, task.column_index, capped ? "capped" : "failed", (error as Error).message),
+          // Row-level spent-call honesty: the failed/capped column still SPENT these calls — the
+          // per-column rows must sum to the census totals (no hidden spend).
+          synthesize_calls: synthesizeCalls,
+          verify_calls: verifyCalls,
+        });
         doomed = true;
       }
     }
