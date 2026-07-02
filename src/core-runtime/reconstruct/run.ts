@@ -2134,10 +2134,12 @@ export async function runSemanticMapStage(args: {
       adapter_version: workbookInventoryAdapterVersion(inventory) ?? 0,
       value_tile_config: workbookInventoryValueTileConfig(inventory),
       data_layer_caps: workbookInventoryDataLayerCaps(inventory),
-      synthesize_model_identity: args.preImageBase.reduce_reader_model_identity,
+      // The ENTIRE ⓑ' base is folded — a SELECTIVE fold left gate-logic/schema-tool version
+      // changes outside the seed key (silent-stale class, self-caught post-W3): everything that
+      // shapes a judgment must rotate the key (model identity, prompt-contract sha, version knob,
+      // gate config+LOGIC version, schema tool version).
+      pre_image_base: args.preImageBase,
       verify_model_identity: args.verifyModelIdentity,
-      authoring_prompt_contract_sha256: args.preImageBase.reduce_prompt_sha256,
-      semantic_map_comprehension_version: args.preImageBase.comprehension_version,
       stage_config: cfg,
     };
     assertGatingKeyExcludesInEpochOutput("semanticMapStageFingerprint", fingerprintPreImage);

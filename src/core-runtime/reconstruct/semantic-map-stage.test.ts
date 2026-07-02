@@ -434,6 +434,10 @@ describe("W3 fingerprint + registration", () => {
     expect((await runWith({}, {}, "other/model")).aggregateFingerprint).not.toBe(base1); // F4 verify model
     expect((await runWith({}, { comprehension_version: "c2" })).aggregateFingerprint).not.toBe(base1); // knob
     expect((await runWith({}, { reduce_reader_model_identity: "swap/model" })).aggregateFingerprint).not.toBe(base1);
+    // Whole-preImageBase fold (self-caught silent-stale): gate LOGIC version + schema tool version
+    // rotate the seed key too — a selective fold left these outside it.
+    expect((await runWith({}, { over_context_gate_logic_sha256: "logic-v2" })).aggregateFingerprint).not.toBe(base1);
+    expect((await runWith({}, { reduce_schema_tool_version: "v2" })).aggregateFingerprint).not.toBe(base1);
   });
 
   it("skipped stage → aggregate fingerprint null (leaf-read null pattern)", async () => {
