@@ -506,3 +506,41 @@ verifySemanticMapBoundary?(input: SemanticBoundaryVerifyInput): Promise<Semantic
 **Confirmed Sound(codex 명시)**: named input 타입·run.ts type-only import(경계/순환 무위반·게이트 실행 확인)·async
 시그니처↔§3 sync-bridge 정합·census→W2/knob→W3 이연(inert 규율)·§13/§14 무충돌. **∴ §15 = W1 빌드 착수 가능 계약**
 (3-라운드 검증 이력: §13 전제 반증 → §14 fix 정련 → §16 W1 스펙 gate_pass).
+
+---
+
+## 17. W5 완료 기록 (2026-07-02·mock E2E + §8 매트릭스 종결)
+
+**mock capability realization** = `mock-llm-realization.ts` `withMockSemanticMapCapability(author)`
+(INV-MOCK-1 삭제 경계; production direct-call author는 의도적으로 pair 미구현 = live default-off 유지).
+결정론 의미: synthesize = 첫 seam anchored 후보 + row_start unanchored 후보(양 reconcile 경로 실행),
+verify = 짝수행 confirmed/홀수행 refuted(kept·disclosed 양 처분 실행). 스테이지 단위 mock(semantic-map-stage.test.ts
+로컬)과 의미 동일 — 전 파이프라인 소비자용만 삭제 경계로 승격.
+
+**mock full-pipeline E2E 3종** (run.test.ts "W5 semantic-map mock full-pipeline E2E") — 전부 **실 tiny xlsx**
+(fflate zipSync → materialize-preparation의 production `observeSpreadsheetSource`가 관측; 손-조립 관측 아님):
+
+1. **ON**: capability author → run completed·manifest `semantic_map` step **completed**·census(관측>0·map_present>0·
+   synthesize/verify calls>0)+sidecar(projection.nodes_total>0) 실파일(ENOENT=dead-code 음성)·**(A) seed 프롬프트**
+   (시스템=SEED note 포함·payload `semantic_map` 필드 non-empty·per-item note 부재=hoist 확인 — codex W4 잔여
+   "map-present writeOntologySeed E2E 부재" 종결)·**(B) 비-seed 프롬프트**(공유 caveat inline+`nodes_total`)·
+   **reuse 키**(`ontology-seed.yaml.reuse-provenance.yaml`의 aggregate fingerprint = 64-hex non-null).
+2. **W4-005 2-런 same-author leak NC**: 런1 rich xlsx(map-present) → **같은 경로**(=동일 결정론 관측 id·sha(ref+location))
+   워크북을 빈 시트로 덮어쓰고 런2 같은 author 인스턴스 → 스테이지 실행되나 map_absent(census 확인)·런2 프롬프트
+   전수에 semantic-map 흔적 0(nodes_total·양 note·seed 필드). 무조건-set(W4-005) 제거 시 런1 stale map이 id 충돌로
+   렌더 → fail. 비-vacuous 가드: 런2 관측-프롬프트 실발행 + seed 호출>0 단언.
+3. **OFF parity(map-eligible 대상)**: capability-absent author + 같은 rich xlsx → step **skipped**·프롬프트 흔적 0·
+   reuse 키 존재-but-null. (주의: manifest step id `"semantic_map"`은 final-output 프롬프트에 정당히 등장 —
+   광역 substring 스캔은 오탐이라 seed payload 필드-존재 검사로 조준.)
+
+**§8 음성대조 매트릭스 16행 전수 커버 확인**: bridge 완전성/드리프트/verify 대칭(W2 stage 테스트)·전송분 봉투
+(모듈 테스트: unexpected field throw + 실경로 886 강제)·X5 fallback·X7 캡(W2+감사)·X4 capped(W4)·D-SUB1
+(W3 회전축 F6)·대체 분기(W4+W5 E2E)·seed 필드 X1(W5 ON/OFF)·reuse/topology 회전(W3)·F9 denylist(W3)·census+sidecar
+실존(W2+W5 live)·totals(W4)·off parity(W4+W5+X6 기대-델타).
+
+**검증**: ts-core+구조 게이트 7종 PASS·full vitest **2319 pass + 1 todo**(W5 신규 +3·회귀 0).
+
+**정직한 한계**: ①mock 의미 = 배선/계약 증거만(의미품질=별도 owner cut·§9 재측정 금지 유지) ②tiny xlsx n=1 토폴로지
+(대형 워크북 캡 자기-비활성 이슈는 §10 owner-결정 잔여) ③OFF byte-parity의 "기존 대비" 절대 비교는 슬라이스별 diff
+규율로 입증(스위트 내 크로스-버전 비교는 불가) ④live 스테이지 config는 `DEFAULT_SEMANTIC_MAP_STAGE_CONFIG` 고정
+(외부 주입 없음 — 캡 재결정 cut에서 재방문).

@@ -18,6 +18,12 @@
 import type { LlmCallResult } from "../llm/llm-caller.js";
 import { REVIEW_MOCK_REALIZATION_ENV } from "../llm/mock-llm-realization.js";
 import type { ReconstructOntologySeedArtifact } from "./artifact-types.js";
+import type {
+  SemanticBoundaryVerification,
+  SemanticBoundaryVerifyInput,
+  SemanticSynthesisInput,
+  SemanticSynthesisOutput,
+} from "./comprehension-semantic-map.js";
 import { ontologySeedClaimProjections } from "./seed-claim-projections.js";
 
 export const RECONSTRUCT_MOCK_REALIZATION_ENV = REVIEW_MOCK_REALIZATION_ENV;
@@ -25,6 +31,46 @@ export const RECONSTRUCT_MOCK_REALIZATION_ENV = REVIEW_MOCK_REALIZATION_ENV;
 export const RECONSTRUCT_MOCK_AUTHOR_ID = "reconstruct-mock-semantic-author";
 export const RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID =
   "reconstruct-mock-confirmation-provider";
+
+/**
+ * Layer-2 semantic-map author capability — MOCK realization (wiring design 20260702 §7-W5).
+ *
+ * Wraps a directive author with the deterministic capability PAIR (the production direct-call
+ * author deliberately does NOT implement it — real-LLM authoring is a separate owner-approved
+ * cut, so the live path stays default-off). Pure functions of their input:
+ *  - synthesize: one boundary anchored at the node's first value-shape seam (exercises the
+ *    anchored reconcile path) plus one at row_start (unanchored wherever no seam is within ±1 —
+ *    exercises the adversarial verify path);
+ *  - verify: confirmed on even rows, refuted on odd (exercises kept AND disclosed dispositions).
+ * Mock output verifies wiring/contracts only — never product semantic quality.
+ */
+export function withMockSemanticMapCapability<T extends object>(author: T): T & {
+  synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput>;
+  verifySemanticMapBoundary(input: SemanticBoundaryVerifyInput): Promise<SemanticBoundaryVerification>;
+} {
+  return {
+    ...author,
+    async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
+      const seam = input.value_shape_seams[0];
+      return {
+        semantic_summary:
+          `mock ${input.node_ref.sheet}#${input.node_ref.column_index}:` +
+          `${input.node_ref.row_start}-${input.node_ref.row_end} kids=${input.child_summaries.length}`,
+        boundaries: [
+          ...(seam
+            ? [{ row: seam.row, character_before: "seam-prev", character_after: "seam-next" }]
+            : []),
+          { row: input.node_ref.row_start, character_before: "prev", character_after: "next" },
+        ],
+      };
+    },
+    async verifySemanticMapBoundary(
+      input: SemanticBoundaryVerifyInput,
+    ): Promise<SemanticBoundaryVerification> {
+      return input.boundary.row % 2 === 0 ? "adversarial_confirmed" : "adversarial_refuted";
+    },
+  };
+}
 
 export function isReconstructMockLlmRealizationEnabled(
   env: NodeJS.ProcessEnv = process.env,

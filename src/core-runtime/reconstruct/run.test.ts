@@ -62,6 +62,8 @@ import {
   authoringPromptContractSha256,
   AUTHORING_PROMPT_CONTRACT_VERSION,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
+  SEMANTIC_MAP_PROMPT_NOTE,
+  SEMANTIC_MAP_SEED_PROMPT_NOTE,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -78,7 +80,9 @@ import {
   RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
   callReconstructMockLlm as reconstructFixtureLlm,
   reconstructMockOntologyHandoff as ontologyHandoffFixture,
+  withMockSemanticMapCapability,
 } from "./mock-llm-realization.js";
+import { zipSync, strToU8 } from "fflate";
 import {
   buildReconstructPipelineExecutionLedger,
 } from "./pipeline-execution-ledger.js";
@@ -7184,5 +7188,302 @@ describe("runReconstruct graceful terminal (Slice 4 · site 2 un-observable fron
       path.join(sessionRoot, "reconstruct-run-control.yaml"),
     );
     expect(runControl.attempt_rows.at(-1)?.attempt_status).toBe("halted");
+  });
+});
+
+// ── W5: semantic-map mock full-pipeline E2E (wiring design 20260702 §7-W5 / §8) ───────────────────
+//
+// The FULL runReconstruct path over a REAL tiny xlsx (materialize-preparation observes it through
+// the production spreadsheet observer, so the stage consumes real value tiles — never a hand-built
+// observation). The capability pair is the MOCK realization (deletion boundary:
+// mock-llm-realization.ts) — wiring/contract evidence only, never semantic quality.
+
+describe("W5 semantic-map mock full-pipeline E2E", () => {
+  const WB_R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const RELS_NS = "http://schemas.openxmlformats.org/package/2006/relationships";
+  const SML_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  const wsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+  const sstRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+
+  // "rich": 2 columns × 7 rows with a mid-column text→number switch (a real value-shape seam).
+  // "empty": same path/sheet, NO data rows — the stage sees the observation but builds zero
+  // column tasks (map_absent), which is the W4-005 stale-leak NC's second-run condition.
+  function ledgerXlsxBytes(kind: "rich" | "empty"): Uint8Array {
+    const sheetData = kind === "rich"
+      ? `<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>` +
+        `<row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>1000</v></c></row>` +
+        `<row r="3"><c r="A3" t="s"><v>3</v></c><c r="B3"><v>400</v></c></row>` +
+        `<row r="4"><c r="A4" t="s"><v>2</v></c><c r="B4"><v>250</v></c></row>` +
+        `<row r="5"><c r="A5"><v>77</v></c><c r="B5"><v>310</v></c></row>` +
+        `<row r="6"><c r="A6"><v>78</v></c><c r="B6"><v>120</v></c></row>` +
+        `<row r="7"><c r="A7"><v>79</v></c><c r="B7"><v>95</v></c></row>`
+      : "";
+    return zipSync({
+      "xl/workbook.xml": strToU8(
+        `<?xml version="1.0"?><workbook ${WB_R}><sheets>` +
+          `<sheet name="Ledger" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+      ),
+      "xl/_rels/workbook.xml.rels": strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${wsRelType}" Target="worksheets/sheet1.xml"/>` +
+          `<Relationship Id="rId2" Type="${sstRelType}" Target="sharedStrings.xml"/></Relationships>`,
+      ),
+      "xl/sharedStrings.xml": strToU8(
+        `<?xml version="1.0"?><sst xmlns="${SML_NS}">` +
+          `<si><t>account</t></si><si><t>amount</t></si>` +
+          `<si><t>revenue</t></si><si><t>cogs</t></si></sst>`,
+      ),
+      "xl/worksheets/sheet1.xml": strToU8(
+        `<?xml version="1.0"?><worksheet ${WB_R}><dimension ref="A1:B7"/><sheetData>` +
+          sheetData +
+          `</sheetData></worksheet>`,
+      ),
+    });
+  }
+
+  function capturingFixtureLlm(): {
+    calls: { systemPrompt: string; userPrompt: string }[];
+    llmCall: (systemPrompt: string, userPrompt: string) => Promise<LlmCallResult>;
+  } {
+    const calls: { systemPrompt: string; userPrompt: string }[] = [];
+    return {
+      calls,
+      llmCall: async (systemPrompt: string, userPrompt: string) => {
+        calls.push({ systemPrompt, userPrompt });
+        return reconstructFixtureLlm(systemPrompt, userPrompt);
+      },
+    };
+  }
+
+  async function runOnXlsx(args: {
+    projectRoot: string;
+    xlsxRef: string;
+    sessionName: string;
+    directiveAuthor: Parameters<typeof runReconstruct>[0]["directiveAuthor"];
+    confirmationProvider: ReconstructConfirmationProvider;
+  }) {
+    const sessionRoot = path.join(
+      args.projectRoot,
+      ".onto",
+      "reconstruct",
+      args.sessionName,
+    );
+    const result = await runReconstruct({
+      projectRoot: args.projectRoot,
+      targetRefs: [args.xlsxRef],
+      intent: "Create a bounded reconstruct Seed from the ledger workbook.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [args.projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: args.directiveAuthor,
+      confirmationProvider: args.confirmationProvider,
+    });
+    return { result, sessionRoot };
+  }
+
+  it("ON: capability author over a real xlsx — stage completes, census+sidecar exist, seed prompt carries semantic_map (note hoisted), observation prompts carry the inline render, reuse key folds the fingerprint", async () => {
+    const projectRoot = await tempProjectRoot();
+    const xlsxRef = path.join(projectRoot, "ledger.xlsx");
+    await fs.writeFile(xlsxRef, Buffer.from(ledgerXlsxBytes("rich")));
+    const { calls, llmCall } = capturingFixtureLlm();
+    const directiveAuthor = withMockSemanticMapCapability(
+      createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+        authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+      }),
+    );
+    const confirmationProvider = createDirectCallReconstructConfirmationProvider({
+      llmCall: reconstructFixtureLlm,
+      providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+    });
+
+    const { result, sessionRoot } = await runOnXlsx({
+      projectRoot,
+      xlsxRef,
+      sessionName: "w5-on",
+      directiveAuthor,
+      confirmationProvider,
+    });
+    expect(result.status).toBe("completed");
+    expect(
+      result.reconstructRunManifest.steps.find((step) => step.step_id === "semantic_map"),
+    ).toMatchObject({ status: "completed" });
+
+    // census + sidecar are REAL files on the live path (ENOENT would prove dead code), and the
+    // census subject set is non-empty (cardinality > 0 before any "map present" claim).
+    const census = await readYaml<{
+      observations_total: number;
+      observations_map_present: number;
+      synthesize_calls_total: number;
+      verify_calls_total: number;
+    }>(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"));
+    expect(census.observations_total).toBeGreaterThan(0);
+    expect(census.observations_map_present).toBeGreaterThan(0);
+    expect(census.synthesize_calls_total).toBeGreaterThan(0);
+    expect(census.verify_calls_total).toBeGreaterThan(0);
+    const sidecar = await readYaml<{
+      observations: Array<{ observation_id: string; projection: { nodes_total: number } }>;
+    }>(path.join(sessionRoot, "comprehension", "semantic-map.yaml"));
+    expect(sidecar.observations.length).toBeGreaterThan(0);
+    expect(sidecar.observations[0]!.projection.nodes_total).toBeGreaterThan(0);
+
+    // (A) seed surface: the userPayload field is present and non-empty, the note is hoisted ONCE
+    // into the system prompt (never inline per item), and this closes the W4 review residue
+    // ("no map-present writeOntologySeed E2E test").
+    const seedCalls = calls.filter((call) =>
+      call.systemPrompt.includes("Author ontology-seed.yaml")
+    );
+    expect(seedCalls.length).toBeGreaterThan(0);
+    for (const seedCall of seedCalls) {
+      expect(seedCall.systemPrompt).toContain(SEMANTIC_MAP_SEED_PROMPT_NOTE);
+      const payload = JSON.parse(seedCall.userPrompt) as {
+        semantic_map?: Array<Record<string, unknown>>;
+      };
+      expect(Array.isArray(payload.semantic_map)).toBe(true);
+      expect(payload.semantic_map!.length).toBeGreaterThan(0);
+      const item = payload.semantic_map![0]!;
+      expect(typeof item.observation_id).toBe("string");
+      expect((item.nodes as unknown[]).length).toBeGreaterThan(0);
+      expect("note" in item).toBe(false);
+    }
+
+    // (B) surface: at least one NON-seed observation prompt carries the inline hierarchical
+    // render (its note is the shared caveat, its totals authoritative).
+    const bCalls = calls.filter((call) =>
+      !call.systemPrompt.includes("Author ontology-seed.yaml") &&
+      call.userPrompt.includes(SEMANTIC_MAP_PROMPT_NOTE)
+    );
+    expect(bCalls.length).toBeGreaterThan(0);
+    expect(bCalls[0]!.userPrompt).toContain('"nodes_total"');
+
+    // Reuse key: the aggregate fingerprint folded into the persisted seed reuse match (non-null
+    // 64-hex — the map-present counterpart of the map-absent null assertion elsewhere).
+    const seedReuseProvenance = await readYaml<{
+      reuse_match?: { semantic_map_aggregate_fingerprint_sha256?: string | null };
+    }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
+    expect(seedReuseProvenance.reuse_match?.semantic_map_aggregate_fingerprint_sha256)
+      .toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("W4-005 two-run same-author leak NC: after a map-present run, a map-ABSENT run on the SAME observation id must carry zero semantic-map traces in its prompts", async () => {
+    const projectRoot = await tempProjectRoot();
+    const xlsxRef = path.join(projectRoot, "ledger.xlsx");
+    await fs.writeFile(xlsxRef, Buffer.from(ledgerXlsxBytes("rich")));
+    const { calls, llmCall } = capturingFixtureLlm();
+    const directiveAuthor = withMockSemanticMapCapability(
+      createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+        authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+      }),
+    );
+    const confirmationProvider = createDirectCallReconstructConfirmationProvider({
+      llmCall: reconstructFixtureLlm,
+      providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+    });
+
+    // run 1: rich workbook — the author closure now HOLDS a projection for this observation id.
+    const run1 = await runOnXlsx({
+      projectRoot,
+      xlsxRef,
+      sessionName: "w5-leak-run1",
+      directiveAuthor,
+      confirmationProvider,
+    });
+    expect(run1.result.status).toBe("completed");
+    expect(calls.some((call) => call.userPrompt.includes('"nodes_total"'))).toBe(true);
+
+    // run 2: SAME author instance, SAME xlsx path (same deterministic observation id — sha of
+    // resolved ref+location), but the workbook is now EMPTY: the stage runs and yields an empty
+    // projection. Without the unconditional setSemanticMapProjection (W4-005), run 1's stale map
+    // would key-collide and render into run 2's prompts.
+    await fs.writeFile(xlsxRef, Buffer.from(ledgerXlsxBytes("empty")));
+    const run2Start = calls.length;
+    const run2 = await runOnXlsx({
+      projectRoot,
+      xlsxRef,
+      sessionName: "w5-leak-run2",
+      directiveAuthor,
+      confirmationProvider,
+    });
+    const run2Calls = calls.slice(run2Start);
+    // non-vacuous: run 2 actually issued observation-bearing prompts
+    expect(run2Calls.some((call) => call.userPrompt.includes('"observation_id"'))).toBe(true);
+    for (const call of run2Calls) {
+      expect(call.userPrompt).not.toContain('"nodes_total"');
+      expect(call.userPrompt).not.toContain(SEMANTIC_MAP_PROMPT_NOTE);
+      expect(call.systemPrompt).not.toContain(SEMANTIC_MAP_SEED_PROMPT_NOTE);
+    }
+    // targeted (A) check: run 2's SEED payloads carry no top-level semantic_map field (the
+    // manifest step id "semantic_map" legitimately appears in final-output prompts, so a broad
+    // substring scan would be a false positive).
+    const run2SeedCalls = run2Calls.filter((call) =>
+      call.systemPrompt.includes("Author ontology-seed.yaml")
+    );
+    expect(run2SeedCalls.length).toBeGreaterThan(0);
+    for (const seedCall of run2SeedCalls) {
+      expect("semantic_map" in (JSON.parse(seedCall.userPrompt) as Record<string, unknown>))
+        .toBe(false);
+    }
+    // the stage itself ran (capability present) and honestly recorded map-absent
+    const census2 = await readYaml<{
+      observations_total: number;
+      observations_map_present: number;
+    }>(path.join(run2.sessionRoot, "comprehension", "semantic-map-census.yaml"));
+    expect(census2.observations_total).toBeGreaterThan(0);
+    expect(census2.observations_map_present).toBe(0);
+  });
+
+  it("OFF parity on a map-ELIGIBLE target: capability-absent author over the same xlsx — step skipped, zero prompt traces, reuse key present-but-null", async () => {
+    const projectRoot = await tempProjectRoot();
+    const xlsxRef = path.join(projectRoot, "ledger.xlsx");
+    await fs.writeFile(xlsxRef, Buffer.from(ledgerXlsxBytes("rich")));
+    const { calls, llmCall } = capturingFixtureLlm();
+    const directiveAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall,
+      authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+    });
+    const confirmationProvider = createDirectCallReconstructConfirmationProvider({
+      llmCall: reconstructFixtureLlm,
+      providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+    });
+
+    const { result, sessionRoot } = await runOnXlsx({
+      projectRoot,
+      xlsxRef,
+      sessionName: "w5-off",
+      directiveAuthor,
+      confirmationProvider,
+    });
+    expect(result.status).toBe("completed");
+    expect(
+      result.reconstructRunManifest.steps.find((step) => step.step_id === "semantic_map"),
+    ).toMatchObject({ status: "skipped" });
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) {
+      expect(call.userPrompt).not.toContain('"nodes_total"');
+      expect(call.userPrompt).not.toContain(SEMANTIC_MAP_PROMPT_NOTE);
+      expect(call.systemPrompt).not.toContain(SEMANTIC_MAP_SEED_PROMPT_NOTE);
+    }
+    const offSeedCalls = calls.filter((call) =>
+      call.systemPrompt.includes("Author ontology-seed.yaml")
+    );
+    expect(offSeedCalls.length).toBeGreaterThan(0);
+    for (const seedCall of offSeedCalls) {
+      expect("semantic_map" in (JSON.parse(seedCall.userPrompt) as Record<string, unknown>))
+        .toBe(false);
+    }
+    const seedReuseProvenance = await readYaml<{
+      reuse_match?: Record<string, unknown>;
+    }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
+    expect(
+      Object.hasOwn(
+        seedReuseProvenance.reuse_match ?? {},
+        "semantic_map_aggregate_fingerprint_sha256",
+      ),
+    ).toBe(true);
+    expect(seedReuseProvenance.reuse_match?.semantic_map_aggregate_fingerprint_sha256)
+      .toBeNull();
   });
 });
