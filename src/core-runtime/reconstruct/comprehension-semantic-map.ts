@@ -109,7 +109,13 @@ const VALID_VERIFICATION = new Set<string>([
   "adversarial_confirmed",
   "adversarial_refuted",
 ]);
-const VALID_ADVERSARIAL_RESULT = new Set<string>(["adversarial_confirmed", "adversarial_refuted"]);
+/** Single literal source for the adversarial-verdict vocabulary (wiring design 20260702 §15.1): BOTH
+ *  the exported verdict type and the runtime allowlist derive from this tuple, so the type and the
+ *  Set cannot drift apart (a separate union + Set pair stays compile-green when only one is edited;
+ *  R3 W1-01 / onto issue-001·003). Exported so the drift-guard test proves the same-source derivation. */
+export const ADVERSARIAL_RESULTS = ["adversarial_confirmed", "adversarial_refuted"] as const;
+export type SemanticBoundaryVerification = (typeof ADVERSARIAL_RESULTS)[number];
+const VALID_ADVERSARIAL_RESULT = new Set<string>(ADVERSARIAL_RESULTS);
 
 /** Canonical TOTAL order over value-shape seams (full witness tuple so equal-row seams from different
  *  provenance never tie by input order; review F7 — mirrors comprehension-reduce canonicalBoundaries). */
@@ -448,14 +454,18 @@ export interface SemanticSynthesisOutput {
 /** Caller-injected synthesis (mock in tests, real authoring in production). Realization-agnostic. */
 export type SemanticSynthesisFn = (input: SemanticSynthesisInput) => SemanticSynthesisOutput;
 
-/** Caller-injected adversarial verifier for ONE unanchored boundary (N3: ALL unanchored are verified —
- *  it is the only check where structure is blind). An INDEPENDENT lens (distinct prompt/model in
- *  production). Returns confirmed | refuted. */
-export type AdversarialVerifyFn = (input: {
+/** Input to the adversarial verifier for ONE unanchored boundary — the named form of the former
+ *  inline shape (type-identity preserving; W1 §15.1 names it for the author capability seat). */
+export interface SemanticBoundaryVerifyInput {
   node_ref: ComprehensionReduceRegion;
   boundary: SemanticBoundary;
   summary: string;
-}) => "adversarial_confirmed" | "adversarial_refuted";
+}
+
+/** Caller-injected adversarial verifier for ONE unanchored boundary (N3: ALL unanchored are verified —
+ *  it is the only check where structure is blind). An INDEPENDENT lens (distinct prompt/model in
+ *  production). Returns confirmed | refuted. */
+export type AdversarialVerifyFn = (input: SemanticBoundaryVerifyInput) => SemanticBoundaryVerification;
 
 export interface AccumulateSemanticMapOpts {
   synthesize: SemanticSynthesisFn;

@@ -30,6 +30,10 @@ import {
   type SemanticBoundary,
   type SemanticEpochPreImage,
   type SemanticSynthesisFn,
+  ADVERSARIAL_RESULTS,
+  type AdversarialVerifyFn,
+  type SemanticBoundaryVerification,
+  type SemanticBoundaryVerifyInput,
 } from "./comprehension-semantic-map.js";
 
 const SHEET = "누적";
@@ -1100,5 +1104,56 @@ describe("projectSemanticMapToSeed", () => {
     );
     expect(proj.nodes.length).toBe(1);
     expect(proj.nodes_total).toBe(3); // authoritative — the other 2 were bounded for size, not dropped
+  });
+});
+
+// ── W1 §15.1/§15.3 (wiring design 20260702): verdict vocabulary single-source drift guard ─────────
+//
+// The exported verdict TYPE and the module's runtime allowlist both derive from ADVERSARIAL_RESULTS.
+// This guard fails if a future edit reverts to separate declarations AND they diverge: (a) the
+// type-level assignability below breaks tsc when the union drifts from the tuple, and (b) the
+// per-member accumulate run throws "invalid result" when the runtime allowlist stops accepting a
+// tuple member. (An allowlist WIDER than the tuple is not observable from outside the module — the
+// by-construction derivation is the primary defense; this guard catches the reversion regression.)
+describe("W1 verdict single-source (ADVERSARIAL_RESULTS SSOT)", () => {
+  // Type-level: AdversarialVerifyFn ≡ (input: SemanticBoundaryVerifyInput) => SemanticBoundaryVerification,
+  // both directions (type-identity preserved by the W1 named-type re-expression).
+  const fromNamed: AdversarialVerifyFn = (
+    input: SemanticBoundaryVerifyInput,
+  ): SemanticBoundaryVerification => (input.boundary.row % 2 === 0 ? "adversarial_confirmed" : "adversarial_refuted");
+  const toNamed: (input: SemanticBoundaryVerifyInput) => SemanticBoundaryVerification = fromNamed;
+  // Type-level: the tuple members ARE the verification union (drift breaks this line at compile time).
+  const tupleIsUnion: readonly SemanticBoundaryVerification[] = ADVERSARIAL_RESULTS;
+
+  it("tuple carries exactly the two adversarial verdicts (runtime shape)", () => {
+    expect(toNamed).toBe(fromNamed);
+    expect([...tupleIsUnion].sort()).toEqual(["adversarial_confirmed", "adversarial_refuted"]);
+  });
+
+  it("every tuple member is accepted by the module's runtime allowlist (accumulate passes per member)", () => {
+    for (const verdict of ADVERSARIAL_RESULTS) {
+      const leaves = [leaf(1, 10, "TEXT", "TEXT")];
+      const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves);
+      const map = accumulateSemanticMap(trace, nodesByKey, {
+        // one boundary at a row with no seam → unanchored → verify runs → returns the member under test.
+        synthesize: (input) => ({
+          semantic_summary: "w1 drift guard",
+          boundaries: [{ row: input.node_ref.row_start, character_before: "u0", character_after: "u1" }],
+        }),
+        verifyUnanchored: () => verdict,
+        preImageBase: {
+          reduce_reader_model_identity: "mock/none",
+          reduce_prompt_sha256: "p",
+          reduce_schema_tool_version: "v1",
+          comprehension_version: "c1",
+          over_context_gate_config_sha256: "cfg",
+          over_context_gate_logic_sha256: "logic",
+        },
+        overContextBudget: 1,
+      });
+      const node = map.get(reduceNodeKey(leaves[0]!.region));
+      expect(node).toBeDefined();
+      expect(node!.semantic_boundaries[0]!.verification).toBe(verdict);
+    }
   });
 });

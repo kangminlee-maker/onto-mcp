@@ -261,6 +261,14 @@ import {
   type LeafReadRegionEvidence,
   type StructureLeafTriggerOpts,
 } from "./leaf-reader.js";
+// W1 (wiring design 20260702 §15.1): type-only — the semantic-map capability seat reuses the module's
+// canonical shapes (single source; no runtime import until the W2 stage wiring).
+import type {
+  SemanticBoundaryVerification,
+  SemanticBoundaryVerifyInput,
+  SemanticSynthesisInput,
+  SemanticSynthesisOutput,
+} from "./comprehension-semantic-map.js";
 import {
   assertGatingKeyExcludesInEpochOutput,
   llmTouchFingerprint,
@@ -367,6 +375,24 @@ export interface ReconstructDirectiveAuthor {
     input: ReconstructValueReadStageInput,
   ): Promise<ReconstructValueReadStageOutput>;
   /**
+   * Layer-2 semantic-map stage (wiring design 20260702 §15.1): synthesize ONE reduce-tree node's
+   * semantic judgment from bounded deterministic facts + child summaries. Non-authoritative /
+   * provisional; the module enforces the source-safe envelope (assertSynthesisInputBounded).
+   * Optional — an author without the PAIR leaves the stage skipped (default-off;
+   * resolveSemanticMapCapability owns the pair rule). No live caller until the W2 stage wiring.
+   */
+  synthesizeSemanticMapNode?(
+    input: SemanticSynthesisInput,
+  ): Promise<SemanticSynthesisOutput>;
+  /**
+   * Independent adversarial re-check of ONE unanchored semantic boundary (design N3: ALL unanchored
+   * are re-verified — the only check where structure is blind). A distinct prompt (and optionally a
+   * distinct model) from synthesize in production. Optional — paired with synthesizeSemanticMapNode.
+   */
+  verifySemanticMapBoundary?(
+    input: SemanticBoundaryVerifyInput,
+  ): Promise<SemanticBoundaryVerification>;
+  /**
    * P1-C2-A Step E: provide the leaf-read provisional labels (observation_id → short label strings)
    * so this author renders them as a NON-AUTHORITATIVE hint in every observation prompt. Set once by
    * runReconstruct after the leaf-read stage; the labels reach the prompt TEXT only, never the
@@ -440,6 +466,30 @@ export interface ReconstructDirectiveAuthor {
     input: ReconstructOntologyExpansionAuthorInput,
   ): Promise<ReconstructOntologyExpansionArtifact>;
   writeFinalOutput(input: ReconstructFinalOutputAuthorInput): Promise<string>;
+}
+
+/**
+ * W1 (wiring design 20260702 §15.2): the semantic-map author capability is a PAIR — synthesize +
+ * verify. Both absent → the stage is skipped (default-off, readLeafLabels precedent). Exactly one
+ * present → a fail-loud configuration error: a one-sided author must NOT masquerade as a normal
+ * skip (X8 / onto-R2 issue-004 — the skip reason would silently hide a broken wiring). Pure; W1
+ * exercises it in tests only — production enforcement starts when the W2 semantic_map stage entry
+ * calls it.
+ */
+export function resolveSemanticMapCapability(
+  author: Pick<
+    ReconstructDirectiveAuthor,
+    "synthesizeSemanticMapNode" | "verifySemanticMapBoundary"
+  >,
+): "absent" | "present" {
+  const hasSynthesize = typeof author.synthesizeSemanticMapNode === "function";
+  const hasVerify = typeof author.verifySemanticMapBoundary === "function";
+  if (hasSynthesize !== hasVerify) {
+    throw new Error(
+      "reconstruct: the semantic-map author capability is a PAIR — implement BOTH synthesizeSemanticMapNode AND verifySemanticMapBoundary, or NEITHER (a one-sided author is a fail-loud configuration error, not a skip; wiring design 20260702 §15.2).",
+    );
+  }
+  return hasSynthesize ? "present" : "absent";
 }
 
 export type ReconstructSemanticAuthorRealization = "direct_call";
