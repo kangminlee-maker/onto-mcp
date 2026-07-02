@@ -1911,6 +1911,12 @@ const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
  *  this). */
 const SEMANTIC_MAP_GATE_LOGIC_VERSION = "classify-frontier:leaf-count:1";
 
+/** Manual version for the projection/render CONTRACT (design §5 X9 / W3 review W3-003): cap VALUES
+ *  are folded via stage_config, but the projection RULES (projectSemanticMapToSeed + the observation
+ *  merge) and — from W4 — the prompt RENDERER change what the seed actually sees without any config
+ *  change. Bump on any projection/merge/renderer semantics edit. */
+const SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION = "projection-merge:1";
+
 /** ⚠️ PRELIMINARY defaults (review-prompt-budget precedent): live calibration is a later cut. Every
  *  value is folded into the stage fingerprint, so re-tuning rotates the seed reuse key. */
 export const DEFAULT_SEMANTIC_MAP_STAGE_CONFIG: SemanticMapStageConfig = {
@@ -2058,6 +2064,12 @@ export interface SemanticMapStageResult {
  * author throws (resolveSemanticMapCapability — production fail-loud starts HERE, §15.2). Census +
  * sidecar are ALWAYS written when the stage runs (leaf_read f1a3c1b pattern). The census/sidecar
  * carry deterministic data only; the reuse fingerprint is W3's fold.
+ *
+ * DELIBERATELY NOT a pipeline-execution-ledger unit (W3 review W3-002, leaf_read precedent): the
+ * ledger tracks continuation-TRUSTED authored units; this stage (like leaf_read) re-runs each run
+ * and its reuse authority is the fingerprint folded into the seed key. NOTE the ledger's
+ * pre-existing `unitKind: "semantic_map"` (claim_realization's KIND) is a different vocabulary — a
+ * name collision, not a relationship.
  */
 export async function runSemanticMapStage(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
@@ -2105,8 +2117,24 @@ export async function runSemanticMapStage(args: {
     census.by_observation.push({ observation_id: observationId, map_present: false, skip_reason: skipReason, columns: [] });
   };
 
-  for (const observation of args.sourceObservations.observations) {
-    if (observation.target_material_kind !== "spreadsheet") continue;
+  const seenObservationIds = new Set<string>();
+  // onto-W3 issue-004(a): cap ALLOCATION consumes a shared budget in processing order — process in
+  // CANONICAL observation_id order so WHICH observations get capped is artifact-order-independent
+  // (defense in depth: the reuse match separately folds the observations artifact hash, but the
+  // stage itself should not be permutation-sensitive).
+  const spreadsheetObservations = args.sourceObservations.observations
+    .filter((o) => o.target_material_kind === "spreadsheet")
+    .slice()
+    .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0));
+  for (const observation of spreadsheetObservations) {
+    // W3 review W3-005: aggregate order-independence and the projection map are keyed by
+    // observation_id — a duplicate would make the sort unstable and the map lossy. Fail loud.
+    if (seenObservationIds.has(observation.observation_id)) {
+      throw new Error(
+        `semantic-map stage: duplicate observation_id '${observation.observation_id}' — fingerprint aggregation and the projection map require unique ids (fail-loud; W3-005).`,
+      );
+    }
+    seenObservationIds.add(observation.observation_id);
     const inventory = observation.structural_data.workbook_inventory as
       | WorkbookStructuralInventory
       | undefined;
@@ -2141,6 +2169,7 @@ export async function runSemanticMapStage(args: {
       pre_image_base: args.preImageBase,
       verify_model_identity: args.verifyModelIdentity,
       stage_config: cfg,
+      projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION, // X9 / W3-003
     };
     assertGatingKeyExcludesInEpochOutput("semanticMapStageFingerprint", fingerprintPreImage);
     perObservationFingerprints.push({

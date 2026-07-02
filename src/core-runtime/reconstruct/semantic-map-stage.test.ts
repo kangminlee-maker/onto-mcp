@@ -358,7 +358,25 @@ describe("runSemanticMapStage (W2)", () => {
     const census = result.census!;
     expect(census.observations_total).toBe(2); // COMPLETE partition — nothing silently dropped
     expect(census.observations_total).toBe(census.observations_map_present + census.observations_map_absent);
-    expect(census.by_observation.map((o) => o.skip_reason)).toEqual(["no_value_tiles", "no_workbook_inventory"]);
+    // canonical observation_id processing order (onto-W3 issue-004a): obs-no-inventory < obs-no-tiles
+    expect(census.by_observation.map((o) => o.skip_reason)).toEqual(["no_workbook_inventory", "no_value_tiles"]);
+  });
+
+  it("W3-005: duplicate observation_id → fail-loud at stage entry (aggregate/map keying)", async () => {
+    const { author } = mockAuthor();
+    await expect(
+      runSemanticMapStage({
+        sourceObservations: observationsArtifact([
+          { observation_id: "dup", columns: [richColumn(0)] },
+          { observation_id: "dup", columns: [richColumn(0)] },
+        ]),
+        directiveAuthor: author,
+        sessionRoot: await tempRoot(),
+        config: CONFIG,
+        preImageBase: PRE_IMAGE_BASE,
+        verifyModelIdentity: "mock/none",
+      }),
+    ).rejects.toThrow(/duplicate observation_id/);
   });
 
   it("config fail-loud (R2-04): a NaN/absent cap throws at entry, before any work", async () => {

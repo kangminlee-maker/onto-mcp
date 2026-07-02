@@ -229,6 +229,20 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     ],
   },
   {
+    // Layer-2 semantic_map stage (W3 review: codex W3-002 ≡ onto issue-001/002/006 — 4-lens
+    // convergence on audit-graph registration). The LIVE run does not consume this ledger (it is a
+    // post-hoc audit projection derived from the record), so this row is descriptive evidence, not
+    // continuation authority; the stage re-runs each run and its reuse authority is the fingerprint
+    // folded into the seed key (leaf_read precedent). unitKind is NOT "semantic_map" — that kind
+    // name is already taken by claim_realization (pre-existing vocabulary collision). No downstream
+    // edge until W4 actually wires the seed-prompt consumption (declared≠wired discipline).
+    unitId: "semantic_map",
+    unitKind: "semantic_map_accumulation",
+    owner: "host_llm",
+    artifactKey: "semantic_map_census",
+    upstreamUnitIds: ["source_observation_lineage_index_validation"],
+  },
+  {
     unitId: "source_purpose_candidates",
     unitKind: "semantic_source_purpose",
     owner: "host_llm",

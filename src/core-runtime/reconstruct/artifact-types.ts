@@ -1737,6 +1737,9 @@ export interface ReconstructPostSeedValidationViolation {
     | "source_ref_mismatch"
     | "location_mismatch"
     | "manifest_step_missing"
+    // W3 review W3-004 (fail-open consumer): the validator accepted unknown/duplicate step ids.
+    | "manifest_step_unknown"
+    | "manifest_step_duplicate"
     | "manifest_artifact_ref_missing"
     | "manifest_artifact_missing"
     | "manifest_snapshot_missing"

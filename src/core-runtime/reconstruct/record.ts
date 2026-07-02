@@ -65,6 +65,13 @@ const RECORD_ARTIFACT_KEYS = [
   "source_observation_reentry_validation",
   "source_observation_lineage_index",
   "source_observation_lineage_index_validation",
+  // W3 code review W3-001: normalizeRefs silently DROPS any typed ref key missing from this list —
+  // leaf_read_census was typed on ReconstructRecordArtifactRefs but dropped here (pre-existing
+  // latent type↔behavior mismatch); registered together with the semantic_map refs so the record
+  // (the durable primary evidence artifact) carries what the type declares.
+  "leaf_read_census",
+  "semantic_map_census",
+  "semantic_map_sidecar",
   "source_safety_ledger",
   "source_safety_ledger_validation",
   "source_scout_pack",
