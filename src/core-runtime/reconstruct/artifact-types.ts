@@ -4,6 +4,7 @@ import type {
   TargetMaterialSupportStatus,
 } from "../target-material-kind.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
+import type { SemanticSeedProjection } from "./comprehension-semantic-map.js";
 
 export interface ReconstructSelectedSourceProfileRef {
   profile_id: string;
@@ -2540,11 +2541,18 @@ export interface ReconstructSemanticMapCensusObservation {
   observation_id: string;
   /** X5 gate: true ⇔ zero failed/capped/skipped columns AND ≥1 produced column. */
   map_present: boolean;
+  /** onto-W2 issue-003/006: a spreadsheet observation the stage SAW but could not evaluate is
+   *  recorded (map_absent, columns=[]) with an explicit reason — never silently dropped, so
+   *  by_observation is a COMPLETE partition of the spreadsheet observations and the totals
+   *  reconcile. null for evaluated observations. System identities, not domain naming. */
+  skip_reason: "no_workbook_inventory" | "no_value_tiles" | null;
   columns: ReconstructSemanticMapCensusColumn[];
 }
 
 export interface ReconstructSemanticMapCensus {
   schema_version: "1";
+  /** ALL spreadsheet observations the stage saw (evaluated + skipped) — a complete partition:
+   *  observations_total == observations_map_present + observations_map_absent (onto-W2 issue-006). */
   observations_total: number;
   observations_map_present: number;
   observations_map_absent: number;
@@ -2554,6 +2562,22 @@ export interface ReconstructSemanticMapCensus {
   max_synthesize_calls: number;
   max_verify_calls: number;
   by_observation: ReconstructSemanticMapCensusObservation[];
+}
+
+/** The semantic-map SIDECAR artifact (`semantic-map.yaml` — F10 lineage: the prompt-injected
+ *  hierarchical projection must be reconstructable from artifact truth, never only from prompt
+ *  text). One row per map_present observation; node_epochs carry every node's resume-excluded
+ *  subtree_epoch_contribution for audit (onto-W2 issue-002/004: a durable output is written only
+ *  against a named, exported artifact contract). */
+export interface ReconstructSemanticMapSidecarObservation {
+  observation_id: string;
+  projection: SemanticSeedProjection;
+  node_epochs: { key: string; subtree_epoch_contribution: string }[];
+}
+
+export interface ReconstructSemanticMapSidecar {
+  schema_version: "1";
+  observations: ReconstructSemanticMapSidecarObservation[];
 }
 
 export interface ReconstructMaturationValueDischargeValidationArtifact {

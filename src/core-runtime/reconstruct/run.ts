@@ -53,6 +53,8 @@ import type {
   ReconstructSemanticMapCensus,
   ReconstructSemanticMapCensusColumn,
   ReconstructSemanticMapCensusObservation,
+  ReconstructSemanticMapSidecar,
+  ReconstructSemanticMapSidecarObservation,
   ReconstructMaturationValueDischargeEntry,
   ReconstructMaturationValueDischargeValidationArtifact,
   ReconstructValueReadScope,
@@ -2047,19 +2049,33 @@ export async function runSemanticMapStage(args: {
     max_verify_calls: cfg.max_verify_calls,
     by_observation: [],
   };
-  const sidecarObservations: {
-    observation_id: string;
-    projection: SemanticSeedProjection;
-    node_epochs: { key: string; subtree_epoch_contribution: string }[];
-  }[] = [];
+  const sidecarObservations: ReconstructSemanticMapSidecarObservation[] = [];
+
+  // onto-W2 issue-003/006: a spreadsheet observation the stage cannot evaluate is RECORDED with an
+  // explicit reason — by_observation stays a complete partition and the totals reconcile.
+  const recordSkippedObservation = (
+    observationId: string,
+    skipReason: NonNullable<ReconstructSemanticMapCensusObservation["skip_reason"]>,
+  ): void => {
+    census.observations_total += 1;
+    census.observations_map_absent += 1;
+    census.by_observation.push({ observation_id: observationId, map_present: false, skip_reason: skipReason, columns: [] });
+  };
 
   for (const observation of args.sourceObservations.observations) {
     if (observation.target_material_kind !== "spreadsheet") continue;
     const inventory = observation.structural_data.workbook_inventory as
       | WorkbookStructuralInventory
       | undefined;
-    const tileSheets = inventory?.segmented_value_tiles;
-    if (!inventory || !tileSheets || tileSheets.length === 0) continue;
+    if (!inventory) {
+      recordSkippedObservation(observation.observation_id, "no_workbook_inventory");
+      continue;
+    }
+    const tileSheets = inventory.segmented_value_tiles;
+    if (!tileSheets || tileSheets.length === 0) {
+      recordSkippedObservation(observation.observation_id, "no_value_tiles");
+      continue;
+    }
     census.observations_total += 1;
 
     // Deterministic column tasks (canonical order = sheet-block order, then column order) built from
@@ -2135,8 +2151,10 @@ export async function runSemanticMapStage(args: {
           const input = buildSynthesisInputForNode(trace, nodesByKey, modes, key, summaryByKey);
           assertSynthesisInputBounded(input); // source-safe envelope on the EXACT transmitted input (§3).
           const inputJson = stableJson(structuredClone(input));
-          const out = await synthesizeNode(input);
+          // Count the ATTEMPT at dispatch, not the success (W2 code review W2-X7-001: a dispatched
+          // call that throws still spent the LLM budget — post-await increment under-reports).
           synthesizeCalls += 1;
+          const out = await synthesizeNode(input);
           assertSynthesisOutputBounded(out);
           summaryByKey.set(key, out.semantic_summary);
           const record: SemanticMapBridgeRecord = { input_json: inputJson, output: structuredClone(out), verifies: [] };
@@ -2157,8 +2175,8 @@ export async function runSemanticMapStage(args: {
               summary: out.semantic_summary,
             };
             const verifyInputJson = stableJson(structuredClone(verifyInput));
+            verifyCalls += 1; // attempt-counted at dispatch (W2-X7-001).
             const verdict = await verifyBoundary(verifyInput);
-            verifyCalls += 1;
             if (!(ADVERSARIAL_RESULTS as readonly string[]).includes(verdict)) {
               throw new Error(`semantic-map stage: author verify returned invalid verdict '${verdict}' at ${key} (fail-closed).`);
             }
@@ -2259,6 +2277,7 @@ export async function runSemanticMapStage(args: {
     const observationRow: ReconstructSemanticMapCensusObservation = {
       observation_id: observation.observation_id,
       map_present: mapPresent,
+      skip_reason: null,
       columns: columnRows,
     };
     census.by_observation.push(observationRow);
@@ -2272,7 +2291,8 @@ export async function runSemanticMapStage(args: {
   const censusPath = path.join(comprehensionDir, "semantic-map-census.yaml");
   await writeYamlDocument(censusPath, census);
   const sidecarPath = path.join(comprehensionDir, "semantic-map.yaml");
-  await writeYamlDocument(sidecarPath, { schema_version: "1", observations: sidecarObservations });
+  const sidecar: ReconstructSemanticMapSidecar = { schema_version: "1", observations: sidecarObservations };
+  await writeYamlDocument(sidecarPath, sidecar);
 
   return { projectionByObservation, census, censusPath, sidecarPath };
 }

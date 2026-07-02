@@ -110,17 +110,19 @@ function observationsArtifact(
 
 /** Deterministic mock author: one boundary at the node's row_start (anchored only for the node
  *  starting at the seam row 21), verify verdict by row parity. Counters expose call counts. */
-function mockAuthor(opts: { failOnColumn?: number } = {}): {
+function mockAuthor(opts: { failOnColumn?: number; failVerify?: boolean } = {}): {
   author: ReconstructDirectiveAuthor;
   counters: { synthesize: number; verify: number };
 } {
   const counters = { synthesize: 0, verify: 0 };
   const author = {
     async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
+      // ATTEMPT counter (W2-X7-001): incremented before a failure throw, mirroring the stage's
+      // dispatch-time accounting — so census totals can be asserted against real attempts.
+      counters.synthesize += 1;
       if (opts.failOnColumn !== undefined && input.node_ref.column_index === opts.failOnColumn) {
         throw new Error("mock synthesize failure (W2 fallback NC)");
       }
-      counters.synthesize += 1;
       // Seam-aware (junction seams materialize on MERGE nodes): anchor one boundary at the first
       // seam when the node has one (exercises the anchored path), plus one at row_start (unanchored
       // wherever no seam is within ±1 — exercises the adversarial path).
@@ -134,7 +136,8 @@ function mockAuthor(opts: { failOnColumn?: number } = {}): {
       };
     },
     async verifySemanticMapBoundary(input: SemanticBoundaryVerifyInput): Promise<SemanticBoundaryVerification> {
-      counters.verify += 1;
+      counters.verify += 1; // attempt counter (before a failure throw — mirrors dispatch accounting)
+      if (opts.failVerify) throw new Error("mock verify failure (W2 rejection-path NC)");
       return input.boundary.row % 2 === 0 ? "adversarial_confirmed" : "adversarial_refuted";
     },
   } as unknown as ReconstructDirectiveAuthor;
@@ -268,6 +271,83 @@ describe("runSemanticMapStage (W2)", () => {
     expect(result.census!.synthesize_calls_total).toBeGreaterThan(0); // spent synthesize calls honestly counted
     // Row↔total consistency: the capped ROW carries its spent calls (Σ rows == totals — no hidden spend).
     expect(col.synthesize_calls).toBe(result.census!.synthesize_calls_total);
+  });
+
+  it("W2-X7-001: a dispatched-then-throwing call is still COUNTED (attempt accounting, census==attempts)", async () => {
+    const { author, counters } = mockAuthor({ failOnColumn: 0 }); // first synthesize dispatch throws
+    const sessionRoot = await tempRoot();
+    const result = await runSemanticMapStage({
+      sourceObservations: observationsArtifact([{ observation_id: "obs-1", columns: [richColumn(0)] }]),
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+    });
+    expect(counters.synthesize).toBe(1); // one attempt, thrown
+    expect(result.census!.synthesize_calls_total).toBe(1); // the ATTEMPT is budget spend, not the success
+    expect(result.census!.by_observation[0]!.columns[0]!.synthesize_calls).toBe(1); // row == total
+  });
+
+  it("X7 preflight exact boundary: budget == need → runs; budget == need-1 → capped (off-by-one control)", async () => {
+    const run = async (cap: number) => {
+      const { author, counters } = mockAuthor();
+      const result = await runSemanticMapStage({
+        sourceObservations: observationsArtifact([{ observation_id: "obs-1", columns: [richColumn(0)] }]),
+        directiveAuthor: author,
+        sessionRoot: await tempRoot(),
+        config: { ...CONFIG, max_synthesize_calls: cap },
+        preImageBase: PRE_IMAGE_BASE,
+      });
+      return { status: result.census!.by_observation[0]!.columns[0]!.status, calls: counters.synthesize };
+    };
+    expect(await run(7)).toEqual({ status: "produced", calls: 7 }); // exactly the need → NOT capped
+    expect(await run(6)).toEqual({ status: "capped", calls: 0 }); // one short → deterministic skip, zero LLM
+  });
+
+  it("W2-X7-001 (verify side): a dispatched-then-throwing verify is counted; column fails to flat", async () => {
+    const { author, counters } = mockAuthor({ failVerify: true });
+    const sessionRoot = await tempRoot();
+    const result = await runSemanticMapStage({
+      sourceObservations: observationsArtifact([{ observation_id: "obs-1", columns: [richColumn(0)] }]),
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+    });
+    expect(result.projectionByObservation.size).toBe(0); // verify failure → column failed → flat
+    expect(counters.verify).toBe(1); // one attempt, thrown
+    expect(result.census!.verify_calls_total).toBe(1); // attempt counted (verify side of W2-X7-001)
+    expect(result.census!.by_observation[0]!.columns[0]!.status).toBe("failed");
+  });
+
+  it("census partition (onto issue-003/006): unevaluatable spreadsheet observations recorded with skip_reason, totals reconcile", async () => {
+    const { author } = mockAuthor();
+    const sessionRoot = await tempRoot();
+    const noTiles = {
+      observations: [
+        {
+          observation_id: "obs-no-tiles",
+          target_material_kind: "spreadsheet",
+          structural_data: { workbook_inventory: { segmented_value_tiles: [] } },
+        },
+        {
+          observation_id: "obs-no-inventory",
+          target_material_kind: "spreadsheet",
+          structural_data: {},
+        },
+      ],
+    } as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
+    const result = await runSemanticMapStage({
+      sourceObservations: noTiles,
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+    });
+    const census = result.census!;
+    expect(census.observations_total).toBe(2); // COMPLETE partition — nothing silently dropped
+    expect(census.observations_total).toBe(census.observations_map_present + census.observations_map_absent);
+    expect(census.by_observation.map((o) => o.skip_reason)).toEqual(["no_value_tiles", "no_workbook_inventory"]);
   });
 
   it("config fail-loud (R2-04): a NaN/absent cap throws at entry, before any work", async () => {
