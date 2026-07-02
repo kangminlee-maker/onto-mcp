@@ -379,6 +379,103 @@ describe("runSemanticMapStage (W2)", () => {
     ).rejects.toThrow(/duplicate observation_id/);
   });
 
+  it("ultracode-A containment NC: a malformed column (absent segments) dooms ITS observation, run+census+sibling survive", async () => {
+    const { author } = mockAuthor();
+    const sessionRoot = await tempRoot();
+    const malformed = {
+      observations: [
+        {
+          observation_id: "obs-bad",
+          target_material_kind: "spreadsheet",
+          structural_data: {
+            workbook_inventory: {
+              segmented_value_tiles: [
+                { sheet: "S", window: 1024, columns: [{ column_index: 0 }], retained_segments: 0 }, // no segments → pre-fix crash
+              ],
+            },
+          },
+        },
+        {
+          observation_id: "obs-good",
+          target_material_kind: "spreadsheet",
+          structural_data: {
+            workbook_inventory: {
+              segmented_value_tiles: [{ sheet: "S", window: 1024, columns: [richColumn(0)], retained_segments: 0 }],
+            },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
+    const result = await runSemanticMapStage({
+      sourceObservations: malformed,
+      directiveAuthor: author,
+      sessionRoot,
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    }); // must NOT throw (pre-fix: TypeError escaped the stage and killed the run)
+    const bad = result.census!.by_observation.find((o) => o.observation_id === "obs-bad")!;
+    expect(bad.skip_reason).toBe("deterministic_phase_failed");
+    expect(bad.skip_detail).toMatch(/segments|filter|undefined/i);
+    expect(result.projectionByObservation.has("obs-good")).toBe(true); // sibling unaffected
+    expect(result.censusPath).toBeTruthy(); // always-written census survived the contained failure
+    expect(result.census!.observations_total).toBe(
+      result.census!.observations_map_present + result.census!.observations_map_absent,
+    );
+  });
+
+  it("ultracode doom-skip NC: FIRST column fails → sibling column row is skipped_observation_fallback with zero calls", async () => {
+    const { author } = mockAuthor({ failOnColumn: 0 });
+    const result = await runSemanticMapStage({
+      sourceObservations: observationsArtifact([{ observation_id: "obs-1", columns: [richColumn(0), richColumn(1)] }]),
+      directiveAuthor: author,
+      sessionRoot: await tempRoot(),
+      config: CONFIG,
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+    const rows = result.census!.by_observation[0]!.columns;
+    expect(rows.map((r) => r.status)).toEqual(["failed", "skipped_observation_fallback"]);
+    expect(rows[1]!.synthesize_calls).toBe(0); // post-failure LLM work actually skipped
+  });
+
+  it("ultracode X7 NC: the cap is a GLOBAL running total across observations (dropping accumulation would pass obs-2)", async () => {
+    const { author, counters } = mockAuthor();
+    const result = await runSemanticMapStage({
+      sourceObservations: observationsArtifact([
+        { observation_id: "obs-1", columns: [richColumn(0)] },
+        { observation_id: "obs-2", columns: [richColumn(0)] },
+      ]),
+      directiveAuthor: author,
+      sessionRoot: await tempRoot(),
+      config: { ...CONFIG, max_synthesize_calls: 7 }, // exactly ONE observation's need
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+    });
+    expect(counters.synthesize).toBe(7); // only the first observation ran
+    const [first, second] = result.census!.by_observation;
+    expect(first!.map_present).toBe(true);
+    expect(second!.map_present).toBe(false);
+    expect(second!.columns[0]!.status).toBe("capped"); // global-total preflight capped obs-2
+  });
+
+  it("ultracode rotation axes: leaf_count (F2) and prompt-contract sha (F6) rotate the aggregate fingerprint", async () => {
+    const run = async (over: Partial<SemanticMapStageConfig>, preOver: Partial<typeof PRE_IMAGE_BASE>) => {
+      const { author } = mockAuthor();
+      return (await runSemanticMapStage({
+        sourceObservations: observationsArtifact([{ observation_id: "obs-1", columns: [richColumn(0)] }]),
+        directiveAuthor: author,
+        sessionRoot: await tempRoot(),
+        config: { ...CONFIG, ...over },
+        preImageBase: { ...PRE_IMAGE_BASE, ...preOver },
+        verifyModelIdentity: "mock/none",
+      })).aggregateFingerprint;
+    };
+    const base = await run({}, {});
+    expect(await run({ leaf_count: 2 }, {})).not.toBe(base); // F2 topology axis
+    expect(await run({}, { reduce_prompt_sha256: "p2" })).not.toBe(base); // F6 prompt-contract axis
+  });
+
   it("config fail-loud (R2-04): a NaN/absent cap throws at entry, before any work", async () => {
     const { author, counters } = mockAuthor();
     const sessionRoot = await tempRoot();
@@ -508,6 +605,40 @@ describe("buildSemanticMapBridgeCallbacks (W2 §3 drift guards)", () => {
     expect(() => callbacks.synthesize(input)).toThrow(/no precomputed synthesis/);
   });
 
+  it("ultracode-G: byte-identical duplicate boundaries replay 1:1 (match-and-consume, no first-verdict aliasing)", () => {
+    const dupInput: SemanticBoundaryVerifyInput = {
+      node_ref: { sheet: "S", column_index: 0, row_start: 1, row_end: 10 },
+      boundary: { row: 3, character_before: "a", character_after: "b", anchor_status: "unanchored", verification: "unverified" },
+      summary: "s",
+    };
+    // Match the bridge's stableJson (recursive key sort) so the recorded key equals the replay key.
+    const stable = (v: unknown): string =>
+      Array.isArray(v)
+        ? `[${v.map(stable).join(",")}]`
+        : v && typeof v === "object"
+          ? `{${Object.keys(v as Record<string, unknown>).sort().map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(",")}}`
+          : JSON.stringify(v) ?? "null";
+    const dupJson = stable(dupInput);
+    const callbacks = buildSemanticMapBridgeCallbacks(
+      new Map([[
+        "S#0:1-10",
+        {
+          input_json: "x",
+          output,
+          verifies: [
+            { input_json: dupJson, verdict: "adversarial_confirmed" as const },
+            { input_json: dupJson, verdict: "adversarial_refuted" as const },
+          ],
+        },
+      ]]),
+    );
+    // Two identical module calls must consume BOTH records in order — a find-first replay returns
+    // confirmed twice (silently overwriting the author's refuted second answer).
+    const verifyModuleShape = (cb: typeof callbacks.verifyUnanchored) => [cb(dupInput), cb(dupInput)];
+    expect(verifyModuleShape(callbacks.verifyUnanchored)).toEqual(["adversarial_confirmed", "adversarial_refuted"]);
+    expect(() => callbacks.verifyUnanchored(dupInput)).toThrow(/no unconsumed/); // third call = over-replay
+  });
+
   it("verify: unmatched full-input key → throw (X3 — no conservative fallback)", () => {
     const callbacks = buildSemanticMapBridgeCallbacks(
       new Map([["S#0:1-10", { input_json: "x", output, verifies: [{ input_json: "OTHER", verdict: "adversarial_confirmed" }] }]]),
@@ -517,7 +648,7 @@ describe("buildSemanticMapBridgeCallbacks (W2 §3 drift guards)", () => {
       boundary: { row: 3, character_before: "a", character_after: "b", anchor_status: "unanchored", verification: "unverified" },
       summary: "s",
     };
-    expect(() => callbacks.verifyUnanchored(verifyInput)).toThrow(/no recorded adversarial verification/);
+    expect(() => callbacks.verifyUnanchored(verifyInput)).toThrow(/no unconsumed recorded adversarial verification/);
   });
 });
 

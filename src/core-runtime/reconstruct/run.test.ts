@@ -3974,6 +3974,20 @@ describe("runReconstruct", () => {
         (reuseProvenance.reuse_match as Record<string, unknown> | undefined)
           ?.authoring_prompt_contract_sha256,
       ).toBe(authoringPromptContractSha256());
+      // W3 consumer-level guard (ultracode audit — reuse-fold test gap): the semantic-map
+      // fingerprint FIELD must reach every persisted reuse match. This fixture author has no
+      // capability pair, so the value is null — but the KEY must exist: dropping the fold or the
+      // call-site threading deletes the key and fails here (nulling-the-fold mutation control).
+      expect(
+        Object.hasOwn(
+          (reuseProvenance.reuse_match ?? {}) as Record<string, unknown>,
+          "semantic_map_aggregate_fingerprint_sha256",
+        ),
+      ).toBe(true);
+      expect(
+        (reuseProvenance.reuse_match as Record<string, unknown>)
+          .semantic_map_aggregate_fingerprint_sha256,
+      ).toBeNull();
     }
 
     await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))

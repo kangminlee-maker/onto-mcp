@@ -2551,8 +2551,16 @@ export interface ReconstructSemanticMapCensusObservation {
   /** onto-W2 issue-003/006: a spreadsheet observation the stage SAW but could not evaluate is
    *  recorded (map_absent, columns=[]) with an explicit reason — never silently dropped, so
    *  by_observation is a COMPLETE partition of the spreadsheet observations and the totals
-   *  reconcile. null for evaluated observations. System identities, not domain naming. */
-  skip_reason: "no_workbook_inventory" | "no_value_tiles" | null;
+   *  reconcile. null for evaluated observations. System identities, not domain naming.
+   *  deterministic_phase_failed (ultracode audit A): the pre-LLM tree build / fingerprint threw —
+   *  contained per observation so a malformed inventory column cannot crash the run. */
+  skip_reason: "no_workbook_inventory" | "no_value_tiles" | "deterministic_phase_failed" | null;
+  /** Present only for deterministic_phase_failed — the contained error message. */
+  skip_detail?: string;
+  /** §6 evidence (ultracode audit I): the per-observation PRE-EXECUTION llm-touch fingerprint the
+   *  seed reuse key aggregates — recorded here so the census alone proves which epoch produced it.
+   *  null for observations skipped before fingerprinting. */
+  fingerprint: string | null;
   columns: ReconstructSemanticMapCensusColumn[];
 }
 
@@ -2568,6 +2576,11 @@ export interface ReconstructSemanticMapCensus {
   /** The deterministic cost-cap config in force (X7) — also folded into the reuse fingerprint (W3). */
   max_synthesize_calls: number;
   max_verify_calls: number;
+  /** §6 evidence (audit I): the deterministic realization identities behind this census — with the
+   *  author id these distinguish a mock-driven census from a real-model one (W5 forward need). */
+  author_id: string;
+  synthesize_model_identity: string;
+  verify_model_identity: string;
   by_observation: ReconstructSemanticMapCensusObservation[];
 }
 

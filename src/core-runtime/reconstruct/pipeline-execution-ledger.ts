@@ -240,7 +240,9 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     unitKind: "semantic_map_accumulation",
     owner: "host_llm",
     artifactKey: "semantic_map_census",
-    upstreamUnitIds: ["source_observation_lineage_index_validation"],
+    // DATA dependency (ultracode audit E: the earlier lineage-validation edge was a false/temporal
+    // edge — the stage reads source_observations' inventory tiles, nothing from the lineage index).
+    upstreamUnitIds: ["source_observation"],
   },
   {
     unitId: "source_purpose_candidates",
@@ -1271,13 +1273,24 @@ export async function buildReconstructPipelineExecutionLedger(
         }
         return trustedUnitIds.has(unitId);
       });
+      // Pre-stage sessions (ultracode audit E, read-path): when a manifest IS provided but carries
+      // NO step for this unit, the run predates the unit's registration — the terminal validator
+      // (manifest_step_missing, W3-004) forces every CURRENT manifest to carry every stage, so an
+      // absent step can only mean "this run never had the stage". Reporting it "missing" would raise
+      // a false defect signal on every historical session each time a stage is added.
+      const predatesUnit =
+        params.reconstructRunManifest != null &&
+        manifestStatus(params.reconstructRunManifest, spec.unitId) == null &&
+        !manifestStepByUnitId.has(spec.unitId);
       const status =
         manifestStatus(params.reconstructRunManifest, spec.unitId) ??
         (outputPresent
           ? "completed"
-          : upstreamTrusted
-            ? "missing"
-            : "not_reached");
+          : predatesUnit
+            ? "not_reached"
+            : upstreamTrusted
+              ? "missing"
+              : "not_reached");
       const trust = trustForReconstructUnit({
         spec,
         status,

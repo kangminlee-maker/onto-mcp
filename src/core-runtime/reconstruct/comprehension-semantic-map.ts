@@ -529,6 +529,17 @@ export function computeSubtreeLeafCounts(trace: ReduceTopologyTrace): Map<Semant
   return counts;
 }
 
+/** Tautological over-context gate LOGIC digest (design §13.4 L2R-2 / ultracode audit F — mirrors
+ *  leaf-reader structureLeafTriggerLogicSha256): hashes the SOURCE of the frontier predicate and its
+ *  metric, so editing either rotates every semantic-map fingerprint without a hand-bumped knob. */
+export function semanticMapGateLogicSha256(): string {
+  return createHash("sha256")
+    .update(classifyFrontier.toString())
+    .update(" ")
+    .update(computeSubtreeLeafCounts.toString())
+    .digest("hex");
+}
+
 /** Classify every REACHABLE node (from root) into its frontier role, top-down (§13.6). A leaf can never
  *  accumulate (no children), so it is a frontier (or subsumed under one). Deterministic. */
 export function classifyFrontier(trace: ReduceTopologyTrace, overContextBudget: number): Map<SemanticNodeKey, FrontierMode> {

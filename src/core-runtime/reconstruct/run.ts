@@ -277,6 +277,7 @@ import {
   classifyFrontier,
   projectSemanticMapToSeed,
   reconcileBoundaries,
+  semanticMapGateLogicSha256,
   type FrontierMode,
   type SemanticBoundaryVerification,
   type SemanticBoundaryVerifyInput,
@@ -1906,10 +1907,9 @@ export async function runSpreadsheetLeafReadStage(args: {
  *  change to that code MUST bump this knob (leaf-read read_set_logic caveat, R9-03/DET-1 class). */
 const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
 
-/** Manual version for the over-context gate LOGIC (design §13.4 L2R-2 — config is folded as a VALUE;
- *  the predicate/ordering code itself has no auto-fold, so edits to classifyFrontier semantics bump
- *  this). */
-const SEMANTIC_MAP_GATE_LOGIC_VERSION = "classify-frontier:leaf-count:1";
+// Over-context gate LOGIC digest: tautological function-source hash (semanticMapGateLogicSha256,
+// leaf-reader precedent) — the earlier hand-bumped literal was a silent-stale seed on any predicate
+// edit whose author forgot the bump (ultracode audit F, 2-lens convergence with design §13.4).
 
 /** Manual version for the projection/render CONTRACT (design §5 X9 / W3 review W3-003): cap VALUES
  *  are folded via stage_config, but the projection RULES (projectSemanticMapToSeed + the observation
@@ -1974,7 +1974,9 @@ function assertSemanticMapStageConfig(config: SemanticMapStageConfig): void {
 export interface SemanticMapBridgeRecord {
   input_json: string;
   output: SemanticSynthesisOutput;
-  verifies: { input_json: string; verdict: SemanticBoundaryVerification }[];
+  /** consumed = replay bookkeeping (audit G): each recorded verification answers exactly ONE module
+   *  verify call, so byte-identical duplicate boundaries stay 1:1 instead of aliasing to the first. */
+  verifies: { input_json: string; verdict: SemanticBoundaryVerification; consumed?: boolean }[];
 }
 
 /** §3(b)/(c) sync closures over the pre-computed records. Exported so the drift detectors are
@@ -2001,13 +2003,18 @@ export function buildSemanticMapBridgeCallbacks(preByKey: ReadonlyMap<string, Se
       const key = reduceNodeKey(input.node_ref);
       const rec = preByKey.get(key);
       const inputJson = stableJson(input);
-      const hit = rec?.verifies.find((v) => v.input_json === inputJson);
-      if (!hit) {
+      // MATCH-AND-CONSUME (ultracode audit G): two byte-identical unanchored boundaries on one node
+      // produce two recorded verifications; a find-first replay would alias BOTH module calls to the
+      // FIRST verdict, silently overwriting the author's second (possibly refuted) answer. Consuming
+      // each recorded entry once keeps the replay 1:1 with the live calls.
+      const idx = rec ? rec.verifies.findIndex((v) => v.input_json === inputJson && !v.consumed) : -1;
+      if (idx < 0 || !rec) {
         throw new Error(
-          `semantic-map bridge: no recorded adversarial verification matching the module's verifier input at ${key} (§3(c) full-input key — row keying collides; a conservative fallback would silently pollute).`,
+          `semantic-map bridge: no unconsumed recorded adversarial verification matching the module's verifier input at ${key} (§3(c) full-input key — row keying collides; a conservative fallback would silently pollute).`,
         );
       }
-      return hit.verdict;
+      rec.verifies[idx]!.consumed = true;
+      return rec.verifies[idx]!.verdict;
     },
   };
 }
@@ -2065,11 +2072,11 @@ export interface SemanticMapStageResult {
  * sidecar are ALWAYS written when the stage runs (leaf_read f1a3c1b pattern). The census/sidecar
  * carry deterministic data only; the reuse fingerprint is W3's fold.
  *
- * DELIBERATELY NOT a pipeline-execution-ledger unit (W3 review W3-002, leaf_read precedent): the
- * ledger tracks continuation-TRUSTED authored units; this stage (like leaf_read) re-runs each run
- * and its reuse authority is the fingerprint folded into the seed key. NOTE the ledger's
- * pre-existing `unitKind: "semantic_map"` (claim_realization's KIND) is a different vocabulary — a
- * name collision, not a relationship.
+ * Ledger note (ultracode audit — stale-comment convergence): the stage IS registered as a
+ * pipeline-execution-ledger unit (descriptive audit row; the live run never consumes the ledger),
+ * while its REUSE authority stays the fingerprint folded into the seed key — the stage re-runs
+ * each run like leaf_read. The ledger's pre-existing `unitKind: "semantic_map"`
+ * (claim_realization's KIND) is a different vocabulary — a name collision, not a relationship.
  */
 export async function runSemanticMapStage(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
@@ -2101,6 +2108,9 @@ export async function runSemanticMapStage(args: {
     verify_calls_total: 0,
     max_synthesize_calls: cfg.max_synthesize_calls,
     max_verify_calls: cfg.max_verify_calls,
+    author_id: args.directiveAuthor.authorId,
+    synthesize_model_identity: args.preImageBase.reduce_reader_model_identity,
+    verify_model_identity: args.verifyModelIdentity,
     by_observation: [],
   };
   const sidecarObservations: ReconstructSemanticMapSidecarObservation[] = [];
@@ -2111,10 +2121,18 @@ export async function runSemanticMapStage(args: {
   const recordSkippedObservation = (
     observationId: string,
     skipReason: NonNullable<ReconstructSemanticMapCensusObservation["skip_reason"]>,
+    skipDetail?: string,
   ): void => {
     census.observations_total += 1;
     census.observations_map_absent += 1;
-    census.by_observation.push({ observation_id: observationId, map_present: false, skip_reason: skipReason, columns: [] });
+    census.by_observation.push({
+      observation_id: observationId,
+      map_present: false,
+      skip_reason: skipReason,
+      ...(skipDetail ? { skip_detail: skipDetail } : {}),
+      fingerprint: null,
+      columns: [],
+    });
   };
 
   const seenObservationIds = new Set<string>();
@@ -2149,6 +2167,14 @@ export async function runSemanticMapStage(args: {
     }
     census.observations_total += 1;
 
+    // ── ultracode audit A/B (3-lens convergence, probe-confirmed): the design's §6 containment must
+    // cover the DETERMINISTIC phase too — buildColumnLeaves/reduceColumnLeavesWithTrace/
+    // classifyFrontier and the fingerprint helpers ran OUTSIDE any containment, so one malformed
+    // inventory column (e.g. absent `segments` from an older adapter) crashed the ENTIRE reconstruct
+    // run and erased the always-written census. Everything below is observation-contained: a
+    // non-graceful throw dooms THIS observation to the flat path (honest skip row) and the run,
+    // the sibling observations, and the census survive.
+    try {
     // W3 §5 pre-execution fingerprint — computed BEFORE any of this observation's LLM calls and
     // regardless of outcome (leaf-read precedent: the DECISION to run is what the seed key tracks).
     // Folds: inventory identity (ⓐ) + BOTH model identities (F4) + prompt-contract sha (F6, via
@@ -2172,9 +2198,10 @@ export async function runSemanticMapStage(args: {
       projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION, // X9 / W3-003
     };
     assertGatingKeyExcludesInEpochOutput("semanticMapStageFingerprint", fingerprintPreImage);
+    const observationFingerprint = sha256Text(stableJson(fingerprintPreImage));
     perObservationFingerprints.push({
       observation_id: observation.observation_id,
-      fingerprint: sha256Text(stableJson(fingerprintPreImage)),
+      fingerprint: observationFingerprint,
     });
 
     // Deterministic column tasks (canonical order = sheet-block order, then column order) built from
@@ -2377,9 +2404,26 @@ export async function runSemanticMapStage(args: {
       observation_id: observation.observation_id,
       map_present: mapPresent,
       skip_reason: null,
+      fingerprint: observationFingerprint,
       columns: columnRows,
     };
     census.by_observation.push(observationRow);
+    } catch (error) {
+      if (isGracefulTerminalSignal(error)) throw error;
+      // Deterministic-phase containment (ultracode audit A/B): observations_total was already
+      // counted; record the honest skip row directly (no double count). Spent LLM totals from the
+      // column loop were already added inside its own catch before rethrow paths — the only throws
+      // reaching here are pre/post-column deterministic failures.
+      census.observations_map_absent += 1;
+      census.by_observation.push({
+        observation_id: observation.observation_id,
+        map_present: false,
+        skip_reason: "deterministic_phase_failed",
+        skip_detail: (error as Error).message,
+        fingerprint: null,
+        columns: [],
+      });
+    }
   }
 
   // ALWAYS persist census + sidecar when the stage ran (f1a3c1b honest-signal pattern): a total
@@ -3857,8 +3901,12 @@ export function createRunManifest(args: {
           "semantic_map",
           "host_llm",
           directiveAuthorPerformer(args.directiveAuthor),
-          "semantic-map stage did not run (author has no synthesizeSemanticMapNode/verifySemanticMapBoundary pair).",
-          "No semantic-map accumulation was attempted; the flat leaf-read path stands unchanged.",
+          // Honest disjunction (ultracode audit H): a null census means the stage never WROTE its
+          // witness — either the author lacks the capability pair (the default-off skip) or the run
+          // ended before the stage (graceful terminal). This builder only sees the ref, so it must
+          // not assert capability absence as fact.
+          "semantic-map stage wrote no census (author lacks the synthesizeSemanticMapNode/verifySemanticMapBoundary pair, or the run terminated before the stage).",
+          "No semantic-map accumulation was recorded; the flat leaf-read path stands unchanged.",
         ),
       completedStep(
         "source_purpose_candidates",
@@ -13425,7 +13473,7 @@ export async function runReconstruct(
       reduce_schema_tool_version: "semantic-map:v1",
       comprehension_version: SEMANTIC_MAP_COMPREHENSION_VERSION,
       over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
-      over_context_gate_logic_sha256: SEMANTIC_MAP_GATE_LOGIC_VERSION,
+      over_context_gate_logic_sha256: semanticMapGateLogicSha256(),
     },
     verifyModelIdentity: directiveAuthor.reuseModelIdentity ?? "unspecified",
   });

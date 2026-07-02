@@ -474,12 +474,20 @@ describe("assembleReconstructRecord", () => {
         source_observation_lineage_index_validation:
           sourceObservationLineageIndexValidationPath,
         ontology_seed_validation: ontologySeedValidationPath,
+        // ultracode audit M: these keys were typed on the refs but silently DROPPED by
+        // normalizeRefs until registered in RECORD_ARTIFACT_KEYS — assert the record CARRIES them.
+        leaf_read_census: await writeYaml(path.join(sessionRoot, "leaf-read-census.yaml"), { schema_version: "1" }),
+        semantic_map_census: await writeYaml(path.join(sessionRoot, "semantic-map-census.yaml"), { schema_version: "1" }),
+        semantic_map_sidecar: await writeYaml(path.join(sessionRoot, "semantic-map.yaml"), { schema_version: "1" }),
       },
     });
 
     const writtenPath = path.join(sessionRoot, "reconstruct-record.yaml");
     const written =
       parseYaml(await fs.readFile(writtenPath, "utf8")) as ReconstructRecordArtifact;
+    expect(written.artifact_refs.leaf_read_census).toBe(path.join(sessionRoot, "leaf-read-census.yaml"));
+    expect(written.artifact_refs.semantic_map_census).toBe(path.join(sessionRoot, "semantic-map-census.yaml"));
+    expect(written.artifact_refs.semantic_map_sidecar).toBe(path.join(sessionRoot, "semantic-map.yaml"));
     expect(record.record_stage).toBe("ontology_seed_validated");
     expect(record.target_material_kind).toBe("spreadsheet");
     expect(record.support_status).toBe("partial");
