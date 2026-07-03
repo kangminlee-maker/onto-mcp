@@ -1984,7 +1984,7 @@ const SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP = 2048;
 const SEMANTIC_MAP_TRANSPORT_RETRYABLE_ERROR =
   /(timed out|timeout_ms|reason=timeout|spawn|ENOENT|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket hang up|network error|fetch failed)/i;
 const SEMANTIC_MAP_FAIL_FAST_ERROR =
-  /(usage limit|quota|rate limit|401|403|unauthorized|forbidden|invalid_request|not supported|billing|invalid JSON and repair failed)/i;
+  /(usage limit|quota|rate limit|401|403|unauthorized|forbidden|invalid_request|not supported|billing|invalid JSON and repair failed|\bauth\b|auth refresh|unauthenticated|\blogin\b|credential)/i;
 
 /** §4 dispatch state machine: 1 logical dispatch → ≤3 process attempts (initial + 2 transport
  *  retries, exponential backoff) → each attempt may include callJsonAuthor's ≤1 parse-repair.
@@ -2060,7 +2060,8 @@ function projectSemanticMapSynthesisOutput(raw: Record<string, unknown>): Semant
 
 function projectSemanticMapVerifyVerdict(raw: Record<string, unknown>): SemanticBoundaryVerification {
   const serialized = JSON.stringify(raw);
-  if (serialized.length > SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP) {
+  // BYTE cap (codex R1 review F5): UTF-16 .length under-counts multibyte payloads.
+  if (Buffer.byteLength(serialized, "utf8") > SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP) {
     throw new Error(`semantic-map verify author: response exceeds the ${SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP}-byte runtime cap (§10.F5 fail-closed).`);
   }
   const verdict = raw.verdict;

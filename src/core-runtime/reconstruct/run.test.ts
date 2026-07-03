@@ -7640,6 +7640,22 @@ describe("R1 production semantic-map capability", () => {
     ).rejects.toThrow(/2048-byte runtime cap/);
   });
 
+  it("codex-R1-F3 NC: an AUTH-class error whose message also carries timeout phrasing fails FAST (auth wins over the retryable timeout pattern)", async () => {
+    const authTimeout = capabilityAuthor([
+      new Error("auth refresh request timed out after 10000ms"),
+    ]);
+    await expect(authTimeout.author.synthesizeSemanticMapNode!(synthesisInput)).rejects.toThrow(/auth refresh/);
+    expect(authTimeout.calls.length).toBe(1); // NO retry — fail-fast predicate tested FIRST
+  });
+
+  it("codex-R1-F5 NC: the verify 2KB cap is a BYTE cap — a multibyte payload under 2048 UTF-16 units but over 2048 bytes fails closed", async () => {
+    // 800 × '한' = 800 UTF-16 units but 2400 UTF-8 bytes (+ envelope) — length-based check would pass.
+    const multibyte = capabilityAuthor([
+      { verdict: "adversarial_confirmed", note: "한".repeat(800) },
+    ]);
+    await expect(multibyte.author.verifySemanticMapBoundary!(verifyInput)).rejects.toThrow(/2048-byte runtime cap/);
+  });
+
   it("transport retry (§10.F3): a timeout-class failure is retried (2nd attempt succeeds); a QUOTA-class failure fails fast on the FIRST attempt", async () => {
     const transient = capabilityAuthor([
       new Error("codex CLI call timed out after 600000ms"),

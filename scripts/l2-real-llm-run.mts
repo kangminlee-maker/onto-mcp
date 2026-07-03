@@ -58,7 +58,13 @@ log(`route: ${modelIdentity}`);
 log("phase 0: 1-call quota probe");
 const probe = await callLlm("Reply with exactly: ok", "ok?", { ...authorLlmConfig, max_tokens: 16 } as never);
 if (!(probe as { text?: string }).text) throw new Error("quota probe returned no text — aborting before any spend");
-log(`quota probe ok (${((probe as { text: string }).text ?? "").slice(0, 20)})`);
+const quotaProbeRecord = {
+  kind: "quota_probe",
+  at: ts(),
+  systemPrompt: "Reply with exactly: ok",
+  text: ((probe as { text: string }).text ?? "").slice(0, 40),
+};
+log(`quota probe ok (${quotaProbeRecord.text.slice(0, 20)})`);
 
 log("phase 0: immutable snapshot");
 const sourceBytes = await fs.readFile(SOURCE);
@@ -112,6 +118,7 @@ const preflight = {
   column_count: colCount,
   caps: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
   worst_case_real_calls: expectedDispatches * 6,
+  quota_probe: quotaProbeRecord,
   go: GO,
   preflight_at: ts(),
 };
@@ -128,6 +135,9 @@ if (!GO) {
 // ── phase 1: run ──────────────────────────────────────────────────────────────────────────────────
 
 const capturePath = path.join(sessionRoot, "captured-calls.jsonl");
+// onto code review issue-002: EVERY live provider call is accounted in the canonical capture —
+// the phase-0 quota probe is written first with its own kind (reported separately from authoring).
+await fs.appendFile(capturePath, JSON.stringify(quotaProbeRecord) + "\n");
 let callCount = 0;
 let consecutiveTransportFailures = 0;
 let harnessAborted = false;
@@ -152,11 +162,20 @@ const capturingLlmCall = async (
     return result;
   } catch (error) {
     consecutiveTransportFailures += 1;
+    const message = String(error);
+    // codex R1 review F4: quota/auth-class death is TERMINAL for the whole run — the stage would
+    // otherwise swallow each failure as a column fallback and keep dispatching for hours.
+    const terminalClass =
+      /(usage limit|quota|rate limit|401|403|unauthorized|forbidden|unauthenticated|\bauth\b|auth refresh|credential|billing)/i
+        .test(message);
     await fs.appendFile(
       capturePath,
-      JSON.stringify({ seq, at: ts(), systemPrompt: systemPrompt.slice(0, 120), error: String(error).slice(0, 400), consecutive: consecutiveTransportFailures }) + "\n",
+      JSON.stringify({ seq, at: ts(), systemPrompt: systemPrompt.slice(0, 120), error: message.slice(0, 400), consecutive: consecutiveTransportFailures, terminal_class: terminalClass }) + "\n",
     );
-    if (consecutiveTransportFailures >= 5) {
+    if (terminalClass) {
+      harnessAborted = true;
+      log("ABORT FLAG SET: quota/auth-class provider error — refusing ALL further spend immediately");
+    } else if (consecutiveTransportFailures >= 5) {
       harnessAborted = true;
       log("ABORT FLAG SET: 5 consecutive transport failures — subsequent calls fail immediately");
     }
@@ -219,9 +238,15 @@ const verifyTotal = Number(census?.verify_calls_total ?? -1);
 const mapPresent = Number(census?.observations_map_present ?? -1);
 // column status vocabulary (artifact-types ReconstructSemanticMapCensusColumn): produced/empty are
 // healthy; failed/capped/skipped_observation_fallback mean the observation fell back to flat.
-const censusColumns = (census as {
-  observations?: Array<{ columns?: Array<{ status?: string }> }>;
-} | null)?.observations?.flatMap((o) => o.columns ?? []) ?? null;
+// CANONICAL surface = census.by_observation (onto code review issue-001 HIGH: an invented
+// `observations` path classified every healthy run as degraded) — fail LOUDLY if it is absent.
+const byObservation = (census as {
+  by_observation?: Array<{ columns?: Array<{ status?: string }> }>;
+} | null)?.by_observation;
+if (census !== null && !Array.isArray(byObservation)) {
+  throw new Error("verdict: census.by_observation missing or non-array — census contract drift, refusing to classify (fail-loud)");
+}
+const censusColumns = byObservation ? byObservation.flatMap((o) => o.columns ?? []) : null;
 const failedColumns = censusColumns === null
   ? -1
   : censusColumns.filter((c) => c.status !== "produced" && c.status !== "empty").length;
@@ -240,6 +265,8 @@ const seedHasMap = Boolean(
 );
 const fingerprint = (provenance?.reuse_match as { semantic_map_aggregate_fingerprint_sha256?: string | null } | undefined)
   ?.semantic_map_aggregate_fingerprint_sha256 ?? null;
+const sidecarNodesTotal = (sidecar as { observations?: Array<{ projection?: { nodes_total?: number } }> } | null)
+  ?.observations?.reduce((sum, o) => sum + (o.projection?.nodes_total ?? 0), 0) ?? null;
 
 const hard = {
   completed_only: runStatus === "completed",
@@ -249,14 +276,21 @@ const hard = {
   verify_positive_and_capped: verifyTotal > 0 && verifyTotal <= DEFAULT_SEMANTIC_MAP_STAGE_CONFIG.max_verify_calls,
   seed_prompt_carries_map: seedHasMap,
   fingerprint_64hex: typeof fingerprint === "string" && /^[0-9a-f]{64}$/.test(fingerprint),
+  sidecar_nodes_positive: typeof sidecarNodesTotal === "number" && sidecarNodesTotal > 0, // §6 hard #2 (codex F2)
 };
 const hardPassExceptVerify = hard.completed_only && hard.map_present && hard.failed_columns_zero &&
-  hard.synthesize_equals_preflight && hard.seed_prompt_carries_map && hard.fingerprint_64hex;
-const isPrimaryModel = modelIdentity.includes("gpt-5.5");
+  hard.synthesize_equals_preflight && hard.seed_prompt_carries_map && hard.fingerprint_64hex &&
+  hard.sidecar_nodes_positive;
+// design §6 v3 (codex F6): EXACT model allowlists — primary=gpt-5.5, fallback=claude-opus-4-8
+// ONLY; any other identity is degraded (never silently promoted to a success-ish class).
+const isPrimaryModel = /\bgpt-5\.5\b/.test(modelIdentity);
+const isFallbackModel = /\bclaude-opus-4-8\b/.test(modelIdentity);
 let completionClass: string;
-if (hardPassExceptVerify && hard.verify_positive_and_capped) {
-  completionClass = isPrimaryModel ? "primary_success" : "fallback_route_evidence";
-} else if (hardPassExceptVerify && verifyTotal === 0) {
+if (hardPassExceptVerify && hard.verify_positive_and_capped && isPrimaryModel) {
+  completionClass = "primary_success";
+} else if (hardPassExceptVerify && hard.verify_positive_and_capped && isFallbackModel) {
+  completionClass = "fallback_route_evidence";
+} else if (hardPassExceptVerify && verifyTotal === 0 && (isPrimaryModel || isFallbackModel)) {
   completionClass = "synthesize_only_partial";
 } else {
   completionClass = "degraded_or_blocked";
@@ -270,11 +304,11 @@ const report = {
   run_error: runError,
   wall_seconds: Math.round(wallMs / 1000),
   llm_calls_captured: callCount,
+  quota_probe_calls: 1,
   expected_synthesize_dispatches: expectedDispatches,
   census: { synthesize_calls_total: synthTotal, verify_calls_total: verifyTotal, observations_map_present: mapPresent, failed_columns: failedColumns },
   hard_criteria: hard,
-  sidecar_nodes_total: (sidecar as { observations?: Array<{ projection?: { nodes_total?: number } }> } | null)
-    ?.observations?.[0]?.projection?.nodes_total ?? null,
+  sidecar_nodes_total: sidecarNodesTotal,
   snapshot_sha256: sourceSha,
   session_root: sessionRoot,
   reported_at: ts(),
