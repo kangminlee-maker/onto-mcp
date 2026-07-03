@@ -1925,14 +1925,19 @@ const SEMANTIC_MAP_COMPREHENSION_VERSION = "l2-wire:1";
  *  change. Bump on any projection/merge/renderer semantics edit. */
 const SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION = "projection-merge:1";
 
-/** ⚠️ PRELIMINARY defaults (review-prompt-budget precedent): live calibration is a later cut. Every
- *  value is folded into the stage fingerprint, so re-tuning rotates the seed reuse key. */
+/** First MEASURED defaults (real-LLM cut design 20260703 §3; previous 200/100 PRELIMINARY values
+ *  self-disabled the stage on real workbooks via the X5 all-or-nothing observation gate): the
+ *  reference 461-column workbook needs EXACTLY 1,699 produced-node dispatches (probe via the real
+ *  buildColumnLeaves→reduce→classifyFrontier), so 2400 carries ~41% drift margin; verify 1000 ≈ 4×
+ *  the ~230 expected unanchored verifications. Every value folds into the stage fingerprint
+ *  (re-tuning rotates the seed reuse key) — the DEFAULT-config pin test makes that rotation a
+ *  conscious decision (§10.F4). */
 export const DEFAULT_SEMANTIC_MAP_STAGE_CONFIG: SemanticMapStageConfig = {
   leaf_count: 8,
   fanin: 2,
   over_context_budget: 2,
-  max_synthesize_calls: 200,
-  max_verify_calls: 100,
+  max_synthesize_calls: 2400,
+  max_verify_calls: 1000,
   max_nodes: 60,
   max_disclosure: 30,
 };
@@ -1951,6 +1956,119 @@ export const SEMANTIC_MAP_PROMPT_NOTE =
 export const SEMANTIC_MAP_SEED_PROMPT_NOTE =
   "When userPayload.semantic_map is present you MAY additionally consult it (it extends any exclusive input-field list above). " +
   SEMANTIC_MAP_PROMPT_NOTE;
+
+/** Real-LLM cut (design 20260703 §2): the production synthesize prompt — a CG-1 catalog entry, so
+ *  editing it rotates authoring_prompt_contract_sha256 (and thus every seed reuse key) tautologically.
+ *  Source-safe: the input carries shape vocabulary only (module envelope), never cell contents. */
+export const SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT =
+  "You are reading ONE spreadsheet column region through its deterministic value-shape structure. No cell contents are provided — only shape vocabulary. Input fields: node_ref (sheet, column_index, row_start, row_end), format_clusters (value-shape names present in the region), value_shape_seams (rows where the dominant value shape changes, with prev_shape/new_shape names), child_summaries (semantic summaries of child sub-regions; present only on merge nodes). Reply with STRICT JSON only, no prose outside it: {\"semantic_summary\": string, \"boundaries\": [{\"row\": integer, \"character_before\": string, \"character_after\": string}]}. semantic_summary: at most 600 characters — one plain-language reading of what this region appears to hold, grounded ONLY in the given shapes, seams, and child summaries; never invent cell values. boundaries: at most 16 items — rows where you judge the MEANING of the column changes; character_before/character_after describe the character of the data before/after that row in shape-vocabulary terms, each at most 120 characters; propose ONLY boundaries you can ground in the input — an empty array is honest and acceptable. No additional fields.";
+
+/** Real-LLM cut (design 20260703 §2): the production adversarial verify prompt — CG-1 catalog entry.
+ *  Independent re-check lens for ONE unanchored boundary; refute-by-default (module §13.2 semantics).
+ *  The verdict enum is HARD-pinned (§10.F7 precursor: the runtime never synonym-maps). */
+export const SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT =
+  "You are an INDEPENDENT adversarial re-checker for ONE proposed semantic boundary in a spreadsheet column region. The boundary was proposed WITHOUT structural corroboration (no value-shape seam co-locates with it), so your default is to REFUTE it. Input fields: node_ref (the region), boundary (row, character_before, character_after, anchor_status, verification), summary (the region's semantic summary). Confirm ONLY if the boundary is genuinely supported by the summary and the before/after characterization is coherent, specific, and non-redundant; otherwise refute. Reply with STRICT JSON only: {\"verdict\": \"adversarial_confirmed\"} or {\"verdict\": \"adversarial_refuted\"} — the verdict value must be EXACTLY one of those two strings (no synonyms, no other casing) and no additional fields are allowed.";
+
+// ── Real-LLM capability runtime bounds + dispatch machinery (design 20260703 §2/§4) ───────────────
+
+/** §10.F5: maxTokens is a provider HINT, not a runtime cap — these deterministic caps are the
+ *  enforced bound. Exceeding any = fail-closed throw (X5 column failure), never truncation. */
+const SEMANTIC_MAP_SUMMARY_CHAR_CAP = 600;
+const SEMANTIC_MAP_BOUNDARIES_PER_NODE_CAP = 16;
+const SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP = 120;
+const SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP = 2048;
+
+/** §10.F3 conservative-syntactic retry predicate: ONLY timeout/spawn/network-class transport
+ *  failures retry. Quota/auth/4xx-class provider errors FAIL FAST — retrying quota exhaustion
+ *  makes a multi-hour run worse; uncertainty resolves to fail-fast. */
+const SEMANTIC_MAP_TRANSPORT_RETRYABLE_ERROR =
+  /(timed out|timeout_ms|reason=timeout|spawn|ENOENT|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket hang up|network error|fetch failed)/i;
+const SEMANTIC_MAP_FAIL_FAST_ERROR =
+  /(usage limit|quota|rate limit|401|403|unauthorized|forbidden|invalid_request|not supported|billing|invalid JSON and repair failed)/i;
+
+/** §4 dispatch state machine: 1 logical dispatch → ≤3 process attempts (initial + 2 transport
+ *  retries, exponential backoff) → each attempt may include callJsonAuthor's ≤1 parse-repair.
+ *  Census counts logical dispatches; telemetry attempt rows record every real call. */
+async function callSemanticMapJsonAuthorWithRetry(args: {
+  llmCall: ReconstructLlmCall;
+  llmConfig: Partial<LlmCallConfig>;
+  telemetry: ReconstructExecutionTelemetryCollector;
+  artifactName: string;
+  systemPrompt: string;
+  userPayload: unknown;
+  maxTokens: number;
+}): Promise<Record<string, unknown>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= 2; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 1_000 : 3_000));
+    }
+    try {
+      return await callJsonAuthor(args);
+    } catch (error) {
+      if (isGracefulTerminalSignal(error)) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      const retryable = !SEMANTIC_MAP_FAIL_FAST_ERROR.test(message) &&
+        (isLlmTimeoutError(error) || SEMANTIC_MAP_TRANSPORT_RETRYABLE_ERROR.test(message));
+      if (!retryable) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+/** §10.F2 declared-field DETERMINISTIC projection: extract exactly the contract fields from the
+ *  LLM JSON (benign extra keys are stripped — contract-field extraction, not semantic patching);
+ *  missing/mistyped/over-cap values fail closed. The module's exact-key validator still guards
+ *  the bridge boundary downstream. */
+function projectSemanticMapSynthesisOutput(raw: Record<string, unknown>): SemanticSynthesisOutput {
+  const summary = raw.semantic_summary;
+  if (typeof summary !== "string" || summary.trim().length === 0) {
+    throw new Error("semantic-map synthesize author: semantic_summary must be a non-empty string (fail-closed).");
+  }
+  if (summary.length > SEMANTIC_MAP_SUMMARY_CHAR_CAP) {
+    throw new Error(`semantic-map synthesize author: semantic_summary exceeds the ${SEMANTIC_MAP_SUMMARY_CHAR_CAP}-char runtime cap (§10.F5 fail-closed, got ${summary.length}).`);
+  }
+  const rawBoundaries = raw.boundaries;
+  if (!Array.isArray(rawBoundaries)) {
+    throw new Error("semantic-map synthesize author: boundaries must be an array (fail-closed).");
+  }
+  if (rawBoundaries.length > SEMANTIC_MAP_BOUNDARIES_PER_NODE_CAP) {
+    throw new Error(`semantic-map synthesize author: ${rawBoundaries.length} boundaries exceed the per-node cap ${SEMANTIC_MAP_BOUNDARIES_PER_NODE_CAP} (§10.F5 fail-closed).`);
+  }
+  const boundaries = rawBoundaries.map((entry, index) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error(`semantic-map synthesize author: boundaries[${index}] must be an object (fail-closed).`);
+    }
+    const candidate = entry as Record<string, unknown>;
+    const row = candidate.row;
+    const before = candidate.character_before;
+    const after = candidate.character_after;
+    if (!Number.isSafeInteger(row)) {
+      throw new Error(`semantic-map synthesize author: boundaries[${index}].row must be a safe integer (fail-closed).`);
+    }
+    if (typeof before !== "string" || typeof after !== "string") {
+      throw new Error(`semantic-map synthesize author: boundaries[${index}] character fields must be strings (fail-closed).`);
+    }
+    if (before.length > SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP || after.length > SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP) {
+      throw new Error(`semantic-map synthesize author: boundaries[${index}] character field exceeds the ${SEMANTIC_MAP_BOUNDARY_CHAR_FIELD_CAP}-char cap (§10.F5 fail-closed).`);
+    }
+    return { row: row as number, character_before: before, character_after: after };
+  });
+  return { semantic_summary: summary, boundaries };
+}
+
+function projectSemanticMapVerifyVerdict(raw: Record<string, unknown>): SemanticBoundaryVerification {
+  const serialized = JSON.stringify(raw);
+  if (serialized.length > SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP) {
+    throw new Error(`semantic-map verify author: response exceeds the ${SEMANTIC_MAP_VERIFY_RESPONSE_BYTE_CAP}-byte runtime cap (§10.F5 fail-closed).`);
+  }
+  const verdict = raw.verdict;
+  if (typeof verdict !== "string" || !(ADVERSARIAL_RESULTS as readonly string[]).includes(verdict)) {
+    throw new Error(`semantic-map verify author: verdict must be EXACTLY one of ${ADVERSARIAL_RESULTS.join("|")} — got '${String(verdict)}' (no synonym mapping, fail-closed).`);
+  }
+  return verdict as SemanticBoundaryVerification;
+}
 
 /** ⚠️ PRELIMINARY prompt-render budget (chars) for one observation's semantic-map render. Changing
  *  it changes prompt-visible content — bump SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION with it (X9). */
@@ -8954,6 +9072,8 @@ export const RECONSTRUCT_AUTHORING_PROMPT_CONTRACT: Record<string, string> = {
   }),
   ontology_seed_semantic_map_note: SEMANTIC_MAP_SEED_PROMPT_NOTE,
   observation_semantic_map_note: SEMANTIC_MAP_PROMPT_NOTE,
+  semantic_map_synthesize: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+  semantic_map_verify: SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
   claim_realization_map: CLAIM_REALIZATION_MAP_SYSTEM_PROMPT,
   competency_questions: competencyQuestionsSystemPrompt({
     hasRepairAttempt: false,
@@ -9031,6 +9151,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   llmCall?: ReconstructLlmCall;
   authorId?: string;
   /**
+   * Layer-2 semantic-map REAL authoring opt-in (real-LLM cut design 20260703 §2). Default
+   * undefined = the capability pair is ABSENT (the stage skips; the wiring cut's default-off
+   * byte-parity holds structurally). Explicit true attaches the production pair: callJsonAuthor
+   * dispatch on the registered artifact names, CG-1 catalog prompts, declared-field projection,
+   * runtime output caps, and the conservative transport retry (§4 state machine).
+   */
+  enableSemanticMapAuthoring?: boolean;
+  /**
    * Seed-stage document projection budget (chars) from the active seat's model
    * window (deriveDocumentExcerptProjectionBudget). Applied to single-document
    * seed prompts. Defaults to the static FLOOR when omitted (model-unaware).
@@ -9093,6 +9221,36 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     setSemanticMapProjection(byObservation: ReadonlyMap<string, SemanticSeedProjection>): void {
       semanticMapProjection = byObservation;
     },
+    // Real-LLM cut §2: the production capability PAIR, attached only under the explicit opt-in —
+    // absent (default) keeps the stage skipped and the merged wiring cut's off-path untouched.
+    ...(args.enableSemanticMapAuthoring === true
+      ? {
+        async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
+          const raw = await callSemanticMapJsonAuthorWithRetry({
+            llmCall,
+            llmConfig,
+            telemetry,
+            artifactName: "semantic-map-synthesize",
+            systemPrompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+            userPayload: input,
+            maxTokens: 900,
+          });
+          return projectSemanticMapSynthesisOutput(raw);
+        },
+        async verifySemanticMapBoundary(input: SemanticBoundaryVerifyInput): Promise<SemanticBoundaryVerification> {
+          const raw = await callSemanticMapJsonAuthorWithRetry({
+            llmCall,
+            llmConfig,
+            telemetry,
+            artifactName: "semantic-map-verify",
+            systemPrompt: SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
+            userPayload: input,
+            maxTokens: 300,
+          });
+          return projectSemanticMapVerifyVerdict(raw);
+        },
+      }
+      : {}),
     executionTelemetry: telemetry,
     documentExcerptProjectionBudget,
     documentExcerptProjectionTruncations,

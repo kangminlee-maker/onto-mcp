@@ -5,6 +5,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import {
   buildSemanticMapBridgeCallbacks,
+  DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
   mergeSemanticSeedProjections,
   observationPromptPayload,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
@@ -559,6 +560,18 @@ describe("W3 fingerprint + registration", () => {
     // rotate the seed key too — a selective fold left these outside it.
     expect((await runWith({}, { over_context_gate_logic_sha256: "logic-v2" })).aggregateFingerprint).not.toBe(base1);
     expect((await runWith({}, { reduce_schema_tool_version: "v2" })).aggregateFingerprint).not.toBe(base1);
+  });
+
+  it("R2 DEFAULT-config pin (real-LLM cut §10.F4): the PRODUCTION default config is exact-pinned — any change rotates every capability-on seed reuse key and must be a conscious decision", () => {
+    expect(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG).toEqual({
+      leaf_count: 8,
+      fanin: 2,
+      over_context_budget: 2,
+      max_synthesize_calls: 2400,
+      max_verify_calls: 1000,
+      max_nodes: 60,
+      max_disclosure: 30,
+    });
   });
 
   it("W4-001 golden pin: the aggregate fingerprint is CONSCIOUSLY rotated — any pre-image change (incl. the render-budget VALUE fold) fails this literal", async () => {
