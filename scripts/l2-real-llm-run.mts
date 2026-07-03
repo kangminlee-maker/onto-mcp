@@ -53,7 +53,12 @@ const authorLlmConfig = resolveLlmProviderConfig({ config: { llm: authorLlm } })
 const providerLlm = resolveReconstructActorLlmSettings(settings, "confirmation_provider");
 const providerLlmConfig = resolveLlmProviderConfig({ config: { llm: providerLlm } }) as Record<string, unknown>;
 const modelIdentity = `${String(authorLlmConfig.provider ?? "?")}/${String(authorLlmConfig.model_id ?? (authorLlmConfig as { model?: string }).model ?? "?")}`;
-log(`route: ${modelIdentity}`);
+// Backlog-⑤a adoption (replay A/B 2026-07-03, l2-effort-replay-2026-07-03T09-50-19): synthesize at
+// gpt-5.5 LOW ≈ medium at the same-config retest noise floor (Jaccard 0.9958=0.9958, exact 59/60
+// both arms). Scope: synthesize ONLY — verify/seed/expansion stay on the base (medium) config. The
+// override folds into the stage fingerprint via semanticMapSynthesizeModelIdentity (key rotates).
+const SYNTHESIZE_REASONING_EFFORT = "low";
+log(`route: ${modelIdentity} (synthesize effort override: ${SYNTHESIZE_REASONING_EFFORT})`);
 
 log("phase 0: 1-call quota probe");
 const probe = await callLlm("Reply with exactly: ok", "ok?", { ...authorLlmConfig, max_tokens: 16 } as never);
@@ -114,6 +119,7 @@ const preflight = {
   snapshot,
   snapshot_sha256: sourceSha,
   model_identity: modelIdentity,
+  synthesize_reasoning_effort: SYNTHESIZE_REASONING_EFFORT,
   expected_synthesize_dispatches: expectedDispatches,
   column_count: colCount,
   caps: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
@@ -190,6 +196,7 @@ const directiveAuthor = createDirectCallReconstructDirectiveAuthor({
   llmConfig: authorLlmConfig as never,
   authorId: "l2-real-llm-semantic-author",
   enableSemanticMapAuthoring: true,
+  semanticMapSynthesizeReasoningEffort: SYNTHESIZE_REASONING_EFFORT,
 });
 const confirmationProvider = createDirectCallReconstructConfirmationProvider({
   llmCall: capturingLlmCall as never,

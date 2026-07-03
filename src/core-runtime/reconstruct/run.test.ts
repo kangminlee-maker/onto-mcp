@@ -7640,6 +7640,47 @@ describe("R1 production semantic-map capability", () => {
     ).rejects.toThrow(/2048-byte runtime cap/);
   });
 
+  it("synthesize effort override (⑤a adoption): ONLY synthesize routes to the override config; the folded identity is exposed; default-off = base config + absent identity (silent-stale falsifiable pair)", async () => {
+    const seen: { prompt: string; effort: string | undefined }[] = [];
+    const capturingCall = async (
+      systemPrompt: string,
+      _userPrompt: string,
+      config?: { reasoning_effort?: string },
+    ): Promise<LlmCallResult> => {
+      seen.push({ prompt: systemPrompt, effort: config?.reasoning_effort });
+      const body = systemPrompt === SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT
+        ? { verdict: "adversarial_confirmed" }
+        : { semantic_summary: "s", boundaries: [] };
+      return {
+        text: JSON.stringify(body), input_tokens: 1, output_tokens: 1, model_id: "m-1",
+      } as unknown as LlmCallResult;
+    };
+    const on = createDirectCallReconstructDirectiveAuthor({
+      llmCall: capturingCall as never,
+      llmConfig: { provider: "mock", model_id: "m-1", reasoning_effort: "medium" } as never,
+      authorId: "effort-override-author",
+      enableSemanticMapAuthoring: true,
+      semanticMapSynthesizeReasoningEffort: "low",
+    });
+    await on.synthesizeSemanticMapNode!(synthesisInput);
+    await on.verifySemanticMapBoundary!(verifyInput);
+    expect(seen[0]).toEqual({ prompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT, effort: "low" });
+    expect(seen[1]).toEqual({ prompt: SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT, effort: "medium" });
+    // the fold surface: identity carries the override → the stage fingerprint pre-image rotates.
+    expect(on.semanticMapSynthesizeModelIdentity).toBe("mock/m-1@synthesize_effort=low");
+
+    seen.length = 0;
+    const off = createDirectCallReconstructDirectiveAuthor({
+      llmCall: capturingCall as never,
+      llmConfig: { provider: "mock", model_id: "m-1", reasoning_effort: "medium" } as never,
+      authorId: "effort-default-author",
+      enableSemanticMapAuthoring: true,
+    });
+    await off.synthesizeSemanticMapNode!(synthesisInput);
+    expect(seen[0]).toEqual({ prompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT, effort: "medium" });
+    expect(off.semanticMapSynthesizeModelIdentity).toBeUndefined();
+  });
+
   it("codex-R1-F3 NC: an AUTH-class error whose message also carries timeout phrasing fails FAST (auth wins over the retryable timeout pattern)", async () => {
     const authTimeout = capabilityAuthor([
       new Error("auth refresh request timed out after 10000ms"),

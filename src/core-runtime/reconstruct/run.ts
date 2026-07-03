@@ -382,6 +382,14 @@ export interface ReconstructDirectiveAuthor {
    */
   readonly reuseJudgeModelIdentity?: string;
   /**
+   * Effective semantic-map SYNTHESIZE model identity when a per-call reasoning-effort
+   * override is active ("<provider>/<model_id>@synthesize_effort=<effort>"). Folded into
+   * the semantic-map stage fingerprint (reduce_reader_model_identity) so the override
+   * rotates the stage reuse key instead of silently reusing the other effort's map
+   * (silent-stale guard, CG-2 lineage). Absent = no override = base reuseModelIdentity.
+   */
+  readonly semanticMapSynthesizeModelIdentity?: string;
+  /**
    * P1-C2-A leaf-read: read a PROVISIONAL label for a low-confidence (unstructured) spreadsheet
    * region (§3.2). Optional — an author without it leaves low-confidence regions to the
    * deterministic companion (no divergence). The implementation runs the FIRST LLM-touch; the run
@@ -9161,6 +9169,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    */
   enableSemanticMapAuthoring?: boolean;
   /**
+   * Reasoning-effort override for the semantic-map SYNTHESIZE author only (replay A/B
+   * 2026-07-03: gpt-5.5 low ≈ medium at the same-config retest noise floor; verify stays on
+   * the base llmConfig — outside the validated scope). Absent = base config (byte-parity).
+   * The effective value reaches the stage reuse fingerprint via
+   * semanticMapSynthesizeModelIdentity — an unfolded effort change would be the silent-stale
+   * class (CG-2/W4-001 lineage), so the override and the key rotate together.
+   */
+  semanticMapSynthesizeReasoningEffort?: string;
+  /**
    * Seed-stage document projection budget (chars) from the active seat's model
    * window (deriveDocumentExcerptProjectionBudget). Applied to single-document
    * seed prompts. Defaults to the static FLOOR when omitted (model-unaware).
@@ -9170,6 +9187,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   const authorId = args.authorId ?? "direct-call-reconstruct-directive-author";
   const llmConfig = args.llmConfig ?? {};
   const judgeLlmConfig = args.judgeLlmConfig ?? llmConfig;
+  const semanticMapSynthesizeLlmConfig: Partial<LlmCallConfig> =
+    args.semanticMapSynthesizeReasoningEffort !== undefined
+      ? { ...llmConfig, reasoning_effort: args.semanticMapSynthesizeReasoningEffort }
+      : llmConfig;
   const llmCall = args.llmCall ?? callLlm;
   const documentExcerptProjectionBudget =
     args.documentExcerptProjectionBudget ?? DOCUMENT_EXCERPT_PROJECTION_FLOOR;
@@ -9230,7 +9251,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
           const raw = await callSemanticMapJsonAuthorWithRetry({
             llmCall,
-            llmConfig,
+            llmConfig: semanticMapSynthesizeLlmConfig,
             telemetry,
             artifactName: "semantic-map-synthesize",
             systemPrompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
@@ -9258,6 +9279,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     documentExcerptProjectionTruncations,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
+    // Effective synthesize identity: base identity + the effort override when present. Consumed by
+    // the semantic-map stage's fingerprint pre-image (reduce_reader_model_identity) so the override
+    // rotates the reuse key AND surfaces in the census (audit-visible), never silently.
+    ...(args.semanticMapSynthesizeReasoningEffort !== undefined
+      ? {
+        semanticMapSynthesizeModelIdentity:
+          `${reconstructAuthoringModelIdentity(llmConfig)}@synthesize_effort=${args.semanticMapSynthesizeReasoningEffort}`,
+      }
+      : {}),
 
     async readLeafLabels(evidence) {
       // The leaf-read is the run's FIRST LLM-touch (§3.2). It goes through callJsonAuthor (shared
@@ -13796,7 +13826,11 @@ export async function runReconstruct(
     sessionRoot,
     config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
     preImageBase: {
-      reduce_reader_model_identity: directiveAuthor.reuseModelIdentity ?? "unspecified",
+      // Effective synthesize identity: carries the per-call effort override when active
+      // (…@synthesize_effort=low) so the override rotates the stage reuse key and shows in
+      // the census; base identity otherwise (byte-parity when no override).
+      reduce_reader_model_identity: directiveAuthor.semanticMapSynthesizeModelIdentity ??
+        directiveAuthor.reuseModelIdentity ?? "unspecified",
       // F6: the authoring prompt-template CONTRACT sha (CG-1 catalog) — the semantic-map author
       // prompts join the catalog with the author realization; any catalog edit rotates this
       // tautologically (over-rotation is the safe direction).
