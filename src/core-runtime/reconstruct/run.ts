@@ -8943,6 +8943,7 @@ const ONTOLOGY_EXPANSION_SYSTEM_PROMPT = [
   RECONSTRUCT_AUTHORING_BASE_SYSTEM,
   "Author ontology-expansion.yaml as an overlay. Never rewrite ontology-seed.yaml in place.",
   "Prefer refine/reuse before add. Use add with increases_surface only when the answer claim proves a new concept is required.",
+  "target_seed_or_ontology_refs must contain the seed/ontology ELEMENT ids this expansion targets (for example the purpose element ids visible in the seed summary and answer claims); never an artifact file path or anchored file ref. The payload's ontology_seed_ref is context only and is never a valid target ref.",
   "JSON shape: {\"expansions\":[{\"expansion_id\":\"...\",\"operation\":\"add|refine|defer|reject\",\"target_surface_refs\":[\"...\"],\"target_dimension_refs\":[\"...\"],\"target_seed_or_ontology_refs\":[\"...\"],\"purpose_element_refs\":[\"...\"],\"answer_claim_refs\":[\"...\"],\"evidence_observation_ids\":[\"...\"],\"concept_economy_effect\":\"reduces_surface|preserves_surface|increases_surface\",\"rationale\":\"...\",\"limitation_refs\":[\"...\"]}]}",
 ].join("\n");
 
