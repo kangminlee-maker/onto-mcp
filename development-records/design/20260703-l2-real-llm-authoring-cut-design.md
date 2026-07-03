@@ -65,6 +65,9 @@ byte-parity가 그대로 성립 — 구조적으로 메서드 부재). on이면:
 - **프롬프트 = CG-1 카탈로그 2 엔트리 추가**(`semantic_map_synthesize`·`semantic_map_verify`·카운트 가드
   39→41). 편집 → `authoringPromptContractSha256()` 자동 회전 → preImageBase의 `reduce_prompt_sha256`로
   seed 키 회전(이미 fold됨 — 신규 기제 불요·tautological).
+- **출력 런타임 캡(v3·§10.F5)**: `maxTokens`는 provider 힌트일 뿐 런타임 캡이 아니다 — capability의 출력
+  검증이 결정론 캡을 강제한다: `semantic_summary` ≤ 600자·`boundaries` ≤ 16개/노드·boundary 문자 필드
+  각 ≤ 120자·verify 응답 직렬화 ≤ 2KB. 초과 = fail-closed throw(컬럼 실패). 음성대조 테스트 필수.
 - **출력 투영 계약(v2·§9.F2)**: `assertSynthesisOutputBounded`는 exact-keys(모듈 693-708)라 LLM의 무해한
   추가 필드 1개로도 컬럼이 죽는다(X5 all-or-nothing·resume 없음). capability는 LLM JSON에서 **선언 필드만
   결정론 투영**한다 — `{semantic_summary, boundaries: boundaries.map(b => ({row, character_before,
@@ -102,9 +105,17 @@ byte-parity가 그대로 성립 — 구조적으로 메서드 부재). on이면:
 
 X5 all-or-nothing: 461 컬럼 중 1개라도 실패 → **관측 전체 map-absent**(이미 쓴 호출은 소모). 수 시간 run에서
 일시 오류 1회로 전체 손실 방지 위해 capability 구현 내부에 bounded transport-retry:
-- 재시도 대상 = `isLlmTimeoutError` + transport 오류(스폰 실패·비-2xx 클래스)·**최대 2회·지수 백오프**.
+- **재시도 술어(v3 정정·§10.F3)**: 재시도 대상 = timeout(`isLlmTimeoutError`)·스폰 실패·네트워크 오류
+  **만**(보수적-구문 매칭)·**최대 2회·지수 백오프**. **쿼터/usage-limit·인증(auth)·4xx-클래스 provider
+  오류는 fail-fast**(재시도 금지 — 쿼터 소진을 재시도하면 악화·즉시 중단 신호로 승격). codex 라우트는
+  non-zero exit을 raw provider error로 던지므로(llm-caller.ts:792) 술어는 메시지 패턴 기반·불확실하면
+  fail-fast 쪽.
 - 재시도 비대상 = parse 실패(callJsonAuthor의 parse-repair가 이미 1회 처리)·shape/verdict 위반(의미 실패 =
-  fail-closed 유지).
+  fail-closed 유지)·쿼터/인증/4xx(위).
+- **디스패치 상태기계(v3·§10.F4)**: 1 **logical dispatch**(census가 세는 단위) → ≤3 **process attempts**
+  (initial + transport-retry 2) → 각 attempt는 ≤1 **parse-repair**. 워스트 = 디스패치당 6 실-LLM-호출·
+  run 워스트 총량 = 1,699×6(예보에 명시). telemetry attempt rows가 세 층위를 구분 기록(기존 열린-집합
+  어휘: initial/parse_repair + retry attempt 수).
 - **두 카운터의 의미론(v2·§9.F3)**: census `synthesize/verify_calls_total` = **브리지 디스패치 수**(produced
   노드; X7 캡의 대상 = 디스패치 캡이지 실-LLM-호출 캡이 아님). 실 LLM 호출 총량(비용) = **execution
   telemetry**(retry + parse-repair 포함·워스트 = 디스패치×(1+retry2+repair1)). §0 목표 (b)의 "실측 비용"은
@@ -118,8 +129,12 @@ X5 all-or-nothing: 461 컬럼 중 1개라도 실패 → **관측 전체 map-abse
 repo harness(tsx·`scripts/l2-real-llm-run.mts`·main 레포엔 두지 않고 이 브랜치): 이유 = 연결된 onto MCP
 전역 v0.4.12에 이 코드 없음(abprobe 선례).
 - 구성: `createDirectCallReconstructDirectiveAuthor({ llmCall: 실 라우트, enableSemanticMapAuthoring: true,
-  ... })` + 캡처 래퍼(프롬프트 전량 JSON 박제·parity probe 패턴) + `runReconstruct` (projectRoot=실 소스 폴더·
-  targetRefs=[101MB xlsx]·sessionRoot=`.onto/reconstruct/l2-real-llm-<date>`·gitignored).
+  ... })` + 캡처 래퍼(프롬프트 전량 JSON 박제·parity probe 패턴) + `runReconstruct`.
+- **불변 스냅샷(v3·§10.F8)**: 원본 xlsx를 run-로컬 스냅샷 경로로 **복사 + sha256 기록**; pre-flight와 run
+  둘 다 같은 스냅샷을 타깃(중간 파일 변경으로 pre-flight↔run 괴리 차단).
+- **격리 projectRoot(v3·§10.F9)**: projectRoot = 격리 작업 폴더(스냅샷 포함) — 실 소스 폴더를 projectRoot로
+  쓰면 그 폴더의 `.onto/settings.json`이 authority로 적용되고 기존 아티팩트와 충돌. sessionRoot =
+  `.onto/reconstruct/l2-real-llm-<timestamp>-<shortsha>`·**경로 기존재 시 fail-fast**.
 - 실 라우트: settings의 semantic_author(gpt-5.5·codex_cli oauth). **run 전 1-call 쿼터 probe 필수**(§7).
 - **결정론 pre-flight(v2)**: run 직전 harness가 현재 파일을 `observeSpreadsheetSource`로 관측(LLM 0)하고
   실 함수(buildColumnLeaves→reduce→classifyFrontier)로 **정확 기대 디스패치 수를 선계산**해 캡 대조 +
@@ -130,16 +145,30 @@ repo harness(tsx·`scripts/l2-real-llm-run.mts`·main 레포엔 두지 않고 �
 
 ## 6. 성공 기준·중단 기준·리스크 (falsifiable)
 
-**성공 기준**(전부 충족 = run 성공·v2 mechanism-true 교체·§9.F1/F5):
-1. `semantic-map-census.yaml`: `observations_map_present = 1`·failed_columns = 0·
-   `0 < synthesize_calls_total ≤ 2400`·`verify_calls_total ≤ 1000`. **증거(soft)**: synthesize_calls_total을
-   pre-flight 선계산값(§5·현재 1,699)과 대조해 run-report에 기록(불일치 = 파일 드리프트 또는 결함 신호·
-   조사 후 판정). **verify_calls_total > 0 기대** — 0이면 run은 유효하나 adversarial verify 경로
-   미실행(known gap)으로 기록하고 후속 실증 의무를 남긴다.
-2. sidecar: projection `nodes_total > 0`·boundaries/disclosure totals 정합(모듈 validator green).
+**완료 클래스(v3·§10.F1≡onto issue-001)** — run 판정은 아래 4클래스 중 하나로 기록(모델 identity +
+terminal status를 run-report 필수 필드로):
+- **primary_success**: gpt-5.5·`status === "completed"`·아래 하드 기준 전부. (§0 목표 달성)
+- **synthesize_only_partial**: 하드 기준 중 verify>0만 미충족(unanchored 0) — capability 쌍 실증 실패로
+  기록·verify 실증은 후속 의무(**성공 아님**·§10.F2≡onto issue-004 HIGH: "쌍 실현 증명" 목표와 verify
+  미실행 성공 판정은 논리 충돌).
+- **fallback_route_evidence**: claude-opus-4-8로 완주 — 기능 증거이나 primary 모델 증거 아님(별도 기록).
+- **degraded_or_blocked**: `blocked/limited/halted` 등 정직 terminal 또는 하드 기준 미충족 — 비성공 산출물
+  (graceful terminal은 런타임이 완주로 반환할 수 있으나 이 cut의 성공이 아님·§10.F1: codex가 run.ts:987
+  graceful-terminal 클래스로 실증).
+
+**하드 성공 기준(primary_success 필요조건·전부 충족)**:
+1. census: `observations_map_present = 1`·`failed_columns = 0`·**`synthesize_calls_total ===
+   pre-flight 선계산값`**(동일 스냅샷이므로 결정론 등식·§10.F7 — under-dispatch green 차단)·
+   `0 < verify_calls_total ≤ 1000`(**하드**·§10.F2).
+2. sidecar: projection `nodes_total > 0`·totals 정합(모듈 validator green).
 3. 캡처된 ontology-seed 호출: userPayload `semantic_map` 필드 실존·시스템 프롬프트 SEED note 실존.
 4. seed reuse-provenance: `semantic_map_aggregate_fingerprint_sha256` = 64-hex.
-5. run 완주(`status: completed` 또는 정직 terminal) + 실측 비용 기록.
+5. `status === "completed"`(**만**) + 실측 비용 기록(telemetry 기준·§4 두 카운터).
+
+**집행 주체(v3·onto issue-003 — 선언≠배선 갭 봉쇄)**: 캡 = X7 런타임 강제 / 쿼터·스냅샷·pre-flight 등식 =
+harness가 run 전 강제(불충족 시 시작 거부) / 완료 클래스 판정 = harness가 census·manifest·record에서
+결정론 산출(사람 판단 아님) / 중단 기준(연속 transport 실패 ≥5·정체) = harness 로그 카운터 + 운영자 관찰
+(자동 kill은 미구현 — 정직 명시·수 시간 run 동안 로그 tail 관찰).
 
 **중단 기준**: 연속 transport 실패 ≥ 5(라우트 다운 판단·중단 후 원인 조사)·synthesize 진행률 정체(동일 컬럼
 30분+·hang 의심 — 단 I/O-wait 신호 규율 적용: 프로세스 상태·in-flight 시간 확인 후 판단)·쿼터 소진 오류.
@@ -161,7 +190,7 @@ owner 결정은 "gpt-5.5(쿼터 복구)"이나 **1-call probe(2026-07-03)는 usa
 
 | 슬라이스 | 내용 | 검증 |
 |---|---|---|
-| R1 capability | §2 쌍 + opt-in + §4 retry + 카탈로그 2 엔트리(39→41) | 유닛(mock llmCall로 shape/verdict/fail-closed/retry NC·opt-in off=메서드 부재)·게이트·full vitest |
+| R1 capability | §2 쌍 + opt-in + §4 retry(술어 보수적) + 출력 런타임 캡 + 카탈로그 2 엔트리(39→41) | 유닛(mock llmCall로 shape/verdict/fail-closed/retry NC·출력 캡 NC·opt-in off=메서드 부재)·**카탈로그 키 실존+call-site가 카탈로그-소유 프롬프트 사용 가드**(§10.F6)·게이트·full vitest |
 | R2 캡 상향 | §3 DEFAULT 재설정 + **DEFAULT-config pin 테스트 신설**(§9.F4 — 기존 pin은 CONFIG 픽스처 대상) | 신설 pin이 DEFAULT 변경에 실제로 우는지 음성대조·스테이지 테스트 회귀 0 |
 | R3 harness+run | §5 harness → 쿼터 probe → 실 run → §6 판정 → 증거 박제 | §6 기준 전부·run-report 커밋 |
 
@@ -188,3 +217,26 @@ verify impedance·§5 캡처·§7 폴백)는 **Confirmed Sound**(코드 검증: 
 
 에이전트 잔여(정직): 실 workbook 접근 불가(gitignored)로 정확값 미산출 — 내 재도출로 보완. 2-패밀리
 (codex+onto) 라운드는 쿼터 복구 후 이 v2에 대해 진행.
+
+---
+
+## 10. 교차검증 라운드-2 (2026-07-03·2-패밀리 gpt-5.5·codex `redesign_narrow` + onto `20260703-1f2cfff2` highest=HIGH·전부 v3 반영)
+
+**수렴(양 패밀리)**: ①**verify>0 하드화**(codex F2 high ≡ onto issue-004 high + issue-002) — v2의
+"기대+갭 기록"은 §0 "쌍 실현 증명"과 논리 충돌; v3 = 완료 클래스 분리(verify=0 → synthesize_only_partial·
+성공 아님) ②**completed-only 성공**(codex F1 high ≡ onto issue-001) — graceful terminal(blocked/limited)은
+런타임 완주여도 이 cut의 성공 아님; 4-클래스 완료 계약.
+
+**codex 단독**: F3(high) 재시도 술어가 쿼터/인증/4xx를 재시도할 위험 → timeout/스폰/네트워크만·나머지
+fail-fast / F4(high) 디스패치 상태기계(logical dispatch ≤3 process attempts ≤1 repair·워스트 6배 명시) /
+F5 출력 런타임 캡(maxTokens는 힌트) / F6 카탈로그 가드 보강(count+inline 가드로는 catalog-밖 const 프롬프트
+누락 가능) / F7 pre-flight 등식 하드 게이트 / F8 불변 스냅샷 / F9 격리 projectRoot(실 소스 폴더의
+settings.json authority 오염+세션 충돌).
+
+**onto 단독**: issue-003 — 중단/증거 기준의 집행 주체 명시(§6 v3: 런타임 강제/harness 강제/운영자 관찰 3분류).
+
+**codex Confirmed Sound**: §2 선언-필드 투영(모듈 exact-key validator 의도 보존)·capability 쌍/default-off
+구조·1,699 모델과 2400 마진 방향성·observeSpreadsheetSource 결정론·X5 런타임 실증. 검증 실행 = ts-core·
+스테이지+telemetry+llm-caller 테스트 56 pass·import probe.
+
+∴ **spine 2-라운드 생존(아키텍처 무손상)·narrows만 — v3 = 빌드 착수 계약**(라운드-1 §9 + 라운드-2 §10).
