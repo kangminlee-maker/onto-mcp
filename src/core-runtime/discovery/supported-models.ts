@@ -33,12 +33,51 @@ import { resolveInstallationPath } from "./installation-paths.js";
 export const SUPPORTED_MODELS_AUTHORITY_PATH =
   ".onto/authority/supported-models.yaml";
 
+/**
+ * Role vocabulary — the sealed 5-role set, each grounded in an existing code
+ * seat (INV-MODEL-1 role-aware design §2.1): `author` (semantic_author actor,
+ * certified by golden full-pipeline completion), `semantic_map_synthesize` /
+ * `semantic_map_verify` (the semantic-map capability pair), `answer_support_judge`
+ * (the judge adoption dispatch), `confirmation_provider` (confirmation actor).
+ * The vocabulary is sealed here; which roles are LISTABLE in a registry entry is
+ * governed separately by {@link CONTRACTED_ROLES}.
+ */
+export const SUPPORTED_MODEL_ROLES = [
+  "author",
+  "semantic_map_synthesize",
+  "semantic_map_verify",
+  "answer_support_judge",
+  "confirmation_provider",
+] as const;
+
+export type SupportedModelRole = (typeof SUPPORTED_MODEL_ROLES)[number];
+
+/**
+ * Roles with a DEFINED evidence contract — the only roles an entry may list in
+ * `roles`. Listing a vocabulary role without a contract fails registry load
+ * (fail-closed): certification must never outrun its evidence definition.
+ * Growing this set means defining that role's evidence contract and carries an
+ * INVARIANT-CHANGE: INV-MODEL-1 marker (role authority change).
+ */
+export const CONTRACTED_ROLES: readonly SupportedModelRole[] = [
+  "author",
+  "semantic_map_synthesize",
+];
+
 const SupportedModelEntrySchema = z
   .object({
     provider: z.string().min(1),
     model: z.string().min(1),
     verified_at: z.string().min(1),
     benchmark_evidence_refs: z.array(z.string().min(1)).min(1),
+    // Role-restricted certification (INV-MODEL-1 role-aware design §2.2).
+    // ABSENT = grandfathered full-route allowance: the entry predates the role
+    // dimension and keeps its flat-registry permissions (an owner
+    // backward-compatibility decision, NOT a stage-traversal evidence claim).
+    // PRESENT = evidence-contracted certification: the model is valid ONLY at
+    // dispatches whose required role is listed. Values are further restricted
+    // to CONTRACTED_ROLES at load (see assertContractedRoles).
+    roles: z.array(z.enum(SUPPORTED_MODEL_ROLES)).min(1).optional(),
     notes: z.string().optional(),
     // Active (provider, model) context window in tokens — the SSOT the
     // reconstruct projection-budget helper (deriveDocumentExcerptProjectionBudget)
@@ -126,7 +165,30 @@ export function parseSupportedModelRegistry(raw: unknown): SupportedModelRegistr
     );
   }
   assertRepoRelativeEvidenceRefs(parsed.data);
+  assertContractedRoles(parsed.data);
   return parsed.data;
+}
+
+/** Fail-closed listable-role check: every role an entry LISTS must have a
+ * defined evidence contract ({@link CONTRACTED_ROLES}). The zod enum admits the
+ * full sealed vocabulary so role names never drift, but a certification without
+ * an evidence contract must not exist — reject at load, not at gate time. */
+export function assertContractedRoles(registry: SupportedModelRegistry): void {
+  const bad: string[] = [];
+  for (const entry of registry.supported_models) {
+    for (const role of entry.roles ?? []) {
+      if (!CONTRACTED_ROLES.includes(role)) {
+        bad.push(`${entry.provider}/${entry.model}: ${role}`);
+      }
+    }
+  }
+  if (bad.length > 0) {
+    throw new Error(
+      `Malformed supported-model registry at ${SUPPORTED_MODELS_AUTHORITY_PATH}: ` +
+        "roles lists role(s) without a defined evidence contract (listable roles: " +
+        `${CONTRACTED_ROLES.join(", ")}):\n${bad.map((b) => `  - ${b}`).join("\n")}`,
+    );
+  }
 }
 
 /** Loads and shape-validates the supported-model registry from the install root.

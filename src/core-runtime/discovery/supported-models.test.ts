@@ -210,6 +210,65 @@ describe("parseSupportedModelRegistry (context_window_tokens contract)", () => {
   });
 });
 
+describe("parseSupportedModelRegistry (roles contract)", () => {
+  const entry = (extra: Record<string, unknown>) => ({
+    schema_version: "1",
+    supported_models: [
+      {
+        provider: "anthropic",
+        model: "claude-haiku-4-5-20251001",
+        verified_at: "2026-07-04",
+        benchmark_evidence_refs: ["development-records/benchmark/x.json"],
+        ...extra,
+      },
+    ],
+  });
+
+  // Positive pair for the negative controls below: a contracted role loads.
+  it("loads an entry restricted to a contracted role", () => {
+    const parsed = parseSupportedModelRegistry(
+      entry({ roles: ["semantic_map_synthesize"] }),
+    );
+    expect(parsed.supported_models[0]?.roles).toEqual([
+      "semantic_map_synthesize",
+    ]);
+  });
+
+  it("loads an entry without roles (grandfathered full-route allowance)", () => {
+    const parsed = parseSupportedModelRegistry(entry({}));
+    expect(parsed.supported_models[0]?.roles).toBeUndefined();
+  });
+
+  // N6: a sealed-vocabulary role WITHOUT a defined evidence contract must not
+  // be listable — certification cannot outrun its evidence definition.
+  it("rejects a vocabulary role without an evidence contract (fail-closed)", () => {
+    expect(() =>
+      parseSupportedModelRegistry(entry({ roles: ["semantic_map_verify"] }))
+    ).toThrow(/without a defined evidence contract/);
+  });
+
+  it("rejects an uncontracted role even alongside a contracted one", () => {
+    expect(() =>
+      parseSupportedModelRegistry(
+        entry({ roles: ["semantic_map_synthesize", "answer_support_judge"] }),
+      )
+    ).toThrow(/answer_support_judge/);
+  });
+
+  // N7: an empty roles list is neither grandfathered nor certified — reject.
+  it("rejects an empty roles list", () => {
+    expect(() => parseSupportedModelRegistry(entry({ roles: [] }))).toThrow(
+      /roles/,
+    );
+  });
+
+  it("rejects a role token outside the sealed vocabulary", () => {
+    expect(() =>
+      parseSupportedModelRegistry(entry({ roles: ["synthesize"] }))
+    ).toThrow(/Malformed supported-model registry/);
+  });
+});
+
 describe("isSupportedModelRoute", () => {
   it("returns true for a registered (provider, model) pair", () => {
     expect(isSupportedModelRoute("openai", "gpt-5.5", registry)).toBe(true);
