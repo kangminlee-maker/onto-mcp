@@ -3508,7 +3508,10 @@ function reviewExecutionHostFromRoute(args: {
   return reviewExecutionHostFromRuntime(args.hostRuntime, args.workerExecutor);
 }
 
-function reviewRetrySettingsFromUnknown(value: unknown): ReviewRetrySettings | null {
+/** Exported for tests: pins the continue-path round-trip contract — every
+ * opt-in stamped in the manifest retry policy (salvage, resubmit) must
+ * survive profile reconstruction, or a resumed run silently loses it. */
+export function reviewRetrySettingsFromUnknown(value: unknown): ReviewRetrySettings | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   const retry = {
@@ -3562,7 +3565,20 @@ function reviewRetrySettingsFromUnknown(value: unknown): ReviewRetrySettings | n
     ...(transcription !== undefined ? { transcription_llm: transcription } : {}),
     delta_completion: "unit_llm",
   };
-  return { ...retry, salvage } as ReviewRetrySettings;
+  // Round-trip the resubmit opt-in for the same reason as salvage: a
+  // resubmit-enabled run resumed via continue must not silently revert to
+  // the whole-run-halt promotion rule (artifacts stamped before the field
+  // existed resume with resubmit disabled — conservative).
+  const resubmitRecord =
+    record.resubmit &&
+    typeof record.resubmit === "object" &&
+    !Array.isArray(record.resubmit)
+      ? (record.resubmit as Record<string, unknown>)
+      : undefined;
+  const resubmit: ReviewRetrySettings["resubmit"] = {
+    enabled: resubmitRecord?.enabled === true,
+  };
+  return { ...retry, salvage, resubmit } as ReviewRetrySettings;
 }
 
 function reviewExecutionProfileFromManifest(

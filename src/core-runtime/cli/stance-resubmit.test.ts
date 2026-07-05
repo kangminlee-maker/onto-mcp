@@ -9,7 +9,6 @@ import {
   correlatedValidationExceeded,
   isUnsupportedEvidenceRefFailureMessage,
   packetHasResubmitErrorSpec,
-  stripResubmitErrorSpec,
 } from "./stance-resubmit.js";
 import { createRuntimeSubmitTools } from "./structured-output-tools.js";
 
@@ -20,6 +19,18 @@ describe("classifyUnsupportedEvidenceRefFailure", () => {
   it("classifies the canonical validation message", () => {
     expect(classifyUnsupportedEvidenceRefFailure(SAMPLE_MESSAGE)).toEqual({
       stanceIndex: 2,
+      issueId: "issue-007",
+      evidenceRef: "finding-999",
+    });
+  });
+
+  it("classifies the on-disk per-lens validator message (null stanceIndex)", () => {
+    expect(
+      classifyUnsupportedEvidenceRefFailure(
+        "issue-stance response for issue issue-007 and lens logic references unsupported evidence: finding-999",
+      ),
+    ).toEqual({
+      stanceIndex: null,
       issueId: "issue-007",
       evidenceRef: "finding-999",
     });
@@ -134,19 +145,18 @@ describe("resubmit error spec projection", () => {
     expect(packetHasResubmitErrorSpec(second)).toBe(true);
   });
 
-  it("strip restores a packet without a spec", () => {
+  it("renders the on-disk violation form (no stance index) and keeps the body", () => {
     const packet = "# packet body\n";
     const withSpec = applyResubmitErrorSpecToPacket(
       packet,
       buildResubmitErrorSpec({
-        violation,
+        violation: { stanceIndex: null, issueId: "issue-001", evidenceRef: "bad" },
         allowedEvidenceRefs: [],
         resubmitAttempt: 1,
       }),
     );
-    expect(stripResubmitErrorSpec(withSpec)).not.toContain(
-      RESUBMIT_ERROR_SPEC_BEGIN,
-    );
+    expect(withSpec).toContain("stance for issue_id: issue-001");
+    expect(withSpec).toContain("# packet body");
     expect(packetHasResubmitErrorSpec(packet)).toBe(false);
   });
 });

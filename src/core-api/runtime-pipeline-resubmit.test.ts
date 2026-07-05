@@ -62,6 +62,7 @@ afterEach(async () => {
   if (originalHome !== undefined) process.env.HOME = originalHome;
   delete process.env.ONTO_RESUBMIT_FAIL_UNITS;
   delete process.env.ONTO_RESUBMIT_STUB_MODE;
+  delete process.env.ONTO_RESUBMIT_STDERR_MODE;
   delete process.env.ONTO_RESUBMIT_INVOCATION_LOG;
   for (const root of tempRoots.splice(0)) {
     await fs.rm(root, { recursive: true, force: true });
@@ -106,7 +107,11 @@ const RESUBMIT_STUB_SOURCE = [
   `        error: ${JSON.stringify(VALIDATION_MESSAGE)},`,
   "      }),",
   "    );",
-  `    console.error(${JSON.stringify(VALIDATION_MESSAGE)});`,
+  // generic stderr mode mirrors worker adapters whose stderr does not carry
+  // the validation text — the frozen salvage input is then the only evidence.
+  '    console.error(process.env.ONTO_RESUBMIT_STDERR_MODE === "generic"',
+  "      ? `resubmit stub forced failure for ${unitId}`",
+  `      : ${JSON.stringify(VALIDATION_MESSAGE)});`,
   "    process.exit(1);",
   "  }",
   "}",
@@ -397,6 +402,20 @@ describe("bounded stance resubmit (설계 A, deterministic dispatch-level)", () 
     expect(packetText).not.toContain(RESUBMIT_ERROR_SPEC_BEGIN);
   });
 
+  it("worker-path fallback: demotion classifies from the frozen salvage input when stderr lacks the validation text", async () => {
+    process.env.ONTO_RESUBMIT_FAIL_UNITS = "issue-stance:logic";
+    process.env.ONTO_RESUBMIT_STDERR_MODE = "generic";
+    const session = await prepareResubmitSession();
+
+    const result = await runPipeline(session, resubmitProfile(true));
+
+    expect(result.synthesis_executed).toBe(true);
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("completed_with_degradation");
+    const unit = stanceUnitResult(executionResult, "issue-stance:logic");
+    expect(unit?.status).toBe("failed");
+  });
+
   it("OFF twin: the disabled path preserves today's whole-run halt", async () => {
     process.env.ONTO_RESUBMIT_FAIL_UNITS = "issue-stance:logic";
     const session = await prepareResubmitSession();
@@ -474,8 +493,11 @@ describe("bounded stance resubmit (설계 A, deterministic dispatch-level)", () 
         unitId === "issue-ledger",
     );
     expect(recomputedUpstream).toEqual([]);
+    // Run 1's frozen salvage input lets the pre-attempt injection put the
+    // error spec into the very first continuation attempt — the healed unit
+    // completes in a single dispatch.
     expect(
-      invocations.some((unitId) => unitId.startsWith("issue-stance:")),
-    ).toBe(true);
+      invocations.filter((unitId) => unitId === "issue-stance:logic"),
+    ).toHaveLength(1);
   });
 });

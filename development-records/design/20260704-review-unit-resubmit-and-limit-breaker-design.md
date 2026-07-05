@@ -156,3 +156,7 @@ reconstruct semantic-map 판정 디스패치).
   리뷰 유닛 티어링(sweep↓/verdict↑ 재배치)은 후속 cut.
 - breaker 발화 시 fallback provider 스왑 + family-collapse 기록(§4 규칙 4)은 후속 cut — 첫 cut의
   breaker 동작은 halt + 미완료 목록 영속 + 공지뿐이다 (owner 결정 2026-07-05).
+- **[적대 리뷰 이연 2026-07-05]** 강등의 durable authority가 현재 stance matrix
+  `validation.missing_stances` 공시 필드 하나다(ledger 빌더가 재독, 손상 시 swallow→빈 집합).
+  검증 결과 matrix 쓰기는 원자적이고 A/B 오케스트레이션 상호배제로 현행 도달 경로는 안전하나,
+  근본 강화(강등 마커를 execution-result per-unit 결과에 기록 + matrix 읽기 fail-loud)는 후속 cut.

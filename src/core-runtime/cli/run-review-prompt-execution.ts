@@ -3618,6 +3618,19 @@ async function runSingleDispatchWithRetries(args: {
   });
   for (let attempt = 0; attempt <= effectiveMaxRetries; attempt += 1) {
     attemptsUsed = attempt + 1;
+    if (attempt === 0) {
+      // 설계 A: nested-batch 1차 시도 실패의 flat 폴백과 halted 세션 resume은
+      // 이 루프 밖에서 실패해 frozen salvage input만 남는다 — 그 구조적
+      // 근거가 있으면 첫 flat 시도 전에 오류 명세를 주입해 blind 재실행을
+      // 막는다. (스위치 OFF·비-stance 유닛·freeze 부재 시 no-op)
+      await applyStanceResubmitErrorSpec({
+        dispatch,
+        error: null,
+        attempt: 0,
+        reviewExecutionProfile,
+        errorLogPath: executionPlan.error_log_path,
+      });
+    }
     try {
       const executorMetadata = await invokeExecutor(
         executorConfig,
@@ -4690,11 +4703,34 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
   const failedOutcomes = completedOutcomes.filter((outcome) => !outcome.success);
   const resubmitEnabled =
     args.reviewExecutionProfile?.retry?.resubmit?.enabled === true;
+  const stanceDispatchError = (
+    outcome: ExecutionOutcome,
+    haltReason: string | null = null,
+  ): ReviewIssueArtifactDispatchError => {
+    const message = outcome.failure?.message ?? "unknown error";
+    return new ReviewIssueArtifactDispatchError(
+      `Issue stance response failed: ${message}`,
+      outcome,
+      message,
+      haltReason,
+    );
+  };
   let demotedLensIds: string[] = [];
   if (failedOutcomes.length > 0) {
-    const validationFailures = failedOutcomes.filter((outcome) =>
-      isUnsupportedEvidenceRefFailureMessage(outcome.failure?.message),
-    );
+    // 검증-거부 분류는 두 근거를 모두 본다: in-process 경로는 실패 메시지
+    // (submit-시점·on-disk 검증기 양쪽 문구), worker 경로는 stderr가 검증
+    // 문구를 보장하지 않으므로 frozen salvage input을 구조적 근거로 읽는다.
+    const validationFailures: ExecutionOutcome[] = [];
+    if (resubmitEnabled) {
+      for (const outcome of failedOutcomes) {
+        const classified =
+          isUnsupportedEvidenceRefFailureMessage(outcome.failure?.message) ||
+          (await readFrozenUnsupportedRefViolation(
+            outcome.dispatch.output_path,
+          )) !== null;
+        if (classified) validationFailures.push(outcome);
+      }
+    }
     if (
       resubmitEnabled &&
       correlatedValidationExceeded({
@@ -4705,11 +4741,8 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
       // 설계 A 상관 에스컬레이션: 같은 검증 클래스가 stance 유닛 과반에서
       // 실패하면 구조 결함(프롬프트/스키마/컨텍스트 조립)이므로 whole-run
       // halt를 보존한다.
-      const first = validationFailures[0]!;
-      throw new ReviewIssueArtifactDispatchError(
-        `Issue stance response failed: ${first.failure?.message ?? "unknown error"}`,
-        first,
-        first.failure?.message ?? "unknown error",
+      throw stanceDispatchError(
+        validationFailures[0]!,
         `${CORRELATED_VALIDATION_HALT_REASON}: evidence_refs validation rejected ${validationFailures.length}/${dispatches.length} stance units`,
       );
     }
@@ -4718,12 +4751,7 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
     if (!demotable) {
       // 현행 승격 규칙 보존: 인프라 실패(timeout/transport/…)와 OFF 경로는
       // 지금처럼 whole-run halt.
-      const failedOutcome = failedOutcomes[0]!;
-      throw new ReviewIssueArtifactDispatchError(
-        `Issue stance response failed: ${failedOutcome.failure?.message ?? "unknown error"}`,
-        failedOutcome,
-        failedOutcome.failure?.message ?? "unknown error",
-      );
+      throw stanceDispatchError(failedOutcomes[0]!);
     }
     // 설계 A 유닛 강등: resubmit cap을 소진한 검증-거부 유닛만
     // complete-with-failure로 남긴다. 실패 outcome은 집계 outcome의 failed
@@ -4741,9 +4769,13 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
   const survivorLensIds = participatingLensIds.filter(
     (lensId) => !demotedLensIds.includes(lensId),
   );
-  const survivorResponsePaths = survivorLensIds
-    .map((lensId) => responsePathsByLensId.get(lensId))
-    .filter((value): value is string => value !== undefined);
+  const survivorResponsePaths = [
+    ...new Set(
+      survivorLensIds
+        .map((lensId) => responsePathsByLensId.get(lensId))
+        .filter((value): value is string => value !== undefined),
+    ),
+  ];
 
   await fs.mkdir(path.dirname(seat.packet_path), { recursive: true });
   await fs.writeFile(

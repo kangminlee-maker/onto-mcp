@@ -82,7 +82,6 @@ interface PipelineExecutionLedgerUnitEntry {
   upstreamUnitIds: string[];
   downstreamUnitIds: string[];
   resolution?: "demoted";
-  resolutionReason?: string;
   executionTelemetry?: PipelineUnitExecutionTelemetry | null;
 }
 

@@ -21,7 +21,7 @@ import {
   buildLedgerTrust,
   buildOutputHashes,
   fileSha256IfPresent,
-  isTrustedLedgerUnit,
+  isResolvedLedgerUnit,
   normalizeLedgerRefs,
   type PipelineExecutionLedger,
   type PipelineExecutionLedgerUnitEntry,
@@ -686,9 +686,6 @@ export async function buildReviewPipelineExecutionLedger(
     deliberationUnitsFromDisk(params.executionPlan),
     synthesisUnitsFromDisk(params.executionPlan),
   ]);
-  const demotedStanceUnitIds = await demotedStanceUnitIdsFromMatrix(
-    params.executionPlan,
-  );
   const collectionResultPresent = allExecutionResults(params.executionResult).some(
     (result) => result.unit_id === "issue-stance-matrix",
   );
@@ -731,6 +728,10 @@ export async function buildReviewPipelineExecutionLedger(
   );
   const trustedUnitIds = new Set<string>();
   const ledgerUnits: PipelineExecutionLedgerUnitEntry[] = [];
+  // Lazy + memoized: the matrix read matters only when some stance unit is
+  // not completed; a healthy run (frontier loops call this builder per
+  // iteration) never pays the stat+read+parse.
+  let demotedStanceUnitIds: Set<string> | null = null;
 
   for (const plannedUnit of units) {
     const entry = await buildUnitEntry({
@@ -747,18 +748,21 @@ export async function buildReviewPipelineExecutionLedger(
       trustedUnitIds,
     });
     if (
-      demotedStanceUnitIds.has(plannedUnit.unitId) &&
+      plannedUnit.unitId.startsWith("issue-stance:") &&
       entry.status !== "completed"
     ) {
-      entry.resolution = "demoted";
-      entry.resolutionReason =
-        "Bounded resubmit exhausted; issue-stance-matrix consumed and disclosed the gap (validation.missing_stances).";
+      demotedStanceUnitIds ??= await demotedStanceUnitIdsFromMatrix(
+        params.executionPlan,
+      );
+      if (demotedStanceUnitIds.has(plannedUnit.unitId)) {
+        entry.resolution = "demoted";
+      }
     }
     ledgerUnits.push(entry);
-    if (isTrustedLedgerUnit(entry)) trustedUnitIds.add(entry.unitId);
-    // A demoted unit satisfies downstream upstream-trust: the stage product
-    // consumed the disclosed gap, not the unit's (absent) output.
-    else if (entry.resolution === "demoted") trustedUnitIds.add(entry.unitId);
+    // Trusted output or terminally resolved — a demoted unit satisfies
+    // downstream upstream-trust because the stage product consumed the
+    // disclosed gap, not the unit's (absent) output.
+    if (isResolvedLedgerUnit(entry)) trustedUnitIds.add(entry.unitId);
   }
 
   return {

@@ -32,33 +32,52 @@ export const RESUBMIT_ERROR_SPEC_END = "<!-- onto:resubmit-error-spec:end -->";
 export const CORRELATED_VALIDATION_HALT_REASON = "correlated_validation";
 
 export interface UnsupportedEvidenceRefViolation {
-  stanceIndex: number;
+  /** Index into stances[] when the submit-time validator reported it;
+   * null for the on-disk validator, which reports issue+lens only. */
+  stanceIndex: number | null;
   issueId: string;
   evidenceRef: string;
 }
 
-const UNSUPPORTED_REF_PATTERN =
+/** Submit-time validator throw site
+ * (structured-output-tools `normalizeIssueStanceResponseSubmitArgs`). */
+const SUBMIT_UNSUPPORTED_REF_PATTERN =
   /submit_issue_stance_response\.stances\[(\d+)\]\.evidence_refs contains unsupported ref for (\S+): (.*)$/m;
+/** On-disk per-lens validator throw site
+ * (issue-artifact-runtime `validateIssueStanceResponseObject`). */
+const ON_DISK_UNSUPPORTED_REF_PATTERN =
+  /issue-stance response for issue (\S+) and lens \S+ references unsupported evidence: (.*)$/m;
 
 /**
  * Classify a unit failure message as an issue-stance unsupported-evidence-ref
- * validation rejection. The pattern anchors on the single throw site in
- * structured-output-tools (`normalizeIssueStanceResponseSubmitArgs`), which
- * survives executor stderr wrapping on the worker path and direct Error
- * propagation on in-process paths. Returns null for every other failure class
- * so infra failures (timeout, transport, empty output) keep their current
- * semantics.
+ * validation rejection. Anchors on BOTH runtime-owned throw sites: the
+ * submit-time whitelist (per-issue union set) and the stricter on-disk
+ * per-lens re-validation — either rejection is the same failure class for
+ * promotion purposes. Message text is not guaranteed to survive the worker
+ * adapters' stderr (see readFrozenUnsupportedRefViolation for the structural
+ * freeze-file source); this classifier is the in-process/message half.
+ * Returns null for every other failure class so infra failures (timeout,
+ * transport, empty output) keep their current semantics.
  */
 export function classifyUnsupportedEvidenceRefFailure(
   message: string,
 ): UnsupportedEvidenceRefViolation | null {
-  const match = UNSUPPORTED_REF_PATTERN.exec(message);
-  if (!match) return null;
-  const stanceIndex = Number.parseInt(match[1]!, 10);
-  const issueId = match[2]!;
-  const evidenceRef = match[3]!.trim();
-  if (!Number.isFinite(stanceIndex) || issueId.length === 0) return null;
-  return { stanceIndex, issueId, evidenceRef };
+  const submitMatch = SUBMIT_UNSUPPORTED_REF_PATTERN.exec(message);
+  if (submitMatch) {
+    const stanceIndex = Number.parseInt(submitMatch[1]!, 10);
+    const issueId = submitMatch[2]!;
+    const evidenceRef = submitMatch[3]!.trim();
+    if (!Number.isFinite(stanceIndex) || issueId.length === 0) return null;
+    return { stanceIndex, issueId, evidenceRef };
+  }
+  const onDiskMatch = ON_DISK_UNSUPPORTED_REF_PATTERN.exec(message);
+  if (onDiskMatch) {
+    const issueId = onDiskMatch[1]!;
+    const evidenceRef = onDiskMatch[2]!.trim();
+    if (issueId.length === 0) return null;
+    return { stanceIndex: null, issueId, evidenceRef };
+  }
+  return null;
 }
 
 export function isUnsupportedEvidenceRefFailureMessage(
@@ -86,6 +105,10 @@ export function buildResubmitErrorSpec(args: {
     args.allowedEvidenceRefs.length > 0
       ? args.allowedEvidenceRefs.map((ref) => `- ${ref}`).join("\n")
       : "- (none — omit evidence_refs entries you cannot support)";
+  const rejectedStanceLabel =
+    violation.stanceIndex !== null
+      ? `stances[${violation.stanceIndex}] (issue_id: ${violation.issueId})`
+      : `stance for issue_id: ${violation.issueId}`;
   return [
     RESUBMIT_ERROR_SPEC_BEGIN,
     "",
@@ -95,7 +118,7 @@ export function buildResubmitErrorSpec(args: {
     "deterministic validation. Do not apologize or explain; call the submit",
     "tool again with a complete corrected payload.",
     "",
-    `- rejected stance: stances[${violation.stanceIndex}] (issue_id: ${violation.issueId})`,
+    `- rejected stance: ${rejectedStanceLabel}`,
     `- unsupported evidence_ref: ${violation.evidenceRef}`,
     `- allowed evidence_refs for ${violation.issueId}:`,
     allowedBlock,
@@ -121,7 +144,7 @@ export function applyResubmitErrorSpecToPacket(
   return `${stripped.trimEnd()}\n\n${errorSpec.trimEnd()}\n`;
 }
 
-export function stripResubmitErrorSpec(packetText: string): string {
+function stripResubmitErrorSpec(packetText: string): string {
   const begin = packetText.indexOf(RESUBMIT_ERROR_SPEC_BEGIN);
   if (begin === -1) return packetText;
   const end = packetText.indexOf(RESUBMIT_ERROR_SPEC_END, begin);

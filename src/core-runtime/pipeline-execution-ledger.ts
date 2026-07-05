@@ -129,7 +129,6 @@ export interface PipelineExecutionLedgerUnitEntry {
    * and `lastFailureMessage` keep the audit truth.
    */
   resolution?: "demoted";
-  resolutionReason?: string;
   /**
    * Per-unit execution telemetry projected from the producing pipeline's
    * run records when available. Currently populated by the reconstruct
