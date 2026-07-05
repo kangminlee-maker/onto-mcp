@@ -116,6 +116,19 @@ const ReviewUnitResubmitSettingsSchema = z
     enabled: z.boolean().optional(),
   })
   .strict();
+/** Dispatch limit/transport circuit breaker settings shape (설계 B) — shared
+ * by the reconstruct semantic-map loop (`reconstruct.execution.dispatch_breaker`)
+ * and the review lens/stance pools (`review.execution.retry.dispatch_breaker`):
+ * one concept, one schema, per-pipeline wire keys. */
+const DispatchBreakerSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    systemic_threshold: z.number().int().min(1).optional(),
+    per_call_max_attempts: z.number().int().min(1).optional(),
+    backoff_initial_ms: z.number().int().min(0).optional(),
+    backoff_cap_ms: z.number().int().min(0).optional(),
+  })
+  .strict();
 const ReviewRetrySettingsSchema = z
   .object({
     lens_max_retries: z.number().int().min(0).optional(),
@@ -125,6 +138,11 @@ const ReviewRetrySettingsSchema = z
     retry_initial_delay_ms: z.number().int().min(0).optional(),
     salvage: ReviewSubmitSalvageSettingsSchema.optional(),
     resubmit: ReviewUnitResubmitSettingsSchema.optional(),
+    // NOTE: this schema is shared by the V3 INPUT parse and the merged
+    // NormalizedSettingsSchema re-validation (via ReviewSettingsSchema), so a
+    // key added here survives both — the #167 dual-schema gap class cannot
+    // recur for retry keys.
+    dispatch_breaker: DispatchBreakerSettingsSchema.optional(),
   })
   .strict();
 const ReviewUnitExecutionSettingsSchema = z
@@ -165,6 +183,54 @@ const DEFAULT_REVIEW_EXECUTION = {
   deliberation: "controlled-lens-deliberation",
 } as const;
 
+/**
+ * Dispatch limit/transport circuit breaker for unattended batch dispatch
+ * loops (설계 B, 20260704-review-unit-resubmit-and-limit-breaker-design.md
+ * §4). Opt-in. Structurally identical to `DispatchBreakerPolicy` in
+ * src/core-runtime/llm/dispatch-breaker.ts (the policy consumer). Wired
+ * per pipeline: `reconstruct.execution.dispatch_breaker` (semantic-map
+ * loop) and `review.execution.retry.dispatch_breaker` (lens/stance pools).
+ */
+export interface DispatchBreakerSettingsInput {
+  enabled?: boolean | undefined;
+  systemic_threshold?: number | undefined;
+  per_call_max_attempts?: number | undefined;
+  backoff_initial_ms?: number | undefined;
+  backoff_cap_ms?: number | undefined;
+}
+
+/** The completed settings ARE the policy shape the breaker consumes — one
+ * concept, one type (the llm module owns it). */
+export type DispatchBreakerSettings = DispatchBreakerPolicy;
+
+export const DEFAULT_DISPATCH_BREAKER_SETTINGS = {
+  // opt-in: OFF = 현행 동작 보존 — 활성화는 settings로만.
+  enabled: false,
+  systemic_threshold: 3,
+  per_call_max_attempts: 3,
+  backoff_initial_ms: 3000,
+  backoff_cap_ms: 30000,
+} as const satisfies DispatchBreakerSettings;
+
+export function completeDispatchBreakerSettings(
+  input: DispatchBreakerSettingsInput | undefined,
+): DispatchBreakerSettings {
+  return {
+    enabled: input?.enabled ?? DEFAULT_DISPATCH_BREAKER_SETTINGS.enabled,
+    systemic_threshold:
+      input?.systemic_threshold ??
+      DEFAULT_DISPATCH_BREAKER_SETTINGS.systemic_threshold,
+    per_call_max_attempts:
+      input?.per_call_max_attempts ??
+      DEFAULT_DISPATCH_BREAKER_SETTINGS.per_call_max_attempts,
+    backoff_initial_ms:
+      input?.backoff_initial_ms ??
+      DEFAULT_DISPATCH_BREAKER_SETTINGS.backoff_initial_ms,
+    backoff_cap_ms:
+      input?.backoff_cap_ms ?? DEFAULT_DISPATCH_BREAKER_SETTINGS.backoff_cap_ms,
+  };
+}
+
 const DEFAULT_REVIEW_RETRY_SETTINGS = {
   lens_max_retries: 2,
   issue_artifact_max_retries: 2,
@@ -175,6 +241,8 @@ const DEFAULT_REVIEW_RETRY_SETTINGS = {
   salvage: { enabled: false, delta_completion: "unit_llm" },
   // opt-in: OFF = 현행 halt 동작 보존 — 활성화는 settings로만.
   resubmit: { enabled: false },
+  // opt-in: OFF = 현행 halt/배리어 동작 보존 — 활성화는 settings로만.
+  dispatch_breaker: DEFAULT_DISPATCH_BREAKER_SETTINGS,
 } as const satisfies ReviewRetrySettings;
 
 const DEFAULT_REVIEW_UNIT_TIMEOUT_MS = 240000;
@@ -452,15 +520,6 @@ const V3ReviewSettingsSchema = z
   })
   .strict();
 
-const V3ReconstructDispatchBreakerSettingsSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    systemic_threshold: z.number().int().min(1).optional(),
-    per_call_max_attempts: z.number().int().min(1).optional(),
-    backoff_initial_ms: z.number().int().min(0).optional(),
-    backoff_cap_ms: z.number().int().min(0).optional(),
-  })
-  .strict();
 const V3ReconstructSettingsSchema = z
   .object({
     execution: z
@@ -472,7 +531,7 @@ const V3ReconstructSettingsSchema = z
         // Execution-level scalars (e.g. the semantic-map authoring opt-in,
         // design §5.5) — entries DERIVED from the scalar constant (§5.1).
         ...reconstructExecutionScalarsShape(),
-        dispatch_breaker: V3ReconstructDispatchBreakerSettingsSchema.optional(),
+        dispatch_breaker: DispatchBreakerSettingsSchema.optional(),
       })
       .strict()
       .optional(),
@@ -505,7 +564,7 @@ const NormalizedSettingsSchema = z
               .strict()
               .optional(),
             ...reconstructExecutionScalarsShape(),
-            dispatch_breaker: V3ReconstructDispatchBreakerSettingsSchema.optional(),
+            dispatch_breaker: DispatchBreakerSettingsSchema.optional(),
           })
           .strict()
           .optional(),
@@ -663,6 +722,8 @@ export interface ReviewRetrySettingsInput {
   retry_initial_delay_ms?: number | undefined;
   salvage?: ReviewSubmitSalvageSettingsInput | undefined;
   resubmit?: ReviewUnitResubmitSettingsInput | undefined;
+  /** 설계 B: 리뷰 lens/stance 풀의 dispatch breaker (opt-in). */
+  dispatch_breaker?: DispatchBreakerSettingsInput | undefined;
 }
 
 export interface ReviewRetrySettings {
@@ -673,6 +734,7 @@ export interface ReviewRetrySettings {
   retry_initial_delay_ms: number;
   salvage: ReviewSubmitSalvageSettings;
   resubmit: ReviewUnitResubmitSettings;
+  dispatch_breaker: DispatchBreakerSettings;
 }
 
 export interface ReviewArtifactSettings {
@@ -706,54 +768,6 @@ export interface ReconstructActorSettings {
   llm: LlmModelSwitcherConfig;
 }
 
-/**
- * Dispatch limit/transport circuit breaker for unattended reconstruct batch
- * loops (설계 B, 20260704-review-unit-resubmit-and-limit-breaker-design.md
- * §4). Opt-in. Structurally identical to `DispatchBreakerPolicy` in
- * src/core-runtime/llm/dispatch-breaker.ts (the policy consumer).
- */
-export interface ReconstructDispatchBreakerSettingsInput {
-  enabled?: boolean | undefined;
-  systemic_threshold?: number | undefined;
-  per_call_max_attempts?: number | undefined;
-  backoff_initial_ms?: number | undefined;
-  backoff_cap_ms?: number | undefined;
-}
-
-/** The completed settings ARE the policy shape the breaker consumes — one
- * concept, one type (the llm module owns it). */
-export type ReconstructDispatchBreakerSettings = DispatchBreakerPolicy;
-
-export const DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS = {
-  // opt-in: OFF = 현행 동작 보존 — 활성화는 settings로만.
-  enabled: false,
-  systemic_threshold: 3,
-  per_call_max_attempts: 3,
-  backoff_initial_ms: 3000,
-  backoff_cap_ms: 30000,
-} as const satisfies ReconstructDispatchBreakerSettings;
-
-export function completeReconstructDispatchBreakerSettings(
-  input: ReconstructDispatchBreakerSettingsInput | undefined,
-): ReconstructDispatchBreakerSettings {
-  return {
-    enabled:
-      input?.enabled ?? DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.enabled,
-    systemic_threshold:
-      input?.systemic_threshold ??
-      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.systemic_threshold,
-    per_call_max_attempts:
-      input?.per_call_max_attempts ??
-      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.per_call_max_attempts,
-    backoff_initial_ms:
-      input?.backoff_initial_ms ??
-      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.backoff_initial_ms,
-    backoff_cap_ms:
-      input?.backoff_cap_ms ??
-      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.backoff_cap_ms,
-  };
-}
-
 export interface ReconstructSettings {
   // Both axes derive from their constants (design §5.1, F19 closure): a new
   // actor key or execution scalar cannot exist in the type without existing
@@ -761,7 +775,7 @@ export interface ReconstructSettings {
   execution?: {
     actors?: Partial<Record<ReconstructActorKey, ReconstructActorSettings>>;
     // Object-shaped execution block (not a boolean scalar): 설계 B breaker.
-    dispatch_breaker?: ReconstructDispatchBreakerSettingsInput;
+    dispatch_breaker?: DispatchBreakerSettingsInput;
   } & Partial<Record<ReconstructExecutionScalarKey, boolean>>;
 }
 
@@ -981,6 +995,15 @@ function definedReviewRetry(
     }
     out.salvage = salvage;
   }
+  // 정정 2026-07-05: resubmit이 이 복사 함수에서 누락되어 설정 파일의
+  // opt-in(true)이 정규화 단계에서 소실됐다(#163 관찰 모드가 불활성이던
+  // 원인). strict 파서가 이미 미지 키를 거른 뒤라 통복사가 안전하다.
+  if (retry.resubmit !== undefined) {
+    out.resubmit = { ...retry.resubmit };
+  }
+  if (retry.dispatch_breaker !== undefined) {
+    out.dispatch_breaker = { ...retry.dispatch_breaker };
+  }
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -1048,6 +1071,7 @@ export function completeReviewRetrySettings(
       enabled:
         retry?.resubmit?.enabled ?? DEFAULT_REVIEW_RETRY_SETTINGS.resubmit.enabled,
     },
+    dispatch_breaker: completeDispatchBreakerSettings(retry?.dispatch_breaker),
   };
 }
 
@@ -1312,6 +1336,16 @@ function mergeReviewRetrySettings(
           resubmit: {
             ...(userRetry?.resubmit ?? {}),
             ...(projectRetry?.resubmit ?? {}),
+          },
+        }
+      : {}),
+    // dispatch_breaker merges deep for the same reason as salvage/resubmit.
+    ...(userRetry?.dispatch_breaker !== undefined ||
+    projectRetry?.dispatch_breaker !== undefined
+      ? {
+          dispatch_breaker: {
+            ...(userRetry?.dispatch_breaker ?? {}),
+            ...(projectRetry?.dispatch_breaker ?? {}),
           },
         }
       : {}),
@@ -1812,6 +1846,7 @@ export function defaultReviewRetrySettings(): ReviewRetrySettings {
     ...DEFAULT_REVIEW_RETRY_SETTINGS,
     salvage: { ...DEFAULT_REVIEW_RETRY_SETTINGS.salvage },
     resubmit: { ...DEFAULT_REVIEW_RETRY_SETTINGS.resubmit },
+    dispatch_breaker: { ...DEFAULT_REVIEW_RETRY_SETTINGS.dispatch_breaker },
   };
 }
 

@@ -27,8 +27,10 @@ import os from "node:os";
 import path from "node:path";
 import { resolveOntoHome } from "../core-runtime/discovery/onto-home.js";
 import {
+  completeDispatchBreakerSettings,
   defaultReviewRetrySettings,
   resolveSettingsChain,
+  type DispatchBreakerSettingsInput,
   type ReviewRetrySettings,
 } from "../core-runtime/discovery/settings-chain.js";
 import { loadCoreLensRegistry } from "../core-runtime/discovery/lens-registry.js";
@@ -113,6 +115,7 @@ import type {
   LlmExecutionRoute,
   LlmProviderName,
 } from "../core-runtime/llm/model-switcher.js";
+import { dispatchIncompleteArtifactPath } from "../core-runtime/llm/dispatch-breaker.js";
 import type {
   ReviewExecutionHost,
   ReviewExecutionProfile,
@@ -3578,7 +3581,37 @@ export function reviewRetrySettingsFromUnknown(value: unknown): ReviewRetrySetti
   const resubmit: ReviewRetrySettings["resubmit"] = {
     enabled: resubmitRecord?.enabled === true,
   };
-  return { ...retry, salvage, resubmit } as ReviewRetrySettings;
+  // Round-trip the dispatch breaker for the same reason: the canonical
+  // recovery flow for a TRIPPED batch is onto_review_continue during the
+  // same outage — dropping the key here would resume the incomplete set
+  // with the breaker silently OFF (the exact retry-storm class 설계 B
+  // prevents). Artifacts stamped before the field existed resume with the
+  // breaker disabled — conservative (completeDispatchBreakerSettings
+  // defaults enabled:false).
+  const breakerRecord =
+    record.dispatch_breaker &&
+    typeof record.dispatch_breaker === "object" &&
+    !Array.isArray(record.dispatch_breaker)
+      ? (record.dispatch_breaker as Record<string, unknown>)
+      : undefined;
+  const breakerNumber = (item: unknown, min: number): number | undefined =>
+    typeof item === "number" && Number.isInteger(item) && item >= min
+      ? item
+      : undefined;
+  const breakerInput: DispatchBreakerSettingsInput = {
+    enabled: breakerRecord?.enabled === true,
+    systemic_threshold: breakerNumber(breakerRecord?.systemic_threshold, 1),
+    per_call_max_attempts: breakerNumber(breakerRecord?.per_call_max_attempts, 1),
+    backoff_initial_ms: breakerNumber(breakerRecord?.backoff_initial_ms, 0),
+    backoff_cap_ms: breakerNumber(breakerRecord?.backoff_cap_ms, 0),
+  };
+  const dispatchBreaker = completeDispatchBreakerSettings(breakerInput);
+  return {
+    ...retry,
+    salvage,
+    resubmit,
+    dispatch_breaker: dispatchBreaker,
+  } as ReviewRetrySettings;
 }
 
 function reviewExecutionProfileFromManifest(
@@ -3913,6 +3946,10 @@ function continuationSessionArtifactRefs(args: {
     args.executionPlan.deliberation_output_path,
     args.executionPlan.final_output_path,
     args.executionPlan.review_record_path,
+    // 설계 B: 트립 배치의 회복 집합 기록 — continuation이 breaker-ON 배치를
+    // 재실행하면 덮어써지므로, 직전 상태를 continuation-attempts/에 백업해
+    // 어느 트립 상태를 회복했는지 감사 가능하게 남긴다.
+    dispatchIncompleteArtifactPath(args.sessionRoot),
   ];
 }
 

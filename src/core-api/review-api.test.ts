@@ -3355,9 +3355,33 @@ describe("reviewRetrySettingsFromUnknown (continue-path retry round-trip)", () =
     expect(parsed?.resubmit.enabled).toBe(true);
   });
 
-  it("defaults both opt-ins to disabled when a pre-field artifact omits them", () => {
+  it("round-trips the dispatch_breaker opt-in — a tripped run resumed via continue must stay protected", () => {
+    // 적대 리뷰 2026-07-05: 이 함수가 dispatch_breaker를 드랍하면 트립 후
+    // 회복 실행(onto_review_continue)이 무방비로 미완료 집합을 재투척한다 —
+    // definedReviewRetry의 #163 resubmit 드랍과 동클래스 회귀 가드.
+    const parsed = reviewRetrySettingsFromUnknown({
+      ...numericRetry,
+      dispatch_breaker: {
+        enabled: true,
+        systemic_threshold: 2,
+        per_call_max_attempts: 1,
+        backoff_initial_ms: 1,
+        backoff_cap_ms: 1,
+      },
+    });
+    expect(parsed?.dispatch_breaker).toEqual({
+      enabled: true,
+      systemic_threshold: 2,
+      per_call_max_attempts: 1,
+      backoff_initial_ms: 1,
+      backoff_cap_ms: 1,
+    });
+  });
+
+  it("defaults the opt-ins to disabled when a pre-field artifact omits them", () => {
     const parsed = reviewRetrySettingsFromUnknown({ ...numericRetry });
     expect(parsed?.salvage.enabled).toBe(false);
     expect(parsed?.resubmit.enabled).toBe(false);
+    expect(parsed?.dispatch_breaker.enabled).toBe(false);
   });
 });

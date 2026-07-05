@@ -6,7 +6,6 @@ import { parse as parseYaml } from "yaml";
 import {
   buildSemanticMapBridgeCallbacks,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-  dispatchIncompleteArtifactPath,
   mergeSemanticSeedProjections,
   observationPromptPayload,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
@@ -20,6 +19,7 @@ import {
 } from "./run.js";
 import {
   DispatchBreakerTrippedError,
+  dispatchIncompleteArtifactPath,
   type DispatchBreakerPolicy,
 } from "../llm/dispatch-breaker.js";
 import type { DispatchIncompleteArtifact } from "../llm/dispatch-breaker.js";

@@ -108,6 +108,7 @@ import {
   DispatchBreakerTrippedError,
   buildDispatchIncompleteArtifact,
   classifySystemicDispatchFailure,
+  dispatchIncompleteArtifactPath,
   readDispatchFailureClass,
   runWithDispatchBackoff,
   type DispatchBreakerPolicy,
@@ -2337,15 +2338,11 @@ export interface SemanticMapStageResult {
  * (claim_realization's KIND) is a different vocabulary — a name collision, not a relationship.
  */
 /** 설계 B 규칙 4·5: the batch's end state (completed / dead-letter /
- * incomplete) persists at a fixed session-root path so a recovery run can
- * re-dispatch EXACTLY the incomplete set — the §1.2 34-item loss happened
- * because this list did not exist. Written on breaker trip AND on normal
- * breaker-ON completion (rule 6 observability); never written when the
- * breaker is off (OFF = 현행 동작). */
-export function dispatchIncompleteArtifactPath(sessionRoot: string): string {
-  return path.join(sessionRoot, "dispatch-incomplete.yaml");
-}
-
+ * incomplete) persists at a fixed session-root path (single-sourced in the
+ * dispatch-breaker module) so a recovery run can re-dispatch EXACTLY the
+ * incomplete set — the §1.2 34-item loss happened because this list did not
+ * exist. Written on breaker trip AND on normal breaker-ON completion (rule 6
+ * observability); never written when the breaker is off (OFF = 현행 동작). */
 async function persistDispatchIncompleteArtifact(args: {
   sessionRoot: string;
   batchLabel: string;

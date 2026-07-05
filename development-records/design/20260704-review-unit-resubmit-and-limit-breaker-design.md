@@ -182,6 +182,39 @@ reconstruct semantic-map 판정 디스패치).
   attended 실행이 지배적인 리뷰에서 그 가치가 배선 표면을 정당화하지 못한다. 실 관찰에서 리뷰
   측 429 낭비가 확인되면 순수 모듈(dispatch-breaker.ts)을 lens fan-out aggregator로 배선하는
   후속 cut을 연다.
+  **[owner 부결 2026-07-05]** 이연을 부결하고 지금 배선하기로 결정 — 근거의 잔여 구멍
+  (trustedOnSeatPresence가 부분출력 seat를 완료로 신뢰할 가능성)을 관찰로 기다리지 않고 선제
+  차단한다. 배선 브랜치 feat/review-dispatch-breaker, 계획은
+  development-records/handoff/20260705-review-breaker-wiring-handoff.md.
+  **[배선 완료 2026-07-05 저녁]** 리뷰 lens·stance flat 풀에 cross-item aggregator로 배선 —
+  `review.execution.retry.dispatch_breaker`(스키마는 reconstruct와 공용
+  `DispatchBreakerSettingsSchema`로 개명), backoff 재시도는 얹지 않음(규칙 1은 기존 per-unit
+  예산으로 충족). 트립 처리: stance는 설계 A의 haltReason 배관 재사용, lens는 배리어 halt와
+  같은 구조화 블록(`halt_phase=lens_dispatch_breaker`; lens 풀은 실패를 throw하지 않고
+  outcome으로만 기록하므로 전파 캐치가 아니라 배리어 앞 epilogue가 맞는 자리다).
+  `dispatch-incomplete.yaml`은 리뷰 세션 루트에 pipeline `review`, batch_label
+  `lens`/`issue-stance`로 기록(경로 헬퍼는 dispatch-breaker 모듈로 단일소스화).
+  nested-workers 1차 배치는 외부 워커가 fan-out을 소유해 미커버 — 후속 cut.
+  **[구현 중 발견·정정 2026-07-05]** 실체인 프로브로 `definedReviewRetry`(settings-chain.ts)가
+  V3 정규화에서 `resubmit` 키를 복사하지 않아 #163의 관찰 모드 ON(`resubmit.enabled=true`)이
+  라이브 경로에서 불활성이었음을 확인 — #167이 고친 갭과 같은 클래스(복사 함수 키 누락)의
+  다른 인스턴스. 같은 커밋에서 수정하고 파일→체인 전 구간 회귀 테스트를 추가했다. 관찰
+  체크리스트(§7 ON 승격)의 resubmit 관찰 횟수는 이 수정 이후 실행부터 유효하다.
+  **[리뷰 배선 적대 리뷰 반영 2026-07-05 밤]** 8-lens finder → 전건 적대 검증 수렴 반영:
+  (1) continuation 프로파일 재구성(`reviewRetrySettingsFromUnknown`)이 dispatch_breaker를
+  드랍해 트립 회복 실행이 무방비이던 결함 수정(#163 갭과 동클래스 3번째 인스턴스 —
+  round-trip 드리프트 테스트에 키 고정); (2) nested 1차 배치가 실행된 stance 스테이지는
+  breaker 미생성(배치-성공 유닛의 무디스패치 success가 streak을 오리셋 — lens 풀과 동일
+  가드); (3) 트립 후 preserved(continuation) 유닛 기록/복원이 중단되지 않도록 트립 체크를
+  preserved 분기 뒤로 이동(return→continue); (4) 트립 throw에 배치 outcome 전체를 실어
+  완료 유닛 행을 execution-result에 보존 + stance 수집 스테이지에 continuation per-unit
+  게이트(runUnitIds/preserved) 신설 — 회복 재디스패치 집합 == 미완료 집합을 E2E로 고정
+  (완료 유닛 0회 재디스패치 assert); (5) `halt_phase=lens_dispatch_breaker`를 progress-step
+  투영에 매핑; (6) dispatch-incomplete.yaml을 fresh-run 리셋 목록과 continuation 백업
+  목록에 추가(stale 트립 기록 차단); (7) 트립 동결(늦은 in-flight 성공의 피해 유닛 poison
+  오귀속 차단)은 상태머신 단위 테스트로 고정. 잔여 수용: 단일 세션 경로의 last-writer-wins
+  (트립은 run당 종결적), retry_policy 공시에 breaker 블록 상시 포함(의도), stance 유닛
+  halt의 progress-step fallback(선재 동작).
 - **[설계 B 적대 리뷰 반영 2026-07-05]** 8-lens 리뷰 수렴 반영: (1) skip/무디스패치 관찰이
   성공으로 기록되어 계통 streak을 리셋하고 outage 피해 아이템을 poison으로 오분류하던 결함 수정
   (`recordItemSkipped` 신설 — 성공은 실제 provider 디스패치 성공만); (2) 아이템 귀속 분류를

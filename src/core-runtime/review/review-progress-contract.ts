@@ -149,6 +149,9 @@ export function reviewProgressStepIdFromHalt(args: {
   if (args.haltPhase === "lens_completion_barrier") {
     return "lens_completion_barrier";
   }
+  // 설계 B: lens 풀 dispatch breaker 트립은 lens 디스패치 단계에서 멈춘
+  // 것이다 (배리어 판정 이전; halt_unit_kind는 null로 온다).
+  if (args.haltPhase === "lens_dispatch_breaker") return "lens_dispatch";
   if (args.haltPhase === "synthesize") return "synthesize";
   if (args.haltPhase === "controlled_lens_deliberation") {
     return args.haltUnitId === "controlled-deliberation"
