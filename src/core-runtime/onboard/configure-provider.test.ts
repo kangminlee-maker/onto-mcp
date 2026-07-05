@@ -337,3 +337,52 @@ describe("runConfigureProvider", () => {
     await expect(readSettingsAt(settingsPath)).resolves.toBeDefined();
   });
 });
+
+// ─── INV-MODEL-1 role-aware B3 §5.1-9 (N13): user-owned actor seats survive ───
+describe("applyActorBlocks preserves user-owned reconstruct actor seats", () => {
+  it("a provider re-run keeps the semantic_map_synthesize seat and the opt-in scalar", async () => {
+    const settingsPath = await makeTmpSettingsPath();
+    const existing = {
+      schema_version: "settings.json/v3",
+      reconstruct: {
+        execution: {
+          actors: {
+            semantic_author: {
+              llm: { auth: "api_key", provider: "openai", model: "old-model" },
+            },
+            semantic_map_synthesize: {
+              llm: {
+                auth: "oauth",
+                provider: "anthropic",
+                model: "claude-haiku-4-5-20251001",
+                effort: "low",
+              },
+            },
+          },
+          semantic_map_authoring: true,
+        },
+      },
+    };
+    await fs.writeFile(
+      settingsPath,
+      `${JSON.stringify(existing, null, 2)}\n`,
+      "utf8",
+    );
+
+    await writeProviderSettings(OPENAI_OAUTH, { target: "user", settingsPath });
+
+    const loaded = await readSettingsAt(settingsPath);
+    // Provider-managed seats overwritten…
+    expect(loaded.reconstruct?.execution?.actors?.semantic_author?.llm.model)
+      .toBe("gpt-5.5");
+    expect(
+      loaded.reconstruct?.execution?.actors?.confirmation_provider?.llm.model,
+    ).toBe("gpt-5.5");
+    // …user-owned seat and execution-level scalar PRESERVED (N13 — the old
+    // wholesale replacement deleted the synthesize seat silently).
+    expect(
+      loaded.reconstruct?.execution?.actors?.semantic_map_synthesize?.llm.model,
+    ).toBe("claude-haiku-4-5-20251001");
+    expect(loaded.reconstruct?.execution?.semantic_map_authoring).toBe(true);
+  });
+});

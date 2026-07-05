@@ -623,3 +623,280 @@ describe("resolveSettingsChain", () => {
     );
   });
 });
+
+// ─── INV-MODEL-1 role-aware B3: synthesize seat + opt-in source-layer chain ───
+import {
+  RECONSTRUCT_ACTOR_KEYS,
+  collectEffectiveModelRoutes as collectRoutesForSeat,
+  isReconstructSemanticMapAuthoringEnabled,
+  mergeReconstructSettings,
+  resolveOptionalReconstructActorLlmSettings,
+  v3ReconstructSettings,
+  assertSettingsModelsSupported,
+  type OntoSettings as OntoSettingsForSeat,
+} from "./settings-chain.js";
+
+describe("reconstruct source-layer structure preservation (design §5.1)", () => {
+  const llm = {
+    auth: "oauth",
+    provider: "openai",
+    model: "gpt-5.5",
+  } as const;
+
+  // Drift guard ①: normalize preserves EVERY constant-declared actor key plus
+  // the declared execution-level scalar — direct call (strict parser bypassed)
+  // so a missed copy in v3ReconstructSettings fails here, not silently in prod.
+  it("normalize preserves every RECONSTRUCT_ACTOR_KEYS actor and the opt-in scalar", () => {
+    const input = {
+      execution: {
+        actors: Object.fromEntries(
+          RECONSTRUCT_ACTOR_KEYS.map((key) => [key, { llm: { ...llm } }]),
+        ),
+        semantic_map_authoring: true,
+      },
+    };
+    const out = v3ReconstructSettings(input as never);
+    for (const key of RECONSTRUCT_ACTOR_KEYS) {
+      expect(out?.execution?.actors?.[key]?.llm, key).toEqual(llm);
+    }
+    expect(out?.execution?.semantic_map_authoring).toBe(true);
+  });
+
+  // Drift guard ② (F19 negative pair): a scalar-only block — actors entirely
+  // absent — must SURVIVE normalize (the old code early-returned undefined).
+  it("normalize preserves a scalar-only block with actors absent (P4 kernel)", () => {
+    const out = v3ReconstructSettings(
+      { execution: { semantic_map_authoring: true } } as never,
+    );
+    expect(out).toEqual({ execution: { semantic_map_authoring: true } });
+  });
+
+  // Drift guard ③: merge iterates every actor key (project > user per actor)
+  // and preserves the scalar across sides even with actors on one side only.
+  it("merge preserves every actor key and the opt-in scalar across sides", () => {
+    const userSide = {
+      execution: {
+        semantic_map_authoring: true,
+        actors: {
+          semantic_map_synthesize: {
+            llm: { ...llm, provider: "anthropic", model: "claude-haiku-4-5-20251001" },
+          },
+        },
+      },
+    };
+    const projectSide = {
+      execution: {
+        actors: Object.fromEntries(
+          RECONSTRUCT_ACTOR_KEYS.filter((k) => k !== "semantic_map_synthesize")
+            .map((key) => [key, { llm: { ...llm } }]),
+        ),
+      },
+    };
+    const out = mergeReconstructSettings(
+      userSide as never,
+      projectSide as never,
+    );
+    for (const key of RECONSTRUCT_ACTOR_KEYS) {
+      expect(out?.execution?.actors?.[key], key).toBeDefined();
+    }
+    expect(out?.execution?.semantic_map_authoring).toBe(true);
+    expect(out?.execution?.actors?.semantic_map_synthesize?.llm.model)
+      .toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("merge: project wins per actor; scalar project > user", () => {
+    const userSide = {
+      execution: {
+        semantic_map_authoring: true,
+        actors: { semantic_author: { llm: { ...llm, effort: "low" } } },
+      },
+    };
+    const projectSide = {
+      execution: {
+        semantic_map_authoring: false,
+        actors: { semantic_author: { llm: { ...llm, effort: "high" } } },
+      },
+    };
+    const out = mergeReconstructSettings(userSide as never, projectSide as never);
+    expect(out?.execution?.actors?.semantic_author?.llm.effort).toBe("high");
+    expect(out?.execution?.semantic_map_authoring).toBe(false);
+  });
+
+  // Byte-parity guard (§7): the legacy two-actor input produces EXACTLY the
+  // legacy output shape — no extra keys introduced by the restructure.
+  it("keeps the legacy two-actor normalize output shape byte-stable", () => {
+    const out = v3ReconstructSettings(
+      {
+        execution: {
+          actors: {
+            semantic_author: { llm: { ...llm } },
+            confirmation_provider: { llm: { ...llm } },
+          },
+        },
+      } as never,
+    );
+    expect(out).toEqual({
+      execution: {
+        actors: {
+          semantic_author: { llm },
+          confirmation_provider: { llm },
+        },
+      },
+    });
+    expect(Object.keys(out?.execution ?? {})).toEqual(["actors"]);
+    expect(
+      v3ReconstructSettings({ execution: {} } as never),
+    ).toBeUndefined();
+    expect(v3ReconstructSettings(undefined)).toBeUndefined();
+  });
+});
+
+describe("synthesize seat + opt-in through real settings files (P1/N12/P4/U6/N8)", () => {
+  beforeEach(() => {
+    scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-settings-seat-"));
+    originalHome = process.env.HOME;
+    process.env.HOME = path.join(scratchRoot, "home");
+    fs.mkdirSync(process.env.HOME, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    fs.rmSync(scratchRoot, { recursive: true, force: true });
+  });
+
+  const SYNTH_SEAT_PATH =
+    "reconstruct.execution.actors.semantic_map_synthesize.llm";
+  const haikuLlm = {
+    auth: "oauth",
+    provider: "anthropic",
+    model: "claude-haiku-4-5-20251001",
+    effort: "low",
+  };
+  const gptLlm = {
+    auth: "oauth",
+    provider: "openai",
+    model: "gpt-5.5",
+    effort: "medium",
+    service_tier: "fast",
+  };
+  const reconstructBlock = (withSeat: boolean, optIn: boolean | undefined) => ({
+    execution: {
+      actors: {
+        semantic_author: { llm: { ...gptLlm } },
+        confirmation_provider: { llm: { ...gptLlm } },
+        ...(withSeat ? { semantic_map_synthesize: { llm: { ...haikuLlm } } } : {}),
+      },
+      ...(optIn !== undefined ? { semantic_map_authoring: optIn } : {}),
+    },
+  });
+
+  // P1 (BLOCKER-1 recurrence guard): the seat written to a REAL project
+  // settings file survives parse → normalize → merge, reaches the resolver AND
+  // the gate walk with its role.
+  it("P1: project-file seat survives resolveSettingsChain to resolver and gate walk", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      reconstruct: reconstructBlock(true, true),
+    });
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+    expect(resolveOptionalReconstructActorLlmSettings(
+      settings,
+      "semantic_map_synthesize",
+    )).toEqual(haikuLlm);
+    expect(isReconstructSemanticMapAuthoringEnabled(settings)).toBe(true);
+    const route = collectRoutesForSeat(settings).find((r) =>
+      r.path === SYNTH_SEAT_PATH
+    );
+    expect(route).toEqual({
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+      path: SYNTH_SEAT_PATH,
+      requiredRole: "semantic_map_synthesize",
+    });
+  });
+
+  it("P1 (user-level variant): user-file seat survives the chain", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    fs.mkdirSync(projectRoot, { recursive: true });
+    writeJson(userSettingsPath(), {
+      schema_version: "settings.json/v3",
+      reconstruct: reconstructBlock(true, true),
+    });
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+    expect(resolveOptionalReconstructActorLlmSettings(
+      settings,
+      "semantic_map_synthesize",
+    )).toEqual(haikuLlm);
+    expect(isReconstructSemanticMapAuthoringEnabled(settings)).toBe(true);
+  });
+
+  // N12 (R2-02 closure): the opt-in scalar set ONLY at user level survives the
+  // merge with project-level actors (the old merge rebuilt {actors} only).
+  it("N12: user-level opt-in survives merge with project-level actors", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(userSettingsPath(), {
+      schema_version: "settings.json/v3",
+      reconstruct: { execution: { semantic_map_authoring: true } },
+    });
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      reconstruct: reconstructBlock(false, undefined),
+    });
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+    expect(isReconstructSemanticMapAuthoringEnabled(settings)).toBe(true);
+    expect(
+      resolveReconstructActorLlmSettings(settings, "semantic_author"),
+    ).toEqual(gptLlm);
+  });
+
+  // P4: opt-in only, NO actors anywhere — survives (F19 file-level pair).
+  it("P4: opt-in-only settings (no actors) survive the chain", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      reconstruct: { execution: { semantic_map_authoring: true } },
+    });
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+    expect(isReconstructSemanticMapAuthoringEnabled(settings)).toBe(true);
+  });
+
+  // U6 pair: dormant seat (opt-in off) is EXCLUDED from the gate walk;
+  // flipping the opt-in on brings it in (fail-loud from then on).
+  it("U6: dormant seat (opt-in off) is excluded from the gate walk", () => {
+    const settings = {
+      reconstruct: reconstructBlock(true, false),
+    } as unknown as OntoSettingsForSeat;
+    expect(
+      collectRoutesForSeat(settings).find((r) => r.path === SYNTH_SEAT_PATH),
+    ).toBeUndefined();
+  });
+
+  it("U6 pair: the same seat with opt-in on IS in the gate walk", () => {
+    const settings = {
+      reconstruct: reconstructBlock(true, true),
+    } as unknown as OntoSettingsForSeat;
+    expect(
+      collectRoutesForSeat(settings).find((r) => r.path === SYNTH_SEAT_PATH)
+        ?.requiredRole,
+    ).toBe("semantic_map_synthesize");
+  });
+
+  // N8 pair against the REAL install registry (anthropic/claude-haiku is not
+  // registered): live gate throws only when the seat can dispatch (opt-in on).
+  it("N8: unregistered model in an active synthesize seat fails the live gate", () => {
+    const settings = {
+      reconstruct: reconstructBlock(true, true),
+    } as unknown as OntoSettingsForSeat;
+    expect(() => assertSettingsModelsSupported(settings))
+      .toThrow(/anthropic\/claude-haiku-4-5-20251001/);
+  });
+
+  it("N8 pair: the same unregistered seat passes while dormant (opt-in off)", () => {
+    const settings = {
+      reconstruct: reconstructBlock(true, false),
+    } as unknown as OntoSettingsForSeat;
+    expect(() => assertSettingsModelsSupported(settings)).not.toThrow();
+  });
+});

@@ -350,6 +350,34 @@ describe("resolveJudgeLlmConfig", () => {
     expect(out.note).toMatch(/not a benchmark-verified route/);
   });
 
+  // N4 (F6-b closure): a registered-but-role-restricted entry is NOT adoptable
+  // as the judge — the request_judge dispatch requires answer_support_judge
+  // coverage, which a synthesize-only certification does not grant.
+  it("degrades a role-restricted (synthesize-only) model override — registered pair, wrong role", () => {
+    const roleRestricted: SupportedModelRegistry = {
+      schema_version: "1",
+      supported_models: [
+        ...registry.supported_models,
+        {
+          provider: "openai",
+          model: "synth-only-model",
+          verified_at: "2026-07-04",
+          benchmark_evidence_refs: ["development-records/benchmark/z.json"],
+          roles: ["semantic_map_synthesize"],
+        },
+      ],
+    };
+    const candidate = { provider: "openai" as const, model_id: "synth-only-model", api_key_env: "MY_OPENAI_KEY" };
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: author,
+      judgeModelCandidate: candidate,
+      judgeModelProvider: "openai",
+      registry: roleRestricted,
+    });
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5-mini");
+    expect(out.note).toMatch(/not a benchmark-verified route/);
+  });
+
   it("degrades (never cross-provider credential leak) when a candidate resolves to a different runtime provider", () => {
     // Defensive: even if a candidate somehow carried a different runtime provider,
     // it must NOT be adopted (would mix the author's api_key_env with another
@@ -396,5 +424,103 @@ describe("resolveJudgeLlmConfig", () => {
     expect(out.judgeLlmConfig?.model_id).toBe("gpt-5.5");
     expect(out.judgeLlmConfig?.reasoning_effort).toBe("high");
     expect(out.note).toBeNull();
+  });
+});
+
+// ─── INV-MODEL-1 role-aware B3: semantic-map synthesize wiring seam (§5.4/§5.5) ───
+import { resolveSemanticMapSynthesizeWiring } from "./reconstruct-api.js";
+import type { OntoSettings } from "../core-runtime/discovery/settings-chain.js";
+
+describe("resolveSemanticMapSynthesizeWiring", () => {
+  const haikuSeat = {
+    auth: "oauth",
+    provider: "anthropic",
+    model: "claude-haiku-4-5-20251001",
+    effort: "low",
+  };
+  const settingsWith = (args: {
+    seat?: boolean;
+    optIn?: boolean;
+  }): OntoSettings =>
+    ({
+      reconstruct: {
+        execution: {
+          ...(args.seat
+            ? {
+              actors: {
+                semantic_map_synthesize: { llm: { ...haikuSeat } },
+              },
+            }
+            : {}),
+          ...(args.optIn !== undefined
+            ? { semantic_map_authoring: args.optIn }
+            : {}),
+        },
+      },
+    }) as unknown as OntoSettings;
+
+  it("no seat: passes only the opt-in through", () => {
+    expect(
+      resolveSemanticMapSynthesizeWiring({
+        settings: settingsWith({ optIn: true }),
+        mockRealizationEnabled: true,
+      }),
+    ).toEqual({ enableSemanticMapAuthoring: true });
+    expect(
+      resolveSemanticMapSynthesizeWiring({
+        settings: settingsWith({}),
+        mockRealizationEnabled: true,
+      }),
+    ).toEqual({ enableSemanticMapAuthoring: false });
+  });
+
+  // N11 kernel: seat + opt-in off → dormant note, NO config, NO enable.
+  it("dormant seat (opt-in off) yields the honest note and no wiring", () => {
+    const wiring = resolveSemanticMapSynthesizeWiring({
+      settings: settingsWith({ seat: true, optIn: false }),
+      mockRealizationEnabled: false,
+    });
+    expect(wiring.enableSemanticMapAuthoring).toBe(false);
+    expect(wiring.semanticMapSynthesizeLlmConfig).toBeUndefined();
+    expect(wiring.dormantSeatNote).toMatch(/dormant/);
+  });
+
+  // Mock: identity-only projection — no adapter, no credential resolution.
+  it("mock realization takes the identity projection (no provider completion)", () => {
+    const wiring = resolveSemanticMapSynthesizeWiring({
+      settings: settingsWith({ seat: true, optIn: true }),
+      mockRealizationEnabled: true,
+    });
+    expect(wiring.enableSemanticMapAuthoring).toBe(true);
+    expect(wiring.semanticMapSynthesizeLlmConfig).toEqual({
+      provider: "anthropic",
+      model_id: "claude-haiku-4-5-20251001",
+      reasoning_effort: "low",
+    });
+  });
+
+  // Live: full provider completion — anthropic oauth resolves to the
+  // claude_code adapter (auth folded into the adapter; F23).
+  it("live realization completes the seat into a provider config with its adapter", () => {
+    const wiring = resolveSemanticMapSynthesizeWiring({
+      settings: settingsWith({ seat: true, optIn: true }),
+      mockRealizationEnabled: false,
+    });
+    const config = wiring.semanticMapSynthesizeLlmConfig;
+    expect(config?.provider).toBe("anthropic");
+    expect(config?.model_id).toBe("claude-haiku-4-5-20251001");
+    expect(config?.execution_adapter).toBe("claude_code");
+    expect(config?.reasoning_effort).toBe("low");
+  });
+
+  // §5.2 rank 2: the request llmEffort pin wins over the seat's own effort
+  // (judge precedent — never silently weaker/stronger than the pinned run).
+  it("the request llmEffort pin overrides the seat effort", () => {
+    const wiring = resolveSemanticMapSynthesizeWiring({
+      settings: settingsWith({ seat: true, optIn: true }),
+      mockRealizationEnabled: false,
+      llmEffortOverride: { reasoning_effort: "high" },
+    });
+    expect(wiring.semanticMapSynthesizeLlmConfig?.reasoning_effort).toBe("high");
   });
 });

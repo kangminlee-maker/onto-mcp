@@ -7712,3 +7712,163 @@ describe("R1 production semantic-map capability", () => {
     expect(quota.calls.length).toBe(1); // fail-fast: NO retry on quota (§10.F3)
   }, 20_000);
 });
+
+// ─── INV-MODEL-1 role-aware B3: synthesize seat fold + dispatch (design §5.2/§5.3) ───
+describe("semanticMapSynthesizeModelIdentity fold — canonical seat serialization", () => {
+  const base = { provider: "openai" as const, model_id: "gpt-5.5" };
+  const haikuSeat = {
+    provider: "anthropic" as const,
+    model_id: "claude-haiku-4-5-20251001",
+    execution_adapter: "claude_code" as const,
+    reasoning_effort: "low",
+  };
+  const foldOf = (
+    args: Parameters<typeof createDirectCallReconstructDirectiveAuthor>[0],
+  ) =>
+    createDirectCallReconstructDirectiveAuthor({
+      llmCall: reconstructFixtureLlm,
+      ...args,
+    }).semanticMapSynthesizeModelIdentity;
+
+  // §7 byte-parity: the ⑤a arg-only fold string is BYTE-IDENTICAL to the
+  // pre-seat format — existing reuse keys must never rotate.
+  it("arg-only fold keeps the legacy byte-identical string", () => {
+    expect(foldOf({
+      llmConfig: base,
+      semanticMapSynthesizeReasoningEffort: "low",
+    })).toBe("openai/gpt-5.5@synthesize_effort=low");
+  });
+
+  it("no seat, no arg → no fold (pin-only runs stay fold-free)", () => {
+    expect(foldOf({ llmConfig: base })).toBeUndefined();
+    // A request llmEffort pin reaches synthesize through the BASE config on
+    // both author and synthesize sides, so it must not create a fold.
+    expect(foldOf({ llmConfig: { ...base, reasoning_effort: "high" } }))
+      .toBeUndefined();
+  });
+
+  it("seat present → canonical serialization (model + adapter + effort)", () => {
+    expect(foldOf({
+      llmConfig: base,
+      semanticMapSynthesizeLlmConfig: haikuSeat,
+    })).toBe(
+      "synth:anthropic/claude-haiku-4-5-20251001@adapter=claude_code@synthesize_effort=low",
+    );
+  });
+
+  // N5: seat MODEL edit rotates the key.
+  it("N5: seat model edit rotates the fold", () => {
+    const a = foldOf({ llmConfig: base, semanticMapSynthesizeLlmConfig: haikuSeat });
+    const b = foldOf({
+      llmConfig: base,
+      semanticMapSynthesizeLlmConfig: { ...haikuSeat, model_id: "claude-sonnet-5" },
+    });
+    expect(a).not.toBe(b);
+  });
+
+  // N5b (CG-2 negative control): seat-borne EFFORT edit rotates the key.
+  it("N5b: seat effort edit (low→high) rotates the fold", () => {
+    const a = foldOf({ llmConfig: base, semanticMapSynthesizeLlmConfig: haikuSeat });
+    const b = foldOf({
+      llmConfig: base,
+      semanticMapSynthesizeLlmConfig: { ...haikuSeat, reasoning_effort: "high" },
+    });
+    expect(a).not.toBe(b);
+  });
+
+  // N5c: an auth flip reaches dispatch as an ADAPTER change (auth is fully
+  // derived into execution_adapter by the model switcher: anthropic
+  // oauth→claude_code, api_key→anthropic_sdk) — the fold must rotate on it.
+  it("N5c: adapter flip (auth-flip surrogate) rotates the fold", () => {
+    const a = foldOf({ llmConfig: base, semanticMapSynthesizeLlmConfig: haikuSeat });
+    const b = foldOf({
+      llmConfig: base,
+      semanticMapSynthesizeLlmConfig: {
+        ...haikuSeat,
+        execution_adapter: "anthropic_sdk" as const,
+      },
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it("base_url is folded as a hash and rotates on repoint", () => {
+    const a = foldOf({
+      llmConfig: base,
+      semanticMapSynthesizeLlmConfig: { ...haikuSeat, base_url: "http://localhost:1234" },
+    });
+    const b = foldOf({
+      llmConfig: base,
+      semanticMapSynthesizeLlmConfig: { ...haikuSeat, base_url: "http://localhost:9999" },
+    });
+    expect(a).toMatch(/@base_url_sha=[0-9a-f]{8}/);
+    expect(a).not.toBe(b);
+    expect(a).not.toContain("localhost"); // hashed, not raw
+  });
+
+  it("the ⑤a arg wins over the seat effort in the effective fold", () => {
+    expect(foldOf({
+      llmConfig: base,
+      semanticMapSynthesizeLlmConfig: haikuSeat,
+      semanticMapSynthesizeReasoningEffort: "high",
+    })).toBe(
+      "synth:anthropic/claude-haiku-4-5-20251001@adapter=claude_code@synthesize_effort=high",
+    );
+  });
+});
+
+describe("synthesize seat dispatch — the stage consumes the seat config (design §5.2)", () => {
+  const seatDispatchInput = {
+    node_ref: { sheet: "S", column_index: 0, row_start: 1, row_end: 10 },
+    format_clusters: ["TEXT"],
+    value_shape_seams: [],
+    child_summaries: [],
+  };
+
+  it("synthesizeSemanticMapNode dispatches with the SEAT config; verify stays on base", async () => {
+    const seen: Array<Partial<LlmCallConfig> | undefined> = [];
+    const llmCall = async (
+      _system: string,
+      _user: string,
+      config?: Partial<LlmCallConfig>,
+    ): Promise<LlmCallResult> => {
+      seen.push(config);
+      return {
+        text: JSON.stringify({ semantic_summary: "text region", boundaries: [] }),
+        input_tokens: 1,
+        output_tokens: 1,
+        model_id: "capture",
+      } as unknown as LlmCallResult;
+    };
+    const base = { provider: "openai" as const, model_id: "gpt-5.5" };
+    const seat = {
+      provider: "anthropic" as const,
+      model_id: "claude-haiku-4-5-20251001",
+      reasoning_effort: "low",
+    };
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall,
+      llmConfig: base,
+      semanticMapSynthesizeLlmConfig: seat,
+      enableSemanticMapAuthoring: true,
+      authorId: "seat-dispatch-author",
+    });
+    await author.synthesizeSemanticMapNode!(seatDispatchInput);
+    expect(seen[0]?.provider).toBe("anthropic");
+    expect(seen[0]?.model_id).toBe("claude-haiku-4-5-20251001");
+    expect(seen[0]?.reasoning_effort).toBe("low");
+    // verify stays on the BASE llmConfig (outside the seat's validated scope).
+    await author.verifySemanticMapBoundary!({
+      node_ref: { sheet: "S", column_index: 0, row_start: 1, row_end: 10 },
+      boundary: {
+        row: 3,
+        character_before: "a",
+        character_after: "b",
+        anchor_status: "unanchored" as const,
+        verification: "unverified" as const,
+      },
+      raw_window: [],
+    } as never).catch(() => undefined); // shape errors irrelevant — config capture only
+    expect(seen[1]?.provider).toBe("openai");
+    expect(seen[1]?.model_id).toBe("gpt-5.5");
+  });
+});
