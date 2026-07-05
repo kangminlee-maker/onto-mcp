@@ -7,6 +7,7 @@ import {
   parseRuntimeIssueSynthesisSchemaContext,
   parseRuntimeProblemFramingContext,
 } from "../cli/runtime-submit-context.js";
+import { packetHasResubmitErrorSpec } from "../cli/stance-resubmit.js";
 import type {
   OntoTool,
   ToolBoundarySkipSummary,
@@ -505,17 +506,56 @@ function issueArtifactArgs(
   }
 }
 
-function issueStanceArgs(packetText: string): Record<string, unknown> {
+/**
+ * 설계 A 픽스처 스위치 (F-A1/F-A2): 지정 렌즈의 stance 유닛이 허용 집합 밖
+ * evidence_ref를 제출해 실제 `issue_evidence_refs` 화이트리스트 검증을
+ * 거부당하게 한다.
+ * - `ONTO_LLM_MOCK_STANCE_UNSUPPORTED_REF_LENSES`: csv 렌즈 id 또는 `*`.
+ * - `ONTO_LLM_MOCK_STANCE_UNSUPPORTED_REF_MODE`: `persist`(기본, cap 소진
+ *   경로) | `correct_on_resubmit`(packet에 resubmit 오류 명세가 주입되면
+ *   유효 ref로 치유 — 오류 명세 전달의 E2E 증거).
+ */
+function stanceUnsupportedRefTargets(
+  env: NodeJS.ProcessEnv = process.env,
+): Set<string> | "*" | null {
+  const raw = env.ONTO_LLM_MOCK_STANCE_UNSUPPORTED_REF_LENSES;
+  if (!raw) return null;
+  if (raw.trim() === "*") return "*";
+  const lenses = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  return lenses.length > 0 ? new Set(lenses) : null;
+}
+
+function issueStanceArgs(
+  unitId: string,
+  packetText: string,
+): Record<string, unknown> {
   const context = parseRuntimeIssueStanceSchemaContext(packetText);
+  const lensId = unitId.startsWith("issue-stance:")
+    ? unitId.slice("issue-stance:".length)
+    : unitId;
+  const targets = stanceUnsupportedRefTargets();
+  const healed =
+    process.env.ONTO_LLM_MOCK_STANCE_UNSUPPORTED_REF_MODE ===
+      "correct_on_resubmit" && packetHasResubmitErrorSpec(packetText);
+  const emitUnsupportedRef =
+    targets !== null && (targets === "*" || targets.has(lensId)) && !healed;
   return {
-    stances: Object.entries(context.issue_evidence_refs).map(([issueId, refs]) => ({
-      issue_id: issueId,
-      stance: "support",
-      rationale: "Mock realization supports the low-severity issue framing.",
-      root_hypothesis_position: "accepts",
-      severity_position: "keeps",
-      evidence_refs: refs.slice(0, 1),
-    })),
+    stances: Object.entries(context.issue_evidence_refs).map(
+      ([issueId, refs], index) => ({
+        issue_id: issueId,
+        stance: "support",
+        rationale: "Mock realization supports the low-severity issue framing.",
+        root_hypothesis_position: "accepts",
+        severity_position: "keeps",
+        evidence_refs:
+          emitUnsupportedRef && index === 0
+            ? [`mock-unsupported-ref:${lensId}`]
+            : refs.slice(0, 1),
+      }),
+    ),
   };
 }
 
@@ -591,7 +631,7 @@ async function executeSubmitTool(args: {
       );
       return;
     case "submit_issue_stance_response":
-      await args.tool.execute(issueStanceArgs(args.userPrompt), args.toolCtx);
+      await args.tool.execute(issueStanceArgs(unitId, args.userPrompt), args.toolCtx);
       return;
     case "submit_issue_deliberation_response":
       await args.tool.execute(issueDeliberationArgs(args.userPrompt), args.toolCtx);

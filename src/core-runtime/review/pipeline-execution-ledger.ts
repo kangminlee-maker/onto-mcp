@@ -653,6 +653,32 @@ async function buildUnitEntry(args: {
   };
 }
 
+/**
+ * 설계 A demotion-disclosure consumer: lenses listed in the persisted stance
+ * matrix's `validation.missing_stances` were demoted complete-with-failure
+ * after bounded resubmit exhaustion; the matrix consumed the gap, so their
+ * per-lens ledger units are terminally resolved (owe no further dispatch).
+ */
+async function demotedStanceUnitIdsFromMatrix(
+  executionPlan: ReviewExecutionPlan,
+): Promise<Set<string>> {
+  const matrixPath = executionPlan.issue_stance_matrix_path;
+  if (!matrixPath || !(await fileExists(matrixPath))) return new Set();
+  try {
+    const matrix = await readYamlDocument<{
+      validation?: { missing_stances?: Array<{ lens_id?: unknown }> };
+    }>(matrixPath);
+    return new Set(
+      (matrix.validation?.missing_stances ?? [])
+        .map((entry) => entry?.lens_id)
+        .filter((lensId): lensId is string => typeof lensId === "string")
+        .map((lensId) => `issue-stance:${lensId}`),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 export async function buildReviewPipelineExecutionLedger(
   params: BuildReviewPipelineExecutionLedgerParams,
 ): Promise<PipelineExecutionLedger> {
@@ -660,6 +686,9 @@ export async function buildReviewPipelineExecutionLedger(
     deliberationUnitsFromDisk(params.executionPlan),
     synthesisUnitsFromDisk(params.executionPlan),
   ]);
+  const demotedStanceUnitIds = await demotedStanceUnitIdsFromMatrix(
+    params.executionPlan,
+  );
   const collectionResultPresent = allExecutionResults(params.executionResult).some(
     (result) => result.unit_id === "issue-stance-matrix",
   );
@@ -717,8 +746,19 @@ export async function buildReviewPipelineExecutionLedger(
         params.reviewRunManifest !== null && params.reviewRunManifest !== undefined,
       trustedUnitIds,
     });
+    if (
+      demotedStanceUnitIds.has(plannedUnit.unitId) &&
+      entry.status !== "completed"
+    ) {
+      entry.resolution = "demoted";
+      entry.resolutionReason =
+        "Bounded resubmit exhausted; issue-stance-matrix consumed and disclosed the gap (validation.missing_stances).";
+    }
     ledgerUnits.push(entry);
     if (isTrustedLedgerUnit(entry)) trustedUnitIds.add(entry.unitId);
+    // A demoted unit satisfies downstream upstream-trust: the stage product
+    // consumed the disclosed gap, not the unit's (absent) output.
+    else if (entry.resolution === "demoted") trustedUnitIds.add(entry.unitId);
   }
 
   return {

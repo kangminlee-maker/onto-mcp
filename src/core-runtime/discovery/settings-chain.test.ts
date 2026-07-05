@@ -248,6 +248,7 @@ describe("resolveSettingsChain", () => {
       synthesis_max_retries: 1,
       retry_initial_delay_ms: 250,
       salvage: { enabled: false, delta_completion: "unit_llm" },
+      resubmit: { enabled: false },
     });
   });
 
@@ -304,6 +305,7 @@ describe("resolveSettingsChain", () => {
         transcription_llm: { model: "claude-haiku-4-5-20251001" },
         delta_completion: "unit_llm",
       },
+      resubmit: { enabled: false },
     });
   });
 
@@ -344,6 +346,7 @@ describe("resolveSettingsChain", () => {
       synthesis_max_retries: 2,
       retry_initial_delay_ms: 3000,
       salvage: { enabled: false, delta_completion: "unit_llm" },
+      resubmit: { enabled: false },
     });
   });
 

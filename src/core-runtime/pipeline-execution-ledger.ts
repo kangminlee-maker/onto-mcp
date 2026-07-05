@@ -120,6 +120,17 @@ export interface PipelineExecutionLedgerUnitEntry {
   upstreamUnitIds: string[];
   downstreamUnitIds: string[];
   /**
+   * Terminal resolution outside the trusted-output path. `"demoted"`: the
+   * unit exhausted its bounded resubmit budget and the downstream stage
+   * product consumed and disclosed the gap (complete-with-failure, 설계 A —
+   * review: issue-stance-matrix `validation.missing_stances`). A resolved
+   * unit owes no further dispatch: it must not reappear on the frontier,
+   * block convergence, or block downstream upstream-trust — while `status`
+   * and `lastFailureMessage` keep the audit truth.
+   */
+  resolution?: "demoted";
+  resolutionReason?: string;
+  /**
    * Per-unit execution telemetry projected from the producing pipeline's
    * run records when available. Currently populated by the reconstruct
    * pipeline only.
@@ -182,6 +193,22 @@ export function isTrustedLedgerUnit(
     unit.trustStatus === "trusted" &&
     hasAllRequiredOutputHashes(unit)
   );
+}
+
+/**
+ * Trusted output OR terminally resolved (demoted complete-with-failure):
+ * either way the unit owes no further dispatch. Frontier and convergence
+ * consumers use this predicate; artifact-preservation consumers keep using
+ * {@link isTrustedLedgerUnit} — a resolved unit has no trusted output to
+ * preserve or to consume downstream.
+ */
+export function isResolvedLedgerUnit(
+  unit: Pick<
+    PipelineExecutionLedgerUnitEntry,
+    "status" | "trustStatus" | "outputRefs" | "outputHashes" | "resolution"
+  >,
+): boolean {
+  return unit.resolution === "demoted" || isTrustedLedgerUnit(unit);
 }
 
 export function firstUntrustedRequiredUnit(

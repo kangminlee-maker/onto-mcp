@@ -136,6 +136,21 @@ reconstruct semantic-map 판정 디스패치).
 - **체크아웃-설치본 드리프트**: 본 문서의 코드 anchor는 feat/l2-real-llm-authoring 시점의 이름 기준이다.
   구현 cut 시작 시 현재 HEAD에서 이름 기반 grep으로 재확인한다 (`allowed_evidence_refs`,
   `issue-stance:` unit id, degradation-summary writer, attempt 어휘).
+- **[정정 2026-07-05, 구현 cut HEAD 재확인 결과]** §3의 전제 3건을 실코드 기준으로 정정한다:
+  (1) stance 화이트리스트 필드는 per-issue `issue_evidence_refs`다 (`allowed_evidence_refs`(flat)는
+  deliberation 필드). (2) 리뷰 측 attempt 어휘는 `attempt_count` + `recovery` 마커다
+  (`attempt_id/attempt_kind`는 reconstruct 전용 어휘). (3) evidence_ref 검증 실패는 worker 경로에서
+  `output_contract`가 아니라 `executor_exit`로 분류되어 **blind 유닛 재시도(기본 2회, 총 3시도)가 이미
+  발생 중**이다 — 따라서 설계 A의 신규 표면은 시도 횟수가 아니라 (a) 재시도 packet에 오류 명세 주입,
+  (b) cap 소진 시 whole-run halt 대신 유닛 강등, (c) 상관 에스컬레이션이며, cap은 기존
+  `issue_artifact_max_retries`(기본 2)를 재사용해 §6의 신규 settings 키를 2개→1개(`resubmit.enabled`)로
+  줄인다 (concept economy 개선; breaker N은 설계 B cut에서 추가).
+- **[구현 발견 2026-07-05]** §3.5의 "새 checkpoint 개념 불요"는 성립하나, 구현 중 미예견 소비자 1곳이
+  드러났다: post-lens frontier 수렴 루프와 continuation frontier가 강등 유닛을 "미완 작업"으로
+  재제안해 수렴 불가. 해소로 공유 ledger에 terminal resolution 마커
+  (`PipelineExecutionLedgerUnitEntry.resolution: "demoted"` + `isResolvedLedgerUnit` 술어)를 추가하고,
+  review ledger 빌더가 stance matrix의 `validation.missing_stances` 공시를 읽어 설정한다 — 공시 필드가
+  실소비자를 얻어 runtime authority가 됐다. 계약 반영: pipeline-execution-ledger-contract.md.
 - 유실된 34개 node_ref의 소급 재판정은 운영 과제로 분리 — F-B3 메커니즘이 생기면 그 경로로 처리 가능.
 - deliberation_response 등 여타 유닛으로의 resubmit 확장, `onto_review_continue` 기본화(도구 UX),
   리뷰 유닛 티어링(sweep↓/verdict↑ 재배치)은 후속 cut.
