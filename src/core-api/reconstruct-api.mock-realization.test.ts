@@ -123,3 +123,91 @@ describe("reconstruct api mock realization (ONTO_LLM_MOCK=1)", () => {
     }
   });
 });
+
+// ─── INV-MODEL-1 role-aware B3 (P3 consumption proof + N11 live-path pair) ───
+describe("synthesize seat wiring on the core-api mock path (N11/P3)", () => {
+  async function runMockE2E(reconstructSettings: unknown): Promise<{
+    status: string;
+    events: string;
+  }> {
+    const projectRoot = await goldenProjectRoot();
+    const spec = reconstructGoldenFixtureSpec("reconstruct-golden-target-v1");
+    const previousEnv = {
+      ONTO_LLM_MOCK: process.env.ONTO_LLM_MOCK,
+      ONTO_RUNTIME_WATCHER: process.env.ONTO_RUNTIME_WATCHER,
+      HOME: process.env.HOME,
+    };
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(isolatedHome, { recursive: true });
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      JSON.stringify(
+        { schema_version: "settings.json/v3", reconstruct: reconstructSettings },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    process.env.ONTO_LLM_MOCK = "1";
+    process.env.ONTO_RUNTIME_WATCHER = "0";
+    process.env.HOME = isolatedHome;
+    try {
+      const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+      const result = await api.runReconstruct({
+        projectRoot,
+        targetRefs: [spec.target_path],
+        sessionRoot: ".onto/reconstruct/mock-e2e-seat",
+        intent: spec.intent,
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "direct_call",
+      });
+      const sessionRoot = path.dirname(
+        result.artifactRefs.source_observation_lineage_index!,
+      );
+      const events = await fs.readFile(
+        path.join(sessionRoot, "runtime-events.ndjson"),
+        "utf8",
+      );
+      return { status: result.status, events };
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  const seatBlock = {
+    semantic_map_synthesize: {
+      llm: {
+        auth: "oauth",
+        provider: "anthropic",
+        model: "claude-haiku-4-5-20251001",
+        effort: "low",
+      },
+    },
+  };
+
+  // N11 (live-path consumption proof for the wiring seam): a dormant seat
+  // (opt-in off) emits the honest note through the REAL runReconstruct path —
+  // observable in the session's runtime events, so the seam is provably
+  // consumed on the product path, not dead code.
+  it("N11: dormant seat (opt-in off) emits the honest note on the real api path", async () => {
+    const { status, events } = await runMockE2E({
+      execution: { actors: { ...seatBlock }, semantic_map_authoring: false },
+    });
+    expect(status).toBe("completed");
+    expect(events).toContain("seat is dormant");
+  });
+
+  // Pair: with the opt-in ON the note must NOT fire, and the golden mock run
+  // still completes (the opt-in + seat do not perturb the golden path).
+  it("P3 pair: active seat (opt-in on) completes without the dormant note", async () => {
+    const { status, events } = await runMockE2E({
+      execution: { actors: { ...seatBlock }, semantic_map_authoring: true },
+    });
+    expect(status).toBe("completed");
+    expect(events).not.toContain("seat is dormant");
+  });
+});

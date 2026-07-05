@@ -54,6 +54,11 @@ const REVIEW_ACTOR_SEATS = {
   synthesize: "worker",
 } as const;
 
+// The PROVIDER-MANAGED subset of reconstruct actors — the two required seats
+// this command (re)writes. Deliberately NARROWER than the full actor key set
+// (settings-chain RECONSTRUCT_ACTOR_KEYS): optional per-role override seats
+// (e.g. semantic_map_synthesize) are user-owned and must SURVIVE a provider
+// switch — applyActorBlocks spreads the existing actors underneath.
 const RECONSTRUCT_ACTORS = ["semantic_author", "confirmation_provider"] as const;
 
 type LlmBlock = Record<string, string>;
@@ -169,7 +174,14 @@ function applyActorBlocks(
     const reconstructExecution = isPlainObject(reconstruct.execution)
       ? { ...reconstruct.execution }
       : {};
-    reconstructExecution.actors = blocks.reconstruct;
+    // Overwrite ONLY the provider-managed seats; preserve user-owned actor
+    // keys (e.g. the optional semantic_map_synthesize override seat) so a
+    // provider switch or bootstrap re-run cannot silently delete them
+    // (INV-MODEL-1 role-aware design §5.1-9).
+    const existingActors = isPlainObject(reconstructExecution.actors)
+      ? reconstructExecution.actors
+      : {};
+    reconstructExecution.actors = { ...existingActors, ...blocks.reconstruct };
     reconstruct.execution = reconstructExecution;
     next.reconstruct = reconstruct;
   }

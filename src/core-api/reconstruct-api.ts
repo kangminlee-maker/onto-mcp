@@ -51,9 +51,13 @@ import {
 } from "../core-runtime/reconstruct/mock-llm-realization.js";
 import {
   assertSettingsModelsSupported,
+  isReconstructSemanticMapAuthoringEnabled,
+  resolveOptionalReconstructActorLlmSettings,
   resolveSettingsChain,
   resolveReconstructActorLlmSettings,
+  type OntoSettings,
 } from "../core-runtime/discovery/settings-chain.js";
+import type { LlmModelSwitcherConfig } from "../core-runtime/llm/model-switcher.js";
 import {
   resolveOntoHome,
 } from "../core-runtime/discovery/onto-home.js";
@@ -345,6 +349,83 @@ export function resolveJudgeLlmConfig(args: {
   else if (authorEffort !== undefined) judge.reasoning_effort = authorEffort;
   else delete judge.reasoning_effort;
   return { judgeLlmConfig: judge, note };
+}
+
+/**
+ * Mock-safe IDENTITY projection of the optional synthesize seat (design §5.4):
+ * carries only the dispatch-identity axes the reuse fold and census read
+ * (provider/model/effort/base_url) — deliberately NOT resolveLlmProviderConfig,
+ * which validates provider/auth combinations and resolves credentials that a
+ * mock run must not require. The identity is deterministic per seat edit, so
+ * P3's fold-rotation assertions hold under mock without any live material.
+ * (No execution_adapter under mock — the canonical fold serializes it as
+ * "default"; live runs fold the real adapter.)
+ */
+export function synthesizeSeatIdentityProjection(
+  selection: LlmModelSwitcherConfig,
+): Partial<LlmCallConfig> {
+  return {
+    ...(selection.provider !== undefined
+      ? { provider: selection.provider as LlmCallConfig["provider"] }
+      : {}),
+    ...(selection.model !== undefined ? { model_id: selection.model } : {}),
+    ...(selection.effort !== undefined
+      ? { reasoning_effort: selection.effort }
+      : {}),
+    ...(selection.base_url !== undefined
+      ? { base_url: selection.base_url }
+      : {}),
+  };
+}
+
+export interface SemanticMapSynthesizeWiring {
+  /** Attach the semantic-map capability pair (settings opt-in, design §5.5). */
+  enableSemanticMapAuthoring: boolean;
+  /** Resolved synthesize seat config for the factory (design §5.2); absent =
+   * seat not configured (stage inherits the semantic_author config). */
+  semanticMapSynthesizeLlmConfig?: Partial<LlmCallConfig>;
+  /** Honest note when the seat is configured but the opt-in is off (N11) —
+   * the caller MUST surface it (judge-note precedent), never drop it. */
+  dormantSeatNote?: string;
+}
+
+/**
+ * The ONE deterministic seam from post-chain settings to the factory's
+ * semantic-map wiring (design §5.4/§5.5): opt-in read, single seat read
+ * (resolveOptionalReconstructActorLlmSettings), live provider completion vs
+ * mock identity projection, and the dormant-seat honesty note. runReconstruct
+ * consumes exactly this — unit tests exercise the same function over real
+ * resolved settings, so the wiring seam cannot drift from the tested one.
+ */
+export function resolveSemanticMapSynthesizeWiring(args: {
+  settings: OntoSettings;
+  mockRealizationEnabled: boolean;
+  llmEffortOverride?: { reasoning_effort: string } | undefined;
+}): SemanticMapSynthesizeWiring {
+  const enabled = isReconstructSemanticMapAuthoringEnabled(args.settings);
+  const seat = resolveOptionalReconstructActorLlmSettings(
+    args.settings,
+    "semantic_map_synthesize",
+  );
+  if (seat === undefined) return { enableSemanticMapAuthoring: enabled };
+  if (!enabled) {
+    return {
+      enableSemanticMapAuthoring: false,
+      dormantSeatNote:
+        "semantic_map_synthesize seat is configured but reconstruct.execution.semantic_map_authoring is off — the seat is dormant (no synthesize dispatch, not gate-validated) until the opt-in is enabled",
+    };
+  }
+  return {
+    enableSemanticMapAuthoring: true,
+    semanticMapSynthesizeLlmConfig: args.mockRealizationEnabled
+      ? synthesizeSeatIdentityProjection(seat)
+      : resolveLlmProviderConfig({
+        config: { llm: seat },
+        ...(args.llmEffortOverride
+          ? { cliOverrides: args.llmEffortOverride }
+          : {}),
+      }),
+  };
 }
 
 function dateStamp(): string {
@@ -716,6 +797,17 @@ export function createOntoReconstructCoreApi(
       const supportedModelRegistry = mockRealizationEnabled
         ? null
         : loadSupportedModelRegistry();
+      // Semantic-map authoring opt-in + optional synthesize seat (INV-MODEL-1
+      // role-aware design §5.4/§5.5): ONE deterministic seam owns the wiring
+      // (resolveSemanticMapSynthesizeWiring) — live completes the seat into a
+      // provider config (own auth/adapter, cross-provider; the request
+      // llmEffort pin applies as cliOverrides, so pin > seat effort), mock
+      // takes an identity-only projection (no auth material required).
+      const semanticMapWiring = resolveSemanticMapSynthesizeWiring({
+        settings,
+        mockRealizationEnabled,
+        llmEffortOverride,
+      });
       // Single seed-stage document projection budget (chars), derived once from
       // the semantic author's MODEL window. Mock / unresolved model → static
       // FLOOR (no regression). Threaded to the directive author, which slices a
@@ -783,6 +875,19 @@ export function createOntoReconstructCoreApi(
         createDirectCallReconstructDirectiveAuthor({
           llmConfig: semanticAuthorLlmConfig,
           ...(judgeLlmConfig ? { judgeLlmConfig } : {}),
+          // Production opt-in + per-role synthesize override (design §5.5/§5.2)
+          // from the single wiring seam. Opt-in absent/false = pair not
+          // attached, stage skips — byte-parity with today. A dormant seat
+          // (configured, opt-in off) is surfaced via the honest note below.
+          ...(semanticMapWiring.enableSemanticMapAuthoring
+            ? { enableSemanticMapAuthoring: true }
+            : {}),
+          ...(semanticMapWiring.semanticMapSynthesizeLlmConfig
+            ? {
+              semanticMapSynthesizeLlmConfig:
+                semanticMapWiring.semanticMapSynthesizeLlmConfig,
+            }
+            : {}),
           documentExcerptProjectionBudget,
           ...(mockRealizationEnabled
             ? {
@@ -823,6 +928,21 @@ export function createOntoReconstructCoreApi(
           sourceLabel: "onto_reconstruct",
           message: judgeConfigNote,
           stageId: "answer_support_judgment",
+        });
+      }
+      if (semanticMapWiring.dormantSeatNote) {
+        // Honest accounting (design §5.4, N11 / judge-note precedent): the
+        // operator configured a synthesize seat but the semantic-map authoring
+        // opt-in is off, so the seat is DORMANT — no synthesize dispatch will
+        // use it and the gate deliberately excludes it (U6). Emitted BEFORE the
+        // run so the inert config is never a silent no-op. This emission is
+        // also the live-path consumption proof for the wiring seam (P3/N11).
+        appendRuntimeStatusEventSync({
+          pipeline: "reconstruct",
+          sessionRoot,
+          sourceLabel: "onto_reconstruct",
+          message: semanticMapWiring.dormantSeatNote,
+          stageId: "start",
         });
       }
       const watcherResult = spawnRuntimeWatcherPane(

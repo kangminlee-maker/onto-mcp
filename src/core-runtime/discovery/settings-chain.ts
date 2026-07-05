@@ -303,6 +303,47 @@ const V3ReconstructActorSettingsSchema = z
   })
   .strict();
 
+/**
+ * Single source of the reconstruct actor-seat key set (INV-MODEL-1 role-aware
+ * design §5.1). The V3/Normalized zod shapes and the ReconstructSettings type
+ * are DERIVED from this constant, and the normalize/merge copy functions
+ * iterate it — so a new actor key added here flows through parse, normalize,
+ * merge, and the gate walk without touching a hand-enumerated whitelist (the
+ * silent-strip class F19 is closed by construction). `semantic_author` and
+ * `confirmation_provider` are REQUIRED seats for live direct_call execution
+ * (resolveReconstructActorLlmSettings); `semantic_map_synthesize` is an
+ * OPTIONAL per-role override seat (absent = inherit the semantic_author
+ * config; resolveOptionalReconstructActorLlmSettings).
+ */
+export const RECONSTRUCT_ACTOR_KEYS = [
+  "semantic_author",
+  "confirmation_provider",
+  "semantic_map_synthesize",
+] as const;
+export type ReconstructActorKey = (typeof RECONSTRUCT_ACTOR_KEYS)[number];
+
+/**
+ * Declared reconstruct.execution-level scalar settings (design §5.1). The
+ * normalize/merge copy functions iterate this list, so a declared scalar
+ * survives the settings chain even when `actors` is absent. This preservation
+ * contract covers EXACTLY the declared keys: a future scalar must be added
+ * here (and to the schemas/type) to be preserved — an undeclared key is
+ * rejected by the strict schemas (fail-loud), never silently dropped.
+ */
+export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
+  "semantic_map_authoring",
+] as const;
+
+/** zod actors shape derived from {@link RECONSTRUCT_ACTOR_KEYS} — the schema
+ * cannot drift from the constant (no second key authority). */
+function reconstructActorsShape<T extends z.ZodTypeAny>(
+  actorSchema: T,
+): Record<ReconstructActorKey, z.ZodOptional<T>> {
+  return Object.fromEntries(
+    RECONSTRUCT_ACTOR_KEYS.map((key) => [key, actorSchema.optional()]),
+  ) as Record<ReconstructActorKey, z.ZodOptional<T>>;
+}
+
 const V3ReviewExecutionSettingsSchema = z
   .object({
     topology: ReviewExecutionModeSchema.optional(),
@@ -397,12 +438,12 @@ const V3ReconstructSettingsSchema = z
     execution: z
       .object({
         actors: z
-          .object({
-            semantic_author: V3ReconstructActorSettingsSchema.optional(),
-            confirmation_provider: V3ReconstructActorSettingsSchema.optional(),
-          })
+          .object(reconstructActorsShape(V3ReconstructActorSettingsSchema))
           .strict()
           .optional(),
+        // Production opt-in for the semantic-map authoring stage (design §5.5).
+        // Absent/false = the capability pair is not attached (byte-parity).
+        semantic_map_authoring: z.boolean().optional(),
       })
       .strict()
       .optional(),
@@ -427,18 +468,14 @@ const NormalizedSettingsSchema = z
         execution: z
           .object({
             actors: z
-              .object({
-                semantic_author: z
-                  .object({ llm: FullLlmSettingsSchema })
-                  .strict()
-                  .optional(),
-                confirmation_provider: z
-                  .object({ llm: FullLlmSettingsSchema })
-                  .strict()
-                  .optional(),
-              })
+              .object(
+                reconstructActorsShape(
+                  z.object({ llm: FullLlmSettingsSchema }).strict(),
+                ),
+              )
               .strict()
               .optional(),
+            semantic_map_authoring: z.boolean().optional(),
           })
           .strict()
           .optional(),
@@ -641,10 +678,11 @@ export interface ReconstructActorSettings {
 
 export interface ReconstructSettings {
   execution?: {
-    actors?: {
-      semantic_author?: ReconstructActorSettings;
-      confirmation_provider?: ReconstructActorSettings;
-    };
+    // Keyed by RECONSTRUCT_ACTOR_KEYS — the type derives from the constant so
+    // a new actor key cannot exist in the type without existing in the copy
+    // functions' iteration source (design §5.1, F19 closure).
+    actors?: Partial<Record<ReconstructActorKey, ReconstructActorSettings>>;
+    semantic_map_authoring?: boolean;
   };
 }
 
@@ -678,6 +716,33 @@ export function resolveReconstructActorLlmSettings(
   }
   normalizeLlmModelSwitcher(actor.llm);
   return actor.llm;
+}
+
+/**
+ * THE single reader of an OPTIONAL reconstruct actor seat (design §5.4) —
+ * live wiring, mock identity projection, and tests all consume this one
+ * post-chain projection so no second seat-reading authority can drift.
+ * Absent seat → undefined (the stage inherits the semantic_author config).
+ * Pure projection: normalizes the switcher shape only — no provider/auth
+ * resolution, so it is safe under mock realization.
+ */
+export function resolveOptionalReconstructActorLlmSettings(
+  settings: OntoSettings,
+  actorName: ReconstructActorKey,
+): LlmModelSwitcherConfig | undefined {
+  const actor = settings.reconstruct?.execution?.actors?.[actorName];
+  if (!actor) return undefined;
+  normalizeLlmModelSwitcher(actor.llm);
+  return actor.llm;
+}
+
+/** Production opt-in for the semantic-map authoring stage (design §5.5).
+ * Absent/false = off: the capability pair is not attached AND the synthesize
+ * seat is dormant (excluded from the gate walk — U6, salvage precedent). */
+export function isReconstructSemanticMapAuthoringEnabled(
+  settings: OntoSettings,
+): boolean {
+  return settings.reconstruct?.execution?.semantic_map_authoring === true;
 }
 
 export const SETTINGS_FILENAME = "settings.json";
@@ -920,27 +985,34 @@ function v3ReconstructActorSettings(
   return { llm: actor.llm };
 }
 
-function v3ReconstructSettings(
+/**
+ * Normalizes the parsed V3 reconstruct block into the runtime shape.
+ * STRUCTURE-PRESERVING by construction (design §5.1): actor copies iterate
+ * RECONSTRUCT_ACTOR_KEYS and execution-level scalars iterate
+ * RECONSTRUCT_EXECUTION_SCALAR_KEYS — no hand-enumerated whitelist, and no
+ * actors-absent early return (a scalar-only block survives).
+ * Exported for the unit-level drift-guard tests, which call the copy
+ * functions directly (bypassing the strict parser) so a missed copy fails.
+ */
+export function v3ReconstructSettings(
   reconstruct: z.infer<typeof V3ReconstructSettingsSchema> | undefined,
 ): ReconstructSettings | undefined {
-  const actors = reconstruct?.execution?.actors;
-  if (!actors) return undefined;
+  const execution = reconstruct?.execution;
+  if (!execution) return undefined;
   const normalizedActors: NonNullable<
     NonNullable<ReconstructSettings["execution"]>["actors"]
   > = {};
-  if (actors.semantic_author) {
-    normalizedActors.semantic_author = v3ReconstructActorSettings(
-      actors.semantic_author,
-    );
+  for (const key of RECONSTRUCT_ACTOR_KEYS) {
+    const actor = execution.actors?.[key];
+    if (actor) normalizedActors[key] = v3ReconstructActorSettings(actor);
   }
-  if (actors.confirmation_provider) {
-    normalizedActors.confirmation_provider = v3ReconstructActorSettings(
-      actors.confirmation_provider,
-    );
+  const out: NonNullable<ReconstructSettings["execution"]> = {};
+  if (Object.keys(normalizedActors).length > 0) out.actors = normalizedActors;
+  for (const key of RECONSTRUCT_EXECUTION_SCALAR_KEYS) {
+    const value = execution[key];
+    if (value !== undefined) out[key] = value;
   }
-  return Object.keys(normalizedActors).length > 0
-    ? { execution: { actors: normalizedActors } }
-    : undefined;
+  return Object.keys(out).length > 0 ? { execution: out } : undefined;
 }
 
 function normalizeV3Settings(settings: V3Settings): OntoSettings {
@@ -1240,24 +1312,35 @@ function mergeReconstructActorSettings(
   return projectActor ?? userActor;
 }
 
-function mergeReconstructSettings(
+/**
+ * user+project merge of the reconstruct block. STRUCTURE-PRESERVING by
+ * construction (design §5.1): per-actor merge iterates RECONSTRUCT_ACTOR_KEYS
+ * (project > user per actor), execution-level scalars iterate
+ * RECONSTRUCT_EXECUTION_SCALAR_KEYS (project > user) and survive even when no
+ * actors are configured on either side. Exported for the unit-level
+ * drift-guard tests (direct calls, strict parser bypassed).
+ */
+export function mergeReconstructSettings(
   user: ReconstructSettings | undefined,
   project: ReconstructSettings | undefined,
 ): ReconstructSettings | undefined {
-  const semanticAuthor = mergeReconstructActorSettings(
-    user?.execution?.actors?.semantic_author,
-    project?.execution?.actors?.semantic_author,
-  );
-  const confirmationProvider = mergeReconstructActorSettings(
-    user?.execution?.actors?.confirmation_provider,
-    project?.execution?.actors?.confirmation_provider,
-  );
   const actors: NonNullable<
     NonNullable<ReconstructSettings["execution"]>["actors"]
   > = {};
-  if (semanticAuthor) actors.semantic_author = semanticAuthor;
-  if (confirmationProvider) actors.confirmation_provider = confirmationProvider;
-  return Object.keys(actors).length > 0 ? { execution: { actors } } : undefined;
+  for (const key of RECONSTRUCT_ACTOR_KEYS) {
+    const merged = mergeReconstructActorSettings(
+      user?.execution?.actors?.[key],
+      project?.execution?.actors?.[key],
+    );
+    if (merged) actors[key] = merged;
+  }
+  const out: NonNullable<ReconstructSettings["execution"]> = {};
+  if (Object.keys(actors).length > 0) out.actors = actors;
+  for (const key of RECONSTRUCT_EXECUTION_SCALAR_KEYS) {
+    const value = project?.execution?.[key] ?? user?.execution?.[key];
+    if (value !== undefined) out[key] = value;
+  }
+  return Object.keys(out).length > 0 ? { execution: out } : undefined;
 }
 
 function contextFromSettings(settings: OntoSettings): ReviewContextSettings | undefined {
@@ -1399,10 +1482,24 @@ export function collectEffectiveModelRoutes(
   const salvageEnabled =
     settings.review?.execution?.retry?.salvage?.enabled === true;
 
+  // The synthesize seat dispatches only when semantic-map authoring is opted
+  // in (the capability pair is attached solely under the opt-in). A dormant
+  // seat (configured, opt-in off) never dispatches, so validating it would
+  // block every live run on an unused setting — same dispatch-conditioned
+  // exemption as salvage (design §5.1-7, U6 owner decision). Flipping the
+  // opt-in on brings the seat into the walk and fails loud then.
+  const semanticMapAuthoringEnabled =
+    settings.reconstruct?.execution?.semantic_map_authoring === true;
+  const SYNTHESIZE_SEAT_PATH =
+    "reconstruct.execution.actors.semantic_map_synthesize.llm";
+
   return nodes.flatMap((node) => {
     if (isSalvageTranscription(node.path)) {
       if (!salvageEnabled) return []; // disabled salvage transcription never dispatches
       return [{ ...node, provider: node.provider ?? DEFAULT_TRANSCRIPTION_PROVIDER }];
+    }
+    if (node.path === SYNTHESIZE_SEAT_PATH && !semanticMapAuthoringEnabled) {
+      return []; // dormant synthesize seat never dispatches (opt-in off)
     }
     const unitId = reviewUnitOf(node.path);
     if (unitId) {

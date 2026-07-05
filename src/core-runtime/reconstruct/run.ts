@@ -8539,6 +8539,32 @@ function reconstructAuthoringModelIdentity(
     : "unspecified";
 }
 
+/**
+ * Canonical identity of a SYNTHESIZE SEAT config for the reuse fingerprint
+ * (INV-MODEL-1 role-aware design §5.3). Folds every dispatch-affecting axis the
+ * resolved config carries: model identity, execution adapter (auth is FULLY
+ * derived into the adapter by the model switcher — anthropic oauth→claude_code,
+ * api_key→anthropic_sdk — so an auth flip always rotates via @adapter; there is
+ * no auth field on LlmCallConfig), base_url (hashed — a different server under
+ * the same model_id), and the effective reasoning effort. Used ONLY when the
+ * seat is present; the ⑤a arg-only path keeps its legacy string byte-identical
+ * so existing reuse keys never rotate.
+ */
+function canonicalSynthesizeSeatIdentity(
+  config: Partial<LlmCallConfig>,
+): string {
+  const adapter = `@adapter=${config.execution_adapter ?? "default"}`;
+  const baseUrl = config.base_url
+    ? `@base_url_sha=${
+      crypto.createHash("sha256").update(config.base_url).digest("hex").slice(0, 8)
+    }`
+    : "";
+  const effort = config.reasoning_effort !== undefined
+    ? `@synthesize_effort=${config.reasoning_effort}`
+    : "";
+  return `synth:${reconstructAuthoringModelIdentity(config)}${adapter}${baseUrl}${effort}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Authoring prompt-template contract (DET-1 / CG-1)
 //
@@ -9186,6 +9212,19 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    */
   semanticMapSynthesizeReasoningEffort?: string;
   /**
+   * Per-role MODEL override for the semantic-map SYNTHESIZE author (INV-MODEL-1
+   * role-aware design §5.2) — the RESOLVED config of the optional
+   * `reconstruct.execution.actors.semantic_map_synthesize` settings seat (own
+   * auth/adapter — cross-provider capable). Absent = inherit the base llmConfig
+   * (byte-parity). Effective-effort priority: the ⑤a arg above wins over this
+   * config's own reasoning_effort (a request llmEffort pin is already applied
+   * to this config at seat resolution, so pin > seat effort holds upstream).
+   * The effective identity reaches the stage reuse fingerprint via
+   * semanticMapSynthesizeModelIdentity (canonical serialization — model,
+   * adapter, base_url, effort all rotate the key; silent-stale guard).
+   */
+  semanticMapSynthesizeLlmConfig?: Partial<LlmCallConfig>;
+  /**
    * Seed-stage document projection budget (chars) from the active seat's model
    * window (deriveDocumentExcerptProjectionBudget). Applied to single-document
    * seed prompts. Defaults to the static FLOOR when omitted (model-unaware).
@@ -9195,10 +9234,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   const authorId = args.authorId ?? "direct-call-reconstruct-directive-author";
   const llmConfig = args.llmConfig ?? {};
   const judgeLlmConfig = args.judgeLlmConfig ?? llmConfig;
+  // §5.2 composition: seat config (when present) is the base; the ⑤a per-call
+  // effort arg overlays it. No seat, no arg → base llmConfig (byte-parity).
+  const synthesizeBase = args.semanticMapSynthesizeLlmConfig ?? llmConfig;
   const semanticMapSynthesizeLlmConfig: Partial<LlmCallConfig> =
     args.semanticMapSynthesizeReasoningEffort !== undefined
-      ? { ...llmConfig, reasoning_effort: args.semanticMapSynthesizeReasoningEffort }
-      : llmConfig;
+      ? { ...synthesizeBase, reasoning_effort: args.semanticMapSynthesizeReasoningEffort }
+      : synthesizeBase;
   const llmCall = args.llmCall ?? callLlm;
   const documentExcerptProjectionBudget =
     args.documentExcerptProjectionBudget ?? DOCUMENT_EXCERPT_PROJECTION_FLOOR;
@@ -9287,10 +9329,22 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     documentExcerptProjectionTruncations,
     reuseModelIdentity: reconstructAuthoringModelIdentity(llmConfig),
     reuseJudgeModelIdentity: reconstructAuthoringModelIdentity(judgeLlmConfig),
-    // Effective synthesize identity: base identity + the effort override when present. Consumed by
-    // the semantic-map stage's fingerprint pre-image (reduce_reader_model_identity) so the override
-    // rotates the reuse key AND surfaces in the census (audit-visible), never silently.
-    ...(args.semanticMapSynthesizeReasoningEffort !== undefined
+    // Effective synthesize identity — consumed by the semantic-map stage's
+    // fingerprint pre-image (reduce_reader_model_identity) so any override
+    // rotates the reuse key AND surfaces in the census (audit-visible), never
+    // silently. Fill rule (design §5.3): SEAT present → canonical serialization
+    // of the EFFECTIVE config (model/adapter/base_url/effort — always folded,
+    // no equality judgment); else ⑤a arg present → legacy string, byte-identical
+    // to the pre-seat format (existing reuse keys never rotate); else absent
+    // (seat 부재·인자 부재 = 현행 byte-parity — a request llmEffort pin alone
+    // reaches synthesize through the base config on BOTH sides, so no fold).
+    ...(args.semanticMapSynthesizeLlmConfig !== undefined
+      ? {
+        semanticMapSynthesizeModelIdentity: canonicalSynthesizeSeatIdentity(
+          semanticMapSynthesizeLlmConfig,
+        ),
+      }
+      : args.semanticMapSynthesizeReasoningEffort !== undefined
       ? {
         semanticMapSynthesizeModelIdentity:
           `${reconstructAuthoringModelIdentity(llmConfig)}@synthesize_effort=${args.semanticMapSynthesizeReasoningEffort}`,
