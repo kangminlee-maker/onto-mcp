@@ -866,18 +866,29 @@ describe("W4 §4(B) — observation prompt replace (observationPromptPayload)", 
 const BREAKER: DispatchBreakerPolicy = {
   enabled: true,
   systemic_threshold: 3,
-  per_item_max_attempts: 3,
+  per_call_max_attempts: 3,
   backoff_initial_ms: 1,
   backoff_cap_ms: 4,
 };
 
-/** n observations obs-1..obs-n; per-observation column index selects the author script. */
+/** Per-observation column index selects the author script; columnIndex null
+ *  builds a structural-skip observation (no workbook_inventory). */
 function breakerObservations(
-  specs: { id: string; columnIndex: number }[],
+  specs: { id: string; columnIndex: number | null }[],
 ): Parameters<typeof runSemanticMapStage>[0]["sourceObservations"] {
-  return observationsArtifact(
-    specs.map((spec) => ({ observation_id: spec.id, columns: [richColumn(spec.columnIndex)] })),
-  );
+  const artifact = observationsArtifact(
+    specs.map((spec) => ({
+      observation_id: spec.id,
+      columns: [richColumn(spec.columnIndex ?? 0)],
+    })),
+  ) as unknown as { observations: Array<{ observation_id: string; structural_data: Record<string, unknown> }> };
+  for (const spec of specs) {
+    if (spec.columnIndex === null) {
+      const observation = artifact.observations.find((o) => o.observation_id === spec.id)!;
+      observation.structural_data = {};
+    }
+  }
+  return artifact as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
 }
 
 /** Author whose synthesize throws `failureMessage` for columns in `failColumns`
@@ -885,8 +896,10 @@ function breakerObservations(
 function scriptedFailureAuthor(opts: {
   failColumns: number[];
   failureMessage: string;
-}): { author: ReconstructDirectiveAuthor; counters: { synthesize: number } } {
-  const counters = { synthesize: 0 };
+  /** When set, synthesize emits one unanchored boundary and verify throws this. */
+  verifyFailureMessage?: string;
+}): { author: ReconstructDirectiveAuthor; counters: { synthesize: number; verify: number } } {
+  const counters = { synthesize: 0, verify: 0 };
   const author = {
     async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
       counters.synthesize += 1;
@@ -895,10 +908,14 @@ function scriptedFailureAuthor(opts: {
       }
       return {
         semantic_summary: `ok ${input.node_ref.sheet}#${input.node_ref.column_index}:${input.node_ref.row_start}-${input.node_ref.row_end}`,
-        boundaries: [],
+        boundaries: opts.verifyFailureMessage
+          ? [{ row: input.node_ref.row_start, character_before: "prev", character_after: "next" }]
+          : [],
       };
     },
     async verifySemanticMapBoundary(): Promise<SemanticBoundaryVerification> {
+      counters.verify += 1;
+      if (opts.verifyFailureMessage) throw new Error(opts.verifyFailureMessage);
       return "adversarial_confirmed";
     },
   } as unknown as ReconstructDirectiveAuthor;
@@ -942,13 +959,19 @@ describe("semantic-map dispatch breaker (설계 B)", () => {
       { id: "obs-4", columnIndex: 0 },
     ]);
 
-    await expect(
-      runSemanticMapStage(stageArgs(observations, author, sessionRoot, BREAKER)),
-    ).rejects.toBeInstanceOf(DispatchBreakerTrippedError);
+    let tripError: unknown;
+    try {
+      await runSemanticMapStage(stageArgs(observations, author, sessionRoot, BREAKER));
+    } catch (error) {
+      tripError = error;
+    }
+    expect(tripError).toBeInstanceOf(DispatchBreakerTrippedError);
+    // 규칙 4 공지: 미완료 목록 경로가 사용자에게 도달하는 오류 메시지에 실린다.
+    expect((tripError as Error).message).toContain("dispatch-incomplete.yaml");
 
     // 재시도 폭풍 부재를 수치로: 총 디스패치 == N items x per-item cap (성공분 0).
     expect(counters.synthesize).toBe(
-      BREAKER.systemic_threshold * BREAKER.per_item_max_attempts,
+      BREAKER.systemic_threshold * BREAKER.per_call_max_attempts,
     );
 
     const artifact = await readIncompleteArtifact(sessionRoot);
@@ -966,10 +989,79 @@ describe("semantic-map dispatch breaker (설계 B)", () => {
     // 트립도 stage-ran: spend census가 남는다 (breaker 재시도 spend 병기).
     const census = parseYaml(
       await fs.readFile(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"), "utf8"),
-    ) as { breaker_retry_synthesize_calls?: number };
+    ) as {
+      breaker_retry_synthesize_calls?: number;
+      observations_total: number;
+      observations_map_present: number;
+      observations_map_absent: number;
+      by_observation: Array<{ observation_id: string }>;
+    };
     expect(census.breaker_retry_synthesize_calls).toBe(
-      BREAKER.systemic_threshold * (BREAKER.per_item_max_attempts - 1),
+      BREAKER.systemic_threshold * (BREAKER.per_call_max_attempts - 1),
     );
+    // 트립 census도 완전 파티션을 유지한다: 트립 관찰의 행까지 기록되고
+    // 총계가 행과 대조된다 (미도달 obs-4는 total에도 행에도 없음).
+    expect(census.observations_total).toBe(3);
+    expect(census.by_observation.map((o) => o.observation_id)).toEqual([
+      "obs-1",
+      "obs-2",
+      "obs-3",
+    ]);
+    expect(
+      census.observations_map_present + census.observations_map_absent,
+    ).toBe(census.observations_total);
+  });
+
+  it("regression: a structural skip between systemic failures neither resets the streak nor poisons victims", async () => {
+    const sessionRoot = await tempRoot();
+    const { author } = scriptedFailureAuthor({
+      failColumns: [5],
+      failureMessage: "status=429 too many requests",
+    });
+    // 순서: 실패(5) → skip(no inventory) → 실패 → 실패 → 임계 3에서 트립.
+    const observations = breakerObservations([
+      { id: "obs-1", columnIndex: 5 },
+      { id: "obs-2", columnIndex: null },
+      { id: "obs-3", columnIndex: 5 },
+      { id: "obs-4", columnIndex: 5 },
+      { id: "obs-5", columnIndex: 5 },
+    ]);
+
+    await expect(
+      runSemanticMapStage(stageArgs(observations, author, sessionRoot, BREAKER)),
+    ).rejects.toBeInstanceOf(DispatchBreakerTrippedError);
+
+    const artifact = await readIncompleteArtifact(sessionRoot);
+    expect(artifact.breaker.tripped).toBe(true);
+    // skip은 완료(회복 불요)로만 기록되고, outage 피해 관찰은 dead-letter가
+    // 아니라 미완료 집합에 남는다.
+    expect(artifact.completed_item_ids).toEqual(["obs-2"]);
+    expect(artifact.dead_letter).toEqual([]);
+    expect(artifact.incomplete_item_ids).toEqual(["obs-1", "obs-3", "obs-4", "obs-5"]);
+  });
+
+  it("verify-path systemic failure: retries are spend-counted and the observation lands in the recovery set", async () => {
+    const sessionRoot = await tempRoot();
+    const { author, counters } = scriptedFailureAuthor({
+      failColumns: [],
+      failureMessage: "unused",
+      verifyFailureMessage: "status=429 too many requests",
+    });
+    const observations = breakerObservations([{ id: "obs-1", columnIndex: 0 }]);
+
+    const result = await runSemanticMapStage(
+      stageArgs(observations, author, sessionRoot, BREAKER),
+    );
+
+    // 임계(3) 미달: 트립 없이 완주하되, verify 재시도 spend가 census에 남는다.
+    expect(result.census?.breaker_retry_verify_calls).toBe(
+      BREAKER.per_call_max_attempts - 1,
+    );
+    expect(counters.verify).toBe(BREAKER.per_call_max_attempts);
+    const artifact = await readIncompleteArtifact(sessionRoot);
+    expect(artifact.breaker.tripped).toBe(false);
+    expect(artifact.dead_letter).toEqual([]);
+    expect(artifact.incomplete_item_ids).toEqual(["obs-1"]);
   });
 
   it("F-B1 OFF twin: the disabled path preserves today's doom-to-flat behavior (no breaker artifacts, no backoff retries)", async () => {

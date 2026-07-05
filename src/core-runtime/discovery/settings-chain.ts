@@ -7,6 +7,7 @@ import {
   normalizeLlmModelSwitcher,
   type LlmModelSwitcherConfig,
 } from "../llm/model-switcher.js";
+import type { DispatchBreakerPolicy } from "../llm/dispatch-breaker.js";
 import {
   createStructuredFailureRecord,
   type StructuredFailureParams,
@@ -455,7 +456,7 @@ const V3ReconstructDispatchBreakerSettingsSchema = z
   .object({
     enabled: z.boolean().optional(),
     systemic_threshold: z.number().int().min(1).optional(),
-    per_item_max_attempts: z.number().int().min(1).optional(),
+    per_call_max_attempts: z.number().int().min(1).optional(),
     backoff_initial_ms: z.number().int().min(0).optional(),
     backoff_cap_ms: z.number().int().min(0).optional(),
   })
@@ -713,24 +714,20 @@ export interface ReconstructActorSettings {
 export interface ReconstructDispatchBreakerSettingsInput {
   enabled?: boolean | undefined;
   systemic_threshold?: number | undefined;
-  per_item_max_attempts?: number | undefined;
+  per_call_max_attempts?: number | undefined;
   backoff_initial_ms?: number | undefined;
   backoff_cap_ms?: number | undefined;
 }
 
-export interface ReconstructDispatchBreakerSettings {
-  enabled: boolean;
-  systemic_threshold: number;
-  per_item_max_attempts: number;
-  backoff_initial_ms: number;
-  backoff_cap_ms: number;
-}
+/** The completed settings ARE the policy shape the breaker consumes — one
+ * concept, one type (the llm module owns it). */
+export type ReconstructDispatchBreakerSettings = DispatchBreakerPolicy;
 
 export const DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS = {
   // opt-in: OFF = 현행 동작 보존 — 활성화는 settings로만.
   enabled: false,
   systemic_threshold: 3,
-  per_item_max_attempts: 3,
+  per_call_max_attempts: 3,
   backoff_initial_ms: 3000,
   backoff_cap_ms: 30000,
 } as const satisfies ReconstructDispatchBreakerSettings;
@@ -744,9 +741,9 @@ export function completeReconstructDispatchBreakerSettings(
     systemic_threshold:
       input?.systemic_threshold ??
       DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.systemic_threshold,
-    per_item_max_attempts:
-      input?.per_item_max_attempts ??
-      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.per_item_max_attempts,
+    per_call_max_attempts:
+      input?.per_call_max_attempts ??
+      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.per_call_max_attempts,
     backoff_initial_ms:
       input?.backoff_initial_ms ??
       DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.backoff_initial_ms,

@@ -4,9 +4,10 @@
  *
  * 설계 B (development-records/design/20260704-review-unit-resubmit-and-limit-breaker-design.md §4):
  * an unattended batch must not throw a retry storm at a dead rate limit and
- * lose items. The policy is injected into each batch dispatch loop (review
- * lens/stance fan-out, reconstruct semantic-map judgment loop — the repo has
- * no common dispatch surface, per the 2026-07-05 re-anchoring note in §8):
+ * lose items. The repo has no common dispatch surface (§8 재앵커링), so the
+ * policy is injected per loop. Currently wired: the reconstruct semantic-map
+ * judgment loop. Review lens/stance wiring is DEFERRED with recorded
+ * rationale (§8 리뷰 측 배선 이연) — do not assume review coverage.
  *
  * 1. backoff first — a per-item failure counts toward the breaker only after
  *    the item's bounded backoff retries are exhausted. Providers surface 429s
@@ -19,18 +20,29 @@
  *    is dead-lettered (complete-with-failure) and the batch continues.
  * 4. breaker trip — the loop halts the batch and persists the incomplete-item
  *    list (fallback provider swap is a deferred later cut).
- * 5. recovery re-dispatch targets exactly the persisted incomplete set.
+ * 5. recovery re-dispatch targets exactly the persisted incomplete set —
+ *    today via the persisted artifact consumed by the recovery OPERATOR /
+ *    fixture contract (F-B3); automatic stage-level resume from the artifact
+ *    is a deferred later cut (§8).
  *
  * File I/O (persisting the artifact), timestamps, and halt mechanics stay in
  * the wiring; this module owns classification, the backoff schedule, the
  * breaker state machine, and the artifact projection.
  */
 
+/**
+ * Breaker counting refinement of the shared pipeline ledger's OPEN
+ * `failure_class` set (pipeline-execution-ledger.ts — parent concept):
+ * `rate_limit`/`auth` refine the ledger's `provider_error`, `transport`
+ * refines its `timeout`/`provider_error` family. The dead-letter artifact's
+ * `failure_class` field deliberately mirrors that ledger field name.
+ */
 export type SystemicDispatchFailureClass = "rate_limit" | "auth" | "transport";
 
 const RATE_LIMIT_PATTERNS = [
   "429",
   "rate limit",
+  "limit reached",
   "rate_limit",
   "too many requests",
   "overloaded",
@@ -52,10 +64,10 @@ const AUTH_PATTERNS = [
   "not logged in",
 ];
 
-// Mirrors the battle-tested transient list in run-review-prompt-execution's
-// isTransientExecutorFailureMessage (different consumer: that list decides
-// per-unit retry, this one decides breaker counting).
-const TRANSPORT_PATTERNS = [
+/** Single source for the transient-transport message patterns shared with the
+ * review runner's per-unit retry decision (isTransientExecutorFailureMessage)
+ * — the two consumers differ only in their extras. */
+export const TRANSIENT_TRANSPORT_MESSAGE_PATTERNS = [
   "stream disconnected before completion",
   "connection reset by peer",
   "error sending request",
@@ -63,6 +75,12 @@ const TRANSPORT_PATTERNS = [
   "transport channel closed",
   "http/request failed",
   "request failed after",
+] as const;
+
+const TRANSPORT_PATTERNS = [
+  ...TRANSIENT_TRANSPORT_MESSAGE_PATTERNS,
+  "timed out",
+  "timeout",
   "econnrefused",
   "econnreset",
   "etimedout",
@@ -93,6 +111,54 @@ export function classifySystemicDispatchFailure(
   return null;
 }
 
+/**
+ * Classify a dispatch ERROR: structured provider status first (the SDK
+ * adapters rethrow the original error with `.status` preserved), message
+ * substrings as the fallback for the CLI/worker adapters that flatten
+ * everything into text.
+ */
+export function classifyDispatchError(
+  error: unknown,
+): SystemicDispatchFailureClass | null {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (typeof status === "number") {
+    if (status === 429) return "rate_limit";
+    if (status === 401 || status === 403) return "auth";
+    if (status >= 500) return "transport";
+  }
+  return classifySystemicDispatchFailure(
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
+/** Marker stamped by {@link runWithDispatchBackoff} on errors that came from
+ * an actual provider dispatch. Item-level attribution MUST read the marker
+ * (readDispatchFailureClass) instead of re-classifying arbitrary error text —
+ * deterministic stage errors embed content-derived text (sheet names, row
+ * ranges) that substring patterns would misread as systemic. */
+const DISPATCH_FAILURE_CLASS = Symbol.for("onto.dispatch_failure_class");
+
+function markDispatchFailureClass(
+  error: unknown,
+  failureClass: SystemicDispatchFailureClass | null,
+): void {
+  if (error !== null && typeof error === "object") {
+    (error as Record<PropertyKey, unknown>)[DISPATCH_FAILURE_CLASS] = failureClass;
+  }
+}
+
+/** Systemic class of a dispatch-marked error; null for unmarked errors
+ * (deterministic/stage-local throws) and marked-but-item-local failures. */
+export function readDispatchFailureClass(
+  error: unknown,
+): SystemicDispatchFailureClass | null {
+  if (error === null || typeof error !== "object") return null;
+  const failureClass = (error as Record<PropertyKey, unknown>)[DISPATCH_FAILURE_CLASS];
+  return failureClass === "rate_limit" || failureClass === "auth" || failureClass === "transport"
+    ? failureClass
+    : null;
+}
+
 /** Capped exponential backoff (no jitter — deterministic for replay/tests).
  * attempt is 0-based: delay before retry #1 is initialMs. */
 export function dispatchBackoffDelayMs(args: {
@@ -109,8 +175,10 @@ export interface DispatchBreakerPolicy {
   enabled: boolean;
   /** N: consecutive distinct-item systemic FINAL failures that trip the breaker. */
   systemic_threshold: number;
-  /** Per-item total attempt cap (1 original + retries) for systemic-class failures. */
-  per_item_max_attempts: number;
+  /** Per-CALL total attempt cap (1 original + backoff retries) for
+   * systemic-class failures. Breaker counting is per ITEM (observation);
+   * backoff is per call. */
+  per_call_max_attempts: number;
   backoff_initial_ms: number;
   backoff_cap_ms: number;
 }
@@ -155,12 +223,25 @@ export class DispatchBreakerState {
     this.policy = policy;
   }
 
+  /** Report a REAL dispatch success — the only event that proves the
+   * provider lane is alive and may reclassify pending systemic failures as
+   * poison. Items that made no successful provider call must use
+   * {@link recordItemSkipped} instead. */
   recordItemSuccess(itemId: string): void {
     this.completed.push(itemId);
     // The provider lane is alive: pending systemic failures were item-scoped
     // after all — poison, dead-lettered.
     for (const entry of this.pendingSystemic) this.deadLetter.push(entry);
     this.pendingSystemic = [];
+  }
+
+  /** Report an item that owes no dispatch (structural skip, budget cap, all
+   * subsumed): completed for recovery-set purposes, but it proves NOTHING
+   * about the provider lane — the systemic streak and pending attribution
+   * are untouched. Conflating this with success let one interleaved skip
+   * reset an outage streak and write its victims off as poison. */
+  recordItemSkipped(itemId: string): void {
+    this.completed.push(itemId);
   }
 
   /** Report an item's FINAL failure (per-item budget exhausted). Returns the
@@ -201,21 +282,16 @@ export class DispatchBreakerState {
   deadLetterEntries(): readonly DispatchDeadLetterEntry[] {
     return this.deadLetter;
   }
-
-  /** Systemic failures not yet attributed (no success boundary reached, no
-   * trip): conservative — they stay in the incomplete set at batch end so a
-   * recovery run retries them instead of writing them off. */
-  pendingSystemicEntries(): readonly DispatchDeadLetterEntry[] {
-    return this.pendingSystemic;
-  }
 }
 
 export class DispatchBreakerTrippedError extends Error {
   readonly trip: DispatchBreakerTripState;
 
-  constructor(trip: DispatchBreakerTripState) {
+  constructor(trip: DispatchBreakerTripState, incompleteArtifactPath?: string | null) {
     super(
-      `dispatch breaker tripped: ${trip.failure_class} failed ${trip.consecutive_item_count} consecutive items (threshold ${trip.threshold}) — batch halted, incomplete items persisted for exact re-dispatch`,
+      `dispatch breaker tripped: ${trip.failure_class} failed ${trip.consecutive_item_count} consecutive items (threshold ${trip.threshold}) — batch halted, incomplete items persisted for exact re-dispatch${
+        incompleteArtifactPath ? ` (${incompleteArtifactPath})` : ""
+      }`,
     );
     this.name = "DispatchBreakerTrippedError";
     this.trip = trip;
@@ -235,7 +311,7 @@ export async function runWithDispatchBackoff<T>(args: {
   label: string;
   policy: Pick<
     DispatchBreakerPolicy,
-    "per_item_max_attempts" | "backoff_initial_ms" | "backoff_cap_ms"
+    "per_call_max_attempts" | "backoff_initial_ms" | "backoff_cap_ms"
   >;
   dispatch: () => Promise<T>;
   sleep: (ms: number) => Promise<void>;
@@ -248,13 +324,14 @@ export async function runWithDispatchBackoff<T>(args: {
     message: string;
   }) => void | Promise<void>;
 }): Promise<T> {
-  const maxAttempts = Math.max(1, args.policy.per_item_max_attempts);
+  const maxAttempts = Math.max(1, args.policy.per_call_max_attempts);
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       return await args.dispatch();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const failureClass = classifySystemicDispatchFailure(message);
+      const failureClass = classifyDispatchError(error);
+      markDispatchFailureClass(error, failureClass);
       const retryable = failureClass !== null && attempt + 1 < maxAttempts;
       if (!retryable) throw error;
       const delayMs = dispatchBackoffDelayMs({

@@ -163,6 +163,10 @@ reconstruct semantic-map 판정 디스패치).
   (synthesizeSemanticMapNode/verifySemanticMapBoundary) 미배선으로 실 provider에서 스킵된다
   (사고는 feat/l2-real-llm-authoring 시점, 해당 브랜치 미머지). 루프 자체는 존재하므로 breaker를
   그 루프에 배선하고 mock author pair로 픽스처를 돌리며, l2 머지 시 즉시 실보호가 된다.
+  **[후속 정정 2026-07-05 늦은 오후]** PR #165(INV-MODEL-1 role-aware)가 semantic-map author
+  pair 실구현을 `reconstruct.execution.semantic_map_authoring` 스칼라(기본 off) 뒤에 랜딩 —
+  breaker가 배선된 루프는 이제 opt-in 실 provider 경로다. 두 opt-in을 함께 켠 실행이
+  §1.2 사고 표면의 실보호 조합이다.
   (3) "아이템당 ~6회" per-item retry 서명은 현 HEAD에 없다 — `callJsonAuthor`는 2시도
   (초기+parse_repair)이고 transport 오류는 무재시도 전파. 규칙 1의 backoff-선행 per-item 재시도는
   reconstruct 측 신설이다.
@@ -178,6 +182,21 @@ reconstruct semantic-map 판정 디스패치).
   attended 실행이 지배적인 리뷰에서 그 가치가 배선 표면을 정당화하지 못한다. 실 관찰에서 리뷰
   측 429 낭비가 확인되면 순수 모듈(dispatch-breaker.ts)을 lens fan-out aggregator로 배선하는
   후속 cut을 연다.
+- **[설계 B 적대 리뷰 반영 2026-07-05]** 8-lens 리뷰 수렴 반영: (1) skip/무디스패치 관찰이
+  성공으로 기록되어 계통 streak을 리셋하고 outage 피해 아이템을 poison으로 오분류하던 결함 수정
+  (`recordItemSkipped` 신설 — 성공은 실제 provider 디스패치 성공만); (2) 아이템 귀속 분류를
+  message 재파싱에서 **디스패치 마커**(runWithDispatchBackoff가 stamped) 판독으로 교체 — 결정적
+  stage 오류의 내용 유래 텍스트(시트명·행번호) 오분류 차단, SDK 경로는 구조적 `status` 우선;
+  (3) 트립을 관찰 부기 완료 후 루프 밖 epilogue로 이동 — census 파티션·spend 대조 불변식이 트립
+  아티팩트에서도 성립, 미완료 목록 경로가 halt 오류 메시지에 공지됨; (4) X7 예산 검사에 breaker
+  재시도 spend 산입(ON에서 cap이 실 provider 호출 상한 유지); (5) `per_item_max_attempts`→
+  `per_call_max_attempts` 개명(backoff는 호출 단위, breaker 카운팅은 관찰 단위); (6) transient
+  transport 패턴을 dispatch-breaker 모듈로 단일소스화(리뷰 러너가 import). **잔여 관찰 과제**:
+  실 claude_code CLI limit 문구가 RATE_LIMIT 패턴과 매칭되는지 실사고 로그로 검증(불일치 시
+  패턴 보강); dispatch-incomplete 아티팩트의 스테이지 자동 재개 소비는 후속 cut(현재는 운영
+  disclosure + F-B3 회복 계약). **리뷰 이연 근거 보강**: continuation frontier는 명시 실패
+  lens는 커버하나 `trustedOnSeatPresence`가 부분출력 seat를 신뢰할 수 있음 — 리뷰 관찰 항목에
+  "429 중 lens 부분출력 seat" 케이스를 추가하고, 확인되면 이연 재검토.
 - **[적대 리뷰 이연 2026-07-05]** 강등의 durable authority가 현재 stance matrix
   `validation.missing_stances` 공시 필드 하나다(ledger 빌더가 재독, 손상 시 swallow→빈 집합).
   검증 결과 matrix 쓰기는 원자적이고 A/B 오케스트레이션 상호배제로 현행 도달 경로는 안전하나,

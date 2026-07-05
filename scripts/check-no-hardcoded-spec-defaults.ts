@@ -98,9 +98,9 @@ const WAIVERS: Waiver[] = [
   {
     file: "src/core-runtime/discovery/settings-chain.ts",
     linePattern:
-      /^(?:lens_|issue_artifact_|deliberation_|synthesis_)?(?:max_retries|retry_initial_delay_ms):\s*(?:\d+|DEFAULT_REVIEW_RETRY_SETTINGS\.retry_initial_delay_ms),$/,
+      /^(?:lens_|issue_artifact_|deliberation_|synthesis_)?(?:max_retries|retry_initial_delay_ms|systemic_threshold|per_call_max_attempts|backoff_initial_ms|backoff_cap_ms):\s*(?:\d+|DEFAULT_REVIEW_RETRY_SETTINGS\.retry_initial_delay_ms),$/,
     reason:
-      "settings chain의 resolved-shape 완성 기본값 — settings 권위 모듈 자체가 소유하는 canonical 완성값. 변경은 G4 보호 대상(INVARIANT-CHANGE 마커 필요).",
+      "settings chain의 resolved-shape 완성 기본값 — settings 권위 모듈 자체가 소유하는 canonical 완성값(dispatch_breaker 임계 포함). 변경은 G4 보호 대상(INVARIANT-CHANGE 마커 필요).",
   },
 ];
 
@@ -119,7 +119,7 @@ const AUTH_OBJECT_RE = /\bauth\w*\s*:\s*["'](?:oauth|api_key|local)["']/;
 /** 타입 유니언 문맥(`"a" | "b"`)은 vocabulary 정의지 기본값이 아니다. */
 const TYPE_UNION_CONTEXT_RE = /["']\s*\||\|\s*["']/;
 const RETRY_DEFAULT_RE =
-  /(?:max_retries|retry_initial_delay_ms|maxRetries|retryInitialDelayMs)\w*\s*(?:=|\?\?|:)\s*[0-9]/;
+  /(?:max_retries|retry_initial_delay_ms|maxRetries|retryInitialDelayMs|systemic_threshold|per_call_max_attempts|backoff_initial_ms|backoff_cap_ms)\w*\s*(?:=|\?\?|:)\s*[0-9]/;
 
 function isCommentLine(text: string): boolean {
   const trimmed = text.trim();

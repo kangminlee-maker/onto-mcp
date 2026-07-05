@@ -108,8 +108,10 @@ import {
   DispatchBreakerTrippedError,
   buildDispatchIncompleteArtifact,
   classifySystemicDispatchFailure,
+  readDispatchFailureClass,
   runWithDispatchBackoff,
   type DispatchBreakerPolicy,
+  type DispatchBreakerTripState,
 } from "../llm/dispatch-breaker.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
@@ -2395,35 +2397,47 @@ export async function runSemanticMapStage(args: {
       : null;
   const breakerSleep = (ms: number): Promise<void> =>
     new Promise((resolve) => setTimeout(resolve, ms));
-  let breakerRetrySynthesizeCalls = 0;
-  let breakerRetryVerifyCalls = 0;
-  const guardedDispatch = <T>(label: string, dispatch: () => Promise<T>, onRetry: () => void): Promise<T> =>
-    breakerState
-      ? runWithDispatchBackoff({
+  // Census honesty (W2-X7-001 spirit): breaker backoff retries SPEND provider
+  // calls too — counted separately from the per-column first-attempt totals
+  // and folded into the X7 budget checks below.
+  const breakerRetryCalls = { synthesize: 0, verify: 0 };
+  // Set on any successful provider dispatch inside the CURRENT observation —
+  // the only evidence that the provider lane is alive (recordItemSuccess);
+  // observations without it record as skipped (no liveness claim).
+  let observationDispatchSucceeded = false;
+  let breakerTrip: DispatchBreakerTripState | null = null;
+  const guardedDispatch = breakerState
+    ? <T>(kind: "synthesize" | "verify", label: string, dispatch: () => Promise<T>): Promise<T> =>
+        runWithDispatchBackoff({
           label,
           policy: breakerState.policy,
           dispatch,
           sleep: breakerSleep,
-          // Census honesty (W2-X7-001 spirit): breaker retries SPEND calls too.
-          onRetry,
+          onRetry: () => {
+            breakerRetryCalls[kind] += 1;
+          },
+        }).then((value) => {
+          observationDispatchSucceeded = true;
+          return value;
         })
-      : dispatch();
-  const synthesizeNode: typeof rawSynthesizeNode = (input) =>
-    guardedDispatch(
-      `synthesize:${input.node_ref.sheet}#${input.node_ref.column_index}:${input.node_ref.row_start}-${input.node_ref.row_end}`,
-      () => rawSynthesizeNode(input),
-      () => {
-        breakerRetrySynthesizeCalls += 1;
-      },
-    );
-  const verifyBoundary: typeof rawVerifyBoundary = (input) =>
-    guardedDispatch(
-      `verify:${input.node_ref.sheet}#${input.node_ref.column_index}:${input.boundary.row}`,
-      () => rawVerifyBoundary(input),
-      () => {
-        breakerRetryVerifyCalls += 1;
-      },
-    );
+    : null;
+  // OFF(기본) 경로는 raw author bind를 그대로 쓴다 — 래핑 비용 0.
+  const synthesizeNode: typeof rawSynthesizeNode = guardedDispatch
+    ? (input) =>
+        guardedDispatch(
+          "synthesize",
+          `synthesize:${input.node_ref.sheet}#${input.node_ref.column_index}:${input.node_ref.row_start}-${input.node_ref.row_end}`,
+          () => rawSynthesizeNode(input),
+        )
+    : rawSynthesizeNode;
+  const verifyBoundary: typeof rawVerifyBoundary = guardedDispatch
+    ? (input) =>
+        guardedDispatch(
+          "verify",
+          `verify:${input.node_ref.sheet}#${input.node_ref.column_index}:${input.boundary.row}`,
+          () => rawVerifyBoundary(input),
+        )
+    : rawVerifyBoundary;
 
   const projectionByObservation = new Map<string, SemanticSeedProjection>();
   const census: ReconstructSemanticMapCensus = {
@@ -2478,9 +2492,11 @@ export async function runSemanticMapStage(args: {
       fingerprint: null,
       columns: [],
     });
-    // Breaker bookkeeping: a skipped observation owes no dispatch — it is
-    // "completed" for recovery-set purposes, never a re-dispatch target.
-    breakerState?.recordItemSuccess(observationId);
+    // Breaker bookkeeping: a skipped observation owes no dispatch — completed
+    // for recovery-set purposes, but it proves nothing about the provider
+    // lane (recordItemSkipped, NOT recordItemSuccess: 성공 취급은 계통 streak을
+    // 리셋해 outage 피해 아이템을 poison으로 오분류한다).
+    breakerState?.recordItemSkipped(observationId);
   };
 
   const seenObservationIds = new Set<string>();
@@ -2591,11 +2607,14 @@ export async function runSemanticMapStage(args: {
       failureClass: ReturnType<typeof classifySystemicDispatchFailure>;
       message: string;
     } | null = null;
+    observationDispatchSucceeded = false;
 
     // X7 synthesize PREFLIGHT — observation-granular against the REMAINING global budget, decided
     // before any of this observation's LLM calls (deterministic given canonical order).
     const observationNeed = tasks.reduce((s, t) => s + t.producedCount, 0);
-    const preflightCapped = census.synthesize_calls_total + observationNeed > cfg.max_synthesize_calls;
+    const preflightCapped =
+      census.synthesize_calls_total + breakerRetryCalls.synthesize + observationNeed >
+      cfg.max_synthesize_calls;
 
     for (const task of tasks) {
       if (task.trace === null || task.nodesByKey === null || task.modes === null) {
@@ -2649,7 +2668,10 @@ export async function runSemanticMapStage(args: {
           const nodeRef = input.node_ref;
           for (const b of classified) {
             if (b.anchor_status !== "unanchored") continue;
-            if (census.verify_calls_total + verifyCalls + 1 > cfg.max_verify_calls) {
+            if (
+              census.verify_calls_total + breakerRetryCalls.verify + verifyCalls + 1 >
+              cfg.max_verify_calls
+            ) {
               throw new SemanticMapVerifyCapExceeded(key, cfg.max_verify_calls);
             }
             const verifyInput: SemanticBoundaryVerifyInput = {
@@ -2744,46 +2766,40 @@ export async function runSemanticMapStage(args: {
         });
         doomed = true;
         if (breakerState && !capped) {
-          const message = (error as Error).message;
-          const failureClass = classifySystemicDispatchFailure(message);
+          // 마커 기반 분류: 디스패치를 실제로 거친 오류만 systemic 후보다 —
+          // 결정적 stage 오류는 내용 유래 텍스트(시트명·행 범위)를 담아
+          // substring 재분류가 오독한다. 남은 컬럼은 기존 doomed 가드가
+          // 디스패치 없이 skip 행으로 기록하므로 추가 차단이 불필요하다.
+          const failureClass = readDispatchFailureClass(error);
           if (breakerObservationFailure === null || failureClass !== null) {
-            breakerObservationFailure = { failureClass, message };
+            breakerObservationFailure = {
+              failureClass,
+              message: (error as Error).message,
+            };
           }
-          // 설계 B: a systemic-class failure already exhausted its per-call
-          // backoff budget — dispatching this observation's REMAINING columns
-          // would hammer the same dead limit. Stop the observation here
-          // (breaker-ON behavior only).
-          if (failureClass !== null) break;
         }
       }
     }
     if (breakerState) {
       if (breakerObservationFailure !== null) {
-        const trip = breakerState.recordItemFailure({
+        // 트립이어도 여기서 throw하지 않는다: 이 관찰의 census 행 부기를
+        // 마쳐 파티션·spend 대조 불변식을 지킨 뒤, 루프 밖 epilogue가
+        // 영속과 halt를 수행한다.
+        breakerTrip = breakerState.recordItemFailure({
           item_id: observation.observation_id,
           failure_class: breakerObservationFailure.failureClass,
           failure_message: breakerObservationFailure.message,
           attempt_count:
             breakerObservationFailure.failureClass !== null
-              ? breakerState.policy.per_item_max_attempts
+              ? breakerState.policy.per_call_max_attempts
               : 1,
         });
-        if (trip) {
-          // 규칙 4: 배치 halt + 미완료 목록 영속 + 사용자 공지(오류 메시지).
-          // 트립도 stage-ran이므로 spend census를 함께 남긴다 (f1a3c1b).
-          census.breaker_retry_synthesize_calls = breakerRetrySynthesizeCalls;
-          census.breaker_retry_verify_calls = breakerRetryVerifyCalls;
-          await persistDispatchIncompleteArtifact({
-            sessionRoot: args.sessionRoot,
-            batchLabel: "semantic-map",
-            plannedItemIds: spreadsheetObservations.map((o) => o.observation_id),
-            state: breakerState,
-          });
-          await persistCensusAndSidecar();
-          throw new DispatchBreakerTrippedError(trip);
-        }
-      } else {
+      } else if (observationDispatchSucceeded) {
         breakerState.recordItemSuccess(observation.observation_id);
+      } else {
+        // 디스패치 성공이 0회인 관찰(preflight-capped·빈 컬럼·전부 subsumed)
+        // 은 프로바이더 생존을 증명하지 못한다 — 회복 집합 부기만 한다.
+        breakerState.recordItemSkipped(observation.observation_id);
       }
     }
 
@@ -2808,10 +2824,6 @@ export async function runSemanticMapStage(args: {
     census.by_observation.push(observationRow);
     } catch (error) {
       if (isGracefulTerminalSignal(error)) throw error;
-      // 설계 B: a tripped breaker is a deliberate batch halt (incomplete list
-      // already persisted) — it must not be contained as a per-observation
-      // deterministic failure.
-      if (error instanceof DispatchBreakerTrippedError) throw error;
       // Deterministic-phase containment (ultracode audit A/B): observations_total was already
       // counted; record the honest skip row directly (no double count). Spent LLM totals from the
       // column loop were already added inside its own catch before rethrow paths — the only throws
@@ -2826,15 +2838,19 @@ export async function runSemanticMapStage(args: {
         columns: [],
       });
     }
+    // 설계 B 트립: 이 관찰의 부기까지 마친 상태에서 배치를 멈춘다 — 남은
+    // 관찰은 미디스패치로 incomplete 집합에 남는다.
+    if (breakerTrip) break;
   }
 
+  let dispatchIncompletePath: string | null = null;
   if (breakerState) {
-    // 규칙 6 관측 상시화: breaker-ON 배치는 종료 시에도 end-state를 영속해
-    // 회복 절차가 항상 정확한 재디스패치 집합을 갖는다. spend 정직성:
-    // backoff 재시도 호출 수를 census에 병기한다.
-    census.breaker_retry_synthesize_calls = breakerRetrySynthesizeCalls;
-    census.breaker_retry_verify_calls = breakerRetryVerifyCalls;
-    await persistDispatchIncompleteArtifact({
+    // 규칙 6 관측 상시화: breaker-ON 배치는 트립이든 완주든 end-state를
+    // 영속해 회복 절차가 항상 정확한 재디스패치 집합을 갖는다. spend
+    // 정직성: backoff 재시도 호출 수를 census에 병기한다.
+    census.breaker_retry_synthesize_calls = breakerRetryCalls.synthesize;
+    census.breaker_retry_verify_calls = breakerRetryCalls.verify;
+    dispatchIncompletePath = await persistDispatchIncompleteArtifact({
       sessionRoot: args.sessionRoot,
       batchLabel: "semantic-map",
       plannedItemIds: spreadsheetObservations.map((o) => o.observation_id),
@@ -2843,6 +2859,10 @@ export async function runSemanticMapStage(args: {
   }
 
   const { censusPath, sidecarPath } = await persistCensusAndSidecar();
+  if (breakerTrip) {
+    // 규칙 4: 배치 halt + 사용자 공지 — 공지에 미완료 목록 경로를 싣는다.
+    throw new DispatchBreakerTrippedError(breakerTrip, dispatchIncompletePath);
+  }
 
   const aggregateFingerprint =
     perObservationFingerprints.length === 0

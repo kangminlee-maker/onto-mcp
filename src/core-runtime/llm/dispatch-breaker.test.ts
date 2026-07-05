@@ -3,16 +3,28 @@ import {
   DispatchBreakerState,
   DispatchBreakerTrippedError,
   buildDispatchIncompleteArtifact,
+  classifyDispatchError,
   classifySystemicDispatchFailure,
   dispatchBackoffDelayMs,
+  readDispatchFailureClass,
   runWithDispatchBackoff,
   type DispatchBreakerPolicy,
 } from "./dispatch-breaker.js";
 
+function incompleteOf(state: DispatchBreakerState, planned: string[]) {
+  return buildDispatchIncompleteArtifact({
+    pipeline: "test",
+    batchLabel: "unit",
+    createdAt: "2026-07-05T00:00:00Z",
+    plannedItemIds: planned,
+    state,
+  });
+}
+
 const policy = (overrides: Partial<DispatchBreakerPolicy> = {}): DispatchBreakerPolicy => ({
   enabled: true,
   systemic_threshold: 3,
-  per_item_max_attempts: 3,
+  per_call_max_attempts: 3,
   backoff_initial_ms: 100,
   backoff_cap_ms: 400,
   ...overrides,
@@ -85,7 +97,7 @@ describe("DispatchBreakerState", () => {
     });
     // Outage victims are recovery targets, not complete-with-failure.
     expect(state.deadLetterEntries()).toEqual([]);
-    expect(state.pendingSystemicEntries().map((entry) => entry.item_id)).toEqual([
+    expect(incompleteOf(state, ["a", "b", "c"]).incomplete_item_ids).toEqual([
       "a",
       "b",
       "c",
@@ -97,7 +109,7 @@ describe("DispatchBreakerState", () => {
     state.recordItemFailure(systemicEntry("a"));
     state.recordItemSuccess("b");
     expect(state.deadLetterEntries().map((entry) => entry.item_id)).toEqual(["a"]);
-    expect(state.pendingSystemicEntries()).toEqual([]);
+    expect(incompleteOf(state, ["a", "b"]).incomplete_item_ids).toEqual([]);
     // Streak restarted: two more systemic failures do not trip at N=3.
     expect(state.recordItemFailure(systemicEntry("c"))).toBeNull();
     expect(state.recordItemFailure(systemicEntry("d"))).toBeNull();
@@ -127,7 +139,63 @@ describe("DispatchBreakerState", () => {
     state.recordItemFailure(systemicEntry("c"));
     state.recordItemFailure(systemicEntry("d"));
     expect(state.tripped()).toBeNull();
-    expect(state.pendingSystemicEntries()).toHaveLength(4);
+    // Disabled breaker still keeps outage victims OUT of dead-letter.
+    expect(incompleteOf(state, ["a", "b", "c", "d"]).incomplete_item_ids).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+    ]);
+  });
+
+  it("a SKIP neither flushes pending systemic failures nor resets the streak", () => {
+    const state = new DispatchBreakerState(policy());
+    state.recordItemFailure(systemicEntry("a"));
+    // Structural skip: no dispatch happened — proves nothing about the lane.
+    state.recordItemSkipped("b");
+    expect(state.deadLetterEntries()).toEqual([]);
+    expect(state.recordItemFailure(systemicEntry("c"))).toBeNull();
+    const trip = state.recordItemFailure(systemicEntry("d"));
+    expect(trip?.consecutive_item_count).toBe(3);
+    const artifact = incompleteOf(state, ["a", "b", "c", "d"]);
+    expect(artifact.completed_item_ids).toEqual(["b"]);
+    expect(artifact.incomplete_item_ids).toEqual(["a", "c", "d"]);
+  });
+});
+
+describe("classifyDispatchError / dispatch markers", () => {
+  it("prefers structured provider status over message text", () => {
+    expect(
+      classifyDispatchError(Object.assign(new Error("provider exploded"), { status: 429 })),
+    ).toBe("rate_limit");
+    expect(
+      classifyDispatchError(Object.assign(new Error("x"), { status: 401 })),
+    ).toBe("auth");
+    expect(
+      classifyDispatchError(Object.assign(new Error("x"), { status: 503 })),
+    ).toBe("transport");
+  });
+
+  it("stage-local errors are never breaker fuel: unmarked errors read null even when text looks systemic", () => {
+    const error = new Error("semantic-map stage: trace node missing for S#4:429-431.");
+    expect(readDispatchFailureClass(error)).toBeNull();
+  });
+
+  it("runWithDispatchBackoff marks final errors with their dispatch class (timeout → transport)", async () => {
+    let caught: unknown;
+    try {
+      await runWithDispatchBackoff({
+        label: "node:a",
+        policy: policy(),
+        dispatch: async () => {
+          throw new Error("claude CLI call timed out after 600000ms");
+        },
+        sleep: async () => {},
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(readDispatchFailureClass(caught)).toBe("transport");
   });
 });
 
@@ -191,7 +259,7 @@ describe("runWithDispatchBackoff + DispatchBreakerState", () => {
         item_id: itemId,
         failure_class: classifySystemicDispatchFailure(message),
         failure_message: message,
-        attempt_count: policy().per_item_max_attempts,
+        attempt_count: policy().per_call_max_attempts,
       });
     };
     expect(await finalFailure("a")).toBeNull();

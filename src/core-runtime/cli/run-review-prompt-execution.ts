@@ -166,6 +166,7 @@ import {
 import { parseRuntimeIssueDeliberationSchemaContext } from "./runtime-submit-context.js";
 import { parseRuntimeIssueStanceSchemaContext } from "./runtime-submit-context.js";
 import { salvageInputPathFor, type SalvageInput } from "./submit-salvage.js";
+import { TRANSIENT_TRANSPORT_MESSAGE_PATTERNS } from "../llm/dispatch-breaker.js";
 import {
   CORRELATED_VALIDATION_HALT_REASON,
   applyResubmitErrorSpecToPacket,
@@ -1568,18 +1569,18 @@ function failureKindFromError(error: unknown): ReviewUnitFailureKind {
   return "unknown";
 }
 
+// Shared transient-transport vocabulary is single-sourced in the dispatch
+// breaker module; this consumer adds only its executor-specific extra.
+const TRANSIENT_EXECUTOR_FAILURE_PATTERNS = [
+  ...TRANSIENT_TRANSPORT_MESSAGE_PATTERNS,
+  "responses_retry",
+];
+
 function isTransientExecutorFailureMessage(message: string): boolean {
   const normalized = message.toLowerCase();
-  return [
-    "stream disconnected before completion",
-    "connection reset by peer",
-    "error sending request",
-    "failed to connect to websocket",
-    "transport channel closed",
-    "http/request failed",
-    "request failed after",
-    "responses_retry",
-  ].some((pattern) => normalized.includes(pattern));
+  return TRANSIENT_EXECUTOR_FAILURE_PATTERNS.some((pattern) =>
+    normalized.includes(pattern),
+  );
 }
 
 function failureKindFromMessage(message: string): ReviewUnitFailureKind {
