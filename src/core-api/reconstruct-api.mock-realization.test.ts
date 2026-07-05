@@ -129,6 +129,7 @@ describe("synthesize seat wiring on the core-api mock path (N11/P3)", () => {
   async function runMockE2E(reconstructSettings: unknown): Promise<{
     status: string;
     events: string;
+    sessionRoot: string;
   }> {
     const projectRoot = await goldenProjectRoot();
     const spec = reconstructGoldenFixtureSpec("reconstruct-golden-target-v1");
@@ -169,7 +170,7 @@ describe("synthesize seat wiring on the core-api mock path (N11/P3)", () => {
         path.join(sessionRoot, "runtime-events.ndjson"),
         "utf8",
       );
-      return { status: result.status, events };
+      return { status: result.status, events, sessionRoot };
     } finally {
       for (const [key, value] of Object.entries(previousEnv)) {
         if (value === undefined) delete process.env[key];
@@ -201,13 +202,28 @@ describe("synthesize seat wiring on the core-api mock path (N11/P3)", () => {
     expect(events).toContain("seat is dormant");
   });
 
-  // Pair: with the opt-in ON the note must NOT fire, and the golden mock run
-  // still completes (the opt-in + seat do not perturb the golden path).
-  it("P3 pair: active seat (opt-in on) completes without the dormant note", async () => {
-    const { status, events } = await runMockE2E({
+  // P3 (design §8, mutation-kill hardened): the active seat's identity must
+  // reach the semantic-map census THROUGH the real api→factory edge. The
+  // census is written whenever the capability pair attaches (run.ts —
+  // f1a3c1b honest-signal pattern), even on a non-spreadsheet golden target,
+  // and its synthesize_model_identity is the §5.3 canonical fold of the §5.4
+  // mock identity projection. This FAILS if either factory spread at the
+  // reconstruct-api call site is dropped: no opt-in → census file absent;
+  // opt-in without the seat config → identity falls back to "unspecified".
+  it("P3: active seat (opt-in on) folds the seat identity into the semantic-map census", async () => {
+    const { status, events, sessionRoot } = await runMockE2E({
       execution: { actors: { ...seatBlock }, semantic_map_authoring: true },
     });
     expect(status).toBe("completed");
     expect(events).not.toContain("seat is dormant");
+    const census = parseYaml(
+      await fs.readFile(
+        path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"),
+        "utf8",
+      ),
+    ) as { synthesize_model_identity?: string };
+    expect(census.synthesize_model_identity).toBe(
+      "synth:anthropic/claude-haiku-4-5-20251001@adapter=default@synthesize_effort=low",
+    );
   });
 });

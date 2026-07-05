@@ -323,16 +323,21 @@ export const RECONSTRUCT_ACTOR_KEYS = [
 export type ReconstructActorKey = (typeof RECONSTRUCT_ACTOR_KEYS)[number];
 
 /**
- * Declared reconstruct.execution-level scalar settings (design §5.1). The
- * normalize/merge copy functions iterate this list, so a declared scalar
- * survives the settings chain even when `actors` is absent. This preservation
- * contract covers EXACTLY the declared keys: a future scalar must be added
- * here (and to the schemas/type) to be preserved — an undeclared key is
- * rejected by the strict schemas (fail-loud), never silently dropped.
+ * Declared reconstruct.execution-level scalar settings (design §5.1). Like the
+ * actor axis, the zod schemas' scalar entries are DERIVED from this constant
+ * (reconstructExecutionScalarsShape) and the type maps over it, so a
+ * schema-declared-but-constant-missing key cannot exist (no second key
+ * authority in either direction); the normalize/merge copy functions iterate
+ * this list, so a declared scalar survives the settings chain even when
+ * `actors` is absent. A key NOT declared here is rejected by the strict
+ * schemas (fail-loud), never silently dropped. Current scalars are all
+ * booleans; a future non-boolean scalar must extend the shape helper.
  */
 export const RECONSTRUCT_EXECUTION_SCALAR_KEYS = [
   "semantic_map_authoring",
 ] as const;
+export type ReconstructExecutionScalarKey =
+  (typeof RECONSTRUCT_EXECUTION_SCALAR_KEYS)[number];
 
 /** zod actors shape derived from {@link RECONSTRUCT_ACTOR_KEYS} — the schema
  * cannot drift from the constant (no second key authority). */
@@ -342,6 +347,19 @@ function reconstructActorsShape<T extends z.ZodTypeAny>(
   return Object.fromEntries(
     RECONSTRUCT_ACTOR_KEYS.map((key) => [key, actorSchema.optional()]),
   ) as Record<ReconstructActorKey, z.ZodOptional<T>>;
+}
+
+/** zod execution-scalar shape derived from
+ * {@link RECONSTRUCT_EXECUTION_SCALAR_KEYS} — same single-source rule as the
+ * actor axis, so the F19/F24 silent-strip class is closed by construction on
+ * BOTH axes. */
+function reconstructExecutionScalarsShape(): Record<
+  ReconstructExecutionScalarKey,
+  z.ZodOptional<z.ZodBoolean>
+> {
+  return Object.fromEntries(
+    RECONSTRUCT_EXECUTION_SCALAR_KEYS.map((key) => [key, z.boolean().optional()]),
+  ) as Record<ReconstructExecutionScalarKey, z.ZodOptional<z.ZodBoolean>>;
 }
 
 const V3ReviewExecutionSettingsSchema = z
@@ -441,9 +459,9 @@ const V3ReconstructSettingsSchema = z
           .object(reconstructActorsShape(V3ReconstructActorSettingsSchema))
           .strict()
           .optional(),
-        // Production opt-in for the semantic-map authoring stage (design §5.5).
-        // Absent/false = the capability pair is not attached (byte-parity).
-        semantic_map_authoring: z.boolean().optional(),
+        // Execution-level scalars (e.g. the semantic-map authoring opt-in,
+        // design §5.5) — entries DERIVED from the scalar constant (§5.1).
+        ...reconstructExecutionScalarsShape(),
       })
       .strict()
       .optional(),
@@ -475,7 +493,7 @@ const NormalizedSettingsSchema = z
               )
               .strict()
               .optional(),
-            semantic_map_authoring: z.boolean().optional(),
+            ...reconstructExecutionScalarsShape(),
           })
           .strict()
           .optional(),
@@ -677,13 +695,12 @@ export interface ReconstructActorSettings {
 }
 
 export interface ReconstructSettings {
+  // Both axes derive from their constants (design §5.1, F19 closure): a new
+  // actor key or execution scalar cannot exist in the type without existing
+  // in the copy functions' iteration source.
   execution?: {
-    // Keyed by RECONSTRUCT_ACTOR_KEYS — the type derives from the constant so
-    // a new actor key cannot exist in the type without existing in the copy
-    // functions' iteration source (design §5.1, F19 closure).
     actors?: Partial<Record<ReconstructActorKey, ReconstructActorSettings>>;
-    semantic_map_authoring?: boolean;
-  };
+  } & Partial<Record<ReconstructExecutionScalarKey, boolean>>;
 }
 
 export interface OntoSettings {

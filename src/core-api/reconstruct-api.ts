@@ -393,9 +393,12 @@ export interface SemanticMapSynthesizeWiring {
  * The ONE deterministic seam from post-chain settings to the factory's
  * semantic-map wiring (design §5.4/§5.5): opt-in read, single seat read
  * (resolveOptionalReconstructActorLlmSettings), live provider completion vs
- * mock identity projection, and the dormant-seat honesty note. runReconstruct
- * consumes exactly this — unit tests exercise the same function over real
- * resolved settings, so the wiring seam cannot drift from the tested one.
+ * mock identity projection, and the dormant-seat honesty note. Coverage is
+ * two-layered: unit tests exercise this function over resolved settings, and
+ * the seam→factory CONSUMPTION edge is bound by the mock E2Es — the dormant
+ * branch via the N11 note, the active branch via the P3 census
+ * synthesize_model_identity assertion (dropping either factory spread at the
+ * runReconstruct call site fails P3).
  */
 export function resolveSemanticMapSynthesizeWiring(args: {
   settings: OntoSettings;
@@ -935,8 +938,9 @@ export function createOntoReconstructCoreApi(
         // operator configured a synthesize seat but the semantic-map authoring
         // opt-in is off, so the seat is DORMANT — no synthesize dispatch will
         // use it and the gate deliberately excludes it (U6). Emitted BEFORE the
-        // run so the inert config is never a silent no-op. This emission is
-        // also the live-path consumption proof for the wiring seam (P3/N11).
+        // run so the inert config is never a silent no-op. This emission binds
+        // the seam's DORMANT branch to the live path (N11); the ACTIVE branch
+        // is bound by the P3 census-identity assertion on the factory spreads.
         appendRuntimeStatusEventSync({
           pipeline: "reconstruct",
           sessionRoot,
