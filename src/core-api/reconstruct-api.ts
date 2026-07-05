@@ -316,6 +316,10 @@ export function resolveJudgeLlmConfig(args: {
       args.judgeModelProvider,
       candidate.model_id,
       args.registry,
+      // Judge adoption is a NAMED non-settings dispatch (design §2.3): a
+      // role-restricted entry (e.g. synthesize-only) must not be adoptable
+      // as the answer-support judge.
+      { kind: "request_judge" },
     );
     // Credential safety: the candidate resolves on the author's provider, so its
     // runtime provider must match the author's (guarantees api_key_env/adapter

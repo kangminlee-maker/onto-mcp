@@ -6,6 +6,8 @@ import {
   exactTrackedMode,
   isSupportedModelRoute,
   parseSupportedModelRegistry,
+  requiredSupportedModelRoleForDispatch,
+  type SupportedModelDispatch,
   type SupportedModelRegistry,
 } from "./supported-models.js";
 import {
@@ -42,11 +44,13 @@ describe("collectModelSelections", () => {
         provider: "openai",
         model: "gpt-5.5",
         path: "review.execution.actors.teamlead.llm",
+        requiredRole: "author",
       },
       {
         provider: undefined,
         model: "gpt-5.5",
         path: "review.execution.units.lens.llm",
+        requiredRole: "author",
       },
     ]);
   });
@@ -57,7 +61,12 @@ describe("collectModelSelections", () => {
         review: { execution: { lens: { llm: { provider: "grok" } } } },
       }),
     ).toEqual([
-      { provider: "grok", model: undefined, path: "review.execution.lens.llm" },
+      {
+        provider: "grok",
+        model: undefined,
+        path: "review.execution.lens.llm",
+        requiredRole: "author",
+      },
     ]);
   });
 });
@@ -269,66 +278,234 @@ describe("parseSupportedModelRegistry (roles contract)", () => {
   });
 });
 
+const JUDGE: SupportedModelDispatch = { kind: "request_judge" };
+
+describe("requiredSupportedModelRoleForDispatch", () => {
+  it("maps the reconstruct actor seats to their roles", () => {
+    expect(
+      requiredSupportedModelRoleForDispatch({
+        kind: "settings_path",
+        path: "reconstruct.execution.actors.semantic_author.llm",
+      }),
+    ).toBe("author");
+    expect(
+      requiredSupportedModelRoleForDispatch({
+        kind: "settings_path",
+        path: "reconstruct.execution.actors.confirmation_provider.llm",
+      }),
+    ).toBe("confirmation_provider");
+    expect(
+      requiredSupportedModelRoleForDispatch({
+        kind: "settings_path",
+        path: "reconstruct.execution.actors.semantic_map_synthesize.llm",
+      }),
+    ).toBe("semantic_map_synthesize");
+  });
+
+  it("maps the judge dispatch to answer_support_judge", () => {
+    expect(requiredSupportedModelRoleForDispatch(JUDGE))
+      .toBe("answer_support_judge");
+  });
+
+  it("requires the strongest certification (author) for every unmapped path", () => {
+    for (
+      const path of [
+        "review.execution.actors.lens.llm",
+        "review.execution.units.lens.llm",
+        "review.execution.retry.salvage.transcription_llm",
+        "llm",
+        "some.future.unmapped.seat.llm",
+      ]
+    ) {
+      expect(requiredSupportedModelRoleForDispatch({ kind: "settings_path", path }))
+        .toBe("author");
+    }
+  });
+});
+
 describe("isSupportedModelRoute", () => {
   it("returns true for a registered (provider, model) pair", () => {
-    expect(isSupportedModelRoute("openai", "gpt-5.5", registry)).toBe(true);
+    expect(isSupportedModelRoute("openai", "gpt-5.5", registry, JUDGE)).toBe(true);
   });
 
   it("returns false for an unregistered pair (judge override degrades)", () => {
-    expect(isSupportedModelRoute("openai", "gpt-9", registry)).toBe(false);
-    expect(isSupportedModelRoute("anthropic", "gpt-5.5", registry)).toBe(false);
+    expect(isSupportedModelRoute("openai", "gpt-9", registry, JUDGE)).toBe(false);
+    expect(isSupportedModelRoute("anthropic", "gpt-5.5", registry, JUDGE))
+      .toBe(false);
   });
 
   it("returns false when provider or model is unresolved", () => {
-    expect(isSupportedModelRoute(undefined, "gpt-5.5", registry)).toBe(false);
-    expect(isSupportedModelRoute("openai", undefined, registry)).toBe(false);
+    expect(isSupportedModelRoute(undefined, "gpt-5.5", registry, JUDGE))
+      .toBe(false);
+    expect(isSupportedModelRoute("openai", undefined, registry, JUDGE))
+      .toBe(false);
   });
+
+  // N4 kernel (F6-b closure): a role-restricted entry is invisible to a
+  // dispatch outside its certified roles — the judge override must degrade.
+  it("rejects a role-restricted entry at the judge dispatch, and accepts it only at its certified seat", () => {
+    const roleRestricted: SupportedModelRegistry = {
+      schema_version: "1",
+      supported_models: [
+        {
+          provider: "anthropic",
+          model: "claude-haiku-4-5-20251001",
+          verified_at: "2026-07-04",
+          benchmark_evidence_refs: ["development-records/benchmark/x.json"],
+          roles: ["semantic_map_synthesize"],
+        },
+      ],
+    };
+    expect(
+      isSupportedModelRoute(
+        "anthropic",
+        "claude-haiku-4-5-20251001",
+        roleRestricted,
+        JUDGE,
+      ),
+    ).toBe(false);
+    expect(
+      isSupportedModelRoute(
+        "anthropic",
+        "claude-haiku-4-5-20251001",
+        roleRestricted,
+        {
+          kind: "settings_path",
+          path: "reconstruct.execution.actors.semantic_map_synthesize.llm",
+        },
+      ),
+    ).toBe(true);
+  });
+});
+
+/** Route literal with its requiredRole derived exactly as production does. */
+const route = (
+  provider: string | undefined,
+  model: string | undefined,
+  path: string,
+) => ({
+  provider,
+  model,
+  path,
+  requiredRole: requiredSupportedModelRoleForDispatch({
+    kind: "settings_path",
+    path,
+  }),
 });
 
 describe("assertSupportedModelRoutes", () => {
   it("passes when every route is a registered (provider, model) pair", () => {
     expect(() =>
-      assertSupportedModelRoutes(
-        [{ provider: "openai", model: "gpt-5.5", path: "a" }],
-        registry,
-      )
+      assertSupportedModelRoutes([route("openai", "gpt-5.5", "a")], registry)
     ).not.toThrow();
   });
 
   it("rejects an unregistered (provider, model) pair", () => {
     expect(() =>
-      assertSupportedModelRoutes(
-        [{ provider: "openai", model: "gpt-4o", path: "x" }],
-        registry,
-      )
+      assertSupportedModelRoutes([route("openai", "gpt-4o", "x")], registry)
     ).toThrow(/not verified as supported[\s\S]*gpt-4o[\s\S]*openai\/gpt-5\.5/);
   });
 
   it("rejects a registered model under a different provider", () => {
     expect(() =>
-      assertSupportedModelRoutes(
-        [{ provider: "grok", model: "gpt-5.5", path: "x" }],
-        registry,
-      )
+      assertSupportedModelRoutes([route("grok", "gpt-5.5", "x")], registry)
     ).toThrow(/grok\/gpt-5\.5/);
   });
 
   it("rejects a route whose effective provider could not be resolved", () => {
     expect(() =>
-      assertSupportedModelRoutes(
-        [{ provider: undefined, model: "gpt-5.5", path: "x" }],
-        registry,
-      )
+      assertSupportedModelRoutes([route(undefined, "gpt-5.5", "x")], registry)
     ).toThrow(/unresolved provider/);
   });
 
   it("rejects a route whose effective model could not be resolved", () => {
     expect(() =>
-      assertSupportedModelRoutes(
-        [{ provider: "openai", model: undefined, path: "x" }],
-        registry,
-      )
+      assertSupportedModelRoutes([route("openai", undefined, "x")], registry)
     ).toThrow(/unresolved model/);
+  });
+});
+
+describe("assertSupportedModelRoutes (role coverage)", () => {
+  const SYNTH_SEAT = "reconstruct.execution.actors.semantic_map_synthesize.llm";
+  const AUTHOR_SEAT = "reconstruct.execution.actors.semantic_author.llm";
+  const CONFIRM_SEAT = "reconstruct.execution.actors.confirmation_provider.llm";
+  const haiku = (path: string) =>
+    route("anthropic", "claude-haiku-4-5-20251001", path);
+  const roleRestricted: SupportedModelRegistry = {
+    schema_version: "1",
+    supported_models: [
+      {
+        provider: "openai",
+        model: "gpt-5.5",
+        verified_at: "2026-06-13",
+        benchmark_evidence_refs: ["development-records/benchmark/x.json"],
+      },
+      {
+        provider: "anthropic",
+        model: "claude-haiku-4-5-20251001",
+        verified_at: "2026-07-04",
+        benchmark_evidence_refs: ["development-records/benchmark/y.json"],
+        roles: ["semantic_map_synthesize"],
+      },
+    ],
+  };
+
+  // Positive pair: the certified seat passes (the negative controls below can fail).
+  it("passes a role-restricted entry at its certified seat", () => {
+    expect(() =>
+      assertSupportedModelRoutes([haiku(SYNTH_SEAT)], roleRestricted)
+    ).not.toThrow();
+  });
+
+  // N1: role-restricted model at the author seat → fail-loud with role detail.
+  it("rejects a role-restricted entry at the semantic_author seat", () => {
+    expect(() => assertSupportedModelRoutes([haiku(AUTHOR_SEAT)], roleRestricted))
+      .toThrow(
+        /certified for \[semantic_map_synthesize\], seat requires author/,
+      );
+  });
+
+  // N2: confirmation seat.
+  it("rejects a role-restricted entry at the confirmation_provider seat", () => {
+    expect(() =>
+      assertSupportedModelRoutes([haiku(CONFIRM_SEAT)], roleRestricted)
+    ).toThrow(/seat requires confirmation_provider/);
+  });
+
+  // N3 (G7/committed-settings scope): review seats are unmapped → author.
+  it("rejects a role-restricted entry at a review unit seat (unmapped → author)", () => {
+    expect(() =>
+      assertSupportedModelRoutes(
+        [haiku("review.execution.units.lens.llm")],
+        roleRestricted,
+      )
+    ).toThrow(/seat requires author/);
+  });
+
+  // Grandfathered entries keep their full-route allowance everywhere.
+  it("passes an absent-roles entry at every seat (grandfathered)", () => {
+    expect(() =>
+      assertSupportedModelRoutes(
+        [
+          route("openai", "gpt-5.5", AUTHOR_SEAT),
+          route("openai", "gpt-5.5", CONFIRM_SEAT),
+          route("openai", "gpt-5.5", SYNTH_SEAT),
+          route("openai", "gpt-5.5", "review.execution.units.lens.llm"),
+        ],
+        roleRestricted,
+      )
+    ).not.toThrow();
+  });
+
+  // N8 kernel: the pair check is preserved — an unregistered model at the
+  // synthesize seat still fails on membership, not role.
+  it("rejects an unregistered model at the synthesize seat (pair check intact)", () => {
+    expect(() =>
+      assertSupportedModelRoutes(
+        [route("anthropic", "claude-sonnet-5", SYNTH_SEAT)],
+        roleRestricted,
+      )
+    ).toThrow(/anthropic\/claude-sonnet-5/);
   });
 });
 
@@ -382,6 +559,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
         provider: "openai",
         model: "gpt-5.5",
         path: "review.execution.units.lens.llm",
+        requiredRole: "author",
       });
     expect(() => assertSupportedModelRoutes(routes, registry)).not.toThrow();
   });
@@ -393,6 +571,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
         provider: "grok",
         model: "gpt-5.5",
         path: "review.execution.units.lens.llm",
+        requiredRole: "author",
       });
     expect(() => assertSupportedModelRoutes(routes, registry)).toThrow(/grok\/gpt-5\.5/);
   });
@@ -409,6 +588,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
         provider: "grok",
         model: undefined,
         path: "review.execution.lens.llm",
+        requiredRole: "author",
       });
     expect(() => assertSupportedModelRoutes(routes, registry))
       .toThrow(/unresolved model/);
@@ -430,6 +610,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
         provider: "grok",
         model: undefined,
         path: "review.execution.units.lens.llm",
+        requiredRole: "author",
       });
     expect(() => assertSupportedModelRoutes(routes, registry))
       .toThrow(/unresolved model/);
@@ -453,6 +634,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
       provider: "anthropic",
       model: "claude-haiku",
       path: "review.execution.retry.salvage.transcription_llm",
+      requiredRole: "author",
     });
   });
 

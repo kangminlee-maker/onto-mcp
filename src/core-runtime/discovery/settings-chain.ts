@@ -1414,6 +1414,7 @@ export function collectEffectiveModelRoutes(
         provider: node.provider ?? providerAtPath.get(actorPath),
         model: node.model ?? modelAtPath.get(actorPath),
         path: node.path,
+        requiredRole: node.requiredRole,
       }];
     }
     // Actors, reconstruct actors, and the top-level llm are base seats: validated

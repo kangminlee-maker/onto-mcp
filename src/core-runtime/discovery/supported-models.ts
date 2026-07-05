@@ -113,15 +113,54 @@ const SupportedModelRegistrySchema = z
 
 export type SupportedModelRegistry = z.infer<typeof SupportedModelRegistrySchema>;
 
+/**
+ * A model dispatch whose route must be gate-validated. The single runtime-owned
+ * input vocabulary for role derivation (design §2.3): every place a
+ * (provider, model) reaches a real LLM dispatch is either a settings path
+ * (walked by collectEffectiveModelRoutes) or a NAMED non-settings dispatch.
+ * A future non-settings dispatch MUST add its kind here to obtain gate
+ * coverage — call-site role literals are not accepted.
+ */
+export type SupportedModelDispatch =
+  | { kind: "settings_path"; path: string }
+  | { kind: "request_judge" };
+
+/**
+ * Single owner of dispatch → required-role derivation (design §2.3).
+ * Settings seats without a finer mapping require `author` — the strongest
+ * certification (golden full-pipeline completion) — so a role-restricted entry
+ * can never occupy an unmapped seat (fail-closed default).
+ */
+export function requiredSupportedModelRoleForDispatch(
+  dispatch: SupportedModelDispatch,
+): SupportedModelRole {
+  if (dispatch.kind === "request_judge") return "answer_support_judge";
+  switch (dispatch.path) {
+    case "reconstruct.execution.actors.semantic_author.llm":
+      return "author";
+    case "reconstruct.execution.actors.confirmation_provider.llm":
+      return "confirmation_provider";
+    case "reconstruct.execution.actors.semantic_map_synthesize.llm":
+      return "semantic_map_synthesize";
+    default:
+      // Review seats, salvage transcription, top-level llm, and any future
+      // unmapped path: require the strongest certification (fail-closed).
+      return "author";
+  }
+}
+
 /** A resolved model route to validate: the effective provider and model (each
  * own or inherited), with the settings path for error reporting. Either may be
  * undefined when it could not be resolved (e.g. a provider-only override whose
  * actor has no model) — an unresolved provider OR model is rejected fail-loud,
- * since the runtime would dispatch a route the gate cannot verify. */
+ * since the runtime would dispatch a route the gate cannot verify.
+ * `requiredRole` is the {@link requiredSupportedModelRoleForDispatch} projection
+ * of the route's dispatch — REQUIRED so no constructor can skip role coverage. */
 export interface EffectiveModelRoute {
   provider: string | undefined;
   model: string | undefined;
   path: string;
+  requiredRole: SupportedModelRole;
 }
 
 /** Locates the authority registry shipped with the install by walking up from
@@ -275,12 +314,17 @@ export function collectModelSelections(settings: unknown): EffectiveModelRoute[]
     if (value === null || typeof value !== "object") return;
     const record = value as Record<string, unknown>;
     if (typeof record.model === "string" || typeof record.provider === "string") {
+      const path = trail || "(root)";
       out.push({
         provider: typeof record.provider === "string"
           ? record.provider
           : undefined,
         model: typeof record.model === "string" ? record.model : undefined,
-        path: trail || "(root)",
+        path,
+        requiredRole: requiredSupportedModelRoleForDispatch({
+          kind: "settings_path",
+          path,
+        }),
       });
     }
     for (const [key, child] of Object.entries(record)) {
@@ -291,55 +335,87 @@ export function collectModelSelections(settings: unknown): EffectiveModelRoute[]
   return out;
 }
 
+/** Does `entry` cover `role`? Absent `roles` = grandfathered full-route
+ * allowance (covers every role — flat-registry backward compatibility);
+ * present = covers exactly the listed roles. */
+function entryCoversRole(
+  entry: SupportedModelRegistry["supported_models"][number],
+  role: SupportedModelRole,
+): boolean {
+  return entry.roles === undefined || entry.roles.includes(role);
+}
+
 /** Non-throwing membership check: is (provider, model) a benchmark-verified
- * supported route? Reuses the same verified-pair set as
+ * supported route FOR THIS DISPATCH? Reuses the same registry as
  * {@link assertSupportedModelRoutes}, but returns a boolean so opt-in callers
  * (e.g. the answer-support judge per-stage model override) can DEGRADE to the
  * inherited config when an override is unsupported, instead of failing the run.
- * An unresolved provider or model is not verified. */
+ * The dispatch parameter is REQUIRED (no default) so every caller names its
+ * dispatch and a role-restricted entry can never be adopted at a dispatch it
+ * is not certified for (F6-b leak closure). An unresolved provider or model is
+ * not verified. */
 export function isSupportedModelRoute(
   provider: string | undefined,
   model: string | undefined,
   registry: SupportedModelRegistry,
+  dispatch: SupportedModelDispatch,
 ): boolean {
   if (provider === undefined || model === undefined) return false;
+  const role = requiredSupportedModelRoleForDispatch(dispatch);
   return registry.supported_models.some(
-    (entry) => entry.provider === provider && entry.model === model,
+    (entry) =>
+      entry.provider === provider &&
+      entry.model === model &&
+      entryCoversRole(entry, role),
   );
 }
 
 /** Throws if any effective route is not a benchmark-verified (provider, model)
- * pair. A route whose effective provider OR model could not be resolved is
- * rejected (fail-loud) rather than leniently accepted — the route must resolve
- * to a verified pair, otherwise the runtime would dispatch a route the gate
- * cannot verify. */
+ * pair CERTIFIED for the route's required role. A route whose effective
+ * provider OR model could not be resolved is rejected (fail-loud) rather than
+ * leniently accepted — the route must resolve to a verified pair, otherwise
+ * the runtime would dispatch a route the gate cannot verify. A pair that is
+ * registered but role-restricted (entry.roles present) is rejected at any
+ * route whose requiredRole it does not list. */
 export function assertSupportedModelRoutes(
   routes: ReadonlyArray<EffectiveModelRoute>,
   registry: SupportedModelRegistry,
 ): void {
-  const verified = new Set(
-    registry.supported_models.map((entry) => `${entry.provider} ${entry.model}`),
-  );
-  const violations = routes.filter((route) =>
-    route.provider === undefined ||
-    route.model === undefined ||
-    !verified.has(`${route.provider} ${route.model}`)
-  );
+  const entryFor = (provider: string, model: string) =>
+    registry.supported_models.find(
+      (entry) => entry.provider === provider && entry.model === model,
+    );
+  const violations = routes.filter((route) => {
+    if (route.provider === undefined || route.model === undefined) return true;
+    const entry = entryFor(route.provider, route.model);
+    return entry === undefined || !entryCoversRole(entry, route.requiredRole);
+  });
   if (violations.length === 0) return;
   const detail = violations
-    .map((route) =>
-      `- ${route.path}: ${
+    .map((route) => {
+      const pair = `${
         route.provider ? `${route.provider}/` : "(unresolved provider)/"
-      }${route.model ?? "(unresolved model)"}`
-    )
+      }${route.model ?? "(unresolved model)"}`;
+      const entry = route.provider !== undefined && route.model !== undefined
+        ? entryFor(route.provider, route.model)
+        : undefined;
+      const reason = entry?.roles
+        ? ` — certified for [${entry.roles.join(", ")}], seat requires ${route.requiredRole}`
+        : "";
+      return `- ${route.path}: ${pair}${reason}`;
+    })
     .join("\n");
   const allowed = registry.supported_models
-    .map((entry) => `${entry.provider}/${entry.model}`)
+    .map((entry) =>
+      `${entry.provider}/${entry.model}${
+        entry.roles ? ` (roles: ${entry.roles.join(", ")})` : ""
+      }`
+    )
     .join(", ");
   throw new Error(
     "settings.json selects model route(s) not verified as supported by benchmark " +
       `(see ${SUPPORTED_MODELS_AUTHORITY_PATH}):\n${detail}\n` +
-      `Benchmark-verified selectable models: ${allowed}. Add a model only after ` +
-      "a benchmark record shows it completing a pipeline run.",
+      `Benchmark-verified selectable models: ${allowed}. Add a model (or role) ` +
+      "only with the evidence its contract requires (see the registry header).",
   );
 }

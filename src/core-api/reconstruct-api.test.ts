@@ -350,6 +350,34 @@ describe("resolveJudgeLlmConfig", () => {
     expect(out.note).toMatch(/not a benchmark-verified route/);
   });
 
+  // N4 (F6-b closure): a registered-but-role-restricted entry is NOT adoptable
+  // as the judge — the request_judge dispatch requires answer_support_judge
+  // coverage, which a synthesize-only certification does not grant.
+  it("degrades a role-restricted (synthesize-only) model override — registered pair, wrong role", () => {
+    const roleRestricted: SupportedModelRegistry = {
+      schema_version: "1",
+      supported_models: [
+        ...registry.supported_models,
+        {
+          provider: "openai",
+          model: "synth-only-model",
+          verified_at: "2026-07-04",
+          benchmark_evidence_refs: ["development-records/benchmark/z.json"],
+          roles: ["semantic_map_synthesize"],
+        },
+      ],
+    };
+    const candidate = { provider: "openai" as const, model_id: "synth-only-model", api_key_env: "MY_OPENAI_KEY" };
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: author,
+      judgeModelCandidate: candidate,
+      judgeModelProvider: "openai",
+      registry: roleRestricted,
+    });
+    expect(out.judgeLlmConfig?.model_id).toBe("gpt-5-mini");
+    expect(out.note).toMatch(/not a benchmark-verified route/);
+  });
+
   it("degrades (never cross-provider credential leak) when a candidate resolves to a different runtime provider", () => {
     // Defensive: even if a candidate somehow carried a different runtime provider,
     // it must NOT be adopted (would mix the author's api_key_env with another
