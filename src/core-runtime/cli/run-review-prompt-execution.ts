@@ -93,7 +93,10 @@ import {
   mergeUnitResultIntoExecutionResult,
   validateUnitSeatToResult,
 } from "../review/review-execution-steps.js";
-import { isTrustedLedgerUnit } from "../pipeline-execution-ledger.js";
+import {
+  isResolvedLedgerUnit,
+  isTrustedLedgerUnit,
+} from "../pipeline-execution-ledger.js";
 import {
   buildReviewExecutionRoute,
   buildReviewRuntimeRouteArtifactProjection,
@@ -161,6 +164,16 @@ import {
   normalizeLlmModelSwitcher,
 } from "../llm/model-switcher.js";
 import { parseRuntimeIssueDeliberationSchemaContext } from "./runtime-submit-context.js";
+import { parseRuntimeIssueStanceSchemaContext } from "./runtime-submit-context.js";
+import { salvageInputPathFor, type SalvageInput } from "./submit-salvage.js";
+import {
+  CORRELATED_VALIDATION_HALT_REASON,
+  applyResubmitErrorSpecToPacket,
+  buildResubmitErrorSpec,
+  classifyUnsupportedEvidenceRefFailure,
+  isUnsupportedEvidenceRefFailureMessage,
+  correlatedValidationExceeded,
+} from "./stance-resubmit.js";
 import {
   isReviewArtifactGenerationRealization,
   semanticQualityEvidenceForArtifactGeneration,
@@ -559,16 +572,21 @@ class ReviewUnitOutputContractError extends Error {
 class ReviewIssueArtifactDispatchError extends Error {
   readonly outcome: ExecutionOutcome | null;
   readonly originalError: unknown;
+  /** Explicit halt_reason override (e.g. `correlated_validation: …`);
+   * null keeps the default `Issue artifact generation failed: …` phrasing. */
+  readonly haltReason: string | null;
 
   constructor(
     message: string,
     outcome: ExecutionOutcome | null,
     originalError: unknown,
+    haltReason: string | null = null,
   ) {
     super(message);
     this.name = "ReviewIssueArtifactDispatchError";
     this.outcome = outcome;
     this.originalError = originalError;
+    this.haltReason = haltReason;
   }
 }
 
@@ -1628,6 +1646,85 @@ function retryTimeoutMs(baseTimeoutMs: number, attempt: number): number {
     : baseTimeoutMs;
 }
 
+/**
+ * 설계 A (bounded resubmit): before the next retry of an issue-stance unit
+ * whose submit was rejected by the `issue_evidence_refs` whitelist, inject
+ * the error spec into the unit's packet so the retry is a corrective
+ * resubmit instead of a blind re-run. The retry budget itself is unchanged
+ * (`issue_artifact_max_retries`); only the packet content differs. Opt-in
+ * via `review.execution.retry.resubmit.enabled`; returns true when a spec
+ * was applied.
+ */
+async function applyStanceResubmitErrorSpec(args: {
+  dispatch: ExecutionDispatchResult;
+  error: unknown;
+  attempt: number;
+  reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+  errorLogPath: string;
+}): Promise<boolean> {
+  if (args.reviewExecutionProfile?.retry?.resubmit?.enabled !== true) {
+    return false;
+  }
+  if (args.dispatch.output_format !== "issue-stance-response") return false;
+  const violation =
+    classifyUnsupportedEvidenceRefFailure(
+      args.error instanceof Error ? args.error.message : String(args.error),
+    ) ?? (await readFrozenUnsupportedRefViolation(args.dispatch.output_path));
+  if (!violation) return false;
+  let packetText: string;
+  try {
+    packetText = await fs.readFile(args.dispatch.packet_path, "utf8");
+  } catch {
+    return false;
+  }
+  let allowedRefs: string[] = [];
+  try {
+    const context = parseRuntimeIssueStanceSchemaContext(packetText);
+    allowedRefs = context.issue_evidence_refs[violation.issueId] ?? [];
+  } catch {
+    allowedRefs = [];
+  }
+  const resubmitAttempt = args.attempt + 1;
+  await fs.writeFile(
+    args.dispatch.packet_path,
+    applyResubmitErrorSpecToPacket(
+      packetText,
+      buildResubmitErrorSpec({
+        violation,
+        allowedEvidenceRefs: allowedRefs,
+        resubmitAttempt,
+      }),
+    ),
+    "utf8",
+  );
+  await appendExecutionProgress(
+    args.errorLogPath,
+    `runner stance resubmit: ${args.dispatch.unit_id}`,
+    [
+      `resubmit_attempt: ${resubmitAttempt}`,
+      `issue_id: ${violation.issueId}`,
+      `unsupported_ref: ${violation.evidenceRef}`,
+    ],
+  );
+  return true;
+}
+
+/** Worker adapters exit before stderr reliably carries the validation text;
+ * the per-attempt frozen salvage input is the structural evidence source. */
+async function readFrozenUnsupportedRefViolation(
+  outputPath: string,
+): Promise<ReturnType<typeof classifyUnsupportedEvidenceRefFailure>> {
+  try {
+    const raw = await fs.readFile(salvageInputPathFor(outputPath), "utf8");
+    const frozen = JSON.parse(raw) as SalvageInput;
+    return typeof frozen.error === "string"
+      ? classifyUnsupportedEvidenceRefFailure(frozen.error)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseExecutorRunMetadata(stdout: string): ReviewExecutorRunMetadata | undefined {
   const trimmed = stdout.trim();
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return undefined;
@@ -2386,6 +2483,8 @@ function inferFailureLensId(
 function collectFailedUnits(
   artifact: ReviewExecutionResultArtifact,
 ): ReviewDegradationUnitFailure[] {
+  const includeAttemptCount =
+    artifact.retry_policy?.resubmit?.enabled === true;
   return allUnitExecutionResults(artifact)
     .filter((result) => result.status === "failed")
     .map((result) => ({
@@ -2396,6 +2495,9 @@ function collectFailedUnits(
       output_path: result.output_path,
       failure_kind: result.failure_kind ?? null,
       failure_message: result.failure_message ?? "unknown failure",
+      ...(includeAttemptCount && result.attempt_count !== undefined
+        ? { attempt_count: result.attempt_count }
+        : {}),
     }));
 }
 
@@ -3516,6 +3618,19 @@ async function runSingleDispatchWithRetries(args: {
   });
   for (let attempt = 0; attempt <= effectiveMaxRetries; attempt += 1) {
     attemptsUsed = attempt + 1;
+    if (attempt === 0) {
+      // 설계 A: nested-batch 1차 시도 실패의 flat 폴백과 halted 세션 resume은
+      // 이 루프 밖에서 실패해 frozen salvage input만 남는다 — 그 구조적
+      // 근거가 있으면 첫 flat 시도 전에 오류 명세를 주입해 blind 재실행을
+      // 막는다. (스위치 OFF·비-stance 유닛·freeze 부재 시 no-op)
+      await applyStanceResubmitErrorSpec({
+        dispatch,
+        error: null,
+        attempt: 0,
+        reviewExecutionProfile,
+        errorLogPath: executionPlan.error_log_path,
+      });
+    }
     try {
       const executorMetadata = await invokeExecutor(
         executorConfig,
@@ -3568,6 +3683,13 @@ async function runSingleDispatchWithRetries(args: {
             `error: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`,
           ],
         );
+        await applyStanceResubmitErrorSpec({
+          dispatch,
+          error,
+          attempt,
+          reviewExecutionProfile,
+          errorLogPath: executionPlan.error_log_path,
+        });
         if (dispatch.unit_kind === "synthesize") {
           await appendExecutionProgress(
             executionPlan.error_log_path,
@@ -4578,14 +4700,82 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
   const completedOutcomes = outcomes.filter(
     (outcome): outcome is ExecutionOutcome => outcome !== undefined,
   );
-  const failedOutcome = completedOutcomes.find((outcome) => !outcome.success);
-  if (failedOutcome) {
-    throw new ReviewIssueArtifactDispatchError(
-      `Issue stance response failed: ${failedOutcome.failure?.message ?? "unknown error"}`,
-      failedOutcome,
-      failedOutcome.failure?.message ?? "unknown error",
+  const failedOutcomes = completedOutcomes.filter((outcome) => !outcome.success);
+  const resubmitEnabled =
+    args.reviewExecutionProfile?.retry?.resubmit?.enabled === true;
+  const stanceDispatchError = (
+    outcome: ExecutionOutcome,
+    haltReason: string | null = null,
+  ): ReviewIssueArtifactDispatchError => {
+    const message = outcome.failure?.message ?? "unknown error";
+    return new ReviewIssueArtifactDispatchError(
+      `Issue stance response failed: ${message}`,
+      outcome,
+      message,
+      haltReason,
+    );
+  };
+  let demotedLensIds: string[] = [];
+  if (failedOutcomes.length > 0) {
+    // 검증-거부 분류는 두 근거를 모두 본다: in-process 경로는 실패 메시지
+    // (submit-시점·on-disk 검증기 양쪽 문구), worker 경로는 stderr가 검증
+    // 문구를 보장하지 않으므로 frozen salvage input을 구조적 근거로 읽는다.
+    const validationFailures: ExecutionOutcome[] = [];
+    if (resubmitEnabled) {
+      for (const outcome of failedOutcomes) {
+        const classified =
+          isUnsupportedEvidenceRefFailureMessage(outcome.failure?.message) ||
+          (await readFrozenUnsupportedRefViolation(
+            outcome.dispatch.output_path,
+          )) !== null;
+        if (classified) validationFailures.push(outcome);
+      }
+    }
+    if (
+      resubmitEnabled &&
+      correlatedValidationExceeded({
+        validationFailedUnitCount: validationFailures.length,
+        totalUnitCount: dispatches.length,
+      })
+    ) {
+      // 설계 A 상관 에스컬레이션: 같은 검증 클래스가 stance 유닛 과반에서
+      // 실패하면 구조 결함(프롬프트/스키마/컨텍스트 조립)이므로 whole-run
+      // halt를 보존한다.
+      throw stanceDispatchError(
+        validationFailures[0]!,
+        `${CORRELATED_VALIDATION_HALT_REASON}: evidence_refs validation rejected ${validationFailures.length}/${dispatches.length} stance units`,
+      );
+    }
+    const demotable =
+      resubmitEnabled && validationFailures.length === failedOutcomes.length;
+    if (!demotable) {
+      // 현행 승격 규칙 보존: 인프라 실패(timeout/transport/…)와 OFF 경로는
+      // 지금처럼 whole-run halt.
+      throw stanceDispatchError(failedOutcomes[0]!);
+    }
+    // 설계 A 유닛 강등: resubmit cap을 소진한 검증-거부 유닛만
+    // complete-with-failure로 남긴다. 실패 outcome은 집계 outcome의 failed
+    // child로 유지되어 degradation-summary와 상태 강등이 자동 전파되고,
+    // 리뷰는 생존 렌즈의 stance로 계속한다.
+    demotedLensIds = validationFailures.map((outcome) =>
+      outcome.dispatch.unit_id.slice("issue-stance:".length),
+    );
+    await appendExecutionProgress(
+      args.executionPlan.error_log_path,
+      "runner stance units demoted (bounded resubmit exhausted)",
+      demotedLensIds.map((lensId) => `lens_id: ${lensId}`),
     );
   }
+  const survivorLensIds = participatingLensIds.filter(
+    (lensId) => !demotedLensIds.includes(lensId),
+  );
+  const survivorResponsePaths = [
+    ...new Set(
+      survivorLensIds
+        .map((lensId) => responsePathsByLensId.get(lensId))
+        .filter((value): value is string => value !== undefined),
+    ),
+  ];
 
   await fs.mkdir(path.dirname(seat.packet_path), { recursive: true });
   await fs.writeFile(
@@ -4594,7 +4784,7 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
       projectRoot: args.projectRoot,
       sessionId: args.executionPlan.session_id,
       outputPath: seat.output_path,
-      responsePaths: Array.from(responsePathsByLensId.values()),
+      responsePaths: survivorResponsePaths,
     }).trimEnd()}\n`,
     "utf8",
   );
@@ -4607,7 +4797,8 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
     executionPlan: args.executionPlan,
     projectRoot: args.projectRoot,
     responsePathsByLensId,
-    participatingLensIds,
+    participatingLensIds: survivorLensIds,
+    demotedLensIds,
     outputPath: seat.output_path,
   });
   return {
@@ -6824,7 +7015,12 @@ export async function executeReviewPromptExecution(
       .filter((failure) => failure.unit_kind === "lens")
       .map((failure) => failure.unit_id);
     const executionCompletedAtMs = Date.now();
-    const haltReason = `Issue artifact generation failed: ${failureMessage}`;
+    const haltReasonOverride =
+      args.error instanceof ReviewIssueArtifactDispatchError
+        ? args.error.haltReason
+        : null;
+    const haltReason =
+      haltReasonOverride ?? `Issue artifact generation failed: ${failureMessage}`;
     await writeExecutionResultArtifact(executionPlan, {
       session_id: executionPlan.session_id,
       session_root: sessionRoot,
@@ -7226,7 +7422,9 @@ export async function executeReviewPromptExecution(
       );
     }
     const frontier = await computeReviewFrontier(sessionRoot);
-    if (frontier.unitLedger.units.every((unit) => isTrustedLedgerUnit(unit))) {
+    // Convergence = no unit owes work: trusted output OR terminally
+    // resolved (demoted complete-with-failure — 설계 A).
+    if (frontier.unitLedger.units.every((unit) => isResolvedLedgerUnit(unit))) {
       break;
     }
     const ready = frontier.frontierUnits.filter(

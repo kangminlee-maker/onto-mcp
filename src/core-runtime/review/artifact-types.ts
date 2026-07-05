@@ -887,6 +887,10 @@ export interface ReviewDegradationUnitFailure {
   output_path: string;
   failure_kind?: ReviewUnitFailureKind | null;
   failure_message: string;
+  /** Attempts consumed before the unit completed-with-failure. Written only
+   * when bounded resubmit (`retry.resubmit.enabled`) is on, so opted-out
+   * runs keep their previous artifact shape. */
+  attempt_count?: number;
 }
 
 export interface ReviewDegradationSummaryArtifact {

@@ -81,6 +81,7 @@ interface PipelineExecutionLedgerUnitEntry {
   lastFailureMessage: string | null;
   upstreamUnitIds: string[];
   downstreamUnitIds: string[];
+  resolution?: "demoted";
   executionTelemetry?: PipelineUnitExecutionTelemetry | null;
 }
 
@@ -170,6 +171,16 @@ Execution telemetry rules:
   competency-question assessment) so batching changes stay attributable.
 - Units that made no LLM call carry no telemetry field; absence is not a
   failure signal.
+- `resolution: "demoted"` marks terminal resolution outside the trusted-output
+  path (bounded resubmit exhausted, complete-with-failure): the downstream
+  stage product consumed and disclosed the gap (review: issue-stance-matrix
+  `validation.missing_stances`), so the unit owes no further dispatch — it
+  must not reappear on the frontier, block convergence, or block downstream
+  upstream-trust. `status`/`lastFailureMessage` keep the audit truth
+  (typically `failed`); a resolved unit contributes no preserved artifacts.
+  Frontier/convergence consumers use `isResolvedLedgerUnit`
+  (trusted-or-resolved); artifact-preservation consumers keep
+  `isTrustedLedgerUnit`.
 - Current population status: `reconstruct` populates telemetry from its run
   manifest steps. `review` does not populate it yet.
 

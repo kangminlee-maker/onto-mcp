@@ -4,7 +4,10 @@ import type {
   PipelineExecutionOwner,
   PipelineExecutionUnitStatus,
 } from "../pipeline-execution-ledger.js";
-import { isTrustedLedgerUnit } from "../pipeline-execution-ledger.js";
+import {
+  isResolvedLedgerUnit,
+  isTrustedLedgerUnit,
+} from "../pipeline-execution-ledger.js";
 
 export interface ReviewContinuationUnit {
   unitId: string;
@@ -69,10 +72,12 @@ function toContinuationUnit(
   };
 }
 
+/** Upstream-satisfied set: trusted outputs plus terminally resolved units
+ * (a demoted unit's downstream consumed the disclosed gap, not its output). */
 function trustedUnitIds(ledger: PipelineExecutionLedger): Set<string> {
   return new Set(
     ledger.units
-      .filter((unit) => isTrustedLedgerUnit(unit))
+      .filter((unit) => isResolvedLedgerUnit(unit))
       .map((unit) => unit.unitId),
   );
 }
@@ -81,7 +86,7 @@ function isFrontierUnit(
   unit: PipelineExecutionLedgerUnitEntry,
   trustedIds: Set<string>,
 ): boolean {
-  if (isTrustedLedgerUnit(unit)) return false;
+  if (isResolvedLedgerUnit(unit)) return false;
   return unit.upstreamUnitIds.every((unitId) => trustedIds.has(unitId));
 }
 
@@ -138,6 +143,15 @@ function targetRejectedUnits(args: {
         ),
       ];
     }
+    if (isResolvedLedgerUnit(unit)) {
+      return [
+        toContinuationUnit(
+          unit,
+          "reject",
+          "Target unit is terminally resolved (demoted complete-with-failure); its gap is disclosed downstream and it owes no further dispatch.",
+        ),
+      ];
+    }
     if (!args.naturalFrontierUnitIds.has(unitId)) {
       return [
         toContinuationUnit(
@@ -184,7 +198,7 @@ export function buildReviewContinuationPlan(
     requestedTargetSet.size === 0
       ? naturalFrontier
       : params.ledger.units.filter(
-          (unit) => requestedTargetSet.has(unit.unitId) && !isTrustedLedgerUnit(unit),
+          (unit) => requestedTargetSet.has(unit.unitId) && !isResolvedLedgerUnit(unit),
         );
   const frontierUnits =
     allRejectedTargets.length > 0
@@ -208,7 +222,7 @@ export function buildReviewContinuationPlan(
     frontierUnitIds,
   });
   const downstreamUnits = params.ledger.units
-    .filter((unit) => downstreamIds.has(unit.unitId) && !isTrustedLedgerUnit(unit))
+    .filter((unit) => downstreamIds.has(unit.unitId) && !isResolvedLedgerUnit(unit))
     .map((unit) =>
       toContinuationUnit(
         unit,

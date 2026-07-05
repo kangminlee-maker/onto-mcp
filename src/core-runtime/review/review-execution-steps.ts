@@ -12,6 +12,7 @@ import {
 } from "./pipeline-execution-ledger.js";
 import {
   fileSha256IfPresent,
+  isResolvedLedgerUnit,
   isTrustedLedgerUnit,
   type PipelineExecutionLedger,
 } from "../pipeline-execution-ledger.js";
@@ -1164,7 +1165,8 @@ async function finalizeHostExecutionResultIfComplete(
   plan: ReviewExecutionPlan,
 ): Promise<void> {
   const ledger = await buildSessionLedger(sessionRoot, plan);
-  if (!ledger.units.every((unit) => isTrustedLedgerUnit(unit))) return;
+  // Convergence = no owed work: trusted OR terminally resolved (demoted).
+  if (!ledger.units.every((unit) => isResolvedLedgerUnit(unit))) return;
   const resultPath = executionResultPath(sessionRoot);
   const existing =
     await readOptionalYamlArtifact<ReviewExecutionResultArtifact>(resultPath);
@@ -1213,10 +1215,11 @@ async function computeRoundResult(
   plan: ReviewExecutionPlan,
 ): Promise<ReviewRoundResult> {
   const frontier = await computeReviewFrontier(sessionRoot);
-  // Terminal: every ledger unit is trusted, so there is nothing left to run and
-  // the caller assembles. (A continuation plan with no untrusted frontier is
-  // `eligible: false`, so this must precede the ineligibility check.)
-  if (frontier.unitLedger.units.every((unit) => isTrustedLedgerUnit(unit))) {
+  // Terminal: every ledger unit owes no work (trusted or terminally
+  // resolved), so there is nothing left to run and the caller assembles.
+  // (A continuation plan with no untrusted frontier is `eligible: false`,
+  // so this must precede the ineligibility check.)
+  if (frontier.unitLedger.units.every((unit) => isResolvedLedgerUnit(unit))) {
     return { status: "ready_to_assemble" };
   }
   if (!frontier.eligible) {

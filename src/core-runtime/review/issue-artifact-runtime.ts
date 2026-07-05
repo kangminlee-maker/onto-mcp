@@ -4747,6 +4747,9 @@ export async function writeIssueStanceMatrixFromResponses(args: {
   projectRoot: string;
   responsePathsByLensId: ReadonlyMap<string, string>;
   participatingLensIds: string[];
+  /** Lenses demoted by bounded resubmit exhaustion (설계 A): excluded from
+   * the matrix body and disclosed in `validation.missing_stances`. */
+  demotedLensIds?: string[];
   outputPath: string;
 }): Promise<void> {
   const context = await issueStanceValidationContext({
@@ -4798,7 +4801,10 @@ export async function writeIssueStanceMatrixFromResponses(args: {
     session_id: args.executionPlan.session_id,
     issues,
     validation: {
-      missing_stances: [],
+      missing_stances: (args.demotedLensIds ?? []).map((lensId) => ({
+        lens_id: lensId,
+        reason: "stance_validation_failed",
+      })),
     },
   });
   await validateIssueArtifactOnDisk({

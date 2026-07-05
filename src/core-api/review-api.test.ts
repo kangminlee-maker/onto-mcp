@@ -32,6 +32,7 @@ import {
 } from "../core-runtime/review/test-fixtures/mock-realization.js";
 import {
   createOntoReviewCoreApi,
+  reviewRetrySettingsFromUnknown,
   type OntoReviewCoreApi,
   type ReviewStatus,
 } from "./review-api.js";
@@ -3332,5 +3333,31 @@ describe("createOntoReviewCoreApi", () => {
       }),
     ).rejects.toThrow(/escapes the session root/);
     await expect(fs.readFile(externalOutput, "utf8")).resolves.toBe("preserve me\n");
+  });
+});
+
+describe("reviewRetrySettingsFromUnknown (continue-path retry round-trip)", () => {
+  const numericRetry = {
+    lens_max_retries: 2,
+    issue_artifact_max_retries: 2,
+    deliberation_max_retries: 2,
+    synthesis_max_retries: 2,
+    retry_initial_delay_ms: 3000,
+  };
+
+  it("round-trips salvage and resubmit opt-ins from a manifest retry policy", () => {
+    const parsed = reviewRetrySettingsFromUnknown({
+      ...numericRetry,
+      salvage: { enabled: true, delta_completion: "unit_llm" },
+      resubmit: { enabled: true },
+    });
+    expect(parsed?.salvage.enabled).toBe(true);
+    expect(parsed?.resubmit.enabled).toBe(true);
+  });
+
+  it("defaults both opt-ins to disabled when a pre-field artifact omits them", () => {
+    const parsed = reviewRetrySettingsFromUnknown({ ...numericRetry });
+    expect(parsed?.salvage.enabled).toBe(false);
+    expect(parsed?.resubmit.enabled).toBe(false);
   });
 });

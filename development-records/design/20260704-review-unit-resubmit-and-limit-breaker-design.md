@@ -87,9 +87,10 @@ reconstruct semantic-map 판정 디스패치).
    임계 N=3 (settings 기본값, 재보정 가능).
 3. **poison item**: 특정 아이템에서만 재현되는 실패는 per-item attempt cap(기존 어휘, ~3) 소진 후
    **dead-letter 목록**(영속 아티팩트)으로 이동 = complete-with-failure. 배치는 계속 진행.
-4. **breaker 발화** → 배치 halt + **미완료 아이템 목록 영속** + 사용자 공지, 또는 settings의 fallback
-   provider로 스왑(기존 per-unit llm config 재사용 — 새 라우팅 개념 없음). fallback 스왑 시
-   **family-collapse 사실을 run record에 기록**한다(리뷰 신뢰 강등 규칙의 소비자가 읽는 필드).
+4. **breaker 발화** → 배치 halt + **미완료 아이템 목록 영속** + 사용자 공지. fallback provider 스왑
+   (기존 per-unit llm config 재사용 + family-collapse run record 기록)은 **후속 cut으로 이연**한다
+   (owner 결정 2026-07-05, §8) — 유실 방지·재시도 폭풍 차단은 halt+영속만으로 완결되고, 스왑은
+   처리량 연속성 최적화라 신뢰 강등 기록·소비자 배선 표면을 첫 cut에 끌고 오지 않는다.
 5. **회복 후 재디스패치는 미완료 집합만 정확히**. §1.2의 34건 유실은 이 목록이 없어서 발생했다.
 6. **관측 상시화**: per-item (모델, 토큰, 결과, 시도수)를 run 아티팩트로 영속 — 임계 재보정이 새 실험
    없이 기존 로그를 읽게 한다.
@@ -110,7 +111,7 @@ reconstruct semantic-map 판정 디스패치).
 | 유닛 결손 공시 | degradation-summary.yaml | 항목 필드 소폭 확장 |
 | 구조 결함 halt | halted_partial + halt_reason | halt_reason 값 1개: `correlated_validation` |
 | 유실 방지 | — | dead-letter/미완료 목록 아티팩트 1종 |
-| provider fallback | per-unit llm config (settings v3) | — |
+| provider fallback (후속 cut 이연, §4 규칙 4) | per-unit llm config (settings v3) | — |
 | breaker 임계·resubmit cap | settings 기본값 체계 | 키 2개 (기본 N=3, cap=3) |
 
 ## 7. 완료조건 (falsifiable)
@@ -135,6 +136,27 @@ reconstruct semantic-map 판정 디스패치).
 - **체크아웃-설치본 드리프트**: 본 문서의 코드 anchor는 feat/l2-real-llm-authoring 시점의 이름 기준이다.
   구현 cut 시작 시 현재 HEAD에서 이름 기반 grep으로 재확인한다 (`allowed_evidence_refs`,
   `issue-stance:` unit id, degradation-summary writer, attempt 어휘).
+- **[정정 2026-07-05, 구현 cut HEAD 재확인 결과]** §3의 전제 3건을 실코드 기준으로 정정한다:
+  (1) stance 화이트리스트 필드는 per-issue `issue_evidence_refs`다 (`allowed_evidence_refs`(flat)는
+  deliberation 필드). (2) 리뷰 측 attempt 어휘는 `attempt_count` + `recovery` 마커다
+  (`attempt_id/attempt_kind`는 reconstruct 전용 어휘). (3) evidence_ref 검증 실패는 worker 경로에서
+  `output_contract`가 아니라 `executor_exit`로 분류되어 **blind 유닛 재시도(기본 2회, 총 3시도)가 이미
+  발생 중**이다 — 따라서 설계 A의 신규 표면은 시도 횟수가 아니라 (a) 재시도 packet에 오류 명세 주입,
+  (b) cap 소진 시 whole-run halt 대신 유닛 강등, (c) 상관 에스컬레이션이며, cap은 기존
+  `issue_artifact_max_retries`(기본 2)를 재사용해 §6의 신규 settings 키를 2개→1개(`resubmit.enabled`)로
+  줄인다 (concept economy 개선; breaker N은 설계 B cut에서 추가).
+- **[구현 발견 2026-07-05]** §3.5의 "새 checkpoint 개념 불요"는 성립하나, 구현 중 미예견 소비자 1곳이
+  드러났다: post-lens frontier 수렴 루프와 continuation frontier가 강등 유닛을 "미완 작업"으로
+  재제안해 수렴 불가. 해소로 공유 ledger에 terminal resolution 마커
+  (`PipelineExecutionLedgerUnitEntry.resolution: "demoted"` + `isResolvedLedgerUnit` 술어)를 추가하고,
+  review ledger 빌더가 stance matrix의 `validation.missing_stances` 공시를 읽어 설정한다 — 공시 필드가
+  실소비자를 얻어 runtime authority가 됐다. 계약 반영: pipeline-execution-ledger-contract.md.
 - 유실된 34개 node_ref의 소급 재판정은 운영 과제로 분리 — F-B3 메커니즘이 생기면 그 경로로 처리 가능.
 - deliberation_response 등 여타 유닛으로의 resubmit 확장, `onto_review_continue` 기본화(도구 UX),
   리뷰 유닛 티어링(sweep↓/verdict↑ 재배치)은 후속 cut.
+- breaker 발화 시 fallback provider 스왑 + family-collapse 기록(§4 규칙 4)은 후속 cut — 첫 cut의
+  breaker 동작은 halt + 미완료 목록 영속 + 공지뿐이다 (owner 결정 2026-07-05).
+- **[적대 리뷰 이연 2026-07-05]** 강등의 durable authority가 현재 stance matrix
+  `validation.missing_stances` 공시 필드 하나다(ledger 빌더가 재독, 손상 시 swallow→빈 집합).
+  검증 결과 matrix 쓰기는 원자적이고 A/B 오케스트레이션 상호배제로 현행 도달 경로는 안전하나,
+  근본 강화(강등 마커를 execution-result per-unit 결과에 기록 + matrix 읽기 fail-loud)는 후속 cut.

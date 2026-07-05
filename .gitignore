@@ -27,3 +27,6 @@ dist/
 # .mcpb Desktop Extension build output (scripts/build-mcpb.mjs).
 # packaging/ and manifest.json are source — intentionally NOT ignored.
 build/
+
+# local env secrets (never commit)
+.env

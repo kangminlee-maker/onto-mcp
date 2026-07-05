@@ -110,6 +110,11 @@ const ReviewSubmitSalvageSettingsSchema = z
     delta_completion: z.literal("unit_llm").optional(),
   })
   .strict();
+const ReviewUnitResubmitSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+  })
+  .strict();
 const ReviewRetrySettingsSchema = z
   .object({
     lens_max_retries: z.number().int().min(0).optional(),
@@ -118,6 +123,7 @@ const ReviewRetrySettingsSchema = z
     synthesis_max_retries: z.number().int().min(0).optional(),
     retry_initial_delay_ms: z.number().int().min(0).optional(),
     salvage: ReviewSubmitSalvageSettingsSchema.optional(),
+    resubmit: ReviewUnitResubmitSettingsSchema.optional(),
   })
   .strict();
 const ReviewUnitExecutionSettingsSchema = z
@@ -166,6 +172,8 @@ const DEFAULT_REVIEW_RETRY_SETTINGS = {
   retry_initial_delay_ms: 3000,
   // opt-in: 벤치마크 재현성 보호 — 활성화는 settings로만.
   salvage: { enabled: false, delta_completion: "unit_llm" },
+  // opt-in: OFF = 현행 halt 동작 보존 — 활성화는 settings로만.
+  resubmit: { enabled: false },
 } as const satisfies ReviewRetrySettings;
 
 const DEFAULT_REVIEW_UNIT_TIMEOUT_MS = 240000;
@@ -561,6 +569,25 @@ export interface ReviewSubmitSalvageSettings {
   delta_completion: "unit_llm";
 }
 
+/**
+ * Bounded unit resubmit on validation rejection (design:
+ * 20260704-review-unit-resubmit-and-limit-breaker-design.md, 설계 A).
+ * Opt-in. When enabled, a unit whose structured submit was rejected by
+ * deterministic validation is re-requested with an error spec injected into
+ * its packet (reusing the unit's existing retry budget), and exhaustion
+ * demotes the unit to complete-with-failure instead of halting the run —
+ * unless the same validation class fails a majority of units
+ * (correlated_validation whole-run halt). Current wiring: issue-stance
+ * evidence_refs rejections only.
+ */
+export interface ReviewUnitResubmitSettingsInput {
+  enabled?: boolean | undefined;
+}
+
+export interface ReviewUnitResubmitSettings {
+  enabled: boolean;
+}
+
 export interface ReviewRetrySettingsInput {
   lens_max_retries?: number | undefined;
   issue_artifact_max_retries?: number | undefined;
@@ -568,6 +595,7 @@ export interface ReviewRetrySettingsInput {
   synthesis_max_retries?: number | undefined;
   retry_initial_delay_ms?: number | undefined;
   salvage?: ReviewSubmitSalvageSettingsInput | undefined;
+  resubmit?: ReviewUnitResubmitSettingsInput | undefined;
 }
 
 export interface ReviewRetrySettings {
@@ -577,6 +605,7 @@ export interface ReviewRetrySettings {
   synthesis_max_retries: number;
   retry_initial_delay_ms: number;
   salvage: ReviewSubmitSalvageSettings;
+  resubmit: ReviewUnitResubmitSettings;
 }
 
 export interface ReviewArtifactSettings {
@@ -869,6 +898,10 @@ export function completeReviewRetrySettings(
         retry?.salvage?.delta_completion ??
         DEFAULT_REVIEW_RETRY_SETTINGS.salvage.delta_completion,
     },
+    resubmit: {
+      enabled:
+        retry?.resubmit?.enabled ?? DEFAULT_REVIEW_RETRY_SETTINGS.resubmit.enabled,
+    },
   };
 }
 
@@ -1114,6 +1147,15 @@ function mergeReviewRetrySettings(
           salvage: {
             ...(userRetry?.salvage ?? {}),
             ...(projectRetry?.salvage ?? {}),
+          },
+        }
+      : {}),
+    // resubmit merges deep for the same reason as salvage.
+    ...(userRetry?.resubmit !== undefined || projectRetry?.resubmit !== undefined
+      ? {
+          resubmit: {
+            ...(userRetry?.resubmit ?? {}),
+            ...(projectRetry?.resubmit ?? {}),
           },
         }
       : {}),
@@ -1576,6 +1618,7 @@ export function defaultReviewRetrySettings(): ReviewRetrySettings {
   return {
     ...DEFAULT_REVIEW_RETRY_SETTINGS,
     salvage: { ...DEFAULT_REVIEW_RETRY_SETTINGS.salvage },
+    resubmit: { ...DEFAULT_REVIEW_RETRY_SETTINGS.resubmit },
   };
 }
 

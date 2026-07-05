@@ -21,7 +21,7 @@ import {
   buildLedgerTrust,
   buildOutputHashes,
   fileSha256IfPresent,
-  isTrustedLedgerUnit,
+  isResolvedLedgerUnit,
   normalizeLedgerRefs,
   type PipelineExecutionLedger,
   type PipelineExecutionLedgerUnitEntry,
@@ -653,6 +653,32 @@ async function buildUnitEntry(args: {
   };
 }
 
+/**
+ * 설계 A demotion-disclosure consumer: lenses listed in the persisted stance
+ * matrix's `validation.missing_stances` were demoted complete-with-failure
+ * after bounded resubmit exhaustion; the matrix consumed the gap, so their
+ * per-lens ledger units are terminally resolved (owe no further dispatch).
+ */
+async function demotedStanceUnitIdsFromMatrix(
+  executionPlan: ReviewExecutionPlan,
+): Promise<Set<string>> {
+  const matrixPath = executionPlan.issue_stance_matrix_path;
+  if (!matrixPath || !(await fileExists(matrixPath))) return new Set();
+  try {
+    const matrix = await readYamlDocument<{
+      validation?: { missing_stances?: Array<{ lens_id?: unknown }> };
+    }>(matrixPath);
+    return new Set(
+      (matrix.validation?.missing_stances ?? [])
+        .map((entry) => entry?.lens_id)
+        .filter((lensId): lensId is string => typeof lensId === "string")
+        .map((lensId) => `issue-stance:${lensId}`),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 export async function buildReviewPipelineExecutionLedger(
   params: BuildReviewPipelineExecutionLedgerParams,
 ): Promise<PipelineExecutionLedger> {
@@ -702,6 +728,10 @@ export async function buildReviewPipelineExecutionLedger(
   );
   const trustedUnitIds = new Set<string>();
   const ledgerUnits: PipelineExecutionLedgerUnitEntry[] = [];
+  // Lazy + memoized: the matrix read matters only when some stance unit is
+  // not completed; a healthy run (frontier loops call this builder per
+  // iteration) never pays the stat+read+parse.
+  let demotedStanceUnitIds: Set<string> | null = null;
 
   for (const plannedUnit of units) {
     const entry = await buildUnitEntry({
@@ -717,8 +747,22 @@ export async function buildReviewPipelineExecutionLedger(
         params.reviewRunManifest !== null && params.reviewRunManifest !== undefined,
       trustedUnitIds,
     });
+    if (
+      plannedUnit.unitId.startsWith("issue-stance:") &&
+      entry.status !== "completed"
+    ) {
+      demotedStanceUnitIds ??= await demotedStanceUnitIdsFromMatrix(
+        params.executionPlan,
+      );
+      if (demotedStanceUnitIds.has(plannedUnit.unitId)) {
+        entry.resolution = "demoted";
+      }
+    }
     ledgerUnits.push(entry);
-    if (isTrustedLedgerUnit(entry)) trustedUnitIds.add(entry.unitId);
+    // Trusted output or terminally resolved — a demoted unit satisfies
+    // downstream upstream-trust because the stage product consumed the
+    // disclosed gap, not the unit's (absent) output.
+    if (isResolvedLedgerUnit(entry)) trustedUnitIds.add(entry.unitId);
   }
 
   return {
