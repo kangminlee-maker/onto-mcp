@@ -182,6 +182,10 @@ reconstruct semantic-map 판정 디스패치).
   attended 실행이 지배적인 리뷰에서 그 가치가 배선 표면을 정당화하지 못한다. 실 관찰에서 리뷰
   측 429 낭비가 확인되면 순수 모듈(dispatch-breaker.ts)을 lens fan-out aggregator로 배선하는
   후속 cut을 연다.
+  **[owner 부결 2026-07-05]** 이연을 부결하고 지금 배선하기로 결정 — 근거의 잔여 구멍
+  (trustedOnSeatPresence가 부분출력 seat를 완료로 신뢰할 가능성)을 관찰로 기다리지 않고 선제
+  차단한다. 배선 브랜치 feat/review-dispatch-breaker, 계획은
+  development-records/handoff/20260705-review-breaker-wiring-handoff.md.
 - **[설계 B 적대 리뷰 반영 2026-07-05]** 8-lens 리뷰 수렴 반영: (1) skip/무디스패치 관찰이
   성공으로 기록되어 계통 streak을 리셋하고 outage 피해 아이템을 poison으로 오분류하던 결함 수정
   (`recordItemSkipped` 신설 — 성공은 실제 provider 디스패치 성공만); (2) 아이템 귀속 분류를
