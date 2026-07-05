@@ -30,6 +30,9 @@
         "retry_initial_delay_ms": 3000,
         "resubmit": {
           "enabled": true
+        },
+        "dispatch_breaker": {
+          "enabled": true
         }
       },
       "units": {
