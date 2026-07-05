@@ -51,6 +51,7 @@ import {
 } from "../core-runtime/reconstruct/mock-llm-realization.js";
 import {
   assertSettingsModelsSupported,
+  completeReconstructDispatchBreakerSettings,
   isReconstructSemanticMapAuthoringEnabled,
   resolveOptionalReconstructActorLlmSettings,
   resolveSettingsChain,
@@ -985,6 +986,11 @@ export function createOntoReconstructCoreApi(
             confirmationProviderRealization,
             directiveAuthor,
             confirmationProvider,
+            // 설계 B: settings가 유일 권위(INV-CFG-1) — 기본 OFF, 완성값은
+            // settings chain이 채운다.
+            dispatchBreaker: completeReconstructDispatchBreakerSettings(
+              settings.reconstruct?.execution?.dispatch_breaker,
+            ),
             filesystemAllowedRoots:
               request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
               [projectRoot],

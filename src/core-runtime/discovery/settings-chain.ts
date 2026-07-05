@@ -451,6 +451,15 @@ const V3ReviewSettingsSchema = z
   })
   .strict();
 
+const V3ReconstructDispatchBreakerSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    systemic_threshold: z.number().int().min(1).optional(),
+    per_item_max_attempts: z.number().int().min(1).optional(),
+    backoff_initial_ms: z.number().int().min(0).optional(),
+    backoff_cap_ms: z.number().int().min(0).optional(),
+  })
+  .strict();
 const V3ReconstructSettingsSchema = z
   .object({
     execution: z
@@ -462,6 +471,7 @@ const V3ReconstructSettingsSchema = z
         // Execution-level scalars (e.g. the semantic-map authoring opt-in,
         // design §5.5) — entries DERIVED from the scalar constant (§5.1).
         ...reconstructExecutionScalarsShape(),
+        dispatch_breaker: V3ReconstructDispatchBreakerSettingsSchema.optional(),
       })
       .strict()
       .optional(),
@@ -694,12 +704,66 @@ export interface ReconstructActorSettings {
   llm: LlmModelSwitcherConfig;
 }
 
+/**
+ * Dispatch limit/transport circuit breaker for unattended reconstruct batch
+ * loops (설계 B, 20260704-review-unit-resubmit-and-limit-breaker-design.md
+ * §4). Opt-in. Structurally identical to `DispatchBreakerPolicy` in
+ * src/core-runtime/llm/dispatch-breaker.ts (the policy consumer).
+ */
+export interface ReconstructDispatchBreakerSettingsInput {
+  enabled?: boolean | undefined;
+  systemic_threshold?: number | undefined;
+  per_item_max_attempts?: number | undefined;
+  backoff_initial_ms?: number | undefined;
+  backoff_cap_ms?: number | undefined;
+}
+
+export interface ReconstructDispatchBreakerSettings {
+  enabled: boolean;
+  systemic_threshold: number;
+  per_item_max_attempts: number;
+  backoff_initial_ms: number;
+  backoff_cap_ms: number;
+}
+
+export const DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS = {
+  // opt-in: OFF = 현행 동작 보존 — 활성화는 settings로만.
+  enabled: false,
+  systemic_threshold: 3,
+  per_item_max_attempts: 3,
+  backoff_initial_ms: 3000,
+  backoff_cap_ms: 30000,
+} as const satisfies ReconstructDispatchBreakerSettings;
+
+export function completeReconstructDispatchBreakerSettings(
+  input: ReconstructDispatchBreakerSettingsInput | undefined,
+): ReconstructDispatchBreakerSettings {
+  return {
+    enabled:
+      input?.enabled ?? DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.enabled,
+    systemic_threshold:
+      input?.systemic_threshold ??
+      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.systemic_threshold,
+    per_item_max_attempts:
+      input?.per_item_max_attempts ??
+      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.per_item_max_attempts,
+    backoff_initial_ms:
+      input?.backoff_initial_ms ??
+      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.backoff_initial_ms,
+    backoff_cap_ms:
+      input?.backoff_cap_ms ??
+      DEFAULT_RECONSTRUCT_DISPATCH_BREAKER_SETTINGS.backoff_cap_ms,
+  };
+}
+
 export interface ReconstructSettings {
   // Both axes derive from their constants (design §5.1, F19 closure): a new
   // actor key or execution scalar cannot exist in the type without existing
   // in the copy functions' iteration source.
   execution?: {
     actors?: Partial<Record<ReconstructActorKey, ReconstructActorSettings>>;
+    // Object-shaped execution block (not a boolean scalar): 설계 B breaker.
+    dispatch_breaker?: ReconstructDispatchBreakerSettingsInput;
   } & Partial<Record<ReconstructExecutionScalarKey, boolean>>;
 }
 
@@ -1031,6 +1095,9 @@ export function v3ReconstructSettings(
     const value = execution[key];
     if (value !== undefined) out[key] = value;
   }
+  if (execution.dispatch_breaker !== undefined) {
+    out.dispatch_breaker = execution.dispatch_breaker;
+  }
   return Object.keys(out).length > 0 ? { execution: out } : undefined;
 }
 
@@ -1359,6 +1426,17 @@ export function mergeReconstructSettings(
     const value = project?.execution?.[key] ?? user?.execution?.[key];
     if (value !== undefined) out[key] = value;
   }
+  // dispatch_breaker merges deep (salvage/resubmit precedent): a project
+  // layer that partially sets it must not clobber an inherited user opt-in.
+  const dispatchBreaker =
+    user?.execution?.dispatch_breaker !== undefined ||
+    project?.execution?.dispatch_breaker !== undefined
+      ? {
+          ...(user?.execution?.dispatch_breaker ?? {}),
+          ...(project?.execution?.dispatch_breaker ?? {}),
+        }
+      : undefined;
+  if (dispatchBreaker !== undefined) out.dispatch_breaker = dispatchBreaker;
   return Object.keys(out).length > 0 ? { execution: out } : undefined;
 }
 
