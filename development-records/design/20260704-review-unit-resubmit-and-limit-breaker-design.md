@@ -87,9 +87,10 @@ reconstruct semantic-map 판정 디스패치).
    임계 N=3 (settings 기본값, 재보정 가능).
 3. **poison item**: 특정 아이템에서만 재현되는 실패는 per-item attempt cap(기존 어휘, ~3) 소진 후
    **dead-letter 목록**(영속 아티팩트)으로 이동 = complete-with-failure. 배치는 계속 진행.
-4. **breaker 발화** → 배치 halt + **미완료 아이템 목록 영속** + 사용자 공지, 또는 settings의 fallback
-   provider로 스왑(기존 per-unit llm config 재사용 — 새 라우팅 개념 없음). fallback 스왑 시
-   **family-collapse 사실을 run record에 기록**한다(리뷰 신뢰 강등 규칙의 소비자가 읽는 필드).
+4. **breaker 발화** → 배치 halt + **미완료 아이템 목록 영속** + 사용자 공지. fallback provider 스왑
+   (기존 per-unit llm config 재사용 + family-collapse run record 기록)은 **후속 cut으로 이연**한다
+   (owner 결정 2026-07-05, §8) — 유실 방지·재시도 폭풍 차단은 halt+영속만으로 완결되고, 스왑은
+   처리량 연속성 최적화라 신뢰 강등 기록·소비자 배선 표면을 첫 cut에 끌고 오지 않는다.
 5. **회복 후 재디스패치는 미완료 집합만 정확히**. §1.2의 34건 유실은 이 목록이 없어서 발생했다.
 6. **관측 상시화**: per-item (모델, 토큰, 결과, 시도수)를 run 아티팩트로 영속 — 임계 재보정이 새 실험
    없이 기존 로그를 읽게 한다.
@@ -110,7 +111,7 @@ reconstruct semantic-map 판정 디스패치).
 | 유닛 결손 공시 | degradation-summary.yaml | 항목 필드 소폭 확장 |
 | 구조 결함 halt | halted_partial + halt_reason | halt_reason 값 1개: `correlated_validation` |
 | 유실 방지 | — | dead-letter/미완료 목록 아티팩트 1종 |
-| provider fallback | per-unit llm config (settings v3) | — |
+| provider fallback (후속 cut 이연, §4 규칙 4) | per-unit llm config (settings v3) | — |
 | breaker 임계·resubmit cap | settings 기본값 체계 | 키 2개 (기본 N=3, cap=3) |
 
 ## 7. 완료조건 (falsifiable)
@@ -138,3 +139,5 @@ reconstruct semantic-map 판정 디스패치).
 - 유실된 34개 node_ref의 소급 재판정은 운영 과제로 분리 — F-B3 메커니즘이 생기면 그 경로로 처리 가능.
 - deliberation_response 등 여타 유닛으로의 resubmit 확장, `onto_review_continue` 기본화(도구 UX),
   리뷰 유닛 티어링(sweep↓/verdict↑ 재배치)은 후속 cut.
+- breaker 발화 시 fallback provider 스왑 + family-collapse 기록(§4 규칙 4)은 후속 cut — 첫 cut의
+  breaker 동작은 halt + 미완료 목록 영속 + 공지뿐이다 (owner 결정 2026-07-05).
