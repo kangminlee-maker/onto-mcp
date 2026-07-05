@@ -161,6 +161,37 @@ describe("DispatchBreakerState", () => {
     expect(artifact.completed_item_ids).toEqual(["b"]);
     expect(artifact.incomplete_item_ids).toEqual(["a", "c", "d"]);
   });
+
+  it("attribution freezes at trip: a late in-flight success must not poison the outage victims (concurrent pools)", () => {
+    // 리뷰 lens/stance 풀은 동시 실행이라 트립 결정 뒤에 in-flight 성공이
+    // 도착할 수 있다 — 그 성공이 pending 피해 유닛을 poison으로 재분류하면
+    // 회복 집합(incomplete)에서 유실된다 (규칙 5 위반 회귀 가드).
+    const state = new DispatchBreakerState(policy());
+    state.recordItemFailure(systemicEntry("a"));
+    state.recordItemFailure(systemicEntry("b"));
+    const trip = state.recordItemFailure(systemicEntry("c"));
+    expect(trip).not.toBeNull();
+    state.recordItemSuccess("d");
+    expect(state.deadLetterEntries()).toEqual([]);
+    const artifact = incompleteOf(state, ["a", "b", "c", "d", "e"]);
+    expect(artifact.completed_item_ids).toEqual(["d"]);
+    // 피해 3 + 미디스패치 1 전부 회복 집합에 남는다.
+    expect(artifact.incomplete_item_ids).toEqual(["a", "b", "c", "e"]);
+  });
+
+  it("the first threshold crossing is the trip authority: post-trip failures join the victims without rewriting the trip", () => {
+    const state = new DispatchBreakerState(policy());
+    state.recordItemFailure(systemicEntry("a"));
+    state.recordItemFailure(systemicEntry("b"));
+    const trip = state.recordItemFailure(systemicEntry("c"));
+    expect(trip?.consecutive_item_count).toBe(3);
+    // 트립 뒤 도착한 in-flight 계통 실패: 트립 상태는 불변, 피해로 귀속.
+    expect(state.recordItemFailure(systemicEntry("d"))).toBeNull();
+    expect(state.tripped()).toEqual(trip);
+    const artifact = incompleteOf(state, ["a", "b", "c", "d"]);
+    expect(artifact.incomplete_item_ids).toEqual(["a", "b", "c", "d"]);
+    expect(artifact.breaker.consecutive_item_count).toBe(3);
+  });
 });
 
 describe("classifyDispatchError / dispatch markers", () => {

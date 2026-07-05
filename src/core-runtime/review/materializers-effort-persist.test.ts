@@ -242,6 +242,13 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
       retry_initial_delay_ms: 500,
       salvage: { enabled: false, delta_completion: "unit_llm" },
       resubmit: { enabled: false },
+      dispatch_breaker: {
+        enabled: false,
+        systemic_threshold: 3,
+        per_call_max_attempts: 3,
+        backoff_initial_ms: 3000,
+        backoff_cap_ms: 30000,
+      },
     });
   });
 
@@ -268,6 +275,13 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
       retry_initial_delay_ms: 3000,
       salvage: { enabled: false, delta_completion: "unit_llm" },
       resubmit: { enabled: false },
+      dispatch_breaker: {
+        enabled: false,
+        systemic_threshold: 3,
+        per_call_max_attempts: 3,
+        backoff_initial_ms: 3000,
+        backoff_cap_ms: 30000,
+      },
     });
   });
 

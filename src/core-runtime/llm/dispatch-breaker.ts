@@ -6,8 +6,9 @@
  * an unattended batch must not throw a retry storm at a dead rate limit and
  * lose items. The repo has no common dispatch surface (§8 재앵커링), so the
  * policy is injected per loop. Currently wired: the reconstruct semantic-map
- * judgment loop. Review lens/stance wiring is DEFERRED with recorded
- * rationale (§8 리뷰 측 배선 이연) — do not assume review coverage.
+ * judgment loop and the review lens/stance fan-out pools (flat per-unit
+ * loops; the nested-workers first-attempt batch is NOT covered — the outer
+ * worker owns that fan-out, §8 후속).
  *
  * 1. backoff first — a per-item failure counts toward the breaker only after
  *    the item's bounded backoff retries are exhausted. Providers surface 429s
@@ -29,6 +30,8 @@
  * the wiring; this module owns classification, the backoff schedule, the
  * breaker state machine, and the artifact projection.
  */
+
+import path from "node:path";
 
 /**
  * Breaker counting refinement of the shared pipeline ledger's OPEN
@@ -229,6 +232,12 @@ export class DispatchBreakerState {
    * {@link recordItemSkipped} instead. */
   recordItemSuccess(itemId: string): void {
     this.completed.push(itemId);
+    // Attribution freezes at trip: a CONCURRENT pool (review lens/stance)
+    // can deliver an in-flight success after the trip decision, and letting
+    // it reclassify the pending outage victims as poison would dead-letter
+    // them OUT of the incomplete recovery set (규칙 5 위반). The late unit
+    // itself still counts as completed.
+    if (this.trip !== null) return;
     // The provider lane is alive: pending systemic failures were item-scoped
     // after all — poison, dead-lettered.
     for (const entry of this.pendingSystemic) this.deadLetter.push(entry);
@@ -255,12 +264,17 @@ export class DispatchBreakerState {
     if (
       !this.pendingSystemic.some((pending) => pending.item_id === entry.item_id)
     ) {
+      // Post-trip in-flight systemic failures still join the pending set —
+      // they are outage victims and belong to the incomplete recovery set.
       this.pendingSystemic.push(entry);
     }
     if (
       this.policy.enabled &&
+      this.trip === null &&
       this.pendingSystemic.length >= this.policy.systemic_threshold
     ) {
+      // The FIRST crossing is the trip authority; later records must not
+      // rewrite its count (stable halt_reason/artifact for audit).
       this.trip = {
         failure_class: entry.failure_class,
         consecutive_item_count: this.pendingSystemic.length,
@@ -351,6 +365,15 @@ export async function runWithDispatchBackoff<T>(args: {
   }
   // Unreachable: the loop always returns/throws on the final attempt.
   throw new Error(`runWithDispatchBackoff fell through for ${args.label}`);
+}
+
+/** Session-root location of the dead-letter/incomplete artifact — part of the
+ * F-B3 recovery contract (재디스패치 집합의 진실 위치), shared by every wired
+ * pipeline (reconstruct semantic-map, review lens/stance). One batch trips at
+ * most once per run (trip is terminal), so a fixed per-session path holds the
+ * latest batch's end state; the `pipeline`/`batch_label` fields identify it. */
+export function dispatchIncompleteArtifactPath(sessionRoot: string): string {
+  return path.join(sessionRoot, "dispatch-incomplete.yaml");
 }
 
 export interface DispatchIncompleteArtifact {

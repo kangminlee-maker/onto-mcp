@@ -249,6 +249,13 @@ describe("resolveSettingsChain", () => {
       retry_initial_delay_ms: 250,
       salvage: { enabled: false, delta_completion: "unit_llm" },
       resubmit: { enabled: false },
+      dispatch_breaker: {
+        enabled: false,
+        systemic_threshold: 3,
+        per_call_max_attempts: 3,
+        backoff_initial_ms: 3000,
+        backoff_cap_ms: 30000,
+      },
     });
   });
 
@@ -306,6 +313,13 @@ describe("resolveSettingsChain", () => {
         delta_completion: "unit_llm",
       },
       resubmit: { enabled: false },
+      dispatch_breaker: {
+        enabled: false,
+        systemic_threshold: 3,
+        per_call_max_attempts: 3,
+        backoff_initial_ms: 3000,
+        backoff_cap_ms: 30000,
+      },
     });
   });
 
@@ -347,6 +361,85 @@ describe("resolveSettingsChain", () => {
       retry_initial_delay_ms: 3000,
       salvage: { enabled: false, delta_completion: "unit_llm" },
       resubmit: { enabled: false },
+      dispatch_breaker: {
+        enabled: false,
+        systemic_threshold: 3,
+        per_call_max_attempts: 3,
+        backoff_initial_ms: 3000,
+        backoff_cap_ms: 30000,
+      },
+    });
+  });
+
+  it("keeps a project-file resubmit opt-in through normalize+merge (정정 2026-07-05 회귀 가드)", async () => {
+    // definedReviewRetry가 resubmit 복사를 누락해 파일의 opt-in(true)이
+    // 기본값(false)으로 소실되던 결함의 실체인 회귀 테스트 — 반드시
+    // 파일 → resolveSettingsChain 전 구간을 통과해야 한다.
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = { resubmit: { enabled: true } };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry?.resubmit).toEqual({ enabled: true });
+  });
+
+  it("keeps a project-file review dispatch_breaker opt-in through normalize+merge and completes partial fields", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      dispatch_breaker: { enabled: true, systemic_threshold: 2 },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry?.dispatch_breaker).toEqual({
+      enabled: true,
+      systemic_threshold: 2,
+      per_call_max_attempts: 3,
+      backoff_initial_ms: 3000,
+      backoff_cap_ms: 30000,
+    });
+  });
+
+  it("keeps a project-file reconstruct dispatch_breaker opt-in through normalize+merge (관찰 모드 ON의 실체인 가드)", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    (settingsDoc as Record<string, any>).reconstruct = {
+      execution: { dispatch_breaker: { enabled: true } },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.reconstruct?.execution?.dispatch_breaker).toEqual({
+      enabled: true,
+    });
+  });
+
+  it("merges review dispatch_breaker deep: a partial project layer must not clobber a user opt-in", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const userSettings = v3ReviewSettings();
+    userSettings.review.execution.retry = {
+      dispatch_breaker: { enabled: true },
+    };
+    const projectSettings = v3ReviewSettings();
+    projectSettings.review.execution.retry = {
+      dispatch_breaker: { systemic_threshold: 5 },
+    };
+    writeJson(userSettingsPath(), userSettings);
+    writeJson(projectSettingsPath(projectRoot), projectSettings);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry?.dispatch_breaker).toEqual({
+      enabled: true,
+      systemic_threshold: 5,
+      per_call_max_attempts: 3,
+      backoff_initial_ms: 3000,
+      backoff_cap_ms: 30000,
     });
   });
 

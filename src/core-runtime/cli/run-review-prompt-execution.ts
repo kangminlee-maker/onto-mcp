@@ -166,7 +166,14 @@ import {
 import { parseRuntimeIssueDeliberationSchemaContext } from "./runtime-submit-context.js";
 import { parseRuntimeIssueStanceSchemaContext } from "./runtime-submit-context.js";
 import { salvageInputPathFor, type SalvageInput } from "./submit-salvage.js";
-import { TRANSIENT_TRANSPORT_MESSAGE_PATTERNS } from "../llm/dispatch-breaker.js";
+import {
+  DispatchBreakerState,
+  TRANSIENT_TRANSPORT_MESSAGE_PATTERNS,
+  buildDispatchIncompleteArtifact,
+  classifySystemicDispatchFailure,
+  dispatchIncompleteArtifactPath,
+  type DispatchBreakerTripState,
+} from "../llm/dispatch-breaker.js";
 import {
   CORRELATED_VALIDATION_HALT_REASON,
   applyResubmitErrorSpecToPacket,
@@ -576,18 +583,25 @@ class ReviewIssueArtifactDispatchError extends Error {
   /** Explicit halt_reason override (e.g. `correlated_validation: …`);
    * null keeps the default `Issue artifact generation failed: …` phrasing. */
   readonly haltReason: string | null;
+  /** 설계 B 트립 전용: halt 시점까지 기록된 배치 outcome 전체(완료+최종
+   * 실패). 완료 유닛의 행이 execution-result에 남아야 continuation ledger가
+   * 그 유닛을 재디스패치하지 않는다 — 회복 집합 == 미완료 집합 (규칙 5).
+   * 트립 외 halt 경로는 빈 배열(현행 동작 보존). */
+  readonly batchOutcomes: ExecutionOutcome[];
 
   constructor(
     message: string,
     outcome: ExecutionOutcome | null,
     originalError: unknown,
     haltReason: string | null = null,
+    batchOutcomes: ExecutionOutcome[] = [],
   ) {
     super(message);
     this.name = "ReviewIssueArtifactDispatchError";
     this.outcome = outcome;
     this.originalError = originalError;
     this.haltReason = haltReason;
+    this.batchOutcomes = batchOutcomes;
   }
 }
 
@@ -1645,6 +1659,62 @@ function retryTimeoutMs(baseTimeoutMs: number, attempt: number): number {
   return Number.isFinite(expanded) && expanded > 0
     ? Math.floor(expanded)
     : baseTimeoutMs;
+}
+
+/**
+ * 설계 B: 리뷰 fan-out 풀(lens/stance)의 dispatch breaker (opt-in,
+ * `review.execution.retry.dispatch_breaker`). 리뷰는 per-unit bounded retry가
+ * 이미 있으므로 backoff 재시도는 얹지 않는다(규칙 1은 기존 유닛 재시도
+ * 예산으로 충족; policy의 backoff_* 필드는 리뷰 배선에서 미소비) — 최종
+ * outcome 기록 + 계통 임계 감지 + 배치 halt + 미완료 아티팩트만 추가한다.
+ * OFF(기본) = 현행 halt/배리어 동작 보존.
+ */
+function reviewDispatchBreakerFromProfile(
+  profile: ReviewExecutionProfile | undefined,
+): DispatchBreakerState | null {
+  const policy = profile?.retry?.dispatch_breaker;
+  return policy?.enabled === true ? new DispatchBreakerState(policy) : null;
+}
+
+/** 리뷰 경로는 `invokeExecutor` 직행이라 dispatch 마커가 없다 — 최종
+ * failure.message 기반 분류를 쓴다. stderr 기반이라 content-derived 오분류
+ * 리스크는 낮으나 잔여 리스크로 기록 (handoff §3.2). */
+function reviewSystemicFailureClassFromOutcome(outcome: ExecutionOutcome) {
+  return classifySystemicDispatchFailure(outcome.failure?.message);
+}
+
+/** halt_reason vocabulary for a review-side breaker trip — the prefix is the
+ * grep/consumer key (reconstruct의 DispatchBreakerTrippedError 문구와 동형). */
+export const REVIEW_DISPATCH_BREAKER_HALT_REASON_PREFIX = "dispatch_breaker";
+
+function reviewDispatchBreakerHaltReason(
+  trip: DispatchBreakerTripState,
+  incompleteArtifactPath: string,
+): string {
+  return `${REVIEW_DISPATCH_BREAKER_HALT_REASON_PREFIX}: ${trip.failure_class} failed ${trip.consecutive_item_count} consecutive units (threshold ${trip.threshold}) — batch halted, incomplete units persisted for exact re-dispatch (${incompleteArtifactPath})`;
+}
+
+/** 규칙 6 관측 상시화 + 규칙 5 정확 재디스패치 집합: breaker-ON 배치는
+ * 트립이든 완주든 end-state를 리뷰 세션 루트에 영속한다 (reconstruct의
+ * persistDispatchIncompleteArtifact 동형; 경로는 breaker 모듈이 단일소스). */
+async function persistReviewDispatchIncompleteArtifact(args: {
+  sessionRoot: string;
+  batchLabel: "lens" | "issue-stance";
+  plannedItemIds: readonly string[];
+  state: DispatchBreakerState;
+}): Promise<string> {
+  const artifactPath = dispatchIncompleteArtifactPath(args.sessionRoot);
+  await writeYamlDocument(
+    artifactPath,
+    buildDispatchIncompleteArtifact({
+      pipeline: "review",
+      batchLabel: args.batchLabel,
+      createdAt: isoFromTimestamp(Date.now()),
+      plannedItemIds: args.plannedItemIds,
+      state: args.state,
+    }),
+  );
+  return artifactPath;
 }
 
 /**
@@ -3479,6 +3549,9 @@ async function resetExecutionOutputs(
     executionPlan.final_output_path,
     executionPlan.lens_completion_barrier_path ??
       path.join(executionPlan.session_root, "lens-completion-barrier.yaml"),
+    // 설계 B: 이전 run의 breaker end-state는 폐기되는 run의 기록이다 —
+    // 남기면 fresh 재실행(특히 breaker OFF)이 낡은 트립/회복 집합을 주장한다.
+    dispatchIncompleteArtifactPath(executionPlan.session_root),
     executionPlan.teamlead_deliberation_prompt_packet_path,
     ...executionPlan.lens_execution_seats.map((seat) => seat.output_path),
     ...executionPlan.lens_execution_seats
@@ -4560,6 +4633,12 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
   unitTimeoutMs: number;
   retryPolicy: ReviewRuntimeRetryPolicy;
   reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+  /** Continuation per-unit gate (deliberation/synthesis 스테이지와 동일
+   * 패턴): 제공되면 run-owing 유닛만 디스패치하고, 나머지는 완료된 prior
+   * result에서 preserved outcome을 복원한다 — 트립/halt 회복이 이미 지불한
+   * 완료 유닛을 재디스패치하지 않게 한다 (규칙 5). */
+  runUnitIds?: Set<string> | undefined;
+  preservedResultsByUnitId?: Map<string, ReviewUnitExecutionResult> | undefined;
 }): Promise<ExecutionOutcome> {
   const participatingLensIds = args.lensOutputPaths.map(lensIdFromRound1ArtifactPath);
   const startedAtMs = Date.now();
@@ -4651,16 +4730,25 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
     }),
   );
 
+  // Continuation per-unit gate: run-owing 유닛만 디스패치 대상이다.
+  // preserved 유닛은 완료된 prior result에서 outcome을 복원한다 (아래 워커).
+  const owesStanceRun = (unitId: string): boolean =>
+    args.runUnitIds === undefined || args.runUnitIds.has(unitId);
+  const runOwingDispatches = dispatches.filter((dispatch) =>
+    owesStanceRun(dispatch.unit_id),
+  );
+
   // nested-workers: attempt #1 for the whole stage goes through ONE outer
   // nesting batch worker (waves capped at the flat pool width); failed
-  // units fall back to the flat per-unit retry loop below.
+  // units fall back to the flat per-unit retry loop below. preserved 유닛은
+  // 배치에 넣지 않는다 — 디스패치를 빚지지 않은 유닛이다.
   const stanceNestedBatch = await runNestedStageFirstAttempt({
     stageLabel: "issue-stance",
     projectRoot: args.projectRoot,
     sessionRoot: args.sessionRoot,
     executionPlan: args.executionPlan,
     executorConfig: args.executorConfig,
-    dispatches,
+    dispatches: runOwingDispatches,
     dispatchWidth: maxConcurrentIssueStanceResponses,
     unitTimeoutMs: args.unitTimeoutMs,
     reviewExecutionProfile: args.reviewExecutionProfile,
@@ -4668,13 +4756,45 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
 
   const outcomes: Array<ExecutionOutcome | undefined> = new Array(dispatches.length);
   let nextDispatchIndex = 0;
+  // 설계 B: stance 풀 breaker — 유닛의 최종 outcome(per-unit bounded retry
+  // 소진 후)을 관찰 단위로 기록한다. flat 모드에선 모든 stance 유닛이 실
+  // 디스패치를 거치므로 skipped 케이스가 없다. nested 1차 배치가 실행된
+  // 경우엔 lens 풀과 같은 이유로 breaker를 생성하지 않는다: 배치-성공
+  // 유닛이 flat 루프에서 무디스패치 success로 반환되어, 과거(배치 창)의
+  // 생존 증거가 현재의 계통 실패 뒤에 기록되며 streak을 오리셋한다 —
+  // #166이 recordItemSkipped로 고친 결함 클래스의 재유입. nested 커버는
+  // 후속 cut (설계 §8).
+  const breakerState =
+    stanceNestedBatch === undefined
+      ? reviewDispatchBreakerFromProfile(args.reviewExecutionProfile)
+      : null;
+  let breakerTripOutcome: ExecutionOutcome | null = null;
   async function runIssueStanceWorker(): Promise<void> {
     while (true) {
       const dispatchIndex = nextDispatchIndex;
       nextDispatchIndex += 1;
       if (dispatchIndex >= dispatches.length) return;
       const dispatch = dispatches[dispatchIndex]!;
-      outcomes[dispatchIndex] = await executeIssueStanceUnit({
+      if (!owesStanceRun(dispatch.unit_id)) {
+        // preserved/continuation 유닛: 디스패치 없이 완료 증거를 복원한다.
+        // breaker에는 기록하지 않는다 — planned 집합 자체가 run-owing
+        // 유닛으로 계산된다 (lens 풀과 동일 규약). 트립 여부와 무관하게
+        // 기록해야 완료 증거가 결과 아티팩트에서 유실되지 않는다.
+        const prior = args.preservedResultsByUnitId?.get(dispatch.unit_id);
+        if (!prior || prior.status !== "completed") {
+          throw new Error(
+            `Cannot preserve continuation unit without a completed prior result: ${dispatch.unit_id}`,
+          );
+        }
+        outcomes[dispatchIndex] = outcomeFromPreviousResult(prior);
+        continue;
+      }
+      // 트립 이후 새 유닛을 디스패치하지 않는다 — 남은 실행 유닛은
+      // 미디스패치로 incomplete 집합에 남아 회복 재디스패치 대상이 된다
+      // (규칙 5). return이 아닌 continue: 뒤 인덱스의 preserved 유닛
+      // 복원을 마저 소진해야 한다.
+      if (breakerState?.tripped()) continue;
+      const outcome = await executeIssueStanceUnit({
         ctx: {
           projectRoot: args.projectRoot,
           sessionRoot: args.sessionRoot,
@@ -4688,6 +4808,22 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
         participatingLensIds,
         nestedBatch: stanceNestedBatch,
       });
+      outcomes[dispatchIndex] = outcome;
+      if (breakerState) {
+        if (outcome.success) {
+          breakerState.recordItemSuccess(dispatch.unit_id);
+        } else {
+          const trip = breakerState.recordItemFailure({
+            item_id: dispatch.unit_id,
+            failure_class: reviewSystemicFailureClassFromOutcome(outcome),
+            failure_message: outcome.failure?.message ?? "unknown error",
+            attempt_count: outcome.attemptCount ?? 1,
+          });
+          // 첫 임계 도달이 트립 권위(상태머신이 동결) — halt 귀속도 그
+          // 유닛의 outcome으로 고정한다.
+          if (trip !== null) breakerTripOutcome = outcome;
+        }
+      }
     }
   }
   await Promise.all(
@@ -4707,6 +4843,7 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
   const stanceDispatchError = (
     outcome: ExecutionOutcome,
     haltReason: string | null = null,
+    batchOutcomes: ExecutionOutcome[] = [],
   ): ReviewIssueArtifactDispatchError => {
     const message = outcome.failure?.message ?? "unknown error";
     return new ReviewIssueArtifactDispatchError(
@@ -4714,8 +4851,45 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
       outcome,
       message,
       haltReason,
+      batchOutcomes,
     );
   };
+  if (breakerState) {
+    // 규칙 6: 트립이든 완주든 배치 end-state를 영속 — 회복 절차가 항상
+    // 정확한 재디스패치 집합을 갖는다. 트립이 아니어도 아래의 기존
+    // 강등/halt 규칙은 그대로 진행된다 (breaker는 구제하지 않는다).
+    const incompleteArtifactPath = await persistReviewDispatchIncompleteArtifact({
+      sessionRoot: args.sessionRoot,
+      batchLabel: "issue-stance",
+      // planned = 이번 run이 실제 디스패치를 빚진 유닛 집합 (preserved 제외).
+      plannedItemIds: runOwingDispatches.map((dispatch) => dispatch.unit_id),
+      state: breakerState,
+    });
+    const trip = breakerState.tripped();
+    if (trip) {
+      // 규칙 4: 계통 실패 임계 도달 — 배치 halt + 사용자 공지(halt_reason에
+      // 미완료 목록 경로 포함). 설계 A의 halt 배관(4번째 인자 haltReason →
+      // haltAfterIssueArtifactFailure → halted_partial)을 재사용한다.
+      const haltReason = reviewDispatchBreakerHaltReason(trip, incompleteArtifactPath);
+      await appendExecutionProgress(
+        args.executionPlan.error_log_path,
+        "runner issue stance dispatch breaker tripped",
+        [
+          `failure_class: ${trip.failure_class}`,
+          `consecutive_unit_count: ${trip.consecutive_item_count}`,
+          `threshold: ${trip.threshold}`,
+          `dispatch_incomplete_path: ${incompleteArtifactPath}`,
+        ],
+      );
+      throw stanceDispatchError(
+        breakerTripOutcome ?? failedOutcomes[0]!,
+        haltReason,
+        // halt 시점까지의 배치 진실 전체 — 완료 유닛의 행이 남아야 회복
+        // 재디스패치 집합이 dispatch-incomplete의 미완료 집합과 일치한다.
+        completedOutcomes,
+      );
+    }
+  }
   let demotedLensIds: string[] = [];
   if (failedOutcomes.length > 0) {
     // 검증-거부 분류는 두 근거를 모두 본다: in-process 경로는 실패 메시지
@@ -4835,6 +5009,9 @@ async function runIssueArtifactDispatch(args: {
   unitTimeoutMs: number;
   retryPolicy: ReviewRuntimeRetryPolicy;
   reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+  /** Continuation per-unit gate — stance 수집 스테이지로 전달된다. */
+  runUnitIds?: Set<string> | undefined;
+  preservedResultsByUnitId?: Map<string, ReviewUnitExecutionResult> | undefined;
 }): Promise<ExecutionOutcome> {
   if (args.artifactId === "issue-stance-matrix") {
     return runIssueStanceMatrixCollectionDispatch({
@@ -4846,6 +5023,8 @@ async function runIssueArtifactDispatch(args: {
       unitTimeoutMs: args.unitTimeoutMs,
       retryPolicy: args.retryPolicy,
       reviewExecutionProfile: args.reviewExecutionProfile,
+      runUnitIds: args.runUnitIds,
+      preservedResultsByUnitId: args.preservedResultsByUnitId,
     });
   }
   const seat = await writeIssueArtifactPromptPacket({
@@ -6412,6 +6591,25 @@ export async function executeReviewPromptExecution(
   );
   let nextLensIndex = 0;
 
+  // A-path 스코프 판별을 호이스트: 초기 lens 페이즈가 nested 배치로 가는
+  // 조건 (continuation/repair 패스는 항상 flat per-unit 루프).
+  const nestedLensWorkerExecutor =
+    !continuationMode &&
+    params.reviewExecutionProfile?.mode === "nested-workers" &&
+    (params.reviewExecutionProfile.worker_executor === "codex" ||
+      params.reviewExecutionProfile.worker_executor === "claude_code")
+      ? params.reviewExecutionProfile.worker_executor
+      : null;
+  // 설계 B: lens 풀 breaker — flat per-unit 루프(runLensWorker)의 최종
+  // outcome만 관찰한다. nested 1차 배치는 외부 워커가 fan-out을 소유해
+  // 유닛별 관찰 시점이 없다 — 그 경로에선 breaker를 생성하지 않는다
+  // (생성하면 미기록 planned 전체가 incomplete로 오기록된다). nested 커버는
+  // 후속 cut (설계 §8).
+  const lensBreakerState =
+    nestedLensWorkerExecutor === null
+      ? reviewDispatchBreakerFromProfile(params.reviewExecutionProfile)
+      : null;
+
   async function haltForCancellation(args: {
     cancelRequest: ReviewCancelRequestArtifact;
     phase: string;
@@ -6532,7 +6730,19 @@ export async function executeReviewPromptExecution(
         return;
       }
       if (!shouldRunUnit(dispatch.unit_id)) {
+        // preserved/continuation 유닛은 breaker에 기록하지 않는다 — planned
+        // 집합 자체가 "이번 run이 실제 디스패치하는 유닛"으로 계산된다.
+        // 트립 여부와 무관하게 기록한다: 디스패치가 필요 없는 완료 증거를
+        // 빼먹으면 barrier/execution-result가 완료 lens를 missing으로
+        // 기록해 다음 continuation이 이미 완료된 lens를 재디스패치한다.
         executionOutcomes[currentIndex] = preservedOutcomeForDispatch(dispatch);
+        continue;
+      }
+      // 설계 B: 트립 이후 새 lens를 디스패치하지 않는다 — 남은 실행 유닛은
+      // 미디스패치로 incomplete 집합에 남아 회복 재디스패치 대상이 된다
+      // (규칙 5). return이 아닌 continue: 뒤 인덱스의 preserved 유닛 기록을
+      // 마저 소진해야 한다.
+      if (lensBreakerState?.tripped()) {
         continue;
       }
       console.log(`[review runner] starting ${dispatch.unit_kind}: ${dispatch.unit_id}`);
@@ -6638,6 +6848,8 @@ export async function executeReviewPromptExecution(
           packetBytes: await fileSizeIfPresent(dispatch.packet_path),
           outputBytes: await fileSizeIfPresent(dispatch.output_path),
         };
+        // 실 디스패치 성공만 프로바이더 생존 증거다 (breaker 규칙 2).
+        lensBreakerState?.recordItemSuccess(dispatch.unit_id);
       } else {
         const completedAtMs = Date.now();
         const failure: ExecutionFailure = {
@@ -6656,7 +6868,7 @@ export async function executeReviewPromptExecution(
           failure,
           executionPlan.effective_boundary_state,
         );
-        executionOutcomes[currentIndex] = {
+        const outcome: ExecutionOutcome = {
           dispatch,
           success: false,
           startedAtMs,
@@ -6666,6 +6878,16 @@ export async function executeReviewPromptExecution(
           outputBytes,
           failure,
         };
+        executionOutcomes[currentIndex] = outcome;
+        // 유닛의 최종 실패(per-unit retry 소진)를 관찰 단위로 기록. 계통
+        // 클래스가 아니면(dead-letter) streak에 닿지 않고, 트립 여부는 루프
+        // 상단 체크가 소비한다 — halt는 배리어 뒤 epilogue가 수행.
+        lensBreakerState?.recordItemFailure({
+          item_id: dispatch.unit_id,
+          failure_class: reviewSystemicFailureClassFromOutcome(outcome),
+          failure_message: failure.message,
+          attempt_count: attemptsUsed,
+        });
       }
     }
   }
@@ -6674,26 +6896,21 @@ export async function executeReviewPromptExecution(
   // scope). Continuation/repair passes re-dispatch remaining units through
   // the flat per-unit loop — same unit-executor invocation, same artifact
   // contract, so the seat truth is identical either way.
-  if (
-    !continuationMode &&
-    params.reviewExecutionProfile?.mode === "nested-workers" &&
-    (params.reviewExecutionProfile.worker_executor === "codex" ||
-      params.reviewExecutionProfile.worker_executor === "claude_code")
-  ) {
+  if (nestedLensWorkerExecutor !== null) {
     const nestedBrand =
-      params.reviewExecutionProfile.worker_executor === "codex"
+      nestedLensWorkerExecutor === "codex"
         ? ("codex" as const)
         : ("claude" as const);
     console.log(
-      `[review runner] mode=nested-workers worker_executor=${params.reviewExecutionProfile.worker_executor}`,
+      `[review runner] mode=nested-workers worker_executor=${nestedLensWorkerExecutor}`,
     );
     await appendExecutionProgress(
       executionPlan.error_log_path,
       "runner profile dispatch: nested-workers",
       [
-        `teamlead_seat: ${params.reviewExecutionProfile.teamlead.seat}`,
-        `lens_seat: ${params.reviewExecutionProfile.lens.seat}`,
-        `worker_executor: ${params.reviewExecutionProfile.worker_executor}`,
+        `teamlead_seat: ${params.reviewExecutionProfile?.teamlead.seat}`,
+        `lens_seat: ${params.reviewExecutionProfile?.lens.seat}`,
+        `worker_executor: ${nestedLensWorkerExecutor}`,
         `planned_lens_count: ${lensDispatches.length}`,
       ],
     );
@@ -6893,6 +7110,20 @@ export async function executeReviewPromptExecution(
     );
   }
 
+  // 설계 B 규칙 6: breaker-ON lens 배치는 트립이든 완주든 end-state를
+  // 영속한다 — 회복 절차가 항상 정확한 재디스패치 집합을 갖는다.
+  let lensDispatchIncompletePath: string | null = null;
+  if (lensBreakerState) {
+    lensDispatchIncompletePath = await persistReviewDispatchIncompleteArtifact({
+      sessionRoot,
+      batchLabel: "lens",
+      plannedItemIds: lensDispatches
+        .filter((dispatch) => shouldRunUnit(dispatch.unit_id))
+        .map((dispatch) => dispatch.unit_id),
+      state: lensBreakerState,
+    });
+  }
+
   const postLensCancelRequest = await readReviewCancelRequest(sessionRoot);
   if (postLensCancelRequest) {
     return haltForCancellation({
@@ -6918,11 +7149,26 @@ export async function executeReviewPromptExecution(
     executionFailures,
   });
 
-  if (!lensCompletionBarrier.downstream_allowed) {
+  // 설계 B 규칙 4: lens 트립은 배리어 판정과 무관하게 무조건 halt한다
+  // (트립 시점 이후 유닛은 미디스패치라 배리어가 우연히 downstream을 허용해도
+  // 배치는 이미 불완전하다). 배리어 아티팩트는 위에서 정상 기록되어
+  // continuation frontier가 미완료 lens를 재제안할 수 있다. lens 풀은
+  // 실패를 throw하지 않고 outcome으로만 기록하므로(전파 캐치 없음), 트립
+  // halt도 기존 배리어 halt와 같은 구조화 블록으로 수행한다.
+  const lensBreakerTrip = lensBreakerState?.tripped() ?? null;
+  if (lensBreakerTrip !== null || !lensCompletionBarrier.downstream_allowed) {
     const haltReason =
-      successfulLensDispatches.length === 0
-        ? "No participating lens outputs were produced."
-        : `Selected lens completion barrier failed: ${lensCompletionBarrier.completed_lens_ids.length}/${lensCompletionBarrier.planned_lens_ids.length} planned lenses completed.`;
+      lensBreakerTrip !== null
+        ? reviewDispatchBreakerHaltReason(
+            lensBreakerTrip,
+            lensDispatchIncompletePath ??
+              dispatchIncompleteArtifactPath(sessionRoot),
+          )
+        : successfulLensDispatches.length === 0
+          ? "No participating lens outputs were produced."
+          : `Selected lens completion barrier failed: ${lensCompletionBarrier.completed_lens_ids.length}/${lensCompletionBarrier.planned_lens_ids.length} planned lenses completed.`;
+    const haltPhase =
+      lensBreakerTrip !== null ? "lens_dispatch_breaker" : "lens_completion_barrier";
     await appendMarkdownLogEntry(
       executionPlan.error_log_path,
       "runner halted before synthesize",
@@ -6963,7 +7209,7 @@ export async function executeReviewPromptExecution(
       synthesis_executed: false,
       deliberation_status: "not_performed",
       halt_reason: haltReason,
-      ...haltArtifactFields("lens_completion_barrier", null),
+      ...haltArtifactFields(haltPhase, null),
       error_log_path: executionPlan.error_log_path,
       lens_completion_barrier_ref:
         executionPlan.lens_completion_barrier_path ??
@@ -6984,7 +7230,7 @@ export async function executeReviewPromptExecution(
       synthesis_executed: false,
       error_log_path: executionPlan.error_log_path,
       halt_reason: haltReason,
-      ...haltArtifactFields("lens_completion_barrier", null),
+      ...haltArtifactFields(haltPhase, null),
     };
   }
 
@@ -6997,6 +7243,22 @@ export async function executeReviewPromptExecution(
     deliberationStatus: DeliberationStatus | null;
     deliberationExecutionResults?: ExecutionOutcome[];
   }): Promise<ReviewPromptExecutionResult> => {
+    // 설계 B 트립: halt 시점까지의 배치 outcome 전체(완료 포함)를 결과
+    // 아티팩트에 보존한다 — 완료 stance 유닛 행이 없으면 continuation
+    // ledger가 missing으로 도출해 이미 지불한 완료분을 재디스패치한다.
+    const batchOutcomes =
+      args.error instanceof ReviewIssueArtifactDispatchError
+        ? args.error.batchOutcomes
+        : [];
+    for (const outcome of batchOutcomes) {
+      if (
+        !issueArtifactOutcomes.some(
+          (existing) => existing.dispatch.unit_id === outcome.dispatch.unit_id,
+        )
+      ) {
+        issueArtifactOutcomes.push(outcome);
+      }
+    }
     const failureOutcome = issueArtifactOutcomeFromError(args.error);
     if (
       failureOutcome &&
@@ -7151,6 +7413,15 @@ export async function executeReviewPromptExecution(
         unitTimeoutMs,
         retryPolicy,
         reviewExecutionProfile: params.reviewExecutionProfile,
+        // Continuation: stance 수집 스테이지가 run-owing 유닛만 디스패치하고
+        // 완료 유닛은 prior result에서 복원한다 (규칙 5 — 회복 재디스패치
+        // 집합 == 미완료 집합).
+        ...(continuationMode
+          ? {
+              runUnitIds: continuationRunUnitIds,
+              preservedResultsByUnitId: previousResultsByUnitId,
+            }
+          : {}),
       }));
       return null;
     } catch (error) {

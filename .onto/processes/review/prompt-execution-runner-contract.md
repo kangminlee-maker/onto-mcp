@@ -108,6 +108,9 @@ runtime은 아래만 한다.
 9. `execution-result.yaml`
 10. `review-run-manifest.yaml`
 11. `error-log.md`
+12. `dispatch-incomplete.yaml` — dispatch breaker가 켜진 배치(lens/issue-stance)의
+    end state (완료/dead-letter/미완료 집합). 트립이든 완주든 기록하며, OFF에서는
+    쓰지 않는다
 
 원칙:
 
@@ -121,6 +124,15 @@ runtime은 아래만 한다.
 - `execution-result.yaml`은 actual execution truth의 canonical seat다
 - `execution-result.yaml`과 `review-run-manifest.yaml`은 effective retry policy를 기록해야 한다
 - `lens-completion-barrier.yaml`은 downstream stage 진입 gate다
+- `review.execution.retry.dispatch_breaker`(opt-in)가 켜지면 lens/issue-stance
+  fan-out 풀의 **flat per-unit 루프**는 유닛의 최종 outcome을 계통 실패 분류
+  (rate_limit/auth/transport)로 관찰하고, 서로 다른 유닛에 걸친 연속 계통 실패가
+  임계에 닿으면 잔여 유닛을 디스패치하지 않고 halt한다 (`halt_reason` prefix
+  `dispatch_breaker:`, lens 풀은 `halt_phase=lens_dispatch_breaker`). 미완료
+  집합은 `dispatch-incomplete.yaml`이 회복 계약(재디스패치 집합 == 미완료 집합)
+  으로 영속하며, 트립 halt의 execution-result는 완료 유닛 행을 보존한다.
+  nested-workers 1차 배치가 실행된 스테이지는 breaker 미적용이다(외부 워커가
+  fan-out을 소유; 후속 cut). OFF(기본)는 현행 halt/배리어 동작이다
 - degraded case / partial failure는 `error-log.md`에 기록해야 한다
 - runtime unavailable completion으로 root unit이 completed가 된 경우에도 원 실패는 child unit result로 보존하고 degradation evidence에 포함해야 한다
 - `error-log.md`는 최소 한 번 `EffectiveBoundaryState`를 기록해야 한다

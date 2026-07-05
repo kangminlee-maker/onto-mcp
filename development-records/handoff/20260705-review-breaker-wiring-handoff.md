@@ -1,5 +1,9 @@
 # 핸드오프: 리뷰 측 dispatch breaker 배선 (2026-07-05, clear 경계)
 
+> **[집행 완료 2026-07-05 저녁]** §3의 계획은 feat/review-dispatch-breaker에서 구현·적대
+> 리뷰·수정까지 완료됐다 — 이하 본문은 착수 시점의 계획 기록이다. 현재 상태의 진실은
+> 설계 SSOT §8의 "[배선 완료]"/"[적대 리뷰 반영]" 노트와 코드다.
+>
 > 이 문서가 다음 세션의 시작점이다. 설계 SSOT:
 > `development-records/design/20260704-review-unit-resubmit-and-limit-breaker-design.md` (§4, §8).
 > 핀 상태: main = `1548321`(PR #167 머지), 작업 브랜치 = `feat/review-dispatch-breaker`(main 기준).
@@ -9,7 +13,7 @@
 | PR | 내용 |
 |---|---|
 | #162 | 설계 A: issue-stance bounded resubmit (default-off) + 적대 리뷰 반영 |
-| #163 | `review.execution.retry.resubmit.enabled=true` 관찰 모드 ON |
+| #163 | `review.execution.retry.resubmit.enabled=true` 관찰 모드 ON — **[정정 2026-07-05 저녁]** `definedReviewRetry`가 정규화에서 `resubmit`을 누락해 이 ON은 라이브 경로에서 불활성이었다(#167 갭과 동클래스). 배선 브랜치에서 수정 + 회귀 테스트; resubmit 관찰 카운트는 수정 이후 실행부터 유효 |
 | #165 | (타 세션) semantic-map author pair 실구현, `semantic_map_authoring` 스칼라(기본 off) |
 | #166 | 설계 B: 디스패치 서킷브레이커 (default-off) + 적대 리뷰 8-lens 반영 |
 | #167 | `semantic_map_authoring=true` + `dispatch_breaker.enabled=true` 관찰 ON + **병합 스키마 갭 수정** |
