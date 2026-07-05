@@ -7193,6 +7193,359 @@ describe("runReconstruct graceful terminal (Slice 4 · site 2 un-observable fron
   });
 });
 
+// ── Graceful terminal sites 3·5·6 (sites356 wiring design 20260705) ───────────────────────────────
+
+type Sites356LlmCall = (
+  systemPrompt: string,
+  userPrompt: string,
+) => Promise<LlmCallResult>;
+
+describe("runReconstruct graceful terminal (site 3 max-rounds non-convergence)", () => {
+  // T3-a fixture (design §6, control-flow F1): the live author self-converts a non-empty
+  // final-round frontier (run.ts 9973), so site 3 needs an author realization WITHOUT that
+  // conversion — the backstop path (a). Rounds must expand into refs that are in-inventory yet
+  // unobserved at prep AND observable when accepted: planned-tier database units (a .xls would
+  // trip site 2 instead). Directory target ⇒ feature.ts observed + the sqlite units skipped.
+  function site3Fixture(projectRoot: string, warehousePaths: string[]) {
+    const baseAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall: reconstructFixtureLlm,
+      authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+    });
+    const directiveAuthor: typeof baseAuthor = {
+      ...baseAuthor,
+      writeSourceFrontier: (input) => {
+        const roundNumber = Number(input.roundId.replace("round-", ""));
+        const nextRef = warehousePaths[roundNumber - 1];
+        return Promise.resolve({
+          schema_version: "1",
+          session_id: input.sessionId,
+          round_id: input.roundId,
+          created_at: new Date().toISOString(),
+          exploration_synthesis_ref: input.explorationSynthesisRef,
+          frontier_refs: nextRef
+            ? [{
+              frontier_ref_id: "frontier_1",
+              source_ref: nextRef,
+              rationale: "An open coverage gap requires the next warehouse database.",
+              priority: "high" as const,
+            }]
+            : [],
+          no_next_frontier_rationale: nextRef
+            ? null
+            : "All fixture warehouses are observed; the remaining depth is a bounded limitation.",
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: baseAuthor.authorId,
+          },
+        });
+      },
+    };
+    return { directiveAuthor };
+  }
+
+  async function site3ProjectRoot(warehouseCount: number) {
+    const projectRoot = await tempProjectRoot();
+    const warehousePaths = Array.from(
+      { length: warehouseCount },
+      (_, index) => path.join(projectRoot, `warehouse${index + 1}.sqlite`),
+    );
+    for (const warehousePath of warehousePaths) {
+      await fs.writeFile(warehousePath, "SQLite format 3 ", "utf8");
+    }
+    return { projectRoot, warehousePaths };
+  }
+
+  it("T3-a: a non-converting author keeping an open frontier at max rounds → limited terminal", async () => {
+    const { projectRoot, warehousePaths } = await site3ProjectRoot(5);
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "site3-run");
+    const { directiveAuthor } = site3Fixture(projectRoot, warehousePaths);
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [projectRoot],
+      intent: "Reconstruct a seed; the warehouses expand past the exploration budget.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor,
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+        providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+      }),
+    });
+
+    // Graceful LIMITED terminal — bounded source-depth, not a crash.
+    expect(result.status).toBe("limited");
+    expect(result.reconstructRecord.terminal_disposition).toBe("limited");
+    expect(result.reconstructRunManifest.graceful_terminal).toMatchObject({
+      disposition: "limited",
+      terminal_step_id: "source_frontier_validation",
+    });
+
+    // Rounds 1-4 really progressed (masking #3 embedded control): the terminal frontier is
+    // round-5's and a round-4 delta was produced — an off-by-one firing early would fail these.
+    expect(result.reconstructRunManifest.artifact_refs.source_frontier_validation)
+      .toContain(path.join("rounds", "round-5", "source-frontier-validation.yaml"));
+    const step = (id: string) =>
+      result.reconstructRunManifest.steps.find((s) => s.step_id === id);
+    expect(step("source_frontier")?.status).toBe("completed");
+    expect(step("source_observation_delta")?.status).toBe("completed");
+    expect(step("ontology_seed")?.status).not.toBe("completed");
+
+    // Diagnostic-enriched reason (design §2.2): budget, accepted ids, progress counters.
+    expect(result.finalOutputText).toContain("Limited");
+    expect(result.finalOutputText).toContain("max_rounds=5");
+    expect(result.finalOutputText).toContain("completed_delta_rounds=4");
+
+    // Fail-closed manifest gate passed on real artifacts; run-control halted.
+    const manifestValidation = await readYaml<{ validation_status: string }>(
+      path.join(sessionRoot, "reconstruct-run-manifest.post-publication-validation.yaml"),
+    );
+    expect(manifestValidation.validation_status).toBe("valid");
+    const runControl = await readYaml<{ attempt_rows: { attempt_status: string }[] }>(
+      path.join(sessionRoot, "reconstruct-run-control.yaml"),
+    );
+    expect(runControl.attempt_rows.at(-1)?.attempt_status).toBe("halted");
+  });
+
+  it("T3-b contrast: the same author converging before max rounds completes with no graceful terminal", async () => {
+    const { projectRoot, warehousePaths } = await site3ProjectRoot(2);
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "site3-contrast");
+    const { directiveAuthor } = site3Fixture(projectRoot, warehousePaths);
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [projectRoot],
+      intent: "Reconstruct a seed; the warehouses converge inside the exploration budget.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor,
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+        providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+      }),
+    });
+    // Rounds 1-2 accepted+observed refs and did NOT graceful-terminate; round 3 converged.
+    expect(result.status).toBe("completed");
+    expect(result.reconstructRunManifest.graceful_terminal).toBeUndefined();
+    expect(result.reconstructRecord.terminal_disposition).toBeUndefined();
+  });
+});
+
+describe("runReconstruct graceful terminal (site 5 unconfirmable purpose)", () => {
+  // The candidates author selects an INFERRED purpose (confirmation_required=true); the
+  // non-interactive confirmation provider honestly answers it cannot confirm.
+  function site5LlmCall(confirmationStatus: "not_available" | "rejected") {
+    return async (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Author source-purpose-candidates.yaml")) {
+        const base = await reconstructFixtureLlm(systemPrompt, userPrompt);
+        const parsed = JSON.parse(base.text) as {
+          purpose_candidates: Array<{ purpose_source_status: string }>;
+        };
+        for (const candidate of parsed.purpose_candidates) {
+          candidate.purpose_source_status = "convergent_inferred";
+        }
+        return { ...base, text: JSON.stringify(parsed) };
+      }
+      if (systemPrompt.includes("mediating source-derived purpose confirmation")) {
+        return {
+          text: JSON.stringify({
+            confirmation_status: confirmationStatus,
+            confirmed_statement: null,
+            revised_statement: null,
+            confirmed_frame_element_refs: [],
+            rejected_frame_element_refs: [],
+            user_response_summary:
+              "Non-interactive host: no user channel is available for the inferred purpose.",
+            source_conflict_policy:
+              "Defer to source-purpose-candidates validation as the purpose authority.",
+            limitation_refs: [],
+          }),
+        };
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
+    };
+  }
+
+  function site5RunParams(projectRoot: string, sessionRoot: string, llmCall: Sites356LlmCall) {
+    return {
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Reconstruct a seed from a source whose purpose is only inferable.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call" as const,
+      confirmationProviderRealization: "direct_call" as const,
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+        authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+        providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+      }),
+    };
+  }
+
+  it("T5-a: confirmation_required + not_available from the non-interactive provider → blocked terminal", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "site5-run");
+    const result = await runReconstruct(
+      site5RunParams(projectRoot, sessionRoot, site5LlmCall("not_available")),
+    );
+
+    expect(result.status).toBe("blocked");
+    expect(result.reconstructRecord.terminal_disposition).toBe("blocked");
+    expect(result.reconstructRunManifest.graceful_terminal).toMatchObject({
+      disposition: "blocked",
+      terminal_step_id: "purpose_confirmation",
+    });
+    const step = (id: string) =>
+      result.reconstructRunManifest.steps.find((s) => s.step_id === id);
+    // The confirmation artifact IS the evidence (completed); its validation was never written —
+    // no invalid artifact persists (design §3.1), the step is honestly not_reached.
+    expect(step("purpose_confirmation")?.status).toBe("completed");
+    expect(step("purpose_confirmation_validation")).toMatchObject({
+      status: "skipped",
+      skip_kind: "not_reached",
+    });
+    await expect(
+      fs.access(path.join(sessionRoot, "purpose-confirmation-validation.yaml")),
+    ).rejects.toThrow();
+
+    // First census-present graceful terminal (control-flow F2): the fail-closed manifest gate
+    // must pass with the witness-backed lineage skips.
+    const manifestValidation = await readYaml<{ validation_status: string }>(
+      path.join(sessionRoot, "reconstruct-run-manifest.post-publication-validation.yaml"),
+    );
+    expect(manifestValidation.validation_status).toBe("valid");
+    expect(result.finalOutputText).toContain("not_available");
+    const runControl = await readYaml<{ attempt_rows: { attempt_status: string }[] }>(
+      path.join(sessionRoot, "reconstruct-run-control.yaml"),
+    );
+    expect(runControl.attempt_rows.at(-1)?.attempt_status).toBe("halted");
+  });
+
+  it("T5-b negative control: an explicit rejection stays a crash (graceful must not swallow semantic verdicts)", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "site5-rejected");
+    await expect(
+      runReconstruct(site5RunParams(projectRoot, sessionRoot, site5LlmCall("rejected"))),
+    ).rejects.toThrow(/purpose-confirmation validation failed/);
+  });
+});
+
+describe("runReconstruct graceful terminal (site 6 seed-readiness frontier_required)", () => {
+  // An adequacy-frame element demanding MORE source depth (closure_expectation=frontier_required)
+  // WITHOUT source evidence stays a `missing` closure row — "a genuine hole the gate still
+  // refuses" (the Defect-2 relief's documented safety boundary) → readiness classification
+  // frontier_required with no concrete frontier: the A/B-probe deadlock class. The direct_call
+  // parse mandates per-element evidence, so — like site 3 — this state is reachable only through
+  // an author realization that does not run that parse (or reused artifacts); the T6-a wrapper
+  // patches the RETURNED artifact to simulate exactly that. WITH evidence the relief converts the
+  // element to limitation_backed → limited_seed_possible (allows seed — the T6-c contrast).
+  function site6RunParams(
+    projectRoot: string,
+    sessionRoot: string,
+    openFrontierElementHasEvidence: boolean,
+  ) {
+    const baseAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall: reconstructFixtureLlm,
+      authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+    });
+    const directiveAuthor: typeof baseAuthor = {
+      ...baseAuthor,
+      writeSourcePurposeCandidates: async (input) => {
+        const artifact = await baseAuthor.writeSourcePurposeCandidates(input);
+        const frame = artifact.purpose_candidates[0]?.adequacy_frame;
+        const template = frame?.required_elements[0];
+        if (frame && template) {
+          frame.required_elements = [
+            ...frame.required_elements,
+            {
+              ...template,
+              element_id: "purpose-element-open-frontier",
+              description: "A deeper source is required to close the object coverage.",
+              closure_expectation: "frontier_required",
+              ...(openFrontierElementHasEvidence ? {} : {
+                supporting_evidence_refs: [],
+                member_source_refs: [],
+              }),
+            },
+          ];
+        }
+        return artifact;
+      },
+    };
+    return {
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Reconstruct a seed whose purpose demands deeper sources than exist.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call" as const,
+      confirmationProviderRealization: "direct_call" as const,
+      directiveAuthor,
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+        providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+      }),
+    };
+  }
+
+  it("T6-a: a valid evidence-less frontier_required readiness → blocked terminal at seed_authoring_readiness", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "site6-run");
+    const result = await runReconstruct(
+      site6RunParams(projectRoot, sessionRoot, false),
+    );
+
+    expect(result.status).toBe("blocked");
+    expect(result.reconstructRecord.terminal_disposition).toBe("blocked");
+    expect(result.reconstructRunManifest.graceful_terminal).toMatchObject({
+      disposition: "blocked",
+      terminal_step_id: "seed_authoring_readiness",
+    });
+    // The readiness verdict this terminal restates is on disk, valid, and frontier_required.
+    const readiness = await readYaml<{ readiness_classification: string }>(
+      path.join(sessionRoot, "seed-authoring-readiness.yaml"),
+    );
+    expect(readiness.readiness_classification).toBe("frontier_required");
+    expect(result.finalOutputText).toContain("frontier_required");
+    const step = (id: string) =>
+      result.reconstructRunManifest.steps.find((s) => s.step_id === id);
+    expect(step("seed_authoring_readiness")?.status).toBe("completed");
+    expect(step("ontology_seed")?.status).not.toBe("completed");
+    const manifestValidation = await readYaml<{ validation_status: string }>(
+      path.join(sessionRoot, "reconstruct-run-manifest.post-publication-validation.yaml"),
+    );
+    expect(manifestValidation.validation_status).toBe("valid");
+    const runControl = await readYaml<{ attempt_rows: { attempt_status: string }[] }>(
+      path.join(sessionRoot, "reconstruct-run-control.yaml"),
+    );
+    expect(runControl.attempt_rows.at(-1)?.attempt_status).toBe("halted");
+  });
+
+  it("T6-c allows_seed contrast: the same element WITH evidence → limited_seed_possible proceeds to completion", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "site6-contrast");
+    const result = await runReconstruct(
+      site6RunParams(projectRoot, sessionRoot, true),
+    );
+    expect(result.status).toBe("completed");
+    expect(result.reconstructRunManifest.graceful_terminal).toBeUndefined();
+    const readiness = await readYaml<{ readiness_classification: string }>(
+      path.join(sessionRoot, "seed-authoring-readiness.yaml"),
+    );
+    expect(readiness.readiness_classification).toBe("limited_seed_possible");
+  });
+});
+
 // ── W5: semantic-map mock full-pipeline E2E (wiring design 20260702 §7-W5 / §8) ───────────────────
 //
 // The FULL runReconstruct path over a REAL tiny xlsx (materialize-preparation observes it through

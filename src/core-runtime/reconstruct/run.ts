@@ -83,6 +83,7 @@ import type {
   ReconstructRunManifestStep,
   ReconstructSeedClaim,
   ReconstructSeedAuthoringReadinessArtifact,
+  ReconstructSeedAuthoringReadinessClassification,
   ReconstructSeedAuthoringReadinessValidationArtifact,
   ReconstructSeedConfirmationArtifact,
   ReconstructSeedConfirmationStatus,
@@ -1066,6 +1067,33 @@ export function isGracefulTerminalSignal(
 ): value is GracefulTerminalSignal {
   return value instanceof GracefulTerminalSignal;
 }
+
+/**
+ * Site 6 routing (sites356 design §4.2): which VALID seed-readiness classifications are a
+ * normal-unmet graceful terminal vs a bug class that must keep crashing. Exhaustive over the
+ * classification type so a new enum value is a compile error — an explicit decision, never an
+ * implicit graceful conversion (positive-precondition principle).
+ *
+ * crash_bug_class rationale (masking-lens HIGH, re-verified against code): blocked_validation_gap
+ * means one of six upstream validations — each asserted valid on the live path BEFORE the
+ * readiness builder re-reads it — is missing/invalid seconds later (corruption / path bug / resume
+ * anomaly). blocked_no_authority means the selected-purpose lookup that confirmPurpose already
+ * resolved (or threw on) failed in the builder. purpose_confirmation_required needs a VALID
+ * confirmation validation carrying must_project_blocked, which the validator never emits without a
+ * violation (→ invalid → earlier crash), and site 5 pre-empts the cannot-confirm case. All three
+ * fall through to assertSeedAuthoringReadinessAllowsSeed, which stays their live fail-loud gate.
+ */
+export const SEED_READINESS_TERMINAL_ROUTE: Record<
+  ReconstructSeedAuthoringReadinessClassification,
+  "allows_seed" | "graceful_blocked" | "crash_bug_class"
+> = {
+  seed_ready: "allows_seed",
+  limited_seed_possible: "allows_seed",
+  frontier_required: "graceful_blocked",
+  purpose_confirmation_required: "crash_bug_class",
+  blocked_no_authority: "crash_bug_class",
+  blocked_validation_gap: "crash_bug_class",
+};
 
 /**
  * The inside-`try` context a graceful terminal needs that is NOT visible at the run-level catch
@@ -14359,65 +14387,83 @@ export async function runReconstruct(
       artifactRef: sourceFrontierValidationPath,
       validation: sourceFrontierValidation,
     });
+    // Shared by sites 3 and 2 (both fire at this exact round state, so the enumeration is
+    // identical — sites356 design §2.2). Called ONLY immediately before a graceful throw or the
+    // observe call; never on the converged break path, so "context set ⟹ signal imminent or
+    // observe in flight" holds and a later graceful site can never read a stale round context.
+    const setRoundGracefulTerminalContext = (): void => {
+      gracefulTerminalContext = {
+        reachedArtifactRefs: {
+          reconstruct_run_control: runControlPath,
+          reconstruct_run_control_validation: runControlValidationPath,
+          registry_verification_evidence: registryVerificationEvidencePath,
+          registry_verification_evidence_validation:
+            registryVerificationEvidenceValidationPath,
+          target_material_profile: preparationRefs.target_material_profile,
+          target_material_profile_validation: targetMaterialProfileValidationPath,
+          source_inventory: preparationRefs.source_inventory,
+          initial_source_frontier: preparationRefs.initial_source_frontier,
+          source_observations: preparationRefs.source_observations,
+          source_safety_ledger: sourceSafetyLedgerPath,
+          source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
+          source_scout_pack: sourceScoutPackPath,
+          source_scout_pack_validation: sourceScoutPackValidationPath,
+          source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
+          source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
+          leaf_read_census: leafReadCensusPath,
+          semantic_map_census: semanticMapCensusPath,
+          semantic_map_sidecar: semanticMapSidecarPath,
+          source_observation_directive: sourceObservationDirectivePath,
+          source_observation_directive_validation:
+            sourceObservationDirectiveValidationPath,
+          lens_judgment_index: lensJudgmentIndexPath,
+          exploration_synthesis: explorationSynthesisPath,
+          source_frontier: sourceFrontierPath,
+          source_frontier_validation: sourceFrontierValidationPath,
+          source_observation_delta: sourceObservationDeltaPath,
+          source_observation_delta_validation: sourceObservationDeltaValidationPath,
+          source_observation_reentry_validation: sourceObservationReentryValidationPath,
+        },
+        contractRegistry,
+        targetMaterialProfile,
+      };
+    };
     if (sourceFrontierValidation.accepted_frontier_ref_ids.length === 0) {
       break;
     }
     if (roundNumber === MAX_RECONSTRUCT_EXPLORATION_ROUNDS) {
-      throw new Error(
-        [
+      // Site 3 graceful terminal (sites356 design §2): the exploration budget is exhausted while
+      // the frontier still accepts new source refs — a deterministic normal-unmet stop (bounded
+      // source-depth), not a crash. The live direct_call author self-converts a non-empty
+      // final-round frontier (9973), so this fires only for an author realization without that
+      // conversion or a reused legacy frontier — a defensive backstop. The reason carries the
+      // completed-round/observation counts so a dedup-class bug reaching here stays diagnosable.
+      setRoundGracefulTerminalContext();
+      throw new GracefulTerminalSignal({
+        disposition: "limited",
+        terminalStepId: "source_frontier_validation",
+        reason: [
           "source-frontier accepted new source refs after the maximum exploration rounds.",
           "The reconstruct run did not converge to a terminal frontier before semantic authoring.",
           `max_rounds=${MAX_RECONSTRUCT_EXPLORATION_ROUNDS}`,
           `accepted_frontier_ref_ids=${sourceFrontierValidation.accepted_frontier_ref_ids.join(",")}`,
+          `completed_delta_rounds=${sourceObservationLineageRows.length}`,
+          `observed_source_count=${sourceObservations.observations.length}`,
         ].join(" "),
-      );
+      });
     }
     const previousSourceObservations = sourceObservations;
     // Site 2 graceful terminal (design site2 §9 N1/N4): observeAcceptedFrontierRefs may throw a
     // GracefulTerminalSignal when an accepted frontier ref is un-observable. The throw is deep inside
     // that helper, so the run-level assembly context is set HERE (the call site, where it is visible)
-    // before the call. It lists EVERY artifact already written by this point — the prep + exploration
-    // round artifacts (directive, lens index, synthesis, frontier, prior-round delta/reentry) — so
-    // the graceful manifest reports them as reached; the assembly's disk-existence filter drops any
-    // not-yet-written (e.g. the current round's delta, still null). Lineage index/census come AFTER
-    // this call, so they are correctly absent. Cleared after a successful round so a later graceful
-    // site cannot read a stale context (a forgotten set then fails loud via assembleGracefulTerminal's
-    // `if (!ctx) throw`).
-    gracefulTerminalContext = {
-      reachedArtifactRefs: {
-        reconstruct_run_control: runControlPath,
-        reconstruct_run_control_validation: runControlValidationPath,
-        registry_verification_evidence: registryVerificationEvidencePath,
-        registry_verification_evidence_validation:
-          registryVerificationEvidenceValidationPath,
-        target_material_profile: preparationRefs.target_material_profile,
-        target_material_profile_validation: targetMaterialProfileValidationPath,
-        source_inventory: preparationRefs.source_inventory,
-        initial_source_frontier: preparationRefs.initial_source_frontier,
-        source_observations: preparationRefs.source_observations,
-        source_safety_ledger: sourceSafetyLedgerPath,
-        source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
-        source_scout_pack: sourceScoutPackPath,
-        source_scout_pack_validation: sourceScoutPackValidationPath,
-        source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
-        source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
-        leaf_read_census: leafReadCensusPath,
-        semantic_map_census: semanticMapCensusPath,
-        semantic_map_sidecar: semanticMapSidecarPath,
-        source_observation_directive: sourceObservationDirectivePath,
-        source_observation_directive_validation:
-          sourceObservationDirectiveValidationPath,
-        lens_judgment_index: lensJudgmentIndexPath,
-        exploration_synthesis: explorationSynthesisPath,
-        source_frontier: sourceFrontierPath,
-        source_frontier_validation: sourceFrontierValidationPath,
-        source_observation_delta: sourceObservationDeltaPath,
-        source_observation_delta_validation: sourceObservationDeltaValidationPath,
-        source_observation_reentry_validation: sourceObservationReentryValidationPath,
-      },
-      contractRegistry,
-      targetMaterialProfile,
-    };
+    // before the call. The shared round enumeration lists EVERY artifact already written by this
+    // point — the prep + exploration round artifacts (directive, lens index, synthesis, frontier,
+    // prior-round delta/reentry) — so the graceful manifest reports them as reached; the assembly's
+    // disk-existence filter drops any not-yet-written (e.g. the current round's delta, still null).
+    // Lineage index/census come AFTER this call, so they are correctly absent. Cleared after a
+    // successful round so a later graceful site cannot read a stale context (a forgotten set then
+    // fails loud via assembleGracefulTerminal's `if (!ctx) throw`).
+    setRoundGracefulTerminalContext();
     sourceObservations = await observeAcceptedFrontierRefs({
       sourceFrontier,
       sourceFrontierValidation,
@@ -14605,6 +14651,79 @@ export async function runReconstruct(
       sourcePurposeCandidatesValidationRef: sourcePurposeCandidatesValidationPath,
     }),
   );
+  // Site 5 graceful terminal (sites356 design §3): a positive source-field precondition checked
+  // BEFORE the confirmation validator runs (§5.2 — a violation-code whitelist is unsound because
+  // conflicting_state is shared with genuine bugs). confirmation_required=true with a pending /
+  // not_available status from the sole non-interactive direct_call provider means "no confirmation
+  // channel exists" — a deterministic normal-unmet stop, not a crash. Firing before the validator
+  // write means no invalid validation artifact is ever persisted (the 41 prior_validation_invalid
+  // re-throw chain is structurally unreachable). rejected / revised_pending_evidence_check are
+  // semantic verdicts, NOT channel absence — they stay on the crash path below (bug catcher).
+  // Predicate invariants (conformance L2): the direct_call confirmPurpose realization always
+  // preserves the selected purpose_candidate_id and session_id, so this graceful subset cannot
+  // co-fire with a session/selected-id mismatch violation. An interactive confirmation-provider
+  // realization (or one that may emit pending WITH a mismatched candidate id) must revisit both
+  // the predicate and that invariant.
+  if (
+    sourcePurposeCandidatesValidation.confirmation_required &&
+    (purposeConfirmation.confirmation_status === "pending" ||
+      purposeConfirmation.confirmation_status === "not_available")
+  ) {
+    gracefulTerminalContext = {
+      reachedArtifactRefs: {
+        reconstruct_run_control: runControlPath,
+        reconstruct_run_control_validation: runControlValidationPath,
+        registry_verification_evidence: registryVerificationEvidencePath,
+        registry_verification_evidence_validation:
+          registryVerificationEvidenceValidationPath,
+        target_material_profile: preparationRefs.target_material_profile,
+        target_material_profile_validation: targetMaterialProfileValidationPath,
+        source_inventory: preparationRefs.source_inventory,
+        initial_source_frontier: preparationRefs.initial_source_frontier,
+        source_observations: preparationRefs.source_observations,
+        source_safety_ledger: sourceSafetyLedgerPath,
+        source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
+        source_scout_pack: sourceScoutPackPath,
+        source_scout_pack_validation: sourceScoutPackValidationPath,
+        source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
+        source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
+        leaf_read_census: leafReadCensusPath,
+        semantic_map_census: semanticMapCensusPath,
+        semantic_map_sidecar: semanticMapSidecarPath,
+        source_observation_directive: sourceObservationDirectivePath,
+        source_observation_directive_validation:
+          sourceObservationDirectiveValidationPath,
+        lens_judgment_index: lensJudgmentIndexPath,
+        exploration_synthesis: explorationSynthesisPath,
+        source_frontier: sourceFrontierPath,
+        source_frontier_validation: sourceFrontierValidationPath,
+        // The five witness-less lineage stages MUST all be listed (control-flow F2): the lineage
+        // census exists by now and witnesses them; omitting a witnessed ref downgrades its step to
+        // not_reached and the validator's manifest_reached_stage_masked check fails the assembly.
+        source_observation_delta: sourceObservationDeltaPath,
+        source_observation_delta_validation: sourceObservationDeltaValidationPath,
+        source_observation_reentry_validation: sourceObservationReentryValidationPath,
+        source_observation_lineage_index: sourceObservationLineageIndexPath,
+        source_observation_lineage_index_validation:
+          sourceObservationLineageIndexValidationPath,
+        source_purpose_candidates: sourcePurposeCandidatesPath,
+        source_purpose_candidates_validation: sourcePurposeCandidatesValidationPath,
+        purpose_confirmation: purposeConfirmationPath,
+      },
+      contractRegistry,
+      targetMaterialProfile,
+    };
+    throw new GracefulTerminalSignal({
+      disposition: "blocked",
+      terminalStepId: "purpose_confirmation",
+      reason: [
+        "purpose confirmation is required but cannot be obtained:",
+        `the selected purpose was inferred (confirmation_required=true) and the non-interactive`,
+        `confirmation provider returned confirmation_status=${purposeConfirmation.confirmation_status}.`,
+        "Seed authoring cannot honestly proceed without a confirmed purpose.",
+      ].join(" "),
+    });
+  }
   const purposeConfirmationValidationPath = path.join(
     sessionRoot,
     "purpose-confirmation-validation.yaml",
@@ -14759,6 +14878,78 @@ export async function runReconstruct(
     artifactRef: seedAuthoringReadinessValidationPath,
     validation: seedAuthoringReadinessValidation,
   });
+  // Site 6 graceful terminal (sites356 design §4): the assert above guarantees the readiness
+  // validation is VALID, so the classification is a trustworthy deterministic verdict. A valid
+  // frontier_required readiness (more source depth demanded, none concretely available — the
+  // A/B-probe deadlock) is a normal-unmet stop → graceful blocked. The bug-class classifications
+  // fall through to assertSeedAuthoringReadinessAllowsSeed and keep crashing (see the route's doc).
+  if (
+    SEED_READINESS_TERMINAL_ROUTE[
+      seedAuthoringReadiness.readiness_classification
+    ] === "graceful_blocked"
+  ) {
+    gracefulTerminalContext = {
+      reachedArtifactRefs: {
+        reconstruct_run_control: runControlPath,
+        reconstruct_run_control_validation: runControlValidationPath,
+        registry_verification_evidence: registryVerificationEvidencePath,
+        registry_verification_evidence_validation:
+          registryVerificationEvidenceValidationPath,
+        target_material_profile: preparationRefs.target_material_profile,
+        target_material_profile_validation: targetMaterialProfileValidationPath,
+        source_inventory: preparationRefs.source_inventory,
+        initial_source_frontier: preparationRefs.initial_source_frontier,
+        source_observations: preparationRefs.source_observations,
+        source_safety_ledger: sourceSafetyLedgerPath,
+        source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
+        source_scout_pack: sourceScoutPackPath,
+        source_scout_pack_validation: sourceScoutPackValidationPath,
+        source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
+        source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
+        leaf_read_census: leafReadCensusPath,
+        semantic_map_census: semanticMapCensusPath,
+        semantic_map_sidecar: semanticMapSidecarPath,
+        source_observation_directive: sourceObservationDirectivePath,
+        source_observation_directive_validation:
+          sourceObservationDirectiveValidationPath,
+        lens_judgment_index: lensJudgmentIndexPath,
+        exploration_synthesis: explorationSynthesisPath,
+        source_frontier: sourceFrontierPath,
+        source_frontier_validation: sourceFrontierValidationPath,
+        // All five witness-less lineage stages listed (control-flow F2) — the census witnesses
+        // them by now; omitting one fails the assembly via manifest_reached_stage_masked.
+        source_observation_delta: sourceObservationDeltaPath,
+        source_observation_delta_validation: sourceObservationDeltaValidationPath,
+        source_observation_reentry_validation: sourceObservationReentryValidationPath,
+        source_observation_lineage_index: sourceObservationLineageIndexPath,
+        source_observation_lineage_index_validation:
+          sourceObservationLineageIndexValidationPath,
+        source_purpose_candidates: sourcePurposeCandidatesPath,
+        source_purpose_candidates_validation: sourcePurposeCandidatesValidationPath,
+        purpose_confirmation: purposeConfirmationPath,
+        purpose_confirmation_validation: purposeConfirmationValidationPath,
+        material_admission_ledger: materialAdmissionLedgerPath,
+        candidate_inventory: candidateInventoryPath,
+        candidate_disposition: candidateDispositionPath,
+        candidate_disposition_validation: candidateDispositionValidationPath,
+        seed_authoring_readiness: seedAuthoringReadinessPath,
+        seed_authoring_readiness_validation: seedAuthoringReadinessValidationPath,
+      },
+      contractRegistry,
+      targetMaterialProfile,
+    };
+    throw new GracefulTerminalSignal({
+      disposition: "blocked",
+      terminalStepId: "seed_authoring_readiness",
+      reason: [
+        "seed authoring readiness does not allow ontology-seed authoring.",
+        `readiness_classification=${seedAuthoringReadiness.readiness_classification}`,
+        `missing_requirement_categories=${
+          seedAuthoringReadiness.missing_requirement_categories.join(",")
+        }`,
+      ].join(" "),
+    });
+  }
   assertSeedAuthoringReadinessAllowsSeed({
     readiness: seedAuthoringReadiness,
     validation: seedAuthoringReadinessValidation,
