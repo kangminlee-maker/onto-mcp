@@ -6,6 +6,7 @@ import { parse as parseYaml } from "yaml";
 import {
   buildSemanticMapBridgeCallbacks,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  dispatchIncompleteArtifactPath,
   mergeSemanticSeedProjections,
   observationPromptPayload,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
@@ -17,6 +18,11 @@ import {
   type ReconstructDirectiveAuthor,
   type SemanticMapStageConfig,
 } from "./run.js";
+import {
+  DispatchBreakerTrippedError,
+  type DispatchBreakerPolicy,
+} from "../llm/dispatch-breaker.js";
+import type { DispatchIncompleteArtifact } from "../llm/dispatch-breaker.js";
 import type { SemanticSeedProjection } from "./comprehension-semantic-map.js";
 import type {
   SemanticBoundaryVerification,
@@ -851,5 +857,330 @@ describe("W4 §4(B) — observation prompt replace (observationPromptPayload)", 
       provisionalLabelsByObservation: new Map([["obs-1", ["col0: flat label"]]]),
     }) as Array<Record<string, unknown>>;
     expect(JSON.stringify(emptyMap)).toBe(JSON.stringify(neverSet));
+  });
+});
+
+
+// ── 설계 B: dispatch limit/transport circuit breaker (F-B1/F-B2/F-B3) ────────────────────────────
+
+const BREAKER: DispatchBreakerPolicy = {
+  enabled: true,
+  systemic_threshold: 3,
+  per_call_max_attempts: 3,
+  backoff_initial_ms: 1,
+  backoff_cap_ms: 4,
+};
+
+/** Per-observation column index selects the author script; columnIndex null
+ *  builds a structural-skip observation (no workbook_inventory). */
+function breakerObservations(
+  specs: { id: string; columnIndex: number | null }[],
+): Parameters<typeof runSemanticMapStage>[0]["sourceObservations"] {
+  const artifact = observationsArtifact(
+    specs.map((spec) => ({
+      observation_id: spec.id,
+      columns: [richColumn(spec.columnIndex ?? 0)],
+    })),
+  ) as unknown as { observations: Array<{ observation_id: string; structural_data: Record<string, unknown> }> };
+  for (const spec of specs) {
+    if (spec.columnIndex === null) {
+      const observation = artifact.observations.find((o) => o.observation_id === spec.id)!;
+      observation.structural_data = {};
+    }
+  }
+  return artifact as unknown as Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
+}
+
+/** Author whose synthesize throws `failureMessage` for columns in `failColumns`
+ *  (dead-limit / poison scripting) and succeeds elsewhere. */
+function scriptedFailureAuthor(opts: {
+  failColumns: number[];
+  failureMessage: string;
+  /** When set, synthesize emits one unanchored boundary and verify throws this. */
+  verifyFailureMessage?: string;
+}): { author: ReconstructDirectiveAuthor; counters: { synthesize: number; verify: number } } {
+  const counters = { synthesize: 0, verify: 0 };
+  const author = {
+    async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
+      counters.synthesize += 1;
+      if (opts.failColumns.includes(input.node_ref.column_index)) {
+        throw new Error(opts.failureMessage);
+      }
+      return {
+        semantic_summary: `ok ${input.node_ref.sheet}#${input.node_ref.column_index}:${input.node_ref.row_start}-${input.node_ref.row_end}`,
+        boundaries: opts.verifyFailureMessage
+          ? [{ row: input.node_ref.row_start, character_before: "prev", character_after: "next" }]
+          : [],
+      };
+    },
+    async verifySemanticMapBoundary(): Promise<SemanticBoundaryVerification> {
+      counters.verify += 1;
+      if (opts.verifyFailureMessage) throw new Error(opts.verifyFailureMessage);
+      return "adversarial_confirmed";
+    },
+  } as unknown as ReconstructDirectiveAuthor;
+  return { author, counters };
+}
+
+async function readIncompleteArtifact(sessionRoot: string): Promise<DispatchIncompleteArtifact> {
+  return parseYaml(
+    await fs.readFile(dispatchIncompleteArtifactPath(sessionRoot), "utf8"),
+  ) as DispatchIncompleteArtifact;
+}
+
+function stageArgs(
+  sourceObservations: Parameters<typeof runSemanticMapStage>[0]["sourceObservations"],
+  author: ReconstructDirectiveAuthor,
+  sessionRoot: string,
+  dispatchBreaker?: DispatchBreakerPolicy,
+): Parameters<typeof runSemanticMapStage>[0] {
+  return {
+    sourceObservations,
+    directiveAuthor: author,
+    sessionRoot,
+    config: CONFIG,
+    preImageBase: PRE_IMAGE_BASE,
+    verifyModelIdentity: "mock/none",
+    ...(dispatchBreaker ? { dispatchBreaker } : {}),
+  };
+}
+
+describe("semantic-map dispatch breaker (설계 B)", () => {
+  it("F-B1: dead limit trips after backoff exhaustion at N=3, persists the incomplete list, bounded dispatch count", async () => {
+    const sessionRoot = await tempRoot();
+    const { author, counters } = scriptedFailureAuthor({
+      failColumns: [0],
+      failureMessage: "status=429 too many requests",
+    });
+    const observations = breakerObservations([
+      { id: "obs-1", columnIndex: 0 },
+      { id: "obs-2", columnIndex: 0 },
+      { id: "obs-3", columnIndex: 0 },
+      { id: "obs-4", columnIndex: 0 },
+    ]);
+
+    let tripError: unknown;
+    try {
+      await runSemanticMapStage(stageArgs(observations, author, sessionRoot, BREAKER));
+    } catch (error) {
+      tripError = error;
+    }
+    expect(tripError).toBeInstanceOf(DispatchBreakerTrippedError);
+    // 규칙 4 공지: 미완료 목록 경로가 사용자에게 도달하는 오류 메시지에 실린다.
+    expect((tripError as Error).message).toContain("dispatch-incomplete.yaml");
+
+    // 재시도 폭풍 부재를 수치로: 총 디스패치 == N items x per-item cap (성공분 0).
+    expect(counters.synthesize).toBe(
+      BREAKER.systemic_threshold * BREAKER.per_call_max_attempts,
+    );
+
+    const artifact = await readIncompleteArtifact(sessionRoot);
+    expect(artifact.breaker).toMatchObject({
+      tripped: true,
+      failure_class: "rate_limit",
+      consecutive_item_count: 3,
+      threshold: 3,
+    });
+    expect(artifact.completed_item_ids).toEqual([]);
+    // 계통 장애 피해 아이템은 dead-letter가 아니라 회복 재디스패치 대상이다.
+    expect(artifact.dead_letter).toEqual([]);
+    expect(artifact.incomplete_item_ids).toEqual(["obs-1", "obs-2", "obs-3", "obs-4"]);
+
+    // 트립도 stage-ran: spend census가 남는다 (breaker 재시도 spend 병기).
+    const census = parseYaml(
+      await fs.readFile(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"), "utf8"),
+    ) as {
+      breaker_retry_synthesize_calls?: number;
+      observations_total: number;
+      observations_map_present: number;
+      observations_map_absent: number;
+      by_observation: Array<{ observation_id: string }>;
+    };
+    expect(census.breaker_retry_synthesize_calls).toBe(
+      BREAKER.systemic_threshold * (BREAKER.per_call_max_attempts - 1),
+    );
+    // 트립 census도 완전 파티션을 유지한다: 트립 관찰의 행까지 기록되고
+    // 총계가 행과 대조된다 (미도달 obs-4는 total에도 행에도 없음).
+    expect(census.observations_total).toBe(3);
+    expect(census.by_observation.map((o) => o.observation_id)).toEqual([
+      "obs-1",
+      "obs-2",
+      "obs-3",
+    ]);
+    expect(
+      census.observations_map_present + census.observations_map_absent,
+    ).toBe(census.observations_total);
+  });
+
+  it("regression: a structural skip between systemic failures neither resets the streak nor poisons victims", async () => {
+    const sessionRoot = await tempRoot();
+    const { author } = scriptedFailureAuthor({
+      failColumns: [5],
+      failureMessage: "status=429 too many requests",
+    });
+    // 순서: 실패(5) → skip(no inventory) → 실패 → 실패 → 임계 3에서 트립.
+    const observations = breakerObservations([
+      { id: "obs-1", columnIndex: 5 },
+      { id: "obs-2", columnIndex: null },
+      { id: "obs-3", columnIndex: 5 },
+      { id: "obs-4", columnIndex: 5 },
+      { id: "obs-5", columnIndex: 5 },
+    ]);
+
+    await expect(
+      runSemanticMapStage(stageArgs(observations, author, sessionRoot, BREAKER)),
+    ).rejects.toBeInstanceOf(DispatchBreakerTrippedError);
+
+    const artifact = await readIncompleteArtifact(sessionRoot);
+    expect(artifact.breaker.tripped).toBe(true);
+    // skip은 완료(회복 불요)로만 기록되고, outage 피해 관찰은 dead-letter가
+    // 아니라 미완료 집합에 남는다.
+    expect(artifact.completed_item_ids).toEqual(["obs-2"]);
+    expect(artifact.dead_letter).toEqual([]);
+    expect(artifact.incomplete_item_ids).toEqual(["obs-1", "obs-3", "obs-4", "obs-5"]);
+  });
+
+  it("verify-path systemic failure: retries are spend-counted and the observation lands in the recovery set", async () => {
+    const sessionRoot = await tempRoot();
+    const { author, counters } = scriptedFailureAuthor({
+      failColumns: [],
+      failureMessage: "unused",
+      verifyFailureMessage: "status=429 too many requests",
+    });
+    const observations = breakerObservations([{ id: "obs-1", columnIndex: 0 }]);
+
+    const result = await runSemanticMapStage(
+      stageArgs(observations, author, sessionRoot, BREAKER),
+    );
+
+    // 임계(3) 미달: 트립 없이 완주하되, verify 재시도 spend가 census에 남는다.
+    expect(result.census?.breaker_retry_verify_calls).toBe(
+      BREAKER.per_call_max_attempts - 1,
+    );
+    expect(counters.verify).toBe(BREAKER.per_call_max_attempts);
+    const artifact = await readIncompleteArtifact(sessionRoot);
+    expect(artifact.breaker.tripped).toBe(false);
+    expect(artifact.dead_letter).toEqual([]);
+    expect(artifact.incomplete_item_ids).toEqual(["obs-1"]);
+  });
+
+  it("F-B1 OFF twin: the disabled path preserves today's doom-to-flat behavior (no breaker artifacts, no backoff retries)", async () => {
+    const sessionRoot = await tempRoot();
+    const { author, counters } = scriptedFailureAuthor({
+      failColumns: [0],
+      failureMessage: "status=429 too many requests",
+    });
+    const observations = breakerObservations([
+      { id: "obs-1", columnIndex: 0 },
+      { id: "obs-2", columnIndex: 0 },
+      { id: "obs-3", columnIndex: 0 },
+      { id: "obs-4", columnIndex: 0 },
+    ]);
+
+    const result = await runSemanticMapStage(stageArgs(observations, author, sessionRoot));
+
+    // 현행 동작: 관찰별 doom-to-flat, run은 계속. backoff 재시도 없음(관찰당 1회).
+    expect(counters.synthesize).toBe(4);
+    expect(result.census?.observations_map_absent).toBe(4);
+    expect(result.census?.breaker_retry_synthesize_calls).toBeUndefined();
+    await expect(fs.access(dispatchIncompleteArtifactPath(sessionRoot))).rejects.toThrow();
+  });
+
+  it("F-B2: a poison item dead-letters alone and the batch completes", async () => {
+    const sessionRoot = await tempRoot();
+    // obs-2만 item-local 실패(컬럼 5), 나머지는 정상.
+    const { author } = scriptedFailureAuthor({
+      failColumns: [5],
+      failureMessage: "author returned invalid JSON and repair failed",
+    });
+    const observations = breakerObservations([
+      { id: "obs-1", columnIndex: 0 },
+      { id: "obs-2", columnIndex: 5 },
+      { id: "obs-3", columnIndex: 0 },
+    ]);
+
+    const result = await runSemanticMapStage(
+      stageArgs(observations, author, sessionRoot, BREAKER),
+    );
+
+    expect(result.census?.observations_map_present).toBe(2);
+    const artifact = await readIncompleteArtifact(sessionRoot);
+    expect(artifact.breaker.tripped).toBe(false);
+    expect(artifact.dead_letter.map((entry) => entry.item_id)).toEqual(["obs-2"]);
+    expect(artifact.dead_letter[0]?.failure_class).toBeNull();
+    expect(artifact.completed_item_ids).toEqual(["obs-1", "obs-3"]);
+    expect(artifact.incomplete_item_ids).toEqual([]);
+  });
+
+  it("F-B2 systemic-poison variant: a lone rate-limited item is poison once a later item succeeds", async () => {
+    const sessionRoot = await tempRoot();
+    const { author } = scriptedFailureAuthor({
+      failColumns: [5],
+      failureMessage: "status=429 session limit",
+    });
+    const observations = breakerObservations([
+      { id: "obs-1", columnIndex: 5 },
+      { id: "obs-2", columnIndex: 0 },
+      { id: "obs-3", columnIndex: 0 },
+    ]);
+
+    const result = await runSemanticMapStage(
+      stageArgs(observations, author, sessionRoot, BREAKER),
+    );
+
+    expect(result.census?.observations_map_present).toBe(2);
+    const artifact = await readIncompleteArtifact(sessionRoot);
+    expect(artifact.breaker.tripped).toBe(false);
+    expect(artifact.dead_letter.map((entry) => entry.item_id)).toEqual(["obs-1"]);
+    expect(artifact.dead_letter[0]?.failure_class).toBe("rate_limit");
+    expect(artifact.incomplete_item_ids).toEqual([]);
+  });
+
+  it("F-B3: the recovery re-dispatch set equals the persisted incomplete set exactly", async () => {
+    const sessionRoot = await tempRoot();
+    // Run 1: obs-1 성공(컬럼 0), obs-2..5는 dead limit(컬럼 5) → obs-2,3,4에서 트립, obs-5 미디스패치.
+    const dead = scriptedFailureAuthor({
+      failColumns: [5],
+      failureMessage: "status=429 too many requests",
+    });
+    const run1Observations = breakerObservations([
+      { id: "obs-1", columnIndex: 0 },
+      { id: "obs-2", columnIndex: 5 },
+      { id: "obs-3", columnIndex: 5 },
+      { id: "obs-4", columnIndex: 5 },
+      { id: "obs-5", columnIndex: 5 },
+    ]);
+    await expect(
+      runSemanticMapStage(stageArgs(run1Observations, dead.author, sessionRoot, BREAKER)),
+    ).rejects.toBeInstanceOf(DispatchBreakerTrippedError);
+
+    const tripped = await readIncompleteArtifact(sessionRoot);
+    expect(tripped.completed_item_ids).toEqual(["obs-1"]);
+    expect(tripped.incomplete_item_ids).toEqual(["obs-2", "obs-3", "obs-4", "obs-5"]);
+
+    // Run 2 (회복): 미완료 집합만 재디스패치 — provider 정상.
+    const incomplete = new Set(tripped.incomplete_item_ids);
+    const healthy = scriptedFailureAuthor({ failColumns: [], failureMessage: "unused" });
+    const run2Observations = breakerObservations(
+      [
+        { id: "obs-2", columnIndex: 5 },
+        { id: "obs-3", columnIndex: 5 },
+        { id: "obs-4", columnIndex: 5 },
+        { id: "obs-5", columnIndex: 5 },
+      ].filter((spec) => incomplete.has(spec.id)),
+    );
+    const recovery = await runSemanticMapStage(
+      stageArgs(run2Observations, healthy.author, sessionRoot, BREAKER),
+    );
+
+    // 집합 동등성: 회복 run이 디스패치한 관찰 == 미완료 집합.
+    expect(
+      (recovery.census?.by_observation ?? []).map((o) => o.observation_id).sort(),
+    ).toEqual([...incomplete].sort());
+    const recovered = await readIncompleteArtifact(sessionRoot);
+    expect(recovered.breaker.tripped).toBe(false);
+    expect(recovered.completed_item_ids.sort()).toEqual([...incomplete].sort());
+    expect(recovered.incomplete_item_ids).toEqual([]);
+    expect(recovered.dead_letter).toEqual([]);
   });
 });

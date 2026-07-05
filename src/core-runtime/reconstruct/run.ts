@@ -103,6 +103,16 @@ import type {
 } from "./artifact-types.js";
 import { WITNESS_LESS_CONDITIONAL_STAGE_IDS } from "./artifact-types.js";
 import { callLlm, type LlmCallConfig, type LlmCallResult } from "../llm/llm-caller.js";
+import {
+  DispatchBreakerState,
+  DispatchBreakerTrippedError,
+  buildDispatchIncompleteArtifact,
+  classifySystemicDispatchFailure,
+  readDispatchFailureClass,
+  runWithDispatchBackoff,
+  type DispatchBreakerPolicy,
+  type DispatchBreakerTripState,
+} from "../llm/dispatch-breaker.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   TARGET_MATERIAL_KINDS,
@@ -916,6 +926,9 @@ export interface RunReconstructParams {
   confirmationProviderRealization: ReconstructConfirmationProviderRealization;
   directiveAuthor: ReconstructDirectiveAuthor;
   confirmationProvider: ReconstructConfirmationProvider;
+  /** 설계 B: unattended-batch dispatch circuit breaker (default-off; resolved
+   * from reconstruct.execution.dispatch_breaker settings by the caller). */
+  dispatchBreaker?: DispatchBreakerPolicy;
 }
 
 interface AuthoredArtifactReuseMatch {
@@ -2323,6 +2336,36 @@ export interface SemanticMapStageResult {
  * each run like leaf_read. The ledger's pre-existing `unitKind: "semantic_map"`
  * (claim_realization's KIND) is a different vocabulary — a name collision, not a relationship.
  */
+/** 설계 B 규칙 4·5: the batch's end state (completed / dead-letter /
+ * incomplete) persists at a fixed session-root path so a recovery run can
+ * re-dispatch EXACTLY the incomplete set — the §1.2 34-item loss happened
+ * because this list did not exist. Written on breaker trip AND on normal
+ * breaker-ON completion (rule 6 observability); never written when the
+ * breaker is off (OFF = 현행 동작). */
+export function dispatchIncompleteArtifactPath(sessionRoot: string): string {
+  return path.join(sessionRoot, "dispatch-incomplete.yaml");
+}
+
+async function persistDispatchIncompleteArtifact(args: {
+  sessionRoot: string;
+  batchLabel: string;
+  plannedItemIds: readonly string[];
+  state: DispatchBreakerState;
+}): Promise<string> {
+  const artifactPath = dispatchIncompleteArtifactPath(args.sessionRoot);
+  await writeYamlDocument(
+    artifactPath,
+    buildDispatchIncompleteArtifact({
+      pipeline: "reconstruct",
+      batchLabel: args.batchLabel,
+      createdAt: isoNow(),
+      plannedItemIds: args.plannedItemIds,
+      state: args.state,
+    }),
+  );
+  return artifactPath;
+}
+
 export async function runSemanticMapStage(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   directiveAuthor: ReconstructDirectiveAuthor;
@@ -2334,14 +2377,67 @@ export async function runSemanticMapStage(args: {
   /** F4 (CG-2/judge-fold class): the adversarial verifier may run a DIFFERENT model in production —
    *  its identity folds separately. Defaults to the author identity at the live call site. */
   verifyModelIdentity: string;
+  /** 설계 B: batch dispatch circuit breaker. Default-off; NOT part of `config`
+   * on purpose — the stage config folds into the reuse fingerprint, and the
+   * breaker policy must never rotate reuse keys. */
+  dispatchBreaker?: DispatchBreakerPolicy;
 }): Promise<SemanticMapStageResult> {
   if (resolveSemanticMapCapability(args.directiveAuthor) === "absent") {
     return { projectionByObservation: new Map(), census: null, censusPath: null, sidecarPath: null, aggregateFingerprint: null };
   }
   assertSemanticMapStageConfig(args.config);
-  const synthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(args.directiveAuthor);
-  const verifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(args.directiveAuthor);
+  const rawSynthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(args.directiveAuthor);
+  const rawVerifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(args.directiveAuthor);
   const cfg = args.config;
+  // 설계 B breaker (opt-in): 규칙 1 — systemic-class 실패는 캡된 지수 backoff의
+  // per-item 재시도를 소진한 뒤에만 관찰 단위(final outcome)로 카운트된다.
+  const breakerState =
+    args.dispatchBreaker?.enabled === true
+      ? new DispatchBreakerState(args.dispatchBreaker)
+      : null;
+  const breakerSleep = (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+  // Census honesty (W2-X7-001 spirit): breaker backoff retries SPEND provider
+  // calls too — counted separately from the per-column first-attempt totals
+  // and folded into the X7 budget checks below.
+  const breakerRetryCalls = { synthesize: 0, verify: 0 };
+  // Set on any successful provider dispatch inside the CURRENT observation —
+  // the only evidence that the provider lane is alive (recordItemSuccess);
+  // observations without it record as skipped (no liveness claim).
+  let observationDispatchSucceeded = false;
+  let breakerTrip: DispatchBreakerTripState | null = null;
+  const guardedDispatch = breakerState
+    ? <T>(kind: "synthesize" | "verify", label: string, dispatch: () => Promise<T>): Promise<T> =>
+        runWithDispatchBackoff({
+          label,
+          policy: breakerState.policy,
+          dispatch,
+          sleep: breakerSleep,
+          onRetry: () => {
+            breakerRetryCalls[kind] += 1;
+          },
+        }).then((value) => {
+          observationDispatchSucceeded = true;
+          return value;
+        })
+    : null;
+  // OFF(기본) 경로는 raw author bind를 그대로 쓴다 — 래핑 비용 0.
+  const synthesizeNode: typeof rawSynthesizeNode = guardedDispatch
+    ? (input) =>
+        guardedDispatch(
+          "synthesize",
+          `synthesize:${input.node_ref.sheet}#${input.node_ref.column_index}:${input.node_ref.row_start}-${input.node_ref.row_end}`,
+          () => rawSynthesizeNode(input),
+        )
+    : rawSynthesizeNode;
+  const verifyBoundary: typeof rawVerifyBoundary = guardedDispatch
+    ? (input) =>
+        guardedDispatch(
+          "verify",
+          `verify:${input.node_ref.sheet}#${input.node_ref.column_index}:${input.boundary.row}`,
+          () => rawVerifyBoundary(input),
+        )
+    : rawVerifyBoundary;
 
   const projectionByObservation = new Map<string, SemanticSeedProjection>();
   const census: ReconstructSemanticMapCensus = {
@@ -2361,6 +2457,24 @@ export async function runSemanticMapStage(args: {
   const sidecarObservations: ReconstructSemanticMapSidecarObservation[] = [];
   const perObservationFingerprints: { observation_id: string; fingerprint: string }[] = [];
 
+  // ALWAYS persist census + sidecar when the stage ran (f1a3c1b honest-signal pattern): a total
+  // semantic-map failure is a durable artifact, never silently absent. Doubles as the W3 manifest
+  // step's artifact refs. Shared by the normal end AND the breaker-trip abort, so a tripped batch
+  // still leaves the honest spend census behind.
+  const persistCensusAndSidecar = async (): Promise<{
+    censusPath: string;
+    sidecarPath: string;
+  }> => {
+    const comprehensionDir = path.join(args.sessionRoot, "comprehension");
+    await fs.mkdir(comprehensionDir, { recursive: true });
+    const censusPath = path.join(comprehensionDir, "semantic-map-census.yaml");
+    await writeYamlDocument(censusPath, census);
+    const sidecarPath = path.join(comprehensionDir, "semantic-map.yaml");
+    const sidecar: ReconstructSemanticMapSidecar = { schema_version: "1", observations: sidecarObservations };
+    await writeYamlDocument(sidecarPath, sidecar);
+    return { censusPath, sidecarPath };
+  };
+
   // onto-W2 issue-003/006: a spreadsheet observation the stage cannot evaluate is RECORDED with an
   // explicit reason — by_observation stays a complete partition and the totals reconcile.
   const recordSkippedObservation = (
@@ -2378,6 +2492,11 @@ export async function runSemanticMapStage(args: {
       fingerprint: null,
       columns: [],
     });
+    // Breaker bookkeeping: a skipped observation owes no dispatch — completed
+    // for recovery-set purposes, but it proves nothing about the provider
+    // lane (recordItemSkipped, NOT recordItemSuccess: 성공 취급은 계통 streak을
+    // 리셋해 outage 피해 아이템을 poison으로 오분류한다).
+    breakerState?.recordItemSkipped(observationId);
   };
 
   const seenObservationIds = new Set<string>();
@@ -2482,11 +2601,20 @@ export async function runSemanticMapStage(args: {
     const columnProjections: SemanticSeedProjection[] = [];
     const nodeEpochs: { key: string; subtree_epoch_contribution: string }[] = [];
     let doomed: boolean = false;
+    // 설계 B: the observation's FIRST breaker-relevant failure (systemic class
+    // wins over item-local) — reported once at observation end.
+    let breakerObservationFailure: {
+      failureClass: ReturnType<typeof classifySystemicDispatchFailure>;
+      message: string;
+    } | null = null;
+    observationDispatchSucceeded = false;
 
     // X7 synthesize PREFLIGHT — observation-granular against the REMAINING global budget, decided
     // before any of this observation's LLM calls (deterministic given canonical order).
     const observationNeed = tasks.reduce((s, t) => s + t.producedCount, 0);
-    const preflightCapped = census.synthesize_calls_total + observationNeed > cfg.max_synthesize_calls;
+    const preflightCapped =
+      census.synthesize_calls_total + breakerRetryCalls.synthesize + observationNeed >
+      cfg.max_synthesize_calls;
 
     for (const task of tasks) {
       if (task.trace === null || task.nodesByKey === null || task.modes === null) {
@@ -2540,7 +2668,10 @@ export async function runSemanticMapStage(args: {
           const nodeRef = input.node_ref;
           for (const b of classified) {
             if (b.anchor_status !== "unanchored") continue;
-            if (census.verify_calls_total + verifyCalls + 1 > cfg.max_verify_calls) {
+            if (
+              census.verify_calls_total + breakerRetryCalls.verify + verifyCalls + 1 >
+              cfg.max_verify_calls
+            ) {
               throw new SemanticMapVerifyCapExceeded(key, cfg.max_verify_calls);
             }
             const verifyInput: SemanticBoundaryVerifyInput = {
@@ -2634,6 +2765,41 @@ export async function runSemanticMapStage(args: {
           verify_calls: verifyCalls,
         });
         doomed = true;
+        if (breakerState && !capped) {
+          // 마커 기반 분류: 디스패치를 실제로 거친 오류만 systemic 후보다 —
+          // 결정적 stage 오류는 내용 유래 텍스트(시트명·행 범위)를 담아
+          // substring 재분류가 오독한다. 남은 컬럼은 기존 doomed 가드가
+          // 디스패치 없이 skip 행으로 기록하므로 추가 차단이 불필요하다.
+          const failureClass = readDispatchFailureClass(error);
+          if (breakerObservationFailure === null || failureClass !== null) {
+            breakerObservationFailure = {
+              failureClass,
+              message: (error as Error).message,
+            };
+          }
+        }
+      }
+    }
+    if (breakerState) {
+      if (breakerObservationFailure !== null) {
+        // 트립이어도 여기서 throw하지 않는다: 이 관찰의 census 행 부기를
+        // 마쳐 파티션·spend 대조 불변식을 지킨 뒤, 루프 밖 epilogue가
+        // 영속과 halt를 수행한다.
+        breakerTrip = breakerState.recordItemFailure({
+          item_id: observation.observation_id,
+          failure_class: breakerObservationFailure.failureClass,
+          failure_message: breakerObservationFailure.message,
+          attempt_count:
+            breakerObservationFailure.failureClass !== null
+              ? breakerState.policy.per_call_max_attempts
+              : 1,
+        });
+      } else if (observationDispatchSucceeded) {
+        breakerState.recordItemSuccess(observation.observation_id);
+      } else {
+        // 디스패치 성공이 0회인 관찰(preflight-capped·빈 컬럼·전부 subsumed)
+        // 은 프로바이더 생존을 증명하지 못한다 — 회복 집합 부기만 한다.
+        breakerState.recordItemSkipped(observation.observation_id);
       }
     }
 
@@ -2672,18 +2838,31 @@ export async function runSemanticMapStage(args: {
         columns: [],
       });
     }
+    // 설계 B 트립: 이 관찰의 부기까지 마친 상태에서 배치를 멈춘다 — 남은
+    // 관찰은 미디스패치로 incomplete 집합에 남는다.
+    if (breakerTrip) break;
   }
 
-  // ALWAYS persist census + sidecar when the stage ran (f1a3c1b honest-signal pattern): a total
-  // semantic-map failure is a durable artifact, never silently absent. Doubles as the W3 manifest
-  // step's artifact refs.
-  const comprehensionDir = path.join(args.sessionRoot, "comprehension");
-  await fs.mkdir(comprehensionDir, { recursive: true });
-  const censusPath = path.join(comprehensionDir, "semantic-map-census.yaml");
-  await writeYamlDocument(censusPath, census);
-  const sidecarPath = path.join(comprehensionDir, "semantic-map.yaml");
-  const sidecar: ReconstructSemanticMapSidecar = { schema_version: "1", observations: sidecarObservations };
-  await writeYamlDocument(sidecarPath, sidecar);
+  let dispatchIncompletePath: string | null = null;
+  if (breakerState) {
+    // 규칙 6 관측 상시화: breaker-ON 배치는 트립이든 완주든 end-state를
+    // 영속해 회복 절차가 항상 정확한 재디스패치 집합을 갖는다. spend
+    // 정직성: backoff 재시도 호출 수를 census에 병기한다.
+    census.breaker_retry_synthesize_calls = breakerRetryCalls.synthesize;
+    census.breaker_retry_verify_calls = breakerRetryCalls.verify;
+    dispatchIncompletePath = await persistDispatchIncompleteArtifact({
+      sessionRoot: args.sessionRoot,
+      batchLabel: "semantic-map",
+      plannedItemIds: spreadsheetObservations.map((o) => o.observation_id),
+      state: breakerState,
+    });
+  }
+
+  const { censusPath, sidecarPath } = await persistCensusAndSidecar();
+  if (breakerTrip) {
+    // 규칙 4: 배치 halt + 사용자 공지 — 공지에 미완료 목록 경로를 싣는다.
+    throw new DispatchBreakerTrippedError(breakerTrip, dispatchIncompletePath);
+  }
 
   const aggregateFingerprint =
     perObservationFingerprints.length === 0
@@ -13887,6 +14066,9 @@ export async function runReconstruct(
     directiveAuthor,
     sessionRoot,
     config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+    ...(params.dispatchBreaker !== undefined
+      ? { dispatchBreaker: params.dispatchBreaker }
+      : {}),
     preImageBase: {
       // Effective synthesize identity: carries the per-call effort override when active
       // (…@synthesize_effort=low) so the override rotates the stage reuse key and shows in

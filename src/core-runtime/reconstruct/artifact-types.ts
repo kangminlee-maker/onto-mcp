@@ -2573,6 +2573,12 @@ export interface ReconstructSemanticMapCensus {
   observations_map_absent: number;
   synthesize_calls_total: number;
   verify_calls_total: number;
+  /** 설계 B breaker-ON spend honesty: backoff RETRY provider calls on top of
+   * the per-column dispatch counts (which sum to *_calls_total). Written only
+   * when the dispatch breaker is enabled, so opted-out runs keep their
+   * previous census shape. */
+  breaker_retry_synthesize_calls?: number;
+  breaker_retry_verify_calls?: number;
   /** The deterministic cost-cap config in force (X7) — also folded into the reuse fingerprint (W3). */
   max_synthesize_calls: number;
   max_verify_calls: number;
