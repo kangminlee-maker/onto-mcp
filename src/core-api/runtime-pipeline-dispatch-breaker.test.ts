@@ -337,6 +337,41 @@ describe("review dispatch breaker (설계 B 리뷰판, deterministic dispatch-le
     ).toHaveLength(STANCE_UNIT_IDS.length);
   });
 
+  it("stance trip halt: the status read reports progress at the issue stance matrix step (§4-7 진행률 오보고 회귀 가드)", async () => {
+    process.env.ONTO_BREAKER_FAIL_UNITS = STANCE_UNIT_IDS.join(",");
+    const session = await prepareBreakerSession();
+
+    await runPipeline(
+      session,
+      breakerProfile({ breakerEnabled: true, systemicThreshold: 3 }),
+    );
+
+    // halt 생산 측 전제: 트립 귀속 유닛은 동적 per-lens stance 유닛이다.
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("halted_partial");
+    expect(executionResult.halt_phase).toBe("issue_artifact");
+    expect(executionResult.halt_unit_id?.startsWith("issue-stance:")).toBe(true);
+
+    // 실 읽기 경로(onto_review_read가 쓰는 getReviewStatus 프로젝션)로
+    // 진행률을 조회 — 수정 전에는 finding_ledger(step 4)로 오보고됐다.
+    const api = createOntoReviewCoreApi({ ontoHome: path.resolve(".") });
+    const status = await api.getReviewStatus(session.sessionRoot);
+    expect(status.status).toBe("halted_partial");
+    const presentationInput = status.llmPresentation?.progress?.input as {
+      progress: {
+        current_step: number | null;
+        current_label: string | null;
+        completed_steps: string[];
+      };
+    };
+    expect(presentationInput.progress.current_label).toBe(
+      "halted during issue stance matrix",
+    );
+    expect(presentationInput.progress.current_step).toBe(7);
+    // 오보고의 모순 가드: finding ledger는 이미 완료된 스텝이다.
+    expect(presentationInput.progress.completed_steps).toContain("finding_ledger");
+  });
+
   it("lens trip: reaching the threshold stops picking new lenses and halts structurally (조기 halt)", async () => {
     process.env.ONTO_BREAKER_FAIL_UNITS = LENS_IDS.join(",");
     const logPath = await invocationLogPath();

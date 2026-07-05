@@ -160,6 +160,9 @@ export function reviewProgressStepIdFromHalt(args: {
   }
   if (args.haltPhase === "issue_artifact") {
     const unitId = args.haltUnitId;
+    // 동적 per-lens stance 유닛(issue-stance:<lens>)은 issue-stance-matrix
+    // 산출 단계에 속한다 — issue_artifact_id 정확 일치로는 매핑되지 않는다.
+    if (unitId?.startsWith("issue-stance:")) return "issue_stance_matrix";
     const step = REVIEW_PROGRESS_STEPS.find(
       (candidate) => candidate.issue_artifact_id === unitId,
     );
