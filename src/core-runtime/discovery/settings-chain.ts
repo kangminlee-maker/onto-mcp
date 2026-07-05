@@ -736,12 +736,14 @@ export function resolveReconstructActorLlmSettings(
 }
 
 /**
- * THE single reader of an OPTIONAL reconstruct actor seat (design §5.4) —
- * live wiring, mock identity projection, and tests all consume this one
- * post-chain projection so no second seat-reading authority can drift.
- * Absent seat → undefined (the stage inherits the semantic_author config).
- * Pure projection: normalizes the switcher shape only — no provider/auth
- * resolution, so it is safe under mock realization.
+ * THE single reader of an OPTIONAL reconstruct actor seat for DISPATCH
+ * consumers (design §5.4) — live wiring, mock identity projection, and tests
+ * all consume this one post-chain projection so no second dispatch-side
+ * seat-reading authority can drift. (The supported-model gate walks the same
+ * post-chain settings object structurally via collectModelSelections; both
+ * therefore see one seat value.) Absent seat → undefined (the stage inherits
+ * the semantic_author config). Pure projection: normalizes the switcher shape
+ * only — no provider/auth resolution, so it is safe under mock realization.
  */
 export function resolveOptionalReconstructActorLlmSettings(
   settings: OntoSettings,
@@ -1506,7 +1508,7 @@ export function collectEffectiveModelRoutes(
   // exemption as salvage (design §5.1-7, U6 owner decision). Flipping the
   // opt-in on brings the seat into the walk and fails loud then.
   const semanticMapAuthoringEnabled =
-    settings.reconstruct?.execution?.semantic_map_authoring === true;
+    isReconstructSemanticMapAuthoringEnabled(settings);
   const SYNTHESIZE_SEAT_PATH =
     "reconstruct.execution.actors.semantic_map_synthesize.llm";
 
