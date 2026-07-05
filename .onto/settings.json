@@ -28,7 +28,9 @@
         "deliberation_max_retries": 2,
         "synthesis_max_retries": 2,
         "retry_initial_delay_ms": 3000,
-        "resubmit": { "enabled": true }
+        "resubmit": {
+          "enabled": true
+        }
       },
       "units": {
         "lens": {
@@ -188,6 +190,10 @@
             "service_tier": "fast"
           }
         }
+      },
+      "semantic_map_authoring": true,
+      "dispatch_breaker": {
+        "enabled": true
       }
     }
   }

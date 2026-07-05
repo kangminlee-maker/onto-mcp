@@ -505,6 +505,7 @@ const NormalizedSettingsSchema = z
               .strict()
               .optional(),
             ...reconstructExecutionScalarsShape(),
+            dispatch_breaker: V3ReconstructDispatchBreakerSettingsSchema.optional(),
           })
           .strict()
           .optional(),
