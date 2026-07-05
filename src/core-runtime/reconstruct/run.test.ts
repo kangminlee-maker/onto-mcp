@@ -64,6 +64,8 @@ import {
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
   SEMANTIC_MAP_PROMPT_NOTE,
   SEMANTIC_MAP_SEED_PROMPT_NOTE,
+  SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
+  SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
 } from "./run.js";
 import type { DocumentExcerptProjectionTruncation } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -6028,7 +6030,7 @@ describe("runReconstruct", () => {
     // site to keep map-absent prompts byte-identical)
     // 37 = 34 + leaf_read (P1-C2-A: the leaf-read prompt is an authoring template too)
     //    + value_read_location + value_read_judgment (maturation value-read cut, design §15.4).
-    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(39);
+    expect(Object.keys(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT)).toHaveLength(41);
     expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.value_read_location).toContain(
       "Select spreadsheet cell locations to read for a value-dependent limitation.",
     );
@@ -7510,4 +7512,203 @@ describe("W5 semantic-map mock full-pipeline E2E", () => {
     expect(seedReuseProvenance.reuse_match?.semantic_map_aggregate_fingerprint_sha256)
       .toBeNull();
   });
+});
+
+// ── R1: production semantic-map capability (real-LLM cut design 20260703 §2/§4) ───────────────────
+
+describe("R1 production semantic-map capability", () => {
+  const synthesisInput = {
+    node_ref: { sheet: "S", column_index: 0, row_start: 1, row_end: 10 },
+    format_clusters: ["TEXT"],
+    value_shape_seams: [],
+    child_summaries: [],
+  };
+  const verifyInput = {
+    node_ref: { sheet: "S", column_index: 0, row_start: 1, row_end: 10 },
+    boundary: {
+      row: 3,
+      character_before: "a",
+      character_after: "b",
+      anchor_status: "unanchored" as const,
+      verification: "unverified" as const,
+    },
+    summary: "region summary",
+  };
+
+  function capabilityAuthor(responses: Array<Record<string, unknown> | Error>) {
+    const calls: { systemPrompt: string; userPrompt: string }[] = [];
+    let index = 0;
+    const llmCall = async (systemPrompt: string, userPrompt: string): Promise<LlmCallResult> => {
+      calls.push({ systemPrompt, userPrompt });
+      const next = responses[Math.min(index, responses.length - 1)]!;
+      index += 1;
+      if (next instanceof Error) throw next;
+      return {
+        text: JSON.stringify(next),
+        input_tokens: 1,
+        output_tokens: 1,
+        model_id: "mock-r1",
+      } as unknown as LlmCallResult;
+    };
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall,
+      authorId: "r1-capability-author",
+      enableSemanticMapAuthoring: true,
+    });
+    return { author, calls };
+  }
+
+  it("opt-in OFF (default): the pair is structurally ABSENT — the merged default-off path is untouched", () => {
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: reconstructFixtureLlm,
+      authorId: "r1-off-author",
+    });
+    expect(author.synthesizeSemanticMapNode).toBeUndefined();
+    expect(author.verifySemanticMapBoundary).toBeUndefined();
+  });
+
+  it("opt-in ON: BOTH capability methods present (pair rule) and synthesize projects the DECLARED fields — benign extra keys stripped, catalog prompt used at the call site (§10.F6)", async () => {
+    const { author, calls } = capabilityAuthor([
+      {
+        semantic_summary: "text region",
+        boundaries: [{ row: 4, character_before: "x", character_after: "y", confidence: 0.9 }],
+        reasoning: "extra commentary the projection must strip",
+      },
+    ]);
+    expect(typeof author.synthesizeSemanticMapNode).toBe("function");
+    expect(typeof author.verifySemanticMapBoundary).toBe("function");
+    const out = await author.synthesizeSemanticMapNode!(synthesisInput);
+    expect(out).toEqual({
+      semantic_summary: "text region",
+      boundaries: [{ row: 4, character_before: "x", character_after: "y" }],
+    });
+    expect(calls[0]!.systemPrompt).toBe(SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT);
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.semantic_map_synthesize)
+      .toBe(SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT);
+    expect(JSON.parse(calls[0]!.userPrompt)).toEqual(synthesisInput);
+  });
+
+  it("shape NCs: missing summary / non-integer row / non-string character field each fail closed", async () => {
+    await expect(
+      capabilityAuthor([{ boundaries: [] }]).author.synthesizeSemanticMapNode!(synthesisInput),
+    ).rejects.toThrow(/semantic_summary/);
+    await expect(
+      capabilityAuthor([
+        { semantic_summary: "s", boundaries: [{ row: 1.5, character_before: "a", character_after: "b" }] },
+      ]).author.synthesizeSemanticMapNode!(synthesisInput),
+    ).rejects.toThrow(/row must be a safe integer/);
+    await expect(
+      capabilityAuthor([
+        { semantic_summary: "s", boundaries: [{ row: 1, character_before: 7, character_after: "b" }] },
+      ]).author.synthesizeSemanticMapNode!(synthesisInput),
+    ).rejects.toThrow(/character fields must be strings/);
+  });
+
+  it("runtime output caps (§10.F5 NCs): over-cap summary / boundary count / character field each fail closed — maxTokens is only a hint", async () => {
+    await expect(
+      capabilityAuthor([
+        { semantic_summary: "x".repeat(601), boundaries: [] },
+      ]).author.synthesizeSemanticMapNode!(synthesisInput),
+    ).rejects.toThrow(/600-char runtime cap/);
+    await expect(
+      capabilityAuthor([
+        {
+          semantic_summary: "s",
+          boundaries: Array.from({ length: 17 }, (_, i) => ({ row: i + 1, character_before: "a", character_after: "b" })),
+        },
+      ]).author.synthesizeSemanticMapNode!(synthesisInput),
+    ).rejects.toThrow(/per-node cap 16/);
+    await expect(
+      capabilityAuthor([
+        { semantic_summary: "s", boundaries: [{ row: 1, character_before: "c".repeat(121), character_after: "b" }] },
+      ]).author.synthesizeSemanticMapNode!(synthesisInput),
+    ).rejects.toThrow(/120-char cap/);
+  });
+
+  it("verify: exact enum verdict returned; a SYNONYM is fail-closed (no runtime synonym mapping, §10.F7); over-cap response fail-closed", async () => {
+    const ok = capabilityAuthor([{ verdict: "adversarial_refuted" }]);
+    await expect(ok.author.verifySemanticMapBoundary!(verifyInput)).resolves.toBe("adversarial_refuted");
+    expect(ok.calls[0]!.systemPrompt).toBe(SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT);
+    expect(RECONSTRUCT_AUTHORING_PROMPT_CONTRACT.semantic_map_verify)
+      .toBe(SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT);
+    await expect(
+      capabilityAuthor([{ verdict: "refuted" }]).author.verifySemanticMapBoundary!(verifyInput),
+    ).rejects.toThrow(/no synonym mapping/);
+    await expect(
+      capabilityAuthor([{ verdict: "adversarial_confirmed", padding: "p".repeat(2100) }])
+        .author.verifySemanticMapBoundary!(verifyInput),
+    ).rejects.toThrow(/2048-byte runtime cap/);
+  });
+
+  it("synthesize effort override (⑤a adoption): ONLY synthesize routes to the override config; the folded identity is exposed; default-off = base config + absent identity (silent-stale falsifiable pair)", async () => {
+    const seen: { prompt: string; effort: string | undefined }[] = [];
+    const capturingCall = async (
+      systemPrompt: string,
+      _userPrompt: string,
+      config?: { reasoning_effort?: string },
+    ): Promise<LlmCallResult> => {
+      seen.push({ prompt: systemPrompt, effort: config?.reasoning_effort });
+      const body = systemPrompt === SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT
+        ? { verdict: "adversarial_confirmed" }
+        : { semantic_summary: "s", boundaries: [] };
+      return {
+        text: JSON.stringify(body), input_tokens: 1, output_tokens: 1, model_id: "m-1",
+      } as unknown as LlmCallResult;
+    };
+    const on = createDirectCallReconstructDirectiveAuthor({
+      llmCall: capturingCall as never,
+      llmConfig: { provider: "mock", model_id: "m-1", reasoning_effort: "medium" } as never,
+      authorId: "effort-override-author",
+      enableSemanticMapAuthoring: true,
+      semanticMapSynthesizeReasoningEffort: "low",
+    });
+    await on.synthesizeSemanticMapNode!(synthesisInput);
+    await on.verifySemanticMapBoundary!(verifyInput);
+    expect(seen[0]).toEqual({ prompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT, effort: "low" });
+    expect(seen[1]).toEqual({ prompt: SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT, effort: "medium" });
+    // the fold surface: identity carries the override → the stage fingerprint pre-image rotates.
+    expect(on.semanticMapSynthesizeModelIdentity).toBe("mock/m-1@synthesize_effort=low");
+
+    seen.length = 0;
+    const off = createDirectCallReconstructDirectiveAuthor({
+      llmCall: capturingCall as never,
+      llmConfig: { provider: "mock", model_id: "m-1", reasoning_effort: "medium" } as never,
+      authorId: "effort-default-author",
+      enableSemanticMapAuthoring: true,
+    });
+    await off.synthesizeSemanticMapNode!(synthesisInput);
+    expect(seen[0]).toEqual({ prompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT, effort: "medium" });
+    expect(off.semanticMapSynthesizeModelIdentity).toBeUndefined();
+  });
+
+  it("codex-R1-F3 NC: an AUTH-class error whose message also carries timeout phrasing fails FAST (auth wins over the retryable timeout pattern)", async () => {
+    const authTimeout = capabilityAuthor([
+      new Error("auth refresh request timed out after 10000ms"),
+    ]);
+    await expect(authTimeout.author.synthesizeSemanticMapNode!(synthesisInput)).rejects.toThrow(/auth refresh/);
+    expect(authTimeout.calls.length).toBe(1); // NO retry — fail-fast predicate tested FIRST
+  });
+
+  it("codex-R1-F5 NC: the verify 2KB cap is a BYTE cap — a multibyte payload under 2048 UTF-16 units but over 2048 bytes fails closed", async () => {
+    // 800 × '한' = 800 UTF-16 units but 2400 UTF-8 bytes (+ envelope) — length-based check would pass.
+    const multibyte = capabilityAuthor([
+      { verdict: "adversarial_confirmed", note: "한".repeat(800) },
+    ]);
+    await expect(multibyte.author.verifySemanticMapBoundary!(verifyInput)).rejects.toThrow(/2048-byte runtime cap/);
+  });
+
+  it("transport retry (§10.F3): a timeout-class failure is retried (2nd attempt succeeds); a QUOTA-class failure fails fast on the FIRST attempt", async () => {
+    const transient = capabilityAuthor([
+      new Error("codex CLI call timed out after 600000ms"),
+      { semantic_summary: "recovered", boundaries: [] },
+    ]);
+    const out = await transient.author.synthesizeSemanticMapNode!(synthesisInput);
+    expect(out.semantic_summary).toBe("recovered");
+    expect(transient.calls.length).toBe(2); // initial + exactly one retry
+    const quota = capabilityAuthor([
+      new Error("ERROR: You've hit your usage limit. Try again later."),
+    ]);
+    await expect(quota.author.synthesizeSemanticMapNode!(synthesisInput)).rejects.toThrow(/usage limit/);
+    expect(quota.calls.length).toBe(1); // fail-fast: NO retry on quota (§10.F3)
+  }, 20_000);
 });
