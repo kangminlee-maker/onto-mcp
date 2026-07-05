@@ -15,11 +15,16 @@ import type {
   ReconstructRecordStage,
   ReconstructSourceInventoryUnit,
 } from "./artifact-types.js";
-import { isZeroObservationGracefulTerminalEligible } from "./run.js";
+import {
+  isZeroObservationGracefulTerminalEligible,
+  SEED_READINESS_TERMINAL_ROUTE,
+} from "./run.js";
 import {
   assertReconstructTerminalDispositionCoherent,
   reconstructTerminalStatus,
 } from "./record.js";
+import { assertSeedAuthoringReadinessAllowsSeed } from "./seed-authoring-readiness-validation.js";
+import type { ReconstructSeedAuthoringReadinessArtifact } from "./artifact-types.js";
 
 function unit(scanStatus: "planned" | "skipped"): ReconstructSourceInventoryUnit {
   return {
@@ -132,5 +137,62 @@ describe("assertReconstructTerminalDispositionCoherent", () => {
         ),
       ).toThrow(/cannot pair with record_stage="completed"/);
     }
+  });
+});
+
+// Site 6 routing (sites356 design §4.2 / T6-u): the exhaustive route splits the six VALID
+// readiness classifications into allows_seed (2), graceful_blocked (frontier_required only), and
+// crash_bug_class (3 — reachable only through corruption/builder bugs, masking-lens HIGH). The
+// crash classes must keep failing loud through the retained assert (fall-through control).
+describe("SEED_READINESS_TERMINAL_ROUTE (site 6)", () => {
+  it("routes exactly frontier_required to graceful_blocked, keeps bug classes crashing", () => {
+    expect(SEED_READINESS_TERMINAL_ROUTE).toEqual({
+      seed_ready: "allows_seed",
+      limited_seed_possible: "allows_seed",
+      frontier_required: "graceful_blocked",
+      purpose_confirmation_required: "crash_bug_class",
+      blocked_no_authority: "crash_bug_class",
+      blocked_validation_gap: "crash_bug_class",
+    });
+  });
+
+  it("crash_bug_class classifications still fail loud through the retained assert", () => {
+    const readiness = (
+      classification: keyof typeof SEED_READINESS_TERMINAL_ROUTE,
+    ): ReconstructSeedAuthoringReadinessArtifact =>
+      ({
+        readiness_classification: classification,
+        missing_requirement_categories: [],
+      }) as unknown as ReconstructSeedAuthoringReadinessArtifact;
+    const validation = { validation_status: "valid" } as Parameters<
+      typeof assertSeedAuthoringReadinessAllowsSeed
+    >[0]["validation"];
+    for (
+      const [classification, route] of Object.entries(SEED_READINESS_TERMINAL_ROUTE)
+    ) {
+      if (route !== "crash_bug_class") continue;
+      expect(() =>
+        assertSeedAuthoringReadinessAllowsSeed({
+          readiness: readiness(
+            classification as keyof typeof SEED_READINESS_TERMINAL_ROUTE,
+          ),
+          validation,
+        })
+      ).toThrow(/does not allow ontology-seed authoring/);
+    }
+  });
+
+  it("invalid readiness validation crashes regardless of classification (T6-b unit form)", () => {
+    expect(() =>
+      assertSeedAuthoringReadinessAllowsSeed({
+        readiness: {
+          readiness_classification: "seed_ready",
+          missing_requirement_categories: [],
+        } as unknown as ReconstructSeedAuthoringReadinessArtifact,
+        validation: { validation_status: "invalid" } as Parameters<
+          typeof assertSeedAuthoringReadinessAllowsSeed
+        >[0]["validation"],
+      })
+    ).toThrow(/readiness validation is invalid/);
   });
 });
