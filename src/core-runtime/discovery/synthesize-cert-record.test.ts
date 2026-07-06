@@ -243,49 +243,29 @@ describe("synthesize-cert/v1 recompute (G7 — design §6.4/§6.4a)", () => {
     expect(codes(record)).toContain("stratum_global_floor");
   });
 
-  it("decision-B: a targeted negative metric equal to baseline is not discriminating (relative threshold)", () => {
+  it("§13.3 boundary re-anchor: negative-arm EFFICACY is not gated — a rubber-stamp negative (mean ~1.0) certifies structurally", () => {
+    // The relative/absolute discrimination thresholds were removed; whether the
+    // mutation genuinely degrades the metric is R7 (§6.5). A near-rubber-stamp
+    // negative arm therefore no longer produces a recompute violation — only its
+    // STRUCTURE (targets, lineage) is checked here.
     const record = makePassingRecord();
     for (const row of record.judgement_rows) {
       if (row.arm === "negative_control") {
-        row.metrics = { ...row.metrics, grounding: "pass" };
+        row.metrics = { grounding: "pass", boundary: "pass" };
       }
     }
     record.declared_aggregates = computeSynthesizeCertAggregates({
       inputManifest: record.input_manifest,
       judgementRows: record.judgement_rows,
     });
-    expect(codes(record)).toContain("negative_metric_not_discriminating");
+    expect(validateSynthesizeCertRecord(record)).toEqual([]);
   });
 
-  it("decision-B: a negative mean < 1.0 but within delta of baseline still fails (would have passed the old absolute <1.0 rule)", () => {
-    const record = makePassingRecord();
-    // Make ~90% of the negative-arm grounding verdicts pass: mean ~0.92, which
-    // clears the retired absolute rule (<1.0) but NOT baseline(1.0)-0.15=0.85.
-    const negRows = record.judgement_rows.filter((row) =>
-      row.arm === "negative_control"
-    );
-    const passCount = Math.ceil(negRows.length * 0.9);
-    negRows.forEach((row, i) => {
-      row.metrics = {
-        ...row.metrics,
-        grounding: i < passCount ? "pass" : "fail",
-      };
-    });
-    record.declared_aggregates = computeSynthesizeCertAggregates({
-      inputManifest: record.input_manifest,
-      judgementRows: record.judgement_rows,
-    });
-    const negMean = passCount / negRows.length;
-    expect(negMean).toBeGreaterThan(0.85);
-    expect(negMean).toBeLessThan(1.0);
-    expect(codes(record)).toContain("negative_metric_not_discriminating");
-  });
-
-  it("decision-A: selective exclusion (5 decisive of many) fails the decisiveness ratio even when the absolute floor is met", () => {
-    // High rep count gives the exclusion room the absolute floor alone permits.
+  it("§13.3 boundary re-anchor: selective exclusion is not gated — 5 decisive of 20 (any exclusion pattern) passes the recompute", () => {
+    // The decisiveness ratio was removed; WHICH rows were excluded and whether
+    // the losses are honest is R7. Only the absolute floor (n >= 5 decisive per
+    // stratum x arm) remains, which this record still meets.
     const record = makePassingRecord(10);
-    // One candidate cell: keep exactly 5 decisive (clears floor 5), mark the
-    // other 15 as judge_error (non-decisive) — ratio 5/20 = 0.25 < 0.8.
     const cellRows = record.judgement_rows.filter((row) =>
       row.fixture_id === "fx-1" && row.arm === "candidate" &&
       !row.stratum.seam && !row.stratum.merge
@@ -299,100 +279,25 @@ describe("synthesize-cert/v1 recompute (G7 — design §6.4/§6.4a)", () => {
       inputManifest: record.input_manifest,
       judgementRows: record.judgement_rows,
     });
-    const result = codes(record);
-    expect(result).toContain("decisiveness_ratio");
-    // The absolute stratum floor is NOT the trigger — 5 decisive still meets it.
-    expect(
-      validateSynthesizeCertRecord(record).filter((v) =>
-        v.code === "stratum_coverage" &&
-        v.message.includes("candidate")
-      ),
-    ).toEqual([]);
+    expect(validateSynthesizeCertRecord(record)).toEqual([]);
   });
 
-  it("decision-①: a low-baseline metric (baseline <= delta) falls back to the absolute rule — a perfectly degrading negative arm certifies", () => {
-    // Drive baseline grounding to 0.10 (<= 0.15) and candidate to match it, with
-    // the negative arm perfectly degrading (grounding all-fail = mean 0). The old
-    // additive threshold 0.10-0.15=-0.05 was UNSATISFIABLE (0 >= -0.05 fired);
-    // the fallback rule (< 1.0) accepts a perfect negative arm.
-    const record = makePassingRecord(10);
-    const setGrounding = (arm: string, passFrac: number) => {
-      const rows = record.judgement_rows.filter((r) => r.arm === arm);
-      const passCount = Math.round(rows.length * passFrac);
-      rows.forEach((r, i) => {
-        r.metrics = { ...r.metrics, grounding: i < passCount ? "pass" : "fail" };
-      });
-    };
-    setGrounding("baseline", 0.1);
-    setGrounding("candidate", 0.1); // candidate >= baseline holds (equal)
-    setGrounding("negative_control", 0); // perfect degradation
-    record.declared_aggregates = computeSynthesizeCertAggregates({
-      inputManifest: record.input_manifest,
-      judgementRows: record.judgement_rows,
-    });
-    expect(record.declared_aggregates.metric_means.baseline.grounding)
-      .toBeLessThanOrEqual(0.15);
-    expect(codes(record)).not.toContain("negative_metric_not_discriminating");
-  });
-
-  it("decision-①: at a low baseline the fallback still requires SOME degradation (negative all-pass is rejected)", () => {
-    const record = makePassingRecord(10);
-    const setGrounding = (arm: string, passFrac: number) => {
-      const rows = record.judgement_rows.filter((r) => r.arm === arm);
-      const passCount = Math.round(rows.length * passFrac);
-      rows.forEach((r, i) => {
-        r.metrics = { ...r.metrics, grounding: i < passCount ? "pass" : "fail" };
-      });
-    };
-    setGrounding("baseline", 0.1);
-    setGrounding("candidate", 0.1);
-    setGrounding("negative_control", 1); // no degradation at all → mean 1.0
-    record.declared_aggregates = computeSynthesizeCertAggregates({
-      inputManifest: record.input_manifest,
-      judgementRows: record.judgement_rows,
-    });
-    expect(codes(record)).toContain("negative_metric_not_discriminating");
-  });
-
-  it("decision-③: honest synthesize-plane not_run losses do NOT self-trip the decisiveness ratio (judge-attempted denominator)", () => {
-    // 5 decisive + 15 honest synthesize losses (candidate_output_status not_run)
-    // in a candidate cell: judge-attempted = 5, decisive/attempted = 1.0. The old
-    // total-based ratio (5/20 = 0.25) would have wrongly tripped.
+  it("§13.3 boundary re-anchor: the absolute decisive floor (n >= 5) is KEPT — 4 decisive of a cell fails", () => {
     const record = makePassingRecord(10);
     const cellRows = record.judgement_rows.filter((row) =>
       row.fixture_id === "fx-1" && row.arm === "candidate" &&
       !row.stratum.seam && !row.stratum.merge
     );
-    expect(cellRows.length).toBe(20);
-    cellRows.slice(5).forEach((row) => {
-      row.candidate_output_status = "not_run";
-      row.judge_status = "not_run";
+    cellRows.slice(4).forEach((row) => {
+      row.judge_status = "judge_error";
       row.metrics = { grounding: "not_judged", boundary: "not_judged" };
     });
     record.declared_aggregates = computeSynthesizeCertAggregates({
       inputManifest: record.input_manifest,
       judgementRows: record.judgement_rows,
     });
-    expect(codes(record)).not.toContain("decisiveness_ratio");
+    expect(codes(record)).toContain("stratum_coverage");
   });
-
-  it("decision-③ contrast: judge-plane exclusion (judge_error) still trips the ratio", () => {
-    const record = makePassingRecord(10);
-    const cellRows = record.judgement_rows.filter((row) =>
-      row.fixture_id === "fx-1" && row.arm === "candidate" &&
-      !row.stratum.seam && !row.stratum.merge
-    );
-    cellRows.slice(5).forEach((row) => {
-      row.judge_status = "judge_error"; // output produced, judge excluded it
-      row.metrics = { grounding: "not_judged", boundary: "not_judged" };
-    });
-    record.declared_aggregates = computeSynthesizeCertAggregates({
-      inputManifest: record.input_manifest,
-      judgementRows: record.judgement_rows,
-    });
-    expect(codes(record)).toContain("decisiveness_ratio");
-  });
-
   it("N10: negative arm must target every judged metric", () => {
     const record = makePassingRecord();
     record.negative_arm.targeted_metrics = ["grounding"];
@@ -621,7 +526,7 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
     )).toBe(true);
   });
 
-  it("decision-②: rejects a record whose baseline arm ran an unsupported model (baseline anchoring)", () => {
+  it("baseline anchoring: rejects a record whose baseline arm ran an unsupported model", () => {
     const record = makePassingRecord();
     record.arm_model.baseline = { provider: "openai", model: "weak-model-x" };
     const violations = synthesizeCertBindingViolations({
@@ -630,6 +535,27 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
       supportedModelKeys: SUPPORTED,
     });
     expect(violations.map((v) => v.code)).toContain("baseline_not_supported");
+  });
+
+  it("§13.3 baseline identity: rejects a self-baseline record (baseline == candidate)", () => {
+    // crossval round-2 HIGH: the candidate's own key is always in the anchor
+    // set (real wiring derives it from every entry incl. the candidate), so
+    // membership alone let a record declare baseline = candidate (self).
+    const record = makePassingRecord();
+    record.arm_model.baseline = {
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+    };
+    const violations = synthesizeCertBindingViolations({
+      entry: entry(["records/cert.json"], ["semantic_map_synthesize"]),
+      evidenceByRef: new Map([["records/cert.json", record]]),
+      supportedModelKeys: new Set([
+        "openai/gpt-5.5",
+        "anthropic/claude-opus-4-8",
+        "anthropic/claude-haiku-4-5-20251001", // candidate IS in the set
+      ]),
+    });
+    expect(violations.map((v) => v.code)).toContain("baseline_is_candidate");
   });
 
   it("accepts a passing, matching record and reports nothing", () => {

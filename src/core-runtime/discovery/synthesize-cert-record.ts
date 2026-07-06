@@ -45,22 +45,14 @@ export const SYNTHESIZE_CERT_FLOORS = {
   minFixtures: 2,
   minRepsPerFixtureArm: 3,
   minDecisivePerStratumArm: 5,
-  // Selective-exclusion ceiling (owner decision A, §13.1): a bench cannot
-  // launder unfavorable verdicts as judge failures and average over survivors
-  // only — the absolute floor of 5 is not proportional, so at high rep counts
-  // an arbitrary fraction could be excluded. Each (fixture x possessed-stratum
-  // x arm) cell must have decisive/total >= this ratio; honest judge loss up
-  // to (1 - ratio) is still tolerated.
-  minDecisivenessRatio: 0.8,
 } as const;
-
-/** Discrimination delta (owner decision B, §13.1): a negative-control mutation
- * must DEGRADE its targeted metric, not merely be imperfect — the targeted
- * metric's negative mean must fall at least this far below the SAME record's
- * baseline mean (relative threshold), so a rubber-stamp judge that passes all
- * but one mutated input no longer certifies. Evidence-contract constant
- * (INVARIANT-CHANGE: INV-MODEL-1). */
-export const SYNTHESIZE_CERT_DISCRIMINATION_DELTA = 0.15;
+// NOTE (§13.3 boundary re-anchor): the discrimination-delta and decisiveness-
+// ratio constants were REMOVED — two rounds of cross-validation proved no
+// deterministic threshold on self-declared row verdicts can judge negative-arm
+// efficacy or selective-exclusion honesty without either over-blocking honest
+// benches or opening a new laundering channel. Those semantic judgements now
+// live in the R7 human-curation checklist (§6.5). The recompute keeps only the
+// structural absolute floors above.
 
 /** Ids join into space-separated coordinate keys, so whitespace inside an id
  * could alias distinct coordinates; honest ids are sha256-derived and never
@@ -289,15 +281,14 @@ export interface SynthesizeCertViolation {
     | "duplicate_row"
     | "stratum_row_mismatch"
     | "stratum_coverage"
-    | "decisiveness_ratio"
     | "stratum_global_floor"
     | "metric_not_judged_on_decisive"
     | "negative_targets_incomplete"
-    | "negative_metric_not_discriminating"
     | "negative_lineage"
     | "prompt_sha_mismatch"
     | "arm_model_mismatch"
     | "baseline_not_supported"
+    | "baseline_is_candidate"
     | "input_sha_mismatch"
     | "negative_mutation_not_applied"
     | "metric_regression"
@@ -544,23 +535,16 @@ export function validateSynthesizeCertRecord(
   }
 
   // --- §6.4a: per-fixture stratum×arm decisive coverage ----------------------
-  // The ratio denominator is the JUDGE-ATTEMPTED rows: a synthesize-plane loss
-  // (candidate_output_status === "not_run") never reached the judge, so it is NOT
-  // a laundered judge verdict and must not count against the decisiveness ratio
-  // (owner decision ③ / crossval: otherwise an honest transport loss self-trips
-  // the guard). Judge-plane losses (judge_error/timeout/not_run) DO stay in the
-  // denominator — that is exactly the selective-exclusion the ratio polices.
+  // Absolute decisive floor only (§13.3 boundary re-anchor): "enough judged
+  // sample per cell" is a structural quantity. The RATIO of exclusion (owner
+  // decision A / fix ③) was a semantic honesty judgement — every deterministic
+  // denominator (all-rows vs judge-attempted) either self-tripped honest losses
+  // or opened a self-declared not_run exclusion channel — so WHICH rows were
+  // excluded and whether the losses are honest is delegated to R7 (§6.5).
   const decisiveByFixtureStratumArm = new Map<string, number>();
-  const judgeAttemptedByFixtureStratumArm = new Map<string, number>();
   for (const row of record.judgement_rows) {
-    const key = `${row.fixture_id} ${stratumKey(row.stratum)} ${row.arm}`;
-    if (row.candidate_output_status !== "not_run") {
-      judgeAttemptedByFixtureStratumArm.set(
-        key,
-        (judgeAttemptedByFixtureStratumArm.get(key) ?? 0) + 1,
-      );
-    }
     if (!isDecisiveRow(row)) continue;
+    const key = `${row.fixture_id} ${stratumKey(row.stratum)} ${row.arm}`;
     decisiveByFixtureStratumArm.set(
       key,
       (decisiveByFixtureStratumArm.get(key) ?? 0) + 1,
@@ -576,32 +560,12 @@ export function validateSynthesizeCertRecord(
     for (const [key] of possessed) {
       let fixtureMeetsFloor = true;
       for (const arm of SYNTHESIZE_CERT_ARMS) {
-        const cellKey = `${fixtureId} ${key} ${arm}`;
-        const n = decisiveByFixtureStratumArm.get(cellKey) ?? 0;
+        const n = decisiveByFixtureStratumArm.get(`${fixtureId} ${key} ${arm}`) ?? 0;
         if (n < SYNTHESIZE_CERT_FLOORS.minDecisivePerStratumArm) {
           fixtureMeetsFloor = false;
           violation(
             "stratum_coverage",
             `fixture ${fixtureId} possesses stratum ${key} but arm ${arm} has ${n} decisive row(s); >= ${SYNTHESIZE_CERT_FLOORS.minDecisivePerStratumArm} required (fixture-possessed strata cannot dodge the floor)`,
-            fixtureId,
-          );
-        }
-        // Decisiveness ratio (owner decision A): unfavorable verdicts laundered
-        // as judge failures inflate the non-decisive share of the cell — the
-        // absolute floor alone permits this at high rep counts, so require the
-        // decisive share of the JUDGE-ATTEMPTED rows to clear the ratio too.
-        // (Bounds the RATE of exclusion; it does not police WHICH rows were
-        // excluded — worst-case selection within the tolerated share stays an
-        // R7 / B4-harness concern, documented in §13.2.)
-        const attempted = judgeAttemptedByFixtureStratumArm.get(cellKey) ?? 0;
-        if (
-          attempted > 0 &&
-          n / attempted < SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio
-        ) {
-          fixtureMeetsFloor = false;
-          violation(
-            "decisiveness_ratio",
-            `fixture ${fixtureId} stratum ${key} arm ${arm} has ${n}/${attempted} decisive among judge-attempted rows (${(n / attempted).toFixed(2)}); >= ${SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio} required — too many judged rows excluded as non-decisive (selective-exclusion guard)`,
             fixtureId,
           );
         }
@@ -622,9 +586,13 @@ export function validateSynthesizeCertRecord(
     }
   }
 
-  // --- §6.4 row 3: negative-arm discrimination + lineage ---------------------
-  const baselineRows = record.judgement_rows.filter((row) => row.arm === "baseline");
-  const candidateRows = record.judgement_rows.filter((row) => row.arm === "candidate");
+  // --- §6.4 row 3: negative-arm STRUCTURE + lineage (§13.3 boundary re-anchor) -
+  // The negative arm's actual DISCRIMINATION EFFICACY (does the mutation really
+  // degrade the metric?) is a semantic judgement — two rounds of cross-validation
+  // proved every deterministic threshold (relative, absolute-fallback) either
+  // over-blocks honest low-baseline metrics or admits a rubber-stamp negative.
+  // So the recompute enforces only the STRUCTURE (both metrics targeted, mutation
+  // actually applied via lineage identity); efficacy is delegated to R7 (§6.5).
   const negativeRows = record.judgement_rows.filter(
     (row) => row.arm === "negative_control",
   );
@@ -636,37 +604,6 @@ export function validateSynthesizeCertRecord(
         `negative_arm.targeted_metrics omits ${metric}; every judged metric must be targeted (§6.2-3)`,
         metric,
       );
-    }
-  }
-  for (const metric of record.negative_arm.targeted_metrics) {
-    const negativeMean = metricMean(negativeRows, metric);
-    const baselineMean = metricMean(baselineRows, metric);
-    // Relative threshold (owner decision B): the mutation must DEGRADE the
-    // metric below the SAME record's baseline by at least the delta, not merely
-    // be imperfect — a near-rubber-stamp judge (one natural fail) no longer
-    // clears this. baselineMean null => the record is already invalid on the
-    // stratum floor, so this check simply abstains (no duplicate violation).
-    if (negativeMean !== null && baselineMean !== null) {
-      // Low-baseline fallback (owner decision ①, crossval ultracode/onto): the
-      // additive form baseline − δ degenerates to <= 0 when baseline <= δ, making
-      // the clause unsatisfiable even for a perfectly-degrading negative arm —
-      // an over-block that contradicts §13.1(B)'s reason for the relative form
-      // (meaning preserved for low-baseline metrics). For baseline <= δ fall
-      // back to the absolute rule (< 1.0): the low-baseline regime still gets a
-      // minimum discrimination requirement (at least one mutated input fails).
-      const threshold = baselineMean > SYNTHESIZE_CERT_DISCRIMINATION_DELTA
-        ? baselineMean - SYNTHESIZE_CERT_DISCRIMINATION_DELTA
-        : 1.0;
-      if (negativeMean >= threshold) {
-        const rule = baselineMean > SYNTHESIZE_CERT_DISCRIMINATION_DELTA
-          ? `< baseline ${baselineMean} - ${SYNTHESIZE_CERT_DISCRIMINATION_DELTA} = ${threshold}`
-          : `< 1.0 (baseline ${baselineMean} <= ${SYNTHESIZE_CERT_DISCRIMINATION_DELTA} → absolute fallback)`;
-        violation(
-          "negative_metric_not_discriminating",
-          `negative-control mean for targeted metric ${metric} is ${negativeMean}; must be ${rule} to prove the mutation degrades the metric`,
-          metric,
-        );
-      }
     }
   }
   // Lineage identity (laxness-lens F1 ≡ spec-lens F4, independently converged):
@@ -750,6 +687,11 @@ export function validateSynthesizeCertRecord(
   }
 
   // --- §6.4 row 5: candidate >= baseline per metric ---------------------------
+  // Computed deterministically, but its MEANING rests on the baseline/candidate
+  // verdicts being genuine — that authenticity is R7 (§6.5/§13.3), not enforced
+  // here. baseline identity (≠ candidate, supported) is checked at G7 binding.
+  const baselineRows = record.judgement_rows.filter((row) => row.arm === "baseline");
+  const candidateRows = record.judgement_rows.filter((row) => row.arm === "candidate");
   for (const metric of SYNTHESIZE_CERT_METRICS) {
     const baselineMean = metricMean(baselineRows, metric);
     const candidateMean = metricMean(candidateRows, metric);
@@ -1076,11 +1018,28 @@ export function synthesizeCertBindingViolations(args: {
     }
     const baselineKey =
       `${record.arm_model.baseline.provider}/${record.arm_model.baseline.model}`;
+    const candidateKey =
+      `${record.arm_model.candidate.provider}/${record.arm_model.candidate.model}`;
+    // Baseline identity (§13.3 boundary re-anchor · crossval self-baseline HIGH):
+    // the candidate's own key is always in supportedModelKeys at gate time, so a
+    // membership check alone lets a record declare arm_model.baseline = candidate
+    // (SELF) — candidate>=baseline then compares the model to itself, vacuously.
+    // Reject baseline == candidate deterministically. (Whether the baseline is
+    // the RIGHT production model, and whether its verdicts are genuine, stays R7.)
+    if (baselineKey === candidateKey) {
+      violations.push({
+        code: "baseline_is_candidate",
+        message:
+          `${ref} baseline arm ran ${baselineKey}, the SAME model as the candidate — candidate>=baseline would be a model-vs-itself comparison`,
+        subject_id: entryId,
+      });
+      continue;
+    }
     if (!supportedModelKeys.has(baselineKey)) {
       violations.push({
         code: "baseline_not_supported",
         message:
-          `${ref} baseline arm ran ${baselineKey}, which is not a certified supported model — the relative discrimination and candidate>=baseline checks would rest on an unanchored baseline`,
+          `${ref} baseline arm ran ${baselineKey}, which is not a certified supported model — the candidate>=baseline check would rest on an unanchored baseline`,
         subject_id: entryId,
       });
       continue;

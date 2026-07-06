@@ -392,3 +392,44 @@ owner 결정 반영분(§13.1 A/B, 커밋 860837a)에 대해 두 패밀리 병�
 두 패밀리 상보 발산(ultracode=①③+반박·onto=②)이 단일보다 강함 — 반박(negative는 강건)까지 준
 것이 내 최고우려를 정확히 종결. [[contract-runtime-gap-ledger]] 동형(candidate 품질=declared-trust≠
 enforced).
+
+### 13.3 B5 경계 재확정 (2026-07-06 · 2라운드 교차검증 loopback-2 종식 · owner 결정)
+
+**진단(양 패밀리 round-2 강수렴 HIGH 6 + 내 독립확인)**: owner 결정 A/B와 그 fix들이 매 라운드
+새 HIGH 구멍을 냄 — ①절대 fallback decoupled(저-baseline rubber-stamp 통과)·②baseline 앵커링이
+membership만(self-baseline 무력)·③not_run 무제한 배제 채널. 근본 = **결정론 재계산은 "선언↔row
+일관성"만 보장, self-declared record의 "변별 실효·candidate 품질·baseline 진위·not_run 정직"은
+근본적으로 미판정.** 국소 패치는 loopback만 연장(2라운드 입증). owner 결정 = **경계 재확정**
+(결정론=구조·identity·일관성; 의미=R7). LLM-capability-boundary 원칙의 정면 적용.
+
+**결정론 게이트가 KEEP (구조·일관성·identity — 위조해도 구조가 깨지거나 R7이 볼 표면):**
+- 스키마·재계산 일관성(declared_aggregates↔row: decisive count·means·stddev·judge_status_counts·
+  reps_matrix)·outer-join(누락·중복·orphan/scope-shrink)
+- floor: fixture≥2·rep≥3·**decisive n≥5 per stratum×arm(절대 표본 요건 — selection 아닌 양)**·
+  per-fixture 보유-stratum 커버리지·global stratum floor
+- lineage identity(negative source_input_id==input_id·sha∉manifest = 변이 실적용)·
+  negative_targets_incomplete(두 지표 표적 = 구조)·prompt sha equality·입력 sha 축 분리·
+  candidate/baseline parse/structural 0·id 위생·declared_reps 캡
+- candidate≥baseline(§6.2-5): 계산은 결정론(유지) — 단 baseline/candidate **숫자 진위는 R7**(과신 금지)
+
+**결정론 게이트가 REMOVE (의미 임계 판정 → R7 위임):**
+- `negative_metric_not_discriminating`(상대/절대 변별 임계·fix① 포함) — 변별 실효는 의미 판정.
+  상수 `SYNTHESIZE_CERT_DISCRIMINATION_DELTA` 폐기.
+- `decisiveness_ratio`(owner A·fix③ not_run 분모) — selection 정직은 의미 판정. 상수
+  `minDecisivenessRatio` 폐기. **절대 floor n≥5는 KEEP**(양 요건).
+
+**결정론 게이트가 ADD (진짜 결정론으로 강화 — 양 검증 수렴 지적):**
+- **baseline identity(fix② membership 대체)**: `arm_model.baseline ≠ arm_model.candidate`
+  (self-baseline 차단·신규 violation `baseline_is_candidate`) ∧ supported(기존). "정확히 프로덕션
+  gpt-5.5"까지의 pin은 baseline 모델 교체 유연성 위해 R7(§6.5)에 명시 — self-baseline(가장 심각·
+  위조 불요)만 결정론 차단.
+
+**R7 명시(§6.5 확장·결정론 미보장 항목의 사람 큐레이션 체크리스트)**: ①negative arm이 실제로
+지표를 degrade하는가(변별 실효) ②candidate 품질이 실사용 가능한가 ③baseline이 진짜 프로덕션
+모델(gpt-5.5) 성능인가 ④not_run/judge_error 손실이 정직한가(선택적 배제 아님) ⑤arm_model
+선언이 실제 실행과 일치하는가. record의 reproduction.command + 사람 검토가 근거.
+
+**메타교훈**: loopback-2 stop-and-ask(CLAUDE.md) 정확 발동. "가장 안전해 보인 owner-결정
+구현"이 2라운드 연속 새 HIGH — 국소 최적화가 근본 경계 오류를 못 고침. 결정론으로 의미를
+강제하려는 시도 자체가 [[contract-runtime-gap-ledger]]의 극단(declared/self-reported≠verifiable).
+검증 축소 = 개념경제↑(임계 2·상수 2·violation 2 제거) + 정직성↑(R7 경계 명문화).
