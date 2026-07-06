@@ -45,7 +45,22 @@ export const SYNTHESIZE_CERT_FLOORS = {
   minFixtures: 2,
   minRepsPerFixtureArm: 3,
   minDecisivePerStratumArm: 5,
+  // Selective-exclusion ceiling (owner decision A, §13.1): a bench cannot
+  // launder unfavorable verdicts as judge failures and average over survivors
+  // only — the absolute floor of 5 is not proportional, so at high rep counts
+  // an arbitrary fraction could be excluded. Each (fixture x possessed-stratum
+  // x arm) cell must have decisive/total >= this ratio; honest judge loss up
+  // to (1 - ratio) is still tolerated.
+  minDecisivenessRatio: 0.8,
 } as const;
+
+/** Discrimination delta (owner decision B, §13.1): a negative-control mutation
+ * must DEGRADE its targeted metric, not merely be imperfect — the targeted
+ * metric's negative mean must fall at least this far below the SAME record's
+ * baseline mean (relative threshold), so a rubber-stamp judge that passes all
+ * but one mutated input no longer certifies. Evidence-contract constant
+ * (INVARIANT-CHANGE: INV-MODEL-1). */
+export const SYNTHESIZE_CERT_DISCRIMINATION_DELTA = 0.15;
 
 /** Ids join into space-separated coordinate keys, so whitespace inside an id
  * could alias distinct coordinates; honest ids are sha256-derived and never
@@ -274,6 +289,7 @@ export interface SynthesizeCertViolation {
     | "duplicate_row"
     | "stratum_row_mismatch"
     | "stratum_coverage"
+    | "decisiveness_ratio"
     | "stratum_global_floor"
     | "metric_not_judged_on_decisive"
     | "negative_targets_incomplete"
@@ -528,9 +544,14 @@ export function validateSynthesizeCertRecord(
 
   // --- §6.4a: per-fixture stratum×arm decisive coverage ----------------------
   const decisiveByFixtureStratumArm = new Map<string, number>();
+  const totalByFixtureStratumArm = new Map<string, number>();
   for (const row of record.judgement_rows) {
-    if (!isDecisiveRow(row)) continue;
     const key = `${row.fixture_id} ${stratumKey(row.stratum)} ${row.arm}`;
+    totalByFixtureStratumArm.set(
+      key,
+      (totalByFixtureStratumArm.get(key) ?? 0) + 1,
+    );
+    if (!isDecisiveRow(row)) continue;
     decisiveByFixtureStratumArm.set(
       key,
       (decisiveByFixtureStratumArm.get(key) ?? 0) + 1,
@@ -546,13 +567,26 @@ export function validateSynthesizeCertRecord(
     for (const [key] of possessed) {
       let fixtureMeetsFloor = true;
       for (const arm of SYNTHESIZE_CERT_ARMS) {
-        const n =
-          decisiveByFixtureStratumArm.get(`${fixtureId} ${key} ${arm}`) ?? 0;
+        const cellKey = `${fixtureId} ${key} ${arm}`;
+        const n = decisiveByFixtureStratumArm.get(cellKey) ?? 0;
         if (n < SYNTHESIZE_CERT_FLOORS.minDecisivePerStratumArm) {
           fixtureMeetsFloor = false;
           violation(
             "stratum_coverage",
             `fixture ${fixtureId} possesses stratum ${key} but arm ${arm} has ${n} decisive row(s); >= ${SYNTHESIZE_CERT_FLOORS.minDecisivePerStratumArm} required (fixture-possessed strata cannot dodge the floor)`,
+            fixtureId,
+          );
+        }
+        // Decisiveness ratio (owner decision A): unfavorable verdicts laundered
+        // as judge failures inflate the non-decisive share of the cell — the
+        // absolute floor alone permits this at high rep counts, so require the
+        // decisive share to clear the ratio too.
+        const total = totalByFixtureStratumArm.get(cellKey) ?? 0;
+        if (total > 0 && n / total < SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio) {
+          fixtureMeetsFloor = false;
+          violation(
+            "decisiveness_ratio",
+            `fixture ${fixtureId} stratum ${key} arm ${arm} has ${n}/${total} decisive (${(n / total).toFixed(2)}); >= ${SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio} required — too many rows excluded as non-decisive (selective-exclusion guard)`,
             fixtureId,
           );
         }
@@ -574,6 +608,8 @@ export function validateSynthesizeCertRecord(
   }
 
   // --- §6.4 row 3: negative-arm discrimination + lineage ---------------------
+  const baselineRows = record.judgement_rows.filter((row) => row.arm === "baseline");
+  const candidateRows = record.judgement_rows.filter((row) => row.arm === "candidate");
   const negativeRows = record.judgement_rows.filter(
     (row) => row.arm === "negative_control",
   );
@@ -588,13 +624,22 @@ export function validateSynthesizeCertRecord(
     }
   }
   for (const metric of record.negative_arm.targeted_metrics) {
-    const mean = metricMean(negativeRows, metric);
-    if (mean !== null && mean >= 1.0) {
-      violation(
-        "negative_metric_not_discriminating",
-        `negative-control mean for targeted metric ${metric} is ${mean}; must be < 1.0 to prove the metric can fail`,
-        metric,
-      );
+    const negativeMean = metricMean(negativeRows, metric);
+    const baselineMean = metricMean(baselineRows, metric);
+    // Relative threshold (owner decision B): the mutation must DEGRADE the
+    // metric below the SAME record's baseline by at least the delta, not merely
+    // be imperfect — a near-rubber-stamp judge (one natural fail) no longer
+    // clears this. baselineMean null => the record is already invalid on the
+    // stratum floor, so this check simply abstains (no duplicate violation).
+    if (negativeMean !== null && baselineMean !== null) {
+      const threshold = baselineMean - SYNTHESIZE_CERT_DISCRIMINATION_DELTA;
+      if (negativeMean >= threshold) {
+        violation(
+          "negative_metric_not_discriminating",
+          `negative-control mean for targeted metric ${metric} is ${negativeMean}; must be < baseline ${baselineMean} - ${SYNTHESIZE_CERT_DISCRIMINATION_DELTA} = ${threshold} to prove the mutation degrades the metric`,
+          metric,
+        );
+      }
     }
   }
   // Lineage identity (laxness-lens F1 ≡ spec-lens F4, independently converged):
@@ -678,8 +723,6 @@ export function validateSynthesizeCertRecord(
   }
 
   // --- §6.4 row 5: candidate >= baseline per metric ---------------------------
-  const baselineRows = record.judgement_rows.filter((row) => row.arm === "baseline");
-  const candidateRows = record.judgement_rows.filter((row) => row.arm === "candidate");
   for (const metric of SYNTHESIZE_CERT_METRICS) {
     const baselineMean = metricMean(baselineRows, metric);
     const candidateMean = metricMean(candidateRows, metric);

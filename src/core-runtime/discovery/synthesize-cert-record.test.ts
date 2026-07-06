@@ -38,12 +38,11 @@ interface FixtureSpec {
  * (meeting its own possessed-stratum floors), reps=3, 2 inputs per possessed
  * stratum (2 x 3 reps = 6 decisive >= 5 per stratum x arm), all rows decisive,
  * baseline/candidate all-pass, negative arm all-fail on both targeted metrics. */
-function makePassingRecord(): SynthesizeCertRecord {
+function makePassingRecord(declaredReps = 3): SynthesizeCertRecord {
   const specs: FixtureSpec[] = [
     { fixtureId: "fx-1", strata: STRATA, inputsPerStratum: 2 },
     { fixtureId: "fx-2", strata: [STRATA[0]!, STRATA[1]!], inputsPerStratum: 2 },
   ];
-  const declaredReps = 3;
   const manifest: SynthesizeCertRecord["input_manifest"] = [];
   for (const spec of specs) {
     for (const [stratumIndex, stratum] of spec.strata.entries()) {
@@ -244,15 +243,71 @@ describe("synthesize-cert/v1 recompute (G7 — design §6.4/§6.4a)", () => {
     expect(codes(record)).toContain("stratum_global_floor");
   });
 
-  it("N10: targeted negative metric at 1.0 has no discrimination", () => {
+  it("decision-B: a targeted negative metric equal to baseline is not discriminating (relative threshold)", () => {
     const record = makePassingRecord();
     for (const row of record.judgement_rows) {
       if (row.arm === "negative_control") {
         row.metrics = { ...row.metrics, grounding: "pass" };
       }
     }
-    record.declared_aggregates.metric_means.negative_control.grounding = 1;
+    record.declared_aggregates = computeSynthesizeCertAggregates({
+      inputManifest: record.input_manifest,
+      judgementRows: record.judgement_rows,
+    });
     expect(codes(record)).toContain("negative_metric_not_discriminating");
+  });
+
+  it("decision-B: a negative mean < 1.0 but within delta of baseline still fails (would have passed the old absolute <1.0 rule)", () => {
+    const record = makePassingRecord();
+    // Make ~90% of the negative-arm grounding verdicts pass: mean ~0.92, which
+    // clears the retired absolute rule (<1.0) but NOT baseline(1.0)-0.15=0.85.
+    const negRows = record.judgement_rows.filter((row) =>
+      row.arm === "negative_control"
+    );
+    const passCount = Math.ceil(negRows.length * 0.9);
+    negRows.forEach((row, i) => {
+      row.metrics = {
+        ...row.metrics,
+        grounding: i < passCount ? "pass" : "fail",
+      };
+    });
+    record.declared_aggregates = computeSynthesizeCertAggregates({
+      inputManifest: record.input_manifest,
+      judgementRows: record.judgement_rows,
+    });
+    const negMean = passCount / negRows.length;
+    expect(negMean).toBeGreaterThan(0.85);
+    expect(negMean).toBeLessThan(1.0);
+    expect(codes(record)).toContain("negative_metric_not_discriminating");
+  });
+
+  it("decision-A: selective exclusion (5 decisive of many) fails the decisiveness ratio even when the absolute floor is met", () => {
+    // High rep count gives the exclusion room the absolute floor alone permits.
+    const record = makePassingRecord(10);
+    // One candidate cell: keep exactly 5 decisive (clears floor 5), mark the
+    // other 15 as judge_error (non-decisive) — ratio 5/20 = 0.25 < 0.8.
+    const cellRows = record.judgement_rows.filter((row) =>
+      row.fixture_id === "fx-1" && row.arm === "candidate" &&
+      !row.stratum.seam && !row.stratum.merge
+    );
+    expect(cellRows.length).toBe(20);
+    cellRows.slice(5).forEach((row) => {
+      row.judge_status = "judge_error";
+      row.metrics = { grounding: "not_judged", boundary: "not_judged" };
+    });
+    record.declared_aggregates = computeSynthesizeCertAggregates({
+      inputManifest: record.input_manifest,
+      judgementRows: record.judgement_rows,
+    });
+    const result = codes(record);
+    expect(result).toContain("decisiveness_ratio");
+    // The absolute stratum floor is NOT the trigger — 5 decisive still meets it.
+    expect(
+      validateSynthesizeCertRecord(record).filter((v) =>
+        v.code === "stratum_coverage" &&
+        v.message.includes("candidate")
+      ),
+    ).toEqual([]);
   });
 
   it("N10: negative arm must target every judged metric", () => {

@@ -328,17 +328,23 @@ owner 결정: B4(라이브 캡처·예산-캡) 승인 전에 **B5의 결정론 �
 - 부수: 커밋 `3a92225`의 모듈 파일에서 NUL 바이트 15개 발견·수복(구분자 공백의 저장-시 치환 이상;
   치환 일관으로 기능 무영향이었으나 grep-바이너리화). 세션 산출 파일 전수 스캔 = 해당 파일 한정.
 
-**owner 결정 대기 (스펙-갭 — 전부 B4 지출 전 결정 필요):**
-- **(A) 선택적 배제 무한계**(laxness-F2·HIGH·스펙-갭): 불리한 판정을 judge_error로 세탁해 생존자
-  평균만 계산하는 경로에 상한 없음(바닥 절대치 5·비례 아님). 후보: per-cell 결정률 바닥(예 0.8) 또는
-  judge_failure_rate 상한 — 증거계약 변경(INVARIANT-CHANGE: INV-MODEL-1).
-- **(B) 변별 임계 mean<1.0 약함**(laxness-S1): 자연 노이즈 1건이면 충족. 후보: 표적지표 negative
-  mean ≤ 0.8 또는 baseline−δ.
-- **(C) 변이 표현**(spec-F2 ≡ producer-MED-4): §6.2-3 예시(종류별→지표별)와 §6.3 단일 negative_arm
-  형이 내부 긴장 — 복합 단일 변이 승인 vs mutations[] 확장.
-- **(D) negative arm 전량 카디널리티 확인**(producer-MED-5): 스펙이 이미 고정(우주 공식) — 판정
-  비용 +50% 함의 확인만.
+**owner 결정 확정 (2026-07-06 · 스펙-갭 4건 — 증거계약 확정):**
+- **(A) 선택적 배제 상한 = 셀별 결정률 바닥 0.8** (owner 승인·구현 완료): 각 (fixture×보유-stratum
+  ×arm) 셀에서 `decisive/total ≥ 0.8`. `SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio=0.8`·신규
+  violation `decisiveness_ratio`. 절대 바닥 5는 유지(둘 다 강제). 세탁 단위(셀별 생존자 선별)를
+  직접 봉쇄·정직 judge 장애 20%까지 허용. INVARIANT-CHANGE: INV-MODEL-1(B6서 마커).
+- **(B) 변별 임계 = 상대 임계 baseline−δ** (owner 변경 결정: 절대 ≤0.8 후보 → **상대** 채택):
+  표적지표 `negative_mean < baseline_mean − 0.15`. `SYNTHESIZE_CERT_DISCRIMINATION_DELTA=0.15`.
+  "변이가 지표를 실제로 **떨어뜨림**"을 baseline 대비로 요구 → baseline이 낮은 지표에서도 의미 유지·
+  고무도장 judge(자연 노이즈 1건) 차단. baseline_mean null이면 이미 stratum floor로 invalid → 검사 abstain.
+- **(C) 변이 표현 = 복합 단일 변이 승인** (owner 승인·코드 변경 0): §6.3 단일 `negative_arm` 형 유지.
+  하나의 복합 결정론 변환이 두 표적지표를 동시에 손상. 지표별 귀속은 포기하나 게이트 목적(지표별
+  "떨어질 수 있음" 입증 — `negative_targets_incomplete` + 지표별 상대 임계 유지)에는 충분. §6.2-3↔§6.3
+  내부 긴장은 "복합 변이가 두 지표를 깬다"로 해소. B4 변이 설계 = 복합 변환 1개(예: 라벨 셔플 +
+  경계 왜곡 합성).
+- **(D) negative arm 전량 카디널리티 = 수용** (owner 승인): 스펙 우주 공식(manifest×reps×3 arm)
+  그대로. 판정 비용 +50%·최소 유니버스 ≈90 row를 B4 예산에 반영. 변별 증거가 전 계층서 확보됨.
 - (후속·비긴급) prompt sha의 프로덕션 카탈로그 앵커(laxness-F5·CG-1 선례) = B5-완성(Haiku 등록) 시.
 
-**검증**: 36 테스트(+11)·tsc clean·check:supported-models 회귀 통과+양 프로브(cert-부재 FAIL·
-roleless FAIL) 발화 실증·full vitest **2492**(회귀 0).
+**검증**: 38 테스트(+13·(A)/(B) 신규 falsifiable 쌍 포함)·tsc clean·check:supported-models 회귀
+통과+양 프로브(cert-부재 FAIL·roleless FAIL) 발화 실증·full vitest 회귀 0.
