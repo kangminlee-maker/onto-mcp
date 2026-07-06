@@ -42,6 +42,9 @@ import {
   exactTrackedMode,
   loadSupportedModelRegistry,
 } from "../src/core-runtime/discovery/supported-models.js";
+import {
+  synthesizeCertBindingViolations,
+} from "../src/core-runtime/discovery/synthesize-cert-record.js";
 
 const PROJECT_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -109,10 +112,50 @@ async function assertEvidenceRefsTracked(
   }
 }
 
+/** B5 role↔record binding (design §11 · onto 20260705-7e0e5263 issue-001/003/006):
+ * an entry listing the `semantic_map_synthesize` role must cite a
+ * `synthesize-cert/v1` record that PARSES and RECOMPUTES to zero violations for
+ * this entry's (provider, model). The recompute itself lives in the shared
+ * core-runtime module (no G7-local parser — design §6.3); this function only
+ * does the repo I/O of reading the cited evidence files. */
+async function assertSynthesizeCertBinding(
+  registry: Awaited<ReturnType<typeof loadSupportedModelRegistry>>,
+): Promise<void> {
+  const bad: string[] = [];
+  for (const entry of registry.supported_models) {
+    if (!entry.roles?.includes("semantic_map_synthesize")) continue;
+    const evidenceByRef = new Map<string, unknown>();
+    for (const ref of entry.benchmark_evidence_refs) {
+      try {
+        evidenceByRef.set(
+          ref,
+          JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, ref), "utf8")),
+        );
+      } catch {
+        // Unreadable/non-JSON refs simply cannot serve as the cert record; the
+        // tracked-file check below already polices their existence separately.
+      }
+    }
+    const violations = synthesizeCertBindingViolations({ entry, evidenceByRef });
+    for (const item of violations) {
+      bad.push(
+        `${entry.provider}/${entry.model}: [${item.code}] ${item.message}`,
+      );
+    }
+  }
+  if (bad.length > 0) {
+    throw new Error(
+      "semantic_map_synthesize entries are not bound to a passing synthesize-cert/v1 record:\n" +
+        bad.map((m) => `  - ${m}`).join("\n"),
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const registry = loadSupportedModelRegistry();
   try {
     await assertEvidenceRefsTracked(registry);
+    await assertSynthesizeCertBinding(registry);
   } catch (error) {
     console.error("[check:supported-models] FAIL");
     console.error(`  ${error instanceof Error ? error.message : String(error)}`);

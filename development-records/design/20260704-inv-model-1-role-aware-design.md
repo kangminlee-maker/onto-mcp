@@ -275,3 +275,28 @@ resolveSettingsChain 산출 byte-동일)
 - **R8(신규)**: §6.3 원자 스키마는 기존 judge 스크립트가 실패 후보를 judging 전 드랍하는
   현행 행동과 다름 — B4 하니스는 실패도 row로 남기도록 신규 구현이어야 하며 기존 스크립트
   재사용 불가(비용 요인).
+
+---
+## 13. B5-검증기 선행 빌드 기록 (2026-07-06 · dated progress — B4 비용 승인 전 결정론 절반 선행)
+
+owner 결정: B4(라이브 캡처·예산-캡) 승인 전에 **B5의 결정론 절반 = §6.3 공유 파서 + §6.4/§6.4a
+재계산 검증기**를 먼저 짓는다(§6.5의 "B5-검증기 선행 순서도 유효" 경로).
+
+- `src/core-runtime/discovery/synthesize-cert-record.ts` — 단일 소유 모듈(§6.3 parser 소유 조항):
+  `synthesize-cert/v1` zod 스키마(원자 row·input_manifest·negative_arm·declared_aggregates·
+  reproduction) + `validateSynthesizeCertRecord`(§6.4 표 6행 + §6.4a per-fixture stratum 계약 +
+  scope-shrink=orphan-row 방향 outer-join) + `synthesizeCertBindingViolations`(role↔record 결속).
+- G7(check-supported-models.ts) 확장: `semantic_map_synthesize` role 엔트리는 인용 evidence 중
+  **파스+재계산 0-violation+(provider,model) 일치** record 1개 이상 필수 — onto 리뷰
+  `20260705-7e0e5263` 이연 issue-001/003/006 닫힘. 스크립트 분기 발화는 임시 변이 프로브로
+  실증(role 추가→FAIL 재현→원복).
+- 테스트 25종: 양성 대조(비-공허 단언) + N10 12축(좌표 누락·중복 row·manifest 축소·rep 부족·
+  stratum 결손·토큰 fixture-2·전역 stratum 바닥·표적지표 1.0·표적 미완비·lineage 1:1·prompt sha·
+  입력 sha·집계 불일치·output-status·회귀조항) + N16 + 결속 4종.
+- **B4 하니스 계약 고정 효과**: 하니스는 이 모듈이 파스·재계산 0-violation으로 통과시키는 record만
+  산출하면 되고(스키마-먼저), 실패 row 보존(R8)·negative 변이 실적용(N16)·전-arm 동일 프롬프트가
+  전부 기계 검증된다.
+- 검증: tsc clean · check:supported-models 통과(현 레지스트리 role 엔트리 0 = 결속 no-op·
+  하위호환) · full vitest **2481**(pass 2480+todo 1 · 이 cut 델타 정확히 +25 · 회귀 0).
+  ※ 측정 정직 기록: 직전 사이트-7 런의 전수 카운트(2449/148)는 해당 1회 프로세스의 수집 이상으로
+  판명 — 동일 내용이 현재 3회 측정(list/fg/bg) 일치로 2456/149이며 전부 green(누락 회귀 없음).
