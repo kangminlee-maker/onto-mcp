@@ -634,4 +634,93 @@ describe("buildReviewPipelineExecutionLedger", () => {
       ledger.units.find((unit) => unit.unitId === "finding-ledger")?.trustStatus,
     ).toBe("blocked_by_upstream");
   });
+
+  it("demotes a failed stance unit the persisted matrix records as a missing stance", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage"]);
+    const runResult = executionResult(plan);
+    const coverageStance = runResult.issue_artifact_execution_results?.find(
+      (unitResult) => unitResult.unit_id === "issue-stance:coverage",
+    );
+    if (!coverageStance) throw new Error("test setup: missing coverage stance result");
+    coverageStance.status = "failed";
+    coverageStance.failure_message = "issue-stance:coverage failed";
+
+    await fs.mkdir(path.dirname(plan.issue_stance_matrix_path), { recursive: true });
+    await fs.writeFile(
+      plan.issue_stance_matrix_path,
+      ["validation:", "  missing_stances:", "    - lens_id: coverage", ""].join("\n"),
+      "utf8",
+    );
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      executionResult: runResult,
+    });
+
+    expect(
+      ledger.units.find((unit) => unit.unitId === "issue-stance:coverage")?.resolution,
+    ).toBe("demoted");
+  });
+
+  it("throws when the persisted issue-stance matrix exists but cannot be parsed, instead of silently losing the demotion signal", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage"]);
+    const runResult = executionResult(plan);
+    const coverageStance = runResult.issue_artifact_execution_results?.find(
+      (unitResult) => unitResult.unit_id === "issue-stance:coverage",
+    );
+    if (!coverageStance) throw new Error("test setup: missing coverage stance result");
+    coverageStance.status = "failed";
+    coverageStance.failure_message = "issue-stance:coverage failed";
+
+    // Present but corrupt: not parseable YAML (unterminated flow map). The
+    // matrix's `validation.missing_stances` is the only durable authority for
+    // stance demotion, so a torn/corrupt read must fail loud rather than
+    // silently drop the demotion and regress the unit to unresolved/blocked.
+    await fs.mkdir(path.dirname(plan.issue_stance_matrix_path), { recursive: true });
+    await fs.writeFile(
+      plan.issue_stance_matrix_path,
+      "validation:\n  missing_stances: [\n    {lens_id: coverage\n",
+      "utf8",
+    );
+    // Guard against a vacuous pass: confirm the fixture actually lands in the
+    // exists-but-unparseable branch, not the file-absent branch.
+    expect((await fs.stat(plan.issue_stance_matrix_path)).isFile()).toBe(true);
+
+    await expect(
+      buildReviewPipelineExecutionLedger({
+        sessionRoot: root,
+        executionPlan: plan,
+        executionResult: runResult,
+      }),
+    ).rejects.toThrow(/issue-stance-matrix\.yaml/);
+  });
+
+  it("returns no demotions, without throwing, when the issue-stance matrix has not been produced yet", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage"]);
+    const runResult = executionResult(plan);
+    const coverageStance = runResult.issue_artifact_execution_results?.find(
+      (unitResult) => unitResult.unit_id === "issue-stance:coverage",
+    );
+    if (!coverageStance) throw new Error("test setup: missing coverage stance result");
+    coverageStance.status = "failed";
+    coverageStance.failure_message = "issue-stance:coverage failed";
+
+    await expect(fs.stat(plan.issue_stance_matrix_path)).rejects.toThrow();
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      executionResult: runResult,
+    });
+
+    const coverageUnit = ledger.units.find(
+      (unit) => unit.unitId === "issue-stance:coverage",
+    );
+    expect(coverageUnit?.status).toBe("failed");
+    expect(coverageUnit?.resolution).toBeUndefined();
+  });
 });
