@@ -177,9 +177,10 @@ function convergentClaims(): ReconstructMaturationAnswerClaimsArtifact {
 function run(
   judgmentArtifact: ReconstructAnswerSupportJudgmentArtifact | null,
   judgmentValidation: ReconstructAnswerSupportJudgmentValidationArtifact | null,
+  claims: ReconstructMaturationAnswerClaimsArtifact = convergentClaims(),
 ) {
   return validateMaturationAnswerClaims({
-    maturationAnswerClaims: convergentClaims(),
+    maturationAnswerClaims: claims,
     maturationAnswerClaimsRef: "maturation-answer-claims.yaml",
     answerSupportLedger: convergentLedger(),
     answerSupportLedgerValidation: validLedgerValidation(),
@@ -196,8 +197,32 @@ function run(
 }
 
 describe("G(a) enforced-tier binding — the judge pair is genuinely live-enforced (parked, not unwired)", () => {
-  it("emits insufficient_independent_evidence for a convergent claim lacking 2 independent judge-confirmed supports", () => {
-    // Judge confirms only ONE of the two cited refs ⇒ independentConfirmed.size === 1 < 2.
+  it("emits insufficient_independent_evidence for an author-fault convergent claim (question pool >= 2, claim under-cites)", () => {
+    // Site-7 rewrite (design 20260706 §4.3): the obligation's violation binding must be
+    // proven on the disposition that KEEPS it — author fault. The judge confirms BOTH
+    // cluster refs (question-scoped pool = 2, certification was reachable), but the claim
+    // cites only one ⇒ independentConfirmed.size === 1 < 2 with pool >= 2 → violation.
+    const claims = convergentClaims();
+    claims.answer_claims[0]!.supporting_evidence_refs = [evidence];
+    const validation = run(
+      judgment([
+        { evidence, supports: "supported" },
+        { evidence: evidence2, supports: "supported" },
+      ]),
+      validJudgmentValidation(),
+      claims,
+    );
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code)).toContain(
+      "insufficient_independent_evidence",
+    );
+    expect(validation.judge_support_shortfall_claim_ids).toEqual([]);
+  });
+
+  it("binds the degrade disposition: an honest judge shortfall (question pool < 2, judge functioned) is listed, not a violation", () => {
+    // Site-7 second binding (design 20260706 §7 T7): the obligation is now enforced by TWO
+    // dispositions — this one certifies the degrade arm is wired (listed + no violation),
+    // while the certification block itself is asserted at the actionability-matrix tests.
     const validation = run(
       judgment([
         { evidence, supports: "supported" },
@@ -205,10 +230,12 @@ describe("G(a) enforced-tier binding — the judge pair is genuinely live-enforc
       ]),
       validJudgmentValidation(),
     );
-    expect(validation.validation_status).toBe("invalid");
-    expect(validation.violations.map((v) => v.code)).toContain(
+    expect(validation.violations.map((v) => v.code)).not.toContain(
       "insufficient_independent_evidence",
     );
+    expect(validation.judge_support_shortfall_claim_ids).toEqual([
+      "answer-claim-feature-object",
+    ]);
   });
 
   it("is fail-closed: a convergent claim with NO judgment is prior_validation_invalid (judge gate active)", () => {

@@ -2423,6 +2423,15 @@ export interface ReconstructMaturationAnswerClaimsValidationArtifact {
   validation_status: "valid" | "invalid";
   answer_claim_count: number;
   answered_question_count: number;
+  // Judge-support shortfall degrade (site-7 proportional terminal). Convergent claims whose
+  // QUESTION-scoped judge-supported independent pool is < 2 while the judge demonstrably
+  // functioned (>= 1 supported verdict anywhere in the run) are not violations: the source
+  // cannot certify them for that question, so they are listed here, the artifact stays
+  // "valid", and the actionability matrix blocks their certification (positive-claim
+  // exclusion + row limitation token). This field is the claim-anchored disclosure
+  // authority — row tokens are readiness mechanics only. Always emitted (sorted, [] when
+  // none) so absence is never silent.
+  judge_support_shortfall_claim_ids: string[];
   validation_results: string[];
   asserted_obligation_ids: string[];
   violations: ReconstructMaturationValidationViolation[];

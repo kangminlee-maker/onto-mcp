@@ -668,6 +668,7 @@ function answerClaimsForRow(
 
 function answerClaimsValidation(
   answerClaimCount = 1,
+  judgeSupportShortfallClaimIds: string[] = [],
 ): ReconstructMaturationAnswerClaimsValidationArtifact {
   return {
     schema_version: "1",
@@ -680,6 +681,7 @@ function answerClaimsValidation(
     validation_status: "valid",
     answer_claim_count: answerClaimCount,
     answered_question_count: answerClaimCount,
+    judge_support_shortfall_claim_ids: judgeSupportShortfallClaimIds,
     validation_results: ["maturation_answer_claims_valid"],
     violations: [],
   };
@@ -1278,6 +1280,218 @@ describe("maturation validation", () => {
       ]),
     );
     expect(matrixValidation.validation_status).toBe("valid");
+  });
+
+  it("site-7 (T5): a degraded claim + expansion citing it cannot raise L3/L4 — the row is limitation_backed with the shortfall token", () => {
+    // Identical fixture to the L4 test above, EXCEPT the claims validation lists the claim
+    // as judge-support shortfall. Laundering negative control: no maturity rise, the row
+    // leaves the trusted claim scope, and the deterministic token is stamped.
+    const { maturationBaseline, baselineValidation, matrix: initialMatrix, frontier, frontierValidation } =
+      frontierScenario();
+    const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
+    const ontologyExpansion = ontologyExpansionForRow(initialMatrix.rows[0]!);
+    const degradedValidation = answerClaimsValidation(1, ["answer-claim-feature-object"]);
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: degradedValidation,
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+    });
+    const matrixValidation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: degradedValidation,
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+    });
+
+    // No maturity rise (the sibling L4 test proves this exact fixture WOULD reach
+    // L4_validated_for_purpose/closed when not degraded — falsifiable pair).
+    expect(matrix.rows[0]?.maturity_level).toBe(
+      maturationBaseline.baseline_rows[0]!.maturity_level,
+    );
+    expect(matrix.rows[0]?.member_readiness).toBe("limitation_backed");
+    expect(matrix.rows[0]?.limitation_refs).toContain(
+      "judge_support_shortfall:answer-claim-feature-object",
+    );
+    expect(matrixValidation.validation_status).toBe("valid");
+
+    // Token conservation: a stale/edited matrix that DROPS the token must be rejected.
+    expect(matrix.rows[0]!.limitation_refs.length).toBeGreaterThan(0);
+    const tamperedRows = matrix.rows.map((row) => ({
+      ...row,
+      limitation_refs: row.limitation_refs.filter((ref) =>
+        !ref.startsWith("judge_support_shortfall:")
+      ),
+    }));
+    const tamperedValidation = validateActionabilityMatrix({
+      actionabilityMatrix: { ...matrix, rows: tamperedRows },
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: degradedValidation,
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+    });
+    expect(tamperedValidation.validation_status).toBe("invalid");
+    expect(tamperedValidation.violations.some((v) =>
+      v.code === "conflicting_state" &&
+      v.message.includes("judge-support-shortfall")
+    )).toBe(true);
+
+    // Forged maturity: stamping L4 on the degraded row must also be rejected (the
+    // validator's positive-claim recompute is degrade-aware in lockstep).
+    const forgedRows = matrix.rows.map((row) => ({
+      ...row,
+      maturity_level: "L4_validated_for_purpose" as const,
+    }));
+    const forgedValidation = validateActionabilityMatrix({
+      actionabilityMatrix: { ...matrix, rows: forgedRows },
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: degradedValidation,
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+    });
+    expect(forgedValidation.validation_status).toBe("invalid");
+    expect(forgedValidation.violations.some((v) =>
+      v.code === "missing_required_ref" &&
+      v.message.includes("L4")
+    )).toBe(true);
+  });
+
+  it("site-7 (T1/T1b/T2): the continuation scale weighs a degraded row by materiality — proportional terminal", () => {
+    // Focused arm test on the deterministic continuation builder: the shortfall token rides
+    // the existing limitation channel, so the EXISTING materiality scale decides the outcome.
+    const shortfallToken = "judge_support_shortfall:answer-claim-feature-object";
+    const row = (args: {
+      id: string;
+      materiality: "blocker" | "high" | "low";
+      readiness: "closed" | "limitation_backed";
+      limitationRefs?: string[];
+    }) => ({
+      matrix_row_id: args.id,
+      materiality: args.materiality,
+      member_readiness: args.readiness,
+      limitation_refs: args.limitationRefs ?? [],
+    });
+    const decide = (rows: unknown[]) =>
+      buildMaturationContinuationDecisionArtifact({
+        sessionId: "session-1",
+        actionabilityMatrix: {
+          rows,
+          candidate_limitation_refs: [],
+        } as unknown as ReconstructActionabilityMatrixArtifact,
+        actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+        maturationConvergenceLedgerValidation: {
+          final_requestion_pass_status: "no_new_material_question",
+        } as unknown as ReconstructMaturationConvergenceLedgerValidationArtifact,
+        maturationConvergenceLedgerValidationRef:
+          "maturation-convergence-ledger-validation.yaml",
+        maturationQuestionFrontier: {
+          questions: [],
+        } as unknown as ReconstructMaturationQuestionFrontierArtifact,
+        maturationClosureFrontier: {
+          authority_requests: [],
+        } as unknown as ReconstructMaturationClosureFrontierArtifact,
+        maturationClosureFrontierValidation: {
+          validation_status: "valid",
+        } as unknown as ReconstructMaturationClosureFrontierValidationArtifact,
+        maturationAuthorityResponse: {
+          responses: [],
+        } as unknown as ReconstructMaturationAuthorityResponseArtifact,
+        ontologyExpansionValidation: {
+          violations: [],
+        } as unknown as ReconstructOntologyExpansionValidationArtifact,
+        revisionProposal: revisionProposal(),
+        revisionProposalValidation: revisionProposalValidation(),
+      });
+
+    // T1: a LOW-materiality degraded row cannot move the headline — decision stays
+    // actionable_ready (contrast!), while the token still surfaces in limitation_refs and
+    // the row is honestly excluded from the trusted claim scope.
+    const t1 = decide([
+      row({ id: "row-closed", materiality: "high", readiness: "closed" }),
+      row({
+        id: "row-degraded-low",
+        materiality: "low",
+        readiness: "limitation_backed",
+        limitationRefs: [shortfallToken],
+      }),
+    ]);
+    expect(t1.decision_state).toBe("actionable_ready");
+    expect(t1.limitation_refs).toContain(shortfallToken);
+    expect(t1.claim_scope.excluded_row_refs).toContain("row-degraded-low");
+    expect(t1.claim_scope.included_row_refs).toEqual(["row-closed"]);
+
+    // T1b: the SAME degraded row at HIGH materiality (plus another closed material row)
+    // downgrades the headline to actionable_limited — the proportional middle outcome.
+    const t1b = decide([
+      row({ id: "row-closed", materiality: "high", readiness: "closed" }),
+      row({
+        id: "row-degraded-high",
+        materiality: "high",
+        readiness: "limitation_backed",
+        limitationRefs: [shortfallToken],
+      }),
+    ]);
+    expect(t1b.decision_state).toBe("actionable_limited");
+    expect(t1b.limitation_refs).toContain(shortfallToken);
+
+    // T2 (unit arm): the ONLY material row degraded, nothing closed → blocked.
+    const t2 = decide([
+      row({
+        id: "row-degraded-only",
+        materiality: "high",
+        readiness: "limitation_backed",
+        limitationRefs: [shortfallToken],
+      }),
+    ]);
+    expect(t2.decision_state).toBe("blocked");
+    expect(t2.limitation_refs).toContain(shortfallToken);
+    expect(t2.blocking_row_refs).toContain("row-degraded-only");
   });
 
   it("wires blocking_question_refs as the matrix->frontier reverse link (G track)", () => {
@@ -4287,7 +4501,12 @@ describe("maturation validation", () => {
       .toBe("answer-support-judgment-validation.yaml");
   });
 
-  it("B-6: insufficient_independent_evidence when fewer than two are judge-confirmed", () => {
+  it("site-7 degrade: judge honestly rejects one of two supports → valid, listed in judge_support_shortfall_claim_ids", () => {
+    // DISPOSITION FLIP (site-7 proportional terminal, design 20260706 §7 F6a): this exact
+    // fixture previously asserted invalid + insufficient_independent_evidence. The question-
+    // scoped judge-supported pool is 1 (< 2) while the judge demonstrably functioned
+    // (1 supported verdict), so the claim is degraded: the artifact stays valid, the claim is
+    // listed, and certification is blocked downstream at the actionability matrix instead.
     const scenario = convergentClaimScenario();
     const validation = claimsValidationWithJudge(
       scenario,
@@ -4296,9 +4515,30 @@ describe("maturation validation", () => {
         { evidence: evidence2, supports: "not_supported" },
       ]),
     );
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.judge_support_shortfall_claim_ids)
+      .toEqual(["answer-claim-feature-object"]);
+    expect(validation.violations.map((v) => v.code))
+      .not.toContain("insufficient_independent_evidence");
+  });
+
+  it("site-7 contrast control (T8): an all-not_supported judgment keeps the loud violation — judge collapse is not degradable", () => {
+    // The judge is present, schema-valid, and coverage-complete, but supported NOTHING in the
+    // run. That is indistinguishable from judge dysfunction (no second artifact can separate
+    // "all evidence is bad" from "the judge is broken"), so the fail-closed crash disposition
+    // is kept. Minimal pair with the degrade test above: only judgeFunctioned differs.
+    const scenario = convergentClaimScenario();
+    const validation = claimsValidationWithJudge(
+      scenario,
+      judgmentArtifact([
+        { evidence, supports: "not_supported" },
+        { evidence: evidence2, supports: "not_supported" },
+      ]),
+    );
     expect(validation.validation_status).toBe("invalid");
     expect(validation.violations.map((v) => v.code))
       .toContain("insufficient_independent_evidence");
+    expect(validation.judge_support_shortfall_claim_ids).toEqual([]);
   });
 
   it("B-6: fail-closed — a convergent claim without a valid judgment is invalid", () => {
@@ -4309,7 +4549,7 @@ describe("maturation validation", () => {
       .toContain("prior_validation_invalid");
   });
 
-  it("B-6: same-source supported refs collapse to one independent support (insufficient)", () => {
+  it("site-7 degrade: same-source supported refs collapse to one independent support → degraded, not invalid", () => {
     // Two clusters whose supported evidence shares the same source_ref:location;
     // the INDEPENDENCE key collapses them to 1, so >=2 is not met even though two
     // separate (cluster, evidence) IDENTITY pairs were judge-confirmed.
@@ -4422,15 +4662,22 @@ describe("maturation validation", () => {
       answerSupportJudgmentValidationRef: "answer-support-judgment-validation.yaml",
     });
     expect(judgmentValidation.validation_status).toBe("valid");
-    expect(validation.validation_status).toBe("invalid");
+    // DISPOSITION FLIP (site-7, design 20260706 §7 F6a): the INDEPENDENCE collapse still
+    // means the question's judge-supported pool is 1 (< 2), but the judge functioned, so
+    // this is now a degrade (valid + listed), not a violation.
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.judge_support_shortfall_claim_ids)
+      .toEqual(["answer-claim-feature-object"]);
     expect(validation.violations.map((v) => v.code))
-      .toContain("insufficient_independent_evidence");
+      .not.toContain("insufficient_independent_evidence");
   });
 
   it("B-6: convergent claim that omits judge-confirmed evidence from its own refs is insufficient", () => {
     // Both clusters' evidence are judge-confirmed, but the claim only carries one
     // supporting_evidence_ref. Sufficiency follows the claim's OWN refs (Codex #3),
     // so this must fail even though the clusters contain two confirmed refs.
+    // Site-7 minimal pair (T3): the question-scoped pool is >= 2 here, so this is
+    // author fault — the crash disposition MUST survive the degrade split.
     const scenario = convergentClaimScenario();
     scenario.answerClaims.answer_claims[0]!.supporting_evidence_refs = [evidence];
     const validation = claimsValidationWithJudge(
@@ -4440,6 +4687,127 @@ describe("maturation validation", () => {
     expect(validation.validation_status).toBe("invalid");
     expect(validation.violations.map((v) => v.code))
       .toContain("insufficient_independent_evidence");
+    expect(validation.judge_support_shortfall_claim_ids).toEqual([]);
+  });
+
+  it("site-7 author fault (T3b): claim cites a judge-rejected cluster while another cluster for the SAME question holds 2 confirmed supports → violation, not degrade", () => {
+    // The question-scoped pool proves the question COULD be certified (cluster-rich has two
+    // judge-confirmed independent supports), so under-citing clusters is author fault and the
+    // crash disposition survives. Falsifiable pair for the question-scope re-cut: a pool
+    // computed only over the claim's CITED clusters would mis-route this to degrade.
+    const { frontier, frontierValidation } = frontierScenario();
+    const richA: ReconstructEvidenceRef = {
+      observation_id: "obs-rich-a",
+      target_material_kind: "code",
+      source_ref: "src/rich-a.ts",
+      location: "src/rich-a.ts",
+    };
+    const richB: ReconstructEvidenceRef = {
+      observation_id: "obs-rich-b",
+      target_material_kind: "code",
+      source_ref: "src/rich-b.ts",
+      location: "src/rich-b.ts",
+    };
+    const ledger: ReconstructAnswerSupportLedgerArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      maturation_question_frontier_ref: "maturation-question-frontier.yaml",
+      evidence_clusters: [
+        {
+          evidence_cluster_id: "cluster-poor",
+          question_refs: ["mq-feature-object"],
+          support_mode: "convergent_source_evidence",
+          proposed_answer_summary: "Poor cluster.",
+          evidence_refs: [evidence, evidence2],
+          proof_refs: [],
+          user_confirmation_refs: [],
+          authority_response_refs: [],
+          independence_basis: "poor",
+          contradiction_refs: [],
+          limitation_refs: [],
+        },
+        {
+          evidence_cluster_id: "cluster-rich",
+          question_refs: ["mq-feature-object"],
+          support_mode: "convergent_source_evidence",
+          proposed_answer_summary: "Rich cluster.",
+          evidence_refs: [richA, richB],
+          proof_refs: [],
+          user_confirmation_refs: [],
+          authority_response_refs: [],
+          independence_basis: "rich",
+          contradiction_refs: [],
+          limitation_refs: [],
+        },
+      ],
+      directive_author: { owner: "host_llm", author_id: "ledger-author" },
+    };
+    const ledgerValidation: ReconstructAnswerSupportLedgerValidationArtifact = {
+      ...emptyAnswerSupportValidation(),
+      evidence_cluster_count: 2,
+      supported_question_count: 1,
+    };
+    const judgment: ReconstructAnswerSupportJudgmentArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      answer_support_ledger_ref: "answer-support-ledger.yaml",
+      answer_support_ledger_validation_ref: "answer-support-ledger-validation.yaml",
+      judgments: [
+        { judgment_id: "j-p1", evidence_cluster_ref: "cluster-poor", evidence_ref: evidence, supports: "not_supported", rationale_ref: "rp1" },
+        { judgment_id: "j-p2", evidence_cluster_ref: "cluster-poor", evidence_ref: evidence2, supports: "not_supported", rationale_ref: "rp2" },
+        { judgment_id: "j-r1", evidence_cluster_ref: "cluster-rich", evidence_ref: richA, supports: "supported", rationale_ref: "rr1" },
+        { judgment_id: "j-r2", evidence_cluster_ref: "cluster-rich", evidence_ref: richB, supports: "supported", rationale_ref: "rr2" },
+      ],
+      directive_author: { owner: "host_llm", author_id: "judge-author" },
+    };
+    const judgmentValidation = validateAnswerSupportJudgment({
+      answerSupportJudgment: judgment,
+      answerSupportLedger: ledger,
+      answerSupportLedgerValidation: ledgerValidation,
+    });
+    expect(judgmentValidation.validation_status).toBe("valid");
+    const answerClaims: ReconstructMaturationAnswerClaimsArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: now,
+      round_id: "maturation-round-1",
+      answer_claims: [{
+        answer_claim_id: "answer-claim-feature-object",
+        question_id: "mq-feature-object",
+        answer: "Cites only the judge-rejected cluster.",
+        answer_status: "answered",
+        support_mode: "convergent_source_evidence",
+        evidence_cluster_refs: ["cluster-poor"],
+        supporting_evidence_refs: [evidence, evidence2],
+        target_surface_refs: ["static_surface"],
+        target_dimension_refs: ["structure"],
+        purpose_element_refs: ["purpose-element-feature-object"],
+        limitation_refs: [],
+      }],
+      directive_author: { owner: "host_llm", author_id: "test-author" },
+    };
+    const validation = validateMaturationAnswerClaims({
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsRef: "maturation-answer-claims.yaml",
+      answerSupportLedger: ledger,
+      answerSupportLedgerValidation: ledgerValidation,
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      answerSupportJudgment: judgment,
+      answerSupportJudgmentValidation: judgmentValidation,
+      answerSupportJudgmentValidationRef: "answer-support-judgment-validation.yaml",
+    });
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((v) => v.code))
+      .toContain("insufficient_independent_evidence");
+    expect(validation.judge_support_shortfall_claim_ids).toEqual([]);
   });
 
   it("gate-enforce (R5): a judge-blocked convergent claim propagates to block downstream ontology expansion", () => {
