@@ -674,8 +674,17 @@ async function demotedStanceUnitIdsFromMatrix(
         .filter((lensId): lensId is string => typeof lensId === "string")
         .map((lensId) => `issue-stance:${lensId}`),
     );
-  } catch {
-    return new Set();
+  } catch (error: unknown) {
+    // The matrix's `validation.missing_stances` is the only durable authority
+    // for stance demotion. A present-but-unreadable/unparseable matrix (torn
+    // write, out-of-band corruption) must fail loud instead of silently
+    // returning an empty set — a silent empty set would drop the demotion
+    // signal and regress the affected stance unit(s) to unresolved/blocked.
+    throw new Error(
+      `Failed to read demoted stance units from issue-stance matrix at ${matrixPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
 }
 
