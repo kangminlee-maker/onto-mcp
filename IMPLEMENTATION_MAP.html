@@ -20,47 +20,50 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
   .card h3{margin:0 0 6px;font-size:13px;color:var(--sub);font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
   .card p{margin:0;font-size:14px;}
+  .card.focus{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset;}
   .ok{color:var(--green);font-weight:600;}
   .warn{color:var(--orange);font-weight:600;}
+  .bad{color:var(--red);font-weight:600;}
   table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--card);}
   th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top;}
   th{background:#f1f5f9;font-weight:600;}
   code{background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:12.5px;}
   .svgwrap{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;overflow-x:auto;margin-top:8px;}
   ul{margin:6px 0;padding-left:20px;font-size:14px;}
+  .step{font-weight:600;color:var(--blue);}
+  .muted{color:var(--sub);}
 </style>
 </head>
 <body>
 <main>
 
 <h1>onto-mcp Implementation Map</h1>
-<p class="stamp">기준: v0.4.12 (2026-06-17) · reconstruct 파이프라인 안정화 #1–#10 + 런타임 answer-support judge + large-input Stage 0 excerpt 예산 + effort 캘리브 P1–P4a + claude reconstruct 라우트 (v0.4.12 릴리스) · <b>large-input Stage 1′ = 모델-윈도 파생 단일문서 투영 예산</b> (PR #84) · <b>rejected purpose-candidate adequacy-frame 검증 rank-aware + full-header 통일 강제</b> (PR #85) · 라이브 e2e external-doc sentinel 게이팅 (PR #86) · <b>effort-calibration 단순화 S1 = telemetry-도출 통일 route identity</b> (PR #88, main <code>c4ae194</code>) · 이 문서는 현재 상태 대시보드다 — 변경 이력은 git log·development-records가 소유한다.</p>
+<p class="stamp">기준: 2026-07-06 · main = <b>PR #171</b> 머지(<code>4be477f</code> stance halt progress-step 수정) + 설계 SSOT 조정 핸드오프(<code>7b2d69d</code>) · 개발 라인 v0.4.12 (직전 맵 갱신 <code>8ebb3c5</code>/#90 이후 <b>197커밋</b> 경과) · 이 문서는 <b>현재 상태 대시보드</b>다 — 변경 이력은 git log·<code>development-records/</code>가 소유한다.</p>
 
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
-  <div class="card"><h3>현재 목표</h3>
-    <p>v0.4.12 출하. review·reconstruct(seeding+maturation)·구조 가드가 제품 경로에서 가동. 대용량 단일 문서가 <b>모델 윈도까지 통째 관찰·투영</b>(Stage 1′)되고, rejected purpose 후보의 적합성 프레임 과엄격성이 제거됨.</p></div>
+  <div class="card focus"><h3>현재 목표</h3>
+    <p>opt-in <b>4종을 관찰 모드로 검증</b> → 실 실행 <b>3회 무결</b> 시 DEFAULT 승격. 선행 정리(설계 SSOT 본문↔§8 조정, §4-3(2) matrix 읽기 fail-loud)는 착지 완료 — 관찰 표면 동결 상태로 관찰 윈도에 진입한다.</p></div>
   <div class="card"><h3>Phase</h3>
-    <p>reconstruct closure hardening <span class="ok">종결</span> · 파이프라인 안정화 #1–#10 <span class="ok">종결</span> · large-input <b>Stage 0+1′</b> <span class="ok">종결</span>(윈도 파생 투영 예산). MCP 호스트 사용성 Phase 1·2 <span class="ok">종결</span>.</p></div>
+    <p>breaker/resubmit <b>관찰 윈도</b> <span class="warn">0/3</span> · 0~1단계(SSOT 조정·구현맵·fail-loud) <span class="ok">완료</span> · 백로그 2→4단계 의존 순서로 진행.</p></div>
   <div class="card"><h3>Health</h3>
-    <p><span class="ok">vitest 112 files / 1502 passed</span> (+1 todo) · 정적 체크 green · CI(invariant-guards) PR마다 가동 · drift <span class="ok">no_drift</span> · registry 실 loader LOADED</p></div>
-  <div class="card"><h3>다음 결정</h3>
-    <p><b>effort-calibration</b>: P4a 리포트 빌더 + 단순화 S1(telemetry-도출 route) 종결 → 다음 = <b>P4b 라이브 sweep</b>(유료·실 multi-effort <code>effort_profile</code>; 착수 전 규모·비용 확인 — 본 환경 제약은 리스크 참조). · <b>large-input</b>: Stage 0+1′ 종결 → 다음 후보 = <b>Stage 2</b>(다문서 breadth + 비용 캐스케이드 + tail 회복). · <b>judge rubber-stamp 레버</b>(PR #62)는 구현됨 — 효과는 <i>다른/강한 모델 + live 벤치마크</i>(비용)로만 관찰. · MCP Phase 2는 방향만.</p></div>
+    <p><span class="ok">vitest 150 files / 2,446 passed</span> · <span class="ok">게이트 14/14</span> · tsc 클린 · 정적 green · 회복 continuation E2E가 ledger 경로 재디스패치 고정.</p></div>
+  <div class="card"><h3>다음 결정 (owner)</h3>
+    <p><b>§4-2</b> dispatch-incomplete 자동 재개 <b>authority</b>: frontier 재계산 유지 vs 아티팩트 직접 소비 (승격 후 착수 전 결정). · <b>§4-3</b> per-unit 강등 마커는 <b>보류</b> 결정(2026-07-06, owner) — 관찰 3회에서 matrix 유실·손상 사례가 나오면 재검토.</p></div>
   <div class="card"><h3>주요 리스크</h3>
-    <p><span class="warn">judge rubber-stamp</span>(완화: context isolation·per-stage model/effort 레버 PR #62; 의미적 독립성 측정 불가) · <span class="warn">gpt-5.5 입력&gt;272K토큰 2x 과금 cliff</span>(대형 CJK 기본 seat·예산으로 회피 불가·한계 기록) · <span class="warn">fable output_contract flake</span>(완화: opt-in submit salvage) · 문서 미러 표류(완화: SSOT·G6 drift).</p></div>
+    <p><span class="warn">관찰 윈도 중 표면 변경 시 카운트 리셋</span>(#168 정규화 수정 전 관찰 무효화 전례) · <span class="warn">실 provider rate-limit 문구 미검증</span>(breaker 패턴 매칭 불확정) · <span class="warn">한 세션의 matrix 손상이 다중 세션 status 조회를 실패시킴</span>(fail-loud 파급, findLatestReviewSessions — 관찰 중 모니터).</p></div>
 </div>
 
 <!-- ───────── 서비스 블루프린트 ───────── -->
-<h2>서비스 블루프린트 — 요청이 어떻게 검증된 산출물이 되는가, 게이트는 어디에 있는가</h2>
+<h2>서비스 블루프린트 — 리뷰 실행이 halt하면, 회복은 어떤 경로로 정확한 재디스패치 집합에 도달하는가</h2>
 <div class="svgwrap">
-<svg width="1860" height="940" viewBox="0 0 1860 940" role="img" aria-labelledby="bp-title bp-desc" xmlns="http://www.w3.org/2000/svg">
-  <title id="bp-title">onto-mcp 서비스 블루프린트 (v0.4.12)</title>
-  <desc id="bp-desc">MCP 요청이 runtime과 LLM 작업을 거쳐 canonical artifact와 투영으로 나뉘고, 게이트·품질 체크·연기 작업이 어디에 있는지 보여준다.</desc>
+<svg width="1880" height="748" viewBox="0 0 1880 748" role="img" aria-labelledby="bp-title bp-desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="bp-title">onto-mcp 리뷰 dispatch breaker 회복 경로 블루프린트</title>
+  <desc id="bp-desc">리뷰 flat fan-out 풀이 dispatch breaker 임계로 halt할 때, ledger의 terminal 강등 마커와 stance matrix, barrier에서 continuation frontier를 재계산해 미완료 집합만 재디스패치하는 canonical 회복 경로와, dispatch-incomplete.yaml 관측 projection·연기 작업을 보여준다.</desc>
   <defs>
     <marker id="a-slate" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#475569"/></marker>
     <marker id="a-green" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#16a34a"/></marker>
     <marker id="a-amber" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#d97706"/></marker>
-    <marker id="a-red" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#dc2626"/></marker>
     <marker id="a-gray" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#94a3b8"/></marker>
   </defs>
   <style>
@@ -70,8 +73,9 @@
     .n-rt{fill:#f0fdf4;stroke:#16a34a;}
     .n-llm{fill:#fffbeb;stroke:#d97706;}
     .n-art{fill:#f1f5f9;stroke:#475569;}
+    .n-art2{fill:#f1f5f9;stroke:#475569;stroke-width:2.4;}
     .n-view{fill:#f5f3ff;stroke:#7c3aed;}
-    .n-gate{fill:#fef2f2;stroke:#dc2626;}
+    .n-gate{fill:#fef2f2;stroke:#dc2626;stroke-width:2;}
     .n-q{fill:#ecfeff;stroke:#0891b2;}
     .n-post{fill:#fff7ed;stroke:#ea580c;}
     .t{font:600 12.5px sans-serif;fill:#0f172a;}
@@ -79,218 +83,239 @@
     .m{font:11px ui-monospace,monospace;fill:#475569;}
     .leg{font:11.5px sans-serif;fill:#334155;}
     .fl{stroke-width:1.6;fill:none;}
+    .flh{stroke-width:2.6;fill:none;}
+    .lbl{font:600 11px sans-serif;fill:#16a34a;}
   </style>
 
   <!-- 범례 -->
-  <g transform="translate(24,16)">
-    <rect width="1812" height="34" fill="#ffffff" stroke="#e2e8f0" rx="6"/>
-    <rect x="12" y="9" width="14" height="14" class="n-in" rx="3"/><text class="leg" x="32" y="21">입력</text>
-    <rect x="84" y="9" width="14" height="14" class="n-rt" rx="3"/><text class="leg" x="104" y="21">runtime/tools (결정적)</text>
-    <rect x="268" y="9" width="14" height="14" class="n-llm" rx="3"/><text class="leg" x="288" y="21">LLM 의미 작업</text>
-    <rect x="408" y="9" width="14" height="14" class="n-art" rx="3"/><text class="leg" x="428" y="21">canonical artifact</text>
-    <rect x="572" y="9" width="14" height="14" class="n-view" rx="3"/><text class="leg" x="592" y="21">투영/뷰</text>
-    <rect x="672" y="9" width="14" height="14" class="n-gate" rx="3"/><text class="leg" x="692" y="21">차단 게이트</text>
-    <rect x="782" y="9" width="14" height="14" class="n-q" rx="3"/><text class="leg" x="802" y="21">비차단 품질</text>
-    <rect x="896" y="9" width="14" height="14" class="n-post" rx="3"/><text class="leg" x="916" y="21">연기/관찰 대기</text>
-    <text class="leg" x="1030" y="21">화살표: 회색=데이터 흐름 · 초록=runtime 소유 · 호박=LLM 제출 · 빨강=게이트 · 점선=투영</text>
+  <g transform="translate(24,14)">
+    <rect width="1832" height="36" fill="#ffffff" stroke="#e2e8f0" rx="6"/>
+    <rect x="12" y="11" width="14" height="14" class="n-in" rx="3"/><text class="leg" x="32" y="23">입력/설정</text>
+    <rect x="106" y="11" width="14" height="14" class="n-llm" rx="3"/><text class="leg" x="126" y="23">LLM 유닛</text>
+    <rect x="204" y="11" width="14" height="14" class="n-rt" rx="3"/><text class="leg" x="224" y="23">runtime/tools</text>
+    <rect x="330" y="11" width="14" height="14" class="n-gate" rx="3"/><text class="leg" x="350" y="23">차단(halt)</text>
+    <rect x="440" y="11" width="14" height="14" class="n-art" rx="3"/><text class="leg" x="460" y="23">canonical artifact</text>
+    <rect x="606" y="11" width="14" height="14" class="n-view" rx="3"/><text class="leg" x="626" y="23">투영/뷰</text>
+    <rect x="706" y="11" width="14" height="14" class="n-q" rx="3"/><text class="leg" x="726" y="23">비차단 품질</text>
+    <rect x="818" y="11" width="14" height="14" class="n-post" rx="3"/><text class="leg" x="838" y="23">연기(hot path 밖)</text>
+    <text class="leg" x="968" y="23">화살표: 회색=데이터 · 점선=투영 · 초록=runtime·회복 · 호박=LLM outcome · 굵은 초록 loop=미완료 집합 재디스패치</text>
   </g>
 
   <!-- 레인 -->
   <g>
-    <rect class="lane" x="24" y="66" width="280" height="560" rx="8"/>
-    <text class="lanet" x="40" y="90">입력 (MCP 호스트)</text>
-    <rect class="lane" x="324" y="66" width="420" height="560" rx="8"/>
-    <text class="lanet" x="340" y="90">runtime / tools</text>
-    <rect class="lane" x="764" y="66" width="330" height="560" rx="8"/>
-    <text class="lanet" x="780" y="90">LLM 의미 작업</text>
-    <rect class="lane" x="1114" y="66" width="330" height="560" rx="8"/>
-    <text class="lanet" x="1130" y="90">canonical artifacts</text>
-    <rect class="lane" x="1464" y="66" width="372" height="560" rx="8"/>
-    <text class="lanet" x="1480" y="90">투영 · 게이트 · 품질 / 연기</text>
+    <rect class="lane" x="24" y="64" width="300" height="602" rx="8"/>
+    <text class="lanet" x="40" y="88">입력 · 실행 (flat fan-out 풀)</text>
+    <rect class="lane" x="340" y="64" width="300" height="602" rx="8"/>
+    <text class="lanet" x="356" y="88">LLM 유닛 디스패치</text>
+    <rect class="lane" x="656" y="64" width="400" height="602" rx="8"/>
+    <text class="lanet" x="672" y="88">runtime: breaker · halt · 회복 재계산</text>
+    <rect class="lane" x="1072" y="64" width="406" height="602" rx="8"/>
+    <text class="lanet" x="1088" y="88">canonical 회복 authority</text>
+    <rect class="lane" x="1494" y="64" width="364" height="602" rx="8"/>
+    <text class="lanet" x="1510" y="88">투영 · 품질 · 연기</text>
   </g>
 
-  <!-- 입력 레인 -->
-  <rect class="n-in" x="44" y="116" width="240" height="92" rx="8"/>
-  <text class="t" x="58" y="138">MCP tool call (12종)</text>
-  <text class="s" x="58" y="156">onto_review / _round / _advance</text>
-  <text class="s" x="58" y="172">onto_reconstruct / observe / validate</text>
-  <text class="m" x="58" y="192">src/mcp (schema) → core-api</text>
+  <!-- L1 입력/실행 -->
+  <rect class="n-in" x="44" y="108" width="260" height="100" rx="8"/>
+  <text class="t" x="58" y="130">리뷰 실행 유닛 풀</text>
+  <text class="s" x="58" y="148">flat per-unit fan-out (lens · issue-stance)</text>
+  <text class="s" x="58" y="164">run-review-prompt-execution 루프</text>
+  <text class="m" x="58" y="184">seat는 execution-plan.yaml이 고정</text>
 
-  <rect class="n-in" x="44" y="240" width="240" height="80" rx="8"/>
-  <text class="t" x="58" y="262">settings chain</text>
-  <text class="s" x="58" y="280">{project}/.onto + ~/.onto</text>
-  <text class="m" x="58" y="298">settings.json/v3 (유일 권위)</text>
+  <rect class="n-in" x="44" y="252" width="260" height="96" rx="8"/>
+  <text class="t" x="58" y="274">opt-in 설정 (관찰 ON)</text>
+  <text class="s" x="58" y="292">dispatch_breaker.enabled=true (#170)</text>
+  <text class="s" x="58" y="308">resubmit.enabled=true (#168 실질)</text>
+  <text class="m" x="58" y="328">settings-chain (OFF=현행 동작)</text>
 
-  <rect class="n-in" x="44" y="352" width="240" height="76" rx="8"/>
-  <text class="t" x="58" y="374">target + intent</text>
-  <text class="s" x="58" y="392">material kind 분류 후 처리</text>
-  <text class="m" x="58" y="410">code/document/… (계약 소유)</text>
+  <!-- L2 LLM -->
+  <rect class="n-llm" x="356" y="108" width="268" height="120" rx="8"/>
+  <text class="t" x="370" y="130">context-isolated 유닛 LLM</text>
+  <text class="s" x="370" y="148">관점별/이슈별 독립 컨텍스트</text>
+  <text class="s" x="370" y="164">structured submit tool로만 제출</text>
+  <text class="s" x="370" y="180">worker: codex CLI | claude CLI</text>
+  <text class="m" x="370" y="200">outcome = 성공 | 실패(계통 분류 대상)</text>
+  <text class="m" x="370" y="216">nested 1차 배치는 breaker 밖 (§4-1)</text>
 
-  <!-- runtime 레인 -->
-  <rect class="n-rt" x="344" y="116" width="380" height="100" rx="8"/>
-  <text class="t" x="358" y="138">review 준비·바인딩·플랜</text>
-  <text class="s" x="358" y="156">해석 → 바인딩 → execution-plan + prompt packets</text>
-  <text class="s" x="358" y="172">orchestration locus 각인: runtime(A) | host(B)</text>
-  <text class="m" x="358" y="192">core-runtime/cli + review (cli→review 단방향)</text>
+  <!-- L3 runtime -->
+  <rect class="n-rt" x="676" y="108" width="360" height="102" rx="8"/>
+  <text class="t" x="690" y="130">dispatch breaker 관찰</text>
+  <text class="s" x="690" y="148">유닛 최종 outcome을 계통 실패로 분류</text>
+  <text class="s" x="690" y="164">rate_limit · auth · transport</text>
+  <text class="s" x="690" y="180">서로 다른 유닛 연속 실패가 임계 도달</text>
+  <text class="m" x="690" y="200">capped backoff · per_call_max_attempts</text>
 
-  <rect class="n-rt" x="344" y="248" width="380" height="108" rx="8"/>
-  <text class="t" x="358" y="270">dispatch 루프 (frontier engine)</text>
-  <text class="s" x="358" y="288">A: runtime이 unit 실행 · B: host가 round/advance로 실행</text>
-  <text class="s" x="358" y="304">retry 예산 → 소진 시 opt-in submit salvage</text>
-  <text class="s" x="358" y="320">(동결 파일 트리거 · 동일 validator · recovery 감사)</text>
-  <text class="m" x="358" y="340">provider switcher: oauth(codex·claude_code)/api/local</text>
+  <rect class="n-gate" x="676" y="228" width="360" height="78" rx="8"/>
+  <text class="t" x="690" y="250">HALT = 차단 (잔여 미디스패치)</text>
+  <text class="s" x="690" y="268">halt_reason prefix dispatch_breaker:</text>
+  <text class="s" x="690" y="284">lens 풀: halt_phase=lens_dispatch_breaker</text>
+  <text class="m" x="690" y="300">완료 유닛 행은 execution-result에 보존</text>
 
-  <rect class="n-rt" x="344" y="388" width="380" height="84" rx="8"/>
-  <text class="t" x="358" y="410">seat 검증·기록·조립</text>
-  <text class="s" x="358" y="428">validator → execution-result upsert → ReviewRecord 조립</text>
-  <text class="m" x="358" y="448">mock/live 동일 검증 경로 (realization은 provenance)</text>
+  <rect class="n-rt" x="676" y="324" width="360" height="86" rx="8"/>
+  <text class="t" x="690" y="346">강등 배선 (matrix → ledger)</text>
+  <text class="s" x="690" y="364">missing_stances → resolution:"demoted"</text>
+  <text class="s" x="690" y="380">demotedStanceUnitIdsFromMatrix (배선·소비)</text>
+  <text class="m" x="690" y="400">review/pipeline-execution-ledger.ts</text>
 
-  <rect class="n-rt" x="344" y="504" width="380" height="96" rx="8"/>
-  <text class="t" x="358" y="526">reconstruct 러너</text>
-  <text class="s" x="358" y="544">원자 admission → 관찰(윈도 파생 투영 예산)·안전·계보 게이트</text>
-  <text class="s" x="358" y="560">→ seed 검증·성숙 루프 → claim projection</text>
-  <text class="m" x="358" y="580">core-runtime/reconstruct (registry가 권위 그래프)</text>
+  <rect class="n-rt" x="676" y="428" width="360" height="110" rx="8"/>
+  <text class="t" x="690" y="450">continuation frontier 재계산</text>
+  <text class="s" x="690" y="468">ledger+matrix+barrier에서 미완료 집합 재도출</text>
+  <text class="s" x="690" y="484">demoted 유닛은 frontier 재진입 없음</text>
+  <text class="s" x="690" y="500">재디스패치 집합 == 미완료 집합 (회복 계약)</text>
+  <text class="m" x="690" y="520">continuation-plan.ts (실 authority)</text>
 
-  <!-- LLM 레인 -->
-  <rect class="n-llm" x="784" y="116" width="290" height="96" rx="8"/>
-  <text class="t" x="798" y="138">context-isolated lenses</text>
-  <text class="s" x="798" y="156">관점별 독립 컨텍스트 finding 생성</text>
-  <text class="s" x="798" y="172">→ structured submit tool로만 제출</text>
-  <text class="m" x="798" y="192">worker: codex CLI | claude CLI</text>
+  <!-- L4 canonical -->
+  <rect class="n-art" x="1092" y="108" width="366" height="104" rx="8"/>
+  <text class="t" x="1106" y="130">pipeline-execution-ledger</text>
+  <text class="s" x="1106" y="148">유닛 entry: trusted-output | resolution:"demoted"</text>
+  <text class="s" x="1106" y="164">isResolvedLedgerUnit = demoted OR trusted</text>
+  <text class="m" x="1106" y="184">.onto/review/&lt;session&gt;/ (YAML canonical)</text>
+  <text class="m" x="1106" y="202">완료 유닛 행 = durable 진실</text>
 
-  <rect class="n-llm" x="784" y="248" width="290" height="96" rx="8"/>
-  <text class="t" x="798" y="270">stance · deliberation · synthesis</text>
-  <text class="s" x="798" y="288">issue별 입장 → 통제 심의 → 보수적 종합</text>
-  <text class="m" x="798" y="308">submit schema = spine 단일 source</text>
-  <text class="m" x="798" y="324">(G3 invariant 테스트가 고정)</text>
+  <rect class="n-art" x="1092" y="230" width="366" height="84" rx="8"/>
+  <text class="t" x="1106" y="252">issue-stance-matrix</text>
+  <text class="s" x="1106" y="270">validation.missing_stances = durable 강등 표면</text>
+  <text class="m" x="1106" y="290">손상 시 fail-loud (§4-3(2) 착지 완료)</text>
+  <text class="m" x="1106" y="306">(부재=미생성 정상, 손상=throw)</text>
 
-  <rect class="n-llm" x="784" y="380" width="290" height="112" rx="8"/>
-  <text class="t" x="798" y="402">reconstruct 의미 저작</text>
-  <text class="s" x="798" y="420">lens judgment · purpose · seed · 답변 클러스터</text>
-  <text class="s" x="798" y="438">+ answer-support judge (별도 저작 아티팩트)</text>
-  <text class="m" x="798" y="456">context isolation: 저자 근거 배제 · supported|not</text>
-  <text class="m" x="798" y="474">direct_call (semantic_author 액터)</text>
+  <rect class="n-art" x="1092" y="332" width="366" height="70" rx="8"/>
+  <text class="t" x="1106" y="354">lens-completion-barrier</text>
+  <text class="s" x="1106" y="372">downstream stage 진입 gate</text>
+  <text class="m" x="1106" y="392">lens-completion-barrier.yaml</text>
 
-  <rect class="n-llm" x="784" y="504" width="290" height="84" rx="8"/>
-  <text class="t" x="798" y="526">salvage 회수 LLM</text>
-  <text class="s" x="798" y="544">delta: 동급 새 인스턴스 · 전사: 저가 모델</text>
-  <text class="m" x="798" y="564">발명 가드 SALVAGE_INCOMPLETE</text>
+  <rect class="n-art2" x="1092" y="428" width="366" height="110" rx="8"/>
+  <text class="t" x="1106" y="450">continuation frontier (회복 authority)</text>
+  <text class="s" x="1106" y="468">ledger·matrix·barrier의 결정적 재계산 결과</text>
+  <text class="s" x="1106" y="484">다음 실행이 소비하는 정확 재디스패치 집합</text>
+  <text class="m" x="1106" y="506">canonical: 재계산이 진실 (아티팩트 저장물 아님)</text>
+  <text class="m" x="1106" y="524">dispatch-incomplete.yaml과 구분됨</text>
 
-  <!-- artifacts 레인 -->
-  <rect class="n-art" x="1134" y="116" width="290" height="108" rx="8"/>
-  <text class="t" x="1148" y="138">review 세션 아티팩트</text>
-  <text class="s" x="1148" y="156">execution-result · issue-ledger · stance-matrix</text>
-  <text class="s" x="1148" y="172">deliberation · review-record (YAML canonical)</text>
-  <text class="m" x="1148" y="192">.onto/review/&lt;session&gt;/ — 어느 locus든</text>
-  <text class="m" x="1148" y="208">artifact 진실은 onto가 소유</text>
+  <!-- L5 투영/품질/연기 -->
+  <rect class="n-view" x="1514" y="108" width="324" height="104" rx="8"/>
+  <text class="t" x="1528" y="130">dispatch-incomplete.yaml</text>
+  <text class="s" x="1528" y="148">배치 end state: 완료·dead-letter·미완료</text>
+  <text class="s" x="1528" y="164">트립/완주 무관 기록 (관측 projection)</text>
+  <text class="m" x="1528" y="184">회복 계약값이나 자동 소비는 §4-2 연기</text>
+  <text class="m" x="1528" y="202">OFF(기본)에선 쓰지 않음</text>
 
-  <rect class="n-art" x="1134" y="256" width="290" height="92" rx="8"/>
-  <text class="t" x="1148" y="278">reconstruct 세션 아티팩트</text>
-  <text class="s" x="1148" y="296">seed · 성숙 루프 · judge · claim-projection · record</text>
-  <text class="m" x="1148" y="316">.onto/reconstruct/&lt;session&gt;/</text>
-  <text class="m" x="1148" y="332">registry.yaml = 기계가독 권위 그래프</text>
+  <rect class="n-q" x="1514" y="230" width="324" height="86" rx="8"/>
+  <text class="t" x="1528" y="252">관찰 · 비차단 품질</text>
+  <text class="s" x="1528" y="270">트립·포이즌·census 정합 공시</text>
+  <text class="s" x="1528" y="286">OFF twin = 임계 없음 (diff로 no-regression 입증)</text>
+  <text class="m" x="1528" y="306">3회 무결 → DEFAULT 승격 게이트 (0/3)</text>
 
-  <rect class="n-art" x="1134" y="380" width="290" height="76" rx="8"/>
-  <text class="t" x="1148" y="402">final-output.md</text>
-  <text class="s" x="1148" y="420">사용자 대면 결과 (artifact 근거 인용)</text>
-  <text class="m" x="1148" y="438">LLM 저작 + runtime 검증 푸터</text>
+  <rect class="n-post" x="1514" y="332" width="324" height="206" rx="8"/>
+  <text class="t" x="1528" y="354">연기 (hot path 밖)</text>
+  <text class="s" x="1528" y="374">§4-2 dispatch-incomplete 자동 스테이지 재개 소비</text>
+  <text class="s" x="1528" y="392">§4-1 nested-workers 1차 배치 breaker 커버</text>
+  <text class="s" x="1528" y="410">§4-4 트립 시 fallback provider 스왑·family-collapse</text>
+  <text class="s" x="1528" y="428">§4-5 유실 34건 소급 재판정 (l2wire 아티팩트)</text>
+  <text class="s" x="1528" y="446">§4-6 resubmit 확장 · continue 기본화 · 유닛 티어링</text>
+  <text class="m" x="1528" y="468">DEFAULT 승격(3단계) 이후 4단계로 진행</text>
+  <text class="m" x="1528" y="486">tiering 메커니즘은 배선 완료 · 기본 정책값만 미배포</text>
+  <text class="m" x="1528" y="510">각 항목은 착수 시 실코드로 재검증(PROPOSED)</text>
 
-  <!-- 투영/게이트/품질/연기 레인 -->
-  <rect class="n-view" x="1484" y="116" width="332" height="88" rx="8"/>
-  <text class="t" x="1498" y="138">MCP 응답 투영</text>
-  <text class="s" x="1498" y="156">status/result compact·standard·full + llmPresentation</text>
-  <text class="m" x="1498" y="176">투영은 진실이 아님 — 진실은 세션 아티팩트</text>
-
-  <rect class="n-gate" x="1484" y="220" width="332" height="140" rx="8"/>
-  <text class="t" x="1498" y="242">차단 게이트 (구조 가드 G1~G4·G7 + CI)</text>
-  <text class="s" x="1498" y="260">import 경계 · 스펙 기본값 · invariant 테스트</text>
-  <text class="s" x="1498" y="276">· 보호 키 INVARIANT-CHANGE · supported-models(G7)</text>
-  <text class="m" x="1498" y="294">.github/workflows/invariants.yml (PR마다)</text>
-  <text class="m" x="1498" y="310">+ 런타임: validator·run-control·fail-loud 경로</text>
-  <text class="s" x="1498" y="332">· answer-support judge 게이트 (maturation): convergent</text>
-  <text class="m" x="1498" y="348">claim은 ≥2 독립 judge-confirmed 없으면 fail-closed (B-6)</text>
-
-  <rect class="n-q" x="1484" y="372" width="332" height="92" rx="8"/>
-  <text class="t" x="1498" y="394">비차단 품질</text>
-  <text class="s" x="1498" y="412">semantic quality gate(주입형 기대값) · 벤치 G5</text>
-  <text class="s" x="1498" y="428">decision gate(runs≥3·fixtures≥2 미만 PRELIMINARY)</text>
-  <text class="m" x="1498" y="448">G6 check:invariant-drift = 집계 리포트</text>
-
-  <rect class="n-post" x="1484" y="496" width="332" height="104" rx="8"/>
-  <text class="t" x="1498" y="518">연기 / 관찰 대기 (hot path 밖)</text>
-  <text class="s" x="1498" y="536">· large-input Stage 2: 다문서 breadth·선택·비용 캐스케이드</text>
-  <text class="s" x="1498" y="552">· evolve: 계약만 존재, runtime/MCP 도구 없음</text>
-  <text class="s" x="1498" y="568">· spreadsheet/database reconstruct 어댑터 (계약만)</text>
-  <text class="s" x="1498" y="584">· 유기적 salvage 관찰 (launchd 예약 트랙·별도)</text>
-
-  <!-- 흐름: 입력 → runtime -->
-  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M284,162 H344"/>
-  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M284,280 L344,200"/>
-  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M284,390 L344,300"/>
-  <!-- runtime 내부 -->
-  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M534,216 V248"/>
-  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M534,356 V388"/>
-  <!-- runtime ↔ LLM -->
-  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M724,290 L784,170"/>
-  <path class="fl" stroke="#d97706" marker-end="url(#a-amber)" d="M784,290 L724,300"/>
-  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M724,540 L784,545"/>
-  <path class="fl" stroke="#d97706" marker-end="url(#a-amber)" d="M784,430 L724,420"/>
-  <!-- runtime → artifacts -->
-  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M724,430 L1134,180"/>
-  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M724,560 L1134,300"/>
-  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M1279,348 V380"/>
-  <!-- artifacts → 투영 -->
-  <path class="fl" stroke="#94a3b8" stroke-dasharray="6 4" marker-end="url(#a-gray)" d="M1424,170 L1484,160"/>
-  <!-- 게이트 → runtime (차단) -->
-  <path class="fl" stroke="#dc2626" marker-end="url(#a-red)" d="M1484,300 L1424,300"/>
+  <!-- 흐름 -->
+  <!-- 입력 → LLM -->
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M304,148 H356"/>
+  <!-- 설정 → breaker -->
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M304,296 C480,296 540,160 676,150"/>
+  <!-- LLM outcome → breaker -->
+  <path class="fl" stroke="#d97706" marker-end="url(#a-amber)" d="M624,168 C650,160 654,156 676,152"/>
+  <!-- breaker → HALT -->
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M856,210 V228"/>
+  <!-- HALT → 강등 -->
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M856,306 V324"/>
+  <!-- 강등 → frontier 재계산 -->
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M856,410 V428"/>
+  <!-- 강등 → ledger (demoted 기록) -->
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M1036,352 C1064,320 1068,220 1092,186"/>
+  <!-- 강등 ← matrix (missing_stances 읽기) -->
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M1092,278 C1066,300 1062,340 1036,356"/>
+  <!-- ledger → frontier authority -->
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M1220,212 V428"/>
+  <!-- matrix → frontier authority -->
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M1270,314 V428"/>
+  <!-- barrier → frontier authority -->
+  <path class="fl" stroke="#475569" marker-end="url(#a-slate)" d="M1320,402 V428"/>
+  <!-- runtime 재계산 → frontier authority (runtime derives) -->
+  <path class="fl" stroke="#16a34a" marker-end="url(#a-green)" d="M1036,486 C1060,480 1070,476 1092,474"/>
+  <!-- ledger → dispatch-incomplete (projection) -->
+  <path class="fl" stroke="#94a3b8" stroke-dasharray="6 4" marker-end="url(#a-gray)" d="M1458,150 H1514"/>
+  <!-- 회복 loop: frontier authority → 다음 실행 유닛 풀 -->
+  <path class="flh" stroke="#16a34a" marker-end="url(#a-green)" d="M1275,538 V706 H172 V208"/>
+  <text class="lbl" x="360" y="698">다음 실행 = 미완료 집합만 재디스패치 (demoted frontier 재진입 없음)</text>
 </svg>
 </div>
+
+<!-- ───────── 관찰 모드 현황 (현재 hot path) ───────── -->
+<h2>관찰 모드 현황 — DEFAULT 승격 게이트 <span class="warn">0/3</span></h2>
+<table>
+  <tr><th>opt-in 키</th><th>상태</th><th>활성 시점</th><th>관찰 대상</th></tr>
+  <tr><td><code>review.execution.retry.resubmit.enabled</code></td><td class="warn">관찰 ON</td><td>#168부터 실질(정규화 드랍 수정)</td><td>stance resubmit 치유율 · degradation/matrix 공시 정합 · halt율(기준 15.2%) · <code>correlated_validation</code> 오발</td></tr>
+  <tr><td><code>review.execution.retry.dispatch_breaker.enabled</code></td><td class="warn">관찰 ON</td><td>#170</td><td>트립/포이즌 정합 · <code>dispatch-incomplete.yaml</code> 내용 · 완료 유닛 보존 · 재디스패치==미완료 · 실 CLI limit 문구 매칭</td></tr>
+  <tr><td><code>reconstruct.execution.dispatch_breaker.enabled</code></td><td class="warn">관찰 ON</td><td>#167</td><td>census <code>breaker_retry_*</code> spend · 트립 파티션 정합</td></tr>
+  <tr><td><code>reconstruct.execution.semantic_map_authoring</code></td><td class="warn">관찰 ON</td><td>#167</td><td>census/projection 품질 · 429 중 부분출력 seat 신뢰(<code>trustedOnSeatPresence</code> caveat)</td></tr>
+</table>
+<p class="muted" style="font-size:13px;margin-top:8px;">승격 규칙: 실 리뷰 실행 + 실 reconstruct 실행 <b>3회 무결</b> → 네 opt-in의 DEFAULT를 <code>enabled:true</code>로 승격하는 PR (INV-CFG-1 마커 + owner 확인). 정정: #168 이전 resubmit 관찰은 <code>definedReviewRetry</code> 정규화 드랍으로 라이브 불활성이었음 → 카운트는 #168 이후부터 0에서 센다.</p>
+
+<!-- ───────── 백로그 (의존 순서) ───────── -->
+<h2>백로그 — 의존 순서 (§N = 2026-07-05 핸드오프 §4 항목)</h2>
+<table>
+  <tr><th>단계</th><th>작업</th><th>상태</th></tr>
+  <tr><td><span class="step">0</span></td><td>설계 SSOT 본문(§3/§6/§7)↔§8 조정 (문서) + 본 구현맵 재구축</td><td class="ok">완료 (2026-07-06)</td></tr>
+  <tr><td><span class="step">1</span></td><td>§4-3(2) matrix 읽기 <b>fail-loud</b> — 강등 표면 손상 시 swallow 금지 (per-unit 마커는 보류: 관찰 후 재검토)</td><td class="ok">완료 (2026-07-06)</td></tr>
+  <tr><td><span class="step">2</span></td><td>관찰 3회 완료 + §4-5 유실 34건 소급 재판정 (아티팩트: <code>~/cowork/onto-mcp-l2wire</code>)</td><td class="muted">대기</td></tr>
+  <tr><td><span class="step">3</span></td><td>opt-in 4종 <b>DEFAULT 승격 PR</b> (INV-CFG-1 마커 + owner)</td><td class="muted">대기 (게이트: 2단계)</td></tr>
+  <tr><td><span class="step">4</span></td><td>§4-2(+6b 자동 재개·continue 기본화) · §4-4(fallback 스왑) · §4-1(nested 커버) · §4-6(c 유닛 티어링 기본값·a resubmit 확장)</td><td class="muted">대기 (PROPOSED — 착수 시 실코드 재검증)</td></tr>
+</table>
 
 <!-- ───────── 아키텍처 ───────── -->
 <h2>아키텍처 (구조 SSOT: docs/architecture/repo-layout.md)</h2>
 <table>
   <tr><th>층</th><th>위치</th><th>역할</th></tr>
-  <tr><td>MCP surface</td><td><code>src/mcp/</code></td><td>12개 도구 + simple(8)/full(12) 프로파일(<code>ONTO_MCP_PROFILE</code>) + 옛 7명 deprecated alias · <code>.mcpb</code> 데스크탑 확장 + 첫실행 bootstrap</td></tr>
-  <tr><td>Core API</td><td><code>src/core-api/</code></td><td>MCP·하니스가 호출하는 facade (review/reconstruct prepare·run·round·advance·status·result)</td></tr>
-  <tr><td>실행층</td><td><code>src/core-runtime/cli/</code></td><td>invocation runner·dispatch 루프·provider unit executor·nesting worker·salvage — review/를 단방향 import</td></tr>
-  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 (reconstruct: seeding+maturation+answer-support judge) · 단일문서 관찰은 <b>모델-윈도 파생 투영 예산</b>(<code>deriveDocumentExcerptProjectionBudget</code>, 캡처 ceiling과 분리) · purpose 후보 검증은 rank-aware(rejected는 빈 required_elements 면제·full frame header는 전 rank 강제) — cli/ import 금지(G1 강제)</td></tr>
-  <tr><td>provider 경계</td><td><code>src/core-runtime/llm/</code></td><td>스위처: oauth(codex·claude 워커, anthropic+oauth reconstruct 포함) / api_key(openai·anthropic·grok) / local(lmstudio) · claude 바이너리 <code>resolveClaudeBin</code>(ONTO_CLAUDE_BIN→PATH→일반위치) · CLI 워커 기본 타임아웃 600s · 선택은 벤치-검증 모델(<code>claude-opus-4-8</code> 등록·G7)로 제한</td></tr>
-  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon·authority(supported-models — <code>context_window_tokens</code>+provenance, <b>G4 보호</b>: 윈도가 런타임 투영 예산에 영향) → rank 2~4 원칙 → rank 5 기능 계약(+reconstruct registry, judge gate active)</td></tr>
+  <tr><td>MCP surface</td><td><code>src/mcp/</code></td><td>onto 도구 + simple/full 프로파일(<code>ONTO_MCP_PROFILE</code>) · <code>onto_review_continue</code>/<code>_cancel</code> 추가 · <code>onto watch</code> read-only live HUD(TUI) · <code>.mcpb</code> 데스크탑 확장 + 첫실행 bootstrap</td></tr>
+  <tr><td>Core API</td><td><code>src/core-api/</code></td><td>MCP·하니스가 호출하는 facade (review/reconstruct prepare·run·round·advance·status·result·continue)</td></tr>
+  <tr><td>실행층</td><td><code>src/core-runtime/cli/</code></td><td>invocation runner·dispatch 루프·provider unit executor·nesting worker·resubmit·salvage — review/를 단방향 import (G1 강제)</td></tr>
+  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 · 회복: pipeline-execution-ledger(<code>resolution:"demoted"</code>)·continuation-plan(frontier)·dispatch-breaker · reconstruct: seeding+maturation+answer-support judge · <b>Layer-2 accumulated semantic-map</b>(누적 채널→over-context frontier→seed projection) · <b>comprehension-reduce</b>(union monoid·leaf-read·value-tile) · <b>graceful-terminal</b>(GracefulTerminalSignal·reachability manifest v2)</td></tr>
+  <tr><td>provider 경계</td><td><code>src/core-runtime/llm/</code></td><td>스위처: oauth(codex·claude)/api_key(openai·anthropic·grok)/local(lmstudio) · <code>dispatch-breaker.ts</code>(계통 실패 분류·per_call_max_attempts·capped backoff) · role-aware dispatch resolver (INV-MODEL-1) · 선택은 벤치-검증 모델(G7)로 제한</td></tr>
+  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon·authority(supported-models role 스키마·<code>context_window_tokens</code>, G4 보호) → rank 2~4 원칙 → rank 5 기능 계약(review runner·pipeline-execution-ledger·reconstruct registry, obligation-coverage 실 등록)</td></tr>
 </table>
 
 <!-- ───────── 검증 체계 ───────── -->
 <h2>검증 체계 (현재 전부 green)</h2>
 <table>
   <tr><th>층</th><th>수단</th><th>비고</th></tr>
-  <tr><td>구조 가드</td><td>G1 <code>check:import-boundary</code> · G2 <code>check:spec-defaults</code> · G4 <code>check:invariant-change</code> · G6 <code>check:invariant-drift</code> · G7 <code>check:supported-models</code></td><td>INVARIANTS.md 강제 현황 표가 매핑 소유; CI가 PR마다 실행</td></tr>
-  <tr><td>불변식 테스트</td><td><code>*.invariant.test.ts</code> (G3)</td><td>auth 생략→OAuth 워커, submit schema=spine 단일 source, INV-MODEL-1</td></tr>
-  <tr><td>conformance</td><td><code>check:review:invocation-runner</code> · <code>check:mcp:review</code> · <code>check:review:route</code> · <code>check:retired-root-paths</code></td><td>기존 4종</td></tr>
-  <tr><td>런타임 검증기</td><td>reconstruct validator (run-control·게이트·judge B-5/B-6) · 실 loader <code>loadReconstructContractRegistry</code></td><td>judge: author≠judge 구조 강제 + convergent claim fail-closed; registry 편집은 실 loader로 검증(YAML+grep으론 active 참조 깨짐 못 잡음)</td></tr>
-  <tr><td>테스트</td><td>vitest 112 files / 1502 passed (+1 todo)</td><td>golden 하니스·salvage E2E·reconstruct judge B-5/B-6·gate-enforce propagation·document 관찰 excerpt 예산(다중문서·바이너리 게이트)·윈도 파생 투영 예산(<code>deriveDocumentExcerptProjectionBudget</code>·CJK)·purpose-candidate rejected-frame rank-aware 검증·<b>route-identity 도출</b>(witnessed/profile_derived·completeness·hint cross-check·retained-sample 증거) 포함</td></tr>
-  <tr><td>벤치 게이트</td><td>G5 decision gate (하니스 내장) · reconstruct mock 완주/품질 GUARD</td><td>runs≥3·fixtures≥2 미충족 시 PRELIMINARY; judge 단계 후 mock 완주·품질 baseline-equivalent</td></tr>
+  <tr><td>구조 가드 (14종)</td><td>G1 <code>import-boundary</code> · G2 <code>spec-defaults</code> · G4 <code>invariant-change</code> · G6 <code>invariant-drift</code> · G7 <code>supported-models</code> · <code>ts-core</code> · <code>prompt-projection-parity</code> · <code>final-output-sections-parity</code> · <code>obligation-coverage</code> · <code>graceful-signal-rethrow</code> · conformance 4종(<code>review:invocation-runner</code>·<code>mcp:review</code>·<code>review:route</code>·<code>retired-root-paths</code>)</td><td>INVARIANTS.md가 매핑 소유 · CI가 PR마다 실행 · G4는 <b>커밋된 range만</b> 검사(워킹트리 상태 게이트는 vacuous PASS)</td></tr>
+  <tr><td>불변식 테스트</td><td><code>*.invariant.test.ts</code> (G3)</td><td>auth 생략→OAuth 워커 · submit schema=spine 단일 source · INV-MODEL-1(role-aware) · INV-OBLIGATION-COVERAGE-1 · INV-SCHEMA-1</td></tr>
+  <tr><td>런타임 검증기</td><td>reconstruct validator(run-control·게이트·judge B-5/B-6) · 실 loader <code>loadReconstructContractRegistry</code> · obligation-coverage 동적 증명 + ratchet</td><td>judge: author≠judge 구조 강제 + convergent claim fail-closed · registry 편집은 실 loader로 검증</td></tr>
+  <tr><td>회복 경로 E2E</td><td>회복 continuation E2E가 <b>ledger 경로로 미완료 집합만 재디스패치</b>함을 고정 · dispatch-breaker(트립·포이즌·OFF twin) · resubmit(강등·matrix·ledger demoted·no whole-run halt)</td><td>stance 트립 halt progress-step 회귀 가드(#171) · demoted 유닛은 frontier 재진입 없음</td></tr>
+  <tr><td>테스트</td><td>vitest 150 files / 2,446 passed</td><td>golden 하니스·salvage/resubmit/breaker E2E·reconstruct judge·Layer-2 semantic-map W1~W5·comprehension leaf-read·graceful-terminal·spreadsheet C-recon/C-review 포함</td></tr>
+  <tr><td>벤치 게이트</td><td>G5 decision gate (하니스 내장) · reconstruct mock 완주/품질 GUARD</td><td>runs≥3·fixtures≥2 미충족 시 PRELIMINARY</td></tr>
 </table>
 
-<!-- ───────── 로드맵/결정/변경영향 ───────── -->
-<h2>로드맵 현황과 다음 결정</h2>
+<!-- ───────── 완료 이력 (압축) ───────── -->
+<h2>완료 이력 (압축: <code>8ebb3c5</code>/#90 → <code>4be477f</code>/#171, 197커밋 · 상세는 git log·development-records)</h2>
 <ul>
-  <li><b>완료 — reconstruct closure hardening</b>(PR #55·#57·#58·#60): maturation closure 정지 기준을 신설 없이 굳힘. ODKE+ 지지 게이트 = <b>author≠judge 독립 judge</b>를 별도 저작 아티팩트로 분리(구조 강제). R1~R5: stage 배선 → judge LLM 저작(context isolation) → B-5/B-6 validator(convergent claim ≥2 독립 judge-confirmed, fail-closed) → 게이트 active 승격 → gate-enforce propagation E2E + 벤치 회귀. <b>3-리뷰 교차검증</b>(ultracode 6차원·onto 5렌즈·Codex): conflict-laundering·claim-own-evidence soundness 상보 포착·반영. 설계: <code>development-records/design/20260615-runtime-judge-stage-r0-design.md</code>.</li>
-  <li><b>완료 — 지원 모델 레지스트리</b>(PR #54): INV-MODEL-1 — 모델 선택을 벤치-검증 모델로 제한(G7). gate=강제 / projection=순수 분리, effective-route 런타임 미러.</li>
-  <li><b>완료 — MCP 호스트 사용성 Phase 1</b>(PR #50·#52·#56): 툴 16→12 병합 + simple/full 프로파일 · 폴링 acceptance(profile-aware sync window) · <code>onto configure-provider</code> · <code>.mcpb</code> 데스크탑 확장 + 첫실행 bootstrap. v0.4.10→Desktop 연결불가→<b>v0.4.11 핫픽스</b>(MCPB entry_point=import 가능한 <code>dist/mcpb-entry.js</code>). 실설치 검증 완료. 설계: <code>docs/architecture/mcp-native-tool-surface.md</code> · DD-010.</li>
-  <li><b>완료 — opt-in per-stage judge LLM config</b>(PR #62): rubber-stamp residual의 근본 레버. judge가 의미저자와 다른 effort/model로 선택 실행(미설정 시 상속=회귀0); judgeModel은 author provider에서 해소·벤치-검증(INV-MODEL-1, model-provider 키)+같은-provider만 채택, 아니면 degrade. 노출=Core API·벤치 하니스·MCP <code>onto_reconstruct</code>. 4중 교차검증(ultracode×2·onto·Codex) 수렴.</li>
-  <li><b>완료 — claude reconstruct 라우트</b>(PR #59): anthropic+oauth reconstruct를 네이티브 <code>callClaudeCli</code> 워커로 — <code>resolveClaudeBin</code>(per-user 바이너리·호스트 최소 PATH 대응) + <code>claude-opus-4-8</code> 등록(라이브 full 완주로 INV-MODEL-1 충족). 3중 리뷰(ultracode·onto·Codex) 수렴.</li>
-  <li><b>완료 — document 관찰 절단 제거 = large-input Stage 0</b>(PR #65): reconstruct 관찰 <code>content_excerpt</code> 예산을 kind-aware로 — text-readable document(.md/.txt/.adoc) 전체 캡처(200K ceiling), <b>seed-authoring 프롬프트 + 단일 document 관찰</b>일 때만 전체 투영(post-seed 집계·다중문서·바이너리는 bound 유지). 라이브 A/B: 완주 1/3→1/1·문서 후반(목표·마일스톤) seed 유입. <b>Codex 4라운드 수렴</b>(다중문서 블로업·바이너리 쓰레기·resume provenance·E2E evidence 무결성). 진단: 절단은 윈도 한계가 아니라 self-inflicted(12.5K자≈3K토큰). 설계: <code>development-records/design/20260616-large-input-observation-design.md</code>.</li>
-  <li><b>완료 — large-input Stage 1′ = 모델-윈도 파생 단일문서 투영 예산</b>(PR #84): 단일 text 문서 관찰의 <i>투영</i> 예산을 활성 모델 context window에서 파생(<code>deriveDocumentExcerptProjectionBudget</code> = clamp(window·fraction − overhead, FLOOR 200K, CEILING))·캡처 ceiling과 분리. <code>supported-models.yaml</code>에 <code>context_window_tokens</code>+provenance 신설(G4 보호·opus 1M·gpt-5.5 1.05M). 라이브 A/B(normal+CJK-밀집 211K자) 둘 다 done-when PASS — 통째 투영·말미 사실 seed 유입. <b>Codex 3라운드</b>(투영시점 탐지·resume 재사용·redaction) 수렴. overflow tail 회복은 Stage 2. 설계: <code>development-records/design/20260616-large-input-stage1-design.md</code>(v5).</li>
-  <li><b>완료 — rejected purpose-candidate adequacy-frame 검증 견고성</b>(PR #85): rejected 후보가 빈 <code>required_elements</code>를 남겨도 ~40분 런이 abort되던 버그 제거 — 검증기 rank-aware(rejected는 빈 배열만 면제·식별필드/형식검증 유지), full frame header(frame_kind·frame_status·material_kind_requirements)는 <b>전 rank 강제</b>(디스크/재사용 경로엔 스키마 게이트 없음 → 검증기가 유일 권위). prompt·mapper·validator 3면 계약 일치. <b>Codex 3라운드</b> 동근(同根) 수렴. 후속 PR #86: 라이브 e2e external-doc sentinel 게이팅. 설계: <code>development-records/design/20260617-purpose-candidates-rejected-frame-validation-fix-design.md</code>.</li>
-  <li><b>완료 — effort-calibration 단순화 S1 = telemetry-도출 통일 route identity</b>(PR #88): P4a 리포트 빌더의 declared-vs-applied 긴 꼬리를 구조적으로 해소 — declared <code>--route</code>를 불신하고 witnessed telemetry에서 <code>RouteIdentity</code> 도출(기존 model-switcher 타입 projection; <code>route_provenance</code>/<code>route_completeness</code>만 신규 어휘). S1.1 witness(reconstruct telemetry에 adapter+model_provider 영속, anthropic-SDK↔Claude-Code-OAuth 분리) → S1.2 harness surface → S1.3 CLI consumer(<code>--route</code>=비차단 hint·route_completeness 게이트(Q3)·구조화 route_identity 기록 <code>schema_version 1→2</code>). <b>Codex 6라운드 수렴</b>(per-route profile 健全성: base_url 그룹핑·retained-샘플 증거·judge 유닛 route·derived provider fail-loud·충돌없는 파일명·소스 NUL 제거; push-back 2건 수용). 설계: <code>development-records/design/20260617-effort-calibration-simplification-telemetry-derived-design.md</code>(v3).</li>
-  <li><b>완료 — reconstruct 파이프라인 안정화 #1–#10 + v0.4.12 릴리스</b>(PR #80·#81·#82 외): CI 라이브 merge 게이트·원자 쓰기·LLM 경계 하드닝·validator 음성 테스트·perf(레지스트리 1회 스레딩·hot validator 인덱싱). 신규 기능 전 4축 안정화 진단(ultracode) 백로그를 hot부터 소진 — 행위 불변·회귀 0.</li>
-  <li><b>tracked follow-up</b>: judge rubber-stamp — 레버는 구현됨, 그러나 의미적 독립성은 측정 불가이고 <b>다른/강한 모델로 실제 사용 + live 벤치마크</b>(실 LLM convergent, 비용)로만 효과 관찰 — <code>development-records/tracking/20260406-discovered-enhancements.md</code> §7.</li>
-  <li><b>후속 결정 후보</b>: <b>effort-calibration P4b 라이브 sweep</b>(유료·별도 트랙: 벤치 하니스를 <code>--realization live</code>로 effort grid 돌려 → <code>calibration:effort:report</code>로 실 multi-effort <code>effort_profile</code>; 결정급 INV-BENCH-1 runs≥3·fixtures≥2 — <b>본 환경 제약</b>: gpt-5.5는 codex_cli OAuth, opus는 <code>ONTO_CLAUDE_BIN</code> 필요, SDK 키 없음) · <b>large-input Stage 2</b>(다문서 breadth 경량 inventory + purpose-결정 선택 + 비용 캐스케이드 + intra-document 섹션 분해[<code>source_ref+location</code> 앵커] + 진짜 윈도초과 tail 회복; RLM 개념 차용) · MCP Phase 2(원격/웹 Streamable HTTP+OAuth) · evolve 트랙 활성화 · reconstruct spreadsheet/database 어댑터(별도 트랙) · reconstruct effort 상수 settings 이관(G2 waiver).</li>
+  <li><b>reconstruct 게이트 카탈로그 실배선 (G-track / INV-OBLIGATION-COVERAGE-1)</b> — #100~#143: validator obligation을 registry에 실 등록하고 obligation-coverage 동적 증명 + ratchet 신설, G(b)/G(c) prompt-projection·final-output parity(INV-SCHEMA-1). declared≠wired 슬라이스를 hot부터 소진.</li>
+  <li><b>spreadsheet reconstruct 활성화 (C-recon · C-review)</b> — #92·#93·#98·#105·#135·#141: 게이트 활성화 + bounded 프롬프트 투영, honesty/provenance 게이트(P6), per-column cardinality·list enum(design-C), formula-pattern dedup, P0.5 header escalation, meaning-aware review(per-ref disposition SSOT). PII/masking 축 제거(#94·#95).</li>
+  <li><b>comprehension-reduce (Layer-1) + leaf-read/value-tile</b> — deterministic core(union monoid + contiguity gate), value-tile sidecar 첫 production wiring, leaf-read subsystem(capture + structure trigger + capped census), llm-touch dependency-discovery.</li>
+  <li><b>Layer-2 accumulated semantic channel + semantic-map authoring</b> — S1~S4(누적 채널→over-context frontier gate→honest seed projection) + W1~W5 실 LLM production wiring + 실 LLM cut(production capability·run harness). <code>semantic_map_authoring</code> opt-in 관찰 ON(#167).</li>
+  <li><b>maturation / silent-defect / answer-support</b> — maturation value-read real raw-cell-read(Stage 2), Defect-1 leaf-read wiring, Defect-2 seed-readiness deadlock, Defect-3 answer-support unblock(source-safety 4-basis), CQ-assessment batch budget fix, silent-defect A track + M1~M4 conservation.</li>
+  <li><b>graceful-terminal (Slice 3, sites 1~6)</b> — GracefulTerminalSignal·terminal_disposition, reachability manifest v2(witness-based skip_kind), zero-observation·un-observable frontier ref·잔여 batch 차단. graceful-signal-rethrow 게이트 신설.</li>
+  <li><b>INV-MODEL-1 role-aware model registry (B1~B3)</b> — supported-model role 스키마, 단일 dispatch resolver + role-aware 게이트, synthesize seat + opt-in 소스층 재구조화.</li>
+  <li><b>resubmit(설계 A) + dispatch breaker(설계 B)</b> — issue-stance evidence_ref bounded resubmit(#162), reconstruct dispatch limit/transport breaker(#166), review lens·stance 풀 breaker(#168), stance halt progress-step 수정(#171). 각 8-lens 적대 리뷰 반영 + retry 정규화 드랍 수정 3건.</li>
+  <li><b>review Stage 1/2 + fail-loud + infra</b> — window-proportional review budget(#153), per-obligation shardability gate(#151), unknown ReviewUnitKind fail-loud(#129), onto register --all-claude-profiles(#154), onto watch live HUD(#99).</li>
 </ul>
 
-<h2>변경 영향 읽는 법</h2>
+<!-- ───────── 정정된 사실 / 변경 영향 ───────── -->
+<h2>정정된 사실 (재검증 완료) · 변경 영향 읽는 법</h2>
 <ul>
-  <li>보호 표면(settings 키·material 정의·auth 정규화·waiver 표)을 건드리면 <code>INVARIANT-CHANGE: &lt;INV-ID&gt;</code> 마커 + 사용자 확인이 필요하다(G4·AGENTS §0-2).</li>
-  <li>구조 서술은 repo-layout SSOT 한 곳만 고치면 된다(AGENTS·CLAUDE·development.md는 포인터).</li>
+  <li><b>정정:</b> ledger 강등 마커(<code>resolution:"demoted"</code>)는 <b>이미 배선·소비 중</b>이다(<code>demotedStanceUnitIdsFromMatrix</code> → matrix <code>missing_stances</code> 읽어 ledger에 기록, frontier가 소비). §4-3은 fail-loud 착지(2026-07-06)로 종결 — execution-result <i>추가 per-unit 마커</i>는 보류(진실원 단일 유지, 관찰 3회에서 matrix 유실·손상 사례 시 재검토).</li>
+  <li><b>정정:</b> per-unit model/effort <b>tiering 메커니즘은 완전 배선</b>됨 — 기본 정책 값만 미배포(§4-6 c).</li>
+  <li><b>정정:</b> dispatch-incomplete.yaml은 회복 계약값(재디스패치==미완료)이나 <b>자동 소비는 미배선</b>(§4-2). 실제 재디스패치는 continuation frontier 재계산(ledger 경로)이 도출한다.</li>
+  <li>보호 표면(settings 키·material 정의·auth 정규화·supported-models·waiver)을 건드리면 <code>INVARIANT-CHANGE: &lt;INV-ID&gt;</code> 마커 + 사용자 확인이 필요하다(G4). opt-in scalar 승격은 INV-CFG-1(설계 SSOT 명시 + cut 지시면 마커 인용으로 충분).</li>
+  <li>구조 서술은 repo-layout SSOT 한 곳만 고친다(AGENTS·CLAUDE·development.md는 포인터).</li>
   <li>벤치 수치는 decision gate를 통과한 것만 결론으로 쓴다 — PRELIMINARY는 예비 관찰.</li>
 </ul>
 
