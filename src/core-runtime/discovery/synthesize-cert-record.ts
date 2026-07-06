@@ -47,10 +47,15 @@ export const SYNTHESIZE_CERT_FLOORS = {
   minDecisivePerStratumArm: 5,
 } as const;
 
+/** Ids join into space-separated coordinate keys, so whitespace inside an id
+ * could alias distinct coordinates; honest ids are sha256-derived and never
+ * contain whitespace — reject at the schema (producer-lens LOW-8 hardening). */
+const IdSchema = z.string().min(1).regex(/^\S+$/, "id must not contain whitespace");
+
 const InputManifestEntrySchema = z
   .object({
-    fixture_id: z.string().min(1),
-    input_id: z.string().min(1),
+    fixture_id: IdSchema,
+    input_id: IdSchema,
     input_sha256: z.string().min(1),
     stratum: StratumSchema,
   })
@@ -61,8 +66,8 @@ const MetricVerdictSchema = z.enum(["pass", "fail", "not_judged"]);
 const JudgementRowSchema = z
   .object({
     row_id: z.string().min(1),
-    fixture_id: z.string().min(1),
-    input_id: z.string().min(1),
+    fixture_id: IdSchema,
+    input_id: IdSchema,
     input_sha256: z.string().min(1),
     rep: z.number().int().positive(),
     arm: z.enum(SYNTHESIZE_CERT_ARMS),
@@ -70,8 +75,18 @@ const JudgementRowSchema = z
     // Failure-plane separation (§6.3): the synthesize OUTPUT plane and the judge
     // EXECUTION plane are recorded independently so a failed candidate is a row,
     // never a silent drop (R8 — the legacy judge script's pre-judging drop is
-    // exactly what this contract forbids).
-    candidate_output_status: z.enum(["ok", "parse_fail", "structural_fail"]),
+    // exactly what this contract forbids). "not_run" = the synthesize call never
+    // produced output (transport loss / crash / resume) — an honestly
+    // representable, non-decisive loss like the judge-plane losses, NOT a
+    // §6.2-1 parse/structural failure (producer-lens HIGH-1: without it, every
+    // synthesize-plane loss forced either an unpassable record or the
+    // validator-invisible {ok, not_run} lie).
+    candidate_output_status: z.enum([
+      "ok",
+      "parse_fail",
+      "structural_fail",
+      "not_run",
+    ]),
     judge_status: z.enum(["ok", "judge_error", "timeout", "not_run"]),
     metrics: z
       .object({
@@ -79,6 +94,13 @@ const JudgementRowSchema = z
         boundary: MetricVerdictSchema,
       })
       .strict(),
+    // Optional honesty fields (producer-lens HIGH-1/MED-3): the sha of the
+    // synthesize output an "ok" status refers to (future hardening may require
+    // it), and how many attempts this coordinate consumed (re-runs overwrite
+    // the coordinate — duplicate rows are violations — so without this count
+    // the published judge_failure_rate is residual-only by construction).
+    output_sha256: z.string().min(1).optional(),
+    attempts: z.number().int().min(1).optional(),
     // negative arm only: which ORIGINAL manifest input this mutated input
     // derives from (mutation lineage, §6.3 / onto issue-014).
     source_input_id: z.string().min(1).optional(),
@@ -134,9 +156,29 @@ const DeclaredAggregatesSchema = z
         negative_control: ArmMetricMeansSchema,
       })
       .strict(),
-    // Honest co-publication (§6.2-6): judge failure attribution and the
+    // §6.2-1 promises 평균/표준편차/n and §6.2-5 makes 분산 a public field
+    // (spec-lens F1: with .strict(), omitting it would even FORBID publishing
+    // it). Bernoulli population std dev sqrt(m·(1-m)) — derivable, but the
+    // frozen contract wants it co-published; same null semantics as the mean.
+    metric_stddev: z
+      .object({
+        baseline: ArmMetricMeansSchema,
+        candidate: ArmMetricMeansSchema,
+        negative_control: ArmMetricMeansSchema,
+      })
+      .strict(),
+    // Honest co-publication (§6.2-6): judge failure rate AND its attribution
+    // (spec-lens F8 — a scalar rate alone attributes nothing), plus the
     // per-condition repetition matrix.
     judge_failure_rate: z.number().min(0).max(1),
+    judge_status_counts: z
+      .object({
+        ok: z.number().int().nonnegative(),
+        judge_error: z.number().int().nonnegative(),
+        timeout: z.number().int().nonnegative(),
+        not_run: z.number().int().nonnegative(),
+      })
+      .strict(),
     reps_matrix: z
       .array(
         z
@@ -161,8 +203,10 @@ const SynthesizeCertRecordSchema = z
     model: z.string().min(1),
     // Declared rep count per (input × arm) condition; the expected row-key
     // universe is DERIVED as manifest × declared_reps × arms (§6.3 — the
-    // producer-declared scalar `expected_judgements` is abolished).
-    declared_reps: z.number().int().min(1),
+    // producer-declared scalar `expected_judgements` is abolished). Capped so a
+    // hostile record cannot make the universe enumeration itself a DoS on the
+    // CI gate (laxness-lens F7); real benches run single-digit reps.
+    declared_reps: z.number().int().min(1).max(1000),
     // Per-arm prompt sha256 — kept per-arm so the "every arm ran the identical
     // prompt" clause (§6.2-4) is a falsifiable comparison, not a tautology.
     arm_prompt_sha256: z
@@ -172,10 +216,37 @@ const SynthesizeCertRecordSchema = z
         negative_control: z.string().min(1),
       })
       .strict(),
+    // Per-arm MODEL identity (producer-lens HIGH-2): the prompt sha proves the
+    // same prompt, but without this nothing records which model ran each arm —
+    // a baseline run on a weak model would make §6.2-5 (candidate >= baseline)
+    // unfalsifiable. The candidate cell must equal the record's top-level
+    // (provider, model) (recompute-checked); the baseline cell is a falsifiable
+    // declaration (§6.5 pins baseline = the current production model; a
+    // registry-pinning policy can harden this at B5 registration time).
+    arm_model: z
+      .object({
+        baseline: z
+          .object({ provider: z.string().min(1), model: z.string().min(1) })
+          .strict(),
+        candidate: z
+          .object({ provider: z.string().min(1), model: z.string().min(1) })
+          .strict(),
+        negative_control: z
+          .object({ provider: z.string().min(1), model: z.string().min(1) })
+          .strict(),
+      })
+      .strict(),
     negative_arm: NegativeArmSchema,
     // Frozen at ORIGINAL enumeration time (§6.3): re-runs/resumes stay bound to
-    // this universe — scope shrink surfaces as orphan rows or missing
-    // coordinates in the outer join below.
+    // this universe. The outer join below machine-checks the orphan-row and
+    // missing-coordinate directions ONLY — a CONSISTENT regeneration (manifest
+    // and rows shrunk together, floors still met) is not detectable from a
+    // single record; that residual binding is owned by the B4 harness plus R7
+    // human curation (spec-lens F3 — do not read this field as fully
+    // machine-enforced scope-freeze). NOTE for producers: input_id must be
+    // GLOBALLY unique across fixtures (namespace it, e.g. "<fixture>:<slice>")
+    // — per-row lookups key on bare input_id, stricter than §6.3's composite
+    // row key (fail-closed; spec-lens F5).
     input_manifest: z.array(InputManifestEntrySchema).min(1),
     judgement_rows: z.array(JudgementRowSchema),
     declared_aggregates: DeclaredAggregatesSchema,
@@ -209,6 +280,7 @@ export interface SynthesizeCertViolation {
     | "negative_metric_not_discriminating"
     | "negative_lineage"
     | "prompt_sha_mismatch"
+    | "arm_model_mismatch"
     | "input_sha_mismatch"
     | "negative_mutation_not_applied"
     | "metric_regression"
@@ -271,21 +343,20 @@ function stratumKey(stratum: SynthesizeCertStratum): string {
 function rowCoordinate(
   row: Pick<SynthesizeCertJudgementRow, "fixture_id" | "input_id" | "rep" | "arm">,
 ): string {
-  return `${row.fixture_id} ${row.input_id} ${row.rep} ${row.arm}`;
+  return `${row.fixture_id} ${row.input_id} ${row.rep} ${row.arm}`;
 }
 
-/** Pass-ratio mean over decisive rows for one arm+metric; null when the arm has
- * no decisive rows. Also reports decisive rows whose metric was left
- * `not_judged` (a judged-complete row must carry a verdict). */
+/** Pass-ratio mean over decisive rows for one arm+metric; null when the arm
+ * has no decisive rows. (A decisive row left `not_judged` is policed by its
+ * own dedicated check, not here.) */
 function metricMean(
   rows: SynthesizeCertJudgementRow[],
   metric: SynthesizeCertMetric,
-): { mean: number | null; notJudged: SynthesizeCertJudgementRow[] } {
+): number | null {
   const decisive = rows.filter(isDecisiveRow);
-  if (decisive.length === 0) return { mean: null, notJudged: [] };
-  const notJudged = decisive.filter((row) => row.metrics[metric] === "not_judged");
+  if (decisive.length === 0) return null;
   const passCount = decisive.filter((row) => row.metrics[metric] === "pass").length;
-  return { mean: passCount / decisive.length, notJudged };
+  return passCount / decisive.length;
 }
 
 function meansEqual(a: number | null, b: number | null): boolean {
@@ -313,6 +384,7 @@ export function validateSynthesizeCertRecord(
     string,
     (typeof record.input_manifest)[number]
   >();
+  const shaSeenByFixture = new Map<string, string>();
   for (const entry of record.input_manifest) {
     if (manifestByInputId.has(entry.input_id)) {
       violation(
@@ -322,6 +394,22 @@ export function validateSynthesizeCertRecord(
       );
     }
     manifestByInputId.set(entry.input_id, entry);
+    // Same content under two ids within one fixture is an input-count inflation
+    // path (laxness-lens F3: 1 real input × 2 ids × reps clears a stratum floor
+    // one input cannot). Intra-fixture duplicate content is near-certainly a
+    // harness bug; cross-fixture collisions stay legal (a shared slice can
+    // legitimately appear in two workbooks).
+    const shaKey = `${entry.fixture_id} ${entry.input_sha256}`;
+    const priorId = shaSeenByFixture.get(shaKey);
+    if (priorId !== undefined) {
+      violation(
+        "duplicate_manifest_input",
+        `fixture ${entry.fixture_id} lists the same input_sha256 under ids ${priorId} and ${entry.input_id}`,
+        entry.input_id,
+      );
+    } else {
+      shaSeenByFixture.set(shaKey, entry.input_id);
+    }
   }
   const fixtureIds = [...new Set(record.input_manifest.map((m) => m.fixture_id))];
   const manifestInputsByFixture = new Map<string, string[]>();
@@ -348,14 +436,14 @@ export function validateSynthesizeCertRecord(
   }
   const repsByFixtureArm = new Map<string, Set<number>>();
   for (const row of record.judgement_rows) {
-    const key = `${row.fixture_id} ${row.arm}`;
+    const key = `${row.fixture_id} ${row.arm}`;
     const reps = repsByFixtureArm.get(key) ?? new Set<number>();
     reps.add(row.rep);
     repsByFixtureArm.set(key, reps);
   }
   for (const fixtureId of fixtureIds) {
     for (const arm of SYNTHESIZE_CERT_ARMS) {
-      const reps = repsByFixtureArm.get(`${fixtureId} ${arm}`) ?? new Set();
+      const reps = repsByFixtureArm.get(`${fixtureId} ${arm}`) ?? new Set();
       if (reps.size < SYNTHESIZE_CERT_FLOORS.minRepsPerFixtureArm) {
         violation(
           "rep_floor",
@@ -366,7 +454,14 @@ export function validateSynthesizeCertRecord(
     }
   }
   for (const row of record.judgement_rows) {
-    if (row.arm !== "negative_control" && row.candidate_output_status !== "ok") {
+    // §6.2-1 zero-tolerance is scoped to parse/structural FAILURES on the
+    // certifying arms; "not_run" is a synthesize-plane LOSS (non-decisive,
+    // honestly representable — HIGH-1), bounded by the decisive floors.
+    if (
+      row.arm !== "negative_control" &&
+      (row.candidate_output_status === "parse_fail" ||
+        row.candidate_output_status === "structural_fail")
+    ) {
       violation(
         "output_status_not_ok",
         `${row.arm} row ${row.row_id} has candidate_output_status ${row.candidate_output_status}; §6.2-1 requires 0 parse/structural failures on baseline/candidate arms`,
@@ -422,7 +517,7 @@ export function validateSynthesizeCertRecord(
   }
   for (const coordinate of expected) {
     if (!seenCoordinates.has(coordinate)) {
-      const [fixtureId, inputId, rep, arm] = coordinate.split(" ");
+      const [fixtureId, inputId, rep, arm] = coordinate.split(" ");
       violation(
         "expected_row_missing",
         `expected coordinate (${fixtureId}, ${inputId}, rep ${rep}, ${arm}) has no row — silent drop`,
@@ -435,7 +530,7 @@ export function validateSynthesizeCertRecord(
   const decisiveByFixtureStratumArm = new Map<string, number>();
   for (const row of record.judgement_rows) {
     if (!isDecisiveRow(row)) continue;
-    const key = `${row.fixture_id} ${stratumKey(row.stratum)} ${row.arm}`;
+    const key = `${row.fixture_id} ${stratumKey(row.stratum)} ${row.arm}`;
     decisiveByFixtureStratumArm.set(
       key,
       (decisiveByFixtureStratumArm.get(key) ?? 0) + 1,
@@ -452,7 +547,7 @@ export function validateSynthesizeCertRecord(
       let fixtureMeetsFloor = true;
       for (const arm of SYNTHESIZE_CERT_ARMS) {
         const n =
-          decisiveByFixtureStratumArm.get(`${fixtureId} ${key} ${arm}`) ?? 0;
+          decisiveByFixtureStratumArm.get(`${fixtureId} ${key} ${arm}`) ?? 0;
         if (n < SYNTHESIZE_CERT_FLOORS.minDecisivePerStratumArm) {
           fixtureMeetsFloor = false;
           violation(
@@ -493,7 +588,7 @@ export function validateSynthesizeCertRecord(
     }
   }
   for (const metric of record.negative_arm.targeted_metrics) {
-    const { mean } = metricMean(negativeRows, metric);
+    const mean = metricMean(negativeRows, metric);
     if (mean !== null && mean >= 1.0) {
       violation(
         "negative_metric_not_discriminating",
@@ -502,35 +597,19 @@ export function validateSynthesizeCertRecord(
       );
     }
   }
-  const sourcesByFixtureRep = new Map<string, string[]>();
+  // Lineage identity (laxness-lens F1 ≡ spec-lens F4, independently converged):
+  // the expected universe already places every negative row on an ORIGINAL
+  // manifest input coordinate, so the only coherent lineage is
+  // source_input_id === input_id. The earlier per-(fixture, rep) multiset
+  // bijection admitted PERMUTED lineage — swapped slots let unmutated original
+  // content pass the slot-anchored mutation check with zero violations.
   for (const row of negativeRows) {
     if (!row.source_input_id) continue; // schema-enforced; guard for safety
-    if (!manifestByInputId.has(row.source_input_id)) {
+    if (row.source_input_id !== row.input_id) {
       violation(
         "negative_lineage",
-        `negative row ${row.row_id} cites source_input_id ${row.source_input_id} which is not in the manifest`,
+        `negative row ${row.row_id} cites source_input_id ${row.source_input_id} but sits on coordinate input ${row.input_id}; a negative row mutates its OWN coordinate input`,
         row.row_id,
-      );
-      continue;
-    }
-    const key = `${row.fixture_id} ${row.rep}`;
-    const bucket = sourcesByFixtureRep.get(key) ?? [];
-    bucket.push(row.source_input_id);
-    sourcesByFixtureRep.set(key, bucket);
-  }
-  for (const [key, sources] of sourcesByFixtureRep) {
-    const [fixtureId, rep] = key.split(" ");
-    const expectedSources = [...(manifestInputsByFixture.get(fixtureId ?? "") ?? [])]
-      .sort();
-    const actualSources = [...sources].sort();
-    if (
-      expectedSources.length !== actualSources.length ||
-      expectedSources.some((value, index) => value !== actualSources[index])
-    ) {
-      violation(
-        "negative_lineage",
-        `negative rows of fixture ${fixtureId} rep ${rep} do not map 1:1 onto the fixture's manifest inputs`,
-        fixtureId ?? null,
       );
     }
   }
@@ -544,14 +623,34 @@ export function validateSynthesizeCertRecord(
       null,
     );
   }
+  // arm_model internal consistency (HIGH-2): the candidate cell IS the model
+  // under certification — a divergence means the record certifies one model
+  // while its rows ran another.
+  if (
+    record.arm_model.candidate.provider !== record.provider ||
+    record.arm_model.candidate.model !== record.model
+  ) {
+    violation(
+      "arm_model_mismatch",
+      `arm_model.candidate is ${record.arm_model.candidate.provider}/${record.arm_model.candidate.model} but the record certifies ${record.provider}/${record.model}`,
+      null,
+    );
+  }
+  const allManifestShas = new Set(
+    record.input_manifest.map((entry) => entry.input_sha256),
+  );
   for (const row of record.judgement_rows) {
     const manifestEntry = manifestByInputId.get(row.input_id);
     if (!manifestEntry) continue; // reported as row_outside_manifest above
     if (row.arm === "negative_control") {
-      if (row.input_sha256 === manifestEntry.input_sha256) {
+      // N16 + laxness-lens F1: mutated content must differ not only from its
+      // OWN original but from EVERY manifest original — a negative sha equal to
+      // any manifest sha means unmutated original content was smuggled into
+      // the negative arm (e.g. a permuted/copy-paste harness bug).
+      if (allManifestShas.has(row.input_sha256)) {
         violation(
           "negative_mutation_not_applied",
-          `negative row ${row.row_id} input sha equals the original manifest sha — the declared mutation was not applied (N16)`,
+          `negative row ${row.row_id} input sha equals a manifest original sha — the declared mutation was not applied (N16)`,
           row.row_id,
         );
       }
@@ -582,8 +681,8 @@ export function validateSynthesizeCertRecord(
   const baselineRows = record.judgement_rows.filter((row) => row.arm === "baseline");
   const candidateRows = record.judgement_rows.filter((row) => row.arm === "candidate");
   for (const metric of SYNTHESIZE_CERT_METRICS) {
-    const baselineMean = metricMean(baselineRows, metric).mean;
-    const candidateMean = metricMean(candidateRows, metric).mean;
+    const baselineMean = metricMean(baselineRows, metric);
+    const candidateMean = metricMean(candidateRows, metric);
     if (
       baselineMean !== null &&
       candidateMean !== null &&
@@ -598,14 +697,16 @@ export function validateSynthesizeCertRecord(
   }
 
   // --- schema row: declared aggregates vs recompute ---------------------------
-  const armRows: Record<SynthesizeCertArm, SynthesizeCertJudgementRow[]> = {
-    baseline: baselineRows,
-    candidate: candidateRows,
-    negative_control: negativeRows,
-  };
+  // The recompute is the SAME exported helper the B4 harness must use to fill
+  // declared_aggregates (producer-lens LOW-7): the declared-vs-recomputed
+  // comparison then guards post-hoc row tampering, not logic divergence.
+  const computed = computeSynthesizeCertAggregates({
+    inputManifest: record.input_manifest,
+    judgementRows: record.judgement_rows,
+  });
   for (const arm of SYNTHESIZE_CERT_ARMS) {
     const declaredCount = record.declared_aggregates.decisive_row_count[arm];
-    const recomputedCount = armRows[arm].filter(isDecisiveRow).length;
+    const recomputedCount = computed.decisive_row_count[arm];
     if (declaredCount !== recomputedCount) {
       violation(
         "aggregate_mismatch",
@@ -615,7 +716,7 @@ export function validateSynthesizeCertRecord(
     }
     for (const metric of SYNTHESIZE_CERT_METRICS) {
       const declaredMean = record.declared_aggregates.metric_means[arm][metric];
-      const recomputedMean = metricMean(armRows[arm], metric).mean;
+      const recomputedMean = computed.metric_means[arm][metric];
       if (!meansEqual(declaredMean, recomputedMean)) {
         violation(
           "aggregate_mismatch",
@@ -623,45 +724,72 @@ export function validateSynthesizeCertRecord(
           arm,
         );
       }
-    }
-  }
-  const totalRows = record.judgement_rows.length;
-  const judgeFailures = record.judgement_rows.filter(
-    (row) => row.judge_status !== "ok",
-  ).length;
-  const recomputedFailureRate = totalRows === 0 ? 0 : judgeFailures / totalRows;
-  if (!meansEqual(record.declared_aggregates.judge_failure_rate, recomputedFailureRate)) {
-    violation(
-      "aggregate_mismatch",
-      `declared judge_failure_rate=${record.declared_aggregates.judge_failure_rate} but rows recompute to ${recomputedFailureRate}`,
-      null,
-    );
-  }
-  const declaredRepsMatrix = new Map(
-    record.declared_aggregates.reps_matrix.map((cell) => [
-      `${cell.fixture_id} ${cell.arm}`,
-      cell.distinct_reps,
-    ]),
-  );
-  const expectedRepsKeys = new Set<string>();
-  for (const fixtureId of fixtureIds) {
-    for (const arm of SYNTHESIZE_CERT_ARMS) {
-      const key = `${fixtureId} ${arm}`;
-      expectedRepsKeys.add(key);
-      const declared = declaredRepsMatrix.get(key);
-      const recomputed = repsByFixtureArm.get(key)?.size ?? 0;
-      if (declared === undefined || declared !== recomputed) {
+      const declaredStddev =
+        record.declared_aggregates.metric_stddev[arm][metric];
+      const recomputedStddev = computed.metric_stddev[arm][metric];
+      if (!meansEqual(declaredStddev, recomputedStddev)) {
         violation(
           "aggregate_mismatch",
-          `reps_matrix cell (${fixtureId}, ${arm}) declared=${String(declared)} recomputed=${recomputed}`,
-          fixtureId,
+          `declared metric_stddev.${arm}.${metric}=${String(declaredStddev)} but rows recompute to ${String(recomputedStddev)}`,
+          arm,
         );
       }
     }
   }
+  if (
+    !meansEqual(
+      record.declared_aggregates.judge_failure_rate,
+      computed.judge_failure_rate,
+    )
+  ) {
+    violation(
+      "aggregate_mismatch",
+      `declared judge_failure_rate=${record.declared_aggregates.judge_failure_rate} but rows recompute to ${computed.judge_failure_rate}`,
+      null,
+    );
+  }
+  for (const status of ["ok", "judge_error", "timeout", "not_run"] as const) {
+    if (
+      record.declared_aggregates.judge_status_counts[status] !==
+        computed.judge_status_counts[status]
+    ) {
+      violation(
+        "aggregate_mismatch",
+        `declared judge_status_counts.${status}=${record.declared_aggregates.judge_status_counts[status]} but rows recompute to ${computed.judge_status_counts[status]}`,
+        status,
+      );
+    }
+  }
+  const declaredRepsMatrix = new Map<string, number>();
+  for (const cell of record.declared_aggregates.reps_matrix) {
+    const key = `${cell.fixture_id} ${cell.arm}`;
+    if (declaredRepsMatrix.has(key)) {
+      // Last-wins Map collapse would silently ignore a contradictory declared
+      // cell (laxness-lens F6) — duplicates are violations.
+      violation(
+        "aggregate_mismatch",
+        `reps_matrix declares cell (${cell.fixture_id}, ${cell.arm}) more than once`,
+        cell.fixture_id,
+      );
+    }
+    declaredRepsMatrix.set(key, cell.distinct_reps);
+  }
+  const expectedRepsKeys = new Set<string>();
+  for (const cell of computed.reps_matrix) {
+    const key = `${cell.fixture_id} ${cell.arm}`;
+    expectedRepsKeys.add(key);
+    const declared = declaredRepsMatrix.get(key);
+    if (declared === undefined || declared !== cell.distinct_reps) {
+      violation(
+        "aggregate_mismatch",
+        `reps_matrix cell (${cell.fixture_id}, ${cell.arm}) declared=${String(declared)} recomputed=${cell.distinct_reps}`,
+        cell.fixture_id,
+      );
+    }
+  }
   for (const key of declaredRepsMatrix.keys()) {
     if (!expectedRepsKeys.has(key)) {
-      const [fixtureId, arm] = key.split(" ");
+      const [fixtureId, arm] = key.split(" ");
       violation(
         "aggregate_mismatch",
         `reps_matrix cites (${fixtureId}, ${arm}) which is not a manifest fixture x arm cell`,
@@ -670,6 +798,143 @@ export function validateSynthesizeCertRecord(
     }
   }
 
+  return violations;
+}
+
+/**
+ * Recomputes the declared_aggregates block from the atomic rows + manifest —
+ * the single shared implementation (§6.3 parser-ownership): the B4 harness
+ * fills declared_aggregates by CALLING this, and the validator compares the
+ * record's declared block against the same computation, so the comparison can
+ * only fail on post-hoc tampering (or a harness that refused to use it).
+ */
+export function computeSynthesizeCertAggregates(args: {
+  inputManifest: SynthesizeCertRecord["input_manifest"];
+  judgementRows: SynthesizeCertJudgementRow[];
+}): SynthesizeCertRecord["declared_aggregates"] {
+  const armRows: Record<SynthesizeCertArm, SynthesizeCertJudgementRow[]> = {
+    baseline: [],
+    candidate: [],
+    negative_control: [],
+  };
+  for (const row of args.judgementRows) armRows[row.arm].push(row);
+  const decisiveRowCount = {
+    baseline: armRows.baseline.filter(isDecisiveRow).length,
+    candidate: armRows.candidate.filter(isDecisiveRow).length,
+    negative_control: armRows.negative_control.filter(isDecisiveRow).length,
+  };
+  const metricMeans = Object.fromEntries(
+    SYNTHESIZE_CERT_ARMS.map((arm) => [
+      arm,
+      Object.fromEntries(
+        SYNTHESIZE_CERT_METRICS.map((metric) => [
+          metric,
+          metricMean(armRows[arm], metric),
+        ]),
+      ),
+    ]),
+  ) as SynthesizeCertRecord["declared_aggregates"]["metric_means"];
+  // Bernoulli population std dev sqrt(m·(1-m)) — §6.2-1/§6.2-5 co-publication;
+  // null exactly when the mean is null.
+  const metricStddev = Object.fromEntries(
+    SYNTHESIZE_CERT_ARMS.map((arm) => [
+      arm,
+      Object.fromEntries(
+        SYNTHESIZE_CERT_METRICS.map((metric) => {
+          const mean = metricMeans[arm][metric];
+          return [metric, mean === null ? null : Math.sqrt(mean * (1 - mean))];
+        }),
+      ),
+    ]),
+  ) as SynthesizeCertRecord["declared_aggregates"]["metric_stddev"];
+  const totalRows = args.judgementRows.length;
+  const judgeStatusCounts = {
+    ok: 0,
+    judge_error: 0,
+    timeout: 0,
+    not_run: 0,
+  };
+  for (const row of args.judgementRows) judgeStatusCounts[row.judge_status] += 1;
+  const judgeFailures = totalRows - judgeStatusCounts.ok;
+  const fixtureIds = [
+    ...new Set(args.inputManifest.map((entry) => entry.fixture_id)),
+  ];
+  const repsByFixtureArm = new Map<string, Set<number>>();
+  for (const row of args.judgementRows) {
+    const key = `${row.fixture_id} ${row.arm}`;
+    const reps = repsByFixtureArm.get(key) ?? new Set<number>();
+    reps.add(row.rep);
+    repsByFixtureArm.set(key, reps);
+  }
+  const repsMatrix: SynthesizeCertRecord["declared_aggregates"]["reps_matrix"] =
+    [];
+  for (const fixtureId of fixtureIds) {
+    for (const arm of SYNTHESIZE_CERT_ARMS) {
+      repsMatrix.push({
+        fixture_id: fixtureId,
+        arm,
+        distinct_reps: repsByFixtureArm.get(`${fixtureId} ${arm}`)?.size ?? 0,
+      });
+    }
+  }
+  return {
+    decisive_row_count: decisiveRowCount,
+    metric_means: metricMeans,
+    metric_stddev: metricStddev,
+    judge_failure_rate: totalRows === 0 ? 0 : judgeFailures / totalRows,
+    judge_status_counts: judgeStatusCounts,
+    reps_matrix: repsMatrix,
+  };
+}
+
+/**
+ * Pre-spend manifest lint (producer-lens MED-6): predicts, from the manifest
+ * and declared rep count ALONE, whether the §6.4a decisive floors are even
+ * reachable — every possessed stratum needs inputs x reps >= the floor with
+ * zero losses, so a violation here means the bench WILL fail no matter how
+ * well the runs go. The B4 harness must run this before any paid call.
+ */
+export function synthesizeCertManifestFloorViolations(args: {
+  inputManifest: SynthesizeCertRecord["input_manifest"];
+  declaredReps: number;
+}): SynthesizeCertViolation[] {
+  const violations: SynthesizeCertViolation[] = [];
+  const fixtureIds = [
+    ...new Set(args.inputManifest.map((entry) => entry.fixture_id)),
+  ];
+  if (fixtureIds.length < SYNTHESIZE_CERT_FLOORS.minFixtures) {
+    violations.push({
+      code: "fixture_floor",
+      message:
+        `manifest has ${fixtureIds.length} distinct fixture(s); >= ${SYNTHESIZE_CERT_FLOORS.minFixtures} required`,
+      subject_id: null,
+    });
+  }
+  if (args.declaredReps < SYNTHESIZE_CERT_FLOORS.minRepsPerFixtureArm) {
+    violations.push({
+      code: "declared_reps_floor",
+      message:
+        `declared_reps ${args.declaredReps} is below the per-condition floor ${SYNTHESIZE_CERT_FLOORS.minRepsPerFixtureArm}`,
+      subject_id: null,
+    });
+  }
+  const inputsByFixtureStratum = new Map<string, number>();
+  for (const entry of args.inputManifest) {
+    const key = `${entry.fixture_id} seam=${entry.stratum.seam}|merge=${entry.stratum.merge}`;
+    inputsByFixtureStratum.set(key, (inputsByFixtureStratum.get(key) ?? 0) + 1);
+  }
+  for (const [key, inputCount] of inputsByFixtureStratum) {
+    const ceiling = inputCount * args.declaredReps;
+    if (ceiling < SYNTHESIZE_CERT_FLOORS.minDecisivePerStratumArm) {
+      const [fixtureId] = key.split(" ");
+      violations.push({
+        code: "stratum_coverage",
+        message:
+          `${key}: at most ${ceiling} decisive row(s) possible (inputs x reps) — below the floor ${SYNTHESIZE_CERT_FLOORS.minDecisivePerStratumArm}; add inputs or reps before spending`,
+        subject_id: fixtureId ?? null,
+      });
+    }
+  }
   return violations;
 }
 

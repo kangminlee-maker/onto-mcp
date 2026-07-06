@@ -43,7 +43,10 @@ import {
   loadSupportedModelRegistry,
 } from "../src/core-runtime/discovery/supported-models.js";
 import {
+  isSynthesizeCertCandidate,
+  parseSynthesizeCertRecord,
   synthesizeCertBindingViolations,
+  validateSynthesizeCertRecord,
 } from "../src/core-runtime/discovery/synthesize-cert-record.js";
 
 const PROJECT_ROOT = path.resolve(
@@ -112,6 +115,35 @@ async function assertEvidenceRefsTracked(
   }
 }
 
+/** The ONLY entries allowed to omit `roles` (grandfathered full-route
+ * allowance predating the role dimension — supported-models.ts documents the
+ * semantics). Frozen as a literal allowlist (laxness-lens F4, matching this
+ * repo's literal-allowlist precedent): without the freeze, a FUTURE entry
+ * could omit `roles` and both skip the synthesize-cert binding below AND be
+ * dispatchable at the synthesize seat via the grandfather semantics. */
+const GRANDFATHERED_ROLELESS_ENTRIES = new Set([
+  "openai/gpt-5.5",
+  "anthropic/claude-opus-4-8",
+]);
+
+function assertRolesDeclaredOutsideGrandfather(
+  registry: Awaited<ReturnType<typeof loadSupportedModelRegistry>>,
+): void {
+  const bad = registry.supported_models
+    .filter((entry) =>
+      entry.roles === undefined &&
+      !GRANDFATHERED_ROLELESS_ENTRIES.has(`${entry.provider}/${entry.model}`)
+    )
+    .map((entry) => `${entry.provider}/${entry.model}`);
+  if (bad.length > 0) {
+    throw new Error(
+      "entries outside the grandfathered set must declare roles (an absent " +
+        "roles key is a full-route allowance and would skip the role evidence " +
+        "contracts):\n" + bad.map((m) => `  - ${m}`).join("\n"),
+    );
+  }
+}
+
 /** B5 role↔record binding (design §11 · onto 20260705-7e0e5263 issue-001/003/006):
  * an entry listing the `semantic_map_synthesize` role must cite a
  * `synthesize-cert/v1` record that PARSES and RECOMPUTES to zero violations for
@@ -142,6 +174,22 @@ async function assertSynthesizeCertBinding(
         `${entry.provider}/${entry.model}: [${item.code}] ${item.message}`,
       );
     }
+    if (violations.length === 0) {
+      // Non-blocking honesty surfacing (laxness-lens S2): binding is an
+      // existential ("1개 이상" — design §13), so a co-cited FAILING cert
+      // record is tolerated; contradictory evidence should still be visible.
+      for (const [ref, raw] of evidenceByRef) {
+        if (!isSynthesizeCertCandidate(raw)) continue;
+        const { record } = parseSynthesizeCertRecord(raw);
+        const failing = record === null ||
+          validateSynthesizeCertRecord(record).length > 0;
+        if (failing) {
+          console.warn(
+            `[check:supported-models] WARN: ${entry.provider}/${entry.model} cites a FAILING synthesize-cert record at ${ref} alongside its binding record`,
+          );
+        }
+      }
+    }
   }
   if (bad.length > 0) {
     throw new Error(
@@ -155,6 +203,7 @@ async function main(): Promise<void> {
   const registry = loadSupportedModelRegistry();
   try {
     await assertEvidenceRefsTracked(registry);
+    assertRolesDeclaredOutsideGrandfather(registry);
     await assertSynthesizeCertBinding(registry);
   } catch (error) {
     console.error("[check:supported-models] FAIL");

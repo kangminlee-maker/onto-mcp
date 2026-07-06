@@ -300,3 +300,45 @@ owner 결정: B4(라이브 캡처·예산-캡) 승인 전에 **B5의 결정론 �
   하위호환) · full vitest **2481**(pass 2480+todo 1 · 이 cut 델타 정확히 +25 · 회귀 0).
   ※ 측정 정직 기록: 직전 사이트-7 런의 전수 카운트(2449/148)는 해당 1회 프로세스의 수집 이상으로
   판명 — 동일 내용이 현재 3회 측정(list/fg/bg) 일치로 2456/149이며 전부 green(누락 회귀 없음).
+
+### 13.1 B5-검증기 구현 교차검증 (2026-07-06 · 3-lens 적대 · 발견 전건 실코드 재검증 후 반영)
+
+3-lens(스펙-일치/관대함-공격/B4-생산자 관점) 병렬 적대 리뷰. **독립 수렴 2건**이 결정적:
+변이-lineage 순열 구멍(laxness-HIGH ≡ spec-F4)·id/identity 위생(3-lens 공통).
+
+**반영 완료 (코드):**
+- **[HIGH·수렴] lineage 순열 구멍**: multiset-bijection lineage가 슬롯 교환(무변이 원본 밀수)을
+  통과시킴 → `source_input_id === input_id` identity 강제 + negative sha ∉ 전체 manifest sha
+  (N16 강화). 순열 재현 테스트 추가(두 축 동시 발화 단언).
+- **[HIGH·producer] `candidate_output_status`에 `not_run` 추가**: synthesize-호출 유실의 정직
+  표현(비-결정·§6.2-1 0-관용은 parse/structural 실패 한정 유지). {ok, not_run} 거짓말 경로 봉쇄의
+  전제. 대조쌍 테스트.
+- **[HIGH·producer] `arm_model`(arm별 provider/model) 필수화**: baseline 모델 identity 없는
+  §6.2-5는 반증 불능 → candidate 칸=record 인증 대상 일치 재계산(`arm_model_mismatch`).
+- **[MED] grandfather 동결**(laxness-F4): roles-부재 엔트리는 리터럴 allowlist
+  {gpt-5.5, claude-opus-4-8} 밖이면 G7 FAIL(프로브로 발화 실증). 신규 엔트리는 roles 선언 필수.
+- **[MED] 스펙-약속 필드 충족**(spec-F1/F8): `metric_stddev`(Bernoulli sqrt(m(1-m))·§6.2-1/5)·
+  `judge_status_counts`(귀속·§6.2-6) — 헬퍼 계산+재계산 대조.
+- **[MED] intra-fixture 중복 content sha = 위반**(laxness-F3 축소판) · reps_matrix 중복 선언 셀
+  위반(F6) · declared_reps ≤1000 캡(F7 게이트-DoS) · id 공백 금지 + input_id 전역 유일 문서화
+  (spec-F5: 스펙 4-tuple보다 엄격 = fail-closed 방향·B4는 네임스페이싱 필수) · scope-shrink 주석
+  과대주장 교정(spec-F3: 일관-재생성 잔차는 in-record 검출 불가 — B4 하니스+R7 소유로 명시) ·
+  metricMean dead-return 제거(F10) · G7의 동거-실패 record 비차단 WARN(S2) · 미커버 3 코드 테스트
+  (fixture_floor·duplicate_manifest_input·stratum_row_mismatch — spec-F6).
+- 부수: 커밋 `3a92225`의 모듈 파일에서 NUL 바이트 15개 발견·수복(구분자 공백의 저장-시 치환 이상;
+  치환 일관으로 기능 무영향이었으나 grep-바이너리화). 세션 산출 파일 전수 스캔 = 해당 파일 한정.
+
+**owner 결정 대기 (스펙-갭 — 전부 B4 지출 전 결정 필요):**
+- **(A) 선택적 배제 무한계**(laxness-F2·HIGH·스펙-갭): 불리한 판정을 judge_error로 세탁해 생존자
+  평균만 계산하는 경로에 상한 없음(바닥 절대치 5·비례 아님). 후보: per-cell 결정률 바닥(예 0.8) 또는
+  judge_failure_rate 상한 — 증거계약 변경(INVARIANT-CHANGE: INV-MODEL-1).
+- **(B) 변별 임계 mean<1.0 약함**(laxness-S1): 자연 노이즈 1건이면 충족. 후보: 표적지표 negative
+  mean ≤ 0.8 또는 baseline−δ.
+- **(C) 변이 표현**(spec-F2 ≡ producer-MED-4): §6.2-3 예시(종류별→지표별)와 §6.3 단일 negative_arm
+  형이 내부 긴장 — 복합 단일 변이 승인 vs mutations[] 확장.
+- **(D) negative arm 전량 카디널리티 확인**(producer-MED-5): 스펙이 이미 고정(우주 공식) — 판정
+  비용 +50% 함의 확인만.
+- (후속·비긴급) prompt sha의 프로덕션 카탈로그 앵커(laxness-F5·CG-1 선례) = B5-완성(Haiku 등록) 시.
+
+**검증**: 36 테스트(+11)·tsc clean·check:supported-models 회귀 통과+양 프로브(cert-부재 FAIL·
+roleless FAIL) 발화 실증·full vitest **2492**(회귀 0).

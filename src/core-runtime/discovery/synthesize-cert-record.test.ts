@@ -6,9 +6,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  computeSynthesizeCertAggregates,
   isSynthesizeCertCandidate,
   parseSynthesizeCertRecord,
   synthesizeCertBindingViolations,
+  synthesizeCertManifestFloorViolations,
   SYNTHESIZE_CERT_ARMS,
   SYNTHESIZE_CERT_CONTRACT,
   validateSynthesizeCertRecord,
@@ -81,18 +83,6 @@ function makePassingRecord(): SynthesizeCertRecord {
       }
     }
   }
-  const perArmRowCount = manifest.length * declaredReps;
-  const repsMatrix: SynthesizeCertRecord["declared_aggregates"]["reps_matrix"] =
-    [];
-  for (const spec of specs) {
-    for (const arm of SYNTHESIZE_CERT_ARMS) {
-      repsMatrix.push({
-        fixture_id: spec.fixtureId,
-        arm,
-        distinct_reps: declaredReps,
-      });
-    }
-  }
   return {
     record_contract: SYNTHESIZE_CERT_CONTRACT,
     created_at: "2026-07-06T00:00:00.000Z",
@@ -104,6 +94,14 @@ function makePassingRecord(): SynthesizeCertRecord {
       candidate: "sha-prompt",
       negative_control: "sha-prompt",
     },
+    arm_model: {
+      baseline: { provider: "openai", model: "gpt-5.5" },
+      candidate: { provider: "anthropic", model: "claude-haiku-4-5-20251001" },
+      negative_control: {
+        provider: "anthropic",
+        model: "claude-haiku-4-5-20251001",
+      },
+    },
     negative_arm: {
       arm: "negative_control",
       mutation_kind: "label_shuffle",
@@ -112,20 +110,12 @@ function makePassingRecord(): SynthesizeCertRecord {
     },
     input_manifest: manifest,
     judgement_rows: rows,
-    declared_aggregates: {
-      decisive_row_count: {
-        baseline: perArmRowCount,
-        candidate: perArmRowCount,
-        negative_control: perArmRowCount,
-      },
-      metric_means: {
-        baseline: { grounding: 1, boundary: 1 },
-        candidate: { grounding: 1, boundary: 1 },
-        negative_control: { grounding: 0, boundary: 0 },
-      },
-      judge_failure_rate: 0,
-      reps_matrix: repsMatrix,
-    },
+    // Filled with the SAME shared helper the B4 harness must use (LOW-7); the
+    // aggregate_mismatch test below proves the comparison is still live.
+    declared_aggregates: computeSynthesizeCertAggregates({
+      inputManifest: manifest,
+      judgementRows: rows,
+    }),
     reproduction: {
       command: "npx tsx scripts/l2-real-llm-run.mts --bench synthesize-cert",
       source_paths: ["development-records/benchmark/fixtures/fx-1.xlsx"],
@@ -271,13 +261,95 @@ describe("synthesize-cert/v1 recompute (G7 — design §6.4/§6.4a)", () => {
     expect(codes(record)).toContain("negative_targets_incomplete");
   });
 
-  it("N10: negative lineage must map 1:1 onto the fixture's manifest inputs", () => {
+  it("N10: negative lineage must be the row's OWN coordinate input (identity)", () => {
     const record = makePassingRecord();
     const negativeRow = record.judgement_rows.find((row) =>
       row.arm === "negative_control" && row.fixture_id === "fx-1"
     )!;
     negativeRow.source_input_id = "fx-2-s0-i0";
     expect(codes(record)).toContain("negative_lineage");
+  });
+
+  it("laxness-F1: PERMUTED lineage (swapped slots carrying unmutated originals) is rejected on both axes", () => {
+    // Two negative rows of the same fixture+rep swap content: slot A carries
+    // B's ORIGINAL sha citing source B, slot B carries A's citing A. The old
+    // multiset-bijection lineage accepted this and the slot-anchored sha check
+    // saw "different sha = mutated". Both axes must now fire.
+    const record = makePassingRecord();
+    const rowA = record.judgement_rows.find((row) =>
+      row.arm === "negative_control" && row.input_id === "fx-1-s0-i0" && row.rep === 1
+    )!;
+    const rowB = record.judgement_rows.find((row) =>
+      row.arm === "negative_control" && row.input_id === "fx-1-s0-i1" && row.rep === 1
+    )!;
+    rowA.input_sha256 = "sha-fx-1-s0-i1"; // B's unmutated original
+    rowA.source_input_id = "fx-1-s0-i1";
+    rowB.input_sha256 = "sha-fx-1-s0-i0"; // A's unmutated original
+    rowB.source_input_id = "fx-1-s0-i0";
+    const result = codes(record);
+    expect(result).toContain("negative_lineage");
+    expect(result).toContain("negative_mutation_not_applied");
+  });
+
+  it("N10: manifest with a single fixture fails the fixture floor", () => {
+    const record = makePassingRecord();
+    record.input_manifest = record.input_manifest.filter((entry) =>
+      entry.fixture_id === "fx-1"
+    );
+    record.judgement_rows = record.judgement_rows.filter((row) =>
+      row.fixture_id === "fx-1"
+    );
+    expect(codes(record)).toContain("fixture_floor");
+  });
+
+  it("N10: duplicate manifest input ids and intra-fixture duplicate content are both violations", () => {
+    const record = makePassingRecord();
+    record.input_manifest.push({ ...record.input_manifest[0]! });
+    expect(codes(record)).toContain("duplicate_manifest_input");
+
+    const contentDup = makePassingRecord();
+    contentDup.input_manifest[1]!.input_sha256 =
+      contentDup.input_manifest[0]!.input_sha256;
+    expect(
+      validateSynthesizeCertRecord(contentDup).filter((v) =>
+        v.code === "duplicate_manifest_input"
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("N10: a row whose stratum disagrees with the manifest stratum is rejected", () => {
+    const record = makePassingRecord();
+    const row = record.judgement_rows.find((r) => r.arm === "baseline")!;
+    row.stratum = { seam: !row.stratum.seam, merge: row.stratum.merge };
+    expect(codes(record)).toContain("stratum_row_mismatch");
+  });
+
+  it("laxness-F6: a duplicated declared reps_matrix cell cannot hide behind last-wins", () => {
+    const record = makePassingRecord();
+    record.declared_aggregates.reps_matrix.unshift({
+      fixture_id: "fx-1",
+      arm: "baseline",
+      distinct_reps: 999,
+    });
+    expect(codes(record)).toContain("aggregate_mismatch");
+  });
+
+  it("laxness-F7: declared_reps beyond the cap is rejected at the schema (gate DoS)", () => {
+    const record = makePassingRecord();
+    const hostile = { ...clone(record), declared_reps: 1_000_000_000 };
+    const parsed = parseSynthesizeCertRecord(hostile);
+    expect(parsed.record).toBeNull();
+    expect(parsed.violations.map((v) => v.code)).toContain("schema_shape_invalid");
+  });
+
+  it("spec-F1/F8: tampered stddev or judge_status_counts fail the aggregate recompute", () => {
+    const record = makePassingRecord();
+    record.declared_aggregates.metric_stddev.candidate.grounding = 0.5;
+    expect(codes(record)).toContain("aggregate_mismatch");
+
+    const counts = makePassingRecord();
+    counts.declared_aggregates.judge_status_counts.judge_error = 7;
+    expect(codes(counts)).toContain("aggregate_mismatch");
   });
 
   it("N10: differing arm prompt shas break the equal-prompt clause", () => {
@@ -327,6 +399,41 @@ describe("synthesize-cert/v1 recompute (G7 — design §6.4/§6.4a)", () => {
     }
     record.declared_aggregates.metric_means.candidate.boundary = 0;
     expect(codes(record)).toContain("metric_regression");
+  });
+
+  it("HIGH-1: a synthesize-plane loss (not_run) is honestly representable and passes while floors hold", () => {
+    const record = makePassingRecord();
+    // One coordinate in a 6-headroom cell lost its synthesize call entirely.
+    const lostRow = record.judgement_rows.find((row) =>
+      row.fixture_id === "fx-1" && row.arm === "candidate" &&
+      row.stratum.seam && row.stratum.merge && row.rep === 1
+    )!;
+    lostRow.candidate_output_status = "not_run";
+    lostRow.judge_status = "not_run";
+    lostRow.metrics = { grounding: "not_judged", boundary: "not_judged" };
+    record.declared_aggregates = computeSynthesizeCertAggregates({
+      inputManifest: record.input_manifest,
+      judgementRows: record.judgement_rows,
+    });
+    expect(validateSynthesizeCertRecord(record)).toEqual([]);
+    // Contrast: the same loss recorded as parse_fail stays a violation
+    // (§6.2-1 zero-tolerance is for FAILURES, not losses).
+    lostRow.candidate_output_status = "parse_fail";
+    expect(codes(record)).toContain("output_status_not_ok");
+  });
+
+  it("HIGH-2: arm_model.candidate must equal the certified (provider, model)", () => {
+    const record = makePassingRecord();
+    record.arm_model.candidate = { provider: "openai", model: "gpt-5.5" };
+    expect(codes(record)).toContain("arm_model_mismatch");
+  });
+
+  it("LOW-8: whitespace inside ids is rejected at the schema (coordinate aliasing)", () => {
+    const record = makePassingRecord();
+    record.input_manifest[0]!.fixture_id = "fx 1";
+    const parsed = parseSynthesizeCertRecord(record);
+    expect(parsed.record).toBeNull();
+    expect(parsed.violations.map((v) => v.code)).toContain("schema_shape_invalid");
   });
 
   it("flags decisive rows whose metric verdict was left not_judged", () => {
@@ -401,6 +508,30 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
       evidenceByRef: new Map(),
     });
     expect(violations).toEqual([]);
+  });
+});
+
+describe("pre-spend manifest floor lint (MED-6)", () => {
+  it("passes the shaped manifest and predicts unreachable floors before any spend", () => {
+    const record = makePassingRecord();
+    expect(synthesizeCertManifestFloorViolations({
+      inputManifest: record.input_manifest,
+      declaredReps: record.declared_reps,
+    })).toEqual([]);
+    // A token single-input stratum caps at 3 decisive rows (< floor 5): the
+    // lint must predict the failure from the manifest alone.
+    const tokenManifest = record.input_manifest.filter((entry) =>
+      entry.fixture_id !== "fx-2" || entry.input_id === "fx-2-s0-i0"
+    );
+    const predicted = synthesizeCertManifestFloorViolations({
+      inputManifest: tokenManifest,
+      declaredReps: record.declared_reps,
+    });
+    expect(predicted.map((v) => v.code)).toContain("stratum_coverage");
+    expect(synthesizeCertManifestFloorViolations({
+      inputManifest: record.input_manifest,
+      declaredReps: 2,
+    }).map((v) => v.code)).toContain("declared_reps_floor");
   });
 });
 
