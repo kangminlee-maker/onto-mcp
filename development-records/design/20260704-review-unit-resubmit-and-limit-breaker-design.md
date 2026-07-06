@@ -3,6 +3,9 @@
 > 이 문서가 두 설계의 **SSOT**다. 배경 수치는 2026-07-04 세션 로그·리뷰 아티팩트 전수 실측에서 나왔고,
 > 재검증에 필요한 수치를 본 문서에 자체 수록한다 (외부 문서 의존 없음).
 > owner 결정(2026-07-04): 설계를 먼저 확정하고, 구현은 별도 cut으로 진행한다.
+> **[조정 2026-07-06]** 구현 cut 중 드러난 §8 정정([정정 2026-07-05]·[구현 발견 2026-07-05])을 본문
+> §3/§4/§6/§7에 in-place 반영해 본문↔§8 자기모순을 해소했다. §8 원문은 이력으로 보존.
+> (조정 근거: `development-records/handoff/20260705-design-ssot-reconciliation-start-here.md`.)
 
 ## 0. 목표·범위·완료조건
 
@@ -54,30 +57,54 @@ reconstruct semantic-map 판정 디스패치).
 
 ## 3. 설계 A — issue-stance evidence_ref bounded resubmit
 
-**현재 흐름**: `submit_issue_stance_response` 검증(`allowed_evidence_refs` 화이트리스트,
-`structured-output-tools.ts`)에서 unsupported ref 발견 → run 전체 halted_partial.
+**현재 흐름 (구현 cut 재확인, §8 [정정 2026-07-05])**: `submit_issue_stance_response` 검증은 per-issue
+`issue_evidence_refs` 화이트리스트(`structured-output-tools.ts`의
+`normalizeIssueStanceResponseSubmitArgs`)로 이뤄진다 — flat `allowed_evidence_refs`는 별개 도구
+`submit_issue_deliberation_response`(`normalizeIssueDeliberationResponseSubmitArgs`) 전용 필드다.
+unsupported ref 발견 시 worker 경로는 이 실패를 `output_contract`가 아니라 `executor_exit`로 분류하므로,
+**유닛당 blind 재시도(기본 2회, 총 3시도 — 기존 `issue_artifact_max_retries` 예산)가 이미 발생 중**이었다.
+즉 원 결함은 "재시도가 없다"가 아니라 "재시도는 있으나 오류 명세 없이 맹목적이고, 실패가 유닛이 아닌
+run 전체로 승격된다"는 것이다.
 
-**목표 흐름**:
+**목표 흐름** (신규 표면 = 오류 명세 주입 + 유닛 강등 + 상관 에스컬레이션; 새 retry cap 없음):
 
-1. 검증 실패 시 런타임은 실패한 유닛(`issue-stance:<lens>`)에만 **오류 명세를 포함한 bounded 재요청**을
-   보낸다: 어떤 stance의 어떤 ref가 왜 unsupported인지 + 허용 집합 요약. 원 출력 전문 재전송 없음.
-2. attempt cap = 유닛당 총 3회(원시도 1 + resubmit 2). 기존 attempt 어휘로 기록.
-3. cap 소진 → 그 유닛만 **complete-with-failure**: degradation-summary에 (unit, 사유, 시도수) 기록,
-   stance matrix에 해당 렌즈 결손 표기. 리뷰는 잔여 렌즈의 stance로 계속 진행하고 deliberation/synthesis
-   산출물에 결손을 **비차단 disclosure**로 공시한다(결손을 근거로 한 자동 차단 없음).
+1. 검증 실패 시 런타임은 실패한 유닛(`issue-stance:<lens>`)의 **다음 blind retry가 나가기 전에 그 재요청
+   packet에 오류 명세를 주입**한다: 어떤 stance의 어떤 ref가 왜 unsupported인지 + 허용 집합 요약. 원 출력
+   전문 재전송 없음. 새 재시도 루프를 추가하는 게 아니라 기존 재시도를 교정형으로 바꾸는 것이다
+   (`run-review-prompt-execution.ts`의 `applyStanceResubmitErrorSpec`, `output_format ===
+   "issue-stance-response"` 게이트). 오프토글은 신규 키 `review.execution.retry.resubmit.enabled` 1개.
+2. attempt 예산은 유닛당 총 3회(원시도 1 + blind retry 2)로 **기존** `issue_artifact_max_retries`(기본 2)
+   그대로다 — Design A는 이 예산에 새 cap을 얹지 않는다. 리뷰 측 시도 기록 어휘는 `attempt_count` +
+   선택적 `recovery`("salvaged_submit" | null)다(`review/artifact-types.ts`).
+3. 예산 소진 → 그 유닛만 **강등(demoted) complete-with-failure**: degradation-summary에 (unit, 사유,
+   `attempt_count`) 기록, stance matrix `validation.missing_stances`에 해당 렌즈 결손(`lens_id`, `reason`)
+   표기. 리뷰는 잔여 렌즈의 stance로 계속 진행하고 deliberation/synthesis 산출물에 결손을 **비차단
+   disclosure**로 공시한다(결손을 근거로 한 자동 차단 없음). 이 강등은 **durable ledger authority**를
+   갖는다: `review/pipeline-execution-ledger.ts`가 stance matrix의 `validation.missing_stances`를 읽어
+   해당 유닛의 `PipelineExecutionLedgerUnitEntry.resolution`을 `"demoted"`로 못박고(공유 정의는
+   `pipeline-execution-ledger.ts`), `isResolvedLedgerUnit` 술어로 이를 소비한다(§3.5).
 4. **상관 실패 에스컬레이션**: 동일 검증 실패 클래스가 stance 유닛 과반(>50%)에서 발생하면 구조 결함
    (프롬프트/스키마/컨텍스트 조립 결함)으로 분류하고 기존 halt 경로로 whole-run halt.
    `halt_reason = correlated_validation`.
 5. **resume 정합**: 유닛 단위 durable-state 재구성(`review-execution-steps.ts`의 `issue-stance:<lens>`
-   Stage 2 map packet)이 이미 존재하므로 resubmit은 그 위에 attempt만 쌓는다. 새 checkpoint 개념 불요.
+   Stage 2 map packet)이 이미 존재하므로 resubmit은 그 위에 packet 내용만 바꿔 쌓는다 — 새 checkpoint
+   개념은 불요했으나(§8 [구현 발견 2026-07-05]), 구현 중 미예견 소비자 1곳이 드러났다: post-lens
+   frontier 수렴 루프(`review-execution-steps.ts`)와 continuation frontier(`continuation-plan.ts`)가
+   강등 유닛을 "미완 작업"으로 재제안해 수렴이 막혔다. 해소로 3항의 terminal resolution 마커를
+   신설했고, 두 frontier 모두 `isResolvedLedgerUnit`으로 강등 유닛을 종결 취급한다(재다이스패치 없음).
 
 **확장 방침**: 실측상 1순위는 issue-stance(10/15). 동형 검증-거부 구조의 유닛(deliberation_response 등)을
 위해 resubmit 정책을 공유 함수로 추출하되, 이번 cut의 배선은 issue-stance 경로에 한정한다.
 
 ## 4. 설계 B — 디스패치 레이어 limit/transport 서킷브레이커
 
-**위치**: 워커 배치 공통 디스패치 지점. 구현 cut 시작 시 현재 HEAD에서 공통 표면을 확정하고, 공통 표면이
-없으면 두 루프(리뷰 디스패치 · reconstruct 판정 디스패치)에 동일 정책 모듈을 주입한다.
+**위치 (구현 완료, PR #168·#170)**: 공통 디스패치 표면은 구현 cut 착수 시 재확인 결과 불성립했다 —
+리뷰/reconstruct는 별개 루프·별개 retry 어휘·별개 settings 섹션이라 예정된 폴백대로 두 루프(리뷰
+lens·stance 디스패치 · reconstruct semantic-map 판정 디스패치)에 동일 정책 모듈(`llm/dispatch-breaker.ts`,
+공유 `DispatchBreakerSettingsSchema`)을 각각 배선했다(§8 [설계 B 재앵커링 2026-07-05]). 리뷰 측은 PR
+#168(feat/review-dispatch-breaker)로 lens·stance flat 풀에 cross-item aggregator로 배선됐고, PR
+#170(chore/enable-review-breaker-observation)으로 관찰 모드가 ON이다 — 아래 규칙은 더 이상 예정된
+설계가 아니라 배선된 현재 동작이다(잔여 이연 항목은 §8 참조).
 
 **규칙**:
 
@@ -107,22 +134,32 @@ reconstruct semantic-map 판정 디스패치).
 
 | 필요 개념 | 재사용 | 신설 |
 |---|---|---|
-| 유닛 재시도 기록 | attempt 어휘 (attempt_id/attempt_kind) | — |
-| 유닛 결손 공시 | degradation-summary.yaml | 항목 필드 소폭 확장 |
+| 유닛 재시도 기록 (리뷰) | `attempt_count` + 선택적 `recovery`("salvaged_submit"\|null) — `attempt_id/attempt_kind`는 reconstruct 전용 어휘, 리뷰는 재사용하지 않는다 (§8 [정정 2026-07-05]) | — |
+| resubmit cap | **기존** `issue_artifact_max_retries`(기본 2, 총 3시도) 그대로 재사용 — Design A는 새 cap을 얹지 않는다 | 오프토글 키 1개: `review.execution.retry.resubmit.enabled` |
+| 유닛 강등 durable 반영 | `PipelineExecutionLedgerUnitEntry`(status/trustStatus 등 기존 필드) | 신설 필드 `resolution: "demoted"` + `isResolvedLedgerUnit` 술어 — post-lens/continuation frontier가 강등 유닛을 미완료로 재제안하지 않게 함 (§8 [구현 발견 2026-07-05], §3.5) |
+| 유닛 결손 공시 | degradation-summary.yaml, stance matrix `validation.missing_stances` | 항목 필드 소폭 확장 |
 | 구조 결함 halt | halted_partial + halt_reason | halt_reason 값 1개: `correlated_validation` |
-| 유실 방지 | — | dead-letter/미완료 목록 아티팩트 1종 |
+| 유실 방지 | — | dead-letter/미완료 목록 아티팩트 1종 (`dispatch-incomplete.yaml`) |
 | provider fallback (후속 cut 이연, §4 규칙 4) | per-unit llm config (settings v3) | — |
-| breaker 임계·resubmit cap | settings 기본값 체계 | 키 2개 (기본 N=3, cap=3) |
+| breaker 임계 (설계 B) | settings 기본값 체계 | 키 1개 (기본 N=3, `per_call_max_attempts` 등과 별개 — 설계 B cut에서 추가, resubmit cap과 별도 authority) |
 
 ## 7. 완료조건 (falsifiable)
 
 설계 A:
-- **F-A1**: unsupported ref 1개를 내는 스텁 렌즈 픽스처 → 리뷰가 halt하지 않고, resubmit 요청에 오류
-  명세가 포함되며, cap 소진 시 degradation-summary 기록 + synthesis 결손 공시.
-  네거티브 컨트롤: 검증 통과 픽스처에서 resubmit 0회.
-- **F-A2**: stance 유닛 과반 동일 실패 픽스처 → whole-run halt, `halt_reason=correlated_validation`.
-- **F-A3**: 기존 halted 사례 아티팩트(예: 20260701-7d89385c) 리플레이 → 신규 경로에서 렌즈+ledger
-  재연산 없이 꼬리 단계만 진행.
+- **F-A1**: unsupported ref 1개를 내는 스텁 렌즈 픽스처 → 리뷰가 halt하지 않고
+  (`execution_status=completed_with_degradation`), 기존 blind retry(원시도 1 + resubmit 2 = 3, 기존
+  `issue_artifact_max_retries` 예산 그대로 — 새 cap 없음)의 재요청 packet에 오류 명세가 주입되며, 예산
+  소진 시 그 유닛이 강등(`status=failed`, `attempt_count=3`)되어 degradation-summary.failed_units에
+  (unit, 사유, `attempt_count`) 기록 + stance matrix `validation.missing_stances`에 결손(`lens_id`,
+  `reason`) 공시 + ledger 유닛 `resolution=demoted`로 종결(post-lens/continuation frontier가 미완료로
+  재제안하지 않음, `isResolvedLedgerUnit`). 네거티브 컨트롤: 검증 통과 픽스처에서 resubmit 0회(재요청
+  packet에 오류 명세 없음).
+- **F-A2**: stance 유닛 과반 동일 실패 픽스처 → whole-run halt, `halt_reason=correlated_validation`
+  (degradation-summary에도 동일 halt_reason 기록).
+- **F-A3**: OFF로 오늘 사고 형태(stance 꼬리에서 halted_partial)를 재현하는 합성 continuation 픽스처 →
+  resubmit ON으로 durable-state에서 재개한 실행이 렌즈·ledger 업스트림 유닛(lens 판정, finding-ledger,
+  finding-relation-graph, issue-ledger)을 재연산하지 않고 stance 꼬리만 재디스패치해 완결된다. 강등
+  유닛은 ledger `resolution=demoted`로 종결돼 frontier에 미완료로 재진입하지 않는다(§3.5 assert).
 설계 B:
 - **F-B1**: 모의 429 provider(전 아이템 계통 실패) → backoff 소진 후 N=3에서 halt, 미완료 목록 영속,
   총 디스패치 ≤ 성공분 + N + backoff 재시도분 (재시도 폭풍 부재를 수치로 assert).
@@ -234,3 +271,13 @@ reconstruct semantic-map 판정 디스패치).
   `validation.missing_stances` 공시 필드 하나다(ledger 빌더가 재독, 손상 시 swallow→빈 집합).
   검증 결과 matrix 쓰기는 원자적이고 A/B 오케스트레이션 상호배제로 현행 도달 경로는 안전하나,
   근본 강화(강등 마커를 execution-result per-unit 결과에 기록 + matrix 읽기 fail-loud)는 후속 cut.
+- **[조정 2026-07-06, 본문↔§8 정합 완료]** 교차 리뷰(FAIL, CONFIRMED 4건 —
+  `development-records/handoff/20260705-design-ssot-reconciliation-start-here.md`)가 지목한
+  본문 미반영을 §3(현재 흐름·목표 흐름·resume 정합)·§4(위치)·§6(concept economy 표)·§7(F-A1~A3)에
+  in-place 반영했다. 4건 각각 재확인한 실코드 근거: `issue_evidence_refs`/`allowed_evidence_refs`
+  분리(`structured-output-tools.ts` normalizeIssueStanceResponseSubmitArgs/
+  normalizeIssueDeliberationResponseSubmitArgs), `resubmit.enabled` 단일 키(settings-chain.ts
+  ReviewUnitResubmitSettingsSchema), `attempt_count`+`recovery`(review/artifact-types.ts),
+  ledger `resolution: "demoted"`+`isResolvedLedgerUnit`(pipeline-execution-ledger.ts
+  demotedStanceUnitIdsFromMatrix / review/pipeline-execution-ledger.ts). §4 시제는 PR #168 구현·
+  #170 관찰 ON 기준으로 현재형 전환. §8 정정 원문은 그대로 보존(이력).
