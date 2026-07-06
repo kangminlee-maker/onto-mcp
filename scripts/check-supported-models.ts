@@ -42,6 +42,12 @@ import {
   exactTrackedMode,
   loadSupportedModelRegistry,
 } from "../src/core-runtime/discovery/supported-models.js";
+import {
+  isSynthesizeCertCandidate,
+  parseSynthesizeCertRecord,
+  synthesizeCertBindingViolations,
+  validateSynthesizeCertRecord,
+} from "../src/core-runtime/discovery/synthesize-cert-record.js";
 
 const PROJECT_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -109,10 +115,105 @@ async function assertEvidenceRefsTracked(
   }
 }
 
+/** The ONLY entries allowed to omit `roles` (grandfathered full-route
+ * allowance predating the role dimension — supported-models.ts documents the
+ * semantics). Frozen as a literal allowlist (laxness-lens F4, matching this
+ * repo's literal-allowlist precedent): without the freeze, a FUTURE entry
+ * could omit `roles` and both skip the synthesize-cert binding below AND be
+ * dispatchable at the synthesize seat via the grandfather semantics. */
+const GRANDFATHERED_ROLELESS_ENTRIES = new Set([
+  "openai/gpt-5.5",
+  "anthropic/claude-opus-4-8",
+]);
+
+function assertRolesDeclaredOutsideGrandfather(
+  registry: Awaited<ReturnType<typeof loadSupportedModelRegistry>>,
+): void {
+  const bad = registry.supported_models
+    .filter((entry) =>
+      entry.roles === undefined &&
+      !GRANDFATHERED_ROLELESS_ENTRIES.has(`${entry.provider}/${entry.model}`)
+    )
+    .map((entry) => `${entry.provider}/${entry.model}`);
+  if (bad.length > 0) {
+    throw new Error(
+      "entries outside the grandfathered set must declare roles (an absent " +
+        "roles key is a full-route allowance and would skip the role evidence " +
+        "contracts):\n" + bad.map((m) => `  - ${m}`).join("\n"),
+    );
+  }
+}
+
+/** B5 role↔record binding (design §11 · onto 20260705-7e0e5263 issue-001/003/006):
+ * an entry listing the `semantic_map_synthesize` role must cite a
+ * `synthesize-cert/v1` record that PARSES and RECOMPUTES to zero violations for
+ * this entry's (provider, model). The recompute itself lives in the shared
+ * core-runtime module (no G7-local parser — design §6.3); this function only
+ * does the repo I/O of reading the cited evidence files. */
+async function assertSynthesizeCertBinding(
+  registry: Awaited<ReturnType<typeof loadSupportedModelRegistry>>,
+): Promise<void> {
+  // Baseline-anchoring authority (owner decision ②): the set of certified
+  // supported models a cert record's baseline arm may claim to have run.
+  const supportedModelKeys = new Set(
+    registry.supported_models.map((e) => `${e.provider}/${e.model}`),
+  );
+  const bad: string[] = [];
+  for (const entry of registry.supported_models) {
+    if (!entry.roles?.includes("semantic_map_synthesize")) continue;
+    const evidenceByRef = new Map<string, unknown>();
+    for (const ref of entry.benchmark_evidence_refs) {
+      try {
+        evidenceByRef.set(
+          ref,
+          JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, ref), "utf8")),
+        );
+      } catch {
+        // Unreadable/non-JSON refs simply cannot serve as the cert record; the
+        // tracked-file check below already polices their existence separately.
+      }
+    }
+    const violations = synthesizeCertBindingViolations({
+      entry,
+      evidenceByRef,
+      supportedModelKeys,
+    });
+    for (const item of violations) {
+      bad.push(
+        `${entry.provider}/${entry.model}: [${item.code}] ${item.message}`,
+      );
+    }
+    if (violations.length === 0) {
+      // Non-blocking honesty surfacing (laxness-lens S2): binding is an
+      // existential ("1개 이상" — design §13), so a co-cited FAILING cert
+      // record is tolerated; contradictory evidence should still be visible.
+      for (const [ref, raw] of evidenceByRef) {
+        if (!isSynthesizeCertCandidate(raw)) continue;
+        const { record } = parseSynthesizeCertRecord(raw);
+        const failing = record === null ||
+          validateSynthesizeCertRecord(record).length > 0;
+        if (failing) {
+          console.warn(
+            `[check:supported-models] WARN: ${entry.provider}/${entry.model} cites a FAILING synthesize-cert record at ${ref} alongside its binding record`,
+          );
+        }
+      }
+    }
+  }
+  if (bad.length > 0) {
+    throw new Error(
+      "semantic_map_synthesize entries are not bound to a passing synthesize-cert/v1 record:\n" +
+        bad.map((m) => `  - ${m}`).join("\n"),
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const registry = loadSupportedModelRegistry();
   try {
     await assertEvidenceRefsTracked(registry);
+    assertRolesDeclaredOutsideGrandfather(registry);
+    await assertSynthesizeCertBinding(registry);
   } catch (error) {
     console.error("[check:supported-models] FAIL");
     console.error(`  ${error instanceof Error ? error.message : String(error)}`);

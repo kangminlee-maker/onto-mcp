@@ -275,3 +275,161 @@ resolveSettingsChain 산출 byte-동일)
 - **R8(신규)**: §6.3 원자 스키마는 기존 judge 스크립트가 실패 후보를 judging 전 드랍하는
   현행 행동과 다름 — B4 하니스는 실패도 row로 남기도록 신규 구현이어야 하며 기존 스크립트
   재사용 불가(비용 요인).
+
+---
+## 13. B5-검증기 선행 빌드 기록 (2026-07-06 · dated progress — B4 비용 승인 전 결정론 절반 선행)
+
+owner 결정: B4(라이브 캡처·예산-캡) 승인 전에 **B5의 결정론 절반 = §6.3 공유 파서 + §6.4/§6.4a
+재계산 검증기**를 먼저 짓는다(§6.5의 "B5-검증기 선행 순서도 유효" 경로).
+
+- `src/core-runtime/discovery/synthesize-cert-record.ts` — 단일 소유 모듈(§6.3 parser 소유 조항):
+  `synthesize-cert/v1` zod 스키마(원자 row·input_manifest·negative_arm·declared_aggregates·
+  reproduction) + `validateSynthesizeCertRecord`(§6.4 표 6행 + §6.4a per-fixture stratum 계약 +
+  scope-shrink=orphan-row 방향 outer-join) + `synthesizeCertBindingViolations`(role↔record 결속).
+- G7(check-supported-models.ts) 확장: `semantic_map_synthesize` role 엔트리는 인용 evidence 중
+  **파스+재계산 0-violation+(provider,model) 일치** record 1개 이상 필수 — onto 리뷰
+  `20260705-7e0e5263` 이연 issue-001/003/006 닫힘. 스크립트 분기 발화는 임시 변이 프로브로
+  실증(role 추가→FAIL 재현→원복).
+- 테스트 25종: 양성 대조(비-공허 단언) + N10 12축(좌표 누락·중복 row·manifest 축소·rep 부족·
+  stratum 결손·토큰 fixture-2·전역 stratum 바닥·표적지표 1.0·표적 미완비·lineage 1:1·prompt sha·
+  입력 sha·집계 불일치·output-status·회귀조항) + N16 + 결속 4종.
+- **B4 하니스 계약 고정 효과**: 하니스는 이 모듈이 파스·재계산 0-violation으로 통과시키는 record만
+  산출하면 되고(스키마-먼저), 실패 row 보존(R8)·negative 변이 실적용(N16)·전-arm 동일 프롬프트가
+  전부 기계 검증된다.
+- 검증: tsc clean · check:supported-models 통과(현 레지스트리 role 엔트리 0 = 결속 no-op·
+  하위호환) · full vitest **2481**(pass 2480+todo 1 · 이 cut 델타 정확히 +25 · 회귀 0).
+  ※ 측정 정직 기록: 직전 사이트-7 런의 전수 카운트(2449/148)는 해당 1회 프로세스의 수집 이상으로
+  판명 — 동일 내용이 현재 3회 측정(list/fg/bg) 일치로 2456/149이며 전부 green(누락 회귀 없음).
+
+### 13.1 B5-검증기 구현 교차검증 (2026-07-06 · 3-lens 적대 · 발견 전건 실코드 재검증 후 반영)
+
+3-lens(스펙-일치/관대함-공격/B4-생산자 관점) 병렬 적대 리뷰. **독립 수렴 2건**이 결정적:
+변이-lineage 순열 구멍(laxness-HIGH ≡ spec-F4)·id/identity 위생(3-lens 공통).
+
+**반영 완료 (코드):**
+- **[HIGH·수렴] lineage 순열 구멍**: multiset-bijection lineage가 슬롯 교환(무변이 원본 밀수)을
+  통과시킴 → `source_input_id === input_id` identity 강제 + negative sha ∉ 전체 manifest sha
+  (N16 강화). 순열 재현 테스트 추가(두 축 동시 발화 단언).
+- **[HIGH·producer] `candidate_output_status`에 `not_run` 추가**: synthesize-호출 유실의 정직
+  표현(비-결정·§6.2-1 0-관용은 parse/structural 실패 한정 유지). {ok, not_run} 거짓말 경로 봉쇄의
+  전제. 대조쌍 테스트.
+- **[HIGH·producer] `arm_model`(arm별 provider/model) 필수화**: baseline 모델 identity 없는
+  §6.2-5는 반증 불능 → candidate 칸=record 인증 대상 일치 재계산(`arm_model_mismatch`).
+- **[MED] grandfather 동결**(laxness-F4): roles-부재 엔트리는 리터럴 allowlist
+  {gpt-5.5, claude-opus-4-8} 밖이면 G7 FAIL(프로브로 발화 실증). 신규 엔트리는 roles 선언 필수.
+- **[MED] 스펙-약속 필드 충족**(spec-F1/F8): `metric_stddev`(Bernoulli sqrt(m(1-m))·§6.2-1/5)·
+  `judge_status_counts`(귀속·§6.2-6) — 헬퍼 계산+재계산 대조.
+- **[MED] intra-fixture 중복 content sha = 위반**(laxness-F3 축소판) · reps_matrix 중복 선언 셀
+  위반(F6) · declared_reps ≤1000 캡(F7 게이트-DoS) · id 공백 금지 + input_id 전역 유일 문서화
+  (spec-F5: 스펙 4-tuple보다 엄격 = fail-closed 방향·B4는 네임스페이싱 필수) · scope-shrink 주석
+  과대주장 교정(spec-F3: 일관-재생성 잔차는 in-record 검출 불가 — B4 하니스+R7 소유로 명시) ·
+  metricMean dead-return 제거(F10) · G7의 동거-실패 record 비차단 WARN(S2) · 미커버 3 코드 테스트
+  (fixture_floor·duplicate_manifest_input·stratum_row_mismatch — spec-F6).
+- 부수: 커밋 `3a92225`의 모듈 파일에서 NUL 바이트 15개 발견·수복(구분자 공백의 저장-시 치환 이상;
+  치환 일관으로 기능 무영향이었으나 grep-바이너리화). 세션 산출 파일 전수 스캔 = 해당 파일 한정.
+
+**owner 결정 확정 (2026-07-06 · 스펙-갭 4건 — 증거계약 확정):**
+- **(A) 선택적 배제 상한 = 셀별 결정률 바닥 0.8** (owner 승인·구현 완료): 각 (fixture×보유-stratum
+  ×arm) 셀에서 `decisive/total ≥ 0.8`. `SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio=0.8`·신규
+  violation `decisiveness_ratio`. 절대 바닥 5는 유지(둘 다 강제). 세탁 단위(셀별 생존자 선별)를
+  직접 봉쇄·정직 judge 장애 20%까지 허용. INVARIANT-CHANGE: INV-MODEL-1(B6서 마커).
+- **(B) 변별 임계 = 상대 임계 baseline−δ** (owner 변경 결정: 절대 ≤0.8 후보 → **상대** 채택):
+  표적지표 `negative_mean < baseline_mean − 0.15`. `SYNTHESIZE_CERT_DISCRIMINATION_DELTA=0.15`.
+  "변이가 지표를 실제로 **떨어뜨림**"을 baseline 대비로 요구 → baseline이 낮은 지표에서도 의미 유지·
+  고무도장 judge(자연 노이즈 1건) 차단. baseline_mean null이면 이미 stratum floor로 invalid → 검사 abstain.
+- **(C) 변이 표현 = 복합 단일 변이 승인** (owner 승인·코드 변경 0): §6.3 단일 `negative_arm` 형 유지.
+  하나의 복합 결정론 변환이 두 표적지표를 동시에 손상. 지표별 귀속은 포기하나 게이트 목적(지표별
+  "떨어질 수 있음" 입증 — `negative_targets_incomplete` + 지표별 상대 임계 유지)에는 충분. §6.2-3↔§6.3
+  내부 긴장은 "복합 변이가 두 지표를 깬다"로 해소. B4 변이 설계 = 복합 변환 1개(예: 라벨 셔플 +
+  경계 왜곡 합성).
+- **(D) negative arm 전량 카디널리티 = 수용** (owner 승인): 스펙 우주 공식(manifest×reps×3 arm)
+  그대로. 판정 비용 +50%·최소 유니버스 ≈90 row를 B4 예산에 반영. 변별 증거가 전 계층서 확보됨.
+- (후속·비긴급) prompt sha의 프로덕션 카탈로그 앵커(laxness-F5·CG-1 선례) = B5-완성(Haiku 등록) 시.
+
+**검증**: 38 테스트(+13·(A)/(B) 신규 falsifiable 쌍 포함)·tsc clean·check:supported-models 회귀
+통과+양 프로브(cert-부재 FAIL·roleless FAIL) 발화 실증·full vitest 회귀 0.
+
+### 13.2 B5 owner-결정 델타 교차검증 (2026-07-06 · ultracode + onto 병행 · 상보 발산)
+
+owner 결정 반영분(§13.1 A/B, 커밋 860837a)에 대해 두 패밀리 병행 적대 교차검증
+([[design-validation-ultracode-onto]]). **독립 수렴 대신 상보 발산 → union이 각각보다 강함.**
+- **ultracode** `wf_5b8232f0-5ec`(3 lens correctness/laxness/interaction·10 agent·7 confirmed).
+- **onto full** `20260706-7dd839f4`(halted_partial — issue-stance codex 인프라 halt이나 issue-ledger
+  완성·4 issue[1 high·1 med·2 info]). 전역 MCP v0.4.12가 신규 settings 스키마 미파싱 → repo 하니스
+  (`createOntoReviewCoreApi().runReview`)로 직접 실행(우회 기록: review-invoke.ts diffTargetDir가
+  파일-target+diffRange서 ENOTDIR — 별도 버그, target=디렉토리로 우회).
+
+**실 결함 3건 (전부 실코드 CONFIRMED) + 반박 1:**
+- **① [ultracode·3 lens 내부수렴·CONFIRMED] 상대 임계의 unsatisfiable region**: baseline ≤ δ(0.15)면
+  threshold ≤ 0 → 완벽 변별(negative 0)도 위반. 정직 약-baseline 지표 인증 불가(over-block·안전방향,
+  false-negative 아님). §13.1(B) 취지("낮은 지표서도 의미")와 정면 모순. **내 (B) 산술 결함.**
+- **② [onto issue-003/004 HIGH/MED·실코드 CONFIRMED] candidate 품질 바닥 부재**: 직접 공격 record
+  (baseline 0.5·candidate 0.5·negative 0.25)가 0-violation 통과 — 저품질 Haiku가 baseline 동반 하락 시
+  인증. candidate≥baseline(§6.2-5) + candidate 절대 바닥 부재. B5 전체 기존 갭(절대 시절도 통과·3-lens
+  미포착·onto 신규). "baseline이 신뢰 기준"이라는 전제 미강제.
+- **③ [ultracode MED/LOW·CONFIRMED] (A) selection-blind + not_run 커플링**: 셀당 20% worst 배제 여지
+  (RATE는 막으나 SELECTION blind) + not_run(synthesize 정직 유실)이 ratio self-trip.
+- **★반박 [ultracode·CONFIRMED]**: 내가 최고우려로 지시한 "baseline 낮춰 rubber-stamp negative 통과"는
+  **성립 안 함** — baseline 낮추면 negative threshold도 낮아져 negative 통과 **더 어려움**. negative는
+  baseline suppression에 강건. onto issue-003의 "negative" 프레이밍 부정확·결론(② candidate)은 정확.
+
+**owner 결정 확정(2026-07-06) + 구현:**
+- **① = 절대 fallback**: `baseline ≤ δ → threshold = 1.0`(negative < 1.0·최소 1건 실패 요구). 정직
+  약-baseline 차단 해소·저-baseline서도 최소 변별 유지. falsifiable 쌍(baseline 0.1+negative 0 통과 /
+  negative 1.0 위반).
+- **② = baseline 앵커링**: G7이 `arm_model.baseline`이 supported-models 등록 모델인지 결정론 확인
+  (신규 violation `baseline_not_supported`). **결정론 경계 정직**: "미등록 약체 baseline"은 차단하나
+  "gpt-5.5 선언 + 성능 위조"(공격 record가 arm_model.baseline=gpt-5.5 선언)는 **R7 사람 큐레이션**
+  (gpt-5.5가 grounding 0.5일 리 없음=사람이 감지). candidate 절대 성능 임계는 미도입(domain-agnostic
+  [[domain-agnostic-no-static-enums]]).
+- **③ = not_run fix + selection R7 위임**: ratio 분모를 judge-attempted(candidate_output_status≠not_run)
+  로 — synthesize 정직 유실 self-trip 해소(①과 동일 "정직 차단 해소" 계열), judge-plane 배제는 분모
+  잔존(세탁 차단). selection(어느 20%)은 완전 봉쇄 대신 R7 + B4 precondition("compound mutation ≥80%
+  parseable 유지") 문서화.
+
+**검증**: 43 테스트(+5)·tsc clean·check:supported-models 회귀 통과·full vitest 2498(회귀 0).
+**메타교훈**: 가장 안전해 보인 owner-결정 구현도 교차검증서 산술 결함(①) + 기존 갭 노출(②) 도출.
+두 패밀리 상보 발산(ultracode=①③+반박·onto=②)이 단일보다 강함 — 반박(negative는 강건)까지 준
+것이 내 최고우려를 정확히 종결. [[contract-runtime-gap-ledger]] 동형(candidate 품질=declared-trust≠
+enforced).
+
+### 13.3 B5 경계 재확정 (2026-07-06 · 2라운드 교차검증 loopback-2 종식 · owner 결정)
+
+**진단(양 패밀리 round-2 강수렴 HIGH 6 + 내 독립확인)**: owner 결정 A/B와 그 fix들이 매 라운드
+새 HIGH 구멍을 냄 — ①절대 fallback decoupled(저-baseline rubber-stamp 통과)·②baseline 앵커링이
+membership만(self-baseline 무력)·③not_run 무제한 배제 채널. 근본 = **결정론 재계산은 "선언↔row
+일관성"만 보장, self-declared record의 "변별 실효·candidate 품질·baseline 진위·not_run 정직"은
+근본적으로 미판정.** 국소 패치는 loopback만 연장(2라운드 입증). owner 결정 = **경계 재확정**
+(결정론=구조·identity·일관성; 의미=R7). LLM-capability-boundary 원칙의 정면 적용.
+
+**결정론 게이트가 KEEP (구조·일관성·identity — 위조해도 구조가 깨지거나 R7이 볼 표면):**
+- 스키마·재계산 일관성(declared_aggregates↔row: decisive count·means·stddev·judge_status_counts·
+  reps_matrix)·outer-join(누락·중복·orphan/scope-shrink)
+- floor: fixture≥2·rep≥3·**decisive n≥5 per stratum×arm(절대 표본 요건 — selection 아닌 양)**·
+  per-fixture 보유-stratum 커버리지·global stratum floor
+- lineage identity(negative source_input_id==input_id·sha∉manifest = 변이 실적용)·
+  negative_targets_incomplete(두 지표 표적 = 구조)·prompt sha equality·입력 sha 축 분리·
+  candidate/baseline parse/structural 0·id 위생·declared_reps 캡
+- candidate≥baseline(§6.2-5): 계산은 결정론(유지) — 단 baseline/candidate **숫자 진위는 R7**(과신 금지)
+
+**결정론 게이트가 REMOVE (의미 임계 판정 → R7 위임):**
+- `negative_metric_not_discriminating`(상대/절대 변별 임계·fix① 포함) — 변별 실효는 의미 판정.
+  상수 `SYNTHESIZE_CERT_DISCRIMINATION_DELTA` 폐기.
+- `decisiveness_ratio`(owner A·fix③ not_run 분모) — selection 정직은 의미 판정. 상수
+  `minDecisivenessRatio` 폐기. **절대 floor n≥5는 KEEP**(양 요건).
+
+**결정론 게이트가 ADD (진짜 결정론으로 강화 — 양 검증 수렴 지적):**
+- **baseline identity(fix② membership 대체)**: `arm_model.baseline ≠ arm_model.candidate`
+  (self-baseline 차단·신규 violation `baseline_is_candidate`) ∧ supported(기존). "정확히 프로덕션
+  gpt-5.5"까지의 pin은 baseline 모델 교체 유연성 위해 R7(§6.5)에 명시 — self-baseline(가장 심각·
+  위조 불요)만 결정론 차단.
+
+**R7 명시(§6.5 확장·결정론 미보장 항목의 사람 큐레이션 체크리스트)**: ①negative arm이 실제로
+지표를 degrade하는가(변별 실효) ②candidate 품질이 실사용 가능한가 ③baseline이 진짜 프로덕션
+모델(gpt-5.5) 성능인가 ④not_run/judge_error 손실이 정직한가(선택적 배제 아님) ⑤arm_model
+선언이 실제 실행과 일치하는가. record의 reproduction.command + 사람 검토가 근거.
+
+**메타교훈**: loopback-2 stop-and-ask(CLAUDE.md) 정확 발동. "가장 안전해 보인 owner-결정
+구현"이 2라운드 연속 새 HIGH — 국소 최적화가 근본 경계 오류를 못 고침. 결정론으로 의미를
+강제하려는 시도 자체가 [[contract-runtime-gap-ledger]]의 극단(declared/self-reported≠verifiable).
+검증 축소 = 개념경제↑(임계 2·상수 2·violation 2 제거) + 정직성↑(R7 경계 명문화).
