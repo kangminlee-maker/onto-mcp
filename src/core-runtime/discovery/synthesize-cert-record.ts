@@ -297,6 +297,7 @@ export interface SynthesizeCertViolation {
     | "negative_lineage"
     | "prompt_sha_mismatch"
     | "arm_model_mismatch"
+    | "baseline_not_supported"
     | "input_sha_mismatch"
     | "negative_mutation_not_applied"
     | "metric_regression"
@@ -543,14 +544,22 @@ export function validateSynthesizeCertRecord(
   }
 
   // --- §6.4a: per-fixture stratum×arm decisive coverage ----------------------
+  // The ratio denominator is the JUDGE-ATTEMPTED rows: a synthesize-plane loss
+  // (candidate_output_status === "not_run") never reached the judge, so it is NOT
+  // a laundered judge verdict and must not count against the decisiveness ratio
+  // (owner decision ③ / crossval: otherwise an honest transport loss self-trips
+  // the guard). Judge-plane losses (judge_error/timeout/not_run) DO stay in the
+  // denominator — that is exactly the selective-exclusion the ratio polices.
   const decisiveByFixtureStratumArm = new Map<string, number>();
-  const totalByFixtureStratumArm = new Map<string, number>();
+  const judgeAttemptedByFixtureStratumArm = new Map<string, number>();
   for (const row of record.judgement_rows) {
     const key = `${row.fixture_id} ${stratumKey(row.stratum)} ${row.arm}`;
-    totalByFixtureStratumArm.set(
-      key,
-      (totalByFixtureStratumArm.get(key) ?? 0) + 1,
-    );
+    if (row.candidate_output_status !== "not_run") {
+      judgeAttemptedByFixtureStratumArm.set(
+        key,
+        (judgeAttemptedByFixtureStratumArm.get(key) ?? 0) + 1,
+      );
+    }
     if (!isDecisiveRow(row)) continue;
     decisiveByFixtureStratumArm.set(
       key,
@@ -580,13 +589,19 @@ export function validateSynthesizeCertRecord(
         // Decisiveness ratio (owner decision A): unfavorable verdicts laundered
         // as judge failures inflate the non-decisive share of the cell — the
         // absolute floor alone permits this at high rep counts, so require the
-        // decisive share to clear the ratio too.
-        const total = totalByFixtureStratumArm.get(cellKey) ?? 0;
-        if (total > 0 && n / total < SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio) {
+        // decisive share of the JUDGE-ATTEMPTED rows to clear the ratio too.
+        // (Bounds the RATE of exclusion; it does not police WHICH rows were
+        // excluded — worst-case selection within the tolerated share stays an
+        // R7 / B4-harness concern, documented in §13.2.)
+        const attempted = judgeAttemptedByFixtureStratumArm.get(cellKey) ?? 0;
+        if (
+          attempted > 0 &&
+          n / attempted < SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio
+        ) {
           fixtureMeetsFloor = false;
           violation(
             "decisiveness_ratio",
-            `fixture ${fixtureId} stratum ${key} arm ${arm} has ${n}/${total} decisive (${(n / total).toFixed(2)}); >= ${SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio} required — too many rows excluded as non-decisive (selective-exclusion guard)`,
+            `fixture ${fixtureId} stratum ${key} arm ${arm} has ${n}/${attempted} decisive among judge-attempted rows (${(n / attempted).toFixed(2)}); >= ${SYNTHESIZE_CERT_FLOORS.minDecisivenessRatio} required — too many judged rows excluded as non-decisive (selective-exclusion guard)`,
             fixtureId,
           );
         }
@@ -632,11 +647,23 @@ export function validateSynthesizeCertRecord(
     // clears this. baselineMean null => the record is already invalid on the
     // stratum floor, so this check simply abstains (no duplicate violation).
     if (negativeMean !== null && baselineMean !== null) {
-      const threshold = baselineMean - SYNTHESIZE_CERT_DISCRIMINATION_DELTA;
+      // Low-baseline fallback (owner decision ①, crossval ultracode/onto): the
+      // additive form baseline − δ degenerates to <= 0 when baseline <= δ, making
+      // the clause unsatisfiable even for a perfectly-degrading negative arm —
+      // an over-block that contradicts §13.1(B)'s reason for the relative form
+      // (meaning preserved for low-baseline metrics). For baseline <= δ fall
+      // back to the absolute rule (< 1.0): the low-baseline regime still gets a
+      // minimum discrimination requirement (at least one mutated input fails).
+      const threshold = baselineMean > SYNTHESIZE_CERT_DISCRIMINATION_DELTA
+        ? baselineMean - SYNTHESIZE_CERT_DISCRIMINATION_DELTA
+        : 1.0;
       if (negativeMean >= threshold) {
+        const rule = baselineMean > SYNTHESIZE_CERT_DISCRIMINATION_DELTA
+          ? `< baseline ${baselineMean} - ${SYNTHESIZE_CERT_DISCRIMINATION_DELTA} = ${threshold}`
+          : `< 1.0 (baseline ${baselineMean} <= ${SYNTHESIZE_CERT_DISCRIMINATION_DELTA} → absolute fallback)`;
         violation(
           "negative_metric_not_discriminating",
-          `negative-control mean for targeted metric ${metric} is ${negativeMean}; must be < baseline ${baselineMean} - ${SYNTHESIZE_CERT_DISCRIMINATION_DELTA} = ${threshold} to prove the mutation degrades the metric`,
+          `negative-control mean for targeted metric ${metric} is ${negativeMean}; must be ${rule} to prove the mutation degrades the metric`,
           metric,
         );
       }
@@ -1001,8 +1028,17 @@ export function synthesizeCertBindingViolations(args: {
     benchmark_evidence_refs: readonly string[];
   };
   evidenceByRef: ReadonlyMap<string, unknown>;
+  // Baseline anchoring (owner decision ②, crossval onto issue-003/004): the
+  // whole contract's meaning rests on baseline being a TRUSTED reference (the
+  // relative discrimination threshold and the candidate>=baseline check both
+  // read the record's own baseline mean). Require the record's baseline arm to
+  // have run a model that is itself a certified supported model — a
+  // "provider/model" key set the caller derives from the registry. A baseline
+  // run on an unregistered weak model is rejected; whether the baseline's
+  // authored verdicts are genuinely that model's output stays R7 human curation.
+  supportedModelKeys: ReadonlySet<string>;
 }): SynthesizeCertViolation[] {
-  const { entry, evidenceByRef } = args;
+  const { entry, evidenceByRef, supportedModelKeys } = args;
   if (!entry.roles?.includes("semantic_map_synthesize")) return [];
   const entryId = `${entry.provider}/${entry.model}`;
   const candidates = entry.benchmark_evidence_refs.filter((ref) =>
@@ -1034,6 +1070,17 @@ export function synthesizeCertBindingViolations(args: {
         code: "aggregate_mismatch",
         message:
           `${ref} certifies ${record.provider}/${record.model}, not the citing entry ${entryId}`,
+        subject_id: entryId,
+      });
+      continue;
+    }
+    const baselineKey =
+      `${record.arm_model.baseline.provider}/${record.arm_model.baseline.model}`;
+    if (!supportedModelKeys.has(baselineKey)) {
+      violations.push({
+        code: "baseline_not_supported",
+        message:
+          `${ref} baseline arm ran ${baselineKey}, which is not a certified supported model — the relative discrimination and candidate>=baseline checks would rest on an unanchored baseline`,
         subject_id: entryId,
       });
       continue;

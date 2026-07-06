@@ -153,6 +153,11 @@ function assertRolesDeclaredOutsideGrandfather(
 async function assertSynthesizeCertBinding(
   registry: Awaited<ReturnType<typeof loadSupportedModelRegistry>>,
 ): Promise<void> {
+  // Baseline-anchoring authority (owner decision ②): the set of certified
+  // supported models a cert record's baseline arm may claim to have run.
+  const supportedModelKeys = new Set(
+    registry.supported_models.map((e) => `${e.provider}/${e.model}`),
+  );
   const bad: string[] = [];
   for (const entry of registry.supported_models) {
     if (!entry.roles?.includes("semantic_map_synthesize")) continue;
@@ -168,7 +173,11 @@ async function assertSynthesizeCertBinding(
         // tracked-file check below already polices their existence separately.
       }
     }
-    const violations = synthesizeCertBindingViolations({ entry, evidenceByRef });
+    const violations = synthesizeCertBindingViolations({
+      entry,
+      evidenceByRef,
+      supportedModelKeys,
+    });
     for (const item of violations) {
       bad.push(
         `${entry.provider}/${entry.model}: [${item.code}] ${item.message}`,

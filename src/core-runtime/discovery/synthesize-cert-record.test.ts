@@ -310,6 +310,89 @@ describe("synthesize-cert/v1 recompute (G7 — design §6.4/§6.4a)", () => {
     ).toEqual([]);
   });
 
+  it("decision-①: a low-baseline metric (baseline <= delta) falls back to the absolute rule — a perfectly degrading negative arm certifies", () => {
+    // Drive baseline grounding to 0.10 (<= 0.15) and candidate to match it, with
+    // the negative arm perfectly degrading (grounding all-fail = mean 0). The old
+    // additive threshold 0.10-0.15=-0.05 was UNSATISFIABLE (0 >= -0.05 fired);
+    // the fallback rule (< 1.0) accepts a perfect negative arm.
+    const record = makePassingRecord(10);
+    const setGrounding = (arm: string, passFrac: number) => {
+      const rows = record.judgement_rows.filter((r) => r.arm === arm);
+      const passCount = Math.round(rows.length * passFrac);
+      rows.forEach((r, i) => {
+        r.metrics = { ...r.metrics, grounding: i < passCount ? "pass" : "fail" };
+      });
+    };
+    setGrounding("baseline", 0.1);
+    setGrounding("candidate", 0.1); // candidate >= baseline holds (equal)
+    setGrounding("negative_control", 0); // perfect degradation
+    record.declared_aggregates = computeSynthesizeCertAggregates({
+      inputManifest: record.input_manifest,
+      judgementRows: record.judgement_rows,
+    });
+    expect(record.declared_aggregates.metric_means.baseline.grounding)
+      .toBeLessThanOrEqual(0.15);
+    expect(codes(record)).not.toContain("negative_metric_not_discriminating");
+  });
+
+  it("decision-①: at a low baseline the fallback still requires SOME degradation (negative all-pass is rejected)", () => {
+    const record = makePassingRecord(10);
+    const setGrounding = (arm: string, passFrac: number) => {
+      const rows = record.judgement_rows.filter((r) => r.arm === arm);
+      const passCount = Math.round(rows.length * passFrac);
+      rows.forEach((r, i) => {
+        r.metrics = { ...r.metrics, grounding: i < passCount ? "pass" : "fail" };
+      });
+    };
+    setGrounding("baseline", 0.1);
+    setGrounding("candidate", 0.1);
+    setGrounding("negative_control", 1); // no degradation at all → mean 1.0
+    record.declared_aggregates = computeSynthesizeCertAggregates({
+      inputManifest: record.input_manifest,
+      judgementRows: record.judgement_rows,
+    });
+    expect(codes(record)).toContain("negative_metric_not_discriminating");
+  });
+
+  it("decision-③: honest synthesize-plane not_run losses do NOT self-trip the decisiveness ratio (judge-attempted denominator)", () => {
+    // 5 decisive + 15 honest synthesize losses (candidate_output_status not_run)
+    // in a candidate cell: judge-attempted = 5, decisive/attempted = 1.0. The old
+    // total-based ratio (5/20 = 0.25) would have wrongly tripped.
+    const record = makePassingRecord(10);
+    const cellRows = record.judgement_rows.filter((row) =>
+      row.fixture_id === "fx-1" && row.arm === "candidate" &&
+      !row.stratum.seam && !row.stratum.merge
+    );
+    expect(cellRows.length).toBe(20);
+    cellRows.slice(5).forEach((row) => {
+      row.candidate_output_status = "not_run";
+      row.judge_status = "not_run";
+      row.metrics = { grounding: "not_judged", boundary: "not_judged" };
+    });
+    record.declared_aggregates = computeSynthesizeCertAggregates({
+      inputManifest: record.input_manifest,
+      judgementRows: record.judgement_rows,
+    });
+    expect(codes(record)).not.toContain("decisiveness_ratio");
+  });
+
+  it("decision-③ contrast: judge-plane exclusion (judge_error) still trips the ratio", () => {
+    const record = makePassingRecord(10);
+    const cellRows = record.judgement_rows.filter((row) =>
+      row.fixture_id === "fx-1" && row.arm === "candidate" &&
+      !row.stratum.seam && !row.stratum.merge
+    );
+    cellRows.slice(5).forEach((row) => {
+      row.judge_status = "judge_error"; // output produced, judge excluded it
+      row.metrics = { grounding: "not_judged", boundary: "not_judged" };
+    });
+    record.declared_aggregates = computeSynthesizeCertAggregates({
+      inputManifest: record.input_manifest,
+      judgementRows: record.judgement_rows,
+    });
+    expect(codes(record)).toContain("decisiveness_ratio");
+  });
+
   it("N10: negative arm must target every judged metric", () => {
     const record = makePassingRecord();
     record.negative_arm.targeted_metrics = ["grounding"];
@@ -507,6 +590,8 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
     roles,
     benchmark_evidence_refs: refs,
   });
+  // gpt-5.5 is the certified baseline the passing record declares (arm_model.baseline).
+  const SUPPORTED = new Set(["openai/gpt-5.5", "anthropic/claude-opus-4-8"]);
 
   it("requires a synthesize-cert record for a semantic_map_synthesize entry", () => {
     const violations = synthesizeCertBindingViolations({
@@ -517,6 +602,7 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
         "development-records/benchmark/generic.json",
         { some: "generic benchmark" },
       ]]),
+      supportedModelKeys: SUPPORTED,
     });
     expect(violations.length).toBeGreaterThan(0);
     expect(violations[0]!.message).toContain(SYNTHESIZE_CERT_CONTRACT);
@@ -528,10 +614,22 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
     const violations = synthesizeCertBindingViolations({
       entry: entry(["records/cert.json"], ["semantic_map_synthesize"]),
       evidenceByRef: new Map([["records/cert.json", foreign]]),
+      supportedModelKeys: SUPPORTED,
     });
     expect(violations.some((item) =>
       item.message.includes("not the citing entry")
     )).toBe(true);
+  });
+
+  it("decision-②: rejects a record whose baseline arm ran an unsupported model (baseline anchoring)", () => {
+    const record = makePassingRecord();
+    record.arm_model.baseline = { provider: "openai", model: "weak-model-x" };
+    const violations = synthesizeCertBindingViolations({
+      entry: entry(["records/cert.json"], ["semantic_map_synthesize"]),
+      evidenceByRef: new Map([["records/cert.json", record]]),
+      supportedModelKeys: SUPPORTED,
+    });
+    expect(violations.map((v) => v.code)).toContain("baseline_not_supported");
   });
 
   it("accepts a passing, matching record and reports nothing", () => {
@@ -543,6 +641,7 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
         ["records/cert.json", makePassingRecord()],
         ["records/generic.json", { note: "unrelated" }],
       ]),
+      supportedModelKeys: SUPPORTED,
     });
     expect(violations).toEqual([]);
   });
@@ -553,6 +652,7 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
     const violations = synthesizeCertBindingViolations({
       entry: entry(["records/cert.json"], ["semantic_map_synthesize"]),
       evidenceByRef: new Map([["records/cert.json", record]]),
+      supportedModelKeys: SUPPORTED,
     });
     expect(violations.map((item) => item.code)).toContain("prompt_sha_mismatch");
   });
@@ -561,6 +661,7 @@ describe("G7 role<->record binding (onto 20260705-7e0e5263 issue-001/003/006)", 
     const violations = synthesizeCertBindingViolations({
       entry: entry(["records/anything.json"], ["author"]),
       evidenceByRef: new Map(),
+      supportedModelKeys: SUPPORTED,
     });
     expect(violations).toEqual([]);
   });
