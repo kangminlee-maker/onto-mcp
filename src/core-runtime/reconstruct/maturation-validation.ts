@@ -492,6 +492,46 @@ function higherMaturityLevel(
   return maturityLevelRank(next) > maturityLevelRank(current) ? next : current;
 }
 
+// Site-7 proportional terminal (design 20260706 §5): the SINGLE certification choke point.
+// A judge-support-shortfall (degraded) claim must never certify — it is excluded from the
+// positive sets that raise maturity (L3/L4), and every baseline row it matches carries a
+// deterministic limitation token so member_readiness degrades to limitation_backed and the
+// continuation decision weighs it by materiality. The matrix BUILDER and VALIDATOR both
+// derive through these helpers (derive-and-assert lockstep); an expansion citing a degraded
+// claim is likewise non-positive so it cannot co-lift a row to L4.
+const JUDGE_SUPPORT_SHORTFALL_TOKEN_PREFIX = "judge_support_shortfall:";
+
+function judgeSupportShortfallIds(
+  validation:
+    | ReconstructMaturationAnswerClaimsValidationArtifact
+    | null
+    | undefined,
+): Set<string> {
+  return new Set(validation?.judge_support_shortfall_claim_ids);
+}
+
+export function judgeSupportShortfallToken(claimId: string): string {
+  return `${JUDGE_SUPPORT_SHORTFALL_TOKEN_PREFIX}${claimId}`;
+}
+
+function positiveAnswerClaim(
+  claim: ReconstructMaturationAnswerClaimsArtifact["answer_claims"][number],
+  shortfallIds: Set<string>,
+): boolean {
+  return claim.answer_status === "answered" &&
+    claim.limitation_refs.length === 0 &&
+    !shortfallIds.has(claim.answer_claim_id);
+}
+
+function positiveExpansion(
+  expansion: ReconstructOntologyExpansionArtifact["expansions"][number],
+  shortfallIds: Set<string>,
+): boolean {
+  return (expansion.operation === "add" || expansion.operation === "refine") &&
+    expansion.limitation_refs.length === 0 &&
+    !expansion.answer_claim_refs.some((ref) => shortfallIds.has(ref));
+}
+
 function answerClaimMatchesBaselineRow(
   claim: ReconstructMaturationAnswerClaimsArtifact["answer_claims"][number],
   row: ReconstructMaturationBaselineRow,
@@ -1038,6 +1078,7 @@ export function buildActionabilityMatrixArtifact(args: {
   const answerClaims = args.maturationAnswerClaimsValidation?.validation_status === "valid"
     ? args.maturationAnswerClaims?.answer_claims ?? []
     : [];
+  const shortfallIds = judgeSupportShortfallIds(args.maturationAnswerClaimsValidation);
   const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
     ? args.ontologyExpansion?.expansions ?? []
     : [];
@@ -1083,12 +1124,10 @@ export function buildActionabilityMatrixArtifact(args: {
         expansionMatchesBaselineRow(expansion, row)
       );
       const positiveAnswerClaims = matchingAnswerClaims.filter((claim) =>
-        claim.answer_status === "answered" &&
-        claim.limitation_refs.length === 0
+        positiveAnswerClaim(claim, shortfallIds)
       );
       const positiveExpansions = matchingExpansions.filter((expansion) =>
-        (expansion.operation === "add" || expansion.operation === "refine") &&
-        expansion.limitation_refs.length === 0
+        positiveExpansion(expansion, shortfallIds)
       );
       let maturityLevel = row.maturity_level;
       const supportingRefs = [
@@ -1121,6 +1160,12 @@ export function buildActionabilityMatrixArtifact(args: {
           supportingRefs.push(ref.observation_id);
         }
         limitationRefs.push(...claim.limitation_refs);
+        // Site-7 degrade token: a matching judge-support-shortfall claim leaves a named
+        // residual limitation, so the row reads limitation_backed (not closed) and the
+        // shortfall reaches decision.limitation_refs — the honest-disclosure channel.
+        if (shortfallIds.has(claim.answer_claim_id)) {
+          limitationRefs.push(judgeSupportShortfallToken(claim.answer_claim_id));
+        }
       }
       for (const expansion of matchingExpansions) {
         supportingRefs.push(expansion.expansion_id, ...expansion.answer_claim_refs);
@@ -1220,6 +1265,7 @@ export function validateActionabilityMatrix(args: {
   const answerClaims = args.maturationAnswerClaimsValidation?.validation_status === "valid"
     ? args.maturationAnswerClaims?.answer_claims ?? []
     : [];
+  const shortfallIds = judgeSupportShortfallIds(args.maturationAnswerClaimsValidation);
   const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
     ? args.ontologyExpansion?.expansions ?? []
     : [];
@@ -1535,13 +1581,11 @@ export function validateActionabilityMatrix(args: {
     }
     const matchingAnswerClaims = answerClaims.filter((claim) =>
       answerClaimMatchesBaselineRow(claim, baselineRow) &&
-      claim.answer_status === "answered" &&
-      claim.limitation_refs.length === 0
+      positiveAnswerClaim(claim, shortfallIds)
     );
     const matchingExpansions = expansions.filter((expansion) =>
       expansionMatchesBaselineRow(expansion, baselineRow) &&
-      (expansion.operation === "add" || expansion.operation === "refine") &&
-      expansion.limitation_refs.length === 0
+      positiveExpansion(expansion, shortfallIds)
     );
     if (row.maturity_level !== baselineRow.maturity_level) {
       const claimsCanRaiseToL3 = matchingAnswerClaims.length > 0;
@@ -1616,6 +1660,25 @@ export function validateActionabilityMatrix(args: {
           code: "conflicting_state",
           message:
             "matrix row dropped a baseline limitation without a validated satisfied value-discharge",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+    }
+    // Site-7 token conservation (design 20260706 §5): stamped claim/expansion caveats are
+    // otherwise trusted, so a stale/edited matrix could silently DROP the judge-support-
+    // shortfall token and un-exclude the row. Re-derive the expected tokens from the claims
+    // + validation authority and require each on the stamped row (mirror of the dropped-
+    // baseline-limitation check above).
+    for (const claim of answerClaims) {
+      if (!shortfallIds.has(claim.answer_claim_id)) continue;
+      if (!answerClaimMatchesBaselineRow(claim, baselineRow)) continue;
+      if (
+        !stampedLimitationRefs.has(judgeSupportShortfallToken(claim.answer_claim_id))
+      ) {
+        violations.push(violation({
+          code: "conflicting_state",
+          message:
+            "matrix row dropped the judge-support-shortfall limitation token for a matching degraded claim",
           subjectId: row.matrix_row_id,
         }));
       }
@@ -3229,6 +3292,7 @@ export function validateMaturationAnswerClaims(args: {
   const artifact = args.maturationAnswerClaims;
   const violations: ReconstructMaturationValidationViolation[] = [];
   const assertedObligationIds: string[] = [];
+  const judgeSupportShortfallClaimIds = new Set<string>();
   const questions = questionMap(args.maturationQuestionFrontier);
   const clusters = new Map(
     args.answerSupportLedger.evidence_clusters.map((cluster) => [
@@ -3403,12 +3467,50 @@ export function validateMaturationAnswerClaims(args: {
           }
         }
         if (independentConfirmed.size < 2) {
-          violations.push(violation({
-            code: "insufficient_independent_evidence",
-            message:
-              "convergent answer claim requires at least two independent judge-confirmed supports",
-            subjectId: claim.answer_claim_id,
-          }));
+          // Site-7 proportional terminal (design 20260706 §4.1): split the shortfall
+          // disposition by a QUESTION-scoped pool computed directly from the judgment
+          // artifact's supported verdicts (never joined through the claim's own refs, so
+          // a future ref-serialization divergence cannot mass-degrade):
+          //   - pool >= 2 → the question COULD be certified; the author under-cited refs
+          //     or clusters → violation stays (bug catcher, crash).
+          //   - pool < 2 AND the judge supported >= 1 ref somewhere in the run (functioned
+          //     contrast control) → the source cannot certify this question → degrade:
+          //     recorded in judge_support_shortfall_claim_ids, the artifact stays valid,
+          //     and the actionability matrix blocks certification downstream.
+          //   - pool < 2 AND the judge supported NOTHING run-wide → indistinguishable from
+          //     judge dysfunction (an all-not_supported judgment is schema-valid), so the
+          //     loud violation is kept.
+          const questionClusterIds = new Set(
+            args.answerSupportLedger.evidence_clusters
+              .filter((cluster) =>
+                cluster.support_mode === "convergent_source_evidence" &&
+                cluster.question_refs.includes(claim.question_id)
+              )
+              .map((cluster) => cluster.evidence_cluster_id),
+          );
+          const questionPoolIndependent = new Set<string>();
+          for (const judgment of args.answerSupportJudgment?.judgments ?? []) {
+            if (
+              judgment.supports === "supported" &&
+              questionClusterIds.has(judgment.evidence_cluster_ref)
+            ) {
+              questionPoolIndependent.add(
+                `${normalizedPathRef(judgment.evidence_ref.source_ref)}:${
+                  normalizedPathRef(judgment.evidence_ref.location)
+                }`,
+              );
+            }
+          }
+          if (questionPoolIndependent.size < 2 && judgeSupported.size > 0) {
+            judgeSupportShortfallClaimIds.add(claim.answer_claim_id);
+          } else {
+            violations.push(violation({
+              code: "insufficient_independent_evidence",
+              message:
+                "convergent answer claim requires at least two independent judge-confirmed supports",
+              subjectId: claim.answer_claim_id,
+            }));
+          }
         }
       }
     }
@@ -3441,6 +3543,7 @@ export function validateMaturationAnswerClaims(args: {
     validation_status: violations.length === 0 ? "valid" : "invalid",
     answer_claim_count: artifact.answer_claims.length,
     answered_question_count: answeredQuestions.size,
+    judge_support_shortfall_claim_ids: [...judgeSupportShortfallClaimIds].sort(),
     validation_results: violations.length === 0
       ? ["maturation_answer_claims_valid"]
       : ["maturation_answer_claims_invalid"],

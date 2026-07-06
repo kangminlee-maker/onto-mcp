@@ -2677,7 +2677,7 @@ validator_records:
     output_ref: answer-support-ledger-validation.yaml
   - validator_id: maturation-answer-claims-validator
     gate_ids: [maturation_answer_claim_gate]
-    validator_version: 1
+    validator_version: 2
     input_authority_refs:
       - maturation-answer-claims.yaml
       - answer-support-ledger-validation.yaml

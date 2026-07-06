@@ -5413,6 +5413,380 @@ describe("runReconstruct", () => {
       .toEqual(actionabilityMatrix.rows.map((row) => row.matrix_row_id).sort());
   });
 
+  it("site-7 (T2): a judge-support shortfall degrades the claim and the run completes to a natural blocked terminal instead of crashing", async () => {
+    // Full-pipeline falsifiable pair with the actionable_ready E2E above: identical run,
+    // EXCEPT the answer support is convergent_source_evidence and the judge honestly rejects
+    // one of the two independent supports (question pool = 1 < 2, judge functioned). Before
+    // the site-7 proportional terminal this exact run crashed at the maturation-answer-claims
+    // assert; now it must COMPLETE (result.status "completed"), the continuation must weigh
+    // the degraded material row to "blocked", and the shortfall must be disclosed end-to-end.
+    const projectRoot = await tempProjectRoot();
+    const docPath = path.join(projectRoot, "maturation-note.md");
+    const frontierSourcePath = path.join(projectRoot, "warehouse.sqlite");
+    await fs.writeFile(frontierSourcePath, "SQLite format 3 ", "utf8");
+    await fs.writeFile(
+      docPath,
+      "# Maturation Note\n\nAdditional source evidence for maturation closure.\n",
+      "utf8",
+    );
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "site7-judge-shortfall-run",
+    );
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Author source-frontier.yaml")) {
+        return Promise.resolve({
+          text: JSON.stringify({
+            frontier_refs: [],
+            no_next_frontier_rationale:
+              "Exploration has no next frontier; maturation will request source evidence.",
+          }),
+        } satisfies LlmCallResult);
+      }
+      if (systemPrompt.includes("Author maturation-closure-frontier.yaml")) {
+        const input = JSON.parse(userPrompt) as {
+          material_questions?: Array<{ question_id: string }>;
+        };
+        const questionId = input.material_questions?.[0]?.question_id ??
+          "maturation-question-1";
+        return Promise.resolve({
+          text: JSON.stringify({
+            source_requests: [{
+              source_request_id: "source-request-maturation-note",
+              question_refs: [questionId],
+              member_scope_refs: [],
+              member_source_refs: [],
+              cross_material_ref_refs: [],
+              requested_source_ref: frontierSourcePath,
+              requested_location: frontierSourcePath,
+              target_material_kind: "database",
+              expected_evidence_kind: "maturation source evidence",
+              reason: "Need the maturation database to close the material question.",
+            }],
+            authority_requests: [],
+          }),
+        } satisfies LlmCallResult);
+      }
+      if (systemPrompt.includes("Assess every competency question")) {
+        const input = JSON.parse(userPrompt) as {
+          competency_questions: {
+            questions: Array<{ question_id: string }>;
+          };
+        };
+        return Promise.resolve({
+          text: JSON.stringify({
+            assessments: input.competency_questions.questions.map((question) => ({
+              question_id: question.question_id,
+              answer_status: "unsupported",
+              answer_summary: "The fixture leaves this question for maturation.",
+              missing_source_or_confirmation:
+                "Additional maturation note source is required.",
+              ambiguity_notes: [],
+              rationale:
+                "This test intentionally opens a maturation closure source request.",
+            })),
+          }),
+        } satisfies LlmCallResult);
+      }
+      if (systemPrompt.includes("Decide whether the current reconstructed result")) {
+        const input = JSON.parse(userPrompt) as {
+          allowed_decisions?: string[];
+        };
+        return Promise.resolve({
+          text: JSON.stringify({
+            decision: input.allowed_decisions?.[0] ?? "continue",
+            rationale:
+              "The fixture follows the runtime-provided allowed decision boundary.",
+            next_actions: [],
+          }),
+        } satisfies LlmCallResult);
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
+    };
+    const baseDirectiveAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall,
+    });
+    const directiveAuthor = {
+      ...baseDirectiveAuthor,
+      async writeMaturationQuestionFrontier(input: Parameters<
+        typeof baseDirectiveAuthor.writeMaturationQuestionFrontier
+      >[0]) {
+        const rows = input.actionabilityMatrix.rows.filter((row) =>
+          row.member_readiness === "frontier_required"
+        );
+        if (rows.length === 0) {
+          throw new Error("fixture expected at least one actionability matrix row");
+        }
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          maturation_baseline_ref: input.maturationBaselineRef,
+          maturation_baseline_validation_ref: input.maturationBaselineValidationRef,
+          actionability_matrix_ref: input.actionabilityMatrixRef,
+          actionability_matrix_validation_ref:
+            input.actionabilityMatrixValidationRef,
+          questions: rows.map((row, index) => ({
+            question_id: index === 0
+              ? "maturation-question-needs-note"
+              : `maturation-question-frontier-${index + 1}`,
+            question: "What maturation evidence is present in the note?",
+            materiality: row.materiality,
+            materiality_ref: row.materiality_ref,
+            actionability_surface_refs: [row.actionability_surface_ref],
+            maturity_dimension_refs: [row.maturity_dimension_ref],
+            purpose_element_refs: [row.purpose_element_ref],
+            baseline_row_refs: row.baseline_row_refs,
+            competency_question_refs: row.competency_question_refs,
+            competency_assessment_refs: row.competency_assessment_refs,
+            domain_competency_trace_refs: [],
+            seed_ref_refs: row.supporting_refs.filter((ref) => !ref.endsWith(".yaml")),
+            current_answer_status: "unsupported" as const,
+            expected_answer_kind: "explanation" as const,
+            evidence_needed: "Read the maturation note source.",
+            authority_need: {
+              authority_kind: "none" as const,
+              authority_scope: null,
+              blocking_if_unavailable: false,
+              expected_response_kind: "unavailable_reason" as const,
+            },
+            closure_frontier_hint_refs: [`source:${frontierSourcePath}`],
+            limitation_refs: [],
+          })),
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+      async writeAnswerSupportLedger(input: Parameters<
+        typeof baseDirectiveAuthor.writeAnswerSupportLedger
+      >[0]) {
+        // Two INDEPENDENT (distinct source_ref) real observations back the convergent
+        // cluster, so the ledger's own independence floor passes and the shortfall is
+        // created purely by the judge verdict below.
+        const bySource = new Map<
+          string,
+          (typeof input.sourceObservations.observations)[number]
+        >();
+        for (const observation of input.sourceObservations.observations) {
+          if (!bySource.has(observation.source_ref)) {
+            bySource.set(observation.source_ref, observation);
+          }
+        }
+        const independent = [...bySource.values()].slice(0, 2);
+        if (independent.length < 2) {
+          throw new Error("fixture expected two distinct-source observations");
+        }
+        const evidenceRefs = independent.map((observation) => ({
+          observation_id: observation.observation_id,
+          target_material_kind: observation.target_material_kind,
+          source_ref: observation.source_ref,
+          location: observation.location,
+        }));
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          round_id: input.roundId,
+          evidence_clusters: input.maturationQuestionFrontier.questions.map((
+            question,
+            index,
+          ) => ({
+            evidence_cluster_id: `cluster-maturation-${index + 1}`,
+            question_refs: [question.question_id],
+            support_mode: "convergent_source_evidence" as const,
+            proposed_answer_summary:
+              "Two independent sources converge on the material answer.",
+            evidence_refs: evidenceRefs,
+            proof_refs: [],
+            user_confirmation_refs: [],
+            authority_response_refs: [],
+            independence_basis:
+              "Two distinct source files provide independent evidence.",
+            contradiction_refs: [],
+            limitation_refs: [],
+          })),
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+      async writeAnswerSupportJudgment(input: Parameters<
+        typeof baseDirectiveAuthor.writeAnswerSupportJudgment
+      >[0]) {
+        // The honest-judge shortfall: full coverage (every convergent ref judged), ONE
+        // supported (the judge demonstrably functioned) and one not_supported, so every
+        // question's supported pool collapses to 1 < 2.
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          round_id: input.roundId,
+          answer_support_ledger_ref: input.answerSupportLedgerRef,
+          answer_support_ledger_validation_ref:
+            input.answerSupportLedgerValidationRef,
+          judgments: input.answerSupportLedger.evidence_clusters.flatMap((cluster) =>
+            cluster.evidence_refs.map((ref, index) => ({
+              judgment_id: `${cluster.evidence_cluster_id}-judgment-${index + 1}`,
+              evidence_cluster_ref: cluster.evidence_cluster_id,
+              evidence_ref: ref,
+              supports: index === 0
+                ? "supported" as const
+                : "not_supported" as const,
+              rationale_ref:
+                `rationale:${cluster.evidence_cluster_id}:${index + 1}`,
+            }))
+          ),
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+      async writeMaturationAnswerClaims(input: Parameters<
+        typeof baseDirectiveAuthor.writeMaturationAnswerClaims
+      >[0]) {
+        const clustersByQuestionId = new Map(
+          input.answerSupportLedger.evidence_clusters.flatMap((cluster) =>
+            cluster.question_refs.map((questionRef) => [questionRef, cluster])
+          ),
+        );
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          round_id: input.roundId,
+          answer_claims: input.maturationQuestionFrontier.questions.map((
+            question,
+            index,
+          ) => {
+            const cluster = clustersByQuestionId.get(question.question_id);
+            if (!cluster) {
+              throw new Error("fixture expected answer support cluster");
+            }
+            return {
+              answer_claim_id: `answer-claim-maturation-${index + 1}`,
+              question_id: question.question_id,
+              answer:
+                "Two independent sources converge on this material answer.",
+              answer_status: "answered" as const,
+              support_mode: "convergent_source_evidence" as const,
+              evidence_cluster_refs: [cluster.evidence_cluster_id],
+              supporting_evidence_refs: cluster.evidence_refs,
+              target_surface_refs: question.actionability_surface_refs,
+              target_dimension_refs: question.maturity_dimension_refs,
+              purpose_element_refs: question.purpose_element_refs,
+              limitation_refs: [],
+            };
+          }),
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+      async writeOntologyExpansion(input: Parameters<
+        typeof baseDirectiveAuthor.writeOntologyExpansion
+      >[0]) {
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          answer_claims_ref: input.answerClaimsRef,
+          source_seed_ref: input.ontologySeedRef,
+          expansions: input.answerClaims.answer_claims.map((claim, index) => ({
+            expansion_id: `expansion-maturation-${index + 1}`,
+            operation: "add" as const,
+            target_surface_refs: claim.target_surface_refs,
+            target_dimension_refs: claim.target_dimension_refs,
+            target_seed_or_ontology_refs: claim.purpose_element_refs.map((ref) =>
+              `purpose-element:${ref}`
+            ),
+            purpose_element_refs: claim.purpose_element_refs,
+            answer_claim_refs: [claim.answer_claim_id],
+            evidence_refs: claim.supporting_evidence_refs,
+            concept_economy_effect: "preserves_surface" as const,
+            rationale:
+              "Expansion cites the degraded claim; the matrix must not let it certify L4.",
+            limitation_refs: [],
+          })),
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+    };
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [projectRoot],
+      intent:
+        "Create a live reconstruct Seed whose convergent evidence fails independent judgment.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor,
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    });
+
+    // The run COMPLETES — natural terminal, not a crash, not a graceful early stop.
+    expect(result.status).toBe("completed");
+    const claimsValidation =
+      await readYaml<ReconstructMaturationAnswerClaimsValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs
+          .maturation_answer_claims_validation!,
+      );
+    expect(claimsValidation.validation_status).toBe("valid");
+    expect(claimsValidation.judge_support_shortfall_claim_ids)
+      .toContain("answer-claim-maturation-1");
+    // Certification is blocked: no maturity rise, the row carries the shortfall token.
+    const degradedMatrix = await readYaml<ReconstructActionabilityMatrixArtifact>(
+      result.reconstructRunManifest.artifact_refs.actionability_matrix!,
+    );
+    const stampedTokens = degradedMatrix.rows
+      .flatMap((row) => row.limitation_refs)
+      .filter((ref) => ref.startsWith("judge_support_shortfall:"));
+    expect(stampedTokens).toContain(
+      "judge_support_shortfall:answer-claim-maturation-1",
+    );
+    expect(degradedMatrix.rows.some((row) =>
+      row.maturity_level === "L4_validated_for_purpose"
+    )).toBe(false);
+    // The existing materiality scale decides: the degraded material rows leave nothing
+    // closed, so the natural continuation terminal is blocked.
+    const degradedDecision =
+      await readYaml<ReconstructMaturationContinuationDecisionArtifact>(
+        result.reconstructRunManifest.artifact_refs
+          .maturation_continuation_decision!,
+      );
+    expect(degradedDecision.decision_state).toBe("blocked");
+    expect(degradedDecision.limitation_refs).toContain(
+      "judge_support_shortfall:answer-claim-maturation-1",
+    );
+    // The completed-run manifest records the actionable-ontology stage as an anticipated
+    // skip (run.ts skippedStep branch), never as a hole.
+    expect(
+      result.reconstructRunManifest.artifact_refs.actionable_ontology ?? null,
+    ).toBeNull();
+    const actionableStep = result.reconstructRunManifest.steps.find((step) =>
+      step.step_id === "actionable_ontology"
+    );
+    expect(actionableStep?.status).toBe("skipped");
+    // Deterministic end-to-end disclosure: the final output names the degraded claim.
+    expect(result.finalOutputText).toContain(
+      "Judge-support shortfall (degraded, not certified): answer-claim-maturation-1",
+    );
+  });
+
   it("treats already-observed source frontier refs as terminal convergence", async () => {
     const projectRoot = await tempProjectRoot();
     const targetRef = path.join(projectRoot, "src", "feature.ts");

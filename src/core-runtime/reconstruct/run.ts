@@ -6856,6 +6856,11 @@ function compactFinalOutputPromptPayload(
         input.maturationAnswerClaims.answer_claims.length,
       answer_claims_validation:
         input.maturationAnswerClaimsValidation.validation_status,
+      // Site-7 degrade disclosure (design 20260706 §6): ids, not a count, so the authored
+      // prose CAN state why the claim scope shrank (the deterministic claim-projection
+      // section is the enforced disclosure; this is the narrative channel).
+      judge_support_shortfall_claim_ids:
+        input.maturationAnswerClaimsValidation.judge_support_shortfall_claim_ids,
       ontology_expansions:
         input.ontologyExpansion.expansions.length,
       ontology_expansion_validation:
@@ -13067,6 +13072,10 @@ function appendFinalOutputClaimProjectionSection(
     claimProjectionValidationPath: string;
     claimProjection: ReconstructClaimProjectionArtifact;
     claimProjectionValidation: ReconstructClaimProjectionValidationArtifact;
+    // Site-7 proportional terminal (design 20260706 §6): claim-anchored degrade disclosure.
+    // Rendered deterministically here — never dependent on the LLM prose picking it up —
+    // because the authoring payload only carries counts, not the shortfall ids.
+    judgeSupportShortfallClaimIds: string[];
   },
 ): string {
   const heading = `## ${FINAL_OUTPUT_SECTION_HEADINGS.claimProjection}`;
@@ -13094,6 +13103,13 @@ function appendFinalOutputClaimProjectionSection(
       ? []
       : [
         "- No ActionableOntology artifact is claimed or emitted by this projection.",
+      ]),
+    ...(args.judgeSupportShortfallClaimIds.length === 0
+      ? []
+      : [
+        `- Judge-support shortfall (degraded, not certified): ${
+          args.judgeSupportShortfallClaimIds.join(", ")
+        } — the answer-support judge could not confirm two independent supports for these claims; they are excluded from the trusted claim scope.`,
       ]),
     "- Public claim truth is owned by the claim projection artifact, not by this prose section.",
     "- The canonical claim projection is generated from the immutable pre-publication run-control checkpoint.",
@@ -16777,6 +16793,8 @@ export async function runReconstruct(
       claimProjectionValidationPath,
       claimProjection,
       claimProjectionValidation,
+      judgeSupportShortfallClaimIds:
+        maturationAnswerClaimsValidation.judge_support_shortfall_claim_ids,
     },
   );
   const finalOutputWithArtifactTruth = appendFinalOutputArtifactTruthSection(
