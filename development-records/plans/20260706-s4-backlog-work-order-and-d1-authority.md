@@ -196,3 +196,31 @@ F1 회귀 단위테스트 + 전체 2500 회귀 + flat-mode breaker E2E.
 
 검증: typecheck PASS · vitest 2500 PASS · 헬퍼 규칙 단위테스트(배치-창 실패 분류·성공 skip·음성
 대조)· F1 회귀테스트 · flat-mode E2E 회귀 · import-boundary·러너 컨포먼스 PASS.
+
+## 8. §4-1 onto-lens 교차검증 (2026-07-07, ultracode Workflow × onto 렌즈 taxonomy)
+
+onto MCP 제품 리뷰는 **서버 stale로 차단**(설치 서버가 repo보다 옛 빌드 — 현재 settings 키 거부 +
+diffRange를 파일 target에만 허용하며 그 경로를 git cwd로 써 ENOTDIR). 대신 `onto_list`로 onto
+정식 렌즈 taxonomy(logic·semantics·pragmatics·coverage·dependency·evolution)를 확보해 ultracode
+Workflow의 6개 적대 렌즈로 구성 → 각 material finding을 실코드로 adversarial 재검증(기본 REFUTED).
+HEAD b456675 대상. 10 에이전트, 0 오류.
+
+**CONFIRMED material 1건 (coverage·dependency 두 렌즈 수렴, §4-1 도입):**
+- **stance/lens post-trip 비대칭** — 트립 후, zero-retry(`issue_artifact_max_retries=0`) 배치 실패
+  유닛을 stance 풀(가드 `tripped() && !stanceBatchOk`)은 스킵→incomplete로 남기는데, lens 풀은
+  `recordItemFailure`로 분류(item-local→dead-letter). 동일 상황이 두 풀에서 dead-letter vs
+  incomplete로 갈리고, 동시 stance 풀에선 트립 전/후 스케줄에 따라 비결정적. 계약(nested 균일
+  규칙: item-local→dead-letter)에서 stance가 이탈. **수정:** stance 트립-스킵을 "새 flat 디스패치를
+  빚지는 유닛만"으로 정정 — batch-ok·zero-retry 배치실패(디스패치 안 빚음)는 트립 후에도 처리해
+  helper로 기록·분류. 기본 설정(retries=2)에선 동작 동일(회귀 0), corner case(retries=0)만 정정.
+
+**비material(문서화):** logic/semantics/coverage/evolution 각 1건(low/info) — 재보고 불요 항목·주석
+정합 등. pragmatics/dependency 추가 material 없음(공시된 pre-existing 동시성 외).
+
+**남은 gap:** 루프-레벨 트립-게이팅(stance/lens 양 풀)의 통합 테스트 부재 — nested-workers 러너
+하니스 필요(F3와 동일 클래스). 분류 동작(zero-budget item-local→dead-letter)은 helper 테스트로 커버.
+
+**교차검증 3중 요약:** Claude 3렌즈(F1) → Codex/OpenAI 4-agent(F2·Finding A) → onto-lens ultracode
+6렌즈(stance/lens 비대칭). 각 KIND가 앞이 놓친 것을 잡음 — cross-family·cross-taxonomy 다양성의 실증.
+
+검증: typecheck PASS · vitest 2500 PASS · import-boundary·러너 컨포먼스 PASS.

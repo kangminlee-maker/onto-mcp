@@ -4840,14 +4840,26 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
         outcomes[dispatchIndex] = outcomeFromPreviousResult(prior);
         continue;
       }
-      // 트립 이후 새 flat 디스패치를 만드는 유닛만 건너뛴다 — 남은 미디스패치
-      // 유닛은 incomplete 집합에 남아 회복 재디스패치 대상이 된다 (규칙 5).
-      // 단 nested 1차 배치에서 이미 성공한 유닛은 디스패치를 빚지지 않으므로
-      // 트립 후에도 처리해 완료로 기록한다(미기록 시 incomplete로 오집계 —
-      // §4-1). return이 아닌 continue: 뒤 인덱스 preserved 복원도 마저 소진.
-      const stanceBatchOk =
-        stanceNestedBatch?.byUnitId.get(dispatch.unit_id)?.ok === true;
-      if (breakerState?.tripped() && !stanceBatchOk) continue;
+      // 트립 이후엔 새 flat 디스패치를 빚지는 유닛만 건너뛴다 — 그런 유닛은
+      // 미디스패치로 incomplete 집합에 남아 회복 재디스패치 대상이 된다(규칙 5).
+      // 배치-성공(디스패치 안 빚음)과 zero-retry 배치-실패(예산 소진 → 새 flat
+      // 디스패치 없음)는 트립 후에도 처리해 recordNested…로 기록·분류한다:
+      // 미기록 시 incomplete로 오집계되고, item-local 배치-실패는 dead-letter
+      // 여야 하는데 스킵하면 incomplete로 오분류된다(교차검증 — lens 풀과 대칭,
+      // 계약의 nested 균일 규칙 준수). return이 아닌 continue: 뒤 인덱스
+      // preserved 복원도 마저 소진.
+      if (breakerState?.tripped()) {
+        const batchOutcome = stanceNestedBatch?.byUnitId.get(dispatch.unit_id);
+        const owesNewDispatch =
+          batchOutcome?.ok !== true &&
+          (batchOutcome === undefined ||
+            maxRetriesForDispatch({
+              profile: args.reviewExecutionProfile,
+              dispatch,
+              fallback: args.retryPolicy.issueArtifactMaxRetries,
+            }) >= 1);
+        if (owesNewDispatch) continue;
+      }
       const outcome = await executeIssueStanceUnit({
         ctx: {
           projectRoot: args.projectRoot,
