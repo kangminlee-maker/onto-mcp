@@ -12,13 +12,30 @@
  * mutation levers actually moved. The mock E2E's negative contrast is
  * therefore a real content comparison, not a label lookup.
  */
-import type {
-  SemanticSynthesisInput,
-  SemanticSynthesisOutput,
+import {
+  reduceColumnLeavesWithTrace,
+  type ComprehensionReduceNode,
+} from "../../reconstruct/comprehension-reduce.js";
+import {
+  classifyFrontier,
+  type SemanticSynthesisInput,
+  type SemanticSynthesisOutput,
 } from "../../reconstruct/comprehension-semantic-map.js";
 import type {
   SynthesizeCertJudgeFn,
 } from "../synthesize-cert-judge.js";
+import {
+  freezeSynthesizeCertPackets,
+  type FreezeSynthesizeCertPacketsResult,
+  type SynthesizeCertAsyncSynthesisFn,
+  type SynthesizeCertColumnPipeline,
+} from "../synthesize-cert-packet.js";
+import {
+  collectSynthesizeCertCandidates,
+  sampleStratifiedManifest,
+  type SynthesizeCertSampledInput,
+  type SynthesizeCertSampleResult,
+} from "../synthesize-cert-sampler.js";
 
 /** Deterministic mock "LLM" for ANY arm: output is a pure function of the
  * packet. Summary folds the grounding facts (clusters + child prose);
@@ -69,4 +86,76 @@ export function createMockSynthesizeCertJudge(): SynthesizeCertJudgeFn {
           : "fail",
     };
   };
+}
+
+// ── shared deterministic test pipeline (fixture module, not a mock LLM) ───────
+
+/** One hand-built reduce leaf with a uniform shape (no intra-leaf seams). */
+export function synthesizeCertTestLeaf(
+  rowStart: number,
+  rowEnd: number,
+  shape: string,
+): ComprehensionReduceNode {
+  return {
+    region: { sheet: "S", column_index: 3, row_start: rowStart, row_end: rowEnd },
+    format_clusters: [shape],
+    boundaries: [],
+    edge_first_shape: shape,
+    edge_last_shape: shape,
+    distinct_is_lower_bound: false,
+    boundaries_are_lower_bound: false,
+    segments_capped: false,
+    limiting_witness: null,
+  };
+}
+
+/** The canonical B4 test column: 6 leaves (rows 1-60, int→text junction at
+ * 30/31), fanin 2, over-context budget 2 → root(1-60) and M1234(1-40)
+ * accumulate (seam×merge), M34(21-40) is seam×leaf, M12/M56 are noseam×leaf. */
+export function buildSynthesizeCertTestPipeline(): SynthesizeCertColumnPipeline {
+  const leaves = [
+    synthesizeCertTestLeaf(1, 10, "int"),
+    synthesizeCertTestLeaf(11, 20, "int"),
+    synthesizeCertTestLeaf(21, 30, "int"),
+    synthesizeCertTestLeaf(31, 40, "text"),
+    synthesizeCertTestLeaf(41, 50, "text"),
+    synthesizeCertTestLeaf(51, 60, "text"),
+  ];
+  const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves, 2);
+  return { trace, nodesByKey, modes: classifyFrontier(trace, 2) };
+}
+
+/** Deterministic mock REFERENCE realization (child authoring): prose folds the
+ * node range + consumed-child count, so bottom-up authoring is observable. */
+export function mockReferenceSynthesize(tag = "ref"): SynthesizeCertAsyncSynthesisFn {
+  return async (input) => ({
+    semantic_summary: `${tag}:${input.node_ref.row_start}-${input.node_ref.row_end}:c${input.child_summaries.length}`,
+    boundaries: [],
+  });
+}
+
+/** collect → sample → freeze over the canonical test column, one fixture. */
+export async function freezeSynthesizeCertTestPackets(
+  fixtureId: string,
+  opts?: { referenceTag?: string; sheetIndex?: number },
+): Promise<{
+  pipeline: SynthesizeCertColumnPipeline;
+  entries: SynthesizeCertSampledInput[];
+  sample: SynthesizeCertSampleResult;
+  frozen: FreezeSynthesizeCertPacketsResult;
+}> {
+  const pipeline = buildSynthesizeCertTestPipeline();
+  const candidates = collectSynthesizeCertCandidates({
+    trace: pipeline.trace,
+    nodesByKey: pipeline.nodesByKey,
+    modes: pipeline.modes,
+    sheetIndex: opts?.sheetIndex ?? 0,
+  });
+  const sample = sampleStratifiedManifest([{ fixture_id: fixtureId, candidates }]);
+  const frozen = await freezeSynthesizeCertPackets({
+    entries: sample.manifest,
+    resolvePipeline: () => pipeline,
+    referenceSynthesize: mockReferenceSynthesize(opts?.referenceTag),
+  });
+  return { pipeline, entries: sample.manifest, sample, frozen };
 }

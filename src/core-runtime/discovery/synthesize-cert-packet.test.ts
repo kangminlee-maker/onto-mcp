@@ -9,13 +9,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
-  reduceColumnLeavesWithTrace,
-  type ComprehensionReduceNode,
-} from "../reconstruct/comprehension-reduce.js";
-import { classifyFrontier } from "../reconstruct/comprehension-semantic-map.js";
-import {
   freezeSynthesizeCertPackets,
-  type SynthesizeCertAsyncSynthesisFn,
   type SynthesizeCertColumnPipeline,
 } from "./synthesize-cert-packet.js";
 import {
@@ -23,38 +17,16 @@ import {
   sampleStratifiedManifest,
   type SynthesizeCertSampledInput,
 } from "./synthesize-cert-sampler.js";
+import {
+  buildSynthesizeCertTestPipeline,
+  mockReferenceSynthesize,
+} from "./test-fixtures/synthesize-cert-mock-realization.js";
 
 const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
 const FIXTURE = sha("packet-fixture");
 
-function leaf(rowStart: number, rowEnd: number, shape: string): ComprehensionReduceNode {
-  return {
-    region: { sheet: "S", column_index: 3, row_start: rowStart, row_end: rowEnd },
-    format_clusters: [shape],
-    boundaries: [],
-    edge_first_shape: shape,
-    edge_last_shape: shape,
-    distinct_is_lower_bound: false,
-    boundaries_are_lower_bound: false,
-    segments_capped: false,
-    limiting_witness: null,
-  };
-}
-
-/** Same mini-pipeline as the S1 tests: 6 leaves, fanin 2, budget 2 → root and
- * M1234 accumulate (merge), M12/M34/M56 are frontier (leaf role). */
-function buildPipeline(): SynthesizeCertColumnPipeline {
-  const leaves = [
-    leaf(1, 10, "int"),
-    leaf(11, 20, "int"),
-    leaf(21, 30, "int"),
-    leaf(31, 40, "text"),
-    leaf(41, 50, "text"),
-    leaf(51, 60, "text"),
-  ];
-  const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves, 2);
-  return { trace, nodesByKey, modes: classifyFrontier(trace, 2) };
-}
+const buildPipeline = buildSynthesizeCertTestPipeline;
+const mockRef = mockReferenceSynthesize;
 
 function sampledEntries(pipeline: SynthesizeCertColumnPipeline): SynthesizeCertSampledInput[] {
   const candidates = collectSynthesizeCertCandidates({
@@ -65,13 +37,6 @@ function sampledEntries(pipeline: SynthesizeCertColumnPipeline): SynthesizeCertS
   });
   return sampleStratifiedManifest([{ fixture_id: FIXTURE, candidates }]).manifest;
 }
-
-const mockRef =
-  (tag: string): SynthesizeCertAsyncSynthesisFn =>
-  async (input) => ({
-    semantic_summary: `${tag}:${input.node_ref.row_start}-${input.node_ref.row_end}:c${input.child_summaries.length}`,
-    boundaries: [],
-  });
 
 describe("freezeSynthesizeCertPackets", () => {
   it("freezes one packet per entry, authoring reference children bottom-up with memoization", async () => {

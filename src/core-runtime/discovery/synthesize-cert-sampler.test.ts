@@ -8,15 +8,8 @@
  */
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import {
-  reduceColumnLeavesWithTrace,
-  reduceNodeKey,
-  type ComprehensionReduceNode,
-} from "../reconstruct/comprehension-reduce.js";
-import {
-  classifyFrontier,
-  type SemanticSynthesisInput,
-} from "../reconstruct/comprehension-semantic-map.js";
+import { reduceNodeKey } from "../reconstruct/comprehension-reduce.js";
+import type { SemanticSynthesisInput } from "../reconstruct/comprehension-semantic-map.js";
 import {
   collectSynthesizeCertCandidates,
   sampleStratifiedManifest,
@@ -27,44 +20,16 @@ import {
   type SynthesizeCertDeterministicFacts,
   type SynthesizeCertSamplerFixtureInput,
 } from "./synthesize-cert-sampler.js";
+import { buildSynthesizeCertTestPipeline } from "./test-fixtures/synthesize-cert-mock-realization.js";
 
 const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
 
 const FIXTURE_A = sha("fixture-A");
 const FIXTURE_B = sha("fixture-B");
 
-// ── real mini-pipeline (6 leaves, fanin 2, budget 2 → 5 non-subsumed nodes) ───
-
-function leaf(rowStart: number, rowEnd: number, shape: string): ComprehensionReduceNode {
-  return {
-    region: { sheet: "S", column_index: 3, row_start: rowStart, row_end: rowEnd },
-    format_clusters: [shape],
-    boundaries: [],
-    edge_first_shape: shape,
-    edge_last_shape: shape,
-    distinct_is_lower_bound: false,
-    boundaries_are_lower_bound: false,
-    segments_capped: false,
-    limiting_witness: null,
-  };
-}
-
-/** L1..L3 "int" (rows 1-30), L4..L6 "text" (rows 31-60). fanin 2 →
- * M12/M34/M56 → M1234 → root; the int→text junction lands inside M34, so the
- * value_shape seam originates there and folds up into M1234 and the root. */
-function buildRealColumn() {
-  const leaves = [
-    leaf(1, 10, "int"),
-    leaf(11, 20, "int"),
-    leaf(21, 30, "int"),
-    leaf(31, 40, "text"),
-    leaf(41, 50, "text"),
-    leaf(51, 60, "text"),
-  ];
-  const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves, 2);
-  const modes = classifyFrontier(trace, 2);
-  return { trace, nodesByKey, modes };
-}
+/** Canonical test column (see the fixture module): 6 leaves, int→text junction
+ * inside M34, fanin 2, budget 2 → 5 non-subsumed nodes. */
+const buildRealColumn = buildSynthesizeCertTestPipeline;
 
 // ── hand-built candidate factory (pool-size control for sampling tests) ───────
 

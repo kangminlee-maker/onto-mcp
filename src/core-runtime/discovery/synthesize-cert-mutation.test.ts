@@ -8,12 +8,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
-  reduceColumnLeavesWithTrace,
-  type ComprehensionReduceNode,
-} from "../reconstruct/comprehension-reduce.js";
-import {
   assertSynthesisInputBounded,
-  classifyFrontier,
   type SemanticSynthesisInput,
 } from "../reconstruct/comprehension-semantic-map.js";
 import {
@@ -23,12 +18,8 @@ import {
   INPUT_CORRUPTION_GROUNDING_LEVER,
   SYNTHESIZE_CERT_MUTATION_KIND,
 } from "./synthesize-cert-mutation.js";
-import { freezeSynthesizeCertPackets } from "./synthesize-cert-packet.js";
-import {
-  collectSynthesizeCertCandidates,
-  sampleStratifiedManifest,
-  synthesizeCertInputSha256,
-} from "./synthesize-cert-sampler.js";
+import { synthesizeCertInputSha256 } from "./synthesize-cert-sampler.js";
+import { freezeSynthesizeCertTestPackets } from "./test-fixtures/synthesize-cert-mock-realization.js";
 
 const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
 const FIXTURE = sha("mutation-fixture");
@@ -49,41 +40,9 @@ function packet(args: {
   };
 }
 
-function leaf(rowStart: number, rowEnd: number, shape: string): ComprehensionReduceNode {
-  return {
-    region: { sheet: "S", column_index: 3, row_start: rowStart, row_end: rowEnd },
-    format_clusters: [shape],
-    boundaries: [],
-    edge_first_shape: shape,
-    edge_last_shape: shape,
-    distinct_is_lower_bound: false,
-    boundaries_are_lower_bound: false,
-    segments_capped: false,
-    limiting_witness: null,
-  };
-}
-
 async function frozenRealPackets() {
-  const leaves = [
-    leaf(1, 10, "int"),
-    leaf(11, 20, "int"),
-    leaf(21, 30, "int"),
-    leaf(31, 40, "text"),
-    leaf(41, 50, "text"),
-    leaf(51, 60, "text"),
-  ];
-  const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves, 2);
-  const pipeline = { trace, nodesByKey, modes: classifyFrontier(trace, 2) };
-  const candidates = collectSynthesizeCertCandidates({ ...pipeline, sheetIndex: 0 });
-  const entries = sampleStratifiedManifest([{ fixture_id: FIXTURE, candidates }]).manifest;
-  return freezeSynthesizeCertPackets({
-    entries,
-    resolvePipeline: () => pipeline,
-    referenceSynthesize: async (input) => ({
-      semantic_summary: `ref:${input.node_ref.row_start}-${input.node_ref.row_end}`,
-      boundaries: [],
-    }),
-  });
+  const { frozen } = await freezeSynthesizeCertTestPackets(FIXTURE);
+  return frozen;
 }
 
 describe("applyInputCorruptionV1", () => {
