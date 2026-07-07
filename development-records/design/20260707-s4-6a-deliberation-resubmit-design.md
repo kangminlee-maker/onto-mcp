@@ -55,11 +55,13 @@ submit-시점·on-disk 양쪽에서 던진다 → 결정적 분류·오류명세
 
 ## 3. 공유화 설계 (surgical, default-off byte-identical)
 
-### 3-A. `stance-resubmit.ts` → 유닛-불문 분류기/빌더
+### 3-A. `stance-resubmit.ts` → 유닛-불문 분류기/빌더 (파일은 `unit-resubmit.ts`로 리네임, §6)
 
-- **신설** `classifyDeliberationUnsupportedEvidenceRefFailure(message)`: 두 deliberation 패턴
-  (submit-시점·on-disk)에 앵커, `evidenceRef`만 캡처(issue/lens는 dispatch에서). 다른 실패 클래스는
-  null 반환(인프라 실패 의미 보존).
+- **신설** `classifyDeliberationUnsupportedEvidenceRefFailure(message)`: deliberation **submit-시점**
+  패턴에만 앵커, `evidenceRef`만 캡처(issue/lens는 dispatch에서). 다른 실패 클래스는 null 반환(인프라
+  실패 의미 보존). **정정(§6 반영)**: 착수 초안은 submit-시점·on-disk **양쪽** 앵커를 예상했으나,
+  교차검증에서 on-disk 거부가 wired-path 도달 불가(post-pool→degrade)로 판명 → **submit-시점 전용**으로
+  확정. on-disk 패턴은 추가하지 않는다(dead code). 최종 코드/§6이 canonical.
 - **일반화** `buildResubmitErrorSpec`: 현재 stance 전용 label("rejected stance…")을 유닛-적합 label로
   파라미터화. deliberation label = `deliberation for issue_id: X, lens_id: Y`. 허용집합 블록·마커·
   본문 지시는 재사용(리팩터 최소화 — stance 호출은 동일 label 산출로 byte-identical 유지).
@@ -135,6 +137,25 @@ concept/scope)으로 각 load-bearing 주장 반증 시도. 결과·조치:
   분류기를 submit-시점 전용으로 명시, 테스트를 "on-disk는 분류 안 함(→degrade)"로 정정.
 - **[조치] 모듈 리네임 `stance-resubmit.ts` → `unit-resubmit.ts`** + docstring 갱신(유닛-불문 범위 반영).
   파일명이 deliberation 로직을 호스팅하는데도 stance-명이라 concept 이름 추적성 위배였음.
+
+### 6-1. cross-family 교차검증 (Codex `$ultracode-for-codex`, 2026-07-07, 커밋 705b991)
+
+Claude 3-KIND 후 **다른 family(Codex/OpenAI)**로 3렌즈 적대 재검증(correctness·contract-preservation·
+concept/design-honesty, 각 xhigh). synthesis 에이전트는 Codex usage-limit로 미완이나 3렌즈 전부 완료.
+결과·조치:
+
+- **correctness: `claims_hold`, findings 0.** 런타임 heal/degrade 경로(retry 루프→applyResubmitErrorSpec
+  →주입→재시도, cap 소진→completeUnavailableDeliberationResponseUnit) cross-family 무결 확인.
+- **concept/honesty: material 1 — [조치 완료].** 설계 노트 §3-A가 "submit·on-disk 양쪽 앵커"로 남아
+  최종 submit-전용 구현·§6 정정과 모순(stale 지시). → §3-A를 submit-전용으로 정정(위).
+- **contract: material 1 — [실증: PR 무영향, 로컬 위생 조치].** `dist/`가 stale(옛 `stance-resubmit.js`만,
+  `unit-resubmit.js` 부재)이고 `bin/onto`가 dist 우선(존재 시)이라 미빌드 체크아웃은 신 경로 미실행 우려.
+  **재도출**: `dist/`는 git 미추적(`.gitignore:25`)·`prepare` 훅이 설치 시 재빌드 → 커밋/배포/테스트
+  (vitest=src 직행) 무영향. 로컬 stale 산출물이라 `build:ts-core` 재빌드로 해소(`unit-resubmit.js` 생성,
+  stale 제거) — 부수로 rename의 빌드-일관성(tsc emit)도 확인. **머지 블로커 아님.**
+
+Codex-side 결론: 소스 correctness·contract 위반 0(유일 findings는 설계-노트 stale·gitignore된 dist
+산출물로, 소스 계약 위반 아님) → 구현 자체는 cross-family로도 sound 확정.
 
 **Residual risk (선재·스코프 밖, 정직 기록):** resubmit 재시도 발동은 `failureKindFromMessage`(공유
 retry-gating)를 거친다. 환각 evidence_ref 문자열이 `issue_id`/`schema_version`/`work_item_id`/
