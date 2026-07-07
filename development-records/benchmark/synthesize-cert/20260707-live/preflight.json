@@ -1,0 +1,24 @@
+{
+  "at": "2026-07-07T07:53:33.236Z",
+  "baseline_reference_judge_seat": "openai/gpt-5.5",
+  "candidate_negative_control_seat": "anthropic/claude-haiku-4-5-20251001",
+  "forecast": {
+    "reference_calls": 20,
+    "arm_calls": 270,
+    "judge_calls": 270,
+    "total": 560,
+    "cap": 800
+  },
+  "quota_probes": [
+    {
+      "label": "openai/gpt-5.5",
+      "at": "2026-07-07T07:53:31.773Z",
+      "text": "ok"
+    },
+    {
+      "label": "anthropic/claude-haiku-4-5-20251001",
+      "at": "2026-07-07T07:53:33.236Z",
+      "text": "ok"
+    }
+  ]
+}

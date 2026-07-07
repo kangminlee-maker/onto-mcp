@@ -1,0 +1,60 @@
+{
+  "structured_grounding_comparison_contract": "synthesize-cert-structured-grounding-comparison/v1",
+  "run_dir": "development-records/benchmark/synthesize-cert/20260707-live",
+  "extraction_seat": "anthropic/claude-opus-4-8 (recompute — 0 LLM calls, verifier re-applied to persisted claims)",
+  "extraction_dispatch": {
+    "attempted": 270,
+    "ok": 256,
+    "parse_error": 5,
+    "honesty_violation": 9,
+    "transport_error": 0
+  },
+  "per_arm_grounding": {
+    "baseline": {
+      "gpt5_holistic": {
+        "pass": 90,
+        "tot": 90
+      },
+      "opus_holistic": {
+        "pass": 90,
+        "tot": 90
+      },
+      "deterministic_structural": {
+        "pass": 77,
+        "tot": 77
+      }
+    },
+    "candidate": {
+      "gpt5_holistic": {
+        "pass": 80,
+        "tot": 90
+      },
+      "opus_holistic": {
+        "pass": 90,
+        "tot": 90
+      },
+      "deterministic_structural": {
+        "pass": 88,
+        "tot": 89
+      }
+    },
+    "negative_control": {
+      "gpt5_holistic": {
+        "pass": 25,
+        "tot": 90
+      },
+      "opus_holistic": {
+        "pass": 59,
+        "tot": 90
+      },
+      "deterministic_structural": {
+        "pass": 45,
+        "tot": 90
+      }
+    }
+  },
+  "violation_kind_counts": {
+    "fabricated_boundary_row": 87,
+    "fabricated_transition_row": 58
+  }
+}

@@ -30,3 +30,8 @@ build/
 
 # local env secrets (never commit)
 .env
+
+# B4 synthesize-cert bench: the durable record+capsule in each run dir ARE
+# tracked; the local/ sidecar holds real-workbook-derived child-summary PROSE
+# (source-safety: sha-referenced from the capsule, never committed).
+development-records/benchmark/synthesize-cert/*/local/

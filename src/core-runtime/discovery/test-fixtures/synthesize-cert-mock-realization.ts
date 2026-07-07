@@ -1,0 +1,281 @@
+/**
+ * B4 bench MOCK realizations (deletion boundary — design v3 §12, mock-realization
+ * discipline): the deterministic arm synthesize + judge used by tests, the S8
+ * mock E2E, and the orchestrator script's default (no `--go`) mode. Production
+ * semantic paths never import this file (G1 test-fixtures import boundary).
+ *
+ * The mock is MECHANICALLY discriminating, not arm-aware: the arm synthesize
+ * derives its output purely from the packet it is given, and the judge
+ * re-derives the expected output from the ORIGINAL packet and compares — so a
+ * baseline/candidate run (original packet) passes both metrics, while a
+ * negative run (mutated packet) fails exactly the metrics whose facts the
+ * mutation levers actually moved. The mock E2E's negative contrast is
+ * therefore a real content comparison, not a label lookup.
+ */
+import { createHash } from "node:crypto";
+import {
+  reduceColumnLeavesWithTrace,
+  type ComprehensionReduceNode,
+} from "../../reconstruct/comprehension-reduce.js";
+import {
+  classifyFrontier,
+  type SemanticSynthesisInput,
+  type SemanticSynthesisOutput,
+} from "../../reconstruct/comprehension-semantic-map.js";
+import type {
+  SynthesizeCertJudgeFn,
+  SynthesizeCertStructuralClaimExtractorFn,
+} from "../synthesize-cert-judge.js";
+import {
+  runSynthesizeCertLoop,
+  type SynthesizeCertLoopResult,
+} from "../synthesize-cert-loop.js";
+import {
+  freezeSynthesizeCertPackets,
+  type FreezeSynthesizeCertPacketsResult,
+  type SynthesizeCertAsyncSynthesisFn,
+  type SynthesizeCertColumnPipeline,
+} from "../synthesize-cert-packet.js";
+import {
+  collectSynthesizeCertCandidates,
+  sampleStratifiedManifest,
+  type SynthesizeCertSampledInput,
+  type SynthesizeCertSampleResult,
+} from "../synthesize-cert-sampler.js";
+
+/** Deterministic mock "LLM" for ANY arm: output is a pure function of the
+ * packet. Summary folds the grounding facts (clusters + child prose);
+ * boundaries mirror the packet's seams with their shapes as the semantic
+ * characterization. */
+export function mockSynthesizeCertArmOutput(
+  packet: SemanticSynthesisInput,
+): SemanticSynthesisOutput {
+  const clusters = [...packet.format_clusters].sort().join(",");
+  const children = packet.child_summaries
+    .map((c) => `${c.key}=${c.summary}`)
+    .join("; ");
+  return {
+    semantic_summary: `mock-synth rows=${packet.node_ref.row_start}-${packet.node_ref.row_end} clusters=[${clusters}] children=[${children}]`,
+    boundaries: packet.value_shape_seams.map((s) => ({
+      row: s.row,
+      character_before: s.prev_shape,
+      character_after: s.new_shape,
+    })),
+  };
+}
+
+const canonicalBoundaries = (
+  boundaries: SemanticSynthesisOutput["boundaries"],
+): string =>
+  JSON.stringify(
+    boundaries
+      .map((b) => ({ row: b.row, character_before: b.character_before, character_after: b.character_after }))
+      .sort(
+        (a, b) =>
+          a.row - b.row ||
+          a.character_before.localeCompare(b.character_before) ||
+          a.character_after.localeCompare(b.character_after),
+      ),
+  );
+
+/** Deterministic mock judge: regenerates the expected output from the ORIGINAL
+ * packet (same generator as the mock arms) and compares per metric —
+ * grounding on the summary content, boundary on the boundary set. */
+export function createMockSynthesizeCertJudge(): SynthesizeCertJudgeFn {
+  return async ({ original_packet, arm_output }) => {
+    const expected = mockSynthesizeCertArmOutput(original_packet);
+    return {
+      grounding: arm_output.semantic_summary === expected.semantic_summary ? "pass" : "fail",
+      boundary:
+        canonicalBoundaries(arm_output.boundaries) === canonicalBoundaries(expected.boundaries)
+          ? "pass"
+          : "fail",
+    };
+  };
+}
+
+/** Deterministic mock structural-claim extractor (structured-grounding cut
+ * rehearsal, owner decision 2026-07-07): always resolves to EMPTY claims —
+ * trivially honest (an empty citation set can never fail
+ * `assertClaimsGroundedInText`) and trivially grounded (an empty citation set
+ * can never fail `verifyStructuralGrounding`). A mock cannot feasibly perform
+ * real prose extraction deterministically; this rehearsal's job is proving
+ * the dispatch/aggregate/persist/resume SCAFFOLD completes, not producing
+ * meaningful claims — {@link verifyStructuralGrounding}'s own unit tests
+ * (the R7 Group A fixture reproduction) are what prove the verifier's logic. */
+export function createMockSynthesizeCertStructuralClaimExtractor(): SynthesizeCertStructuralClaimExtractorFn {
+  return async () => ({ cited_boundary_rows: [], cited_format_labels: [], cited_transitions: [] });
+}
+
+// ── shared deterministic test pipeline (fixture module, not a mock LLM) ───────
+
+/** One hand-built reduce leaf with a uniform shape (no intra-leaf seams). */
+export function synthesizeCertTestLeaf(
+  rowStart: number,
+  rowEnd: number,
+  shape: string,
+  columnIndex = 3,
+): ComprehensionReduceNode {
+  return {
+    region: { sheet: "S", column_index: columnIndex, row_start: rowStart, row_end: rowEnd },
+    format_clusters: [shape],
+    boundaries: [],
+    edge_first_shape: shape,
+    edge_last_shape: shape,
+    distinct_is_lower_bound: false,
+    boundaries_are_lower_bound: false,
+    segments_capped: false,
+    limiting_witness: null,
+  };
+}
+
+/** The canonical B4 test column: 6 leaves (rows 1-60, int→text junction at
+ * 30/31), fanin 2, over-context budget 2 → root(1-60) and M1234(1-40)
+ * accumulate (seam×merge), M34(21-40) is seam×leaf, M12/M56 are noseam×leaf. */
+export function buildSynthesizeCertTestPipeline(columnIndex = 3): SynthesizeCertColumnPipeline {
+  const leaves = [
+    synthesizeCertTestLeaf(1, 10, "int", columnIndex),
+    synthesizeCertTestLeaf(11, 20, "int", columnIndex),
+    synthesizeCertTestLeaf(21, 30, "int", columnIndex),
+    synthesizeCertTestLeaf(31, 40, "text", columnIndex),
+    synthesizeCertTestLeaf(41, 50, "text", columnIndex),
+    synthesizeCertTestLeaf(51, 60, "text", columnIndex),
+  ];
+  const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves, 2);
+  return { trace, nodesByKey, modes: classifyFrontier(trace, 2) };
+}
+
+/** A uniform column (all "int", no junction): root and M1234 accumulate
+ * WITHOUT seams — the noseam×merge stratum the seam column cannot produce. */
+export function buildSynthesizeCertUniformTestPipeline(
+  columnIndex = 2,
+): SynthesizeCertColumnPipeline {
+  const leaves = [
+    synthesizeCertTestLeaf(1, 10, "int", columnIndex),
+    synthesizeCertTestLeaf(11, 20, "int", columnIndex),
+    synthesizeCertTestLeaf(21, 30, "int", columnIndex),
+    synthesizeCertTestLeaf(31, 40, "int", columnIndex),
+    synthesizeCertTestLeaf(41, 50, "int", columnIndex),
+    synthesizeCertTestLeaf(51, 60, "int", columnIndex),
+  ];
+  const { trace, nodesByKey } = reduceColumnLeavesWithTrace(leaves, 2);
+  return { trace, nodesByKey, modes: classifyFrontier(trace, 2) };
+}
+
+/** A full-stratum synthetic fixture (§12 "각 stratum ≥ floor"): two seam
+ * columns + one uniform column → per stratum ≥2 inputs, so 3 reps clear the
+ * decisive floor (5) with K=5 over-provisioning. */
+export function buildSynthesizeCertFullFixturePipelines(): SynthesizeCertColumnPipeline[] {
+  return [
+    buildSynthesizeCertTestPipeline(1),
+    buildSynthesizeCertUniformTestPipeline(2),
+    buildSynthesizeCertTestPipeline(3),
+  ];
+}
+
+/** Deterministic mock REFERENCE realization (child authoring): prose folds the
+ * node range + consumed-child count, so bottom-up authoring is observable. */
+export function mockReferenceSynthesize(tag = "ref"): SynthesizeCertAsyncSynthesisFn {
+  return async (input) => ({
+    semantic_summary: `${tag}:${input.node_ref.row_start}-${input.node_ref.row_end}:c${input.child_summaries.length}`,
+    boundaries: [],
+  });
+}
+
+/** collect → sample → freeze → loop over TWO full-stratum synthetic fixtures —
+ * the floor-clean mock bench the record assembly and the S8 mock E2E consume
+ * (§12: no observer I/O, no LLM spend, every stage the real implementation). */
+export async function runSynthesizeCertMockBench(opts?: {
+  fixtureIds?: [string, string];
+  declaredReps?: number;
+  referenceTag?: string;
+  mutationSeed?: string;
+}): Promise<{
+  fixtureIds: [string, string];
+  pipelinesByFixture: Map<string, SynthesizeCertColumnPipeline[]>;
+  sample: SynthesizeCertSampleResult;
+  frozen: FreezeSynthesizeCertPacketsResult;
+  loop: SynthesizeCertLoopResult;
+  mutationSeed: string;
+}> {
+  const fixtureIds = opts?.fixtureIds ?? [
+    createHash("sha256").update("mock-bench-fixture-1").digest("hex"),
+    createHash("sha256").update("mock-bench-fixture-2").digest("hex"),
+  ];
+  const mutationSeed = opts?.mutationSeed ?? "b4-mock-bench-seed";
+  const pipelinesByFixture = new Map<string, SynthesizeCertColumnPipeline[]>(
+    fixtureIds.map((id) => [id, buildSynthesizeCertFullFixturePipelines()]),
+  );
+  const fixtures = fixtureIds.map((fixtureId) => ({
+    fixture_id: fixtureId,
+    candidates: pipelinesByFixture
+      .get(fixtureId)!
+      .flatMap((pipeline) =>
+        collectSynthesizeCertCandidates({
+          trace: pipeline.trace,
+          nodesByKey: pipeline.nodesByKey,
+          modes: pipeline.modes,
+          sheetIndex: 0,
+        }),
+      ),
+  }));
+  const sample = sampleStratifiedManifest(fixtures, {
+    declaredReps: opts?.declaredReps ?? 3,
+  });
+  if (sample.floor_violations.length > 0) {
+    throw new Error(
+      `runSynthesizeCertMockBench: mock universe must be floor-clean, got ${sample.floor_violations
+        .map((v) => v.code)
+        .join(", ")}`,
+    );
+  }
+  const frozen = await freezeSynthesizeCertPackets({
+    entries: sample.manifest,
+    resolvePipeline: (entry) => {
+      const pipeline = pipelinesByFixture
+        .get(entry.fixture_id)
+        ?.find((p) => p.trace.nodes.has(entry.node_key));
+      if (!pipeline) {
+        throw new Error(`runSynthesizeCertMockBench: no pipeline for ${entry.input_id}`);
+      }
+      return pipeline;
+    },
+    referenceSynthesize: mockReferenceSynthesize(opts?.referenceTag),
+  });
+  const mockArm: SynthesizeCertAsyncSynthesisFn = async (packet) =>
+    mockSynthesizeCertArmOutput(packet);
+  const loop = await runSynthesizeCertLoop({
+    packets: frozen.packets,
+    declaredReps: sample.declared_reps,
+    arms: { baseline: mockArm, candidate: mockArm, negative_control: mockArm },
+    judge: createMockSynthesizeCertJudge(),
+    mutationSeed,
+  });
+  return { fixtureIds, pipelinesByFixture, sample, frozen, loop, mutationSeed };
+}
+
+/** collect → sample → freeze over the canonical test column, one fixture. */
+export async function freezeSynthesizeCertTestPackets(
+  fixtureId: string,
+  opts?: { referenceTag?: string; sheetIndex?: number },
+): Promise<{
+  pipeline: SynthesizeCertColumnPipeline;
+  entries: SynthesizeCertSampledInput[];
+  sample: SynthesizeCertSampleResult;
+  frozen: FreezeSynthesizeCertPacketsResult;
+}> {
+  const pipeline = buildSynthesizeCertTestPipeline();
+  const candidates = collectSynthesizeCertCandidates({
+    trace: pipeline.trace,
+    nodesByKey: pipeline.nodesByKey,
+    modes: pipeline.modes,
+    sheetIndex: opts?.sheetIndex ?? 0,
+  });
+  const sample = sampleStratifiedManifest([{ fixture_id: fixtureId, candidates }]);
+  const frozen = await freezeSynthesizeCertPackets({
+    entries: sample.manifest,
+    resolvePipeline: () => pipeline,
+    referenceSynthesize: mockReferenceSynthesize(opts?.referenceTag),
+  });
+  return { pipeline, entries: sample.manifest, sample, frozen };
+}
