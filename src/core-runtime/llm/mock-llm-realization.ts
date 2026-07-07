@@ -7,7 +7,7 @@ import {
   parseRuntimeIssueSynthesisSchemaContext,
   parseRuntimeProblemFramingContext,
 } from "../cli/runtime-submit-context.js";
-import { packetHasResubmitErrorSpec } from "../cli/stance-resubmit.js";
+import { packetHasResubmitErrorSpec } from "../cli/unit-resubmit.js";
 import type {
   OntoTool,
   ToolBoundarySkipSummary,

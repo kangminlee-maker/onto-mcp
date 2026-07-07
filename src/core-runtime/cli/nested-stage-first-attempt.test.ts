@@ -15,11 +15,14 @@ import os from "node:os";
 import path from "node:path";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import {
+  executeIssueStanceUnit,
+  recordNestedUnitOutcomeToBreaker,
   runNestedStageFirstAttempt,
   unitOutcomeWithNestedFirstAttempt,
   type ExecutionDispatchResult,
   type ExecutionOutcome,
 } from "./run-review-prompt-execution.js";
+import { DispatchBreakerState } from "../llm/dispatch-breaker.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
 import type { dispatchNestedBatch } from "./nested-batch-dispatch.js";
 
@@ -272,6 +275,9 @@ describe("unitOutcomeWithNestedFirstAttempt", () => {
     expect(outcome.startedAtMs).toBe(10);
     expect(outcome.completedAtMs).toBe(20);
     expect(outcome.outputBytes).toBe(5);
+    // §4-1: batch-window success carries the tag so a breaker records it as
+    // skipped (completed, no streak reset), not as an observed dispatch.
+    expect(outcome.nestedBatchWindow).toBe(true);
   });
 
   it("spends the remaining budget flat after a batch failure", async () => {
@@ -312,6 +318,9 @@ describe("unitOutcomeWithNestedFirstAttempt", () => {
     await expect(fs.access(d.output_path)).rejects.toThrow();
     const log = await fs.readFile(plan.error_log_path, "utf8");
     expect(log).toContain("issue_artifact failure: a");
+    // §4-1: a zero-retry batch-window failure is a batch-window outcome too —
+    // tagged so a breaker records it skipped (budget cap), never streak fuel.
+    expect(outcome.nestedBatchWindow).toBe(true);
   });
 
   it("treats a unit absent from the batch (e.g. preserved-unit subset) as flat with full budget", async () => {
@@ -328,5 +337,184 @@ describe("unitOutcomeWithNestedFirstAttempt", () => {
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.maxRetriesOverride).toBeUndefined();
+  });
+
+  it("§4-1: flat-dispatch outcomes are not tagged nestedBatchWindow (breaker records them as real dispatches)", async () => {
+    // Batch failed for this unit but budget remains → real flat retry.
+    const flat = await unitOutcomeWithNestedFirstAttempt({
+      batch: {
+        byUnitId: new Map([["a", { ok: false, error: "exit=1 size=0" }]]),
+        startedAtMs: 10,
+        completedAtMs: 20,
+      },
+      flat: flatArgs(dispatch("a", tmp), 2),
+      runFlat: captureFlat().runFlat,
+    });
+    expect(flat.nestedBatchWindow).toBeUndefined();
+
+    // Unit absent from the batch → flat with full budget.
+    const notInBatch = await unitOutcomeWithNestedFirstAttempt({
+      batch: {
+        byUnitId: new Map([["other", { ok: true }]]),
+        startedAtMs: 10,
+        completedAtMs: 20,
+      },
+      flat: flatArgs(dispatch("solo", tmp)),
+      runFlat: captureFlat().runFlat,
+    });
+    expect(notInBatch.nestedBatchWindow).toBeUndefined();
+  });
+});
+
+describe("recordNestedUnitOutcomeToBreaker (§4-1 nested breaker coverage)", () => {
+  const breakerPolicy = {
+    enabled: true,
+    systemic_threshold: 3,
+    per_call_max_attempts: 3,
+    backoff_initial_ms: 100,
+    backoff_cap_ms: 400,
+  };
+  const oc = (
+    unitId: string,
+    fields: Partial<ExecutionOutcome> & { success: boolean },
+  ): ExecutionOutcome =>
+    ({
+      dispatch: { unit_id: unitId } as ExecutionDispatchResult,
+      startedAtMs: 0,
+      completedAtMs: 1,
+      attemptCount: 1,
+      ...fields,
+    }) as ExecutionOutcome;
+  const systemicFail = (unitId: string): ExecutionOutcome =>
+    oc(unitId, {
+      success: false,
+      failure: { message: "status=429" } as ExecutionOutcome["failure"],
+    });
+
+  it("a batch-window success does NOT reset a systemic streak (still trips)", () => {
+    const breaker = new DispatchBreakerState(breakerPolicy);
+    expect(recordNestedUnitOutcomeToBreaker(breaker, systemicFail("a"))).toBeNull();
+    expect(recordNestedUnitOutcomeToBreaker(breaker, systemicFail("b"))).toBeNull();
+    // Interleaved batch-window success (no observed dispatch) → skipped: the
+    // pending outage victims are NOT poison-flushed and the streak is intact.
+    expect(
+      recordNestedUnitOutcomeToBreaker(
+        breaker,
+        oc("ok", { success: true, nestedBatchWindow: true }),
+      ),
+    ).toBeNull();
+    expect(breaker.deadLetterEntries()).toEqual([]);
+    // The third systemic failure crosses the threshold → trips.
+    const trip = recordNestedUnitOutcomeToBreaker(breaker, systemicFail("c"));
+    expect(trip).toMatchObject({
+      failure_class: "rate_limit",
+      consecutive_item_count: 3,
+    });
+  });
+
+  it("contrast control: a REAL flat success DOES reset the streak (the tag is the difference)", () => {
+    const breaker = new DispatchBreakerState(breakerPolicy);
+    recordNestedUnitOutcomeToBreaker(breaker, systemicFail("a"));
+    recordNestedUnitOutcomeToBreaker(breaker, systemicFail("b"));
+    // An untagged flat success → recordItemSuccess → poison-flush + streak reset.
+    recordNestedUnitOutcomeToBreaker(breaker, oc("ok", { success: true }));
+    expect(breaker.deadLetterEntries().map((e) => e.item_id)).toEqual(["a", "b"]);
+    // Streak restarted: one more systemic failure does not trip at N=3.
+    expect(recordNestedUnitOutcomeToBreaker(breaker, systemicFail("c"))).toBeNull();
+    expect(breaker.tripped()).toBeNull();
+  });
+
+  it("a batch-window FAILURE is recorded as a failure, not skipped (교차검증 F2/Finding A)", () => {
+    // Item-local batch-window failure → dead-letter, excluded from the recovery
+    // set, no streak effect (NOT skipped/completed).
+    const bItemLocal = new DispatchBreakerState(breakerPolicy);
+    expect(
+      recordNestedUnitOutcomeToBreaker(
+        bItemLocal,
+        oc("v", {
+          success: false,
+          nestedBatchWindow: true,
+          failure: {
+            message: "author returned invalid JSON and repair failed",
+          } as ExecutionOutcome["failure"],
+        }),
+      ),
+    ).toBeNull();
+    expect(bItemLocal.deadLetterEntries().map((e) => e.item_id)).toEqual(["v"]);
+    expect(bItemLocal.completedItemIds()).not.toContain("v");
+
+    // Systemic batch-window failure → recovery victim (pending), and it DOES
+    // count toward the trip like the flat path — here it crosses the threshold.
+    const bSystemic = new DispatchBreakerState(breakerPolicy);
+    recordNestedUnitOutcomeToBreaker(bSystemic, systemicFail("a"));
+    recordNestedUnitOutcomeToBreaker(bSystemic, systemicFail("b"));
+    const trip = recordNestedUnitOutcomeToBreaker(
+      bSystemic,
+      oc("zb", {
+        success: false,
+        nestedBatchWindow: true,
+        failure: { message: "status=429" } as ExecutionOutcome["failure"],
+      }),
+    );
+    expect(trip).toMatchObject({
+      failure_class: "rate_limit",
+      consecutive_item_count: 3,
+    });
+    expect(bSystemic.completedItemIds()).not.toContain("zb");
+  });
+});
+
+describe("executeIssueStanceUnit — batch-ok then validation failure (§4-1 tag strip)", () => {
+  let tmp: string;
+  let plan: ReviewExecutionPlan;
+  beforeEach(async () => {
+    tmp = await fs.mkdtemp(path.join(os.tmpdir(), "onto-ds3-vf-"));
+    plan = {
+      session_id: "ds3",
+      session_root: tmp,
+      artifact_generation_realization: "live",
+      error_log_path: path.join(tmp, "error-log.md"),
+    } as unknown as ReviewExecutionPlan;
+  });
+  afterEach(async () => {
+    await fs.rm(tmp, { recursive: true, force: true });
+  });
+
+  it("drops nestedBatchWindow on a validation failure so the breaker records it as a failure, not a skip", async () => {
+    const d = dispatch("issue-stance:x", tmp);
+    // Batch reports ok, but no valid stance response exists on disk → the
+    // runner's on-disk validation throws (readYamlDocument ENOENT). The
+    // re-emitted failure must NOT carry the batch-window tag (F1 fix), else a
+    // directly-observed validation failure would be mis-recorded as skipped.
+    const outcome = await executeIssueStanceUnit({
+      ctx: {
+        projectRoot: tmp,
+        sessionRoot: tmp,
+        executionPlan: plan,
+        executorConfig: { bin: "node", args: [] },
+        retryPolicy: { issueArtifactMaxRetries: 2, retryInitialDelayMs: 1 },
+      } as unknown as Parameters<typeof executeIssueStanceUnit>[0]["ctx"],
+      dispatch: d,
+      participatingLensIds: ["x"],
+      nestedBatch: {
+        byUnitId: new Map([[d.unit_id, { ok: true }]]),
+        startedAtMs: 10,
+        completedAtMs: 20,
+      },
+    });
+    expect(outcome.success).toBe(false);
+    expect(outcome.nestedBatchWindow).toBeUndefined();
+    // Contrast: routed through the breaker, an untagged failure is real fuel.
+    const breaker = new DispatchBreakerState({
+      enabled: true,
+      systemic_threshold: 3,
+      per_call_max_attempts: 3,
+      backoff_initial_ms: 100,
+      backoff_cap_ms: 400,
+    });
+    recordNestedUnitOutcomeToBreaker(breaker, outcome);
+    // Validation failure is item-local (null class) → dead-letter, not completed-skip.
+    expect(breaker.deadLetterEntries().map((e) => e.item_id)).toEqual([d.unit_id]);
+    expect(breaker.completedItemIds()).not.toContain(d.unit_id);
   });
 });

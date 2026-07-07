@@ -13,7 +13,7 @@ import {
   executeReviewPromptExecution,
   REVIEW_DISPATCH_BREAKER_HALT_REASON_PREFIX,
 } from "../core-runtime/cli/run-review-prompt-execution.js";
-import { CORRELATED_VALIDATION_HALT_REASON } from "../core-runtime/cli/stance-resubmit.js";
+import { CORRELATED_VALIDATION_HALT_REASON } from "../core-runtime/cli/unit-resubmit.js";
 import { buildReviewPipelineExecutionLedger } from "../core-runtime/review/pipeline-execution-ledger.js";
 import type { ReviewRunManifestForLedger } from "../core-runtime/review/pipeline-execution-ledger.js";
 import { buildReviewContinuationPlan } from "../core-runtime/review/continuation-plan.js";
