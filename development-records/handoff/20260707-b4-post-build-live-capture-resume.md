@@ -16,24 +16,32 @@
   추출만·판정은 결정론) → verifier 구조-전용 수정(어휘 거짓양성 제거·domain-agnostic 원칙).
 - **커밋 체인**(branch `feat/inv-model-1-b4` · 미푸시): `f57f408`(--go 배선) · `a3709c3`(--resume) ·
   `bf4f8e6`(opus 재채점 + R7 감사) · `f98b5fd`(R7 추출기) · `646ffa6`(구조화-추출 grounding 판정).
-- **boundary caveat (owner 결정)**: cert record는 boundary `metric_regression`(candidate 0.967 <
-  baseline 1.0)으로 미박제이나, 이는 **degenerate 메트릭**(negative_control 0.978 ≈ candidate ·
-  no-seam 입력은 boundary 레버가 inert · 설계 §6에서 이미 예견)이고 **judge 편향이 아님**(gpt-5.5·
-  opus 둘 다 0.967로 동일). 구조적 boundary-날조(seam 없는 곳에 전환을 주장하는 경우)는 이미
-  결정론 grounding(0.989)에 포함되어 잡힌다. owner 결정 = 이 `metric_regression`을 **문서화된
-  degenerate-metric caveat로 남기고, grounding 증거를 근거로 등록을 추진**한다. shipped
-  `synthesize-cert-record.ts`의 게이트는 불변이라 표준 record 박제는 불가능 — 등록 evidence 기반은
-  `structured-grounding-comparison.json` + 이 caveat.
-- **남은 경로 → B5**:
-  ④ production-contrast run(§13 — sampled merge를 production accumulate→reconcile→verify 경로로,
-  child 저작=Haiku, 별도 라이브 지출 필요)
-  ⑤ B5 등록(`supported-models.yaml`에 Haiku 엔트리 + G7 배선 = `INVARIANT-CHANGE: INV-MODEL-1`
-  마커 · evidence = structured-grounding 증거 + 이 caveat)
-  ⑥ B6/B7.
+- **boundary (정정)**: 이전 서술("degenerate 노이즈·caveat로 두고 등록 추진")은 **틀렸음**. 실
+  조사 결과 candidate boundary 실패 3건은 **진짜 약점**: 전부 merge 노드(s7-c81/c82·r20481_34816·
+  seam 33938 단일·자식 30720/30721 분할)에서 Haiku가 **자식-분할 행 30721을 value-shape 전환으로
+  오특성화**(shape 변화 없는데 "INT only→mixed"라고 주장). **gpt-5.5·opus 두 judge가 일치**(편향
+  아님)·baseline은 이 오류를 안 함·rep 간 비일관(약 절반). 이는 날조가 아님(30721=실재 자식경계라
+  결정론 grounding은 통과)·**의미 특성화 오류**라서 결정론 구조검사는 못 잡고 holistic boundary가
+  잡는다. 즉 boundary metric은 실제 약점을 정확히 포착 중이었다.
+- **G7 차단 (정정)**: `assertSynthesizeCertBinding`(check-supported-models.ts) → 
+  `synthesizeCertBindingViolations`가 **완전-패스 record**(grounding·boundary 둘 다 candidate≥
+  baseline·0-violation)를 요구한다. `structured-grounding-comparison.json`은 record 계약이 아니라
+  evidence로 인식조차 안 된다. 부분-패스/caveat를 허용하는 로직은 없다. capsule/production_contrast
+  게이트는 확정 inert(B5 경로에 미배선). 즉 "grounding 증거+caveat로 등록"은 G7을 통과할 수 없다.
+- **owner 결정 (신규)**: **B5 등록 보류**. 현 벤치 기준 Haiku는 semantic_map_synthesize 역할로
+  "grounding 경쟁력은 있으나(0.989) merge-노드 boundary 특성화가 아직 baseline 미달"로 결론한다.
+  grounding 경쟁력과 boundary 약점을 **둘 다 정직하게 기록**한다. B5 등록·production-contrast
+  (§13 — B5 등록의 전제라 함께 보류)는 미실행.
+- **재개 조건**: 등록을 다시 추진하려면 다음 중 하나가 선행되어야 한다 — (a) Haiku boundary 개선
+  실측 (b) owner가 트레이드오프를 명시적으로 수용하고 cert 계약 변경(INVARIANT-CHANGE·설계-먼저)
+  (c) seam-rich fixture로 재측정.
 - **★ 방법론 교훈**: 결정론 verifier가 owner(Fable)의 손분석 맹점을 3회 포착했다 — case 7의
   자식-경계 오판, integer/INT 어휘 불일치, 전환-라벨 어휘 불일치. LLM judge 단독이었다면 이 세
   가지가 전부 묻혔을 것. verifier = 구조(행·경계·전환 위치)만 판정, 명명은 LLM의 의미 잔차로
-  남긴다.
+  남긴다. **추가**: "degenerate caveat" 프레이밍은 과낙관이었고, T0-B5 정찰(G7 완전-패스 요구
+  확인)과 3건 실조사가 이를 정정했다 — 정직 수용이 잘못된 등록을 방지했다. 결정론 grounding(요약
+  내용)과 holistic boundary(전환 특성화)는 서로 다른 출력 부분을 본다: 전자는 판정에서 same-family
+  judge 편향을 제거하고, 후자는 결정론이 볼 수 없는 의미적 특성화 오류를 포착한다.
 - **첫 커맨드(다음 세션)**:
   ```
   cd /Users/kangmin/cowork/onto-mcp-claude && git fetch origin && git log --oneline -6 HEAD
