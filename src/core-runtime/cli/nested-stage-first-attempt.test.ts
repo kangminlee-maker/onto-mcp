@@ -15,11 +15,13 @@ import os from "node:os";
 import path from "node:path";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import {
+  recordNestedUnitOutcomeToBreaker,
   runNestedStageFirstAttempt,
   unitOutcomeWithNestedFirstAttempt,
   type ExecutionDispatchResult,
   type ExecutionOutcome,
 } from "./run-review-prompt-execution.js";
+import { DispatchBreakerState } from "../llm/dispatch-breaker.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
 import type { dispatchNestedBatch } from "./nested-batch-dispatch.js";
 
@@ -272,6 +274,9 @@ describe("unitOutcomeWithNestedFirstAttempt", () => {
     expect(outcome.startedAtMs).toBe(10);
     expect(outcome.completedAtMs).toBe(20);
     expect(outcome.outputBytes).toBe(5);
+    // §4-1: batch-window success carries the tag so a breaker records it as
+    // skipped (completed, no streak reset), not as an observed dispatch.
+    expect(outcome.nestedBatchWindow).toBe(true);
   });
 
   it("spends the remaining budget flat after a batch failure", async () => {
@@ -312,6 +317,9 @@ describe("unitOutcomeWithNestedFirstAttempt", () => {
     await expect(fs.access(d.output_path)).rejects.toThrow();
     const log = await fs.readFile(plan.error_log_path, "utf8");
     expect(log).toContain("issue_artifact failure: a");
+    // §4-1: a zero-retry batch-window failure is a batch-window outcome too —
+    // tagged so a breaker records it skipped (budget cap), never streak fuel.
+    expect(outcome.nestedBatchWindow).toBe(true);
   });
 
   it("treats a unit absent from the batch (e.g. preserved-unit subset) as flat with full budget", async () => {
@@ -328,5 +336,110 @@ describe("unitOutcomeWithNestedFirstAttempt", () => {
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.maxRetriesOverride).toBeUndefined();
+  });
+
+  it("§4-1: flat-dispatch outcomes are not tagged nestedBatchWindow (breaker records them as real dispatches)", async () => {
+    // Batch failed for this unit but budget remains → real flat retry.
+    const flat = await unitOutcomeWithNestedFirstAttempt({
+      batch: {
+        byUnitId: new Map([["a", { ok: false, error: "exit=1 size=0" }]]),
+        startedAtMs: 10,
+        completedAtMs: 20,
+      },
+      flat: flatArgs(dispatch("a", tmp), 2),
+      runFlat: captureFlat().runFlat,
+    });
+    expect(flat.nestedBatchWindow).toBeUndefined();
+
+    // Unit absent from the batch → flat with full budget.
+    const notInBatch = await unitOutcomeWithNestedFirstAttempt({
+      batch: {
+        byUnitId: new Map([["other", { ok: true }]]),
+        startedAtMs: 10,
+        completedAtMs: 20,
+      },
+      flat: flatArgs(dispatch("solo", tmp)),
+      runFlat: captureFlat().runFlat,
+    });
+    expect(notInBatch.nestedBatchWindow).toBeUndefined();
+  });
+});
+
+describe("recordNestedUnitOutcomeToBreaker (§4-1 nested breaker coverage)", () => {
+  const breakerPolicy = {
+    enabled: true,
+    systemic_threshold: 3,
+    per_call_max_attempts: 3,
+    backoff_initial_ms: 100,
+    backoff_cap_ms: 400,
+  };
+  const oc = (
+    unitId: string,
+    fields: Partial<ExecutionOutcome> & { success: boolean },
+  ): ExecutionOutcome =>
+    ({
+      dispatch: { unit_id: unitId } as ExecutionDispatchResult,
+      startedAtMs: 0,
+      completedAtMs: 1,
+      attemptCount: 1,
+      ...fields,
+    }) as ExecutionOutcome;
+  const systemicFail = (unitId: string): ExecutionOutcome =>
+    oc(unitId, {
+      success: false,
+      failure: { message: "status=429" } as ExecutionOutcome["failure"],
+    });
+
+  it("a batch-window success does NOT reset a systemic streak (still trips)", () => {
+    const breaker = new DispatchBreakerState(breakerPolicy);
+    expect(recordNestedUnitOutcomeToBreaker(breaker, systemicFail("a"))).toBeNull();
+    expect(recordNestedUnitOutcomeToBreaker(breaker, systemicFail("b"))).toBeNull();
+    // Interleaved batch-window success (no observed dispatch) → skipped: the
+    // pending outage victims are NOT poison-flushed and the streak is intact.
+    expect(
+      recordNestedUnitOutcomeToBreaker(
+        breaker,
+        oc("ok", { success: true, nestedBatchWindow: true }),
+      ),
+    ).toBeNull();
+    expect(breaker.deadLetterEntries()).toEqual([]);
+    // The third systemic failure crosses the threshold → trips.
+    const trip = recordNestedUnitOutcomeToBreaker(breaker, systemicFail("c"));
+    expect(trip).toMatchObject({
+      failure_class: "rate_limit",
+      consecutive_item_count: 3,
+    });
+  });
+
+  it("contrast control: a REAL flat success DOES reset the streak (the tag is the difference)", () => {
+    const breaker = new DispatchBreakerState(breakerPolicy);
+    recordNestedUnitOutcomeToBreaker(breaker, systemicFail("a"));
+    recordNestedUnitOutcomeToBreaker(breaker, systemicFail("b"));
+    // An untagged flat success → recordItemSuccess → poison-flush + streak reset.
+    recordNestedUnitOutcomeToBreaker(breaker, oc("ok", { success: true }));
+    expect(breaker.deadLetterEntries().map((e) => e.item_id)).toEqual(["a", "b"]);
+    // Streak restarted: one more systemic failure does not trip at N=3.
+    expect(recordNestedUnitOutcomeToBreaker(breaker, systemicFail("c"))).toBeNull();
+    expect(breaker.tripped()).toBeNull();
+  });
+
+  it("a zero-retry batch-window failure is skipped (completed, not streak fuel)", () => {
+    const breaker = new DispatchBreakerState(breakerPolicy);
+    recordNestedUnitOutcomeToBreaker(breaker, systemicFail("a"));
+    recordNestedUnitOutcomeToBreaker(breaker, systemicFail("b"));
+    expect(
+      recordNestedUnitOutcomeToBreaker(
+        breaker,
+        oc("zb", {
+          success: false,
+          nestedBatchWindow: true,
+          failure: { message: "status=429" } as ExecutionOutcome["failure"],
+        }),
+      ),
+    ).toBeNull();
+    // The batch-window failure did not advance the streak: 2 pending, no trip.
+    expect(breaker.tripped()).toBeNull();
+    // …but it is completed for the recovery set (excluded from incomplete).
+    expect(breaker.completedItemIds()).toContain("zb");
   });
 });
