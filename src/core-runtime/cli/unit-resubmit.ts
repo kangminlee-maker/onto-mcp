@@ -143,6 +143,25 @@ export type ResubmitUnitDescriptor =
   | { kind: "deliberation"; lensId: string };
 
 /**
+ * Neutralize the runtime-owned section markers inside a value before it is
+ * interpolated into the spec. The rejected `evidence_ref` is model-controlled;
+ * a value literally containing an END (or BEGIN) marker would land as a
+ * premature delimiter inside the spec and fool the idempotent strip
+ * (`indexOf(END, begin)` matches the injected marker first), orphaning spec
+ * fragments and breaking the at-most-one-spec invariant across resubmit rounds.
+ * Marker-free values (every normal ref) are returned unchanged, so this is a
+ * no-op for the common path. Applied to every dynamic interpolation for
+ * defense-in-depth even though only the ref is model-controlled today.
+ */
+function neutralizeSpecMarkers(value: string): string {
+  return value
+    .split(RESUBMIT_ERROR_SPEC_BEGIN)
+    .join("(spec marker removed)")
+    .split(RESUBMIT_ERROR_SPEC_END)
+    .join("(spec marker removed)");
+}
+
+/**
  * Render the bounded error spec for a resubmit attempt. Contains only the
  * violation and the allowed set for the offending unit — never the failed
  * output itself (design: no full-output retransmission; the model rebuilds
@@ -157,15 +176,19 @@ export function buildResubmitErrorSpec(args: {
   unit?: ResubmitUnitDescriptor;
 }): string {
   const { violation } = args;
+  const evidenceRef = neutralizeSpecMarkers(violation.evidenceRef);
+  const issueId = neutralizeSpecMarkers(violation.issueId);
   const allowedBlock =
     args.allowedEvidenceRefs.length > 0
-      ? args.allowedEvidenceRefs.map((ref) => `- ${ref}`).join("\n")
+      ? args.allowedEvidenceRefs
+          .map((ref) => `- ${neutralizeSpecMarkers(ref)}`)
+          .join("\n")
       : "- (none — omit evidence_refs entries you cannot support)";
   const spec =
     args.unit?.kind === "deliberation"
       ? {
           submitTool: "submit_issue_deliberation_response",
-          rejectedLine: `- rejected: deliberation for issue_id: ${violation.issueId}, lens_id: ${args.unit.lensId}`,
+          rejectedLine: `- rejected: deliberation for issue_id: ${issueId}, lens_id: ${neutralizeSpecMarkers(args.unit.lensId)}`,
           allowedHeader: "- allowed evidence_refs:",
           closing: [
             "Every evidence_ref must come from the allowed set in the schema",
@@ -177,10 +200,10 @@ export function buildResubmitErrorSpec(args: {
           submitTool: "submit_issue_stance_response",
           rejectedLine: `- rejected stance: ${
             violation.stanceIndex !== null
-              ? `stances[${violation.stanceIndex}] (issue_id: ${violation.issueId})`
-              : `stance for issue_id: ${violation.issueId}`
+              ? `stances[${violation.stanceIndex}] (issue_id: ${issueId})`
+              : `stance for issue_id: ${issueId}`
           }`,
-          allowedHeader: `- allowed evidence_refs for ${violation.issueId}:`,
+          allowedHeader: `- allowed evidence_refs for ${issueId}:`,
           closing: [
             "Every stance's evidence_refs must come from that issue's allowed set in",
             "the schema context above. Resubmit the full stances array, not only the",
@@ -197,7 +220,7 @@ export function buildResubmitErrorSpec(args: {
     "tool again with a complete corrected payload.",
     "",
     spec.rejectedLine,
-    `- unsupported evidence_ref: ${violation.evidenceRef}`,
+    `- unsupported evidence_ref: ${evidenceRef}`,
     spec.allowedHeader,
     allowedBlock,
     "",

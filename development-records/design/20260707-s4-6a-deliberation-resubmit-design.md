@@ -157,6 +157,30 @@ concept/design-honesty, 각 xhigh). synthesis 에이전트는 Codex usage-limit�
 Codex-side 결론: 소스 correctness·contract 위반 0(유일 findings는 설계-노트 stale·gitignore된 dist
 산출물로, 소스 계약 위반 아님) → 구현 자체는 cross-family로도 sound 확정.
 
+### 6-2. 깊은 라운드 (different-kind 렌즈, 2026-07-07)
+
+correctness/contract/concept가 두 family로 수렴했으므로, 아직 안 판 different-kind 축 3개(동시성·풀
+레이스 / regex·파싱 강건성 / resume·nested-batch)로 추가 적대 라운드. 결과:
+
+- **동시성/idempotency: SURVIVED.** 유닛별 고유 packet_path(issue×lens), 풀 인덱스 배분 race-free
+  (read/increment 사이 await 없음), 주입 strip-then-append로 idempotent, 크기 bounded.
+- **resume/nested-batch: SURVIVED.** batch 실패 시 executor가 output_format-무관 freeze → flat
+  fallback attempt-0 주입이 그 freeze를 읽어 1-dispatch heal(stance F-A3 성질이 deliberation으로
+  무상속). budget(maxRetriesOverride)·resume(패킷 재생성)·degrade→trusted→frontier 제외 모두 안전.
+- **regex/파싱: material 1 — [조치 완료, 재현됨].** `buildResubmitErrorSpec`가 model-controlled
+  `evidence_ref`를 마커-구획 spec에 verbatim 삽입 → ref가 END 마커 문자열을 포함하면 조기 END로 삽입,
+  다음 라운드 `stripResubmitErrorSpec`의 `indexOf(END,begin)`가 그것을 먼저 매치해 tail을 orphan →
+  "패킷당 spec 최대 1개" invariant 붕괴·누적. reachable(deliberation 거부=executor_exit→재시도).
+  blast radius 제한적(같은 worker 프롬프트, allowed-set 파싱은 단일-라인 ref가 yaml fence를 위조
+  못 해 무오염). **shared sink라 stance에도 선재** — §4-6a가 deliberation ref를 그 sink로 새로
+  라우팅하므로 **root-cause 수정**: `neutralizeSpecMarkers`로 모든 동적 삽입값(ref·issue·lens·allowed)
+  의 마커 리터럴 중화(마커-free 정상 ref엔 no-op → stance byte-identical 보존). 회귀 테스트 추가
+  (마커 포함 ref 2라운드 후 BEGIN/END 각 1개·orphan 없음).
+
+Residual(비블로커): (a) nested-batch/resume deliberation은 공유 메커니즘 추론+stance E2E로 커버,
+전용 E2E 미작성(원하면 nestedBatch+freeze 프리셋으로 flat attempt-0 heal 검증 테스트로 봉인 가능).
+(b) 하드 크래시 시 in-memory budget 리셋으로 총 시도 초과 가능(비용만, stance F-A3와 동일 선재).
+
 **Residual risk (선재·스코프 밖, 정직 기록):** resubmit 재시도 발동은 `failureKindFromMessage`(공유
 retry-gating)를 거친다. 환각 evidence_ref 문자열이 `issue_id`/`schema_version`/`work_item_id`/
 `boundary_notes`/`source_refs_used` 등 envelope 필드명 substring을 포함하면 거부 메시지가
