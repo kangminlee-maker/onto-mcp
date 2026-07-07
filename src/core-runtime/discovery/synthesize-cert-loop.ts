@@ -108,8 +108,32 @@ export interface SynthesizeCertLoopResult {
 
 const DEFAULT_MAX_CONSECUTIVE_FAILURES = 5;
 
-const coordinateKey = (inputId: string, rep: number, arm: SynthesizeCertArm): string =>
+/** Canonical coordinate identity (packet input_id × rep × arm) — the SINGLE
+ * source both this loop's own priorRows dedup-guard and the orchestrator's
+ * --resume progress fold ({@link foldSynthesizeCertProgressRows}) key against,
+ * so the two can never drift into disagreeing key formats. */
+export const coordinateKey = (inputId: string, rep: number, arm: SynthesizeCertArm): string =>
   `${inputId} ${rep} ${arm}`;
+
+/**
+ * Folds RAW progress rows — e.g. read line-by-line from an incremental
+ * `onRowComplete` sidecar, which can carry more than one line for the same
+ * coordinate across a single run's own re-attempts — into one row per
+ * coordinate, LAST WRITE WINS. This is the only normalization a --resume
+ * caller needs before handing the result to `runSynthesizeCertLoop` as
+ * `priorRows`: the loop ITSELF already throws (see above) if `priorRows`
+ * still carries a duplicate coordinate, so this function does not duplicate
+ * that (or any other) validation — dedup is its only job.
+ */
+export function foldSynthesizeCertProgressRows(
+  rows: readonly SynthesizeCertJudgementRow[],
+): SynthesizeCertJudgementRow[] {
+  const byCoordinate = new Map<string, SynthesizeCertJudgementRow>();
+  for (const row of rows) {
+    byCoordinate.set(coordinateKey(row.input_id, row.rep, row.arm), row);
+  }
+  return [...byCoordinate.values()];
+}
 
 export async function runSynthesizeCertLoop(
   args: SynthesizeCertLoopArgs,

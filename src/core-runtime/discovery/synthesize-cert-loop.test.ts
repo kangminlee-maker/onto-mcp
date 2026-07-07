@@ -10,6 +10,8 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { SemanticSynthesisInput } from "../reconstruct/comprehension-semantic-map.js";
 import {
+  coordinateKey,
+  foldSynthesizeCertProgressRows,
   runSynthesizeCertLoop,
   synthesizeCertOutputSha256,
   SynthesizeCertJudgeTimeout,
@@ -17,7 +19,7 @@ import {
   SynthesizeCertStructuralFail,
 } from "./synthesize-cert-loop.js";
 import type { FrozenSynthesizeCertPacket } from "./synthesize-cert-packet.js";
-import { SYNTHESIZE_CERT_ARMS } from "./synthesize-cert-record.js";
+import { SYNTHESIZE_CERT_ARMS, type SynthesizeCertJudgementRow } from "./synthesize-cert-record.js";
 import {
   createMockSynthesizeCertJudge,
   freezeSynthesizeCertTestPackets,
@@ -313,5 +315,78 @@ describe("synthesizeCertOutputSha256", () => {
     expect(
       synthesizeCertOutputSha256({ ...out, semantic_summary: `${out.semantic_summary}!` }),
     ).not.toBe(synthesizeCertOutputSha256(out));
+  });
+});
+
+describe("foldSynthesizeCertProgressRows (--resume, owner decision D1)", () => {
+  function row(args: {
+    inputId: string;
+    rep: number;
+    arm: (typeof SYNTHESIZE_CERT_ARMS)[number];
+    attempts: number;
+    status: "ok" | "not_run";
+  }): SynthesizeCertJudgementRow {
+    return {
+      row_id: `${args.inputId}.r${args.rep}.${args.arm}`,
+      fixture_id: "fixture-a",
+      input_id: args.inputId,
+      input_sha256: sha(`${args.inputId}-content`),
+      rep: args.rep,
+      arm: args.arm,
+      stratum: { seam: false, merge: false },
+      candidate_output_status: args.status,
+      judge_status: args.status === "ok" ? "ok" : "not_run",
+      metrics:
+        args.status === "ok"
+          ? { grounding: "pass", boundary: "pass" }
+          : { grounding: "not_judged", boundary: "not_judged" },
+      attempts: args.attempts,
+      ...(args.arm === "negative_control" ? { source_input_id: args.inputId } : {}),
+    };
+  }
+
+  it("passes non-duplicate rows through unchanged", () => {
+    const rows = [
+      row({ inputId: "i1", rep: 1, arm: "baseline", attempts: 1, status: "ok" }),
+      row({ inputId: "i1", rep: 2, arm: "baseline", attempts: 1, status: "ok" }),
+      row({ inputId: "i2", rep: 1, arm: "candidate", attempts: 1, status: "ok" }),
+    ];
+    const folded = foldSynthesizeCertProgressRows(rows);
+    expect(folded.length).toBe(3);
+    expect(new Set(folded.map((r) => coordinateKey(r.input_id, r.rep, r.arm)))).toEqual(
+      new Set(rows.map((r) => coordinateKey(r.input_id, r.rep, r.arm))),
+    );
+  });
+
+  it("collapses duplicate coordinates — the LAST write wins", () => {
+    const first = row({ inputId: "i1", rep: 1, arm: "baseline", attempts: 1, status: "not_run" });
+    const second = row({ inputId: "i1", rep: 1, arm: "baseline", attempts: 2, status: "ok" }); // same coordinate, re-attempted
+    const other = row({ inputId: "i2", rep: 1, arm: "candidate", attempts: 1, status: "ok" });
+    const folded = foldSynthesizeCertProgressRows([first, second, other]);
+    expect(folded.length).toBe(2); // the duplicate coordinate collapsed to ONE row
+    const foldedForI1 = folded.find((r) => r.input_id === "i1")!;
+    expect(foldedForI1.attempts).toBe(2); // last write, not first
+    expect(foldedForI1.candidate_output_status).toBe("ok");
+  });
+
+  it("folded output never carries a duplicate coordinate — runSynthesizeCertLoop accepts it as priorRows without throwing", async () => {
+    const raw = [
+      row({ inputId: "i1", rep: 1, arm: "baseline", attempts: 1, status: "not_run" }),
+      row({ inputId: "i1", rep: 1, arm: "baseline", attempts: 2, status: "ok" }),
+    ];
+    const folded = foldSynthesizeCertProgressRows(raw);
+    const packets = (await frozenPackets()).filter((p) => p.input_id !== "i1");
+    // priorRows may legitimately reference coordinates outside the current
+    // packet set (the loop only consumes what it iterates) — this just proves
+    // the loop's own priorRows duplicate guard never trips on folded output.
+    const result = await runSynthesizeCertLoop({
+      packets,
+      declaredReps: 3,
+      arms: mockArms,
+      judge: createMockSynthesizeCertJudge(),
+      mutationSeed: SEED,
+      priorRows: folded,
+    });
+    expect(result.rows.length).toBe(packets.length * 3 * SYNTHESIZE_CERT_ARMS.length);
   });
 });

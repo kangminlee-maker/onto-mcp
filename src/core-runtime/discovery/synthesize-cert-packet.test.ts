@@ -10,6 +10,9 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   freezeSynthesizeCertPackets,
+  parseSynthesizeCertFreezeCheckpoint,
+  serializeSynthesizeCertFreezeCheckpoint,
+  SYNTHESIZE_CERT_FREEZE_CHECKPOINT_CONTRACT,
   type SynthesizeCertColumnPipeline,
 } from "./synthesize-cert-packet.js";
 import {
@@ -175,5 +178,99 @@ describe("freezeSynthesizeCertPackets", () => {
         }) as never,
       }),
     ).rejects.toThrow(/unexpected field/);
+  });
+});
+
+describe("synthesize-cert freeze checkpoint (--resume, owner decision D1)", () => {
+  const MANIFEST_IDENTITY = sha("manifest-identity");
+
+  async function frozenResult(): Promise<{
+    frozen: Awaited<ReturnType<typeof freezeSynthesizeCertPackets>>;
+    inputIds: string[];
+  }> {
+    const pipeline = buildPipeline();
+    const entries = sampledEntries(pipeline);
+    const frozen = await freezeSynthesizeCertPackets({
+      entries,
+      resolvePipeline: () => pipeline,
+      referenceSynthesize: mockRef("ref"),
+    });
+    return { frozen, inputIds: entries.map((e) => e.input_id) };
+  }
+
+  it("round-trips: serialize → parse reproduces the exact frozen result", async () => {
+    const { frozen, inputIds } = await frozenResult();
+    expect(inputIds.length).toBe(5); // non-vacuous subject set
+    const checkpoint = serializeSynthesizeCertFreezeCheckpoint(frozen, MANIFEST_IDENTITY);
+    expect(checkpoint.checkpoint_contract).toBe(SYNTHESIZE_CERT_FREEZE_CHECKPOINT_CONTRACT);
+    // Simulate the real path: JSON.stringify → disk → JSON.parse → re-verify.
+    const roundTripped = JSON.parse(JSON.stringify(checkpoint));
+    const parsed = parseSynthesizeCertFreezeCheckpoint(roundTripped, {
+      expectedManifestIdentitySha256: MANIFEST_IDENTITY,
+      expectedInputIds: inputIds,
+    });
+    expect(parsed).toEqual(frozen);
+  });
+
+  it("fails closed on a contract tag mismatch", async () => {
+    const { frozen, inputIds } = await frozenResult();
+    const checkpoint = serializeSynthesizeCertFreezeCheckpoint(frozen, MANIFEST_IDENTITY);
+    const tampered = { ...checkpoint, checkpoint_contract: "some-other-contract/v1" };
+    expect(() =>
+      parseSynthesizeCertFreezeCheckpoint(tampered, {
+        expectedManifestIdentitySha256: MANIFEST_IDENTITY,
+        expectedInputIds: inputIds,
+      }),
+    ).toThrow(/carries contract/);
+  });
+
+  it("fails closed on a manifest identity mismatch", async () => {
+    const { frozen, inputIds } = await frozenResult();
+    const checkpoint = serializeSynthesizeCertFreezeCheckpoint(frozen, MANIFEST_IDENTITY);
+    expect(() =>
+      parseSynthesizeCertFreezeCheckpoint(checkpoint, {
+        expectedManifestIdentitySha256: sha("a-different-manifest"),
+        expectedInputIds: inputIds,
+      }),
+    ).toThrow(/manifest identity/);
+  });
+
+  it("fails closed when the checkpoint's input_id set has an EXTRA id beyond the expected manifest", async () => {
+    const { frozen, inputIds } = await frozenResult();
+    const checkpoint = serializeSynthesizeCertFreezeCheckpoint(frozen, MANIFEST_IDENTITY);
+    expect(() =>
+      parseSynthesizeCertFreezeCheckpoint(checkpoint, {
+        expectedManifestIdentitySha256: MANIFEST_IDENTITY,
+        expectedInputIds: inputIds.slice(1), // expected manifest is missing the first id
+      }),
+    ).toThrow(/input_id set disagrees/);
+  });
+
+  it("fails closed when the checkpoint's input_id set is MISSING an id the expected manifest requires", async () => {
+    const { frozen, inputIds } = await frozenResult();
+    const checkpoint = serializeSynthesizeCertFreezeCheckpoint(frozen, MANIFEST_IDENTITY);
+    expect(() =>
+      parseSynthesizeCertFreezeCheckpoint(checkpoint, {
+        expectedManifestIdentitySha256: MANIFEST_IDENTITY,
+        expectedInputIds: [...inputIds, "an-id-the-checkpoint-never-froze"],
+      }),
+    ).toThrow(/input_id set disagrees/);
+  });
+
+  it("fails closed on a tampered/corrupted packet whose input_sha256 no longer recomputes", async () => {
+    const { frozen, inputIds } = await frozenResult();
+    const checkpoint = serializeSynthesizeCertFreezeCheckpoint(frozen, MANIFEST_IDENTITY);
+    const tampered = {
+      ...checkpoint,
+      packets: checkpoint.packets.map((p, i) =>
+        i === 0 ? { ...p, packet: { ...p.packet, format_clusters: [...p.packet.format_clusters, "tampered"] } } : p,
+      ),
+    };
+    expect(() =>
+      parseSynthesizeCertFreezeCheckpoint(tampered, {
+        expectedManifestIdentitySha256: MANIFEST_IDENTITY,
+        expectedInputIds: inputIds,
+      }),
+    ).toThrow(/recomputes input_sha256/);
   });
 });

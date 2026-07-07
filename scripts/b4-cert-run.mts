@@ -16,6 +16,15 @@
  *    seat (candidate/negative_control — §5, not a registry-gated settings
  *    seat by design; see that module's doc), a 1-call quota probe per
  *    distinct provider route, and an incremental local/ capture sidecar.
+ *  - --go ... --resume <runDir> : resumes an interrupted live run against the
+ *    SAME --fixture args (same order) instead of re-spending the reference
+ *    freeze. Requires --go. Loads/verifies `<runDir>/local/freeze-checkpoint.json`
+ *    (manifest identity + per-packet input_sha256 re-check, fail-closed) and
+ *    folds `<runDir>/local/judgement-rows.progress.jsonl` (if present) into
+ *    priorRows — the loop then only re-dispatches non-decisive coordinates.
+ *    Forecast/cap apply to the REMAINING coordinates only; probe results and
+ *    forecast go to `preflight.resume.json` (the original preflight.json is
+ *    never overwritten, preserving the fresh-run spend audit trail).
  *
  * Persistence per run (out dir defaults to
  * development-records/benchmark/synthesize-cert/<stamp>/):
@@ -24,15 +33,24 @@
  *  - synthesize-cert-capsule.json  (tracked; source-safe by construction)
  *  - preflight.json                (tracked, --go only; source-safe: resolved
  *    seat identities + quota-probe result + call forecast, no prose)
+ *  - preflight.resume.json         (tracked, --resume only; same shape, does
+ *    not overwrite preflight.json)
  *  - local/packets.json            (GITIGNORED prose sidecar: frozen packets
  *    incl. child-summary prose + node identity, for R7 audit / judge replay)
  *  - local/live-calls.jsonl        (GITIGNORED, --go only: every raw live
  *    request/response, tagged by role, for R7 judge replay)
+ *  - local/freeze-checkpoint.json  (GITIGNORED, --go only: the exact frozen
+ *    packets, written right after freeze completes — enables --resume without
+ *    re-spending the reference freeze; source-safe fields only, same
+ *    child-summary prose sensitivity as local/packets.json)
+ *  - local/judgement-rows.progress.jsonl (GITIGNORED, --go only: one line per
+ *    completed coordinate, incremental — folded into priorRows on --resume)
  *
- * Usage: npx tsx scripts/b4-cert-run.mts [--fixture <xlsx>]... [--out <dir>] [--go] [--max-calls <n>]
+ * Usage: npx tsx scripts/b4-cert-run.mts [--fixture <xlsx>]... [--out <dir>] [--go] [--max-calls <n>] [--resume <runDir>]
  * --max-calls (--go only; default 800, §11 forecast 500-700 + headroom): the
  * preflight forecast must not exceed this before ANY spend (incl. the quota
- * probe) — raise only with owner budget approval.
+ * probe) — raise only with owner budget approval. On --resume this caps the
+ * REMAINING forecast, not the original full-universe forecast.
  */
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -54,9 +72,22 @@ import {
   assembleSynthesizeCertCapsule,
   validateSynthesizeCertCapsuleBinding,
 } from "../src/core-runtime/discovery/synthesize-cert-capsule.ts";
-import { runSynthesizeCertLoop } from "../src/core-runtime/discovery/synthesize-cert-loop.ts";
-import { freezeSynthesizeCertPackets } from "../src/core-runtime/discovery/synthesize-cert-packet.ts";
-import { validateSynthesizeCertRecord } from "../src/core-runtime/discovery/synthesize-cert-record.ts";
+import {
+  coordinateKey,
+  foldSynthesizeCertProgressRows,
+  runSynthesizeCertLoop,
+} from "../src/core-runtime/discovery/synthesize-cert-loop.ts";
+import {
+  freezeSynthesizeCertPackets,
+  parseSynthesizeCertFreezeCheckpoint,
+  serializeSynthesizeCertFreezeCheckpoint,
+} from "../src/core-runtime/discovery/synthesize-cert-packet.ts";
+import {
+  isDecisiveRow,
+  SYNTHESIZE_CERT_ARMS,
+  validateSynthesizeCertRecord,
+  type SynthesizeCertJudgementRow,
+} from "../src/core-runtime/discovery/synthesize-cert-record.ts";
 import {
   collectSynthesizeCertCandidates,
   sampleStratifiedManifest,
@@ -89,6 +120,7 @@ const argv = process.argv.slice(2);
 const fixturePaths: string[] = [];
 let outDir: string | null = null;
 let go = false;
+let resumeDir: string | null = null;
 // §11 budget-unit hard cap (l2-real-llm-run expectedDispatches>cap precedent):
 // 500-700 forecast + headroom. Checked before any spend (incl. quota probes).
 let maxCalls = 800;
@@ -97,6 +129,7 @@ for (let i = 0; i < argv.length; i += 1) {
   if (arg === "--fixture") fixturePaths.push(argv[++i] ?? "");
   else if (arg === "--out") outDir = argv[++i] ?? null;
   else if (arg === "--go") go = true;
+  else if (arg === "--resume") resumeDir = argv[++i] ?? null;
   else if (arg === "--max-calls") {
     const raw = argv[++i];
     const parsed = raw === undefined ? NaN : Number(raw);
@@ -109,6 +142,11 @@ for (let i = 0; i < argv.length; i += 1) {
 if (go && fixturePaths.length === 0) {
   throw new Error(
     "b4-cert-run: --go (live capture) requires at least one --fixture — a live run over the synthetic mock universe is not meaningful evidence. Pass --fixture <xlsx> (repeatable) alongside --go.",
+  );
+}
+if (resumeDir !== null && !go) {
+  throw new Error(
+    "b4-cert-run: --resume requires --go — resuming a live run only makes sense while live (mock has no checkpoint to resume from). Pass --go --fixture <same xlsx, same order> --resume <runDir>.",
   );
 }
 
@@ -194,10 +232,36 @@ const resolvePipelineForEntry = (entry: SynthesizeCertSampledInput): SynthesizeC
 //    top of its branch below, since its capture sidecar writes incrementally
 //    from preflight onward; mock creates it only in the persist section, so a
 //    mock run that exits earlier (floor gate / record / capsule-binding
-//    failure) leaves NO directory behind — default-off stays diff-provable) ──
+//    failure) leaves NO directory behind — default-off stays diff-provable.
+//    --resume reuses the GIVEN dir verbatim — never a fresh stamp — so the
+//    capture/progress sidecars already there are appended to, not shadowed) ──
 const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
 const runDirSuffix = go ? "" : fixturePaths.length > 0 ? "-mock" : "-synthetic-mock";
-const runDir = outDir ?? path.join("development-records/benchmark/synthesize-cert", `${stamp}${runDirSuffix}`);
+const runDir =
+  resumeDir ?? outDir ?? path.join("development-records/benchmark/synthesize-cert", `${stamp}${runDirSuffix}`);
+
+/** §11/D4 resume forecast: how many (input × rep × arm) coordinates still lack
+ * a decisive prior row — the upper bound on remaining arm+judge spend. Reuses
+ * the loop's own `coordinateKey`/`isDecisiveRow` so this can never disagree
+ * with what `runSynthesizeCertLoop` itself will actually re-dispatch. */
+function countB4RemainingCoordinates(
+  manifest: readonly { input_id: string }[],
+  declaredReps: number,
+  priorRows: readonly SynthesizeCertJudgementRow[],
+): number {
+  const decisive = new Set(
+    priorRows.filter(isDecisiveRow).map((r) => coordinateKey(r.input_id, r.rep, r.arm)),
+  );
+  let remaining = 0;
+  for (const entry of manifest) {
+    for (let rep = 1; rep <= declaredReps; rep += 1) {
+      for (const arm of SYNTHESIZE_CERT_ARMS) {
+        if (!decisive.has(coordinateKey(entry.input_id, rep, arm))) remaining += 1;
+      }
+    }
+  }
+  return remaining;
+}
 
 // ── S2: freeze (mock or live reference realization) ───────────────────────────
 const mutationSeed = `b4-${sample.manifest_identity_sha256.slice(0, 16)}`;
@@ -219,15 +283,82 @@ if (go) {
   });
   log(`preflight: baseline/reference/judge seat = ${seats.baselineModelIdentity}; candidate/negative seat = ${seats.candidateModelIdentity}`);
 
-  const referenceCallsForecast = await forecastB4ReferenceSynthesizeCalls({
-    entries: sample.manifest,
-    resolvePipeline: resolvePipelineForEntry,
-  });
-  const armCallsForecast = sample.manifest.length * DECLARED_REPS * 3;
+  // ── --resume load + validate (owner decision D3) — after seats, BEFORE forecast/probe ──
+  let resumedFrozen: Awaited<ReturnType<typeof freezeSynthesizeCertPackets>> | null = null;
+  let resumedPriorRows: SynthesizeCertJudgementRow[] = [];
+  if (resumeDir !== null) {
+    log(`resume: loading freeze checkpoint from ${resumeDir}`);
+    const checkpointPath = path.join(resumeDir, "local", "freeze-checkpoint.json");
+    let checkpointText: string;
+    try {
+      checkpointText = await fs.readFile(checkpointPath, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(
+          `b4-cert-run: --resume ${resumeDir} has no freeze checkpoint at ${checkpointPath} — nothing to resume; run fresh without --resume.`,
+        );
+      }
+      throw error;
+    }
+    let checkpointRaw: unknown;
+    try {
+      checkpointRaw = JSON.parse(checkpointText);
+    } catch (error) {
+      throw new Error(
+        `b4-cert-run: --resume ${resumeDir} freeze checkpoint at ${checkpointPath} is not valid JSON (fail-closed): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    resumedFrozen = parseSynthesizeCertFreezeCheckpoint(checkpointRaw, {
+      expectedManifestIdentitySha256: sample.manifest_identity_sha256,
+      expectedInputIds: sample.manifest.map((e) => e.input_id),
+    });
+    log(`resume: checkpoint verified (${resumedFrozen.packets.length} packets, manifest identity matches)`);
+
+    const progressPath = path.join(resumeDir, "local", "judgement-rows.progress.jsonl");
+    let progressText: string | null = null;
+    try {
+      progressText = await fs.readFile(progressPath, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    if (progressText !== null) {
+      const rawRows = progressText
+        .split("\n")
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => line.trim().length > 0)
+        .map(({ line, index }) => {
+          try {
+            return JSON.parse(line) as SynthesizeCertJudgementRow;
+          } catch (error) {
+            throw new Error(
+              `b4-cert-run: --resume progress sidecar line ${index + 1} at ${progressPath} is not valid JSON (fail-closed): ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        });
+      resumedPriorRows = foldSynthesizeCertProgressRows(rawRows);
+      log(`resume: folded ${rawRows.length} progress line(s) into ${resumedPriorRows.length} prior row(s)`);
+    } else {
+      log("resume: no progress sidecar found — resuming right after freeze (0 prior rows, valid)");
+    }
+  }
+
+  const referenceCallsForecast =
+    resumeDir !== null
+      ? 0 // reference freeze is already checkpointed — never re-spend it on resume
+      : await forecastB4ReferenceSynthesizeCalls({
+          entries: sample.manifest,
+          resolvePipeline: resolvePipelineForEntry,
+        });
+  const armCallsForecast =
+    resumeDir !== null
+      ? countB4RemainingCoordinates(sample.manifest, DECLARED_REPS, resumedPriorRows)
+      : sample.manifest.length * DECLARED_REPS * 3;
   const judgeCallsForecast = armCallsForecast;
   const totalForecast = referenceCallsForecast + armCallsForecast + judgeCallsForecast;
   log(
-    `preflight forecast: reference=${referenceCallsForecast} arm=${armCallsForecast} judge=${judgeCallsForecast} total≈${totalForecast} (cap=${maxCalls})`,
+    resumeDir !== null
+      ? `preflight forecast (RESUME — reference skipped): remaining=${armCallsForecast} judge=${judgeCallsForecast} total≈${totalForecast} (cap=${maxCalls})`
+      : `preflight forecast: reference=${referenceCallsForecast} arm=${armCallsForecast} judge=${judgeCallsForecast} total≈${totalForecast} (cap=${maxCalls})`,
   );
   if (totalForecast > maxCalls) {
     throw new Error(
@@ -246,11 +377,15 @@ if (go) {
   });
   log(`preflight: quota probes ok (${openaiProbe.label}, ${anthropicProbe.label})`);
 
+  // Resume writes a SIBLING preflight.resume.json — the original preflight.json
+  // (fresh-run probe/forecast) stays untouched, preserving the full spend
+  // audit history across a resume instead of overwriting it (owner decision D4).
   await fs.writeFile(
-    path.join(runDir, "preflight.json"),
+    path.join(runDir, resumeDir !== null ? "preflight.resume.json" : "preflight.json"),
     `${JSON.stringify(
       {
         at: ts(),
+        ...(resumeDir !== null ? { resumed_at: ts() } : {}),
         baseline_reference_judge_seat: seats.baselineModelIdentity,
         candidate_negative_control_seat: seats.candidateModelIdentity,
         forecast: {
@@ -296,13 +431,28 @@ if (go) {
     llmConfig: seats.baselineLlmConfig,
   });
 
-  log("live: S2 freeze (reference authoring, real spend starts now)");
-  frozen = await freezeSynthesizeCertPackets({
-    entries: sample.manifest,
-    resolvePipeline: resolvePipelineForEntry,
-    referenceSynthesize: referenceFn,
-  });
-  log(`live: frozen ${frozen.packets.length} packets (${frozen.reference_synthesize_calls} reference calls)`);
+  if (resumeDir !== null) {
+    // D5: freeze is SKIPPED entirely — the checkpoint already carries the
+    // identical frozen packets, and mutationSeed above is re-derived from the
+    // (identity-verified) manifest, so it is automatically the same value.
+    frozen = resumedFrozen!;
+    log(`resume: reusing ${frozen.packets.length} checkpointed packets (freeze skipped, 0 reference spend)`);
+  } else {
+    log("live: S2 freeze (reference authoring, real spend starts now)");
+    frozen = await freezeSynthesizeCertPackets({
+      entries: sample.manifest,
+      resolvePipeline: resolvePipelineForEntry,
+      referenceSynthesize: referenceFn,
+    });
+    log(`live: frozen ${frozen.packets.length} packets (${frozen.reference_synthesize_calls} reference calls)`);
+    // D2: persist the freeze checkpoint right after freeze completes, before
+    // the loop starts — a crash mid-loop can then --resume without re-freezing.
+    await fs.writeFile(
+      path.join(runDir, "local", "freeze-checkpoint.json"),
+      `${JSON.stringify(serializeSynthesizeCertFreezeCheckpoint(frozen, sample.manifest_identity_sha256), null, 2)}\n`,
+    );
+    log("live: freeze checkpoint persisted (local/freeze-checkpoint.json — enables --resume)");
+  }
 
   const progressPath = path.join(runDir, "local", "judgement-rows.progress.jsonl");
   log("live: S3-S5 coordinate loop (baseline/candidate/negative_control + judge)");
@@ -312,6 +462,7 @@ if (go) {
     arms: { baseline: baselineFn, candidate: candidateFn, negative_control: negativeFn },
     judge: judgeFn,
     mutationSeed,
+    ...(resumeDir !== null ? { priorRows: resumedPriorRows } : {}),
     onRowComplete: async (row) => {
       await fs.appendFile(progressPath, `${JSON.stringify(row)}\n`);
     },
@@ -365,7 +516,7 @@ const record = assembleSynthesizeCertRecord({
   packets: frozen.packets,
   judgementRows: loop.rows,
   reproduction: {
-    command: `npx tsx scripts/b4-cert-run.mts${fixturePaths.map((f) => ` --fixture ${f}`).join("")}${go ? " --go" : ""}`,
+    command: `npx tsx scripts/b4-cert-run.mts${fixturePaths.map((f) => ` --fixture ${f}`).join("")}${go ? " --go" : ""}${resumeDir !== null ? ` --resume ${resumeDir}` : ""}`,
     source_paths: sourcePaths,
     limitations: reproductionLimitations,
   },

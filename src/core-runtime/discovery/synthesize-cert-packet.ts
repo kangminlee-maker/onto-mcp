@@ -195,3 +195,139 @@ export async function freezeSynthesizeCertPackets(args: {
   }
   return { packets, reference_synthesize_calls: referenceCalls };
 }
+
+// ── --resume checkpoint (live-wiring cut, owner decision D1) ─────────────────
+//
+// Freeze is the ONE paid phase a resumed run must never repeat: this contract
+// durably serializes exactly what `freezeSynthesizeCertPackets` produced, so a
+// crashed/interrupted --go run can reload the identical frozen packets instead
+// of re-spending the reference-authoring calls. The orchestrator script owns
+// the file I/O (write right after freeze completes, read at --resume start);
+// this module owns the contract shape and its fail-closed verification.
+
+export const SYNTHESIZE_CERT_FREEZE_CHECKPOINT_CONTRACT = "synthesize-cert-freeze-checkpoint/v1";
+
+export interface SynthesizeCertFreezeCheckpoint {
+  checkpoint_contract: typeof SYNTHESIZE_CERT_FREEZE_CHECKPOINT_CONTRACT;
+  /** Binds the checkpoint to the EXACT manifest a resumed run must reproduce
+   * (same --fixture args, same order, same sampler) — a resume against a
+   * different manifest fails closed at parse time. */
+  manifest_identity_sha256: string;
+  reference_synthesize_calls: number;
+  packets: FrozenSynthesizeCertPacket[];
+}
+
+/** Pure projection of a freeze result into the durable checkpoint shape — no
+ * I/O; the caller JSON.stringifies and writes it. */
+export function serializeSynthesizeCertFreezeCheckpoint(
+  frozen: FreezeSynthesizeCertPacketsResult,
+  manifestIdentitySha256: string,
+): SynthesizeCertFreezeCheckpoint {
+  return {
+    checkpoint_contract: SYNTHESIZE_CERT_FREEZE_CHECKPOINT_CONTRACT,
+    manifest_identity_sha256: manifestIdentitySha256,
+    reference_synthesize_calls: frozen.reference_synthesize_calls,
+    packets: frozen.packets,
+  };
+}
+
+/**
+ * Fail-closed parse + re-verification of a persisted checkpoint. Every check
+ * throws (never silently coerces or drops): contract tag mismatch, manifest
+ * identity mismatch, a malformed packet shape, a duplicate input_id, the
+ * checkpoint's input_id SET disagreeing with the expected manifest (extra OR
+ * missing — no silent scope-shrink/grow), and — the tamper/corruption guard —
+ * each packet's `input_sha256` failing to recompute via the SAME canonical
+ * hash (`synthesizeCertInputSha256`) `freezeSynthesizeCertPackets` used to
+ * produce it. Reuses `assertSynthesisInputBounded` (the shipped source-safe
+ * envelope guard) rather than re-implementing packet shape checks.
+ */
+export function parseSynthesizeCertFreezeCheckpoint(
+  raw: unknown,
+  args: { expectedManifestIdentitySha256: string; expectedInputIds: readonly string[] },
+): FreezeSynthesizeCertPacketsResult {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error("synthesize-cert-packet: freeze checkpoint must be a JSON object (fail-closed)");
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.checkpoint_contract !== SYNTHESIZE_CERT_FREEZE_CHECKPOINT_CONTRACT) {
+    throw new Error(
+      `synthesize-cert-packet: freeze checkpoint carries contract ${JSON.stringify(obj.checkpoint_contract)}, expected ${SYNTHESIZE_CERT_FREEZE_CHECKPOINT_CONTRACT} (fail-closed)`,
+    );
+  }
+  if (obj.manifest_identity_sha256 !== args.expectedManifestIdentitySha256) {
+    throw new Error(
+      `synthesize-cert-packet: freeze checkpoint manifest identity ${JSON.stringify(obj.manifest_identity_sha256)} disagrees with the expected manifest ${args.expectedManifestIdentitySha256} (fail-closed — same --fixture args in same order?)`,
+    );
+  }
+  if (
+    typeof obj.reference_synthesize_calls !== "number" ||
+    !Number.isSafeInteger(obj.reference_synthesize_calls) ||
+    obj.reference_synthesize_calls < 0
+  ) {
+    throw new Error(
+      "synthesize-cert-packet: freeze checkpoint reference_synthesize_calls must be a nonnegative safe integer (fail-closed)",
+    );
+  }
+  if (!Array.isArray(obj.packets)) {
+    throw new Error("synthesize-cert-packet: freeze checkpoint packets must be an array (fail-closed)");
+  }
+
+  const seenInputIds = new Set<string>();
+  const packets: FrozenSynthesizeCertPacket[] = obj.packets.map((rawPacket, index) => {
+    if (typeof rawPacket !== "object" || rawPacket === null || Array.isArray(rawPacket)) {
+      throw new Error(`synthesize-cert-packet: freeze checkpoint packets[${index}] must be an object (fail-closed)`);
+    }
+    const p = rawPacket as Record<string, unknown>;
+    const { fixture_id, input_id, node_key, stratum, deterministic_facts_sha256, input_sha256, packet } = p;
+    if (
+      typeof fixture_id !== "string" ||
+      typeof input_id !== "string" ||
+      typeof node_key !== "string" ||
+      typeof deterministic_facts_sha256 !== "string" ||
+      typeof input_sha256 !== "string" ||
+      typeof stratum !== "object" || stratum === null || Array.isArray(stratum) ||
+      typeof (stratum as Record<string, unknown>).seam !== "boolean" ||
+      typeof (stratum as Record<string, unknown>).merge !== "boolean" ||
+      typeof packet !== "object" || packet === null || Array.isArray(packet)
+    ) {
+      throw new Error(`synthesize-cert-packet: freeze checkpoint packets[${index}] has a malformed shape (fail-closed)`);
+    }
+    if (seenInputIds.has(input_id)) {
+      throw new Error(`synthesize-cert-packet: freeze checkpoint lists input_id ${input_id} more than once (fail-closed)`);
+    }
+    seenInputIds.add(input_id);
+    // Reuse the shipped source-safe envelope guard (§13.6) instead of a second
+    // hand-rolled shape check — a malformed/enriched packet fails here.
+    assertSynthesisInputBounded(packet as SemanticSynthesisInput);
+    const recomputedSha = synthesizeCertInputSha256(packet as SemanticSynthesisInput);
+    if (recomputedSha !== input_sha256) {
+      throw new Error(
+        `synthesize-cert-packet: freeze checkpoint packet ${input_id} recomputes input_sha256 ${recomputedSha}, checkpoint declares ${input_sha256} (fail-closed — tampered or corrupted checkpoint)`,
+      );
+    }
+    return {
+      fixture_id,
+      input_id,
+      node_key: node_key as SemanticNodeKey,
+      stratum: {
+        seam: (stratum as { seam: boolean }).seam,
+        merge: (stratum as { merge: boolean }).merge,
+      },
+      deterministic_facts_sha256,
+      input_sha256,
+      packet: packet as SemanticSynthesisInput,
+    };
+  });
+
+  const expectedIds = new Set(args.expectedInputIds);
+  const extra = [...seenInputIds].filter((id) => !expectedIds.has(id));
+  const missing = [...expectedIds].filter((id) => !seenInputIds.has(id));
+  if (extra.length > 0 || missing.length > 0) {
+    throw new Error(
+      `synthesize-cert-packet: freeze checkpoint input_id set disagrees with the expected manifest (extra=[${extra.join(", ")}] missing=[${missing.join(", ")}]) — fail-closed, scope-shrink/grow forbidden`,
+    );
+  }
+
+  return { packets, reference_synthesize_calls: obj.reference_synthesize_calls };
+}
