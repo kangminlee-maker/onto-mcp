@@ -296,14 +296,50 @@ export class DispatchBreakerState {
     ) {
       // The FIRST crossing is the trip authority; later records must not
       // rewrite its count (stable halt_reason/artifact for audit).
+      // Concurrent mode: the crossing item's class is completion-order
+      // dependent when a burst mixes classes (rate_limit + transport + auth),
+      // which would leave the halt_reason / disclosure `failure_class` label
+      // non-reproducible (F1). Derive it from the pending victims instead —
+      // most frequent class, tie-broken by ascending name — so it depends only
+      // on WHICH items failed, not their order. count/threshold and the
+      // completed/dead-letter/incomplete sets are already order-independent
+      // in this mode (pendingSystemic is never flushed).
       this.trip = {
-        failure_class: entry.failure_class,
+        failure_class: this.policy.concurrent
+          ? this.dominantPendingClass(entry.failure_class)
+          : entry.failure_class,
         consecutive_item_count: this.pendingSystemic.length,
         threshold: this.policy.systemic_threshold,
       };
       return this.trip;
     }
     return null;
+  }
+
+  /** Order-independent trip class for concurrent mode: the most frequent
+   * systemic class among the pending victims, tie-broken by ascending class
+   * name. `fallback` is the crossing item's (non-null) class — only used if
+   * pendingSystemic somehow holds no classed entry, which cannot happen at a
+   * trip. */
+  private dominantPendingClass(
+    fallback: SystemicDispatchFailureClass,
+  ): SystemicDispatchFailureClass {
+    const counts = new Map<SystemicDispatchFailureClass, number>();
+    for (const entry of this.pendingSystemic) {
+      if (entry.failure_class !== null) {
+        counts.set(entry.failure_class, (counts.get(entry.failure_class) ?? 0) + 1);
+      }
+    }
+    let best = fallback;
+    let bestCount = -1;
+    for (const cls of [...counts.keys()].sort()) {
+      const count = counts.get(cls)!;
+      if (count > bestCount) {
+        best = cls;
+        bestCount = count;
+      }
+    }
+    return best;
   }
 
   tripped(): DispatchBreakerTripState | null {

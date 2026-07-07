@@ -246,6 +246,39 @@ describe("DispatchBreakerState — concurrent mode determinism (F1)", () => {
     expect(b.deadLetter).toEqual(["a", "b"]);
     expect(b.incomplete).toEqual(["c"]);
   });
+
+  it("concurrent mode: a MIXED-class systemic burst trips with a deterministic failure_class (dominant, tie by name)", () => {
+    const failWith = (
+      item: string,
+      cls: "rate_limit" | "auth" | "transport",
+    ) => ({ item_id: item, failure_class: cls, failure_message: `${cls} fail`, attempt_count: 3 });
+    const tripOf = (seq: Array<[string, "rate_limit" | "auth" | "transport"]>) => {
+      const state = new DispatchBreakerState(policy({ concurrent: true }));
+      for (const [item, cls] of seq) state.recordItemFailure(failWith(item, cls));
+      return state.tripped();
+    };
+    // Same set {a:rate_limit, b:transport, c:auth} (each count 1) → tie → ascending name = "auth".
+    const t1 = tripOf([["a", "rate_limit"], ["b", "transport"], ["c", "auth"]]);
+    const t2 = tripOf([["c", "auth"], ["b", "transport"], ["a", "rate_limit"]]);
+    expect(t1).toEqual(t2);
+    expect(t1?.failure_class).toBe("auth");
+    expect(t1?.consecutive_item_count).toBe(3);
+    // Non-uniform counts → the majority class wins regardless of order.
+    expect(
+      tripOf([["a", "transport"], ["b", "transport"], ["c", "rate_limit"]])?.failure_class,
+    ).toBe("transport");
+    expect(
+      tripOf([["c", "rate_limit"], ["a", "transport"], ["b", "transport"]])?.failure_class,
+    ).toBe("transport");
+    // Contrast: default (non-concurrent) picks the CROSSING item's class → order-dependent.
+    const nonConc = (seq: Array<[string, "rate_limit" | "auth" | "transport"]>) => {
+      const state = new DispatchBreakerState(policy());
+      for (const [item, cls] of seq) state.recordItemFailure(failWith(item, cls));
+      return state.tripped()?.failure_class;
+    };
+    expect(nonConc([["a", "rate_limit"], ["b", "transport"], ["c", "auth"]])).toBe("auth");
+    expect(nonConc([["c", "auth"], ["b", "transport"], ["a", "rate_limit"]])).toBe("rate_limit");
+  });
 });
 
 describe("classifyDispatchError / dispatch markers", () => {

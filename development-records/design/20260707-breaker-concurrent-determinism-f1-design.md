@@ -117,3 +117,26 @@ Option C가 과하다고 판단되면 **Option D**(문서화)가 최소 대안 �
 **후속 상태:** foundation(§4·§6-1 = concurrent capability + breaker 단위 결정성 테스트)은
 default-off로 배선·검증 완료. 리뷰 풀 배선(§7-3: `reviewDispatchBreakerFromProfile`에서
 `concurrent:true` 전달 + 러너 통합 테스트)은 F3 하니스 착지 후 별도 PR로 진행.
+
+## 9. 독립 리뷰 반영 (2026-07-07, foundation PR #178)
+
+집중 적대 리뷰 2렌즈(상태기계 정확성 · 설계-주장 검증). 설계 load-bearing 주장(reconstruct 이중
+면역·리뷰 frontier-안전 → severity medium·동시성 전제)은 **전부 CONFIRMED**. 실 material 1건 수정:
+
+- **[medium 수정] concurrent 트립 `failure_class` 결정성**: 혼합 systemic 클래스 버스트에서 임계를
+  넘긴 아이템의 클래스가 완료순서 의존 → halt_reason/disclosure `failure_class` label 비재현.
+  **수정**: concurrent 모드에선 트립 클래스를 pending victim의 **최빈 클래스(동률=이름 오름차순)**
+  로 도출(`dominantPendingClass`) — 순서 무관. 혼합-클래스 테스트 추가(음성 대조: 비concurrent는
+  crossing 아이템 클래스라 순서 의존).
+- **[low 문서화] `consecutive_item_count` 네이밍**: concurrent 모드에선 "consecutive"가 아니라
+  "누적 distinct" N에서 트립(값은 항상 threshold로 정확). 필드명은 비concurrent 유래 — 감사 시 유의.
+- **[low 문서화] disclosure 배열 순서**: `completed_item_ids`/`dead_letter` **배열 순서**는 기록순
+  유지(집합은 결정적). 회복 집합 `incomplete_item_ids`는 planned 순서라 **결정적**. concurrent가
+  보장하는 재현성 = 트립 bool·count·failure_class·**집합 멤버십**·회복셋. 배열 바이트-순서까지는
+  요구 안 함(회복 무관 cosmetic). 필요 시 wiring PR에서 canonical sort.
+- **[wiring 고려] poison 비종결**: concurrent 모드는 성공 flush가 없어 systemic-분류 실패를
+  dead-letter로 종결하지 않음 → 진짜 item-local(과대 프롬프트 등 매번 systemic 메시지) 유닛을
+  frontier가 반복 재디스패치할 수 있음. 리뷰 회복상 dead-letter/incomplete 무차별이라 현재 inert이나,
+  **리뷰 풀 배선 시 frontier의 per-unit 시도 상한이 poison 루프를 종결하는지 확인**할 것.
+
+검증: typecheck PASS · dispatch-breaker 테스트(결정성 대조 + 혼합-클래스) PASS · vitest 전체 PASS.
