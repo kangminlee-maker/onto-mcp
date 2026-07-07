@@ -378,3 +378,193 @@ export function assembleSynthesizeCertCapsule(
   assertSynthesizeCertCapsuleSourceSafe(capsule);
   return parsed.capsule;
 }
+
+// ── S7 capsule ↔ record binding gate (§18) ────────────────────────────────────
+
+/** Failure kinds of the capsule binding gate — a NEW gate with its own error
+ * classes, kept OUT of the frozen record validator's vocabulary. This is the
+ * sibling-validator realization of the §18 gate (design §15's sanctioned
+ * alternative to extending the shipped `synthesizeCertBindingViolations`);
+ * wiring it into the B5 registration path (G7) is a follow-up that touches
+ * INV-MODEL-1 and carries its own INVARIANT-CHANGE marker. */
+export interface SynthesizeCertCapsuleBindingViolation {
+  code:
+    | "capsule_missing"
+    | "capsule_schema_invalid"
+    | "capsule_source_unsafe"
+    | "capsule_digest_mismatch"
+    | "capsule_input_mismatch"
+    | "capsule_row_mismatch"
+    | "obligation_incomplete";
+  message: string;
+  subject_id: string | null;
+}
+
+/**
+ * The §18 binding gate — STRUCTURAL and deterministic only (§13.3): capsule
+ * presence (fail-closed), source-safety, record-manifest digest equality,
+ * per-input identity binding, per-row verdict binding, and the
+ * production-contrast obligation (completed !== true blocks B5 registration).
+ * It never judges semantic adequacy — whether the contrast run was adequate,
+ * the grounding prose truthful, or the negative effective is R7's job.
+ * Returns ALL violations (no short-circuit past parse) so a failure report is
+ * complete; [] means the capsule is bound.
+ */
+export function validateSynthesizeCertCapsuleBinding(args: {
+  record: SynthesizeCertRecord;
+  /** The capsule artifact as read (raw JSON value). undefined/null = absent. */
+  capsuleRaw: unknown;
+}): SynthesizeCertCapsuleBindingViolation[] {
+  const violations: SynthesizeCertCapsuleBindingViolation[] = [];
+  const violation = (
+    code: SynthesizeCertCapsuleBindingViolation["code"],
+    message: string,
+    subjectId: string | null = null,
+  ) => violations.push({ code, message, subject_id: subjectId });
+
+  if (args.capsuleRaw === undefined || args.capsuleRaw === null) {
+    return [
+      {
+        code: "capsule_missing",
+        message:
+          "no durable evidence capsule accompanies the record — a record without its capsule is unauditable and cannot register (§18 fail-closed)",
+        subject_id: null,
+      },
+    ];
+  }
+  try {
+    assertSynthesizeCertCapsuleSourceSafe(args.capsuleRaw);
+  } catch (error) {
+    violation(
+      "capsule_source_unsafe",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  const parsed = parseSynthesizeCertCapsule(args.capsuleRaw);
+  if (!parsed.capsule) {
+    for (const item of parsed.violations) {
+      violation("capsule_schema_invalid", item.message, item.subject_id);
+    }
+    return violations; // unparseable: field-level binding is not checkable
+  }
+  const capsule = parsed.capsule;
+
+  // Manifest digest binding (record ↔ capsule).
+  const recordManifestSha = synthesizeCertManifestSha256(args.record.input_manifest);
+  if (capsule.record_input_manifest_sha256 !== recordManifestSha) {
+    violation(
+      "capsule_digest_mismatch",
+      `capsule binds manifest digest ${capsule.record_input_manifest_sha256} but the record's input_manifest hashes to ${recordManifestSha}`,
+    );
+  }
+
+  // Per-input identity binding.
+  const capsuleInputById = new Map(capsule.per_input.map((e) => [e.input_id, e]));
+  if (capsuleInputById.size !== capsule.per_input.length) {
+    violation("capsule_input_mismatch", "capsule per_input lists an input_id more than once");
+  }
+  for (const manifestEntry of args.record.input_manifest) {
+    const capsuleEntry = capsuleInputById.get(manifestEntry.input_id);
+    if (!capsuleEntry) {
+      violation(
+        "capsule_input_mismatch",
+        `record manifest input ${manifestEntry.input_id} is absent from the capsule`,
+        manifestEntry.input_id,
+      );
+      continue;
+    }
+    if (capsuleEntry.input_sha256 !== manifestEntry.input_sha256) {
+      violation(
+        "capsule_input_mismatch",
+        `input ${manifestEntry.input_id}: capsule sha ${capsuleEntry.input_sha256} != record manifest sha ${manifestEntry.input_sha256}`,
+        manifestEntry.input_id,
+      );
+    }
+    if (
+      capsuleEntry.stratum.seam !== manifestEntry.stratum.seam ||
+      capsuleEntry.stratum.merge !== manifestEntry.stratum.merge
+    ) {
+      violation(
+        "capsule_input_mismatch",
+        `input ${manifestEntry.input_id}: capsule stratum disagrees with the record manifest`,
+        manifestEntry.input_id,
+      );
+    }
+  }
+  const manifestIds = new Set(args.record.input_manifest.map((e) => e.input_id));
+  for (const capsuleEntry of capsule.per_input) {
+    if (!manifestIds.has(capsuleEntry.input_id)) {
+      violation(
+        "capsule_input_mismatch",
+        `capsule per_input cites ${capsuleEntry.input_id}, absent from the record manifest`,
+        capsuleEntry.input_id,
+      );
+    }
+  }
+
+  // Per-row verdict binding.
+  const capsuleRowById = new Map(capsule.per_row.map((r) => [r.row_id, r]));
+  if (capsuleRowById.size !== capsule.per_row.length) {
+    violation("capsule_row_mismatch", "capsule per_row lists a row_id more than once");
+  }
+  for (const row of args.record.judgement_rows) {
+    const capsuleRow = capsuleRowById.get(row.row_id);
+    if (!capsuleRow) {
+      violation(
+        "capsule_row_mismatch",
+        `record row ${row.row_id} is absent from the capsule`,
+        row.row_id,
+      );
+      continue;
+    }
+    if (
+      capsuleRow.input_id !== row.input_id ||
+      capsuleRow.arm !== row.arm ||
+      capsuleRow.rep !== row.rep
+    ) {
+      violation(
+        "capsule_row_mismatch",
+        `row ${row.row_id}: capsule coordinate (${capsuleRow.input_id}, ${capsuleRow.rep}, ${capsuleRow.arm}) != record coordinate (${row.input_id}, ${row.rep}, ${row.arm})`,
+        row.row_id,
+      );
+    }
+    if (capsuleRow.output_sha256 !== (row.output_sha256 ?? null)) {
+      violation(
+        "capsule_row_mismatch",
+        `row ${row.row_id}: capsule output sha ${String(capsuleRow.output_sha256)} != record output sha ${String(row.output_sha256 ?? null)}`,
+        row.row_id,
+      );
+    }
+    if (
+      capsuleRow.metrics.grounding !== row.metrics.grounding ||
+      capsuleRow.metrics.boundary !== row.metrics.boundary
+    ) {
+      violation(
+        "capsule_row_mismatch",
+        `row ${row.row_id}: capsule metrics disagree with the record row`,
+        row.row_id,
+      );
+    }
+  }
+  const recordRowIds = new Set(args.record.judgement_rows.map((r) => r.row_id));
+  for (const capsuleRow of capsule.per_row) {
+    if (!recordRowIds.has(capsuleRow.row_id)) {
+      violation(
+        "capsule_row_mismatch",
+        `capsule per_row cites ${capsuleRow.row_id}, absent from the record`,
+        capsuleRow.row_id,
+      );
+    }
+  }
+
+  // Obligation (§13/§18): the production-contrast run must be completed before
+  // registration — presence is a structural gate; ADEQUACY is R7.
+  if (capsule.production_contrast.completed !== true) {
+    violation(
+      "obligation_incomplete",
+      "production_contrast.completed is not true — the B5 registration obligation is unmet (fail-closed; run and reference the production-contrast evidence first)",
+    );
+  }
+
+  return violations;
+}
