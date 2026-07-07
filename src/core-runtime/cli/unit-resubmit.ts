@@ -1,24 +1,33 @@
 /**
  * Bounded unit resubmit — pure decision/projection logic (no I/O, no LLM
- * calls).
+ * calls). Unit-agnostic: the error-spec construction and packet projection are
+ * shared across review units; per-unit failure classifiers select which
+ * validation rejections are correctable.
  *
- * When `review.execution.retry.resubmit.enabled` is on, an issue-stance unit
- * whose structured submit was rejected by the deterministic
- * `issue_evidence_refs` whitelist is re-requested through the unit's existing
- * retry budget with an error spec injected into its prompt packet, instead of
- * retrying blind. Exhaustion demotes the unit to complete-with-failure
- * (recorded in degradation-summary, disclosed non-blockingly downstream)
- * rather than halting the run — unless the same validation class fails a
- * strict majority of stance units, which is treated as a structural defect
- * and escalates to the existing whole-run halt with
- * `halt_reason = correlated_validation: …`.
+ * When `review.execution.retry.resubmit.enabled` is on, a unit whose structured
+ * submit was rejected by a deterministic evidence-ref whitelist is re-requested
+ * through the unit's existing retry budget with an error spec injected into its
+ * prompt packet, instead of retrying blind.
+ *
+ * Wired units (§4-6a):
+ * - issue-stance: `issue_evidence_refs` whitelist. Exhaustion demotes the unit
+ *   to complete-with-failure (degradation-summary, disclosed non-blockingly)
+ *   rather than halting — unless the same validation class fails a strict
+ *   majority of stance units (structural defect → whole-run halt with
+ *   `halt_reason = correlated_validation: …`). The demotion/correlated
+ *   machinery below is stance-only.
+ * - deliberation-response: `allowed_evidence_refs` whitelist. Exhaustion reuses
+ *   deliberation's existing non-halting degrade (unavailable-completion), so it
+ *   needs no demotion/correlated machinery. Only the submit-time rejection is
+ *   correctable; on-disk rejections run post-pool and degrade.
  *
  * This module owns the deterministic parts: failure classification, error
  * spec construction, idempotent packet projection, and the correlated
  * escalation decision. File I/O and dispatch stay in
  * run-review-prompt-execution.
  *
- * Design: development-records/design/20260704-review-unit-resubmit-and-limit-breaker-design.md (설계 A).
+ * Design: development-records/design/20260704-review-unit-resubmit-and-limit-breaker-design.md (설계 A),
+ *   development-records/design/20260707-s4-6a-deliberation-resubmit-design.md (§4-6a 확대).
  */
 
 /** Marker delimiting the runtime-owned error spec section inside a packet.
@@ -89,43 +98,110 @@ export function isUnsupportedEvidenceRefFailureMessage(
   );
 }
 
+/** Deliberation-response evidence_refs whitelist rejection (§4-6a). Unlike the
+ * stance messages, the deliberation throw embeds only the offending ref (not
+ * issue/lens), so this classifier captures the ref alone and the caller
+ * recovers issue_id/lens_id from the dispatch unit_id
+ * (`deliberation:<issueId>:<lensId>`). */
+export interface DeliberationUnsupportedEvidenceRefViolation {
+  evidenceRef: string;
+}
+
+/** Submit-time throw site (structured-output-tools `assertAllowedRefs` via
+ * `normalizeIssueDeliberationResponseSubmitArgs`). This is the only deliberation
+ * evidence_refs rejection reachable by resubmit: the executor throws it during
+ * the dispatch (retryable) and freezes it as the salvage input. The on-disk
+ * validator (`validateIssueDeliberationResponseObject`) runs post-pool and is
+ * caught into a non-halting degrade — it never re-enters the retry loop — so it
+ * is deliberately not anchored here. */
+const SUBMIT_DELIBERATION_UNSUPPORTED_REF_PATTERN =
+  /submit_issue_deliberation_response\.evidence_refs contains unsupported ref: (.*)$/m;
+
+/**
+ * Classify a unit failure message as a submit-time deliberation-response
+ * unsupported-evidence-ref rejection. Returns null for every other class so
+ * infra failures — and on-disk rejections, which degrade rather than resubmit —
+ * keep their current semantics.
+ */
+export function classifyDeliberationUnsupportedEvidenceRefFailure(
+  message: string,
+): DeliberationUnsupportedEvidenceRefViolation | null {
+  const submitMatch = SUBMIT_DELIBERATION_UNSUPPORTED_REF_PATTERN.exec(message);
+  if (submitMatch) {
+    const evidenceRef = submitMatch[1]!.trim();
+    if (evidenceRef.length === 0) return null;
+    return { evidenceRef };
+  }
+  return null;
+}
+
+/** Which review unit a resubmit error spec targets. Absent → issue-stance
+ * (the original cut; output stays byte-identical). `deliberation` carries the
+ * lens_id the message text lacks. */
+export type ResubmitUnitDescriptor =
+  | { kind: "stance" }
+  | { kind: "deliberation"; lensId: string };
+
 /**
  * Render the bounded error spec for a resubmit attempt. Contains only the
- * violation and the allowed set for the offending issue — never the failed
+ * violation and the allowed set for the offending unit — never the failed
  * output itself (design: no full-output retransmission; the model rebuilds
- * the complete payload from the unchanged packet body).
+ * the complete payload from the unchanged packet body). Unit-agnostic: the
+ * `unit` descriptor selects the submit tool, rejected-unit label, allowed-set
+ * header, and closing instruction; stance is the default and unchanged.
  */
 export function buildResubmitErrorSpec(args: {
   violation: UnsupportedEvidenceRefViolation;
   allowedEvidenceRefs: readonly string[];
   resubmitAttempt: number;
+  unit?: ResubmitUnitDescriptor;
 }): string {
   const { violation } = args;
   const allowedBlock =
     args.allowedEvidenceRefs.length > 0
       ? args.allowedEvidenceRefs.map((ref) => `- ${ref}`).join("\n")
       : "- (none — omit evidence_refs entries you cannot support)";
-  const rejectedStanceLabel =
-    violation.stanceIndex !== null
-      ? `stances[${violation.stanceIndex}] (issue_id: ${violation.issueId})`
-      : `stance for issue_id: ${violation.issueId}`;
+  const spec =
+    args.unit?.kind === "deliberation"
+      ? {
+          submitTool: "submit_issue_deliberation_response",
+          rejectedLine: `- rejected: deliberation for issue_id: ${violation.issueId}, lens_id: ${args.unit.lensId}`,
+          allowedHeader: "- allowed evidence_refs:",
+          closing: [
+            "Every evidence_ref must come from the allowed set in the schema",
+            "context above. Resubmit the full deliberation response, not only the",
+            "rejected entry.",
+          ],
+        }
+      : {
+          submitTool: "submit_issue_stance_response",
+          rejectedLine: `- rejected stance: ${
+            violation.stanceIndex !== null
+              ? `stances[${violation.stanceIndex}] (issue_id: ${violation.issueId})`
+              : `stance for issue_id: ${violation.issueId}`
+          }`,
+          allowedHeader: `- allowed evidence_refs for ${violation.issueId}:`,
+          closing: [
+            "Every stance's evidence_refs must come from that issue's allowed set in",
+            "the schema context above. Resubmit the full stances array, not only the",
+            "rejected entry.",
+          ],
+        };
   return [
     RESUBMIT_ERROR_SPEC_BEGIN,
     "",
     `## Resubmit required: evidence_refs validation rejected (attempt ${args.resubmitAttempt})`,
     "",
-    "Your previous submit_issue_stance_response call was rejected by",
+    `Your previous ${spec.submitTool} call was rejected by`,
     "deterministic validation. Do not apologize or explain; call the submit",
     "tool again with a complete corrected payload.",
     "",
-    `- rejected stance: ${rejectedStanceLabel}`,
+    spec.rejectedLine,
     `- unsupported evidence_ref: ${violation.evidenceRef}`,
-    `- allowed evidence_refs for ${violation.issueId}:`,
+    spec.allowedHeader,
     allowedBlock,
     "",
-    "Every stance's evidence_refs must come from that issue's allowed set in",
-    "the schema context above. Resubmit the full stances array, not only the",
-    "rejected entry.",
+    ...spec.closing,
     "",
     RESUBMIT_ERROR_SPEC_END,
   ].join("\n");

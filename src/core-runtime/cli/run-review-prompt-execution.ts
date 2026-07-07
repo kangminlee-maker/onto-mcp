@@ -179,9 +179,10 @@ import {
   applyResubmitErrorSpecToPacket,
   buildResubmitErrorSpec,
   classifyUnsupportedEvidenceRefFailure,
+  classifyDeliberationUnsupportedEvidenceRefFailure,
   isUnsupportedEvidenceRefFailureMessage,
   correlatedValidationExceeded,
-} from "./stance-resubmit.js";
+} from "./unit-resubmit.js";
 import {
   isReviewArtifactGenerationRealization,
   semanticQualityEvidenceForArtifactGeneration,
@@ -1829,6 +1830,137 @@ async function readFrozenUnsupportedRefViolation(
     const frozen = JSON.parse(raw) as SalvageInput;
     return typeof frozen.error === "string"
       ? classifyUnsupportedEvidenceRefFailure(frozen.error)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 설계 A / §4-6a: unit-agnostic entry for bounded resubmit error-spec
+ * injection. Routes by `output_format` to the per-unit strategy; unknown
+ * formats (synthesis, ledgers, …) are a no-op, so the retry stays blind for
+ * units without a classifiable, spec-correctable validation rejection. The
+ * opt-in gate is re-checked here so OFF returns before any per-unit work.
+ */
+export async function applyResubmitErrorSpec(args: {
+  dispatch: ExecutionDispatchResult;
+  error: unknown;
+  attempt: number;
+  reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+  errorLogPath: string;
+}): Promise<boolean> {
+  if (args.reviewExecutionProfile?.retry?.resubmit?.enabled !== true) {
+    return false;
+  }
+  if (args.dispatch.output_format === "issue-stance-response") {
+    return applyStanceResubmitErrorSpec(args);
+  }
+  if (args.dispatch.output_format === "issue-deliberation-response") {
+    return applyDeliberationResubmitErrorSpec(args);
+  }
+  return false;
+}
+
+/** deliberation unit_id is `deliberation:<issueId>:<lensId>` (the live colon
+ * form built by buildIssueScopedLensDeliberationPrompt); mirrors the split
+ * convention in haltLensIdFromOutcome. */
+function deliberationUnitIdParts(
+  unitId: string,
+): { issueId: string; lensId: string } | null {
+  if (!unitId.startsWith("deliberation:")) return null;
+  const [, issueId, lensId] = unitId.split(":");
+  if (!issueId || !lensId) return null;
+  return { issueId, lensId };
+}
+
+/**
+ * §4-6a deliberation strategy: inject the evidence_refs error spec before the
+ * next retry of a deliberation-response unit whose submit was rejected by the
+ * `allowed_evidence_refs` whitelist. The deliberation throw carries only the
+ * ref, so issue_id/lens_id come from the dispatch unit_id and the allowed set
+ * from the packet's runtime projection (flat, single-(issue,lens) scope).
+ * Cap exhaustion keeps deliberation's existing non-halting degrade
+ * (completeUnavailableDeliberationResponseUnit) — no demotion machinery.
+ */
+async function applyDeliberationResubmitErrorSpec(args: {
+  dispatch: ExecutionDispatchResult;
+  error: unknown;
+  attempt: number;
+  reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+  errorLogPath: string;
+}): Promise<boolean> {
+  if (args.reviewExecutionProfile?.retry?.resubmit?.enabled !== true) {
+    return false;
+  }
+  if (args.dispatch.output_format !== "issue-deliberation-response") {
+    return false;
+  }
+  const violation =
+    classifyDeliberationUnsupportedEvidenceRefFailure(
+      args.error instanceof Error ? args.error.message : String(args.error),
+    ) ??
+    (await readFrozenDeliberationUnsupportedRefViolation(
+      args.dispatch.output_path,
+    ));
+  if (!violation) return false;
+  const parts = deliberationUnitIdParts(args.dispatch.unit_id);
+  if (!parts) return false;
+  let packetText: string;
+  try {
+    packetText = await fs.readFile(args.dispatch.packet_path, "utf8");
+  } catch {
+    return false;
+  }
+  let allowedRefs: string[] = [];
+  try {
+    allowedRefs =
+      parseRuntimeIssueDeliberationSchemaContext(packetText).allowed_evidence_refs;
+  } catch {
+    allowedRefs = [];
+  }
+  const resubmitAttempt = args.attempt + 1;
+  await fs.writeFile(
+    args.dispatch.packet_path,
+    applyResubmitErrorSpecToPacket(
+      packetText,
+      buildResubmitErrorSpec({
+        violation: {
+          stanceIndex: null,
+          issueId: parts.issueId,
+          evidenceRef: violation.evidenceRef,
+        },
+        allowedEvidenceRefs: allowedRefs,
+        resubmitAttempt,
+        unit: { kind: "deliberation", lensId: parts.lensId },
+      }),
+    ),
+    "utf8",
+  );
+  await appendExecutionProgress(
+    args.errorLogPath,
+    `runner deliberation resubmit: ${args.dispatch.unit_id}`,
+    [
+      `resubmit_attempt: ${resubmitAttempt}`,
+      `issue_id: ${parts.issueId}`,
+      `lens_id: ${parts.lensId}`,
+      `unsupported_ref: ${violation.evidenceRef}`,
+    ],
+  );
+  return true;
+}
+
+/** Deliberation counterpart of readFrozenUnsupportedRefViolation: the salvage
+ * freeze is output_format-agnostic, so a deliberation submit rejection is
+ * recoverable from the frozen error even when the adapter swallowed stderr. */
+async function readFrozenDeliberationUnsupportedRefViolation(
+  outputPath: string,
+): Promise<ReturnType<typeof classifyDeliberationUnsupportedEvidenceRefFailure>> {
+  try {
+    const raw = await fs.readFile(salvageInputPathFor(outputPath), "utf8");
+    const frozen = JSON.parse(raw) as SalvageInput;
+    return typeof frozen.error === "string"
+      ? classifyDeliberationUnsupportedEvidenceRefFailure(frozen.error)
       : null;
   } catch {
     return null;
@@ -3735,8 +3867,8 @@ async function runSingleDispatchWithRetries(args: {
       // 설계 A: nested-batch 1차 시도 실패의 flat 폴백과 halted 세션 resume은
       // 이 루프 밖에서 실패해 frozen salvage input만 남는다 — 그 구조적
       // 근거가 있으면 첫 flat 시도 전에 오류 명세를 주입해 blind 재실행을
-      // 막는다. (스위치 OFF·비-stance 유닛·freeze 부재 시 no-op)
-      await applyStanceResubmitErrorSpec({
+      // 막는다. (스위치 OFF·미지원 output_format·freeze 부재 시 no-op)
+      await applyResubmitErrorSpec({
         dispatch,
         error: null,
         attempt: 0,
@@ -3796,7 +3928,7 @@ async function runSingleDispatchWithRetries(args: {
             `error: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`,
           ],
         );
-        await applyStanceResubmitErrorSpec({
+        await applyResubmitErrorSpec({
           dispatch,
           error,
           attempt,
