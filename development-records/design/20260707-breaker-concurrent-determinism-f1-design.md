@@ -118,16 +118,22 @@ Option C가 과하다고 판단되면 **Option D**(문서화)가 최소 대안 �
 default-off로 배선·검증 완료. 리뷰 풀 배선(§7-3: `reviewDispatchBreakerFromProfile`에서
 `concurrent:true` 전달 + 러너 통합 테스트)은 F3 하니스 착지 후 별도 PR로 진행.
 
-## 9. 독립 리뷰 반영 (2026-07-07, foundation PR #178)
+## 9. 독립 리뷰 2라운드 반영 (2026-07-07, foundation PR #178)
 
-집중 적대 리뷰 2렌즈(상태기계 정확성 · 설계-주장 검증). 설계 load-bearing 주장(reconstruct 이중
-면역·리뷰 frontier-안전 → severity medium·동시성 전제)은 **전부 CONFIRMED**. 실 material 1건 수정:
+라운드1: Claude 집중 2렌즈(상태기계 · 설계-주장). 라운드2: Codex(cross-family) ultracode 3렌즈.
+설계 load-bearing 주장(reconstruct 이중 면역·리뷰 frontier-안전 → severity medium·동시성 전제)은
+**두 라운드 모두 CONFIRMED**. failure_class 결정성은 2라운드에 걸쳐 정정:
 
-- **[medium 수정] concurrent 트립 `failure_class` 결정성**: 혼합 systemic 클래스 버스트에서 임계를
-  넘긴 아이템의 클래스가 완료순서 의존 → halt_reason/disclosure `failure_class` label 비재현.
-  **수정**: concurrent 모드에선 트립 클래스를 pending victim의 **최빈 클래스(동률=이름 오름차순)**
-  로 도출(`dominantPendingClass`) — 순서 무관. 혼합-클래스 테스트 추가(음성 대조: 비concurrent는
-  crossing 아이템 클래스라 순서 의존).
+- **[medium] concurrent 트립 `failure_class` 비결정성 → de-scope(정직한 축소)**: 라운드1이 혼합-클래스
+  버스트에서 crossing 아이템 클래스가 순서 의존임을 지적 → 1차로 pending 최빈(`dominantPendingClass`)
+  도출로 수정. **라운드2(Codex)가 그 수정이 불완전함을 재현**: 트립은 조기(첫 임계 = 먼저 완료된
+  N개 prefix)에 발생하므로 최빈을 prefix에서 계산하면 여전히 순서 의존({a:auth,b:auth,c:tr,d:tr}
+  threshold 3 → 24순열 12/12로 갈림). **근본 이유**: 트립-시점 failure_class는 본질적으로 prefix
+  기반 — 전체 victim 집합은 배치 끝에야 확정된다. **해결**: `dominantPendingClass` 되돌리고
+  concurrent 보장을 실제 값으로 축소 — **트립 결정(bool)·count·회복셋·집합 멤버십은 결정적**,
+  failure_class는 crossing 클래스 = **best-effort 진단 label**(회복 무관). 테스트도 혼합-클래스에서
+  회복-관련 결정성(트립·count·집합)만 단언하도록 교체(failure_class 미단언). 전체 결정적 class 요약이
+  필요하면 배치 끝 전체 pending에서 별도 산출(F1 후속, 미착수).
 - **[low 문서화] `consecutive_item_count` 네이밍**: concurrent 모드에선 "consecutive"가 아니라
   "누적 distinct" N에서 트립(값은 항상 threshold로 정확). 필드명은 비concurrent 유래 — 감사 시 유의.
 - **[low 문서화] disclosure 배열 순서**: `completed_item_ids`/`dead_letter` **배열 순서**는 기록순
