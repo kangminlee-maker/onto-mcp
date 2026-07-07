@@ -6,9 +6,11 @@
  * an unattended batch must not throw a retry storm at a dead rate limit and
  * lose items. The repo has no common dispatch surface (§8 재앵커링), so the
  * policy is injected per loop. Currently wired: the reconstruct semantic-map
- * judgment loop and the review lens/stance fan-out pools (flat per-unit
- * loops; the nested-workers first-attempt batch is NOT covered — the outer
- * worker owns that fan-out, §8 후속).
+ * judgment loop and the review lens/stance fan-out pools — both the flat
+ * per-unit loops AND the nested-workers first-attempt batch (§4-1: a batch-window
+ * SUCCESS is recorded skipped so a stale batch success never resets the streak,
+ * while a batch-window FAILURE is classified like any failure; the
+ * directly-observed flat retries drive the streak).
  *
  * 1. backoff first — a per-item failure counts toward the breaker only after
  *    the item's bounded backoff retries are exhausted. Providers surface 429s
