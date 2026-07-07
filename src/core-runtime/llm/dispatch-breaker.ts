@@ -186,6 +186,16 @@ export interface DispatchBreakerPolicy {
   per_call_max_attempts: number;
   backoff_initial_ms: number;
   backoff_cap_ms: number;
+  /** Concurrent-pool mode (opt-in; default off/undefined preserves the current
+   * behavior byte-for-byte). Set by CODE for the review lens/stance pools
+   * (`Promise.all`) — NOT a user setting. When on, a pre-trip success does NOT
+   * flush the pending systemic failures to poison, so the trip and the
+   * completed/dead-letter/incomplete classification depend only on WHICH items
+   * failed systemically, not on their completion order. Sequential callers
+   * (reconstruct semantic-map, canonical order) omit it and keep the
+   * poison-vs-systemic-via-later-success attribution. See design note
+   * development-records/design/20260707-breaker-concurrent-determinism-f1-design.md. */
+  concurrent?: boolean;
 }
 
 export interface DispatchDeadLetterEntry {
@@ -240,6 +250,15 @@ export class DispatchBreakerState {
     // them OUT of the incomplete recovery set (규칙 5 위반). The late unit
     // itself still counts as completed.
     if (this.trip !== null) return;
+    // Concurrent pool (opt-in, F1): during a concurrent burst a success does
+    // NOT prove the whole lane is alive (a partial rate-limit yields some 200s
+    // and some 429s), and letting completion order decide which pending victims
+    // become poison makes the trip/classification non-deterministic. In this
+    // mode systemic victims stay pending — the trip is count-based and
+    // order-independent; un-tripped victims end as incomplete (review recovery
+    // re-derives from the frontier either way). Sequential callers omit the flag
+    // and keep the poison-via-later-success attribution.
+    if (this.policy.concurrent) return;
     // The provider lane is alive: pending systemic failures were item-scoped
     // after all — poison, dead-lettered.
     for (const entry of this.pendingSystemic) this.deadLetter.push(entry);
@@ -276,7 +295,16 @@ export class DispatchBreakerState {
       this.pendingSystemic.length >= this.policy.systemic_threshold
     ) {
       // The FIRST crossing is the trip authority; later records must not
-      // rewrite its count (stable halt_reason/artifact for audit).
+      // rewrite its count. Concurrent-mode guarantee (F1): the trip DECISION
+      // (bool), `consecutive_item_count`, and the completed/dead-letter/
+      // incomplete SETS are order-independent (pendingSystemic is never
+      // flushed). `failure_class` is NOT: the trip fires early on the
+      // first-N-to-complete prefix, so a mixed-class burst labels the trip by
+      // whichever systemic class happened to cross. It is a best-effort
+      // diagnostic label (halt_reason / disclosure), never recovery-relevant,
+      // and is left as the crossing item's class — a deterministic full-batch
+      // class summary, if ever needed, belongs at end-of-batch over the full
+      // pending set, not at this early trip point (F1 후속).
       this.trip = {
         failure_class: entry.failure_class,
         consecutive_item_count: this.pendingSystemic.length,
