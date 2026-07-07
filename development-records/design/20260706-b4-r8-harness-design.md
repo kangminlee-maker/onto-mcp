@@ -1,9 +1,9 @@
-# INV-MODEL-1 B4 — R8 라이브 캡처 하니스 설계 (v2 · 교차검증 반영)
+# INV-MODEL-1 B4 — R8 라이브 캡처 하니스 설계 (v3 · 2라운드 교차검증 반영)
 
-> 상태: **설계-먼저 (빌드 전) · v2**. owner 승인 = "설계-먼저 · 두 번째 fixture=6255aef7 · **결정 1(b)+2(a)**"(2026-07-07).
-> v1→v2 = 3-패밀리 교차검증(ultracode wf_22791f61-685 · onto 20260707-ea339d5b · 독립) HIGH 5·MED 4 반영.
-> 변경 요지·수렴 근거 = §17. 상위 계약 = `20260704-inv-model-1-role-aware-design.md` §6·§13.3.
-> 검증기(스키마-먼저 고정·불변) = `src/core-runtime/discovery/synthesize-cert-record.ts`.
+> 상태: **설계-먼저 (빌드 전) · v3**. owner 승인 = "1(b)+2(a) · fixture=6255aef7 · **round-2 후 옵션 A(durable source-safe capsule)**"(2026-07-07).
+> v1→v2 = round-1(ultracode wf_22791f61-685 · onto 20260707-ea339d5b · 독립) HIGH 5·MED 4.
+> **v2→v3 = round-2(ultracode wf_2ed0b4ad-817 · onto 20260707-6bb4d130 · 독립)**: onto convergent HIGH 3(증거 durability/binding, fix-유발) → loopback-2 stop-and-ask → owner 옵션 A. 변경 요지 = §17·§18·§19.
+> 상위 계약 = `20260704-inv-model-1-role-aware-design.md` §6·§13.3. 검증기(스키마-먼저 고정·불변) = `src/core-runtime/discovery/synthesize-cert-record.ts`.
 
 ## 0. 목표 · 범위 · done-when
 
@@ -11,13 +11,18 @@
   생성·박제 → Haiku 레지스트리 엔트리(B5-완성) 가능케 함.
 - **★ 인증 주장 범위 (결정 1(b))**: cert = **per-node raw synthesize 능력**(`synthesizeSemanticMapNode`
   이 고정 bounded 입력에 대해 내는 summary+boundaries)만 인증. production 전체경로(accumulate→
-  reconcile→verify→taint→projection)와의 **gap은 machine-readable로 공개**하고, B5 등록 전 별도
-  **production-contrast run**을 필수 obligation으로 둔다(§13). full-production 인증 아님.
-- **범위(이 세션)**: 무지출 R8 하니스 **설계 v2 + 빌드 + mock E2E**. 라이브(`--go`)는 owner 예산 후.
+  reconcile→verify→taint→projection)와의 **gap은 구조화된 evidence capsule(§18)에 machine-readable로 공개**
+  (자유텍스트 아님)하고, B5 등록 전 별도 **production-contrast run**을 필수 obligation으로 둔다(§13). full-production 인증 아님.
+- **★ 증거 durability (round-2 옵션 A · §18)**: cert 증거는 **durable source-safe evidence capsule**(tracked
+  companion 아티팩트)로 영속 — hash·추상 구조 facts·verdict·mutation provenance·obligation flag 포함, **민감한
+  child_summary 프로세만 로컬(gitignore·R7 grounding 감사)**. B5/gate가 capsule↔record binding과 obligation을
+  소비(fail-closed). "박제된 record 뒤에 증거가 local-only여서 재현 불가"(round-2 HIGH) 해소.
+- **범위(이 세션)**: 무지출 R8 하니스 **설계 v3 + 빌드 + mock E2E**. 라이브(`--go`)는 owner 예산 후.
 - **done-when (하니스)**: mock/fixture LLM로 산출한 record가 `validateSynthesizeCertRecord` **0-violation**
-  + `computeSynthesizeCertAggregates` 재계산 일치 + 실패-보존(R8) + **frozen-input packet 영속·감사가능**
-  + 음성대조(결함 record가 비-0). 라이브 done-when = 상위 §1 + R7(§13) + production-contrast.
-- **비-목표(§13.3 경계)**: negative 변별 실효·candidate 품질·baseline 진위·선택배제 정직 = R7.
+  + `computeSynthesizeCertAggregates` 재계산 일치 + 실패-보존(R8) + **durable capsule 영속·binding gate 통과**
+  (record.input_sha256 ↔ capsule digest 검증·obligation 소비·fail-closed) + 음성대조(결함 record/capsule 비-0).
+  라이브 done-when = 상위 §1 + R7(§13) + production-contrast.
+- **비-목표(§13.3 경계)**: negative 변별 실효·candidate 품질·baseline 진위·선택배제 정직·grounding 프로세 의미 = R7.
 
 ## 1. 확정 그라운딩 (실측·코드 인용 — v1 유지)
 
@@ -57,7 +62,7 @@
 | aggregate_mismatch (715) | `computeSynthesizeCertAggregates` |
 | floors·outer-join | 샘플러 over-provision(§3)·실패-보존(§8) |
 
-## 2. 아키텍처 v2 (입력 동결 → 단일 호출)
+## 2. 아키텍처 v3 (입력 동결 → 단일 호출 → durable capsule)
 
 ```
 [관찰·결정론]        [샘플러·결정론]              [입력 동결·1회]                [arm·LLM]           [judge·LLM]      [조립]
@@ -76,12 +81,13 @@ observe(2 fixture) ─▶ 층화 샘플+provenance ─▶ frozen SemanticSynthes
                                                      ▼
                               실패-보존 row(R8) → judgement_rows → computeAggregates
                                                      │
-                                                     ▼  + frozen/mutated packet 사이드카(감사)
-                              SynthesizeCertRecord → validate 0-violation → 박제
+                          durable capsule(§18·tracked·source-safe) + prose 사이드카(gitignore·local)
+                                                     ▼
+                              record → validate 0-violation + capsule binding gate → 박제
 ```
 
-**v1 대비 핵심**: per-arm subtree walk 폐기. child_summaries를 **1회 동결**해 전 arm 동일 입력 →
-same-input 비교 성립(A). arm 실행 = frozen packet에 대한 **단일 synthesize 호출**(merge/leaf 무관).
+**핵심**: per-arm subtree walk 폐기(child 1회 동결→전 arm 동일 입력→same-input·A). arm=frozen packet 단일
+호출. **증거=durable source-safe capsule(§18)+프로세만 로컬**(round-2 옵션 A).
 
 ## 3. 결정론 층화 샘플러 → 고정 manifest (+ provenance)
 
@@ -89,8 +95,13 @@ same-input 비교 성립(A). arm 실행 = frozen packet에 대한 **단일 synth
 
 **over-provisioning (D 해소)**: (fixture × 보유 stratum)별 K입력. decisive n≥5는 K×rep(3) × 실 decisive율
 필요. 9행 중 >4 비-decisive면 floor 위반(유료런 후 발각) → **비관 decisive율 0.4 가정 K=5**(5×3=15행 →
-0.4서 6 decisive ≥5). pre-spend `synthesizeCertManifestFloorViolations`로 **가용 부족 시 즉시 실패**
-(라이브 전 차단). fixture#1 4 stratum×5=20 · fixture#2 2×5=10 = 30입력.
+0.4서 6 decisive ≥5). fixture#1 4 stratum×5=20 · fixture#2 2×5=10 = 30입력.
+
+**★ 시퀀싱 (R2-IND-1 해소)**: floor 사전 체크는 **결정론 facts 스코프**(node identity+stratum·§4의
+`deterministic_facts_sha256`)로 **reference child 저작(§5, LLM 지출) *전에*** 실행 —
+`synthesizeCertManifestFloorViolations`로 가용 부족 시 즉시 실패(reference 지출 낭비·라이브 전 차단).
+그 후에만 reference 저작 → full `input_sha256`(§4) 계산 → manifest 동결. 즉 "pre-spend floor 체크"는
+reference 저작보다 앞선다.
 
 **결정론·정직 선정** (cherry-pick 금지 = R7):
 1. stratum 후보를 안정 키(reduceNodeKey) 정렬. seed=sha256(`fixture_sha|stratum|sampler_version`).
@@ -99,26 +110,33 @@ same-input 비교 성립(A). arm 실행 = frozen packet에 대한 **단일 synth
 3. **input_id = 공백-free (E 해소)**: `<fixture8>-s<sheetIndex>-c<colIndex>-r<rowStart>_<rowEnd>` (raw 시트명
    미포함·전역 유일). 샘플러가 freeze 전 **모든 input_id `/^\S+$/` 단언**.
 
-**provenance 사이드카 (H 해소)**: stratum별 rejected pool 크기·후보 rank·seed·stride·**selected vs
-nearest-unselected** 를 `sampling-provenance.json`에 영속 → R7 대표성 감사. reproduction.source_paths 인용.
+**provenance (H 해소)**: stratum별 rejected pool 크기·후보 rank·seed·stride·**selected vs
+nearest-unselected** 를 **durable capsule(§18)에** 영속(source-safe: 노드 identity·구조 지표만) → R7 대표성 감사.
 
 **출력 = 고정 manifest**: `input_manifest[] = {fixture_id, input_id, input_sha256, stratum}` (§4). pre-spend
-동결 + **manifest identity sha 기록**(post-hoc shrink 불가 증명·D).
+동결 + **manifest identity sha 기록**(post-hoc shrink 불가 증명·D). manifest·provenance·binding = durable capsule(§18).
 
-## 4. 입력 identity + frozen packet (A 해소 · 결정 2(a))
+## 4. 입력 identity — 2-단 분리 (A 해소 · 결정 2(a) · round-2 R2-IND-1)
 
 - **frozen packet** = 완전한 `SemanticSynthesisInput`(node_ref + sorted format_clusters + canonical
   value_shape_seams + **child_summaries 포함**). merge는 child_summaries를 reference realization로 1회
   저작(§5)해 동결; leaf는 child_summaries=[].
-- **`input_sha256` = sha256(canonical(frozen packet 전체))** — child_summaries **포함**. 전 arm이 동일 packet
-  →baseline/candidate 동일 sha → input_sha_mismatch 통과 → **진짜 same-input 비교**(candidate≥baseline 무오염).
-- negative row: 변이 packet → 다른 sha(§6) → negative_mutation_not_applied 통과. source_input_id=input_id.
-- **packet 영속 + 거버넌스(v2-신규 MED)**: 원본·변이 packet을 `manifest-packets.jsonl`(input_id 키)로 저장
-  → judge 참조(§7)·R7 로컬 감사. packet의 child_summaries는 source-safe envelope 내(raw 셀 없음)이나
-  **실 워크북을 요약한 LLM 프로세**를 담으므로, 이 레포 source-safety 거버넌스(source 내용 redaction=
-  reconstruct 범위 밖·재추가 금지)에 따라 **packet 사이드카는 gitignore**(로컬 R7 증거·미커밋). git-tracked
-  record·manifest는 **opaque `input_sha256`만** 보유(워크북 파생 내용 무커밋). record 스키마는 strict/불변
-  이므로 packet은 사이드카.
+- **2-단 identity (R2-IND-1)**:
+  - `deterministic_facts_sha256` = sha256(node_ref + sorted format_clusters + canonical value_shape_seams,
+    **child_summaries 제외**) — LLM-무관·결정론. **샘플/scope/floor 사전체크용**(reference 저작 전 계산 가능·§3 시퀀싱).
+  - `input_sha256` = sha256(canonical(frozen packet **전체**·child_summaries 포함)) — **비교/same-input용**.
+    전 arm 동일 packet → baseline/candidate 동일 `input_sha256` → input_sha_mismatch 통과 → **진짜 same-input
+    비교**(candidate≥baseline 무오염). manifest는 둘 다 보유.
+- negative row: 변이 packet → 다른 `input_sha256`(§6) → negative_mutation_not_applied 통과. source_input_id=input_id.
+- **★ 증거 durability (round-2 옵션 A · §18)**: 두 층으로 분리 —
+  - **durable capsule(tracked·§18)**: `input_sha256`·`deterministic_facts_sha256`·**child_summaries의 sha만**
+    (프로세 아님)·구조 facts(format_clusters·value_shape_seams=추상·비민감)·output_sha·verdict·mutation
+    provenance·sampling provenance·obligation flag. **전부 source-safe → 커밋**. B5/gate가 binding·obligation 소비.
+  - **local prose 사이드카(gitignore)**: 원본·변이 packet의 **child_summary 프로세 전문**(실 워크북 요약=민감).
+    R7 grounding 감사·judge replay 로컬. capsule의 child sha와 대조 가능(로컬).
+  - → "record 박제됐지만 증거 local-only=재현 불가"(round-2 HIGH issue-002) 해소: **구조·binding·verdict·
+    obligation은 durable+gate-검증**, 민감 프로세만 로컬(그 의미 재감사=R7·§13.3). record 스키마 strict/불변이라
+    capsule은 companion 아티팩트(스키마 무변).
 
 ## 5. arm 실행 v2 (frozen packet · 단일 호출)
 
@@ -159,8 +177,9 @@ boundedness=transform 구현+테스트. **레버는 content-changing relabel로 
 
 - **독립 lens**: synthesize와 다른 모델(gpt-5.5 또는 opus)+전용 프롬프트. 전 arm 동일 judge.
 - **judge 입력 = 영속된 원본 frozen packet(§4) + arm output**. negative도 원본 packet 기준(arm이 본 변이
-  아님) → 변별. **packet이 record 사이드카에 영속**되므로 R7이 "이 verdict가 이 packet서 도출가능한가"
-  감사 가능(issue-005 = 답변가능성). source-safe(raw 셀 없음) 유지.
+  아님) → 변별. **verdict·output_sha·구조 facts·packet child sha = durable capsule(§18)**·**child 프로세 전문 =
+  local 사이드카**. R7이 "이 verdict가 이 packet서 도출가능한가" 감사: 구조·binding은 capsule(durable),
+  프로세 의미 재감사는 local(§13.3)(issue-005 답변가능성 = capsule로 durable 감사가능화).
 - **판정 대상 정의**:
   - grounding = summary가 packet facts(format_clusters·seams·**child_summaries**)에 충실(할루시네이션 없음).
     merge는 child_summaries가 packet에 있어 판정 정보 충분(IND-1 leaf 취약 완화: leaf는 packet의 구조
@@ -180,11 +199,14 @@ boundedness=transform 구현+테스트. **레버는 content-changing relabel로 
 
 1. judgement_rows → `computeSynthesizeCertAggregates`로 declared_aggregates(재계산 일치).
 2. arm_prompt_sha256(전 arm=프롬프트 sha)·arm_model·negative_arm(kind/params/targeted_metrics)·
-   reproduction(command·source_paths[packet·provenance 사이드카]·**limitations**).
-3. **limitations = machine-readable gap 공개(B)**: 인증 표면=raw synthesize output; production reconcile/
-   verify/taint/projection·end-to-end subtree 저작(reference 고정)은 인증 밖; merge 단일-fixture; 샘플러
-   비용 편향; no-seam boundary 미표적. → R7·B5-contrast 근거.
-4. `validateSynthesizeCertRecord(record) === []` 확인 후에만 박제. `realization: "gate_outside_replay"`.
+   reproduction(command·source_paths[**durable capsule §18**·local prose 사이드카]·limitations[산문 요약]).
+3. **★ gap 공개 = durable capsule의 구조화 obligation flag(§18·round-2 issue-003)**: `certification_scope`
+   (per_node_synthesize_capability)·`production_contrast_required/completed`·per-row/stratum negative targeting
+   ·limitation ids. **자유텍스트 아닌 gate-parse 가능 구조** → "machine-readable"이 이제 실제 참(round-2 LOW 해소).
+   record.reproduction.limitations는 산문 병기(사람용). 인증 밖 = production reconcile/verify/taint/projection·
+   end-to-end 저작(reference 고정)·merge 단일-fixture·샘플러 비용 편향·no-seam boundary 미표적.
+4. `validateSynthesizeCertRecord(record) === []` **AND** capsule binding gate(§18) 통과 후에만 박제.
+   `realization: "gate_outside_replay"`.
 - **note(boundary↔reconcile·IND-2)**: production `reconcileBoundaries`가 output boundary↔seam 매칭을 결정론
   계산. judge의 boundary 지표는 raw output의 **의미 특성화**(character_before/after 적절성) 포함으로 결정론
   초과 판정을 명시 대상으로 함(단순 row 매칭은 reconcile 몫). §7 프롬프트가 이를 한정.
@@ -220,48 +242,62 @@ grounding/boundary judge · 좌표 루프 · record 조립기.
 
 ## 13. R7 사람 큐레이션 + B5 obligation (§13.3 위임)
 
-record.reproduction + packet/provenance 사이드카 근거로 사람 검토:
+durable capsule(§18) + local prose 사이드카 근거로 사람 검토:
 ① negative가 실제 두 지표 degrade(seam strata boundary 포함) ② candidate 품질 실사용 가능 ③ baseline 진짜
-gpt-5.5 성능 ④ not_run/judge_error 정직 ⑤ arm_model↔실행 일치 ⑥ 샘플러 공정(provenance로 rejected/nearest
-대조) ⑦ judge verdict가 packet서 도출가능 ⑧ merge 단일-fixture 수용.
-**★ B5 등록 전 obligation(결정 1b·B)**: **production-contrast run** — sampled merge 노드 ≥1개를 production
-accumulate→reconcile→verify 경로로 실행해 raw 인증과의 gap(boundary 의미·taint) 실측·공개. 이 대조 없이
-등록 불가.
+gpt-5.5 성능 ④ not_run/judge_error 정직 ⑤ arm_model↔실행 일치 ⑥ 샘플러 공정(capsule provenance로 rejected/
+nearest 대조) ⑦ judge verdict가 packet서 도출가능(구조=capsule·프로세 의미=local) ⑧ merge 단일-fixture 수용.
+**★ B5 등록 전 obligation (round-2 ultracode MED 강화)**: **production-contrast run** — sampled merge 노드
+≥1개를 production accumulate→reconcile→verify 경로로 실행하되 **child 저작을 candidate(Haiku)로 실행**(2a가
+도려낸 능력을 정확히 측정)하고, gap 축 = **boundary 의미·taint + child-authoring/cross-level compounding 품질**
+을 명시 측정·공개. capsule의 `production_contrast_required=true`; `completed`가 false면 **B5 binding gate
+fail-closed**(§18 — presence는 구조 게이트·§13.3 OK; 대조 adequacy 판정은 R7). 이 대조 없이 등록 불가.
 
-## 14. 설계 긴장 해소표 (v1 §14 → v2)
+## 14. 설계 긴장 해소표 (round-1 v2 + round-2 v3)
 
-| v1 | 해소 (v2) |
+| 긴장 | 해소 |
 |---|---|
-| T1 judge 정보충분성 | §7 원본 packet 참조 + child_summaries 포함(merge) + packet 영속(답변가능·C/issue-005) |
-| T2 scoped walk 충실도 | **소멸** — 입력 동결로 arm=단일 호출·walk 없음. production gap=인증 밖 공개(B) |
-| T3 input_sha merge | **해소** — full packet(child 포함) sha·전 arm 동일 same-input(A) |
+| T1 judge 정보충분성 | §7 원본 packet 참조 + child_summaries 포함(merge) + **capsule durable 감사**(C/issue-005) |
+| T2 scoped walk 충실도 | **소멸** — 입력 동결로 arm=단일 호출·walk 없음. production gap=구조화 공개(§18) |
+| T3 input_sha merge | **해소** — full packet sha·전 arm 동일 same-input(A) + 2-단 identity(§4·R2-IND-1) |
 | T4 복합 단일 변이 | §6 per-metric 레버 provenance·seam strata서 boundary 실효(G/I) |
-| T5 샘플러 정직 | §3 provenance 사이드카·over-provision(H/D) |
-| T6 merge 단일-fixture | §13 R7 ⑧ + limitation 공개 (수용·미해소는 3번째 긴-컬럼 워크북 필요) |
-| (신규 E) input_id 공백 | §3 공백-free id + `/^\S+$/` 단언 |
+| T5 샘플러 정직 | §3 provenance→**capsule**·over-provision(H/D) |
+| T6 merge 단일-fixture | §13 R7 ⑧ + 공개 (수용·미해소는 3번째 긴-컬럼 워크북 필요) |
+| E input_id 공백 | §3 공백-free id + `/^\S+$/` 단언 |
+| **R2-A 증거 durability**(round-2 onto issue-002) | **§18 durable source-safe capsule**·프로세만 로컬 |
+| **R2-B binding 미강제**(issue-001) | **§18 capsule binding gate**(input_sha256↔capsule·fail-closed) |
+| **R2-C obligation 비-gate-consumable**(issue-003) | **§18 구조화 obligation flag**·B5 게이트 소비 |
+| **R2-D contrast 미명세**(ultracode MED) | §13 Haiku child 저작 + compounding 축 |
+| **R2-E "machine-readable" 과대**(ultracode LOW) | §9 capsule이 실제 구조화→참 |
+| **R2-F identity 분리/시퀀싱**(IND-1) | §4 2-단 sha·§3 floor 사전체크 선행 |
 
 ## 15. 빌드 계약 (staged · 무지출)
 
-1. **S1 샘플러** — stratum 태깅·over-provision K=5·결정론 픽·input_id 공백-free·provenance 사이드카.
-   테스트: 결정론·floor pre-check·`/^\S+$/`·provenance 완전성·selected-vs-nearest.
-2. **S2 packet 동결** — buildSynthesisInputForNode 기반 frozen packet + reference child 저작(1회) +
-   packet 영속. 테스트: 전 arm 동일 sha·source-safe·재현성.
-3. **S3 transform** — `input_corruption/v1` relabel(두 레버) + **입력별 sha-변경 단언**(no-seam 포함) +
-   per-metric provenance. 음성대조: 무레버 입력 거부.
-4. **S4 judge** — 원본 packet 참조 grounding/boundary + mock 실현 + 답변가능 packet 영속.
+1. **S1 샘플러** — stratum 태깅·over-provision K=5·2-단 identity(§4)·`deterministic_facts_sha256` floor
+   사전체크(reference 저작 전)·결정론 픽·input_id 공백-free. 테스트: 결정론·floor pre-check·`/^\S+$/`·selected-vs-nearest.
+2. **S2 packet 동결** — buildSynthesisInputForNode frozen packet + reference child 저작(1회) + 프로세 local
+   사이드카(gitignore) 영속. 테스트: 전 arm 동일 `input_sha256`·source-safe·재현성.
+3. **S3 transform** — `input_corruption/v1` relabel(두 레버) + **입력별 sha-변경 단언**(no-seam 포함) + per-metric provenance. 음성대조: 무레버 입력 거부.
+4. **S4 judge** — 원본 packet 참조 grounding/boundary + mock 실현.
 5. **S5 좌표 루프** — arm별 단일 synthesize + 실패-보존 + 캡처/soft-abort.
-6. **S6 record 조립** — computeAggregates + limitations(gap) + validate 0-violation.
-7. **S7 mock E2E** — 전 경로 0-violation + 음성대조(§12).
-- 게이트: ts-core clean · full vitest 회귀0 · 정적 게이트 · mock E2E 0-violation + 음성대조 비-0.
+6. **S6 durable capsule(§18)** — source-safe capsule 조립(hash·구조facts·verdict·provenance·obligation flag)·
+   프로세는 sha만·**tracked**. 테스트: source-safe 단언(프로세 부재)·capsule↔row 정합.
+7. **S7 record + binding gate** — computeAggregates·validate 0-violation·**capsule binding gate**(input_sha256↔
+   capsule digest·obligation·fail-closed). 테스트: 음성대조(capsule 누락/불일치/obligation 미충족→gate 비-0).
+8. **S8 mock E2E** — 전 경로 0-violation + capsule 커밋가능 + 음성대조(§12).
+- 게이트: ts-core clean · full vitest 회귀0 · 정적 게이트 · mock E2E 0-violation + capsule binding + 음성대조 비-0.
+- **B5 게이트 확장(구조·§13.3 OK)**: 기존 `synthesizeCertBindingViolations`(shipped)에 capsule presence/digest/
+  obligation 검증 추가 = INVARIANT-CHANGE 후보(닿는 INV id 마커). semantic adequacy는 R7(무변).
 - default-off: 라이브 = realization 스위치 + `--go`(off=mock·프로덕션 무영향).
 
-## 16. 교차검증 (완료 + 재검 계획)
+## 16. 교차검증 (2라운드 완료)
 
-v1 → **1라운드 완료(§17)**. v2 변경분(§3~§9·§13) **내 독립 재검 완료** = 신규 결함 2건: **MED packet
-영속 거버넌스**(§4 반영=사이드카 gitignore) · **LOW reference 저작 편향**(gpt-5.5 children이 baseline에
-미세 스타일 prior 가능하나 양 arm 동일 입력이라 비교 무편향; R7 ⑤/⑧ 대상). **잔여 재검증 표적**(round-2
-후보) = 결정 2(a) frozen-input의 남은 미포착 결함 + D/E/G/H/I 기계 하드닝의 계약 정합. B5 loopback-2 교훈:
-결정론으로 의미 재강제 금지. v2 round-2서 새 HIGH면 loopback-2 → stop-and-ask.
+- **round-1(§17)**: v1 → HIGH 5·MED 4 → v2(1b+2a).
+- **round-2(§19)**: v2 → ultracode 0 HIGH·onto convergent HIGH 3(증거 durability, fix-유발) → **loopback-2
+  stop-and-ask** → owner **옵션 A** → v3(§18 durable capsule). v3는 round-2 findings를 전부 반영.
+- **v3 재검증 판단**: 옵션 A는 round-2가 명시 제안한 방향(onto action + 내 추천 수렴)이라 새 근본 결정 아님.
+  단 §18 capsule/gate는 신규 개념 + shipped B5 게이트 확장 → **빌드 시 S6/S7 음성대조 + 구조가드로 자기검증**,
+  필요 시 빌드 후 targeted round-3(capsule 계약·B5 게이트 확장만). **loopback-2 규율 준수**: v3가 또 새 HIGH를
+  내면 stop-and-ask(패치 금지).
 
 ## 17. 교차검증 기록 (2026-07-07 · v1 → v2)
 
@@ -278,3 +314,52 @@ v1 → **1라운드 완료(§17)**. v2 변경분(§3~§9·§13) **내 독립 재
 **owner 결정 = 1(b) per-node capability cert + 2(a) child_summaries 동결.** 이 결정이 A·B·C·F를 클러스터로
 해소(입력 동결 → arm 단일 호출 → walk 소멸·same-input·judge packet·child 변이 sha 가시). 잔여(D·E·G·H·I)는
 기계적 하드닝. 상세 종합 = `scratchpad/b4-xval-synthesis.md`(세션 산물).
+
+## 18. Durable evidence capsule + binding gate (round-2 옵션 A · 신규 개념)
+
+**개념**: cert record(박제·opaque)의 증거를 durable하게 만드는 **tracked companion 아티팩트**
+(`synthesize-cert-capsule/v1`). record 스키마(strict/불변)를 안 건드리는 별도 파일.
+
+**capsule 내용 (전부 source-safe → 커밋 가능)**:
+```
+{ capsule_contract: "synthesize-cert-capsule/v1",
+  record_ref, record_input_manifest_sha,           // record와 결속
+  certification_scope: "per_node_synthesize_capability",   // 주장 범위(구조화·issue-003)
+  production_contrast: { required: true, completed: bool, evidence_ref? },  // obligation flag(issue-003·§13)
+  limitation_ids: [...],                            // 인증 밖 항목(구조화)
+  per_input: [ { input_id, deterministic_facts_sha256, input_sha256,   // 2-단 identity(§4)
+    child_summary_sha256,                           // 프로세 sha만(프로세 본문 아님)
+    format_clusters, value_shape_seams,             // 추상 구조 facts(비민감)
+    stratum, sampling_rank, nearest_unselected_id } ],   // provenance(§3·H)
+  per_row: [ { row_id, input_id, arm, rep, output_sha256, metrics,      // verdict binding
+    negative_lever_applied? } ] }                   // per-metric provenance(§6·G)
+```
+**민감 제외**: child_summary **프로세 본문**은 capsule에 없음(sha만) → local prose 사이드카(gitignore).
+
+**binding gate (구조·결정론·§13.3 OK)** — `synthesizeCertBindingViolations`(shipped B5) 확장 or 신규
+capsule-validator:
+- capsule presence(누락→fail-closed) · `record_input_manifest_sha` ↔ record 실제 manifest 일치
+- per_input.input_sha256 ↔ record.input_manifest 일치 · per_row output/metrics ↔ record.judgement_rows 일치
+- `production_contrast.completed===true`(false→fail-closed·B5 등록 차단)
+- source-safe 단언: capsule에 프로세 필드 부재(구조가드)
+- **semantic adequacy(대조 충분·grounding 프로세 의미·negative 실효)는 판정 안 함 = R7**(§13.3).
+
+**거버넌스**: capsule=tracked(source-safe). prose 사이드카=gitignore. capsule의 child sha ↔ local prose sha
+대조로 로컬 무결성 확인. **round-2 issue-001/002/003 동시 해소**: durable(002)·gate-consumed binding(001)·
+구조화 obligation(003).
+
+## 19. 교차검증 round-2 기록 (2026-07-07 · v2 → v3)
+
+**3-패밀리(v2 델타 표적)**: ultracode(wf_2ed0b4ad-817·7 raw→2 confirmed·**HIGH 0**·`loopback2:false`·MED §13
+contrast 미명세·LOW machine-readable 과대) · onto(20260707-6bb4d130·9-lens·**convergent HIGH 3**) · 독립(R2-IND-1/2).
+- **발산(convergence-by-KIND)**: ultracode 4렌즈(synthesis 건전성)=durability 못 봄. onto dependency/structure/
+  pragmatics/axiology/evolution=**증거 durability/binding/replay 축** HIGH 포착. **union 채택**. onto가
+  ultracode+나의 공통 blind spot(내 packet-gitignore가 durability를 깸) 포착.
+- **onto HIGH 뿌리 하나**(fix-유발): v2 증거-영속(gitignore packet + opaque record + un-gated obligation)이
+  durable audit/binding/gate-consumability를 깸 → 박제 record가 hollow shell. issue-001(binding)·002(durability)·
+  003(obligation coarse).
+- **loopback-2 판정**: round-1 HIGH → v2 fix → round-2 새 HIGH(fix-유발) = 2라운드 연속 → **stop-and-ask**
+  (CLAUDE.md·B5 선례). ROOT=governance 트레이드오프(durability vs source-safety vs frozen-schema)=owner.
+- **owner 결정 = 옵션 A**(durable source-safe capsule + companion·프로세만 로컬). §18 반영. ultracode MED(§13
+  강화)·LOW(machine-readable 참)·R2-IND-1(2-단 identity)·R2-IND-2(contrast presence 게이트) 병행 반영.
+- 상세 = `scratchpad/b4-r2-synthesis.md`·`b4-r2-independent.md`(세션 산물).
