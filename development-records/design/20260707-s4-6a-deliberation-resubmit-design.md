@@ -1,0 +1,209 @@
+# §4-6a — bounded-resubmit 확대: deliberation_response 설계 (2026-07-07)
+
+Authority: 설계 SSOT `20260704-review-unit-resubmit-and-limit-breaker-design.md` §3·line 96-97
+("resubmit 정책을 공유 함수로 추출하되 이번 cut의 배선은 issue-stance 경로에 한정"의 이연분 실현).
+레인 A(INV-MODEL-1 무관). default-off 보존.
+
+## 0. 판정 (구현 전 결정) — deliberation는 resubmit 적용 **가능**
+
+deliberation_response 유닛은 stance와 **구조적으로 동일한 `evidence_refs` 화이트리스트 거부**를
+submit-시점·on-disk 양쪽에서 던진다 → 결정적 분류·오류명세 교정 가능 → resubmit 전제 충족
+(SSOT §2: 런타임 no-reason, 거부+명세 재요청만).
+
+실코드 근거(main 35a4b24 재검증):
+
+| 지점 | stance | deliberation |
+|---|---|---|
+| submit-시점 거부 | `submit_issue_stance_response.stances[N].evidence_refs contains unsupported ref for ISSUE: REF` (`structured-output-tools.ts` `normalizeIssueStanceResponseSubmitArgs` :865) | `submit_issue_deliberation_response.evidence_refs contains unsupported ref: REF` (동 파일 `assertAllowedRefs` :562, `normalizeIssueDeliberationResponseSubmitArgs` :901 경유) |
+| on-disk 거부 | `issue-stance response for issue ISSUE and lens LENS references unsupported evidence: REF` (`issue-artifact-runtime.ts`) | `issue deliberation response.evidence_refs contains unsupported ref: REF` (`controlled-lens-deliberation.ts` `validateIssueDeliberationResponseObject` :566) |
+| 허용집합 | keyed `issue_evidence_refs[issueId]` | **flat** `parseRuntimeIssueDeliberationSchemaContext(packet).allowed_evidence_refs` |
+| 메시지의 issue/lens | 메시지에 포함 | **메시지에 없음** → `dispatch.unit_id`(`deliberation:<issueId>:<lensId>`)에서 회수 |
+| 유닛당 스코프 | issue×lens 매트릭스 | 단일 (issue,lens) |
+
+## 1. 핸드오프 §3 가정 1건 정정 (실코드 근거)
+
+핸드오프는 "강등 slice·correlated-halt까지 output_format-불문 일반화"를 예상했으나, 실코드상
+**deliberation에는 강등/halt 기계가 불필요**하다:
+
+- stance: 검증-거부 실패 → 배치 강등 블록(`run-review-prompt-execution.ts` `runIssueStanceMatrixCollectionDispatch`
+  내부, main 기준 ~4951-5001; 이 cut의 추가로 라인 하향 이동) + correlated 과반 시 whole-run halt.
+  `outcome.dispatch.unit_id.slice("issue-stance:".length)`로 강등.
+- deliberation: 실패(dispatch/submit/on-disk) → **이미 비-halt degrade**
+  (`executeDeliberationResponseUnit` :4379 → `completeUnavailableDeliberationResponseUnit` :4283).
+  whole-run halt은 그 unavailable-completion마저 실패(null)할 때만.
+
+즉 deliberation의 "cap 소진 → fallback"은 *신설 없이* 기존 unavailable-completion이 담당한다.
+→ **stance 배치 강등 블록(4951-5001)·correlated-escalation은 손대지 않는다.** §4-6a 실 스코프는
+"주입 함수 + 분류기의 유닛-불문 일반화"로 축소된다(정직한 재프레이밍).
+
+## 2. resubmit 주입 배선 (검증된 경로)
+
+- per-issue deliberation 유닛은 범용 `runSingleDispatchWithRetries`(:3666)를 통과한다
+  (`executeDeliberationResponseUnit` → `unitOutcomeWithNestedFirstAttempt` → runFlat). unit_kind
+  `"deliberation"`, output_format `"issue-deliberation-response"`.
+- 그 루프 안 주입 호출부는 **이미** attempt-0(:3739)·pre-retry(:3799)에 있고, 게이트
+  `applyStanceResubmitErrorSpec` 내부 `:1778 output_format !== "issue-stance-response"` 에서만 no-op.
+- in-dispatch(재시도 대상) 검증 신호 = **submit-시점 거부**뿐이다: `validateUnitOutputFile`(:1508)은
+  `issue-deliberation-response`에 대해 content 검증 없이 early-return(:1558) → executor의 submit
+  throw만이 dispatch를 실패시킨다.
+- salvage freeze(`claude-code-review-unit-executor.ts` :741-752, `codex-*` 동형)는 **output_format
+  무관** → deliberation submit 실패도 `frozen.error`에 submit-시점 메시지를 담아 freeze. 따라서
+  attempt-0 경로(:3739 → `readFrozenUnsupportedRefViolation`)도 분류기 일반화만으로 적용된다.
+- on-disk 거부(`validateIssueDeliberationResponseObject` :5601)는 **post-pool**이라 retry 밖 →
+  degrade(unavailable). 허용집합이 submit-시점과 동일 출처(packet)이므로 submit-시점이 1차로 잡고,
+  on-disk는 belt-and-suspenders. → resubmit 스코프는 submit-시점 경로(=retry 루프)로 한정한다.
+
+## 3. 공유화 설계 (surgical, default-off byte-identical)
+
+### 3-A. `stance-resubmit.ts` → 유닛-불문 분류기/빌더 (파일은 `unit-resubmit.ts`로 리네임, §6)
+
+- **신설** `classifyDeliberationUnsupportedEvidenceRefFailure(message)`: deliberation **submit-시점**
+  패턴에만 앵커, `evidenceRef`만 캡처(issue/lens는 dispatch에서). 다른 실패 클래스는 null 반환(인프라
+  실패 의미 보존). **정정(§6 반영)**: 착수 초안은 submit-시점·on-disk **양쪽** 앵커를 예상했으나,
+  교차검증에서 on-disk 거부가 wired-path 도달 불가(post-pool→degrade)로 판명 → **submit-시점 전용**으로
+  확정. on-disk 패턴은 추가하지 않는다(dead code). 최종 코드/§6이 canonical.
+- **일반화** `buildResubmitErrorSpec`: 현재 stance 전용 label("rejected stance…")을 유닛-적합 label로
+  파라미터화. deliberation label = `deliberation for issue_id: X, lens_id: Y`. 허용집합 블록·마커·
+  본문 지시는 재사용(리팩터 최소화 — stance 호출은 동일 label 산출로 byte-identical 유지).
+- **재사용(무변경)**: 마커 `RESUBMIT_ERROR_SPEC_BEGIN/END`, `applyResubmitErrorSpecToPacket`,
+  `stripResubmitErrorSpec`, `packetHasResubmitErrorSpec` — 이미 generic.
+- 강등 관련(`correlatedValidationExceeded` 등)은 **무변경**(deliberation 미사용).
+
+### 3-B. `run-review-prompt-execution.ts` — 주입 함수 유닛-불문화
+
+- `applyStanceResubmitErrorSpec` → `applyResubmitErrorSpec` (또는 명칭 유지 + 내부 분기):
+  - 게이트1 `resubmit.enabled !== true → false` (무변경).
+  - 게이트2 `dispatch.output_format` 분기:
+    - `issue-stance-response` → 기존 전략(분류기 + `parseRuntimeIssueStanceSchemaContext` +
+      `issue_evidence_refs[issueId]`). **byte-identical.**
+    - `issue-deliberation-response` → 신규 전략(deliberation 분류기 +
+      `parseRuntimeIssueDeliberationSchemaContext.allowed_evidence_refs` + issue/lens from unit_id).
+    - 그 외 → false (synthesis 등 no-op 보존).
+  - `readFrozenUnsupportedRefViolation`도 output_format에 맞는 분류기를 태우도록 일반화.
+- 호출부(:3739/:3799) 시그니처 무변경 — 함수 내부에서 output_format으로 자기-분기.
+- **강등 블록(4951-5001)·correlated-halt: 무변경**(stance 전용).
+
+### 3-C. default-off 보존 (diff-provable)
+
+`resubmit.enabled` 게이트 무변경 → OFF면 stance·deliberation 모두 즉시 false 반환 → 현행 맹목 재시도
+byte-identical. 신설 오프토글 키 없음(기존 `review.execution.retry.resubmit.enabled` 재사용).
+
+## 4. 가치 / 완료 기준 (falsifiable)
+
+- 가치: deliberation submit-시점 evidence_refs 거부 시 현행=맹목 재시도(budget 낭비)→degrade(unavailable).
+  resubmit ON=교정 재시도(거부 ref+허용집합 통지)→성공률↑, unavailable degrade↓(참여 렌즈 보존 →
+  resolution 품질↑). stance와 동일 가치 명제.
+- 완료 기준(모두 충족 — negative/contrast control 포함):
+  1. **OFF byte-identical**: `deliberation-resubmit-dispatch.test.ts` "OFF contrast" — 동일 실패 stub·동일
+     cap에서 packet이 `DELIBERATION_PACKET`와 정확히 일치(주입 0)·resubmit 로그 부재. + builder
+     byte-identical 회귀 가드(`unit-resubmit.test.ts`).
+  2. **ON heal**: "ON heal" — 허용-외 ref 거부 → error-spec 주입(허용집합 packet 회수 확인) → 교정
+     재시도로 유닛 완료(2회 호출, degrade child 없음, healed 출력).
+  3. **ON cap 소진 degrade**: "ON exhausted" — 매 재시도 스펙 주입 후 whole-run halt 없이
+     `completeUnavailableDeliberationResponseUnit` degrade(3회 호출, outcome.success=degrade, child 실패).
+  4. **contrast control**: ON-exhausted vs OFF는 동일 degrade 결과지만 ON만 스펙 주입(packet 변경+로그)
+     → 토글이 deliberation resubmit을 실제로 게이팅함을 증명(mechanism이 맞을 때만 통과).
+  5. **분류기 negative**: 인프라 실패·on-disk 메시지는 null → resubmit 미발동(`unit-resubmit.test.ts`,
+     `deliberation-resubmit-wiring.test.ts`).
+  6. **stance 회귀 없음**: 기존 unit-resubmit 스위트 + stance E2E green + byte-identical 가드.
+
+  검증 레벨 근거: 전체-파이프라인 run은 상류(findings→issues→stances→plan) non-empty일 때만 per-issue
+  deliberation을 디스패치하는데 이를 만드는 기존 하니스가 없어 상류 6개 검증기 역설계가 필요하다(무관
+  스테이지 테스트). 대신 §4-6a가 실제로 건드리는 **유닛-디스패치 경계**에서 실 stub 서브프로세스로
+  `executeDeliberationResponseUnit`→실 retry 루프→`applyResubmitErrorSpec`→주입→heal/degrade를 전부
+  관통(`deliberation-resubmit-dispatch.test.ts`). retry-loop 호출부는 stance와 공유 —
+  full-pipeline 커버는 `core-api/runtime-pipeline-resubmit.test.ts`(stance)가 담당.
+
+## 5. 스코프 결정 (사용자 확인 완료 — deliberation만)
+
+- **deliberation만 이번 cut** (확정): 핸드오프 우선순위("deliberation_response 우선")·최소 surgical·
+  일반화를 1개 유닛으로 증명. synthesis는 fast-follow.
+- synthesis도 `assertAllowedRefs`(`source_refs_used`/`allowed_source_refs`)로 동형 거부 존재 →
+  구조적으로 적용 가능하나 **필드명이 달라 별도 전략**(`evidence_refs` 아님). 일반화 기계를 재사용하면
+  추가 비용은 분류기 패턴 1 + 허용집합 회수 1.
+
+## 6. 검증 결과 (독립 적대 교차검증 3-KIND 완료)
+
+green 스위트만으론 부족 → 서로 다른 KIND의 적대 리뷰어 3명(correctness·contract-preservation·
+concept/scope)으로 각 load-bearing 주장 반증 시도. 결과·조치:
+
+- **contract-preservation: SURVIVED.** stance 출력 byte-identical(경험적 3-케이스 확인), default-off
+  전 output_format 보존, synthesis/`deliberation-resolution` 등 no-op 유지. 조치 불요.
+- **scope(강등 불요): HOLDS.** deliberation은 검증-거부 전 경로가 `completeUnavailableDeliberationResponseUnit`
+  비-halt degrade(cap 소진 유닛 `success:true` unavailable-완료). demotion 미확장이 정직.
+- **[조치] on-disk 분류기 dead code 제거.** deliberation on-disk 거부는 post-pool에서 catch→degrade,
+  frozen salvage는 submit-시점 오류만 담고, deliberation엔 stance와 달리 demotion 소비자가 없어
+  on-disk 패턴이 wired-path 도달 불가였음 → `ON_DISK_DELIBERATION_UNSUPPORTED_REF_PATTERN` 제거,
+  분류기를 submit-시점 전용으로 명시, 테스트를 "on-disk는 분류 안 함(→degrade)"로 정정.
+- **[조치] 모듈 리네임 `stance-resubmit.ts` → `unit-resubmit.ts`** + docstring 갱신(유닛-불문 범위 반영).
+  파일명이 deliberation 로직을 호스팅하는데도 stance-명이라 concept 이름 추적성 위배였음.
+
+### 6-1. cross-family 교차검증 (Codex `$ultracode-for-codex`, 2026-07-07, 커밋 705b991)
+
+Claude 3-KIND 후 **다른 family(Codex/OpenAI)**로 3렌즈 적대 재검증(correctness·contract-preservation·
+concept/design-honesty, 각 xhigh). synthesis 에이전트는 Codex usage-limit로 미완이나 3렌즈 전부 완료.
+결과·조치:
+
+- **correctness: `claims_hold`, findings 0.** 런타임 heal/degrade 경로(retry 루프→applyResubmitErrorSpec
+  →주입→재시도, cap 소진→completeUnavailableDeliberationResponseUnit) cross-family 무결 확인.
+- **concept/honesty: material 1 — [조치 완료].** 설계 노트 §3-A가 "submit·on-disk 양쪽 앵커"로 남아
+  최종 submit-전용 구현·§6 정정과 모순(stale 지시). → §3-A를 submit-전용으로 정정(위).
+- **contract: material 1 — [실증: PR 무영향, 로컬 위생 조치].** `dist/`가 stale(옛 `stance-resubmit.js`만,
+  `unit-resubmit.js` 부재)이고 `bin/onto`가 dist 우선(존재 시)이라 미빌드 체크아웃은 신 경로 미실행 우려.
+  **재도출**: `dist/`는 git 미추적(`.gitignore:25`)·`prepare` 훅이 설치 시 재빌드 → 커밋/배포/테스트
+  (vitest=src 직행) 무영향. 로컬 stale 산출물이라 `build:ts-core` 재빌드로 해소(`unit-resubmit.js` 생성,
+  stale 제거) — 부수로 rename의 빌드-일관성(tsc emit)도 확인. **머지 블로커 아님.**
+
+Codex-side 결론: 소스 correctness·contract 위반 0(유일 findings는 설계-노트 stale·gitignore된 dist
+산출물로, 소스 계약 위반 아님) → 구현 자체는 cross-family로도 sound 확정.
+
+### 6-2. 깊은 라운드 (different-kind 렌즈, 2026-07-07)
+
+correctness/contract/concept가 두 family로 수렴했으므로, 아직 안 판 different-kind 축 3개(동시성·풀
+레이스 / regex·파싱 강건성 / resume·nested-batch)로 추가 적대 라운드. 결과:
+
+- **동시성/idempotency: SURVIVED.** 유닛별 고유 packet_path(issue×lens), 풀 인덱스 배분 race-free
+  (read/increment 사이 await 없음), 주입 strip-then-append로 idempotent, 크기 bounded.
+- **resume/nested-batch: SURVIVED.** batch 실패 시 executor가 output_format-무관 freeze → flat
+  fallback attempt-0 주입이 그 freeze를 읽어 1-dispatch heal(stance F-A3 성질이 deliberation으로
+  무상속). budget(maxRetriesOverride)·resume(패킷 재생성)·degrade→trusted→frontier 제외 모두 안전.
+- **regex/파싱: material 1 — [조치 완료, 재현됨].** `buildResubmitErrorSpec`가 model-controlled
+  `evidence_ref`를 마커-구획 spec에 verbatim 삽입 → ref가 END 마커 문자열을 포함하면 조기 END로 삽입,
+  다음 라운드 `stripResubmitErrorSpec`의 `indexOf(END,begin)`가 그것을 먼저 매치해 tail을 orphan →
+  "패킷당 spec 최대 1개" invariant 붕괴·누적. reachable(deliberation 거부=executor_exit→재시도).
+  blast radius 제한적(같은 worker 프롬프트, allowed-set 파싱은 단일-라인 ref가 yaml fence를 위조
+  못 해 무오염). **shared sink라 stance에도 선재** — §4-6a가 deliberation ref를 그 sink로 새로
+  라우팅하므로 **root-cause 수정**: `neutralizeSpecMarkers`로 모든 동적 삽입값(ref·issue·lens·allowed)
+  의 마커 리터럴 중화(마커-free 정상 ref엔 no-op → stance byte-identical 보존). 회귀 테스트 추가
+  (마커 포함 ref 2라운드 후 BEGIN/END 각 1개·orphan 없음).
+
+Residual(비블로커): (a) nested-batch/resume deliberation은 공유 메커니즘 추론+stance E2E로 커버,
+전용 E2E 미작성(원하면 nestedBatch+freeze 프리셋으로 flat attempt-0 heal 검증 테스트로 봉인 가능).
+(b) 하드 크래시 시 in-memory budget 리셋으로 총 시도 초과 가능(비용만, stance F-A3와 동일 선재).
+
+### 6-3. 4번째 라운드 (fix 검증·테스트 falsifiability·의미 정확성, 2026-07-07)
+
+깊은 라운드의 마커-주입 수정(f107b14)과 테스트 자체를 새 KIND로 재검증:
+
+- **fix-bypass: SURVIVED.** `neutralizeSpecMarkers`는 대체 토큰이 non-empty라 split/join 재구성 불가
+  ·마커 self-overlap 없음·2차 패스가 BEGIN 위조 불가 → 380k 퍼즈 트라이얼 0 붕괴. 4개 동적 sink
+  전부 커버(빠진 삽입 없음), 정상 ref no-op(byte-identical 보존). 최소·완전.
+- **semantic-correctness: PROVEN.** render 측 allowed-set(`applyDeliberationResubmitErrorSpec`)과
+  validate 측(`assertAllowedRefs`)이 **동일 packet에 동일 `parseRuntimeIssueDeliberationSchemaContext`**
+  → 스펙이 통지하는 허용집합 == submit 검증 집합(교정이 다시 거부되지 않음). append-invariance 프로브로
+  spec 추가 후에도 projection 파싱 불변 확인. spec가 실제 프롬프트 본문(재시도마다 fresh 재read) 도달 —
+  inert 아님. full-pipeline 도달성(`runControlledLensDeliberation`→`executeDeliberationResponseUnit`
+  →retry 루프→`applyResubmitErrorSpec`) 코드-추적 확인. codex 어댑터 freeze 대칭. inert 코드 0.
+- **test falsifiability: 대체로 통과, 1건 정정.** 모든 테스트가 실 subprocess spawn·비-vacuous·broken 시
+  실패(카운트/불변 단언·null-error가 frozen 강제·합성 ref 검증). **단** 마커-주입 테스트의
+  `not.toContain("evil")`가 non-discriminating(broken에서도 통과 — "evil"은 주입 END 앞이라 잘림)이라
+  실제 orphan `"tail"` 검사로 정정(카운트 단언이 이미 버그를 잡으므로 구멍 아닌 강화).
+
+**Residual risk (선재·스코프 밖, 정직 기록):** resubmit 재시도 발동은 `failureKindFromMessage`(공유
+retry-gating)를 거친다. 환각 evidence_ref 문자열이 `issue_id`/`schema_version`/`work_item_id`/
+`boundary_notes`/`source_refs_used` 등 envelope 필드명 substring을 포함하면 거부 메시지가
+`output_contract`로 오분류되어 재시도 자체가 억제 → 교정 resubmit 스킵, degrade(=OFF와 동일 결과).
+이는 stance와 **공유된 선재 취약성**이며 §4-6a가 도입한 것이 아니다(최악도 "교정 못 하고 degrade",
+correctness 회귀·halt 아님). robust fix는 재시도 게이트를 구조적 분류기(freeze 존재/분류기 매치)로
+전환하는 것이나, 이는 공유 stance 경로까지 바꾸므로 §4-6a 스코프 밖 → 별도 항목으로 이연.
+메모리: `onto-mcp-s4-backlog-validity-20260706`, `onto-mcp-post-impl-cross-verify-expectation`.

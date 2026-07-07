@@ -14,7 +14,7 @@ import { executeReviewPromptExecution } from "../core-runtime/cli/run-review-pro
 import {
   CORRELATED_VALIDATION_HALT_REASON,
   RESUBMIT_ERROR_SPEC_BEGIN,
-} from "../core-runtime/cli/stance-resubmit.js";
+} from "../core-runtime/cli/unit-resubmit.js";
 import { buildReviewPipelineExecutionLedger } from "../core-runtime/review/pipeline-execution-ledger.js";
 import type { ReviewRunManifestForLedger } from "../core-runtime/review/pipeline-execution-ledger.js";
 import { buildReviewContinuationPlan } from "../core-runtime/review/continuation-plan.js";
