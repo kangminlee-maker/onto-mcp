@@ -50,9 +50,13 @@ import {
   isLlmTimeoutError,
 } from "../src/core-runtime/reconstruct/run.ts";
 import {
+  assertClaimsGroundedInText,
   parseSynthesizeCertJudgeResponseText,
+  parseSynthesizeCertStructuralClaimsResponseText,
   SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT,
+  SYNTHESIZE_CERT_STRUCTURAL_CLAIM_EXTRACTION_SYSTEM_PROMPT,
   type SynthesizeCertJudgeFn,
+  type SynthesizeCertStructuralClaimExtractorFn,
 } from "../src/core-runtime/discovery/synthesize-cert-judge.ts";
 import { SynthesizeCertJudgeTimeout } from "../src/core-runtime/discovery/synthesize-cert-loop.ts";
 import {
@@ -285,6 +289,47 @@ export function createB4LiveSynthesizeCertJudge(args: {
       throw new Error("b4-live-realization: live judge call returned no text");
     }
     return parseSynthesizeCertJudgeResponseText(result.text);
+  };
+}
+
+/** Live structural-claim extractor realization (SG3, owner decision
+ * 2026-07-07 R7 structured-grounding cut): raw callLlm dispatch with the
+ * dedicated extraction prompt — mirrors {@link createB4LiveSynthesizeCertJudge}
+ * exactly (same timeout reclassification via {@link isLlmTimeoutError} /
+ * `SynthesizeCertJudgeTimeout`, since a timeout is a transport-plane loss
+ * regardless of which prompt was in flight). The extractor NEVER sees the
+ * packet — only `summaryText` — so it cannot smuggle judgement in as
+ * "extraction". Bakes in BOTH failure-plane checks the caller must
+ * distinguish: parse/shape (`SynthesizeCertClaimParseFail`, thrown by
+ * {@link parseSynthesizeCertStructuralClaimsResponseText}) and honesty
+ * (`SynthesizeCertClaimHonestyViolation`, thrown by
+ * `assertClaimsGroundedInText`) — the orchestrator classifies by error type,
+ * never by string-matching a message. */
+export function createB4LiveStructuralClaimExtractor(args: {
+  llmCall: B4LiveLlmCall;
+  llmConfig: Partial<LlmCallConfig>;
+}): SynthesizeCertStructuralClaimExtractorFn {
+  return async (summaryText) => {
+    const userPrompt = JSON.stringify({ summary: summaryText });
+    let result: LlmCallResult;
+    try {
+      result = await args.llmCall(
+        SYNTHESIZE_CERT_STRUCTURAL_CLAIM_EXTRACTION_SYSTEM_PROMPT,
+        userPrompt,
+        args.llmConfig,
+      );
+    } catch (error) {
+      if (isLlmTimeoutError(error)) {
+        throw new SynthesizeCertJudgeTimeout(error instanceof Error ? error.message : String(error));
+      }
+      throw error;
+    }
+    if (!result.text) {
+      throw new Error("b4-live-realization: live structural-claim extractor call returned no text");
+    }
+    const claims = parseSynthesizeCertStructuralClaimsResponseText(result.text);
+    assertClaimsGroundedInText(claims, summaryText);
+    return claims;
   };
 }
 

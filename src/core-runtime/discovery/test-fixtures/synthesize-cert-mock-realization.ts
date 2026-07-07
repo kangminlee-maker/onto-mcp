@@ -24,6 +24,7 @@ import {
 } from "../../reconstruct/comprehension-semantic-map.js";
 import type {
   SynthesizeCertJudgeFn,
+  SynthesizeCertStructuralClaimExtractorFn,
 } from "../synthesize-cert-judge.js";
 import {
   runSynthesizeCertLoop,
@@ -91,6 +92,19 @@ export function createMockSynthesizeCertJudge(): SynthesizeCertJudgeFn {
           : "fail",
     };
   };
+}
+
+/** Deterministic mock structural-claim extractor (structured-grounding cut
+ * rehearsal, owner decision 2026-07-07): always resolves to EMPTY claims —
+ * trivially honest (an empty citation set can never fail
+ * `assertClaimsGroundedInText`) and trivially grounded (an empty citation set
+ * can never fail `verifyStructuralGrounding`). A mock cannot feasibly perform
+ * real prose extraction deterministically; this rehearsal's job is proving
+ * the dispatch/aggregate/persist/resume SCAFFOLD completes, not producing
+ * meaningful claims — {@link verifyStructuralGrounding}'s own unit tests
+ * (the R7 Group A fixture reproduction) are what prove the verifier's logic. */
+export function createMockSynthesizeCertStructuralClaimExtractor(): SynthesizeCertStructuralClaimExtractorFn {
+  return async () => ({ cited_boundary_rows: [], cited_format_labels: [], cited_transitions: [] });
 }
 
 // ── shared deterministic test pipeline (fixture module, not a mock LLM) ───────

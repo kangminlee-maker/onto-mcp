@@ -248,3 +248,317 @@ export function reconstructSynthesizeCertJudgeReplayInputs(args: {
   }
   return { matched, unmatched };
 }
+
+// ── SG1 — deterministic STRUCTURAL grounding verifier (owner decision 2026-07-07,
+//    post opus-rejudge R7 cut) ────────────────────────────────────────────────
+//
+// The R7 human audit (development-records/.../local/r7-grounding-audit.md,
+// Group A) found gpt-5.5's holistic grounding pass/fail conflates two
+// different questions: whether the summary's INTERPRETIVE gloss is
+// reasonable (a genuinely semantic judgement — R7/human territory, never
+// re-enforced here) and whether the summary CITES facts the packet does not
+// support (a purely structural question: a cited row/label/transition either
+// appears in format_clusters/value_shape_seams or it does not — decidable by
+// direct comparison, no judgement required). This verifier owns ONLY the
+// second question. It NEVER checks completeness: omitting a real seam from
+// the claims is not a violation — silence about a fact is not fabricating
+// one (§ design note: grounded = no fabrication, not "exhaustive").
+//
+// A CHILD-SUMMARY-key row range (a merge packet's internal subtree split) IS
+// a valid boundary row (§ owner correction 2026-07-07, R7 Group A case 7):
+// the child_summaries ARE packet facts the arm was given — a merge packet's
+// child boundary is exactly as grounded as a value_shape_seam, because the
+// arm legitimately synthesizes across child-summary content the packet
+// itself supplies (case 7: two children — one uniform-INT, one INT-then-DEC
+// — and the candidate's boundary at the child split faithfully reflects
+// that authored content; there is no seam there because the SEAM data and
+// the CHILD-SUMMARY data are two independent structural fact channels the
+// packet carries, and a citation grounded in either is grounded, period).
+//
+// STRUCTURE-ONLY, no format-label matching (§ owner correction 2026-07-07,
+// post-opus-extraction real-run analysis): the live opus extraction found
+// format-label matching is a false-positive bomb — summaries commonly name
+// formats in NATURAL LANGUAGE ("integer", "decimal date") while packets carry
+// them as CODES ("INT", "DEC", "ISO_DATE"); of candidate's 18 real-run
+// "fabrication" flags, 17 were this vocabulary artifact and only 1 (case 3's
+// row 2072) was a genuine structural fabrication. Format naming is exactly
+// the domain-agnostic-no-static-enums line this project already draws
+// elsewhere: deterministic code owns change/structure/identity, LLM-semantic
+// naming is a runtime concern, never a hardcoded enum comparison. So this
+// verifier judges STRUCTURE ONLY — row-level facts (boundary rows, and a
+// transition's row-of-occurrence) — and never compares label TEXT.
+// `cited_format_labels` stays in the claims schema (still extracted, still
+// policed by the honesty guard for extraction integrity) but is READ BY
+// NEITHER of this verifier's checks — it is audit-only information now.
+
+export type SynthesizeCertStructuralGroundingViolationCode =
+  | "fabricated_boundary_row"
+  | "fabricated_transition_row";
+
+export interface SynthesizeCertStructuralGroundingViolation {
+  code: SynthesizeCertStructuralGroundingViolationCode;
+  message: string;
+}
+
+/** Extracted structural claims a summary makes — the LLM extractor's (SG2/
+ * SG3) output shape. This verifier CONSUMES claims; it never produces them
+ * (extraction is a separate, lower-privilege step — SG2's
+ * {@link assertClaimsGroundedInText} polices the extractor's own honesty). */
+export interface SynthesizeCertStructuralClaims {
+  cited_boundary_rows: number[];
+  cited_format_labels: string[];
+  cited_transitions: Array<{ at_row: number; from: string; to: string }>;
+}
+
+export interface VerifyStructuralGroundingArgs {
+  packet: SemanticSynthesisInput;
+  /** The node's row range — NOT read from `packet.node_ref` (the caller
+   * derives it independently, e.g. from the manifest input_id), so this
+   * function stays a pure comparison over exactly the four args given. */
+  regionStart: number;
+  regionEnd: number;
+  claims: SynthesizeCertStructuralClaims;
+}
+
+/** Parses the trailing `:<start>-<end>` row range off a child_summaries key
+ * (the `<sheet>#<col>:<start>-<end>` node-key convention) — end-anchored so
+ * a sheet name containing `:` is still handled safely. A key that doesn't
+ * match contributes no boundary (never throws): this verifier's job is
+ * grounding, not upstream packet-shape validation, which is owned
+ * elsewhere. */
+function parseChildKeyRowRange(key: string): { start: number; end: number } | null {
+  const match = /:(\d+)-(\d+)$/.exec(key);
+  if (!match) return null;
+  return { start: Number(match[1]), end: Number(match[2]) };
+}
+
+/**
+ * Deterministically verifies a summary's structural claims against the
+ * packet's OWN structural facts (value_shape_seams row positions AND
+ * child_summaries' own row-range keys — both packet-supplied, equally
+ * grounding) — never against format-label TEXT, never against the summary's
+ * prose. Pure, no I/O, no LLM. `grounded` is `violations.length === 0`.
+ *
+ * Two checks, both row-position-only:
+ *  - `fabricated_boundary_row`: a cited boundary row must be the region
+ *    start/end, a seam's row, a seam's row − 1 (the last row of the PRIOR
+ *    shape — summaries commonly cite the ending row, not only the row a new
+ *    shape begins; both are grounded in the SAME seam), or a child_summaries
+ *    entry's start/end row (a merge packet's child-partition boundary is a
+ *    packet fact the arm legitimately saw, exactly as grounding as a seam —
+ *    R7 Group A case 7).
+ *  - `fabricated_transition_row`: a cited transition's `at_row` must be
+ *    SOME seam's row exactly — a "transition" claim is specifically about a
+ *    format CHANGE point, which only a seam represents (a child-partition
+ *    row is a subtree split, not necessarily a shape change, so it does NOT
+ *    ground a transition claim the way it grounds a boundary claim).
+ *
+ * `cited_format_labels` and each transition's `from`/`to` text are NEVER
+ * compared against `packet.format_clusters` or seam shape names — label
+ * TEXT matching is out of this verifier's scope (see the module doc above:
+ * domain-agnostic-no-static-enums; format naming is an LLM-semantic
+ * residual, not a deterministic-code judgment).
+ */
+export function verifyStructuralGrounding(
+  args: VerifyStructuralGroundingArgs,
+): SynthesizeCertStructuralGroundingViolation[] {
+  const violations: SynthesizeCertStructuralGroundingViolation[] = [];
+  const validBoundaryRows = new Set<number>([args.regionStart, args.regionEnd]);
+  for (const seam of args.packet.value_shape_seams) {
+    validBoundaryRows.add(seam.row);
+    validBoundaryRows.add(seam.row - 1);
+  }
+  for (const child of args.packet.child_summaries) {
+    const range = parseChildKeyRowRange(child.key);
+    if (!range) continue;
+    validBoundaryRows.add(range.start);
+    validBoundaryRows.add(range.end);
+  }
+  const seamRows = new Set(args.packet.value_shape_seams.map((seam) => seam.row));
+
+  for (const row of args.claims.cited_boundary_rows) {
+    if (!validBoundaryRows.has(row)) {
+      violations.push({
+        code: "fabricated_boundary_row",
+        message: `cited boundary row ${row} matches no packet seam (row or row-1), no child_summaries start/end, nor the region start/end (fail-closed)`,
+      });
+    }
+  }
+  for (const transition of args.claims.cited_transitions) {
+    if (!seamRows.has(transition.at_row)) {
+      violations.push({
+        code: "fabricated_transition_row",
+        message: `cited transition at row ${transition.at_row} matches no packet seam row (fail-closed; label text is not checked)`,
+      });
+    }
+  }
+  return violations;
+}
+
+// ── SG2 — extracted-claim schema + extractor honesty guard ──────────────────
+//
+// The extractor (SG3, an independent LLM lens — opus in production) runs at
+// LOW privilege: it may only pull out what the summary text LITERALLY says,
+// never infer or evaluate. `assertClaimsGroundedInText` is the boundary that
+// enforces that privilege split deterministically — an extraction that cites
+// a row/label absent from the summary's own text is an EXTRACTION failure
+// (the extractor invented something), a category error distinct from the
+// packet-grounding violations {@link verifyStructuralGrounding} reports.
+
+/** The extractor's raw response failed to parse as JSON, or parsed to the
+ * wrong shape — an EXTRACTION-plane failure (§ orchestrator classifies
+ * `parse_error`), distinct from a grounding violation. */
+export class SynthesizeCertClaimParseFail extends Error {}
+/** The extractor cited a row/label absent from the summary text it was
+ * extracting from — an EXTRACTION-plane honesty failure (orchestrator
+ * classifies `honesty_violation`), distinct from a grounding violation
+ * (which compares claims against the PACKET, not the summary text). */
+export class SynthesizeCertClaimHonestyViolation extends Error {}
+
+/** Fail-closed: every number the claims cite as a boundary/transition row,
+ * and every format label they cite, must appear verbatim in `summaryText`
+ * (rows as a digit substring, labels case-insensitively) — else the
+ * extractor fabricated something not present in the text it was extracting
+ * from. Throws {@link SynthesizeCertClaimHonestyViolation} (never silently
+ * drops) on the first violation found. */
+export function assertClaimsGroundedInText(
+  claims: SynthesizeCertStructuralClaims,
+  summaryText: string,
+): void {
+  const citedRows = new Set<number>([
+    ...claims.cited_boundary_rows,
+    ...claims.cited_transitions.map((t) => t.at_row),
+  ]);
+  for (const row of citedRows) {
+    if (!summaryText.includes(String(row))) {
+      throw new SynthesizeCertClaimHonestyViolation(
+        `synthesize-cert-judge: extractor cited row ${row} which does not appear in the summary text (fail-closed — extraction, not grounding, failure)`,
+      );
+    }
+  }
+  const lowerText = summaryText.toLowerCase();
+  const citedLabels = new Set<string>([
+    ...claims.cited_format_labels,
+    ...claims.cited_transitions.flatMap((t) => [t.from, t.to]),
+  ]);
+  for (const label of citedLabels) {
+    if (!lowerText.includes(label.toLowerCase())) {
+      throw new SynthesizeCertClaimHonestyViolation(
+        `synthesize-cert-judge: extractor cited format label '${label}' which does not appear in the summary text (fail-closed — extraction, not grounding, failure)`,
+      );
+    }
+  }
+}
+
+// ── SG3 — structural-claim extraction prompt + response parser ──────────────
+//
+// The extractor is deliberately NOT a judge: it is told so explicitly, and
+// its prompt asks for verbatim extraction only (no inference, no
+// evaluation). Live dispatch (scripts side) mirrors the judge's dispatch
+// shape exactly — a raw callLlm with this dedicated prompt, parsed by the
+// pure parser below.
+export const SYNTHESIZE_CERT_STRUCTURAL_CLAIM_EXTRACTION_SYSTEM_PROMPT =
+  "You are a STRUCTURAL CLAIM EXTRACTOR, not a judge. You are given ONE semantic-summary text describing a spreadsheet column region. Extract ONLY what the text LITERALLY states — never infer, never evaluate, never add a row number or label the text does not contain, and never judge whether the summary is correct.\n\n" +
+  "Extract exactly:\n" +
+  "(a) cited_boundary_rows: every row number the text presents as a region boundary or transition point.\n" +
+  "(b) cited_format_labels: every format/type label the text names (e.g. INT, DEC, ISO_DATE).\n" +
+  "(c) cited_transitions: every {at_row, from, to} transition the text describes, where at_row is the row number and from/to are the two format labels named as changing at that row.\n\n" +
+  "Reply with STRICT JSON only, no prose outside it, no markdown code fences: " +
+  '{"cited_boundary_rows": [integer, ...], "cited_format_labels": [string, ...], "cited_transitions": [{"at_row": integer, "from": string, "to": string}, ...]}. ' +
+  "Empty arrays are honest and acceptable when the text cites nothing of that kind. No additional fields.";
+
+/** Fail-closed total-shape guard for an extractor realization's returned
+ * claims — anything outside {cited_boundary_rows: number[],
+ * cited_format_labels: string[], cited_transitions: {at_row:number,
+ * from:string, to:string}[]} is an extraction-plane failure, never a
+ * silently-coerced result. Throws {@link SynthesizeCertClaimParseFail}. */
+export function assertSynthesizeCertStructuralClaims(
+  claims: SynthesizeCertStructuralClaims,
+): void {
+  const record = claims as unknown as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== 3 ||
+    !("cited_boundary_rows" in record) ||
+    !("cited_format_labels" in record) ||
+    !("cited_transitions" in record)
+  ) {
+    throw new SynthesizeCertClaimParseFail(
+      `synthesize-cert-judge: claims must be exactly {cited_boundary_rows, cited_format_labels, cited_transitions}, got keys [${keys.join(", ")}] (fail-closed)`,
+    );
+  }
+  const rows = record.cited_boundary_rows;
+  if (!Array.isArray(rows) || !rows.every((r) => typeof r === "number" && Number.isFinite(r))) {
+    throw new SynthesizeCertClaimParseFail(
+      "synthesize-cert-judge: cited_boundary_rows must be an array of numbers (fail-closed)",
+    );
+  }
+  const labels = record.cited_format_labels;
+  if (!Array.isArray(labels) || !labels.every((l) => typeof l === "string" && l.length > 0)) {
+    throw new SynthesizeCertClaimParseFail(
+      "synthesize-cert-judge: cited_format_labels must be an array of non-empty strings (fail-closed)",
+    );
+  }
+  const transitions = record.cited_transitions;
+  const validTransition = (t: unknown): boolean => {
+    if (typeof t !== "object" || t === null || Array.isArray(t)) return false;
+    const obj = t as Record<string, unknown>;
+    if (Object.keys(obj).length !== 3) return false;
+    const atRow = obj.at_row;
+    const from = obj.from;
+    const to = obj.to;
+    return (
+      typeof atRow === "number" &&
+      Number.isFinite(atRow) &&
+      typeof from === "string" &&
+      from.length > 0 &&
+      typeof to === "string" &&
+      to.length > 0
+    );
+  };
+  if (!Array.isArray(transitions) || !transitions.every(validTransition)) {
+    throw new SynthesizeCertClaimParseFail(
+      "synthesize-cert-judge: cited_transitions must be an array of {at_row:number, from:string, to:string} (fail-closed)",
+    );
+  }
+}
+
+/**
+ * Pure parser: an extractor realization's raw response text → TOTAL claims,
+ * or a thrown {@link SynthesizeCertClaimParseFail} (never a partial/coerced
+ * result) — no LLM touched, so this is unit-testable against fixture
+ * response strings. Reuses {@link stripLlmResponseFence} (shared with the
+ * judge parser) and {@link assertSynthesizeCertStructuralClaims} as the
+ * single shape authority.
+ */
+export function parseSynthesizeCertStructuralClaimsResponseText(
+  text: string,
+): SynthesizeCertStructuralClaims {
+  const jsonText = stripLlmResponseFence(text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (error) {
+    throw new SynthesizeCertClaimParseFail(
+      `synthesize-cert-judge: structural-claim extraction response is not valid JSON (fail-closed): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new SynthesizeCertClaimParseFail(
+      `synthesize-cert-judge: structural-claim extraction response must be a JSON object, got ${JSON.stringify(parsed)} (fail-closed)`,
+    );
+  }
+  assertSynthesizeCertStructuralClaims(parsed as SynthesizeCertStructuralClaims);
+  return parsed as SynthesizeCertStructuralClaims;
+}
+
+/** Caller-injected extractor realization (mock in tests, independent LLM
+ * lens — opus — in production). Realization-agnostic, mirroring
+ * {@link SynthesizeCertJudgeFn}. Takes the arm's summary text ONLY (never
+ * the packet — the extractor must never see ground truth, or "extraction"
+ * would silently become judging). */
+export type SynthesizeCertStructuralClaimExtractorFn = (
+  summaryText: string,
+) => Promise<SynthesizeCertStructuralClaims>;

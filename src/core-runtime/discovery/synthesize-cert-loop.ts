@@ -124,11 +124,16 @@ export const coordinateKey = (inputId: string, rep: number, arm: SynthesizeCertA
  * `priorRows`: the loop ITSELF already throws (see above) if `priorRows`
  * still carries a duplicate coordinate, so this function does not duplicate
  * that (or any other) validation — dedup is its only job.
+ *
+ * Generic over any row shape carrying the three coordinate fields (not just
+ * {@link SynthesizeCertJudgementRow}): sibling progress sidecars — e.g. the
+ * rejudge and structured-grounding cuts' own per-coordinate progress rows —
+ * reuse this SAME fold instead of re-implementing coordinate dedup.
  */
-export function foldSynthesizeCertProgressRows(
-  rows: readonly SynthesizeCertJudgementRow[],
-): SynthesizeCertJudgementRow[] {
-  const byCoordinate = new Map<string, SynthesizeCertJudgementRow>();
+export function foldSynthesizeCertProgressRows<
+  T extends { input_id: string; rep: number; arm: SynthesizeCertArm },
+>(rows: readonly T[]): T[] {
+  const byCoordinate = new Map<string, T>();
   for (const row of rows) {
     byCoordinate.set(coordinateKey(row.input_id, row.rep, row.arm), row);
   }
