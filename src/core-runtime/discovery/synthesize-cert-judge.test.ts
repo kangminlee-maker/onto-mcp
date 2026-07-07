@@ -11,6 +11,8 @@ import { describe, expect, it } from "vitest";
 import type { SemanticSynthesisInput } from "../reconstruct/comprehension-semantic-map.js";
 import {
   assertSynthesizeCertJudgeVerdicts,
+  parseSynthesizeCertJudgeResponseText,
+  SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT,
   type SynthesizeCertJudgeVerdicts,
 } from "./synthesize-cert-judge.js";
 import { applyInputCorruptionV1 } from "./synthesize-cert-mutation.js";
@@ -119,6 +121,64 @@ describe("mock judge realization", () => {
       expect(negativeVerdicts.grounding).toBe("fail"); // every real node carries clusters
       expect(negativeVerdicts.boundary).toBe(frozen.stratum.seam ? "fail" : "pass");
     }
+  });
+});
+
+describe("SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT", () => {
+  it("scopes boundary judgement away from deterministic row-matching and covers both metrics", () => {
+    expect(SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT).toMatch(/GROUNDING/);
+    expect(SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT).toMatch(/BOUNDARY/);
+    expect(SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT).toMatch(/outside your scope/i);
+    expect(SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT).toMatch(/"grounding"/);
+    expect(SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT).toMatch(/"boundary"/);
+  });
+});
+
+describe("parseSynthesizeCertJudgeResponseText (pure — no LLM)", () => {
+  it("parses bare JSON", () => {
+    expect(parseSynthesizeCertJudgeResponseText('{"grounding":"pass","boundary":"fail"}')).toEqual({
+      grounding: "pass",
+      boundary: "fail",
+    });
+  });
+
+  it("strips a markdown code fence around the JSON", () => {
+    const fenced = '```json\n{"grounding":"fail","boundary":"pass"}\n```';
+    expect(parseSynthesizeCertJudgeResponseText(fenced)).toEqual({
+      grounding: "fail",
+      boundary: "pass",
+    });
+  });
+
+  it("tolerates surrounding whitespace", () => {
+    expect(parseSynthesizeCertJudgeResponseText('  \n {"grounding":"pass","boundary":"pass"}\n ')).toEqual({
+      grounding: "pass",
+      boundary: "pass",
+    });
+  });
+
+  it("throws (fail-closed) on malformed JSON", () => {
+    expect(() => parseSynthesizeCertJudgeResponseText("not json at all")).toThrow(/not valid JSON/);
+  });
+
+  it("throws (fail-closed) on a non-object JSON value", () => {
+    expect(() => parseSynthesizeCertJudgeResponseText('["pass", "fail"]')).toThrow(/must be a JSON object/);
+    expect(() => parseSynthesizeCertJudgeResponseText("null")).toThrow(/must be a JSON object/);
+  });
+
+  it("throws (fail-closed) on an out-of-enum verdict", () => {
+    expect(() =>
+      parseSynthesizeCertJudgeResponseText('{"grounding":"maybe","boundary":"pass"}'),
+    ).toThrow(/grounding verdict/);
+  });
+
+  it("throws (fail-closed) on a partial or over-complete response", () => {
+    expect(() => parseSynthesizeCertJudgeResponseText('{"grounding":"pass"}')).toThrow(
+      /exactly \{grounding, boundary\}/,
+    );
+    expect(() =>
+      parseSynthesizeCertJudgeResponseText('{"grounding":"pass","boundary":"pass","extra":1}'),
+    ).toThrow(/exactly \{grounding, boundary\}/);
   });
 });
 

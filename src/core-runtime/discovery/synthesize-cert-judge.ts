@@ -29,6 +29,21 @@ import type {
   SemanticSynthesisOutput,
 } from "../reconstruct/comprehension-semantic-map.js";
 
+/**
+ * The dedicated live judge system prompt (design §7/§9 note, live-wiring cut).
+ * A fixed, arm-blind lens: it sees the ORIGINAL frozen packet and one arm's raw
+ * output, never which arm produced it. Boundary judgement is deliberately
+ * scoped to the SEMANTIC characterization (character_before/after) the
+ * deterministic `reconcileBoundaries` step cannot judge — exact row-matching
+ * between output boundaries and packet seams is that separate deterministic
+ * step's job, not this judge's (§9 note: boundary↔reconcile).
+ */
+export const SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT =
+  "You are an INDEPENDENT judge for a spreadsheet-column semantic-synthesis benchmark. You are given the ORIGINAL frozen input packet (node_ref, format_clusters, value_shape_seams, child_summaries) and ONE candidate model's raw output (semantic_summary, boundaries) produced from that packet (or a corrupted variant of it — you never see which). Judge TWO metrics, each pass or fail, using ONLY the given original_packet as ground truth — never trust the output's own claims about itself.\n\n" +
+  "GROUNDING: does semantic_summary stay faithful to original_packet's format_clusters, value_shape_seams, and child_summaries — no hallucinated facts, no invented business meaning, no invented shape or child content the packet does not support? Any claim not traceable to the packet fails grounding.\n" +
+  "BOUNDARY: judge only the SEMANTIC CHARACTERIZATION of the output's boundaries — is character_before/character_after for each proposed boundary a plausible, coherent reading of original_packet's value_shape_seams (comparing against prev_shape/new_shape)? Do NOT judge exact row alignment or perform deterministic row-matching between output boundaries and seams — a separate deterministic reconciliation step owns that, outside your scope. If original_packet has NO value_shape_seams, boundary passes UNLESS the output proposes a boundary anyway (a spurious boundary with no supporting seam fails boundary).\n\n" +
+  "Reply with STRICT JSON only, no prose outside it, no markdown code fences: {\"grounding\": \"pass\"|\"fail\", \"boundary\": \"pass\"|\"fail\"}. No additional fields.";
+
 export type SynthesizeCertMetricVerdict = "pass" | "fail";
 
 export interface SynthesizeCertJudgeVerdicts {
@@ -72,4 +87,46 @@ export function assertSynthesizeCertJudgeVerdicts(
       );
     }
   }
+}
+
+/** Strips a markdown code fence if the model wrapped its JSON in one, despite
+ * the prompt's instruction not to (defensive — mirrors the synthesize
+ * author's own fence-tolerance). A no-op on already-bare JSON text. */
+function stripJudgeResponseFence(text: string): string {
+  const trimmed = text.trim();
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+  return fenced?.[1]?.trim() ?? trimmed;
+}
+
+/**
+ * Pure parser: a live judge realization's raw response text → a TOTAL verdict
+ * pair, or a thrown Error (never a partial/coerced result) — no LLM touched,
+ * so this is unit-testable against fixture response strings. Reuses
+ * {@link assertSynthesizeCertJudgeVerdicts} as the single enum-shape authority
+ * (fail-closed: an out-of-enum or partial response is never silently
+ * coerced). The live dispatch wrapper (scripts side) calls this after
+ * receiving raw response text; any throw here is an untyped rejection that
+ * the coordinate loop classifies as `judge_error`.
+ */
+export function parseSynthesizeCertJudgeResponseText(
+  text: string,
+): SynthesizeCertJudgeVerdicts {
+  const jsonText = stripJudgeResponseFence(text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (error) {
+    throw new Error(
+      `synthesize-cert-judge: response is not valid JSON (fail-closed): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      `synthesize-cert-judge: response must be a JSON object, got ${JSON.stringify(parsed)} (fail-closed)`,
+    );
+  }
+  assertSynthesizeCertJudgeVerdicts(parsed as SynthesizeCertJudgeVerdicts);
+  return parsed as SynthesizeCertJudgeVerdicts;
 }
