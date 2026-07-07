@@ -2079,7 +2079,7 @@ async function callSemanticMapJsonAuthorWithRetry(args: {
  *  LLM JSON (benign extra keys are stripped — contract-field extraction, not semantic patching);
  *  missing/mistyped/over-cap values fail closed. The module's exact-key validator still guards
  *  the bridge boundary downstream. */
-function projectSemanticMapSynthesisOutput(raw: Record<string, unknown>): SemanticSynthesisOutput {
+export function projectSemanticMapSynthesisOutput(raw: Record<string, unknown>): SemanticSynthesisOutput {
   const summary = raw.semantic_summary;
   if (typeof summary !== "string" || summary.trim().length === 0) {
     throw new Error("semantic-map synthesize author: semantic_summary must be a non-empty string (fail-closed).");

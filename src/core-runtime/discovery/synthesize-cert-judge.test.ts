@@ -8,10 +8,17 @@
  */
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import type { SemanticSynthesisInput } from "../reconstruct/comprehension-semantic-map.js";
+import type {
+  SemanticSynthesisInput,
+  SemanticSynthesisOutput,
+} from "../reconstruct/comprehension-semantic-map.js";
+import { projectSemanticMapSynthesisOutput } from "../reconstruct/run.js";
+import type { SynthesizeCertJudgementRow } from "./synthesize-cert-record.js";
+import { synthesizeCertOutputSha256 } from "./synthesize-cert-loop.js";
 import {
   assertSynthesizeCertJudgeVerdicts,
   parseSynthesizeCertJudgeResponseText,
+  reconstructSynthesizeCertJudgeReplayInputs,
   SYNTHESIZE_CERT_JUDGE_SYSTEM_PROMPT,
   type SynthesizeCertJudgeVerdicts,
 } from "./synthesize-cert-judge.js";
@@ -179,6 +186,111 @@ describe("parseSynthesizeCertJudgeResponseText (pure — no LLM)", () => {
     expect(() =>
       parseSynthesizeCertJudgeResponseText('{"grounding":"pass","boundary":"pass","extra":1}'),
     ).toThrow(/exactly \{grounding, boundary\}/);
+  });
+});
+
+describe("reconstructSynthesizeCertJudgeReplayInputs (pure content-hash join — no LLM)", () => {
+  const FIXTURE_ID = sha("replay-fixture");
+  const original = packet({
+    clusters: ["int", "date"],
+    seams: [{ row: 10, prev_shape: "int", new_shape: "date" }],
+  });
+  const armOutput: SemanticSynthesisOutput = {
+    semantic_summary: "a region of integers then dates",
+    boundaries: [{ row: 10, character_before: "int", character_after: "date" }],
+  };
+  const outputSha = synthesizeCertOutputSha256(armOutput);
+  const rawText = JSON.stringify({
+    semantic_summary: armOutput.semantic_summary,
+    boundaries: armOutput.boundaries,
+  });
+
+  const okRow: SynthesizeCertJudgementRow = {
+    row_id: "in1.r1.baseline",
+    fixture_id: FIXTURE_ID,
+    input_id: "in1",
+    input_sha256: sha("in1"),
+    rep: 1,
+    arm: "baseline",
+    stratum: { seam: true, merge: false },
+    candidate_output_status: "ok",
+    judge_status: "ok",
+    metrics: { grounding: "pass", boundary: "pass" },
+    output_sha256: outputSha,
+    attempts: 1,
+  };
+  const notRunRow: SynthesizeCertJudgementRow = {
+    ...okRow,
+    row_id: "in1.r2.baseline",
+    rep: 2,
+    candidate_output_status: "not_run",
+    judge_status: "not_run",
+    metrics: { grounding: "not_judged", boundary: "not_judged" },
+  };
+
+  const packetsByInputId = new Map([["in1", original]]);
+  const join = (capturedCalls: { seq: number; role: string; text?: string | null }[], rows = [okRow]) =>
+    reconstructSynthesizeCertJudgeReplayInputs({
+      rows,
+      originalPacketsByInputId: packetsByInputId,
+      capturedCalls,
+      projectArmOutput: projectSemanticMapSynthesisOutput,
+      hashArmOutput: synthesizeCertOutputSha256,
+    });
+
+  it("matches an ok row to its captured call by content-hash identity", () => {
+    const result = join([{ seq: 1, role: "baseline", text: rawText }]);
+    expect(result.unmatched).toEqual([]);
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0]!.row).toBe(okRow);
+    expect(result.matched[0]!.judgeInput).toEqual({ original_packet: original, arm_output: armOutput });
+  });
+
+  it("fence-strips a markdown-wrapped call before matching", () => {
+    const fenced = `\`\`\`json\n${rawText}\n\`\`\``;
+    const result = join([{ seq: 1, role: "baseline", text: fenced }]);
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0]!.judgeInput.arm_output).toEqual(armOutput);
+  });
+
+  it("negative: mutated/corrupted call text does not match — unmatched, not a false positive", () => {
+    const corruptedText = JSON.stringify({
+      semantic_summary: "a DIFFERENT reading entirely, not grounded the same way",
+      boundaries: armOutput.boundaries,
+    });
+    const result = join([{ seq: 1, role: "baseline", text: corruptedText }]);
+    expect(result.matched).toEqual([]);
+    expect(result.unmatched).toEqual([okRow]);
+  });
+
+  it("ignores an unusable capture line (malformed JSON or no text) — unmatched, never a crash", () => {
+    const result = join([
+      { seq: 1, role: "baseline", text: "not json at all" },
+      { seq: 2, role: "baseline" }, // failed call capture: no text field
+    ]);
+    expect(result.matched).toEqual([]);
+    expect(result.unmatched).toEqual([okRow]);
+  });
+
+  it("does not cross-match a call from a DIFFERENT arm role, even with identical content", () => {
+    const result = join([{ seq: 1, role: "candidate", text: rawText }]); // okRow.arm === "baseline"
+    expect(result.matched).toEqual([]);
+    expect(result.unmatched).toEqual([okRow]);
+  });
+
+  it("skips non-ok rows entirely — no attempt, no unmatched flag", () => {
+    const result = join([], [notRunRow]);
+    expect(result.matched).toEqual([]);
+    expect(result.unmatched).toEqual([]);
+  });
+
+  it("picks the lowest-seq call deterministically on a content-identical sha collision", () => {
+    const result = join([
+      { seq: 5, role: "baseline", text: rawText },
+      { seq: 2, role: "baseline", text: rawText },
+    ]);
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0]!.judgeInput.arm_output).toEqual(armOutput);
   });
 });
 
