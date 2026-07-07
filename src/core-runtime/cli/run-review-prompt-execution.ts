@@ -4252,8 +4252,14 @@ export async function executeIssueStanceUnit(args: {
       failure,
       ctx.executionPlan.effective_boundary_state,
     );
+    // §4-1: an on-disk validation failure is a directly-observed unit failure,
+    // not a batch-window outcome — drop the nested-batch tag so the breaker
+    // records it as a failure (dead-letter), consistent with the flat path.
+    // (A batch-ok→validation-fail unit would otherwise spread
+    // `nestedBatchWindow: true` and be mis-recorded as skipped/completed.)
+    const { nestedBatchWindow: _batchWindow, ...observed } = outcome;
     return {
-      ...outcome,
+      ...observed,
       success: false as const,
       completedAtMs: Date.now(),
       outputBytes: await fileSizeIfPresent(dispatch.output_path),

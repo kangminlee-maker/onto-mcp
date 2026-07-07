@@ -143,3 +143,29 @@ flat-mode breaker E2E(stance/lens 트립·OFF twin) 회귀 PASS · import-bounda
 
 **검증 gap:** nested-workers 러너를 실제로 태우는 E2E 하니스는 미존재(기존 하니스는 main-workers).
 러너 배선은 코드 인스펙션 + 컴포넌트 단위테스트로 검증. nested E2E 하니스는 후속.
+
+## 6. §4-1 교차검증 (2026-07-07, 독립 3렌즈 적대 리뷰)
+
+렌즈: (1) 정확성/엣지케이스 (2) 동시성/순서 (3) 계약·관계 정합. 대상 `origin/main..HEAD`.
+
+**Material 수정 완료:**
+- **F1 [수렴 3렌즈] 태그 누수** — `executeIssueStanceUnit`의 배치-ok→on-disk 검증실패 재방출이
+  `{...outcome}` 스프레드로 `nestedBatchWindow:true`를 보존 → 헬퍼가 skipped 오분류(flat은
+  dead-letter). **수정:** 검증실패 재방출 시 태그 destructure-omit. 회귀 테스트 추가(배치-ok +
+  응답파일 부재 → 태그 벗겨진 실패 → dead-letter 확인).
+- **F2 stale 주석** — `dispatch-breaker.ts` 헤더가 "nested-workers … NOT covered"라 §4-1로 stale.
+  **수정:** 헤더를 nested 커버(배치-창=skipped, flat 재시도만 streak) 반영으로 갱신.
+
+**Non-material (문서화, 미변경):**
+- Finding A [low] zero-retry(maxRetries=0) nested 배치실패의 flat/nested 회복셋 라벨 비대칭
+  (nested=completed vs flat=incomplete-victim). `recordItemSkipped` 계약이 "budget cap"을 skip으로
+  명시 승인, 비기본 설정, 런타임 회복은 execution-result frontier가 독립 보상 → 비차단.
+- F4 [low] 규칙 3중 구현(lens 인라인 / stance 헬퍼 / flat 직접) drift 위험 — 4경로 의미 일치 검증됨,
+  유지보수 권고.
+
+**남은 검증 gap (F3, disclosed):** nested-workers 러너를 통째로 태우는 통합 테스트 부재. 하니스가
+`main-workers` 고정이고 lens nested(`executeReviewViaNestedBatch`)는 러너 진입점에서 주입 불가라
+주입 seam 추가(러너 시그니처 변경)가 필요 — 별도 후속. 현 커버: 조합기 태그·헬퍼 규칙(음성 대조)·
+F1 회귀 단위테스트 + 전체 2500 회귀 + flat-mode breaker E2E.
+
+검증: typecheck PASS · vitest 2500 PASS · import-boundary·러너 컨포먼스 PASS.

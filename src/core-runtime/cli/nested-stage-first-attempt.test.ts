@@ -15,6 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import {
+  executeIssueStanceUnit,
   recordNestedUnitOutcomeToBreaker,
   runNestedStageFirstAttempt,
   unitOutcomeWithNestedFirstAttempt,
@@ -441,5 +442,60 @@ describe("recordNestedUnitOutcomeToBreaker (§4-1 nested breaker coverage)", () 
     expect(breaker.tripped()).toBeNull();
     // …but it is completed for the recovery set (excluded from incomplete).
     expect(breaker.completedItemIds()).toContain("zb");
+  });
+});
+
+describe("executeIssueStanceUnit — batch-ok then validation failure (§4-1 tag strip)", () => {
+  let tmp: string;
+  let plan: ReviewExecutionPlan;
+  beforeEach(async () => {
+    tmp = await fs.mkdtemp(path.join(os.tmpdir(), "onto-ds3-vf-"));
+    plan = {
+      session_id: "ds3",
+      session_root: tmp,
+      artifact_generation_realization: "live",
+      error_log_path: path.join(tmp, "error-log.md"),
+    } as unknown as ReviewExecutionPlan;
+  });
+  afterEach(async () => {
+    await fs.rm(tmp, { recursive: true, force: true });
+  });
+
+  it("drops nestedBatchWindow on a validation failure so the breaker records it as a failure, not a skip", async () => {
+    const d = dispatch("issue-stance:x", tmp);
+    // Batch reports ok, but no valid stance response exists on disk → the
+    // runner's on-disk validation throws (readYamlDocument ENOENT). The
+    // re-emitted failure must NOT carry the batch-window tag (F1 fix), else a
+    // directly-observed validation failure would be mis-recorded as skipped.
+    const outcome = await executeIssueStanceUnit({
+      ctx: {
+        projectRoot: tmp,
+        sessionRoot: tmp,
+        executionPlan: plan,
+        executorConfig: { bin: "node", args: [] },
+        retryPolicy: { issueArtifactMaxRetries: 2, retryInitialDelayMs: 1 },
+      } as unknown as Parameters<typeof executeIssueStanceUnit>[0]["ctx"],
+      dispatch: d,
+      participatingLensIds: ["x"],
+      nestedBatch: {
+        byUnitId: new Map([[d.unit_id, { ok: true }]]),
+        startedAtMs: 10,
+        completedAtMs: 20,
+      },
+    });
+    expect(outcome.success).toBe(false);
+    expect(outcome.nestedBatchWindow).toBeUndefined();
+    // Contrast: routed through the breaker, an untagged failure is real fuel.
+    const breaker = new DispatchBreakerState({
+      enabled: true,
+      systemic_threshold: 3,
+      per_call_max_attempts: 3,
+      backoff_initial_ms: 100,
+      backoff_cap_ms: 400,
+    });
+    recordNestedUnitOutcomeToBreaker(breaker, outcome);
+    // Validation failure is item-local (null class) → dead-letter, not completed-skip.
+    expect(breaker.deadLetterEntries().map((e) => e.item_id)).toEqual([d.unit_id]);
+    expect(breaker.completedItemIds()).not.toContain(d.unit_id);
   });
 });
