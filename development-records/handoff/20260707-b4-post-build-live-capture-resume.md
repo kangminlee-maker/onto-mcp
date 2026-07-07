@@ -4,6 +4,41 @@
 > 이 문서 = clear 후 라이브 캡처 세션의 START-HERE. SSOT =
 > `development-records/design/20260706-b4-r8-harness-design.md`(v3·헤더에 빌드 상태).
 
+## B4 종결 상태 (2026-07-07)
+
+- **grounding 질문 해소**: Haiku grounding은 gpt-5.5와 사실상 동률(편향 없는 결정론 구조검증
+  **candidate 0.989 vs baseline 1.000** — 89건 중 진짜 날조 1건). 원 벤치 gap(candidate 0.889 <
+  baseline 1.0)은 **동일-패밀리 judge 편향**(judge=gpt-5.5=baseline)이었음 — opus 재채점
+  (0.889→1.000) + 구조화-추출로 확정. 방법 자기검증 = negative_control 0.500 ≪ candidate(주입된
+  변이 45건 포착).
+- **경로 요약**: 라이브 561콜(첫 런 46% 지점 hang → `--resume`로 복구 완주) → `metric_regression`
+  발견 → opus 재채점(동일-패밀리 편향 확인) → R7 사람 감사 추출 → 구조화-추출 grounding(LLM은
+  추출만·판정은 결정론) → verifier 구조-전용 수정(어휘 거짓양성 제거·domain-agnostic 원칙).
+- **커밋 체인**(branch `feat/inv-model-1-b4` · 미푸시): `f57f408`(--go 배선) · `a3709c3`(--resume) ·
+  `bf4f8e6`(opus 재채점 + R7 감사) · `f98b5fd`(R7 추출기) · `646ffa6`(구조화-추출 grounding 판정).
+- **boundary caveat (owner 결정)**: cert record는 boundary `metric_regression`(candidate 0.967 <
+  baseline 1.0)으로 미박제이나, 이는 **degenerate 메트릭**(negative_control 0.978 ≈ candidate ·
+  no-seam 입력은 boundary 레버가 inert · 설계 §6에서 이미 예견)이고 **judge 편향이 아님**(gpt-5.5·
+  opus 둘 다 0.967로 동일). 구조적 boundary-날조(seam 없는 곳에 전환을 주장하는 경우)는 이미
+  결정론 grounding(0.989)에 포함되어 잡힌다. owner 결정 = 이 `metric_regression`을 **문서화된
+  degenerate-metric caveat로 남기고, grounding 증거를 근거로 등록을 추진**한다. shipped
+  `synthesize-cert-record.ts`의 게이트는 불변이라 표준 record 박제는 불가능 — 등록 evidence 기반은
+  `structured-grounding-comparison.json` + 이 caveat.
+- **남은 경로 → B5**:
+  ④ production-contrast run(§13 — sampled merge를 production accumulate→reconcile→verify 경로로,
+  child 저작=Haiku, 별도 라이브 지출 필요)
+  ⑤ B5 등록(`supported-models.yaml`에 Haiku 엔트리 + G7 배선 = `INVARIANT-CHANGE: INV-MODEL-1`
+  마커 · evidence = structured-grounding 증거 + 이 caveat)
+  ⑥ B6/B7.
+- **★ 방법론 교훈**: 결정론 verifier가 owner(Fable)의 손분석 맹점을 3회 포착했다 — case 7의
+  자식-경계 오판, integer/INT 어휘 불일치, 전환-라벨 어휘 불일치. LLM judge 단독이었다면 이 세
+  가지가 전부 묻혔을 것. verifier = 구조(행·경계·전환 위치)만 판정, 명명은 LLM의 의미 잔차로
+  남긴다.
+- **첫 커맨드(다음 세션)**:
+  ```
+  cd /Users/kangmin/cowork/onto-mcp-claude && git fetch origin && git log --oneline -6 HEAD
+  ```
+
 ## 0. 지금 어디인가 (CONFIRMED @ 2026-07-07)
 
 - branch `feat/inv-model-1-b4` · 빌드 커밋 9개 `ada79d2`(S1)→`58fa1f6`(S8) · 미푸시.
