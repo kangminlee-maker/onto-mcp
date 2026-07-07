@@ -271,9 +271,13 @@ describe("resubmit error spec projection", () => {
     // create a real second region, and the previous spec was fully stripped.
     expect(second.split(RESUBMIT_ERROR_SPEC_BEGIN).length - 1).toBe(1);
     expect(second.split(RESUBMIT_ERROR_SPEC_END).length - 1).toBe(1);
-    // Round 1's ref content is gone (no orphaned fragments), round 2's is present.
+    // On the pre-fix bug the injected END splits round 1's spec so the trailing
+    // "tail" (after the injected marker) is orphaned into the body; assert that
+    // exact surviving fragment is gone. "tail" — not "evil" (which sits before
+    // the injected END and is sliced out even on the broken path, so it would
+    // not discriminate). Round 2's ref is present.
     expect(second).toContain("other-ref");
-    expect(second).not.toContain("evil");
+    expect(second).not.toContain("tail");
     expect(second).toContain("# packet body");
     expect(packetHasResubmitErrorSpec(second)).toBe(true);
   });

@@ -181,6 +181,24 @@ Residual(비블로커): (a) nested-batch/resume deliberation은 공유 메커니
 전용 E2E 미작성(원하면 nestedBatch+freeze 프리셋으로 flat attempt-0 heal 검증 테스트로 봉인 가능).
 (b) 하드 크래시 시 in-memory budget 리셋으로 총 시도 초과 가능(비용만, stance F-A3와 동일 선재).
 
+### 6-3. 4번째 라운드 (fix 검증·테스트 falsifiability·의미 정확성, 2026-07-07)
+
+깊은 라운드의 마커-주입 수정(f107b14)과 테스트 자체를 새 KIND로 재검증:
+
+- **fix-bypass: SURVIVED.** `neutralizeSpecMarkers`는 대체 토큰이 non-empty라 split/join 재구성 불가
+  ·마커 self-overlap 없음·2차 패스가 BEGIN 위조 불가 → 380k 퍼즈 트라이얼 0 붕괴. 4개 동적 sink
+  전부 커버(빠진 삽입 없음), 정상 ref no-op(byte-identical 보존). 최소·완전.
+- **semantic-correctness: PROVEN.** render 측 allowed-set(`applyDeliberationResubmitErrorSpec`)과
+  validate 측(`assertAllowedRefs`)이 **동일 packet에 동일 `parseRuntimeIssueDeliberationSchemaContext`**
+  → 스펙이 통지하는 허용집합 == submit 검증 집합(교정이 다시 거부되지 않음). append-invariance 프로브로
+  spec 추가 후에도 projection 파싱 불변 확인. spec가 실제 프롬프트 본문(재시도마다 fresh 재read) 도달 —
+  inert 아님. full-pipeline 도달성(`runControlledLensDeliberation`→`executeDeliberationResponseUnit`
+  →retry 루프→`applyResubmitErrorSpec`) 코드-추적 확인. codex 어댑터 freeze 대칭. inert 코드 0.
+- **test falsifiability: 대체로 통과, 1건 정정.** 모든 테스트가 실 subprocess spawn·비-vacuous·broken 시
+  실패(카운트/불변 단언·null-error가 frozen 강제·합성 ref 검증). **단** 마커-주입 테스트의
+  `not.toContain("evil")`가 non-discriminating(broken에서도 통과 — "evil"은 주입 END 앞이라 잘림)이라
+  실제 orphan `"tail"` 검사로 정정(카운트 단언이 이미 버그를 잡으므로 구멍 아닌 강화).
+
 **Residual risk (선재·스코프 밖, 정직 기록):** resubmit 재시도 발동은 `failureKindFromMessage`(공유
 retry-gating)를 거친다. 환각 evidence_ref 문자열이 `issue_id`/`schema_version`/`work_item_id`/
 `boundary_notes`/`source_refs_used` 등 envelope 필드명 substring을 포함하면 거부 메시지가
