@@ -1,6 +1,12 @@
 # INV-MODEL-1 B4 — R8 라이브 캡처 하니스 설계 (v3 · 2라운드 교차검증 반영)
 
-> 상태: **설계-먼저 (빌드 전) · v3**. owner 승인 = "1(b)+2(a) · fixture=6255aef7 · **round-2 후 옵션 A(durable source-safe capsule)**"(2026-07-07).
+> 상태: **v3 확정 · S1~S8 빌드 완료(2026-07-07 · Fable 5 · `ada79d2`…`58fa1f6` 9커밋)**. mock E2E
+> done-when (a)~(d) 전부 충족(vitest 2559=baseline 2495+64·회귀0). §15의 S7 binding gate는
+> **신규 sibling validator**(`validateSynthesizeCertCapsuleBinding`)로 실현 — shipped
+> `synthesizeCertBindingViolations` 불변 유지, B5 등록 경로(G7) 배선 = 후속 INVARIANT-CHANGE 슬라이스.
+> 라이브(`--go`)는 fail-loud 스텁 — 배선·캡처 = 예산 승인 세션
+> (`development-records/handoff/20260707-b4-post-build-live-capture-resume.md`).
+> owner 승인 = "1(b)+2(a) · fixture=6255aef7 · **round-2 후 옵션 A(durable source-safe capsule)**"(2026-07-07).
 > v1→v2 = round-1(ultracode wf_22791f61-685 · onto 20260707-ea339d5b · 독립) HIGH 5·MED 4.
 > **v2→v3 = round-2(ultracode wf_2ed0b4ad-817 · onto 20260707-6bb4d130 · 독립)**: onto convergent HIGH 3(증거 durability/binding, fix-유발) → loopback-2 stop-and-ask → owner 옵션 A. 변경 요지 = §17·§18·§19.
 > 상위 계약 = `20260704-inv-model-1-role-aware-design.md` §6·§13.3. 검증기(스키마-먼저 고정·불변) = `src/core-runtime/discovery/synthesize-cert-record.ts`.
