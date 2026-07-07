@@ -127,10 +127,17 @@
 ## 8. 첫 커맨드 (모델 포함)
 
 ```
-# 모델: Opus 4.8 (1M) — 빌드는 난이도 높음, 구현+검증에 상위 tier 유지.
+# 모델: Fable 5 (claude-fable-5) — owner 지정(2026-07-07).
 cd /Users/kangmin/cowork/onto-mcp-claude
-git fetch origin && git rev-parse --abbrev-ref HEAD && git log --oneline -1 HEAD   # feat/inv-model-1-b4 @ 16fbdd5
+git fetch origin && git rev-parse --abbrev-ref HEAD && git log --oneline -1 HEAD   # feat/inv-model-1-b4 @ 5c62f03
 git log --oneline -1 origin/main                                                   # ≥ 18ce27c
-npx vitest run 2>&1 | tail -3                                                       # baseline 확정(≈2495)
+npx vitest run 2>&1 | tail -3                                                       # baseline = 2495 passed + 1 todo (변동 없어야)
 # 그 후: design v3 §15/§18 읽고 S1(sampler)부터 착수.
 ```
+
+**★ 모델 배분 주의(CLAUDE.md 다중모델)**: 설계·2라운드 교차검증은 Opus 4.8에서 수행, 빌드 구현은 **Fable 5**
+(다른 tier). "구현과 검증을 동시에 economize 금지" 원칙 → **결정론 게이트가 안전망**: 각 슬라이스 ts-core
+clean + `npx vitest run` 회귀0 + **S7/S8 음성대조 비-0**(capsule 누락/불일치/obligation 미충족/프로세 존재/
+input_id 공백) + source-safe 구조가드. 이들은 author 모델과 무관하게 기능 오류를 잡는다. 빌드 후 리뷰가
+필요하면 **상위 tier 또는 다른 reviewer KIND**로(Fable 5 self-review에 의존하지 말 것). INVARIANT-CHANGE
+슬라이스(S7 B5 게이트 확장)는 특히 격리 + 별도 확인.
