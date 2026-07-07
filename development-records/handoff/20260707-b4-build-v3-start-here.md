@@ -120,7 +120,8 @@
 - **scratchpad 종합은 세션-로컬**(clear 후 경로 변함): `b4-r2-synthesis.md`·`b4-r2-independent.md`·
   `b4-xval-synthesis.md`·`b4-independent-findings.md`. **durable 기록 = design §17/§18/§19 + 이 핸드오프 + memory**.
   워크플로우 저널(durable): `~/.claude-1/projects/…/subagents/workflows/wf_22791f61-685`(r1)·`wf_2ed0b4ad-817`(r2).
-- **baseline full vitest ≈ 2495**(memory·PROPOSED) — git clean HEAD서 `npx vitest run` 먼저 돌려 실 baseline 확정.
+- **baseline full vitest = 2495 passed + 1 todo (2496·150 파일·~34s·exit 0)** — CONFIRMED @ HEAD `808f4b6`
+  (2026-07-07 실측). 빌드 후 이 숫자 + 신규 테스트만큼만 증가·회귀0이어야.
 - ⚠️ untracked 잔재(구 핸드오프·WIP 스크립트·fixtures 로그) = 이 세션 산물 아님·B4 무관하면 방치.
 
 ## 8. 첫 커맨드 (모델 포함)

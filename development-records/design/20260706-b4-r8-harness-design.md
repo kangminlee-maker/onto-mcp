@@ -138,7 +138,7 @@ nearest-unselected** 를 **durable capsule(§18)에** 영속(source-safe: 노드
     obligation은 durable+gate-검증**, 민감 프로세만 로컬(그 의미 재감사=R7·§13.3). record 스키마 strict/불변이라
     capsule은 companion 아티팩트(스키마 무변).
 
-## 5. arm 실행 v2 (frozen packet · 단일 호출)
+## 5. arm 실행 (frozen packet · 단일 호출)
 
 | arm | 모델 | 입력 packet | judge 기준 |
 |---|---|---|---|
@@ -226,7 +226,7 @@ boundedness=transform 구현+테스트. **레버는 content-changing relabel로 
 **신규**: 층화 샘플러(+provenance) · packet 동결/영속 · `input_corruption/v1` relabel transform ·
 grounding/boundary judge · 좌표 루프 · record 조립기.
 
-## 11. 비용 모델 v2 (실측 그라운딩)
+## 11. 비용 모델 (실측 그라운딩)
 
 - reference 저작(1회): merge 입력 subtree 저작 ≈ 작은 서브트리 ~3콜 × merge 입력(~10) = ~30콜.
 - arm 실행: 30입력 × 3rep × 3arm = 270 **단일** synthesize + judge 270 = ~540. (per-arm walk 폐기로 v1보다 단순.)
