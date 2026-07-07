@@ -10,7 +10,7 @@
 - **full vitest = 2559 passed + 1 todo (158 파일·회귀0·baseline 2495+신규 64)** — 이 세션 실측.
 - 정적 게이트 전부 통과: ts-core · import-boundary · invariant-drift · spec-defaults ·
   invariant-change(protected_changes 0 — **shipped `synthesize-cert-record.ts` 이번 빌드에서 불변**).
-- 라이브 배선 완료(2026-07-07): --go = 실좌석 배선·quota probe·cap 게이트. 남은 순서 = §3 2~6.
+- 라이브 배선 완료(2026-07-07): --go = 실좌석 배선·quota probe·cap 게이트. 남은 순서 = §3 2~6. + --resume <runDir> 재개 레버(freeze-checkpoint·중도 실패 시 기지출 보존, 커밋 a3709c3)
 
 ## 1. 빌드 산출물 (src/core-runtime/discovery/)
 
