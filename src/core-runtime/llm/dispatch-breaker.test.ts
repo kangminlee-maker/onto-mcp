@@ -194,6 +194,60 @@ describe("DispatchBreakerState", () => {
   });
 });
 
+describe("DispatchBreakerState — concurrent mode determinism (F1)", () => {
+  const systemic = (itemId: string) => ({
+    item_id: itemId,
+    failure_class: "rate_limit" as const,
+    failure_message: "status=429",
+    attempt_count: 3,
+  });
+  // Replay a sequence of item events against a fresh breaker and project the
+  // recovery classification (order-sensitivity is exactly what F1 is about).
+  const replay = (concurrent: boolean, seq: Array<["fail" | "ok", string]>) => {
+    const state = new DispatchBreakerState(policy({ concurrent }));
+    for (const [kind, item] of seq) {
+      if (kind === "ok") state.recordItemSuccess(item);
+      else state.recordItemFailure(systemic(item));
+    }
+    const planned = [...new Set(seq.map(([, item]) => item))];
+    return {
+      tripped: state.tripped() !== null,
+      deadLetter: state.deadLetterEntries().map((e) => e.item_id).sort(),
+      completed: [...state.completedItemIds()].sort(),
+      incomplete: incompleteOf(state, planned).incomplete_item_ids.slice().sort(),
+    };
+  };
+  // Same outcome SET (a/b/c systemic-fail, d succeeds); two completion orders.
+  const orderA: Array<["fail" | "ok", string]> = [
+    ["fail", "a"], ["fail", "b"], ["fail", "c"], ["ok", "d"],
+  ];
+  const orderB: Array<["fail" | "ok", string]> = [
+    ["fail", "a"], ["fail", "b"], ["ok", "d"], ["fail", "c"],
+  ];
+
+  it("concurrent mode: trip and classification are identical regardless of completion order", () => {
+    const a = replay(true, orderA);
+    const b = replay(true, orderB);
+    expect(a).toEqual(b);
+    expect(a.tripped).toBe(true);
+    expect(a.incomplete).toEqual(["a", "b", "c"]);
+    expect(a.deadLetter).toEqual([]);
+  });
+
+  it("contrast (default/non-concurrent): completion order changes the verdict — the F1 order-sensitivity concurrent mode removes", () => {
+    const a = replay(false, orderA);
+    const b = replay(false, orderB);
+    expect(a).not.toEqual(b);
+    // order A: c crosses the threshold before d's success → trip; a/b/c incomplete.
+    expect(a.tripped).toBe(true);
+    expect(a.incomplete).toEqual(["a", "b", "c"]);
+    // order B: d's pre-trip success flushes a/b to poison dead-letter → no trip; only c incomplete.
+    expect(b.tripped).toBe(false);
+    expect(b.deadLetter).toEqual(["a", "b"]);
+    expect(b.incomplete).toEqual(["c"]);
+  });
+});
+
 describe("classifyDispatchError / dispatch markers", () => {
   it("prefers structured provider status over message text", () => {
     expect(

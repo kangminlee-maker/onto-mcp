@@ -186,6 +186,16 @@ export interface DispatchBreakerPolicy {
   per_call_max_attempts: number;
   backoff_initial_ms: number;
   backoff_cap_ms: number;
+  /** Concurrent-pool mode (opt-in; default off/undefined preserves the current
+   * behavior byte-for-byte). Set by CODE for the review lens/stance pools
+   * (`Promise.all`) — NOT a user setting. When on, a pre-trip success does NOT
+   * flush the pending systemic failures to poison, so the trip and the
+   * completed/dead-letter/incomplete classification depend only on WHICH items
+   * failed systemically, not on their completion order. Sequential callers
+   * (reconstruct semantic-map, canonical order) omit it and keep the
+   * poison-vs-systemic-via-later-success attribution. See design note
+   * development-records/design/20260707-breaker-concurrent-determinism-f1-design.md. */
+  concurrent?: boolean;
 }
 
 export interface DispatchDeadLetterEntry {
@@ -240,6 +250,15 @@ export class DispatchBreakerState {
     // them OUT of the incomplete recovery set (규칙 5 위반). The late unit
     // itself still counts as completed.
     if (this.trip !== null) return;
+    // Concurrent pool (opt-in, F1): during a concurrent burst a success does
+    // NOT prove the whole lane is alive (a partial rate-limit yields some 200s
+    // and some 429s), and letting completion order decide which pending victims
+    // become poison makes the trip/classification non-deterministic. In this
+    // mode systemic victims stay pending — the trip is count-based and
+    // order-independent; un-tripped victims end as incomplete (review recovery
+    // re-derives from the frontier either way). Sequential callers omit the flag
+    // and keep the poison-via-later-success attribution.
+    if (this.policy.concurrent) return;
     // The provider lane is alive: pending systemic failures were item-scoped
     // after all — poison, dead-lettered.
     for (const entry of this.pendingSystemic) this.deadLetter.push(entry);
