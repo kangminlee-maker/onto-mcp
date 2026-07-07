@@ -10,6 +10,7 @@
 - **full vitest = 2559 passed + 1 todo (158 파일·회귀0·baseline 2495+신규 64)** — 이 세션 실측.
 - 정적 게이트 전부 통과: ts-core · import-boundary · invariant-drift · spec-defaults ·
   invariant-change(protected_changes 0 — **shipped `synthesize-cert-record.ts` 이번 빌드에서 불변**).
+- 라이브 배선 완료(2026-07-07): --go = 실좌석 배선·quota probe·cap 게이트. 남은 순서 = §3 2~6.
 
 ## 1. 빌드 산출물 (src/core-runtime/discovery/)
 
@@ -43,7 +44,8 @@
 
 1. **라이브 realization 배선**(`scripts/b4-cert-run.mts` `--go` 브랜치): arm 3종(baseline gpt-5.5·
    candidate/negative Haiku)·reference(gpt-5.5)·judge(gpt-5.5 또는 opus·전용 프롬프트 §7/§9 note —
-   boundary는 의미 특성화 판정, row 매칭은 reconcile 몫) + quota preflight/캡처.
+   boundary는 의미 특성화 판정, row 매칭은 reconcile 몫) + quota preflight/캡처. — ✅ 완료(2026-07-07 ·
+   커밋 f57f408 · --max-calls 캡 기본 800 추가)
 2. **owner 예산 승인** 후 라이브 캡처: fixtures 로컬 = #1 `~/Downloads/mbp_2026년 02월_결제 및
    수익인식F_260309.xlsx`(3392b185·앵커) · #2 `~/Downloads/[Day 1] 1.0 (from 20250707) (1).xlsx`(6255aef7).
    forecast ≈500-700콜(§11). 실행 = `--fixture <#1> --fixture <#2> --go`.
