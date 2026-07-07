@@ -424,24 +424,43 @@ describe("recordNestedUnitOutcomeToBreaker (§4-1 nested breaker coverage)", () 
     expect(breaker.tripped()).toBeNull();
   });
 
-  it("a zero-retry batch-window failure is skipped (completed, not streak fuel)", () => {
-    const breaker = new DispatchBreakerState(breakerPolicy);
-    recordNestedUnitOutcomeToBreaker(breaker, systemicFail("a"));
-    recordNestedUnitOutcomeToBreaker(breaker, systemicFail("b"));
+  it("a batch-window FAILURE is recorded as a failure, not skipped (교차검증 F2/Finding A)", () => {
+    // Item-local batch-window failure → dead-letter, excluded from the recovery
+    // set, no streak effect (NOT skipped/completed).
+    const bItemLocal = new DispatchBreakerState(breakerPolicy);
     expect(
       recordNestedUnitOutcomeToBreaker(
-        breaker,
-        oc("zb", {
+        bItemLocal,
+        oc("v", {
           success: false,
           nestedBatchWindow: true,
-          failure: { message: "status=429" } as ExecutionOutcome["failure"],
+          failure: {
+            message: "author returned invalid JSON and repair failed",
+          } as ExecutionOutcome["failure"],
         }),
       ),
     ).toBeNull();
-    // The batch-window failure did not advance the streak: 2 pending, no trip.
-    expect(breaker.tripped()).toBeNull();
-    // …but it is completed for the recovery set (excluded from incomplete).
-    expect(breaker.completedItemIds()).toContain("zb");
+    expect(bItemLocal.deadLetterEntries().map((e) => e.item_id)).toEqual(["v"]);
+    expect(bItemLocal.completedItemIds()).not.toContain("v");
+
+    // Systemic batch-window failure → recovery victim (pending), and it DOES
+    // count toward the trip like the flat path — here it crosses the threshold.
+    const bSystemic = new DispatchBreakerState(breakerPolicy);
+    recordNestedUnitOutcomeToBreaker(bSystemic, systemicFail("a"));
+    recordNestedUnitOutcomeToBreaker(bSystemic, systemicFail("b"));
+    const trip = recordNestedUnitOutcomeToBreaker(
+      bSystemic,
+      oc("zb", {
+        success: false,
+        nestedBatchWindow: true,
+        failure: { message: "status=429" } as ExecutionOutcome["failure"],
+      }),
+    );
+    expect(trip).toMatchObject({
+      failure_class: "rate_limit",
+      consecutive_item_count: 3,
+    });
+    expect(bSystemic.completedItemIds()).not.toContain("zb");
   });
 });
 

@@ -132,9 +132,10 @@ runtime은 아래만 한다.
   집합은 `dispatch-incomplete.yaml`이 회복 계약(재디스패치 집합 == 미완료 집합)
   으로 영속하며, 트립 halt의 execution-result는 완료 유닛 행을 보존한다.
   nested-workers 1차 배치가 실행된 스테이지도 breaker가 적용된다(§4-1): 배치-창
-  결과(배치성공·zero-retry 확정 실패)는 실 디스패치가 아니므로 완료로만 집계돼
-  계통 streak을 리셋하지 않고, 배치-실패 유닛의 flat 재시도만 계통 실패를
-  관찰·구동한다. OFF(기본)는 현행 halt/배리어 동작이며 nested 경로도 무변경이다
+  SUCCESS는 실 디스패치가 아니므로 완료로만 집계돼 계통 streak을 리셋하지 않고,
+  배치-창 FAILURE는 flat 경로처럼 실패로 분류된다(item-local→dead-letter, 계통→
+  회복 미완료 집합). 배치-실패 유닛의 flat 재시도가 계통 실패를 직접 관찰·구동
+  한다. OFF(기본)는 현행 halt/배리어 동작이며 nested 경로도 무변경이다
 - degraded case / partial failure는 `error-log.md`에 기록해야 한다
 - runtime unavailable completion으로 root unit이 completed가 된 경우에도 원 실패는 child unit result로 보존하고 degradation evidence에 포함해야 한다
 - `error-log.md`는 최소 한 번 `EffectiveBoundaryState`를 기록해야 한다

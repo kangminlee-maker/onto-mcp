@@ -7,9 +7,10 @@
  * lose items. The repo has no common dispatch surface (§8 재앵커링), so the
  * policy is injected per loop. Currently wired: the reconstruct semantic-map
  * judgment loop and the review lens/stance fan-out pools — both the flat
- * per-unit loops AND the nested-workers first-attempt batch (§4-1: batch-window
- * outcomes are recorded as skipped so a stale batch success never resets the
- * streak; only the directly-observed flat retries drive it).
+ * per-unit loops AND the nested-workers first-attempt batch (§4-1: a batch-window
+ * SUCCESS is recorded skipped so a stale batch success never resets the streak,
+ * while a batch-window FAILURE is classified like any failure; the
+ * directly-observed flat retries drive the streak).
  *
  * 1. backoff first — a per-item failure counts toward the breaker only after
  *    the item's bounded backoff retries are exhausted. Providers surface 429s

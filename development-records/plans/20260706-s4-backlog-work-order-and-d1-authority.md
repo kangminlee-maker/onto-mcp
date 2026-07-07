@@ -169,3 +169,30 @@ flat-mode breaker E2E(stance/lens 트립·OFF twin) 회귀 PASS · import-bounda
 F1 회귀 단위테스트 + 전체 2500 회귀 + flat-mode breaker E2E.
 
 검증: typecheck PASS · vitest 2500 PASS · import-boundary·러너 컨포먼스 PASS.
+
+## 7. §4-1 Codex 교차검증 (2026-07-07, 다른 모델 패밀리 = OpenAI)
+
+`$ultracode-for-codex`(4-agent fan-out, ChatGPT 인증). Claude 3렌즈의 same-family 한계를
+보완하는 diverse 검증. 리뷰 전용(소스 미수정, worktree clean 확인).
+
+**Material 수정 완료:**
+- **Codex F2 [medium, §4-1 도입]** — lens nested 배치-ok→parent `validateUnitOutputFile` 실패 +
+  `lens_max_retries=0`이면 실패 lens를 dead-letter가 아니라 skipped/completed로 기록(stance F1
+  fix의 lens 짝을 놓침). **수정:** lens zero-budget 실패를 헬퍼 경유 `recordItemFailure`로.
+- **Finding A [내 리뷰서 low→Codex 수렴으로 승격]** — zero-budget 배치실패의 flat/nested 회복셋
+  비대칭. **함께 수정:** 헬퍼 규칙을 "배치-창 SUCCESS만 skipped, FAILURE는 flat처럼
+  recordItemFailure(item-local→dead-letter, 계통→회복 victim)"로 변경. lens 배치-ok 성공도 태그+
+  헬퍼로 통일(F4 drift도 해소). 테스트 재작성(배치-창 실패→dead-letter/victim, 성공→skipped 유지).
+
+**Pre-existing 공시 (§4-1 범위 밖, 별도 후속):**
+- **Codex F1 [high, PRE-EXISTING]** — 동시 stance/lens 풀에서 breaker 판정이 completion-order에
+  의존(같은 outcome 집합이 순서에 따라 trip/incomplete 상이). `recordItemSuccess`가 pre-trip에
+  `pendingSystemic`을 flush하기 때문. **git 확인:** `origin/main`에도 concurrent 풀
+  (`Promise.all`)+`recordItemSuccess`가 이미 존재 — §4-1이 도입한 게 아니다. breaker 상태기계는
+  post-trip 레이스만 freeze로 처리하고 pre-trip 인터리브는 미처리. 결정성 개선은 breaker 관측을
+  deterministic dispatch order/wave로 투영하는 별도 변경(flat 모드도 영향). §4-1에 번들하지 않음.
+
+**모델 다양성:** author=Claude, verifier=Codex(OpenAI) → 진짜 cross-family(collapse 아님).
+
+검증: typecheck PASS · vitest 2500 PASS · 헬퍼 규칙 단위테스트(배치-창 실패 분류·성공 skip·음성
+대조)· F1 회귀테스트 · flat-mode E2E 회귀 · import-boundary·러너 컨포먼스 PASS.

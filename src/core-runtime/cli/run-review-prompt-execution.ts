@@ -1692,16 +1692,21 @@ function reviewSystemicFailureClassFromOutcome(outcome: ExecutionOutcome) {
 }
 
 /** §4-1: record a nested-pool unit's FINAL outcome to the dispatch breaker.
- * A batch-window outcome (tagged `nestedBatchWindow` — batch-ok, or a zero-retry
- * batch failure) is recorded as skipped: completed for the recovery set, but no
- * proof the provider lane is alive THIS run, so it must not reset a systemic
- * streak. A real flat dispatch drives success/failure. Returns the trip state on
- * the threshold crossing so the caller can freeze halt attribution to it. */
+ *
+ * A batch-window SUCCESS (`nestedBatchWindow` + success) is recorded as skipped:
+ * completed for the recovery set, but no proof the provider lane is alive THIS
+ * run, so it must not reset a systemic streak. A FAILURE — whether from the
+ * batch window or a real flat dispatch — is classified like the flat path
+ * (item-local → dead-letter, systemic → recovery victim); it is never skipped
+ * (교차검증 F2/Finding A: skipping a failure mis-labels it completed and drops
+ * it from the recovery set, diverging from the flat path). A real flat success
+ * drives `recordItemSuccess`. Returns the trip state on the threshold crossing so
+ * the caller can freeze halt attribution to it. */
 export function recordNestedUnitOutcomeToBreaker(
   breaker: DispatchBreakerState,
   outcome: ExecutionOutcome,
 ): DispatchBreakerTripState | null {
-  if (outcome.nestedBatchWindow) {
+  if (outcome.nestedBatchWindow && outcome.success) {
     breaker.recordItemSkipped(outcome.dispatch.unit_id);
     return null;
   }
@@ -4088,9 +4093,10 @@ export async function runNestedStageFirstAttempt(args: {
  *     an explicit zero-retry policy means exactly one attempt).
  *
  * The two batch-window branches (batch ok, zero-budget fail) carry
- * `nestedBatchWindow: true` so a breaker records them as skipped, not as a
- * directly-observed dispatch — the flat-retry branch is a real dispatch and
- * stays untagged (§4-1).
+ * `nestedBatchWindow: true` marking them as not directly observed. A breaker
+ * skips a batch-window SUCCESS (completed, no streak reset) but still records a
+ * batch-window FAILURE as a failure (see recordNestedUnitOutcomeToBreaker) —
+ * the flat-retry branch is a real dispatch and stays untagged (§4-1).
  */
 export async function unitOutcomeWithNestedFirstAttempt(args: {
   batch: NestedStageBatchAttempt | undefined;
@@ -4805,10 +4811,11 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
   let nextDispatchIndex = 0;
   // 설계 B + §4-1: stance 풀 breaker — 유닛의 최종 outcome(per-unit bounded
   // retry 소진 후)을 관찰 단위로 기록한다. nested 1차 배치가 실행돼도 생성한다:
-  // 배치-창 결과(배치성공·zero-retry 확정 실패)는 실 디스패치가 아니므로
-  // recordItemSkipped로 완료만 집계하고(과거 배치 창의 생존 증거가 현재 계통
-  // 실패 streak을 오리셋하지 않게 — #166 결함 클래스의 재유입 차단), 배치-실패
-  // 유닛의 flat 재시도만 실 관측으로 streak을 구동한다.
+  // 배치-창 SUCCESS는 실 디스패치가 아니므로 recordItemSkipped로 완료만 집계해
+  // 과거 배치 창의 생존 증거가 현재 계통 실패 streak을 오리셋하지 못하게 하고
+  // (#166 결함 클래스 재유입 차단), 배치-창 FAILURE는 flat 경로처럼 실패로 기록
+  // 한다(item-local→dead-letter, 계통→회복 victim). 배치-실패 유닛이 flat 재시도
+  // 예산을 쓰면 그 실 관측이 streak을 구동한다.
   const breakerState = reviewDispatchBreakerFromProfile(
     args.reviewExecutionProfile,
   );
@@ -7046,18 +7053,22 @@ export async function executeReviewPromptExecution(
               `output_path: ${dispatch.output_path}`,
             ],
           );
-          executionOutcomes[i] = {
+          const okOutcome: ExecutionOutcome = {
             dispatch,
             success: true,
             startedAtMs: nestedStartedAtMs,
             completedAtMs: nestedCompletedAtMs,
             attemptCount: 1,
+            nestedBatchWindow: true,
             packetBytes: await fileSizeIfPresent(dispatch.packet_path),
             outputBytes: await fileSizeIfPresent(dispatch.output_path),
           };
-          // §4-1: 배치-성공은 실 디스패치가 아니다 — 완료로만 집계(계통
-          // streak 불변). 미기록 시 incomplete로 오집계된다.
-          lensBreakerState?.recordItemSkipped(dispatch.unit_id);
+          executionOutcomes[i] = okOutcome;
+          // §4-1: 배치-성공은 실 디스패치가 아니다 — 헬퍼가 skipped로 완료만
+          // 집계(계통 streak 불변). 미기록 시 incomplete로 오집계된다.
+          if (lensBreakerState) {
+            recordNestedUnitOutcomeToBreaker(lensBreakerState, okOutcome);
+          }
           continue;
         } catch (error) {
           batchFailureMessage =
@@ -7133,7 +7144,7 @@ export async function executeReviewPromptExecution(
         failure,
         executionPlan.effective_boundary_state,
       );
-      executionOutcomes[i] = {
+      const failureOutcome: ExecutionOutcome = {
         dispatch,
         success: false,
         startedAtMs: nestedStartedAtMs,
@@ -7143,9 +7154,13 @@ export async function executeReviewPromptExecution(
         outputBytes,
         failure,
       };
-      // §4-1: zero-retry 확정 실패는 실 flat 디스패치가 아니다(예산 소진) —
-      // 완료로만 집계하고 계통 streak은 건드리지 않는다.
-      lensBreakerState?.recordItemSkipped(dispatch.unit_id);
+      executionOutcomes[i] = failureOutcome;
+      // §4-1 (교차검증 F2/Finding A): zero-retry 배치 실패는 flat 경로처럼
+      // 실패로 기록한다 — 검증 실패(item-local)는 dead-letter, 계통 실패는
+      // 회복 victim(incomplete). skipped(완료 오집계)가 아니다.
+      if (lensBreakerState) {
+        recordNestedUnitOutcomeToBreaker(lensBreakerState, failureOutcome);
+      }
     }
     // Capture outer teamlead halt_reason for the post-dispatch halt check
     // (synthesize may still run if enough lenses participated, matching the
