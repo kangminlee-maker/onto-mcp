@@ -39,7 +39,7 @@ describe("normalizeLlmModelSwitcher", () => {
         model: "claude-opus-4-8",
         service_tier: "fast",
       }),
-    ).toThrow("service_tier requires the external OAuth worker route");
+    ).toThrow("service_tier is only valid on the openai + auth=oauth");
   });
 
   it("keeps anthropic+api_key on the direct model-call / anthropic_sdk route", () => {

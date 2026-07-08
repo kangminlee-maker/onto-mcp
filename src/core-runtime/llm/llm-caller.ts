@@ -85,6 +85,15 @@ export interface LlmCallConfig {
   /** codex-only: service tier passed as `service_tier`. Ignored by other providers. */
   service_tier?: string;
   /**
+   * Per-call transport timeout (ms) for the direct-call CLI worker route
+   * (codex_cli/claude_code). Absent → the route's DEFAULT_WORKER_TIMEOUT_MS.
+   * Sourced from the actor `llm.timeout_ms` settings block via
+   * resolveLlmProviderConfig; a distinct layer from review `units[].timeout_ms`
+   * (the worker-process bound enforced by the unit executor). The api_key SDK
+   * route is not affected and stays on the ONTO_LLM_TIMEOUT_MS / SDK default.
+   */
+  timeout_ms?: number;
+  /**
    * Pre-resolved ExecutionPlan (Review Recovery PR-1, 2026-04-18).
    *
    * When set, callLlm dispatches directly using the plan's
@@ -113,7 +122,13 @@ export interface LlmCallConfig {
  * Minimal subset of OntoConfig that resolveLlmProviderConfig reads.
  */
 export interface LlmProviderConfigInputs {
-  llm?: LlmModelSwitcherConfig;
+  /**
+   * The actor llm settings block. `timeout_ms` (a transport bound for the
+   * direct-call CLI worker route) is carried here but is not a model-switch
+   * axis, so normalizeLlmModelSwitcher ignores it and resolveLlmProviderConfig
+   * forwards it to LlmCallConfig.timeout_ms.
+   */
+  llm?: LlmModelSwitcherConfig & { timeout_ms?: number };
 }
 
 /**
@@ -179,6 +194,8 @@ export function resolveLlmProviderConfig(args: {
   if (reasoning_effort) out.reasoning_effort = reasoning_effort;
   if (service_tier) out.service_tier = service_tier;
   if (api_key_env) out.api_key_env = api_key_env;
+  // Transport timeout carried on the llm block (not a model-switch axis).
+  if (config.llm?.timeout_ms) out.timeout_ms = config.llm.timeout_ms;
   if (Object.keys(models_per_provider).length > 0) {
     out.models_per_provider = models_per_provider;
   }
@@ -729,8 +746,10 @@ async function callCodexCli(
   modelId?: string,
   reasoningEffort?: string,
   serviceTier?: string,
+  timeoutMs?: number,
 ): Promise<LlmCallResult> {
   const { spawn } = await import("node:child_process");
+  const workerTimeoutMs = timeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS;
 
   const args: string[] = ["exec", "--skip-git-repo-check", "--ephemeral"];
   if (modelId) args.push("-m", modelId);
@@ -741,7 +760,7 @@ async function callCodexCli(
   const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
   emitModelCallLog(
-    `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" service_tier="${serviceTier ?? "(unset)"}" timeout_ms=${DEFAULT_WORKER_TIMEOUT_MS}`,
+    `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" service_tier="${serviceTier ?? "(unset)"}" timeout_ms=${workerTimeoutMs}`,
   );
 
   const child = spawn("codex", args, {
@@ -793,7 +812,7 @@ async function callCodexCli(
         child.kill("SIGKILL");
       } catch { /* already exited */ }
     }, WORKER_SIGKILL_GRACE_MS);
-  }, DEFAULT_WORKER_TIMEOUT_MS);
+  }, workerTimeoutMs);
 
   const clearTimers = (): void => {
     clearTimeout(timeoutHandle);
@@ -818,9 +837,9 @@ async function callCodexCli(
 
   if (timedOut) {
     emitModelCallLog(
-      `codex call FAILED: model="${modelId ?? "(codex default)"}" reason=timeout timeout_ms=${DEFAULT_WORKER_TIMEOUT_MS}`,
+      `codex call FAILED: model="${modelId ?? "(codex default)"}" reason=timeout timeout_ms=${workerTimeoutMs}`,
     );
-    throw new Error(`codex CLI call timed out after ${DEFAULT_WORKER_TIMEOUT_MS}ms`);
+    throw new Error(`codex CLI call timed out after ${workerTimeoutMs}ms`);
   }
   if (exitCode !== 0) {
     const combined = [stderr.trim(), stdout.trim()]
@@ -950,8 +969,10 @@ async function callClaudeCli(
   userPrompt: string,
   modelId?: string,
   reasoningEffort?: string,
+  timeoutMs?: number,
 ): Promise<LlmCallResult> {
   const { spawn } = await import("node:child_process");
+  const workerTimeoutMs = timeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS;
   const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
   const args: string[] = ["-p", combinedPrompt, "--output-format", "json"];
@@ -960,7 +981,7 @@ async function callClaudeCli(
   args.push("--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}');
 
   emitModelCallLog(
-    `claude call: model="${modelId ?? "(claude default)"}" effort="${reasoningEffort ?? "(unset)"}" timeout_ms=${DEFAULT_WORKER_TIMEOUT_MS}`,
+    `claude call: model="${modelId ?? "(claude default)"}" effort="${reasoningEffort ?? "(unset)"}" timeout_ms=${workerTimeoutMs}`,
   );
 
   const claudeBin = resolveClaudeBin();
@@ -1003,7 +1024,7 @@ async function callClaudeCli(
         child.kill("SIGKILL");
       } catch { /* already exited */ }
     }, WORKER_SIGKILL_GRACE_MS);
-  }, DEFAULT_WORKER_TIMEOUT_MS);
+  }, workerTimeoutMs);
 
   const clearTimers = (): void => {
     clearTimeout(timeoutHandle);
@@ -1028,9 +1049,9 @@ async function callClaudeCli(
 
   if (timedOut) {
     emitModelCallLog(
-      `claude call FAILED: model="${modelId ?? "(claude default)"}" reason=timeout timeout_ms=${DEFAULT_WORKER_TIMEOUT_MS}`,
+      `claude call FAILED: model="${modelId ?? "(claude default)"}" reason=timeout timeout_ms=${workerTimeoutMs}`,
     );
-    throw new Error(`claude CLI call timed out after ${DEFAULT_WORKER_TIMEOUT_MS}ms`);
+    throw new Error(`claude CLI call timed out after ${workerTimeoutMs}ms`);
   }
   if (exitCode !== 0) {
     const combined = [stderr.trim(), stdout.trim()]
@@ -1115,6 +1136,7 @@ async function dispatchByPlan(
       modelId,
       config.reasoning_effort,
       config.service_tier,
+      config.timeout_ms,
     );
   }
   if (plan.provider_identity === "anthropic") {
@@ -1245,6 +1267,7 @@ export async function callLlm(
       config.model_id ?? config.models_per_provider?.codex,
       config.reasoning_effort,
       config.service_tier,
+      config.timeout_ms,
     );
   }
 
@@ -1262,6 +1285,7 @@ export async function callLlm(
       userPrompt,
       config.model_id ?? config.models_per_provider?.anthropic,
       config.reasoning_effort,
+      config.timeout_ms,
     );
   }
 
@@ -1322,6 +1346,7 @@ export async function callLlm(
         modelId,
         config?.reasoning_effort,
         config?.service_tier,
+        config?.timeout_ms,
       );
     }
     case "anthropic": {

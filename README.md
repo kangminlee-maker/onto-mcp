@@ -296,6 +296,57 @@ LLM switcher axes:
 
 Unsupported settings stop during profile resolution.
 
+### provider·model 전환 (권장: `onto configure-provider`)
+
+`settings.json`을 손으로 고치는 대신 `onto configure-provider`가 actor LLM 블록을
+라우트 검증 후 기록합니다(units 등 다른 설정은 보존). 라우팅 불가능한 조합은 기록
+전에 fail-loud 합니다.
+
+```sh
+# Codex (OpenAI) OAuth
+onto configure-provider --provider openai --model gpt-5.5 --auth oauth \
+  --effort medium --service-tier fast
+
+# Claude Code (Anthropic) OAuth
+onto configure-provider --provider anthropic --model claude-opus-4-8 --auth oauth \
+  --effort high
+```
+
+- `--service-tier`는 `openai`+`oauth`(Codex) 경로 전용입니다 — anthropic에 주면
+  profile 해석 단계에서 거부됩니다.
+- `--auth`를 주면 reconstruct actor 블록(`semantic_author`/`confirmation_provider`)도
+  함께 기록합니다. 생략하면 review actor만 기록하고 loader가 provider 기본 auth를 파생합니다.
+- `--timeout-ms <ms>`는 각 actor `llm` 블록에 per-actor `timeout_ms`(양의 정수)를
+  함께 기록합니다 — codex/claude direct-call worker 호출 타임아웃(아래 [타임아웃](#타임아웃)
+  참고). api_key SDK 경로에는 적용되지 않습니다.
+- `--project`는 프로젝트 seat(`.onto/settings.json`)에, 생략하면 사용자 seat
+  (`~/.onto/settings.json`)에 기록합니다.
+- 지원 model id는 [`.onto/authority/supported-models.yaml`](.onto/authority/supported-models.yaml)가
+  authority입니다(현재 anthropic: `claude-opus-4-8`; `claude-sonnet-5`는
+  `semantic_map_synthesize` 역할 전용).
+- 이 명령은 actor 블록만 기록합니다. `units[].llm.model`로 unit별 model을 고정해
+  두었다면(위 정적 프로필 예시가 그렇습니다) 같은 model로 바꾸거나 그 `model` 키를
+  지워 actor 값을 상속하게 하세요.
+
+### 타임아웃
+
+| 경로 | 기본값 | 조절 knob (우선순위) |
+|---|---|---|
+| review unit worker (codex/claude) | 240s (짧은 응답 단계 180s, `issue_stance_matrix` 120s) | `units[].timeout_ms` |
+| direct-call CLI worker (codex/claude) — reconstruct·inline review | 600s | actor `llm.timeout_ms` → 없으면 `ONTO_LLM_TIMEOUT_MS` |
+| SDK direct call (`api_key`) | 120s | `ONTO_LLM_TIMEOUT_MS` (ms) |
+
+`llm.timeout_ms`(ms)는 actor `llm` 블록에 넣는 per-actor 값으로, codex/claude CLI worker
+경로(reconstruct의 `semantic_author`/`confirmation_provider`, inline review actor)의 호출
+타임아웃을 그 값으로 고정합니다. 없으면 env `ONTO_LLM_TIMEOUT_MS`, 그것도 없으면 기본값을
+씁니다(api_key SDK 경로에는 적용되지 않고 `ONTO_LLM_TIMEOUT_MS`만 반영). 이 knob은 review의
+`units[].timeout_ms`(worker 프로세스 bound)와 구분되는 별개 계층입니다.
+
+`ONTO_LLM_TIMEOUT_MS`(ms)는 direct-call/CLI-worker와 SDK 경로 기본값을 전역으로 덮어씁니다.
+opus 같은 프론티어 모델의 긴 단일-turn authoring도 600s worker 기본값으로 완료되므로 지원
+모델에는 override가 필요 없습니다. 특정 review unit이 오래 걸리면 그 unit의
+`units[].timeout_ms`만 키우면 됩니다(모든 unit에 큰 값을 박을 필요 없음).
+
 ## Documentation
 
 | Document | Contents |

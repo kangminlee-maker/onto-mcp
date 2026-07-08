@@ -62,6 +62,17 @@ describe("buildLlmBlock", () => {
     expect(block.api_key_env).toBe("ANTHROPIC_API_KEY");
     expect(JSON.stringify(block)).not.toMatch(/api_key"\s*:/);
   });
+
+  it("emits timeout_ms as a number (schema requires z.number()), never a string", () => {
+    const block = buildLlmBlock({
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      auth: "oauth",
+      timeoutMs: 1_800_000,
+    });
+    expect(block.timeout_ms).toBe(1_800_000);
+    expect(typeof block.timeout_ms).toBe("number");
+  });
 });
 
 describe("buildProviderActorBlocks", () => {
@@ -258,6 +269,31 @@ describe("writeProviderSettings", () => {
     ).rejects.toThrow();
     await expect(fs.access(settingsPath)).rejects.toThrow();
   });
+
+  it("writes timeout_ms as a JSON number that the real loader accepts", async () => {
+    const settingsPath = await makeTmpSettingsPath();
+    await writeProviderSettings(
+      { ...OPENAI_OAUTH, timeoutMs: 1_800_000 },
+      { target: "user", settingsPath },
+    );
+    const raw = JSON.parse(await fs.readFile(settingsPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const teamleadLlm = (
+      (
+        (raw.review as Record<string, unknown>).execution as Record<
+          string,
+          unknown
+        >
+      ).actors as Record<string, { llm: Record<string, unknown> }>
+    ).teamlead.llm;
+    // Serialized as a real JSON number — a string would fail loader re-validation.
+    expect(teamleadLlm.timeout_ms).toBe(1_800_000);
+    expect(typeof teamleadLlm.timeout_ms).toBe("number");
+    const loaded = await readSettingsAt(settingsPath);
+    expect(loaded.review?.execution?.teamlead?.llm?.timeout_ms).toBe(1_800_000);
+  });
 });
 
 describe("parseConfigureProviderArgs", () => {
@@ -291,6 +327,11 @@ describe("parseConfigureProviderArgs", () => {
   it("selects the project seat with --project", () => {
     const parsed = parseConfigureProviderArgs(["--project"]);
     expect(parsed.target).toBe("project");
+  });
+
+  it("captures --timeout-ms as a raw string for downstream numeric validation", () => {
+    const parsed = parseConfigureProviderArgs(["--timeout-ms", "1800000"]);
+    expect(parsed.timeoutMsRaw).toBe("1800000");
   });
 });
 
@@ -335,6 +376,45 @@ describe("runConfigureProvider", () => {
     ]);
     expect(code).toBe(0);
     await expect(readSettingsAt(settingsPath)).resolves.toBeDefined();
+  });
+
+  it("writes a numeric timeout_ms via --timeout-ms (exit 0)", async () => {
+    const settingsPath = await makeTmpSettingsPath();
+    const code = await runConfigureProvider([
+      "--provider",
+      "anthropic",
+      "--model",
+      "claude-opus-4-8",
+      "--auth",
+      "oauth",
+      "--effort",
+      "high",
+      "--timeout-ms",
+      "1800000",
+      "--settings-path",
+      settingsPath,
+    ]);
+    expect(code).toBe(0);
+    const loaded = await readSettingsAt(settingsPath);
+    expect(loaded.review?.execution?.lens?.llm?.timeout_ms).toBe(1_800_000);
+  });
+
+  it("fails loud (exit 1) on a non-positive-integer --timeout-ms, writing nothing", async () => {
+    const settingsPath = await makeTmpSettingsPath();
+    const code = await runConfigureProvider([
+      "--provider",
+      "anthropic",
+      "--model",
+      "claude-opus-4-8",
+      "--auth",
+      "oauth",
+      "--timeout-ms",
+      "nope",
+      "--settings-path",
+      settingsPath,
+    ]);
+    expect(code).toBe(1);
+    await expect(fs.access(settingsPath)).rejects.toThrow();
   });
 });
 

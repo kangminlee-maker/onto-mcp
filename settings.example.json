@@ -47,6 +47,19 @@
 
       # actors는 review 안에서 역할별로 실제 모델 설정을 소유합니다.
       # 즉 teamlead, lens, synthesize를 서로 독립적으로 바꿀 수 있습니다.
+      #
+      # ── provider 전환 ───────────────────────────────────────────────
+      # 손으로 고치는 대신 `onto configure-provider`가 아래 actor 블록을 검증 후
+      # 기록합니다(units 등 다른 설정은 보존). 예:
+      #   onto configure-provider --provider openai    --model gpt-5.5         --auth oauth --effort medium --service-tier fast
+      #   onto configure-provider --provider anthropic --model claude-opus-4-8 --auth oauth --effort high
+      # anthropic(Claude Code)로 손수 바꿀 때: 각 llm에서 provider를 "anthropic",
+      # model을 "claude-opus-4-8"로 바꾸고 "service_tier" 줄을 삭제합니다
+      # (service_tier는 openai+oauth 전용 — anthropic에 주면 거부됨).
+      # configure-provider는 actor만 기록하므로, 아래 units[].llm.model도 같은
+      # model로 바꾸거나 그 "model" 키를 지워 actor 값을 상속하게 하세요.
+      # 지원 model id: .onto/authority/supported-models.yaml
+      # ────────────────────────────────────────────────────────────────
       "actors": {
         # teamlead는 review 전체 진행과 숙의 조율을 담당합니다.
         "teamlead": {

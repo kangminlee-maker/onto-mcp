@@ -128,4 +128,61 @@ describe("anthropic OAuth → Claude Code CLI worker (reconstruct direct-call)",
       /not logged in/,
     );
   });
+
+  it("forwards llm.timeout_ms into the resolved LlmCallConfig (absent → undefined)", () => {
+    const withOverride = resolveLlmProviderConfig({
+      config: { llm: { ...ANTHROPIC_OAUTH_LLM, timeout_ms: 1_800_000 } },
+    });
+    expect(withOverride.timeout_ms).toBe(1_800_000);
+
+    const withoutOverride = resolveLlmProviderConfig({
+      config: { llm: ANTHROPIC_OAUTH_LLM },
+    });
+    expect(withoutOverride.timeout_ms).toBeUndefined();
+  });
+
+  it("callClaudeCli uses llm.timeout_ms for the worker timeout; overridden value absent by default", async () => {
+    const okResult = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      result: "OK",
+    });
+    const writes: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        writes.push(String(chunk));
+        return true;
+      });
+    try {
+      // Override present → the claude worker call log reports the overridden ms.
+      nextChild = fakeClaudeChild(okResult, 0);
+      await callLlm(
+        "s",
+        "u",
+        resolveLlmProviderConfig({
+          config: { llm: { ...ANTHROPIC_OAUTH_LLM, timeout_ms: 1_800_000 } },
+        }),
+      );
+      expect(
+        writes.some(
+          (w) => w.includes("claude call:") && w.includes("timeout_ms=1800000"),
+        ),
+      ).toBe(true);
+
+      // Negative control: without an override the overridden value must NOT
+      // appear — the call falls back to DEFAULT_WORKER_TIMEOUT_MS.
+      writes.length = 0;
+      nextChild = fakeClaudeChild(okResult, 0);
+      await callLlm(
+        "s",
+        "u",
+        resolveLlmProviderConfig({ config: { llm: ANTHROPIC_OAUTH_LLM } }),
+      );
+      expect(writes.some((w) => w.includes("claude call:"))).toBe(true);
+      expect(writes.some((w) => w.includes("timeout_ms=1800000"))).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

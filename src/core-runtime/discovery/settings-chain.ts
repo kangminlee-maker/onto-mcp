@@ -35,6 +35,10 @@ const LlmSettingsSchema = z
     effort: z.string().min(1).optional(),
     service_tier: z.string().min(1).optional(),
     api_key_env: z.string().min(1).optional(),
+    // Per-call CLI-worker timeout (ms) for the direct-call route
+    // (codex_cli/claude_code); absent → DEFAULT_WORKER_TIMEOUT_MS. Distinct from
+    // review `units[].timeout_ms` (worker-process bound). See LlmCallConfig.timeout_ms.
+    timeout_ms: z.number().int().min(1).optional(),
   })
   .strict();
 
@@ -47,6 +51,10 @@ const FullLlmSettingsSchema = z
     effort: z.string().min(1).optional(),
     service_tier: z.string().min(1).optional(),
     api_key_env: z.string().min(1).optional(),
+    // Per-call CLI-worker timeout (ms) for the direct-call route
+    // (codex_cli/claude_code); absent → DEFAULT_WORKER_TIMEOUT_MS. Distinct from
+    // review `units[].timeout_ms` (worker-process bound). See LlmCallConfig.timeout_ms.
+    timeout_ms: z.number().int().min(1).optional(),
   })
   .strict();
 
@@ -59,6 +67,10 @@ const ReviewActorLlmSettingsSchema = z
     effort: z.string().min(1).optional(),
     service_tier: z.string().min(1).optional(),
     api_key_env: z.string().min(1).optional(),
+    // Per-call CLI-worker timeout (ms) for the direct-call route
+    // (codex_cli/claude_code); absent → DEFAULT_WORKER_TIMEOUT_MS. Distinct from
+    // review `units[].timeout_ms` (worker-process bound). See LlmCallConfig.timeout_ms.
+    timeout_ms: z.number().int().min(1).optional(),
   })
   .strict();
 

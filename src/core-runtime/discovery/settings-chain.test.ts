@@ -630,6 +630,21 @@ describe("resolveSettingsChain", () => {
     );
   });
 
+  it("accepts and preserves llm.timeout_ms on a v3 actor llm block", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(
+      projectSettingsPath(projectRoot),
+      v3ReviewSettings({
+        synthesizeLlm: { ...fullOauthLlm("xhigh"), timeout_ms: 1_800_000 },
+      }),
+    );
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+    expect(settings.review?.execution?.synthesize?.llm?.timeout_ms).toBe(
+      1_800_000,
+    );
+  });
+
   it("fails loudly when unsupported YAML config exists", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     fs.mkdirSync(path.join(projectRoot, ".onto"), { recursive: true });
@@ -689,7 +704,7 @@ describe("resolveSettingsChain", () => {
     );
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "service_tier requires the external OAuth worker route",
+      "service_tier is only valid on the openai + auth=oauth",
     );
   });
 

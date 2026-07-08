@@ -34,6 +34,7 @@ export interface ProviderSettingsInput {
   effort?: string | undefined;
   serviceTier?: string | undefined;
   baseUrl?: string | undefined;
+  timeoutMs?: number | undefined;
 }
 
 export interface WriteProviderSettingsTarget {
@@ -61,7 +62,10 @@ const REVIEW_ACTOR_SEATS = {
 // switch — applyActorBlocks spreads the existing actors underneath.
 const RECONSTRUCT_ACTORS = ["semantic_author", "confirmation_provider"] as const;
 
-type LlmBlock = Record<string, string>;
+// String-valued switcher fields plus the numeric `timeout_ms` (schema:
+// z.number().int()); it must serialize as a JSON number, not a string, or the
+// loader re-validation in writeProviderSettings would reject the file.
+type LlmBlock = Record<string, string | number>;
 
 /**
  * Build a minimal actor LLM block from caller input. Only keys the caller
@@ -77,6 +81,7 @@ export function buildLlmBlock(input: ProviderSettingsInput): LlmBlock {
   if (input.effort !== undefined) block.effort = input.effort;
   if (input.serviceTier !== undefined) block.service_tier = input.serviceTier;
   if (input.apiKeyEnv !== undefined) block.api_key_env = input.apiKeyEnv;
+  if (input.timeoutMs !== undefined) block.timeout_ms = input.timeoutMs;
   return block;
 }
 
@@ -303,6 +308,7 @@ export interface ParsedConfigureProviderArgs {
   effort: string | undefined;
   serviceTier: string | undefined;
   baseUrl: string | undefined;
+  timeoutMsRaw: string | undefined;
   target: "user" | "project";
   projectRoot: string | undefined;
   settingsPath: string | undefined;
@@ -330,6 +336,9 @@ const USAGE = [
   "  --effort <e>          Reasoning effort",
   "  --service-tier <t>    Service tier",
   "  --base-url <u>        Base URL override",
+  "  --timeout-ms <ms>     Per-actor CLI-worker call timeout (positive integer ms).",
+  "                        Bounds the codex/claude direct-call worker; not the",
+  "                        api_key SDK route. See llm.timeout_ms.",
   "  --project             Write the project seat (.onto/settings.json) instead",
   "                        of the user seat (~/.onto/settings.json)",
   "  --help, -h            Show this help",
@@ -346,6 +355,7 @@ export function parseConfigureProviderArgs(
     effort: undefined,
     serviceTier: undefined,
     baseUrl: undefined,
+    timeoutMsRaw: undefined,
     target: "user",
     projectRoot: undefined,
     settingsPath: undefined,
@@ -376,6 +386,9 @@ export function parseConfigureProviderArgs(
         break;
       case "--base-url":
         parsed.baseUrl = argv[++i];
+        break;
+      case "--timeout-ms":
+        parsed.timeoutMsRaw = argv[++i];
         break;
       case "--project":
         parsed.target = "project";
@@ -429,6 +442,19 @@ export async function runConfigureProvider(argv: string[]): Promise<number> {
     return 1;
   }
 
+  let timeoutMs: number | undefined;
+  if (parsed.timeoutMsRaw !== undefined) {
+    const n = Number(parsed.timeoutMsRaw);
+    if (!Number.isInteger(n) || n < 1) {
+      console.error(
+        "[onto configure-provider] --timeout-ms must be a positive integer " +
+          `(ms); got "${parsed.timeoutMsRaw}".`,
+      );
+      return 1;
+    }
+    timeoutMs = n;
+  }
+
   const input: ProviderSettingsInput = {
     provider: parsed.provider!,
     model: parsed.model!,
@@ -439,6 +465,7 @@ export async function runConfigureProvider(argv: string[]): Promise<number> {
       ? { serviceTier: parsed.serviceTier }
       : {}),
     ...(parsed.baseUrl !== undefined ? { baseUrl: parsed.baseUrl } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
   };
 
   const targetSpec: WriteProviderSettingsTarget = {

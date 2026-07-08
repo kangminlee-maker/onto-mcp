@@ -94,7 +94,7 @@ export function normalizeLlmModelSwitcher(
   }
   if (config.service_tier && !(provider === "openai" && auth === "oauth")) {
     throw new Error(
-      "service_tier requires the external OAuth worker route with auth=oauth and provider=openai.",
+      `service_tier is only valid on the openai + auth=oauth (Codex) route; remove service_tier for provider=${provider} + auth=${auth}.`,
     );
   }
 
