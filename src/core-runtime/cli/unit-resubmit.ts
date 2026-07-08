@@ -9,17 +9,24 @@
  * through the unit's existing retry budget with an error spec injected into its
  * prompt packet, instead of retrying blind.
  *
- * Wired units (§4-6a):
+ * Wired units (§4-6a, §4-2c/2-A):
  * - issue-stance: `issue_evidence_refs` whitelist. Exhaustion demotes the unit
  *   to complete-with-failure (degradation-summary, disclosed non-blockingly)
  *   rather than halting — unless the same validation class fails a strict
  *   majority of stance units (structural defect → whole-run halt with
  *   `halt_reason = correlated_validation: …`). The demotion/correlated
- *   machinery below is stance-only.
+ *   machinery below is stance-only, which is why stance is EXCLUDED from the
+ *   §4-2c structural retry gate (see RESUBMIT_UNIT_ROUTING.gateEligible).
  * - deliberation-response: `allowed_evidence_refs` whitelist. Exhaustion reuses
  *   deliberation's existing non-halting degrade (unavailable-completion), so it
  *   needs no demotion/correlated machinery. Only the submit-time rejection is
  *   correctable; on-disk rejections run post-pool and degrade.
+ * - synthesis-response: `allowed_source_refs` whitelist (§4-2c/2-A). Its
+ *   rejection message always carries `source_refs_used` → substring-classified
+ *   output_contract, so its in-loop resubmit depends on the structural retry
+ *   gate. Exhaustion reuses synthesis's existing non-halting degrade
+ *   (completeUnavailableSynthesisResponseUnit); no demotion/correlated
+ *   machinery.
  *
  * This module owns the deterministic parts: failure classification, error
  * spec construction, idempotent packet projection, and the correlated
@@ -135,12 +142,56 @@ export function classifyDeliberationUnsupportedEvidenceRefFailure(
   return null;
 }
 
+/** Issue-synthesis-response `source_refs_used` whitelist rejection (§4-2c/2-A).
+ * `sourceRef` is the offending ref for the unsupported-ref rejection, or null
+ * when the submit cited no allowed source ref at all (the "must include at
+ * least one" rejection) — both are resubmit-correctable by re-prompting with the
+ * allowed set. The issue_id the message lacks is recovered by the caller from
+ * the dispatch unit_id (`synthesis:<issueId>`). */
+export interface SynthesisUnsupportedSourceRefViolation {
+  sourceRef: string | null;
+}
+
+/** Submit-time throw sites in `normalizeIssueSynthesisResponseSubmitArgs`
+ * (structured-output-tools): `assertAllowedRefs` for a bad ref, and the
+ * "must include at least one" guard for an all-invalid set. The empty
+ * allowed-set rejection ("cannot validate … because allowed_source_refs is
+ * empty") is deliberately NOT matched — an empty allowed set is a runtime/context
+ * condition a resubmit cannot correct, so it stays non-retryable. */
+const SUBMIT_SYNTHESIS_UNSUPPORTED_REF_PATTERN =
+  /submit_issue_synthesis_response\.source_refs_used contains unsupported ref: (.*)$/m;
+const SUBMIT_SYNTHESIS_MISSING_ALLOWED_REF_PATTERN =
+  /submit_issue_synthesis_response\.source_refs_used must include at least one allowed source ref\./;
+
+/**
+ * Classify a unit failure message as a submit-time synthesis-response
+ * unsupported/missing source-ref rejection. Returns null for every other class
+ * (including the non-correctable empty-allowed-set rejection) so infra failures
+ * keep their current semantics.
+ */
+export function classifySynthesisUnsupportedSourceRefFailure(
+  message: string,
+): SynthesisUnsupportedSourceRefViolation | null {
+  const unsupported = SUBMIT_SYNTHESIS_UNSUPPORTED_REF_PATTERN.exec(message);
+  if (unsupported) {
+    const sourceRef = unsupported[1]!.trim();
+    if (sourceRef.length === 0) return null;
+    return { sourceRef };
+  }
+  if (SUBMIT_SYNTHESIS_MISSING_ALLOWED_REF_PATTERN.test(message)) {
+    return { sourceRef: null };
+  }
+  return null;
+}
+
 /** Which review unit a resubmit error spec targets. Absent → issue-stance
  * (the original cut; output stays byte-identical). `deliberation` carries the
- * lens_id the message text lacks. */
+ * lens_id the message text lacks; `synthesis` carries the issue_id the
+ * `source_refs_used` rejection text lacks (recovered from the unit_id). */
 export type ResubmitUnitDescriptor =
   | { kind: "stance" }
-  | { kind: "deliberation"; lensId: string };
+  | { kind: "deliberation"; lensId: string }
+  | { kind: "synthesis"; issueId: string };
 
 /**
  * Neutralize the runtime-owned section markers inside a value before it is
@@ -178,12 +229,19 @@ export function buildResubmitErrorSpec(args: {
   const { violation } = args;
   const evidenceRef = neutralizeSpecMarkers(violation.evidenceRef);
   const issueId = neutralizeSpecMarkers(violation.issueId);
+  // Field-name vocabulary differs by unit: stance/deliberation reject
+  // `evidence_refs`, synthesis rejects `source_refs_used`. Defaulting to the
+  // evidence_refs vocabulary keeps stance/deliberation output byte-identical.
+  const refFieldPlural =
+    args.unit?.kind === "synthesis" ? "source_refs_used" : "evidence_refs";
+  const refFieldSingular =
+    args.unit?.kind === "synthesis" ? "source ref" : "evidence_ref";
   const allowedBlock =
     args.allowedEvidenceRefs.length > 0
       ? args.allowedEvidenceRefs
           .map((ref) => `- ${neutralizeSpecMarkers(ref)}`)
           .join("\n")
-      : "- (none — omit evidence_refs entries you cannot support)";
+      : `- (none — omit ${refFieldPlural} entries you cannot support)`;
   const spec =
     args.unit?.kind === "deliberation"
       ? {
@@ -193,6 +251,17 @@ export function buildResubmitErrorSpec(args: {
           closing: [
             "Every evidence_ref must come from the allowed set in the schema",
             "context above. Resubmit the full deliberation response, not only the",
+            "rejected entry.",
+          ],
+        }
+      : args.unit?.kind === "synthesis"
+      ? {
+          submitTool: "submit_issue_synthesis_response",
+          rejectedLine: `- rejected: synthesis response for issue_id: ${issueId}`,
+          allowedHeader: "- allowed source_refs_used:",
+          closing: [
+            "Every source ref must come from the allowed set in the schema",
+            "context above. Resubmit the full synthesis response, not only the",
             "rejected entry.",
           ],
         }
@@ -210,17 +279,23 @@ export function buildResubmitErrorSpec(args: {
             "rejected entry.",
           ],
         };
+  // A specific offending ref → name it; an empty ref (synthesis "must include at
+  // least one" rejection) → instruct citing from the allowed set instead.
+  const refLine =
+    evidenceRef.length > 0
+      ? `- unsupported ${refFieldSingular}: ${evidenceRef}`
+      : `- you cited no allowed ${refFieldSingular}; include at least one from the allowed set below`;
   return [
     RESUBMIT_ERROR_SPEC_BEGIN,
     "",
-    `## Resubmit required: evidence_refs validation rejected (attempt ${args.resubmitAttempt})`,
+    `## Resubmit required: ${refFieldPlural} validation rejected (attempt ${args.resubmitAttempt})`,
     "",
     `Your previous ${spec.submitTool} call was rejected by`,
     "deterministic validation. Do not apologize or explain; call the submit",
     "tool again with a complete corrected payload.",
     "",
     spec.rejectedLine,
-    `- unsupported evidence_ref: ${evidenceRef}`,
+    refLine,
     spec.allowedHeader,
     allowedBlock,
     "",

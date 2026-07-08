@@ -193,20 +193,21 @@ describe("applyResubmitErrorSpec — deliberation wiring (§4-6a)", () => {
     expect(await fs.readFile(s.packetPath, "utf8")).toBe(DELIBERATION_PACKET);
   });
 
-  it("no-op for a non-resubmit output_format (synthesis stays blind)", async () => {
+  it("no-op for an unrouted output_format (issue-artifact stays blind)", async () => {
+    // issue-artifact units (issue-ledger, finding-relation-graph, problem-framing)
+    // have no resubmit strategy in RESUBMIT_UNIT_ROUTING → dispatcher no-op,
+    // packet untouched. (synthesis is now wired — see synthesis-resubmit-wiring.)
     const s = await scratch();
 
     const applied = await applyResubmitErrorSpec({
       dispatch: {
-        unit_id: "synthesis:issue-001",
-        unit_kind: "synthesize",
+        unit_id: "issue-ledger",
+        unit_kind: "issue_artifact",
         packet_path: s.packetPath,
         output_path: s.outputPath,
-        output_format: "issue-synthesis-response",
+        output_format: "issue-artifact",
       },
-      error: new Error(
-        "submit_issue_synthesis_response.source_refs_used contains unsupported ref: bad-ref",
-      ),
+      error: new Error("issue-ledger response is malformed output"),
       attempt: 0,
       reviewExecutionProfile: profile(true),
       errorLogPath: s.errorLogPath,
