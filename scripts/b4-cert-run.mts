@@ -12,9 +12,10 @@
  *    over the synthetic universe is a contradiction — rejected before any
  *    spend). Live wiring (scripts/b4-live-realization.mts): settings-chain +
  *    supported-model-registry resolution for the openai `semantic_author`
- *    seat (reference/baseline/judge), a directly-constructed anthropic Haiku
- *    seat (candidate/negative_control — §5, not a registry-gated settings
- *    seat by design; see that module's doc), a 1-call quota probe per
+ *    seat (reference/baseline/judge), a directly-constructed anthropic
+ *    candidate seat (candidate/negative_control — currently claude-sonnet-5
+ *    with extended thinking OFF; §5, not a registry-gated settings seat by
+ *    design; see that module's doc), a 1-call quota probe per
  *    distinct provider route, and an incremental local/ capture sidecar.
  *  - --go ... --resume <runDir> : resumes an interrupted live run against the
  *    SAME --fixture args (same order) instead of re-spending the reference
@@ -150,7 +151,16 @@ if (resumeDir !== null && !go) {
   );
 }
 
-const CANDIDATE = { provider: "anthropic", model: "claude-haiku-4-5-20251001" } as const;
+// INV-MODEL-1 B4 sonnet-5 retry (owner directive): the candidate/negative seat
+// is claude-sonnet-5 run with extended thinking OFF (thinking:{type:"disabled"}
+// via the callAnthropic opt-in — Haiku's merge-boundary weakness is what this
+// retry tests whether a stronger no-thinking model clears). Directly
+// constructed, NOT a settings seat (see b4-live-realization.mts module doc).
+const CANDIDATE = {
+  provider: "anthropic",
+  model: "claude-sonnet-5",
+  thinking_mode: "disabled",
+} as const;
 const BASELINE = { provider: "openai", model: "gpt-5.5" } as const;
 const DECLARED_REPS = 3;
 const promptSha256 = crypto

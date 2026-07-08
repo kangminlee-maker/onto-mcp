@@ -58,3 +58,32 @@ supported_models:
     context_window_provenance: >-
       Anthropic model reference (platform.claude.com models overview): Claude
       Opus 4.8 ships a 1,000,000-token (1M) context window.
+  - provider: anthropic
+    model: claude-sonnet-5
+    verified_at: "2026-07-08"
+    roles:
+      - semantic_map_synthesize
+    benchmark_evidence_refs:
+      - development-records/benchmark/synthesize-cert/20260708-sonnet5-live/synthesize-cert-record.json
+      - development-records/benchmark/synthesize-cert/20260708-sonnet5-live/rejudge-comparison.json
+      - development-records/benchmark/synthesize-cert/20260708-sonnet5-live/structured-grounding-comparison.json
+    notes: >-
+      Role-scoped certification for `semantic_map_synthesize` (INV-MODEL-1 B4).
+      Verified via the synthesize-cert/v1 live benchmark (3 reps x 2 fixtures =
+      90 rows/arm) run with extended thinking DISABLED — the exact config the
+      record certifies (thinking:{type:"disabled"}; see scripts/b4-cert-run.mts
+      CANDIDATE). Support: the candidate arm completed the synthesize pipeline
+      end to end (candidate_output_status=ok for all 90 rows) and the cited
+      record recomputes to zero validateSynthesizeCertRecord violations. Quality
+      gate — candidate>=baseline on BOTH gated metrics: the raw original judge
+      (gpt-5.5) showed candidate grounding 89/90 vs baseline 90/90, but that is a
+      same-family judge bias (judge model == baseline model); a neutral
+      cross-family opus rejudge flips it to 90/90
+      (rejudge-comparison.json: metric_regression_flip.grounding.flipped=true)
+      and the domain-agnostic deterministic structural grounding is candidate
+      89/89 = baseline (structured-grounding-comparison.json), with zero real
+      fabrications in the candidate arm. Boundary is candidate 90/90 = baseline,
+      including 30/30 on the merge stratum — the exact point where the earlier
+      claude-haiku-4-5 candidate fell short (3/90). Support and the
+      candidate>=baseline gate — verified; PRELIMINARY for any absolute
+      performance claim beyond the candidate>=baseline comparison.

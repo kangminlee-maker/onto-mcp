@@ -1,0 +1,25 @@
+{
+  "at": "2026-07-08T01:20:17.490Z",
+  "resumed_at": "2026-07-08T01:20:17.490Z",
+  "baseline_reference_judge_seat": "openai/gpt-5.5",
+  "candidate_negative_control_seat": "anthropic/claude-sonnet-5",
+  "forecast": {
+    "reference_calls": 0,
+    "arm_calls": 144,
+    "judge_calls": 144,
+    "total": 288,
+    "cap": 800
+  },
+  "quota_probes": [
+    {
+      "label": "openai/gpt-5.5",
+      "at": "2026-07-08T01:20:15.830Z",
+      "text": "ok"
+    },
+    {
+      "label": "anthropic/claude-sonnet-5",
+      "at": "2026-07-08T01:20:17.489Z",
+      "text": "ok"
+    }
+  ]
+}

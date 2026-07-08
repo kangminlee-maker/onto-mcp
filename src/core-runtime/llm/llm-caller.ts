@@ -72,6 +72,16 @@ export interface LlmCallConfig {
   execution_adapter?: LlmExecutionAdapter;
   /** Reasoning effort. Codex maps it to `model_reasoning_effort`; OpenAI API maps it to `reasoning_effort`. */
   reasoning_effort?: string;
+  /**
+   * anthropic-only, api_key (SDK) route only: when "disabled", send
+   * `thinking:{type:"disabled"}` so the model runs with no extended thinking
+   * (accepted on opus-4.7/4.8 and sonnet-5; Fable 5 rejects it). Absent →
+   * unchanged legacy request bytes. Ignored by every non-anthropic provider and
+   * by the anthropic OAuth/CLI-worker route (which never touches the SDK
+   * `thinking` param). Additive opt-in for the INV-MODEL-1 B4 sonnet-5
+   * thinking-off candidate seat.
+   */
+  thinking_mode?: "disabled";
   /** codex-only: service tier passed as `service_tier`. Ignored by other providers. */
   service_tier?: string;
   /**
@@ -404,6 +414,7 @@ async function callAnthropic(
   modelId: string,
   maxTokens: number,
   reasoningEffort?: string,
+  thinkingMode?: "disabled",
 ): Promise<LlmCallResult> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({
@@ -413,7 +424,7 @@ async function callAnthropic(
   });
 
   emitModelCallLog(
-    `anthropic call: model="${modelId}" max_tokens=${maxTokens} effort=${reasoningEffort ?? "(unset)"}`,
+    `anthropic call: model="${modelId}" max_tokens=${maxTokens} effort=${reasoningEffort ?? "(unset)"} thinking=${thinkingMode ?? "(default)"}`,
   );
 
   let response;
@@ -421,27 +432,39 @@ async function callAnthropic(
     response = await client.messages.create({
       model: modelId,
       max_tokens: maxTokens,
-      // Reasoning depth is controlled by output_config.effort (GA, no beta
-      // header), but on opus-4.x effort only modulates *thinking* depth when
-      // adaptive thinking is enabled — without it the model runs without
-      // thinking, so configured effort would not be realized on this route.
-      // Pair the two so effort actually engages reasoning (matching the openai
-      // Responses and claude-CLI routes); effort also bounds overall token
-      // spend. The free-form seat string maps onto the API effort enum; absent
-      // → the API default (high) with no thinking (legacy behavior preserved).
-      ...(reasoningEffort
-        ? {
-            thinking: { type: "adaptive" as const },
-            output_config: {
-              effort: reasoningEffort as
-                | "low"
-                | "medium"
-                | "high"
-                | "xhigh"
-                | "max",
-            },
-          }
-        : {}),
+      // Thinking configuration is a three-way choice, and every non-default
+      // branch is additive over the legacy no-op tail so an absent opt-in emits
+      // byte-identical request bytes:
+      //   thinking_mode="disabled" → thinking:{type:"disabled"} (explicit no
+      //     extended thinking; accepted on opus-4.7/4.8 and sonnet-5, rejected
+      //     by Fable 5). Takes precedence over effort: effort's only job on this
+      //     route is to modulate *thinking* depth, which is moot once thinking
+      //     is off, so output_config is not paired here.
+      //   reasoningEffort set → adaptive thinking paired with output_config.
+      //     effort (GA, no beta header). On opus-4.x effort only modulates
+      //     thinking depth when adaptive is enabled — without adaptive the model
+      //     runs without thinking, so configured effort would not be realized on
+      //     this route. Pairing the two makes effort actually engage reasoning
+      //     (matching the openai Responses and claude-CLI routes); effort also
+      //     bounds overall token spend. The free-form seat string maps onto the
+      //     API effort enum.
+      //   neither → no thinking block (API default: high, no thinking — legacy
+      //     behavior preserved).
+      ...(thinkingMode === "disabled"
+        ? { thinking: { type: "disabled" as const } }
+        : reasoningEffort
+          ? {
+              thinking: { type: "adaptive" as const },
+              output_config: {
+                effort: reasoningEffort as
+                  | "low"
+                  | "medium"
+                  | "high"
+                  | "xhigh"
+                  | "max",
+              },
+            }
+          : {}),
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     });
@@ -474,12 +497,22 @@ async function callAnthropic(
     `anthropic success: model_id=${response.model ?? modelId} input_tokens=${response.usage.input_tokens} output_tokens=${response.usage.output_tokens}`,
   );
 
-  // With adaptive thinking on (effort set), thinking shares the max_tokens
-  // budget; a max_tokens stop means the response was truncated and may carry
-  // partial/empty text. Fail loud rather than record a truncated artifact.
-  if (reasoningEffort && response.stop_reason === "max_tokens") {
+  // A max_tokens stop means the response was truncated and may carry
+  // partial/empty text — fail loud rather than record a truncated artifact.
+  // Both thinking-bearing branches are guarded: with adaptive thinking on
+  // (effort set) thinking shares the max_tokens budget; with thinking disabled
+  // the whole budget is the answer, so a cap still truncates it. The legacy
+  // no-opt path (neither set) stays unguarded, unchanged.
+  if (
+    (reasoningEffort || thinkingMode === "disabled") &&
+    response.stop_reason === "max_tokens"
+  ) {
     throw new Error(
-      `anthropic response truncated at max_tokens=${maxTokens} (effort=${reasoningEffort} reasoning exhausted the budget); raise max_tokens`,
+      `anthropic response truncated at max_tokens=${maxTokens}` +
+        (reasoningEffort
+          ? ` (effort=${reasoningEffort} reasoning exhausted the budget)`
+          : " (thinking disabled; answer exceeded the budget)") +
+        "; raise max_tokens",
     );
   }
 
@@ -1102,6 +1135,7 @@ async function dispatchByPlan(
       modelId,
       maxTokens,
       config.reasoning_effort,
+      config.thinking_mode,
     );
   }
   if (plan.provider_identity === "openai") {
@@ -1300,6 +1334,7 @@ export async function callLlm(
         modelId,
         maxTokens,
         config?.reasoning_effort,
+        config?.thinking_mode,
       );
     }
     case "openai": {

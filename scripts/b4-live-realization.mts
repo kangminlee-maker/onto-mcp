@@ -14,16 +14,19 @@
  *    semantic_author` settings seat (production-route mirror — l2-real-llm-run
  *    backlog-⑤a synthesize-effort override applies to both, since reference
  *    authoring dispatches the identical production synthesize call).
- *  - candidate + negative_control: anthropic/claude-haiku-4-5-20251001, built
- *    DIRECTLY — NOT a settings seat. `assertSettingsModelsSupported` walks
- *    only routes `collectModelSelections` finds inside the settings OBJECT
+ *  - candidate + negative_control: a directly-constructed anthropic seat
+ *    (caller-supplied model + optional thinking mode — currently
+ *    claude-sonnet-5 with extended thinking OFF), built DIRECTLY — NOT a
+ *    settings seat. `assertSettingsModelsSupported` walks only routes
+ *    `collectModelSelections` finds inside the settings OBJECT
  *    (supported-models.ts's dispatch vocabulary is `settings_path` |
  *    `request_judge`); a script-constructed LlmCallConfig that never enters
  *    `settings` is structurally invisible to that walk, so it is never gated.
  *    This is not a bypass of an enforced boundary — B4 exists precisely to
- *    produce the evidence that would let Haiku occupy a REAL settings seat;
- *    gating the bench's own candidate dispatch on registry membership would
- *    make the benchmark that creates the registry entry unbuildable.
+ *    produce the evidence that would let a not-yet-registered candidate occupy
+ *    a REAL settings seat; gating the bench's own candidate dispatch on
+ *    registry membership would make the benchmark that creates the registry
+ *    entry unbuildable.
  *  - judge: the SAME resolved semantic_author config (openai/gpt-5.5) at its
  *    BASE effort (the ⑤a low-effort finding is scoped to synthesize quality
  *    parity, not judging) — dispatched via a raw callLlm with the dedicated
@@ -77,6 +80,13 @@ export const B4_SYNTHESIZE_REASONING_EFFORT_OVERRIDE = "low";
 export interface B4DeclaredModelIdentity {
   provider: LlmProviderName;
   model: string;
+  /**
+   * anthropic-only: run this seat with extended thinking OFF
+   * (`thinking:{type:"disabled"}`, the callAnthropic opt-in). Absent → provider
+   * default. Only the directly-constructed candidate seat sets it; the
+   * settings-declared baseline leaves it unset (openai route, no SDK thinking).
+   */
+  thinking_mode?: "disabled";
 }
 
 export interface B4LiveSeats {
@@ -126,13 +136,24 @@ export async function resolveB4LiveSeats(args: {
   const candidateLlmConfig = resolveLlmProviderConfig({
     config: { llm: { provider: args.candidate.provider, model: args.candidate.model } },
   });
+  // The directly-constructed candidate seat carries no runtime thinking control
+  // by default; a declared thinking mode is injected onto the constructed
+  // config (callAnthropic thinking-disabled opt-in). This stays out of
+  // resolveLlmProviderConfig (the settings/CLI bridge) — same "직접 구성"
+  // boundary as the candidate model choice, which is not a settings route.
+  if (args.candidate.thinking_mode !== undefined) {
+    candidateLlmConfig.thinking_mode = args.candidate.thinking_mode;
+  }
   if (
     candidateLlmConfig.provider !== args.candidate.provider ||
-    candidateLlmConfig.model_id !== args.candidate.model
+    candidateLlmConfig.model_id !== args.candidate.model ||
+    candidateLlmConfig.thinking_mode !== args.candidate.thinking_mode
   ) {
     throw new Error(
-      `b4-live-realization: declared candidate ${args.candidate.provider}/${args.candidate.model} resolved to ` +
-        `${candidateLlmConfig.provider ?? "(unresolved)"}/${candidateLlmConfig.model_id ?? "(unresolved)"} — ` +
+      `b4-live-realization: declared candidate ${args.candidate.provider}/${args.candidate.model}` +
+        `${args.candidate.thinking_mode ? ` (thinking=${args.candidate.thinking_mode})` : ""} resolved to ` +
+        `${candidateLlmConfig.provider ?? "(unresolved)"}/${candidateLlmConfig.model_id ?? "(unresolved)"}` +
+        `${candidateLlmConfig.thinking_mode ? ` (thinking=${candidateLlmConfig.thinking_mode})` : ""} — ` +
         "refusing to dispatch under a mismatched identity",
     );
   }
@@ -142,6 +163,12 @@ export async function resolveB4LiveSeats(args: {
     baselineLlmConfig,
     candidateLlmConfig,
     baselineModelIdentity: `${args.baseline.provider}/${args.baseline.model}`,
+    // The identity is the bare `provider/model` and MUST stay parseable back to
+    // a clean model id: downstream consumers (b4-rejudge readPreflightSeats)
+    // split it into the record's arm_model/model, and that model id must be the
+    // real SDK id a settings seat dispatches — never a display-annotated string.
+    // The thinking mode is verified structurally above and surfaced on every
+    // per-call model-call log ("thinking=disabled"); it is NOT concatenated here.
     candidateModelIdentity: `${candidateLlmConfig.provider}/${candidateLlmConfig.model_id}`,
   };
 }

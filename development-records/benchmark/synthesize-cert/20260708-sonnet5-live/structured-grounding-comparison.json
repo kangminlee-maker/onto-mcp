@@ -1,0 +1,60 @@
+{
+  "structured_grounding_comparison_contract": "synthesize-cert-structured-grounding-comparison/v1",
+  "run_dir": "development-records/benchmark/synthesize-cert/20260708-sonnet5-live",
+  "extraction_seat": "anthropic/claude-opus-4-8",
+  "extraction_dispatch": {
+    "attempted": 7,
+    "ok": 1,
+    "parse_error": 4,
+    "honesty_violation": 2,
+    "transport_error": 0
+  },
+  "per_arm_grounding": {
+    "baseline": {
+      "gpt5_holistic": {
+        "pass": 90,
+        "tot": 90
+      },
+      "opus_holistic": {
+        "pass": 90,
+        "tot": 90
+      },
+      "deterministic_structural": {
+        "pass": 85,
+        "tot": 85
+      }
+    },
+    "candidate": {
+      "gpt5_holistic": {
+        "pass": 89,
+        "tot": 90
+      },
+      "opus_holistic": {
+        "pass": 90,
+        "tot": 90
+      },
+      "deterministic_structural": {
+        "pass": 89,
+        "tot": 89
+      }
+    },
+    "negative_control": {
+      "gpt5_holistic": {
+        "pass": 18,
+        "tot": 88
+      },
+      "opus_holistic": {
+        "pass": 58,
+        "tot": 90
+      },
+      "deterministic_structural": {
+        "pass": 48,
+        "tot": 90
+      }
+    }
+  },
+  "violation_kind_counts": {
+    "fabricated_boundary_row": 69,
+    "fabricated_transition_row": 55
+  }
+}
