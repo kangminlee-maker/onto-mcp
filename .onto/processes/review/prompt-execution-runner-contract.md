@@ -60,7 +60,7 @@ runtime은 아래만 한다.
    - `prompt-packets/synthesis/{issue_id}.prompt.md`
 9. executor realization
    - `worker`
-   - `direct-call`
+   - `direct_call`
 10. host runtime
    - `codex`
    - `openai`
@@ -183,13 +183,18 @@ evidence로 쓰지 않는다.
 
 현재 구현에서 prompt execution runner를 통해 실행되는 execution profile:
 
-- `worker + codex` (Codex CLI 경로)
-- `worker + direct-call` (API/local provider 경로)
+- `main-workers + codex|claude_code` (Codex CLI 또는 Claude Code CLI 경로)
+- `main-workers + direct_call` (API/local provider 경로)
+- `nested-workers + codex|claude_code` (outer OAuth worker가 ready unit batch를
+  fan-out하고, inner unit은 flat 경로와 동일한 unit-executor CLI/seat/검증 계약을
+  따른다)
 
-`nested-workers` mode는 현재 runner에서 pre-dispatch structured failure로
-차단한다. inner lens worker가 runtime submit-tool serialization,
-read-only sandbox, `execution-plan.max_concurrent_lenses` 기반 bounded dispatch를
-같은 방식으로 보장하기 전에는 active product path가 아니다.
+`nested-workers + direct_call`은 outer worker seat가 없으므로
+`nested_workers_executor_unsupported` structured failure로 fail-closed한다. raw
+provider-CLI inner bridge는 retired 경로이며, active nested path의 계약은
+`nesting-batch-worker-contract.md`가 소유한다. mock-backed nested harness는 wiring,
+schema, artifact contract, route/failure 검증 evidence이며 product semantic
+completion 또는 semantic quality evidence로 승격하지 않는다.
 
 원칙:
 

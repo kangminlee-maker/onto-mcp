@@ -198,17 +198,21 @@ canonical requirement:
 현재 repo-local TS bounded path에서 실행 가능한 `ReviewExecutionProfile` mode는 아래다.
 
 - `main-workers`: main이 teamlead 역할을 수행하고 worker가 lens를 실행한다.
+- `nested-workers`: external OAuth worker executor(`codex` 또는 `claude_code`)가
+  outer seat에서 ready unit batch를 fan-out하고, 각 inner unit은 flat 경로와
+  동일한 unit-executor CLI/seat/검증 계약을 따른다. `direct_call` executor와
+  조합되면 outer worker seat가 없으므로 fail-closed한다.
 - `synthesize.llm`: deliberation 이후 별도 synthesize unit에 적용된다. synthesize는 모든 lens output, issue artifacts, deliberation, problem framing을 통합하므로 높은 effort가 기본적으로 적합하다.
 
-`nested-workers`는 concept/profile shape로 남아 있지만 현재 active live path에서는
-pre-dispatch에서 fail-loud한다. 기존 nested bridge가 sidecar structured output,
-read-only lens execution, settings-owned bounded dispatch를 강제하지 못하기 때문이다.
-이 mode는 inner lens 실행이 동일한 structured runner 계약을 따를 때만 다시 실행
-가능한 경로가 될 수 있다.
+`nested-workers`의 canonical 계약은 `nesting-batch-worker-contract.md`가 소유한다.
+과거 raw provider-CLI inner bridge는 retired 경로이며, 현재 runtime path는
+sidecar structured output, read-only unit execution, settings-owned bounded dispatch를
+동일 unit executor 공유로 보존한다.
 
 worker executor는 profile resolution에서 아래 중 하나로 고정된다.
 
 - `codex`: host-bound OAuth 또는 Codex worker path.
+- `claude_code`: host-bound Claude Code worker path.
 - `direct_call`: `api_key` 또는 `local` provider path.
 
 중요한 점은 host-specific naming이 아니라:

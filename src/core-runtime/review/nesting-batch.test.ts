@@ -215,7 +215,7 @@ describe("executed batch script (stub unit executor)", () => {
         'const unitId = get("--unit-id");',
         'const out = get("--output-path");',
         "console.log(`stub unit=${unitId}`);",
-        'if (unitId === "boom") { console.error("stub failure"); process.exit(1); }',
+        'if (unitId === "boom") { console.error(\'stub failure "quoted" path=C:\\\\tmp\\\\x \\\\x1b[31mRED\\\\x1b[0m \\\\bBS\'); process.exit(1); }',
         "fs.writeFileSync(out, `seat for ${unitId}\\n`);",
         "",
       ].join("\n"),
@@ -272,6 +272,13 @@ describe("executed batch script (stub unit executor)", () => {
       "issue-stance:coverage=ok",
     ]);
     expect(outcomes[1]?.error).toMatch(/exit=1/);
+    expect(outcomes[1]?.error).toContain("stub failure");
+    expect(outcomes[1]?.error).toContain('stub failure "quoted"');
+    expect(outcomes[1]?.error).toContain("path=C:\\tmp\\x");
+    expect(outcomes[1]?.error).toContain("RED");
+    expect(outcomes[1]?.error).toContain("BS");
+    expect(outcomes[1]?.error).not.toContain("\u001b");
+    expect(outcomes[1]?.error).not.toContain("\b");
 
     // Log lifecycle: success logs removed, failure log persisted for audit.
     const listing = await fs.readdir(round1);

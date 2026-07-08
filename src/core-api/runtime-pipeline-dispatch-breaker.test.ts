@@ -50,6 +50,7 @@ const RATE_LIMIT_MESSAGE =
 
 const tempRoots: string[] = [];
 let originalHome: string | undefined;
+let originalPath: string | undefined;
 let restoreEnv: (() => void) | undefined;
 
 beforeEach(async () => {
@@ -58,6 +59,7 @@ beforeEach(async () => {
     OPENAI_API_KEY: "test-openai-key",
   });
   originalHome = process.env.HOME;
+  originalPath = process.env.PATH;
   const homeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "onto-breaker-home-"));
   tempRoots.push(homeRoot);
   process.env.HOME = homeRoot;
@@ -66,8 +68,10 @@ beforeEach(async () => {
 afterEach(async () => {
   restoreEnv?.();
   if (originalHome !== undefined) process.env.HOME = originalHome;
+  if (originalPath !== undefined) process.env.PATH = originalPath;
   delete process.env.ONTO_BREAKER_FAIL_UNITS;
   delete process.env.ONTO_BREAKER_INVOCATION_LOG;
+  delete process.env.ONTO_NESTED_OUTER_INVOCATION_LOG;
   for (const root of tempRoots.splice(0)) {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -116,6 +120,34 @@ const BREAKER_STUB_SOURCE = [
   "if (!content) content = `# ${unitId}\\n`;",
   "fs.mkdirSync(path.dirname(out), { recursive: true });",
   "fs.writeFileSync(out, content);",
+  "",
+].join("\n");
+
+/**
+ * Fake outer Codex binary for the nested-workers integration harness.
+ * It is intentionally thin: read the real outer prompt from stdin, extract
+ * the generated bash fence, run it with bash, and surface stdout/stderr
+ * verbatim. The review runner still exercises the real nested branch,
+ * `runCodexNestingBatchWorker`, `dispatchNestedBatch`, and the generated
+ * inner unit-executor script; this only replaces the external LLM shell.
+ */
+const FAKE_CODEX_OUTER_SOURCE = [
+  "#!/usr/bin/env node",
+  'import fs from "node:fs";',
+  'import { spawnSync } from "node:child_process";',
+  'const prompt = fs.readFileSync(0, "utf8");',
+  "if (process.env.ONTO_NESTED_OUTER_INVOCATION_LOG) {",
+  "  fs.appendFileSync(process.env.ONTO_NESTED_OUTER_INVOCATION_LOG, `${process.argv.slice(2).join(' ')}\\n`);",
+  "}",
+  "const match = prompt.match(/```bash\\n([\\s\\S]*?)\\n```/);",
+  "if (!match) {",
+  "  console.error('fake codex outer: prompt did not contain a bash fence');",
+  "  process.exit(1);",
+  "}",
+  'const run = spawnSync("bash", ["-s"], { input: match[1], encoding: "utf8" });',
+  "process.stdout.write(run.stdout ?? '');",
+  "process.stderr.write(run.stderr ?? '');",
+  "process.exit(run.status ?? 1);",
   "",
 ].join("\n");
 
@@ -208,6 +240,56 @@ function breakerProfile(args: {
       },
     },
   } as unknown as ReviewExecutionProfile;
+}
+
+const CODEX_WORKER_LLM = {
+  auth: "oauth",
+  provider: "openai",
+  model: "gpt-5.5",
+  effort: "medium",
+  service_tier: "fast",
+} as const;
+
+function nestedBreakerProfile(args: {
+  breakerEnabled: boolean;
+  systemicThreshold?: number;
+  maxConcurrentLenses?: number;
+}): ReviewExecutionProfile {
+  const base = breakerProfile({
+    breakerEnabled: args.breakerEnabled,
+    systemicThreshold: args.systemicThreshold,
+    maxConcurrentLenses: args.maxConcurrentLenses,
+  });
+  return {
+    ...base,
+    mode: "nested-workers",
+    orchestration: "runtime",
+    worker_executor: "codex",
+    host: "codex",
+    teamlead: { seat: "worker", llm: { ...CODEX_WORKER_LLM } },
+    lens: { seat: "worker", llm: { ...CODEX_WORKER_LLM } },
+    synthesize: { seat: "worker", llm: { ...CODEX_WORKER_LLM } },
+    deliberation: "controlled-lens-deliberation",
+    units: {},
+    provider: "openai",
+    auth: "oauth",
+    model: "gpt-5.5",
+    effort: "medium",
+    service_tier: "fast",
+    trace: [],
+  } as ReviewExecutionProfile;
+}
+
+async function installFakeCodexOuter(): Promise<{ outerLogPath: string }> {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), "onto-fake-codex-"));
+  tempRoots.push(binDir);
+  const fakeCodexPath = path.join(binDir, "codex");
+  await fs.writeFile(fakeCodexPath, FAKE_CODEX_OUTER_SOURCE, "utf8");
+  await fs.chmod(fakeCodexPath, 0o755);
+  process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ""}`;
+  const outerLogPath = path.join(binDir, "outer-invocations.log");
+  process.env.ONTO_NESTED_OUTER_INVOCATION_LOG = outerLogPath;
+  return { outerLogPath };
 }
 
 async function runPipeline(
@@ -606,6 +688,101 @@ describe("review dispatch breaker (설계 B 리뷰판, deterministic dispatch-le
     const recoveredIncomplete = await readDispatchIncomplete(session.sessionRoot);
     expect(recoveredIncomplete.breaker.tripped).toBe(false);
     expect(recoveredIncomplete.incomplete_item_ids).toEqual([]);
+  });
+
+  it("nested-workers clean run: full runner uses outer batches for lens and issue-stance stages", async () => {
+    const { outerLogPath } = await installFakeCodexOuter();
+    const logPath = await invocationLogPath();
+    process.env.ONTO_BREAKER_INVOCATION_LOG = logPath;
+    const session = await prepareBreakerSession();
+
+    const result = await runPipeline(
+      session,
+      nestedBreakerProfile({
+        breakerEnabled: true,
+        systemicThreshold: 3,
+        maxConcurrentLenses: 2,
+      }),
+    );
+
+    expect(result.synthesis_executed).toBe(true);
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("completed");
+
+    const invocations = await readInvocations(logPath);
+    for (const lensId of LENS_IDS) {
+      expect(invocations.filter((unitId) => unitId === lensId)).toHaveLength(1);
+      expect(
+        invocations.filter((unitId) => unitId === `issue-stance:${lensId}`),
+      ).toHaveLength(1);
+    }
+
+    const outerInvocations = await readInvocations(outerLogPath);
+    expect(outerInvocations.length).toBeGreaterThanOrEqual(2);
+    await expect(
+      fs.readFile(path.join(session.sessionRoot, "nested-outer-stdout.log"), "utf8"),
+    ).resolves.toContain("UNIT_DISPATCH_SUMMARY:");
+    await expect(
+      fs.readFile(
+        path.join(session.sessionRoot, "nested-outer-issue-stance-stdout.log"),
+        "utf8",
+      ),
+    ).resolves.toContain("UNIT_DISPATCH_SUMMARY:");
+  });
+
+  it("nested-workers stance breaker: batch-window success is preserved while systemic failures trip into the incomplete set", async () => {
+    await installFakeCodexOuter();
+    process.env.ONTO_BREAKER_FAIL_UNITS =
+      "issue-stance:logic,issue-stance:structure";
+    const logPath = await invocationLogPath();
+    process.env.ONTO_BREAKER_INVOCATION_LOG = logPath;
+    const session = await prepareBreakerSession();
+
+    await runPipeline(
+      session,
+      nestedBreakerProfile({
+        breakerEnabled: true,
+        systemicThreshold: 2,
+        maxConcurrentLenses: 1,
+      }),
+    );
+
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("halted_partial");
+    expect(
+      executionResult.halt_reason?.startsWith(
+        `${REVIEW_DISPATCH_BREAKER_HALT_REASON_PREFIX}: rate_limit`,
+      ),
+    ).toBe(true);
+    expect(executionResult.halt_phase).toBe("issue_artifact");
+
+    const incomplete = await readDispatchIncomplete(session.sessionRoot);
+    expect(incomplete.batch_label).toBe("issue-stance");
+    expect(incomplete.breaker.tripped).toBe(true);
+    expect(incomplete.breaker.failure_class).toBe("rate_limit");
+    // The successful nested batch-window unit is completed/skipped, not a
+    // provider-lane success that resets the systemic streak.
+    expect(incomplete.completed_item_ids).toEqual(["issue-stance:coverage"]);
+    expect([...incomplete.incomplete_item_ids].sort()).toEqual([
+      "issue-stance:logic",
+      "issue-stance:structure",
+    ]);
+    expect(incomplete.dead_letter).toEqual([]);
+
+    const rows = executionResult.issue_artifact_execution_results ?? [];
+    expect(
+      rows.find((entry) => entry.unit_id === "issue-stance:coverage")?.status,
+    ).toBe("completed");
+    const logicFailure = rows.find((entry) => entry.unit_id === "issue-stance:logic");
+    expect(logicFailure?.status).toBe("failed");
+    expect(logicFailure?.failure_message).toContain(RATE_LIMIT_MESSAGE);
+
+    const invocations = await readInvocations(logPath);
+    // The nested first-attempt batch ran all three stance units; the breaker
+    // then halted the stage without flat fallback retries.
+    expect(
+      invocations.filter((unitId) => unitId.startsWith("issue-stance:")),
+    ).toEqual(STANCE_UNIT_IDS);
   });
 
   it("negative control: a clean breaker-ON run completes and records a tripped=false end state (규칙 6 관측 상시화)", async () => {

@@ -180,7 +180,7 @@ export function buildNestingBatchScript(
     const auditPath = path.join(outputDir, `.${safeId}.nested-stderr.log`);
     const statRef = `"$TMPDIR/u${index}.status"`;
     const okJson = `{"unit_id":"${jsonEscape(unit.unit_id)}","status":"ok"}`;
-    const failFmt = `{"unit_id":"${jsonEscape(unit.unit_id)}","status":"fail","error":"exit=%s size=%s"}`;
+    const failFmt = `{"unit_id":"${jsonEscape(unit.unit_id)}","status":"fail","error":"exit=%s size=%s log_tail=%s"}`;
     const fallbackJson = `{"unit_id":"${jsonEscape(unit.unit_id)}","status":"fail","error":"no status reported"}`;
     const unitArgs = [
       "--unit-id",
@@ -214,7 +214,11 @@ export function buildNestingBatchScript(
         '  if [ "$EC" = "0" ] && [ "$SIZE" -gt 0 ]; then',
         `    printf '%s' ${shellQuote(okJson)} > ${statRef}`,
         "  else",
-        `    printf ${shellQuote(failFmt)} "$EC" "$SIZE" > ${statRef}`,
+        '    ERROR_HINT=""',
+        '    if [ -f "$LOG" ]; then',
+        `      ERROR_HINT=$(tail -n 20 "$LOG" 2>/dev/null | tr '\\n\\r\\t' '   ' | tr '\\000-\\010\\013\\014\\016-\\037\\177' ' ' | cut -c1-500 | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')`,
+        "    fi",
+        `    printf ${shellQuote(failFmt)} "$EC" "$SIZE" "$ERROR_HINT" > ${statRef}`,
         "  fi",
         ") &",
       ].join("\n"),
