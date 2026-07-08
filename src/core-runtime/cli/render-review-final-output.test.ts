@@ -362,6 +362,145 @@ describe("runRenderReviewFinalOutputCli", () => {
     }
   });
 
+  it("renders classification action candidates when synthesis output is unavailable", async () => {
+    const sessionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-final-output-"));
+    const finalOutputPath = path.join(sessionRoot, "final-output.md");
+    const targetPath = path.join(sessionRoot, "target.txt");
+    try {
+      fs.writeFileSync(targetPath, "target\n", "utf8");
+      fs.writeFileSync(
+        path.join(sessionRoot, "binding.yaml"),
+        [
+          "session_id: test-session",
+          "resolved_session_domain: none",
+          "resolved_review_mode: full",
+          "resolved_execution_realization: direct-call",
+          "resolved_host_runtime: openai",
+          "semantic_quality_evidence:",
+          "  status: not_applicable",
+          "  applicability: mock_or_fixture",
+          "resolved_lens_set: [logic]",
+          "resolved_target_scope:",
+          "  kind: file",
+          `  resolved_refs: [${JSON.stringify(targetPath)}]`,
+          `finding_ledger_path: ${JSON.stringify(path.join(sessionRoot, "finding-ledger.yaml"))}`,
+          `issue_ledger_path: ${JSON.stringify(path.join(sessionRoot, "issue-ledger.yaml"))}`,
+          `problem_framing_path: ${JSON.stringify(path.join(sessionRoot, "problem-framing.yaml"))}`,
+          `execution_result_path: ${JSON.stringify(path.join(sessionRoot, "execution-result.yaml"))}`,
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      fs.writeFileSync(
+        path.join(sessionRoot, "session-metadata.yaml"),
+        "session_id: test-session\ncreated_at: 2026-06-06T00:00:00.000Z\n",
+        "utf8",
+      );
+      fs.writeFileSync(
+        path.join(sessionRoot, "execution-result.yaml"),
+        [
+          "session_id: test-session",
+          `session_root: ${JSON.stringify(sessionRoot)}`,
+          "execution_realization: direct-call",
+          "host_runtime: openai",
+          "review_mode: full",
+          "execution_status: completed",
+          'execution_started_at: "2026-06-06T00:00:00.000Z"',
+          'execution_completed_at: "2026-06-06T00:00:01.000Z"',
+          "total_duration_ms: 1000",
+          "max_concurrent_lenses: 1",
+          "retry_policy:",
+          "  lens_max_retries: 10",
+          "  issue_artifact_max_retries: 1",
+          "  deliberation_max_retries: 10",
+          "  synthesis_max_retries: 1",
+          "  retry_initial_delay_ms: 8000",
+          "planned_lens_ids: [logic]",
+          "participating_lens_ids: [logic]",
+          "degraded_lens_ids: []",
+          "excluded_lens_ids: []",
+          "executed_lens_count: 1",
+          "synthesis_executed: false",
+          "deliberation_status: skipped",
+          "error_log_path: error-log.md",
+          "lens_execution_results: []",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      fs.writeFileSync(
+        path.join(sessionRoot, "finding-ledger.yaml"),
+        [
+          "findings:",
+          "  - finding_id: finding-001",
+          "    lens_id: logic",
+          "    severity: medium",
+          "    claim: unstableFormat delegates raw JSON.stringify output.",
+          "    affected_purpose: string return contract",
+          "    failure_condition: JSON.stringify returns undefined",
+          "    impact: callers receive a non-string value",
+          "    evidence_refs: [src/target.ts:13]",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      fs.writeFileSync(
+        path.join(sessionRoot, "issue-ledger.yaml"),
+        [
+          "issues:",
+          "  - issue_id: issue-001",
+          "    root_cause_hypothesis: JSON.stringify is used without a guard.",
+          "    root_confidence: high",
+          "    surface_finding_ids: [finding-001]",
+          "    relation_refs: []",
+          "    raised_by_lens_ids: [logic]",
+          "    issue_statement: unstableFormat can return undefined despite declaring string.",
+          "    proposed_action: Add a fallback or guard around JSON.stringify.",
+          "    affected_purpose: string return contract",
+          "    failure_condition: JSON.stringify returns undefined",
+          "    impact: callers receive a non-string value",
+          "    evidence_refs: [src/target.ts:13]",
+          "    severity: medium",
+          "issue_dependencies: []",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      fs.writeFileSync(
+        path.join(sessionRoot, "problem-framing.yaml"),
+        [
+          "classifications:",
+          "  - issue_id: issue-001",
+          "    problem_definition: unstableFormat should not expose raw JSON.stringify undefined.",
+          "    issue_role: root_cause",
+          "    judgment_state: observed",
+          "    impact_kind: correctness",
+          "    timing_class: next_step_blocker",
+          "    closure_class: needs_decision",
+          "    closure_obligation: must_close_before_next_stage",
+          "    rationale: Add a fallback or guard before relying on unstableFormat.",
+          "    related_surface_finding_ids: [finding-001]",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      await runRenderReviewFinalOutputCli([
+        "--project-root", sessionRoot,
+        "--session-root", sessionRoot,
+      ]);
+      const finalOutput = fs.readFileSync(finalOutputPath, "utf8");
+      expect(finalOutput).toContain(
+        "### Immediate Actions Required\n- issue-001: fix_before_release, accept_risk",
+      );
+      expect(finalOutput).toContain(
+        "rationale: Add a fallback or guard before relying on unstableFormat.",
+      );
+    } finally {
+      fs.rmSync(sessionRoot, { recursive: true, force: true });
+    }
+  });
+
   it("renders lens agreement and disagreement from synthesis ledger summaries", async () => {
     const sessionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-final-output-"));
     const finalOutputPath = path.join(sessionRoot, "final-output.md");

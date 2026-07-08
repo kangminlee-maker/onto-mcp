@@ -55,9 +55,10 @@ const CLAUDE_READONLY_ALLOWED_TOOLS = ["Read", "Grep", "Glob"] as const;
 const CLAUDE_BIN = resolveClaudeBin();
 
 /**
- * Embed the submit-tool JSON Schema into the bounded prompt. Claude Code's
- * `--json-schema` flag silently rejects the runtime's complex submit schemas,
- * so the schema travels in-prompt and the submit tool validates the result.
+ * Embed the submit-tool JSON Schema into the bounded prompt as a redundant
+ * semantic hint. The same schema is also passed through Claude Code's
+ * `--json-schema` flag when available; the submit tool remains the artifact
+ * validator.
  */
 function appendSchemaToPrompt(
   boundedPrompt: string,

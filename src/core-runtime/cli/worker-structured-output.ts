@@ -170,8 +170,9 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
 
 /**
  * Normalize a JSON Schema into the strict shape external workers require: every
- * object's properties become `required`. Mirrors what the Codex `--output-schema`
- * and Claude `--json-schema` flags expect for structured output.
+ * object's properties become `required`, and homogeneous `anyOf` object rows are
+ * collapsed to a single provider-compatible object. Runtime submit validation
+ * remains the authority for issue-specific allowed sets.
  */
 export function toWorkerStructuredOutputSchema(schema: unknown): unknown {
   if (Array.isArray(schema)) {
@@ -184,11 +185,107 @@ export function toWorkerStructuredOutputSchema(schema: unknown): unknown {
   for (const [key, value] of Object.entries(schema)) {
     normalized[key] = toWorkerStructuredOutputSchema(value);
   }
+  const collapsedAnyOf = collapseHomogeneousAnyOf(normalized);
+  if (collapsedAnyOf) return collapsedAnyOf;
   const properties = normalized.properties;
   if (properties && typeof properties === "object" && !Array.isArray(properties)) {
     normalized.required = Object.keys(properties);
   }
   return normalized;
+}
+
+function collapseHomogeneousAnyOf(
+  schema: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const variants = schema.anyOf;
+  if (!Array.isArray(variants) || variants.length === 0) return null;
+  const records = variants.filter(
+    (variant): variant is Record<string, unknown> =>
+      !!variant && typeof variant === "object" && !Array.isArray(variant),
+  );
+  if (records.length !== variants.length) return null;
+  if (!records.every((record) => record.type === "object")) return null;
+  const propertySets = records.map((record) =>
+    record.properties &&
+    typeof record.properties === "object" &&
+    !Array.isArray(record.properties)
+      ? Object.keys(record.properties).sort()
+      : null,
+  );
+  const firstSet = propertySets[0];
+  if (!firstSet) return null;
+  if (
+    !propertySets.every(
+      (set) =>
+        !!set &&
+        set.length === firstSet.length &&
+        set.every((key, index) => key === firstSet[index]),
+    )
+  ) {
+    return null;
+  }
+  const mergedProperties: Record<string, unknown> = {};
+  for (const key of firstSet) {
+    const merged = mergeHomogeneousProperty(
+      records.map((record) => (record.properties as Record<string, unknown>)[key]),
+    );
+    if (merged === null) return null;
+    mergedProperties[key] = merged;
+  }
+  const collapsed: Record<string, unknown> = {
+    type: "object",
+    additionalProperties: records.every(
+      (record) => record.additionalProperties === false,
+    )
+      ? false
+      : schema.additionalProperties,
+    properties: mergedProperties,
+    required: Object.keys(mergedProperties),
+  };
+  if (typeof schema.description === "string") {
+    collapsed.description = schema.description;
+  }
+  return collapsed;
+}
+
+function mergeHomogeneousProperty(values: unknown[]): unknown | null {
+  const records = values.filter(
+    (value): value is Record<string, unknown> =>
+      !!value && typeof value === "object" && !Array.isArray(value),
+  );
+  if (records.length !== values.length) return sameJson(values) ? values[0] : null;
+  const first = records[0];
+  if (!first) return null;
+  const comparable = records.map(
+    ({ enum: _enum, description: _description, ...rest }) => rest,
+  );
+  if (sameJson(comparable)) {
+    const enumValues = records.flatMap((record) =>
+      Array.isArray(record.enum) ? record.enum : [],
+    );
+    const base = {
+      ...comparable[0],
+      ...(typeof first.description === "string"
+        ? { description: first.description }
+        : {}),
+    };
+    if (enumValues.length > 0) {
+      return {
+        ...base,
+        enum: Array.from(
+          new Set(enumValues.map((value) => JSON.stringify(value))),
+        ).map((value) => JSON.parse(value)),
+      };
+    }
+    return base;
+  }
+  return sameJson(records) ? first : null;
+}
+
+function sameJson(values: unknown[]): boolean {
+  if (values.length === 0) return true;
+  const first = JSON.stringify(values[0]);
+  return values.every((value) => JSON.stringify(value) === first);
 }
 
 /**

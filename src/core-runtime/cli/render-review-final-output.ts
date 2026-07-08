@@ -882,6 +882,7 @@ export async function runRenderReviewFinalOutputCli(
     executionStatus === "completed"
       ? "- bounded review execution completed"
       : `- execution status: ${executionStatus}`;
+  const fallbackImmediateActions = renderActionCandidates(classificationSummary);
 
   const finalOutputText = `---
 session_id: ${bindingArtifact.session_id}
@@ -982,7 +983,7 @@ ${renderedBoundaryNotes}
 ### Immediate Actions Required
 ${synthesisLedger
   ? renderLedgerActions(synthesisLedger)
-  : degradationSummary}
+  : fallbackImmediateActions}
 
 ### Recommendations
 ${synthesisLedger
