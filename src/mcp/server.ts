@@ -602,7 +602,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review_continue",
     description:
-      "Continue a review session when runControl.continuationAvailable is true by reusing trusted PipelineExecutionLedger units and rerunning only the continuation frontier and downstream units.",
+      "The default way to resume a review that halted, timed out, or is prepared (runControl.continuationAvailable=true): reuses trusted PipelineExecutionLedger units and reruns only the continuation frontier and downstream units. Prefer this over starting a new onto_review — it keeps already-completed work. This is the operational resume of a session; it is not the continue_review finding action-candidate (which means the review should expand its evidence boundary).",
     inputSchema: REVIEW_CONTINUE_INPUT_SCHEMA,
   },
   {
@@ -682,7 +682,7 @@ export function advertisedToolDefinitions(): ToolDefinition[] {
   return TOOL_DEFINITIONS.filter((tool) => simple.has(tool.name));
 }
 
-const USAGE_GUIDE = `# Using onto via MCP
+export const USAGE_GUIDE = `# Using onto via MCP
 
 onto is an ontology-as-code review runtime. The host LLM drives it through MCP
 tools; the runtime owns artifacts and validation. Two product paths exist:
@@ -727,6 +727,13 @@ reported through canonical route visibility. Listing tools needs no provider.
    result (full adds the ReviewRecord and final output text); a halted or failed
    session returns the status/failure projection.
    Present using the result's llmPresentation prompts.
+4. If the review halted (status "halted") and runControl.continuationAvailable is
+   true, the default next action is \`onto_review_continue\` with the same
+   sessionRoot: it resumes the session, reuses already-completed units, and
+   reruns only the failed/missing frontier and its downstream. Prefer it over
+   starting a fresh \`onto_review\`. (This operational resume is distinct from the
+   \`continue_review\` finding action-candidate, which means "expand the review's
+   evidence boundary because it was insufficient".)
 
 Other review tools: \`onto_prepare_review\` (materialize without executing) then
 \`onto_review_continue\`; \`onto_review_cancel\` to stop a running session.

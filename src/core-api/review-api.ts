@@ -2303,6 +2303,7 @@ function buildHaltPresentation(input: unknown): LlmPresentationPrompt {
     prompt: [
       "Render a concise halted-partial onto review update from bounded runtime facts.",
       "Use only the provided input facts. Lead with halt identity, produced artifacts, absent artifacts, and available action candidates.",
+      "When run_control.continuationAvailable is true, present the default recovery as calling onto_review_continue with the same sessionRoot: it resumes the session, reuses already-completed units, and reruns only the failed/missing frontier — prefer it over restarting a new review. This operational resume is distinct from the continue_review action-candidate, which means expanding the review's evidence boundary.",
       "Do not present partial findings as a completed review. Use the user's conversation language.",
     ].join("\n"),
     input,
