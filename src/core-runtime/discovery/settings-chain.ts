@@ -704,7 +704,10 @@ export interface ReviewSubmitSalvageSettings {
  * demotes the unit to complete-with-failure instead of halting the run —
  * unless the same validation class fails a majority of units
  * (correlated_validation whole-run halt). Current wiring: issue-stance
- * evidence_refs rejections only.
+ * evidence_refs (§4-6a), issue-deliberation evidence_refs (§4-6a), and
+ * issue-synthesis source_refs_used (§4-2c/2-A). The synthesis and rare-poison
+ * deliberation cases additionally need the §4-2c structural retry gate to reach
+ * the retry loop; issue-stance is excluded from that gate.
  */
 export interface ReviewUnitResubmitSettingsInput {
   enabled?: boolean | undefined;

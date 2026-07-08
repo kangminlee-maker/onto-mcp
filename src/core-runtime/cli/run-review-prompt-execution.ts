@@ -165,6 +165,7 @@ import {
 } from "../llm/model-switcher.js";
 import { parseRuntimeIssueDeliberationSchemaContext } from "./runtime-submit-context.js";
 import { parseRuntimeIssueStanceSchemaContext } from "./runtime-submit-context.js";
+import { parseRuntimeIssueSynthesisSchemaContext } from "./runtime-submit-context.js";
 import { salvageInputPathFor, type SalvageInput } from "./submit-salvage.js";
 import {
   DispatchBreakerState,
@@ -180,6 +181,7 @@ import {
   buildResubmitErrorSpec,
   classifyUnsupportedEvidenceRefFailure,
   classifyDeliberationUnsupportedEvidenceRefFailure,
+  classifySynthesisUnsupportedSourceRefFailure,
   isUnsupportedEvidenceRefFailureMessage,
   correlatedValidationExceeded,
 } from "./unit-resubmit.js";
@@ -1646,20 +1648,54 @@ function failureKindFromMessage(message: string): ReviewUnitFailureKind {
   return "executor_exit";
 }
 
-function shouldRetryUnitFailure(args: {
+export function shouldRetryUnitFailure(args: {
   error: unknown;
   attempt: number;
   maxRetries: number;
+  dispatch: ExecutionDispatchResult;
+  reviewExecutionProfile: ReviewExecutionProfile | undefined;
 }): boolean {
   if (args.attempt >= args.maxRetries) return false;
   const failureKind = failureKindFromError(args.error);
-  if (
-    failureKind === "empty_output" ||
-    failureKind === "output_contract"
-  ) {
-    return false;
+  if (failureKind === "empty_output") return false;
+  if (failureKind === "output_contract") {
+    // §4-2c structural retry gate: an output_contract failure is normally
+    // terminal, but a resubmit-correctable whitelist rejection is
+    // substring-misclassified as output_contract when its message contains an
+    // envelope field name (synthesis: always; deliberation: rare hallucinated
+    // ref). Route it back to a corrective retry only when resubmit will actually
+    // fire on it — otherwise keep the terminal, byte-identical behavior.
+    return isResubmitCorrectableRetry(args);
   }
   return true;
+}
+
+/**
+ * Allow an output_contract retry iff resubmit is enabled AND the unit is
+ * gate-eligible AND the precise structural classifier matches — making the
+ * gate's activation a strict subset of the resubmit strategy's activation
+ * (design §10: F-1 retry ⟺ strategy fires; F-2 issue-stance excluded because its
+ * correlated/demotion machinery reads the terminal failure class). Reads the
+ * shared RESUBMIT_UNIT_ROUTING table so the gate and dispatcher cannot diverge
+ * (M-1). OFF (resubmit disabled) → false → byte-identical to output_contract
+ * being terminal.
+ */
+function isResubmitCorrectableRetry(args: {
+  error: unknown;
+  dispatch: ExecutionDispatchResult;
+  reviewExecutionProfile: ReviewExecutionProfile | undefined;
+}): boolean {
+  if (args.reviewExecutionProfile?.retry?.resubmit?.enabled !== true) {
+    return false;
+  }
+  const outputFormat = args.dispatch.output_format;
+  const routing = outputFormat
+    ? RESUBMIT_UNIT_ROUTING[outputFormat]
+    : undefined;
+  if (!routing || !routing.gateEligible) return false;
+  const message =
+    args.error instanceof Error ? args.error.message : String(args.error);
+  return routing.classify(message) !== null;
 }
 
 function retryTimeoutMs(baseTimeoutMs: number, attempt: number): number {
@@ -1837,11 +1873,56 @@ async function readFrozenUnsupportedRefViolation(
 }
 
 /**
- * 설계 A / §4-6a: unit-agnostic entry for bounded resubmit error-spec
- * injection. Routes by `output_format` to the per-unit strategy; unknown
- * formats (synthesis, ledgers, …) are a no-op, so the retry stays blind for
- * units without a classifiable, spec-correctable validation rejection. The
- * opt-in gate is re-checked here so OFF returns before any per-unit work.
+ * §4-2c single source for resubmit unit routing. Both the dispatcher
+ * (`applyResubmitErrorSpec` → `apply`) and the structural retry gate
+ * (`shouldRetryUnitFailure` → `classify` + `gateEligible`) read this one table,
+ * so the "retry-allowed ⟺ resubmit-strategy-fires" invariant cannot drift across
+ * two parallel switches. `gateEligible` marks units whose output_contract-poison
+ * rejections may be routed back to a corrective retry — deliberation and
+ * synthesis, both of which degrade non-haltingly on cap exhaustion. issue-stance
+ * is deliberately EXCLUDED: its correlated-escalation/demotion machinery reads
+ * the unit's TERMINAL failure class, so making poison-stance retryable could let
+ * a per-lens demotion flip into a whole-run halt (design §10 F-2). Stance keeps
+ * its existing executor_exit-path resubmit unchanged.
+ */
+interface ResubmitUnitRouting {
+  classify: (message: string) => unknown | null;
+  apply: (args: {
+    dispatch: ExecutionDispatchResult;
+    error: unknown;
+    attempt: number;
+    reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+    errorLogPath: string;
+  }) => Promise<boolean>;
+  gateEligible: boolean;
+}
+
+export const RESUBMIT_UNIT_ROUTING: Record<string, ResubmitUnitRouting> =
+  Object.freeze({
+    "issue-stance-response": {
+      classify: classifyUnsupportedEvidenceRefFailure,
+      apply: applyStanceResubmitErrorSpec,
+      gateEligible: false,
+    },
+    "issue-deliberation-response": {
+      classify: classifyDeliberationUnsupportedEvidenceRefFailure,
+      apply: applyDeliberationResubmitErrorSpec,
+      gateEligible: true,
+    },
+    "issue-synthesis-response": {
+      classify: classifySynthesisUnsupportedSourceRefFailure,
+      apply: applySynthesisResubmitErrorSpec,
+      gateEligible: true,
+    },
+  });
+
+/**
+ * 설계 A / §4-6a / §4-2c: unit-agnostic entry for bounded resubmit error-spec
+ * injection. Routes by `output_format` through the shared routing table to the
+ * per-unit strategy; unrouted formats (ledgers, lenses, …) are a no-op, so the
+ * retry stays blind for units without a classifiable, spec-correctable
+ * validation rejection. The opt-in gate is re-checked here so OFF returns before
+ * any per-unit work.
  */
 export async function applyResubmitErrorSpec(args: {
   dispatch: ExecutionDispatchResult;
@@ -1853,13 +1934,11 @@ export async function applyResubmitErrorSpec(args: {
   if (args.reviewExecutionProfile?.retry?.resubmit?.enabled !== true) {
     return false;
   }
-  if (args.dispatch.output_format === "issue-stance-response") {
-    return applyStanceResubmitErrorSpec(args);
-  }
-  if (args.dispatch.output_format === "issue-deliberation-response") {
-    return applyDeliberationResubmitErrorSpec(args);
-  }
-  return false;
+  const outputFormat = args.dispatch.output_format;
+  const routing = outputFormat
+    ? RESUBMIT_UNIT_ROUTING[outputFormat]
+    : undefined;
+  return routing ? routing.apply(args) : false;
 }
 
 /** deliberation unit_id is `deliberation:<issueId>:<lensId>` (the live colon
@@ -1961,6 +2040,103 @@ async function readFrozenDeliberationUnsupportedRefViolation(
     const frozen = JSON.parse(raw) as SalvageInput;
     return typeof frozen.error === "string"
       ? classifyDeliberationUnsupportedEvidenceRefFailure(frozen.error)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** synthesis unit_id is `synthesis:<issueId>` (workItem.work_item_id, built in
+ * synthesis-map-reduce as `synthesis:${issue_id}`); the source_refs_used
+ * rejection text carries no issue_id, so it is recovered here. */
+function synthesisIssueIdFromUnitId(unitId: string): string | null {
+  if (!unitId.startsWith("synthesis:")) return null;
+  const issueId = unitId.slice("synthesis:".length);
+  return issueId.length > 0 ? issueId : null;
+}
+
+/**
+ * §4-2c/2-A synthesis strategy: inject the source_refs_used error spec before
+ * the next retry of a synthesis-response unit whose submit was rejected by the
+ * `allowed_source_refs` whitelist (bad ref) or the "must include at least one"
+ * guard. issue_id comes from the dispatch unit_id, the allowed set from the
+ * packet's runtime projection. Cap exhaustion keeps synthesis's existing
+ * non-halting degrade (completeUnavailableSynthesisResponseUnit) — no demotion
+ * machinery. In-loop retry reachability depends on the structural retry gate
+ * (shouldRetryUnitFailure), because the synthesis rejection message always
+ * substring-classifies as output_contract.
+ */
+async function applySynthesisResubmitErrorSpec(args: {
+  dispatch: ExecutionDispatchResult;
+  error: unknown;
+  attempt: number;
+  reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+  errorLogPath: string;
+}): Promise<boolean> {
+  if (args.reviewExecutionProfile?.retry?.resubmit?.enabled !== true) {
+    return false;
+  }
+  if (args.dispatch.output_format !== "issue-synthesis-response") return false;
+  const violation =
+    classifySynthesisUnsupportedSourceRefFailure(
+      args.error instanceof Error ? args.error.message : String(args.error),
+    ) ??
+    (await readFrozenSynthesisUnsupportedRefViolation(args.dispatch.output_path));
+  if (!violation) return false;
+  const issueId = synthesisIssueIdFromUnitId(args.dispatch.unit_id);
+  if (!issueId) return false;
+  let packetText: string;
+  try {
+    packetText = await fs.readFile(args.dispatch.packet_path, "utf8");
+  } catch {
+    return false;
+  }
+  let allowedRefs: string[] = [];
+  try {
+    allowedRefs =
+      parseRuntimeIssueSynthesisSchemaContext(packetText).allowed_source_refs;
+  } catch {
+    allowedRefs = [];
+  }
+  const resubmitAttempt = args.attempt + 1;
+  await fs.writeFile(
+    args.dispatch.packet_path,
+    applyResubmitErrorSpecToPacket(
+      packetText,
+      buildResubmitErrorSpec({
+        violation: {
+          stanceIndex: null,
+          issueId,
+          evidenceRef: violation.sourceRef ?? "",
+        },
+        allowedEvidenceRefs: allowedRefs,
+        resubmitAttempt,
+        unit: { kind: "synthesis", issueId },
+      }),
+    ),
+    "utf8",
+  );
+  await appendExecutionProgress(
+    args.errorLogPath,
+    `runner synthesis resubmit: ${args.dispatch.unit_id}`,
+    [
+      `resubmit_attempt: ${resubmitAttempt}`,
+      `issue_id: ${issueId}`,
+      `unsupported_ref: ${violation.sourceRef ?? "(none — must cite >=1 allowed source ref)"}`,
+    ],
+  );
+  return true;
+}
+
+/** Synthesis counterpart of readFrozenUnsupportedRefViolation. */
+async function readFrozenSynthesisUnsupportedRefViolation(
+  outputPath: string,
+): Promise<ReturnType<typeof classifySynthesisUnsupportedSourceRefFailure>> {
+  try {
+    const raw = await fs.readFile(salvageInputPathFor(outputPath), "utf8");
+    const frozen = JSON.parse(raw) as SalvageInput;
+    return typeof frozen.error === "string"
+      ? classifySynthesisUnsupportedSourceRefFailure(frozen.error)
       : null;
   } catch {
     return null;
@@ -3914,7 +4090,7 @@ async function runSingleDispatchWithRetries(args: {
       };
     } catch (error: unknown) {
       lastError = error;
-      if (shouldRetryUnitFailure({ error, attempt, maxRetries: effectiveMaxRetries })) {
+      if (shouldRetryUnitFailure({ error, attempt, maxRetries: effectiveMaxRetries, dispatch, reviewExecutionProfile })) {
         const retryDelay = effectiveRetryInitialDelayMs * (attempt + 1);
         console.log(
           `[review runner] ${dispatch.unit_id} attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
@@ -3948,7 +4124,7 @@ async function runSingleDispatchWithRetries(args: {
         }
         await sleep(retryDelay);
       }
-      if (!shouldRetryUnitFailure({ error, attempt, maxRetries: effectiveMaxRetries })) break;
+      if (!shouldRetryUnitFailure({ error, attempt, maxRetries: effectiveMaxRetries, dispatch, reviewExecutionProfile })) break;
     }
   }
 
@@ -6988,6 +7164,8 @@ export async function executeReviewPromptExecution(
               error,
               attempt,
               maxRetries: effectiveMaxRetries,
+              dispatch,
+              reviewExecutionProfile: params.reviewExecutionProfile,
             })
           ) {
             const retryDelay = effectiveRetryInitialDelayMs * (attempt + 1);
@@ -7010,6 +7188,8 @@ export async function executeReviewPromptExecution(
               error,
               attempt,
               maxRetries: effectiveMaxRetries,
+              dispatch,
+              reviewExecutionProfile: params.reviewExecutionProfile,
             })
           ) break;
         }
