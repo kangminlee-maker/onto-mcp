@@ -682,19 +682,24 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
     ],
   );
 
+  // Boundary uncertainty's preservation AUTHORITY is the finding-ledger
+  // (non-material findings), not the final Boundary Notes projection. A model
+  // preserves the decoy's uncertainty by recording it as a non-material,
+  // boundary-contextualized finding; whether it also echoes that into the final
+  // summary is a projection-style choice, not a quality signal — one model may
+  // prioritize the MATERIAL issue's own confidence boundaries in the final note
+  // and keep the non-material decoy in the ledger for audit, which is at least as
+  // sound. So this reads nonMaterialText (the authority) and stays independent of
+  // false_materiality_guard, which checks the ORTHOGONAL axis: the decoy was not
+  // mis-promoted to a material issue. (A decoy surfaced only in the final note but
+  // absent from the authority still fails here — authority is where it must live.)
   const boundaryUncertainty = check(
     "boundary_uncertainty_preservation",
     !falseMaterialityCandidateObserved ||
-      (
-        boundaryNotes !== null &&
-        textContainsAny(boundaryNotesText, fixture.boundaryUncertaintyTerms) &&
-        textContainsAny(boundaryNotesText, fixture.boundaryContextTerms)
-      ),
+      containsBoundarySensitiveUncertainty(nonMaterialText, fixture),
     [
-      boundaryNotes === null
-        ? "Boundary Notes section missing"
-        : `Boundary Notes chars=${boundaryNotes.length}`,
-      `expected: compact note preserving ${fixture.boundaryUncertaintyTerms.join(", ")} uncertainty`,
+      `non_material_boundary_chars=${nonMaterialText.length}`,
+      `expected boundary uncertainty (${fixture.boundaryUncertaintyTerms.join(", ")}) preserved in the finding-ledger authority (non-material findings)`,
     ],
   );
 
