@@ -5,7 +5,7 @@ import {
   OntoSimpleProfileToolNames,
   OntoToolNames,
 } from "./tool-schemas.js";
-import { advertisedToolDefinitions } from "./server.js";
+import { advertisedToolDefinitions, USAGE_GUIDE } from "./server.js";
 
 // Pins the consolidated MCP tool surface from the Host Usability Roadmap
 // (docs/architecture/mcp-native-tool-surface.md §Phase 1). INV-TEST-1: these
@@ -98,5 +98,45 @@ describe("MCP tool surface (Host Usability Roadmap Phase 1)", () => {
     expect(properties.llmEffort).toBeDefined();
     expect(properties.judgeLlmEffort).toBeDefined();
     expect(properties.judgeModel).toBeDefined();
+  });
+});
+
+// §4-6b: onto_review_continue is the DEFAULT operational resume for a
+// halted/timed-out review, and the host guidance must keep it distinct from the
+// continue_review finding action-candidate (evidence-boundary expansion). These
+// assertions are discriminating: the pre-§4-6b conditional framing (no "default"
+// resume role, no continue_review disambiguation) fails them.
+describe("review continuation default guidance (§4-6b)", () => {
+  const continueDescription = (): string => {
+    const tool = advertisedToolDefinitions().find(
+      (entry) => entry.name === "onto_review_continue",
+    );
+    expect(tool).toBeDefined();
+    return String(tool!.description);
+  };
+
+  it("frames onto_review_continue as the default resume for halted/timed-out sessions", () => {
+    const description = continueDescription();
+    expect(description).toMatch(/default way to resume/i);
+    expect(description).toMatch(/halted/i);
+    // Prefer resuming over restarting a fresh review.
+    expect(description).toMatch(/prefer this over starting a new onto_review/i);
+  });
+
+  it("disambiguates the operational resume from the continue_review action-candidate", () => {
+    const description = continueDescription();
+    // Names the colliding concept explicitly and marks it as NOT the same thing.
+    expect(description).toContain("continue_review");
+    expect(description).toMatch(/not the continue_review|distinct from/i);
+    expect(description).toMatch(/expand/i);
+  });
+
+  it("teaches the halt→continue default in the usage guide, distinct from continue_review", () => {
+    // Happy-path resume step: halted + continuationAvailable → onto_review_continue.
+    expect(USAGE_GUIDE).toMatch(/halted/i);
+    expect(USAGE_GUIDE).toContain("default next action is `onto_review_continue`");
+    expect(USAGE_GUIDE).toContain("continuationAvailable");
+    // Same disambiguation carried into the reference guide.
+    expect(USAGE_GUIDE).toContain("continue_review");
   });
 });

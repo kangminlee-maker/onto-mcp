@@ -1530,6 +1530,17 @@ describe("createOntoReviewCoreApi", () => {
         "halted_partial",
       );
       expect(haltedStatus.runControl?.alreadyRunning).toBe(false);
+      // §4-6b: the halt presentation reaching the host must steer to
+      // onto_review_continue as the default recovery, keep it distinct from the
+      // continue_review action-candidate, and the signal it references must
+      // actually be true on this real halted session (non-vacuous).
+      expect(haltedStatus.runControl?.continuationAvailable).toBe(true);
+      expect(haltedStatus.runControl?.retrySemantics).toBe("use_review_continue");
+      const haltPrompt = haltedStatus.llmPresentation?.halt?.prompt ?? "";
+      expect(haltPrompt).toContain("onto_review_continue");
+      expect(haltPrompt).toMatch(/default recovery/i);
+      expect(haltPrompt).toMatch(/run_control\.continuationAvailable/);
+      expect(haltPrompt).toContain("continue_review");
       const haltedProgressInput = haltedStatus.llmPresentation?.progress?.input as
         | { latest_update?: { summary?: string }; halt?: { reason?: string } }
         | undefined;
