@@ -253,6 +253,7 @@ async function runSubmitSalvageMode(args: {
 
   const workerBase = {
     projectRoot: args.projectRoot,
+    jsonSchema: args.submitSchema.schema,
     sandboxMode: args.sandboxMode,
     unitId: args.unitId,
     unitKind: args.unitKind,
@@ -332,6 +333,7 @@ async function runSubmitSalvageMode(args: {
 async function runClaudeWorker(args: {
   projectRoot: string;
   boundedPrompt: string;
+  jsonSchema?: unknown;
   model: string | undefined;
   reasoningEffort: string | undefined;
   sandboxMode: string;
@@ -360,11 +362,19 @@ async function runClaudeWorker(args: {
   if (args.reasoningEffort && args.reasoningEffort.length > 0) {
     claudeArgs.push("--effort", args.reasoningEffort);
   }
-  // The schema is embedded in the prompt rather than passed via --json-schema:
-  // claude's --json-schema validator silently rejects the runtime's complex
-  // submit schemas (additionalProperties:false + deep required) and exits with
-  // no output. The submit tool remains the authoritative validator.
-  //
+  // --json-schema constrains output at the API level (grammar-based structured
+  // outputs) so the model CANNOT emit syntactically malformed JSON; the CLI then
+  // returns a parsed `structured_output` object (extractClaudeStructuredPayload
+  // reads that first). Empirically (opus-4.8 + haiku, 2026-07) the flag accepts
+  // the runtime's submit schemas (additionalProperties:false + deep required,
+  // ~20 params, enums) and returns native objects — the earlier "silently
+  // rejects complex schemas" note was inaccurate. Without this, opus free-forms
+  // the JSON in-prompt and can drop a comma on large findings → output_contract
+  // failure with no recovery. The in-prompt schema stays as a redundant semantic
+  // hint; the submit tool remains the authoritative VALIDATOR of field content.
+  if (args.jsonSchema !== undefined) {
+    claudeArgs.push("--json-schema", JSON.stringify(args.jsonSchema));
+  }
   // Never load project/user MCP servers in the bounded worker (no side effects,
   // no mcp__* tools to auto-approve).
   claudeArgs.push("--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}');
@@ -703,6 +713,7 @@ export async function runClaudeCodeReviewUnitExecutorCli(
     const stdout = await runClaudeWorker({
       projectRoot,
       boundedPrompt,
+      jsonSchema: submitSchema?.schema,
       model,
       reasoningEffort,
       sandboxMode,
