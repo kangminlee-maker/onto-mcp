@@ -38,7 +38,7 @@ review continuation frontier가 아니라 reconstruct `dispatch-incomplete.yaml`
 
 ## 5. F1 result (2026-07-09)
 
-Status: implemented in the working tree.
+Status: landed at `7b1c9b4`.
 
 - `run-review-prompt-execution.ts` now creates review fan-out breaker state with
   `concurrent:true` when the actual run-owing lens/issue-stance dispatch width is greater
@@ -63,6 +63,8 @@ Verification:
 - `npm run check:review:invocation-runner` — passed.
 - `npm run check:review:route` — passed.
 - `npm run check:mcp:review` — passed.
+- Combined rerun of the five targeted resubmit suites — 49 passed.
+- Post-commit `npm run check:invariant-drift` — no_drift.
 - `npm run check:import-boundary` — passed.
 - `npm run check:invariant-drift` — no_drift.
 - Cross-validation rerun after correction: `npx vitest run src/core-api/runtime-pipeline-dispatch-breaker.test.ts src/core-runtime/llm/dispatch-breaker.test.ts` — 33 passed; `npm run check:ts-core` — passed; `git diff --check` — clean.
