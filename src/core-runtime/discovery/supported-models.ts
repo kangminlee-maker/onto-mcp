@@ -7,9 +7,12 @@
  * provider calls) and by the G7 committed-config guard (which covers every
  * committed seat). Review-side runtime enforcement is a noted follow-up, so the
  * runtime gate today is wired on the reconstruct live path only. An unlisted
- * (provider, model) is rejected fail-loud at those gate points. Settings
- * resolution itself stays a PURE projection and does NOT apply this gate (see
- * settings-chain). The
+ * (provider, model) is rejected fail-loud at those gate points. The only
+ * runtime-owned exception is the B7 bench-candidate option passed explicitly by
+ * a benchmark harness: it can rescue an UNREGISTERED pair only at an exact
+ * allowlisted route path, and it never rescues registered role mismatches.
+ * Settings resolution itself stays a PURE projection and does NOT apply this
+ * gate (see settings-chain). The
  * authority ships with the onto install (it is located from the install root,
  * like core-lens-registry.yaml), so it is always present. The registry is data
  * (human-curated, evidence-cited); this module loads it and provides the
@@ -113,6 +116,19 @@ const SupportedModelRegistrySchema = z
 
 export type SupportedModelRegistry = z.infer<typeof SupportedModelRegistrySchema>;
 
+export interface BenchCandidateModelAllowance {
+  provider: string;
+  model: string;
+  allowedRoutePaths: readonly string[];
+}
+
+export interface SupportedModelGateOptions {
+  benchCandidates?: readonly BenchCandidateModelAllowance[];
+}
+
+export const RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH =
+  "reconstruct.execution.actors.semantic_map_synthesize.llm";
+
 /**
  * A model dispatch whose route must be gate-validated. The single runtime-owned
  * input vocabulary for role derivation (design §2.3): every place a
@@ -140,7 +156,7 @@ export function requiredSupportedModelRoleForDispatch(
       return "author";
     case "reconstruct.execution.actors.confirmation_provider.llm":
       return "confirmation_provider";
-    case "reconstruct.execution.actors.semantic_map_synthesize.llm":
+    case RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH:
       return "semantic_map_synthesize";
     default:
       // Review seats, salvage transcription, top-level llm, and any future
@@ -345,6 +361,33 @@ function entryCoversRole(
   return entry.roles === undefined || entry.roles.includes(role);
 }
 
+function supportedModelEntryFor(
+  registry: SupportedModelRegistry,
+  provider: string,
+  model: string,
+): SupportedModelRegistry["supported_models"][number] | undefined {
+  return registry.supported_models.find(
+    (entry) => entry.provider === provider && entry.model === model,
+  );
+}
+
+function isAllowedUnregisteredBenchCandidate(
+  route: EffectiveModelRoute,
+  registry: SupportedModelRegistry,
+  options: SupportedModelGateOptions | undefined,
+): boolean {
+  if (route.provider === undefined || route.model === undefined) return false;
+  if (supportedModelEntryFor(registry, route.provider, route.model) !== undefined) {
+    return false;
+  }
+  return (options?.benchCandidates ?? []).some(
+    (candidate) =>
+      candidate.provider === route.provider &&
+      candidate.model === route.model &&
+      candidate.allowedRoutePaths.includes(route.path),
+  );
+}
+
 /** Non-throwing membership check: is (provider, model) a benchmark-verified
  * supported route FOR THIS DISPATCH? Reuses the same registry as
  * {@link assertSupportedModelRoutes}, but returns a boolean so opt-in callers
@@ -362,12 +405,8 @@ export function isSupportedModelRoute(
 ): boolean {
   if (provider === undefined || model === undefined) return false;
   const role = requiredSupportedModelRoleForDispatch(dispatch);
-  return registry.supported_models.some(
-    (entry) =>
-      entry.provider === provider &&
-      entry.model === model &&
-      entryCoversRole(entry, role),
-  );
+  const entry = supportedModelEntryFor(registry, provider, model);
+  return entry !== undefined && entryCoversRole(entry, role);
 }
 
 /** Throws if any effective route is not a benchmark-verified (provider, model)
@@ -380,15 +419,13 @@ export function isSupportedModelRoute(
 export function assertSupportedModelRoutes(
   routes: ReadonlyArray<EffectiveModelRoute>,
   registry: SupportedModelRegistry,
+  options?: SupportedModelGateOptions,
 ): void {
-  const entryFor = (provider: string, model: string) =>
-    registry.supported_models.find(
-      (entry) => entry.provider === provider && entry.model === model,
-    );
   const violations = routes.filter((route) => {
     if (route.provider === undefined || route.model === undefined) return true;
-    const entry = entryFor(route.provider, route.model);
-    return entry === undefined || !entryCoversRole(entry, route.requiredRole);
+    const entry = supportedModelEntryFor(registry, route.provider, route.model);
+    if (entry !== undefined) return !entryCoversRole(entry, route.requiredRole);
+    return !isAllowedUnregisteredBenchCandidate(route, registry, options);
   });
   if (violations.length === 0) return;
   const detail = violations
@@ -397,7 +434,7 @@ export function assertSupportedModelRoutes(
         route.provider ? `${route.provider}/` : "(unresolved provider)/"
       }${route.model ?? "(unresolved model)"}`;
       const entry = route.provider !== undefined && route.model !== undefined
-        ? entryFor(route.provider, route.model)
+        ? supportedModelEntryFor(registry, route.provider, route.model)
         : undefined;
       const reason = entry?.roles
         ? ` — certified for [${entry.roles.join(", ")}], seat requires ${route.requiredRole}`
@@ -418,4 +455,37 @@ export function assertSupportedModelRoutes(
       `Benchmark-verified selectable models: ${allowed}. Add a model (or role) ` +
       "only with the evidence its contract requires (see the registry header).",
   );
+}
+
+export function assertB4BenchCandidateDispatchAllowed(args: {
+  provider: string;
+  model: string;
+  registry?: SupportedModelRegistry;
+}): { allowance: "registered_supported" | "bench_candidate"; route: EffectiveModelRoute } {
+  const registry = args.registry ?? loadSupportedModelRegistry();
+  const route: EffectiveModelRoute = {
+    provider: args.provider,
+    model: args.model,
+    path: RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH,
+    requiredRole: requiredSupportedModelRoleForDispatch({
+      kind: "settings_path",
+      path: RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH,
+    }),
+  };
+  try {
+    assertSupportedModelRoutes([route], registry);
+    return { allowance: "registered_supported", route };
+  } catch (error) {
+    if (supportedModelEntryFor(registry, args.provider, args.model) !== undefined) {
+      throw error;
+    }
+  }
+  assertSupportedModelRoutes([route], registry, {
+    benchCandidates: [{
+      provider: args.provider,
+      model: args.model,
+      allowedRoutePaths: [RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH],
+    }],
+  });
+  return { allowance: "bench_candidate", route };
 }

@@ -14,8 +14,8 @@
  *    supported-model-registry resolution for the openai `semantic_author`
  *    seat (reference/baseline/judge), a directly-constructed anthropic
  *    candidate seat (candidate/negative_control — currently claude-sonnet-5
- *    with extended thinking OFF; §5, not a registry-gated settings seat by
- *    design; see that module's doc), a 1-call quota probe per
+ *    with extended thinking OFF; §5, checked by the live module's exact-path
+ *    bench allowance before the config is constructed), a 1-call quota probe per
  *    distinct provider route, and an incremental local/ capture sidecar.
  *  - --go ... --resume <runDir> : resumes an interrupted live run against the
  *    SAME --fixture args (same order) instead of re-spending the reference

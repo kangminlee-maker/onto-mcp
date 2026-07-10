@@ -743,6 +743,9 @@ import {
   assertSettingsModelsSupported,
   type OntoSettings as OntoSettingsForSeat,
 } from "./settings-chain.js";
+import {
+  RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH,
+} from "./supported-models.js";
 
 describe("reconstruct source-layer structure preservation (design §5.1)", () => {
   const llm = {
@@ -873,8 +876,7 @@ describe("synthesize seat + opt-in through real settings files (P1/N12/P4/U6/N8)
     fs.rmSync(scratchRoot, { recursive: true, force: true });
   });
 
-  const SYNTH_SEAT_PATH =
-    "reconstruct.execution.actors.semantic_map_synthesize.llm";
+  const SYNTH_SEAT_PATH = RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH;
   const haikuLlm = {
     auth: "oauth",
     provider: "anthropic",
@@ -985,10 +987,11 @@ describe("synthesize seat + opt-in through real settings files (P1/N12/P4/U6/N8)
     const settings = {
       reconstruct: reconstructBlock(true, true),
     } as unknown as OntoSettingsForSeat;
-    expect(
-      collectRoutesForSeat(settings).find((r) => r.path === SYNTH_SEAT_PATH)
-        ?.requiredRole,
-    ).toBe("semantic_map_synthesize");
+    const synthRoutes = collectRoutesForSeat(settings).filter((r) =>
+      r.path === SYNTH_SEAT_PATH
+    );
+    expect(synthRoutes).toHaveLength(1);
+    expect(synthRoutes[0]?.requiredRole).toBe("semantic_map_synthesize");
   });
 
   // N8 pair against the REAL install registry (anthropic/claude-haiku is not
@@ -1006,5 +1009,44 @@ describe("synthesize seat + opt-in through real settings files (P1/N12/P4/U6/N8)
       reconstruct: reconstructBlock(true, false),
     } as unknown as OntoSettingsForSeat;
     expect(() => assertSettingsModelsSupported(settings)).not.toThrow();
+  });
+
+  it("B7: explicit bench option reaches the active synthesize route only", () => {
+    const candidateModel = "claude-sonnet-b7-candidate";
+    const settings = {
+      reconstruct: {
+        execution: {
+          actors: {
+            semantic_author: { llm: { ...gptLlm } },
+            confirmation_provider: { llm: { ...gptLlm } },
+            semantic_map_synthesize: {
+              llm: { ...haikuLlm, model: candidateModel },
+            },
+          },
+          semantic_map_authoring: true,
+        },
+      },
+    } as unknown as OntoSettingsForSeat;
+    const synthRoutes = collectRoutesForSeat(settings).filter((r) =>
+      r.path === SYNTH_SEAT_PATH
+    );
+    expect(synthRoutes).toHaveLength(1);
+    expect(synthRoutes[0]).toMatchObject({
+      provider: "anthropic",
+      model: candidateModel,
+      requiredRole: "semantic_map_synthesize",
+    });
+    expect(() => assertSettingsModelsSupported(settings)).toThrow(
+      /anthropic\/claude-sonnet-b7-candidate/,
+    );
+    expect(() =>
+      assertSettingsModelsSupported(settings, {
+        benchCandidates: [{
+          provider: "anthropic",
+          model: candidateModel,
+          allowedRoutePaths: [SYNTH_SEAT_PATH],
+        }],
+      })
+    ).not.toThrow();
   });
 });

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertB4BenchCandidateDispatchAllowed,
   assertRepoRelativeEvidenceRefs,
   assertSupportedModelRoutes,
   collectModelSelections,
   exactTrackedMode,
   isSupportedModelRoute,
   parseSupportedModelRegistry,
+  RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH,
   requiredSupportedModelRoleForDispatch,
   type SupportedModelDispatch,
   type SupportedModelRegistry,
@@ -426,7 +428,7 @@ describe("assertSupportedModelRoutes", () => {
 });
 
 describe("assertSupportedModelRoutes (role coverage)", () => {
-  const SYNTH_SEAT = "reconstruct.execution.actors.semantic_map_synthesize.llm";
+  const SYNTH_SEAT = RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH;
   const AUTHOR_SEAT = "reconstruct.execution.actors.semantic_author.llm";
   const CONFIRM_SEAT = "reconstruct.execution.actors.confirmation_provider.llm";
   const haiku = (path: string) =>
@@ -506,6 +508,114 @@ describe("assertSupportedModelRoutes (role coverage)", () => {
         roleRestricted,
       )
     ).toThrow(/anthropic\/claude-sonnet-5/);
+  });
+
+  it("allows an explicit unregistered bench candidate only at the exact synthesize path", () => {
+    const candidate = route("anthropic", "claude-sonnet-b7-candidate", SYNTH_SEAT);
+    expect(() => assertSupportedModelRoutes([candidate], roleRestricted))
+      .toThrow(/anthropic\/claude-sonnet-b7-candidate/);
+    expect(() =>
+      assertSupportedModelRoutes([candidate], roleRestricted, {
+        benchCandidates: [{
+          provider: "anthropic",
+          model: "claude-sonnet-b7-candidate",
+          allowedRoutePaths: [SYNTH_SEAT],
+        }],
+      })
+    ).not.toThrow();
+    expect(() =>
+      assertSupportedModelRoutes(
+        [route("anthropic", "claude-sonnet-b7-candidate", AUTHOR_SEAT)],
+        roleRestricted,
+        {
+          benchCandidates: [{
+            provider: "anthropic",
+            model: "claude-sonnet-b7-candidate",
+            allowedRoutePaths: [SYNTH_SEAT],
+          }],
+        },
+      )
+    ).toThrow(/anthropic\/claude-sonnet-b7-candidate/);
+  });
+
+  it("does not rescue identity mismatches or unresolved routes with the bench option", () => {
+    const allowance = {
+      provider: "anthropic",
+      model: "claude-sonnet-b7-candidate",
+      allowedRoutePaths: [SYNTH_SEAT],
+    };
+    expect(() =>
+      assertSupportedModelRoutes(
+        [route("openai", "claude-sonnet-b7-candidate", SYNTH_SEAT)],
+        roleRestricted,
+        { benchCandidates: [allowance] },
+      )
+    ).toThrow(/openai\/claude-sonnet-b7-candidate/);
+    expect(() =>
+      assertSupportedModelRoutes(
+        [route(undefined, "claude-sonnet-b7-candidate", SYNTH_SEAT)],
+        roleRestricted,
+        { benchCandidates: [allowance] },
+      )
+    ).toThrow(/unresolved provider/);
+    expect(() =>
+      assertSupportedModelRoutes(
+        [route("anthropic", undefined, SYNTH_SEAT)],
+        roleRestricted,
+        { benchCandidates: [allowance] },
+      )
+    ).toThrow(/unresolved model/);
+  });
+
+  it("does not rescue registered role mismatches with the bench option", () => {
+    expect(() =>
+      assertSupportedModelRoutes([haiku(AUTHOR_SEAT)], roleRestricted, {
+        benchCandidates: [{
+          provider: "anthropic",
+          model: "claude-haiku-4-5-20251001",
+          allowedRoutePaths: [AUTHOR_SEAT],
+        }],
+      })
+    ).toThrow(/certified for \[semantic_map_synthesize\], seat requires author/);
+  });
+
+  it("gates B4 candidates through normal support first and bench allowance only for unregistered pairs", () => {
+    expect(
+      assertB4BenchCandidateDispatchAllowed({
+        provider: "anthropic",
+        model: "claude-haiku-4-5-20251001",
+        registry: roleRestricted,
+      }).allowance,
+    ).toBe("registered_supported");
+    expect(
+      assertB4BenchCandidateDispatchAllowed({
+        provider: "anthropic",
+        model: "claude-sonnet-b7-candidate",
+        registry: roleRestricted,
+      }).allowance,
+    ).toBe("bench_candidate");
+  });
+
+  it("does not let the B4 helper bypass a registered model's missing synthesize role", () => {
+    const authorOnly: SupportedModelRegistry = {
+      schema_version: "1",
+      supported_models: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-b7-candidate",
+          verified_at: "2026-07-10",
+          benchmark_evidence_refs: ["development-records/benchmark/z.json"],
+          roles: ["author"],
+        },
+      ],
+    };
+    expect(() =>
+      assertB4BenchCandidateDispatchAllowed({
+        provider: "anthropic",
+        model: "claude-sonnet-b7-candidate",
+        registry: authorOnly,
+      })
+    ).toThrow(/certified for \[author\], seat requires semantic_map_synthesize/);
   });
 });
 

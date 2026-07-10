@@ -17,16 +17,11 @@
  *  - candidate + negative_control: a directly-constructed anthropic seat
  *    (caller-supplied model + optional thinking mode — currently
  *    claude-sonnet-5 with extended thinking OFF), built DIRECTLY — NOT a
- *    settings seat. `assertSettingsModelsSupported` walks only routes
- *    `collectModelSelections` finds inside the settings OBJECT
- *    (supported-models.ts's dispatch vocabulary is `settings_path` |
- *    `request_judge`); a script-constructed LlmCallConfig that never enters
- *    `settings` is structurally invisible to that walk, so it is never gated.
- *    This is not a bypass of an enforced boundary — B4 exists precisely to
- *    produce the evidence that would let a not-yet-registered candidate occupy
- *    a REAL settings seat; gating the bench's own candidate dispatch on
- *    registry membership would make the benchmark that creates the registry
- *    entry unbuildable.
+ *    settings seat. Before constructing that LlmCallConfig, the harness calls
+ *    `assertB4BenchCandidateDispatchAllowed`: registered candidates must pass
+ *    the normal supported-model gate for the semantic-map synthesize seat, and
+ *    unregistered candidates may pass only through the B7 exact-path bench
+ *    allowance for that same seat.
  *  - judge: the SAME resolved semantic_author config (openai/gpt-5.5) at its
  *    BASE effort (the ⑤a low-effort finding is scoped to synthesize quality
  *    parity, not judging) — dispatched via a raw callLlm with the dedicated
@@ -41,6 +36,9 @@ import {
   resolveSettingsChain,
   type OntoSettings,
 } from "../src/core-runtime/discovery/settings-chain.ts";
+import {
+  assertB4BenchCandidateDispatchAllowed,
+} from "../src/core-runtime/discovery/supported-models.ts";
 import {
   callLlm,
   resolveLlmProviderConfig,
@@ -133,6 +131,10 @@ export async function resolveB4LiveSeats(args: {
   }
   const baselineLlmConfig = resolveLlmProviderConfig({ config: { llm: authorLlm } });
 
+  assertB4BenchCandidateDispatchAllowed({
+    provider: args.candidate.provider,
+    model: args.candidate.model,
+  });
   const candidateLlmConfig = resolveLlmProviderConfig({
     config: { llm: { provider: args.candidate.provider, model: args.candidate.model } },
   });

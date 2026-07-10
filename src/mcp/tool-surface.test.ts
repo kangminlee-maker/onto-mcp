@@ -99,6 +99,28 @@ describe("MCP tool surface (Host Usability Roadmap Phase 1)", () => {
     expect(properties.judgeLlmEffort).toBeDefined();
     expect(properties.judgeModel).toBeDefined();
   });
+
+  it("does not expose a benchCandidate escape hatch on the onto_reconstruct product surface", () => {
+    expect(() =>
+      OntoReconstructToolInputSchema.parse({
+        targetRefs: ["schedule.csv"],
+        intent: "reconstruct the schedule",
+        benchCandidate: { provider: "anthropic", model: "candidate" },
+      })
+    ).toThrow();
+
+    const reconstructTool = advertisedToolDefinitions().find(
+      (tool) => tool.name === "onto_reconstruct",
+    );
+    expect(reconstructTool).toBeDefined();
+    const properties = (reconstructTool!.inputSchema as {
+      properties: Record<string, unknown>;
+    }).properties;
+    expect(properties.benchCandidate).toBeUndefined();
+    expect(JSON.stringify(reconstructTool!.inputSchema)).not.toContain(
+      "benchCandidate",
+    );
+  });
 });
 
 // §4-6b: onto_review_continue is the DEFAULT operational resume for a

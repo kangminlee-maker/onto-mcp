@@ -21,6 +21,7 @@ import {
   type EffectiveModelRoute,
   loadSupportedModelRegistry,
   SUPPORTED_MODELS_AUTHORITY_PATH,
+  type SupportedModelGateOptions,
 } from "./supported-models.js";
 
 const LlmAuthModeSchema = z.enum(["api_key", "oauth", "local"]);
@@ -1677,11 +1678,15 @@ export function collectEffectiveModelRoutes(
  * disagree. Mock/test paths that resolve settings without making real calls
  * never invoke it.
  */
-export function assertSettingsModelsSupported(settings: OntoSettings): void {
+export function assertSettingsModelsSupported(
+  settings: OntoSettings,
+  options?: SupportedModelGateOptions,
+): void {
   try {
     assertSupportedModelRoutes(
       collectEffectiveModelRoutes(settings),
       loadSupportedModelRegistry(),
+      options,
     );
   } catch (error) {
     if (error instanceof OntoSettingsValidationError) throw error;
