@@ -154,3 +154,49 @@ Backlog status after this cut:
 4. §4-6c review unit model/effort tiering policy values — done in working tree.
 5. Next: §4-4 breaker-trip fallback provider swap / family-collapse.
 6. Then: rare-poison-stance hardening.
+
+## 8. §4-4 design gate (2026-07-10)
+
+Status: design captured, implementation blocked on owner approval.
+
+Real-code correction:
+
+- `dispatch-breaker.ts` still deliberately implements breaker trip as halt +
+  incomplete-item persistence. Fallback provider swap is the deferred later cut.
+- Reconstruct semantic-map now has the correct consumer for P1: same-batch
+  `dispatch-incomplete.yaml` + `semantic-map-resume-validation.yaml`.
+- Review recovery authority is different: continuation frontier, not
+  `dispatch-incomplete.yaml`.
+- B7 `benchCandidate` is benchmark-only and must not be reused for product
+  fallback.
+
+Design artifact:
+
+- `development-records/design/20260710-s4-4-fallback-provider-swap-design.md`
+
+Recommendation:
+
+- Implement P1 as reconstruct semantic-map only, behind a new default-off
+  `reconstruct.execution.dispatch_fallback` settings key.
+- Require a full fallback LLM config (`provider`, `auth`, `model`) and exact
+  route allowlist. No provider/model/auth defaults.
+- First trigger class should be `rate_limit` only unless owner explicitly
+  approves `transport` too. Exclude `auth` from first cut.
+- Record `dispatch-fallback.yaml` and make reconstruct status/result or record
+  consume it so family-collapse does not become inert.
+- Defer review provider swap to P2, likely via explicit `onto_review_continue`
+  fallback profile.
+
+Approval required before code:
+
+- `.onto/settings.json` schema/key addition touches AGENTS §0 protected settings
+  contract and INV-CFG-1/INV-AUTH-1/INV-MODEL-1.
+- Product fallback route gate must be separate from B7 benchCandidate.
+
+Backlog status after this gate:
+
+1. §4-4 P1 reconstruct semantic-map fallback provider swap — waiting for owner
+   approval of default-off settings schema and trigger class.
+2. §4-4 P2 review fallback provider swap — deferred.
+3. rare-poison-stance hardening — next non-schema fallback item if approval is
+   not granted yet.
