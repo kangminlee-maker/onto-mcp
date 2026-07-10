@@ -6,6 +6,7 @@ import {
   REVIEW_EXECUTION_UNIT_IDS,
   defaultReviewExecutionUnits,
   projectSettingsPath,
+  readSettingsAt,
   resolveReconstructActorLlmSettings,
   resolveSettingsChain,
   userSettingsPath,
@@ -460,6 +461,59 @@ describe("resolveSettingsChain", () => {
       max_output_bytes: 524288,
     });
     expect(units.lens?.llm).toBeUndefined();
+  });
+
+  it("keeps checked-in review unit model/effort policy aligned with decision-grade evidence", async () => {
+    const evidencePath = path.join(
+      process.cwd(),
+      "development-records/benchmark/review-unit-effort-all-units-low-medium-high-decision-rerun2-20260610-winner-selection-merged.json",
+    );
+    const evidence = JSON.parse(fs.readFileSync(evidencePath, "utf8")) as {
+      status?: string;
+      decision_gate?: { comparison_conclusion_allowed?: boolean };
+      selections?: Array<{
+        unit_id?: string;
+        winner?: { status?: string; effort?: string };
+      }>;
+    };
+    const expectedPolicy = {
+      deliberation_plan: "medium",
+      deliberation_resolution: "low",
+      deliberation_response: "medium",
+      finding_ledger: "medium",
+      finding_relation_graph: "medium",
+      issue_ledger: "medium",
+      issue_stance_response: "medium",
+      lens: "medium",
+      problem_framing: "medium",
+      synthesis_response: "medium",
+    } as const;
+
+    expect(evidence.status).toBe("decision-grade");
+    expect(evidence.decision_gate?.comparison_conclusion_allowed).toBe(true);
+    expect(
+      Object.fromEntries(
+        (evidence.selections ?? []).map((selection) => [
+          selection.unit_id,
+          selection.winner?.effort,
+        ]),
+      ),
+    ).toEqual(expectedPolicy);
+    for (const selection of evidence.selections ?? []) {
+      expect(selection.winner?.status).toBe("selected");
+    }
+
+    for (const settingsPath of ["settings.example.json", ".onto/settings.json"]) {
+      const settings = await readSettingsAt(path.join(process.cwd(), settingsPath));
+      for (const [unitId, effort] of Object.entries(expectedPolicy)) {
+        const unit =
+          settings.review?.execution?.units?.[
+            unitId as (typeof REVIEW_EXECUTION_UNIT_IDS)[number]
+          ];
+        expect(unit?.llm?.model, `${settingsPath}:${unitId}`).toBe("gpt-5.5");
+        expect(unit?.llm?.effort, `${settingsPath}:${unitId}`).toBe(effort);
+      }
+    }
   });
 
   it("parses review max_concurrent_lenses from project settings", async () => {

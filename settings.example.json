@@ -133,8 +133,8 @@
       # max_tokens/tool_mode은 direct_call/inline HTTP executor에서만 강제 가능합니다.
       # 기본 Codex OAuth worker 경로는 해당 knob를 강제할 수 없으므로 설정 시 fail-loud합니다.
       "units": {
-        # lens는 9개 관점별 독립 검토입니다. 아래 값들은 시작 기준 예시입니다.
-        # 실제 튜닝은 benchmark:review:pipeline의 unit-sweep 결과를 보고 조정하세요.
+        # lens는 9개 관점별 독립 검토입니다. 아래 값들은 decision-grade unit-sweep 결과입니다.
+        # 기준: development-records/benchmark/review-unit-effort-all-units-low-medium-high-decision-rerun2-20260610-winner-selection-merged.json
         "lens": {
           "llm": {
             "model": "gpt-5.5",
@@ -225,7 +225,7 @@
         "deliberation_resolution": {
           "llm": {
             "model": "gpt-5.5",
-            "effort": "medium"
+            "effort": "low"
           },
           "timeout_ms": 240000,
           "max_retries": 2,

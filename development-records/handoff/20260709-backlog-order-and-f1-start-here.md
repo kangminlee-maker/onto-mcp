@@ -1,7 +1,7 @@
 # Backlog order + F1 start-here (2026-07-09)
 
 > 상태: Active handoff memory
-> 기준: main `54dc6d2`에서 실제 코드 재검증 후 정리
+> 기준: main `51761d1` + §4-6c working cut에서 실제 코드 재검증 후 정리
 
 ## 1. 의존성 순서
 
@@ -102,6 +102,55 @@ Backlog status after this cut:
 1. F1 review fan-out breaker `concurrent:true` runtime wiring — done in working tree.
 2. §4-2 reconstruct semantic-map automatic stage resume — done in working tree.
 3. INV-MODEL-1 B7 `benchCandidate` / allowlist governance — already present at `d788da8`.
-4. Next: §4-6c review unit model/effort tiering policy values.
-5. Then: §4-4 breaker-trip fallback provider swap / family-collapse.
+4. §4-6c review unit model/effort tiering policy values — see §7.
+5. Next: §4-4 breaker-trip fallback provider swap / family-collapse.
+6. Then: rare-poison-stance hardening.
+
+## 7. §4-6c result (2026-07-10)
+
+Status: implemented in the working tree.
+
+Real-code/evidence correction:
+
+- §4-6c was narrowed to checked-in review unit policy values, not a new runtime
+  default. Runtime still has no hardcoded model/effort defaults for review units;
+  settings remain the authority (`INV-CFG-1`).
+- The committed decision-grade review-unit sweep selects `gpt-5.5` with
+  `deliberation_resolution=low` and every other LLM review unit at `medium`.
+  Evidence:
+  `development-records/benchmark/review-unit-effort-all-units-low-medium-high-decision-rerun2-20260610-winner-selection-merged.json`
+  (`status=decision-grade`, 3 runs x 2 fixtures, comparison conclusion allowed).
+- `.onto/settings.json` already matched that policy. `settings.example.json`
+  had drifted on `deliberation_resolution` (`medium`); it now uses `low`.
+- No Haiku/Sonnet review-unit default was added. Current supported-model
+  registry allows `claude-sonnet-5` only for `semantic_map_synthesize`; Haiku is
+  not registered. Any review-wide model switch remains a separate evidence gate.
+
+Changes:
+
+- `settings.example.json` now labels the unit policy as decision-grade
+  unit-sweep evidence and sets `deliberation_resolution.llm.effort` to `low`.
+- `settings-chain.test.ts` now reads the checked-in winner-selection record,
+  `settings.example.json`, and `.onto/settings.json`, and asserts the model/effort
+  policy stays aligned.
+- `IMPLEMENTATION_MAP.html` marks §4-6c as landed and moves the next open §4
+  item to §4-4.
+
+Verification:
+
+- `npx vitest run src/core-runtime/discovery/settings-chain.test.ts` — 45 passed.
+- `npm run check:ts-core` — passed.
+- `npm run check:supported-models` — passed (`validated_routes=15`).
+- `npm run check:spec-defaults` — passed.
+- `npm run check:invariant-drift` — no_drift.
+- `npm run check:import-boundary` — passed.
+- `git diff --check` — clean.
+
+Backlog status after this cut:
+
+1. F1 review fan-out breaker `concurrent:true` runtime wiring — done.
+2. §4-2 reconstruct semantic-map automatic stage resume — done.
+3. INV-MODEL-1 B7 `benchCandidate` / allowlist governance — done at `d788da8`.
+4. §4-6c review unit model/effort tiering policy values — done in working tree.
+5. Next: §4-4 breaker-trip fallback provider swap / family-collapse.
 6. Then: rare-poison-stance hardening.
