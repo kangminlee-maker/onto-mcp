@@ -70,8 +70,10 @@ const RECORD_ARTIFACT_KEYS = [
   // latent type↔behavior mismatch); registered together with the semantic_map refs so the record
   // (the durable primary evidence artifact) carries what the type declares.
   "leaf_read_census",
+  "dispatch_incomplete",
   "semantic_map_census",
   "semantic_map_sidecar",
+  "semantic_map_resume_validation",
   "source_safety_ledger",
   "source_safety_ledger_validation",
   "source_scout_pack",

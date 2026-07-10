@@ -460,7 +460,7 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["fresh", "reuse_existing_authored_artifacts"],
       description:
-        "Optional promoted resume mode. fresh rejects same-session duplicate starts; reuse_existing_authored_artifacts admits a same-request resume attempt only when authored-artifact provenance can prove a current match.",
+        "Optional promoted resume mode. fresh rejects same-session duplicate starts; reuse_existing_authored_artifacts admits a same-request resume attempt only when authored-artifact provenance can prove a current match, and lets reconstruct semantic-map recover a validated same-batch dispatch-incomplete frontier.",
     },
     semanticAuthorRealization: {
       type: "string",

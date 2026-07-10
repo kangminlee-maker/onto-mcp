@@ -23,10 +23,10 @@
  *    is dead-lettered (complete-with-failure) and the batch continues.
  * 4. breaker trip — the loop halts the batch and persists the incomplete-item
  *    list (fallback provider swap is a deferred later cut).
- * 5. recovery re-dispatch targets exactly the persisted incomplete set —
- *    today via the persisted artifact consumed by the recovery OPERATOR /
- *    fixture contract (F-B3); automatic stage-level resume from the artifact
- *    is a deferred later cut (§8).
+ * 5. recovery re-dispatch targets exactly the persisted incomplete set. For
+ *    reconstruct semantic-map, stage-local resume validates the same-batch
+ *    partition plus prior census/sidecar truth before reusing retained rows
+ *    and re-dispatching incomplete rows.
  *
  * File I/O (persisting the artifact), timestamps, and halt mechanics stay in
  * the wiring; this module owns classification, the backoff schedule, the
@@ -423,10 +423,73 @@ export interface DispatchIncompleteArtifact {
   incomplete_item_ids: string[];
 }
 
+function assertUniqueItemIds(itemIds: readonly string[], label: string): void {
+  const seen = new Set<string>();
+  for (const itemId of itemIds) {
+    if (seen.has(itemId)) {
+      throw new Error(`dispatch incomplete artifact: duplicate ${label} item_id '${itemId}'`);
+    }
+    seen.add(itemId);
+  }
+}
+
 /** Deterministic projection of a batch's end state — the wiring persists it
  * on breaker trip AND on normal completion (rule 6 observability), so a
- * recovery run always has the exact re-dispatch set. `createdAt` is supplied
- * by the caller (runtime owns timestamps). */
+ * recovery run always has the exact re-dispatch set. This overload accepts a
+ * fully-expanded partition so recovery runs can persist retained prior work +
+ * current retry work without pretending the live breaker state observed every
+ * retained item. `createdAt` is supplied by the caller (runtime owns timestamps). */
+export function buildDispatchIncompleteArtifactFromPartition(args: {
+  pipeline: string;
+  batchLabel: string;
+  createdAt: string;
+  plannedItemIds: readonly string[];
+  completedItemIds: readonly string[];
+  deadLetter: readonly DispatchDeadLetterEntry[];
+  breaker: DispatchIncompleteArtifact["breaker"];
+}): DispatchIncompleteArtifact {
+  assertUniqueItemIds(args.plannedItemIds, "planned");
+  assertUniqueItemIds(args.completedItemIds, "completed");
+  assertUniqueItemIds(args.deadLetter.map((entry) => entry.item_id), "dead_letter");
+  const planned = new Set(args.plannedItemIds);
+  const completed = new Set(args.completedItemIds);
+  const deadLettered = new Set(args.deadLetter.map((entry) => entry.item_id));
+  const unknownCompleted = args.completedItemIds.filter((itemId) => !planned.has(itemId));
+  const unknownDeadLetter = args.deadLetter
+    .map((entry) => entry.item_id)
+    .filter((itemId) => !planned.has(itemId));
+  const overlapping = args.completedItemIds.filter((itemId) => deadLettered.has(itemId));
+  if (unknownCompleted.length > 0 || unknownDeadLetter.length > 0 || overlapping.length > 0) {
+    throw new Error(
+      [
+        "dispatch incomplete artifact: invalid full-batch partition",
+        unknownCompleted.length > 0
+          ? `unknown completed item_ids=${unknownCompleted.join(",")}`
+          : null,
+        unknownDeadLetter.length > 0
+          ? `unknown dead_letter item_ids=${unknownDeadLetter.join(",")}`
+          : null,
+        overlapping.length > 0 ? `overlapping item_ids=${overlapping.join(",")}` : null,
+      ].filter((part): part is string => part !== null).join("; "),
+    );
+  }
+  return {
+    schema_version: "1",
+    pipeline: args.pipeline,
+    batch_label: args.batchLabel,
+    created_at: args.createdAt,
+    breaker: args.breaker,
+    completed_item_ids: args.plannedItemIds.filter((itemId) => completed.has(itemId)),
+    dead_letter: args.plannedItemIds
+      .filter((itemId) => deadLettered.has(itemId))
+      .map((itemId) => args.deadLetter.find((entry) => entry.item_id === itemId)!),
+    incomplete_item_ids: args.plannedItemIds.filter(
+      (itemId) => !completed.has(itemId) && !deadLettered.has(itemId),
+    ),
+  };
+}
+
+/** State-machine convenience wrapper for normal first-attempt batches. */
 export function buildDispatchIncompleteArtifact(args: {
   pipeline: string;
   batchLabel: string;
@@ -434,26 +497,19 @@ export function buildDispatchIncompleteArtifact(args: {
   plannedItemIds: readonly string[];
   state: DispatchBreakerState;
 }): DispatchIncompleteArtifact {
-  const completed = new Set(args.state.completedItemIds());
-  const deadLettered = new Set(
-    args.state.deadLetterEntries().map((entry) => entry.item_id),
-  );
   const trip = args.state.tripped();
-  return {
-    schema_version: "1",
+  return buildDispatchIncompleteArtifactFromPartition({
     pipeline: args.pipeline,
-    batch_label: args.batchLabel,
-    created_at: args.createdAt,
+    batchLabel: args.batchLabel,
+    createdAt: args.createdAt,
+    plannedItemIds: args.plannedItemIds,
+    completedItemIds: args.state.completedItemIds(),
+    deadLetter: args.state.deadLetterEntries(),
     breaker: {
       tripped: trip !== null,
       failure_class: trip?.failure_class ?? null,
       consecutive_item_count: trip?.consecutive_item_count ?? null,
       threshold: args.state.policy.systemic_threshold,
     },
-    completed_item_ids: [...completed],
-    dead_letter: [...args.state.deadLetterEntries()],
-    incomplete_item_ids: args.plannedItemIds.filter(
-      (itemId) => !completed.has(itemId) && !deadLettered.has(itemId),
-    ),
-  };
+  });
 }

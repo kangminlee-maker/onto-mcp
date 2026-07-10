@@ -1716,9 +1716,15 @@ function retryTimeoutMs(baseTimeoutMs: number, attempt: number): number {
  */
 function reviewDispatchBreakerFromProfile(
   profile: ReviewExecutionProfile | undefined,
+  args: { concurrent: boolean },
 ): DispatchBreakerState | null {
   const policy = profile?.retry?.dispatch_breaker;
-  return policy?.enabled === true ? new DispatchBreakerState(policy) : null;
+  // Review lens/stance pools can be Promise.all fan-outs, so completion order
+  // must not decide poison-vs-outage recovery classification. This is
+  // runtime-owned; it is deliberately not a user-facing settings key.
+  return policy?.enabled === true
+    ? new DispatchBreakerState({ ...policy, concurrent: args.concurrent })
+    : null;
 }
 
 /** 리뷰 경로는 `invokeExecutor` 직행이라 dispatch 마커가 없다 — 최종
@@ -5126,6 +5132,10 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
   // 예산을 쓰면 그 실 관측이 streak을 구동한다.
   const breakerState = reviewDispatchBreakerFromProfile(
     args.reviewExecutionProfile,
+    {
+      concurrent:
+        Math.min(maxConcurrentIssueStanceResponses, runOwingDispatches.length) > 1,
+    },
   );
   let breakerTripOutcome: ExecutionOutcome | null = null;
   async function runIssueStanceWorker(): Promise<void> {
@@ -6973,6 +6983,14 @@ export async function executeReviewPromptExecution(
   // 오리셋하는 것 차단), 배치-실패 유닛의 flat 재시도만 streak을 구동한다.
   const lensBreakerState = reviewDispatchBreakerFromProfile(
     params.reviewExecutionProfile,
+    {
+      concurrent:
+        Math.min(
+          maxConcurrentLenses,
+          lensDispatches.filter((dispatch) => shouldRunUnit(dispatch.unit_id))
+            .length,
+        ) > 1,
+    },
   );
 
   async function haltForCancellation(args: {

@@ -70,6 +70,7 @@ afterEach(async () => {
   if (originalHome !== undefined) process.env.HOME = originalHome;
   if (originalPath !== undefined) process.env.PATH = originalPath;
   delete process.env.ONTO_BREAKER_FAIL_UNITS;
+  delete process.env.ONTO_BREAKER_DELAY_MS;
   delete process.env.ONTO_BREAKER_INVOCATION_LOG;
   delete process.env.ONTO_NESTED_OUTER_INVOCATION_LOG;
   for (const root of tempRoots.splice(0)) {
@@ -97,6 +98,11 @@ const BREAKER_STUB_SOURCE = [
   "  fs.appendFileSync(process.env.ONTO_BREAKER_INVOCATION_LOG, `${unitId}\\n`);",
   "}",
   'const failUnits = (process.env.ONTO_BREAKER_FAIL_UNITS ?? "").split(",").map((v) => v.trim()).filter(Boolean);',
+  'const delayMap = new Map((process.env.ONTO_BREAKER_DELAY_MS ?? "").split(",").map((v) => v.trim()).filter(Boolean).map((v) => { const i = v.lastIndexOf(":"); return [v.slice(0, i), Number.parseInt(v.slice(i + 1), 10)]; }));',
+  "const delayMs = delayMap.get(unitId);",
+  "if (Number.isFinite(delayMs) && delayMs > 0) {",
+  "  await new Promise((resolve) => setTimeout(resolve, delayMs));",
+  "}",
   "if (failUnits.includes(unitId)) {",
   `  console.error(${JSON.stringify(RATE_LIMIT_MESSAGE)});`,
   "  process.exit(1);",
@@ -496,6 +502,49 @@ describe("review dispatch breaker (설계 B 리뷰판, deterministic dispatch-le
     );
   });
 
+  it("lens concurrent breaker: an interleaved success does not poison the first outage victim (F1)", async () => {
+    process.env.ONTO_BREAKER_FAIL_UNITS = "coverage,structure";
+    process.env.ONTO_BREAKER_DELAY_MS = "coverage:10,logic:50,structure:100";
+    const logPath = await invocationLogPath();
+    process.env.ONTO_BREAKER_INVOCATION_LOG = logPath;
+    const session = await prepareBreakerSession();
+
+    await runPipeline(
+      session,
+      breakerProfile({
+        breakerEnabled: true,
+        systemicThreshold: 2,
+        maxConcurrentLenses: 3,
+      }),
+    );
+
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("halted_partial");
+    expect(executionResult.halt_phase).toBe("lens_dispatch_breaker");
+    expect(
+      executionResult.halt_reason?.startsWith(
+        `${REVIEW_DISPATCH_BREAKER_HALT_REASON_PREFIX}: rate_limit`,
+      ),
+    ).toBe(true);
+
+    const incomplete = await readDispatchIncomplete(session.sessionRoot);
+    expect(incomplete.batch_label).toBe("lens");
+    expect(incomplete.breaker.tripped).toBe(true);
+    expect(incomplete.completed_item_ids).toEqual(["logic"]);
+    expect([...incomplete.incomplete_item_ids].sort()).toEqual([
+      "coverage",
+      "structure",
+    ]);
+    expect(incomplete.dead_letter).toEqual([]);
+
+    const invocations = await readInvocations(logPath);
+    expect(
+      invocations
+        .filter((unitId) => LENS_IDS.includes(unitId as typeof LENS_IDS[number]))
+        .sort(),
+    ).toEqual([...LENS_IDS].sort());
+  });
+
   it("lens OFF twin: the disabled path preserves today's completion-barrier halt and writes no artifact", async () => {
     process.env.ONTO_BREAKER_FAIL_UNITS = LENS_IDS.join(",");
     const logPath = await invocationLogPath();
@@ -617,6 +666,42 @@ describe("review dispatch breaker (설계 B 리뷰판, deterministic dispatch-le
     expect([...incomplete.incomplete_item_ids].sort()).toEqual(
       [...STANCE_UNIT_IDS].sort(),
     );
+  });
+
+  it("stance concurrent breaker: an interleaved success does not poison the first outage victim (F1)", async () => {
+    process.env.ONTO_BREAKER_FAIL_UNITS =
+      "issue-stance:coverage,issue-stance:structure";
+    process.env.ONTO_BREAKER_DELAY_MS =
+      "issue-stance:coverage:10,issue-stance:logic:50,issue-stance:structure:100";
+    const session = await prepareBreakerSession();
+
+    await runPipeline(
+      session,
+      breakerProfile({
+        breakerEnabled: true,
+        systemicThreshold: 2,
+        maxConcurrentLenses: 3,
+      }),
+    );
+
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("halted_partial");
+    expect(executionResult.halt_phase).toBe("issue_artifact");
+    expect(
+      executionResult.halt_reason?.startsWith(
+        `${REVIEW_DISPATCH_BREAKER_HALT_REASON_PREFIX}: rate_limit`,
+      ),
+    ).toBe(true);
+
+    const incomplete = await readDispatchIncomplete(session.sessionRoot);
+    expect(incomplete.batch_label).toBe("issue-stance");
+    expect(incomplete.breaker.tripped).toBe(true);
+    expect(incomplete.completed_item_ids).toEqual(["issue-stance:logic"]);
+    expect([...incomplete.incomplete_item_ids].sort()).toEqual([
+      "issue-stance:coverage",
+      "issue-stance:structure",
+    ]);
+    expect(incomplete.dead_letter).toEqual([]);
   });
 
   it("trip recovery: completed stance rows survive the trip halt and the continuation re-dispatches ONLY the incomplete set (규칙 5)", async () => {

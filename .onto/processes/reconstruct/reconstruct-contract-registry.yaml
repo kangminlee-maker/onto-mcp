@@ -904,6 +904,22 @@ artifact_authorities:
     authority_ref: seed-stage-prompt-source-observations.yaml
     validation_ref: null
     projection_policy: pre_maturation_seed_stage_projected_observation_snapshot_for_resume_truncation_conservation
+  dispatch_incomplete:
+    authority_ref: dispatch-incomplete.yaml
+    validation_ref: semantic-map-resume-validation.yaml
+    projection_policy: full_batch_dispatch_partition_for_stage_local_semantic_map_recovery
+  semantic_map_census:
+    authority_ref: comprehension/semantic-map-census.yaml
+    validation_ref: null
+    projection_policy: semantic_map_observation_partition_and_spend_census
+  semantic_map_sidecar:
+    authority_ref: comprehension/semantic-map.yaml
+    validation_ref: null
+    projection_policy: semantic_map_projection_sidecar_for_map_present_observations
+  semantic_map_resume_validation:
+    authority_ref: semantic-map-resume-validation.yaml
+    validation_ref: null
+    projection_policy: runtime_owned_validation_of_same_batch_semantic_map_recovery_frontier
   source_safety_ledger:
     authority_ref: source-safety-ledger.yaml
     validation_ref: source-safety-ledger-validation.yaml
@@ -1277,6 +1293,9 @@ validation_gate_catalog:
   - gate_id: source_scout_pack_post_maturation_gate
     validation_artifact_ref: source-scout-pack-validation.post-maturation.yaml
     required_when: source_scout_pack_post_maturation_snapshot_exists
+  - gate_id: semantic_map_resume_gate
+    validation_artifact_ref: semantic-map-resume-validation.yaml
+    required_when: semantic_map_resume_validation_exists
   - gate_id: source_purpose_candidates_gate
     validation_artifact_ref: source-purpose-candidates-validation.yaml
     required_when: seed_validity_or_seed_iteration_readiness_is_projected
@@ -1447,6 +1466,11 @@ required_when_predicate_catalog:
     truth_expression: "artifact_exists(source-scout-pack.post-maturation.yaml)"
     unknown_projection: blocked
     explanation_template: "An immutable post-maturation SourceScoutPack snapshot exists and requires snapshot-scoped validation before post-maturation audit or replay use."
+  - predicate_id: semantic_map_resume_validation_exists
+    input_authority_refs: [semantic-map-resume-validation.yaml]
+    truth_expression: "artifact_exists(semantic-map-resume-validation.yaml)"
+    unknown_projection: blocked
+    explanation_template: "A semantic-map resume validation artifact exists and must be valid before handoff consumption."
   - predicate_id: source_frontier_observation_delta
     gate_instance_scope: per_round
     input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml]
@@ -1983,6 +2007,16 @@ readiness_projection:
   conflict_rule: When supporting artifacts project different canonical values, choose the first value in strictness_order_high_to_low that appears among contributing artifacts; lower list index is stricter and wins. Cite every contributing artifact.
 
 validator_records:
+  - validator_id: semantic-map-resume-validator
+    gate_ids: [semantic_map_resume_gate]
+    validator_version: 1
+    input_authority_refs:
+      - dispatch-incomplete.yaml
+      - comprehension/semantic-map-census.yaml
+      - comprehension/semantic-map.yaml
+      - source-observations.yaml
+    validation_obligations: []
+    output_ref: semantic-map-resume-validation.yaml
   - validator_id: reconstruct-run-control-validator
     gate_ids: [reconstruct_run_control_gate]
     validator_version: 1

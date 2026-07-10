@@ -2615,6 +2615,75 @@ export interface ReconstructSemanticMapSidecar {
   observations: ReconstructSemanticMapSidecarObservation[];
 }
 
+export interface ReconstructSemanticMapResumeValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  dispatch_incomplete_ref: string | null;
+  semantic_map_census_ref: string | null;
+  semantic_map_sidecar_ref: string | null;
+  validation_status: "valid" | "invalid";
+  /** true only when a prior tripped semantic-map batch is accepted for stage-local recovery. */
+  recovery_attempted: boolean;
+  activation_decision:
+    | "normal_full_stage"
+    | "recovery_activated"
+    | "recovery_rejected";
+  resume_mode: "fresh" | "reuse_existing_authored_artifacts";
+  dispatch_breaker_enabled: boolean;
+  pipeline: "reconstruct";
+  batch_label: "semantic-map";
+  current_observation_ids: string[];
+  retained_item_ids: string[];
+  discarded_item_ids: string[];
+  prior_retry_totals: {
+    breaker_retry_synthesize_calls: number | null;
+    breaker_retry_verify_calls: number | null;
+  };
+  prior_refs: {
+    dispatch_incomplete: string | null;
+    semantic_map_census: string | null;
+    semantic_map_sidecar: string | null;
+  };
+  backup_refs: {
+    dispatch_incomplete: string | null;
+    semantic_map_census: string | null;
+    semantic_map_sidecar: string | null;
+  };
+  partition_validation: {
+    planned_item_ids: string[];
+    completed_item_ids: string[];
+    dead_letter_item_ids: string[];
+    incomplete_item_ids: string[];
+    unknown_item_ids: string[];
+    duplicate_item_ids: string[];
+    overlapping_item_ids: string[];
+    exact_current_set_match: boolean;
+  };
+  census_validation: {
+    retained_census_ids: string[];
+    incomplete_census_ids: string[];
+    unknown_census_ids: string[];
+    extra_census_ids: string[];
+    missing_retained_ids: string[];
+    non_reusable_retained_ids: string[];
+    fingerprint_mismatch_ids: string[];
+    census_complete_partition: boolean;
+  };
+  sidecar_validation: {
+    retained_sidecar_ids: string[];
+    incomplete_sidecar_ids: string[];
+    unknown_sidecar_ids: string[];
+    missing_map_present_sidecar_ids: string[];
+    extra_sidecar_ids: string[];
+    projection_renderable: boolean;
+    node_epochs_shape_valid: boolean;
+  };
+  validation_results: string[];
+  asserted_obligation_ids: string[];
+  violations: ReconstructPostSeedValidationViolation[];
+}
+
 export interface ReconstructMaturationValueDischargeValidationArtifact {
   schema_version: "1";
   session_id: string;
@@ -3662,8 +3731,10 @@ export interface ReconstructRecordArtifactRefs {
   // Layer-2 semantic_map stage (W3): census always written when the stage runs (map-absent runs
   // still record the honest partition); sidecar carries the per-observation projections + node
   // epochs (F10 lineage). Null only when the stage no-ops (author lacks the capability pair).
+  dispatch_incomplete: string | null;
   semantic_map_census: string | null;
   semantic_map_sidecar: string | null;
+  semantic_map_resume_validation: string | null;
   source_safety_ledger: string | null;
   source_safety_ledger_validation: string | null;
   source_scout_pack: string | null;

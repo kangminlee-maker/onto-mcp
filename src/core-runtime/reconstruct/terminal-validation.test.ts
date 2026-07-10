@@ -6,6 +6,7 @@ import type {
   ReconstructMetricsArtifact,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
+  ReconstructSemanticMapResumeValidationArtifact,
   ReconstructSeedAuthoringReadinessValidationArtifact,
   ReconstructSeedConfirmationValidationArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
@@ -158,6 +159,83 @@ function sourceScoutPackValidation(
   });
 }
 
+function semanticMapResumeValidation(
+  status: "valid" | "invalid",
+): ReconstructSemanticMapResumeValidationArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    dispatch_incomplete_ref: "/tmp/dispatch-incomplete.yaml",
+    semantic_map_census_ref: "/tmp/comprehension/semantic-map-census.yaml",
+    semantic_map_sidecar_ref: "/tmp/comprehension/semantic-map.yaml",
+    validation_status: status,
+    recovery_attempted: status === "valid",
+    activation_decision: status === "valid" ? "recovery_activated" : "recovery_rejected",
+    resume_mode: "reuse_existing_authored_artifacts",
+    dispatch_breaker_enabled: true,
+    pipeline: "reconstruct",
+    batch_label: "semantic-map",
+    current_observation_ids: ["obs-1"],
+    retained_item_ids: [],
+    discarded_item_ids: ["obs-1"],
+    prior_retry_totals: {
+      breaker_retry_synthesize_calls: null,
+      breaker_retry_verify_calls: null,
+    },
+    prior_refs: {
+      dispatch_incomplete: "/tmp/dispatch-incomplete.yaml",
+      semantic_map_census: "/tmp/comprehension/semantic-map-census.yaml",
+      semantic_map_sidecar: "/tmp/comprehension/semantic-map.yaml",
+    },
+    backup_refs: {
+      dispatch_incomplete: null,
+      semantic_map_census: null,
+      semantic_map_sidecar: null,
+    },
+    partition_validation: {
+      planned_item_ids: ["obs-1"],
+      completed_item_ids: [],
+      dead_letter_item_ids: [],
+      incomplete_item_ids: ["obs-1"],
+      unknown_item_ids: [],
+      duplicate_item_ids: [],
+      overlapping_item_ids: [],
+      exact_current_set_match: true,
+    },
+    census_validation: {
+      retained_census_ids: [],
+      incomplete_census_ids: [],
+      unknown_census_ids: [],
+      extra_census_ids: [],
+      missing_retained_ids: [],
+      non_reusable_retained_ids: [],
+      fingerprint_mismatch_ids: [],
+      census_complete_partition: true,
+    },
+    sidecar_validation: {
+      retained_sidecar_ids: [],
+      incomplete_sidecar_ids: [],
+      unknown_sidecar_ids: [],
+      missing_map_present_sidecar_ids: [],
+      extra_sidecar_ids: [],
+      projection_renderable: true,
+      node_epochs_shape_valid: true,
+    },
+    validation_results: status === "valid"
+      ? ["semantic_map_resume_validation_valid"]
+      : ["semantic_map_resume_validation_invalid"],
+    asserted_obligation_ids: [],
+    violations: status === "valid"
+      ? []
+      : [{
+        code: "conflicting_state",
+        message: "fixture invalid",
+        subject_id: "semantic-map-resume-validation.yaml",
+      }],
+  };
+}
+
 function multiRoundManifest(): ReconstructRunManifestArtifact {
   return {
     artifact_refs: {
@@ -187,6 +265,8 @@ async function validateFixture(args: {
     ReconstructSourceScoutPackValidationArtifact | null;
   sourceScoutPackPostMaturationValidation?:
     ReconstructSourceScoutPackValidationArtifact | null;
+  semanticMapResumeValidation?:
+    ReconstructSemanticMapResumeValidationArtifact | null;
   validationArtifactRefs?: Record<string, string | null | undefined>;
   contractRegistry?: ReconstructContractRegistry;
 }) {
@@ -251,6 +331,8 @@ async function validateFixture(args: {
       args.sourceScoutPackPreSeedValidation ?? null,
     sourceScoutPackPostMaturationValidation:
       args.sourceScoutPackPostMaturationValidation ?? null,
+    semanticMapResumeValidation:
+      args.semanticMapResumeValidation ?? null,
     candidateDispositionValidation: null,
     seedAuthoringReadinessValidation:
       validArtifact<ReconstructSeedAuthoringReadinessValidationArtifact>({
@@ -379,6 +461,55 @@ describe("terminal reconstruct validation", () => {
     expect(postMaturationGate?.concrete_validation_artifact_ref)
       .toBe(postMaturationValidationRef);
     expect(postMaturationGate?.validation_status).toBe("valid");
+  });
+
+  it("projects semantic-map resume validation as an active gate only when the artifact exists", async () => {
+    const absent = await validateFixture({
+      manifest: manifest(null),
+    });
+    const absentGate = absent.gate_projection.find((gate) =>
+      gate.gate_id === "semantic_map_resume_gate"
+    );
+    expect(absentGate?.applicability).toBe("not_applicable");
+    expect(absentGate?.validation_status).toBe("not_applicable");
+
+    const resumeRef = "/tmp/semantic-map-resume-validation.yaml";
+    const manifestWithResume = {
+      ...manifest(null),
+      artifact_refs: {
+        ...manifest(null).artifact_refs,
+        semantic_map_resume_validation: resumeRef,
+      },
+    } as ReconstructRunManifestArtifact;
+
+    const valid = await validateFixture({
+      manifest: manifestWithResume,
+      semanticMapResumeValidation: semanticMapResumeValidation("valid"),
+      validationArtifactRefs: {
+        "semantic-map-resume-validation.yaml": resumeRef,
+      },
+    });
+    const validGate = valid.gate_projection.find((gate) =>
+      gate.gate_id === "semantic_map_resume_gate"
+    );
+    expect(validGate?.applicability).toBe("applicable");
+    expect(validGate?.concrete_validation_artifact_ref).toBe(resumeRef);
+    expect(validGate?.validation_status).toBe("valid");
+
+    const invalid = await validateFixture({
+      manifest: manifestWithResume,
+      semanticMapResumeValidation: semanticMapResumeValidation("invalid"),
+      validationArtifactRefs: {
+        "semantic-map-resume-validation.yaml": resumeRef,
+      },
+    });
+    const invalidGate = invalid.gate_projection.find((gate) =>
+      gate.gate_id === "semantic_map_resume_gate"
+    );
+    expect(invalidGate?.validation_status).toBe("invalid");
+    expect(invalid.violations.some((violation) =>
+      violation.subject_id === "semantic_map_resume_gate"
+    )).toBe(true);
   });
 
   it("validates post-maturation gate projection as a later terminal-equivalent authority", async () => {
