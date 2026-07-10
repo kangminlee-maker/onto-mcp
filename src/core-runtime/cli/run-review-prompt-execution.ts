@@ -1674,11 +1674,13 @@ export function shouldRetryUnitFailure(args: {
  * Allow an output_contract retry iff resubmit is enabled AND the unit is
  * gate-eligible AND the precise structural classifier matches — making the
  * gate's activation a strict subset of the resubmit strategy's activation
- * (design §10: F-1 retry ⟺ strategy fires; F-2 issue-stance excluded because its
- * correlated/demotion machinery reads the terminal failure class). Reads the
- * shared RESUBMIT_UNIT_ROUTING table so the gate and dispatcher cannot diverge
- * (M-1). OFF (resubmit disabled) → false → byte-identical to output_contract
- * being terminal.
+ * (design §10: F-1 retry ⟺ strategy fires). Reads the shared
+ * RESUBMIT_UNIT_ROUTING table so the gate and dispatcher cannot diverge (M-1).
+ * OFF (resubmit disabled) → false → byte-identical to output_contract being
+ * terminal. Issue-stance is gate-eligible as of the rare-poison hardening cut:
+ * final stance demote/correlated decisions still read the terminal outcome, so
+ * an infra final failure remains a whole-run halt rather than being
+ * reinterpreted as validation.
  */
 function isResubmitCorrectableRetry(args: {
   error: unknown;
@@ -1885,11 +1887,10 @@ async function readFrozenUnsupportedRefViolation(
  * so the "retry-allowed ⟺ resubmit-strategy-fires" invariant cannot drift across
  * two parallel switches. `gateEligible` marks units whose output_contract-poison
  * rejections may be routed back to a corrective retry — deliberation and
- * synthesis, both of which degrade non-haltingly on cap exhaustion. issue-stance
- * is deliberately EXCLUDED: its correlated-escalation/demotion machinery reads
- * the unit's TERMINAL failure class, so making poison-stance retryable could let
- * a per-lens demotion flip into a whole-run halt (design §10 F-2). Stance keeps
- * its existing executor_exit-path resubmit unchanged.
+ * synthesis, which degrade non-haltingly on cap exhaustion, and stance rare
+ * output_contract-poison failures, whose terminal outcome still drives the
+ * existing demote/correlated machinery. If a stance retry ends in infra failure,
+ * it remains a halt; only terminal validation failures demote or correlate.
  */
 interface ResubmitUnitRouting {
   classify: (message: string) => unknown | null;
@@ -1908,7 +1909,7 @@ export const RESUBMIT_UNIT_ROUTING: Record<string, ResubmitUnitRouting> =
     "issue-stance-response": {
       classify: classifyUnsupportedEvidenceRefFailure,
       apply: applyStanceResubmitErrorSpec,
-      gateEligible: false,
+      gateEligible: true,
     },
     "issue-deliberation-response": {
       classify: classifyDeliberationUnsupportedEvidenceRefFailure,

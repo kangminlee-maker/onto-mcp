@@ -39,8 +39,7 @@ import { createOntoReviewCoreApi } from "./review-api.js";
  *   OFF   the disabled twin preserves today's halt behavior.
  */
 
-const VALIDATION_MESSAGE =
-  "submit_issue_stance_response.stances[0].evidence_refs contains unsupported ref for issue-001: mock-unsupported-ref";
+const RARE_POISON_REF = "hallucinated-issue_id-ref";
 
 const tempRoots: string[] = [];
 let originalHome: string | undefined;
@@ -64,6 +63,7 @@ afterEach(async () => {
   delete process.env.ONTO_RESUBMIT_STUB_MODE;
   delete process.env.ONTO_RESUBMIT_STDERR_MODE;
   delete process.env.ONTO_RESUBMIT_INVOCATION_LOG;
+  delete process.env.ONTO_RESUBMIT_EVIDENCE_REF;
   for (const root of tempRoots.splice(0)) {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -92,10 +92,17 @@ const RESUBMIT_STUB_SOURCE = [
   "  fs.appendFileSync(process.env.ONTO_RESUBMIT_INVOCATION_LOG, `${unitId}\\n`);",
   "}",
   'const failUnits = (process.env.ONTO_RESUBMIT_FAIL_UNITS ?? "").split(",").map((v) => v.trim()).filter(Boolean);',
+  'const evidenceRef = process.env.ONTO_RESUBMIT_EVIDENCE_REF ?? "mock-unsupported-ref";',
+  "const validationMessage = `submit_issue_stance_response.stances[0].evidence_refs contains unsupported ref for issue-001: ${evidenceRef}`;",
   "if (failUnits.includes(unitId)) {",
   "  const packetText = packetPath && fs.existsSync(packetPath) ? fs.readFileSync(packetPath, \"utf8\") : \"\";",
   `  const healed = process.env.ONTO_RESUBMIT_STUB_MODE === "correct_on_resubmit" && packetText.includes(${JSON.stringify(RESUBMIT_ERROR_SPEC_BEGIN)});`,
   "  if (!healed) {",
+  "    if (process.env.ONTO_RESUBMIT_STUB_MODE === \"infra_after_resubmit\" && packetText.includes(" + JSON.stringify(RESUBMIT_ERROR_SPEC_BEGIN) + ")) {",
+  "      fs.rmSync(`${out}.salvage-input.json`, { force: true });",
+  "      console.error(`transient transport failed after resubmit for ${unitId}`);",
+  "      process.exit(1);",
+  "    }",
   "    fs.mkdirSync(path.dirname(out), { recursive: true });",
   "    fs.writeFileSync(",
   "      `${out}.salvage-input.json`,",
@@ -104,14 +111,14 @@ const RESUBMIT_STUB_SOURCE = [
   "        unit_kind: unitKind,",
   '        output_format: get("--output-format") ?? "issue-stance-response",',
   '        stdout: "",',
-  `        error: ${JSON.stringify(VALIDATION_MESSAGE)},`,
+  "        error: validationMessage,",
   "      }),",
   "    );",
   // generic stderr mode mirrors worker adapters whose stderr does not carry
   // the validation text — the frozen salvage input is then the only evidence.
   '    console.error(process.env.ONTO_RESUBMIT_STDERR_MODE === "generic"',
   "      ? `resubmit stub forced failure for ${unitId}`",
-  `      : ${JSON.stringify(VALIDATION_MESSAGE)});`,
+  "      : validationMessage);",
   "    process.exit(1);",
   "  }",
   "}",
@@ -400,6 +407,66 @@ describe("bounded stance resubmit (설계 A, deterministic dispatch-level)", () 
     const unit = stanceUnitResult(executionResult, "issue-stance:logic");
     const packetText = await fs.readFile(unit!.packet_path, "utf8");
     expect(packetText).not.toContain(RESUBMIT_ERROR_SPEC_BEGIN);
+  });
+
+  it("rare-poison stance: output_contract-poison validation now receives a corrective resubmit and can heal", async () => {
+    process.env.ONTO_RESUBMIT_FAIL_UNITS = "issue-stance:logic";
+    process.env.ONTO_RESUBMIT_EVIDENCE_REF = RARE_POISON_REF;
+    process.env.ONTO_RESUBMIT_STUB_MODE = "correct_on_resubmit";
+    const logPath = await invocationLogPath();
+    process.env.ONTO_RESUBMIT_INVOCATION_LOG = logPath;
+    const session = await prepareResubmitSession();
+
+    const result = await runPipeline(session, resubmitProfile(true));
+
+    expect(result.synthesis_executed).toBe(true);
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("completed");
+    const unit = stanceUnitResult(executionResult, "issue-stance:logic");
+    expect(unit?.status).toBe("completed");
+    expect(unit?.attempt_count).toBe(2);
+    const invocations = await readInvocations(logPath);
+    expect(
+      invocations.filter((unitId) => unitId === "issue-stance:logic"),
+    ).toHaveLength(2);
+    const errorLog = await readErrorLog(executionResult);
+    expect(errorLog).toContain("runner stance resubmit: issue-stance:logic");
+  });
+
+  it("rare-poison stance: cap exhaustion still demotes on terminal validation failure", async () => {
+    process.env.ONTO_RESUBMIT_FAIL_UNITS = "issue-stance:logic";
+    process.env.ONTO_RESUBMIT_EVIDENCE_REF = RARE_POISON_REF;
+    const session = await prepareResubmitSession();
+
+    const result = await runPipeline(session, resubmitProfile(true));
+
+    expect(result.synthesis_executed).toBe(true);
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("completed_with_degradation");
+    const unit = stanceUnitResult(executionResult, "issue-stance:logic");
+    expect(unit?.status).toBe("failed");
+    expect(unit?.attempt_count).toBe(3);
+    const packetText = await fs.readFile(unit!.packet_path, "utf8");
+    expect(packetText).toContain(RARE_POISON_REF);
+    expect(packetText).toContain(RESUBMIT_ERROR_SPEC_BEGIN);
+  });
+
+  it("rare-poison stance: a final infra failure remains a whole-run halt, not validation demotion", async () => {
+    process.env.ONTO_RESUBMIT_FAIL_UNITS = "issue-stance:logic";
+    process.env.ONTO_RESUBMIT_EVIDENCE_REF = RARE_POISON_REF;
+    process.env.ONTO_RESUBMIT_STUB_MODE = "infra_after_resubmit";
+    const session = await prepareResubmitSession();
+
+    await runPipeline(session, resubmitProfile(true));
+
+    const executionResult = await readExecutionResult(session.sessionRoot);
+    expect(executionResult.execution_status).toBe("halted_partial");
+    expect(executionResult.halt_reason).toContain(
+      "transient transport failed after resubmit",
+    );
+    expect(executionResult.halt_reason).not.toContain(
+      CORRELATED_VALIDATION_HALT_REASON,
+    );
   });
 
   it("worker-path fallback: demotion classifies from the frozen salvage input when stderr lacks the validation text", async () => {

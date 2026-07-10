@@ -10,7 +10,7 @@
 3. INV-MODEL-1 B7 `benchCandidate` / allowlist governance
 4. §4-6c review unit model/effort tiering policy values
 5. §4-4 breaker-trip fallback provider swap / family-collapse
-6. rare-poison-stance hardening
+6. rare-poison-stance hardening — done in §9
 
 관찰 3회/DEFAULT 승격은 1~5가 닫힌 뒤 다시 시작한다. 특히 1, 2, 5는 관찰의 회복 의미와
 provider-failure 해석을 바꾸므로 먼저 닫는다.
@@ -104,7 +104,7 @@ Backlog status after this cut:
 3. INV-MODEL-1 B7 `benchCandidate` / allowlist governance — already present at `d788da8`.
 4. §4-6c review unit model/effort tiering policy values — see §7.
 5. Next: §4-4 breaker-trip fallback provider swap / family-collapse.
-6. Then: rare-poison-stance hardening.
+6. Then: rare-poison-stance hardening — done in §9.
 
 ## 7. §4-6c result (2026-07-10)
 
@@ -153,7 +153,7 @@ Backlog status after this cut:
 3. INV-MODEL-1 B7 `benchCandidate` / allowlist governance — done at `d788da8`.
 4. §4-6c review unit model/effort tiering policy values — done in working tree.
 5. Next: §4-4 breaker-trip fallback provider swap / family-collapse.
-6. Then: rare-poison-stance hardening.
+6. Then: rare-poison-stance hardening — done in §9.
 
 ## 8. §4-4 design gate (2026-07-10)
 
@@ -198,5 +198,51 @@ Backlog status after this gate:
 1. §4-4 P1 reconstruct semantic-map fallback provider swap — waiting for owner
    approval of default-off settings schema and trigger class.
 2. §4-4 P2 review fallback provider swap — deferred.
-3. rare-poison-stance hardening — next non-schema fallback item if approval is
-   not granted yet.
+3. rare-poison-stance hardening — done in §9.
+
+## 9. rare-poison-stance hardening result (2026-07-10)
+
+Status: implemented in the working tree.
+
+Design artifact:
+
+- `development-records/design/20260710-rare-poison-stance-hardening-design.md`
+
+Real-code correction:
+
+- §4-2c had intentionally gate-excluded stance because demote/correlated reads
+  terminal stance outcomes. Rechecking the code showed this can be hardened
+  without a new settings key: `resubmit.enabled=true` already gates the behavior,
+  and terminal authority remains unchanged.
+
+Changes:
+
+- `RESUBMIT_UNIT_ROUTING["issue-stance-response"].gateEligible` is now `true`.
+  Rare output_contract-poison stance unsupported-ref failures now enter the same
+  corrective resubmit path as normal stance validation failures.
+- Final outcome authority is preserved:
+  - healed retry -> completed;
+  - cap-exhausted terminal validation -> demote / completed_with_degradation;
+  - terminal infra after retry -> halted_partial, not validation demotion.
+- Tests now include rare-poison stance heal, cap-exhaustion demote, and final
+  infra negative control. The infra fixture clears stale salvage input so the
+  test proves the terminal failure class rather than a leftover freeze file.
+
+Verification:
+
+- `npx vitest run src/core-runtime/cli/structural-retry-gate.test.ts src/core-api/runtime-pipeline-resubmit.test.ts`
+  — 20 passed.
+- `npx vitest run src/core-runtime/cli/deliberation-resubmit-wiring.test.ts src/core-runtime/cli/synthesis-resubmit-wiring.test.ts src/core-runtime/cli/unit-resubmit.test.ts`
+  — 29 passed.
+- `npm run check:ts-core` — passed.
+- `npm run check:import-boundary` — passed.
+- `npm run check:review:invocation-runner` — passed.
+- `npm run check:review:route` — passed.
+- `npm run check:mcp:review` — passed.
+
+Remaining backlog:
+
+1. §4-4 P1 reconstruct semantic-map fallback provider swap — blocked on owner
+   approval of default-off settings schema.
+2. §4-4 P2 review fallback provider swap — deferred.
+3. Observation window 0/3 remains pending after fallback/final hardening.

@@ -718,9 +718,9 @@ export interface ReviewSubmitSalvageSettings {
  * unless the same validation class fails a majority of units
  * (correlated_validation whole-run halt). Current wiring: issue-stance
  * evidence_refs (§4-6a), issue-deliberation evidence_refs (§4-6a), and
- * issue-synthesis source_refs_used (§4-2c/2-A). The synthesis and rare-poison
- * deliberation cases additionally need the §4-2c structural retry gate to reach
- * the retry loop; issue-stance is excluded from that gate.
+ * issue-synthesis source_refs_used (§4-2c/2-A). The output_contract-poison cases
+ * (synthesis, rare-poison deliberation, rare-poison stance) additionally need
+ * the §4-2c structural retry gate to reach the retry loop.
  */
 export interface ReviewUnitResubmitSettingsInput {
   enabled?: boolean | undefined;
