@@ -2,8 +2,10 @@ import { execFile, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import YAML from "yaml";
+import type { ReviewArtifactGenerationRealization } from "../src/core-runtime/review/artifact-types.js";
 import {
   REVIEW_EXECUTION_UNIT_IDS,
   defaultReviewExecutionUnits,
@@ -49,6 +51,11 @@ interface BenchmarkOptions {
   runs: number;
   caseSelectors: string[];
   executorRealization?: ExecutorRealization;
+  /** Written into the temp project settings verbatim. Default "live" preserves
+   * the benchmark's existing behavior; "semantic_mock" (with ONTO_LLM_MOCK=1
+   * and the ts_inline_http executor) is the zero-spend rehearsal path used by
+   * scripts/review-cert-run.mts. */
+  artifactGenerationRealization?: ReviewArtifactGenerationRealization;
   model: string;
   provider: string;
   auth: string;
@@ -299,6 +306,8 @@ function usage(): string {
     "                                     Repeatable. Default: review-pipeline-target-v1",
     "  --executor-realization <codex|ts_inline_http>",
     "                                     Debug-only legacy CLI override. Omit to use project config.",
+    "  --artifact-generation-realization <live|semantic_mock|boundary_stub|fixture>",
+    "                                     Temp-project settings value. Default: live",
     "  --model <model-id>                  Default: gpt-5.5",
     "  --provider <provider>               Default: openai",
     "  --auth <auth-mode>                  Default: oauth. ts_inline_http requires explicit api_key or local",
@@ -417,6 +426,22 @@ function parseOptions(argv: string[]): BenchmarkOptions {
     );
   }
 
+  const artifactGenerationRealization = readOption(
+    argv,
+    "artifact-generation-realization",
+  ) as ReviewArtifactGenerationRealization | undefined;
+  if (
+    artifactGenerationRealization !== undefined &&
+    artifactGenerationRealization !== "live" &&
+    artifactGenerationRealization !== "semantic_mock" &&
+    artifactGenerationRealization !== "boundary_stub" &&
+    artifactGenerationRealization !== "fixture"
+  ) {
+    throw new Error(
+      `Unknown --artifact-generation-realization value: ${artifactGenerationRealization}`,
+    );
+  }
+
   const timeoutMs = parsePositiveInt(
     readOption(argv, "timeout-ms") ??
       process.env.ONTO_REVIEW_BENCHMARK_TIMEOUT_MS,
@@ -450,6 +475,9 @@ function parseOptions(argv: string[]): BenchmarkOptions {
     runs: parsePositiveInt(readOption(argv, "runs"), 1, "--runs"),
     caseSelectors,
     executorRealization,
+    ...(artifactGenerationRealization !== undefined
+      ? { artifactGenerationRealization }
+      : {}),
     model: readOption(argv, "model") ?? "gpt-5.5",
     provider: readOption(argv, "provider") ?? "openai",
     auth: explicitAuth ?? "oauth",
@@ -587,7 +615,10 @@ function benchmarkCases(options: BenchmarkOptions): BenchmarkCase[] {
   return cases;
 }
 
-function benchmarkFixture(fixtureId: SemanticQualityGateFixtureId): BenchmarkFixtureSpec {
+/** Exported for scripts/review-cert-run.mts: the cert record's fixture
+ * manifest (target anchor + content sha) derives from THIS single source, so
+ * the manifest can never drift from what the benchmark actually reviews. */
+export function benchmarkFixture(fixtureId: SemanticQualityGateFixtureId): BenchmarkFixtureSpec {
   if (fixtureId === "retry-policy-target-v1") {
     return {
       fixture_id: fixtureId,
@@ -718,7 +749,8 @@ function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkCase): u
       execution: {
         ...(executor ? { executor } : {}),
         topology: "main-workers",
-        artifact_generation_realization: "live",
+        artifact_generation_realization:
+          options.artifactGenerationRealization ?? "live",
         max_concurrent_lenses: options.maxConcurrentLenses,
         retry: defaultReviewRetrySettings(),
         actors: {
@@ -1772,7 +1804,12 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exit(1);
-});
+// Import guard (codex-review-unit-executor precedent): running the file as a
+// CLI executes the benchmark; importing it (review-cert-run.mts pulls
+// benchmarkFixture) must not.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exit(1);
+  });
+}
