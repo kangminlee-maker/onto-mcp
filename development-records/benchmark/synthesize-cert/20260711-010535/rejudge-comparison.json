@@ -1,0 +1,246 @@
+{
+  "rejudge_comparison_contract": "synthesize-cert-rejudge-comparison/v1",
+  "run_dir": "development-records/benchmark/synthesize-cert/20260711-010535",
+  "original_judge_seat": "openai/gpt-5.5",
+  "rejudge_seat": "anthropic/claude-opus-4-8",
+  "reconstruction": {
+    "matched": 269,
+    "unmatched": 0
+  },
+  "rejudge_dispatch": {
+    "attempted": 269,
+    "ok": 269,
+    "judge_error": 0,
+    "timeout": 0
+  },
+  "per_arm_per_metric_pass_tot": {
+    "old_judge": {
+      "baseline": {
+        "grounding": {
+          "pass": 88,
+          "tot": 89
+        },
+        "boundary": {
+          "pass": 89,
+          "tot": 89
+        }
+      },
+      "candidate": {
+        "grounding": {
+          "pass": 89,
+          "tot": 89
+        },
+        "boundary": {
+          "pass": 89,
+          "tot": 89
+        }
+      },
+      "negative_control": {
+        "grounding": {
+          "pass": 10,
+          "tot": 90
+        },
+        "boundary": {
+          "pass": 90,
+          "tot": 90
+        }
+      }
+    },
+    "new_judge": {
+      "baseline": {
+        "grounding": {
+          "pass": 90,
+          "tot": 90
+        },
+        "boundary": {
+          "pass": 90,
+          "tot": 90
+        }
+      },
+      "candidate": {
+        "grounding": {
+          "pass": 89,
+          "tot": 89
+        },
+        "boundary": {
+          "pass": 89,
+          "tot": 89
+        }
+      },
+      "negative_control": {
+        "grounding": {
+          "pass": 52,
+          "tot": 90
+        },
+        "boundary": {
+          "pass": 90,
+          "tot": 90
+        }
+      }
+    }
+  },
+  "metric_regression_flip": {
+    "grounding": {
+      "old_regressed": false,
+      "new_regressed": false,
+      "flipped": false
+    },
+    "boundary": {
+      "old_regressed": false,
+      "new_regressed": false,
+      "flipped": false
+    }
+  },
+  "declared_aggregates": {
+    "old_judge": {
+      "decisive_row_count": {
+        "baseline": 89,
+        "candidate": 89,
+        "negative_control": 90
+      },
+      "metric_means": {
+        "baseline": {
+          "grounding": 0.9887640449438202,
+          "boundary": 1
+        },
+        "candidate": {
+          "grounding": 1,
+          "boundary": 1
+        },
+        "negative_control": {
+          "grounding": 0.1111111111111111,
+          "boundary": 1
+        }
+      },
+      "metric_stddev": {
+        "baseline": {
+          "grounding": 0.10540260134434686,
+          "boundary": 0
+        },
+        "candidate": {
+          "grounding": 0,
+          "boundary": 0
+        },
+        "negative_control": {
+          "grounding": 0.31426968052735443,
+          "boundary": 0
+        }
+      },
+      "judge_failure_rate": 0.007407407407407408,
+      "judge_status_counts": {
+        "ok": 268,
+        "judge_error": 1,
+        "timeout": 0,
+        "not_run": 1
+      },
+      "reps_matrix": [
+        {
+          "fixture_id": "3392b1854fec1c8e634ceff36bd3d40e17f4dfc47bd47989ff08ebd7ae36f8f3",
+          "arm": "baseline",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "3392b1854fec1c8e634ceff36bd3d40e17f4dfc47bd47989ff08ebd7ae36f8f3",
+          "arm": "candidate",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "3392b1854fec1c8e634ceff36bd3d40e17f4dfc47bd47989ff08ebd7ae36f8f3",
+          "arm": "negative_control",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "6255aef7a89f4f654c5e88ed78b4a91e2aef84a57b43e941f9226584b7683c75",
+          "arm": "baseline",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "6255aef7a89f4f654c5e88ed78b4a91e2aef84a57b43e941f9226584b7683c75",
+          "arm": "candidate",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "6255aef7a89f4f654c5e88ed78b4a91e2aef84a57b43e941f9226584b7683c75",
+          "arm": "negative_control",
+          "distinct_reps": 3
+        }
+      ]
+    },
+    "new_judge": {
+      "decisive_row_count": {
+        "baseline": 90,
+        "candidate": 89,
+        "negative_control": 90
+      },
+      "metric_means": {
+        "baseline": {
+          "grounding": 1,
+          "boundary": 1
+        },
+        "candidate": {
+          "grounding": 1,
+          "boundary": 1
+        },
+        "negative_control": {
+          "grounding": 0.5777777777777777,
+          "boundary": 1
+        }
+      },
+      "metric_stddev": {
+        "baseline": {
+          "grounding": 0,
+          "boundary": 0
+        },
+        "candidate": {
+          "grounding": 0,
+          "boundary": 0
+        },
+        "negative_control": {
+          "grounding": 0.4939135726865082,
+          "boundary": 0
+        }
+      },
+      "judge_failure_rate": 0.003703703703703704,
+      "judge_status_counts": {
+        "ok": 269,
+        "judge_error": 0,
+        "timeout": 0,
+        "not_run": 1
+      },
+      "reps_matrix": [
+        {
+          "fixture_id": "3392b1854fec1c8e634ceff36bd3d40e17f4dfc47bd47989ff08ebd7ae36f8f3",
+          "arm": "baseline",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "3392b1854fec1c8e634ceff36bd3d40e17f4dfc47bd47989ff08ebd7ae36f8f3",
+          "arm": "candidate",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "3392b1854fec1c8e634ceff36bd3d40e17f4dfc47bd47989ff08ebd7ae36f8f3",
+          "arm": "negative_control",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "6255aef7a89f4f654c5e88ed78b4a91e2aef84a57b43e941f9226584b7683c75",
+          "arm": "baseline",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "6255aef7a89f4f654c5e88ed78b4a91e2aef84a57b43e941f9226584b7683c75",
+          "arm": "candidate",
+          "distinct_reps": 3
+        },
+        {
+          "fixture_id": "6255aef7a89f4f654c5e88ed78b4a91e2aef84a57b43e941f9226584b7683c75",
+          "arm": "negative_control",
+          "distinct_reps": 3
+        }
+      ]
+    }
+  },
+  "record_violations": [],
+  "record_persisted": true
+}

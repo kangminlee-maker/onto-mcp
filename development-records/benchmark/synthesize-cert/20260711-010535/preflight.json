@@ -1,0 +1,35 @@
+{
+  "at": "2026-07-11T01:06:01.262Z",
+  "baseline_reference_judge_seat": "openai/gpt-5.5",
+  "candidate_negative_control_seat": "openai/gpt-5.6-luna",
+  "declared_dispatch": {
+    "baseline": {
+      "reasoning_effort": "low"
+    },
+    "candidate": {
+      "reasoning_effort": "low"
+    },
+    "negative_control": {
+      "reasoning_effort": "low"
+    }
+  },
+  "forecast": {
+    "reference_calls": 20,
+    "arm_calls": 270,
+    "judge_calls": 270,
+    "total": 560,
+    "cap": 800
+  },
+  "quota_probes": [
+    {
+      "label": "openai/gpt-5.5",
+      "at": "2026-07-11T01:05:50.155Z",
+      "text": "ok"
+    },
+    {
+      "label": "openai/gpt-5.6-luna",
+      "at": "2026-07-11T01:06:01.262Z",
+      "text": "ok"
+    }
+  ]
+}

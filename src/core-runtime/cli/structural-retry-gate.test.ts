@@ -84,11 +84,8 @@ describe("structural retry gate — shouldRetryUnitFailure (§4-2c)", () => {
     expect(gate("issue-deliberation-response", DELIBERATION_POISON_UNSUPPORTED_REF, true)).toBe(true);
   });
 
-  it("F-2 guard: ON stance poison stays non-retryable (gate-excluded, correlated/demote safe)", () => {
-    // Even though the stance classifier matches this message, stance is
-    // gate-excluded, so its terminal failure class stays deterministic and the
-    // per-lens demotion cannot flip into a whole-run halt.
-    expect(gate("issue-stance-response", STANCE_POISON_UNSUPPORTED_REF, true)).toBe(false);
+  it("ON: rare-poison stance becomes retryable under the same structural classifier", () => {
+    expect(gate("issue-stance-response", STANCE_POISON_UNSUPPORTED_REF, true)).toBe(true);
   });
 
   it("negative control: ON output_contract that is NOT a correctable ref rejection stays non-retryable", () => {
@@ -118,8 +115,8 @@ describe("structural retry gate — shouldRetryUnitFailure (§4-2c)", () => {
 });
 
 describe("RESUBMIT_UNIT_ROUTING — single-source registry (§4-2c M-1/F-2)", () => {
-  it("stance is gate-excluded; deliberation and synthesis are gate-eligible (F-2)", () => {
-    expect(RESUBMIT_UNIT_ROUTING["issue-stance-response"]?.gateEligible).toBe(false);
+  it("stance, deliberation, and synthesis are gate-eligible for correctable output_contract-poison failures", () => {
+    expect(RESUBMIT_UNIT_ROUTING["issue-stance-response"]?.gateEligible).toBe(true);
     expect(RESUBMIT_UNIT_ROUTING["issue-deliberation-response"]?.gateEligible).toBe(true);
     expect(RESUBMIT_UNIT_ROUTING["issue-synthesis-response"]?.gateEligible).toBe(true);
   });

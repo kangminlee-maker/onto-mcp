@@ -45,6 +45,7 @@ export interface AssembleReconstructRecordParams {
    * pairing it with `record_stage === "completed"` — a graceful terminal never completed.
    */
   terminalDisposition?: "blocked" | "limited";
+  dispatchFallback?: NonNullable<ReconstructRecordArtifact["dispatch_fallback"]>;
 }
 
 const RECORD_ARTIFACT_KEYS = [
@@ -70,8 +71,10 @@ const RECORD_ARTIFACT_KEYS = [
   // latent type↔behavior mismatch); registered together with the semantic_map refs so the record
   // (the durable primary evidence artifact) carries what the type declares.
   "leaf_read_census",
+  "dispatch_incomplete",
   "semantic_map_census",
   "semantic_map_sidecar",
+  "semantic_map_resume_validation",
   "source_safety_ledger",
   "source_safety_ledger_validation",
   "source_scout_pack",
@@ -681,6 +684,9 @@ export async function assembleReconstructRecord(
     target_material_kind: targetMaterialProfile?.target_material_kind ?? null,
     support_status: targetMaterialProfile?.support_status ?? null,
     artifact_refs: artifactRefs,
+    ...(params.dispatchFallback && recordStage === "completed"
+      ? { dispatch_fallback: structuredClone(params.dispatchFallback) }
+      : {}),
     artifact_integrity: artifactIntegrity,
     validation_summary: {
       target_material_profile_status: targetMaterialProfileStatus,

@@ -1,3 +1,4 @@
+import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { stringify as stringifyYaml } from "yaml";
@@ -36,6 +37,50 @@ export async function atomicWriteFile(
     // Same-filesystem rename is atomic; the target flips in one step.
     await fs.rename(tempPath, filePath);
   } catch (error) {
+    await fs.rm(tempPath, { force: true });
+    throw error;
+  }
+}
+
+async function fsyncDirectory(directoryPath: string): Promise<void> {
+  const handle = await fs.open(directoryPath, fsConstants.O_RDONLY);
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Atomic write with crash-durable file and directory metadata. Use for small
+ * control-plane authorities whose rename must survive a process or host crash.
+ */
+export async function durableAtomicWriteFile(
+  filePath: string,
+  contents: string,
+): Promise<void> {
+  const directoryPath = path.dirname(filePath);
+  await fs.mkdir(directoryPath, { recursive: true });
+  tempWriteCounter += 1;
+  const tempPath = `${filePath}.${process.pid}.${tempWriteCounter}.durable.tmp`;
+  let handle: fs.FileHandle | null = null;
+  try {
+    handle = await fs.open(
+      tempPath,
+      fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        fsConstants.O_WRONLY |
+        fsConstants.O_NOFOLLOW,
+      0o600,
+    );
+    await handle.writeFile(contents, "utf8");
+    await handle.sync();
+    await handle.close();
+    handle = null;
+    await fs.rename(tempPath, filePath);
+    await fsyncDirectory(directoryPath);
+  } catch (error) {
+    await handle?.close().catch(() => undefined);
     await fs.rm(tempPath, { force: true });
     throw error;
   }
@@ -81,6 +126,16 @@ export async function atomicWriteYamlDocument(
   value: unknown,
 ): Promise<void> {
   await atomicWriteFile(
+    filePath,
+    stringifyYaml(stripInMemoryOnlyArtifactFields(value)),
+  );
+}
+
+export async function durableAtomicWriteYamlDocument(
+  filePath: string,
+  value: unknown,
+): Promise<void> {
+  await durableAtomicWriteFile(
     filePath,
     stringifyYaml(stripInMemoryOnlyArtifactFields(value)),
   );

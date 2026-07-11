@@ -1,0 +1,52 @@
+{
+  "schema_version": "reconstruct-output-headroom-live-evidence/v1",
+  "evidence_class": "preliminary_n1_route_compatibility",
+  "started_at": "2026-07-10T23:28:43.128Z",
+  "completed_at": "2026-07-10T23:37:39.676Z",
+  "duration_ms": 536548,
+  "project_root": "/Users/kangmin/Documents/onto-mcp/.onto/temp/reconstruct-output-headroom-live-2026-07-10T23-28-43-112Z",
+  "session_root": "/Users/kangmin/Documents/onto-mcp/.onto/temp/reconstruct-output-headroom-live-2026-07-10T23-28-43-112Z/.onto/reconstruct/session",
+  "target_sha256": "1f5edec2fa519fb56ffb226082ea1fc2a7411716c07edcd89737cf9c4f57a519",
+  "route": {
+    "provider": "openai",
+    "auth": "api_key",
+    "adapter": "openai_sdk",
+    "wire_format": "native_sdk",
+    "model": "gpt-5.5",
+    "effort": "low",
+    "credential_env": "OPENAI_API_KEY",
+    "credential_present_and_format_valid": true
+  },
+  "headroom_tokens": 25000,
+  "openai_physical_request_count": 28,
+  "target_stage_requests": {
+    "candidate_disposition": [
+      {
+        "stage": "candidate_disposition",
+        "max_output_tokens": 29000,
+        "provider_status": "completed",
+        "http_status": 200
+      }
+    ],
+    "ontology_seed": [
+      {
+        "stage": "ontology_seed",
+        "max_output_tokens": 34000,
+        "provider_status": "completed",
+        "http_status": 200
+      }
+    ]
+  },
+  "terminal": {
+    "status": "completed",
+    "record_stage": "completed",
+    "final_output_sha256": "399866c152f08758338b5e4d0c6defe3640f2f64a123f1e52ab707ae59c358e9"
+  },
+  "artifacts": {
+    "candidate_disposition_ref": "/Users/kangmin/Documents/onto-mcp/.onto/temp/reconstruct-output-headroom-live-2026-07-10T23-28-43-112Z/.onto/reconstruct/session/candidate-disposition.yaml",
+    "ontology_seed_ref": "/Users/kangmin/Documents/onto-mcp/.onto/temp/reconstruct-output-headroom-live-2026-07-10T23-28-43-112Z/.onto/reconstruct/session/ontology-seed.yaml",
+    "candidate_disposition_count": 20,
+    "ontology_seed_top_level_key_count": 13
+  },
+  "product_claim_limit": "N=1 route compatibility and changed-path execution only; not a default, quality, or cost decision"
+}

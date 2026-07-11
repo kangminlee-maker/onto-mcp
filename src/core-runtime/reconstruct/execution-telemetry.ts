@@ -27,6 +27,7 @@ import {
   type RouteIdentity,
   witnessedReconstructRouteIdentity,
 } from "../route-identity.js";
+import { readStructuredDispatchFailureEvidence } from "../llm/structured-dispatch-error.js";
 
 // Open (stored/consumed) aliases.
 export type ReconstructExecutionAttemptKind = PipelineExecutionAttemptKind;
@@ -180,7 +181,7 @@ export function unitIdForAuthoredArtifactName(
 
 export function attemptKindForAuthoredArtifactName(
   artifactName: string,
-): ReconstructExecutionAttemptKindKnown {
+): Exclude<ReconstructExecutionAttemptKindKnown, "validation_gate"> {
   if (artifactName.endsWith("MinimalKernel")) return "timeout_recovery";
   if (artifactName.endsWith("Repair")) return "semantic_repair";
   return "initial";
@@ -190,6 +191,13 @@ export function failureClassForLlmCallError(
   error: unknown,
   isTimeout: (error: unknown) => boolean,
 ): ReconstructExecutionFailureClassKnown {
+  const structured = readStructuredDispatchFailureEvidence(error);
+  if (
+    structured?.failure_class === "transport" &&
+    structured.failure_code === "timeout"
+  ) {
+    return "timeout";
+  }
   return isTimeout(error) ? "timeout" : "provider_error";
 }
 
@@ -206,8 +214,17 @@ function addSourceIdentityRef(
   }
 }
 
-export function createReconstructExecutionTelemetryCollector(): ReconstructExecutionTelemetryCollector {
+export function createReconstructExecutionTelemetryCollector(options: {
+  nullMixedRouteProjection?: boolean;
+} = {}): ReconstructExecutionTelemetryCollector {
   const byUnitId = new Map<string, ReconstructUnitExecutionTelemetry>();
+  const routeProjectionByUnitId = new Map<string, {
+    providerRoute: string | null;
+    modelId: string | null;
+    effort: string | null;
+    routeIdentity: RouteIdentity | null;
+    mixed: boolean;
+  }>();
 
   function unitRow(unitId: ReconstructStageId): ReconstructUnitExecutionTelemetry {
     const existing = byUnitId.get(unitId);
@@ -241,25 +258,63 @@ export function createReconstructExecutionTelemetryCollector(): ReconstructExecu
       row.duration_ms += Math.max(0, Math.round(input.durationMs));
       row.prompt_chars += Math.max(0, input.promptChars);
       row.output_chars += Math.max(0, input.outputChars);
-      if (typeof input.providerTokensIn === "number" && input.providerTokensIn > 0) {
+      if (typeof input.providerTokensIn === "number" && input.providerTokensIn >= 0) {
         row.provider_tokens_in = (row.provider_tokens_in ?? 0) + input.providerTokensIn;
       }
-      if (typeof input.providerTokensOut === "number" && input.providerTokensOut > 0) {
+      if (typeof input.providerTokensOut === "number" && input.providerTokensOut >= 0) {
         row.provider_tokens_out =
           (row.provider_tokens_out ?? 0) + input.providerTokensOut;
       }
-      if (input.providerRoute) row.provider_route = input.providerRoute;
-      if (input.modelId) row.model_id = input.modelId;
-      if (input.effort) row.effort = input.effort;
-      // Witnessed route identity from the resolved selection at the call
-      // boundary (last attempt with route fields wins, mirroring provider_route).
-      if (input.provider || input.executionAdapter || input.effectiveBaseUrl) {
-        row.route_identity = witnessedReconstructRouteIdentity({
+      const routeIdentity =
+        input.provider || input.executionAdapter || input.effectiveBaseUrl
+          ? witnessedReconstructRouteIdentity({
           provider: input.provider,
           executionAdapter: input.executionAdapter,
           declaredBillingMode: input.declaredBillingMode,
           effectiveBaseUrl: input.effectiveBaseUrl,
-        });
+            })
+          : null;
+      const hasRouteProjection = Boolean(
+        input.providerRoute || input.modelId || input.effort || routeIdentity,
+      );
+      if (hasRouteProjection && !options.nullMixedRouteProjection) {
+        if (input.providerRoute) row.provider_route = input.providerRoute;
+        if (input.modelId) row.model_id = input.modelId;
+        if (input.effort) row.effort = input.effort;
+        if (routeIdentity) row.route_identity = routeIdentity;
+      } else if (hasRouteProjection) {
+        const projection = routeProjectionByUnitId.get(input.unitId) ?? {
+          providerRoute: null,
+          modelId: null,
+          effort: null,
+          routeIdentity: null,
+          mixed: false,
+        };
+        const conflicts = <T>(prior: T | null, next: T | null): boolean =>
+          prior !== null &&
+          next !== null &&
+          JSON.stringify(prior) !== JSON.stringify(next);
+        projection.mixed = projection.mixed ||
+          conflicts(projection.providerRoute, input.providerRoute ?? null) ||
+          conflicts(projection.modelId, input.modelId ?? null) ||
+          conflicts(projection.effort, input.effort ?? null) ||
+          conflicts(projection.routeIdentity, routeIdentity);
+        projection.providerRoute ??= input.providerRoute ?? null;
+        projection.modelId ??= input.modelId ?? null;
+        projection.effort ??= input.effort ?? null;
+        projection.routeIdentity ??= routeIdentity;
+        routeProjectionByUnitId.set(input.unitId, projection);
+        if (!projection.mixed) {
+          row.provider_route = projection.providerRoute;
+          row.model_id = projection.modelId;
+          row.effort = projection.effort;
+          row.route_identity = projection.routeIdentity;
+        } else {
+          row.provider_route = null;
+          row.model_id = null;
+          row.effort = null;
+          row.route_identity = null;
+        }
       }
       if (
         row.prompt_policy_sha256 === null &&
@@ -310,6 +365,7 @@ export function createReconstructExecutionTelemetryCollector(): ReconstructExecu
     },
     reset() {
       byUnitId.clear();
+      routeProjectionByUnitId.clear();
     },
   };
 }

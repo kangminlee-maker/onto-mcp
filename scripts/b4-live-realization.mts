@@ -14,19 +14,16 @@
  *    semantic_author` settings seat (production-route mirror — l2-real-llm-run
  *    backlog-⑤a synthesize-effort override applies to both, since reference
  *    authoring dispatches the identical production synthesize call).
- *  - candidate + negative_control: a directly-constructed anthropic seat
- *    (caller-supplied model + optional thinking mode — currently
- *    claude-sonnet-5 with extended thinking OFF), built DIRECTLY — NOT a
- *    settings seat. `assertSettingsModelsSupported` walks only routes
- *    `collectModelSelections` finds inside the settings OBJECT
- *    (supported-models.ts's dispatch vocabulary is `settings_path` |
- *    `request_judge`); a script-constructed LlmCallConfig that never enters
- *    `settings` is structurally invisible to that walk, so it is never gated.
- *    This is not a bypass of an enforced boundary — B4 exists precisely to
- *    produce the evidence that would let a not-yet-registered candidate occupy
- *    a REAL settings seat; gating the bench's own candidate dispatch on
- *    registry membership would make the benchmark that creates the registry
- *    entry unbuildable.
+ *  - candidate + negative_control: a directly-constructed seat from the
+ *    caller-supplied declared identity — an anthropic candidate carries an
+ *    optional thinking mode (e.g. claude-sonnet-5 with extended thinking OFF),
+ *    an openai candidate carries an optional reasoning effort (dispatched via
+ *    the codex oauth worker) — built DIRECTLY, NOT a settings seat. Before
+ *    constructing that LlmCallConfig, the harness calls
+ *    `assertB4BenchCandidateDispatchAllowed`: registered candidates must pass
+ *    the normal supported-model gate for the semantic-map synthesize seat, and
+ *    unregistered candidates may pass only through the B7 exact-path bench
+ *    allowance for that same seat.
  *  - judge: the SAME resolved semantic_author config (openai/gpt-5.5) at its
  *    BASE effort (the ⑤a low-effort finding is scoped to synthesize quality
  *    parity, not judging) — dispatched via a raw callLlm with the dedicated
@@ -41,6 +38,9 @@ import {
   resolveSettingsChain,
   type OntoSettings,
 } from "../src/core-runtime/discovery/settings-chain.ts";
+import {
+  assertB4BenchCandidateDispatchAllowed,
+} from "../src/core-runtime/discovery/supported-models.ts";
 import {
   callLlm,
   resolveLlmProviderConfig,
@@ -87,6 +87,17 @@ export interface B4DeclaredModelIdentity {
    * settings-declared baseline leaves it unset (openai route, no SDK thinking).
    */
   thinking_mode?: "disabled";
+  /**
+   * openai(codex)-candidate synthesize effort. The candidate seat is directly
+   * constructed, so an openai candidate resolves to the codex CLI worker, which
+   * inherits `model_reasoning_effort` from ~/.codex/config.toml when unset
+   * (codex-nesting-batch-worker: "Absent → TOML default"). Declaring the effort
+   * here lets the caller inject it onto the candidate synthesize call so the
+   * certified effort is the dispatched effort — not a stray host TOML default.
+   * The anthropic candidate (thinking_mode route) leaves this unset; its
+   * synthesize quality is governed by thinking_mode, not effort (module doc ⑤a).
+   */
+  reasoning_effort?: string;
 }
 
 export interface B4LiveSeats {
@@ -100,20 +111,23 @@ export interface B4LiveSeats {
 /**
  * Resolves the two DISTINCT provider routes B4 dispatches (§5): the settings
  * `semantic_author` seat (baseline/reference/judge, openai/gpt-5.5) and the
- * directly-constructed candidate seat (anthropic Haiku, §5 candidate =
- * negative_control model). Runs `assertSettingsModelsSupported` on the
- * settings-declared route only (INV-MODEL-1 discipline, mirroring
+ * directly-constructed candidate seat (caller-supplied declared identity,
+ * §5 candidate = negative_control model). Runs `assertSettingsModelsSupported`
+ * on the settings-declared route only (INV-MODEL-1 discipline, mirroring
  * l2-real-llm-run) — see the module doc for why the candidate route is
  * neither subject to, nor a bypass of, that gate.
  *
- * Declared↔resolved identity check: the openai `semantic_author` seat runs
- * via auth=oauth, which `resolveLlmProviderConfig` aliases to the internal
- * "codex" execution brand (model-switcher.ts) — comparing THAT resolved
- * `.provider` against the literal "openai" declared identity would always
- * false-fail. So the baseline/reference check compares against the RAW
- * settings-chain actor declaration (pre-alias); the anthropic candidate seat
- * has no such alias (model-switcher never renames the anthropic brand), so
- * its check compares the fully resolved LlmCallConfig directly.
+ * Identity discipline (provider-brand-identity-class design 2026-07-11): an
+ * oauth openai declaration resolves to the internal "codex" runtime brand
+ * (model-switcher.ts), so the DECLARED brand cannot be recovered from the
+ * resolved LlmCallConfig. Both seat identities therefore come from the RAW
+ * declarations (baseline: the settings-chain actor declaration; candidate:
+ * `args.candidate`), and the resolved configs are used for dispatch only.
+ * The candidate guard checks the two axes a correct resolver could still
+ * distort: `model_id` (never aliased — a raw compare catches a dropped or
+ * rewritten model, e.g. an empty model resolves to undefined) and
+ * `thinking_mode` (confirms the injected anthropic opt-in survived onto the
+ * constructed config).
  */
 export async function resolveB4LiveSeats(args: {
   repoRoot: string;
@@ -133,6 +147,10 @@ export async function resolveB4LiveSeats(args: {
   }
   const baselineLlmConfig = resolveLlmProviderConfig({ config: { llm: authorLlm } });
 
+  assertB4BenchCandidateDispatchAllowed({
+    provider: args.candidate.provider,
+    model: args.candidate.model,
+  });
   const candidateLlmConfig = resolveLlmProviderConfig({
     config: { llm: { provider: args.candidate.provider, model: args.candidate.model } },
   });
@@ -144,16 +162,26 @@ export async function resolveB4LiveSeats(args: {
   if (args.candidate.thinking_mode !== undefined) {
     candidateLlmConfig.thinking_mode = args.candidate.thinking_mode;
   }
+  // The candidate seat is directly constructed with a per-provider default
+  // auth, so resolveLlmProviderConfig aliases an oauth openai brand to the
+  // internal "codex" runtime provider (model-switcher) — exactly as the
+  // settings baseline seat above is aliased. Provider is NOT re-compared here:
+  // any comparand would derive from the same normalizer over the same input (a
+  // tautology that can never fire), and the identity below carries the DECLARED
+  // brand, not the resolved one. The guard checks the two axes a correct
+  // resolver could still distort: `model_id` (never aliased — the raw compare
+  // catches a dropped or rewritten model; an undefined-provider caller lands
+  // here too, since its selection resolves to no model_id) and `thinking_mode`
+  // (confirms the injected anthropic opt-in survived onto the config).
   if (
-    candidateLlmConfig.provider !== args.candidate.provider ||
     candidateLlmConfig.model_id !== args.candidate.model ||
     candidateLlmConfig.thinking_mode !== args.candidate.thinking_mode
   ) {
     throw new Error(
       `b4-live-realization: declared candidate ${args.candidate.provider}/${args.candidate.model}` +
         `${args.candidate.thinking_mode ? ` (thinking=${args.candidate.thinking_mode})` : ""} resolved to ` +
-        `${candidateLlmConfig.provider ?? "(unresolved)"}/${candidateLlmConfig.model_id ?? "(unresolved)"}` +
-        `${candidateLlmConfig.thinking_mode ? ` (thinking=${candidateLlmConfig.thinking_mode})` : ""} — ` +
+        `model ${candidateLlmConfig.model_id ?? "(unresolved)"}` +
+        `${candidateLlmConfig.thinking_mode ? ` (thinking=${candidateLlmConfig.thinking_mode})` : " (thinking=absent)"} — ` +
         "refusing to dispatch under a mismatched identity",
     );
   }
@@ -167,9 +195,15 @@ export async function resolveB4LiveSeats(args: {
     // a clean model id: downstream consumers (b4-rejudge readPreflightSeats)
     // split it into the record's arm_model/model, and that model id must be the
     // real SDK id a settings seat dispatches — never a display-annotated string.
+    // Both halves are the DECLARED identity (provider-brand-identity-class
+    // design 2026-07-11): the provider half is the registry brand the B5
+    // binding compares against — the resolved config's provider is the runtime
+    // alias ("codex" for oauth openai) and would split-brain the rejudge record
+    // against the fresh record and the registry; the model half is declared
+    // too, proven equal to the dispatched model_id by the guard above.
     // The thinking mode is verified structurally above and surfaced on every
     // per-call model-call log ("thinking=disabled"); it is NOT concatenated here.
-    candidateModelIdentity: `${candidateLlmConfig.provider}/${candidateLlmConfig.model_id}`,
+    candidateModelIdentity: `${args.candidate.provider}/${args.candidate.model}`,
   };
 }
 
@@ -227,9 +261,23 @@ export function createB4LiveCallHarness(capturePath: string): B4LiveCallHarness 
         }
         callCount += 1;
         const seq = callCount;
+        // Dispatch-config WITNESS (effort-witness design): the knobs this call
+        // is dispatched WITH, taken from the exact config handed to callLlm.
+        // Present knobs only (no nulls — the record cell schema rejects null);
+        // the object itself is ALWAYS present on new-format lines (possibly
+        // `{}`), so a line WITHOUT a `dispatch` key stays distinguishable as a
+        // pre-field legacy line (no evidence), never a "no-knob dispatch".
+        const dispatch = {
+          ...(config?.reasoning_effort !== undefined
+            ? { reasoning_effort: config.reasoning_effort }
+            : {}),
+          ...(config?.thinking_mode !== undefined
+            ? { thinking_mode: config.thinking_mode }
+            : {}),
+        };
         try {
           const result = await callLlm(systemPrompt, userPrompt, config as never);
-          await appendCapture({ seq, role, at: ts(), systemPrompt, userPrompt, text: result.text ?? null });
+          await appendCapture({ seq, role, at: ts(), dispatch, systemPrompt, userPrompt, text: result.text ?? null });
           return result;
         } catch (error) {
           const message = String(error);
@@ -238,6 +286,7 @@ export function createB4LiveCallHarness(capturePath: string): B4LiveCallHarness 
             seq,
             role,
             at: ts(),
+            dispatch,
             systemPrompt: systemPrompt.slice(0, 200),
             error: message.slice(0, 400),
             terminal_class: terminalClass,

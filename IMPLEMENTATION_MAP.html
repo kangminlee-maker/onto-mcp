@@ -38,20 +38,20 @@
 <main>
 
 <h1>onto-mcp Implementation Map</h1>
-<p class="stamp">기준: 2026-07-08 · main = <b>PR #183</b> 머지(<code>ea9d49a</code> INV-MODEL-1 B5 — claude-sonnet-5 role 인증) · 개발 라인 v0.4.12 · 직전 맵 갱신 <code>7ee3cbc</code>/#171(2026-07-06) 이후 <b>12 PR(#172~#183)</b> 경과 · 이 문서는 <b>현재 상태 대시보드</b>다 — 변경 이력은 git log·<code>development-records/</code>가 소유한다.</p>
+<p class="stamp">기준: 2026-07-11 · main = <code>799c662</code> · 개발 라인 v0.4.12 · 이 문서는 <b>현재 상태 대시보드</b>다 — 변경 이력은 git log·<code>development-records/</code>가 소유한다.</p>
 
 <!-- ───────── 첫 화면: 목표 / phase / health / 다음 결정 / 리스크 ───────── -->
 <div class="grid">
   <div class="card focus"><h3>현재 목표</h3>
     <p>전략 목표(불변): opt-in <b>4종 관찰</b> → 실 <b>3회 무결</b> 시 DEFAULT 승격. 실제 진행: 관찰 윈도는 <b>실 provider 실행 대기로 정체</b>(0/3)라, 그동안 <b>§4 회복-경로 백로그 하드닝</b>과 <b>INV-MODEL-1 모델 등록</b>을 병렬 소진 중 — 두 트랙 모두 승격 전 견고화.</p></div>
   <div class="card"><h3>Phase</h3>
-    <p>관찰 윈도 <span class="warn">0/3</span>(정체) · §4 백로그: §4-1·§4-6a·§4-6b·§4-2c/synthesis <span class="ok">착지</span>, §4-2·§4-4·§4-6c <b>open</b> · INV-MODEL-1: B1~B5 <span class="ok">착지</span>(sonnet-5 role 등록), B6·B7 open.</p></div>
+    <p>관찰 윈도 <span class="warn">0/3</span>(정체) · §4 백로그: §4-1·F1 concurrent wiring·§4-2 reconstruct semantic-map recovery·§4-4 P1a originating-call fallback·§4-6a·§4-6b·§4-6c·§4-2c/synthesis·rare-poison stance <span class="ok">구현</span>. §4-4는 default-off sealed SDK trigger + running-owner fence + exact-incomplete existing-stage fallback + checkpointed thin outcome까지 배선됐고, <span class="ok">injected-primary + real Anthropic fallback support evidence</span>를 확보했다. Natural incident와 full downstream completion은 남았다. · INV-MODEL-1: B1~B7 <span class="ok">착지</span>.</p></div>
   <div class="card"><h3>Health</h3>
-    <p><span class="ok">vitest 164 files / 2,665 passed</span>(+1 todo) · <span class="ok">게이트 14/14</span> · tsc 클린 · 정적 green · 회복 continuation E2E가 ledger 경로 재디스패치 고정.</p></div>
+    <p><span class="ok">vitest 174 files / 2,810 passed</span>(+1 todo) · <span class="ok">invariant-drift no_drift</span> · tsc/import/G7~G11 green · reconstruct semantic-map resume/fallback + direct-API output-headroom/failed-terminal 경로 고정.</p></div>
   <div class="card"><h3>다음 결정 (owner)</h3>
-    <p><b>§4-2</b> authority는 <span class="ok">결정됨</span>(D1a=frontier 재계산, review는 아티팩트 소비 금지 / reconstruct는 아티팩트가 유일 authority) — 남은 건 reconstruct 자동재개 착수. · <b>§4-6c</b> 티어링 <b>정책값</b>: 리뷰 seat를 어느 등록 모델/effort로 sweep할지(값 배포만 잔여, 메커니즘 배선 완료). · <b>§4-4</b> fallback 스왑은 B7 allowlist governance 종속.</p></div>
+    <p><b>§4-4 P1a</b> 구현과 non-empty live alternate-provider semantic-map support evidence는 <span class="ok">완료</span>. 다음 owner 판단은 자연 rate-limit incident·full downstream completion을 기다릴지, 관찰 윈도 0/3을 먼저 재개할지다. P1b cross-attempt reuse와 P2 review fallback은 incident cost/evidence 전까지 deferred.</p></div>
   <div class="card"><h3>주요 리스크</h3>
-    <p><span class="warn">resubmit 표면이 #179·#182로 변경</span>(deliberation 확대·retry-gate substring→구조적 분류기) → 이전 resubmit 관찰 무효, 재기준 필요 · <span class="warn">실 provider rate-limit 문구 미검증</span>(breaker 패턴 매칭 불확정) · <span class="warn">한 세션의 matrix 손상이 다중 세션 status 조회를 실패시킴</span>(fail-loud 파급, findLatestReviewSessions — 관찰 중 모니터).</p></div>
+    <p><span class="warn">§4-4 full product E2E는 아직 partial</span>: real Anthropic synthesize와 verify probe는 통과했지만 primary 429는 주입됨 · direct-API candidate-disposition 29k/ontology-seed 34k target은 실제 completion됐으나 최신 terminal은 후속 confirm transport timeout · natural structured rate-limit incident 미관측 · activation 뒤 crash는 의도적으로 same-session resume를 닫고 새 session을 요구 · 기존 일반 record/run-control 2-pass hash 순환은 active fallback 밖의 별도 설계 과제 · review resubmit 관찰은 #182 이후 재기준 필요.</p></div>
 </div>
 
 <!-- ───────── 서비스 블루프린트 ───────── -->
@@ -195,7 +195,7 @@
   <text class="t" x="1528" y="130">dispatch-incomplete.yaml</text>
   <text class="s" x="1528" y="148">배치 end state: 완료·dead-letter·미완료</text>
   <text class="s" x="1528" y="164">트립/완주 무관 기록 (관측 projection)</text>
-  <text class="m" x="1528" y="184">회복 계약값이나 자동 소비는 §4-2 연기</text>
+  <text class="m" x="1528" y="184">review frontier / reconstruct partition authority 분리</text>
   <text class="m" x="1528" y="202">OFF(기본)에선 쓰지 않음</text>
 
   <rect class="n-q" x="1514" y="230" width="324" height="86" rx="8"/>
@@ -205,15 +205,16 @@
   <text class="m" x="1528" y="306">3회 무결 → DEFAULT 승격 게이트 (0/3)</text>
 
   <rect class="n-post" x="1514" y="332" width="324" height="206" rx="8"/>
-  <text class="t" x="1528" y="354">연기 (hot path 밖) — open</text>
-  <text class="s" x="1528" y="374">§4-2 reconstruct 자동 스테이지 재개 (D1a=frontier, 착수 대기)</text>
-  <text class="s" x="1528" y="392">§4-4 트립 시 fallback provider 스왑 (B7 allowlist 종속)</text>
-  <text class="s" x="1528" y="410">§4-6c 리뷰 유닛 model/effort 티어링 정책값 배포</text>
-  <text class="s" x="1528" y="428">INV-MODEL-1 B6(role-aware INVARIANTS 문구)·B7(benchCandidate/allowlist)</text>
-  <text class="s" x="1528" y="446">rare-poison-stance 하드닝 (correlated terminal-class 선행)</text>
-  <text class="m" x="1528" y="468">착지 완료: §4-1(#177)·§4-6a(#179)·§4-6b(#181)·§4-2c/synthesis(#182)</text>
-  <text class="m" x="1528" y="486">tiering 메커니즘은 배선 완료 · 기본 정책값만 미배포</text>
-  <text class="m" x="1528" y="510">각 항목은 착수 시 실코드로 재검증(PROPOSED)</text>
+  <text class="t" x="1528" y="354">후속 evidence gate · deferred scope</text>
+  <text class="s" x="1528" y="374">§4-2 reconstruct semantic-map 자동 스테이지 재개 착지</text>
+  <text class="s" x="1528" y="392">§4-4 P1a live fallback support 확보 · natural/full downstream 대기</text>
+  <text class="s" x="1528" y="410">§4-6c 리뷰 유닛 model/effort 정책값 배포 착지</text>
+  <text class="s" x="1528" y="428">INV-MODEL-1 B7 bench 후보 exact-route guard 착지</text>
+  <text class="s" x="1528" y="446">rare-poison-stance 하드닝 착지 (terminal outcome authority 보존)</text>
+  <text class="m" x="1528" y="468">착지 완료: §4-1+F1·§4-2 recovery·§4-4 P1a·§4-6a/6b/6c·§4-2c/synthesis·rare-poison stance</text>
+  <text class="m" x="1528" y="486">§4-6c는 새 모델 등록 없이 gpt-5.5 evidence-backed unit policy만 고정</text>
+  <text class="m" x="1528" y="506">§4-4 P1a: originating-call activation + existing-stage fallback, review는 P2</text>
+  <text class="m" x="1528" y="526">각 항목은 착수 시 실코드로 재검증(PROPOSED)</text>
 
   <!-- 흐름 -->
   <!-- 입력 → LLM -->
@@ -256,6 +257,7 @@
   <tr><td><code>review.execution.retry.dispatch_breaker.enabled</code></td><td class="warn">관찰 ON</td><td>#170</td><td>트립/포이즌 정합 · <code>dispatch-incomplete.yaml</code> 내용 · 완료 유닛 보존 · 재디스패치==미완료 · 실 CLI limit 문구 매칭</td></tr>
   <tr><td><code>reconstruct.execution.dispatch_breaker.enabled</code></td><td class="warn">관찰 ON</td><td>#167</td><td>census <code>breaker_retry_*</code> spend · 트립 파티션 정합</td></tr>
   <tr><td><code>reconstruct.execution.semantic_map_authoring</code></td><td class="warn">관찰 ON</td><td>#167</td><td>census/projection 품질 · 429 중 부분출력 seat 신뢰(<code>trustedOnSeatPresence</code> caveat)</td></tr>
+  <tr><td><code>semantic_author.llm_runtime.openai_responses_output_headroom_tokens</code></td><td class="warn">default OFF · target live 확인</td><td>명시적 project actor opt-in</td><td>OpenAI Responses direct API만 base+headroom · model cap 선검증 · incomplete sidecar/failed status · 29k/34k target completion 확인 · latest terminal은 downstream confirm timeout</td></tr>
 </table>
 <p class="muted" style="font-size:13px;margin-top:8px;">승격 규칙: 실 리뷰 실행 + 실 reconstruct 실행 <b>3회 무결</b> → 네 opt-in의 DEFAULT를 <code>enabled:true</code>로 승격하는 PR (INV-CFG-1 마커 + owner 확인). <b>현황(2026-07-08)</b>: 실 review/reconstruct 관찰 실행 산출물 <b>미누적</b>(0/3) — 지난 12 PR은 관찰이 아니라 §4 하드닝·INV-MODEL-1 등록으로 소진됨. <b>재기준</b>: #179(deliberation resubmit)·#182(retry-gate 구조화·synthesis resubmit)로 resubmit 표면이 변경되어 이전 resubmit 관찰은 무효, #182 이후부터 0에서 다시 센다.</p>
 
@@ -264,9 +266,9 @@
 <table>
   <tr><th>단계</th><th>작업</th><th>상태</th></tr>
   <tr><td><span class="step">0~1</span></td><td>설계 SSOT 본문↔§8 조정 + 구현맵 재구축 + §4-3(2) matrix 읽기 <b>fail-loud</b> (per-unit 마커는 보류: D1b)</td><td class="ok">완료 (2026-07-06)</td></tr>
-  <tr><td><span class="step">4a</span></td><td>§4 회복-경로 하드닝 <b>착지분</b>: §4-1 nested breaker 커버(#177) · §4-6a deliberation resubmit 확대(#179) · §4-6b <code>onto_review_continue</code> 기본 재개 안내(#181) · §4-2c retry-gate 구조화 + synthesis resubmit(#182) · graceful-terminal site 7(#175) · breaker 동시-풀 결정성(#178, default-off)</td><td class="ok">완료 (2026-07-07~08)</td></tr>
-  <tr><td><span class="step">4b</span></td><td>§4 <b>open</b>: §4-2 reconstruct 자동 스테이지 재개(D1a=frontier 결정됨, 착수 대기) · §4-4 fallback provider 스왑(B7 종속) · §4-6c 리뷰 유닛 티어링 <b>정책값</b>(메커니즘 배선 완료) · rare-poison-stance 하드닝(별개)</td><td class="muted">대기 (PROPOSED — 착수 시 실코드 재검증)</td></tr>
-  <tr><td><span class="step">M</span></td><td><b>INV-MODEL-1</b> role-aware 모델 등록: B1~B3 dispatch resolver·게이트(#165), B4 벤치 하니스+Haiku 시도(#180, 등록 보류), B5 record 검증기(#176)+<b>claude-sonnet-5 role 인증</b>(#183, <code>semantic_map_synthesize</code>)</td><td class="warn">B1~B5 완료(런타임 게이트는 reconstruct-live·리뷰 seat는 G7 커밋-config, B5 결속은 build-time G7) · B6 role-aware INVARIANTS <b>문구만 잔여</b>(일반 엔트리+<code>context_window_tokens</code> G4는 기존재, <code>roles</code>는 설계상 G4 비보호=G7+CONTRACTED_ROLES가 담당) · B7(benchCandidate/allowlist, src 부재) open</td></tr>
+  <tr><td><span class="step">4a</span></td><td>§4 회복-경로 하드닝 <b>착지분</b>: §4-1 nested breaker 커버(#177) · F1 review fan-out concurrent breaker runtime wiring(2026-07-09) · §4-2 reconstruct semantic-map 자동 스테이지 재개(2026-07-10) · §4-6a deliberation resubmit 확대(#179) · §4-6b <code>onto_review_continue</code> 기본 재개 안내(#181) · §4-2c retry-gate 구조화 + synthesis resubmit(#182) · graceful-terminal site 7(#175)</td><td class="ok">완료 (2026-07-07~10)</td></tr>
+  <tr><td><span class="step">4b</span></td><td>§4-4 P1a fallback provider swap: strict default-off settings, named model pair gate, immutable exact-version sealed SDK/counting error capability, create-once activation, running-owner lineage fence, physical-request cumulative cap, exact-incomplete existing-stage second pass, schema-validated secure publication/outcome checkpoint, active-only record/manifest/ledger, mixed telemetry, fresh npm/MCPB parity까지 구현. Injected primary typed 429 → real Anthropic synthesize 1회 + independent verify probe 1회 live support evidence도 확보. Cross-attempt reuse는 P1b, review fallback은 P2로 분리.</td><td class="warn">구현·live support 완료 · natural incident/full downstream 대기</td></tr>
+  <tr><td><span class="step">M</span></td><td><b>INV-MODEL-1</b> role-aware 모델 등록: B1~B3 dispatch resolver·게이트(#165), B4 벤치 하니스+Haiku 시도(#180, 등록 보류), B5 record 검증기(#176)+<b>claude-sonnet-5 role 인증</b>(#183, <code>semantic_map_synthesize</code>), B6 role-aware INVARIANTS 문구 정리, B7 벤치 후보 exact-route guard</td><td class="ok">B1~B7 완료(런타임 게이트는 reconstruct-live·B4 bench preflight·리뷰 seat는 G7 커밋-config, B5 결속+벤치 후보 token/binding은 build-time G7; <code>roles</code>는 G7+CONTRACTED_ROLES, <code>context_window_tokens</code>는 G4 보호)</td></tr>
   <tr><td><span class="step">2·3</span></td><td>관찰 3회 무결 → opt-in 4종 <b>DEFAULT 승격 PR</b> (INV-CFG-1 마커 + owner) · §4-5는 재프레이밍(소급 재판정 아님 → "breaker ON semantic-map l2 재실행" 검증, INV-MODEL-1 B4/B5에 흡수)</td><td class="muted">대기 (게이트: 실 관찰 실행 0/3, 정체)</td></tr>
 </table>
 
@@ -277,9 +279,9 @@
   <tr><td>MCP surface</td><td><code>src/mcp/</code></td><td>onto 도구 + simple/full 프로파일(<code>ONTO_MCP_PROFILE</code>) · <code>onto_review_continue</code>/<code>_cancel</code> 추가 · <code>onto watch</code> read-only live HUD(TUI) · <code>.mcpb</code> 데스크탑 확장 + 첫실행 bootstrap</td></tr>
   <tr><td>Core API</td><td><code>src/core-api/</code></td><td>MCP·하니스가 호출하는 facade (review/reconstruct prepare·run·round·advance·status·result·continue)</td></tr>
   <tr><td>실행층</td><td><code>src/core-runtime/cli/</code></td><td>invocation runner·dispatch 루프·provider unit executor·nesting worker·resubmit·salvage — review/를 단방향 import (G1 강제)</td></tr>
-  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 · 회복: pipeline-execution-ledger(<code>resolution:"demoted"</code>)·continuation-plan(frontier)·dispatch-breaker · reconstruct: seeding+maturation+answer-support judge · <b>Layer-2 accumulated semantic-map</b>(누적 채널→over-context frontier→seed projection) · <b>comprehension-reduce</b>(union monoid·leaf-read·value-tile) · <b>graceful-terminal</b>(GracefulTerminalSignal·reachability manifest v2)</td></tr>
+  <tr><td>의미층</td><td><code>src/core-runtime/review/</code> · <code>reconstruct/</code></td><td>artifact 타입·materializer·심의·게이트 · 회복: review ledger continuation frontier, reconstruct semantic-map dispatch partition + resume validation + default-off originating-call provider fallback(<code>dispatch-fallback-artifacts.ts</code>) · sealed SDK/counting/typed failure는 <code>src/core-runtime/llm/</code> · reconstruct seeding+maturation+answer-support judge · <b>Layer-2 accumulated semantic-map</b> · <b>graceful-terminal</b></td></tr>
   <tr><td>provider 경계</td><td><code>src/core-runtime/llm/</code></td><td>스위처: oauth(codex·claude)/api_key(openai·anthropic·grok)/local(lmstudio) · <code>dispatch-breaker.ts</code>(계통 실패 분류·per_call_max_attempts·capped backoff) · role-aware dispatch resolver (INV-MODEL-1) · 선택은 벤치-검증 모델(G7)로 제한</td></tr>
-  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon·authority(supported-models role 스키마·<code>context_window_tokens</code>, G4 보호) → rank 2~4 원칙 → rank 5 기능 계약(review runner·pipeline-execution-ledger·reconstruct registry, obligation-coverage 실 등록)</td></tr>
+  <tr><td>계약 권위</td><td><code>.onto/</code></td><td>rank 1 lexicon·authority(supported-models role 스키마·<code>context_window_tokens</code>/<code>max_output_tokens</code>, G4 보호) → rank 2~4 원칙 → rank 5 기능 계약(review runner·pipeline-execution-ledger·reconstruct registry, obligation-coverage 실 등록)</td></tr>
 </table>
 
 <!-- ───────── 검증 체계 ───────── -->
@@ -290,14 +292,14 @@
   <tr><td>불변식 테스트</td><td><code>*.invariant.test.ts</code> (G3)</td><td>auth 생략→OAuth 워커 · submit schema=spine 단일 source · INV-MODEL-1(role-aware) · INV-OBLIGATION-COVERAGE-1 · INV-SCHEMA-1</td></tr>
   <tr><td>런타임 검증기</td><td>reconstruct validator(run-control·게이트·judge B-5/B-6) · 실 loader <code>loadReconstructContractRegistry</code> · obligation-coverage 동적 증명 + ratchet</td><td>judge: author≠judge 구조 강제 + convergent claim fail-closed · registry 편집은 실 loader로 검증</td></tr>
   <tr><td>회복 경로 E2E</td><td>회복 continuation E2E가 <b>ledger 경로로 미완료 집합만 재디스패치</b>함을 고정 · dispatch-breaker(트립·포이즌·OFF twin) · resubmit(강등·matrix·ledger demoted·no whole-run halt)</td><td>stance 트립 halt progress-step 회귀 가드(#171) · demoted 유닛은 frontier 재진입 없음</td></tr>
-  <tr><td>테스트</td><td>vitest 164 files / 2,665 passed (+1 todo)</td><td>golden 하니스·salvage/resubmit(stance·deliberation·synthesis)/breaker E2E·구조적 retry-gate·reconstruct judge·synthesize-cert(INV-MODEL-1)·Layer-2 semantic-map W1~W5·comprehension leaf-read·graceful-terminal·spreadsheet C-recon/C-review 포함</td></tr>
+  <tr><td>테스트</td><td>vitest 174 files / 2,810 passed (+1 todo)</td><td>기존 전체 suite + output-headroom OFF/ON/cap·typed incomplete·raw terminal seam·failure sidecar crash reconciliation·failed consumer projection·cross-process mutation lock·live completion contrast·G11 mutation self-check + sealed SDK/fallback 검증 포함</td></tr>
   <tr><td>벤치 게이트</td><td>G5 decision gate (하니스 내장) · reconstruct mock 완주/품질 GUARD</td><td>runs≥3·fixtures≥2 미충족 시 PRELIMINARY</td></tr>
 </table>
 
 <!-- ───────── 완료 이력 (압축) ───────── -->
 <h2>완료 이력 (압축: <code>8ebb3c5</code>/#90 → <code>ea9d49a</code>/#183 · 상세는 git log·development-records·상단 백로그 표)</h2>
 <ul>
-  <li><b>§4 회복-경로 하드닝 + INV-MODEL-1 (2026-07-06~08, #172~#183, 12 PR)</b> — §4-1 nested breaker 커버(#177)·§4-6a deliberation resubmit(#179)·§4-6b continue 기본화(#181)·§4-2c retry-gate 구조화+synthesis resubmit(#182)·graceful-terminal site 7(#175)·breaker 동시-풀 결정성(#178). INV-MODEL-1 B4 벤치 하니스+Haiku 시도(#180, boundary 약점→등록 보류)·B5 synthesize-cert record 검증기(#176)+G7 role↔record 결속+claude-sonnet-5 role 인증(#183). 각 건 설계-먼저 + 독립 적대 다-KIND 교차검증(핸드오프·design note 기록). 상세는 상단 백로그 표 4a·M 행.</li>
+  <li><b>§4 회복-경로 하드닝 + INV-MODEL-1 (2026-07-06~10, #172~#183 + F1/§4-2/§4-6c working cuts)</b> — §4-1 nested breaker 커버(#177)·F1 review fan-out concurrent breaker runtime wiring·§4-2 reconstruct semantic-map resume-validation recovery·§4-6a deliberation resubmit(#179)·§4-6b continue 기본화(#181)·§4-6c review unit model/effort policy sync·§4-2c retry-gate 구조화+synthesis resubmit(#182)·graceful-terminal site 7(#175). INV-MODEL-1 B4 벤치 하니스+Haiku 시도(#180, boundary 약점→등록 보류)·B5 synthesize-cert record 검증기(#176)+G7 role↔record 결속+claude-sonnet-5 role 인증(#183). 각 건 설계-먼저 + 독립 적대 다-KIND 교차검증(핸드오프·design note 기록). 상세는 상단 백로그 표 4a·M 행.</li>
   <li><b>reconstruct 게이트 카탈로그 실배선 (G-track / INV-OBLIGATION-COVERAGE-1)</b> — #100~#143: validator obligation을 registry에 실 등록하고 obligation-coverage 동적 증명 + ratchet 신설, G(b)/G(c) prompt-projection·final-output parity(INV-SCHEMA-1). declared≠wired 슬라이스를 hot부터 소진.</li>
   <li><b>spreadsheet reconstruct 활성화 (C-recon · C-review)</b> — #92·#93·#98·#105·#135·#141: 게이트 활성화 + bounded 프롬프트 투영, honesty/provenance 게이트(P6), per-column cardinality·list enum(design-C), formula-pattern dedup, P0.5 header escalation, meaning-aware review(per-ref disposition SSOT). PII/masking 축 제거(#94·#95).</li>
   <li><b>comprehension-reduce (Layer-1) + leaf-read/value-tile</b> — deterministic core(union monoid + contiguity gate), value-tile sidecar 첫 production wiring, leaf-read subsystem(capture + structure trigger + capped census), llm-touch dependency-discovery.</li>
@@ -313,9 +315,11 @@
 <h2>정정된 사실 (재검증 완료) · 변경 영향 읽는 법</h2>
 <ul>
   <li><b>정정:</b> ledger 강등 마커(<code>resolution:"demoted"</code>)는 <b>이미 배선·소비 중</b>이다(<code>demotedStanceUnitIdsFromMatrix</code> → matrix <code>missing_stances</code> 읽어 ledger에 기록, frontier가 소비). §4-3은 fail-loud 착지(2026-07-06)로 종결 — execution-result <i>추가 per-unit 마커</i>는 보류(진실원 단일 유지, 관찰 3회에서 matrix 유실·손상 사례 시 재검토).</li>
-  <li><b>정정:</b> per-unit model/effort <b>tiering 메커니즘은 완전 배선</b>됨 — 기본 정책 값만 미배포(§4-6 c).</li>
-  <li><b>정정(authority 결정 완료, 2026-07-06 owner):</b> §4-2 자동 재개 authority는 <b>D1a=frontier 재계산</b>으로 확정 — <i>review</i>는 continuation frontier(ledger 경로)가 canonical이라 dispatch-incomplete.yaml 자동 소비 <b>금지</b>. 단 <i>reconstruct</i>엔 아이템단위 frontier가 없어 dispatch-incomplete.yaml이 <b>유일 authority</b>라 소비가 원칙 준수 → §4-2 실 갭은 reconstruct semantic-map 배치의 자동 스테이지 재개(레인 B, 착수 대기).</li>
-  <li><b>정정(#182 착지):</b> resubmit 재시도 게이트를 substring <code>failureKindFromMessage</code> → <b>구조적 분류기</b>(<code>isResubmitCorrectableRetry</code>, 단일 레지스트리 <code>RESUBMIT_UNIT_ROUTING</code>)로 전환. synthesis resubmit 배선(이전엔 <code>source_refs_used</code> poison-substring으로 flat-dead였음). <b>stance는 게이트 제외</b>(F-2: correlated/demote가 stance-pool-local·최종 실패 클래스 의존 → poison-stance 재시도가 whole-run halt 뒤집을 수 있음). <code>resubmit.enabled=false</code>면 byte-identical.</li>
+  <li><b>정정:</b> per-unit model/effort <b>tiering 메커니즘은 완전 배선</b>됐고, §4-6c 정책값도 gpt-5.5 decision-grade winner로 설정·예시·회귀 테스트에 반영됨. 신규 review 모델 등록은 별도 evidence gate다.</li>
+  <li><b>§4-4 v6.2 구현:</b> P1a reconstruct spreadsheet semantic-map originating-call recovery가 default-off로 배선됐다. Fresh initial owner의 immutable sealed SDK structured rate-limit evidence만 activation하고 exact incomplete set을 alternate pair로 한 번 재실행한다. Timestamp expiry는 takeover authority가 아니며 physical-request accounting, activation/outcome, committed checkpoint가 truth를 소유한다. Active final record는 2-pass hash 순환을 피하려 run-control transaction 대상이 아니고 canonical outcome projection을 검증한다. Injected primary typed 429에서 real Anthropic synthesize 1회와 independent verify probe 1회가 통과했으며, natural incident·semantic quality·full downstream completion은 pending이다.</li>
+  <li><b>정정(authority 결정 완료, 2026-07-06 owner · 구현 반영 2026-07-10):</b> §4-2 자동 재개 authority는 <b>D1a=frontier 재계산</b>으로 확정 — <i>review</i>는 continuation frontier(ledger 경로)가 canonical이라 dispatch-incomplete.yaml 자동 소비 <b>금지</b>. 단 <i>reconstruct</i> semantic-map은 dispatch partition + runtime resume validation을 stage-local authority로 소비한다.</li>
+  <li><b>정정(#182 착지):</b> resubmit 재시도 게이트를 substring <code>failureKindFromMessage</code> → <b>구조적 분류기</b>(<code>isResubmitCorrectableRetry</code>, 단일 레지스트리 <code>RESUBMIT_UNIT_ROUTING</code>)로 전환. synthesis resubmit 배선(이전엔 <code>source_refs_used</code> poison-substring으로 flat-dead였음). <code>resubmit.enabled=false</code>면 byte-identical. 당시 stance는 gate 제외였으나 2026-07-10 rare-poison hardening에서 해제됐다.</li>
+  <li><b>정정(rare-poison stance 착지, 2026-07-10):</b> stance gate 제외는 해제됐다. <code>resubmit.enabled=true</code>에서 rare output_contract-poison stance unsupported-ref도 corrective resubmit을 탄다. 단 terminal outcome authority는 유지해 healed retry는 completed, terminal validation은 demote/correlated, terminal infra는 whole-run halt다.</li>
   <li><b>모델 등록(#183):</b> <code>claude-sonnet-5</code>가 <b>role-한정</b>(<code>semantic_map_synthesize</code>)으로 supported-models에 인증됨 — synthesize-cert/v1 라이브 벤치(3rep×2fixture) candidate≥baseline + cross-family opus rejudge로 same-family judge 편향 교정. <code>claude-haiku-4-5</code>는 merge stratum boundary 미달(3/90)로 <b>미등록</b>. 전역 seat 모델은 여전히 gpt-5.5·opus-4-8.</li>
   <li>보호 표면(settings 키·material 정의·auth 정규화·supported-models·waiver)을 건드리면 <code>INVARIANT-CHANGE: &lt;INV-ID&gt;</code> 마커 + 사용자 확인이 필요하다(G4). opt-in scalar 승격은 INV-CFG-1(설계 SSOT 명시 + cut 지시면 마커 인용으로 충분).</li>
   <li>구조 서술은 repo-layout SSOT 한 곳만 고친다(AGENTS·CLAUDE·development.md는 포인터).</li>

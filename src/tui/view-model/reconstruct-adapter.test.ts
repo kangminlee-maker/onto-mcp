@@ -265,4 +265,66 @@ describe("reconstructStatusToTreeViewModel", () => {
     expect(vm.runControl.cancellable).toBe(false);
     expect(vm.narrator).toContain("halted at purpose confirmation");
   });
+
+  it("maps a record-less provider failure to a failed workflow", () => {
+    const failureRef = `${SESSION_ROOT}/llm-dispatch-failures/failure-a.yaml`;
+    const status: ReconstructSessionStatus = {
+      sessionId: "20260616-abcd1234",
+      sessionRoot: SESSION_ROOT,
+      status: "failed",
+      artifactRefs: {
+        reconstruct_run_control: `${SESSION_ROOT}/reconstruct-run-control.yaml`,
+        reconstruct_run_control_validation:
+          `${SESSION_ROOT}/reconstruct-run-control-validation.yaml`,
+      },
+      claimProjection: null,
+      claimProjectionValidation: null,
+      progress: {
+        executionProfile: null,
+        currentStageId: "ontology_seed",
+        stageCount: 96,
+        liveness: {
+          state: "halted_or_partial",
+          recommendedPollIntervalMs: null,
+        },
+        countSummary: { ...emptyCountSummary(), failureCount: null },
+        answerabilitySummary: null,
+        stages: [stage("ontology_seed", "halted", {
+          owner: "host_llm",
+          artifactRefs: [failureRef],
+          reason: "openai_responses_max_output_tokens",
+        })],
+      },
+      reconstructRecord: null,
+      runControlRef: `${SESSION_ROOT}/reconstruct-run-control.yaml`,
+      runControlValidationRef:
+        `${SESSION_ROOT}/reconstruct-run-control-validation.yaml`,
+      failure: {
+        failure_code: "openai_responses_max_output_tokens",
+        unit_id: "ontology_seed",
+        artifact_name: "OntologySeed",
+        provider_status: "incomplete",
+        incomplete_reason: "max_output_tokens",
+        base_output_ceiling_tokens: 9_000,
+        configured_output_headroom_tokens: 25_000,
+        effective_max_output_tokens: 34_000,
+        input_tokens: 2_000,
+        cached_input_tokens: 0,
+        output_tokens: 33_990,
+        reasoning_tokens: 33_000,
+        non_reasoning_output_tokens: 990,
+        actual_adapter_request_count: null,
+        request_count_observability: "unavailable",
+        failure_artifact_ref: failureRef,
+      },
+    };
+
+    const vm = reconstructStatusToTreeViewModel(status, SESSION_ROOT);
+
+    expect(vm.status).toBe("failed");
+    expect(vm.narrator).toContain("reconstruct failed at ontology seed");
+    expect(vm.phases[0]?.state).toBe("halted");
+    expect(vm.phases[0]?.nodes[0]?.outputPath).toBeNull();
+    expect(vm.runControl.cancellable).toBe(false);
+  });
 });

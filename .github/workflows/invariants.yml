@@ -34,6 +34,8 @@ jobs:
         run: npx tsx scripts/check-final-output-sections-parity.ts
       - name: G10 obligation-coverage ratchet (INV-OBLIGATION-COVERAGE-1)
         run: npx tsx scripts/check-obligation-coverage.ts "origin/${{ github.base_ref }}"
+      - name: G11 reconstruct terminal-signal rethrow (INV-SCHEMA-1)
+        run: npx tsx scripts/check-graceful-signal-rethrow.ts
       - name: Full vitest suite (unit + integration merge gate)
         # vitest.config include set; superset of the G3 invariant subset above.
         # Live/benchmark scripts (npm test, benchmark:*) stay out — they need credentials.

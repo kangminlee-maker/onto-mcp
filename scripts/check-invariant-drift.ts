@@ -76,6 +76,11 @@ const GUARDS: GuardRun[] = [
     invariants: ["INV-OBLIGATION-COVERAGE-1"],
     command: ["npx", "tsx", "scripts/check-obligation-coverage.ts", baseRef],
   },
+  {
+    guard: "G11 graceful-signal-rethrow",
+    invariants: ["INV-SCHEMA-1"],
+    command: ["npx", "tsx", "scripts/check-graceful-signal-rethrow.ts"],
+  },
 ];
 
 async function runGuard(run: GuardRun): Promise<{ run: GuardRun; ok: boolean; detail: string }> {

@@ -89,6 +89,11 @@ import {
   type SynthesizeCertJudgementRow,
   type SynthesizeCertMetric,
 } from "../src/core-runtime/discovery/synthesize-cert-record.ts";
+import {
+  projectSynthesizeCertArmDispatch,
+  synthesizeCertDispatchGuardViolations,
+  type SynthesizeCertArmDispatch,
+} from "../src/core-runtime/discovery/synthesize-cert-assemble.ts";
 import { createMockSynthesizeCertJudge } from "../src/core-runtime/discovery/test-fixtures/synthesize-cert-mock-realization.ts";
 import {
   createB4LiveCallHarness,
@@ -192,8 +197,13 @@ if (declaredReps < 1) throw new Error("b4-rejudge: no rows with rep >= 1 found �
 interface PreflightSeatFields {
   baseline_reference_judge_seat?: string;
   candidate_negative_control_seat?: string;
+  declared_dispatch?: unknown;
 }
-async function readPreflightSeats(): Promise<{ baseline: { provider: string; model: string }; candidate: { provider: string; model: string } }> {
+async function readPreflightSeats(): Promise<{
+  baseline: { provider: string; model: string };
+  candidate: { provider: string; model: string };
+  declaredDispatch: unknown;
+}> {
   let preflight: PreflightSeatFields | null = null;
   for (const name of ["preflight.json", "preflight.resume.json"]) {
     try {
@@ -211,10 +221,56 @@ async function readPreflightSeats(): Promise<{ baseline: { provider: string; mod
     if (idx < 0) throw new Error(`b4-rejudge: malformed seat identity '${s}' (expected 'provider/model')`);
     return { provider: s.slice(0, idx), model: s.slice(idx + 1) };
   };
-  return { baseline: split(preflight.baseline_reference_judge_seat), candidate: split(preflight.candidate_negative_control_seat) };
+  return {
+    baseline: split(preflight.baseline_reference_judge_seat),
+    candidate: split(preflight.candidate_negative_control_seat),
+    declaredDispatch: preflight.declared_dispatch,
+  };
 }
 const seats = await readPreflightSeats();
 log(`seats (from preflight): baseline/reference/original-judge=${seats.baseline.provider}/${seats.baseline.model}, candidate/negative_control=${seats.candidate.provider}/${seats.candidate.model}`);
+
+// ── dispatch witness (effort-witness design §4.5.1-7): the rejudge record is
+//    the actual B5 binding artifact (the registry-cited sonnet-5 record's
+//    reproduction.command is this script) AND --go overwrites the fresh
+//    record's path — so the SAME declared-vs-witnessed guard re-runs here and
+//    the witness rides this record too, or a guard-failed fresh run could be
+//    laundered into a clean tracked binding record. Legacy runs (no
+//    declared_dispatch, all-legacy capture) skip and emit nothing. ──
+const dispatchProjection = projectSynthesizeCertArmDispatch(rawLiveCalls);
+let rejudgeArmDispatch: SynthesizeCertArmDispatch | null = null;
+if (seats.declaredDispatch === undefined) {
+  if (!dispatchProjection.legacy) {
+    throw new Error(
+      "b4-rejudge: capture carries dispatch witnesses but the preflight has no declared_dispatch — inconsistent-era runDir, refusing to certify",
+    );
+  }
+  log("dispatch witness: legacy run (no declaration, pre-witness capture) — arm_dispatch omitted");
+} else {
+  const problems = dispatchProjection.legacy
+    ? ["preflight declares a dispatch but the capture is entirely pre-witness (legacy lines)"]
+    : [...dispatchProjection.violations];
+  if (problems.length === 0 && dispatchProjection.armDispatch !== null) {
+    problems.push(
+      ...synthesizeCertDispatchGuardViolations({
+        declared: seats.declaredDispatch as SynthesizeCertArmDispatch,
+        witnessed: dispatchProjection.armDispatch,
+        armProviders: {
+          baseline: seats.baseline.provider,
+          candidate: seats.candidate.provider,
+          negative_control: seats.candidate.provider,
+        },
+      }),
+    );
+    rejudgeArmDispatch = dispatchProjection.armDispatch;
+  }
+  if (problems.length > 0) {
+    throw new Error(
+      `b4-rejudge: DISPATCH WITNESS GUARD FAILED:\n${problems.map((p) => `  ${p}`).join("\n")}`,
+    );
+  }
+  log("dispatch witness: declared == witnessed for all three arms");
+}
 
 const mutationSeed = `b4-${checkpointRaw.manifest_identity_sha256.slice(0, 16)}`; // mirrors scripts/b4-cert-run.mts's derivation exactly
 
@@ -355,6 +411,8 @@ const rawRecord = {
     candidate: { provider: seats.candidate.provider, model: seats.candidate.model },
     negative_control: { provider: seats.candidate.provider, model: seats.candidate.model },
   },
+  // Witnessed dispatch, guard-verified above — omitted on legacy runs.
+  ...(rejudgeArmDispatch !== null ? { arm_dispatch: rejudgeArmDispatch } : {}),
   negative_arm: buildInputCorruptionV1NegativeArm(mutationSeed),
   input_manifest: inputManifest,
   judgement_rows: finalRows,

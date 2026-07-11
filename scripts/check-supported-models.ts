@@ -48,6 +48,9 @@ import {
   synthesizeCertBindingViolations,
   validateSynthesizeCertRecord,
 } from "../src/core-runtime/discovery/synthesize-cert-record.js";
+import {
+  assertBenchCandidateTokenPolicy,
+} from "./check-supported-models-token-policy.js";
 
 const PROJECT_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -214,6 +217,7 @@ async function main(): Promise<void> {
     await assertEvidenceRefsTracked(registry);
     assertRolesDeclaredOutsideGrandfather(registry);
     await assertSynthesizeCertBinding(registry);
+    await assertBenchCandidateTokenPolicy(PROJECT_ROOT);
   } catch (error) {
     console.error("[check:supported-models] FAIL");
     console.error(`  ${error instanceof Error ? error.message : String(error)}`);

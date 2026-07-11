@@ -460,7 +460,7 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["fresh", "reuse_existing_authored_artifacts"],
       description:
-        "Optional promoted resume mode. fresh rejects same-session duplicate starts; reuse_existing_authored_artifacts admits a same-request resume attempt only when authored-artifact provenance can prove a current match.",
+        "Optional promoted resume mode. fresh rejects same-session duplicate starts; reuse_existing_authored_artifacts admits a same-request resume attempt only when authored-artifact provenance can prove a current match, and lets reconstruct semantic-map recover a validated same-batch dispatch-incomplete frontier.",
     },
     semanticAuthorRealization: {
       type: "string",
@@ -650,13 +650,13 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_reconstruct",
     description:
-      "Run the material-aware reconstruct path with live semantic authoring, runtime validation gates, final-output.md, and reconstruct-record.yaml refs.",
+      "Run the material-aware reconstruct path with live semantic authoring and runtime validation gates. Returns final-output.md and reconstruct-record.yaml refs on completion, or a bounded record-less failed projection for a trusted provider output-ceiling terminal.",
     inputSchema: RECONSTRUCT_INPUT_SCHEMA,
   },
   {
     name: "onto_reconstruct_read",
     description:
-      "Read a reconstruct session — stage progress, liveness, and count summary at projectionLevel compact/standard; the full record, run manifest, and final output at projectionLevel=full. Replaces onto_reconstruct_status and onto_reconstruct_result.",
+      "Read a reconstruct session — stage progress, liveness, and count summary at projectionLevel compact/standard; the full record, run manifest, and final output at projectionLevel=full. A trusted provider failure before record assembly returns the bounded record-less failed projection at every level. Replaces onto_reconstruct_status and onto_reconstruct_result.",
     inputSchema: RECONSTRUCT_READ_INPUT_SCHEMA,
   },
 ];

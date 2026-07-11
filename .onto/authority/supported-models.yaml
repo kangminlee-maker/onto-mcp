@@ -15,12 +15,9 @@
 # citing the benchmark record under benchmark_evidence_refs. Curated by humans;
 # the citation is the evidence, the entry is the authority.
 #
-# Optional context_window_tokens: the model's active context window (tokens),
-# the SSOT the reconstruct projection-budget helper reads to scale a single
-# document's seed-stage excerpt. It is a published model spec (not a benchmark
-# result), so it carries its own citation in context_window_provenance and is
-# G4-protected (a change requires an INVARIANT-CHANGE: INV-MODEL-1 marker). An
-# entry without a window falls back to the static projection FLOOR.
+# Optional model specification values are G4-protected and independently cite
+# their published source: context_window_tokens scales reconstruct document
+# projection; max_output_tokens bounds direct-API output headroom preflight.
 schema_version: "1"
 supported_models:
   - provider: openai
@@ -38,6 +35,10 @@ supported_models:
       retrieved 2026-06-17): 1,050,000-token context window, 128,000 max output
       tokens. Cost note: inputs above 272,000 tokens incur 2x input / 1.5x
       output pricing for the session.
+    max_output_tokens: 128000
+    max_output_tokens_provenance: >-
+      OpenAI API model reference (developers.openai.com/api/docs/models/gpt-5.5,
+      retrieved 2026-07-11): 128,000 maximum output tokens.
   - provider: anthropic
     model: claude-opus-4-8
     verified_at: "2026-06-15"
@@ -87,3 +88,35 @@ supported_models:
       claude-haiku-4-5 candidate fell short (3/90). Support and the
       candidate>=baseline gate — verified; PRELIMINARY for any absolute
       performance claim beyond the candidate>=baseline comparison.
+  - provider: openai
+    model: gpt-5.6-luna
+    verified_at: "2026-07-11"
+    roles:
+      - semantic_map_synthesize
+    benchmark_evidence_refs:
+      - development-records/benchmark/synthesize-cert/20260711-010535/synthesize-cert-record.json
+      - development-records/benchmark/synthesize-cert/20260711-010535/rejudge-comparison.json
+    notes: >-
+      Role-scoped certification for `semantic_map_synthesize` (INV-MODEL-1 B4).
+      Verified via the synthesize-cert/v1 live benchmark (3 reps x 2 fixtures =
+      90 rows/arm; the SAME two fixture workbooks as the 20260708 sonnet-5 cert,
+      fixture ids match by content sha) with the candidate dispatched at
+      reasoning_effort=low via the codex OAuth route — and, first for this
+      registry, the certified dispatch is WITNESSED, not merely declared: the
+      record's arm_dispatch is projected from the run's live-call capture and a
+      declared-vs-witnessed guard held on both the fresh run and the rejudge
+      (effort-witness design 2026-07-10/11), so "low" is the dispatched effort,
+      not a host-TOML inherit. Support: the candidate arm completed the
+      synthesize pipeline (89/90 rows ok; 1 transport not_run, an honestly
+      recorded non-decisive loss) and the cited record recomputes to zero
+      validateSynthesizeCertRecord violations. Quality gate —
+      candidate>=baseline on BOTH gated metrics under BOTH judges: original
+      judge gpt-5.5 (same-family-as-candidate) grounding 89/89 vs baseline
+      88/89 and boundary 89/89 = baseline; neutral cross-family opus rejudge
+      grounding 1.0 = baseline and boundary 1.0 = baseline with NO
+      metric_regression_flip in either direction (rejudge-comparison.json),
+      including the merge stratum where the earlier claude-haiku-4-5 candidate
+      fell short. The negative-control arm degrades as designed (grounding
+      0.111 original / 0.578 opus) — the gated metrics are non-vacuous.
+      Support and the candidate>=baseline gate — verified; PRELIMINARY for any
+      absolute performance claim beyond the candidate>=baseline comparison.

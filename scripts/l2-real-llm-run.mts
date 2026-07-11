@@ -52,7 +52,10 @@ const authorLlm = resolveReconstructActorLlmSettings(settings, "semantic_author"
 const authorLlmConfig = resolveLlmProviderConfig({ config: { llm: authorLlm } }) as Record<string, unknown>;
 const providerLlm = resolveReconstructActorLlmSettings(settings, "confirmation_provider");
 const providerLlmConfig = resolveLlmProviderConfig({ config: { llm: providerLlm } }) as Record<string, unknown>;
-const modelIdentity = `${String(authorLlmConfig.provider ?? "?")}/${String(authorLlmConfig.model_id ?? (authorLlmConfig as { model?: string }).model ?? "?")}`;
+// Audit identity from the DECLARED settings seat (provider-brand-identity-class
+// design 2026-07-11): the resolved config's provider is the runtime alias
+// ("codex" for oauth openai) — an audit artifact must carry the registry brand.
+const modelIdentity = `${String(authorLlm.provider ?? "?")}/${String(authorLlm.model ?? "?")}`;
 // Backlog-⑤a adoption (replay A/B 2026-07-03, l2-effort-replay-2026-07-03T09-50-19): synthesize at
 // gpt-5.5 LOW ≈ medium at the same-config retest noise floor (Jaccard 0.9958=0.9958, exact 59/60
 // both arms). Scope: synthesize ONLY — verify/seed/expansion stay on the base (medium) config. The

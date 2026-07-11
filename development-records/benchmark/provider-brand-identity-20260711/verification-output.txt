@@ -1,0 +1,32 @@
+# provider-brand-identity fix verification output (2026-07-11)
+# design: development-records/design/20260711-provider-brand-identity-class-design.md
+# [D] rehearsal inputs: development-records/benchmark/synthesize-cert/20260708-sonnet5-live/ copies,
+#     candidate seat doctored to probe [A]'s actual output (new) / pre-fix codex form (old).
+
+## probe [A][B][C]
+[A openai/luna     ] ADMITTED → candidateModelIdentity=openai/gpt-5.6-luna
+[B anthropic/sonnet] ADMITTED → candidateModelIdentity=anthropic/claude-sonnet-5
+[C empty model     ] REJECTED → b4-live-realization: declared candidate openai/ resolved to model (unresolved) (thinking=absent) — refusing to dispatch under a mismatched identity
+
+[verdict] PASS — declared-brand identity, sonnet parity, guard alive
+
+## probe [L2]
+[old resolved-config expression] codex/gpt-5.5
+[new declared-seat expression]   openai/gpt-5.5
+
+[verdict] PASS — old form leaked codex, new form carries the registry brand
+
+## probe [D] (mock-rejudge real-consumer-path replay + real B5 binding)
+[control] top=anthropic/claude-sonnet-5 candidate=anthropic/claude-sonnet-5 negative=anthropic/claude-sonnet-5
+[new]     top=openai/gpt-5.6-luna candidate=openai/gpt-5.6-luna negative=openai/gpt-5.6-luna
+[old]     top=codex/gpt-5.6-luna candidate=codex/gpt-5.6-luna negative=codex/gpt-5.6-luna
+[B5 new] violations=0 []
+[B5 old] violations=1 ["aggregate_mismatch"]
+
+[verdict] PASS — real consumer path carries the declared brand; B5 binding admits new and rejects old
+
+## gates
+  "check": "supported-models",
+  "status": "passed",
+typecheck (b4-live-realization.mts, b4-cert-run.mts, l2-real-llm-run.mts): clean
+unit tests (bench-candidate-token-policy, model-switcher): 12 passed

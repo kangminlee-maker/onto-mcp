@@ -62,7 +62,11 @@ function humanizeStageId(stageId: string): string {
   return stageId.replace(/_/g, " ");
 }
 
-function stageToNode(stage: ReconstructRunStageProjection): TreeNode {
+function stageToNode(
+  stage: ReconstructRunStageProjection,
+  hiddenArtifactRef: string | null,
+): TreeNode {
+  const outputPath = stage.artifactRefs.find((ref) => ref !== hiddenArtifactRef) ?? null;
   return {
     id: stage.stageId,
     label: humanizeStageId(stage.stageId),
@@ -76,7 +80,7 @@ function stageToNode(stage: ReconstructRunStageProjection): TreeNode {
     // `reason` is the stage's terminal explanation (skip/halt rationale).
     failureMessage: stage.reason,
     // First authored artifact ref is the drill-down target.
-    outputPath: stage.artifactRefs[0] ?? null,
+    outputPath,
   };
 }
 
@@ -104,6 +108,7 @@ function derivePhaseState(
 function deriveWorkflowStatus(
   status: ReconstructSessionStatus,
 ): WorkflowStatus {
+  if (status.status === "failed") return "failed";
   if (status.status === "completed") return "completed";
   // A graceful terminal (design §16.7) is terminal but not completed: surface it as `halted` so
   // the watch loop stops polling and the operator sees an honest stop, not a "session completed".
@@ -145,6 +150,8 @@ function deriveNarrator(
   const lead =
     workflowStatus === "completed"
       ? "reconstruct complete"
+      : workflowStatus === "failed"
+        ? `reconstruct failed at ${stage}`
       : workflowStatus === "halted"
         ? `halted at ${stage}`
         : `reconstructing — ${stage}`;
@@ -167,7 +174,12 @@ export function reconstructStatusToTreeViewModel(
 ): TreeViewModel {
   const { progress } = status;
   const workflowStatus = deriveWorkflowStatus(status);
-  const nodes = progress.stages.map(stageToNode);
+  const hiddenArtifactRef = status.status === "failed"
+    ? status.failure.failure_artifact_ref
+    : null;
+  const nodes = progress.stages.map((stage) =>
+    stageToNode(stage, hiddenArtifactRef)
+  );
   const phase: TreePhase = {
     id: PIPELINE_PHASE_ID,
     label: PIPELINE_PHASE_LABEL,

@@ -16,8 +16,8 @@ small set of tools with a stable MCP surface.
 | `onto_review_read` | Read a review session: recovery/liveness status while running (`sessionRoot` or `latest=true`), and the bounded result once it completes. Routes by session state, avoiding a missing-record result error on still-incomplete sessions | status/liveness/run-control/continuation projection at `compact`; result projection at `standard`/`full` once the review completes (`completed`/`completed_with_degradation`; `full` adds `review-record.yaml` and `final-output.md`); a running, halted, or failed session returns the status/failure projection |
 | `onto_observe_source` | Materialize reconstruct source observations | `target-material-profile.yaml`, `source-inventory.yaml`, `source-observations.yaml`, initial `reconstruct-record.yaml` |
 | `onto_validate_reconstruct_directive` | Validate LLM-authored reconstruct directive files | validation artifact with status and violations |
-| `onto_reconstruct` | Run the material-aware reconstruct post-Seed artifact loop with direct-call semantic/confirmation realization | post-Seed artifacts, `final-output.md`, `reconstruct-run-manifest.yaml`, `reconstruct-record.yaml` |
-| `onto_reconstruct_read` | Read a reconstruct session: stage progress, liveness, count summary at `compact`/`standard`; full record, run manifest, and final output at `full` | record stage, stage progress, liveness, count summary, and artifact refs; `full` adds run manifest and final output text |
+| `onto_reconstruct` | Run the material-aware reconstruct post-Seed artifact loop with direct-call semantic/confirmation realization | post-Seed artifacts, `final-output.md`, `reconstruct-run-manifest.yaml`, `reconstruct-record.yaml`; or the bounded record-less `failed` branch when a trusted provider output-ceiling failure ends the run |
+| `onto_reconstruct_read` | Read a reconstruct session: stage progress, liveness, count summary at `compact`/`standard`; full record, run manifest, and final output at `full` | record stage, stage progress, liveness, count summary, and artifact refs; `full` adds run manifest and final output text; a trusted record-less provider failure returns the bounded `failed` projection at every level |
 | `onto_list` | List a registry by `kind`: `lenses`, `domains`, or `source_profiles` | full/core-axis lens IDs, domain IDs, or source profile refs keyed by `target_material_kind` |
 
 **Profiles & compatibility.** `tools/list` advertises the **full** profile (all 12)
@@ -368,7 +368,7 @@ not make the runtime an ontology meaning author:
 | `onto_observe_source` | return deterministic material-structure observations |
 | `onto_validate_reconstruct_directive` | validate LLM-authored reconstruct directives |
 | `onto_reconstruct` | orchestrate the post-Seed artifact loop through direct-call `semanticAuthorRealization` and `confirmationProviderRealization` |
-| `onto_reconstruct_read` | read the current `reconstruct-record.yaml` plus stage progress, liveness, and count summary (`compact`/`standard`); the record, run manifest, progress projection, and final output text at `full` |
+| `onto_reconstruct_read` | read the current `reconstruct-record.yaml` plus stage progress, liveness, and count summary (`compact`/`standard`); the record, run manifest, progress projection, and final output text at `full`; when a trusted provider failure precedes record assembly, read the record-less bounded `failed` projection instead |
 
 These tools should be added through the bounded Core API facade in
 `src/core-api/reconstruct-api.ts`. The facade covers source-profile listing,

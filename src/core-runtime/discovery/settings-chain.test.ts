@@ -6,6 +6,7 @@ import {
   REVIEW_EXECUTION_UNIT_IDS,
   defaultReviewExecutionUnits,
   projectSettingsPath,
+  readSettingsAt,
   resolveReconstructActorLlmSettings,
   resolveSettingsChain,
   userSettingsPath,
@@ -462,6 +463,59 @@ describe("resolveSettingsChain", () => {
     expect(units.lens?.llm).toBeUndefined();
   });
 
+  it("keeps checked-in review unit model/effort policy aligned with decision-grade evidence", async () => {
+    const evidencePath = path.join(
+      process.cwd(),
+      "development-records/benchmark/review-unit-effort-all-units-low-medium-high-decision-rerun2-20260610-winner-selection-merged.json",
+    );
+    const evidence = JSON.parse(fs.readFileSync(evidencePath, "utf8")) as {
+      status?: string;
+      decision_gate?: { comparison_conclusion_allowed?: boolean };
+      selections?: Array<{
+        unit_id?: string;
+        winner?: { status?: string; effort?: string };
+      }>;
+    };
+    const expectedPolicy = {
+      deliberation_plan: "medium",
+      deliberation_resolution: "low",
+      deliberation_response: "medium",
+      finding_ledger: "medium",
+      finding_relation_graph: "medium",
+      issue_ledger: "medium",
+      issue_stance_response: "medium",
+      lens: "medium",
+      problem_framing: "medium",
+      synthesis_response: "medium",
+    } as const;
+
+    expect(evidence.status).toBe("decision-grade");
+    expect(evidence.decision_gate?.comparison_conclusion_allowed).toBe(true);
+    expect(
+      Object.fromEntries(
+        (evidence.selections ?? []).map((selection) => [
+          selection.unit_id,
+          selection.winner?.effort,
+        ]),
+      ),
+    ).toEqual(expectedPolicy);
+    for (const selection of evidence.selections ?? []) {
+      expect(selection.winner?.status).toBe("selected");
+    }
+
+    for (const settingsPath of ["settings.example.json", ".onto/settings.json"]) {
+      const settings = await readSettingsAt(path.join(process.cwd(), settingsPath));
+      for (const [unitId, effort] of Object.entries(expectedPolicy)) {
+        const unit =
+          settings.review?.execution?.units?.[
+            unitId as (typeof REVIEW_EXECUTION_UNIT_IDS)[number]
+          ];
+        expect(unit?.llm?.model, `${settingsPath}:${unitId}`).toBe("gpt-5.5");
+        expect(unit?.llm?.effort, `${settingsPath}:${unitId}`).toBe(effort);
+      }
+    }
+  });
+
   it("parses review max_concurrent_lenses from project settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     const settingsDoc = v3ReviewSettings();
@@ -743,6 +797,9 @@ import {
   assertSettingsModelsSupported,
   type OntoSettings as OntoSettingsForSeat,
 } from "./settings-chain.js";
+import {
+  RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH,
+} from "./supported-models.js";
 
 describe("reconstruct source-layer structure preservation (design §5.1)", () => {
   const llm = {
@@ -873,8 +930,7 @@ describe("synthesize seat + opt-in through real settings files (P1/N12/P4/U6/N8)
     fs.rmSync(scratchRoot, { recursive: true, force: true });
   });
 
-  const SYNTH_SEAT_PATH =
-    "reconstruct.execution.actors.semantic_map_synthesize.llm";
+  const SYNTH_SEAT_PATH = RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH;
   const haikuLlm = {
     auth: "oauth",
     provider: "anthropic",
@@ -985,10 +1041,11 @@ describe("synthesize seat + opt-in through real settings files (P1/N12/P4/U6/N8)
     const settings = {
       reconstruct: reconstructBlock(true, true),
     } as unknown as OntoSettingsForSeat;
-    expect(
-      collectRoutesForSeat(settings).find((r) => r.path === SYNTH_SEAT_PATH)
-        ?.requiredRole,
-    ).toBe("semantic_map_synthesize");
+    const synthRoutes = collectRoutesForSeat(settings).filter((r) =>
+      r.path === SYNTH_SEAT_PATH
+    );
+    expect(synthRoutes).toHaveLength(1);
+    expect(synthRoutes[0]?.requiredRole).toBe("semantic_map_synthesize");
   });
 
   // N8 pair against the REAL install registry (anthropic/claude-haiku is not
@@ -1006,5 +1063,44 @@ describe("synthesize seat + opt-in through real settings files (P1/N12/P4/U6/N8)
       reconstruct: reconstructBlock(true, false),
     } as unknown as OntoSettingsForSeat;
     expect(() => assertSettingsModelsSupported(settings)).not.toThrow();
+  });
+
+  it("B7: explicit bench option reaches the active synthesize route only", () => {
+    const candidateModel = "claude-sonnet-b7-candidate";
+    const settings = {
+      reconstruct: {
+        execution: {
+          actors: {
+            semantic_author: { llm: { ...gptLlm } },
+            confirmation_provider: { llm: { ...gptLlm } },
+            semantic_map_synthesize: {
+              llm: { ...haikuLlm, model: candidateModel },
+            },
+          },
+          semantic_map_authoring: true,
+        },
+      },
+    } as unknown as OntoSettingsForSeat;
+    const synthRoutes = collectRoutesForSeat(settings).filter((r) =>
+      r.path === SYNTH_SEAT_PATH
+    );
+    expect(synthRoutes).toHaveLength(1);
+    expect(synthRoutes[0]).toMatchObject({
+      provider: "anthropic",
+      model: candidateModel,
+      requiredRole: "semantic_map_synthesize",
+    });
+    expect(() => assertSettingsModelsSupported(settings)).toThrow(
+      /anthropic\/claude-sonnet-b7-candidate/,
+    );
+    expect(() =>
+      assertSettingsModelsSupported(settings, {
+        benchCandidates: [{
+          provider: "anthropic",
+          model: candidateModel,
+          allowedRoutePaths: [SYNTH_SEAT_PATH],
+        }],
+      })
+    ).not.toThrow();
   });
 });

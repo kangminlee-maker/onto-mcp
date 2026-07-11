@@ -8,9 +8,18 @@ import type {
 } from "../core-runtime/reconstruct/artifact-types.js";
 import {
   createOntoReconstructCoreApi,
+  recoverReconstructFailedRunStatus,
   resolveJudgeLlmConfig,
+  tryCreateEligiblePrimarySealedDispatchCapability,
 } from "./reconstruct-api.js";
 import type { SupportedModelRegistry } from "../core-runtime/discovery/supported-models.js";
+import { ReconstructLlmDispatchFailureError } from "../core-runtime/reconstruct/llm-dispatch-failure.js";
+import {
+  initializeReconstructRunControl,
+  persistReconstructLlmDispatchFailure,
+  recordReconstructRunControlTransactions,
+} from "../core-runtime/reconstruct/run-control-validation.js";
+import { normalizeLlmModelSwitcher } from "../core-runtime/llm/model-switcher.js";
 
 const tempRoots: string[] = [];
 
@@ -42,6 +51,38 @@ afterEach(async () => {
 });
 
 describe("createOntoReconstructCoreApi", () => {
+  it("keeps one eligible sealed primary operation when its sibling is unsupported", async () => {
+    process.env.TEST_PRIMARY_KEY = "test-only";
+    try {
+      const [eligible, unsupported] = await Promise.all([
+        tryCreateEligiblePrimarySealedDispatchCapability({
+          llm: {
+            provider: "openai",
+            auth: "api_key",
+            model: "test-model",
+            effort: "medium",
+            api_key_env: "TEST_PRIMARY_KEY",
+          },
+          operation: "semantic_map_synthesize",
+        }),
+        tryCreateEligiblePrimarySealedDispatchCapability({
+          llm: {
+            provider: "openai",
+            auth: "api_key",
+            model: "test-model",
+          },
+          operation: "semantic_map_verify",
+        }),
+      ]);
+      expect(eligible?.public_descriptor.dispatch_role).toBe(
+        "semantic_map_synthesize",
+      );
+      expect(unsupported).toBeUndefined();
+    } finally {
+      delete process.env.TEST_PRIMARY_KEY;
+    }
+  });
+
   it("lists source profiles from the configured onto home", async () => {
     const api = createOntoReconstructCoreApi({
       ontoHome: path.resolve("."),
@@ -105,6 +146,202 @@ describe("createOntoReconstructCoreApi", () => {
     expect(prepared.reconstructRecord.target_material_kind).toBe("spreadsheet");
   });
 
+  it("lets the latest trusted LLM failure supersede an older preparation record", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "failed-session",
+    );
+    const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+    const prepared = await api.prepareReconstruct({
+      projectRoot,
+      targetRefs: ["schedule.csv"],
+      sessionRoot,
+    });
+    expect(prepared.reconstructRecord.record_stage)
+      .toBe("preparation_artifacts_written");
+    const runControlPath = path.join(
+      sessionRoot,
+      "reconstruct-run-control.yaml",
+    );
+    const runControlValidationPath = path.join(
+      sessionRoot,
+      "reconstruct-run-control-validation.yaml",
+    );
+    const initialized = await initializeReconstructRunControl({
+      sessionId: path.basename(sessionRoot),
+      sessionRoot,
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "schedule.csv")],
+      intent: "reconstruct failed status fixture",
+      domain: null,
+      profilesRoot: path.join(projectRoot, "profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      runtimeVersion: "test-runtime",
+      outputPath: runControlPath,
+      validationOutputPath: runControlValidationPath,
+      bootstrapDiagnosticPath: path.join(
+        sessionRoot,
+        "reconstruct-run-bootstrap-diagnostic.yaml",
+      ),
+    });
+    const dispatchFailure = new ReconstructLlmDispatchFailureError({
+      unitId: "ontology_seed",
+      artifactName: "OntologySeed",
+      callKind: "initial",
+      evidence: {
+        failure_code: "openai_responses_max_output_tokens",
+        provider_status: "incomplete",
+        incomplete_reason: "max_output_tokens",
+        base_output_ceiling_tokens: 9_000,
+        configured_output_headroom_tokens: 25_000,
+        effective_max_output_tokens: 34_000,
+        input_tokens: 2_000,
+        cached_input_tokens: 0,
+        output_tokens: 33_990,
+        reasoning_tokens: 33_000,
+        non_reasoning_output_tokens: 990,
+        partial_output_chars: 555,
+        partial_output_sha256: "c".repeat(64),
+        provider_model: "gpt-5.5",
+        provider_response_id: "resp_private",
+        provider_request_id: "req_private",
+        effective_base_url: "https://api.openai.com/v1",
+        sdk_max_retries: 2,
+        actual_adapter_request_count: null,
+        request_count_observability: "unavailable",
+      },
+      cause: new Error("provider incomplete"),
+    });
+    const trustedArtifactRef = path.join(sessionRoot, "target-material-profile.yaml");
+    const changedArtifactRef = path.join(sessionRoot, "source-inventory.yaml");
+    await fs.writeFile(trustedArtifactRef, "schema_version: '1'\n", "utf8");
+    await fs.writeFile(changedArtifactRef, "schema_version: '1'\n", "utf8");
+    await recordReconstructRunControlTransactions({
+      runControlPath,
+      validationOutputPath: runControlValidationPath,
+      attemptId: initialized.attemptId,
+      artifactRefs: [trustedArtifactRef, changedArtifactRef],
+      expectedSessionId: path.basename(sessionRoot),
+      expectedSessionRoot: sessionRoot,
+    });
+    await fs.writeFile(changedArtifactRef, "schema_version: 'changed'\n", "utf8");
+    await persistReconstructLlmDispatchFailure({
+      runControlPath,
+      validationOutputPath: runControlValidationPath,
+      sessionId: path.basename(sessionRoot),
+      sessionRoot,
+      attemptId: initialized.attemptId,
+      error: dispatchFailure,
+    });
+    const failureDirectory = path.join(sessionRoot, "llm-dispatch-failures");
+    await fs.chmod(sessionRoot, 0o555);
+    await fs.chmod(failureDirectory, 0o555);
+    let status;
+    try {
+      status = await api.getRunStatus(sessionRoot);
+    } finally {
+      await fs.chmod(failureDirectory, 0o755);
+      await fs.chmod(sessionRoot, 0o755);
+    }
+    expect(await fs.lstat(`${runControlPath}.write-lock`).catch(() => null))
+      .toBeNull();
+    expect(status.status).toBe("failed");
+    if (status.status !== "failed") throw new Error("expected failed status");
+    expect(status.reconstructRecord).toBeNull();
+    expect(status.progress.currentStageId).toBe("ontology_seed");
+    expect(status.progress.countSummary.failureCount).toBeNull();
+    expect(status.reusableArtifactRefs).toEqual([trustedArtifactRef]);
+    expect(status.progress.stages.find((stage) =>
+      stage.stageId === "run_control"
+    )?.state).toBe("completed");
+    expect(status.progress.stages.find((stage) =>
+      stage.stageId === "run_control_validation"
+    )?.state).toBe("completed");
+    expect(status.progress.stages.find((stage) =>
+      stage.stageId === "target_material_profile"
+    )?.state).toBe("completed");
+    expect(status.progress.stages.find((stage) =>
+      stage.stageId === "ontology_seed"
+    )?.state).toBe("halted");
+    expect(status.failure).toMatchObject({
+      failure_code: "openai_responses_max_output_tokens",
+      base_output_ceiling_tokens: 9_000,
+      effective_max_output_tokens: 34_000,
+      output_tokens: 33_990,
+    });
+    const publicJson = JSON.stringify(status);
+    expect(publicJson).not.toContain("req_private");
+    expect(publicJson).not.toContain("resp_private");
+    expect(publicJson).not.toContain("api.openai.com");
+    expect(publicJson).not.toContain("c".repeat(64));
+
+    const result = await api.getRunResult(sessionRoot);
+    expect(result.status).toBe("failed");
+    expect(result.finalOutputPath).toBeNull();
+    expect(result.finalOutputText).toBeNull();
+    expect(result.reconstructRunManifestPath).toBeNull();
+    expect(result.reconstructRunManifest).toBeNull();
+
+    const immediate = await recoverReconstructFailedRunStatus({
+      sessionRoot,
+      error: dispatchFailure,
+    });
+    expect(immediate?.status).toBe("failed");
+    expect(immediate?.sessionRoot).toBe(sessionRoot);
+    expect(await recoverReconstructFailedRunStatus({
+      sessionRoot,
+      error: new Error("ordinary provider error"),
+    })).toBeNull();
+
+    // The conflict invocation must survive actor-settings resolution (which
+    // precedes run-control validation) without depending on a host-level
+    // ~/.onto/settings.json: provide the v3 actor seats in the project layer
+    // and isolate HOME, so the run-control conflict decides the outcome.
+    const conflictActorLlm = {
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5.5",
+      effort: "low",
+      api_key_env: "UNSET_TEST_OPENAI_KEY",
+    };
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      `${JSON.stringify({
+        schema_version: "settings.json/v3",
+        reconstruct: {
+          execution: {
+            actors: {
+              semantic_author: { llm: conflictActorLlm },
+              confirmation_provider: { llm: conflictActorLlm },
+            },
+          },
+        },
+      }, null, 2)}\n`,
+      "utf8",
+    );
+    const previousHome = process.env.HOME;
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(isolatedHome, { recursive: true });
+    process.env.HOME = isolatedHome;
+    try {
+      await expect(api.runReconstruct({
+        projectRoot,
+        targetRefs: ["schedule.csv"],
+        sessionRoot,
+        intent: "a different invocation must not inherit the prior failed terminal",
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "direct_call",
+      })).rejects.toThrow(/run-control conflict/);
+    } finally {
+      process.env.HOME = previousHome;
+    }
+  });
+
   it("fails loudly before reconstruct direct-call when v3 semantic author llm is missing", async () => {
     const projectRoot = await tempProjectRoot();
     const previousHome = process.env.HOME;
@@ -157,6 +394,198 @@ describe("createOntoReconstructCoreApi", () => {
       } else {
         process.env.HOME = previousHome;
       }
+    }
+  });
+
+  it("surfaces a reconciled partial failure write as an explicit blocked error", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "partial");
+    const runControlPath = path.join(sessionRoot, "reconstruct-run-control.yaml");
+    await initializeReconstructRunControl({
+      sessionId: path.basename(sessionRoot),
+      sessionRoot,
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "schedule.csv")],
+      intent: "reconstruct",
+      domain: null,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      runtimeVersion: "test-runtime",
+      outputPath: runControlPath,
+      validationOutputPath: path.join(
+        sessionRoot,
+        "reconstruct-run-control-validation.yaml",
+      ),
+      bootstrapDiagnosticPath: path.join(
+        sessionRoot,
+        "reconstruct-run-bootstrap-diagnostic.yaml",
+      ),
+    });
+    const failureDirectory = path.join(sessionRoot, "llm-dispatch-failures");
+    await fs.mkdir(failureDirectory);
+    await fs.writeFile(
+      path.join(failureDirectory, ".scratch-dead-write.yaml"),
+      "partial",
+      "utf8",
+    );
+
+    const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+    await expect(api.getRunStatus(sessionRoot)).rejects.toThrow(
+      /blocked by a partial failure write/,
+    );
+    const runControl = parseYaml(await fs.readFile(runControlPath, "utf8")) as {
+      resume_rows: Array<{ resume_decision: string }>;
+    };
+    expect(runControl.resume_rows.at(-1)?.resume_decision)
+      .toBe("blocked_partial_write");
+  });
+
+  it("rejects a session-root realpath escape before provider configuration", async () => {
+    const projectRoot = await tempProjectRoot();
+    const externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), "onto-external-session-"));
+    tempRoots.push(externalRoot);
+    const reconstructRoot = path.join(projectRoot, ".onto", "reconstruct");
+    await fs.mkdir(reconstructRoot, { recursive: true });
+    const linkedSession = path.join(reconstructRoot, "linked-session");
+    await fs.symlink(externalRoot, linkedSession);
+
+    const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+    await expect(api.runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "schedule.csv")],
+      sessionRoot: linkedSession,
+      intent: "must fail before dispatch",
+    })).rejects.toThrow(/sessionRoot realpath escapes allowed root/);
+  });
+
+  it("rejects headroom plus dispatch fallback before any provider call", async () => {
+    const projectRoot = await tempProjectRoot();
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    const directOpenAi = {
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5.5",
+      effort: "low",
+      api_key_env: "UNSET_TEST_OPENAI_KEY",
+    };
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      `${JSON.stringify({
+        schema_version: "settings.json/v3",
+        reconstruct: {
+          execution: {
+            actors: {
+              semantic_author: {
+                llm: directOpenAi,
+                llm_runtime: {
+                  openai_responses_output_headroom_tokens: 25_000,
+                },
+              },
+              confirmation_provider: { llm: directOpenAi },
+            },
+            semantic_map_authoring: true,
+            dispatch_breaker: { enabled: true },
+            dispatch_fallback: {
+              enabled: true,
+              trigger: "rate_limit",
+              max_fallback_passes: 1,
+              per_dispatch_max_provider_attempts: 1,
+              systemic_failure_threshold: 1,
+              llm: {
+                provider: "anthropic",
+                auth: "api_key",
+                model: "claude-opus-4-8",
+                effort: "medium",
+                api_key_env: "UNSET_TEST_ANTHROPIC_KEY",
+              },
+            },
+          },
+        },
+      }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+    await expect(api.runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "schedule.csv")],
+      sessionRoot: path.join(projectRoot, ".onto", "reconstruct", "fallback"),
+      intent: "must reject before dispatch",
+    })).rejects.toThrow(/cannot be combined with dispatch_fallback/);
+  });
+
+  it("fails before provider capability creation when dispatch fallback is enabled but its breaker is off", async () => {
+    const projectRoot = await tempProjectRoot();
+    const previousHome = process.env.HOME;
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    await fs.mkdir(isolatedHome, { recursive: true });
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      JSON.stringify({
+        schema_version: "settings.json/v3",
+        reconstruct: {
+          execution: {
+            semantic_map_authoring: true,
+            actors: {
+              semantic_author: {
+                llm: {
+                  provider: "openai",
+                  auth: "api_key",
+                  model: "gpt-5.5",
+                  effort: "medium",
+                  api_key_env: "TEST_OPENAI_KEY",
+                },
+              },
+              confirmation_provider: {
+                llm: {
+                  provider: "openai",
+                  auth: "api_key",
+                  model: "gpt-5.5",
+                  effort: "medium",
+                  api_key_env: "TEST_OPENAI_KEY",
+                },
+              },
+            },
+            dispatch_breaker: { enabled: false },
+            dispatch_fallback: {
+              enabled: true,
+              trigger: "rate_limit",
+              max_fallback_passes: 1,
+              per_dispatch_max_provider_attempts: 1,
+              systemic_failure_threshold: 1,
+              llm: {
+                provider: "anthropic",
+                auth: "api_key",
+                model: "claude-opus-4-8",
+                effort: "medium",
+                api_key_env: "TEST_ANTHROPIC_KEY",
+              },
+            },
+          },
+        },
+      }, null, 2),
+      "utf8",
+    );
+
+    process.env.HOME = isolatedHome;
+    try {
+      const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+      await expect(api.runReconstruct({
+        projectRoot,
+        targetRefs: ["src/feature.ts"],
+        sessionRoot: ".onto/reconstruct/fallback-without-breaker",
+        intent: "reconstruct",
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "direct_call",
+      })).rejects.toThrow(
+        "dispatch_fallback requires reconstruct.execution.dispatch_breaker.enabled=true",
+      );
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
     }
   });
 
@@ -275,6 +704,8 @@ describe("resolveJudgeLlmConfig", () => {
         model: "gpt-5-mini",
         verified_at: "2026-06-13",
         benchmark_evidence_refs: ["development-records/benchmark/x.json"],
+        max_output_tokens: 128_000,
+        max_output_tokens_provenance: "test provider specification",
       },
       {
         provider: "anthropic",
@@ -347,6 +778,41 @@ describe("resolveJudgeLlmConfig", () => {
       registry,
     });
     expect(out.judgeLlmConfig?.model_id).toBe("gpt-5-mini");
+    expect(out.note).toMatch(/not a benchmark-verified route/);
+  });
+
+  it("applies headroom only after an unsupported judge model degrades", () => {
+    const selection = normalizeLlmModelSwitcher({
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5-mini",
+      api_key_env: "MY_OPENAI_KEY",
+    });
+    expect(selection).not.toBeNull();
+    const out = resolveJudgeLlmConfig({
+      authorLlmConfig: {
+        ...author,
+        execution_adapter: "openai_sdk",
+      },
+      judgeModelCandidate: {
+        provider: "openai",
+        execution_adapter: "openai_sdk",
+        model_id: "gpt-9-unverified",
+        api_key_env: "MY_OPENAI_KEY",
+      },
+      judgeModelProvider: "openai",
+      registry,
+      outputHeadroom: {
+        selection: selection!,
+        headroomTokens: 32,
+      },
+    });
+
+    expect(out.judgeLlmConfig).toMatchObject({
+      model_id: "gpt-5-mini",
+      openai_responses_output_headroom_tokens: 32,
+      openai_responses_model_max_output_tokens: 128_000,
+    });
     expect(out.note).toMatch(/not a benchmark-verified route/);
   });
 

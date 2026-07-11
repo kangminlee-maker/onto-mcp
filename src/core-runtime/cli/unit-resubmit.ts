@@ -15,8 +15,9 @@
  *   rather than halting — unless the same validation class fails a strict
  *   majority of stance units (structural defect → whole-run halt with
  *   `halt_reason = correlated_validation: …`). The demotion/correlated
- *   machinery below is stance-only, which is why stance is EXCLUDED from the
- *   §4-2c structural retry gate (see RESUBMIT_UNIT_ROUTING.gateEligible).
+ *   machinery is stance-only and reads the terminal outcome; the rare-poison
+ *   stance gate therefore retries only correctable validation failures and does
+ *   not reinterpret a later infra terminal failure as validation.
  * - deliberation-response: `allowed_evidence_refs` whitelist. Exhaustion reuses
  *   deliberation's existing non-halting degrade (unavailable-completion), so it
  *   needs no demotion/correlated machinery. Only the submit-time rejection is

@@ -1,0 +1,99 @@
+{
+  "schema_version": "dispatch-fallback-live-evidence-record/v1",
+  "recorded_at": "2026-07-11",
+  "subject": {
+    "feature": "reconstruct semantic-map same-call dispatch fallback",
+    "target_material_kind": "spreadsheet",
+    "fixture_kind": "synthetic_xlsx_value_shape_transition",
+    "fixture_sha256": "324e32dacaa53a8cbe775ddd8ef27ee140f107a46a1deb06b06e6bb59a436763",
+    "forecast": {
+      "semantic_map_synthesize_dispatches": 1,
+      "value_shape_seams": 1
+    }
+  },
+  "realization": {
+    "primary": {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "operation": "semantic_map_synthesize",
+      "failure_source": "deterministic_sdk_http_429_injection",
+      "logical_dispatches": 1,
+      "adapter_requests": 3
+    },
+    "fallback": {
+      "provider": "anthropic",
+      "model": "claude-opus-4-8",
+      "endpoint_kind": "official_sdk",
+      "semantic_map_synthesize": {
+        "realization": "live",
+        "logical_dispatches": 1,
+        "adapter_requests": 1
+      },
+      "semantic_map_verify": {
+        "stage_logical_dispatches": 0,
+        "stage_adapter_requests": 0,
+        "reason": "the model-proposed boundary was structurally anchored",
+        "independent_live_probe": {
+          "realization": "live",
+          "logical_dispatches": 1,
+          "adapter_requests": 1,
+          "verdict": "adversarial_refuted",
+          "output_sha256": "bb46b922e75c974349550134be5520782146d817c9a03fed4cf81efd27047fd7"
+        }
+      }
+    },
+    "settings_sha256": "7fa2d7d8bd0bb4500fd4ceba0607dd41802cf196153a67f343c9deb8d8c8673d",
+    "harness": "scripts/reconstruct-dispatch-fallback-live-e2e.mts"
+  },
+  "canonical_artifacts": {
+    "dispatch_fallback_activation_sha256": "450d8b976163206847fe6ada6c9c0a966893aeae6822ae257ff934a1debed3de",
+    "dispatch_fallback_outcome_sha256": "0f2bfdd3258fd8acf45bc56fc85e1619334ae37dd00dab8e6239c3bdcc6c3671",
+    "semantic_map_census_sha256": "55f6b6a298c51fad5e0826c99729da6d4ffb3c48928d9ea8e69d2920f4d14230",
+    "semantic_map_sha256": "b26d7d5e7d2692689e17bb76cbc6c76cc7ba7bfd85502aa7b38a0d4cf6957717",
+    "reconstruct_run_control_sha256": "3c70edd3c00c9ebee1e8786ed3f26866b4501327acb4ff1c5732d438e5c4611d",
+    "fallback_outcome_status": "completed",
+    "completed_item_count": 1,
+    "incomplete_item_count": 0,
+    "observations_map_present": 1,
+    "terminal_contract_validation": "passed",
+    "artifact_hash_validation": "passed",
+    "outcome_checkpoint_validation": "passed"
+  },
+  "completion_boundary": {
+    "live_alternate_provider_semantic_map_completion": "supported",
+    "live_fallback_synthesize_route": "supported",
+    "live_fallback_verify_route": "supported_by_independent_probe",
+    "same_call_stage_verify_dispatch": "not_observed_because_boundary_was_anchored",
+    "natural_primary_rate_limit_incident": "not_observed",
+    "semantic_quality_decision": "not_assessed",
+    "full_reconstruct_completion": "not_claimed",
+    "downstream_attempts": [
+      {
+        "ordinary_author_route": "openai_oauth",
+        "effort": "medium",
+        "terminal_step": "source_frontier",
+        "terminal_reason": "oauth_usage_limit"
+      },
+      {
+        "ordinary_author_route": "openai_api_key",
+        "effort": "medium",
+        "terminal_step": "candidate_disposition",
+        "terminal_reason": "responses_incomplete_max_output_tokens_4000"
+      },
+      {
+        "ordinary_author_route": "openai_api_key",
+        "effort": "low",
+        "terminal_step": "ontology_seed",
+        "terminal_reason": "responses_incomplete_max_output_tokens_9000"
+      }
+    ],
+    "downstream_failure_scope": "pre_existing_provider_output_budget_not_dispatch_fallback",
+    "observation_window_credit": 0
+  },
+  "decision": {
+    "p1a_live_path_support": "pass",
+    "p1a_full_product_e2e": "partial",
+    "default_promotion_eligible": false,
+    "notes": "This record proves non-empty live alternate-provider semantic-map completion after an injected typed primary rate-limit. It does not replace natural-incident evidence, semantic-quality review, a completed downstream reconstruct record, or the 3-run observation gate."
+  }
+}

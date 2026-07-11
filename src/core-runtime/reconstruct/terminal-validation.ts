@@ -24,6 +24,7 @@ import type {
   ReconstructRunControlValidationArtifact,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
+  ReconstructSemanticMapResumeValidationArtifact,
   ReconstructSourceObservationLineageCensus,
   ReconstructSeedAuthoringReadinessValidationArtifact,
   ReconstructSelectedSourceProfileRef,
@@ -408,6 +409,8 @@ function validationArtifactStatuses(args: {
     ReconstructSourceScoutPackValidationArtifact | null | undefined;
   sourceScoutPackPostMaturationValidation?:
     ReconstructSourceScoutPackValidationArtifact | null | undefined;
+  semanticMapResumeValidation?:
+    ReconstructSemanticMapResumeValidationArtifact | null | undefined;
   materialAdmissionLedgerValidation?:
     ReconstructMaterialAdmissionLedgerValidationArtifact | null | undefined;
   seedAuthoringReadinessValidation?:
@@ -465,6 +468,10 @@ function validationArtifactStatuses(args: {
     [
       "source-scout-pack-validation.post-maturation.yaml",
       statusOf(args.sourceScoutPackPostMaturationValidation),
+    ],
+    [
+      "semantic-map-resume-validation.yaml",
+      statusOf(args.semanticMapResumeValidation),
     ],
     [
       "material-admission-ledger-validation.yaml",
@@ -1296,6 +1303,8 @@ export function validateHandoffDecision(args: {
     ReconstructSourceScoutPackValidationArtifact | null | undefined;
   sourceScoutPackPostMaturationValidation?:
     ReconstructSourceScoutPackValidationArtifact | null | undefined;
+  semanticMapResumeValidation?:
+    ReconstructSemanticMapResumeValidationArtifact | null | undefined;
   materialAdmissionLedgerValidation?:
     ReconstructMaterialAdmissionLedgerValidationArtifact | null | undefined;
   seedAuthoringReadinessValidation?:
@@ -1513,6 +1522,7 @@ export async function writeHandoffDecisionValidationArtifact(args: {
   sourceScoutPackValidationPath?: string | null;
   sourceScoutPackPreSeedValidationPath?: string | null;
   sourceScoutPackPostMaturationValidationPath?: string | null;
+  semanticMapResumeValidationPath?: string | null;
   materialAdmissionLedgerValidationPath?: string | null;
   seedAuthoringReadinessValidationPath?: string | null;
   sourceFrontierValidationPath: string;
@@ -1557,6 +1567,7 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     sourceScoutPackValidation,
     sourceScoutPackPreSeedValidation,
     sourceScoutPackPostMaturationValidation,
+    semanticMapResumeValidation,
     materialAdmissionLedgerValidation,
     seedAuthoringReadinessValidation,
     sourceFrontierValidation,
@@ -1612,6 +1623,11 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     args.sourceScoutPackPostMaturationValidationPath
       ? readYamlDocumentIfPresent<ReconstructSourceScoutPackValidationArtifact>(
         args.sourceScoutPackPostMaturationValidationPath,
+      )
+      : Promise.resolve(null),
+    args.semanticMapResumeValidationPath
+      ? readYamlDocumentIfPresent<ReconstructSemanticMapResumeValidationArtifact>(
+        args.semanticMapResumeValidationPath,
       )
       : Promise.resolve(null),
     args.materialAdmissionLedgerValidationPath
@@ -1714,6 +1730,7 @@ export async function writeHandoffDecisionValidationArtifact(args: {
       sourceScoutPackPostMaturationValidation
         ? args.sourceScoutPackPostMaturationValidationPath
         : null,
+      semanticMapResumeValidation ? args.semanticMapResumeValidationPath : null,
       materialAdmissionLedgerValidation
         ? args.materialAdmissionLedgerValidationPath
         : null,
@@ -1776,6 +1793,9 @@ export async function writeHandoffDecisionValidationArtifact(args: {
         sourceScoutPackPostMaturationValidation
           ? args.sourceScoutPackPostMaturationValidationPath
           : null,
+      "semantic-map-resume-validation.yaml": semanticMapResumeValidation
+        ? args.semanticMapResumeValidationPath
+        : null,
       "material-admission-ledger-validation.yaml":
         materialAdmissionLedgerValidation
           ? args.materialAdmissionLedgerValidationPath
@@ -1832,6 +1852,7 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     sourceScoutPackValidation,
     sourceScoutPackPreSeedValidation,
     sourceScoutPackPostMaturationValidation,
+    semanticMapResumeValidation,
     materialAdmissionLedgerValidation,
     seedAuthoringReadinessValidation,
     sourceFrontierValidation,

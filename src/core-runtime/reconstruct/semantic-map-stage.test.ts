@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   buildSemanticMapBridgeCallbacks,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  deriveSemanticMapFallbackPriorDispatchSpend,
   mergeSemanticSeedProjections,
   observationPromptPayload,
+  prepareSemanticMapResumeContext,
   RECONSTRUCT_AUTHORING_PROMPT_CONTRACT,
   renderSemanticMapProjection,
   resolveSemanticMapCapability,
@@ -31,6 +33,7 @@ import type {
   SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
 import type { ColumnValueTiles } from "../spreadsheet-structure-observer.js";
+import type { ReconstructSemanticMapCensus } from "./artifact-types.js";
 import { assertGatingKeyExcludesInEpochOutput } from "./llm-touch-fingerprint.js";
 import { unitIdForAuthoredArtifactName } from "./execution-telemetry.js";
 
@@ -178,6 +181,8 @@ const PRE_IMAGE_BASE = {
   over_context_gate_logic_sha256: "logic",
 };
 
+const NOW = "2026-07-10T00:00:00.000Z";
+
 async function tempRoot(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "w2-semantic-map-"));
 }
@@ -324,6 +329,78 @@ describe("runSemanticMapStage (W2)", () => {
     };
     expect(await run(7)).toEqual({ status: "produced", calls: 7 }); // exactly the need → NOT capped
     expect(await run(6)).toEqual({ status: "capped", calls: 0 }); // one short → deterministic skip, zero LLM
+  });
+
+  it("same-call fallback cap includes discarded primary dispatch spend", async () => {
+    const { author, counters } = mockAuthor();
+    const result = await runSemanticMapStage({
+      sourceObservations: observationsArtifact([
+        { observation_id: "obs-1", columns: [richColumn(0)] },
+      ]),
+      directiveAuthor: author,
+      sessionRoot: await tempRoot(),
+      config: { ...CONFIG, max_synthesize_calls: 7 },
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+      priorDispatchSpend: { synthesize: 1, verify: 0 },
+      executionSource: "fallback",
+    });
+    expect(counters.synthesize).toBe(0);
+    expect(result.census!.by_observation[0]!.columns[0]!.status).toBe("capped");
+  });
+
+  it("derives retry spend from physical requests while preserving one logical dispatch", () => {
+    const primaryCensus = {
+      schema_version: "1",
+      observations_total: 1,
+      observations_map_present: 0,
+      observations_map_absent: 1,
+      synthesize_calls_total: 1,
+      verify_calls_total: 0,
+      max_synthesize_calls: 7,
+      max_verify_calls: 7,
+      author_id: "primary",
+      synthesize_model_identity: "primary",
+      verify_model_identity: "primary",
+      by_observation: [{
+        observation_id: "obs-1",
+        map_present: false,
+        skip_reason: null,
+        fingerprint: "fingerprint",
+        columns: [{
+          sheet: "S",
+          column_index: 0,
+          status: "failed",
+          reason: "rate limit",
+          produced_nodes: 0,
+          frontier_accumulating: 0,
+          frontier_frontier: 0,
+          frontier_subsumed: 0,
+          anchored: 0,
+          unanchored: 0,
+          adversarial_confirmed: 0,
+          adversarial_refuted: 0,
+          synthesize_calls: 1,
+          verify_calls: 0,
+        }],
+      }],
+    } satisfies ReconstructSemanticMapCensus;
+    expect(deriveSemanticMapFallbackPriorDispatchSpend({
+      primaryCensus,
+      incompleteItemIds: ["obs-1"],
+      accountingEntries: [{
+        observation_id: "obs-1",
+        execution_source: "primary",
+        operation: "semantic_map_synthesize",
+        disposition: "failed",
+        descriptor_id: "descriptor",
+        capability_instance_id: "instance",
+        logical_dispatch_id: "logical",
+        actual_adapter_request_count: 2,
+        failure_class: "rate_limit",
+      }],
+      sealedOperations: { synthesize: true, verify: false },
+    })).toEqual({ synthesize: 2, verify: 0 });
   });
 
   it("W2-X7-001 (verify side): a dispatched-then-throwing verify is counted; column fails to flat", async () => {
@@ -928,11 +1005,17 @@ async function readIncompleteArtifact(sessionRoot: string): Promise<DispatchInco
   ) as DispatchIncompleteArtifact;
 }
 
+async function writeYamlFixture(filePath: string, value: unknown): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, stringifyYaml(value), "utf8");
+}
+
 function stageArgs(
   sourceObservations: Parameters<typeof runSemanticMapStage>[0]["sourceObservations"],
   author: ReconstructDirectiveAuthor,
   sessionRoot: string,
   dispatchBreaker?: DispatchBreakerPolicy,
+  recoveryContext?: Parameters<typeof runSemanticMapStage>[0]["recoveryContext"],
 ): Parameters<typeof runSemanticMapStage>[0] {
   return {
     sourceObservations,
@@ -942,8 +1025,340 @@ function stageArgs(
     preImageBase: PRE_IMAGE_BASE,
     verifyModelIdentity: "mock/none",
     ...(dispatchBreaker ? { dispatchBreaker } : {}),
+    ...(recoveryContext ? { recoveryContext } : {}),
   };
 }
+
+function censusFingerprintFromContext(
+  context: NonNullable<Parameters<typeof runSemanticMapStage>[0]["recoveryContext"]>,
+  observationId: string,
+): string | null {
+  return context.retainedRowsByObservationId.get(observationId)?.fingerprint ?? null;
+}
+
+describe("semantic-map resume preflight (v3.3)", () => {
+  async function preflight(args: {
+    sessionRoot: string;
+    sourceObservations: Parameters<typeof runSemanticMapStage>[0]["sourceObservations"];
+    resumeMode?: "fresh" | "reuse_existing_authored_artifacts";
+    dispatchBreaker?: DispatchBreakerPolicy;
+  }) {
+    return prepareSemanticMapResumeContext({
+      sessionId: "session-1",
+      sessionRoot: args.sessionRoot,
+      attemptId: "attempt-1",
+      sourceObservations: args.sourceObservations,
+      resumeMode: args.resumeMode ?? "reuse_existing_authored_artifacts",
+      ...(args.dispatchBreaker !== undefined ? { dispatchBreaker: args.dispatchBreaker } : {}),
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+      config: CONFIG,
+    });
+  }
+
+  it("rejects stale same-batch partitions and writes invalid resume validation before stage calls", async () => {
+    const sessionRoot = await tempRoot();
+    await writeYamlFixture(dispatchIncompleteArtifactPath(sessionRoot), {
+      schema_version: "1",
+      pipeline: "reconstruct",
+      batch_label: "semantic-map",
+      created_at: NOW,
+      breaker: {
+        tripped: true,
+        failure_class: "rate_limit",
+        consecutive_item_count: 3,
+        threshold: 3,
+      },
+      completed_item_ids: [],
+      dead_letter: [],
+      incomplete_item_ids: ["ghost-observation"],
+    });
+
+    await expect(
+      preflight({
+        sessionRoot,
+        sourceObservations: breakerObservations([{ id: "obs-1", columnIndex: 0 }]),
+        dispatchBreaker: BREAKER,
+      }),
+    ).rejects.toThrow(/semantic-map resume validation failed/);
+
+    const validation = parseYaml(
+      await fs.readFile(path.join(sessionRoot, "semantic-map-resume-validation.yaml"), "utf8"),
+    ) as { validation_status: string; partition_validation: { unknown_item_ids: string[] } };
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.partition_validation.unknown_item_ids).toEqual(["ghost-observation"]);
+  });
+
+  it("accepts a complete non-tripped same-batch artifact as normal full-stage, not recovery", async () => {
+    const sessionRoot = await tempRoot();
+    await writeYamlFixture(dispatchIncompleteArtifactPath(sessionRoot), {
+      schema_version: "1",
+      pipeline: "reconstruct",
+      batch_label: "semantic-map",
+      created_at: NOW,
+      breaker: {
+        tripped: false,
+        failure_class: null,
+        consecutive_item_count: null,
+        threshold: 3,
+      },
+      completed_item_ids: ["obs-1"],
+      dead_letter: [],
+      incomplete_item_ids: [],
+    });
+
+    const context = await preflight({
+      sessionRoot,
+      sourceObservations: breakerObservations([{ id: "obs-1", columnIndex: 0 }]),
+      dispatchBreaker: BREAKER,
+    });
+    expect(context).toBeNull();
+    const validation = parseYaml(
+      await fs.readFile(path.join(sessionRoot, "semantic-map-resume-validation.yaml"), "utf8"),
+    ) as { validation_status: string; recovery_attempted: boolean; activation_decision: string };
+    expect(validation).toMatchObject({
+      validation_status: "valid",
+      recovery_attempted: false,
+      activation_decision: "normal_full_stage",
+    });
+  });
+
+  it("retains structural skip rows but rejects deterministic_phase_failed retained rows", async () => {
+    const sessionRoot = await tempRoot();
+    await writeYamlFixture(dispatchIncompleteArtifactPath(sessionRoot), {
+      schema_version: "1",
+      pipeline: "reconstruct",
+      batch_label: "semantic-map",
+      created_at: NOW,
+      breaker: {
+        tripped: true,
+        failure_class: "rate_limit",
+        consecutive_item_count: 3,
+        threshold: 3,
+      },
+      completed_item_ids: ["obs-skip"],
+      dead_letter: [],
+      incomplete_item_ids: ["obs-run"],
+    });
+    await writeYamlFixture(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"), {
+      schema_version: "1",
+      observations_total: 1,
+      observations_map_present: 0,
+      observations_map_absent: 1,
+      synthesize_calls_total: 0,
+      verify_calls_total: 0,
+      max_synthesize_calls: CONFIG.max_synthesize_calls,
+      max_verify_calls: CONFIG.max_verify_calls,
+      author_id: "mock",
+      synthesize_model_identity: PRE_IMAGE_BASE.reduce_reader_model_identity,
+      verify_model_identity: "mock/none",
+      by_observation: [{
+        observation_id: "obs-skip",
+        map_present: false,
+        skip_reason: "no_workbook_inventory",
+        fingerprint: null,
+        columns: [],
+      }],
+    });
+    await writeYamlFixture(path.join(sessionRoot, "comprehension", "semantic-map.yaml"), {
+      schema_version: "1",
+      observations: [],
+    });
+
+    const context = await preflight({
+      sessionRoot,
+      sourceObservations: breakerObservations([
+        { id: "obs-skip", columnIndex: null },
+        { id: "obs-run", columnIndex: 0 },
+      ]),
+      dispatchBreaker: BREAKER,
+    });
+    expect(context?.retainedRowsByObservationId.has("obs-skip")).toBe(true);
+
+    const failedRoot = await tempRoot();
+    await writeYamlFixture(dispatchIncompleteArtifactPath(failedRoot), {
+      schema_version: "1",
+      pipeline: "reconstruct",
+      batch_label: "semantic-map",
+      created_at: NOW,
+      breaker: {
+        tripped: true,
+        failure_class: "rate_limit",
+        consecutive_item_count: 3,
+        threshold: 3,
+      },
+      completed_item_ids: ["obs-bad"],
+      dead_letter: [],
+      incomplete_item_ids: ["obs-run"],
+    });
+    await writeYamlFixture(path.join(failedRoot, "comprehension", "semantic-map-census.yaml"), {
+      schema_version: "1",
+      observations_total: 1,
+      observations_map_present: 0,
+      observations_map_absent: 1,
+      synthesize_calls_total: 0,
+      verify_calls_total: 0,
+      max_synthesize_calls: CONFIG.max_synthesize_calls,
+      max_verify_calls: CONFIG.max_verify_calls,
+      author_id: "mock",
+      synthesize_model_identity: PRE_IMAGE_BASE.reduce_reader_model_identity,
+      verify_model_identity: "mock/none",
+      by_observation: [{
+        observation_id: "obs-bad",
+        map_present: false,
+        skip_reason: "deterministic_phase_failed",
+        skip_detail: "fixture",
+        fingerprint: null,
+        columns: [],
+      }],
+    });
+    await writeYamlFixture(path.join(failedRoot, "comprehension", "semantic-map.yaml"), {
+      schema_version: "1",
+      observations: [],
+    });
+
+    await expect(
+      preflight({
+        sessionRoot: failedRoot,
+        sourceObservations: breakerObservations([
+          { id: "obs-bad", columnIndex: 0 },
+          { id: "obs-run", columnIndex: 0 },
+        ]),
+        dispatchBreaker: BREAKER,
+      }),
+    ).rejects.toThrow(/non-reusable retained ids/);
+  });
+
+  it("rejects prior census/sidecar rows outside the current observation set", async () => {
+    const sessionRoot = await tempRoot();
+    await writeYamlFixture(dispatchIncompleteArtifactPath(sessionRoot), {
+      schema_version: "1",
+      pipeline: "reconstruct",
+      batch_label: "semantic-map",
+      created_at: NOW,
+      breaker: {
+        tripped: true,
+        failure_class: "rate_limit",
+        consecutive_item_count: 3,
+        threshold: 3,
+      },
+      completed_item_ids: ["obs-1"],
+      dead_letter: [],
+      incomplete_item_ids: ["obs-2"],
+    });
+    await writeYamlFixture(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"), {
+      schema_version: "1",
+      observations_total: 2,
+      observations_map_present: 0,
+      observations_map_absent: 2,
+      synthesize_calls_total: 0,
+      verify_calls_total: 0,
+      max_synthesize_calls: CONFIG.max_synthesize_calls,
+      max_verify_calls: CONFIG.max_verify_calls,
+      author_id: "mock",
+      synthesize_model_identity: PRE_IMAGE_BASE.reduce_reader_model_identity,
+      verify_model_identity: "mock/none",
+      by_observation: [
+        {
+          observation_id: "obs-1",
+          map_present: false,
+          skip_reason: "no_workbook_inventory",
+          fingerprint: null,
+          columns: [],
+        },
+        {
+          observation_id: "ghost-observation",
+          map_present: false,
+          skip_reason: "no_workbook_inventory",
+          fingerprint: null,
+          columns: [],
+        },
+      ],
+    });
+    await writeYamlFixture(path.join(sessionRoot, "comprehension", "semantic-map.yaml"), {
+      schema_version: "1",
+      observations: [{
+        observation_id: "ghost-observation",
+        projection: seedProjection(1),
+        node_epochs: [],
+      }],
+    });
+
+    await expect(
+      preflight({
+        sessionRoot,
+        sourceObservations: breakerObservations([
+          { id: "obs-1", columnIndex: null },
+          { id: "obs-2", columnIndex: 0 },
+        ]),
+        dispatchBreaker: BREAKER,
+      }),
+    ).rejects.toThrow(/outside current spreadsheet observations/);
+
+    const validation = parseYaml(
+      await fs.readFile(path.join(sessionRoot, "semantic-map-resume-validation.yaml"), "utf8"),
+    ) as {
+      validation_status: string;
+      census_validation: { unknown_census_ids: string[] };
+      sidecar_validation: { unknown_sidecar_ids: string[] };
+    };
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.census_validation.unknown_census_ids).toEqual(["ghost-observation"]);
+    expect(validation.sidecar_validation.unknown_sidecar_ids).toEqual(["ghost-observation"]);
+  });
+
+  it("rejects tripped recovery before provider work when the semantic-map capability pair is absent", async () => {
+    const sessionRoot = await tempRoot();
+    await writeYamlFixture(dispatchIncompleteArtifactPath(sessionRoot), {
+      schema_version: "1",
+      pipeline: "reconstruct",
+      batch_label: "semantic-map",
+      created_at: NOW,
+      breaker: {
+        tripped: true,
+        failure_class: "rate_limit",
+        consecutive_item_count: 3,
+        threshold: 3,
+      },
+      completed_item_ids: [],
+      dead_letter: [],
+      incomplete_item_ids: ["obs-1"],
+    });
+    await writeYamlFixture(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"), {
+      schema_version: "1",
+      observations_total: 0,
+      observations_map_present: 0,
+      observations_map_absent: 0,
+      synthesize_calls_total: 0,
+      verify_calls_total: 0,
+      max_synthesize_calls: CONFIG.max_synthesize_calls,
+      max_verify_calls: CONFIG.max_verify_calls,
+      author_id: "mock",
+      synthesize_model_identity: PRE_IMAGE_BASE.reduce_reader_model_identity,
+      verify_model_identity: "mock/none",
+      by_observation: [],
+    });
+    await writeYamlFixture(path.join(sessionRoot, "comprehension", "semantic-map.yaml"), {
+      schema_version: "1",
+      observations: [],
+    });
+
+    await expect(
+      prepareSemanticMapResumeContext({
+        sessionId: "session-1",
+        sessionRoot,
+        attemptId: "attempt-1",
+        sourceObservations: breakerObservations([{ id: "obs-1", columnIndex: 0 }]),
+        resumeMode: "reuse_existing_authored_artifacts",
+        dispatchBreaker: BREAKER,
+        semanticMapCapabilityPresent: false,
+        preImageBase: PRE_IMAGE_BASE,
+        verifyModelIdentity: "mock/none",
+        config: CONFIG,
+      }),
+    ).rejects.toThrow(/capability pair/);
+  });
+});
 
 describe("semantic-map dispatch breaker (설계 B)", () => {
   it("F-B1: dead limit trips after backoff exhaustion at N=3, persists the incomplete list, bounded dispatch count", async () => {
@@ -1158,29 +1573,172 @@ describe("semantic-map dispatch breaker (설계 B)", () => {
     expect(tripped.completed_item_ids).toEqual(["obs-1"]);
     expect(tripped.incomplete_item_ids).toEqual(["obs-2", "obs-3", "obs-4", "obs-5"]);
 
-    // Run 2 (회복): 미완료 집합만 재디스패치 — provider 정상.
-    const incomplete = new Set(tripped.incomplete_item_ids);
+    // Run 2 (회복): full current batch를 다시 넣되, retained obs-1은 prior census/sidecar에서
+    // 재사용하고 미완료 집합만 provider 정상 재디스패치.
     const healthy = scriptedFailureAuthor({ failColumns: [], failureMessage: "unused" });
-    const run2Observations = breakerObservations(
-      [
-        { id: "obs-2", columnIndex: 5 },
-        { id: "obs-3", columnIndex: 5 },
-        { id: "obs-4", columnIndex: 5 },
-        { id: "obs-5", columnIndex: 5 },
-      ].filter((spec) => incomplete.has(spec.id)),
-    );
+    const run2Observations = breakerObservations([
+      { id: "obs-1", columnIndex: 0 },
+      { id: "obs-2", columnIndex: 5 },
+      { id: "obs-3", columnIndex: 5 },
+      { id: "obs-4", columnIndex: 5 },
+      { id: "obs-5", columnIndex: 5 },
+    ]);
+    const recoveryContext = await prepareSemanticMapResumeContext({
+      sessionId: "session-1",
+      sessionRoot,
+      attemptId: "attempt-1",
+      sourceObservations: run2Observations,
+      resumeMode: "reuse_existing_authored_artifacts",
+      dispatchBreaker: BREAKER,
+      semanticMapCapabilityPresent: true,
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+      config: CONFIG,
+    });
+    expect(recoveryContext).not.toBeNull();
+    if (recoveryContext === null) throw new Error("expected semantic-map recovery context");
+    const resumeValidation = parseYaml(
+      await fs.readFile(path.join(sessionRoot, "semantic-map-resume-validation.yaml"), "utf8"),
+    ) as {
+      validation_status: string;
+      recovery_attempted: boolean;
+      census_validation: { incomplete_census_ids: string[] };
+    };
+    expect(resumeValidation).toMatchObject({
+      validation_status: "valid",
+      recovery_attempted: true,
+    });
+    // Prior tripped rows for obs-2..4 are quarantined/discarded, not treated as stale-invalid.
+    expect(resumeValidation.census_validation.incomplete_census_ids.sort()).toEqual([
+      "obs-2",
+      "obs-3",
+      "obs-4",
+    ]);
     const recovery = await runSemanticMapStage(
-      stageArgs(run2Observations, healthy.author, sessionRoot, BREAKER),
+      stageArgs(run2Observations, healthy.author, sessionRoot, BREAKER, recoveryContext),
     );
 
-    // 집합 동등성: 회복 run이 디스패치한 관찰 == 미완료 집합.
+    // Full-batch truth: census/dispatch partition cover the whole current batch, but provider work
+    // is spent only on the prior incomplete set.
     expect(
-      (recovery.census?.by_observation ?? []).map((o) => o.observation_id).sort(),
-    ).toEqual([...incomplete].sort());
+      (recovery.census?.by_observation ?? []).map((o) => o.observation_id),
+    ).toEqual(["obs-1", "obs-2", "obs-3", "obs-4", "obs-5"]);
+    expect(healthy.counters.synthesize).toBe(tripped.incomplete_item_ids.length * 7);
+    expect(recovery.census?.by_observation.find((row) => row.observation_id === "obs-1")?.fingerprint)
+      .toBe(censusFingerprintFromContext(recoveryContext, "obs-1"));
     const recovered = await readIncompleteArtifact(sessionRoot);
     expect(recovered.breaker.tripped).toBe(false);
-    expect(recovered.completed_item_ids.sort()).toEqual([...incomplete].sort());
+    expect(recovered.completed_item_ids).toEqual([
+      "obs-1",
+      "obs-2",
+      "obs-3",
+      "obs-4",
+      "obs-5",
+    ]);
     expect(recovered.incomplete_item_ids).toEqual([]);
     expect(recovered.dead_letter).toEqual([]);
+  });
+
+  it("recovery re-trip preserves unvisited retained rows in census and dispatch partition", async () => {
+    const sessionRoot = await tempRoot();
+    const observations = breakerObservations([
+      { id: "obs-1", columnIndex: null },
+      { id: "obs-2", columnIndex: 5 },
+      { id: "obs-3", columnIndex: 5 },
+      { id: "obs-4", columnIndex: 5 },
+      { id: "obs-5", columnIndex: null },
+    ]);
+    await writeYamlFixture(dispatchIncompleteArtifactPath(sessionRoot), {
+      schema_version: "1",
+      pipeline: "reconstruct",
+      batch_label: "semantic-map",
+      created_at: NOW,
+      breaker: {
+        tripped: true,
+        failure_class: "rate_limit",
+        consecutive_item_count: 3,
+        threshold: 3,
+      },
+      completed_item_ids: ["obs-1", "obs-5"],
+      dead_letter: [],
+      incomplete_item_ids: ["obs-2", "obs-3", "obs-4"],
+    });
+    await writeYamlFixture(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"), {
+      schema_version: "1",
+      observations_total: 2,
+      observations_map_present: 0,
+      observations_map_absent: 2,
+      synthesize_calls_total: 0,
+      verify_calls_total: 0,
+      max_synthesize_calls: CONFIG.max_synthesize_calls,
+      max_verify_calls: CONFIG.max_verify_calls,
+      author_id: "mock",
+      synthesize_model_identity: PRE_IMAGE_BASE.reduce_reader_model_identity,
+      verify_model_identity: "mock/none",
+      by_observation: [
+        {
+          observation_id: "obs-1",
+          map_present: false,
+          skip_reason: "no_workbook_inventory",
+          fingerprint: null,
+          columns: [],
+        },
+        {
+          observation_id: "obs-5",
+          map_present: false,
+          skip_reason: "no_workbook_inventory",
+          fingerprint: null,
+          columns: [],
+        },
+      ],
+    });
+    await writeYamlFixture(path.join(sessionRoot, "comprehension", "semantic-map.yaml"), {
+      schema_version: "1",
+      observations: [],
+    });
+
+    const recoveryContext = await prepareSemanticMapResumeContext({
+      sessionId: "session-1",
+      sessionRoot,
+      attemptId: "attempt-1",
+      sourceObservations: observations,
+      resumeMode: "reuse_existing_authored_artifacts",
+      dispatchBreaker: BREAKER,
+      semanticMapCapabilityPresent: true,
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+      config: CONFIG,
+    });
+    expect(recoveryContext).not.toBeNull();
+    if (recoveryContext === null) throw new Error("expected semantic-map recovery context");
+
+    const failing = scriptedFailureAuthor({
+      failColumns: [5],
+      failureMessage: "status=429 too many requests",
+    });
+    await expect(
+      runSemanticMapStage(
+        stageArgs(observations, failing.author, sessionRoot, BREAKER, recoveryContext),
+      ),
+    ).rejects.toBeInstanceOf(DispatchBreakerTrippedError);
+
+    const census = parseYaml(
+      await fs.readFile(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"), "utf8"),
+    ) as {
+      by_observation: Array<{ observation_id: string }>;
+      observations_total: number;
+    };
+    expect(census.by_observation.map((row) => row.observation_id)).toEqual([
+      "obs-1",
+      "obs-2",
+      "obs-3",
+      "obs-4",
+      "obs-5",
+    ]);
+    expect(census.observations_total).toBe(5);
+    const repartitioned = await readIncompleteArtifact(sessionRoot);
+    expect(repartitioned.breaker.tripped).toBe(true);
+    expect(repartitioned.completed_item_ids).toEqual(["obs-1", "obs-5"]);
+    expect(repartitioned.incomplete_item_ids).toEqual(["obs-2", "obs-3", "obs-4"]);
   });
 });

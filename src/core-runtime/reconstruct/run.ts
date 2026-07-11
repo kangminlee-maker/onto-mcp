@@ -53,6 +53,7 @@ import type {
   ReconstructSemanticMapCensus,
   ReconstructSemanticMapCensusColumn,
   ReconstructSemanticMapCensusObservation,
+  ReconstructSemanticMapResumeValidationArtifact,
   ReconstructSemanticMapSidecar,
   ReconstructSemanticMapSidecarObservation,
   ReconstructMaturationValueDischargeEntry,
@@ -61,6 +62,7 @@ import type {
   ReconstructMetricsArtifact,
   ReconstructOntologyExpansionArtifact,
   ReconstructOntologyExpansionValidationArtifact,
+  ReconstructPostSeedValidationViolation,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
   ReconstructPurposeConfirmationArtifact,
@@ -104,16 +106,33 @@ import type {
 } from "./artifact-types.js";
 import { WITNESS_LESS_CONDITIONAL_STAGE_IDS } from "./artifact-types.js";
 import { callLlm, type LlmCallConfig, type LlmCallResult } from "../llm/llm-caller.js";
+import { readOpenAIResponsesIncompleteEvidence } from "../llm/openai-responses-incomplete-error.js";
+import {
+  RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS,
+} from "./output-budget.js";
+import {
+  SemanticMapDispatchAccounting,
+  type ResolvedLlmDispatchCapability,
+  type SemanticMapDispatchAccountingEntry,
+} from "../llm/sealed-dispatch-capability.js";
+import {
+  readStructuredDispatchFailureEvidence,
+  type StructuredDispatchFailureEvidence,
+} from "../llm/structured-dispatch-error.js";
 import {
   DispatchBreakerState,
   DispatchBreakerTrippedError,
   buildDispatchIncompleteArtifact,
+  buildDispatchIncompleteArtifactFromPartition,
   classifySystemicDispatchFailure,
   dispatchIncompleteArtifactPath,
+  isDispatchIncompleteArtifact,
   readDispatchFailureClass,
   runWithDispatchBackoff,
+  type DispatchDeadLetterEntry,
   type DispatchBreakerPolicy,
   type DispatchBreakerTripState,
+  type DispatchIncompleteArtifact,
 } from "../llm/dispatch-breaker.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
@@ -189,9 +208,28 @@ import {
   finalizeReconstructRunControl,
   initializeReconstructRunControl,
   markReconstructRunControlAttemptFailed,
+  persistReconstructLlmDispatchFailure,
+  reconcileReconstructLlmDispatchFailures,
   recordReconstructRunControlTransactions,
   writeReconstructRunControlValidationArtifact,
 } from "./run-control-validation.js";
+import {
+  ReconstructLlmDispatchFailureError,
+  readReconstructLlmDispatchFailureError,
+  type ReconstructLlmCallKind,
+} from "./llm-dispatch-failure.js";
+import {
+  assertDispatchFallbackSessionAdmission,
+  assertDispatchFallbackTerminalArtifactContracts,
+  assertDispatchFallbackAttemptOwner,
+  publishDispatchFallbackActivation,
+  publishDispatchFallbackOutcome,
+  projectDispatchFallbackRecordBlock,
+  securePublishDispatchFallbackYaml,
+  type DispatchFallbackActivation,
+  type DispatchFallbackOutcome,
+} from "./dispatch-fallback-artifacts.js";
+import type { DispatchFallbackSettings } from "../discovery/settings-chain.js";
 import {
   writeRegistryVerificationEvidenceArtifact,
   writeRegistryVerificationEvidenceValidationArtifact,
@@ -401,6 +439,13 @@ export interface ReconstructDirectiveAuthor {
    * (silent-stale guard, CG-2 lineage). Absent = no override = base reuseModelIdentity.
    */
   readonly semanticMapSynthesizeModelIdentity?: string;
+  /** Runtime-only dispatch context for sealed semantic-map accounting. */
+  setSemanticMapDispatchContext?(
+    observationId: string,
+    source: "primary" | "fallback",
+  ): void;
+  /** Runtime-owned identity shared by every physical attempt of one node/verify dispatch. */
+  setSemanticMapLogicalDispatchId?(logicalDispatchId: string): void;
   /**
    * P1-C2-A leaf-read: read a PROVISIONAL label for a low-confidence (unstructured) spreadsheet
    * region (§3.2). Optional — an author without it leaves low-confidence regions to the
@@ -931,6 +976,21 @@ export interface RunReconstructParams {
   /** 설계 B: unattended-batch dispatch circuit breaker (default-off; resolved
    * from reconstruct.execution.dispatch_breaker settings by the caller). */
   dispatchBreaker?: DispatchBreakerPolicy;
+  dispatchFallback?: DispatchFallbackSettings;
+  dispatchFallbackRuntime?: ReconstructDispatchFallbackRuntime;
+}
+
+export interface ReconstructDispatchFallbackRuntime {
+  accounting: SemanticMapDispatchAccounting;
+  primary: {
+    synthesize?: ResolvedLlmDispatchCapability;
+    verify?: ResolvedLlmDispatchCapability;
+  };
+  fallback: {
+    synthesize: ResolvedLlmDispatchCapability;
+    verify: ResolvedLlmDispatchCapability;
+    directiveAuthor: ReconstructDirectiveAuthor;
+  };
 }
 
 interface AuthoredArtifactReuseMatch {
@@ -1372,6 +1432,7 @@ async function readYamlDocumentIfPresent<T>(filePath: string): Promise<T | null>
     return await readYamlDocument<T>(filePath);
   } catch (error) {
     if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
     if (isMissingFile(error)) return null;
     throw error;
   }
@@ -1382,6 +1443,7 @@ async function readTextIfPresent(filePath: string): Promise<string | null> {
     return await fs.readFile(filePath, "utf8");
   } catch (error) {
     if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
     if (isMissingFile(error)) return null;
     throw error;
   }
@@ -1393,6 +1455,7 @@ async function exists(filePath: string): Promise<boolean> {
     return true;
   } catch (error) {
     if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
     if (isMissingFile(error)) return false;
     throw error;
   }
@@ -1865,6 +1928,7 @@ export async function runSpreadsheetLeafReadStage(args: {
           outcome = await readLeaf(region);
         } catch (error) {
           if (isGracefulTerminalSignal(error)) throw error;
+          if (readReconstructLlmDispatchFailureError(error)) throw error;
           // The author's readLeafLabels already degrades hard failures to {kind:'failed'}; a throw
           // here is unexpected — degrade defensively (never abort the run for a leaf-read, §11 R9).
           outcome = { kind: "failed", reason: `leaf-read threw: ${(error as Error).message}` };
@@ -2055,9 +2119,12 @@ async function callSemanticMapJsonAuthorWithRetry(args: {
   systemPrompt: string;
   userPayload: unknown;
   maxTokens: number;
+  maxTransportAttempts?: 1 | 3;
+  allowParseRepair?: boolean;
 }): Promise<Record<string, unknown>> {
   let lastError: unknown;
-  for (let attempt = 0; attempt <= 2; attempt += 1) {
+  const maxAttempts = args.maxTransportAttempts ?? 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (attempt > 0) {
       await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 1_000 : 3_000));
     }
@@ -2065,6 +2132,7 @@ async function callSemanticMapJsonAuthorWithRetry(args: {
       return await callJsonAuthor(args);
     } catch (error) {
       if (isGracefulTerminalSignal(error)) throw error;
+      if (readReconstructLlmDispatchFailureError(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       const retryable = !SEMANTIC_MAP_FAIL_FAST_ERROR.test(message) &&
         (isLlmTimeoutError(error) || SEMANTIC_MAP_TRANSPORT_RETRYABLE_ERROR.test(message));
@@ -2352,6 +2420,788 @@ export interface SemanticMapStageResult {
   aggregateFingerprint: string | null;
 }
 
+type SemanticMapPreImageBase = Omit<
+  SemanticEpochPreImage,
+  "layer1_ground_hash" | "child_contributions"
+>;
+
+type SpreadsheetObservation =
+  ReconstructSourceObservationsArtifact["observations"][number];
+
+function semanticMapCensusPath(sessionRoot: string): string {
+  return path.join(sessionRoot, "comprehension", "semantic-map-census.yaml");
+}
+
+function semanticMapSidecarPath(sessionRoot: string): string {
+  return path.join(sessionRoot, "comprehension", "semantic-map.yaml");
+}
+
+function semanticMapResumeValidationPath(sessionRoot: string): string {
+  return path.join(sessionRoot, "semantic-map-resume-validation.yaml");
+}
+
+function semanticMapSpreadsheetObservations(
+  sourceObservations: ReconstructSourceObservationsArtifact,
+): SpreadsheetObservation[] {
+  return sourceObservations.observations
+    .filter((o) => o.target_material_kind === "spreadsheet")
+    .slice()
+    .sort((a, b) => (a.observation_id < b.observation_id ? -1 : a.observation_id > b.observation_id ? 1 : 0));
+}
+
+function semanticMapObservationFingerprint(args: {
+  observation: SpreadsheetObservation;
+  inventory: WorkbookStructuralInventory;
+  preImageBase: SemanticMapPreImageBase;
+  verifyModelIdentity: string;
+  config: SemanticMapStageConfig;
+}): string {
+  const fingerprintPreImage = {
+    content_sha256:
+      typeof args.observation.structural_data.content_sha256 === "string"
+        ? args.observation.structural_data.content_sha256
+        : "",
+    adapter_version: workbookInventoryAdapterVersion(args.inventory) ?? 0,
+    value_tile_config: workbookInventoryValueTileConfig(args.inventory),
+    data_layer_caps: workbookInventoryDataLayerCaps(args.inventory),
+    // The ENTIRE ⓑ' base is folded — a SELECTIVE fold left gate-logic/schema-tool version
+    // changes outside the seed key (silent-stale class, self-caught post-W3): everything that
+    // shapes a judgment must rotate the key (model identity, prompt-contract sha, version knob,
+    // gate config+LOGIC version, schema tool version).
+    pre_image_base: args.preImageBase,
+    verify_model_identity: args.verifyModelIdentity,
+    stage_config: args.config,
+    projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION, // X9 / W3-003
+    // W4 review W4-001 (5th recurrence of the value-shapes-prompt-but-not-key class): the render
+    // budget truncates BOTH prompt surfaces — folded by VALUE, never only via the manual knob.
+    render_char_budget: SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+  };
+  assertGatingKeyExcludesInEpochOutput("semanticMapStageFingerprint", fingerprintPreImage);
+  return sha256Text(stableJson(fingerprintPreImage));
+}
+
+function semanticMapSkipReasonForCurrentObservation(
+  observation: SpreadsheetObservation,
+): "no_workbook_inventory" | "no_value_tiles" | null {
+  const inventory = observation.structural_data.workbook_inventory as
+    | WorkbookStructuralInventory
+    | undefined;
+  if (!inventory) return "no_workbook_inventory";
+  const tileSheets = inventory.segmented_value_tiles;
+  return !tileSheets || tileSheets.length === 0 ? "no_value_tiles" : null;
+}
+
+function resumeValidationViolation(args: {
+  code: ReconstructPostSeedValidationViolation["code"];
+  message: string;
+  subjectId?: string | null;
+}): ReconstructPostSeedValidationViolation {
+  return {
+    code: args.code,
+    message: args.message,
+    subject_id: args.subjectId ?? null,
+  };
+}
+
+function duplicateIds(ids: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) duplicates.add(id);
+    seen.add(id);
+  }
+  return [...duplicates].sort();
+}
+
+function isSemanticMapCensus(value: unknown): value is ReconstructSemanticMapCensus {
+  const candidate = value as ReconstructSemanticMapCensus | null;
+  return Boolean(
+    candidate &&
+      typeof candidate === "object" &&
+      candidate.schema_version === "1" &&
+      Array.isArray(candidate.by_observation),
+  );
+}
+
+function isSemanticMapSidecar(value: unknown): value is ReconstructSemanticMapSidecar {
+  const candidate = value as ReconstructSemanticMapSidecar | null;
+  return Boolean(
+    candidate &&
+      typeof candidate === "object" &&
+      candidate.schema_version === "1" &&
+      Array.isArray(candidate.observations),
+  );
+}
+
+function projectionIsRenderable(projection: SemanticSeedProjection): boolean {
+  try {
+    renderSemanticMapProjection(
+      projection,
+      SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
+      true,
+    );
+    return true;
+  } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
+    return false;
+  }
+}
+
+interface SemanticMapRecoveryContext {
+  validationPath: string;
+  dispatchIncompletePath: string;
+  backupRefs: ReconstructSemanticMapResumeValidationArtifact["backup_refs"];
+  retainedRowsByObservationId: Map<string, ReconstructSemanticMapCensusObservation>;
+  retainedSidecarByObservationId: Map<string, ReconstructSemanticMapSidecarObservation>;
+  retainedCompletedItemIds: string[];
+  retainedDeadLetter: DispatchDeadLetterEntry[];
+  incompleteItemIds: string[];
+  priorRetryTotals: ReconstructSemanticMapResumeValidationArtifact["prior_retry_totals"];
+}
+
+function buildSemanticMapResumeValidationArtifact(args: {
+  sessionId: string;
+  resumeMode: "fresh" | "reuse_existing_authored_artifacts";
+  dispatchBreakerEnabled: boolean;
+  semanticMapCapabilityPresent: boolean;
+  currentObservationIds: string[];
+  observationsById: Map<string, SpreadsheetObservation>;
+  dispatchIncompleteRef: string | null;
+  dispatchIncomplete: DispatchIncompleteArtifact | null;
+  semanticMapCensusRef: string | null;
+  semanticMapCensus: ReconstructSemanticMapCensus | null;
+  semanticMapSidecarRef: string | null;
+  semanticMapSidecar: ReconstructSemanticMapSidecar | null;
+  preImageBase: SemanticMapPreImageBase;
+  verifyModelIdentity: string;
+  config: SemanticMapStageConfig;
+  backupRefs?: Partial<ReconstructSemanticMapResumeValidationArtifact["backup_refs"]>;
+}): {
+  artifact: ReconstructSemanticMapResumeValidationArtifact;
+  retainedRowsByObservationId: Map<string, ReconstructSemanticMapCensusObservation>;
+  retainedSidecarByObservationId: Map<string, ReconstructSemanticMapSidecarObservation>;
+  retainedCompletedItemIds: string[];
+  retainedDeadLetter: DispatchDeadLetterEntry[];
+  incompleteItemIds: string[];
+} {
+  const violations: ReconstructPostSeedValidationViolation[] = [];
+  const dispatch = args.dispatchIncomplete;
+  const currentSet = new Set(args.currentObservationIds);
+  const completed = dispatch?.completed_item_ids ?? [];
+  const deadLetter = dispatch?.dead_letter ?? [];
+  const deadLetterIds = deadLetter.map((entry) => entry.item_id);
+  const incomplete = dispatch?.incomplete_item_ids ?? [];
+  const planned = [...completed, ...deadLetterIds, ...incomplete];
+  const plannedSet = new Set(planned);
+  const duplicateItemIds = duplicateIds(planned);
+  const unknownItemIds = planned
+    .filter((itemId) => !currentSet.has(itemId))
+    .filter((itemId, index, arr) => arr.indexOf(itemId) === index)
+    .sort();
+  const completedSet = new Set(completed);
+  const deadLetterSet = new Set(deadLetterIds);
+  const incompleteSet = new Set(incomplete);
+  const overlappingItemIds = args.currentObservationIds.filter((itemId) =>
+    Number(completedSet.has(itemId)) +
+      Number(deadLetterSet.has(itemId)) +
+      Number(incompleteSet.has(itemId)) > 1
+  );
+  const exactCurrentSetMatch =
+    plannedSet.size === currentSet.size &&
+    args.currentObservationIds.every((itemId) => plannedSet.has(itemId));
+
+  if (!dispatch) {
+    violations.push(resumeValidationViolation({
+      code: "missing_required_ref",
+      message: "semantic-map resume validation requires dispatch-incomplete.yaml when it is evaluated",
+      subjectId: "dispatch-incomplete.yaml",
+    }));
+  } else {
+    if (dispatch.pipeline !== "reconstruct" || dispatch.batch_label !== "semantic-map") {
+      violations.push(resumeValidationViolation({
+        code: "source_ref_mismatch",
+        message:
+          `dispatch-incomplete.yaml belongs to ${dispatch.pipeline}/${dispatch.batch_label}, not reconstruct/semantic-map`,
+        subjectId: "dispatch-incomplete.yaml",
+      }));
+    }
+    if (duplicateItemIds.length > 0) {
+      violations.push(resumeValidationViolation({
+        code: "duplicate_id",
+        message: `dispatch partition repeats item ids: ${duplicateItemIds.join(",")}`,
+        subjectId: "dispatch-incomplete.yaml",
+      }));
+    }
+    if (unknownItemIds.length > 0) {
+      violations.push(resumeValidationViolation({
+        code: "unknown_id",
+        message: `dispatch partition contains ids outside current spreadsheet observations: ${unknownItemIds.join(",")}`,
+        subjectId: "dispatch-incomplete.yaml",
+      }));
+    }
+    if (overlappingItemIds.length > 0) {
+      violations.push(resumeValidationViolation({
+        code: "conflicting_state",
+        message: `dispatch partition overlaps completed/dead-letter/incomplete sets: ${overlappingItemIds.join(",")}`,
+        subjectId: "dispatch-incomplete.yaml",
+      }));
+    }
+    if (!exactCurrentSetMatch) {
+      violations.push(resumeValidationViolation({
+        code: "source_ref_mismatch",
+        message:
+          "dispatch partition must exactly match the current sorted spreadsheet observation id set",
+        subjectId: "dispatch-incomplete.yaml",
+      }));
+    }
+    if (!dispatch.breaker.tripped && incomplete.length > 0) {
+      violations.push(resumeValidationViolation({
+        code: "conflicting_state",
+        message:
+          "non-tripped semantic-map dispatch artifacts must not carry incomplete_item_ids",
+        subjectId: "dispatch-incomplete.yaml",
+      }));
+    }
+    if (
+      dispatch.breaker.tripped &&
+      (args.resumeMode !== "reuse_existing_authored_artifacts" ||
+        !args.dispatchBreakerEnabled)
+    ) {
+      violations.push(resumeValidationViolation({
+        code: "conflicting_state",
+        message:
+          "tripped semantic-map recovery requires resumeMode=reuse_existing_authored_artifacts and dispatch_breaker.enabled=true",
+        subjectId: "dispatch-incomplete.yaml",
+      }));
+    }
+    if (dispatch.breaker.tripped && !args.semanticMapCapabilityPresent) {
+      violations.push(resumeValidationViolation({
+        code: "conflicting_state",
+        message:
+          "tripped semantic-map recovery requires the synthesizeSemanticMapNode/verifySemanticMapBoundary capability pair",
+        subjectId: "dispatch-incomplete.yaml",
+      }));
+    }
+  }
+
+  const recoveryAttempted = Boolean(
+    dispatch?.breaker.tripped &&
+      args.resumeMode === "reuse_existing_authored_artifacts" &&
+      args.dispatchBreakerEnabled &&
+      args.semanticMapCapabilityPresent,
+  );
+  const retainedItemIds = recoveryAttempted
+    ? [...completed, ...deadLetterIds]
+      .filter((itemId) => currentSet.has(itemId))
+      .filter((itemId, index, arr) => arr.indexOf(itemId) === index)
+      .sort((a, b) => args.currentObservationIds.indexOf(a) - args.currentObservationIds.indexOf(b))
+    : [];
+  const retainedSet = new Set(retainedItemIds);
+  const discardedItemIds = recoveryAttempted
+    ? incomplete
+      .filter((itemId) => currentSet.has(itemId))
+      .filter((itemId, index, arr) => arr.indexOf(itemId) === index)
+      .sort((a, b) => args.currentObservationIds.indexOf(a) - args.currentObservationIds.indexOf(b))
+    : [];
+  const discardedSet = new Set(discardedItemIds);
+
+  const censusRows = args.semanticMapCensus?.by_observation ?? [];
+  const censusRowsById = new Map<string, ReconstructSemanticMapCensusObservation>();
+  for (const row of censusRows) {
+    if (censusRowsById.has(row.observation_id)) {
+      violations.push(resumeValidationViolation({
+        code: "duplicate_id",
+        message: `prior semantic-map census repeats observation_id ${row.observation_id}`,
+        subjectId: row.observation_id,
+      }));
+    }
+    censusRowsById.set(row.observation_id, row);
+  }
+  const incompleteCensusIds = censusRows
+    .map((row) => row.observation_id)
+    .filter((id) => discardedSet.has(id))
+    .sort();
+  const unknownCensusIds = censusRows
+    .map((row) => row.observation_id)
+    .filter((id) => !currentSet.has(id))
+    .filter((id, index, arr) => arr.indexOf(id) === index)
+    .sort();
+  const extraCensusIds = recoveryAttempted
+    ? censusRows
+      .map((row) => row.observation_id)
+      .filter((id) =>
+        currentSet.has(id) && !retainedSet.has(id) && !discardedSet.has(id)
+      )
+      .filter((id, index, arr) => arr.indexOf(id) === index)
+      .sort()
+    : [];
+  const missingRetainedIds = retainedItemIds.filter((id) => !censusRowsById.has(id));
+  const nonReusableRetainedIds: string[] = [];
+  const fingerprintMismatchIds: string[] = [];
+  const retainedRowsByObservationId = new Map<string, ReconstructSemanticMapCensusObservation>();
+
+  if (recoveryAttempted && (!args.semanticMapCensus || !args.semanticMapSidecar)) {
+    violations.push(resumeValidationViolation({
+      code: "missing_required_ref",
+      message:
+        "semantic-map recovery requires prior semantic-map-census.yaml and semantic-map.yaml",
+      subjectId: "semantic-map artifacts",
+    }));
+  }
+
+  for (const id of retainedItemIds) {
+    const row = censusRowsById.get(id);
+    const observation = args.observationsById.get(id);
+    if (!row || !observation) continue;
+    if (row.skip_reason === "deterministic_phase_failed") {
+      nonReusableRetainedIds.push(id);
+      continue;
+    }
+    if (row.fingerprint === null) {
+      const currentSkipReason = semanticMapSkipReasonForCurrentObservation(observation);
+      if (
+        row.skip_reason !== "no_workbook_inventory" &&
+        row.skip_reason !== "no_value_tiles"
+      ) {
+        nonReusableRetainedIds.push(id);
+        continue;
+      }
+      if (row.skip_reason !== currentSkipReason) {
+        fingerprintMismatchIds.push(id);
+        continue;
+      }
+      retainedRowsByObservationId.set(id, row);
+      continue;
+    }
+    const inventory = observation.structural_data.workbook_inventory as
+      | WorkbookStructuralInventory
+      | undefined;
+    if (!inventory) {
+      fingerprintMismatchIds.push(id);
+      continue;
+    }
+    const currentFingerprint = semanticMapObservationFingerprint({
+      observation,
+      inventory,
+      preImageBase: args.preImageBase,
+      verifyModelIdentity: args.verifyModelIdentity,
+      config: args.config,
+    });
+    if (row.fingerprint !== currentFingerprint) {
+      fingerprintMismatchIds.push(id);
+      continue;
+    }
+    retainedRowsByObservationId.set(id, row);
+  }
+
+  if (missingRetainedIds.length > 0) {
+    violations.push(resumeValidationViolation({
+      code: "missing_required_ref",
+      message: `prior semantic-map census is missing retained ids: ${missingRetainedIds.join(",")}`,
+      subjectId: "semantic-map-census.yaml",
+    }));
+  }
+  if (nonReusableRetainedIds.length > 0) {
+    violations.push(resumeValidationViolation({
+      code: "conflicting_state",
+      message: `prior semantic-map census contains non-reusable retained ids: ${nonReusableRetainedIds.join(",")}`,
+      subjectId: "semantic-map-census.yaml",
+    }));
+  }
+  if (fingerprintMismatchIds.length > 0) {
+    violations.push(resumeValidationViolation({
+      code: "source_ref_mismatch",
+      message: `prior semantic-map census retained fingerprints/skip reasons do not match current observations: ${fingerprintMismatchIds.join(",")}`,
+      subjectId: "semantic-map-census.yaml",
+    }));
+  }
+  if (unknownCensusIds.length > 0) {
+    violations.push(resumeValidationViolation({
+      code: "unknown_id",
+      message: `prior semantic-map census contains ids outside current spreadsheet observations: ${unknownCensusIds.join(",")}`,
+      subjectId: "semantic-map-census.yaml",
+    }));
+  }
+  if (extraCensusIds.length > 0) {
+    violations.push(resumeValidationViolation({
+      code: "conflicting_state",
+      message: `prior semantic-map census contains rows outside the dispatch partition: ${extraCensusIds.join(",")}`,
+      subjectId: "semantic-map-census.yaml",
+    }));
+  }
+
+  const sidecarRows = args.semanticMapSidecar?.observations ?? [];
+  const sidecarRowsById = new Map<string, ReconstructSemanticMapSidecarObservation>();
+  let projectionRenderable = true;
+  let nodeEpochsShapeValid = true;
+  for (const row of sidecarRows) {
+    if (sidecarRowsById.has(row.observation_id)) {
+      violations.push(resumeValidationViolation({
+        code: "duplicate_id",
+        message: `prior semantic-map sidecar repeats observation_id ${row.observation_id}`,
+        subjectId: row.observation_id,
+      }));
+    }
+    sidecarRowsById.set(row.observation_id, row);
+    if (!projectionIsRenderable(row.projection)) projectionRenderable = false;
+    if (
+      !Array.isArray(row.node_epochs) ||
+      row.node_epochs.some((entry) =>
+        typeof entry.key !== "string" ||
+        typeof entry.subtree_epoch_contribution !== "string"
+      )
+    ) {
+      nodeEpochsShapeValid = false;
+    }
+  }
+  const retainedSidecarByObservationId =
+    new Map<string, ReconstructSemanticMapSidecarObservation>();
+  const retainedSidecarIds: string[] = [];
+  const missingMapPresentSidecarIds: string[] = [];
+  const incompleteSidecarIds = sidecarRows
+    .map((row) => row.observation_id)
+    .filter((id) => discardedSet.has(id))
+    .sort();
+  const unknownSidecarIds = sidecarRows
+    .map((row) => row.observation_id)
+    .filter((id) => !currentSet.has(id))
+    .filter((id, index, arr) => arr.indexOf(id) === index)
+    .sort();
+  const expectedSidecarIds = new Set<string>();
+  for (const id of retainedItemIds) {
+    const row = retainedRowsByObservationId.get(id);
+    if (!row?.map_present) continue;
+    expectedSidecarIds.add(id);
+    const sidecarRow = sidecarRowsById.get(id);
+    if (!sidecarRow) {
+      missingMapPresentSidecarIds.push(id);
+      continue;
+    }
+    retainedSidecarIds.push(id);
+    retainedSidecarByObservationId.set(id, sidecarRow);
+  }
+  const extraSidecarIds = sidecarRows
+    .map((row) => row.observation_id)
+    .filter((id) => retainedSet.has(id) && !expectedSidecarIds.has(id))
+    .sort();
+
+  if (missingMapPresentSidecarIds.length > 0) {
+    violations.push(resumeValidationViolation({
+      code: "missing_required_ref",
+      message: `prior semantic-map sidecar is missing retained map_present ids: ${missingMapPresentSidecarIds.join(",")}`,
+      subjectId: "semantic-map.yaml",
+    }));
+  }
+  if (extraSidecarIds.length > 0) {
+    violations.push(resumeValidationViolation({
+      code: "conflicting_state",
+      message: `prior semantic-map sidecar has rows for retained map_absent ids: ${extraSidecarIds.join(",")}`,
+      subjectId: "semantic-map.yaml",
+    }));
+  }
+  if (unknownSidecarIds.length > 0) {
+    violations.push(resumeValidationViolation({
+      code: "unknown_id",
+      message: `prior semantic-map sidecar contains ids outside current spreadsheet observations: ${unknownSidecarIds.join(",")}`,
+      subjectId: "semantic-map.yaml",
+    }));
+  }
+  if (!projectionRenderable) {
+    violations.push(resumeValidationViolation({
+      code: "schema_shape_invalid",
+      message: "prior semantic-map sidecar contains a projection that cannot render through the canonical renderer",
+      subjectId: "semantic-map.yaml",
+    }));
+  }
+  if (!nodeEpochsShapeValid) {
+    violations.push(resumeValidationViolation({
+      code: "schema_shape_invalid",
+      message: "prior semantic-map sidecar node_epochs entries must contain string key and subtree_epoch_contribution fields",
+      subjectId: "semantic-map.yaml",
+    }));
+  }
+
+  const censusCompletePartition = Boolean(
+    args.semanticMapCensus &&
+      args.semanticMapCensus.observations_total === censusRows.length &&
+      args.semanticMapCensus.observations_total ===
+        args.semanticMapCensus.observations_map_present +
+          args.semanticMapCensus.observations_map_absent,
+  );
+  if (args.semanticMapCensus && !censusCompletePartition) {
+    violations.push(resumeValidationViolation({
+      code: "conflicting_state",
+      message: "prior semantic-map census totals do not form a complete partition",
+      subjectId: "semantic-map-census.yaml",
+    }));
+  }
+
+  const valid = violations.length === 0;
+  const activationDecision: ReconstructSemanticMapResumeValidationArtifact["activation_decision"] =
+    valid && recoveryAttempted
+      ? "recovery_activated"
+      : valid
+        ? "normal_full_stage"
+        : "recovery_rejected";
+  const artifact: ReconstructSemanticMapResumeValidationArtifact = {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    dispatch_incomplete_ref: args.dispatchIncompleteRef,
+    semantic_map_census_ref: args.semanticMapCensusRef,
+    semantic_map_sidecar_ref: args.semanticMapSidecarRef,
+    validation_status: valid ? "valid" : "invalid",
+    recovery_attempted: valid && recoveryAttempted,
+    activation_decision: activationDecision,
+    resume_mode: args.resumeMode,
+    dispatch_breaker_enabled: args.dispatchBreakerEnabled,
+    pipeline: "reconstruct",
+    batch_label: "semantic-map",
+    current_observation_ids: args.currentObservationIds,
+    retained_item_ids: retainedItemIds,
+    discarded_item_ids: discardedItemIds,
+    prior_retry_totals: {
+      breaker_retry_synthesize_calls:
+        args.semanticMapCensus?.breaker_retry_synthesize_calls ?? null,
+      breaker_retry_verify_calls:
+        args.semanticMapCensus?.breaker_retry_verify_calls ?? null,
+    },
+    prior_refs: {
+      dispatch_incomplete: args.dispatchIncompleteRef,
+      semantic_map_census: args.semanticMapCensusRef,
+      semantic_map_sidecar: args.semanticMapSidecarRef,
+    },
+    backup_refs: {
+      dispatch_incomplete: args.backupRefs?.dispatch_incomplete ?? null,
+      semantic_map_census: args.backupRefs?.semantic_map_census ?? null,
+      semantic_map_sidecar: args.backupRefs?.semantic_map_sidecar ?? null,
+    },
+    partition_validation: {
+      planned_item_ids: planned,
+      completed_item_ids: completed,
+      dead_letter_item_ids: deadLetterIds,
+      incomplete_item_ids: incomplete,
+      unknown_item_ids: unknownItemIds,
+      duplicate_item_ids: duplicateItemIds,
+      overlapping_item_ids: overlappingItemIds,
+      exact_current_set_match: exactCurrentSetMatch,
+    },
+    census_validation: {
+      retained_census_ids: retainedItemIds.filter((id) => censusRowsById.has(id)),
+      incomplete_census_ids: incompleteCensusIds,
+      unknown_census_ids: unknownCensusIds,
+      extra_census_ids: extraCensusIds,
+      missing_retained_ids: missingRetainedIds,
+      non_reusable_retained_ids: nonReusableRetainedIds,
+      fingerprint_mismatch_ids: fingerprintMismatchIds,
+      census_complete_partition: censusCompletePartition,
+    },
+    sidecar_validation: {
+      retained_sidecar_ids: retainedSidecarIds,
+      incomplete_sidecar_ids: incompleteSidecarIds,
+      unknown_sidecar_ids: unknownSidecarIds,
+      missing_map_present_sidecar_ids: missingMapPresentSidecarIds,
+      extra_sidecar_ids: extraSidecarIds,
+      projection_renderable: projectionRenderable,
+      node_epochs_shape_valid: nodeEpochsShapeValid,
+    },
+    validation_results: valid
+      ? ["semantic_map_resume_validation_valid"]
+      : ["semantic_map_resume_validation_invalid"],
+    asserted_obligation_ids: [],
+    violations,
+  };
+  return {
+    artifact,
+    retainedRowsByObservationId,
+    retainedSidecarByObservationId,
+    retainedCompletedItemIds: completed.filter((id) => retainedSet.has(id)),
+    retainedDeadLetter: deadLetter.filter((entry) => retainedSet.has(entry.item_id)),
+    incompleteItemIds: incomplete.filter((id) => currentSet.has(id)),
+  };
+}
+
+async function readResumeYamlIfPresent<T>(
+  filePath: string,
+): Promise<{ value: T | null; error: unknown | null }> {
+  try {
+    return { value: await readYamlDocumentIfPresent<T>(filePath), error: null };
+  } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
+    return { value: null, error };
+  }
+}
+
+async function backupSemanticMapRecoveryInputs(args: {
+  sessionRoot: string;
+  attemptId: string;
+  dispatchIncompletePath: string;
+  censusPath: string;
+  sidecarPath: string;
+}): Promise<ReconstructSemanticMapResumeValidationArtifact["backup_refs"]> {
+  const backupDir = path.join(
+    args.sessionRoot,
+    "comprehension",
+    "recovery",
+    args.attemptId,
+  );
+  await fs.mkdir(backupDir, { recursive: true });
+  const copyIfPresent = async (
+    sourcePath: string,
+    basename: string,
+  ): Promise<string | null> => {
+    if (!(await exists(sourcePath))) return null;
+    const targetPath = path.join(backupDir, basename);
+    await fs.copyFile(sourcePath, targetPath);
+    return targetPath;
+  };
+  return {
+    dispatch_incomplete: await copyIfPresent(
+      args.dispatchIncompletePath,
+      "dispatch-incomplete.yaml",
+    ),
+    semantic_map_census: await copyIfPresent(
+      args.censusPath,
+      "semantic-map-census.yaml",
+    ),
+    semantic_map_sidecar: await copyIfPresent(
+      args.sidecarPath,
+      "semantic-map.yaml",
+    ),
+  };
+}
+
+export async function prepareSemanticMapResumeContext(args: {
+  sessionId: string;
+  sessionRoot: string;
+  attemptId: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  resumeMode: "fresh" | "reuse_existing_authored_artifacts";
+  dispatchBreaker?: DispatchBreakerPolicy;
+  semanticMapCapabilityPresent?: boolean;
+  preImageBase: SemanticMapPreImageBase;
+  verifyModelIdentity: string;
+  config: SemanticMapStageConfig;
+}): Promise<SemanticMapRecoveryContext | null> {
+  const dispatchPath = dispatchIncompleteArtifactPath(args.sessionRoot);
+  if (!(await exists(dispatchPath))) return null;
+
+  const validationPath = semanticMapResumeValidationPath(args.sessionRoot);
+  const censusPath = semanticMapCensusPath(args.sessionRoot);
+  const sidecarPath = semanticMapSidecarPath(args.sessionRoot);
+  const spreadsheetObservations = semanticMapSpreadsheetObservations(args.sourceObservations);
+  const currentObservationIds = spreadsheetObservations.map((observation) =>
+    observation.observation_id
+  );
+  const observationsById = new Map(
+    spreadsheetObservations.map((observation) => [
+      observation.observation_id,
+      observation,
+    ]),
+  );
+  const dispatchRead =
+    await readResumeYamlIfPresent<DispatchIncompleteArtifact>(dispatchPath);
+  const censusRead =
+    await readResumeYamlIfPresent<ReconstructSemanticMapCensus>(censusPath);
+  const sidecarRead =
+    await readResumeYamlIfPresent<ReconstructSemanticMapSidecar>(sidecarPath);
+
+  const parseViolations: ReconstructPostSeedValidationViolation[] = [];
+  const dispatch = isDispatchIncompleteArtifact(dispatchRead.value)
+    ? dispatchRead.value
+    : null;
+  if (dispatchRead.error || (dispatchRead.value !== null && !dispatch)) {
+    parseViolations.push(resumeValidationViolation({
+      code: "schema_shape_invalid",
+      message: `dispatch-incomplete.yaml is not a readable schema_version=1 dispatch artifact: ${
+        dispatchRead.error instanceof Error ? dispatchRead.error.message : "shape mismatch"
+      }`,
+      subjectId: "dispatch-incomplete.yaml",
+    }));
+  }
+  const census = isSemanticMapCensus(censusRead.value) ? censusRead.value : null;
+  if (censusRead.error || (censusRead.value !== null && !census)) {
+    parseViolations.push(resumeValidationViolation({
+      code: "schema_shape_invalid",
+      message: `semantic-map-census.yaml is not a readable schema_version=1 census artifact: ${
+        censusRead.error instanceof Error ? censusRead.error.message : "shape mismatch"
+      }`,
+      subjectId: "semantic-map-census.yaml",
+    }));
+  }
+  const sidecar = isSemanticMapSidecar(sidecarRead.value) ? sidecarRead.value : null;
+  if (sidecarRead.error || (sidecarRead.value !== null && !sidecar)) {
+    parseViolations.push(resumeValidationViolation({
+      code: "schema_shape_invalid",
+      message: `semantic-map.yaml is not a readable schema_version=1 sidecar artifact: ${
+        sidecarRead.error instanceof Error ? sidecarRead.error.message : "shape mismatch"
+      }`,
+      subjectId: "semantic-map.yaml",
+    }));
+  }
+
+  const backupRefs = parseViolations.length === 0
+    ? await backupSemanticMapRecoveryInputs({
+      sessionRoot: args.sessionRoot,
+      attemptId: args.attemptId,
+      dispatchIncompletePath: dispatchPath,
+      censusPath,
+      sidecarPath,
+    })
+    : {
+      dispatch_incomplete: null,
+      semantic_map_census: null,
+      semantic_map_sidecar: null,
+    };
+  const { artifact, ...context } = buildSemanticMapResumeValidationArtifact({
+    sessionId: args.sessionId,
+    resumeMode: args.resumeMode,
+    dispatchBreakerEnabled: args.dispatchBreaker?.enabled === true,
+    semanticMapCapabilityPresent: args.semanticMapCapabilityPresent ?? true,
+    currentObservationIds,
+    observationsById,
+    dispatchIncompleteRef: dispatchPath,
+    dispatchIncomplete: dispatch,
+    semanticMapCensusRef: censusRead.value !== null ? censusPath : null,
+    semanticMapCensus: census,
+    semanticMapSidecarRef: sidecarRead.value !== null ? sidecarPath : null,
+    semanticMapSidecar: sidecar,
+    preImageBase: args.preImageBase,
+    verifyModelIdentity: args.verifyModelIdentity,
+    config: args.config,
+    backupRefs,
+  });
+  artifact.violations.push(...parseViolations);
+  if (parseViolations.length > 0) {
+    artifact.validation_status = "invalid";
+    artifact.activation_decision = "recovery_rejected";
+    artifact.recovery_attempted = false;
+    artifact.validation_results = ["semantic_map_resume_validation_invalid"];
+  }
+  await writeYamlDocument(validationPath, artifact);
+  if (artifact.validation_status !== "valid") {
+    throw new Error(
+      `semantic-map resume validation failed at ${validationPath}: ${
+        artifact.violations.map((violation) => violation.message).join("; ")
+      }`,
+    );
+  }
+  if (!artifact.recovery_attempted) return null;
+  return {
+    validationPath,
+    dispatchIncompletePath: dispatchPath,
+    backupRefs,
+    retainedRowsByObservationId: context.retainedRowsByObservationId,
+    retainedSidecarByObservationId: context.retainedSidecarByObservationId,
+    retainedCompletedItemIds: context.retainedCompletedItemIds,
+    retainedDeadLetter: context.retainedDeadLetter,
+    incompleteItemIds: context.incompleteItemIds,
+    priorRetryTotals: artifact.prior_retry_totals,
+  };
+}
+
 /**
  * W2 semantic_map stage. Default-off: an author without the capability PAIR returns the skip result
  * (no census — "never ran" stays durably distinct from "ran and produced nothing"); a one-sided
@@ -2359,11 +3209,12 @@ export interface SemanticMapStageResult {
  * sidecar are ALWAYS written when the stage runs (leaf_read f1a3c1b pattern). The census/sidecar
  * carry deterministic data only; the reuse fingerprint is W3's fold.
  *
- * Ledger note (ultracode audit — stale-comment convergence): the stage IS registered as a
- * pipeline-execution-ledger unit (descriptive audit row; the live run never consumes the ledger),
- * while its REUSE authority stays the fingerprint folded into the seed key — the stage re-runs
- * each run like leaf_read. The ledger's pre-existing `unitKind: "semantic_map"`
- * (claim_realization's KIND) is a different vocabulary — a name collision, not a relationship.
+ * Ledger note: the stage IS registered as a pipeline-execution-ledger unit (descriptive audit row;
+ * the live run never consumes the ledger). Reuse remains fingerprint-based for authored seed
+ * artifacts, while breaker recovery is stage-local: dispatch-incomplete.yaml supplies the frontier
+ * and semantic-map-resume-validation.yaml validates retained census/sidecar rows before use. The
+ * ledger's pre-existing `unitKind: "semantic_map"` (claim_realization's KIND) is a different
+ * vocabulary — a name collision, not a relationship.
  */
 /** 설계 B 규칙 4·5: the batch's end state (completed / dead-letter /
  * incomplete) persists at a fixed session-root path (single-sourced in the
@@ -2375,18 +3226,37 @@ async function persistDispatchIncompleteArtifact(args: {
   sessionRoot: string;
   batchLabel: string;
   plannedItemIds: readonly string[];
-  state: DispatchBreakerState;
+  state?: DispatchBreakerState;
+  completedItemIds?: readonly string[];
+  deadLetter?: readonly DispatchDeadLetterEntry[];
+  breaker?: DispatchIncompleteArtifact["breaker"];
 }): Promise<string> {
   const artifactPath = dispatchIncompleteArtifactPath(args.sessionRoot);
-  await writeYamlDocument(
-    artifactPath,
-    buildDispatchIncompleteArtifact({
+  const artifact = args.state
+    ? buildDispatchIncompleteArtifact({
       pipeline: "reconstruct",
       batchLabel: args.batchLabel,
       createdAt: isoNow(),
       plannedItemIds: args.plannedItemIds,
       state: args.state,
-    }),
+    })
+    : buildDispatchIncompleteArtifactFromPartition({
+      pipeline: "reconstruct",
+      batchLabel: args.batchLabel,
+      createdAt: isoNow(),
+      plannedItemIds: args.plannedItemIds,
+      completedItemIds: args.completedItemIds ?? [],
+      deadLetter: args.deadLetter ?? [],
+      breaker: args.breaker ?? {
+        tripped: false,
+        failure_class: null,
+        consecutive_item_count: null,
+        threshold: 0,
+      },
+    });
+  await writeYamlDocument(
+    artifactPath,
+    artifact,
   );
   return artifactPath;
 }
@@ -2406,6 +3276,10 @@ export async function runSemanticMapStage(args: {
    * on purpose — the stage config folds into the reuse fingerprint, and the
    * breaker policy must never rotate reuse keys. */
   dispatchBreaker?: DispatchBreakerPolicy;
+  recoveryContext?: SemanticMapRecoveryContext | null;
+  executionSource?: "primary" | "fallback";
+  priorDispatchSpend?: { synthesize: number; verify: number };
+  captureStructuredContributors?: boolean;
 }): Promise<SemanticMapStageResult> {
   if (resolveSemanticMapCapability(args.directiveAuthor) === "absent") {
     return { projectionByObservation: new Map(), census: null, censusPath: null, sidecarPath: null, aggregateFingerprint: null };
@@ -2414,6 +3288,10 @@ export async function runSemanticMapStage(args: {
   const rawSynthesizeNode = args.directiveAuthor.synthesizeSemanticMapNode!.bind(args.directiveAuthor);
   const rawVerifyBoundary = args.directiveAuthor.verifySemanticMapBoundary!.bind(args.directiveAuthor);
   const cfg = args.config;
+  const priorDispatchSpend = args.priorDispatchSpend ?? {
+    synthesize: 0,
+    verify: 0,
+  };
   // 설계 B breaker (opt-in): 규칙 1 — systemic-class 실패는 캡된 지수 backoff의
   // per-item 재시도를 소진한 뒤에만 관찰 단위(final outcome)로 카운트된다.
   const breakerState =
@@ -2431,9 +3309,15 @@ export async function runSemanticMapStage(args: {
   // observations without it record as skipped (no liveness claim).
   let observationDispatchSucceeded = false;
   let breakerTrip: DispatchBreakerTripState | null = null;
+  const breakerStructuredContributors = new Map<
+    string,
+    StructuredDispatchFailureEvidence
+  >();
   const guardedDispatch = breakerState
     ? <T>(kind: "synthesize" | "verify", label: string, dispatch: () => Promise<T>): Promise<T> =>
-        runWithDispatchBackoff({
+        {
+          args.directiveAuthor.setSemanticMapLogicalDispatchId?.(crypto.randomUUID());
+          return runWithDispatchBackoff({
           label,
           policy: breakerState.policy,
           dispatch,
@@ -2444,7 +3328,8 @@ export async function runSemanticMapStage(args: {
         }).then((value) => {
           observationDispatchSucceeded = true;
           return value;
-        })
+          });
+        }
     : null;
   // OFF(기본) 경로는 raw author bind를 그대로 쓴다 — 래핑 비용 0.
   const synthesizeNode: typeof rawSynthesizeNode = guardedDispatch
@@ -2481,6 +3366,36 @@ export async function runSemanticMapStage(args: {
   };
   const sidecarObservations: ReconstructSemanticMapSidecarObservation[] = [];
   const perObservationFingerprints: { observation_id: string; fingerprint: string }[] = [];
+  const processedObservationIds = new Set<string>();
+
+  const appendRetainedObservation = (observationId: string): boolean => {
+    const retainedRow = args.recoveryContext?.retainedRowsByObservationId.get(observationId);
+    if (!retainedRow) return false;
+    const row = structuredClone(retainedRow);
+    census.observations_total += 1;
+    if (row.map_present) census.observations_map_present += 1;
+    else census.observations_map_absent += 1;
+    for (const column of row.columns) {
+      census.synthesize_calls_total += column.synthesize_calls;
+      census.verify_calls_total += column.verify_calls;
+    }
+    census.by_observation.push(row);
+    if (row.fingerprint !== null) {
+      perObservationFingerprints.push({
+        observation_id: row.observation_id,
+        fingerprint: row.fingerprint,
+      });
+    }
+    const sidecarRow =
+      args.recoveryContext?.retainedSidecarByObservationId.get(observationId);
+    if (sidecarRow) {
+      const retainedSidecar = structuredClone(sidecarRow);
+      sidecarObservations.push(retainedSidecar);
+      projectionByObservation.set(observationId, retainedSidecar.projection);
+    }
+    processedObservationIds.add(observationId);
+    return true;
+  };
 
   // ALWAYS persist census + sidecar when the stage ran (f1a3c1b honest-signal pattern): a total
   // semantic-map failure is a durable artifact, never silently absent. Doubles as the W3 manifest
@@ -2517,6 +3432,7 @@ export async function runSemanticMapStage(args: {
       fingerprint: null,
       columns: [],
     });
+    processedObservationIds.add(observationId);
     // Breaker bookkeeping: a skipped observation owes no dispatch — completed
     // for recovery-set purposes, but it proves nothing about the provider
     // lane (recordItemSkipped, NOT recordItemSuccess: 성공 취급은 계통 streak을
@@ -2542,6 +3458,13 @@ export async function runSemanticMapStage(args: {
       );
     }
     seenObservationIds.add(observation.observation_id);
+    args.directiveAuthor.setSemanticMapDispatchContext?.(
+      observation.observation_id,
+      args.executionSource ?? "primary",
+    );
+    if (appendRetainedObservation(observation.observation_id)) {
+      continue;
+    }
     const inventory = observation.structural_data.workbook_inventory as
       | WorkbookStructuralInventory
       | undefined;
@@ -2569,28 +3492,13 @@ export async function runSemanticMapStage(args: {
     // Folds: inventory identity (ⓐ) + BOTH model identities (F4) + prompt-contract sha (F6, via
     // preImageBase) + version knob + the WHOLE stage config (F2 topology · X7 caps · X9 projection
     // caps). VALUE only — never the map instance (denylist-guarded).
-    const fingerprintPreImage = {
-      content_sha256:
-        typeof observation.structural_data.content_sha256 === "string"
-          ? observation.structural_data.content_sha256
-          : "",
-      adapter_version: workbookInventoryAdapterVersion(inventory) ?? 0,
-      value_tile_config: workbookInventoryValueTileConfig(inventory),
-      data_layer_caps: workbookInventoryDataLayerCaps(inventory),
-      // The ENTIRE ⓑ' base is folded — a SELECTIVE fold left gate-logic/schema-tool version
-      // changes outside the seed key (silent-stale class, self-caught post-W3): everything that
-      // shapes a judgment must rotate the key (model identity, prompt-contract sha, version knob,
-      // gate config+LOGIC version, schema tool version).
-      pre_image_base: args.preImageBase,
-      verify_model_identity: args.verifyModelIdentity,
-      stage_config: cfg,
-      projection_contract_version: SEMANTIC_MAP_PROJECTION_CONTRACT_VERSION, // X9 / W3-003
-      // W4 review W4-001 (5th recurrence of the value-shapes-prompt-but-not-key class): the render
-      // budget truncates BOTH prompt surfaces — folded by VALUE, never only via the manual knob.
-      render_char_budget: SEMANTIC_MAP_PROMPT_RENDER_CHAR_BUDGET,
-    };
-    assertGatingKeyExcludesInEpochOutput("semanticMapStageFingerprint", fingerprintPreImage);
-    const observationFingerprint = sha256Text(stableJson(fingerprintPreImage));
+    const observationFingerprint = semanticMapObservationFingerprint({
+      observation,
+      inventory,
+      preImageBase: args.preImageBase,
+      verifyModelIdentity: args.verifyModelIdentity,
+      config: cfg,
+    });
     perObservationFingerprints.push({
       observation_id: observation.observation_id,
       fingerprint: observationFingerprint,
@@ -2638,7 +3546,8 @@ export async function runSemanticMapStage(args: {
     // before any of this observation's LLM calls (deterministic given canonical order).
     const observationNeed = tasks.reduce((s, t) => s + t.producedCount, 0);
     const preflightCapped =
-      census.synthesize_calls_total + breakerRetryCalls.synthesize + observationNeed >
+      priorDispatchSpend.synthesize + census.synthesize_calls_total +
+        breakerRetryCalls.synthesize + observationNeed >
       cfg.max_synthesize_calls;
 
     for (const task of tasks) {
@@ -2647,7 +3556,7 @@ export async function runSemanticMapStage(args: {
         continue;
       }
       if (preflightCapped) {
-        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, "capped", `synthesize preflight: observation needs ${observationNeed}, budget remaining ${cfg.max_synthesize_calls - census.synthesize_calls_total} (X7)`));
+        columnRows.push(emptySemanticMapColumnRow(task.sheet, task.column_index, "capped", `synthesize preflight: observation needs ${observationNeed}, budget remaining ${cfg.max_synthesize_calls - priorDispatchSpend.synthesize - census.synthesize_calls_total - breakerRetryCalls.synthesize} (X7)`));
         doomed = true;
         continue;
       }
@@ -2694,7 +3603,8 @@ export async function runSemanticMapStage(args: {
           for (const b of classified) {
             if (b.anchor_status !== "unanchored") continue;
             if (
-              census.verify_calls_total + breakerRetryCalls.verify + verifyCalls + 1 >
+              priorDispatchSpend.verify + census.verify_calls_total +
+                breakerRetryCalls.verify + verifyCalls + 1 >
               cfg.max_verify_calls
             ) {
               throw new SemanticMapVerifyCapExceeded(key, cfg.max_verify_calls);
@@ -2776,6 +3686,7 @@ export async function runSemanticMapStage(args: {
         }
       } catch (error) {
         if (isGracefulTerminalSignal(error)) throw error;
+        if (readReconstructLlmDispatchFailureError(error)) throw error;
         // Column-level stage-owned fallback (X5 — the strongest round-1 convergence): the module
         // stays fail-closed; a failed/capped column dooms the OBSERVATION to the flat path. Spent
         // calls are still counted (honest cost census).
@@ -2796,6 +3707,14 @@ export async function runSemanticMapStage(args: {
           // substring 재분류가 오독한다. 남은 컬럼은 기존 doomed 가드가
           // 디스패치 없이 skip 행으로 기록하므로 추가 차단이 불필요하다.
           const failureClass = readDispatchFailureClass(error);
+          const structuredEvidence = readStructuredDispatchFailureEvidence(error);
+          if (structuredEvidence?.failure_class === null) throw error;
+          if (structuredEvidence) {
+            breakerStructuredContributors.set(
+              observation.observation_id,
+              structuredClone(structuredEvidence),
+            );
+          }
           if (breakerObservationFailure === null || failureClass !== null) {
             breakerObservationFailure = {
               failureClass,
@@ -2821,6 +3740,12 @@ export async function runSemanticMapStage(args: {
         });
       } else if (observationDispatchSucceeded) {
         breakerState.recordItemSuccess(observation.observation_id);
+        if (!breakerState.policy.concurrent) {
+          // Sequential success reclassifies the pending systemic streak as
+          // item-local poison. Its structured rows are no longer activation
+          // contributors for a later independent trip.
+          breakerStructuredContributors.clear();
+        }
       } else {
         // 디스패치 성공이 0회인 관찰(preflight-capped·빈 컬럼·전부 subsumed)
         // 은 프로바이더 생존을 증명하지 못한다 — 회복 집합 부기만 한다.
@@ -2847,8 +3772,13 @@ export async function runSemanticMapStage(args: {
       columns: columnRows,
     };
     census.by_observation.push(observationRow);
+    processedObservationIds.add(observation.observation_id);
     } catch (error) {
       if (isGracefulTerminalSignal(error)) throw error;
+      if (readReconstructLlmDispatchFailureError(error)) throw error;
+      if (readStructuredDispatchFailureEvidence(error)?.failure_class === null) {
+        throw error;
+      }
       // Deterministic-phase containment (ultracode audit A/B): observations_total was already
       // counted; record the honest skip row directly (no double count). Spent LLM totals from the
       // column loop were already added inside its own catch before rethrow paths — the only throws
@@ -2862,10 +3792,18 @@ export async function runSemanticMapStage(args: {
         fingerprint: null,
         columns: [],
       });
+      processedObservationIds.add(observation.observation_id);
     }
     // 설계 B 트립: 이 관찰의 부기까지 마친 상태에서 배치를 멈춘다 — 남은
     // 관찰은 미디스패치로 incomplete 집합에 남는다.
     if (breakerTrip) break;
+  }
+
+  if (breakerTrip && args.recoveryContext) {
+    for (const observation of spreadsheetObservations) {
+      if (processedObservationIds.has(observation.observation_id)) continue;
+      appendRetainedObservation(observation.observation_id);
+    }
   }
 
   let dispatchIncompletePath: string | null = null;
@@ -2875,18 +3813,46 @@ export async function runSemanticMapStage(args: {
     // 정직성: backoff 재시도 호출 수를 census에 병기한다.
     census.breaker_retry_synthesize_calls = breakerRetryCalls.synthesize;
     census.breaker_retry_verify_calls = breakerRetryCalls.verify;
+    const plannedItemIds = spreadsheetObservations.map((o) => o.observation_id);
+    const retainedCompletedItemIds =
+      args.recoveryContext?.retainedCompletedItemIds ?? [];
+    const retainedDeadLetter = args.recoveryContext?.retainedDeadLetter ?? [];
+    const trip = breakerState.tripped();
     dispatchIncompletePath = await persistDispatchIncompleteArtifact({
       sessionRoot: args.sessionRoot,
       batchLabel: "semantic-map",
-      plannedItemIds: spreadsheetObservations.map((o) => o.observation_id),
-      state: breakerState,
+      plannedItemIds,
+      completedItemIds: [
+        ...retainedCompletedItemIds,
+        ...breakerState.completedItemIds(),
+      ],
+      deadLetter: [
+        ...retainedDeadLetter,
+        ...breakerState.deadLetterEntries(),
+      ],
+      breaker: {
+        tripped: trip !== null,
+        failure_class: trip?.failure_class ?? null,
+        consecutive_item_count: trip?.consecutive_item_count ?? null,
+        threshold: breakerState.policy.systemic_threshold,
+      },
     });
   }
 
   const { censusPath, sidecarPath } = await persistCensusAndSidecar();
   if (breakerTrip) {
     // 규칙 4: 배치 halt + 사용자 공지 — 공지에 미완료 목록 경로를 싣는다.
-    throw new DispatchBreakerTrippedError(breakerTrip, dispatchIncompletePath);
+    throw new DispatchBreakerTrippedError(
+      breakerTrip,
+      dispatchIncompletePath,
+      args.captureStructuredContributors
+        ? {
+            structuredContributors: [
+              ...breakerStructuredContributors.values(),
+            ],
+          }
+        : undefined,
+    );
   }
 
   const aggregateFingerprint =
@@ -2901,6 +3867,169 @@ export async function runSemanticMapStage(args: {
         );
 
   return { projectionByObservation, census, censusPath, sidecarPath, aggregateFingerprint };
+}
+
+export function deriveSemanticMapFallbackPriorDispatchSpend(args: {
+  primaryCensus: ReconstructSemanticMapCensus;
+  incompleteItemIds: readonly string[];
+  accountingEntries: readonly SemanticMapDispatchAccountingEntry[];
+  sealedOperations: { synthesize: boolean; verify: boolean };
+}): { synthesize: number; verify: number } {
+  const incompleteSet = new Set(args.incompleteItemIds);
+  const incompleteOuterSpend = args.primaryCensus.by_observation
+    .filter((row) => incompleteSet.has(row.observation_id))
+    .flatMap((row) => row.columns)
+    .reduce(
+      (sum, column) => ({
+        synthesize: sum.synthesize + column.synthesize_calls,
+        verify: sum.verify + column.verify_calls,
+      }),
+      { synthesize: 0, verify: 0 },
+    );
+  const primaryAccountingRequests = (
+    operation: "semantic_map_synthesize" | "semantic_map_verify",
+  ): number =>
+    args.accountingEntries.filter(
+      (entry) =>
+        entry.execution_source === "primary" && entry.operation === operation,
+    ).reduce(
+      (sum, entry) => sum + entry.actual_adapter_request_count,
+      0,
+    );
+  return {
+    synthesize:
+      incompleteOuterSpend.synthesize +
+      (args.sealedOperations.synthesize
+        ? Math.max(
+            0,
+            primaryAccountingRequests("semantic_map_synthesize") -
+              args.primaryCensus.synthesize_calls_total,
+          )
+        : args.primaryCensus.breaker_retry_synthesize_calls ?? 0),
+    verify:
+      incompleteOuterSpend.verify +
+      (args.sealedOperations.verify
+        ? Math.max(
+            0,
+            primaryAccountingRequests("semantic_map_verify") -
+              args.primaryCensus.verify_calls_total,
+          )
+        : args.primaryCensus.breaker_retry_verify_calls ?? 0),
+  };
+}
+
+function annotateDispatchFallbackCensus(args: {
+  census: ReconstructSemanticMapCensus;
+  runtime: ReconstructDispatchFallbackRuntime;
+  primaryCensus: ReconstructSemanticMapCensus;
+}): void {
+  const entries = args.runtime.accounting.entries();
+  args.census.dispatch_execution_profiles = {
+    primary: {
+      synthesize_descriptor_id:
+        args.runtime.primary.synthesize?.public_descriptor.descriptor_id ?? null,
+      verify_descriptor_id:
+        args.runtime.primary.verify?.public_descriptor.descriptor_id ?? null,
+    },
+    fallback: {
+      synthesize_descriptor_id:
+        args.runtime.fallback.synthesize.public_descriptor.descriptor_id,
+      verify_descriptor_id:
+        args.runtime.fallback.verify.public_descriptor.descriptor_id,
+    },
+  };
+  const fallbackEntries = entries.filter(
+    (entry) => entry.execution_source === "fallback",
+  );
+  const count = (
+    operation: "semantic_map_synthesize" | "semantic_map_verify",
+    projection: "logical" | "requests",
+  ): number =>
+    fallbackEntries
+      .filter((entry) => entry.operation === operation)
+      .reduce(
+        (sum, entry) =>
+          sum +
+          (projection === "logical"
+            ? 1
+            : entry.actual_adapter_request_count),
+        0,
+      );
+  args.census.fallback_synthesize_logical_calls = count(
+    "semantic_map_synthesize",
+    "logical",
+  );
+  args.census.fallback_verify_logical_calls = count(
+    "semantic_map_verify",
+    "logical",
+  );
+  args.census.fallback_synthesize_adapter_requests = count(
+    "semantic_map_synthesize",
+    "requests",
+  );
+  args.census.fallback_verify_adapter_requests = count(
+    "semantic_map_verify",
+    "requests",
+  );
+  for (const row of args.census.by_observation) {
+    const rowEntries = entries.filter(
+      (entry) => entry.observation_id === row.observation_id,
+    );
+    const fallback = rowEntries.filter(
+      (entry) => entry.execution_source === "fallback",
+    );
+    const primary = rowEntries.filter(
+      (entry) => entry.execution_source === "primary",
+    );
+    const primaryCensusRow = args.primaryCensus.by_observation.find(
+      (candidate) => candidate.observation_id === row.observation_id,
+    );
+    const primaryLogicalCalls = (
+      operation: "synthesize" | "verify",
+    ): number =>
+      primaryCensusRow?.columns.reduce(
+        (sum, column) =>
+          sum +
+          (operation === "synthesize"
+            ? column.synthesize_calls
+            : column.verify_calls),
+        0,
+      ) ?? 0;
+    row.dispatch_execution_source =
+      fallback.length > 0 ? "fallback" : primary.length > 0 ? "primary" : null;
+    row.discarded_primary_synthesize_logical_calls =
+      fallback.length > 0
+        ? primaryLogicalCalls("synthesize")
+        : 0;
+    row.discarded_primary_verify_logical_calls =
+      fallback.length > 0
+        ? primaryLogicalCalls("verify")
+        : 0;
+    row.primary_synthesize_adapter_requests = primary
+      .filter((entry) => entry.operation === "semantic_map_synthesize")
+      .reduce((sum, entry) => sum + entry.actual_adapter_request_count, 0);
+    row.primary_verify_adapter_requests = primary
+      .filter((entry) => entry.operation === "semantic_map_verify")
+      .reduce((sum, entry) => sum + entry.actual_adapter_request_count, 0);
+  }
+  const mixedIdentity = (
+    descriptorIds: readonly string[],
+  ): string => {
+    const distinct = [...new Set(descriptorIds)].sort();
+    return distinct.length === 1
+      ? distinct[0]!
+      : `mixed:${sha256Text(stableJson(distinct))}`;
+  };
+  args.census.synthesize_model_identity = mixedIdentity([
+    args.runtime.primary.synthesize?.public_descriptor.descriptor_id ??
+      args.census.synthesize_model_identity,
+    args.runtime.fallback.synthesize.public_descriptor.descriptor_id,
+  ]);
+  args.census.verify_model_identity = mixedIdentity([
+    args.runtime.primary.verify?.public_descriptor.descriptor_id ??
+      args.census.verify_model_identity,
+    args.runtime.fallback.verify.public_descriptor.descriptor_id,
+  ]);
 }
 
 function emptySemanticMapColumnRow(
@@ -3099,6 +4228,7 @@ export async function runMaturationValueReadStage(args: {
     failedCount = output.failed_count ?? 0;
   } catch (error) {
     if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
     // Total failure: treat every targeted limitation as a failed read/judgment.
     failedCount = targetedLimitations.size;
   }
@@ -3629,8 +4759,11 @@ export function artifactRefsWithDefaults(args: {
     source_observation_lineage_index_validation:
       args.refs.source_observation_lineage_index_validation ?? null,
     leaf_read_census: args.refs.leaf_read_census ?? null,
+    dispatch_incomplete: args.refs.dispatch_incomplete ?? null,
     semantic_map_census: args.refs.semantic_map_census ?? null,
     semantic_map_sidecar: args.refs.semantic_map_sidecar ?? null,
+    semantic_map_resume_validation:
+      args.refs.semantic_map_resume_validation ?? null,
     source_safety_ledger: args.refs.source_safety_ledger ?? null,
     source_safety_ledger_validation:
       args.refs.source_safety_ledger_validation ?? null,
@@ -3951,6 +5084,7 @@ export function createRunManifest(args: {
   reconstructRecordPath: string;
   governingSnapshot: ReconstructRunGoverningSnapshot;
   terminalArtifactsCompleted: boolean;
+  dispatchFallbackOutcomeRef?: string;
   /**
    * Present only for a graceful terminal (Slice 3). When set, the built steps are rewritten to a
    * witness-truthful reachability manifest, the graceful_terminal marker is emitted, and the
@@ -4347,6 +5481,11 @@ export function createRunManifest(args: {
           "host_llm",
           directiveAuthorPerformer(args.directiveAuthor),
           [args.artifactRefs.semantic_map_census, args.artifactRefs.semantic_map_sidecar]
+            .concat(
+              args.dispatchFallbackOutcomeRef
+                ? [args.dispatchFallbackOutcomeRef]
+                : [],
+            )
             .filter((ref): ref is string => ref !== null),
         )
         : skippedStep(
@@ -5153,6 +6292,7 @@ function parseLlmJsonObject(text: string, artifactName: string): Record<string, 
     return parsed as Record<string, unknown>;
   } catch (error) {
     if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
     throw new Error(
       `${artifactName} author returned invalid JSON: ${
         error instanceof Error ? error.message : String(error)
@@ -5163,7 +6303,7 @@ function parseLlmJsonObject(text: string, artifactName: string): Record<string, 
 
 function jsonRepairMaxTokens(originalText: string, requestedMaxTokens: number): number {
   return Math.min(
-    16000,
+    RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS.json_parse_repair,
     Math.max(requestedMaxTokens * 2, Math.ceil(originalText.length / 3) + 1024),
   );
 }
@@ -8531,9 +9671,9 @@ function compactExplorationSynthesisForPrompt(
   };
 }
 
-type ReconstructLlmAttemptKind = Parameters<
+type ReconstructLlmAttemptKind = Exclude<Parameters<
   ReconstructExecutionTelemetryCollector["recordLlmAttempt"]
->[0]["kind"];
+>[0]["kind"], "validation_gate">;
 
 type ReconstructLlmOutputClassification =
   | { ok: true }
@@ -8576,6 +9716,10 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       failureMessage?: string | null;
       outputChars: number;
       result?: LlmCallResult;
+      providerTokensIn?: number | null;
+      providerTokensOut?: number | null;
+      effectiveBaseUrl?: string | null;
+      modelId?: string | null;
     },
   ): void => {
     if (!args.telemetry) return;
@@ -8588,8 +9732,8 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       durationMs: Date.now() - startedAt,
       promptChars: args.systemPrompt.length + args.userPrompt.length,
       outputChars: input.outputChars,
-      providerTokensIn: input.result?.input_tokens ?? null,
-      providerTokensOut: input.result?.output_tokens ?? null,
+      providerTokensIn: input.providerTokensIn ?? input.result?.input_tokens ?? null,
+      providerTokensOut: input.providerTokensOut ?? input.result?.output_tokens ?? null,
       // Mock realizations answer with a mock:// route marker; record the
       // actually exercised route, not the configured live provider.
       providerRoute: input.result?.effective_base_url?.startsWith("mock://")
@@ -8602,8 +9746,9 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
       provider: args.llmConfig.provider ?? null,
       executionAdapter: args.llmConfig.execution_adapter ?? null,
       declaredBillingMode: input.result?.declared_billing_mode ?? null,
-      effectiveBaseUrl: input.result?.effective_base_url ?? null,
-      modelId: input.result?.model_id ?? args.llmConfig.model_id ?? null,
+      effectiveBaseUrl:
+        input.effectiveBaseUrl ?? input.result?.effective_base_url ?? null,
+      modelId: input.modelId ?? input.result?.model_id ?? args.llmConfig.model_id ?? null,
       effort: args.llmConfig.reasoning_effort ?? null,
       systemPrompt: args.systemPrompt,
       artifactName: args.artifactName,
@@ -8617,12 +9762,27 @@ async function callLlmRecorded(args: RecordedLlmCallArgs): Promise<LlmCallResult
     });
   } catch (error) {
     if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
+    const incompleteEvidence = readOpenAIResponsesIncompleteEvidence(error);
     record({
       status: "failed",
       failureClass: failureClassForLlmCallError(error, isLlmTimeoutError),
       failureMessage: error instanceof Error ? error.message : String(error),
-      outputChars: 0,
+      outputChars: incompleteEvidence?.partial_output_chars ?? 0,
+      providerTokensIn: incompleteEvidence?.input_tokens ?? null,
+      providerTokensOut: incompleteEvidence?.output_tokens ?? null,
+      effectiveBaseUrl: incompleteEvidence?.effective_base_url ?? null,
+      modelId: incompleteEvidence?.provider_model ?? null,
     });
+    if (incompleteEvidence) {
+      throw new ReconstructLlmDispatchFailureError({
+        unitId,
+        artifactName: args.artifactName,
+        callKind: args.kind as ReconstructLlmCallKind,
+        evidence: incompleteEvidence,
+        cause: error,
+      });
+    }
     throw error;
   }
   const classification = args.classifyOutput?.(result.text) ?? { ok: true };
@@ -8656,6 +9816,7 @@ function jsonOutputClassifier(args: {
       return { ok: true };
     } catch (error) {
       if (isGracefulTerminalSignal(error)) throw error;
+      if (readReconstructLlmDispatchFailureError(error)) throw error;
       args.sink.failureMessage = error instanceof Error
         ? error.message
         : String(error);
@@ -8676,6 +9837,7 @@ async function callJsonAuthor(args: {
   userPayload: unknown;
   maxTokens: number;
   telemetry?: ReconstructExecutionTelemetryCollector;
+  allowParseRepair?: boolean;
 }): Promise<Record<string, unknown>> {
   const initialSink: JsonOutputSink = { parsed: null, failureMessage: null };
   const result = await callLlmRecorded({
@@ -8696,6 +9858,9 @@ async function callJsonAuthor(args: {
   if (initialSink.parsed) return initialSink.parsed;
   const initialErrorMessage = initialSink.failureMessage ??
     `${args.artifactName} author returned no parseable JSON object.`;
+  if (args.allowParseRepair === false) {
+    throw new Error(initialErrorMessage);
+  }
   const repairSink: JsonOutputSink = { parsed: null, failureMessage: null };
   await callLlmRecorded({
     telemetry: args.telemetry,
@@ -8743,9 +9908,14 @@ export function isLlmTimeoutError(error: unknown): boolean {
 function reconstructAuthoringModelIdentity(
   llmConfig: Partial<LlmCallConfig>,
 ): string {
-  return llmConfig.provider && llmConfig.model_id
+  const base = llmConfig.provider && llmConfig.model_id
     ? `${llmConfig.provider}/${llmConfig.model_id}`
     : "unspecified";
+  return llmConfig.openai_responses_output_headroom_tokens === undefined
+    ? base
+    : `${base}@openai_responses_output_headroom_tokens=${
+      llmConfig.openai_responses_output_headroom_tokens
+    }`;
 }
 
 /**
@@ -9439,6 +10609,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    * seed prompts. Defaults to the static FLOOR when omitted (model-unaware).
    */
   documentExcerptProjectionBudget?: number;
+  /** Optional sealed SDK pair. Presence routes only semantic-map operations
+   * through counted invoke-once capabilities; all other author operations keep
+   * the ordinary llmCall path. */
+  semanticMapDispatchCapabilities?: {
+    synthesize?: ResolvedLlmDispatchCapability;
+    verify?: ResolvedLlmDispatchCapability;
+    accounting: SemanticMapDispatchAccounting;
+    executionSource: "primary" | "fallback";
+    allowParseRepair: boolean;
+    maxTransportAttempts: 1 | 3;
+  };
+  executionTelemetry?: ReconstructExecutionTelemetryCollector;
 } = {}): ReconstructDirectiveAuthor {
   const authorId = args.authorId ?? "direct-call-reconstruct-directive-author";
   const llmConfig = args.llmConfig ?? {};
@@ -9469,7 +10651,58 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       documentExcerptProjectionTruncations.push(truncation);
     }
   };
-  const telemetry = createReconstructExecutionTelemetryCollector();
+  const telemetry =
+    args.executionTelemetry ?? createReconstructExecutionTelemetryCollector();
+  let semanticMapDispatchObservationId: string | null = null;
+  let semanticMapDispatchSource: "primary" | "fallback" | null = null;
+  let semanticMapLogicalDispatchId: string | null = null;
+  const sealedLlmCall = (
+    capability: ResolvedLlmDispatchCapability,
+  ): ReconstructLlmCall => async (systemPrompt, userPrompt, config) => {
+    if (!semanticMapDispatchObservationId || !semanticMapDispatchSource) {
+      throw new Error("sealed semantic-map dispatch requires a current observation context.");
+    }
+    try {
+      const counted = await capability.invokeOnce({
+        system_prompt: systemPrompt,
+        user_prompt: userPrompt,
+        max_tokens: config?.max_tokens ?? 0,
+        ...(semanticMapLogicalDispatchId
+          ? { logical_dispatch_id: semanticMapLogicalDispatchId }
+          : {}),
+      });
+      args.semanticMapDispatchCapabilities!.accounting.record({
+        observation_id: semanticMapDispatchObservationId,
+        execution_source: semanticMapDispatchSource,
+        operation: capability.public_descriptor.dispatch_role,
+        disposition: "succeeded",
+        descriptor_id: capability.public_descriptor.descriptor_id,
+        capability_instance_id: capability.capability_instance_id,
+        logical_dispatch_id: counted.logical_dispatch_id,
+        actual_adapter_request_count: counted.actual_adapter_request_count,
+        failure_class: null,
+      });
+      return counted.result;
+    } catch (error) {
+      if (isGracefulTerminalSignal(error)) throw error;
+      if (readReconstructLlmDispatchFailureError(error)) throw error;
+      const evidence = readStructuredDispatchFailureEvidence(error);
+      if (evidence) {
+        args.semanticMapDispatchCapabilities!.accounting.record({
+          observation_id: semanticMapDispatchObservationId,
+          execution_source: semanticMapDispatchSource,
+          operation: capability.public_descriptor.dispatch_role,
+          disposition: "failed",
+          descriptor_id: evidence.descriptor_id,
+          capability_instance_id: evidence.capability_instance_id,
+          logical_dispatch_id: evidence.logical_dispatch_id,
+          actual_adapter_request_count: evidence.actual_adapter_request_count,
+          failure_class: evidence.failure_class,
+        });
+      }
+      throw error;
+    }
+  };
 
   // P1-C2-A/B′ Step E: the leaf-read captures + honest capped census (set after the leaf-read stage).
   // projected into every observation prompt as a non-authoritative hint; never folded into the reuse key.
@@ -9494,6 +10727,28 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   return {
     authorId,
     owner: "host_llm",
+    ...(args.semanticMapDispatchCapabilities
+      ? {
+          setSemanticMapDispatchContext(
+            observationId: string,
+            source: "primary" | "fallback",
+          ): void {
+            if (source !== args.semanticMapDispatchCapabilities!.executionSource) {
+              throw new Error(
+                `sealed semantic-map author expected ${args.semanticMapDispatchCapabilities!.executionSource} context, got ${source}.`,
+              );
+            }
+            semanticMapDispatchObservationId = observationId;
+            semanticMapDispatchSource = source;
+          },
+          setSemanticMapLogicalDispatchId(logicalDispatchId: string): void {
+            if (logicalDispatchId.length === 0) {
+              throw new Error("sealed semantic-map dispatch requires a logical dispatch id.");
+            }
+            semanticMapLogicalDispatchId = logicalDispatchId;
+          },
+        }
+      : {}),
     setLeafReadProvisionalLabels(labels: ReadonlyMap<string, readonly string[]>): void {
       leafReadProvisionalLabels = labels;
     },
@@ -9508,26 +10763,44 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     ...(args.enableSemanticMapAuthoring === true
       ? {
         async synthesizeSemanticMapNode(input: SemanticSynthesisInput): Promise<SemanticSynthesisOutput> {
+          const capability = args.semanticMapDispatchCapabilities?.synthesize;
           const raw = await callSemanticMapJsonAuthorWithRetry({
-            llmCall,
+            llmCall: capability ? sealedLlmCall(capability) : llmCall,
             llmConfig: semanticMapSynthesizeLlmConfig,
             telemetry,
             artifactName: "semantic-map-synthesize",
             systemPrompt: SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT,
             userPayload: input,
             maxTokens: 900,
+            ...(args.semanticMapDispatchCapabilities
+              ? {
+                  maxTransportAttempts:
+                    args.semanticMapDispatchCapabilities.maxTransportAttempts,
+                  allowParseRepair:
+                    args.semanticMapDispatchCapabilities.allowParseRepair,
+                }
+              : {}),
           });
           return projectSemanticMapSynthesisOutput(raw);
         },
         async verifySemanticMapBoundary(input: SemanticBoundaryVerifyInput): Promise<SemanticBoundaryVerification> {
+          const capability = args.semanticMapDispatchCapabilities?.verify;
           const raw = await callSemanticMapJsonAuthorWithRetry({
-            llmCall,
+            llmCall: capability ? sealedLlmCall(capability) : llmCall,
             llmConfig,
             telemetry,
             artifactName: "semantic-map-verify",
             systemPrompt: SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT,
             userPayload: input,
             maxTokens: 300,
+            ...(args.semanticMapDispatchCapabilities
+              ? {
+                  maxTransportAttempts:
+                    args.semanticMapDispatchCapabilities.maxTransportAttempts,
+                  allowParseRepair:
+                    args.semanticMapDispatchCapabilities.allowParseRepair,
+                }
+              : {}),
           });
           return projectSemanticMapVerifyVerdict(raw);
         },
@@ -9692,6 +10965,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           });
         } catch (error) {
           if (isGracefulTerminalSignal(error)) throw error;
+          if (readReconstructLlmDispatchFailureError(error)) throw error;
           failedCount += 1;
         }
       }
@@ -10073,6 +11347,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         });
       } catch (error) {
         if (isGracefulTerminalSignal(error)) throw error;
+        if (readReconstructLlmDispatchFailureError(error)) throw error;
         if (!isLlmTimeoutError(error)) throw error;
         raw = await callJsonAuthor({
           llmCall,
@@ -10268,7 +11543,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         llmConfig,
         telemetry,
         artifactName: "CandidateInventory",
-        maxTokens: 4000,
+        maxTokens:
+          RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS.candidate_disposition,
         systemPrompt: candidateInventorySystemPrompt({
           candidateKindIds: candidateKindIds(input.contractRegistry).join(", "),
         }),
@@ -10456,7 +11732,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           artifactName: input.repairAttempt
             ? "OntologySeedValidationRepair"
             : "OntologySeed",
-          maxTokens: 9000,
+          maxTokens: RECONSTRUCT_SEMANTIC_AUTHOR_OUTPUT_CEILINGS.ontology_seed,
           // W4 R2-02: the seed system prompt enumerates the userPayload fields — a new field the
           // prompt never declares would be an unexplained input. The note is appended ONLY when the
           // payload actually carries semantic_map (map-absent prompts stay byte-identical); the note
@@ -10545,6 +11821,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         });
       } catch (error) {
         if (isGracefulTerminalSignal(error)) throw error;
+        if (readReconstructLlmDispatchFailureError(error)) throw error;
         if (!isLlmTimeoutError(error) || input.repairAttempt) {
           throw error;
         }
@@ -10610,6 +11887,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           });
         } catch (retryError) {
           if (isGracefulTerminalSignal(retryError)) throw retryError;
+          if (readReconstructLlmDispatchFailureError(retryError)) throw retryError;
           if (!isLlmTimeoutError(retryError)) throw retryError;
           throw new Error(
             "OntologySeedMinimalKernel timed out after the primary seed authoring timeout; deterministic seed timeout recovery is disabled because runtime must not author semantic seed content.",
@@ -10987,6 +12265,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           });
         } catch (error) {
           if (isGracefulTerminalSignal(error)) throw error;
+          if (readReconstructLlmDispatchFailureError(error)) throw error;
           if (!isLlmTimeoutError(error)) throw error;
           rawBatch = deterministicQuestionBatch(args);
         }
@@ -13555,6 +14834,14 @@ function finalOutputProvenanceSectionBindings(args: {
 export async function runReconstruct(
   params: RunReconstructParams,
 ): Promise<ReconstructRunResult> {
+  if (
+    params.dispatchFallback?.enabled === true &&
+    (params.dispatchBreaker?.enabled !== true || !params.dispatchFallbackRuntime)
+  ) {
+    throw new Error(
+      "dispatch fallback core runtime requires an enabled breaker and a resolved sealed fallback runtime.",
+    );
+  }
   const projectRoot = path.resolve(params.projectRoot);
   const sessionRoot = path.resolve(params.sessionRoot);
   const sessionId = path.basename(sessionRoot);
@@ -13626,6 +14913,15 @@ export async function runReconstruct(
     sessionRoot,
     "reconstruct-run-bootstrap-diagnostic.yaml",
   );
+  await reconcileReconstructLlmDispatchFailures({
+    sessionRoot,
+    runControlPath,
+    validationOutputPath: runControlValidationPath,
+  });
+  await assertDispatchFallbackSessionAdmission({
+    sessionRoot,
+    enabled: params.dispatchFallback?.enabled === true,
+  });
   const registryVerificationEvidencePath = path.join(
     sessionRoot,
     "registry-verification-evidence.yaml",
@@ -13650,6 +14946,7 @@ export async function runReconstruct(
     outputPath: runControlPath,
     validationOutputPath: runControlValidationPath,
     bootstrapDiagnosticPath: runBootstrapDiagnosticPath,
+    dispatchFallbackEnabled: params.dispatchFallback?.enabled === true,
   });
   assertRuntimeValidationValid({
     artifactName: "reconstruct-run-control",
@@ -14056,6 +15353,42 @@ export async function runReconstruct(
     lensIds,
     admittedDomainIds: params.domain ? [params.domain] : [],
   });
+  const semanticMapPreImageBase: SemanticMapPreImageBase = {
+    // Effective synthesize identity: carries the per-call effort override when active
+    // (…@synthesize_effort=low) so the override rotates the stage reuse key and shows in
+    // the census; base identity otherwise (byte-parity when no override).
+    reduce_reader_model_identity: directiveAuthor.semanticMapSynthesizeModelIdentity ??
+      directiveAuthor.reuseModelIdentity ?? "unspecified",
+    // F6: the authoring prompt-template CONTRACT sha (CG-1 catalog) — the semantic-map author
+    // prompts join the catalog with the author realization; any catalog edit rotates this
+    // tautologically (over-rotation is the safe direction).
+    reduce_prompt_sha256: authoringPromptContractSha256(),
+    reduce_schema_tool_version: "semantic-map:v1",
+    comprehension_version: SEMANTIC_MAP_COMPREHENSION_VERSION,
+    over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
+    over_context_gate_logic_sha256: semanticMapGateLogicSha256(),
+  };
+  const semanticMapVerifyModelIdentity =
+    directiveAuthor.reuseModelIdentity ?? "unspecified";
+  const semanticMapCapability = resolveSemanticMapCapability(directiveAuthor);
+  const semanticMapRecoveryContext = await prepareSemanticMapResumeContext({
+    sessionId,
+    sessionRoot,
+    attemptId: runControlState.attemptId,
+    sourceObservations,
+    resumeMode: params.resumeMode ?? "fresh",
+    ...(params.dispatchBreaker !== undefined
+      ? { dispatchBreaker: params.dispatchBreaker }
+      : {}),
+    semanticMapCapabilityPresent: semanticMapCapability === "present",
+    preImageBase: semanticMapPreImageBase,
+    verifyModelIdentity: semanticMapVerifyModelIdentity,
+    config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  });
+  const semanticMapResumeValidationRef =
+    await exists(semanticMapResumeValidationPath(sessionRoot))
+      ? semanticMapResumeValidationPath(sessionRoot)
+      : null;
   // P1-C2-A (§11 Step D): run the first LLM-touch — the leaf-read over low-confidence spreadsheet
   // regions — and capture the order-independent aggregate fingerprint the seed reuse key folds
   // (R2/R8) so a leaf-reader model/prompt swap rotates the seed. Runs once on the initial observation
@@ -14102,31 +15435,488 @@ export async function runReconstruct(
   // reuse-match assembly so its fingerprint folds into every authored artifact's reuse key —
   // registration/reuse authority PRECEDES prompt injection (R2-03: the projection reaches no prompt
   // until W4; a W3-state capability author spends calls without prompt effect, by design).
-  const semanticMapStage = await runSemanticMapStage({
-    sourceObservations,
-    directiveAuthor,
-    sessionRoot,
-    config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
-    ...(params.dispatchBreaker !== undefined
-      ? { dispatchBreaker: params.dispatchBreaker }
-      : {}),
-    preImageBase: {
-      // Effective synthesize identity: carries the per-call effort override when active
-      // (…@synthesize_effort=low) so the override rotates the stage reuse key and shows in
-      // the census; base identity otherwise (byte-parity when no override).
-      reduce_reader_model_identity: directiveAuthor.semanticMapSynthesizeModelIdentity ??
-        directiveAuthor.reuseModelIdentity ?? "unspecified",
-      // F6: the authoring prompt-template CONTRACT sha (CG-1 catalog) — the semantic-map author
-      // prompts join the catalog with the author realization; any catalog edit rotates this
-      // tautologically (over-rotation is the safe direction).
-      reduce_prompt_sha256: authoringPromptContractSha256(),
-      reduce_schema_tool_version: "semantic-map:v1",
-      comprehension_version: SEMANTIC_MAP_COMPREHENSION_VERSION,
-      over_context_gate_config_sha256: sha256Text(stableJson(DEFAULT_SEMANTIC_MAP_STAGE_CONFIG)),
-      over_context_gate_logic_sha256: semanticMapGateLogicSha256(),
-    },
-    verifyModelIdentity: directiveAuthor.reuseModelIdentity ?? "unspecified",
-  });
+  const dispatchFallbackCompletion: {
+    outcome: DispatchFallbackOutcome | null;
+    integrity: { path: string; sha256: string } | null;
+  } = { outcome: null, integrity: null };
+  let semanticMapStage: SemanticMapStageResult;
+  try {
+    semanticMapStage = await runSemanticMapStage({
+      sourceObservations,
+      directiveAuthor,
+      sessionRoot,
+      config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+      ...(params.dispatchBreaker !== undefined
+        ? { dispatchBreaker: params.dispatchBreaker }
+        : {}),
+      preImageBase: semanticMapPreImageBase,
+      verifyModelIdentity: semanticMapVerifyModelIdentity,
+      recoveryContext: semanticMapRecoveryContext,
+      executionSource: "primary",
+      captureStructuredContributors:
+        params.dispatchFallback?.enabled === true &&
+        params.dispatchFallbackRuntime !== undefined,
+    });
+  } catch (error) {
+    if (isGracefulTerminalSignal(error)) throw error;
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
+    const fallbackSettings = params.dispatchFallback;
+    const fallbackRuntime = params.dispatchFallbackRuntime;
+    if (
+      !(error instanceof DispatchBreakerTrippedError) ||
+      fallbackSettings?.enabled !== true ||
+      !fallbackRuntime ||
+      params.resumeMode === "reuse_existing_authored_artifacts" ||
+      error.trip.failure_class !== "rate_limit"
+    ) {
+      throw error;
+    }
+
+    const primaryCapabilities = [
+      fallbackRuntime.primary.synthesize,
+      fallbackRuntime.primary.verify,
+    ].filter(
+      (capability): capability is ResolvedLlmDispatchCapability =>
+        capability !== undefined,
+    );
+    const structuredContributors = error.structuredContributors ?? [];
+    const firstContributor = structuredContributors[0];
+    const failingCapability = firstContributor
+      ? primaryCapabilities.find(
+          (capability) =>
+            capability.public_descriptor.descriptor_id ===
+              firstContributor.descriptor_id &&
+            capability.capability_instance_id ===
+              firstContributor.capability_instance_id,
+        )
+      : undefined;
+    if (
+      !firstContributor ||
+      !failingCapability ||
+      structuredContributors.length <
+        error.trip.threshold ||
+      structuredContributors.some(
+        (contributor) =>
+          contributor.failure_class !== "rate_limit" ||
+          contributor.descriptor_id !== firstContributor.descriptor_id ||
+          contributor.capability_instance_id !==
+            firstContributor.capability_instance_id ||
+          contributor.actual_adapter_request_count < 1,
+      )
+    ) {
+      throw error;
+    }
+    if (
+      failingCapability.public_descriptor.model_provider ===
+      fallbackRuntime.fallback.synthesize.public_descriptor.model_provider
+    ) {
+      throw error;
+    }
+
+    const currentRunControl = await readYamlDocument<
+      import("./artifact-types.js").ReconstructRunControlArtifact
+    >(runControlPath);
+    const ownerLock = currentRunControl.lock_rows.find(
+      (row) =>
+        row.lock_scope === "session_root" &&
+        row.owner_attempt_id === runControlState.attemptId &&
+        row.lock_status === "held",
+    );
+    if (!ownerLock) {
+      throw new Error("dispatch fallback activation requires the originating held session lock.");
+    }
+    assertDispatchFallbackAttemptOwner({
+      runControl: currentRunControl,
+      attemptId: runControlState.attemptId,
+      lockTokenHash: ownerLock.lock_token_hash,
+      requireInitial: true,
+    });
+    const realSessionRoot = await fs.realpath(sessionRoot);
+    const realAllowedRoots = await Promise.all(
+      filesystemAllowedRoots.map((allowedRoot) => fs.realpath(allowedRoot)),
+    );
+    const sessionContained = realAllowedRoots.some((allowedRoot) => {
+      const relative = path.relative(allowedRoot, realSessionRoot);
+      return relative === "" ||
+        (!relative.startsWith(`..${path.sep}`) && relative !== ".." &&
+          !path.isAbsolute(relative));
+    });
+    if (!sessionContained) {
+      throw new Error(
+        `dispatch fallback session root is outside filesystem_allowed_roots: ${sessionRoot}`,
+      );
+    }
+
+    const dispatchPath = dispatchIncompleteArtifactPath(sessionRoot);
+    const primaryPartition = await readYamlDocument<DispatchIncompleteArtifact>(
+      dispatchPath,
+    );
+    const primaryCensusSnapshot =
+      await readYamlDocument<ReconstructSemanticMapCensus>(
+        semanticMapCensusPath(sessionRoot),
+      );
+    if (
+      !isDispatchIncompleteArtifact(primaryPartition) ||
+      primaryPartition.pipeline !== "reconstruct" ||
+      primaryPartition.batch_label !== "semantic-map" ||
+      !primaryPartition.breaker.tripped
+    ) {
+      throw new Error("dispatch fallback activation requires a valid tripped semantic-map partition.");
+    }
+    const plannedIds = semanticMapSpreadsheetObservations(sourceObservations).map(
+      (observation) => observation.observation_id,
+    );
+    const deadLetterIds = primaryPartition.dead_letter.map(
+      (entry) => entry.item_id,
+    );
+    const accountingEntries = fallbackRuntime.accounting.entries();
+    const priorDispatchSpend = deriveSemanticMapFallbackPriorDispatchSpend({
+      primaryCensus: primaryCensusSnapshot,
+      incompleteItemIds: primaryPartition.incomplete_item_ids,
+      accountingEntries,
+      sealedOperations: {
+        synthesize: fallbackRuntime.primary.synthesize !== undefined,
+        verify: fallbackRuntime.primary.verify !== undefined,
+      },
+    });
+    const partitionUnion = [
+      ...primaryPartition.completed_item_ids,
+      ...deadLetterIds,
+      ...primaryPartition.incomplete_item_ids,
+    ];
+    if (
+      new Set(partitionUnion).size !== partitionUnion.length ||
+      new Set(partitionUnion).size !== plannedIds.length ||
+      plannedIds.some((id) => !partitionUnion.includes(id))
+    ) {
+      throw new Error("dispatch fallback activation partition does not exactly cover planned observations.");
+    }
+
+    const exactRecoveryContext = await prepareSemanticMapResumeContext({
+      sessionId,
+      sessionRoot,
+      attemptId: runControlState.attemptId,
+      sourceObservations,
+      resumeMode: "reuse_existing_authored_artifacts",
+      ...(params.dispatchBreaker
+        ? { dispatchBreaker: params.dispatchBreaker }
+        : {}),
+      semanticMapCapabilityPresent: true,
+      preImageBase: semanticMapPreImageBase,
+      verifyModelIdentity: semanticMapVerifyModelIdentity,
+      config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+    });
+    if (
+      !exactRecoveryContext ||
+      stableJson(exactRecoveryContext.incompleteItemIds.slice().sort()) !==
+        stableJson(primaryPartition.incomplete_item_ids.slice().sort())
+    ) {
+      throw new Error("dispatch fallback exact recovery context does not match the activation partition.");
+    }
+
+    const activationContributors = structuredContributors.map(
+      (contributor) => {
+        const accounting = accountingEntries.find(
+          (entry) =>
+            entry.logical_dispatch_id === contributor.logical_dispatch_id,
+        );
+        if (
+          !accounting ||
+          accounting.execution_source !== "primary" ||
+          accounting.descriptor_id !== contributor.descriptor_id ||
+          accounting.capability_instance_id !==
+            contributor.capability_instance_id ||
+          accounting.failure_class !== "rate_limit"
+        ) {
+          throw new Error(
+            `dispatch fallback contributor ${contributor.logical_dispatch_id} is absent from primary accounting.`,
+          );
+        }
+        return {
+          ...structuredClone(contributor),
+          actual_adapter_request_count:
+            accounting.actual_adapter_request_count,
+          observation_id: accounting.observation_id,
+          operation: accounting.operation,
+        };
+      },
+    );
+    const activation: DispatchFallbackActivation = {
+      schema_version: "dispatch-fallback-activation/v1",
+      session_id: sessionId,
+      created_at: isoNow(),
+      owner_attempt_id: runControlState.attemptId,
+      owner_lock_token_hash: ownerLock.lock_token_hash,
+      trigger: {
+        failure_class: "rate_limit",
+        systemic_failure_threshold:
+          error.trip.threshold,
+        contributors: activationContributors,
+      },
+      primary_descriptor: failingCapability.public_descriptor,
+      primary_capability_instance_id:
+        failingCapability.capability_instance_id,
+      fallback_descriptors: {
+        synthesize: fallbackRuntime.fallback.synthesize.public_descriptor,
+        verify: fallbackRuntime.fallback.verify.public_descriptor,
+      },
+      partition: {
+        planned: plannedIds,
+        completed: [...primaryPartition.completed_item_ids],
+        dead_letter: deadLetterIds,
+        incomplete: [...primaryPartition.incomplete_item_ids],
+      },
+      route_relation: "cross_provider",
+    };
+    const activationIntegrity = await publishDispatchFallbackActivation(
+      sessionRoot,
+      activation,
+    );
+    const activationCheckpoint = await recordReconstructRunControlTransactions({
+      runControlPath,
+      validationOutputPath: runControlValidationPath,
+      attemptId: runControlState.attemptId,
+      artifactRefs: [activationIntegrity.path],
+      expectedSessionId: sessionId,
+      expectedSessionRoot: sessionRoot,
+      expectedCommittedArtifactRefs: [activationIntegrity.path],
+    });
+    assertRuntimeValidationValid({
+      artifactName: "dispatch-fallback-activation-checkpoint",
+      artifactRef: runControlValidationPath,
+      validation: activationCheckpoint.validation,
+    });
+    const assertActivationOwnerCheckpoint = (
+      runControl: import("./artifact-types.js").ReconstructRunControlArtifact,
+    ): void => {
+      assertDispatchFallbackAttemptOwner({
+        runControl,
+        attemptId: runControlState.attemptId,
+        lockTokenHash: ownerLock.lock_token_hash,
+        requireInitial: true,
+      });
+      const transaction = runControl.write_transactions.find(
+        (row) =>
+          path.resolve(row.artifact_ref) ===
+            path.resolve(activationIntegrity.path) &&
+          row.owner_attempt_id === runControlState.attemptId &&
+          row.transaction_status === "committed",
+      );
+      if (transaction?.committed_hash !== activationIntegrity.sha256) {
+        throw new Error(
+          "dispatch fallback activation checkpoint is missing the expected committed ref/hash.",
+        );
+      }
+    };
+    assertActivationOwnerCheckpoint(activationCheckpoint.runControl);
+
+    const fallbackPreImageBase: SemanticMapPreImageBase = {
+      ...semanticMapPreImageBase,
+      reduce_reader_model_identity:
+        fallbackRuntime.fallback.synthesize.public_descriptor.descriptor_id,
+    };
+    const fallbackBreaker: DispatchBreakerPolicy = {
+      ...params.dispatchBreaker!,
+      enabled: true,
+      systemic_threshold: fallbackSettings.systemic_failure_threshold,
+      per_call_max_attempts:
+        fallbackSettings.per_dispatch_max_provider_attempts,
+    };
+
+    const publishTerminalFallback = async (
+      status: "completed" | "halted",
+      terminalFailure: StructuredDispatchFailureEvidence | null,
+    ): Promise<{ path: string; sha256: string }> => {
+      const finalPartition = await readYamlDocument<DispatchIncompleteArtifact>(
+        dispatchPath,
+      );
+      const finalCensus = await readYamlDocument<ReconstructSemanticMapCensus>(
+        semanticMapCensusPath(sessionRoot),
+      );
+      const finalSidecar = await readYamlDocument<ReconstructSemanticMapSidecar>(
+        semanticMapSidecarPath(sessionRoot),
+      );
+      annotateDispatchFallbackCensus({
+        census: finalCensus,
+        runtime: fallbackRuntime,
+        primaryCensus: primaryCensusSnapshot,
+      });
+      assertDispatchFallbackTerminalArtifactContracts({
+        partition: finalPartition,
+        census: finalCensus,
+        sidecar: finalSidecar,
+      });
+      const [partitionIntegrity, censusIntegrity, sidecarIntegrity] =
+        await Promise.all([
+          securePublishDispatchFallbackYaml({
+            sessionRoot,
+            relativePath: "dispatch-incomplete.yaml",
+            value: finalPartition,
+          }),
+          securePublishDispatchFallbackYaml({
+            sessionRoot,
+            relativePath: "comprehension/semantic-map-census.yaml",
+            value: finalCensus,
+          }),
+          securePublishDispatchFallbackYaml({
+            sessionRoot,
+            relativePath: "comprehension/semantic-map.yaml",
+            value: finalSidecar,
+          }),
+        ]);
+      const targetSet = new Set(activation.partition.incomplete);
+      const finalCompleted = finalPartition.completed_item_ids.filter((id) =>
+        targetSet.has(id)
+      ).length;
+      const finalDeadLetter = finalPartition.dead_letter.filter((entry) =>
+        targetSet.has(entry.item_id)
+      ).length;
+      const finalIncomplete = finalPartition.incomplete_item_ids.filter((id) =>
+        targetSet.has(id)
+      ).length;
+      const fallbackEntries = fallbackRuntime.accounting
+        .entries()
+        .filter((entry) => entry.execution_source === "fallback");
+      const countFallback = (
+        operation: "semantic_map_synthesize" | "semantic_map_verify",
+        requests: boolean,
+      ): number =>
+        fallbackEntries
+          .filter((entry) => entry.operation === operation)
+          .reduce(
+            (sum, entry) =>
+              sum + (requests ? entry.actual_adapter_request_count : 1),
+            0,
+          );
+      const outcome: DispatchFallbackOutcome = {
+        schema_version: "dispatch-fallback-outcome/v1",
+        session_id: sessionId,
+        created_at: isoNow(),
+        owner_attempt_id: runControlState.attemptId,
+        activation: {
+          ref: activationIntegrity.path,
+          sha256: activationIntegrity.sha256,
+        },
+        status,
+        partition: {
+          target_count: targetSet.size,
+          completed_count: finalCompleted,
+          dead_letter_count: finalDeadLetter,
+          incomplete_count: finalIncomplete,
+        },
+        dispatch_counts: {
+          synthesize_logical: countFallback(
+            "semantic_map_synthesize",
+            false,
+          ),
+          verify_logical: countFallback("semantic_map_verify", false),
+          synthesize_adapter_requests: countFallback(
+            "semantic_map_synthesize",
+            true,
+          ),
+          verify_adapter_requests: countFallback(
+            "semantic_map_verify",
+            true,
+          ),
+        },
+        final_artifacts: {
+          dispatch_incomplete: {
+            ref: partitionIntegrity.path,
+            sha256: partitionIntegrity.sha256,
+          },
+          semantic_map_census: {
+            ref: censusIntegrity.path,
+            sha256: censusIntegrity.sha256,
+          },
+          semantic_map: {
+            ref: sidecarIntegrity.path,
+            sha256: sidecarIntegrity.sha256,
+          },
+        },
+        terminal_failure: terminalFailure,
+      };
+      const outcomeIntegrity = await publishDispatchFallbackOutcome(
+        sessionRoot,
+        outcome,
+      );
+      const terminalCheckpoint = await recordReconstructRunControlTransactions({
+        runControlPath,
+        validationOutputPath: runControlValidationPath,
+        attemptId: runControlState.attemptId,
+        artifactRefs: [
+          activationIntegrity.path,
+          partitionIntegrity.path,
+          censusIntegrity.path,
+          sidecarIntegrity.path,
+          outcomeIntegrity.path,
+        ],
+        expectedSessionId: sessionId,
+        expectedSessionRoot: sessionRoot,
+        expectedCommittedArtifactRefs: [
+          activationIntegrity.path,
+          partitionIntegrity.path,
+          censusIntegrity.path,
+          sidecarIntegrity.path,
+          outcomeIntegrity.path,
+        ],
+      });
+      assertRuntimeValidationValid({
+        artifactName: "dispatch-fallback-outcome-checkpoint",
+        artifactRef: runControlValidationPath,
+        validation: terminalCheckpoint.validation,
+      });
+      dispatchFallbackCompletion.outcome = outcome;
+      dispatchFallbackCompletion.integrity = outcomeIntegrity;
+      return outcomeIntegrity;
+    };
+
+    try {
+      assertActivationOwnerCheckpoint(
+        await readYamlDocument<
+          import("./artifact-types.js").ReconstructRunControlArtifact
+        >(runControlPath),
+      );
+      semanticMapStage = await runSemanticMapStage({
+        sourceObservations,
+        directiveAuthor: fallbackRuntime.fallback.directiveAuthor,
+        sessionRoot,
+        config: DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+        dispatchBreaker: fallbackBreaker,
+        preImageBase: fallbackPreImageBase,
+        verifyModelIdentity:
+          fallbackRuntime.fallback.verify.public_descriptor.descriptor_id,
+        recoveryContext: exactRecoveryContext,
+        executionSource: "fallback",
+        priorDispatchSpend,
+        captureStructuredContributors: true,
+      });
+      await publishTerminalFallback("completed", null);
+    } catch (fallbackError) {
+      if (isGracefulTerminalSignal(fallbackError)) throw fallbackError;
+      if (readReconstructLlmDispatchFailureError(fallbackError)) throw fallbackError;
+      if (!(fallbackError instanceof DispatchBreakerTrippedError)) {
+        throw fallbackError;
+      }
+      const fallbackStructuredContributors =
+        fallbackError.structuredContributors ?? [];
+      const terminalFailure = fallbackStructuredContributors[0] ?? null;
+      if (!terminalFailure || terminalFailure.failure_class === null) {
+        throw fallbackError;
+      }
+      const haltedOutcomeIntegrity = await publishTerminalFallback(
+        "halted",
+        terminalFailure,
+      );
+      throw new DispatchBreakerTrippedError(
+        fallbackError.trip,
+        dispatchPath,
+        {
+          structuredContributors: fallbackStructuredContributors,
+          fallbackOutcomePath: haltedOutcomeIntegrity.path,
+        },
+      );
+    }
+  }
   const semanticMapAggregateFingerprint = semanticMapStage.aggregateFingerprint;
   // W4 §4: hand the per-observation projections to the author — (A) the seed userPayload field and
   // (B) the observation-prompt replace both render from this one map (prompt text only; the reuse
@@ -14134,8 +15924,11 @@ export async function runReconstruct(
   // ALWAYS set — including an empty map (W4 review W4-005): a reused author instance would
   // otherwise leak the PREVIOUS run's projections into a map-absent run (parity violation).
   directiveAuthor.setSemanticMapProjection?.(semanticMapStage.projectionByObservation);
-  const semanticMapCensusPath = semanticMapStage.censusPath;
-  const semanticMapSidecarPath = semanticMapStage.sidecarPath;
+  const semanticMapCensusRef = semanticMapStage.censusPath;
+  const semanticMapSidecarRef = semanticMapStage.sidecarPath;
+  const dispatchIncompleteRef = await exists(dispatchIncompleteArtifactPath(sessionRoot))
+    ? dispatchIncompleteArtifactPath(sessionRoot)
+    : null;
   const refreshAuthoredArtifactReuseMatch = (): void => {
     currentAuthoredArtifactReuseMatch = authoredArtifactReuseMatch({
       sessionId,
@@ -14427,8 +16220,10 @@ export async function runReconstruct(
           source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
           source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
           leaf_read_census: leafReadCensusPath,
-          semantic_map_census: semanticMapCensusPath,
-          semantic_map_sidecar: semanticMapSidecarPath,
+          dispatch_incomplete: dispatchIncompleteRef,
+          semantic_map_census: semanticMapCensusRef,
+          semantic_map_sidecar: semanticMapSidecarRef,
+          semantic_map_resume_validation: semanticMapResumeValidationRef,
           source_observation_directive: sourceObservationDirectivePath,
           source_observation_directive_validation:
             sourceObservationDirectiveValidationPath,
@@ -14704,8 +16499,10 @@ export async function runReconstruct(
         source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
         source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
         leaf_read_census: leafReadCensusPath,
-        semantic_map_census: semanticMapCensusPath,
-        semantic_map_sidecar: semanticMapSidecarPath,
+        dispatch_incomplete: dispatchIncompleteRef,
+        semantic_map_census: semanticMapCensusRef,
+        semantic_map_sidecar: semanticMapSidecarRef,
+        semantic_map_resume_validation: semanticMapResumeValidationRef,
         source_observation_directive: sourceObservationDirectivePath,
         source_observation_directive_validation:
           sourceObservationDirectiveValidationPath,
@@ -14923,8 +16720,10 @@ export async function runReconstruct(
         source_scout_pack_pre_seed: sourceScoutPackPreSeedPath,
         source_scout_pack_validation_pre_seed: sourceScoutPackPreSeedValidationPath,
         leaf_read_census: leafReadCensusPath,
-        semantic_map_census: semanticMapCensusPath,
-        semantic_map_sidecar: semanticMapSidecarPath,
+        dispatch_incomplete: dispatchIncompleteRef,
+        semantic_map_census: semanticMapCensusRef,
+        semantic_map_sidecar: semanticMapSidecarRef,
+        semantic_map_resume_validation: semanticMapResumeValidationRef,
         source_observation_directive: sourceObservationDirectivePath,
         source_observation_directive_validation:
           sourceObservationDirectiveValidationPath,
@@ -15583,8 +17382,10 @@ export async function runReconstruct(
       source_observation_lineage_index_validation:
         sourceObservationLineageIndexValidationPath,
       leaf_read_census: leafReadCensusPath,
-      semantic_map_census: semanticMapCensusPath,
-      semantic_map_sidecar: semanticMapSidecarPath,
+      dispatch_incomplete: dispatchIncompleteRef,
+      semantic_map_census: semanticMapCensusRef,
+      semantic_map_sidecar: semanticMapSidecarRef,
+      semantic_map_resume_validation: semanticMapResumeValidationRef,
       source_safety_ledger: sourceSafetyLedgerPath,
       source_safety_ledger_validation: sourceSafetyLedgerValidationPath,
       source_scout_pack: sourceScoutPackPath,
@@ -15746,6 +17547,7 @@ export async function runReconstruct(
     sourceScoutPackValidationPath,
     sourceScoutPackPreSeedValidationPath,
     sourceScoutPackPostMaturationValidationPath,
+    semanticMapResumeValidationPath: semanticMapResumeValidationRef,
     materialAdmissionLedgerValidationPath,
     seedAuthoringReadinessValidationPath,
     sourceFrontierValidationPath,
@@ -16992,6 +18794,12 @@ export async function runReconstruct(
     reconstructRecordPath: recordPath,
     governingSnapshot,
     terminalArtifactsCompleted: true,
+    ...(dispatchFallbackCompletion.integrity
+      ? {
+          dispatchFallbackOutcomeRef:
+            dispatchFallbackCompletion.integrity.path,
+        }
+      : {}),
   });
   await writeYamlDocument(manifestPath, reconstructRunManifest);
   const postPublicationRunManifestValidation =
@@ -17021,7 +18829,7 @@ export async function runReconstruct(
       prePublicationRunControlValidationPath,
       sourceObservationLineageIndexPath,
       prePublicationRecordPath,
-      recordPath,
+      ...(dispatchFallbackCompletion.integrity ? [] : [recordPath]),
       manifestPath,
     ],
     expectedSessionId: sessionId,
@@ -17032,10 +18840,21 @@ export async function runReconstruct(
     artifactRef: runControlValidationPath,
     validation: finalizedRunControl.validation,
   });
+  const dispatchFallbackRecordBlock =
+    dispatchFallbackCompletion.outcome &&
+      dispatchFallbackCompletion.integrity
+      ? projectDispatchFallbackRecordBlock({
+          outcome: dispatchFallbackCompletion.outcome,
+          outcomeIntegrity: dispatchFallbackCompletion.integrity,
+        })
+      : undefined;
   const finalRecord = await assembleReconstructRecord({
     sessionRoot,
     artifactRefs,
     outputPath: recordPath,
+    ...(dispatchFallbackRecordBlock
+      ? { dispatchFallback: dispatchFallbackRecordBlock }
+      : {}),
   });
 
   return {
@@ -17070,6 +18889,9 @@ export async function runReconstruct(
         // genuine crashes (never a graceful signal); guard anyway so a signal is never mis-marked as
         // a failed attempt (design §16.4 N5' — structural fail-closed).
         if (isGracefulTerminalSignal(assemblyError)) throw assemblyError;
+        if (readReconstructLlmDispatchFailureError(assemblyError)) {
+          throw assemblyError;
+        }
         await markReconstructRunControlAttemptFailed({
           runControlPath,
           validationOutputPath: runControlValidationPath,
@@ -17079,6 +18901,33 @@ export async function runReconstruct(
         }).catch(() => undefined);
         throw assemblyError;
       }
+    }
+    const llmDispatchFailure = readReconstructLlmDispatchFailureError(error);
+    if (llmDispatchFailure) {
+      try {
+        await persistReconstructLlmDispatchFailure({
+          runControlPath,
+          validationOutputPath: runControlValidationPath,
+          sessionId,
+          sessionRoot,
+          attemptId: runControlState.attemptId,
+          error: llmDispatchFailure,
+        });
+      } catch (persistenceError) {
+        if (isGracefulTerminalSignal(persistenceError)) throw persistenceError;
+        if (readReconstructLlmDispatchFailureError(persistenceError)) {
+          throw persistenceError;
+        }
+        throw new Error(
+          `failed to persist reconstruct LLM dispatch failure: ${
+            persistenceError instanceof Error
+              ? persistenceError.message
+              : String(persistenceError)
+          }`,
+          { cause: error },
+        );
+      }
+      throw error;
     }
     await markReconstructRunControlAttemptFailed({
       runControlPath,

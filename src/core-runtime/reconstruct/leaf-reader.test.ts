@@ -21,6 +21,7 @@ import {
   type LlmTouchPreExecutionPreImage,
 } from "./llm-touch-fingerprint.js";
 import type { WorkbookStructuralInventory } from "../spreadsheet-structure-observer.js";
+import { ReconstructLlmDispatchFailureError } from "./llm-dispatch-failure.js";
 
 // Inventory with ONE low-confidence sheet (leaf-read target) + ONE high-confidence sheet (skipped).
 const inv = (): WorkbookStructuralInventory =>
@@ -223,6 +224,45 @@ describe("leaf-reader — read outcomes (mock LLM)", () => {
       },
     });
     expect(out.kind).toBe("failed");
+  });
+
+  it("rethrows a typed output-ceiling failure instead of degrading partial output", async () => {
+    const [region] = extractLowConfidenceLeafEvidence(inv());
+    const failure = new ReconstructLlmDispatchFailureError({
+      unitId: "leaf_read",
+      artifactName: "leaf-read",
+      callKind: "initial",
+      evidence: {
+        failure_code: "openai_responses_max_output_tokens",
+        provider_status: "incomplete",
+        incomplete_reason: "max_output_tokens",
+        base_output_ceiling_tokens: 1_000,
+        configured_output_headroom_tokens: 500,
+        effective_max_output_tokens: 1_500,
+        input_tokens: 10,
+        cached_input_tokens: 0,
+        output_tokens: 1_500,
+        reasoning_tokens: 1_400,
+        non_reasoning_output_tokens: 100,
+        partial_output_chars: 20,
+        partial_output_sha256: "a".repeat(64),
+        provider_model: "gpt-5.5",
+        provider_response_id: null,
+        provider_request_id: null,
+        effective_base_url: "https://api.openai.com/v1",
+        sdk_max_retries: 1,
+        actual_adapter_request_count: null,
+        request_count_observability: "unavailable",
+      },
+      cause: new Error("provider incomplete"),
+    });
+
+    await expect(readStructureLeaf({
+      evidence: region,
+      callLlm: async () => {
+        throw failure;
+      },
+    })).rejects.toBe(failure);
   });
 
   it("UNREAD: zero readable labels is an explicit unread outcome (not a silent success)", async () => {

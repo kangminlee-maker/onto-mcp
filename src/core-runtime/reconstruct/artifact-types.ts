@@ -169,6 +169,8 @@ export interface ReconstructRunControlWriteTransactionRow {
   artifact_ref: string;
   temp_ref: string | null;
   expected_prior_hash: string | null;
+  /** Expected bytes for a prepared create-once transaction; equals committed_hash after commit. */
+  prepared_content_hash?: string | null;
   committed_hash: string | null;
   commit_method:
     | "atomic_rename"
@@ -222,6 +224,8 @@ export interface ReconstructRunControlValidationViolation {
     | "terminal_validation_missing"
     | "terminal_validation_invalid"
     | "expected_transaction_missing"
+    | "failed_terminal_missing"
+    | "failed_terminal_invalid"
     | "invalid_resume";
   message: string;
   subject_id: string | null;
@@ -2571,6 +2575,11 @@ export interface ReconstructSemanticMapCensusObservation {
    *  null for observations skipped before fingerprinting. */
   fingerprint: string | null;
   columns: ReconstructSemanticMapCensusColumn[];
+  dispatch_execution_source?: "primary" | "fallback" | null;
+  discarded_primary_synthesize_logical_calls?: number;
+  discarded_primary_verify_logical_calls?: number;
+  primary_synthesize_adapter_requests?: number;
+  primary_verify_adapter_requests?: number;
 }
 
 export interface ReconstructSemanticMapCensus {
@@ -2596,6 +2605,17 @@ export interface ReconstructSemanticMapCensus {
   author_id: string;
   synthesize_model_identity: string;
   verify_model_identity: string;
+  dispatch_execution_profiles?: {
+    primary: {
+      synthesize_descriptor_id: string | null;
+      verify_descriptor_id: string | null;
+    };
+    fallback: { synthesize_descriptor_id: string; verify_descriptor_id: string };
+  };
+  fallback_synthesize_logical_calls?: number;
+  fallback_verify_logical_calls?: number;
+  fallback_synthesize_adapter_requests?: number;
+  fallback_verify_adapter_requests?: number;
   by_observation: ReconstructSemanticMapCensusObservation[];
 }
 
@@ -2613,6 +2633,75 @@ export interface ReconstructSemanticMapSidecarObservation {
 export interface ReconstructSemanticMapSidecar {
   schema_version: "1";
   observations: ReconstructSemanticMapSidecarObservation[];
+}
+
+export interface ReconstructSemanticMapResumeValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  dispatch_incomplete_ref: string | null;
+  semantic_map_census_ref: string | null;
+  semantic_map_sidecar_ref: string | null;
+  validation_status: "valid" | "invalid";
+  /** true only when a prior tripped semantic-map batch is accepted for stage-local recovery. */
+  recovery_attempted: boolean;
+  activation_decision:
+    | "normal_full_stage"
+    | "recovery_activated"
+    | "recovery_rejected";
+  resume_mode: "fresh" | "reuse_existing_authored_artifacts";
+  dispatch_breaker_enabled: boolean;
+  pipeline: "reconstruct";
+  batch_label: "semantic-map";
+  current_observation_ids: string[];
+  retained_item_ids: string[];
+  discarded_item_ids: string[];
+  prior_retry_totals: {
+    breaker_retry_synthesize_calls: number | null;
+    breaker_retry_verify_calls: number | null;
+  };
+  prior_refs: {
+    dispatch_incomplete: string | null;
+    semantic_map_census: string | null;
+    semantic_map_sidecar: string | null;
+  };
+  backup_refs: {
+    dispatch_incomplete: string | null;
+    semantic_map_census: string | null;
+    semantic_map_sidecar: string | null;
+  };
+  partition_validation: {
+    planned_item_ids: string[];
+    completed_item_ids: string[];
+    dead_letter_item_ids: string[];
+    incomplete_item_ids: string[];
+    unknown_item_ids: string[];
+    duplicate_item_ids: string[];
+    overlapping_item_ids: string[];
+    exact_current_set_match: boolean;
+  };
+  census_validation: {
+    retained_census_ids: string[];
+    incomplete_census_ids: string[];
+    unknown_census_ids: string[];
+    extra_census_ids: string[];
+    missing_retained_ids: string[];
+    non_reusable_retained_ids: string[];
+    fingerprint_mismatch_ids: string[];
+    census_complete_partition: boolean;
+  };
+  sidecar_validation: {
+    retained_sidecar_ids: string[];
+    incomplete_sidecar_ids: string[];
+    unknown_sidecar_ids: string[];
+    missing_map_present_sidecar_ids: string[];
+    extra_sidecar_ids: string[];
+    projection_renderable: boolean;
+    node_epochs_shape_valid: boolean;
+  };
+  validation_results: string[];
+  asserted_obligation_ids: string[];
+  violations: ReconstructPostSeedValidationViolation[];
 }
 
 export interface ReconstructMaturationValueDischargeValidationArtifact {
@@ -3662,8 +3751,10 @@ export interface ReconstructRecordArtifactRefs {
   // Layer-2 semantic_map stage (W3): census always written when the stage runs (map-absent runs
   // still record the honest partition); sidecar carries the per-observation projections + node
   // epochs (F10 lineage). Null only when the stage no-ops (author lacks the capability pair).
+  dispatch_incomplete: string | null;
   semantic_map_census: string | null;
   semantic_map_sidecar: string | null;
+  semantic_map_resume_validation: string | null;
   source_safety_ledger: string | null;
   source_safety_ledger_validation: string | null;
   source_scout_pack: string | null;
@@ -3779,6 +3870,23 @@ export interface ReconstructRecordArtifact {
   target_material_kind: TargetMaterialKind | null;
   support_status: TargetMaterialSupportStatus | null;
   artifact_refs: ReconstructRecordArtifactRefs;
+  dispatch_fallback?: {
+    outcome_ref: string;
+    outcome_sha256: string;
+    activation_sha256: string;
+    owner_attempt_id: string;
+    trigger_code: "rate_limit";
+    route_relation: "cross_provider";
+    target_count: number;
+    completed_count: number;
+    dead_letter_count: number;
+    incomplete_count: number;
+    synthesize_logical_dispatch_count: number;
+    verify_logical_dispatch_count: number;
+    synthesize_adapter_request_count: number;
+    verify_adapter_request_count: number;
+    outcome: "completed";
+  };
   artifact_integrity: Array<{
     artifact_key: keyof ReconstructRecordArtifactRefs;
     artifact_ref: string | null;

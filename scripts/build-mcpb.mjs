@@ -35,6 +35,7 @@ const buildDir = path.join(repoRoot, "build", "mcpb");
 const stageDir = path.join(buildDir, "onto");
 const outputMcpb = path.join(buildDir, "onto.mcpb");
 const manifestSrc = path.join(repoRoot, "packaging", "mcpb", "manifest.json");
+const stageOnly = process.argv.includes("--stage-only");
 
 // Directory entries copied verbatim into the stage.
 const STAGE_DIRS = [
@@ -236,6 +237,10 @@ async function main() {
   stage();
   installProdDeps();
   await assertStage();
+  if (stageOnly) {
+    log(`stage-only done: ${path.relative(repoRoot, stageDir)}`);
+    return;
+  }
   validateManifest();
   packBundle();
   log(`done: ${path.relative(repoRoot, outputMcpb)}`);
