@@ -3,20 +3,28 @@ export type SemanticQualityGateFixtureId =
   | "review-pipeline-target-v1"
   | "retry-policy-target-v1";
 
+/** The complete check-id universe this gate can emit — the value-level single
+ * source (the check_id type derives from it). The review-cert/v1 evidence
+ * contract pins its per-run check universe against THIS list, so a harness
+ * that omits issue artifacts (the gate then emits a subset — see
+ * runSemanticQualityGate) cannot silently shrink the certified comparison. */
+export const SEMANTIC_QUALITY_GATE_CHECK_IDS = [
+  "material_issue_recall",
+  "final_result_material_issue_recall",
+  "false_materiality_guard",
+  "boundary_uncertainty_preservation",
+  "non_material_finding_preservation",
+  "artifact_material_issue_recall",
+  "causal_materiality_shape",
+  "causal_relation_correctness",
+  "issue_dependency_preservation",
+  "actionability",
+  "count_list_consistency",
+  "grounding",
+] as const;
+
 export interface SemanticQualityGateCheck {
-  check_id:
-    | "material_issue_recall"
-    | "final_result_material_issue_recall"
-    | "false_materiality_guard"
-    | "boundary_uncertainty_preservation"
-    | "non_material_finding_preservation"
-    | "artifact_material_issue_recall"
-    | "causal_materiality_shape"
-    | "causal_relation_correctness"
-    | "issue_dependency_preservation"
-    | "actionability"
-    | "count_list_consistency"
-    | "grounding";
+  check_id: (typeof SEMANTIC_QUALITY_GATE_CHECK_IDS)[number];
   status: "passed" | "failed";
   evidence: string[];
 }
