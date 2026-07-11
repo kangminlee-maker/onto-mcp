@@ -192,6 +192,14 @@
             "effort": "medium",
             "service_tier": "fast"
           }
+        },
+        "semantic_map_synthesize": {
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.6-luna",
+            "effort": "low"
+          }
         }
       },
       "semantic_map_authoring": true,
