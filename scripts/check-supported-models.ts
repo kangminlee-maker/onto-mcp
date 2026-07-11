@@ -49,6 +49,12 @@ import {
   validateSynthesizeCertRecord,
 } from "../src/core-runtime/discovery/synthesize-cert-record.js";
 import {
+  isReviewCertCandidate,
+  parseReviewCertRecord,
+  reviewCertBindingViolations,
+  validateReviewCertRecord,
+} from "../src/core-runtime/discovery/review-cert-record.js";
+import {
   assertBenchCandidateTokenPolicy,
 } from "./check-supported-models-token-policy.js";
 
@@ -211,12 +217,72 @@ async function assertSynthesizeCertBinding(
   }
 }
 
+/** review-role binding (review-role registration design §4): an entry listing
+ * the `review` role must cite a `review-cert/v1` record that PARSES and
+ * RECOMPUTES to zero violations for this entry's (provider, model). Same
+ * shape as {@link assertSynthesizeCertBinding}: the recompute lives in the
+ * shared core-runtime module, this function only does the repo I/O; binding is
+ * existential, and a co-cited FAILING record is surfaced as a WARN. */
+async function assertReviewCertBinding(
+  registry: Awaited<ReturnType<typeof loadSupportedModelRegistry>>,
+): Promise<void> {
+  const supportedModelKeys = new Set(
+    registry.supported_models.map((e) => `${e.provider}/${e.model}`),
+  );
+  const bad: string[] = [];
+  for (const entry of registry.supported_models) {
+    if (!entry.roles?.includes("review")) continue;
+    const evidenceByRef = new Map<string, unknown>();
+    for (const ref of entry.benchmark_evidence_refs) {
+      try {
+        evidenceByRef.set(
+          ref,
+          JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, ref), "utf8")),
+        );
+      } catch {
+        // Unreadable/non-JSON refs simply cannot serve as the cert record; the
+        // tracked-file check already polices their existence separately.
+      }
+    }
+    const violations = reviewCertBindingViolations({
+      entry,
+      evidenceByRef,
+      supportedModelKeys,
+    });
+    for (const item of violations) {
+      bad.push(
+        `${entry.provider}/${entry.model}: [${item.code}] ${item.message}`,
+      );
+    }
+    if (violations.length === 0) {
+      for (const [ref, raw] of evidenceByRef) {
+        if (!isReviewCertCandidate(raw)) continue;
+        const { record } = parseReviewCertRecord(raw);
+        const failing = record === null ||
+          validateReviewCertRecord(record).length > 0;
+        if (failing) {
+          console.warn(
+            `[check:supported-models] WARN: ${entry.provider}/${entry.model} cites a FAILING review-cert record at ${ref} alongside its binding record`,
+          );
+        }
+      }
+    }
+  }
+  if (bad.length > 0) {
+    throw new Error(
+      "review entries are not bound to a passing review-cert/v1 record:\n" +
+        bad.map((m) => `  - ${m}`).join("\n"),
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const registry = loadSupportedModelRegistry();
   try {
     await assertEvidenceRefsTracked(registry);
     assertRolesDeclaredOutsideGrandfather(registry);
     await assertSynthesizeCertBinding(registry);
+    await assertReviewCertBinding(registry);
     await assertBenchCandidateTokenPolicy(PROJECT_ROOT);
   } catch (error) {
     console.error("[check:supported-models] FAIL");
