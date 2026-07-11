@@ -62,7 +62,14 @@
  *     [--baseline-model gpt-5.5] [--baseline-provider openai] \
  *     [--baseline-auth oauth] [--baseline-effort medium] \
  *     [--reps 3] [--max-attempts <reps+2>] [--timeout-ms <per-review>] \
- *     [--out <dir>] [--rehearsal]
+ *     [--out <dir>] [--rehearsal] [--resume <prior-out-dir>]
+ *
+ * --resume continues an interrupted cert run (e.g. a provider usage-limit
+ * cutoff) INTO the prior out dir: completed ok rows, honest not_run rows, and
+ * witness captures are reused verbatim; new attempts continue each key's rep
+ * numbering. The attempt budget is CUMULATIVE across sessions, so a resume
+ * usually needs a raised --max-attempts; arms/efforts must match the original
+ * invocation (a divergence shows up as witness-capture inconsistency).
  */
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
@@ -109,7 +116,7 @@ let rehearsal = false;
 const VALUE_ARGS = new Set([
   "--candidate-model", "--candidate-provider", "--candidate-auth", "--candidate-effort",
   "--baseline-model", "--baseline-provider", "--baseline-auth", "--baseline-effort",
-  "--reps", "--out", "--max-attempts", "--timeout-ms",
+  "--reps", "--out", "--max-attempts", "--timeout-ms", "--resume",
 ]);
 for (let i = 0; i < argv.length; i += 1) {
   const arg = argv[i]!;
@@ -193,10 +200,18 @@ if (retryDefaults.salvage.enabled !== false || retryDefaults.resubmit.enabled !=
 }
 log("run_controls pin: defaultReviewRetrySettings() has salvage/resubmit OFF (benchmark temp-project settings carry it explicitly; project layer beats user layer)");
 
-// ── out dir ───────────────────────────────────────────────────────────────────
+// ── out dir (--resume: continue INTO a prior run's dir — completed rows and
+// witness captures are reused verbatim; new attempts continue the per-key rep
+// numbering so coordinates never collide) ─────────────────────────────────────
+if (opts["resume"] !== undefined && (opts["out"] !== undefined || rehearsal)) {
+  throw new Error(
+    "review-cert-run: --resume takes the prior run's dir as the out dir — do not combine with --out or --rehearsal",
+  );
+}
 const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
 const outDir = path.resolve(
-  opts["out"] ?? path.join("development-records", "benchmark", "review-cert", stamp),
+  opts["resume"] ?? opts["out"] ??
+    path.join("development-records", "benchmark", "review-cert", stamp),
 );
 const runsDir = path.join(outDir, "runs");
 const captureDir = path.join(outDir, "capture");
@@ -334,7 +349,13 @@ if (realCodex !== null) {
 
 const captureFileFor = (arm: ReviewCertArm): string => path.join(captureDir, `${arm}.jsonl`);
 for (const arm of REVIEW_CERT_ARMS) {
-  await fs.writeFile(captureFileFor(arm), ""); // fresh, append-ready
+  if (opts["resume"] !== undefined) {
+    // Resume PRESERVES the prior sessions' witness lines — truncating here
+    // would destroy the only dispatch evidence for already-completed rows.
+    await fs.appendFile(captureFileFor(arm), "");
+  } else {
+    await fs.writeFile(captureFileFor(arm), ""); // fresh, append-ready
+  }
 }
 
 // ── fixture manifest (single-sourced from the benchmark's fixture specs) ─────
@@ -525,11 +546,37 @@ function rowFromAttempt(args: {
 const progressPath = path.join(runsDir, "rows.progress.jsonl");
 const rows: ReviewCertRun[] = [];
 const okCounts = new Map<string, number>();
+// --resume seeding: prior rows (ok AND honest not_run) enter the record
+// verbatim; new attempts continue each key's rep numbering past the prior max.
+const priorOk = new Map<string, number>();
+const priorMaxRep = new Map<string, number>();
+if (opts["resume"] !== undefined) {
+  const priorText = await fs
+    .readFile(progressPath, "utf8")
+    .catch(() => {
+      throw new Error(
+        `review-cert-run: --resume dir has no ${progressPath} — nothing to resume`,
+      );
+    });
+  for (const line of priorText.split("\n")) {
+    if (line.trim().length === 0) continue;
+    const row = JSON.parse(line) as ReviewCertRun;
+    rows.push(row);
+    const key = `${row.arm}/${row.fixture_id}`;
+    if (row.completion === "ok") priorOk.set(key, (priorOk.get(key) ?? 0) + 1);
+    priorMaxRep.set(key, Math.max(priorMaxRep.get(key) ?? 0, row.rep));
+  }
+  log(
+    `resume: seeded ${rows.length} prior rows — ok per key: ${
+      [...priorOk.entries()].map(([key, count]) => `${key}=${count}`).join(", ") || "(none)"
+    }`,
+  );
+}
 for (const arm of [baseline, candidate]) {
   for (const fixtureId of FIXTURE_IDS) {
     const key = `${arm.arm}/${fixtureId}`;
-    let ok = 0;
-    let attempt = 0;
+    let ok = priorOk.get(key) ?? 0;
+    let attempt = priorMaxRep.get(key) ?? 0;
     while (ok < reps && attempt < maxAttempts) {
       attempt += 1;
       log(`${key}: attempt ${attempt}/${maxAttempts} (ok ${ok}/${reps}) — ${arm.model}@${arm.effort}`);
