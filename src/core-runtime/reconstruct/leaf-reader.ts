@@ -11,6 +11,7 @@ import {
   type LeafReadProducedResult,
   type LeafSemanticRole,
 } from "./comprehension-artifact.js";
+import { readReconstructLlmDispatchFailureError } from "./llm-dispatch-failure.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // leaf-reader (§3.2 / P1-C2-A · P1-C2-B′) — the FIRST LLM-touch. For a region the deterministic
@@ -326,8 +327,11 @@ export async function readStructureLeaf(args: {
       columns: evidence.columns,
     });
   } catch (error) {
-    // §11 R9: an LLM hard error (network/timeout/budget) is an explicit FAILED outcome — the caller
-    // degrades to a deterministic producer, never aborts the run.
+    // Provider output-ceiling failures are run-terminal: partial output must
+    // never enter leaf degradation or permit a later semantic call.
+    if (readReconstructLlmDispatchFailureError(error)) throw error;
+    // §11 R9: ordinary transport/provider errors remain explicit FAILED
+    // outcomes and degrade to the deterministic producer.
     return { kind: "failed", reason: `leaf-read LLM call failed: ${(error as Error).message}` };
   }
 

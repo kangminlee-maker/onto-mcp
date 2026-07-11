@@ -9,6 +9,7 @@ import {
   parseSupportedModelRegistry,
   RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH,
   requiredSupportedModelRoleForDispatch,
+  supportedModelMaxOutputTokens,
   type SupportedModelDispatch,
   type SupportedModelRegistry,
 } from "./supported-models.js";
@@ -214,10 +215,49 @@ describe("parseSupportedModelRegistry (context_window_tokens contract)", () => {
     ).toThrow(/context_window_provenance/);
   });
 
+  it("loads a max output limit with independent provenance", () => {
+    const parsed = parseSupportedModelRegistry(
+      entry({
+        max_output_tokens: 128000,
+        max_output_tokens_provenance: "OpenAI API model reference",
+      }),
+    );
+    expect(supportedModelMaxOutputTokens(parsed, "openai", "gpt-5.5"))
+      .toBe(128000);
+  });
+
+  it("rejects max_output_tokens without provenance", () => {
+    expect(() =>
+      parseSupportedModelRegistry(entry({ max_output_tokens: 128000 }))
+    ).toThrow(/max_output_tokens_provenance/);
+  });
+
+  it("rejects an unsafe max_output_tokens capability", () => {
+    expect(() =>
+      parseSupportedModelRegistry(entry({
+        max_output_tokens: Number.MAX_SAFE_INTEGER + 1,
+        max_output_tokens_provenance: "provider model reference",
+      }))
+    ).toThrow();
+  });
+
   it("rejects an unknown field (strict)", () => {
     expect(() =>
       parseSupportedModelRegistry(entry({ context_window: 1050000 }))
     ).toThrow(/Malformed supported-model registry/);
+  });
+
+  it("rejects duplicate provider/model authority rows", () => {
+    const duplicate = entry({ max_output_tokens: 128000 });
+    duplicate.supported_models.push({
+      ...duplicate.supported_models[0]!,
+      max_output_tokens: 64000,
+      max_output_tokens_provenance: "different source",
+    });
+
+    expect(() => parseSupportedModelRegistry(duplicate)).toThrow(
+      /duplicate supported model pair/,
+    );
   });
 });
 

@@ -94,6 +94,11 @@ const SupportedModelEntrySchema = z
     // benchmark result. Required whenever context_window_tokens is present so a
     // window value is never unsourced (C7).
     context_window_provenance: z.string().min(1).optional(),
+    // Provider-published maximum output ceiling. Reconstruct direct-API
+    // headroom preflight consumes this value before any provider call.
+    // INV-MODEL-1 / G4 protected, independently provenance-backed.
+    max_output_tokens: z.number().int().positive().safe().optional(),
+    max_output_tokens_provenance: z.string().min(1).optional(),
   })
   .strict()
   .refine(
@@ -105,6 +110,16 @@ const SupportedModelEntrySchema = z
         "context_window_tokens requires context_window_provenance (a window value must cite its source)",
       path: ["context_window_provenance"],
     },
+  )
+  .refine(
+    (entry) =>
+      entry.max_output_tokens === undefined ||
+      entry.max_output_tokens_provenance !== undefined,
+    {
+      message:
+        "max_output_tokens requires max_output_tokens_provenance (an output limit must cite its source)",
+      path: ["max_output_tokens_provenance"],
+    },
   );
 
 const SupportedModelRegistrySchema = z
@@ -112,7 +127,21 @@ const SupportedModelRegistrySchema = z
     schema_version: z.string().min(1),
     supported_models: z.array(SupportedModelEntrySchema),
   })
-  .strict();
+  .strict()
+  .superRefine((registry, ctx) => {
+    const seen = new Set<string>();
+    registry.supported_models.forEach((entry, index) => {
+      const key = `${entry.provider}\u0000${entry.model}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["supported_models", index],
+          message: `duplicate supported model pair: ${entry.provider}/${entry.model}`,
+        });
+      }
+      seen.add(key);
+    });
+  });
 
 export type SupportedModelRegistry = z.infer<typeof SupportedModelRegistrySchema>;
 
@@ -128,6 +157,8 @@ export interface SupportedModelGateOptions {
 
 export const RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH =
   "reconstruct.execution.actors.semantic_map_synthesize.llm";
+export const RECONSTRUCT_DISPATCH_FALLBACK_LLM_ROUTE_PATH =
+  "reconstruct.execution.dispatch_fallback.llm";
 
 /**
  * A model dispatch whose route must be gate-validated. The single runtime-owned
@@ -139,7 +170,9 @@ export const RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH =
  */
 export type SupportedModelDispatch =
   | { kind: "settings_path"; path: string }
-  | { kind: "request_judge" };
+  | { kind: "request_judge" }
+  | { kind: "semantic_map_synthesize" }
+  | { kind: "semantic_map_verify" };
 
 /**
  * Single owner of dispatch → required-role derivation (design §2.3).
@@ -151,6 +184,8 @@ export function requiredSupportedModelRoleForDispatch(
   dispatch: SupportedModelDispatch,
 ): SupportedModelRole {
   if (dispatch.kind === "request_judge") return "answer_support_judge";
+  if (dispatch.kind === "semantic_map_synthesize") return "semantic_map_synthesize";
+  if (dispatch.kind === "semantic_map_verify") return "semantic_map_verify";
   switch (dispatch.path) {
     case "reconstruct.execution.actors.semantic_author.llm":
       return "author";
@@ -329,6 +364,19 @@ export function collectModelSelections(settings: unknown): EffectiveModelRoute[]
     }
     if (value === null || typeof value !== "object") return;
     const record = value as Record<string, unknown>;
+    if (trail === RECONSTRUCT_DISPATCH_FALLBACK_LLM_ROUTE_PATH) {
+      const provider = typeof record.provider === "string" ? record.provider : undefined;
+      const model = typeof record.model === "string" ? record.model : undefined;
+      for (const kind of ["semantic_map_synthesize", "semantic_map_verify"] as const) {
+        out.push({
+          provider,
+          model,
+          path: `${trail}#${kind}`,
+          requiredRole: requiredSupportedModelRoleForDispatch({ kind }),
+        });
+      }
+      return;
+    }
     if (typeof record.model === "string" || typeof record.provider === "string") {
       const path = trail || "(root)";
       out.push({
@@ -351,6 +399,9 @@ export function collectModelSelections(settings: unknown): EffectiveModelRoute[]
   return out;
 }
 
+/** Canonical settings-to-dispatch collector consumed by runtime and G7. */
+export const collectSupportedModelDispatches = collectModelSelections;
+
 /** Does `entry` cover `role`? Absent `roles` = grandfathered full-route
  * allowance (covers every role — flat-registry backward compatibility);
  * present = covers exactly the listed roles. */
@@ -369,6 +420,14 @@ function supportedModelEntryFor(
   return registry.supported_models.find(
     (entry) => entry.provider === provider && entry.model === model,
   );
+}
+
+export function supportedModelMaxOutputTokens(
+  registry: SupportedModelRegistry,
+  provider: string,
+  model: string,
+): number | undefined {
+  return supportedModelEntryFor(registry, provider, model)?.max_output_tokens;
 }
 
 function isAllowedUnregisteredBenchCandidate(

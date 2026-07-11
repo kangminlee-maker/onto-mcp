@@ -328,6 +328,65 @@ describe("reconstruct run-control validation", () => {
     expect(diagnostic.safe_recovery_action).toBe("return_existing");
   });
 
+  it("serializes concurrent recovery of a dead cross-process mutation lock", async () => {
+    const root = await tempSessionRoot();
+    const lockPath = `${baseInitArgs(root).outputPath}.write-lock`;
+    await fs.mkdir(lockPath);
+    const staleAt = new Date(Date.now() - 60_000);
+    await fs.utimes(lockPath, staleAt, staleAt);
+
+    const results = await Promise.allSettled([
+      initializeReconstructRunControl(baseInitArgs(root)),
+      initializeReconstructRunControl(baseInitArgs(root)),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(await fs.lstat(lockPath).catch(() => null)).toBeNull();
+    const runControl = await readYaml<ReconstructRunControlArtifact>(
+      baseInitArgs(root).outputPath,
+    );
+    expect(runControl.attempt_rows).toHaveLength(1);
+    expect(runControl.lock_rows.filter((row) => row.lock_status === "held"))
+      .toHaveLength(1);
+  });
+
+  it("keeps a fallback-enabled live owner immutable when a resume races after lease expiry", async () => {
+    const root = await tempSessionRoot();
+    const args = { ...baseInitArgs(root), dispatchFallbackEnabled: true };
+    await initializeReconstructRunControl(args);
+    const live = await readYaml<ReconstructRunControlArtifact>(args.outputPath);
+    live.lock_rows[0]!.lease_started_at = "2000-01-01T00:00:00.000Z";
+    live.lock_rows[0]!.lease_expires_at = "2000-01-01T01:00:00.000Z";
+    await fs.writeFile(args.outputPath, JSON.stringify(live), "utf8");
+    const before = await fs.readFile(args.outputPath, "utf8");
+
+    await expect(initializeReconstructRunControl({
+      ...args,
+      resumeMode: "reuse_existing_authored_artifacts",
+    })).rejects.toThrow("lease expiry is not takeover authority");
+
+    expect(await fs.readFile(args.outputPath, "utf8")).toBe(before);
+  });
+
+  it("keeps every live owner immutable when a resume races after lease expiry", async () => {
+    const root = await tempSessionRoot();
+    const args = baseInitArgs(root);
+    await initializeReconstructRunControl(args);
+    const live = await readYaml<ReconstructRunControlArtifact>(args.outputPath);
+    live.lock_rows[0]!.lease_started_at = "2000-01-01T00:00:00.000Z";
+    live.lock_rows[0]!.lease_expires_at = "2000-01-01T01:00:00.000Z";
+    await fs.writeFile(args.outputPath, JSON.stringify(live), "utf8");
+    const before = await fs.readFile(args.outputPath, "utf8");
+
+    await expect(initializeReconstructRunControl({
+      ...args,
+      resumeMode: "reuse_existing_authored_artifacts",
+    })).rejects.toThrow("lease expiry is not takeover authority");
+
+    expect(await fs.readFile(args.outputPath, "utf8")).toBe(before);
+  });
+
   it("finalizes completed attempts with observed file hash transactions", async () => {
     const root = await tempSessionRoot();
     const init = await initializeReconstructRunControl(baseInitArgs(root));
@@ -721,6 +780,53 @@ describe("validateReconstructRunControl rejection branches", () => {
     });
     expect(validation.validation_status).toBe("valid");
     expect(validation.violations).toHaveLength(0);
+  });
+
+  it("rejects duplicate attempt ids", () => {
+    const runControl = cloneBase();
+    runControl.attempt_rows.push({
+      ...runControl.attempt_rows[0]!,
+      attempt_status: "abandoned",
+      completed_at: "2026-06-02T00:30:00.000Z",
+    });
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "schema_shape_invalid",
+        subject_id: "attempt:1",
+      }),
+    ]));
+  });
+
+  it("rejects duplicate transaction ids", () => {
+    const runControl = cloneBase();
+    const transaction = {
+      transaction_id: "write:1",
+      owner_attempt_id: "attempt:1",
+      artifact_ref: "/tmp/session/a.yaml",
+      temp_ref: null,
+      expected_prior_hash: null,
+      prepared_content_hash: "a".repeat(64),
+      committed_hash: "a".repeat(64),
+      commit_method: "atomic_replace" as const,
+      transaction_status: "committed" as const,
+      recovery_ref: null,
+    };
+    runControl.write_transactions.push(transaction, {
+      ...transaction,
+      artifact_ref: "/tmp/session/b.yaml",
+    });
+
+    const validation = validateReconstructRunControl({ runControl });
+
+    expect(validation.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "schema_shape_invalid",
+        subject_id: "write:1",
+      }),
+    ]));
   });
 
   it("rejects schema_version other than '1' (schema_shape_invalid)", () => {

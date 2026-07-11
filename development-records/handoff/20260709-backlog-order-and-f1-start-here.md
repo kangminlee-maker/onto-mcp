@@ -9,7 +9,7 @@
 2. §4-2 reconstruct semantic-map automatic stage resume
 3. INV-MODEL-1 B7 `benchCandidate` / allowlist governance
 4. §4-6c review unit model/effort tiering policy values
-5. §4-4 breaker-trip fallback provider swap / family-collapse
+5. §4-4 breaker-trip fallback provider swap (historical `family-collapse` label corrected in §8)
 6. rare-poison-stance hardening — done in §9
 
 관찰 3회/DEFAULT 승격은 1~5가 닫힌 뒤 다시 시작한다. 특히 1, 2, 5는 관찰의 회복 의미와
@@ -105,7 +105,7 @@ Backlog status after this cut:
 2. §4-2 reconstruct semantic-map automatic stage resume — done in working tree.
 3. INV-MODEL-1 B7 `benchCandidate` / allowlist governance — already present at `d788da8`.
 4. §4-6c review unit model/effort tiering policy values — see §7.
-5. Next: §4-4 breaker-trip fallback provider swap / family-collapse.
+5. Next: §4-4 breaker-trip fallback provider swap (`family-collapse`는 §8에서 정정).
 6. Then: rare-poison-stance hardening — done in §9.
 
 ## 7. §4-6c result (2026-07-10)
@@ -154,19 +154,71 @@ Backlog status after this cut:
 2. §4-2 reconstruct semantic-map automatic stage resume — done.
 3. INV-MODEL-1 B7 `benchCandidate` / allowlist governance — done at `d788da8`.
 4. §4-6c review unit model/effort tiering policy values — done in working tree.
-5. Next: §4-4 breaker-trip fallback provider swap / family-collapse.
+5. Next: §4-4 breaker-trip fallback provider swap (`family-collapse`는 §8에서 정정).
 6. Then: rare-poison-stance hardening — done in §9.
 
 ## 8. §4-4 design gate (2026-07-10)
 
-Status: design captured, implementation blocked on owner approval.
+Status: v6.2 originating-call P1a redesign reflected. Six independent
+`gpt-5.6-sol`, `effort=ultra` v5 reviews all converged on the same central design
+with specific fixes; the same six residual reviews again reported architecture
+convergence and bounded fixes only. The final check narrowed the sole persistence
+residual to timestamp-expiry takeover; v6.2 removes that authority. Persistence and
+implementation targeted closure both returned `NONE · RESOLVED · APPROVABLE`.
+Owner approval was received on 2026-07-10; implementation result is recorded in §10.
 
 Real-code correction:
 
 - `dispatch-breaker.ts` still deliberately implements breaker trip as halt +
   incomplete-item persistence. Fallback provider swap is the deferred later cut.
-- Reconstruct semantic-map now has the correct consumer for P1: same-batch
-  `dispatch-incomplete.yaml` + `semantic-map-resume-validation.yaml`.
+- `DispatchBreakerTripState.failure_class` and text classification remain breaker
+  halt/disclosure data, not provider-swap authority. P1a activation requires a
+  closed structured rate-limit envelope from a version-bound supported SDK route.
+- Current OAuth Codex/Claude workers flatten failures to text. P1a therefore starts
+  only with adapters that prove structured failure evidence and low-level retry
+  control; an enabled unsupported route fails before semantic-map provider calls.
+- Existing `NormalizedLlmSelection` and `LlmExecutionAdapter` remain canonical.
+  One private sealed dispatch capability owns the public descriptor and actual
+  `invokeOnce`; stable route identity is separate from the run-local capability
+  instance. Literal official endpoint, counting fetch, no-op logger/log-off,
+  credential handle, version, and retry controls cannot drift.
+- The current optional `semantic_map_synthesize` seat changes synthesize only;
+  provider-wide rate-limit recovery must swap the synthesize/verify capability
+  pair together.
+- A lineage-fixed, direct-child `dispatch-fallback-activation.yaml` acquired by
+  exclusive create is the one-pass predicate and claim authority. Only the fresh,
+  parentless initial attempt that directly observed the trip may create it.
+- Once activation exists, every later same-session entry is rejected before the
+  first run-control/session write and must use a new session. This avoids stale
+  create-once outcome hashes without adding cross-attempt result reuse.
+- One admission helper runs before Core API events and core run-control writes.
+  Resume cannot recover/release a `running+held` initial owner regardless of lease
+  timestamp. Clean terminal/abandoned + released may resume when activation is
+  absent; hard-crash residue requires a new session. Activation rechecks owner
+  token and committed transaction before the first fallback call.
+- Resume attempts with no activation preserve current primary recovery behavior
+  but are fallback-ineligible. Run-control RMW/CAS is not promoted into P1a scope.
+- P1 does not add a pre-dispatch record or fallback-specific running status.
+  Terminal completion uses the existing normal path. A fallback halt preserves the
+  current `DispatchBreakerTrippedError` failure path; P1a does not reuse `limited`.
+- Existing fixed-root partition/census/sidecar and the existing semantic-map stage
+  remain canonical. The pure exact-recovery context is shared with a second
+  same-call stage pass over only incomplete observations.
+- Observation, logical synthesize/verify dispatch, and physical adapter request are
+  distinct units. Fallback allows one pass and one adapter request per logical
+  dispatch, with SDK/transport/breaker/repair retries all disabled.
+- Success and failure share one run-scoped accounting source and one typed safe
+  dispatch error carrier. Provider rejection/unknown fails sanitized and cannot
+  fall back to text classification or dead-letter.
+- Census rows carry primary/fallback source, discarded primary spend, logical-call
+  and physical-request counts. A thin outcome audits completion/halt; it does not
+  duplicate partition or route catalogs.
+- Completed final files + outcome are one run-control checkpoint before continuation;
+  halted public truth is activation/outcome/checkpoint/current breaker error only.
+- The historical `family-collapse` label overclaimed the evidence: one failed
+  primary capability pair does not prove all models in a provider family failed.
+  v6.2 records exact failing-route and capability-instance evidence plus a
+  cross-provider route relation only.
 - Review recovery authority is different: continuation frontier, not
   `dispatch-incomplete.yaml`.
 - B7 `benchCandidate` is benchmark-only and must not be reused for product
@@ -178,33 +230,54 @@ Design artifact:
 
 Recommendation:
 
-- Implement P1 as reconstruct semantic-map only, behind a new default-off
-  `reconstruct.execution.dispatch_fallback` settings key.
-- Require a full fallback LLM config (`provider`, `auth`, `model`) and exact
-  route allowlist. No provider/model/auth defaults.
-- First trigger class should be `rate_limit` only unless owner explicitly
-  approves `transport` too. Exclude `auth` from first cut.
-- Record `dispatch-fallback.yaml` and make reconstruct status/result or record
-  consume it so family-collapse does not become inert.
+- Implement P1 as reconstruct spreadsheet semantic-map only, behind an optional
+  default-off `reconstruct.execution.dispatch_fallback` settings key.
+- Require one complete fallback LLM config (`provider`, `auth`, `model`,
+  `effort`) in one settings layer and apply it to the synthesize/verify pair.
+  Parse each layer before whole-object replacement; no cross-layer route-field
+  inheritance or provider/model/auth/effort defaults.
+- First cut accepts one exact-route structured `rate_limit` trip from a registered
+  official-endpoint SDK capability only. At least one primary operation must be
+  eligible; unsupported siblings keep current behavior but cannot contribute. Actual contributors share one descriptor,
+  and fallback provider differs from it; mixed-route trips preserve current halt.
+- Acquire `dispatch-fallback-activation.yaml` by no-follow exclusive create before
+  any fallback call. Reuse the current stage with exact recovery context, one
+  fallback pass, and one physical request per fallback logical dispatch.
+- Secure-publish the final fixed-root partition/census/sidecar, then create a thin
+  `dispatch-fallback-outcome.yaml`. Run-control indexes refs/hashes; valid outcome is
+  the non-atomic multi-file publication's terminal marker.
+- Emit record/manifest/ledger fallback fields only when active, prevent singular
+  last-wins route telemetry, and keep OFF record bytes unchanged.
+- Use the same named synthesize/verify dispatch collector in runtime and G7. Verify
+  remains grandfathered-full-route-only until its evidence contract is listable.
+- Fresh package parity owns clean TS/MCPB/npm manifests and exact adapter versions.
+- Do not add fallback cache, dynamic canonical result refs, route catalogs, or a
+  new graceful terminal in P1a.
 - Defer review provider swap to P2, likely via explicit `onto_review_continue`
   fallback profile.
 
-Approval required before code:
+Gates before code:
 
-- `.onto/settings.json` schema/key addition touches AGENTS §0 protected settings
-  contract and INV-CFG-1/INV-AUTH-1/INV-MODEL-1.
-- Product fallback route gate must be separate from B7 benchCandidate.
+- Targeted closure over v6.2 completed with persistence and implementation
+  `gpt-5.6-sol`, `effort=ultra` lenses: no surviving blocker/high; main context
+  re-verified lease, preflight, instance binding, and mutation controls.
+- Owner approval for the ten protected changes in design §13 was received on
+  2026-07-10; implementation and verification are recorded in §10.
+- Product fallback routes reuse the normal supported-model gate and never receive
+  B7 `benchCandidate`.
 
 Backlog status after this gate:
 
-1. §4-4 P1 reconstruct semantic-map fallback provider swap — waiting for owner
-   approval of default-off settings schema and trigger class.
-2. §4-4 P2 review fallback provider swap — deferred.
-3. rare-poison-stance hardening — done in §9.
+1. §4-4 P1a reconstruct semantic-map originating-call fallback provider swap —
+   implemented; live product-path evidence remains pending.
+2. §4-4 P1b fallback-result cross-attempt reuse — deferred unless incidents prove
+   the additional persistence cost material.
+3. §4-4 P2 review fallback provider swap — deferred.
+4. rare-poison-stance hardening — done in §9.
 
 ## 9. rare-poison-stance hardening result (2026-07-10)
 
-Status: implemented in the working tree.
+Status: landed at `7b1c9b4`.
 
 Design artifact:
 
@@ -244,7 +317,127 @@ Verification:
 
 Remaining backlog:
 
-1. §4-4 P1 reconstruct semantic-map fallback provider swap — blocked on owner
-   approval of default-off settings schema.
-2. §4-4 P2 review fallback provider swap — deferred.
-3. Observation window 0/3 remains pending after fallback/final hardening.
+1. §4-4 P1a reconstruct semantic-map originating-call fallback provider swap —
+   implemented; live product-path evidence remains pending (see §10).
+2. §4-4 P1b fallback-result cross-attempt reuse — deferred.
+3. §4-4 P2 review fallback provider swap — deferred.
+4. Observation window 0/3 remains pending after fallback/final hardening.
+
+## 10. §4-4 P1a implementation result (2026-07-10)
+
+Status: implemented in the working tree after owner approval. Deterministic and
+support verification is green; paid live alternate-provider and natural-incident
+evidence remain pending.
+
+Implemented:
+
+- strict default-off `reconstruct.execution.dispatch_fallback` whole-object settings
+- shared named synthesize/verify supported-model collector
+- exact-version official-endpoint sealed SDK capabilities with counted fetch,
+  retry 0, logging off, ambient route-env rejection, and `StructuredDispatchError`
+- run-scoped semantic-map dispatch accounting and mixed-route singular null projection
+- direct-child create-once activation, thin completed/halted outcome, first-write
+  admission, `running+held` takeover fence, secure final publication, and checkpoint
+- same-call reuse of the existing semantic-map stage over exact incomplete ids only;
+  one fallback pass, one provider attempt per fallback logical dispatch, no parse repair
+- completed-only record/manifest/ledger projection and halted breaker-error disclosure
+- exact OpenAI/Anthropic SDK pins plus fresh npm/MCPB package parity gate
+
+Verification:
+
+- `npm run test:vitest` — 170 files, 2,740 passed, 1 todo
+- `npm run check:ts-core` — passed
+- `npm run check:dispatch-fallback-package-parity` — passed
+- `npm run check:invariant-drift -- origin/main` — `no_drift`
+- G7/G8/G9/G10, import-boundary, spec-defaults, graceful-signal-rethrow,
+  and `git diff --check` — passed
+
+Evidence boundary:
+
+- deterministic local SDK 429/counting tests are boundary-support evidence, not
+  product completion or semantic-quality evidence
+- paid live alternate-provider success and a natural primary structured rate-limit
+  incident were not available in this session
+
+Remaining backlog:
+
+1. §4-4 P1a live product-path evidence: non-empty alternate-provider semantic-map completion
+2. natural incident evidence when a primary sealed route actually rate-limits
+3. §4-4 P1b cross-attempt result reuse — deferred unless incident cost proves material
+4. §4-4 P2 review provider fallback — deferred
+5. observation window remains 0/3
+
+## 11. §4-4 P1a implementation review closure (2026-07-11)
+
+Three independent `gpt-5.6-sol`, `effort=ultra` post-implementation reviews
+covered runtime/concurrency, SDK/security, and OFF/consumer/package behavior.
+All re-derived material findings are closed in code and mutation/contrast tests:
+
+- live-owner lineage admission and activation/outcome checkpoint acceptance
+- physical adapter-request accounting across breaker retries and cumulative caps
+- immutable SDK client/fetch/credential/model/effort sealing with sanitized errors
+- discriminated failure schema plus terminal partition/census/sidecar validation
+- canonical-parent symlink/inode defenses and expanded npm/MCPB deletion mutations
+- unsupported primary sibling isolation and exact OFF telemetry compatibility
+
+Dated authority correction: active fallback no longer indexes the final record as a
+committed run-control transaction artifact. That would claim a pre-final hash because
+the existing record/run-control assembly is a two-pass hash cycle. The immutable
+outcome transaction plus the record's recomputed canonical outcome projection now own
+active fallback integrity. The general OFF-path two-pass record hash cycle predates
+P1a and remains a separate architecture backlog; it was not silently redesigned here.
+
+Final support verification:
+
+- `npm run test:vitest` — 170 files, 2,740 passed, 1 todo
+- related fallback/reconstruct suite — 11 files, 325 passed
+- `npm run check:ts-core` — passed
+- `npm run check:dispatch-fallback-package-parity` — passed
+- `npm run check:invariant-drift` — `no_drift`
+- `npm run check:graceful-signal-rethrow` and `git diff --check` — passed
+
+Remaining backlog, dependency order:
+
+1. §4-4 P1a live product-path evidence: non-empty alternate-provider semantic-map completion
+2. natural primary structured rate-limit incident evidence
+3. observation window 0/3
+4. general record/run-control two-pass hash-cycle redesign, separately scoped
+5. §4-4 P1b cross-attempt result reuse, incident-cost gated
+6. §4-4 P2 review provider fallback
+
+## 12. §4-4 P1a live support evidence (2026-07-11)
+
+The bounded live harness `scripts/reconstruct-dispatch-fallback-live-e2e.mts`
+ran the actual Core API over an isolated spreadsheet fixture. Its no-`--go`
+preflight proved zero provider calls and one synthesize/one seam subject.
+
+Observed support evidence:
+
+- injected typed primary SDK 429: 1 logical / 3 physical requests
+- real Anthropic `claude-opus-4-8` fallback synthesize: 1 logical / 1 physical
+- canonical fallback outcome: completed, map-present=1, incomplete=0
+- same-call stage verify: 0 because the boundary was structurally anchored
+- independent real sealed fallback verify probe: 1 physical request,
+  canonical `adversarial_refuted`
+- activation/outcome/partition/census/sidecar hashes and outcome checkpoint:
+  independently revalidated by assessment mode
+
+Three downstream completion attempts ended after fallback completion: OAuth
+medium hit a `source_frontier` usage limit; API-key medium reached
+`candidate_disposition` but Responses exhausted 4,000 output tokens; API-key low
+passed that contrast and then exhausted 9,000 output tokens at `ontology_seed`.
+Therefore this closes the non-empty live alternate-provider semantic-map support
+item, but does not claim a completed downstream reconstruct record, natural
+incident evidence, or semantic quality. Durable record:
+`development-records/benchmark/dispatch-fallback-live/20260711-injected-primary-real-anthropic.json`.
+
+Remaining backlog, dependency order:
+
+1. Direct-API reconstruct output-budget design: Responses reasoning-token
+   exhaustion at candidate-disposition/ontology-seed, separately scoped
+2. Natural primary structured rate-limit incident evidence
+3. Full downstream reconstruct completion with active fallback record projection
+4. Observation window 0/3
+5. General record/run-control two-pass hash-cycle redesign, separately scoped
+6. §4-4 P1b cross-attempt result reuse, incident-cost gated
+7. §4-4 P2 review provider fallback

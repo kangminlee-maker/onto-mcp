@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,7 +7,11 @@ import type {
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
 } from "./artifact-types.js";
-import { buildReconstructPipelineExecutionLedger } from "./pipeline-execution-ledger.js";
+import {
+  buildReconstructPipelineExecutionLedger,
+  reconstructStageIdForArtifactRef,
+  reconstructStageOwner,
+} from "./pipeline-execution-ledger.js";
 
 const tempRoots: string[] = [];
 
@@ -24,6 +29,16 @@ afterEach(async () => {
       fs.rm(root, { recursive: true, force: true }),
     ),
   );
+});
+
+describe("reconstruct stage artifact projection authority", () => {
+  it("maps non-isomorphic artifact names and confirmation ownership", () => {
+    expect(reconstructStageIdForArtifactRef(
+      "/tmp/source-safety-ledger-validation.yaml",
+    )).toBe("source_safety_validation");
+    expect(reconstructStageOwner("purpose_confirmation")).toBe("host_or_user");
+    expect(reconstructStageOwner("ontology_seed")).toBe("host_llm");
+  });
 });
 
 function emptyRefs(): ReconstructRecordArtifactRefs {
@@ -203,6 +218,107 @@ async function writeInvalidValidation(filePath: string): Promise<string> {
 }
 
 describe("buildReconstructPipelineExecutionLedger", () => {
+  it("adds the completed fallback outcome as a hashed semantic-map companion", async () => {
+    const root = await tempSessionRoot();
+    const censusRef = await writeArtifact(
+      path.join(root, "comprehension", "semantic-map-census.yaml"),
+    );
+    const outcomeRef = path.join(root, "dispatch-fallback-outcome.yaml");
+    await fs.writeFile(outcomeRef, JSON.stringify({
+      schema_version: "dispatch-fallback-outcome/v1",
+      session_id: path.basename(root),
+      created_at: new Date().toISOString(),
+      owner_attempt_id: "attempt-1",
+      activation: { ref: path.join(root, "dispatch-fallback-activation.yaml"), sha256: "a".repeat(64) },
+      status: "completed",
+      partition: {
+        target_count: 1,
+        completed_count: 1,
+        dead_letter_count: 0,
+        incomplete_count: 0,
+      },
+      dispatch_counts: {
+        synthesize_logical: 1,
+        verify_logical: 0,
+        synthesize_adapter_requests: 1,
+        verify_adapter_requests: 0,
+      },
+      final_artifacts: {
+        dispatch_incomplete: { ref: path.join(root, "dispatch-incomplete.yaml"), sha256: "b".repeat(64) },
+        semantic_map_census: { ref: censusRef, sha256: "c".repeat(64) },
+        semantic_map: { ref: path.join(root, "comprehension", "semantic-map.yaml"), sha256: "d".repeat(64) },
+      },
+      terminal_failure: null,
+    }), "utf8");
+    const outcomeSha = crypto
+      .createHash("sha256")
+      .update(await fs.readFile(outcomeRef))
+      .digest("hex");
+    const reconstructRecord = record(root, { semantic_map_census: censusRef });
+    reconstructRecord.record_stage = "completed";
+    reconstructRecord.dispatch_fallback = {
+      outcome_ref: outcomeRef,
+      outcome_sha256: outcomeSha,
+      activation_sha256: "a".repeat(64),
+      owner_attempt_id: "attempt-1",
+      trigger_code: "rate_limit",
+      route_relation: "cross_provider",
+      target_count: 1,
+      completed_count: 1,
+      dead_letter_count: 0,
+      incomplete_count: 0,
+      synthesize_logical_dispatch_count: 1,
+      verify_logical_dispatch_count: 0,
+      synthesize_adapter_request_count: 1,
+      verify_adapter_request_count: 0,
+      outcome: "completed",
+    };
+    const manifest = {
+      artifact_refs: {},
+      steps: [{
+        step_id: "semantic_map",
+        status: "completed",
+        artifact_refs: [censusRef, outcomeRef],
+      }],
+    } as never;
+    const ledger = await buildReconstructPipelineExecutionLedger({
+      sessionRoot: root,
+      reconstructRecord,
+      reconstructRunManifest: manifest,
+    });
+    const semanticMap = ledger.units.find((unit) => unit.unitId === "semantic_map")!;
+    expect(semanticMap.outputRefs).toEqual([censusRef, outcomeRef].sort());
+    expect(semanticMap.outputHashes[outcomeRef]).toBe(outcomeSha);
+
+    await expect(
+      buildReconstructPipelineExecutionLedger({
+        sessionRoot: root,
+        reconstructRecord,
+        reconstructRunManifest: {
+          artifact_refs: {},
+          steps: [{
+            step_id: "semantic_map",
+            status: "completed",
+            artifact_refs: [censusRef],
+          }],
+        } as never,
+      }),
+    ).rejects.toThrow("record/manifest mismatch");
+
+    await fs.writeFile(outcomeRef, "status: completed\n", "utf8");
+    reconstructRecord.dispatch_fallback.outcome_sha256 = crypto
+      .createHash("sha256")
+      .update(await fs.readFile(outcomeRef))
+      .digest("hex");
+    await expect(
+      buildReconstructPipelineExecutionLedger({
+        sessionRoot: root,
+        reconstructRecord,
+        reconstructRunManifest: manifest,
+      }),
+    ).rejects.toThrow("not a valid completed canonical outcome");
+  });
+
   it("records direct validator authority-input edges in the ledger topology", async () => {
     const root = await tempSessionRoot();
 

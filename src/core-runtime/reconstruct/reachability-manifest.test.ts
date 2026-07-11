@@ -272,6 +272,7 @@ describe("createRunManifest — graceful-terminal witness-gating (Slice 2)", () 
     refs?: Partial<ReconstructRecordArtifactRefs>;
     graceful?: ReconstructGracefulTerminalManifestInput;
     recordPath?: string;
+    dispatchFallbackOutcomeRef?: string;
   }): ReconstructRunManifestArtifact {
     return createRunManifest({
       sessionId: "session-1",
@@ -286,6 +287,9 @@ describe("createRunManifest — graceful-terminal witness-gating (Slice 2)", () 
       governingSnapshot: snapshot,
       terminalArtifactsCompleted: false,
       graceful: opts.graceful,
+      ...(opts.dispatchFallbackOutcomeRef
+        ? { dispatchFallbackOutcomeRef: opts.dispatchFallbackOutcomeRef }
+        : {}),
     });
   }
 
@@ -385,6 +389,24 @@ describe("createRunManifest — graceful-terminal witness-gating (Slice 2)", () 
     expect(stepOf(m, "source_purpose_candidates")).toMatchObject({ status: "completed", artifact_refs: [] });
     expect(m.steps.some((s) => s.skip_kind !== undefined)).toBe(false);
     expect(m.execution_profile.allowed_completion_claim).toContain("completed the live integral");
+  });
+
+  it("adds the active completed fallback outcome only to the semantic_map step", async () => {
+    const census = await writeArtifact("semantic-map-census.yaml");
+    const sidecar = await writeArtifact("semantic-map.yaml");
+    const outcome = await writeArtifact("dispatch-fallback-outcome.yaml");
+    const manifest = build({
+      refs: { semantic_map_census: census, semantic_map_sidecar: sidecar },
+      dispatchFallbackOutcomeRef: outcome,
+    });
+    expect(stepOf(manifest, "semantic_map").artifact_refs).toEqual([
+      census,
+      sidecar,
+      outcome,
+    ]);
+    expect(
+      manifest.steps.filter((step) => step.artifact_refs.includes(outcome)),
+    ).toHaveLength(1);
   });
 
   // ── S4 (design §16.3): the graceful terminal deterministically PRODUCES a final-output + record.

@@ -10,6 +10,7 @@ import {
   unitIdForAuthoredArtifactName,
   type ReconstructUnitExecutionTelemetry,
 } from "./execution-telemetry.js";
+import { StructuredDispatchError } from "../llm/structured-dispatch-error.js";
 
 describe("reconstruct execution telemetry", () => {
   it("maps authored artifact names to owning pipeline units", () => {
@@ -55,6 +56,15 @@ describe("reconstruct execution telemetry", () => {
     expect(
       failureClassForLlmCallError(new Error("connection refused"), isTimeout),
     ).toBe("provider_error");
+    expect(failureClassForLlmCallError(new StructuredDispatchError({
+      descriptor_id: "descriptor",
+      capability_instance_id: "instance",
+      logical_dispatch_id: "logical",
+      actual_adapter_request_count: 1,
+      failure_class: "transport",
+      failure_code: "timeout",
+      source: "sdk_exception_type",
+    }), () => false)).toBe("timeout");
   });
 
   it("aggregates per-unit calls into one telemetry row with attempt lineage", () => {
@@ -156,6 +166,75 @@ describe("reconstruct execution telemetry", () => {
     expect(terminalFailureMessageFromTelemetry(null)).toBeNull();
   });
 
+  it("nulls every singular route projection after a mixed-provider unit", () => {
+    const collector = createReconstructExecutionTelemetryCollector({
+      nullMixedRouteProjection: true,
+    });
+    for (const input of [
+      {
+        providerRoute: "openai",
+        provider: "openai",
+        executionAdapter: "openai_sdk" as const,
+        effectiveBaseUrl: "https://api.openai.com/v1",
+        modelId: "model-a",
+        effort: "medium",
+      },
+      {
+        providerRoute: "anthropic",
+        provider: "anthropic",
+        executionAdapter: "anthropic_sdk" as const,
+        effectiveBaseUrl: "https://api.anthropic.com",
+        modelId: "model-b",
+        effort: "high",
+      },
+    ]) {
+      collector.recordLlmAttempt({
+        unitId: "semantic_map",
+        kind: "initial",
+        status: "succeeded",
+        durationMs: 1,
+        promptChars: 1,
+        outputChars: 1,
+        ...input,
+      });
+    }
+    expect(collector.unitTelemetry("semantic_map")).toMatchObject({
+      provider_route: null,
+      model_id: null,
+      effort: null,
+      route_identity: null,
+      llm_call_count: 2,
+    });
+  });
+
+  it("keeps the legacy last-attempt route projection unless fallback opts in", () => {
+    const collector = createReconstructExecutionTelemetryCollector();
+    for (const provider of ["openai", "anthropic"] as const) {
+      collector.recordLlmAttempt({
+        unitId: "semantic_map",
+        kind: "initial",
+        status: "succeeded",
+        durationMs: 1,
+        promptChars: 1,
+        outputChars: 1,
+        providerRoute: provider,
+        provider,
+        executionAdapter: provider === "openai" ? "openai_sdk" : "anthropic_sdk",
+        effectiveBaseUrl:
+          provider === "openai"
+            ? "https://api.openai.com/v1"
+            : "https://api.anthropic.com",
+        modelId: `${provider}-model`,
+        effort: "medium",
+      });
+    }
+    expect(collector.unitTelemetry("semantic_map")).toMatchObject({
+      provider_route: "anthropic",
+      model_id: "anthropic-model",
+      effort: "medium",
+    });
+  });
+
   it("accumulates distinct authored-artifact source identity refs", () => {
     const collector = createReconstructExecutionTelemetryCollector();
     collector.recordLlmAttempt({
@@ -187,7 +266,7 @@ describe("reconstruct execution telemetry", () => {
     ).toBe(true);
   });
 
-  it("keeps provider tokens null when the provider reports none", () => {
+  it("preserves provider-reported zero tokens distinctly from unreported tokens", () => {
     const collector = createReconstructExecutionTelemetryCollector();
     collector.recordLlmAttempt({
       unitId: "stop_decision",
@@ -200,8 +279,21 @@ describe("reconstruct execution telemetry", () => {
       providerTokensOut: 0,
     });
     const row = collector.unitTelemetry("stop_decision");
-    expect(row?.provider_tokens_in).toBeNull();
-    expect(row?.provider_tokens_out).toBeNull();
+    expect(row?.provider_tokens_in).toBe(0);
+    expect(row?.provider_tokens_out).toBe(0);
+
+    const unreportedCollector = createReconstructExecutionTelemetryCollector();
+    unreportedCollector.recordLlmAttempt({
+      unitId: "stop_decision",
+      kind: "initial",
+      status: "succeeded",
+      durationMs: 5,
+      promptChars: 10,
+      outputChars: 10,
+    });
+    const unreported = unreportedCollector.unitTelemetry("stop_decision");
+    expect(unreported?.provider_tokens_in).toBeNull();
+    expect(unreported?.provider_tokens_out).toBeNull();
   });
 
   it("resets all recorded rows for run-scoped collection", () => {

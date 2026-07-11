@@ -10,6 +10,7 @@ export default defineConfig({
       "src/core-api/**/*.test.ts",
       "src/mcp/**/*.test.ts",
       "src/tui/**/*.test.{ts,tsx}",
+      "scripts/**/*.test.ts",
     ],
     testTimeout: 30000,
   },

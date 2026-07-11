@@ -872,6 +872,11 @@ artifact_authorities:
   reconstruct_run_control_validation:
     authority_ref: reconstruct-run-control-validation.yaml
     validation_ref: null
+  llm_dispatch_failures:
+    authority_ref: llm-dispatch-failures/*.yaml
+    validation_ref: reconstruct-run-control-validation.yaml
+    registry_ref: src/core-runtime/reconstruct/llm-dispatch-failure.ts
+    projection_policy: runtime_owned_provider_incomplete_evidence_projected_only_through_bounded_failed_status
   reconstruct_run_control_pre_publication_validation:
     authority_ref: reconstruct-run-control.pre-publication-validation.yaml
     validation_ref: null
@@ -920,6 +925,16 @@ artifact_authorities:
     authority_ref: semantic-map-resume-validation.yaml
     validation_ref: null
     projection_policy: runtime_owned_validation_of_same_batch_semantic_map_recovery_frontier
+  dispatch_fallback_activation:
+    authority_ref: dispatch-fallback-activation.yaml
+    validation_ref: null
+    registry_ref: src/core-runtime/reconstruct/dispatch-fallback-artifacts.ts
+    projection_policy: create_once_lineage_claim_for_originating_initial_semantic_map_rate_limit_fallback
+  dispatch_fallback_outcome:
+    authority_ref: dispatch-fallback-outcome.yaml
+    validation_ref: null
+    registry_ref: src/core-runtime/reconstruct/dispatch-fallback-artifacts.ts
+    projection_policy: terminal_commit_marker_for_one_same_call_exact_incomplete_fallback_pass
   source_safety_ledger:
     authority_ref: source-safety-ledger.yaml
     validation_ref: source-safety-ledger-validation.yaml

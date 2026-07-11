@@ -34,6 +34,10 @@
  */
 
 import path from "node:path";
+import {
+  readStructuredDispatchFailureClass,
+  readStructuredDispatchFailureEvidence,
+} from "./structured-dispatch-error.js";
 
 /**
  * Breaker counting refinement of the shared pipeline ledger's OPEN
@@ -125,6 +129,8 @@ export function classifySystemicDispatchFailure(
 export function classifyDispatchError(
   error: unknown,
 ): SystemicDispatchFailureClass | null {
+  const structured = readStructuredDispatchFailureEvidence(error);
+  if (structured) return structured.failure_class;
   const status = (error as { status?: unknown } | null)?.status;
   if (typeof status === "number") {
     if (status === 429) return "rate_limit";
@@ -157,6 +163,8 @@ function markDispatchFailureClass(
 export function readDispatchFailureClass(
   error: unknown,
 ): SystemicDispatchFailureClass | null {
+  const structured = readStructuredDispatchFailureEvidence(error);
+  if (structured) return readStructuredDispatchFailureClass(error);
   if (error === null || typeof error !== "object") return null;
   const failureClass = (error as Record<PropertyKey, unknown>)[DISPATCH_FAILURE_CLASS];
   return failureClass === "rate_limit" || failureClass === "auth" || failureClass === "transport"
@@ -330,15 +338,33 @@ export class DispatchBreakerState {
 
 export class DispatchBreakerTrippedError extends Error {
   readonly trip: DispatchBreakerTripState;
+  declare readonly structuredContributors?: readonly import("./structured-dispatch-error.js").StructuredDispatchFailureEvidence[];
+  declare readonly fallbackOutcomePath?: string;
 
-  constructor(trip: DispatchBreakerTripState, incompleteArtifactPath?: string | null) {
+  constructor(
+    trip: DispatchBreakerTripState,
+    incompleteArtifactPath?: string | null,
+    options?: {
+      structuredContributors?: readonly import("./structured-dispatch-error.js").StructuredDispatchFailureEvidence[];
+      fallbackOutcomePath?: string | null;
+    },
+  ) {
     super(
       `dispatch breaker tripped: ${trip.failure_class} failed ${trip.consecutive_item_count} consecutive items (threshold ${trip.threshold}) — batch halted, incomplete items persisted for exact re-dispatch${
         incompleteArtifactPath ? ` (${incompleteArtifactPath})` : ""
+      }${options?.fallbackOutcomePath ? `; fallback outcome: ${options.fallbackOutcomePath}` : ""
       }`,
     );
     this.name = "DispatchBreakerTrippedError";
     this.trip = trip;
+    if (options?.structuredContributors) {
+      this.structuredContributors = options.structuredContributors.map((entry) =>
+        structuredClone(entry)
+      );
+    }
+    if (options?.fallbackOutcomePath) {
+      this.fallbackOutcomePath = options.fallbackOutcomePath;
+    }
   }
 }
 
@@ -421,6 +447,31 @@ export interface DispatchIncompleteArtifact {
   dead_letter: DispatchDeadLetterEntry[];
   /** Exact recovery set (설계 B 규칙 5): planned − completed − dead-lettered. */
   incomplete_item_ids: string[];
+}
+
+export function isDispatchIncompleteArtifact(
+  value: unknown,
+): value is DispatchIncompleteArtifact {
+  const candidate = value as DispatchIncompleteArtifact | null;
+  return Boolean(
+    candidate &&
+      typeof candidate === "object" &&
+      candidate.schema_version === "1" &&
+      typeof candidate.pipeline === "string" &&
+      typeof candidate.batch_label === "string" &&
+      candidate.breaker &&
+      typeof candidate.breaker === "object" &&
+      typeof candidate.breaker.tripped === "boolean" &&
+      typeof candidate.breaker.threshold === "number" &&
+      Array.isArray(candidate.completed_item_ids) &&
+      candidate.completed_item_ids.every((id) => typeof id === "string") &&
+      Array.isArray(candidate.dead_letter) &&
+      candidate.dead_letter.every(
+        (entry) => entry && typeof entry === "object" && typeof entry.item_id === "string",
+      ) &&
+      Array.isArray(candidate.incomplete_item_ids) &&
+      candidate.incomplete_item_ids.every((id) => typeof id === "string"),
+  );
 }
 
 function assertUniqueItemIds(itemIds: readonly string[], label: string): void {

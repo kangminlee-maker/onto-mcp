@@ -1,10 +1,14 @@
 import crypto from "node:crypto";
+import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import lockfile from "proper-lockfile";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { z } from "zod";
 import {
   assertArrayField,
   atomicWriteYamlDocument as writeYamlDocument,
+  durableAtomicWriteYamlDocument as writeRunControlDocument,
 } from "../artifact-io.js";
 import { assertObligation } from "./obligation-assertion.js";
 import type {
@@ -14,6 +18,27 @@ import type {
   ReconstructRunControlValidationArtifact,
   ReconstructRunControlValidationViolation,
 } from "./artifact-types.js";
+import {
+  assertDispatchFallbackRunControlHasNoLiveOwner,
+  assertDispatchFallbackSessionAdmission,
+} from "./dispatch-fallback-artifacts.js";
+import {
+  RECONSTRUCT_LLM_DISPATCH_FAILURE_DIR,
+  ReconstructLlmDispatchFailureArtifactSchema,
+  assertReconstructLlmDispatchFailureDirectory,
+  createReconstructLlmDispatchFailureArtifact,
+  isReconstructLlmDispatchFailureRef,
+  isReconstructLlmDispatchFailureTempRef,
+  planReconstructLlmDispatchFailureWrite,
+  publishReconstructLlmDispatchFailureTemp,
+  readReconstructLlmDispatchFailureArtifact,
+  readReconstructLlmDispatchFailureArtifactWithHash,
+  reconstructLlmDispatchFailurePath,
+  sha256ReconstructLlmDispatchFailureArtifact,
+  writeReconstructLlmDispatchFailureTemp,
+  type ReconstructLlmDispatchFailureArtifact,
+  type ReconstructLlmDispatchFailureError,
+} from "./llm-dispatch-failure.js";
 
 function isoNow(): string {
   return new Date().toISOString();
@@ -21,6 +46,52 @@ function isoNow(): string {
 
 function sha256(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+const runControlMutationQueues = new Map<string, Promise<void>>();
+
+async function withRunControlMutationLock<T>(
+  runControlPath: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const key = path.resolve(runControlPath);
+  const previous = runControlMutationQueues.get(key) ?? Promise.resolve();
+  let releaseQueue: () => void = () => {};
+  const current = new Promise<void>((resolve) => {
+    releaseQueue = resolve;
+  });
+  const queued = previous.then(() => current);
+  runControlMutationQueues.set(key, queued);
+  await previous;
+
+  const lockPath = `${key}.write-lock`;
+  let releaseFileLock: (() => Promise<void>) | null = null;
+  try {
+    await fs.mkdir(path.dirname(key), { recursive: true });
+    releaseFileLock = await lockfile.lock(key, {
+      lockfilePath: lockPath,
+      realpath: false,
+      stale: 5_000,
+      update: 1_000,
+      retries: {
+        retries: 600,
+        factor: 1,
+        minTimeout: 50,
+        maxTimeout: 50,
+        randomize: false,
+      },
+    });
+    return await task();
+  } finally {
+    try {
+      if (releaseFileLock) await releaseFileLock();
+    } finally {
+      releaseQueue();
+      if (runControlMutationQueues.get(key) === queued) {
+        runControlMutationQueues.delete(key);
+      }
+    }
+  }
 }
 
 async function sha256File(filePath: string): Promise<string | null> {
@@ -44,9 +115,28 @@ async function writeYamlDocumentAtomicCreate(
     path.dirname(filePath),
     `.${path.basename(filePath)}.${process.pid}.${crypto.randomUUID()}.tmp`,
   );
-  await fs.writeFile(tempPath, stringifyYaml(value), "utf8");
+  const handle = await fs.open(
+    tempPath,
+    fsConstants.O_CREAT |
+      fsConstants.O_EXCL |
+      fsConstants.O_WRONLY |
+      fsConstants.O_NOFOLLOW,
+    0o600,
+  );
+  try {
+    await handle.writeFile(stringifyYaml(value), "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
   try {
     await fs.link(tempPath, filePath);
+    const directoryHandle = await fs.open(path.dirname(filePath), fsConstants.O_RDONLY);
+    try {
+      await directoryHandle.sync();
+    } finally {
+      await directoryHandle.close();
+    }
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
@@ -224,6 +314,9 @@ export function validateReconstructRunControl(args: {
   expectedCommittedArtifactRefs?: string[];
   terminalValidationRef?: string | null;
   terminalValidationStatus?: string | null;
+  failedTerminalArtifactRef?: string | null;
+  failedTerminalArtifact?: unknown;
+  failedTerminalArtifactSha256?: string | null;
 }): ReconstructRunControlValidationArtifact {
   assertArrayField(args.runControl.request_rows, "run-control", "request_rows");
   assertArrayField(args.runControl.attempt_rows, "run-control", "attempt_rows");
@@ -309,18 +402,111 @@ export function validateReconstructRunControl(args: {
       message: "run-control must record at least one attempt row",
     }));
   }
-  const currentAttempt = [...args.runControl.attempt_rows]
-    .reverse()
-    .find((row) =>
-      row.attempt_status === "running" ||
-      row.attempt_status === "completed" ||
-      row.attempt_status === "recovered" ||
-      row.attempt_status === "halted"
-    ) ?? null;
+  const duplicateIds = (
+    rows: readonly Record<string, unknown>[],
+    field: string,
+  ): string[] => {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const row of rows) {
+      const value = row[field];
+      if (typeof value !== "string") continue;
+      if (seen.has(value)) duplicates.add(value);
+      seen.add(value);
+    }
+    return [...duplicates];
+  };
+  for (const [label, rows, field] of [
+    ["request", args.runControl.request_rows, "request_id"],
+    ["attempt", args.runControl.attempt_rows, "attempt_id"],
+    ["lock", args.runControl.lock_rows, "lock_id"],
+    ["transaction", args.runControl.write_transactions, "transaction_id"],
+    ["resume", args.runControl.resume_rows, "resume_id"],
+  ] as const) {
+    for (const duplicateId of duplicateIds(
+      rows as unknown as readonly Record<string, unknown>[],
+      field,
+    )) {
+      violations.push(violation({
+        code: "schema_shape_invalid",
+        message: `run-control ${label} ids must be unique`,
+        subjectId: duplicateId,
+      }));
+    }
+  }
+  const latestAttempt = args.runControl.attempt_rows.at(-1) ?? null;
+  let trustedFailedAttempt = false;
+  if (latestAttempt?.attempt_status === "failed") {
+    const failureTransactions = args.runControl.write_transactions.filter((row) =>
+      row.owner_attempt_id === latestAttempt.attempt_id &&
+      isReconstructLlmDispatchFailureRef(args.runControl.session_root, row.artifact_ref)
+    );
+    const transaction = failureTransactions.length === 1
+      ? failureTransactions[0]
+      : undefined;
+    const parsedArtifact = ReconstructLlmDispatchFailureArtifactSchema.safeParse(
+      args.failedTerminalArtifact,
+    );
+    const ownerSessionLocks = args.runControl.lock_rows.filter((row) =>
+      row.lock_scope === "session_root" &&
+      row.owner_attempt_id === latestAttempt.attempt_id
+    );
+    if (!transaction || args.failedTerminalArtifactRef === undefined) {
+      violations.push(violation({
+        code: "failed_terminal_missing",
+        message:
+          "latest failed attempt requires an owner-linked LLM dispatch failure transaction",
+        subjectId: latestAttempt.attempt_id,
+      }));
+    } else if (
+      transaction.transaction_status !== "committed" ||
+      !transaction.committed_hash ||
+      transaction.prepared_content_hash !== transaction.committed_hash ||
+      path.resolve(transaction.artifact_ref) !==
+        path.resolve(args.failedTerminalArtifactRef ?? "") ||
+      transaction.committed_hash !== args.failedTerminalArtifactSha256 ||
+      !parsedArtifact.success ||
+      parsedArtifact.data.session_id !== args.runControl.session_id ||
+      (args.expectedSessionId !== undefined &&
+        parsedArtifact.data.session_id !== args.expectedSessionId) ||
+      parsedArtifact.data.owner_attempt_id !== latestAttempt.attempt_id ||
+      path.resolve(transaction.artifact_ref) !== path.resolve(
+        reconstructLlmDispatchFailurePath(
+          args.runControl.session_root,
+          parsedArtifact.data.failure_id,
+        ),
+      ) ||
+      ownerSessionLocks.length !== 1 ||
+      ownerSessionLocks[0]?.lock_status !== "released" ||
+      args.runControl.lock_rows.some((row) =>
+        row.lock_scope === "session_root" && row.lock_status === "held"
+      )
+    ) {
+      violations.push(violation({
+        code: "failed_terminal_invalid",
+        message:
+          "latest failed attempt failure artifact must match owner, ref, schema, prepared hash, and committed hash",
+        subjectId: transaction.transaction_id,
+      }));
+    } else {
+      trustedFailedAttempt = true;
+    }
+  }
+  const currentAttempt = trustedFailedAttempt
+    ? latestAttempt
+    : [...args.runControl.attempt_rows]
+        .reverse()
+        .find((row) =>
+          row.attempt_status === "running" ||
+          row.attempt_status === "completed" ||
+          row.attempt_status === "recovered" ||
+          row.attempt_status === "halted"
+        ) ?? null;
   if (!currentAttempt) {
     violations.push(violation({
       code: "active_attempt_missing",
-      message: "run-control must have a running, completed, recovered, or halted attempt",
+      message:
+        "run-control must have a running, completed, recovered, halted, or trusted failed attempt",
     }));
   }
   const activeLocks = args.runControl.lock_rows.filter((row) =>
@@ -332,6 +518,22 @@ export function validateReconstructRunControl(args: {
       code: "session_lock_missing",
       message: "run-control must record a session_root lock",
     }));
+  }
+  if (currentAttempt?.attempt_status === "running") {
+    const heldSessionLocks = args.runControl.lock_rows.filter((row) =>
+      row.lock_scope === "session_root" && row.lock_status === "held"
+    );
+    if (
+      heldSessionLocks.length !== 1 ||
+      heldSessionLocks[0]?.owner_attempt_id !== currentAttempt.attempt_id
+    ) {
+      violations.push(violation({
+        code: "conflicting_lock",
+        message:
+          "the current running attempt must be the unique held session_root lock owner",
+        subjectId: currentAttempt.attempt_id,
+      }));
+    }
   }
   if (args.runControl.lock_rows.some((row) =>
     row.lock_status === "conflict_blocked" ||
@@ -356,6 +558,21 @@ export function validateReconstructRunControl(args: {
         message: "committed transaction must record committed_hash",
         subjectId: row.transaction_id,
       }));
+    }
+    if (isReconstructLlmDispatchFailureRef(args.runControl.session_root, row.artifact_ref)) {
+      if (
+        !row.prepared_content_hash ||
+        (row.transaction_status === "prepared" && !row.temp_ref) ||
+        (row.transaction_status === "committed" &&
+          row.prepared_content_hash !== row.committed_hash)
+      ) {
+        violations.push(violation({
+          code: "invalid_transaction",
+          message:
+            "LLM dispatch failure transaction must preserve prepared content hash and temp/commit state",
+          subjectId: row.transaction_id,
+        }));
+      }
     }
   }
   const attemptIds = new Set(
@@ -492,19 +709,16 @@ export function validateReconstructRunControl(args: {
   };
 }
 
-export async function writeReconstructRunControlValidationArtifact(args: {
+async function buildReconstructRunControlValidationArtifactFromRunControl(args: {
+  runControl: ReconstructRunControlArtifact;
   runControlPath: string;
-  outputPath: string;
   expectedSessionId?: string | null;
   expectedSessionRoot?: string | null;
   expectedCommittedArtifactRefs?: string[];
   terminalValidationRef?: string | null;
 }): Promise<ReconstructRunControlValidationArtifact> {
-  const runControl = await readYamlDocument<ReconstructRunControlArtifact>(
-    args.runControlPath,
-  );
   const terminalValidationRef = inferTerminalValidationRef({
-    runControl,
+    runControl: args.runControl,
     runControlPath: args.runControlPath,
     ...(args.terminalValidationRef !== undefined
       ? { explicitRef: args.terminalValidationRef }
@@ -512,8 +726,34 @@ export async function writeReconstructRunControlValidationArtifact(args: {
   });
   const terminalValidationStatus =
     await readValidationStatusIfPresent(terminalValidationRef);
-  const validation = validateReconstructRunControl({
-    runControl,
+  const latestAttempt = args.runControl.attempt_rows.at(-1) ?? null;
+  const failedTransaction = latestAttempt?.attempt_status === "failed"
+    ? args.runControl.write_transactions.find((row) =>
+        row.owner_attempt_id === latestAttempt.attempt_id &&
+        isReconstructLlmDispatchFailureRef(
+          args.runControl.session_root,
+          row.artifact_ref,
+        )
+      )
+    : undefined;
+  let failedTerminalArtifact: ReconstructLlmDispatchFailureArtifact | null = null;
+  let failedTerminalArtifactSha256: string | null = null;
+  if (failedTransaction) {
+    try {
+      const failedRead =
+        await readReconstructLlmDispatchFailureArtifactWithHash({
+          sessionRoot: args.runControl.session_root,
+          artifactRef: failedTransaction.artifact_ref,
+        });
+      failedTerminalArtifact = failedRead.artifact;
+      failedTerminalArtifactSha256 = failedRead.sha256;
+    } catch {
+      failedTerminalArtifact = null;
+      failedTerminalArtifactSha256 = null;
+    }
+  }
+  return validateReconstructRunControl({
+    runControl: args.runControl,
     runControlRef: args.runControlPath,
     ...(args.expectedSessionId !== undefined
       ? { expectedSessionId: args.expectedSessionId }
@@ -526,10 +766,101 @@ export async function writeReconstructRunControlValidationArtifact(args: {
       : {}),
     terminalValidationRef,
     terminalValidationStatus,
+    ...(failedTransaction
+      ? {
+          failedTerminalArtifactRef: failedTransaction.artifact_ref,
+          failedTerminalArtifact,
+          failedTerminalArtifactSha256,
+        }
+      : {}),
   });
+}
+
+async function buildReconstructRunControlValidationArtifact(args: {
+  runControlPath: string;
+  expectedSessionId?: string | null;
+  expectedSessionRoot?: string | null;
+  expectedCommittedArtifactRefs?: string[];
+  terminalValidationRef?: string | null;
+}): Promise<ReconstructRunControlValidationArtifact> {
+  const runControl = await readYamlDocument<ReconstructRunControlArtifact>(
+    args.runControlPath,
+  );
+  return buildReconstructRunControlValidationArtifactFromRunControl({
+    ...args,
+    runControl,
+  });
+}
+
+export async function writeReconstructRunControlValidationArtifact(args: {
+  runControlPath: string;
+  outputPath: string;
+  expectedSessionId?: string | null;
+  expectedSessionRoot?: string | null;
+  expectedCommittedArtifactRefs?: string[];
+  terminalValidationRef?: string | null;
+}): Promise<ReconstructRunControlValidationArtifact> {
+  const validation = await buildReconstructRunControlValidationArtifact(args);
   await writeYamlDocument(args.outputPath, validation);
   return validation;
 }
+
+function comparableRunControlValidation(
+  validation: unknown,
+  options: { stripInMemoryFields: boolean },
+): string | null {
+  if (validation === null || typeof validation !== "object" || Array.isArray(validation)) {
+    return null;
+  }
+  const persisted = { ...(validation as Record<string, unknown>) };
+  if (options.stripInMemoryFields) {
+    delete persisted.asserted_obligation_ids;
+  }
+  const parsed = PersistedRunControlValidationSchema.safeParse(persisted);
+  if (!parsed.success) return null;
+  try {
+    return JSON.stringify({ ...parsed.data, created_at: null });
+  } catch {
+    return null;
+  }
+}
+
+const PersistedRunControlValidationSchema = z.object({
+  schema_version: z.literal("1"),
+  session_id: z.string().min(1),
+  created_at: z.string().datetime({ offset: true }),
+  reconstruct_run_control_ref: z.string().min(1).nullable(),
+  validation_status: z.enum(["valid", "invalid"]),
+  request_count: z.number().int().nonnegative(),
+  attempt_count: z.number().int().nonnegative(),
+  active_lock_count: z.number().int().nonnegative(),
+  transaction_count: z.number().int().nonnegative(),
+  current_attempt_id: z.string().min(1).nullable(),
+  validation_results: z.array(z.string()),
+  violations: z.array(z.object({
+    code: z.enum([
+      "schema_shape_invalid",
+      "session_id_mismatch",
+      "session_root_missing",
+      "request_row_missing",
+      "attempt_row_missing",
+      "active_attempt_missing",
+      "session_lock_missing",
+      "conflicting_request",
+      "conflicting_lock",
+      "invalid_transaction",
+      "transaction_hash_missing",
+      "terminal_validation_missing",
+      "terminal_validation_invalid",
+      "expected_transaction_missing",
+      "failed_terminal_missing",
+      "failed_terminal_invalid",
+      "invalid_resume",
+    ]),
+    message: z.string(),
+    subject_id: z.string().nullable(),
+  }).strict()),
+}).strict();
 
 export async function writeReconstructRunBootstrapDiagnostic(args: {
   outputPath: string;
@@ -557,7 +888,7 @@ export async function writeReconstructRunBootstrapDiagnostic(args: {
   return artifact;
 }
 
-export async function initializeReconstructRunControl(args: {
+async function initializeReconstructRunControlUnlocked(args: {
   sessionId: string;
   sessionRoot: string;
   projectRoot: string;
@@ -573,12 +904,17 @@ export async function initializeReconstructRunControl(args: {
   outputPath: string;
   validationOutputPath: string;
   bootstrapDiagnosticPath: string;
+  dispatchFallbackEnabled?: boolean;
 }): Promise<{
   runControl: ReconstructRunControlArtifact;
   validation: ReconstructRunControlValidationArtifact;
   requestFingerprint: string;
   attemptId: string;
 }> {
+  await assertDispatchFallbackSessionAdmission({
+    sessionRoot: args.sessionRoot,
+    enabled: args.dispatchFallbackEnabled === true,
+  });
   const requestFingerprint = reconstructRequestFingerprint({
     projectRoot: args.projectRoot,
     sessionRoot: args.sessionRoot,
@@ -594,6 +930,10 @@ export async function initializeReconstructRunControl(args: {
   const existing =
     await readYamlDocumentIfPresent<ReconstructRunControlArtifact>(args.outputPath);
   if (existing) {
+    assertDispatchFallbackRunControlHasNoLiveOwner({
+      runControl: existing,
+      enabled: args.dispatchFallbackEnabled === true,
+    });
     const conflict = existing.request_rows.some((row) =>
       row.request_fingerprint !== requestFingerprint
     );
@@ -618,12 +958,72 @@ export async function initializeReconstructRunControl(args: {
       if (!completedAttempt) {
         const now = isoNow();
         const sourceAttempt = [...existing.attempt_rows].reverse()[0] ?? null;
-        const resumeId = idFor("resume", `${requestFingerprint}:${now}`);
+        const heldSessionLock = existing.lock_rows.find((row) =>
+          row.lock_scope === "session_root" && row.lock_status === "held"
+        );
+        if (
+          sourceAttempt?.attempt_status === "running" ||
+          heldSessionLock !== undefined
+        ) {
+          throw new Error(
+            "cannot resume a live reconstruct attempt; lease expiry is not takeover authority",
+          );
+        }
+        if (existing.resume_rows.some((row) =>
+          row.source_attempt_id === sourceAttempt?.attempt_id &&
+          row.resume_decision === "blocked_partial_write"
+        )) {
+          throw new Error(
+            "cannot resume reconstruct session with blocked_partial_write authority",
+          );
+        }
+        let failureProvenanceRefs: string[] = [];
+        const sourceFailureTransactions = sourceAttempt?.attempt_status === "failed"
+          ? existing.write_transactions.filter((row) =>
+              row.owner_attempt_id === sourceAttempt.attempt_id &&
+              isReconstructLlmDispatchFailureRef(
+                args.sessionRoot,
+                row.artifact_ref,
+              )
+            )
+          : [];
+        if (sourceFailureTransactions.length > 0) {
+          const failedValidation =
+            await writeReconstructRunControlValidationArtifact({
+              runControlPath: args.outputPath,
+              outputPath: args.validationOutputPath,
+              expectedSessionId: args.sessionId,
+              expectedSessionRoot: args.sessionRoot,
+            });
+          if (failedValidation.validation_status !== "valid") {
+            throw new Error(
+              `cannot resume from an untrusted failed terminal: ${failedValidation.violations.map((item) => item.code).join(",")}`,
+            );
+          }
+          failureProvenanceRefs = sourceFailureTransactions
+            .filter((row) =>
+              row.transaction_status === "committed"
+            )
+            .map((row) => row.artifact_ref);
+          if (failureProvenanceRefs.length !== 1) {
+            throw new Error(
+              "cannot resume without exactly one trusted failure provenance ref",
+            );
+          }
+        }
+        const resumeId = idFor(
+          "resume",
+          `${requestFingerprint}:${now}:${crypto.randomUUID()}`,
+        );
         const attemptId = idFor("attempt", `${resumeId}:attempt`);
         const trustedArtifactRefs = existing.write_transactions
           .filter((row) =>
             row.transaction_status === "committed" &&
-            row.committed_hash !== null
+            row.committed_hash !== null &&
+            !isReconstructLlmDispatchFailureRef(
+              args.sessionRoot,
+              row.artifact_ref,
+            )
           )
           .map((row) => row.artifact_ref)
           .sort();
@@ -634,6 +1034,7 @@ export async function initializeReconstructRunControl(args: {
           args.validationOutputPath,
           ...provenanceMatchRefs,
           ...trustedArtifactRefs,
+          ...failureProvenanceRefs,
         ];
         existing.updated_at = now;
         existing.resume_rows.push({
@@ -649,6 +1050,7 @@ export async function initializeReconstructRunControl(args: {
             args.validationOutputPath,
             ...provenanceMatchRefs,
             ...trustedArtifactRefs,
+            ...failureProvenanceRefs,
           ].sort(),
           resume_decision: "resume_pending_provenance",
         });
@@ -676,6 +1078,7 @@ export async function initializeReconstructRunControl(args: {
             args.outputPath,
             args.validationOutputPath,
             ...trustedArtifactRefs,
+            ...failureProvenanceRefs,
           ],
         });
         existing.lock_rows = existing.lock_rows.map((row) =>
@@ -693,7 +1096,7 @@ export async function initializeReconstructRunControl(args: {
           conflict_policy: "recover_expired_lease",
           lock_status: "held",
         });
-        await writeYamlDocument(args.outputPath, existing);
+        await writeRunControlDocument(args.outputPath, existing);
         const validation = await writeReconstructRunControlValidationArtifact({
           runControlPath: args.outputPath,
           outputPath: args.validationOutputPath,
@@ -771,7 +1174,7 @@ export async function initializeReconstructRunControl(args: {
   };
   const created = await writeYamlDocumentAtomicCreate(args.outputPath, runControl);
   if (!created) {
-    return initializeReconstructRunControl(args);
+    return initializeReconstructRunControlUnlocked(args);
   }
   const validation = await writeReconstructRunControlValidationArtifact({
     runControlPath: args.outputPath,
@@ -782,7 +1185,16 @@ export async function initializeReconstructRunControl(args: {
   return { runControl, validation, requestFingerprint, attemptId };
 }
 
-export async function markReconstructRunControlAttemptFailed(args: {
+export async function initializeReconstructRunControl(
+  args: Parameters<typeof initializeReconstructRunControlUnlocked>[0],
+) {
+  return withRunControlMutationLock(
+    args.outputPath,
+    () => initializeReconstructRunControlUnlocked(args),
+  );
+}
+
+async function markReconstructRunControlAttemptFailedUnlocked(args: {
   runControlPath: string;
   validationOutputPath: string;
   attemptId: string;
@@ -815,7 +1227,7 @@ export async function markReconstructRunControlAttemptFailed(args: {
         ? { ...row, lock_status: "released" }
         : row
     );
-    await writeYamlDocument(args.runControlPath, runControl);
+    await writeRunControlDocument(args.runControlPath, runControl);
   }
   const validation = await writeReconstructRunControlValidationArtifact({
     runControlPath: args.runControlPath,
@@ -824,6 +1236,835 @@ export async function markReconstructRunControlAttemptFailed(args: {
     expectedSessionRoot: args.expectedSessionRoot,
   });
   return { runControl, validation };
+}
+
+export async function markReconstructRunControlAttemptFailed(
+  args: Parameters<typeof markReconstructRunControlAttemptFailedUnlocked>[0],
+) {
+  return withRunControlMutationLock(
+    args.runControlPath,
+    () => markReconstructRunControlAttemptFailedUnlocked(args),
+  );
+}
+
+export type ReconstructLlmFailurePersistenceFaultPoint =
+  | "after_temp_write"
+  | "after_prepare"
+  | "after_publish"
+  | "after_commit";
+
+async function persistReconstructLlmDispatchFailureUnlocked(args: {
+  runControlPath: string;
+  validationOutputPath: string;
+  sessionId: string;
+  sessionRoot: string;
+  attemptId: string;
+  error: ReconstructLlmDispatchFailureError;
+  faultInjector?: (
+    point: ReconstructLlmFailurePersistenceFaultPoint,
+  ) => void | Promise<void>;
+}): Promise<{
+  artifact: ReconstructLlmDispatchFailureArtifact;
+  artifactRef: string;
+  runControl: ReconstructRunControlArtifact;
+  validation: ReconstructRunControlValidationArtifact;
+}> {
+  let runControl = await readYamlDocument<ReconstructRunControlArtifact>(
+    args.runControlPath,
+  );
+  const latestAttempt = runControl.attempt_rows.at(-1) ?? null;
+  const ownerLocks = runControl.lock_rows.filter((row) =>
+    row.owner_attempt_id === args.attemptId &&
+    row.lock_scope === "session_root" &&
+    row.lock_status === "held"
+  );
+  if (
+    latestAttempt?.attempt_id !== args.attemptId ||
+    latestAttempt.attempt_status !== "running" ||
+    ownerLocks.length !== 1
+  ) {
+    throw new Error(
+      `cannot persist LLM dispatch failure for non-owning attempt ${args.attemptId}`,
+    );
+  }
+  const artifact = createReconstructLlmDispatchFailureArtifact({
+    sessionId: args.sessionId,
+    attemptId: args.attemptId,
+    error: args.error,
+  });
+  const plan = await planReconstructLlmDispatchFailureWrite({
+    sessionRoot: args.sessionRoot,
+    artifact,
+  });
+  const temp = await writeReconstructLlmDispatchFailureTemp({
+    sessionRoot: args.sessionRoot,
+    artifact,
+    plan,
+  });
+  await args.faultInjector?.("after_temp_write");
+
+  const transactionId = idFor(
+    "write",
+    `${args.attemptId}:${plan.finalRef}`,
+  );
+  const existingTransaction = runControl.write_transactions.find((row) =>
+    row.transaction_id === transactionId
+  );
+  const attempt = runControl.attempt_rows.find((row) =>
+    row.attempt_id === args.attemptId
+  );
+  const heldLock = runControl.lock_rows.some((row) =>
+    row.owner_attempt_id === args.attemptId &&
+    row.lock_scope === "session_root" &&
+    row.lock_status === "held"
+  );
+  if (
+    (!attempt || attempt.attempt_status !== "running" || !heldLock) &&
+    existingTransaction?.transaction_status !== "committed"
+  ) {
+    throw new Error(
+      `cannot prepare LLM dispatch failure for non-owning attempt ${args.attemptId}`,
+    );
+  }
+  if (existingTransaction) {
+    if (
+      existingTransaction.owner_attempt_id !== args.attemptId ||
+      path.resolve(existingTransaction.artifact_ref) !== path.resolve(plan.finalRef) ||
+      existingTransaction.prepared_content_hash !== plan.contentSha256 ||
+      (existingTransaction.transaction_status !== "prepared" &&
+        existingTransaction.transaction_status !== "committed")
+    ) {
+      throw new Error(`LLM dispatch failure transaction conflicts: ${transactionId}`);
+    }
+  } else {
+    runControl.updated_at = isoNow();
+    runControl.write_transactions.push({
+      transaction_id: transactionId,
+      owner_attempt_id: args.attemptId,
+      artifact_ref: plan.finalRef,
+      temp_ref: plan.tempRef,
+      expected_prior_hash: null,
+      prepared_content_hash: plan.contentSha256,
+      committed_hash: null,
+      commit_method: "append_only",
+      transaction_status: "prepared",
+      recovery_ref: null,
+    });
+    await writeRunControlDocument(args.runControlPath, runControl);
+  }
+  await args.faultInjector?.("after_prepare");
+
+  await publishReconstructLlmDispatchFailureTemp({
+    sessionRoot: args.sessionRoot,
+    tempRef: temp.tempRef,
+    finalRef: temp.finalRef,
+  });
+  await args.faultInjector?.("after_publish");
+  const publishedRead = await readReconstructLlmDispatchFailureArtifactWithHash({
+    sessionRoot: args.sessionRoot,
+    artifactRef: temp.finalRef,
+  });
+  const published = publishedRead.artifact;
+  const publishedHash = publishedRead.sha256;
+  if (
+    published.failure_id !== artifact.failure_id ||
+    published.owner_attempt_id !== args.attemptId ||
+    publishedHash !== temp.contentSha256
+  ) {
+    throw new Error("published LLM dispatch failure artifact failed integrity verification");
+  }
+
+  runControl = await readYamlDocument<ReconstructRunControlArtifact>(
+    args.runControlPath,
+  );
+  const alreadyCommitted = runControl.write_transactions.find((row) =>
+    row.transaction_id === transactionId &&
+    row.transaction_status === "committed" &&
+    row.owner_attempt_id === args.attemptId &&
+    row.committed_hash === publishedHash
+  );
+  if (alreadyCommitted) {
+    const validation = await writeReconstructRunControlValidationArtifact({
+      runControlPath: args.runControlPath,
+      outputPath: args.validationOutputPath,
+      expectedSessionId: args.sessionId,
+      expectedSessionRoot: args.sessionRoot,
+    });
+    if (validation.validation_status !== "valid") {
+      throw new Error(
+        `reconciled LLM dispatch failure did not produce a valid failed terminal: ${validation.violations.map((item) => item.code).join(",")}`,
+      );
+    }
+    return {
+      artifact: published,
+      artifactRef: temp.finalRef,
+      runControl,
+      validation,
+    };
+  }
+  const preparedTransaction = runControl.write_transactions.find((row) =>
+    row.transaction_id === transactionId &&
+    row.transaction_status === "prepared" &&
+    row.owner_attempt_id === args.attemptId &&
+    row.prepared_content_hash === publishedHash
+  );
+  const runningAttempt = runControl.attempt_rows.some((row) =>
+    row.attempt_id === args.attemptId && row.attempt_status === "running"
+  );
+  const owningLock = runControl.lock_rows.some((row) =>
+    row.owner_attempt_id === args.attemptId &&
+    row.lock_scope === "session_root" &&
+    row.lock_status === "held"
+  );
+  if (!preparedTransaction || !runningAttempt || !owningLock) {
+    throw new Error(
+      `cannot commit LLM dispatch failure without prepared transaction ownership for ${args.attemptId}`,
+    );
+  }
+  const committedAt = isoNow();
+  runControl.updated_at = committedAt;
+  runControl.write_transactions = runControl.write_transactions.map((row) =>
+    row.transaction_id === transactionId && row.transaction_status === "prepared"
+      ? {
+          ...row,
+          temp_ref: null,
+          committed_hash: publishedHash,
+          transaction_status: "committed" as const,
+        }
+      : row
+  );
+  runControl.attempt_rows = runControl.attempt_rows.map((row) =>
+    row.attempt_id === args.attemptId && row.attempt_status === "running"
+      ? { ...row, completed_at: committedAt, attempt_status: "failed" as const }
+      : row
+  );
+  runControl.lock_rows = runControl.lock_rows.map((row) =>
+    row.owner_attempt_id === args.attemptId && row.lock_status === "held"
+      ? { ...row, lock_status: "released" as const }
+      : row
+  );
+  await writeRunControlDocument(args.runControlPath, runControl);
+  await args.faultInjector?.("after_commit");
+  const validation = await writeReconstructRunControlValidationArtifact({
+    runControlPath: args.runControlPath,
+    outputPath: args.validationOutputPath,
+    expectedSessionId: args.sessionId,
+    expectedSessionRoot: args.sessionRoot,
+  });
+  if (validation.validation_status !== "valid") {
+    throw new Error(
+      `persisted LLM dispatch failure did not produce a valid failed terminal: ${validation.violations.map((item) => item.code).join(",")}`,
+    );
+  }
+  return { artifact, artifactRef: temp.finalRef, runControl, validation };
+}
+
+export async function persistReconstructLlmDispatchFailure(
+  args: Parameters<typeof persistReconstructLlmDispatchFailureUnlocked>[0],
+) {
+  return withRunControlMutationLock(
+    args.runControlPath,
+    () => persistReconstructLlmDispatchFailureUnlocked(args),
+  );
+}
+
+function blockedPartialWriteResumeRow(args: {
+  runControlPath: string;
+  attemptId: string;
+  staleRefs: string[];
+}): ReconstructRunControlArtifact["resume_rows"][number] {
+  const resumeId = idFor(
+    "resume",
+    `${args.attemptId}:blocked_partial_write:${args.staleRefs.join(":")}`,
+  );
+  return {
+    resume_id: resumeId,
+    resume_token_hash: sha256(resumeId),
+    source_attempt_id: args.attemptId,
+    checkpoint_refs: [args.runControlPath],
+    trusted_artifact_refs: [],
+    stale_artifact_refs: args.staleRefs,
+    required_revalidation_refs: [args.runControlPath],
+    resume_decision: "blocked_partial_write",
+  };
+}
+
+function abandonCurrentAttemptForPartialWrite(args: {
+  runControl: ReconstructRunControlArtifact;
+  runControlPath: string;
+  staleRefs: string[];
+}): boolean {
+  const current = args.runControl.attempt_rows.at(-1) ?? null;
+  if (current?.attempt_status !== "running") return false;
+  const abandonedAt = isoNow();
+  args.runControl.attempt_rows = args.runControl.attempt_rows.map((row) =>
+    row.attempt_id === current.attempt_id && row.attempt_status === "running"
+      ? { ...row, completed_at: abandonedAt, attempt_status: "abandoned" as const }
+      : row
+  );
+  args.runControl.lock_rows = args.runControl.lock_rows.map((row) =>
+    row.owner_attempt_id === current.attempt_id && row.lock_status === "held"
+      ? { ...row, lock_status: "released" as const }
+      : row
+  );
+  if (!args.runControl.resume_rows.some((row) =>
+    row.source_attempt_id === current.attempt_id &&
+    row.resume_decision === "blocked_partial_write"
+  )) {
+    args.runControl.resume_rows.push(blockedPartialWriteResumeRow({
+      runControlPath: args.runControlPath,
+      attemptId: current.attempt_id,
+      staleRefs: args.staleRefs,
+    }));
+  }
+  return true;
+}
+
+async function pathExists(filePath: string | null): Promise<boolean> {
+  if (!filePath) return false;
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function removeFailureTempFile(
+  sessionRoot: string,
+  tempRef: string,
+): Promise<void> {
+  const directoryPath = await assertReconstructLlmDispatchFailureDirectory(
+    sessionRoot,
+  );
+  if (
+    !isReconstructLlmDispatchFailureTempRef(sessionRoot, tempRef) ||
+    path.dirname(path.resolve(tempRef)) !== directoryPath
+  ) {
+    throw new Error(`cannot remove failure temp outside session: ${tempRef}`);
+  }
+  const stat = await fs.lstat(tempRef).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!stat) return;
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error(`cannot remove non-regular failure temp: ${tempRef}`);
+  }
+  await fs.rm(tempRef);
+}
+
+async function validatePreparedFailureArtifact(args: {
+  sessionRoot: string;
+  artifactRef: string;
+  sessionId: string;
+  ownerAttemptId: string;
+  preparedContentHash: string | null | undefined;
+}): Promise<{ artifact: ReconstructLlmDispatchFailureArtifact; hash: string }> {
+  const read = await readReconstructLlmDispatchFailureArtifactWithHash({
+    sessionRoot: args.sessionRoot,
+    artifactRef: args.artifactRef,
+    allowTemp: isReconstructLlmDispatchFailureTempRef(
+      args.sessionRoot,
+      args.artifactRef,
+    ),
+  });
+  const artifact = read.artifact;
+  const hash = read.sha256;
+  if (
+    artifact.session_id !== args.sessionId ||
+    artifact.owner_attempt_id !== args.ownerAttemptId ||
+    !args.preparedContentHash ||
+    hash !== args.preparedContentHash
+  ) {
+    throw new Error("prepared failure transaction artifact does not match owner/hash");
+  }
+  if (
+    !isReconstructLlmDispatchFailureTempRef(args.sessionRoot, args.artifactRef) &&
+    path.resolve(args.artifactRef) !== path.resolve(
+      reconstructLlmDispatchFailurePath(args.sessionRoot, artifact.failure_id),
+    )
+  ) {
+    throw new Error("prepared failure transaction artifact path does not match failure id");
+  }
+  return { artifact, hash };
+}
+
+async function reconcileReconstructLlmDispatchFailuresUnlocked(args: {
+  sessionRoot: string;
+  runControlPath?: string;
+  validationOutputPath?: string;
+}): Promise<{
+  runControl: ReconstructRunControlArtifact;
+  validation: ReconstructRunControlValidationArtifact | null;
+} | null> {
+  const sessionRoot = path.resolve(args.sessionRoot);
+  const runControlPath = path.resolve(
+    args.runControlPath ?? path.join(sessionRoot, "reconstruct-run-control.yaml"),
+  );
+  const validationOutputPath = path.resolve(
+    args.validationOutputPath ??
+      path.join(sessionRoot, "reconstruct-run-control-validation.yaml"),
+  );
+  let runControl: ReconstructRunControlArtifact;
+  try {
+    runControl = await readYamlDocument<ReconstructRunControlArtifact>(
+      runControlPath,
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  if (
+    path.resolve(runControl.session_root) !== sessionRoot ||
+    runControl.session_id !== path.basename(sessionRoot) ||
+    runControlPath !== path.join(sessionRoot, "reconstruct-run-control.yaml") ||
+    validationOutputPath !==
+      path.join(sessionRoot, "reconstruct-run-control-validation.yaml")
+  ) {
+    throw new Error("reconstruct failure reconciliation session identity mismatch");
+  }
+
+  let changed = false;
+  const failureDirectory = await assertReconstructLlmDispatchFailureDirectory(
+    sessionRoot,
+  );
+  let failureEntries: Array<import("node:fs").Dirent> = [];
+  try {
+    failureEntries = await fs.readdir(failureDirectory, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const trackedTempRefs = new Set(
+    runControl.write_transactions
+      .map((row) => row.temp_ref)
+      .filter((ref): ref is string => Boolean(ref))
+      .map((ref) => path.resolve(ref)),
+  );
+  const trackedFinalRefs = new Set(
+    runControl.write_transactions
+      .filter((row) =>
+        isReconstructLlmDispatchFailureRef(sessionRoot, row.artifact_ref)
+      )
+      .map((row) => path.resolve(row.artifact_ref)),
+  );
+  const untrackedPartialRefs = failureEntries
+    .filter((entry) => {
+      const entryRef = path.join(failureDirectory, entry.name);
+      return entry.name.startsWith(".scratch-") ||
+        (entry.name.startsWith(".pending-") && !trackedTempRefs.has(entryRef));
+    })
+    .map((entry) => path.join(failureDirectory, entry.name));
+  const ambiguousPartialWrite = untrackedPartialRefs.length > 1;
+  if (ambiguousPartialWrite) {
+    changed = abandonCurrentAttemptForPartialWrite({
+      runControl,
+      runControlPath,
+      staleRefs: untrackedPartialRefs,
+    }) || changed;
+  }
+  for (const entry of failureEntries) {
+    const entryRef = path.join(failureDirectory, entry.name);
+    if (entry.name.startsWith(".scratch-")) {
+      if (!ambiguousPartialWrite) {
+        changed = abandonCurrentAttemptForPartialWrite({
+          runControl,
+          runControlPath,
+          staleRefs: [entryRef],
+        }) || changed;
+      }
+      continue;
+    }
+    if (entry.name.startsWith(".pending-") && !trackedTempRefs.has(entryRef)) {
+      if (ambiguousPartialWrite) continue;
+      try {
+        const read = await readReconstructLlmDispatchFailureArtifactWithHash({
+          sessionRoot,
+          artifactRef: entryRef,
+          allowTemp: true,
+        });
+        const latestAttempt = runControl.attempt_rows.at(-1) ?? null;
+        const ownerLocks = runControl.lock_rows.filter((row) =>
+          row.lock_scope === "session_root" &&
+          row.owner_attempt_id === read.artifact.owner_attempt_id
+        );
+        if (
+          entry.name.startsWith(`.pending-${read.sha256.slice(0, 16)}-`) &&
+          read.artifact.session_id === runControl.session_id &&
+          latestAttempt?.attempt_id === read.artifact.owner_attempt_id &&
+          latestAttempt.attempt_status === "running" &&
+          ownerLocks.length === 1 &&
+          ownerLocks[0]?.lock_status === "held"
+        ) {
+          const finalRef = reconstructLlmDispatchFailurePath(
+            sessionRoot,
+            read.artifact.failure_id,
+          );
+          const transactionId = idFor(
+            "write",
+            `${read.artifact.owner_attempt_id}:${finalRef}`,
+          );
+          if (!runControl.write_transactions.some((row) =>
+            row.transaction_id === transactionId
+          )) {
+            runControl.write_transactions.push({
+              transaction_id: transactionId,
+              owner_attempt_id: read.artifact.owner_attempt_id,
+              artifact_ref: finalRef,
+              temp_ref: entryRef,
+              expected_prior_hash: null,
+              prepared_content_hash: read.sha256,
+              committed_hash: null,
+              commit_method: "append_only",
+              transaction_status: "prepared",
+              recovery_ref: null,
+            });
+            trackedFinalRefs.add(path.resolve(finalRef));
+            changed = true;
+            runControl.updated_at = isoNow();
+            await writeRunControlDocument(runControlPath, runControl);
+          }
+        } else {
+          changed = abandonCurrentAttemptForPartialWrite({
+            runControl,
+            runControlPath,
+            staleRefs: [entryRef],
+          }) || changed;
+        }
+      } catch {
+        changed = abandonCurrentAttemptForPartialWrite({
+          runControl,
+          runControlPath,
+          staleRefs: [entryRef],
+        }) || changed;
+      }
+      continue;
+    }
+    if (
+      !entry.name.startsWith("failure-") ||
+      path.extname(entry.name) !== ".yaml" ||
+      trackedFinalRefs.has(entryRef)
+    ) {
+      continue;
+    }
+    let artifact: ReconstructLlmDispatchFailureArtifact | null = null;
+    let artifactHash: string | null = null;
+    try {
+      const stat = await fs.lstat(entryRef);
+      if (stat.isFile() && !stat.isSymbolicLink()) {
+        artifactHash = await sha256ReconstructLlmDispatchFailureArtifact(entryRef);
+      }
+    } catch {
+      artifactHash = null;
+    }
+    try {
+      artifact = await readReconstructLlmDispatchFailureArtifact(entryRef);
+    } catch {
+      artifact = null;
+    }
+    const ownerAttemptId = artifact &&
+        artifact.session_id === runControl.session_id &&
+        runControl.attempt_rows.some((row) =>
+          row.attempt_id === artifact.owner_attempt_id
+        )
+      ? artifact.owner_attempt_id
+      : [...runControl.attempt_rows].reverse().find((row) =>
+          row.attempt_status === "running"
+        )?.attempt_id ?? null;
+    if (!ownerAttemptId || !artifactHash) continue;
+    const transactionId = idFor("write", `${ownerAttemptId}:${entryRef}:orphan`);
+    if (!runControl.write_transactions.some((row) =>
+      row.transaction_id === transactionId
+    )) {
+      runControl.write_transactions.push({
+        transaction_id: transactionId,
+        owner_attempt_id: ownerAttemptId,
+        artifact_ref: entryRef,
+        temp_ref: null,
+        expected_prior_hash: null,
+        prepared_content_hash: artifactHash,
+        committed_hash: null,
+        commit_method: "append_only",
+        transaction_status: "quarantined",
+        recovery_ref: "blocked_partial_write",
+      });
+    }
+    const abandonedAt = isoNow();
+    runControl.attempt_rows = runControl.attempt_rows.map((row) =>
+      row.attempt_id === ownerAttemptId && row.attempt_status === "running"
+        ? { ...row, completed_at: abandonedAt, attempt_status: "abandoned" as const }
+        : row
+    );
+    runControl.lock_rows = runControl.lock_rows.map((row) =>
+      row.owner_attempt_id === ownerAttemptId && row.lock_status === "held"
+        ? { ...row, lock_status: "released" as const }
+        : row
+    );
+    if (!runControl.resume_rows.some((row) =>
+      row.source_attempt_id === ownerAttemptId &&
+      row.resume_decision === "blocked_partial_write"
+    )) {
+      runControl.resume_rows.push(blockedPartialWriteResumeRow({
+        runControlPath,
+        attemptId: ownerAttemptId,
+        staleRefs: [entryRef],
+      }));
+    }
+    changed = true;
+  }
+  for (const transaction of runControl.write_transactions) {
+    if (
+      transaction.transaction_status !== "prepared" ||
+      !isReconstructLlmDispatchFailureRef(sessionRoot, transaction.artifact_ref)
+    ) {
+      continue;
+    }
+    try {
+      const latestAttempt = runControl.attempt_rows.at(-1) ?? null;
+      const ownerAttempt = runControl.attempt_rows.find((row) =>
+        row.attempt_id === transaction.owner_attempt_id
+      );
+      const ownerLocks = runControl.lock_rows.filter((row) =>
+        row.lock_scope === "session_root" &&
+        row.owner_attempt_id === transaction.owner_attempt_id
+      );
+      if (
+        latestAttempt?.attempt_id !== transaction.owner_attempt_id ||
+        ownerAttempt?.attempt_status !== "running" ||
+        ownerLocks.length !== 1 ||
+        ownerLocks[0]?.lock_status !== "held"
+      ) {
+        throw new Error(
+          "prepared failure transaction is not owned by the latest running attempt and its unique held lock",
+        );
+      }
+      if (
+        transaction.temp_ref &&
+        !isReconstructLlmDispatchFailureTempRef(
+          sessionRoot,
+          transaction.temp_ref,
+        )
+      ) {
+        throw new Error("prepared failure transaction temp ref escapes failure directory");
+      }
+      const finalExists = await pathExists(transaction.artifact_ref);
+      const tempExists = await pathExists(transaction.temp_ref);
+      if (!finalExists) {
+        if (!tempExists) {
+          if (Date.parse(ownerLocks[0].lease_expires_at) > Date.now()) {
+            continue;
+          }
+          throw new Error("prepared failure transaction has neither temp nor final artifact");
+        }
+        await validatePreparedFailureArtifact({
+          sessionRoot,
+          artifactRef: transaction.temp_ref!,
+          sessionId: runControl.session_id,
+          ownerAttemptId: transaction.owner_attempt_id,
+          preparedContentHash: transaction.prepared_content_hash,
+        });
+        await publishReconstructLlmDispatchFailureTemp({
+          sessionRoot,
+          tempRef: transaction.temp_ref!,
+          finalRef: transaction.artifact_ref,
+        });
+      }
+      const validated = await validatePreparedFailureArtifact({
+        sessionRoot,
+        artifactRef: transaction.artifact_ref,
+        sessionId: runControl.session_id,
+        ownerAttemptId: transaction.owner_attempt_id,
+        preparedContentHash: transaction.prepared_content_hash,
+      });
+      if (await pathExists(transaction.temp_ref)) {
+        await removeFailureTempFile(sessionRoot, transaction.temp_ref!);
+      }
+      transaction.temp_ref = null;
+      transaction.committed_hash = validated.hash;
+      transaction.transaction_status = "committed";
+      const completedAt = isoNow();
+      runControl.attempt_rows = runControl.attempt_rows.map((row) =>
+        row.attempt_id === transaction.owner_attempt_id &&
+            row.attempt_status === "running"
+          ? { ...row, completed_at: completedAt, attempt_status: "failed" as const }
+          : row
+      );
+      runControl.lock_rows = runControl.lock_rows.map((row) =>
+        row.owner_attempt_id === transaction.owner_attempt_id &&
+            row.lock_status === "held"
+          ? { ...row, lock_status: "released" as const }
+          : row
+      );
+      changed = true;
+    } catch {
+      const staleRefs = [transaction.artifact_ref, transaction.temp_ref]
+        .filter((ref): ref is string => Boolean(ref));
+      transaction.transaction_status = "quarantined";
+      transaction.recovery_ref = "blocked_partial_write";
+      const abandonedAt = isoNow();
+      runControl.attempt_rows = runControl.attempt_rows.map((row) =>
+        row.attempt_id === transaction.owner_attempt_id &&
+            row.attempt_status === "running"
+          ? { ...row, completed_at: abandonedAt, attempt_status: "abandoned" as const }
+          : row
+      );
+      runControl.lock_rows = runControl.lock_rows.map((row) =>
+        row.owner_attempt_id === transaction.owner_attempt_id &&
+            row.lock_status === "held"
+          ? { ...row, lock_status: "released" as const }
+          : row
+      );
+      if (!runControl.resume_rows.some((row) =>
+        row.source_attempt_id === transaction.owner_attempt_id &&
+        row.resume_decision === "blocked_partial_write"
+      )) {
+        runControl.resume_rows.push(blockedPartialWriteResumeRow({
+          runControlPath,
+          attemptId: transaction.owner_attempt_id,
+          staleRefs,
+        }));
+      }
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    runControl.updated_at = isoNow();
+    await writeRunControlDocument(runControlPath, runControl);
+  }
+  const latestAttempt = runControl.attempt_rows.at(-1) ?? null;
+  const validation = changed || latestAttempt?.attempt_status === "failed"
+    ? await writeReconstructRunControlValidationArtifact({
+        runControlPath,
+        outputPath: validationOutputPath,
+        expectedSessionId: runControl.session_id,
+        expectedSessionRoot: sessionRoot,
+      })
+    : null;
+  return { runControl, validation };
+}
+
+export async function reconcileReconstructLlmDispatchFailures(
+  args: Parameters<typeof reconcileReconstructLlmDispatchFailuresUnlocked>[0],
+) {
+  const sessionRoot = path.resolve(args.sessionRoot);
+  const runControlPath = path.resolve(
+    args.runControlPath ?? path.join(sessionRoot, "reconstruct-run-control.yaml"),
+  );
+  const validationOutputPath = path.resolve(
+    args.validationOutputPath ??
+      path.join(sessionRoot, "reconstruct-run-control-validation.yaml"),
+  );
+  let snapshot: ReconstructRunControlArtifact;
+  try {
+    snapshot = await readYamlDocument<ReconstructRunControlArtifact>(runControlPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  if (
+    path.resolve(snapshot.session_root) !== sessionRoot ||
+    snapshot.session_id !== path.basename(sessionRoot) ||
+    runControlPath !== path.join(sessionRoot, "reconstruct-run-control.yaml") ||
+    validationOutputPath !==
+      path.join(sessionRoot, "reconstruct-run-control-validation.yaml")
+  ) {
+    throw new Error("reconstruct failure reconciliation session identity mismatch");
+  }
+  const failureDirectory = path.join(
+    sessionRoot,
+    RECONSTRUCT_LLM_DISPATCH_FAILURE_DIR,
+  );
+  const failureDirectoryStat = await fs.lstat(failureDirectory)
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+  if (
+    failureDirectoryStat &&
+    (!failureDirectoryStat.isDirectory() || failureDirectoryStat.isSymbolicLink())
+  ) {
+    throw new Error(
+      `LLM dispatch failure directory is not a real directory: ${failureDirectory}`,
+    );
+  }
+  if (failureDirectoryStat) {
+    const [realSessionRoot, realFailureDirectory] = await Promise.all([
+      fs.realpath(sessionRoot),
+      fs.realpath(failureDirectory),
+    ]);
+    if (path.dirname(realFailureDirectory) !== realSessionRoot) {
+      throw new Error(
+        `LLM dispatch failure directory escapes session root: ${realFailureDirectory}`,
+      );
+    }
+  }
+  const failureEntries = failureDirectoryStat
+    ? await fs.readdir(failureDirectory, { withFileTypes: true })
+    : [];
+  const trackedFinalRefs = new Set(
+    snapshot.write_transactions
+      .filter((row) =>
+        isReconstructLlmDispatchFailureRef(sessionRoot, row.artifact_ref)
+      )
+      .map((row) => path.resolve(row.artifact_ref)),
+  );
+  const needsMutation = snapshot.write_transactions.some((row) =>
+    row.transaction_status === "prepared" &&
+    isReconstructLlmDispatchFailureRef(sessionRoot, row.artifact_ref)
+  ) || failureEntries.some((entry) => {
+    const entryRef = path.join(failureDirectory, entry.name);
+    return entry.name.startsWith(".scratch-") ||
+      entry.name.startsWith(".pending-") ||
+      (entry.name.startsWith("failure-") &&
+        path.extname(entry.name) === ".yaml" &&
+        !trackedFinalRefs.has(path.resolve(entryRef)));
+  });
+  const latestAttempt = snapshot.attempt_rows.at(-1) ?? null;
+  let persistedValidation: ReconstructRunControlValidationArtifact | null = null;
+  if (latestAttempt?.attempt_status === "failed") {
+    try {
+      const raw = await readYamlDocumentIfPresent<unknown>(validationOutputPath);
+      if (
+        raw !== null &&
+        comparableRunControlValidation(raw, { stripInMemoryFields: false }) !== null
+      ) {
+        persistedValidation = raw as ReconstructRunControlValidationArtifact;
+      }
+    } catch {
+      persistedValidation = null;
+    }
+  }
+  const expectedValidation = latestAttempt?.attempt_status === "failed"
+    ? await buildReconstructRunControlValidationArtifactFromRunControl({
+        runControl: snapshot,
+        runControlPath,
+        expectedSessionId: snapshot.session_id,
+        expectedSessionRoot: sessionRoot,
+      })
+    : null;
+  const persistedComparable = comparableRunControlValidation(
+    persistedValidation,
+    { stripInMemoryFields: false },
+  );
+  const expectedComparable = comparableRunControlValidation(
+    expectedValidation,
+    { stripInMemoryFields: true },
+  );
+  const validationIsCurrent = persistedComparable !== null &&
+    expectedComparable !== null &&
+    persistedComparable === expectedComparable;
+  if (!needsMutation && latestAttempt?.attempt_status !== "failed") {
+    return { runControl: snapshot, validation: null };
+  }
+  if (!needsMutation && validationIsCurrent) {
+    return { runControl: snapshot, validation: persistedValidation };
+  }
+  return withRunControlMutationLock(
+    runControlPath,
+    () => reconcileReconstructLlmDispatchFailuresUnlocked(args),
+  );
 }
 
 function artifactRefsForTransactions(
@@ -865,7 +2106,7 @@ async function appendWriteTransactions(args: {
   }
 }
 
-export async function recordReconstructRunControlTransactions(args: {
+async function recordReconstructRunControlTransactionsUnlocked(args: {
   runControlPath: string;
   validationOutputPath: string;
   attemptId: string;
@@ -904,7 +2145,7 @@ export async function recordReconstructRunControlTransactions(args: {
     attemptId: args.attemptId,
     refs: [...new Set(args.artifactRefs)].sort(),
   });
-  await writeYamlDocument(args.runControlPath, runControl);
+  await writeRunControlDocument(args.runControlPath, runControl);
   const validation = await writeReconstructRunControlValidationArtifact({
     runControlPath: args.runControlPath,
     outputPath: args.validationOutputPath,
@@ -917,7 +2158,16 @@ export async function recordReconstructRunControlTransactions(args: {
   return { runControl, validation };
 }
 
-export async function finalizeReconstructRunControl(args: {
+export async function recordReconstructRunControlTransactions(
+  args: Parameters<typeof recordReconstructRunControlTransactionsUnlocked>[0],
+) {
+  return withRunControlMutationLock(
+    args.runControlPath,
+    () => recordReconstructRunControlTransactionsUnlocked(args),
+  );
+}
+
+async function finalizeReconstructRunControlUnlocked(args: {
   runControlPath: string;
   validationOutputPath: string;
   attemptId: string;
@@ -959,6 +2209,56 @@ export async function finalizeReconstructRunControl(args: {
   const runControl = await readYamlDocument<ReconstructRunControlArtifact>(
     args.runControlPath,
   );
+  if (runControl.resume_rows.some((row) =>
+    row.source_attempt_id === args.attemptId &&
+    row.resume_decision === "blocked_partial_write"
+  )) {
+    throw new Error(
+      "reconstruct run-control cannot finalize a blocked_partial_write attempt",
+    );
+  }
+  const activeAttempt = runControl.attempt_rows.find((row) =>
+    row.attempt_id === args.attemptId
+  );
+  const activeOwnerLocks = runControl.lock_rows.filter((row) =>
+    row.lock_scope === "session_root" &&
+    row.owner_attempt_id === args.attemptId &&
+    row.lock_status === "held"
+  );
+  if (activeAttempt?.attempt_status !== "running" || activeOwnerLocks.length !== 1) {
+    throw new Error(
+      `reconstruct run-control finalize requires the exact running owner: ${args.attemptId}`,
+    );
+  }
+  if (activeAttempt.attempt_kind === "resume" && activeAttempt.trigger_ref) {
+    const resume = runControl.resume_rows.find((row) =>
+      row.resume_id === activeAttempt.trigger_ref
+    );
+    if (!resume || resume.resume_decision !== "resume_pending_provenance") {
+      throw new Error("reconstruct resume is not pending trusted provenance");
+    }
+    for (const failureRef of resume.required_revalidation_refs.filter((ref) =>
+      isReconstructLlmDispatchFailureRef(runControl.session_root, ref)
+    )) {
+      const sourceTransaction = runControl.write_transactions.find((row) =>
+        row.owner_attempt_id === resume.source_attempt_id &&
+        path.resolve(row.artifact_ref) === path.resolve(failureRef) &&
+        row.transaction_status === "committed" &&
+        row.committed_hash !== null
+      );
+      const failureRead = sourceTransaction
+        ? await readReconstructLlmDispatchFailureArtifactWithHash({
+            sessionRoot: runControl.session_root,
+            artifactRef: failureRef,
+          })
+        : null;
+      if (!sourceTransaction || failureRead?.sha256 !== sourceTransaction.committed_hash) {
+        throw new Error(
+          `reconstruct resume failure provenance changed before finalize: ${failureRef}`,
+        );
+      }
+    }
+  }
   const completedAt = isoNow();
   runControl.updated_at = completedAt;
   runControl.attempt_rows = runControl.attempt_rows.map((row) =>
@@ -994,7 +2294,7 @@ export async function finalizeReconstructRunControl(args: {
     attemptId: args.attemptId,
     refs,
   });
-  await writeYamlDocument(args.runControlPath, runControl);
+  await writeRunControlDocument(args.runControlPath, runControl);
   const validation = await writeReconstructRunControlValidationArtifact({
     runControlPath: args.runControlPath,
     outputPath: args.validationOutputPath,
@@ -1003,4 +2303,13 @@ export async function finalizeReconstructRunControl(args: {
     terminalValidationRef: args.terminalRunManifestValidationPath,
   });
   return { runControl, validation };
+}
+
+export async function finalizeReconstructRunControl(
+  args: Parameters<typeof finalizeReconstructRunControlUnlocked>[0],
+) {
+  return withRunControlMutationLock(
+    args.runControlPath,
+    () => finalizeReconstructRunControlUnlocked(args),
+  );
 }

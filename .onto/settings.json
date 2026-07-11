@@ -197,6 +197,9 @@
       "semantic_map_authoring": true,
       "dispatch_breaker": {
         "enabled": true
+      },
+      "dispatch_fallback": {
+        "enabled": false
       }
     }
   }

@@ -6,6 +6,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   buildSemanticMapBridgeCallbacks,
   DEFAULT_SEMANTIC_MAP_STAGE_CONFIG,
+  deriveSemanticMapFallbackPriorDispatchSpend,
   mergeSemanticSeedProjections,
   observationPromptPayload,
   prepareSemanticMapResumeContext,
@@ -32,6 +33,7 @@ import type {
   SemanticSynthesisOutput,
 } from "./comprehension-semantic-map.js";
 import type { ColumnValueTiles } from "../spreadsheet-structure-observer.js";
+import type { ReconstructSemanticMapCensus } from "./artifact-types.js";
 import { assertGatingKeyExcludesInEpochOutput } from "./llm-touch-fingerprint.js";
 import { unitIdForAuthoredArtifactName } from "./execution-telemetry.js";
 
@@ -327,6 +329,78 @@ describe("runSemanticMapStage (W2)", () => {
     };
     expect(await run(7)).toEqual({ status: "produced", calls: 7 }); // exactly the need → NOT capped
     expect(await run(6)).toEqual({ status: "capped", calls: 0 }); // one short → deterministic skip, zero LLM
+  });
+
+  it("same-call fallback cap includes discarded primary dispatch spend", async () => {
+    const { author, counters } = mockAuthor();
+    const result = await runSemanticMapStage({
+      sourceObservations: observationsArtifact([
+        { observation_id: "obs-1", columns: [richColumn(0)] },
+      ]),
+      directiveAuthor: author,
+      sessionRoot: await tempRoot(),
+      config: { ...CONFIG, max_synthesize_calls: 7 },
+      preImageBase: PRE_IMAGE_BASE,
+      verifyModelIdentity: "mock/none",
+      priorDispatchSpend: { synthesize: 1, verify: 0 },
+      executionSource: "fallback",
+    });
+    expect(counters.synthesize).toBe(0);
+    expect(result.census!.by_observation[0]!.columns[0]!.status).toBe("capped");
+  });
+
+  it("derives retry spend from physical requests while preserving one logical dispatch", () => {
+    const primaryCensus = {
+      schema_version: "1",
+      observations_total: 1,
+      observations_map_present: 0,
+      observations_map_absent: 1,
+      synthesize_calls_total: 1,
+      verify_calls_total: 0,
+      max_synthesize_calls: 7,
+      max_verify_calls: 7,
+      author_id: "primary",
+      synthesize_model_identity: "primary",
+      verify_model_identity: "primary",
+      by_observation: [{
+        observation_id: "obs-1",
+        map_present: false,
+        skip_reason: null,
+        fingerprint: "fingerprint",
+        columns: [{
+          sheet: "S",
+          column_index: 0,
+          status: "failed",
+          reason: "rate limit",
+          produced_nodes: 0,
+          frontier_accumulating: 0,
+          frontier_frontier: 0,
+          frontier_subsumed: 0,
+          anchored: 0,
+          unanchored: 0,
+          adversarial_confirmed: 0,
+          adversarial_refuted: 0,
+          synthesize_calls: 1,
+          verify_calls: 0,
+        }],
+      }],
+    } satisfies ReconstructSemanticMapCensus;
+    expect(deriveSemanticMapFallbackPriorDispatchSpend({
+      primaryCensus,
+      incompleteItemIds: ["obs-1"],
+      accountingEntries: [{
+        observation_id: "obs-1",
+        execution_source: "primary",
+        operation: "semantic_map_synthesize",
+        disposition: "failed",
+        descriptor_id: "descriptor",
+        capability_instance_id: "instance",
+        logical_dispatch_id: "logical",
+        actual_adapter_request_count: 2,
+        failure_class: "rate_limit",
+      }],
+      sealedOperations: { synthesize: true, verify: false },
+    })).toEqual({ synthesize: 2, verify: 0 });
   });
 
   it("W2-X7-001 (verify side): a dispatched-then-throwing verify is counted; column fails to flat", async () => {

@@ -19,6 +19,10 @@ import {
   type PipelineExecutionUnitStatus,
 } from "../pipeline-execution-ledger.js";
 import { terminalFailureMessageFromTelemetry } from "./execution-telemetry.js";
+import {
+  DispatchFallbackOutcomeSchema,
+  projectDispatchFallbackRecordBlock,
+} from "./dispatch-fallback-artifacts.js";
 
 type ReconstructArtifactRefKey = keyof ReconstructRecordArtifactRefs | "reconstruct_record";
 
@@ -907,6 +911,27 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
   },
 ];
 
+export function reconstructStageIdForArtifactRef(
+  artifactRef: string,
+): ReconstructStageId | null {
+  const artifactKey = path.basename(artifactRef, path.extname(artifactRef))
+    .replaceAll("-", "_");
+  return RECONSTRUCT_LEDGER_STAGE_SPECS.find((spec) =>
+    spec.artifactKey === artifactKey
+  )?.unitId ?? null;
+}
+
+export function reconstructStageOwner(
+  stageId: ReconstructStageId,
+): "runtime" | "host_llm" | "host_or_user" | null {
+  const owner = RECONSTRUCT_LEDGER_STAGE_SPECS.find((spec) =>
+    spec.unitId === stageId
+  )?.owner;
+  if (owner === "runtime" || owner === "host_llm") return owner;
+  if (owner === "user_or_host_mediated") return "host_or_user";
+  return null;
+}
+
 const VALIDATION_GATE_BY_AUTHORED_UNIT = new Map<ReconstructStageId, ReconstructStageId>([
   ["observation_directive", "observation_directive_validation"],
   ["source_frontier", "source_frontier_validation"],
@@ -1215,6 +1240,53 @@ export async function buildReconstructPipelineExecutionLedger(
       ]),
     ]),
   );
+  const dispatchFallback = params.reconstructRecord.dispatch_fallback;
+  if (dispatchFallback) {
+    const semanticMapManifestStep = manifestStepByUnitId.get("semantic_map");
+    if (
+      !semanticMapManifestStep?.artifact_refs.includes(
+        dispatchFallback.outcome_ref,
+      )
+    ) {
+      throw new Error(
+        "dispatch fallback record/manifest mismatch: semantic_map step must consume the completed outcome ref.",
+      );
+    }
+    const parsedOutcome = DispatchFallbackOutcomeSchema.safeParse(
+      parseYaml(await fs.readFile(dispatchFallback.outcome_ref, "utf8")),
+    );
+    if (!parsedOutcome.success || parsedOutcome.data.status !== "completed") {
+      throw new Error(
+        "dispatch fallback record/ledger mismatch: outcome artifact is not a valid completed canonical outcome.",
+      );
+    }
+    const canonicalBlock = projectDispatchFallbackRecordBlock({
+      outcome: parsedOutcome.data,
+      outcomeIntegrity: {
+        path: dispatchFallback.outcome_ref,
+        sha256: dispatchFallback.outcome_sha256,
+      },
+    });
+    if (
+      Object.entries(canonicalBlock).some(
+        ([key, value]) =>
+          JSON.stringify(
+            dispatchFallback[key as keyof typeof dispatchFallback],
+          ) !== JSON.stringify(value),
+      )
+    ) {
+      throw new Error(
+        "dispatch fallback record/ledger mismatch: record block is not the canonical outcome projection.",
+      );
+    }
+    artifactRefsByUnitId.set(
+      "semantic_map",
+      normalizeLedgerRefs([
+        ...(artifactRefsByUnitId.get("semantic_map") ?? []),
+        dispatchFallback.outcome_ref,
+      ]),
+    );
+  }
   const sourceDeltaFrontierKind = await sourceObservationDeltaFrontierKind(
     artifactRefsByUnitId.get("source_observation_delta") ?? [],
   );
@@ -1241,6 +1313,16 @@ export async function buildReconstructPipelineExecutionLedger(
     const outputRefs = artifactRefsByUnitId.get(spec.unitId) ?? [];
     const outputHashes = await buildOutputHashes(outputRefs);
     outputHashesByUnitId.set(spec.unitId, outputHashes);
+    if (
+      spec.unitId === "semantic_map" &&
+      dispatchFallback &&
+      outputHashes[dispatchFallback.outcome_ref] !==
+        dispatchFallback.outcome_sha256
+    ) {
+      throw new Error(
+        "dispatch fallback record/ledger mismatch: outcome file hash does not match the completed record block.",
+      );
+    }
     if (spec.unitKind === "runtime_validation") {
       validationStatusesByUnitId.set(
         spec.unitId,

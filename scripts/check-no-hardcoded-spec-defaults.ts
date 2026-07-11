@@ -102,6 +102,12 @@ const WAIVERS: Waiver[] = [
     reason:
       "settings chain의 resolved-shape 완성 기본값 — settings 권위 모듈 자체가 소유하는 canonical 완성값(dispatch_breaker 임계 포함). 변경은 G4 보호 대상(INVARIANT-CHANGE 마커 필요).",
   },
+  {
+    file: "src/core-runtime/llm/sealed-dispatch-capability.ts",
+    linePattern: /^maxRetries: 0,$/,
+    reason:
+      "dispatch_fallback 봉인 SDK capability의 구조적 invoke-once 강제값 — 사용자 retry 기본값이 아니며 승인된 계약이 low-level SDK retry를 0으로 고정한다.",
+  },
 ];
 
 const MODEL_LITERAL_RE =

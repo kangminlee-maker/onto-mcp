@@ -17,7 +17,7 @@ import type { ReviewStructuredFailureRecord } from "../review/artifact-types.js"
 import type { ReviewArtifactGenerationRealization } from "../review/artifact-types.js";
 import {
   assertSupportedModelRoutes,
-  collectModelSelections,
+  collectSupportedModelDispatches,
   type EffectiveModelRoute,
   loadSupportedModelRegistry,
   SUPPORTED_MODELS_AUTHORITY_PATH,
@@ -142,6 +142,28 @@ const DispatchBreakerSettingsSchema = z
     backoff_cap_ms: z.number().int().min(0).optional(),
   })
   .strict();
+const DispatchFallbackLlmSettingsSchema = z
+  .object({
+    provider: z.enum(["openai", "anthropic"]),
+    auth: z.literal("api_key"),
+    model: z.string().min(1),
+    effort: z.string().min(1),
+    api_key_env: z.string().min(1),
+  })
+  .strict();
+const DispatchFallbackSettingsSchema = z.discriminatedUnion("enabled", [
+  z.object({ enabled: z.literal(false) }).strict(),
+  z
+    .object({
+      enabled: z.literal(true),
+      trigger: z.literal("rate_limit"),
+      max_fallback_passes: z.literal(1),
+      per_dispatch_max_provider_attempts: z.literal(1),
+      systemic_failure_threshold: z.literal(1),
+      llm: DispatchFallbackLlmSettingsSchema,
+    })
+    .strict(),
+]);
 const ReviewRetrySettingsSchema = z
   .object({
     lens_max_retries: z.number().int().min(0).optional(),
@@ -379,9 +401,16 @@ const V3ReviewActorSettingsSchema = z
   })
   .strict();
 
+const ReconstructActorLlmRuntimeSettingsSchema = z
+  .object({
+    openai_responses_output_headroom_tokens: z.number().int().positive().safe(),
+  })
+  .strict();
+
 const V3ReconstructActorSettingsSchema = z
   .object({
     llm: FullLlmSettingsSchema,
+    llm_runtime: ReconstructActorLlmRuntimeSettingsSchema.optional(),
   })
   .strict();
 
@@ -429,6 +458,24 @@ function reconstructActorsShape<T extends z.ZodTypeAny>(
   return Object.fromEntries(
     RECONSTRUCT_ACTOR_KEYS.map((key) => [key, actorSchema.optional()]),
   ) as Record<ReconstructActorKey, z.ZodOptional<T>>;
+}
+
+function reconstructActorsSettingsSchema() {
+  return z
+    .object(reconstructActorsShape(V3ReconstructActorSettingsSchema))
+    .strict()
+    .superRefine((actors, ctx) => {
+      for (const key of RECONSTRUCT_ACTOR_KEYS) {
+        if (key !== "semantic_author" && actors[key]?.llm_runtime !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            path: [key, "llm_runtime"],
+            message:
+              "reconstruct actor llm_runtime is currently supported only on semantic_author.",
+          });
+        }
+      }
+    });
 }
 
 /** zod execution-scalar shape derived from
@@ -538,13 +585,13 @@ const V3ReconstructSettingsSchema = z
     execution: z
       .object({
         actors: z
-          .object(reconstructActorsShape(V3ReconstructActorSettingsSchema))
-          .strict()
+          .lazy(reconstructActorsSettingsSchema)
           .optional(),
         // Execution-level scalars (e.g. the semantic-map authoring opt-in,
         // design §5.5) — entries DERIVED from the scalar constant (§5.1).
         ...reconstructExecutionScalarsShape(),
         dispatch_breaker: DispatchBreakerSettingsSchema.optional(),
+        dispatch_fallback: DispatchFallbackSettingsSchema.optional(),
       })
       .strict()
       .optional(),
@@ -569,15 +616,11 @@ const NormalizedSettingsSchema = z
         execution: z
           .object({
             actors: z
-              .object(
-                reconstructActorsShape(
-                  z.object({ llm: FullLlmSettingsSchema }).strict(),
-                ),
-              )
-              .strict()
+              .lazy(reconstructActorsSettingsSchema)
               .optional(),
             ...reconstructExecutionScalarsShape(),
             dispatch_breaker: DispatchBreakerSettingsSchema.optional(),
+            dispatch_fallback: DispatchFallbackSettingsSchema.optional(),
           })
           .strict()
           .optional(),
@@ -780,9 +823,18 @@ export interface ReviewSettings {
   artifacts?: ReviewArtifactSettings;
 }
 
+export interface ReconstructActorLlmRuntimeSettings {
+  openai_responses_output_headroom_tokens: number;
+}
+
 export interface ReconstructActorSettings {
   llm: LlmModelSwitcherConfig;
+  llm_runtime?: ReconstructActorLlmRuntimeSettings;
 }
+
+export type DispatchFallbackSettings = z.infer<
+  typeof DispatchFallbackSettingsSchema
+>;
 
 export interface ReconstructSettings {
   // Both axes derive from their constants (design §5.1, F19 closure): a new
@@ -792,6 +844,9 @@ export interface ReconstructSettings {
     actors?: Partial<Record<ReconstructActorKey, ReconstructActorSettings>>;
     // Object-shaped execution block (not a boolean scalar): 설계 B breaker.
     dispatch_breaker?: DispatchBreakerSettingsInput;
+    // Whole-object, default-off provider swap capability. Enabled form is a
+    // strict contract whose retry/pass limits are all literal 1.
+    dispatch_fallback?: DispatchFallbackSettings;
   } & Partial<Record<ReconstructExecutionScalarKey, boolean>>;
 }
 
@@ -825,6 +880,12 @@ export function resolveReconstructActorLlmSettings(
   }
   normalizeLlmModelSwitcher(actor.llm);
   return actor.llm;
+}
+
+export function resolveReconstructSemanticAuthorLlmRuntimeSettings(
+  settings: OntoSettings,
+): ReconstructActorLlmRuntimeSettings | undefined {
+  return settings.reconstruct?.execution?.actors?.semantic_author?.llm_runtime;
 }
 
 /**
@@ -1103,7 +1164,12 @@ function v3ActorSettings(
 function v3ReconstructActorSettings(
   actor: z.infer<typeof V3ReconstructActorSettingsSchema>,
 ): ReconstructActorSettings {
-  return { llm: actor.llm };
+  return {
+    llm: actor.llm,
+    ...(actor.llm_runtime !== undefined
+      ? { llm_runtime: actor.llm_runtime }
+      : {}),
+  };
 }
 
 /**
@@ -1135,6 +1201,9 @@ export function v3ReconstructSettings(
   }
   if (execution.dispatch_breaker !== undefined) {
     out.dispatch_breaker = execution.dispatch_breaker;
+  }
+  if (execution.dispatch_fallback !== undefined) {
+    out.dispatch_fallback = execution.dispatch_fallback;
   }
   return Object.keys(out).length > 0 ? { execution: out } : undefined;
 }
@@ -1485,6 +1554,9 @@ export function mergeReconstructSettings(
         }
       : undefined;
   if (dispatchBreaker !== undefined) out.dispatch_breaker = dispatchBreaker;
+  const dispatchFallback =
+    project?.execution?.dispatch_fallback ?? user?.execution?.dispatch_fallback;
+  if (dispatchFallback !== undefined) out.dispatch_fallback = dispatchFallback;
   return Object.keys(out).length > 0 ? { execution: out } : undefined;
 }
 
@@ -1594,7 +1666,7 @@ function unitDefaultActorForSettingsValidation(
 export function collectEffectiveModelRoutes(
   settings: OntoSettings,
 ): EffectiveModelRoute[] {
-  const nodes = collectModelSelections(settings);
+  const nodes = collectSupportedModelDispatches(settings);
   const providerAtPath = new Map<string, string>();
   const modelAtPath = new Map<string, string>();
   for (const node of nodes) {

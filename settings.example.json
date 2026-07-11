@@ -244,5 +244,53 @@
         }
       }
     }
+  },
+
+  # reconstruct의 breaker-trip provider fallback은 기본적으로 꺼져 있습니다.
+  # 활성화할 때는 enabled만 바꾸지 말고 strict enabled 형식의 trigger/limit/llm
+  # 필드를 모두 명시해야 합니다. api_key 값 자체는 파일에 쓰지 않습니다.
+  # enabled 형식:
+  # "dispatch_fallback": {
+  #   "enabled": true,
+  #   "trigger": "rate_limit",
+  #   "max_fallback_passes": 1,
+  #   "per_dispatch_max_provider_attempts": 1,
+  #   "systemic_failure_threshold": 1,
+  #   "llm": {
+  #     "provider": "anthropic", "auth": "api_key",
+  #     "model": "<supported-model>", "effort": "medium",
+  #     "api_key_env": "ANTHROPIC_API_KEY"
+  #   }
+  # }
+  "reconstruct": {
+    "execution": {
+      # reconstruct actor도 역할별 독립 설정을 사용합니다.
+      # semantic_author를 openai + api_key direct API 경로로 명시 전환한 경우에만
+      # actor의 llm sibling인 llm_runtime.openai_responses_output_headroom_tokens를
+      # 양의 정수로 추가할 수 있습니다. 생략하면 기존 stage output ceiling을 그대로 씁니다.
+      "actors": {
+        "semantic_author": {
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "confirmation_provider": {
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        }
+      },
+      "dispatch_fallback": {
+        "enabled": false
+      }
+    }
   }
 }

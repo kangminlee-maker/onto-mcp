@@ -26,7 +26,12 @@ const PROJECT_ROOT = path.resolve(
   "..",
 );
 const RUN_TS = path.join(PROJECT_ROOT, "src/core-runtime/reconstruct/run.ts");
+const LEAF_READER_TS = path.join(
+  PROJECT_ROOT,
+  "src/core-runtime/reconstruct/leaf-reader.ts",
+);
 const GUARD_FN = "isGracefulTerminalSignal";
+const LLM_FAILURE_GUARD_FN = "readReconstructLlmDispatchFailureError";
 
 type Status = "guarded" | "handler" | "exempt-rethrow" | "VIOLATION";
 interface Finding {
@@ -122,10 +127,255 @@ function classifyFirstStatement(
   return null;
 }
 
+function isNamedGuardRethrow(
+  stmt: ts.Statement | undefined,
+  varName: string,
+  guardFn: string,
+): boolean {
+  if (!stmt || !ts.isIfStatement(stmt)) return false;
+  const cond = stmt.expression;
+  if (
+    !ts.isCallExpression(cond) ||
+    !ts.isIdentifier(cond.expression) ||
+    cond.expression.text !== guardFn ||
+    cond.arguments.length !== 1
+  ) {
+    return false;
+  }
+  const arg = cond.arguments[0];
+  if (!arg || !ts.isIdentifier(arg) || arg.text !== varName) return false;
+  const then = stmt.thenStatement;
+  const inner = ts.isBlock(then) && then.statements.length === 1
+    ? then.statements[0]
+    : then;
+  return Boolean(inner && isBareRethrow(inner, varName));
+}
+
+function isRunTypedFailureHandler(
+  statements: ts.NodeArray<ts.Statement>,
+  caughtVarName: string,
+): boolean {
+  const isTypedFailureDeclaration = (statement: ts.Statement): boolean => {
+    if (
+      !ts.isVariableStatement(statement) ||
+      !(statement.declarationList.flags & ts.NodeFlags.Const) ||
+      statement.declarationList.declarations.length !== 1
+    ) {
+      return false;
+    }
+    const declaration = statement.declarationList.declarations[0];
+    if (
+      !declaration ||
+      !ts.isIdentifier(declaration.name) ||
+      !declaration.initializer ||
+      !ts.isCallExpression(declaration.initializer) ||
+      !ts.isIdentifier(declaration.initializer.expression) ||
+      declaration.initializer.expression.text !== LLM_FAILURE_GUARD_FN ||
+      declaration.initializer.arguments.length !== 1
+    ) {
+      return false;
+    }
+    const argument = declaration.initializer.arguments[0];
+    return Boolean(
+      argument &&
+      ts.isIdentifier(argument) &&
+      argument.text === caughtVarName,
+    );
+  };
+  const declarationIndexes = statements.flatMap((statement, index) =>
+    isTypedFailureDeclaration(statement) ? [index] : []
+  );
+  if (declarationIndexes.length !== 1 || declarationIndexes[0] !== 1) {
+    return false;
+  }
+  const declarationIndex = declarationIndexes[0];
+  const declarationStatement = statements[declarationIndex];
+  if (!declarationStatement || !ts.isVariableStatement(declarationStatement)) {
+    return false;
+  }
+  const declaration = declarationStatement.declarationList.declarations[0];
+  if (!declaration || !ts.isIdentifier(declaration.name)) return false;
+  const typedFailureVarName = declaration.name.text;
+
+  const typedBranch = statements[declarationIndex + 1];
+  if (
+    !typedBranch ||
+    !ts.isIfStatement(typedBranch) ||
+    typedBranch.elseStatement ||
+    !ts.isIdentifier(typedBranch.expression) ||
+    typedBranch.expression.text !== typedFailureVarName ||
+    !ts.isBlock(typedBranch.thenStatement) ||
+    typedBranch.thenStatement.statements.length !== 2
+  ) {
+    return false;
+  }
+  const persistenceTry = typedBranch.thenStatement.statements[0];
+  const terminalRethrow = typedBranch.thenStatement.statements[1];
+  if (
+    !persistenceTry ||
+    !ts.isTryStatement(persistenceTry) ||
+    persistenceTry.finallyBlock ||
+    persistenceTry.tryBlock.statements.length !== 1 ||
+    !terminalRethrow ||
+    !isBareRethrow(terminalRethrow, caughtVarName)
+  ) {
+    return false;
+  }
+  let persistenceReferenceCount = 0;
+  const countPersistenceReferences = (node: ts.Node): void => {
+    if (
+      ts.isIdentifier(node) &&
+      node.text === "persistReconstructLlmDispatchFailure"
+    ) {
+      persistenceReferenceCount += 1;
+    }
+    ts.forEachChild(node, countPersistenceReferences);
+  };
+  for (const statement of statements) countPersistenceReferences(statement);
+  if (persistenceReferenceCount !== 1) return false;
+
+  const persistenceStatement = persistenceTry.tryBlock.statements[0];
+  if (!persistenceStatement || !ts.isExpressionStatement(persistenceStatement)) {
+    return false;
+  }
+  const awaited = persistenceStatement.expression;
+  if (!ts.isAwaitExpression(awaited) || !ts.isCallExpression(awaited.expression)) {
+    return false;
+  }
+  const call = awaited.expression;
+  if (
+    !ts.isIdentifier(call.expression) ||
+    call.expression.text !== "persistReconstructLlmDispatchFailure" ||
+    call.arguments.length !== 1
+  ) {
+    return false;
+  }
+  const options = call.arguments[0];
+  if (!options || !ts.isObjectLiteralExpression(options)) return false;
+  if (
+    options.properties.some((property) =>
+      ts.isSpreadAssignment(property) ||
+      ("name" in property && ts.isComputedPropertyName(property.name))
+    )
+  ) {
+    return false;
+  }
+  const errorProperties = options.properties.filter((property) => {
+    if (!("name" in property)) return false;
+    return (
+      (ts.isIdentifier(property.name) && property.name.text === "error") ||
+      (ts.isStringLiteral(property.name) && property.name.text === "error")
+    );
+  });
+  const errorProperty = errorProperties[0];
+  return Boolean(
+    errorProperties.length === 1 &&
+    errorProperty &&
+    ts.isPropertyAssignment(errorProperty) &&
+    ts.isIdentifier(errorProperty.initializer) &&
+    errorProperty.initializer.text === typedFailureVarName,
+  );
+}
+
+function typedHandlerStatements(sourceText: string): ts.NodeArray<ts.Statement> {
+  const fixture = ts.createSourceFile(
+    "g11-typed-handler-fixture.ts",
+    `async function fixture() { try {} catch (error) { ${sourceText} } }`,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  let statements: ts.NodeArray<ts.Statement> | null = null;
+  const visitFixture = (node: ts.Node): void => {
+    if (ts.isCatchClause(node) && statements === null) {
+      statements = node.block.statements;
+    }
+    ts.forEachChild(node, visitFixture);
+  };
+  visitFixture(fixture);
+  if (!statements) throw new Error("G11 typed-handler self-check fixture did not parse");
+  return statements;
+}
+
+const VALID_TYPED_HANDLER_FIXTURE = `
+  if (isGracefulTerminalSignal(error)) return assembleGracefulTerminal(error);
+  const typed = readReconstructLlmDispatchFailureError(error);
+  if (typed) {
+    try {
+      await persistReconstructLlmDispatchFailure({ error: typed });
+    } catch (persistenceError) {
+      throw persistenceError;
+    }
+    throw error;
+  }
+`;
+const INVALID_TYPED_HANDLER_FIXTURES = [
+  VALID_TYPED_HANDLER_FIXTURE.replace("const typed", "let typed"),
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "if (typed) {",
+    "typed = null; if (typed) {",
+  ),
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "await persistReconstructLlmDispatchFailure",
+    "void persistReconstructLlmDispatchFailure",
+  ),
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "await persistReconstructLlmDispatchFailure({ error: typed });",
+    "if (false) await persistReconstructLlmDispatchFailure({ error: typed });",
+  ),
+  VALID_TYPED_HANDLER_FIXTURE.replace("{ error: typed }", "{ error }"),
+  VALID_TYPED_HANDLER_FIXTURE.replace("throw error;", "throw typed;"),
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "throw error;",
+    "if (false) throw error; throw new Error('replacement');",
+  ),
+  `return; ${VALID_TYPED_HANDLER_FIXTURE}`,
+  `${VALID_TYPED_HANDLER_FIXTURE}
+   const duplicateTyped = readReconstructLlmDispatchFailureError(error);`,
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "} catch (persistenceError) {\n      throw persistenceError;\n    }",
+    "} finally {\n      throw new Error('replacement');\n    }",
+  ),
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "{ error: typed }",
+    "{ error: typed, ...({ error } as any) }",
+  ),
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "{ error: typed }",
+    "{ error: typed, ['error']: error }",
+  ),
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "throw persistenceError;",
+    "await persistReconstructLlmDispatchFailure({ error: typed }); throw persistenceError;",
+  ),
+  VALID_TYPED_HANDLER_FIXTURE.replace(
+    "{ error: typed }",
+    "{ audit: await persistReconstructLlmDispatchFailure({ error: typed }), error: typed }",
+  ),
+];
+const validTypedHandlerAccepted = isRunTypedFailureHandler(
+  typedHandlerStatements(VALID_TYPED_HANDLER_FIXTURE),
+  "error",
+);
+const invalidTypedHandlerAccepted = INVALID_TYPED_HANDLER_FIXTURES.map(
+  (fixture) => isRunTypedFailureHandler(typedHandlerStatements(fixture), "error"),
+);
+if (
+  !validTypedHandlerAccepted ||
+  invalidTypedHandlerAccepted.some(Boolean)
+) {
+  throw new Error(
+    `G11 typed-handler contrast self-check failed: valid=${validTypedHandlerAccepted} ` +
+      `invalid=${JSON.stringify(invalidTypedHandlerAccepted)}`,
+  );
+}
+
 const findings: Finding[] = [];
+let runCatchCount = 0;
+let runHandlerCount = 0;
 
 function visit(node: ts.Node): void {
   if (ts.isCatchClause(node)) {
+    runCatchCount += 1;
     const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
     const decl = node.variableDeclaration;
     const varName =
@@ -149,9 +399,41 @@ function visit(node: ts.Node): void {
       const first = stmts[0];
       const kind = first ? classifyFirstStatement(first, varName) : null;
       if (kind === "guard") {
-        findings.push({ line, varName, status: "guarded", detail: "first statement rethrows the graceful signal" });
+        if (!isNamedGuardRethrow(stmts[1], varName, LLM_FAILURE_GUARD_FN)) {
+          findings.push({
+            line,
+            varName,
+            status: "VIOLATION",
+            detail:
+              `second statement must rethrow ${LLM_FAILURE_GUARD_FN}(${varName}) so provider partial output cannot be degraded`,
+          });
+        } else {
+          findings.push({
+            line,
+            varName,
+            status: "guarded",
+            detail: "first two statements rethrow graceful and provider-output terminal signals",
+          });
+        }
       } else if (kind === "handler") {
-        findings.push({ line, varName, status: "handler", detail: "first statement handles the graceful signal" });
+        if (!isRunTypedFailureHandler(stmts, varName)) {
+          findings.push({
+            line,
+            varName,
+            status: "VIOLATION",
+            detail:
+              "run-level handler must detect the caught provider-output terminal, await its failure persistence, and rethrow the same caught error",
+          });
+        } else {
+          runHandlerCount += 1;
+          findings.push({
+            line,
+            varName,
+            status: "handler",
+            detail:
+              "handles graceful terminal and persists/rethrows the caught provider-output terminal",
+          });
+        }
       } else {
         findings.push({
           line,
@@ -167,8 +449,80 @@ function visit(node: ts.Node): void {
 
 visit(sf);
 
+const leafSource = fs.readFileSync(LEAF_READER_TS, "utf8");
+const leafSf = ts.createSourceFile(
+  LEAF_READER_TS,
+  leafSource,
+  ts.ScriptTarget.Latest,
+  true,
+);
+let leafProviderCatchCount = 0;
+function containsCallTo(node: ts.Node, identifier: string): boolean {
+  let found = false;
+  const walk = (current: ts.Node): void => {
+    if (found) return;
+    if (
+      current !== node &&
+      (ts.isFunctionDeclaration(current) ||
+        ts.isFunctionExpression(current) ||
+        ts.isArrowFunction(current) ||
+        ts.isMethodDeclaration(current))
+    ) {
+      return;
+    }
+    if (
+      ts.isCallExpression(current) &&
+      ts.isIdentifier(current.expression) &&
+      current.expression.text === identifier
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(current, walk);
+  };
+  walk(node);
+  return found;
+}
+function visitLeaf(node: ts.Node): void {
+  if (
+    ts.isCatchClause(node) &&
+    ts.isTryStatement(node.parent) &&
+    containsCallTo(node.parent.tryBlock, "callLlm")
+  ) {
+    leafProviderCatchCount += 1;
+    const decl = node.variableDeclaration;
+    const varName = decl && ts.isIdentifier(decl.name) ? decl.name.text : null;
+    const line = leafSf.getLineAndCharacterOfPosition(node.getStart(leafSf)).line + 1;
+    if (
+      varName &&
+      isNamedGuardRethrow(
+        node.block.statements[0],
+        varName,
+        LLM_FAILURE_GUARD_FN,
+      )
+    ) {
+      findings.push({
+        line,
+        varName,
+        status: "guarded",
+        detail: "leaf-reader LLM catch rethrows provider-output terminal signals",
+      });
+    } else {
+      findings.push({
+        line,
+        varName: varName ?? "(unbound)",
+        status: "VIOLATION",
+        detail:
+          `leaf-reader catch must first rethrow ${LLM_FAILURE_GUARD_FN}(${varName})`,
+      });
+    }
+  }
+  ts.forEachChild(node, visitLeaf);
+}
+visitLeaf(leafSf);
+
 console.log(
-  `check-graceful-signal-rethrow: ${findings.length} catch clause(s) in src/core-runtime/reconstruct/run.ts`,
+  `check-graceful-signal-rethrow: ${findings.length} guarded catch clause(s) across reconstruct terminal paths`,
 );
 for (const f of findings) {
   console.log(`  L${f.line} catch(${f.varName}): ${f.status} — ${f.detail}`);
@@ -177,6 +531,23 @@ for (const f of findings) {
 if (findings.length === 0) {
   console.error(
     "\nERROR: no catch clauses found in run.ts — the guard subject set is empty (a vacuous pass proves nothing).",
+  );
+  process.exit(1);
+}
+
+if (runCatchCount === 0) {
+  console.error("\nERROR: run.ts catch subject set is empty.");
+  process.exit(1);
+}
+if (runHandlerCount !== 1) {
+  console.error(
+    `\nERROR: run.ts must contain exactly one graceful terminal handler catch; observed ${runHandlerCount}.`,
+  );
+  process.exit(1);
+}
+if (leafProviderCatchCount !== 1) {
+  console.error(
+    `\nERROR: leaf-reader.ts must contain exactly one callLlm provider catch; observed ${leafProviderCatchCount}.`,
   );
   process.exit(1);
 }

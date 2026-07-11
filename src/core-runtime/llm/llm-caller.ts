@@ -24,6 +24,7 @@ import {
   normalizeLlmModelSwitcher,
   type LlmModelSwitcherConfig,
   type LlmExecutionAdapter,
+  type NormalizedLlmSelection,
 } from "./model-switcher.js";
 import { resolveClaudeBin } from "./claude-bin.js";
 import {
@@ -35,6 +36,11 @@ import {
   isReviewMockLlmRealizationEnabled,
 } from "./mock-llm-realization.js";
 import type { ReviewArtifactGenerationRealization } from "../review/artifact-types.js";
+import {
+  OPENAI_RESPONSES_MAX_OUTPUT_TOKENS_FAILURE_CODE,
+  OpenAIResponsesIncompleteError,
+  resolveOpenAIResponsesOutputBudget,
+} from "./openai-responses-incomplete-error.js";
 
 /**
  * Structural subset of ExecutionPlan that callLlm reads. Accepts either the
@@ -93,6 +99,10 @@ export interface LlmCallConfig {
    * route is not affected and stays on the ONTO_LLM_TIMEOUT_MS / SDK default.
    */
   timeout_ms?: number;
+  /** Reconstruct-only additive headroom for the OpenAI Responses shared output ceiling. */
+  openai_responses_output_headroom_tokens?: number;
+  /** Registry-derived provider maximum required whenever headroom is present. */
+  openai_responses_model_max_output_tokens?: number;
   /**
    * Pre-resolved ExecutionPlan (Review Recovery PR-1, 2026-04-18).
    *
@@ -202,6 +212,43 @@ export function resolveLlmProviderConfig(args: {
   return out;
 }
 
+export function applyOpenAIResponsesOutputHeadroom(args: {
+  config: Partial<LlmCallConfig>;
+  selection: NormalizedLlmSelection;
+  headroomTokens: number | undefined;
+  modelMaxOutputTokens: number | undefined;
+  maxBaseOutputTokens: number;
+}): Partial<LlmCallConfig> {
+  if (args.headroomTokens === undefined) return args.config;
+  if (
+    args.selection.model_provider !== "openai" ||
+    args.selection.auth !== "api_key" ||
+    args.selection.execution_route !== "direct_model_call" ||
+    args.selection.execution_adapter !== "openai_sdk" ||
+    args.selection.wire_format !== "native_sdk" ||
+    args.selection.base_url !== undefined
+  ) {
+    throw new Error(
+      "openai Responses output headroom requires the official openai + api_key + openai_sdk + native_sdk route without a custom base_url.",
+    );
+  }
+  if (args.modelMaxOutputTokens === undefined) {
+    throw new Error(
+      "openai Responses output headroom requires registered max_output_tokens.",
+    );
+  }
+  resolveOpenAIResponsesOutputBudget({
+    baseOutputTokens: args.maxBaseOutputTokens,
+    headroomTokens: args.headroomTokens,
+    modelMaxOutputTokens: args.modelMaxOutputTokens,
+  });
+  return {
+    ...args.config,
+    openai_responses_output_headroom_tokens: args.headroomTokens,
+    openai_responses_model_max_output_tokens: args.modelMaxOutputTokens,
+  };
+}
+
 export interface LlmCallResult {
   text: string;
   input_tokens: number;
@@ -237,6 +284,20 @@ const WORKER_SIGKILL_GRACE_MS = 5_000;
 // faster (1 retry instead of the default 2) so operators see provider errors
 // within ~2× timeout instead of ~3×.
 const DEFAULT_MAX_RETRIES = 1;
+const OPENAI_RESPONSES_BASE_URL = "https://api.openai.com/v1";
+
+function sanitizeEffectiveBaseUrl(baseUrl: string): string {
+  try {
+    const sanitized = new URL(baseUrl);
+    sanitized.username = "";
+    sanitized.password = "";
+    sanitized.search = "";
+    sanitized.hash = "";
+    return sanitized.toString();
+  } catch {
+    return "invalid-endpoint:redacted";
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Provider resolution
@@ -646,18 +707,45 @@ async function callOpenAIResponses(
   userPrompt: string,
   apiKey: string,
   modelId: string,
-  maxOutputTokens: number,
+  baseMaxOutputTokens: number,
   reasoningEffort?: string,
+  outputHeadroomTokens?: number,
+  modelMaxOutputTokens?: number,
 ): Promise<LlmCallResult> {
+  const budget = resolveOpenAIResponsesOutputBudget({
+    baseOutputTokens: baseMaxOutputTokens,
+    ...(outputHeadroomTokens !== undefined
+      ? { headroomTokens: outputHeadroomTokens }
+      : {}),
+    ...(modelMaxOutputTokens !== undefined
+      ? { modelMaxOutputTokens }
+      : {}),
+  });
   const { default: OpenAI } = await import("openai");
+  const effectiveBaseUrl = sanitizeEffectiveBaseUrl(
+    outputHeadroomTokens === undefined
+      ? process.env.OPENAI_BASE_URL ?? OPENAI_RESPONSES_BASE_URL
+      : OPENAI_RESPONSES_BASE_URL,
+  );
+  const noOpLogger = {
+    error: () => {},
+    warn: () => {},
+    info: () => {},
+    debug: () => {},
+  };
   const client = new OpenAI({
     apiKey,
+    ...(outputHeadroomTokens !== undefined
+      ? { baseURL: OPENAI_RESPONSES_BASE_URL }
+      : {}),
     timeout: DEFAULT_TIMEOUT_MS,
     maxRetries: DEFAULT_MAX_RETRIES,
+    logLevel: "off",
+    logger: noOpLogger,
   });
 
   emitModelCallLog(
-    `openai call: model="${modelId}" max_output_tokens=${maxOutputTokens} effort=${reasoningEffort ?? "(unset)"}`,
+    `openai call: model="${modelId}" max_output_tokens=${budget.effectiveMaxOutputTokens} effort=${reasoningEffort ?? "(unset)"}`,
   );
 
   let response;
@@ -666,7 +754,7 @@ async function callOpenAIResponses(
       model: modelId,
       instructions: systemPrompt,
       input: userPrompt,
-      max_output_tokens: maxOutputTokens,
+      max_output_tokens: budget.effectiveMaxOutputTokens,
       // Transient single-turn authoring/review calls; the Responses API stores
       // response objects provider-side by default (retrievable for ~30d). Opt
       // out so these prompts/outputs are not persisted — matches the
@@ -704,10 +792,64 @@ async function callOpenAIResponses(
     const detail =
       response.incomplete_details?.reason ?? response.error?.message ?? "no detail";
     emitModelCallLog(
-      `openai call NOT COMPLETED: model="${modelId}" status=${response.status} detail=${detail} max_output_tokens=${maxOutputTokens}`,
+      `openai call NOT COMPLETED: model="${modelId}" status=${response.status} detail=${detail} max_output_tokens=${budget.effectiveMaxOutputTokens}`,
     );
+    if (
+      response.status === "incomplete" &&
+      response.incomplete_details?.reason === "max_output_tokens"
+    ) {
+      const usage = response.usage;
+      const inputTokens = typeof usage?.input_tokens === "number"
+        ? usage.input_tokens
+        : null;
+      const cachedInputTokens =
+        typeof usage?.input_tokens_details?.cached_tokens === "number"
+          ? usage.input_tokens_details.cached_tokens
+          : null;
+      const outputTokens = typeof usage?.output_tokens === "number"
+        ? usage.output_tokens
+        : null;
+      const reasoningTokens =
+        typeof usage?.output_tokens_details?.reasoning_tokens === "number"
+          ? usage.output_tokens_details.reasoning_tokens
+          : null;
+      const nonReasoningOutputTokens =
+        outputTokens !== null && reasoningTokens !== null
+          ? Math.max(0, outputTokens - reasoningTokens)
+          : null;
+      const partialOutput = response.output_text ?? "";
+      throw new OpenAIResponsesIncompleteError({
+        failure_code: OPENAI_RESPONSES_MAX_OUTPUT_TOKENS_FAILURE_CODE,
+        provider_status: response.status,
+        incomplete_reason: "max_output_tokens",
+        base_output_ceiling_tokens: budget.baseOutputTokens,
+        configured_output_headroom_tokens: budget.headroomTokens,
+        effective_max_output_tokens: budget.effectiveMaxOutputTokens,
+        input_tokens: inputTokens,
+        cached_input_tokens: cachedInputTokens,
+        output_tokens: outputTokens,
+        reasoning_tokens: reasoningTokens,
+        non_reasoning_output_tokens: nonReasoningOutputTokens,
+        partial_output_chars: partialOutput.length,
+        partial_output_sha256: crypto
+          .createHash("sha256")
+          .update(partialOutput, "utf8")
+          .digest("hex"),
+        provider_model: response.model ?? modelId,
+        provider_response_id:
+          typeof response.id === "string" ? response.id : null,
+        provider_request_id:
+          typeof (response as { _request_id?: unknown })._request_id === "string"
+            ? (response as { _request_id: string })._request_id
+            : null,
+        effective_base_url: effectiveBaseUrl,
+        sdk_max_retries: DEFAULT_MAX_RETRIES,
+        actual_adapter_request_count: null,
+        request_count_observability: "unavailable",
+      });
+    }
     throw new Error(
-      `openai response not completed (status=${response.status}: ${detail}) at max_output_tokens=${maxOutputTokens} — raise max_output_tokens if truncated`,
+      `openai response not completed (status=${response.status}: ${detail}) at max_output_tokens=${budget.effectiveMaxOutputTokens}`,
     );
   }
 
@@ -721,7 +863,7 @@ async function callOpenAIResponses(
     input_tokens: usage?.input_tokens ?? 0,
     output_tokens: usage?.output_tokens ?? 0,
     model_id: modelId,
-    effective_base_url: "https://api.openai.com/v1",
+    effective_base_url: effectiveBaseUrl,
     declared_billing_mode: "per_token",
   };
 }
@@ -1176,6 +1318,8 @@ async function dispatchByPlan(
       modelId,
       maxTokens,
       config.reasoning_effort,
+      config.openai_responses_output_headroom_tokens,
+      config.openai_responses_model_max_output_tokens,
     );
   }
   if (plan.provider_identity === "grok") {
@@ -1250,6 +1394,17 @@ export async function callLlm(
     config?.artifact_generation_realization === "semantic_mock"
   ) {
     return callReviewMockLlm(systemPrompt, userPrompt, config);
+  }
+
+  if (
+    config?.openai_responses_output_headroom_tokens !== undefined &&
+    (config.provider !== "openai" ||
+      config.execution_adapter !== "openai_sdk" ||
+      config.base_url !== undefined)
+  ) {
+    throw new Error(
+      "openai Responses output headroom reached an unsupported dispatch route.",
+    );
   }
 
   if (config?.plan) {
@@ -1372,6 +1527,8 @@ export async function callLlm(
         modelId,
         maxTokens,
         config?.reasoning_effort,
+        config?.openai_responses_output_headroom_tokens,
+        config?.openai_responses_model_max_output_tokens,
       );
     }
     case "grok": {

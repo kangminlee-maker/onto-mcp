@@ -169,6 +169,8 @@ export interface ReconstructRunControlWriteTransactionRow {
   artifact_ref: string;
   temp_ref: string | null;
   expected_prior_hash: string | null;
+  /** Expected bytes for a prepared create-once transaction; equals committed_hash after commit. */
+  prepared_content_hash?: string | null;
   committed_hash: string | null;
   commit_method:
     | "atomic_rename"
@@ -222,6 +224,8 @@ export interface ReconstructRunControlValidationViolation {
     | "terminal_validation_missing"
     | "terminal_validation_invalid"
     | "expected_transaction_missing"
+    | "failed_terminal_missing"
+    | "failed_terminal_invalid"
     | "invalid_resume";
   message: string;
   subject_id: string | null;
@@ -2571,6 +2575,11 @@ export interface ReconstructSemanticMapCensusObservation {
    *  null for observations skipped before fingerprinting. */
   fingerprint: string | null;
   columns: ReconstructSemanticMapCensusColumn[];
+  dispatch_execution_source?: "primary" | "fallback" | null;
+  discarded_primary_synthesize_logical_calls?: number;
+  discarded_primary_verify_logical_calls?: number;
+  primary_synthesize_adapter_requests?: number;
+  primary_verify_adapter_requests?: number;
 }
 
 export interface ReconstructSemanticMapCensus {
@@ -2596,6 +2605,17 @@ export interface ReconstructSemanticMapCensus {
   author_id: string;
   synthesize_model_identity: string;
   verify_model_identity: string;
+  dispatch_execution_profiles?: {
+    primary: {
+      synthesize_descriptor_id: string | null;
+      verify_descriptor_id: string | null;
+    };
+    fallback: { synthesize_descriptor_id: string; verify_descriptor_id: string };
+  };
+  fallback_synthesize_logical_calls?: number;
+  fallback_verify_logical_calls?: number;
+  fallback_synthesize_adapter_requests?: number;
+  fallback_verify_adapter_requests?: number;
   by_observation: ReconstructSemanticMapCensusObservation[];
 }
 
@@ -3850,6 +3870,23 @@ export interface ReconstructRecordArtifact {
   target_material_kind: TargetMaterialKind | null;
   support_status: TargetMaterialSupportStatus | null;
   artifact_refs: ReconstructRecordArtifactRefs;
+  dispatch_fallback?: {
+    outcome_ref: string;
+    outcome_sha256: string;
+    activation_sha256: string;
+    owner_attempt_id: string;
+    trigger_code: "rate_limit";
+    route_relation: "cross_provider";
+    target_count: number;
+    completed_count: number;
+    dead_letter_count: number;
+    incomplete_count: number;
+    synthesize_logical_dispatch_count: number;
+    verify_logical_dispatch_count: number;
+    synthesize_adapter_request_count: number;
+    verify_adapter_request_count: number;
+    outcome: "completed";
+  };
   artifact_integrity: Array<{
     artifact_key: keyof ReconstructRecordArtifactRefs;
     artifact_ref: string | null;

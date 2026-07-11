@@ -10,6 +10,8 @@ import type {
   ReconstructMetricsArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
+  ReconstructRunControlArtifact,
+  ReconstructRunControlValidationArtifact,
   ReconstructRunManifestArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
   ReconstructStageId,
@@ -38,8 +40,12 @@ import {
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
   runReconstruct,
+  type ReconstructDispatchFallbackRuntime,
   type ReconstructRunResult,
 } from "../core-runtime/reconstruct/run.js";
+import {
+  RECONSTRUCT_SEMANTIC_AUTHOR_MAX_BASE_OUTPUT_TOKENS,
+} from "../core-runtime/reconstruct/output-budget.js";
 // Explicit reconstruct mock realization switch point (INV-MOCK-1 boundary;
 // allowlisted in scripts/check-import-boundary.ts). Active only when
 // ONTO_LLM_MOCK=1; mock runs record mock actor ids in the run manifest.
@@ -56,21 +62,35 @@ import {
   resolveOptionalReconstructActorLlmSettings,
   resolveSettingsChain,
   resolveReconstructActorLlmSettings,
+  resolveReconstructSemanticAuthorLlmRuntimeSettings,
   type OntoSettings,
 } from "../core-runtime/discovery/settings-chain.js";
-import type { LlmModelSwitcherConfig } from "../core-runtime/llm/model-switcher.js";
+import { assertDispatchFallbackSessionAdmission } from "../core-runtime/reconstruct/dispatch-fallback-artifacts.js";
+import {
+  normalizeLlmModelSwitcher,
+  type LlmModelSwitcherConfig,
+} from "../core-runtime/llm/model-switcher.js";
 import {
   resolveOntoHome,
 } from "../core-runtime/discovery/onto-home.js";
 import {
   isSupportedModelRoute,
   loadSupportedModelRegistry,
+  supportedModelMaxOutputTokens,
   type SupportedModelRegistry,
 } from "../core-runtime/discovery/supported-models.js";
 import {
+  applyOpenAIResponsesOutputHeadroom,
   resolveLlmProviderConfig,
   type LlmCallConfig,
 } from "../core-runtime/llm/llm-caller.js";
+import {
+  createSealedDispatchCapability,
+  SemanticMapDispatchAccounting,
+  type ResolvedLlmDispatchCapability,
+  type SemanticMapDispatchOperation,
+} from "../core-runtime/llm/sealed-dispatch-capability.js";
+import { createReconstructExecutionTelemetryCollector } from "../core-runtime/reconstruct/execution-telemetry.js";
 import {
   writeOntologySeedValidationArtifact,
   writeCandidateDispositionValidationArtifact,
@@ -88,10 +108,23 @@ import {
 import type { PipelineExecutionLedger } from "../core-runtime/pipeline-execution-ledger.js";
 import {
   buildReconstructPipelineExecutionLedger,
+  reconstructStageIdForArtifactRef,
+  reconstructStageOwner,
 } from "../core-runtime/reconstruct/pipeline-execution-ledger.js";
+import {
+  reconcileReconstructLlmDispatchFailures,
+} from "../core-runtime/reconstruct/run-control-validation.js";
+import {
+  isReconstructLlmDispatchFailureRef,
+  projectReconstructLlmDispatchFailureSummary,
+  readReconstructLlmDispatchFailureArtifactWithHash,
+  readReconstructLlmDispatchFailureError,
+  type ReconstructLlmDispatchFailureSummary,
+} from "../core-runtime/reconstruct/llm-dispatch-failure.js";
 import {
   spawnRuntimeWatcherPane,
 } from "../core-runtime/cli/spawn-watcher.js";
+import { assertPathInsideRoot } from "../core-runtime/path-boundary.js";
 import {
   appendRuntimeStatusEventSync,
   runWithRuntimeObservationContext,
@@ -172,7 +205,7 @@ export interface AssembleReconstructRecordRequest {
   outputPath?: string;
 }
 
-export interface ReconstructSessionStatus {
+export interface ReconstructRecordBackedSessionStatus {
   sessionId: string;
   sessionRoot: string;
   /**
@@ -189,12 +222,35 @@ export interface ReconstructSessionStatus {
   reconstructRecord: ReconstructRecordArtifact;
 }
 
-export interface ReconstructSessionResult extends ReconstructSessionStatus {
+export interface ReconstructFailedSessionStatus {
+  sessionId: string;
+  sessionRoot: string;
+  status: "failed";
+  artifactRefs: Partial<ReconstructRecordArtifactRefs>;
+  claimProjection: null;
+  claimProjectionValidation: null;
+  progress: ReconstructRunProgressProjection;
+  reconstructRecord: null;
+  runControlRef: string;
+  runControlValidationRef: string;
+  failure: ReconstructLlmDispatchFailureSummary;
+  reusableArtifactRefs: string[];
+}
+
+export type ReconstructSessionStatus =
+  | ReconstructRecordBackedSessionStatus
+  | ReconstructFailedSessionStatus;
+
+export type ReconstructRunResponse =
+  | ReconstructRunResult
+  | ReconstructFailedSessionStatus;
+
+export type ReconstructSessionResult = ReconstructSessionStatus & {
   finalOutputPath: string | null;
   finalOutputText: string | null;
   reconstructRunManifestPath: string | null;
   reconstructRunManifest: unknown | null;
-}
+};
 
 export interface ReconstructRunStageProjection {
   stageId: ReconstructStageId;
@@ -238,10 +294,236 @@ export interface ReconstructRunProgressProjection {
   stages: ReconstructRunStageProjection[];
 }
 
+function failedReconstructProgress(
+  failure: ReconstructLlmDispatchFailureSummary,
+  completedStageRefs: ReadonlyMap<ReconstructStageId, readonly string[]>,
+): ReconstructRunProgressProjection {
+  return {
+    executionProfile: null,
+    currentStageId: failure.unit_id,
+    stageCount: RECONSTRUCT_STAGE_IDS.length,
+    liveness: {
+      state: "halted_or_partial",
+      recommendedPollIntervalMs: null,
+    },
+    countSummary: {
+      sourceObservationCount: null,
+      selectedObservationCount: null,
+      semanticClaimCount: null,
+      confirmedClaimCount: null,
+      partialClaimCount: null,
+      deferredClaimCount: null,
+      competencyQuestionCount: null,
+      assessmentCount: null,
+      failureCount: null,
+      revisionProposalCount: null,
+      unresolvedCount: null,
+      passRate: null,
+    },
+    answerabilitySummary: null,
+    stages: RECONSTRUCT_STAGE_IDS.map((stageId) => ({
+      stageId,
+      state: stageId === failure.unit_id
+        ? "halted"
+        : completedStageRefs.has(stageId)
+          ? "completed"
+          : "pending",
+      owner: stageId === failure.unit_id
+        ? reconstructStageOwner(stageId)
+        : null,
+      artifactRefs: stageId === failure.unit_id
+        ? [failure.failure_artifact_ref]
+        : [...(completedStageRefs.get(stageId) ?? [])],
+      reason: stageId === failure.unit_id ? failure.failure_code : null,
+      authorityImpact: stageId === failure.unit_id
+        ? "The provider output ceiling stopped the owning actor before a canonical stage artifact was accepted."
+        : null,
+    })),
+  };
+}
+
+async function isRegularRefInsideSession(
+  sessionRoot: string,
+  artifactRef: string,
+): Promise<boolean> {
+  const relative = path.relative(sessionRoot, path.resolve(artifactRef));
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return false;
+  try {
+    const stat = await fs.lstat(artifactRef);
+    if (!stat.isFile() || stat.isSymbolicLink()) return false;
+    const [realSessionRoot, realArtifactRef] = await Promise.all([
+      fs.realpath(sessionRoot),
+      fs.realpath(artifactRef),
+    ]);
+    const realRelative = path.relative(realSessionRoot, realArtifactRef);
+    return !realRelative.startsWith("..") && !path.isAbsolute(realRelative);
+  } catch {
+    return false;
+  }
+}
+
+async function collectFailedStatusArtifactEvidence(args: {
+  sessionRoot: string;
+  runControl: ReconstructRunControlArtifact;
+  ownerAttemptId: string;
+}): Promise<{
+  reusableArtifactRefs: string[];
+  completedStageRefs: Map<ReconstructStageId, string[]>;
+}> {
+  const reusable = new Set<string>();
+  const completedStageRefs = new Map<ReconstructStageId, string[]>();
+  const addStageRef = (stageId: ReconstructStageId, ref: string): void => {
+    const refs = completedStageRefs.get(stageId) ?? [];
+    if (!refs.includes(ref)) refs.push(ref);
+    completedStageRefs.set(stageId, refs);
+  };
+  for (const transaction of args.runControl.write_transactions) {
+    if (
+      transaction.owner_attempt_id !== args.ownerAttemptId ||
+      transaction.transaction_status !== "committed" ||
+      !transaction.committed_hash ||
+      isReconstructLlmDispatchFailureRef(
+        args.sessionRoot,
+        transaction.artifact_ref,
+      ) ||
+      !(await isRegularRefInsideSession(
+        args.sessionRoot,
+        transaction.artifact_ref,
+      ))
+    ) {
+      continue;
+    }
+    const bytes = await fs.readFile(transaction.artifact_ref);
+    const observedHash = crypto.createHash("sha256").update(bytes).digest("hex");
+    if (observedHash !== transaction.committed_hash) continue;
+    reusable.add(transaction.artifact_ref);
+    const stageId = reconstructStageIdForArtifactRef(transaction.artifact_ref);
+    if (stageId) addStageRef(stageId, transaction.artifact_ref);
+  }
+  return {
+    reusableArtifactRefs: [...reusable].sort(),
+    completedStageRefs,
+  };
+}
+
+async function trustedFailedSessionStatus(args: {
+  sessionRoot: string;
+  reconciliation: Awaited<ReturnType<
+    typeof reconcileReconstructLlmDispatchFailures
+  >>;
+  runControlRef: string;
+  runControlValidationRef: string;
+}): Promise<ReconstructFailedSessionStatus | null> {
+  if (!args.reconciliation) return null;
+  const runControl = args.reconciliation.runControl;
+  const validation = args.reconciliation.validation ??
+    await readYamlArtifactIfPresent<ReconstructRunControlValidationArtifact>(
+      args.runControlValidationRef,
+    );
+  const latestAttempt = runControl.attempt_rows.at(-1) ?? null;
+  if (latestAttempt?.attempt_status !== "failed") return null;
+  const failureTransactions = runControl.write_transactions.filter((row) =>
+    row.owner_attempt_id === latestAttempt.attempt_id &&
+    row.transaction_status === "committed" &&
+    isReconstructLlmDispatchFailureRef(
+      args.sessionRoot,
+      row.artifact_ref,
+    )
+  );
+  const failureTransaction = failureTransactions.length === 1
+    ? failureTransactions[0]
+    : null;
+  if (
+    !validation ||
+    validation.validation_status !== "valid" ||
+    validation.current_attempt_id !== latestAttempt.attempt_id ||
+    !failureTransaction
+  ) {
+    throw new Error(
+      `reconstruct session has no trusted failed terminal: ${args.sessionRoot}`,
+    );
+  }
+  const failureRead = await readReconstructLlmDispatchFailureArtifactWithHash({
+    sessionRoot: args.sessionRoot,
+    artifactRef: failureTransaction.artifact_ref,
+  });
+  if (
+    failureTransaction.prepared_content_hash !==
+      failureTransaction.committed_hash ||
+    failureRead.sha256 !== failureTransaction.committed_hash ||
+    failureRead.artifact.session_id !== runControl.session_id ||
+    failureRead.artifact.owner_attempt_id !== latestAttempt.attempt_id
+  ) {
+    throw new Error(
+      `trusted failed terminal changed after validation: ${failureTransaction.artifact_ref}`,
+    );
+  }
+  const failure = projectReconstructLlmDispatchFailureSummary(
+    failureRead.artifact,
+    failureTransaction.artifact_ref,
+  );
+  const artifactEvidence = await collectFailedStatusArtifactEvidence({
+    sessionRoot: args.sessionRoot,
+    runControl,
+    ownerAttemptId: latestAttempt.attempt_id,
+  });
+  artifactEvidence.completedStageRefs.set("run_control", [args.runControlRef]);
+  artifactEvidence.completedStageRefs.set("run_control_validation", [
+    args.runControlValidationRef,
+  ]);
+  return {
+    sessionId: runControl.session_id,
+    sessionRoot: args.sessionRoot,
+    status: "failed",
+    artifactRefs: {
+      reconstruct_run_control: args.runControlRef,
+      reconstruct_run_control_validation: args.runControlValidationRef,
+    },
+    claimProjection: null,
+    claimProjectionValidation: null,
+    progress: failedReconstructProgress(
+      failure,
+      artifactEvidence.completedStageRefs,
+    ),
+    reconstructRecord: null,
+    runControlRef: args.runControlRef,
+    runControlValidationRef: args.runControlValidationRef,
+    failure,
+    reusableArtifactRefs: artifactEvidence.reusableArtifactRefs,
+  };
+}
+
+export async function recoverReconstructFailedRunStatus(args: {
+  sessionRoot: string;
+  error: unknown;
+}): Promise<ReconstructFailedSessionStatus | null> {
+  const typedFailure = readReconstructLlmDispatchFailureError(args.error);
+  if (!typedFailure) return null;
+  const runControlRef = path.join(
+    args.sessionRoot,
+    "reconstruct-run-control.yaml",
+  );
+  const runControlValidationRef = path.join(
+    args.sessionRoot,
+    "reconstruct-run-control-validation.yaml",
+  );
+  const reconciliation = await reconcileReconstructLlmDispatchFailures({
+    sessionRoot: args.sessionRoot,
+    runControlPath: runControlRef,
+    validationOutputPath: runControlValidationRef,
+  });
+  return trustedFailedSessionStatus({
+    sessionRoot: args.sessionRoot,
+    reconciliation,
+    runControlRef,
+    runControlValidationRef,
+  });
+}
+
 export interface OntoReconstructCoreApi {
   listSourceProfiles(projectRoot?: string): Promise<ReconstructSourceProfile[]>;
   prepareReconstruct(request: PrepareReconstructRequest): Promise<PreparedReconstruct>;
-  runReconstruct(request: RunReconstructRequest): Promise<ReconstructRunResult>;
+  runReconstruct(request: RunReconstructRequest): Promise<ReconstructRunResponse>;
   validateSourceObservationDirective(
     request: ValidateReconstructSourceObservationDirectiveRequest,
   ): Promise<ReconstructSourceObservationDirectiveValidationArtifact>;
@@ -305,6 +587,10 @@ export function resolveJudgeLlmConfig(args: {
    */
   judgeModelProvider?: string;
   registry: SupportedModelRegistry;
+  outputHeadroom?: {
+    selection: NonNullable<ReturnType<typeof normalizeLlmModelSwitcher>>;
+    headroomTokens: number;
+  };
 }): { judgeLlmConfig: Partial<LlmCallConfig> | undefined; note: string | null } {
   if (!args.judgeLlmEffort && !args.judgeModelCandidate) {
     return { judgeLlmConfig: undefined, note: null };
@@ -349,7 +635,21 @@ export function resolveJudgeLlmConfig(args: {
   if (args.judgeLlmEffort) judge.reasoning_effort = args.judgeLlmEffort;
   else if (authorEffort !== undefined) judge.reasoning_effort = authorEffort;
   else delete judge.reasoning_effort;
-  return { judgeLlmConfig: judge, note };
+  const judgeLlmConfig = args.outputHeadroom
+    ? applyOpenAIResponsesOutputHeadroom({
+        config: judge,
+        selection: args.outputHeadroom.selection,
+        headroomTokens: args.outputHeadroom.headroomTokens,
+        maxBaseOutputTokens:
+          RECONSTRUCT_SEMANTIC_AUTHOR_MAX_BASE_OUTPUT_TOKENS,
+        modelMaxOutputTokens: supportedModelMaxOutputTokens(
+          args.registry,
+          args.judgeModelProvider ?? "",
+          judge.model_id ?? "",
+        ),
+      })
+    : judge;
+  return { judgeLlmConfig, note };
 }
 
 /**
@@ -660,6 +960,28 @@ function recordArtifactRefsFromPreparation(
   };
 }
 
+export async function tryCreateEligiblePrimarySealedDispatchCapability(args: {
+  llm: LlmModelSwitcherConfig;
+  operation: SemanticMapDispatchOperation;
+}): Promise<ResolvedLlmDispatchCapability | undefined> {
+  const selection = normalizeLlmModelSwitcher(args.llm);
+  if (
+    !selection ||
+    selection.auth !== "api_key" ||
+    selection.execution_route !== "direct_model_call" ||
+    (selection.execution_adapter !== "openai_sdk" &&
+      selection.execution_adapter !== "anthropic_sdk") ||
+    selection.base_url !== undefined
+  ) {
+    return undefined;
+  }
+  try {
+    return await createSealedDispatchCapability(args);
+  } catch {
+    return undefined;
+  }
+}
+
 export function createOntoReconstructCoreApi(
   options: OntoReconstructCoreApiOptions = {},
 ): OntoReconstructCoreApi {
@@ -682,6 +1004,11 @@ export function createOntoReconstructCoreApi(
       const sessionRoot = request.sessionRoot
         ? resolveFromBase(projectRoot, request.sessionRoot)
         : createDefaultSessionRoot(projectRoot);
+      await assertPathInsideRoot({
+        root: projectRoot,
+        candidate: sessionRoot,
+        label: "reconstruct sessionRoot",
+      });
       const profilesRoot = await resolveProfilesRoot({
         projectRoot,
         ...(request.profilesRoot
@@ -733,11 +1060,16 @@ export function createOntoReconstructCoreApi(
 
     async runReconstruct(
       request: RunReconstructRequest,
-    ): Promise<ReconstructRunResult> {
+    ): Promise<ReconstructRunResponse> {
       const projectRoot = path.resolve(request.projectRoot);
       const sessionRoot = request.sessionRoot
         ? resolveFromBase(projectRoot, request.sessionRoot)
         : createDefaultSessionRoot(projectRoot);
+      await assertPathInsideRoot({
+        root: projectRoot,
+        candidate: sessionRoot,
+        label: "reconstruct sessionRoot",
+      });
       const profilesRoot = await resolveProfilesRoot({
         projectRoot,
         ...(request.profilesRoot
@@ -749,6 +1081,10 @@ export function createOntoReconstructCoreApi(
         resolveFromBase(projectRoot, targetRef)
       );
       const settings = await resolveSettingsChain(ontoHome ?? projectRoot, projectRoot);
+      await assertDispatchFallbackSessionAdmission({
+        sessionRoot,
+        enabled: settings.reconstruct?.execution?.dispatch_fallback?.enabled === true,
+      });
       const semanticAuthorRealization = request.semanticAuthorRealization ?? "direct_call";
       const confirmationProviderRealization =
         request.confirmationProviderRealization ?? "direct_call";
@@ -777,7 +1113,7 @@ export function createOntoReconstructCoreApi(
       const semanticAuthorActorLlm = mockRealizationEnabled
         ? null
         : resolveReconstructActorLlmSettings(settings, "semantic_author");
-      const semanticAuthorLlmConfig = semanticAuthorActorLlm
+      let semanticAuthorLlmConfig = semanticAuthorActorLlm
         ? resolveLlmProviderConfig({
           config: { llm: semanticAuthorActorLlm },
           ...(llmEffortOverride ? { cliOverrides: llmEffortOverride } : {}),
@@ -801,6 +1137,30 @@ export function createOntoReconstructCoreApi(
       const supportedModelRegistry = mockRealizationEnabled
         ? null
         : loadSupportedModelRegistry();
+      const semanticAuthorLlmRuntime = mockRealizationEnabled
+        ? undefined
+        : resolveReconstructSemanticAuthorLlmRuntimeSettings(settings);
+      if (semanticAuthorLlmRuntime && semanticAuthorActorLlm) {
+        const selection = normalizeLlmModelSwitcher(semanticAuthorActorLlm);
+        if (!selection) {
+          throw new Error(
+            "semantic_author output headroom requires a resolved LLM selection.",
+          );
+        }
+        semanticAuthorLlmConfig = applyOpenAIResponsesOutputHeadroom({
+          config: semanticAuthorLlmConfig,
+          selection,
+          headroomTokens:
+            semanticAuthorLlmRuntime.openai_responses_output_headroom_tokens,
+          maxBaseOutputTokens:
+            RECONSTRUCT_SEMANTIC_AUTHOR_MAX_BASE_OUTPUT_TOKENS,
+          modelMaxOutputTokens: supportedModelMaxOutputTokens(
+            supportedModelRegistry!,
+            selection.model_provider,
+            semanticAuthorLlmConfig.model_id ?? selection.model_id ?? "",
+          ),
+        });
+      }
       // Semantic-map authoring opt-in + optional synthesize seat (INV-MODEL-1
       // role-aware design §5.4/§5.5): ONE deterministic seam owns the wiring
       // (resolveSemanticMapSynthesizeWiring) — live completes the seat into a
@@ -813,9 +1173,7 @@ export function createOntoReconstructCoreApi(
         llmEffortOverride,
       });
       // Single seed-stage document projection budget (chars), derived once from
-      // the semantic author's MODEL window. Mock / unresolved model → static
-      // FLOOR (no regression). Threaded to the directive author, which slices a
-      // single document's seed-stage excerpt to this budget.
+      // the semantic author's MODEL window.
       const documentExcerptProjectionBudget = supportedModelRegistry
         ? deriveDocumentExcerptProjectionBudget(
           {
@@ -829,6 +1187,139 @@ export function createOntoReconstructCoreApi(
           supportedModelRegistry,
         )
         : DOCUMENT_EXCERPT_PROJECTION_FLOOR;
+      const dispatchFallbackSettings =
+        settings.reconstruct?.execution?.dispatch_fallback;
+      const dispatchBreakerSettings = completeDispatchBreakerSettings(
+        settings.reconstruct?.execution?.dispatch_breaker,
+      );
+      if (
+        semanticAuthorLlmRuntime &&
+        dispatchFallbackSettings?.enabled === true
+      ) {
+        throw new Error(
+          "reconstruct output headroom cannot be combined with dispatch_fallback until the sealed semantic-map route preserves the same output-budget and typed-incomplete contract.",
+        );
+      }
+      let dispatchFallbackRuntime:
+        | ReconstructDispatchFallbackRuntime
+        | undefined;
+      let dispatchFallbackTelemetry:
+        | ReturnType<typeof createReconstructExecutionTelemetryCollector>
+        | undefined;
+      if (dispatchFallbackSettings?.enabled === true) {
+        if (!dispatchBreakerSettings.enabled) {
+          throw new Error(
+            "reconstruct dispatch_fallback requires reconstruct.execution.dispatch_breaker.enabled=true.",
+          );
+        }
+        if (mockRealizationEnabled) {
+          throw new Error(
+            "reconstruct dispatch_fallback requires the live sealed SDK path; mock realization is not product evidence.",
+          );
+        }
+        if (!semanticMapWiring.enableSemanticMapAuthoring) {
+          throw new Error(
+            "reconstruct dispatch_fallback requires reconstruct.execution.semantic_map_authoring=true.",
+          );
+        }
+        const effectiveEffort = request.llmEffort;
+        const primarySynthesizeLlm = {
+          ...(resolveOptionalReconstructActorLlmSettings(
+            settings,
+            "semantic_map_synthesize",
+          ) ?? resolveReconstructActorLlmSettings(settings, "semantic_author")),
+          ...(effectiveEffort ? { effort: effectiveEffort } : {}),
+        };
+        const primaryVerifyLlm = {
+          ...resolveReconstructActorLlmSettings(settings, "semantic_author"),
+          ...(effectiveEffort ? { effort: effectiveEffort } : {}),
+        };
+        const fallbackLlm = {
+          ...dispatchFallbackSettings.llm,
+          ...(effectiveEffort ? { effort: effectiveEffort } : {}),
+        };
+        const [primarySynthesize, primaryVerify, fallbackSynthesize, fallbackVerify] =
+          await Promise.all([
+            tryCreateEligiblePrimarySealedDispatchCapability({
+              llm: primarySynthesizeLlm,
+              operation: "semantic_map_synthesize",
+            }),
+            tryCreateEligiblePrimarySealedDispatchCapability({
+              llm: primaryVerifyLlm,
+              operation: "semantic_map_verify",
+            }),
+            createSealedDispatchCapability({
+              llm: fallbackLlm,
+              operation: "semantic_map_synthesize",
+            }),
+            createSealedDispatchCapability({
+              llm: fallbackLlm,
+              operation: "semantic_map_verify",
+            }),
+          ]);
+        const eligiblePrimaryCapabilities = [
+          primarySynthesize,
+          primaryVerify,
+        ].filter((capability) => capability !== undefined);
+        if (eligiblePrimaryCapabilities.length === 0) {
+          throw new Error(
+            "reconstruct dispatch_fallback requires at least one eligible sealed primary semantic-map operation.",
+          );
+        }
+        const eligiblePrimaryProviders = new Set(
+          eligiblePrimaryCapabilities.map(
+            (capability) => capability.public_descriptor.model_provider,
+          ),
+        );
+        if (
+          [...eligiblePrimaryProviders].every(
+            (provider) =>
+              provider === fallbackSynthesize.public_descriptor.model_provider,
+          ) ||
+          fallbackSynthesize.public_descriptor.model_provider !==
+            fallbackVerify.public_descriptor.model_provider
+        ) {
+          throw new Error(
+            "reconstruct dispatch_fallback requires one alternate provider for the complete fallback pair.",
+          );
+        }
+        const accounting = new SemanticMapDispatchAccounting();
+        dispatchFallbackTelemetry =
+          createReconstructExecutionTelemetryCollector({
+            nullMixedRouteProjection: true,
+          });
+        const fallbackLlmConfig = resolveLlmProviderConfig({
+          config: { llm: fallbackLlm },
+        });
+        const fallbackDirectiveAuthor =
+          createDirectCallReconstructDirectiveAuthor({
+            llmConfig: fallbackLlmConfig,
+            semanticMapSynthesizeLlmConfig: fallbackLlmConfig,
+            enableSemanticMapAuthoring: true,
+            semanticMapDispatchCapabilities: {
+              synthesize: fallbackSynthesize,
+              verify: fallbackVerify,
+              accounting,
+              executionSource: "fallback",
+              allowParseRepair: false,
+              maxTransportAttempts: 1,
+            },
+            documentExcerptProjectionBudget,
+            executionTelemetry: dispatchFallbackTelemetry,
+          });
+        dispatchFallbackRuntime = {
+          accounting,
+          primary: {
+            ...(primarySynthesize ? { synthesize: primarySynthesize } : {}),
+            ...(primaryVerify ? { verify: primaryVerify } : {}),
+          },
+          fallback: {
+            synthesize: fallbackSynthesize,
+            verify: fallbackVerify,
+            directiveAuthor: fallbackDirectiveAuthor,
+          },
+        };
+      }
       // Opt-in per-stage JUDGE config (semantic-independence lever). Default =
       // inherit the semantic-author config (judgeLlmConfig undefined → no change,
       // zero regression). A judgeModel override resolves ON THE AUTHOR'S PROVIDER
@@ -850,7 +1341,7 @@ export function createOntoReconstructCoreApi(
         !mockRealizationEnabled && request.judgeModel
           ? resolveReconstructActorLlmSettings(settings, "semantic_author")
           : null;
-      const judgeModelCandidate = judgeAuthorActorLlm
+      const judgeModelCandidateBase = judgeAuthorActorLlm
         ? resolveLlmProviderConfig({
           config: { llm: judgeAuthorActorLlm },
           cliOverrides: { model: request.judgeModel! },
@@ -863,11 +1354,23 @@ export function createOntoReconstructCoreApi(
           ...(request.judgeLlmEffort
             ? { judgeLlmEffort: request.judgeLlmEffort }
             : {}),
-          judgeModelCandidate,
+          judgeModelCandidate: judgeModelCandidateBase,
           // Registry key is the MODEL provider (e.g. openai), not the runtime
           // adapter (openai OAuth → codex). The judge uses the author's provider.
           ...(judgeAuthorActorLlm?.provider
             ? { judgeModelProvider: judgeAuthorActorLlm.provider }
+            : {}),
+          ...(judgeAuthorActorLlm && semanticAuthorLlmRuntime
+            ? {
+                outputHeadroom: {
+                  selection: normalizeLlmModelSwitcher(
+                    judgeAuthorActorLlm,
+                  )!,
+                  headroomTokens:
+                    semanticAuthorLlmRuntime
+                      .openai_responses_output_headroom_tokens,
+                },
+              }
             : {}),
           // Non-null in this branch: both this and supportedModelRegistry gate on
           // the same mockRealizationEnabled check.
@@ -893,6 +1396,28 @@ export function createOntoReconstructCoreApi(
             }
             : {}),
           documentExcerptProjectionBudget,
+          ...(dispatchFallbackRuntime
+            ? {
+                semanticMapDispatchCapabilities: {
+                  ...(dispatchFallbackRuntime.primary.synthesize
+                    ? {
+                        synthesize:
+                          dispatchFallbackRuntime.primary.synthesize,
+                      }
+                    : {}),
+                  ...(dispatchFallbackRuntime.primary.verify
+                    ? { verify: dispatchFallbackRuntime.primary.verify }
+                    : {}),
+                  accounting: dispatchFallbackRuntime.accounting,
+                  executionSource: "primary" as const,
+                  allowParseRepair: true,
+                  maxTransportAttempts: 3 as const,
+                },
+              }
+            : {}),
+          ...(dispatchFallbackTelemetry
+            ? { executionTelemetry: dispatchFallbackTelemetry }
+            : {}),
           ...(mockRealizationEnabled
             ? {
               llmCall: callReconstructMockLlm,
@@ -988,9 +1513,16 @@ export function createOntoReconstructCoreApi(
             confirmationProvider,
             // 설계 B: settings가 유일 권위(INV-CFG-1) — 기본 OFF, 완성값은
             // settings chain이 채운다.
-            dispatchBreaker: completeDispatchBreakerSettings(
-              settings.reconstruct?.execution?.dispatch_breaker,
-            ),
+            dispatchBreaker: dispatchBreakerSettings,
+            ...(settings.reconstruct?.execution?.dispatch_fallback
+              ? {
+                  dispatchFallback:
+                    settings.reconstruct.execution.dispatch_fallback,
+                }
+              : {}),
+            ...(dispatchFallbackRuntime
+              ? { dispatchFallbackRuntime }
+              : {}),
             filesystemAllowedRoots:
               request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
               [projectRoot],
@@ -1012,6 +1544,11 @@ export function createOntoReconstructCoreApi(
           message: `reconstruct session failed: ${error instanceof Error ? error.message : String(error)}`,
           stageId: "complete",
         });
+        const failedStatus = await recoverReconstructFailedRunStatus({
+          sessionRoot,
+          error,
+        });
+        if (failedStatus) return failedStatus;
         throw error;
       }
     },
@@ -1078,9 +1615,49 @@ export function createOntoReconstructCoreApi(
 
     async getRunStatus(sessionRoot: string): Promise<ReconstructSessionStatus> {
       const resolvedSessionRoot = path.resolve(sessionRoot);
-      const reconstructRecord = await readYamlArtifact<ReconstructRecordArtifact>(
-        path.join(resolvedSessionRoot, "reconstruct-record.yaml"),
+      const runControlRef = path.join(
+        resolvedSessionRoot,
+        "reconstruct-run-control.yaml",
       );
+      const runControlValidationRef = path.join(
+        resolvedSessionRoot,
+        "reconstruct-run-control-validation.yaml",
+      );
+      const reconciliation = await reconcileReconstructLlmDispatchFailures({
+        sessionRoot: resolvedSessionRoot,
+        runControlPath: runControlRef,
+        validationOutputPath: runControlValidationRef,
+      });
+      const blockedPartialWrite = reconciliation
+        ? [...reconciliation.runControl.resume_rows].reverse().find(
+            (row) => row.resume_decision === "blocked_partial_write",
+          )
+        : undefined;
+      if (blockedPartialWrite) {
+        throw new Error(
+          `reconstruct session is blocked by a partial failure write: ${
+            blockedPartialWrite.stale_artifact_refs.join(",") || "unknown ref"
+          }`,
+        );
+      }
+      const failedStatus = await trustedFailedSessionStatus({
+        sessionRoot: resolvedSessionRoot,
+        reconciliation,
+        runControlRef,
+        runControlValidationRef,
+      });
+      if (failedStatus) return failedStatus;
+      const reconstructRecord =
+        await readYamlArtifactIfPresent<ReconstructRecordArtifact>(
+          path.join(resolvedSessionRoot, "reconstruct-record.yaml"),
+        );
+      if (!reconstructRecord) {
+        throw new Error(
+          reconciliation
+            ? `reconstruct session has no readable terminal record or trusted failed terminal: ${resolvedSessionRoot}`
+            : `reconstruct session has neither a record nor run-control: ${resolvedSessionRoot}`,
+        );
+      }
       const reconstructRunManifest =
         await readYamlArtifactIfPresent<ReconstructRunManifestArtifact>(
           reconstructRecord.artifact_refs.reconstruct_run_manifest,
@@ -1129,6 +1706,15 @@ export function createOntoReconstructCoreApi(
 
     async getRunResult(sessionRoot: string): Promise<ReconstructSessionResult> {
       const status = await this.getRunStatus(sessionRoot);
+      if (status.status === "failed") {
+        return {
+          ...status,
+          finalOutputPath: null,
+          finalOutputText: null,
+          reconstructRunManifestPath: null,
+          reconstructRunManifest: null,
+        };
+      }
       const finalOutputPath = status.reconstructRecord.artifact_refs.final_output;
       const reconstructRunManifestPath =
         status.reconstructRecord.artifact_refs.reconstruct_run_manifest;

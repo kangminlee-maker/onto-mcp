@@ -161,8 +161,77 @@ If a run halts, the output should still be useful:
 
 A halted run may provide candidate Seed content only if the corresponding
 artifact and validation refs exist. It may not imply seed confirmation, CQ
-  assessment, failure classification, revision proposal, terminal seed iteration readiness, or
+assessment, failure classification, revision proposal, terminal seed iteration readiness, or
 final ontology direction unless those artifacts exist.
+
+### 6.1 Provider output-ceiling failure
+
+When an OpenAI Responses direct-API semantic-author call ends with
+`incomplete_details.reason=max_output_tokens`, the runtime does not parse,
+repair, continue, or accept the partial output. It persists the provider evidence
+under `llm-dispatch-failures/*.yaml`, links that source artifact to the owning
+attempt through a committed run-control transaction, marks the attempt `failed`,
+and releases the session lock.
+
+The headroom route is pinned to the public OpenAI Responses endpoint. A custom
+actor `base_url` is rejected before dispatch, and ambient `OPENAI_BASE_URL` does
+not redirect this route. Failure publication is serialized with every other
+run-control mutation. It writes and fsyncs a scratch file, atomically promotes
+it to a hash-prefixed pending file, records the prepared transaction, publishes
+the canonical sidecar, and commits the transaction/failed attempt/released lock.
+A valid untracked pending file may be adopted only when its bytes, hash-prefix,
+session, attempt, and held owner lock all match. Scratch, malformed, truncated,
+ambiguous, wrong-prefix, wrong-owner, or wrong-hash remnants abandon the current
+attempt, release its lock, and require `blocked_partial_write` recovery.
+
+`onto_reconstruct`, `onto_reconstruct_read`, the compatibility status/result
+tools, and the Core API must return a record-less discriminated branch when the
+run-control validator trusts the latest failed terminal. A latest trusted failed
+attempt supersedes an older non-terminal preparation record. The branch has
+`status: failed`, `reconstructRecord: null`, run-control and validation refs, the
+failure artifact ref, stage progress, and a bounded failure summary. The summary
+may expose the stable failure code, stage/artifact identity, provider status and
+incomplete reason, base/headroom/effective output caps, provider token counts,
+and request-count observability. Provider request/response ids, endpoint, and
+partial-output hash remain source-artifact-only fields; raw partial output is not
+persisted.
+
+Failed progress does not infer semantic counts from the existence of a sidecar:
+`failureCount` is `null`. Run-control and run-control-validation are completed
+control stages. The failed semantic stage is halted. Other stages are completed
+only when a committed transaction owned by the latest failed attempt still
+matches the current regular-file bytes inside the real session root; otherwise
+they remain pending. `reusableArtifactRefs` contains only that same bounded,
+hash-verified latest-owner set, excludes the failure sidecar, and may be empty.
+
+### 6.2 Semantic-map provider fallback
+
+`reconstruct.execution.dispatch_fallback` is an explicit default-off capability
+for the spreadsheet semantic-map stage. It may activate only in the originating
+fresh initial attempt after a sealed direct SDK route supplies structured
+rate-limit evidence and the current attempt still owns the held session lock.
+Arbitrary diagnostic text is not trigger evidence.
+
+An activated run writes the direct-child
+`dispatch-fallback-activation.yaml` claim before alternate-provider work. It
+then reuses the existing semantic-map stage for exactly the persisted incomplete
+observation set, with one fallback pass and one physical SDK request per logical
+dispatch. Retained primary observations are not sent again.
+
+`dispatch-fallback-outcome.yaml` is the terminal commit marker after the final
+`dispatch-incomplete.yaml`, semantic-map census, and semantic-map sidecar have
+been securely published and indexed in run control. A completed outcome is
+projected into the completed reconstruct record and semantic-map manifest step.
+A halted outcome is disclosed through the current breaker error and does not
+create a completed record or manifest. Any session lineage with an activation,
+including a crash between activation and outcome, requires a new session for a
+later entry. A `running` attempt with a `held` session lock cannot be taken over
+based on `lease_expires_at` alone.
+
+The TypeScript schema, validators, path constructors, secure publishers, and
+record projection for both artifacts are owned by
+`src/core-runtime/reconstruct/dispatch-fallback-artifacts.ts`; prose and the
+contract registry do not duplicate their machine schema.
 
 ## 7. Runtime Payload Expectations
 
@@ -175,6 +244,8 @@ render this contract without scraping prose:
 - stage state: pending, running, completed, skipped, or halted
 - skipped/deferred stage reason and `authority_impact`
 - stage artifact refs and owner
+- record-less trusted provider failure status, bounded failure summary, and
+  failure/run-control refs
 - liveness state and recommended polling interval
 - deterministic count summaries from the latest completed artifacts
 - latest source frontier summary and reusable trusted observation refs

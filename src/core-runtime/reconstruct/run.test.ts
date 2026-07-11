@@ -78,6 +78,14 @@ import {
 } from "./contract-registry.js";
 import type { LlmCallResult } from "../llm/llm-caller.js";
 import {
+  dispatchDescriptorProjection,
+  SemanticMapDispatchAccounting,
+  type ResolvedLlmDispatchCapability,
+  type SemanticMapDispatchOperation,
+} from "../llm/sealed-dispatch-capability.js";
+import { StructuredDispatchError } from "../llm/structured-dispatch-error.js";
+import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
+import {
   RECONSTRUCT_MOCK_AUTHOR_ID,
   RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
   callReconstructMockLlm as reconstructFixtureLlm,
@@ -89,8 +97,11 @@ import {
   buildReconstructPipelineExecutionLedger,
 } from "./pipeline-execution-ledger.js";
 import {
+  createReconstructExecutionTelemetryCollector,
   terminalFailureMessageFromTelemetry,
 } from "./execution-telemetry.js";
+import { ReconstructLlmDispatchFailureError } from "./llm-dispatch-failure.js";
+import { OpenAIResponsesIncompleteError } from "../llm/openai-responses-incomplete-error.js";
 
 const tmpRoots: string[] = [];
 
@@ -144,6 +155,37 @@ function sha256Text(text: string): string {
 }
 
 describe("runReconstruct", () => {
+  it("keeps OFF author identity stable and rotates it for output headroom values", () => {
+    const baseConfig = {
+      provider: "openai" as const,
+      model_id: "gpt-5.5",
+      execution_adapter: "openai_sdk" as const,
+    };
+    const off = createDirectCallReconstructDirectiveAuthor({
+      llmConfig: baseConfig,
+    });
+    const on25k = createDirectCallReconstructDirectiveAuthor({
+      llmConfig: {
+        ...baseConfig,
+        openai_responses_output_headroom_tokens: 25_000,
+        openai_responses_model_max_output_tokens: 128_000,
+      },
+    });
+    const on30k = createDirectCallReconstructDirectiveAuthor({
+      llmConfig: {
+        ...baseConfig,
+        openai_responses_output_headroom_tokens: 30_000,
+        openai_responses_model_max_output_tokens: 128_000,
+      },
+    });
+
+    expect(off.reuseModelIdentity).toBe("openai/gpt-5.5");
+    expect(on25k.reuseModelIdentity).toBe(
+      "openai/gpt-5.5@openai_responses_output_headroom_tokens=25000",
+    );
+    expect(on30k.reuseModelIdentity).not.toBe(on25k.reuseModelIdentity);
+  });
+
   it("repairs source purpose contradiction status mismatches with focused authorship", async () => {
     const sourceObservations: ReconstructSourceObservationsArtifact = {
       schema_version: "1",
@@ -2622,6 +2664,94 @@ describe("runReconstruct", () => {
     expect(judgeConfigs[0]!.reasoning_effort).toBe("low");
   });
 
+  it("persists a forced typed incomplete and makes no later semantic call", async () => {
+    const projectRoot = await tempProjectRoot();
+    const targetRef = path.join(projectRoot, "accounting-schedule.csv");
+    await fs.copyFile(
+      path.resolve(
+        "development-records/reference/material-kind/accounting-schedule.csv",
+      ),
+      targetRef,
+    );
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "forced-incomplete",
+    );
+    const providerFailure = new OpenAIResponsesIncompleteError({
+        failure_code: "openai_responses_max_output_tokens",
+        provider_status: "incomplete",
+        incomplete_reason: "max_output_tokens",
+        base_output_ceiling_tokens: 4_000,
+        configured_output_headroom_tokens: 25_000,
+        effective_max_output_tokens: 29_000,
+        input_tokens: 100,
+        cached_input_tokens: 0,
+        output_tokens: 29_000,
+        reasoning_tokens: 28_500,
+        non_reasoning_output_tokens: 500,
+        partial_output_chars: 30,
+        partial_output_sha256: "b".repeat(64),
+        provider_model: "gpt-5.5",
+        provider_response_id: null,
+        provider_request_id: null,
+        effective_base_url: "https://api.openai.com/v1",
+        sdk_max_retries: 1,
+        actual_adapter_request_count: null,
+        request_count_observability: "unavailable",
+    });
+    let llmCalls = 0;
+    const llmCall = async (): Promise<LlmCallResult> => {
+      llmCalls += 1;
+      throw providerFailure;
+    };
+
+    const runError = await runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Reconstruct the accounting schedule.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({ llmCall }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(runError).toBeInstanceOf(ReconstructLlmDispatchFailureError);
+    expect(runError).not.toBe(providerFailure);
+
+    expect(llmCalls).toBe(1);
+    expect(await fs.stat(path.join(sessionRoot, "candidate-disposition.yaml"))
+      .catch(() => null)).toBeNull();
+    expect(await fs.stat(path.join(sessionRoot, "ontology-seed.yaml"))
+      .catch(() => null)).toBeNull();
+    const runControl = parseYaml(await fs.readFile(
+      path.join(sessionRoot, "reconstruct-run-control.yaml"),
+      "utf8",
+    )) as {
+      attempt_rows: Array<{ attempt_status: string }>;
+      lock_rows: Array<{ lock_status: string }>;
+      write_transactions: Array<{ transaction_status: string }>;
+    };
+    expect(runControl.attempt_rows.at(-1)?.attempt_status).toBe("failed");
+    expect(runControl.lock_rows.at(-1)?.lock_status).toBe("released");
+    expect(runControl.write_transactions.at(-1)?.transaction_status)
+      .toBe("committed");
+    const failureFiles = await fs.readdir(
+      path.join(sessionRoot, "llm-dispatch-failures"),
+    );
+    expect(failureFiles.filter((name) => name.startsWith("failure-")))
+      .toHaveLength(1);
+  });
+
   it("completes three consecutive mock-realization runs with runtime-owned execution telemetry", async () => {
     // The same author/provider instances are reused across all three runs so
     // run-scoped telemetry is proven: a prior run's rows must not leak into
@@ -2749,7 +2879,7 @@ describe("runReconstruct", () => {
       expect(seedUnit?.attemptCount).toBe(1);
       expect(seedUnit?.lastFailureMessage).toBeNull();
     }
-  });
+  }, 60_000);
 
   it("runs the material-aware purpose adequacy path for the first code fixture", async () => {
     const projectRoot = await tempProjectRoot();
@@ -7995,6 +8125,10 @@ describe("W5 semantic-map mock full-pipeline E2E", () => {
     sessionName: string;
     directiveAuthor: Parameters<typeof runReconstruct>[0]["directiveAuthor"];
     confirmationProvider: ReconstructConfirmationProvider;
+    dispatch?: Pick<
+      Parameters<typeof runReconstruct>[0],
+      "dispatchBreaker" | "dispatchFallback" | "dispatchFallbackRuntime"
+    >;
   }) {
     const sessionRoot = path.join(
       args.projectRoot,
@@ -8013,8 +8147,48 @@ describe("W5 semantic-map mock full-pipeline E2E", () => {
       confirmationProviderRealization: "direct_call",
       directiveAuthor: args.directiveAuthor,
       confirmationProvider: args.confirmationProvider,
+      ...(args.dispatch ?? {}),
     });
     return { result, sessionRoot };
+  }
+
+  function boundaryCapability(args: {
+    provider: "openai" | "anthropic";
+    operation: SemanticMapDispatchOperation;
+    invoke: ResolvedLlmDispatchCapability["invokeOnce"];
+  }): ResolvedLlmDispatchCapability {
+    const model = args.provider === "openai" ? "gpt-boundary" : "claude-boundary";
+    const selection = normalizeLlmModelSwitcher({
+      provider: args.provider,
+      auth: "api_key",
+      model,
+      effort: "medium",
+      api_key_env: args.provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY",
+    })!;
+    const isOpenAI = args.provider === "openai";
+    return {
+      selection,
+      public_descriptor: dispatchDescriptorProjection({
+        model_provider: args.provider,
+        model_id: model,
+        execution_adapter: isOpenAI ? "openai_sdk" : "anthropic_sdk",
+        protocol_version: isOpenAI ? "openai_responses_v1" : "anthropic_messages_v1",
+        adapter_package_version: isOpenAI ? "6.39.0" : "0.99.0",
+        auth: "api_key",
+        endpoint_kind: "official_sdk",
+        service_tier: null,
+        reasoning_effort: "medium",
+        dispatch_role: args.operation,
+      }),
+      capabilities: {
+        structured_failure_evidence: true,
+        counted_adapter_requests: true,
+        sdk_retry_zero: true,
+        invoke_once: true,
+      },
+      capability_instance_id: crypto.randomUUID(),
+      invokeOnce: args.invoke,
+    };
   }
 
   it("ON: capability author over a real xlsx — stage completes, census+sidecar exist, seed prompt carries semantic_map (note hoisted), observation prompts carry the inline render, reuse key folds the fingerprint", async () => {
@@ -8101,6 +8275,263 @@ describe("W5 semantic-map mock full-pipeline E2E", () => {
     }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
     expect(seedReuseProvenance.reuse_match?.semantic_map_aggregate_fingerprint_sha256)
       .toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("dispatch fallback traverses typed primary 429 -> exact same-call alternate synthesize+verify -> completed record/manifest/ledger consumers", async () => {
+    const projectRoot = await tempProjectRoot();
+    const xlsxRef = path.join(projectRoot, "ledger.xlsx");
+    await fs.writeFile(xlsxRef, Buffer.from(ledgerXlsxBytes("rich")));
+    const accounting = new SemanticMapDispatchAccounting();
+    const telemetry = createReconstructExecutionTelemetryCollector({
+      nullMixedRouteProjection: true,
+    });
+    let primaryCalls = 0;
+    let fallbackSynthesizeCalls = 0;
+    let fallbackVerifyCalls = 0;
+
+    let primaryCapability!: ResolvedLlmDispatchCapability;
+    primaryCapability = boundaryCapability({
+      provider: "openai",
+      operation: "semantic_map_synthesize",
+      invoke: async (input) => {
+        primaryCalls += 1;
+        const logicalDispatchId = input.logical_dispatch_id ?? "missing-logical-id";
+        throw new StructuredDispatchError({
+          descriptor_id: primaryCapability.public_descriptor.descriptor_id,
+          capability_instance_id: primaryCapability.capability_instance_id,
+          logical_dispatch_id: logicalDispatchId,
+          actual_adapter_request_count: 1,
+          failure_class: "rate_limit",
+          failure_code: "http_429",
+          source: "sdk_http_status",
+        });
+      },
+    });
+    const fallbackSynthesize = boundaryCapability({
+      provider: "anthropic",
+      operation: "semantic_map_synthesize",
+      invoke: async (input) => {
+        fallbackSynthesizeCalls += 1;
+        const payload = JSON.parse(input.user_prompt) as {
+          node_ref: { row_start: number };
+        };
+        return {
+          logical_dispatch_id:
+            input.logical_dispatch_id ?? `fallback-synthesize-${fallbackSynthesizeCalls}`,
+          actual_adapter_request_count: 1,
+          result: {
+            text: JSON.stringify({
+              semantic_summary: "uniform TEXT shape",
+              boundaries: [{
+                row: payload.node_ref.row_start,
+                character_before: "TEXT before",
+                character_after: "TEXT after",
+              }],
+            }),
+            input_tokens: 10,
+            output_tokens: 8,
+            model_id: "claude-boundary",
+            effective_base_url: "https://api.anthropic.com",
+            declared_billing_mode: "per_token",
+          },
+        };
+      },
+    });
+    const fallbackVerify = boundaryCapability({
+      provider: "anthropic",
+      operation: "semantic_map_verify",
+      invoke: async (input) => {
+        fallbackVerifyCalls += 1;
+        return {
+          logical_dispatch_id:
+            input.logical_dispatch_id ?? `fallback-verify-${fallbackVerifyCalls}`,
+          actual_adapter_request_count: 1,
+          result: {
+            text: JSON.stringify({ verdict: "adversarial_refuted" }),
+            input_tokens: 7,
+            output_tokens: 3,
+            model_id: "claude-boundary",
+            effective_base_url: "https://api.anthropic.com",
+            declared_billing_mode: "per_token",
+          },
+        };
+      },
+    });
+    const primaryAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall: reconstructFixtureLlm,
+      llmConfig: {
+        provider: "openai",
+        model_id: "gpt-boundary",
+        execution_adapter: "openai_sdk",
+        reasoning_effort: "medium",
+      },
+      semanticMapSynthesizeLlmConfig: {
+        provider: "openai",
+        model_id: "gpt-boundary",
+        execution_adapter: "openai_sdk",
+        reasoning_effort: "medium",
+      },
+      authorId: RECONSTRUCT_MOCK_AUTHOR_ID,
+      enableSemanticMapAuthoring: true,
+      semanticMapDispatchCapabilities: {
+        synthesize: primaryCapability,
+        accounting,
+        executionSource: "primary",
+        allowParseRepair: true,
+        maxTransportAttempts: 3,
+      },
+      executionTelemetry: telemetry,
+    });
+    const fallbackAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall: reconstructFixtureLlm,
+      llmConfig: {
+        provider: "anthropic",
+        model_id: "claude-boundary",
+        execution_adapter: "anthropic_sdk",
+        reasoning_effort: "medium",
+      },
+      semanticMapSynthesizeLlmConfig: {
+        provider: "anthropic",
+        model_id: "claude-boundary",
+        execution_adapter: "anthropic_sdk",
+        reasoning_effort: "medium",
+      },
+      authorId: "fallback-boundary-author",
+      enableSemanticMapAuthoring: true,
+      semanticMapDispatchCapabilities: {
+        synthesize: fallbackSynthesize,
+        verify: fallbackVerify,
+        accounting,
+        executionSource: "fallback",
+        allowParseRepair: false,
+        maxTransportAttempts: 1,
+      },
+      executionTelemetry: telemetry,
+    });
+    const confirmationProvider = createDirectCallReconstructConfirmationProvider({
+      llmCall: reconstructFixtureLlm,
+      providerId: RECONSTRUCT_MOCK_CONFIRMATION_PROVIDER_ID,
+    });
+
+    const { result, sessionRoot } = await runOnXlsx({
+      projectRoot,
+      xlsxRef,
+      sessionName: "dispatch-fallback-completed",
+      directiveAuthor: primaryAuthor,
+      confirmationProvider,
+      dispatch: {
+        dispatchBreaker: {
+          enabled: true,
+          systemic_threshold: 1,
+          per_call_max_attempts: 3,
+          backoff_initial_ms: 0,
+          backoff_cap_ms: 0,
+        },
+        dispatchFallback: {
+          enabled: true,
+          trigger: "rate_limit",
+          max_fallback_passes: 1,
+          per_dispatch_max_provider_attempts: 1,
+          systemic_failure_threshold: 1,
+          llm: {
+            provider: "anthropic",
+            auth: "api_key",
+            model: "claude-boundary",
+            effort: "medium",
+            api_key_env: "ANTHROPIC_API_KEY",
+          },
+        },
+        dispatchFallbackRuntime: {
+          accounting,
+          primary: { synthesize: primaryCapability },
+          fallback: {
+            synthesize: fallbackSynthesize,
+            verify: fallbackVerify,
+            directiveAuthor: fallbackAuthor,
+          },
+        },
+      },
+    });
+
+    expect(result.status).toBe("completed");
+    expect(primaryCalls).toBe(3);
+    expect(fallbackSynthesizeCalls).toBeGreaterThan(0);
+    expect(fallbackVerifyCalls).toBeGreaterThan(0);
+    const fallbackEntries = accounting.entries().filter(
+      (entry) => entry.execution_source === "fallback",
+    );
+    const primaryEntries = accounting.entries().filter(
+      (entry) => entry.execution_source === "primary",
+    );
+    expect(primaryEntries).toHaveLength(1);
+    expect(primaryEntries[0]?.actual_adapter_request_count).toBe(3);
+    expect(fallbackEntries.length).toBeGreaterThan(0);
+    expect(fallbackEntries.every((entry) => entry.actual_adapter_request_count === 1))
+      .toBe(true);
+    expect(result.reconstructRecord.dispatch_fallback).toMatchObject({
+      outcome: "completed",
+      trigger_code: "rate_limit",
+      route_relation: "cross_provider",
+      incomplete_count: 0,
+    });
+    const outcomeRef = result.reconstructRecord.dispatch_fallback!.outcome_ref;
+    expect(path.dirname(outcomeRef)).toBe(await fs.realpath(sessionRoot));
+    expect(
+      result.reconstructRunManifest.steps
+        .find((step) => step.step_id === "semantic_map")
+        ?.artifact_refs,
+    ).toContain(outcomeRef);
+    expect(
+      result.reconstructRunManifest.steps
+        .find((step) => step.step_id === "semantic_map")
+        ?.execution_telemetry,
+    ).toMatchObject({
+      provider_route: null,
+      model_id: null,
+      effort: null,
+      route_identity: null,
+    });
+    const fallbackCensus = await readYaml<{
+      fallback_synthesize_logical_calls: number;
+      fallback_verify_logical_calls: number;
+      by_observation: Array<{
+        discarded_primary_synthesize_logical_calls: number;
+      }>;
+    }>(path.join(sessionRoot, "comprehension", "semantic-map-census.yaml"));
+    expect(fallbackCensus.fallback_synthesize_logical_calls).toBeGreaterThan(0);
+    expect(fallbackCensus.fallback_verify_logical_calls).toBeGreaterThan(0);
+    expect(fallbackCensus.by_observation[0]?.discarded_primary_synthesize_logical_calls)
+      .toBe(1);
+    expect(fallbackCensus.by_observation[0]).toMatchObject({
+      primary_synthesize_adapter_requests: 3,
+    });
+    const ledger = await buildReconstructPipelineExecutionLedger({
+      sessionRoot,
+      reconstructRecord: result.reconstructRecord,
+      reconstructRecordRef: result.reconstructRecordPath,
+      reconstructRunManifest: result.reconstructRunManifest,
+      reconstructRunManifestRef: result.reconstructRunManifestPath,
+    });
+    expect(
+      ledger.units.find((unit) => unit.unitId === "semantic_map")?.outputRefs,
+    ).toContain(outcomeRef);
+    const runControl = await readYaml<{
+      write_transactions: Array<{
+        artifact_ref: string;
+        committed_hash: string;
+      }>;
+    }>(path.join(sessionRoot, "reconstruct-run-control.yaml"));
+    expect(
+      runControl.write_transactions.some(
+        (row) => row.artifact_ref === result.reconstructRecordPath,
+      ),
+    ).toBe(false);
+    const outcomeTransaction = runControl.write_transactions.find(
+      (row) => path.resolve(row.artifact_ref) === path.resolve(outcomeRef),
+    );
+    expect(outcomeTransaction?.committed_hash).toBe(
+      result.reconstructRecord.dispatch_fallback!.outcome_sha256,
+    );
   });
 
   it("W4-005 two-run same-author leak NC: after a map-present run, a map-ABSENT run on the SAME observation id must carry zero semantic-map traces in its prompts", async () => {
