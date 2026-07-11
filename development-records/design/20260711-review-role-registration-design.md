@@ -1,7 +1,10 @@
 # review role 등록 구조 설계 — author-role 순환 해소 (INV-MODEL-1 확장)
 
-- 상태: 설계 v2 (owner 승인 전, 구현 착수 금지). v1 → v2: 독립 적대 리뷰 2렌즈(코드접지·설계공격)의
-  material 9건 반영 — 핵심은 quality 축 재설계(이진 parity 폐기), witness 신규 기계 인정, R7 큐레이션 복원.
+- 상태: **설계 v2 owner 승인 완료 (2026-07-12)**. O1~O7 권고안 채택. 구조 단계 1~4는 현재
+  구현을 승인된 설계의 실현으로 채택하고, 진행 중인 Sol cert run은 기존 `max-attempts=12` 경계 안에서
+  완료까지 허용한다. Fable cert spend는 Sol 결과와 R7 판단 뒤 별도 결정한다. v1 → v2: 독립 적대
+  리뷰 2렌즈(코드접지·설계공격)의 material 9건 반영 — 핵심은 quality 축 재설계(이진 parity 폐기),
+  witness 신규 기계 인정, R7 큐레이션 복원.
 - 날짜: 2026-07-11
 - 선행: `20260704-inv-model-1-role-aware-design.md` (role-aware v4), B4/B5 synthesize-cert 선례
 - 관련 커밋: 5afae90(luna 인증), d7eb9f9(synthesize seat 승격)
@@ -15,7 +18,8 @@ fail-closed 기본값인 `author`(golden 전체 파이프라인 인증)를 요�
 없어 등록 경로 자체가 부재하다.
 
 **완료 조건(설계 단계)**: 옵션 비교 + 권고안의 개념 설계·증거 계약·게이트 진화·구현
-순서가 확정되고 owner가 승인한다. 구현·cert run(실지출)은 별도 트리거.
+순서가 확정되고 owner가 승인한다. 2026-07-12 충족. 구조 구현과 현재 Sol cert run은 승인됐으며,
+Fable cert run은 별도 spend trigger다.
 
 ## 1. 코드 근거 재확인 (2026-07-11, HEAD d7eb9f9; v2에서 F5 정정·F9 보강·F10~F16 추가)
 
@@ -113,15 +117,15 @@ parity"는 F12로 공허가 실증되어 폐기.
 - **fixture 한계 (L-2)**: gate 자기선언 scope가 `fixture_specific`이고 fixture 2종이
   소형 합성 타깃이므로, 실 repo 규모로의 외삽 한계를 record 산문에 명기.
 
-## 5. 구현 프로세스 설계 (승인 후)
+## 5. 승인된 구현 프로세스
 
 | 단계 | 내용 | 검증 |
 |---|---|---|
-| 1 | 어휘 `review` + 매핑(§3 경계 핀) + CONTRACTED_ROLES + zod (INVARIANT-CHANGE: INV-MODEL-1 커밋) | typecheck · 매핑 단위테스트(양성/음성 + 미지 unit 경로가 author 유지되는 fail-closed 테스트) · **현행 registry G7 no-op 증명**(L-1) · G4 |
-| 2 | review-cert record 모듈(파서·validate·rate/floor 재계산·universe 핀) — core-runtime 공유 | 단위테스트 + 고의 위반 fixture(음성대조: floor 미달·universe 불일치·rescue 오염) |
-| 3 | G7 `assertReviewCertBinding`(존재형) 확장 | G7 실행 + 고의 실패 record 음성대조 |
-| 4 | cert 하니스: baseline+candidate 2-arm 러너(F16 신규) + spawn-인자 witness capture(H-1 신규) + review 전용 projection | mock 리허설(B4 [D] 선례) + witness 음성대조(선언≠capture 시 fail-loud) |
-| 5 | cert run(sol 우선) + **R7 큐레이션** + registry 등록 커밋 | rate/floor 게이트 + witness guard + G7 + R7 기록 |
+| 1 | 어휘 `review` + 매핑(§3 경계 핀) + CONTRACTED_ROLES + zod (INVARIANT-CHANGE: INV-MODEL-1 커밋) | **구현 완료** · typecheck · 매핑 단위테스트(양성/음성 + 미지 unit 경로가 author 유지되는 fail-closed 테스트) · **현행 registry G7 no-op 증명**(L-1) · G4 |
+| 2 | review-cert record 모듈(파서·validate·rate/floor 재계산·universe 핀) — core-runtime 공유 | **구현 완료** · 단위테스트 + 고의 위반 fixture(음성대조: floor 미달·universe 불일치·rescue 오염) |
+| 3 | G7 `assertReviewCertBinding`(존재형) 확장 | **구현 완료** · G7 실행 + 고의 실패 record 음성대조 |
+| 4 | cert 하니스: baseline+candidate 2-arm 러너(F16 신규) + spawn-인자 witness capture(H-1 신규) + review 전용 projection | **구현 완료** · mock 리허설(B4 [D] 선례) + witness 음성대조(선언≠capture 시 fail-loud) |
+| 5 | cert run(Sol 우선) + **R7 큐레이션** + registry 등록 커밋 | **Sol run 진행 승인** · rate/floor 게이트 + witness guard + G7 + R7 기록. Fable은 별도 spend 결정 |
 | — | 각 단계 종료마다 해당 게이트 + 다중렌즈 교차리뷰(material 0까지) | 가이드 Review Loop |
 
 **redesign trigger (v2 교체)**: ① baseline 플레이크가 커서(rep 증가로도 rate 비교가
@@ -129,17 +133,27 @@ parity"는 F12로 공허가 실증되어 폐기.
 ② topology별 유닛 구성 분기로 "완주" 정의가 갈라지면 support 축 재정의. ③ 구현 중 review
 seat 경로가 F7 목록 밖에서 발견되면 매핑 재검토(경계 확장 → stop-and-ask).
 
-## 6. 열린 결정 (owner)
+## 6. Owner 결정 (2026-07-12 승인)
 
 | # | 결정 | 기본값(권고) |
 |---|---|---|
-| O1 | role 이름: `review` vs `review_unit` | `review` |
-| O2 | review runtime enforcement(라이브 경계 gate) 포함 여부 | **제외**(N3 유지 — 포함 시 review용 bench allowance 결합 필요) |
-| O3 | cert run spend 범위 — **(v2) baseline 동시대 재실행 포함 ≈2×**(후보 arm + baseline arm, 각 ≥3 reps × 2 fixtures) | 구조(1~4단계)만 이번 범위, cert run(5단계)은 별도 spend 승인 |
-| O4 | fable5(anthropic) 동시 cert run 여부 | sol 결과 확인 후 순차 |
-| O5 | **(v2)** core check 절대 floor 값(material_issue_recall 등 3종) | 후보 pass-rate ≥ 2/3 (reps=3 기준 2회 이상) — cert run 전 baseline 예비 rate로 재보정 |
-| O6 | **(v2)** nested-workers 커버리지: main-workers 핀 cert의 한계 수용 vs nested arm 추가 | 한계 수용(명기) — nested teamlead는 grandfathered 모델 유지 |
-| O7 | **(v2)** worker stdout 메타(model/effort echo) 확장 여부 | 제외(하니스 spawn-인자 capture로 충분; 확장은 제품 경로 변경이라 별도 건) |
+| O1 | role 이름: `review` vs `review_unit` | **`review` 승인** |
+| O2 | review runtime enforcement(라이브 경계 gate) 포함 여부 | **제외 승인**(N3 유지 — 포함 시 review용 bench allowance 결합 필요) |
+| O3 | cert run spend 범위 — **(v2) baseline 동시대 재실행 포함 ≈2×**(후보 arm + baseline arm, 각 ≥3 reps × 2 fixtures) | **구조 1~4 + 현재 Sol run 승인**. 현재 run은 기존 `max-attempts=12` 상한을 유지하고 partial evidence를 resume한다. 새 모델 run은 별도 spend 결정 |
+| O4 | fable5(anthropic) 동시 cert run 여부 | **Sol 우선 순차 원칙 승인**. Fable 실행 자체는 Sol R7 뒤 별도 결정 |
+| O5 | **(v2)** core check 절대 floor 값(material_issue_recall 등 3종) | **후보 pass-rate ≥ 2/3 승인**(reps=3 기준 2회 이상) |
+| O6 | **(v2)** nested-workers 커버리지: main-workers 핀 cert의 한계 수용 vs nested arm 추가 | **한계 수용 승인** — nested teamlead는 grandfathered 모델 유지 |
+| O7 | **(v2)** worker stdout 메타(model/effort echo) 확장 여부 | **제외 승인** — 하니스 spawn-인자 capture를 witness authority로 사용 |
+
+### 6.1 승인 경계와 프로세스 정정
+
+- 이 승인은 `INV-MODEL-1`의 `review` role과 `review-cert/v1` 증거 계약, G7 binding, main-workers
+  cert 하니스에 한정된다. review runtime gate, nested arm, worker stdout 계약은 승인하지 않는다.
+- registry 등록은 cert record의 결정론 gate 통과만으로 자동 수행하지 않는다. Sol 결과를 R7 사람이
+  큐레이션한 뒤 별도 등록 커밋으로 진행한다.
+- 구조 단계 1~4와 cert resume 구현 커밋이 정식 owner 승인보다 먼저 생성된 사실을 확인했다. 2026-07-12
+  owner가 실코드 상태와 O1~O7 결과를 확인하고 현재 구현을 채택했다. 이 순서 역전은 향후 보호 변경의
+  선례가 아니며, 다음 `INV-MODEL-1` 확장은 구현 전에 owner 결정을 기록한다.
 
 ## 7. 스코프 제외
 
