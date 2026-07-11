@@ -68,6 +68,9 @@ import {
 } from "../src/core-runtime/reconstruct/run.ts";
 import {
   assembleSynthesizeCertRecord,
+  projectSynthesizeCertArmDispatch,
+  synthesizeCertDispatchGuardViolations,
+  type SynthesizeCertArmDispatch,
 } from "../src/core-runtime/discovery/synthesize-cert-assemble.ts";
 import {
   assembleSynthesizeCertCapsule,
@@ -105,6 +108,7 @@ import {
 } from "../src/core-runtime/discovery/test-fixtures/synthesize-cert-mock-realization.ts";
 import {
   B4_SYNTHESIZE_REASONING_EFFORT_OVERRIDE,
+  type B4DeclaredModelIdentity,
   createB4LiveCallHarness,
   createB4LiveSynthesizeArm,
   createB4LiveSynthesizeCertJudge,
@@ -151,17 +155,38 @@ if (resumeDir !== null && !go) {
   );
 }
 
-// INV-MODEL-1 B4 sonnet-5 retry (owner directive): the candidate/negative seat
-// is claude-sonnet-5 run with extended thinking OFF (thinking:{type:"disabled"}
-// via the callAnthropic opt-in — Haiku's merge-boundary weakness is what this
-// retry tests whether a stronger no-thinking model clears). Directly
-// constructed, NOT a settings seat (see b4-live-realization.mts module doc).
-const CANDIDATE = {
-  provider: "anthropic",
-  model: "claude-sonnet-5",
-  thinking_mode: "disabled",
-} as const;
+// INV-MODEL-1 B4 gpt-5.6-luna candidate (owner directive 2026-07-11): the
+// candidate/negative seat is gpt-5.6-luna at reasoning_effort=low — the
+// spreadsheet recursive-LLM (semantic_map) seat this candidate targets. The
+// declared effort is injected onto the synthesize calls (candidateSynthesizeEffort
+// below) so the codex worker dispatches THAT effort instead of inheriting a
+// host ~/.codex/config.toml default, and the dispatch witness guard holds the
+// capture against this declaration. Directly constructed, NOT a settings seat
+// (see b4-live-realization.mts module doc). Prior candidate: claude-sonnet-5
+// thinking-off (registered 2026-07-08 — supported-models.yaml).
+const CANDIDATE: B4DeclaredModelIdentity = {
+  provider: "openai",
+  model: "gpt-5.6-luna",
+  reasoning_effort: "low",
+};
 const BASELINE = { provider: "openai", model: "gpt-5.5" } as const;
+// Declared per-arm dispatch (effort-witness design §4.5-3): the PLAN the
+// declared-vs-witnessed guard compares the capture witness against, persisted
+// on the preflight. baseline synthesize runs at the ⑤a low override;
+// candidate/negative carry exactly the CANDIDATE declaration.
+const CANDIDATE_DECLARED_DISPATCH = {
+  ...(CANDIDATE.reasoning_effort !== undefined
+    ? { reasoning_effort: CANDIDATE.reasoning_effort }
+    : {}),
+  ...(CANDIDATE.thinking_mode !== undefined
+    ? { thinking_mode: CANDIDATE.thinking_mode }
+    : {}),
+};
+const DECLARED_DISPATCH: SynthesizeCertArmDispatch = {
+  baseline: { reasoning_effort: B4_SYNTHESIZE_REASONING_EFFORT_OVERRIDE },
+  candidate: CANDIDATE_DECLARED_DISPATCH,
+  negative_control: CANDIDATE_DECLARED_DISPATCH,
+};
 const DECLARED_REPS = 3;
 const promptSha256 = crypto
   .createHash("sha256")
@@ -398,6 +423,9 @@ if (go) {
         ...(resumeDir !== null ? { resumed_at: ts() } : {}),
         baseline_reference_judge_seat: seats.baselineModelIdentity,
         candidate_negative_control_seat: seats.candidateModelIdentity,
+        // The dispatch PLAN (effort-witness design): the post-run guard and
+        // b4-rejudge compare the capture WITNESS against exactly this.
+        declared_dispatch: DECLARED_DISPATCH,
         forecast: {
           reference_calls: referenceCallsForecast,
           arm_calls: armCallsForecast,
@@ -426,15 +454,25 @@ if (go) {
     llmConfig: seats.baselineLlmConfig,
     synthesizeReasoningEffort: B4_SYNTHESIZE_REASONING_EFFORT_OVERRIDE,
   });
+  // The candidate/negative synthesize effort is declared on CANDIDATE (unset for
+  // the anthropic thinking-mode route, so this stays byte-identical there; an
+  // openai candidate declares it so the codex worker dispatches THAT effort
+  // instead of inheriting a host ~/.codex/config.toml default). Injected the
+  // same way reference/baseline inject the ⑤a override — a synthesize-call knob.
+  const candidateSynthesizeEffort = CANDIDATE.reasoning_effort !== undefined
+    ? { synthesizeReasoningEffort: CANDIDATE.reasoning_effort }
+    : {};
   const candidateFn = createB4LiveSynthesizeArm({
     role: "candidate",
     llmCall: harness.forRole("candidate"),
     llmConfig: seats.candidateLlmConfig,
+    ...candidateSynthesizeEffort,
   });
   const negativeFn = createB4LiveSynthesizeArm({
     role: "negative_control",
     llmCall: harness.forRole("negative_control"),
     llmConfig: seats.candidateLlmConfig,
+    ...candidateSynthesizeEffort,
   });
   const judgeFn = createB4LiveSynthesizeCertJudge({
     llmCall: harness.forRole("judge"),
@@ -514,11 +552,50 @@ if (go) {
     "MOCK RUN — deterministic mock realizations; NOT B5 evidence. Live scope when captured: per-node synthesize capability only (capsule limitation_ids).";
 }
 
+// ── S6.5: dispatch witness (effort-witness design §4 gate 3-5, --go only) ─────
+// Project the per-arm dispatch WITNESS from the full capture file (re-read, not
+// in-memory: resume appends to the same file, so this covers prior sessions),
+// then hold it against the declared plan. Fail-loud BEFORE assembly/persist —
+// a record must never certify a dispatch the capture cannot witness.
+let armDispatch: SynthesizeCertArmDispatch | undefined;
+if (go) {
+  const captureLines = (
+    await fs.readFile(path.join(runDir, "local", "live-calls.jsonl"), "utf8")
+  )
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as unknown);
+  const projection = projectSynthesizeCertArmDispatch(captureLines);
+  const dispatchProblems = projection.legacy
+    ? ["capture is entirely pre-witness (legacy lines) but this run DECLARED a dispatch — resuming a pre-witness run cannot be certified"]
+    : projection.violations;
+  if (dispatchProblems.length === 0 && projection.armDispatch !== null) {
+    const guardViolations = synthesizeCertDispatchGuardViolations({
+      declared: DECLARED_DISPATCH,
+      witnessed: projection.armDispatch,
+      armProviders: {
+        baseline: BASELINE.provider,
+        candidate: CANDIDATE.provider,
+        negative_control: CANDIDATE.provider,
+      },
+    });
+    dispatchProblems.push(...guardViolations);
+    armDispatch = projection.armDispatch;
+  }
+  if (dispatchProblems.length > 0) {
+    console.error("[b4-cert-run] DISPATCH WITNESS GUARD FAILED:");
+    for (const problem of dispatchProblems) console.error(`  ${problem}`);
+    process.exit(1);
+  }
+  log("dispatch witness: declared == witnessed for all three arms");
+}
+
 // ── S7: record + gates ────────────────────────────────────────────────────────
 const record = assembleSynthesizeCertRecord({
   createdAt: ts(),
   candidateModel: CANDIDATE,
   baselineModel: BASELINE,
+  ...(armDispatch !== undefined ? { armDispatch } : {}),
   promptSha256,
   declaredReps: DECLARED_REPS,
   mutationSeed,

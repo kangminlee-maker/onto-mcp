@@ -1,0 +1,13 @@
+[b4-rejudge 2026-07-10T23:29:26.062Z] loading run dir /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/3ef1e5cf-ce5f-4331-b4a0-6ca400e156e7/scratchpad/e2-run-witness
+[b4-rejudge 2026-07-10T23:29:26.070Z] checkpoint verified: 30 packets (identity 10907e7e773d…)
+[b4-rejudge 2026-07-10T23:29:26.071Z] folded 396 raw progress line(s) into 270 coordinate row(s)
+[b4-rejudge 2026-07-10T23:29:26.074Z] seats (from preflight): baseline/reference/original-judge=openai/gpt-5.5, candidate/negative_control=anthropic/claude-sonnet-5
+[b4-rejudge 2026-07-10T23:29:26.075Z] dispatch witness: declared == witnessed for all three arms
+[b4-rejudge 2026-07-10T23:29:26.077Z] reconstruction: 270 matched, 0 unmatched (of 270 ok row(s))
+[b4-rejudge 2026-07-10T23:29:26.078Z] resume: folded 270 prior rejudge line(s) into 270 row(s)
+[b4-rejudge 2026-07-10T23:29:26.078Z] rejudge forecast: 0 remaining coordinate(s) (of 270 reconstructed; cap=300)
+[b4-rejudge 2026-07-10T23:29:26.078Z] rejudge seat: mock (rehearsal — not evidence)
+[b4-rejudge 2026-07-10T23:29:26.078Z] rejudge dispatch: 0 attempted (ok=0, judge_error=0, timeout=0)
+[b4-rejudge 2026-07-10T23:29:26.082Z] record recompute: 0 violation(s)
+[b4-rejudge 2026-07-10T23:29:26.083Z] comparison persisted → /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/3ef1e5cf-ce5f-4331-b4a0-6ca400e156e7/scratchpad/e2-run-witness/local/rejudge-mock-comparison.json
+[b4-rejudge 2026-07-10T23:29:26.084Z] record: 0 violations → persisted to /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/3ef1e5cf-ce5f-4331-b4a0-6ca400e156e7/scratchpad/e2-run-witness/local/rejudge-mock-record.json (capsule intentionally NOT produced — see reproduction.limitations)

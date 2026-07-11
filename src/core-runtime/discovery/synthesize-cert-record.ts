@@ -138,6 +138,25 @@ const NegativeArmSchema = z
   })
   .strict();
 
+// One arm's WITNESSED dispatch config (effort-witness design 2026-07-10/11).
+// Exactly the dispatch-affecting knobs the LlmCallConfig carries per provider
+// route: `reasoning_effort` (codex/openai) and `thinking_mode` (anthropic SDK).
+// A knob absent from the dispatched config is OMITTED (never null) — an empty
+// cell is the witness "dispatched with no knob on the config", which the
+// producer guard treats as certifiable only where the provider route makes it
+// observable (it rejects a knobless codex arm: that shape means an
+// unobservable host-TOML inherit, not a provider default).
+const DispatchConfigSchema = z
+  .object({
+    reasoning_effort: z.string().min(1).optional(),
+    thinking_mode: z.enum(["disabled"]).optional(),
+  })
+  .strict();
+export type SynthesizeCertDispatchConfig = z.infer<typeof DispatchConfigSchema>;
+/** Exported for the capture→arm_dispatch projection (assemble module): one
+ * schema owns the cell shape on both the record and the capture-line side. */
+export const SynthesizeCertDispatchConfigSchema = DispatchConfigSchema;
+
 const ArmMetricMeansSchema = z
   .object({
     // Mean = pass ratio over the arm's decisive rows; null iff the arm has no
@@ -243,6 +262,25 @@ const SynthesizeCertRecordSchema = z
           .strict(),
       })
       .strict(),
+    // Per-arm dispatch-config WITNESS (effort-witness design 2026-07-10/11):
+    // projected from the run's live-call capture, never copied from a
+    // declaration — the declared-vs-witnessed comparison is the producer-side
+    // guard (synthesize-cert-assemble.ts), not a validator recompute (the
+    // validator has no capture access; witness consistency is owned at
+    // assembly). BOUNDARY: this witnesses the CONFIG each arm call was
+    // dispatched WITH, not the provider-side realization (an anthropic route
+    // ignores effort once thinking is disabled; a codex route inherits a host
+    // TOML effort when the config carries none — the producer guard rejects
+    // those shapes instead of recording them). Optional: absent on records
+    // predating the field and on rejudge records of legacy runs.
+    arm_dispatch: z
+      .object({
+        baseline: DispatchConfigSchema,
+        candidate: DispatchConfigSchema,
+        negative_control: DispatchConfigSchema,
+      })
+      .strict()
+      .optional(),
     negative_arm: NegativeArmSchema,
     // Frozen at ORIGINAL enumeration time (§6.3): re-runs/resumes stay bound to
     // this universe. The outer join below machine-checks the orphan-row and

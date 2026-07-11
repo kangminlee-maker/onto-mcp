@@ -1,0 +1,13 @@
+[b4-rejudge 2026-07-10T23:29:26.505Z] loading run dir /private/tmp/claude-501/-Users-kangmin-Documents-onto-mcp/3ef1e5cf-ce5f-4331-b4a0-6ca400e156e7/scratchpad/e2-run-mismatch
+[b4-rejudge 2026-07-10T23:29:26.512Z] checkpoint verified: 30 packets (identity 10907e7e773d…)
+[b4-rejudge 2026-07-10T23:29:26.513Z] folded 396 raw progress line(s) into 270 coordinate row(s)
+[b4-rejudge 2026-07-10T23:29:26.517Z] seats (from preflight): baseline/reference/original-judge=openai/gpt-5.5, candidate/negative_control=anthropic/claude-sonnet-5
+/Users/kangmin/Documents/onto-mcp/scripts/b4-rejudge.mts:268
+    throw new Error(
+          ^
+
+Error: b4-rejudge: DISPATCH WITNESS GUARD FAILED:
+  arm baseline: declared reasoning_effort=xhigh but witnessed low
+    at <anonymous> (/Users/kangmin/Documents/onto-mcp/scripts/b4-rejudge.mts:268:11)
+
+Node.js v26.0.0

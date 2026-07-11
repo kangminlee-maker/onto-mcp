@@ -1,0 +1,22 @@
+# effort-witness (arm_dispatch) verification output (2026-07-11)
+# design: development-records/design/20260710-b4-cert-effort-witness-design.md
+# e2e rehearsal inputs: 20260708-sonnet5-live copies — legacy(untouched) /
+#   witness(declared_dispatch + new-format capture) / mismatch(declared xhigh vs witnessed low)
+
+## unit tests (colocated, synthesize-cert-assemble.test.ts +11 cases)
+discovery suite: 18 files, 313 tests passed (projection/guard positive+negative, schema emit/omit)
+
+## existing-record regression (n=2, non-empty baseline)
+20260708-sonnet5-live/synthesize-cert-record.json: parsed=true parse_violations=0 recompute_violations=0
+20260708-sonnet5-live/local/rejudge-mock-record.json: parsed=true parse_violations=0 recompute_violations=0
+
+## e2e (real b4-rejudge mock rehearsal, real consumer path)
+[legacy]   exit=0  'legacy run (no declaration, pre-witness capture) — arm_dispatch omitted'; record arm_dispatch=absent
+[witness]  exit=0  'declared == witnessed for all three arms'; record arm_dispatch={baseline:{reasoning_effort:low}, candidate:{thinking_mode:disabled}, negative_control:{thinking_mode:disabled}}
+[mismatch] exit=1  'DISPATCH WITNESS GUARD FAILED: arm baseline: declared reasoning_effort=xhigh but witnessed low'
+           mismatch record byte-identical to source copy → guard threw BEFORE any persist
+
+## gates
+  "check": "supported-models",
+  "status": "passed",
+typecheck: check:ts-core clean; scripts(b4-cert-run/b4-live-realization/b4-rejudge/l2) clean

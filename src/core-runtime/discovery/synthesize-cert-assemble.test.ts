@@ -15,6 +15,8 @@ import {
 import {
   assembleSynthesizeCertRecord,
   buildSynthesizeCertInputManifest,
+  projectSynthesizeCertArmDispatch,
+  synthesizeCertDispatchGuardViolations,
   type AssembleSynthesizeCertRecordArgs,
 } from "./synthesize-cert-assemble.js";
 import {
@@ -186,5 +188,173 @@ describe("validateSynthesizeCertCapsuleBinding", () => {
     const violations = validateSynthesizeCertCapsuleBinding({ record, capsuleRaw: smuggled });
     expect(violations.some((v) => v.code === "capsule_source_unsafe")).toBe(true);
     expect(violations.some((v) => v.code === "capsule_schema_invalid")).toBe(true); // strict schema too
+  });
+});
+
+// ── arm_dispatch witness (effort-witness design 2026-07-10/11) ────────────────
+
+const NEW_LINE = (role: string, seq: number, dispatch: Record<string, unknown>) => ({
+  seq,
+  role,
+  at: "2026-07-11T00:00:00.000Z",
+  dispatch,
+  systemPrompt: "s",
+  userPrompt: "u",
+  text: "t",
+});
+const LEGACY_LINE = (role: string, seq: number) => ({
+  seq,
+  role,
+  at: "2026-07-08T00:00:00.000Z",
+  systemPrompt: "s",
+  userPrompt: "u",
+  text: "t",
+});
+const CLEAN_CAPTURE = [
+  NEW_LINE("reference", 1, {}), // non-arm roles are ignored by the projection
+  NEW_LINE("baseline", 2, { reasoning_effort: "low" }),
+  NEW_LINE("baseline", 3, { reasoning_effort: "low" }),
+  NEW_LINE("candidate", 4, { thinking_mode: "disabled" }),
+  NEW_LINE("negative_control", 5, { thinking_mode: "disabled" }),
+  NEW_LINE("judge", 6, {}),
+];
+const CLEAN_DECLARED = {
+  baseline: { reasoning_effort: "low" },
+  candidate: { thinking_mode: "disabled" as const },
+  negative_control: { thinking_mode: "disabled" as const },
+};
+const ARM_PROVIDERS = {
+  baseline: "openai",
+  candidate: "anthropic",
+  negative_control: "anthropic",
+};
+
+describe("projectSynthesizeCertArmDispatch", () => {
+  it("projects a clean capture into per-arm witnessed dispatch", () => {
+    const projection = projectSynthesizeCertArmDispatch(CLEAN_CAPTURE);
+    expect(projection.legacy).toBe(false);
+    expect(projection.violations).toEqual([]);
+    expect(projection.armDispatch).toEqual({
+      baseline: { reasoning_effort: "low" },
+      candidate: { thinking_mode: "disabled" },
+      negative_control: { thinking_mode: "disabled" },
+    });
+  });
+
+  it("classifies an all-legacy capture as legacy, never as empty-dispatch witness", () => {
+    const projection = projectSynthesizeCertArmDispatch([
+      LEGACY_LINE("baseline", 1),
+      LEGACY_LINE("candidate", 2),
+      LEGACY_LINE("negative_control", 3),
+    ]);
+    expect(projection.legacy).toBe(true);
+    expect(projection.armDispatch).toBeNull();
+    expect(projection.violations).toEqual([]);
+  });
+
+  it("fails loud on a mixed legacy/new capture (no-evidence line in a witnessing run)", () => {
+    const projection = projectSynthesizeCertArmDispatch([
+      ...CLEAN_CAPTURE,
+      LEGACY_LINE("candidate", 7),
+    ]);
+    expect(projection.legacy).toBe(false);
+    expect(projection.armDispatch).toBeNull();
+    expect(projection.violations.some((v) => v.includes("predates the dispatch witness"))).toBe(true);
+  });
+
+  it("fails loud on an empty arm and on within-arm inconsistency", () => {
+    const emptyArm = projectSynthesizeCertArmDispatch(
+      CLEAN_CAPTURE.filter((line) => line.role !== "negative_control"),
+    );
+    expect(emptyArm.violations.some((v) => v.includes("negative_control: no captured calls"))).toBe(true);
+
+    const inconsistent = projectSynthesizeCertArmDispatch([
+      ...CLEAN_CAPTURE,
+      NEW_LINE("baseline", 8, { reasoning_effort: "high" }),
+    ]);
+    expect(inconsistent.armDispatch).toBeNull();
+    expect(inconsistent.violations.some((v) => v.includes("inconsistent dispatch"))).toBe(true);
+  });
+
+  it("rejects a malformed dispatch witness (null knob / unknown knob)", () => {
+    const malformed = projectSynthesizeCertArmDispatch([
+      ...CLEAN_CAPTURE.filter((line) => line.role !== "baseline"),
+      NEW_LINE("baseline", 9, { reasoning_effort: null }),
+      NEW_LINE("baseline", 10, { verbosity: "high" }),
+    ]);
+    expect(malformed.armDispatch).toBeNull();
+    expect(malformed.violations.filter((v) => v.includes("malformed dispatch witness")).length).toBe(2);
+  });
+});
+
+describe("synthesizeCertDispatchGuardViolations", () => {
+  const witnessedClean = {
+    baseline: { reasoning_effort: "low" },
+    candidate: { thinking_mode: "disabled" as const },
+    negative_control: { thinking_mode: "disabled" as const },
+  };
+
+  it("passes when declared == witnessed on every arm", () => {
+    expect(
+      synthesizeCertDispatchGuardViolations({
+        declared: CLEAN_DECLARED,
+        witnessed: witnessedClean,
+        armProviders: ARM_PROVIDERS,
+      }),
+    ).toEqual([]);
+  });
+
+  it("fails loud on declared != witnessed (the gate-6 negative control)", () => {
+    const violations = synthesizeCertDispatchGuardViolations({
+      declared: CLEAN_DECLARED,
+      witnessed: { ...witnessedClean, baseline: { reasoning_effort: "xhigh" } },
+      armProviders: ARM_PROVIDERS,
+    });
+    expect(violations.some((v) => v.includes("baseline: declared reasoning_effort=low but witnessed xhigh"))).toBe(true);
+  });
+
+  it("rejects a knobless openai(codex-route) arm — TOML inherit is not certifiable", () => {
+    const violations = synthesizeCertDispatchGuardViolations({
+      declared: { ...CLEAN_DECLARED, baseline: {} },
+      witnessed: { ...witnessedClean, baseline: {} },
+      armProviders: ARM_PROVIDERS,
+    });
+    expect(violations.some((v) => v.includes("witnessed NO reasoning_effort"))).toBe(true);
+  });
+
+  it("rejects effort+thinking together — unrealized on the anthropic route", () => {
+    const both = { reasoning_effort: "low", thinking_mode: "disabled" as const };
+    const violations = synthesizeCertDispatchGuardViolations({
+      declared: { ...CLEAN_DECLARED, candidate: both },
+      witnessed: { ...witnessedClean, candidate: both },
+      armProviders: ARM_PROVIDERS,
+    });
+    expect(violations.some((v) => v.includes("witnessed BOTH reasoning_effort and thinking_mode"))).toBe(true);
+  });
+});
+
+describe("assembleSynthesizeCertRecord arm_dispatch", () => {
+  it("emits arm_dispatch when supplied and the record passes the shipped validator", async () => {
+    const { recordArgs } = await assembledLineage();
+    const record = assembleSynthesizeCertRecord({
+      ...recordArgs,
+      armDispatch: {
+        baseline: { reasoning_effort: "low" },
+        candidate: { thinking_mode: "disabled" },
+        negative_control: { thinking_mode: "disabled" },
+      },
+    });
+    expect(record.arm_dispatch).toEqual({
+      baseline: { reasoning_effort: "low" },
+      candidate: { thinking_mode: "disabled" },
+      negative_control: { thinking_mode: "disabled" },
+    });
+    expect(validateSynthesizeCertRecord(record)).toEqual([]);
+  });
+
+  it("omits arm_dispatch when not supplied (legacy/mock assembly — backward compatible)", async () => {
+    const { record } = await assembledLineage();
+    expect(record.arm_dispatch).toBeUndefined();
+    expect(validateSynthesizeCertRecord(record)).toEqual([]);
   });
 });
