@@ -298,14 +298,48 @@ describe("createOntoReconstructCoreApi", () => {
       error: new Error("ordinary provider error"),
     })).toBeNull();
 
-    await expect(api.runReconstruct({
-      projectRoot,
-      targetRefs: ["schedule.csv"],
-      sessionRoot,
-      intent: "a different invocation must not inherit the prior failed terminal",
-      semanticAuthorRealization: "direct_call",
-      confirmationProviderRealization: "direct_call",
-    })).rejects.toThrow(/run-control conflict/);
+    // The conflict invocation must survive actor-settings resolution (which
+    // precedes run-control validation) without depending on a host-level
+    // ~/.onto/settings.json: provide the v3 actor seats in the project layer
+    // and isolate HOME, so the run-control conflict decides the outcome.
+    const conflictActorLlm = {
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5.5",
+      effort: "low",
+      api_key_env: "UNSET_TEST_OPENAI_KEY",
+    };
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      `${JSON.stringify({
+        schema_version: "settings.json/v3",
+        reconstruct: {
+          execution: {
+            actors: {
+              semantic_author: { llm: conflictActorLlm },
+              confirmation_provider: { llm: conflictActorLlm },
+            },
+          },
+        },
+      }, null, 2)}\n`,
+      "utf8",
+    );
+    const previousHome = process.env.HOME;
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(isolatedHome, { recursive: true });
+    process.env.HOME = isolatedHome;
+    try {
+      await expect(api.runReconstruct({
+        projectRoot,
+        targetRefs: ["schedule.csv"],
+        sessionRoot,
+        intent: "a different invocation must not inherit the prior failed terminal",
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "direct_call",
+      })).rejects.toThrow(/run-control conflict/);
+    } finally {
+      process.env.HOME = previousHome;
+    }
   });
 
   it("fails loudly before reconstruct direct-call when v3 semantic author llm is missing", async () => {
