@@ -52,6 +52,7 @@ import {
   isReviewCertCandidate,
   parseReviewCertRecord,
   reviewCertBindingViolations,
+  reviewCertQualityDisclosures,
   validateReviewCertRecord,
 } from "../src/core-runtime/discovery/review-cert-record.js";
 import {
@@ -218,7 +219,7 @@ async function assertSynthesizeCertBinding(
 }
 
 /** review-role binding (review-role registration design §4): an entry listing
- * the `review` role must cite a `review-cert/v1` record that PARSES and
+ * the `review` role must cite a `review-cert/v2` record that PARSES and
  * RECOMPUTES to zero violations for this entry's (provider, model). Same
  * shape as {@link assertSynthesizeCertBinding}: the recompute lives in the
  * shared core-runtime module, this function only does the repo I/O; binding is
@@ -264,13 +265,19 @@ async function assertReviewCertBinding(
           console.warn(
             `[check:supported-models] WARN: ${entry.provider}/${entry.model} cites a FAILING review-cert record at ${ref} alongside its binding record`,
           );
+        } else {
+          for (const disclosure of reviewCertQualityDisclosures(record)) {
+            console.warn(
+              `[check:supported-models] WARN: ${entry.provider}/${entry.model} review-cert quality disclosure at ${ref}: ${disclosure.message}`,
+            );
+          }
         }
       }
     }
   }
   if (bad.length > 0) {
     throw new Error(
-      "review entries are not bound to a passing review-cert/v1 record:\n" +
+      "review entries are not bound to a passing review-cert/v2 record:\n" +
         bad.map((m) => `  - ${m}`).join("\n"),
     );
   }

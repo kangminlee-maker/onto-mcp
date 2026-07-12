@@ -90,6 +90,7 @@ interface UnitResult {
   failure_message?: string | null;
   attempt_count?: number | null;
   recovery?: string | null;
+  resubmit_applied?: boolean;
   packet_bytes?: number | null;
   output_bytes?: number | null;
   input_tokens?: number | null;
@@ -1258,6 +1259,15 @@ function salvagedUnitIds(units: UnitResult[]): string[] {
     .map((unit) => unit.unit_id as string);
 }
 
+/** Units whose dispatch used the resubmit error-spec channel (설계 A
+ * corrective retry) — marker set by the runner's retry loop, mirrors the
+ * salvaged split above (review-cert/v2 disclosure source). */
+function resubmitAppliedUnitIds(units: UnitResult[]): string[] {
+  return units
+    .filter((unit) => unit.resubmit_applied === true && unit.unit_id)
+    .map((unit) => unit.unit_id as string);
+}
+
 function failureKindCounts(units: UnitResult[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const unit of units) {
@@ -1565,6 +1575,7 @@ async function collectRunSummary(args: {
   );
   const units = unitsFromExecution(execution);
   const salvaged = salvagedUnitIds(units);
+  const resubmitApplied = resubmitAppliedUnitIds(units);
   const packetBytes = units.map((unit) => unit.packet_bytes);
   const outputBytes = units.map((unit) => unit.output_bytes);
   const maxPacketBytes = Math.max(0, ...packetBytes.map((value) => value ?? 0));
@@ -1605,6 +1616,8 @@ async function collectRunSummary(args: {
     total_attempt_count: sumNumbers(units.map((unit) => unit.attempt_count)),
     salvaged_unit_count: salvaged.length,
     salvaged_unit_ids: salvaged,
+    resubmit_applied_unit_count: resubmitApplied.length,
+    resubmit_applied_unit_ids: resubmitApplied,
     failure_kind_counts: failureKindCounts(units),
     unit_summaries: units.map(unitSummary),
     review_profile: manifest.review_execution_profile,

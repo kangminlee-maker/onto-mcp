@@ -69,7 +69,7 @@ export type SupportedModelRole = (typeof SUPPORTED_MODEL_ROLES)[number];
 export const CONTRACTED_ROLES: readonly SupportedModelRole[] = [
   "author",
   "semantic_map_synthesize",
-  // Evidence contract: review-cert/v1 (2026-07-11 review-role registration
+  // Evidence contract: review-cert/v2 (2026-07-11 review-role registration
   // design §4) — per-check pass-rate vs a contemporaneous baseline arm,
   // absolute core-check floors, pinned check universe, R7 human curation.
   "review",

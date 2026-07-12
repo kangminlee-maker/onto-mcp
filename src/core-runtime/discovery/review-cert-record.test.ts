@@ -4,10 +4,13 @@ import {
   parseReviewCertRecord,
   REVIEW_CERT_ARMS,
   REVIEW_CERT_CONTRACT,
+  REVIEW_CERT_CORE_CHECKS,
   REVIEW_CERT_CORE_CHECK_FLOOR,
   type ReviewCertRecord,
   type ReviewCertRun,
   reviewCertBindingViolations,
+  reviewCertQualityDisclosures,
+  reviewCertResubmitDisclosure,
   validateReviewCertRecord,
 } from "./review-cert-record.js";
 import { SEMANTIC_QUALITY_GATE_CHECK_IDS } from "../review/semantic-quality-gate.js";
@@ -36,6 +39,7 @@ function okRun(
     completion: "ok",
     units_total: UNITS_TOTAL,
     units_completed: UNITS_TOTAL,
+    resubmit_applied_unit_count: 0,
     checks: fullChecks(failing),
   };
 }
@@ -74,7 +78,7 @@ function passingRecord(): ReviewCertRecord {
       check_universe: [...SEMANTIC_QUALITY_GATE_CHECK_IDS],
       issue_artifacts_provided: true,
     },
-    run_controls: { salvage_enabled: false, resubmit_enabled: false },
+    run_controls: { salvage_enabled: false, resubmit_enabled: true },
     runs,
     declared_aggregates: {
       per_fixture_check: FIXTURES.flatMap((fixture_id) =>
@@ -207,40 +211,44 @@ describe("review-cert record recompute", () => {
     expect(codes(validateReviewCertRecord(stray))).toContain("row_outside_manifest");
   });
 
-  it("rejects a candidate rate below the baseline rate (metric_regression)", () => {
+  it("discloses a non-core regression without rejecting the record", () => {
     const record = clone(passingRecord());
-    // One candidate rep fails a non-core check on fixture 0 → rate 2/3 < 1.
+    // False-positive restraint is useful evidence, but the main context
+    // re-verifies surfaced issues before action, so it is not a hard gate.
     const target = record.runs.find(
       (run) => run.arm === "candidate" && run.fixture_id === FIXTURES[0] && run.rep === 1,
     )!;
-    target.checks = fullChecks(["actionability"]);
+    target.checks = fullChecks(["false_materiality_guard"]);
     redeclareAggregates(record);
-    const found = validateReviewCertRecord(record);
-    expect(codes(found)).toContain("metric_regression");
-    expect(codes(found)).not.toContain("core_check_floor");
+    expect(validateReviewCertRecord(record)).toEqual([]);
+    expect(record.declared_aggregates.quality_pass).toBe(true);
+    expect(codes(reviewCertQualityDisclosures(record))).toEqual(["metric_regression"]);
   });
 
-  it("enforces the absolute core-check floor even when the baseline is flaky", () => {
+  it("requires every completed candidate run to preserve the recall spine", () => {
     const record = clone(passingRecord());
-    // Baseline collapses on material_issue_recall (rate 0) — binary parity
-    // would waive the check entirely; the absolute floor must still bite when
-    // the candidate also drops below it (1/3 < 2/3).
+    expect(REVIEW_CERT_CORE_CHECKS).toEqual([
+      "material_issue_recall",
+      "artifact_material_issue_recall",
+      "final_result_material_issue_recall",
+      "grounding",
+    ]);
+    expect(REVIEW_CERT_CORE_CHECK_FLOOR).toBe(1);
+    // Even a flaky baseline cannot waive one observed silent candidate miss.
     for (const run of record.runs) {
       if (run.arm === "baseline" && run.fixture_id === FIXTURES[0]) {
-        run.checks = fullChecks(["material_issue_recall"]);
+        run.checks = fullChecks(["artifact_material_issue_recall"]);
       }
     }
     const candidateRuns = record.runs.filter(
       (run) => run.arm === "candidate" && run.fixture_id === FIXTURES[0],
     );
-    candidateRuns[0]!.checks = fullChecks(["material_issue_recall"]);
-    candidateRuns[1]!.checks = fullChecks(["material_issue_recall"]);
+    candidateRuns[0]!.checks = fullChecks(["artifact_material_issue_recall"]);
     redeclareAggregates(record);
     record.declared_aggregates.quality_pass = false;
     const found = validateReviewCertRecord(record);
     expect(codes(found)).toContain("core_check_floor");
-    // candidate 1/3 >= baseline 0 → no regression; the floor is what bites.
-    expect(codes(found)).not.toContain("metric_regression");
+    expect(reviewCertQualityDisclosures(record)).toEqual([]);
   });
 
   it("rejects declared aggregates that do not recompute", () => {
@@ -258,6 +266,37 @@ describe("review-cert record recompute", () => {
     const record = clone(passingRecord());
     record.arm_model.candidate = { provider: "openai", model: "gpt-5.6-terra" };
     expect(codes(validateReviewCertRecord(record))).toContain("arm_model_mismatch");
+  });
+});
+
+describe("reviewCertResubmitDisclosure", () => {
+  it("separates ok-row usage from not_run firings, per arm, non-vacuously", () => {
+    const record = clone(passingRecord());
+    // candidate: one ok row used resubmit on 2 units; one not_run row fired 3.
+    const candidateRows = record.runs.filter((run) => run.arm === "candidate");
+    expect(candidateRows.length).toBeGreaterThan(0); // non-vacuous subject
+    candidateRows[0]!.resubmit_applied_unit_count = 2;
+    record.runs.push({
+      arm: "candidate",
+      fixture_id: candidateRows[0]!.fixture_id,
+      rep: 99,
+      completion: "not_run",
+      units_total: 1, // harness placeholder — must NOT pollute the ok denominator
+      units_completed: 0,
+      resubmit_applied_unit_count: 3,
+      checks: [],
+    });
+    const disclosures = reviewCertResubmitDisclosure(record);
+    expect(disclosures.map((d) => d.subject_id).sort()).toEqual(["baseline", "candidate"]);
+    const candidate = disclosures.find((d) => d.subject_id === "candidate")!;
+    const okUnits = candidateRows.reduce((sum, run) => sum + run.units_total, 0);
+    expect(candidate.message).toContain(`resubmit applied on 2/${okUnits} units`);
+    expect(candidate.message).toContain("additionally fired 3 unit(s)");
+    // zero usage is still a claim, not an omission
+    const baseline = disclosures.find((d) => d.subject_id === "baseline")!;
+    expect(baseline.message).toContain("resubmit applied on 0/");
+    // NEVER part of the blocking recompute
+    expect(validateReviewCertRecord(record).map((v) => v.code)).not.toContain("resubmit_usage");
   });
 });
 
@@ -293,7 +332,7 @@ describe("review-cert binding (G7)", () => {
       supportedModelKeys: SUPPORTED,
     });
     expect(violations.length).toBe(1);
-    expect(violations[0]!.message).toMatch(/cites no review-cert\/v1 record/);
+    expect(violations[0]!.message).toMatch(/cites no review-cert\/v2 record/);
   });
 
   it("rejects a record certifying a different model than the citing entry", () => {

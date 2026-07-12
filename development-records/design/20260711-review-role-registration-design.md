@@ -1,10 +1,12 @@
 # review role 등록 구조 설계 — author-role 순환 해소 (INV-MODEL-1 확장)
 
-- 상태: **설계 v2 owner 승인 완료 (2026-07-12)**. O1~O7 권고안 채택. 구조 단계 1~4는 현재
-  구현을 승인된 설계의 실현으로 채택하고, 진행 중인 Sol cert run은 기존 `max-attempts=12` 경계 안에서
-  완료까지 허용한다. Fable cert spend는 Sol 결과와 R7 판단 뒤 별도 결정한다. v1 → v2: 독립 적대
+- 상태: **설계 v3 owner 승인 완료 (2026-07-12)**. O1~O7 권고안 채택 후 O5를 recall-first
+  비대칭 게이트로 교정했다. 구조 단계 1~4는 현재
+  구현을 승인된 설계의 실현으로 채택했다. Sol cert는 support floor 미달로 종료됐고,
+  후속 Fable cert가 별도 승인되어 진행 중이다. v1 → v2: 독립 적대
   리뷰 2렌즈(코드접지·설계공격)의 material 9건 반영 — 핵심은 quality 축 재설계(이진 parity 폐기),
-  witness 신규 기계 인정, R7 큐레이션 복원.
+  witness 신규 기계 인정, R7 큐레이션 복원. v2 → v3: false positive는 비차단 disclosure,
+  알려진 이슈의 silent miss는 recall spine 3/3 하드 실패로 재배치.
 - 날짜: 2026-07-11
 - 선행: `20260704-inv-model-1-role-aware-design.md` (role-aware v4), B4/B5 synthesize-cert 선례
 - 관련 커밋: 5afae90(luna 인증), d7eb9f9(synthesize seat 승격)
@@ -18,8 +20,8 @@ fail-closed 기본값인 `author`(golden 전체 파이프라인 인증)를 요�
 없어 등록 경로 자체가 부재하다.
 
 **완료 조건(설계 단계)**: 옵션 비교 + 권고안의 개념 설계·증거 계약·게이트 진화·구현
-순서가 확정되고 owner가 승인한다. 2026-07-12 충족. 구조 구현과 현재 Sol cert run은 승인됐으며,
-Fable cert run은 별도 spend trigger다.
+순서가 확정되고 owner가 승인한다. 2026-07-12 충족. 구조 구현과 Sol/Fable cert spend는
+각각 승인됐으며, 모델 등록은 passing record와 R7 판단을 기다린다.
 
 ## 1. 코드 근거 재확인 (2026-07-11, HEAD d7eb9f9; v2에서 F5 정정·F9 보강·F10~F16 추가)
 
@@ -76,7 +78,7 @@ runtime gate가 없어 uncommitted settings로 벤치 실행은 가능하다. �
   의존 사실이므로 1단계에서 **diff/테스트로 증명**하고, 미래 `roles:[author]` 엔트리는
   review seat에서 valid→invalid로 플립됨을 계약 주석에 명기한다.
 
-## 4. review-cert/v1 증거 계약 (v2 재설계)
+## 4. review-cert/v1 증거 계약 (v3 recall-first 교정)
 
 B4 선례의 **최종 확정 경계**(v4 §13.3: 결정론 게이트 = 구조·일관성·집계만, candidate
 품질·변별 실효·정직성 = **R7 사람 큐레이션**)를 그대로 준수한다. v1의 "run당 이진
@@ -87,15 +89,22 @@ parity"는 F12로 공허가 실증되어 폐기.
   `retry.salvage.enabled=false`·`retry.resubmit.enabled=false`를 **핀**하고 record가
   설정 핀을 증명(rescue 채널로 타 모델이 완주에 기여하는 오염 차단). transport 손실의
   정직 not_run 처리는 B4 89/90 선례 준용.
-- **quality 축 (재설계)**: 동시대 **baseline arm**(현행 shipping 모델, registry 등록
-  모델만; 동일 reps×fixtures — F16 비용 ≈2× 명시) 대비, **check별 pass-rate 집계 비교**:
-  fixture×check마다 후보 pass-rate ≥ baseline pass-rate (B4의 decisive-rows mean 준용).
-  추가로 **core check 절대 floor** — `material_issue_recall`,
-  `final_result_material_issue_recall`, `grounding`은 baseline 성적과 무관하게 후보
-  pass-rate 절대 하한을 요구(F12의 "baseline 실패로 핵심 check 면제" 봉쇄; floor 값은
-  O5). rep 집계 semantics는 이 rate 정의로 확정(any/all 이진 비교 아님).
-- **check universe 핀 (M-2)**: record가 gate 모듈 버전(sha)·check_id 전집합·
-  `issueArtifacts` 제공 여부를 핀. **12종 전부 방출된 run만 유효 rep**(7/11-check run은
+  **[정정 2026-07-12]** M-1의 양채널-OFF 핀은 review-cert/v1 한정. v2는
+  `salvage=false·resubmit=true`를 계약으로 선언하고(제품 실경로 측정 — 오염
+  논거는 타-모델 개입인 salvage에만 해당, resubmit은 동일 후보의 정보형
+  재시도) 사용량을 비차단 공개 지표로 기록한다. 근거·명세:
+  20260712-review-cert-v2-design.md.
+- **quality 축 (v3 비대칭 게이트)**: 동시대 **baseline arm**(현행 shipping 모델, registry
+  등록 모델만; 동일 reps×fixtures — F16 비용 ≈2× 명시)의 check별 pass-rate는 모두
+  record에 보존한다. 차단 권한은 알려진 이슈가 메인 컨텍스트의 재검증 전에 유실되지
+  않는지를 보는 recall spine에만 둔다: `material_issue_recall`,
+  `artifact_material_issue_recall`, `final_result_material_issue_recall`, `grounding`의 후보
+  pass-rate가 각 fixture에서 **1.0(완료 run 3/3)** 이어야 한다. 그 밖의
+  candidate<baseline regression(`false_materiality_guard` 포함)은 비차단 quality
+  disclosure로 R7에 전달한다. 과도한 false positive 여부는 자동 lexical 판정이 아니라
+  R7 사람이 검토한다. 새 judge·artifact·schema는 추가하지 않는다.
+- **check universe 핀 (M-2)**: record가 check_id 전집합과 `issueArtifacts` 제공 여부를
+  핀한다. **12종 전부 방출된 run만 유효 rep**(7/11-check run은
   rep으로 불인정). G7 재계산 = record에 임베드된 per-rep check rows에서 rate·floor
   **집계 재계산**(B5의 judgement-rows 재계산 준용) + universe 핀 검증.
 - **R7 큐레이션 (H-2)**: 결정론 게이트 통과 후, candidate 품질·변별 실효·정직성의 최종
@@ -122,14 +131,14 @@ parity"는 F12로 공허가 실증되어 폐기.
 | 단계 | 내용 | 검증 |
 |---|---|---|
 | 1 | 어휘 `review` + 매핑(§3 경계 핀) + CONTRACTED_ROLES + zod (INVARIANT-CHANGE: INV-MODEL-1 커밋) | **구현 완료** · typecheck · 매핑 단위테스트(양성/음성 + 미지 unit 경로가 author 유지되는 fail-closed 테스트) · **현행 registry G7 no-op 증명**(L-1) · G4 |
-| 2 | review-cert record 모듈(파서·validate·rate/floor 재계산·universe 핀) — core-runtime 공유 | **구현 완료** · 단위테스트 + 고의 위반 fixture(음성대조: floor 미달·universe 불일치·rescue 오염) |
+| 2 | review-cert record 모듈(파서·validate·recall-first floor 재계산·universe 핀) — core-runtime 공유 | **v3 구현 완료** · 음성대조: recall 1회 누락은 실패, false-materiality regression은 disclosure, universe 불일치·rescue 오염은 실패 |
 | 3 | G7 `assertReviewCertBinding`(존재형) 확장 | **구현 완료** · G7 실행 + 고의 실패 record 음성대조 |
 | 4 | cert 하니스: baseline+candidate 2-arm 러너(F16 신규) + spawn-인자 witness capture(H-1 신규) + review 전용 projection | **구현 완료** · mock 리허설(B4 [D] 선례) + witness 음성대조(선언≠capture 시 fail-loud) |
-| 5 | cert run(Sol 우선) + **R7 큐레이션** + registry 등록 커밋 | **Sol run 진행 승인** · rate/floor 게이트 + witness guard + G7 + R7 기록. Fable은 별도 spend 결정 |
+| 5 | cert run + **R7 큐레이션** + registry 등록 커밋 | **진행 중** · Sol은 support floor 미달로 종료, Fable live cert 진행. passing record가 생겨도 R7 전 자동 등록하지 않음 |
 | — | 각 단계 종료마다 해당 게이트 + 다중렌즈 교차리뷰(material 0까지) | 가이드 Review Loop |
 
-**redesign trigger (v2 교체)**: ① baseline 플레이크가 커서(rep 증가로도 rate 비교가
-판별력 상실) quality 축이 노이즈 지배로 남으면 §4 재설계(reps 증액 또는 check 가중 재검토).
+**redesign trigger (v3 교체)**: ① recall spine lexical check가 실제 silent miss와 반복적으로
+불일치하면 §4를 재설계한다(그 전에는 자동 semantic judge를 추가하지 않는다).
 ② topology별 유닛 구성 분기로 "완주" 정의가 갈라지면 support 축 재정의. ③ 구현 중 review
 seat 경로가 F7 목록 밖에서 발견되면 매핑 재검토(경계 확장 → stop-and-ask).
 
@@ -141,7 +150,7 @@ seat 경로가 F7 목록 밖에서 발견되면 매핑 재검토(경계 확장 �
 | O2 | review runtime enforcement(라이브 경계 gate) 포함 여부 | **제외 승인**(N3 유지 — 포함 시 review용 bench allowance 결합 필요) |
 | O3 | cert run spend 범위 — **(v2) baseline 동시대 재실행 포함 ≈2×**(후보 arm + baseline arm, 각 ≥3 reps × 2 fixtures) | **구조 1~4 + 현재 Sol run 승인**. 현재 run은 기존 `max-attempts=12` 상한을 유지하고 partial evidence를 resume한다. 새 모델 run은 별도 spend 결정 |
 | O4 | fable5(anthropic) 동시 cert run 여부 | **Sol 우선 순차 원칙 승인**. Fable 실행 자체는 Sol R7 뒤 별도 결정 |
-| O5 | **(v2)** core check 절대 floor 값(material_issue_recall 등 3종) | **후보 pass-rate ≥ 2/3 승인**(reps=3 기준 2회 이상) |
+| O5 | **(v3 수정)** false positive와 silent miss의 차단 권한 | **recall spine 4종은 후보 pass-rate 1.0, 나머지 regression은 비차단 disclosure 승인** |
 | O6 | **(v2)** nested-workers 커버리지: main-workers 핀 cert의 한계 수용 vs nested arm 추가 | **한계 수용 승인** — nested teamlead는 grandfathered 모델 유지 |
 | O7 | **(v2)** worker stdout 메타(model/effort echo) 확장 여부 | **제외 승인** — 하니스 spawn-인자 capture를 witness authority로 사용 |
 
@@ -149,11 +158,21 @@ seat 경로가 F7 목록 밖에서 발견되면 매핑 재검토(경계 확장 �
 
 - 이 승인은 `INV-MODEL-1`의 `review` role과 `review-cert/v1` 증거 계약, G7 binding, main-workers
   cert 하니스에 한정된다. review runtime gate, nested arm, worker stdout 계약은 승인하지 않는다.
-- registry 등록은 cert record의 결정론 gate 통과만으로 자동 수행하지 않는다. Sol 결과를 R7 사람이
+- registry 등록은 cert record의 결정론 gate 통과만으로 자동 수행하지 않는다. passing cert를 R7 사람이
   큐레이션한 뒤 별도 등록 커밋으로 진행한다.
 - 구조 단계 1~4와 cert resume 구현 커밋이 정식 owner 승인보다 먼저 생성된 사실을 확인했다. 2026-07-12
   owner가 실코드 상태와 O1~O7 결과를 확인하고 현재 구현을 채택했다. 이 순서 역전은 향후 보호 변경의
   선례가 아니며, 다음 `INV-MODEL-1` 확장은 구현 전에 owner 결정을 기록한다.
+
+### 6.2 v3 owner 교정 — 2026-07-12
+
+- 모든 surfaced issue는 작업을 수행하는 메인 컨텍스트가 다시 검증하므로, 과도하지 않은
+  false positive는 registration blocker가 아니다.
+- silent miss는 재검증 기회 자체를 없애므로 recall을 우선한다.
+- 이 결정은 `material issue` predicate를 바꾸지 않는다. cert의 quality signal 중 무엇이
+  G7을 차단하는지만 바꾸며, 기존 12-check rows는 모두 보존한다.
+- `review-cert/v1`을 인용하는 registry entry가 아직 없으므로 첫 채택 전 정책 교정으로
+  적용하고 contract id와 record schema는 유지한다.
 
 ## 7. 스코프 제외
 
@@ -164,6 +183,11 @@ seat 경로가 F7 목록 밖에서 발견되면 매핑 재검토(경계 확장 �
 - worker stdout 메타데이터 확장(O7 기본 제외)
 
 ## 8. 리뷰 이력
+
+- v2 → v3 (2026-07-12): 실제 Sol 결과를 재검토해 lexical
+  `false_materiality_guard`에 semantic registration authority를 부여한 것이 목적과
+  맞지 않음을 확인했다. owner의 손실 비대칭 결정에 따라 recall 3단계+grounding을
+  3/3 hard gate로 강화하고 나머지 regression을 disclosure로 전환했다.
 
 - v1 → v2 (2026-07-11): 독립 2렌즈 리뷰(코드접지 lens: material 1 — F5 존재형 정정 /
   적대 lens: material 8 — B-1 이진 parity 공허(F12), H-1 witness 재사용 불가(F13),

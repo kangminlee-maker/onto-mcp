@@ -17,11 +17,11 @@ import { SynthesizeCertDispatchConfigSchema } from "./synthesize-cert-record.js"
 //    losses are recorded honestly as `not_run` and do not count);
 //    rescue channels (salvage transcription / resubmit) are PINNED OFF so no
 //    other model can contribute to the candidate's completion evidence.
-//  - quality: per fixture × check, the candidate's PASS-RATE over its
-//    completed runs must be >= the contemporaneous baseline arm's rate
-//    (binary per-run parity is noise-dominated — committed gpt-5.5 records
-//    fail core checks stochastically), AND core checks additionally carry an
-//    absolute floor the baseline cannot waive.
+//  - quality: the recall spine must pass on every completed candidate run so
+//    a known material issue is not silently lost before the main context can
+//    re-verify it. Other candidate<baseline regressions remain visible as
+//    non-blocking quality disclosures; false-positive restraint is useful but
+//    does not own registration authority.
 //  - universe pin: every completed run must emit the FULL gate check universe
 //    (the gate emits a subset when issue artifacts are absent — a shrunken
 //    universe is a violation, not a smaller comparison).
@@ -29,7 +29,13 @@ import { SynthesizeCertDispatchConfigSchema } from "./synthesize-cert-record.js"
 // judgment beyond these aggregates is R7 human curation, not runtime logic.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const REVIEW_CERT_CONTRACT = "review-cert/v1";
+/** v2 (20260712-review-cert-v2-design.md): measures the PRODUCT path —
+ * run_controls must pin resubmit ON (error-spec corrective retry) and salvage
+ * OFF; per-row resubmit usage is recorded and surfaced as a NON-blocking
+ * disclosure (reviewCertResubmitDisclosure). v1 records (raw-measurement pin,
+ * both channels OFF) no longer parse as cert candidates — the only two v1
+ * records on disk are uncited failure evidence. */
+export const REVIEW_CERT_CONTRACT = "review-cert/v2";
 
 export const REVIEW_CERT_ARMS = ["baseline", "candidate"] as const;
 export type ReviewCertArm = (typeof REVIEW_CERT_ARMS)[number];
@@ -38,15 +44,16 @@ export type ReviewCertArm = (typeof REVIEW_CERT_ARMS)[number];
 export const REVIEW_CERT_MIN_REPS = 3;
 export const REVIEW_CERT_MIN_FIXTURES = 2;
 
-/** Core checks (owner decision O5): the candidate must clear an ABSOLUTE
- * pass-rate floor on these regardless of the baseline's own rate — a flaky
- * baseline must not waive the recall/grounding spine of the review contract. */
+/** Recall-first core (owner revision 2026-07-12): the candidate must preserve
+ * the known issue in the source artifact, ReviewRecord, and final projection,
+ * with enough grounding for the main context to re-verify it. */
 export const REVIEW_CERT_CORE_CHECKS = [
   "material_issue_recall",
+  "artifact_material_issue_recall",
   "final_result_material_issue_recall",
   "grounding",
 ] as const;
-export const REVIEW_CERT_CORE_CHECK_FLOOR = 2 / 3;
+export const REVIEW_CERT_CORE_CHECK_FLOOR = 1;
 
 const IdSchema = z.string().min(1).regex(/^\S+$/, "id must not contain whitespace");
 const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/, "expected a lowercase sha256 hex");
@@ -83,6 +90,11 @@ const ReviewCertRunSchema = z
     completion: z.enum(["ok", "not_run"]),
     units_total: z.number().int().min(1),
     units_completed: z.number().int().min(0),
+    /** Units in this run whose dispatch used the resubmit error-spec channel
+     * (corrective retry after a whitelist rejection). Recorded on ok AND
+     * not_run rows (diagnostic); never participates in ok/floor judgments —
+     * surfaced only via the reviewCertResubmitDisclosure projection. */
+    resubmit_applied_unit_count: z.number().int().min(0),
     checks: z.array(RunCheckSchema),
   })
   .strict();
@@ -157,7 +169,6 @@ export interface ReviewCertViolation {
     | "check_emission_incomplete"
     | "rescue_channel_not_pinned"
     | "core_check_floor"
-    | "metric_regression"
     | "aggregate_mismatch"
     | "arm_model_mismatch"
     | "baseline_not_supported"
@@ -234,13 +245,20 @@ export interface ReviewCertAggregateRow {
   candidate_pass_rate: number;
 }
 
+export interface ReviewCertQualityDisclosure {
+  code: "metric_regression" | "resubmit_usage";
+  message: string;
+  subject_id: string;
+}
+
 /**
  * The ONE aggregate computation both the validator (recompute/compare) and the
  * harness assembler (declare) consume — a second rate implementation could
  * silently disagree with the gate. Fixture×check pairs where either arm has no
  * completed run are OMITTED (rep_floor reports that state separately).
- * `quality_pass` = no candidate<baseline regression AND every core check meets
- * the absolute floor.
+ * `quality_pass` = every recall-first core check meets the absolute floor.
+ * Candidate<baseline regressions outside that decisive spine are retained in
+ * the aggregate rows and projected by {@link reviewCertQualityDisclosures}.
  */
 export function computeReviewCertAggregates(
   runs: readonly ReviewCertRun[],
@@ -259,9 +277,6 @@ export function computeReviewCertAggregates(
         baseline_pass_rate: baselineRate,
         candidate_pass_rate: candidateRate,
       });
-      if (candidateRate < baselineRate && !ratesEqual(candidateRate, baselineRate)) {
-        qualityPass = false;
-      }
       if (
         (REVIEW_CERT_CORE_CHECKS as readonly string[]).includes(checkId) &&
         candidateRate < REVIEW_CERT_CORE_CHECK_FLOOR &&
@@ -272,6 +287,58 @@ export function computeReviewCertAggregates(
     }
   }
   return { per_fixture_check: rows, quality_pass: qualityPass };
+}
+
+/** Non-blocking comparison surface for R7. These rows remain useful signals,
+ * but they cannot reject a model whose recall spine is intact; the main
+ * context re-verifies surfaced issues before acting on them. */
+/** v2 non-blocking resubmit-usage disclosure — same regime as
+ * reviewCertQualityDisclosures: NEVER stored, NEVER part of
+ * validateReviewCertRecord; consumers surface it as WARN/info. ok rows and
+ * not_run rows are aggregated SEPARATELY: the ok-row rate is usage that
+ * contributed to real completions (denominator = ok-row units_total sum — no
+ * not_run placeholder pollution); the not_run count is diagnostic "fired but
+ * did not save the run" volume. Always emits one entry per arm, including
+ * zero usage (a zero is a claim, not an omission). */
+export function reviewCertResubmitDisclosure(
+  record: ReviewCertRecord,
+): ReviewCertQualityDisclosure[] {
+  return REVIEW_CERT_ARMS.map((arm) => {
+    const rows = record.runs.filter((run) => run.arm === arm);
+    const okRows = rows.filter((run) => run.completion === "ok");
+    const okApplied = okRows.reduce((sum, run) => sum + run.resubmit_applied_unit_count, 0);
+    const okUnits = okRows.reduce((sum, run) => sum + run.units_total, 0);
+    const notRunApplied = rows
+      .filter((run) => run.completion === "not_run")
+      .reduce((sum, run) => sum + run.resubmit_applied_unit_count, 0);
+    return {
+      code: "resubmit_usage" as const,
+      message:
+        `arm ${arm}: resubmit applied on ${okApplied}/${okUnits} units across ${okRows.length} ok run(s)` +
+        ` (not_run runs additionally fired ${notRunApplied} unit(s))`,
+      subject_id: arm,
+    };
+  });
+}
+
+export function reviewCertQualityDisclosures(
+  record: ReviewCertRecord,
+): ReviewCertQualityDisclosure[] {
+  const fixtureIds = [...new Set(record.fixtures.map((fixture) => fixture.fixture_id))];
+  return computeReviewCertAggregates(record.runs, fixtureIds).per_fixture_check
+    .filter((row) =>
+      row.candidate_pass_rate < row.baseline_pass_rate &&
+      !ratesEqual(row.candidate_pass_rate, row.baseline_pass_rate)
+    )
+    .map((row) => {
+      const subject = `${row.fixture_id}/${row.check_id}`;
+      return {
+        code: "metric_regression" as const,
+        message:
+          `${subject}: candidate pass-rate ${row.candidate_pass_rate.toFixed(4)} < baseline ${row.baseline_pass_rate.toFixed(4)}`,
+        subject_id: subject,
+      };
+    });
 }
 
 /**
@@ -323,12 +390,14 @@ export function validateReviewCertRecord(
     );
   }
 
-  // Rescue channels pinned OFF (design §4 M-1): another model must not be able
-  // to contribute to the candidate's completion evidence.
-  if (record.run_controls.salvage_enabled || record.run_controls.resubmit_enabled) {
+  // v2 run_controls pin (20260712-review-cert-v2-design.md §1): salvage stays
+  // OFF (another model must not contribute to completion evidence), resubmit
+  // must be ON (the cert measures the product path — error-spec corrective
+  // retries by the SAME candidate model).
+  if (record.run_controls.salvage_enabled || !record.run_controls.resubmit_enabled) {
     push(
       "rescue_channel_not_pinned",
-      `run_controls must pin salvage_enabled=false and resubmit_enabled=false (got salvage=${record.run_controls.salvage_enabled}, resubmit=${record.run_controls.resubmit_enabled})`,
+      `run_controls must pin salvage_enabled=false and resubmit_enabled=true (got salvage=${record.run_controls.salvage_enabled}, resubmit=${record.run_controls.resubmit_enabled})`,
     );
   }
 
@@ -415,8 +484,9 @@ export function validateReviewCertRecord(
     }
   }
 
-  // Quality axis: recompute rates; candidate >= baseline per fixture × check,
-  // core checks also >= the absolute floor; declared aggregates must match.
+  // Quality axis: recompute rates; the recall-first core must meet its absolute
+  // floor. All other candidate-vs-baseline rates stay in the record for R7
+  // disclosure but do not own deterministic registration authority.
   const declaredByKey = new Map(
     record.declared_aggregates.per_fixture_check.map((row) => [
       `${row.fixture_id}\u0000${row.check_id}`,
@@ -443,16 +513,6 @@ export function validateReviewCertRecord(
       push(
         "aggregate_mismatch",
         `declared aggregate for ${subject} is missing or does not recompute (baseline=${row.baseline_pass_rate.toFixed(4)}, candidate=${row.candidate_pass_rate.toFixed(4)})`,
-        subject,
-      );
-    }
-    if (
-      row.candidate_pass_rate < row.baseline_pass_rate &&
-      !ratesEqual(row.candidate_pass_rate, row.baseline_pass_rate)
-    ) {
-      push(
-        "metric_regression",
-        `${subject}: candidate pass-rate ${row.candidate_pass_rate.toFixed(4)} < baseline ${row.baseline_pass_rate.toFixed(4)}`,
         subject,
       );
     }
@@ -498,8 +558,9 @@ export function reviewCertBindingViolations(args: {
   };
   evidenceByRef: ReadonlyMap<string, unknown>;
   /** Baseline anchoring (B5 precedent): the baseline arm must itself be a
-   * certified supported model, and must not be the candidate itself (a
-   * self-baseline makes candidate>=baseline a model-vs-itself comparison). */
+   * certified supported model, and must not be the candidate itself. The
+   * comparison is disclosure-only, but an unanchored/self baseline would make
+   * that disclosure misleading. */
   supportedModelKeys: ReadonlySet<string>;
 }): ReviewCertViolation[] {
   const { entry, evidenceByRef, supportedModelKeys } = args;
@@ -546,7 +607,7 @@ export function reviewCertBindingViolations(args: {
       violations.push({
         code: "baseline_is_candidate",
         message:
-          `${ref} baseline arm ran ${baselineKey}, the SAME model as the candidate — candidate>=baseline would be a model-vs-itself comparison`,
+          `${ref} baseline arm ran ${baselineKey}, the SAME model as the candidate — quality disclosure would be a model-vs-itself comparison`,
         subject_id: entryId,
       });
       continue;
@@ -555,7 +616,7 @@ export function reviewCertBindingViolations(args: {
       violations.push({
         code: "baseline_not_supported",
         message:
-          `${ref} baseline arm ran ${baselineKey}, which is not a certified supported model — the candidate>=baseline check would rest on an unanchored baseline`,
+          `${ref} baseline arm ran ${baselineKey}, which is not a certified supported model — quality disclosure would rest on an unanchored baseline`,
         subject_id: entryId,
       });
       continue;

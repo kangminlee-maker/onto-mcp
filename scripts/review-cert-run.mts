@@ -92,6 +92,8 @@ import {
 import {
   parseReviewCertRecord,
   REVIEW_CERT_ARMS,
+  reviewCertQualityDisclosures,
+  reviewCertResubmitDisclosure,
   validateReviewCertRecord,
   type ReviewCertArm,
   type ReviewCertRun,
@@ -99,7 +101,7 @@ import {
 import { resolveClaudeBin } from "../src/core-runtime/llm/claude-bin.ts";
 import { defaultReviewRetrySettings } from "../src/core-runtime/discovery/settings-chain.ts";
 import { SEMANTIC_QUALITY_GATE_CHECK_IDS } from "../src/core-runtime/review/semantic-quality-gate.ts";
-import { benchmarkFixture } from "./review-pipeline-benchmark.ts";
+import { benchmarkFixture, settingsForCase } from "./review-pipeline-benchmark.ts";
 
 const ts = () => new Date().toISOString();
 const log = (m: string) => console.log(`[review-cert-run ${ts()}] ${m}`);
@@ -209,6 +211,31 @@ if (retryDefaults.salvage.enabled !== false || retryDefaults.resubmit.enabled !=
   );
 }
 log("run_controls pin: defaultReviewRetrySettings() has salvage/resubmit OFF (benchmark temp-project settings carry it explicitly; project layer beats user layer)");
+
+// v2 mechanical-ON assertion (design §5.3): the harness passes
+// --retry-resubmit unconditionally; verify the benchmark's settings builder
+// actually turns that into retry.resubmit.enabled=true — a silent knob
+// regression must fail HERE, not surface as an all-zero disclosure.
+{
+  const probeSettings = settingsForCase(
+    {
+      runs: 1, caseSelectors: ["all-medium"], model: "probe", provider: "openai",
+      auth: "oauth", baseEffort: "medium", baselineEffort: "low", candidateEffort: "xhigh",
+      sweepEfforts: [], sweepUnits: [], sweepAllUnits: false,
+      fixtureIds: ["review-pipeline-target-v1"], lensIds: [], keepTmp: false,
+      timeoutMs: 1000, unitSweepCandidateOnly: false, maxConcurrentLenses: 1,
+      retryResubmit: true,
+    } as never,
+    { case_id: "all-medium", label: "probe", profile_role: "candidate",
+      comparison_axis: "run-effort", base_effort: "medium", unit_efforts: {} } as never,
+  ) as { review?: { execution?: { retry?: { resubmit?: { enabled?: boolean } } } } };
+  if (probeSettings.review?.execution?.retry?.resubmit?.enabled !== true) {
+    throw new Error(
+      "review-cert-run: settingsForCase({retryResubmit:true}) did not yield retry.resubmit.enabled=true — the v2 contract cannot be dispatched. Fix the benchmark knob before certifying.",
+    );
+  }
+  log("v2 mechanical-ON: settingsForCase({retryResubmit:true}) yields retry.resubmit.enabled=true");
+}
 
 // ── out dir (--resume: continue INTO a prior run's dir — completed rows and
 // witness captures are reused verbatim; new attempts continue the per-key rep
@@ -528,6 +555,8 @@ interface BenchmarkRunLike {
   unit_count?: number;
   failed_unit_count?: number;
   salvaged_unit_ids?: string[];
+  resubmit_applied_unit_count?: number;
+  resubmit_applied_unit_ids?: string[];
   semantic_quality_gate?: {
     status?: string;
     checks?: Array<{ check_id: string; status: string }>;
@@ -564,6 +593,9 @@ async function runBenchmarkOnce(args: {
     "--auth", rehearsal ? "api_key" : args.arm.auth,
     "--output", outputPath,
     "--timeout-ms", String(timeoutMs),
+    // review-cert/v2: resubmit ON is the CONTRACT (both arms, always) — the
+    // cert measures the product path; salvage stays OFF via the defaults pin.
+    "--retry-resubmit",
     ...(rehearsal
       ? ["--executor-realization", "ts_inline_http", "--artifact-generation-realization", "semantic_mock"]
       : []),
@@ -647,6 +679,9 @@ function rowFromAttempt(args: {
   const unitCount = summary?.unit_count;
   const failedUnits = summary?.failed_unit_count;
   const salvaged = summary?.salvaged_unit_ids ?? [];
+  const resubmitApplied =
+    summary?.resubmit_applied_unit_ids?.length ??
+    summary?.resubmit_applied_unit_count ?? 0;
   if (summary !== null) {
     if (summary.status !== "completed" || summary.execution_status !== "completed") {
       reasons.push(`execution_status=${summary.execution_status ?? summary.status ?? "unknown"}`);
@@ -674,6 +709,7 @@ function rowFromAttempt(args: {
         completion: "ok",
         units_total: unitCount as number,
         units_completed: unitCount as number,
+        resubmit_applied_unit_count: resubmitApplied,
         checks: (summary!.semantic_quality_gate!.checks ?? []).map((check) => ({
           check_id: check.check_id as ReviewCertRun["checks"][number]["check_id"],
           status: check.status === "passed" ? "passed" : "failed",
@@ -695,6 +731,7 @@ function rowFromAttempt(args: {
       completion: "not_run",
       units_total: knownTotal,
       units_completed: knownCompleted,
+      resubmit_applied_unit_count: resubmitApplied,
       checks: [], // a lost/partial/rescued/short-universe run carries no check evidence
     },
     notOkReason: reasons.join("; "),
@@ -703,6 +740,9 @@ function rowFromAttempt(args: {
 
 // ── arm × fixture rep loop ───────────────────────────────────────────────────
 const progressPath = path.join(runsDir, "rows.progress.jsonl");
+/** v2 run_controls — single source for the record declaration, the per-row
+ * provenance stamp, and the resume mixing guard (design §5.4). */
+const RUN_CONTROLS = { salvage_enabled: false, resubmit_enabled: true } as const;
 const rows: ReviewCertRun[] = [];
 const okCounts = new Map<string, number>();
 // --resume seeding: prior rows (ok AND honest not_run) enter the record
@@ -717,9 +757,23 @@ if (opts["resume"] !== undefined) {
         `review-cert-run: --resume dir has no ${progressPath} — nothing to resume`,
       );
     });
-  for (const line of priorText.split("\n")) {
+  for (const [index, line] of priorText.split("\n").entries()) {
     if (line.trim().length === 0) continue;
-    const row = JSON.parse(line) as ReviewCertRun;
+    const parsedLine = JSON.parse(line) as ReviewCertRun & {
+      run_controls?: { salvage_enabled: boolean; resubmit_enabled: boolean };
+    };
+    // Provenance guard (design §5.4): a seeded row must have been generated
+    // under the SAME run_controls regime — a missing stamp (v1-era row) or a
+    // divergent one would mix generation mechanisms into one record.
+    if (
+      parsedLine.run_controls?.salvage_enabled !== RUN_CONTROLS.salvage_enabled ||
+      parsedLine.run_controls?.resubmit_enabled !== RUN_CONTROLS.resubmit_enabled
+    ) {
+      throw new Error(
+        `review-cert-run: resume row ${index + 1} carries run_controls=${JSON.stringify(parsedLine.run_controls ?? null)} but this run pins ${JSON.stringify(RUN_CONTROLS)} — refusing to mix rows from different contract regimes. Start a fresh --out instead.`,
+      );
+    }
+    const { run_controls: _stamp, ...row } = parsedLine;
     rows.push(row);
     const key = `${row.arm}/${row.fixture_id}`;
     if (row.completion === "ok") priorOk.set(key, (priorOk.get(key) ?? 0) + 1);
@@ -748,7 +802,7 @@ for (const arm of [baseline, candidate]) {
         summary: outcome.summary,
       });
       rows.push(row);
-      await fs.appendFile(progressPath, `${JSON.stringify(row)}\n`);
+      await fs.appendFile(progressPath, `${JSON.stringify({ ...row, run_controls: RUN_CONTROLS })}\n`);
       if (row.completion === "ok") {
         ok += 1;
         log(`${key}: attempt ${attempt} ok (${row.units_total} units, 12 checks)`);
@@ -846,7 +900,7 @@ const assembly = assembleReviewCertRecord({
   declaredReps: reps,
   fixtures: fixtureManifest,
   runs: rows,
-  runControls: { salvage_enabled: false, resubmit_enabled: false },
+  runControls: RUN_CONTROLS,
   issueArtifactsProvided: true, // the benchmark always feeds issueArtifacts into the gate
   reproductionCommand,
 });
@@ -871,6 +925,9 @@ const parsed = parseReviewCertRecord(roundTripped);
 const violations = parsed.record !== null
   ? validateReviewCertRecord(parsed.record)
   : parsed.violations;
+const qualityDisclosures = parsed.record !== null
+  ? [...reviewCertQualityDisclosures(parsed.record), ...reviewCertResubmitDisclosure(parsed.record)]
+  : [];
 
 const recordFileName = rehearsal ? "review-cert-record.rehearsal.json" : "review-cert-record.json";
 const recordPath = path.join(outDir, recordFileName);
@@ -879,7 +936,12 @@ await fs.writeFile(recordPath, `${JSON.stringify(assembly.record, null, 2)}\n`);
 for (const [key, ok] of okCounts) {
   log(`support: ${key} → ${ok}/${reps} completed reps`);
 }
-log(`aggregates: quality_pass=${assembly.record.declared_aggregates.quality_pass} over ${assembly.record.declared_aggregates.per_fixture_check.length} fixture×check rates`);
+log(`aggregates: recall_first_quality_pass=${assembly.record.declared_aggregates.quality_pass} over ${assembly.record.declared_aggregates.per_fixture_check.length} fixture×check rates`);
+for (const disclosure of qualityDisclosures) {
+  console.warn(
+    `[review-cert-run] QUALITY DISCLOSURE (non-blocking)${disclosure.subject_id ? ` [${disclosure.subject_id}]` : ""}: ${disclosure.message}`,
+  );
+}
 if (violations.length > 0) {
   console.error(`[review-cert-run] RECORD RECOMPUTE: ${violations.length} violation(s):`);
   for (const violation of violations) {

@@ -268,6 +268,13 @@ export interface ExecutionOutcome {
   semanticQualityEvidence?: ReviewSemanticQualityEvidence;
   /** Attempt-level recovery marker (opt-in submit salvage). */
   recovery?: "salvaged_submit";
+  /** True when ANY attempt of this dispatch ran with a resubmit error spec
+   * injected (설계 A corrective retry; incl. the attempt-0 structural
+   * pre-injection). Loop-scope accumulated: the spec fires on a FAILED
+   * iteration and the healed submit returns on the NEXT one, so per-attempt
+   * capture would systematically miss exactly the healed cases
+   * (review-cert/v2 disclosure source — 20260712-review-cert-v2-design §5.2). */
+  resubmitApplied?: true;
   /** True when this outcome came from the nested-workers batch WINDOW
    * (batch-ok, or a batch failure finalized under an explicit zero-retry
    * policy) rather than a directly-observed flat dispatch. The dispatch
@@ -2607,7 +2614,10 @@ async function invokeExecutor(
   return parseExecutorRunMetadata(stdout);
 }
 
-function toUnitExecutionResult(
+// Exported for the resubmit-marker falsifiability tests (review-cert/v2
+// §5.3): the outcome→unit-result projection is where the marker would be
+// silently dropped if the wiring regressed.
+export function toUnitExecutionResult(
   outcome: ExecutionOutcome,
 ): ReviewUnitExecutionResult {
   if (outcome.preservedResult) {
@@ -2630,6 +2640,7 @@ function toUnitExecutionResult(
     ...(outcome.attemptCount !== undefined
       ? { attempt_count: outcome.attemptCount }
       : {}),
+    ...(outcome.resubmitApplied ? { resubmit_applied: true } : {}),
     ...(outcome.packetBytes !== undefined
       ? { packet_bytes: outcome.packetBytes }
       : {}),
@@ -4094,6 +4105,7 @@ async function runSingleDispatchWithRetries(args: {
     dispatch,
     fallback: unitTimeoutMs,
   });
+  let resubmitApplied = false;
   for (let attempt = 0; attempt <= effectiveMaxRetries; attempt += 1) {
     attemptsUsed = attempt + 1;
     if (attempt === 0) {
@@ -4101,14 +4113,14 @@ async function runSingleDispatchWithRetries(args: {
       // 이 루프 밖에서 실패해 frozen salvage input만 남는다 — 그 구조적
       // 근거가 있으면 첫 flat 시도 전에 오류 명세를 주입해 blind 재실행을
       // 막는다. (스위치 OFF·미지원 output_format·freeze 부재 시 no-op)
-      await applyResubmitErrorSpec({
+      resubmitApplied = (await applyResubmitErrorSpec({
         dispatch,
         error: null,
         attempt: 0,
         reviewExecutionProfile,
         errorLogPath: executionPlan.error_log_path,
         executionPlan,
-      });
+      })) || resubmitApplied;
     }
     try {
       const executorMetadata = await invokeExecutor(
@@ -4137,6 +4149,7 @@ async function runSingleDispatchWithRetries(args: {
         startedAtMs,
         completedAtMs,
         attemptCount: attempt + 1,
+        ...(resubmitApplied ? { resubmitApplied: true as const } : {}),
         ...(executorMetadata !== undefined ? { executorMetadata } : {}),
         artifactGenerationRealization:
           executorMetadata?.artifact_generation_realization ??
@@ -4162,14 +4175,14 @@ async function runSingleDispatchWithRetries(args: {
             `error: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`,
           ],
         );
-        await applyResubmitErrorSpec({
+        resubmitApplied = (await applyResubmitErrorSpec({
           dispatch,
           error,
           attempt,
           reviewExecutionProfile,
           errorLogPath: executionPlan.error_log_path,
           executionPlan,
-        });
+        })) || resubmitApplied;
         if (dispatch.unit_kind === "synthesize") {
           await appendExecutionProgress(
             executionPlan.error_log_path,
@@ -4270,6 +4283,7 @@ async function runSingleDispatchWithRetries(args: {
           completedAtMs: Date.now(),
           attemptCount: attemptsUsed + 1,
           recovery: "salvaged_submit",
+          ...(resubmitApplied ? { resubmitApplied: true as const } : {}),
           childOutcomes: [failedOutcome],
           ...(executorMetadata !== undefined ? { executorMetadata } : {}),
           artifactGenerationRealization:
@@ -4308,6 +4322,7 @@ async function runSingleDispatchWithRetries(args: {
     startedAtMs,
     completedAtMs,
     attemptCount: attemptsUsed,
+    ...(resubmitApplied ? { resubmitApplied: true as const } : {}),
     packetBytes,
     outputBytes,
     failure,

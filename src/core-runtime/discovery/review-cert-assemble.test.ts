@@ -246,6 +246,7 @@ describe("assembleReviewCertRecord", () => {
             completion: "ok",
             units_total: 25,
             units_completed: 25,
+            resubmit_applied_unit_count: 0,
             checks: SEMANTIC_QUALITY_GATE_CHECK_IDS.map((check_id) => ({
               check_id,
               status: "passed" as const,
@@ -265,7 +266,7 @@ describe("assembleReviewCertRecord", () => {
       declaredReps: 3,
       fixtures: FIXTURES,
       runs: okRuns(),
-      runControls: { salvage_enabled: false, resubmit_enabled: false },
+      runControls: { salvage_enabled: false, resubmit_enabled: true },
       issueArtifactsProvided: true,
       reproductionCommand: "npx tsx scripts/review-cert-run.mts --candidate-model gpt-5.6-sol",
     });
@@ -296,7 +297,7 @@ describe("assembleReviewCertRecord", () => {
       declaredReps: 3,
       fixtures: FIXTURES,
       runs: okRuns(),
-      runControls: { salvage_enabled: false, resubmit_enabled: false },
+      runControls: { salvage_enabled: false, resubmit_enabled: true },
       issueArtifactsProvided: true,
       reproductionCommand:
         "npx tsx scripts/review-cert-run.mts --candidate-model claude-fable-5 --candidate-provider anthropic",
@@ -320,7 +321,7 @@ describe("assembleReviewCertRecord", () => {
       declaredReps: 3,
       fixtures: FIXTURES,
       runs: okRuns(),
-      runControls: { salvage_enabled: false, resubmit_enabled: false },
+      runControls: { salvage_enabled: false, resubmit_enabled: true },
       issueArtifactsProvided: true,
       reproductionCommand: "cmd",
     });

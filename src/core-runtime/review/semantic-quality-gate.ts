@@ -4,7 +4,7 @@ export type SemanticQualityGateFixtureId =
   | "retry-policy-target-v1";
 
 /** The complete check-id universe this gate can emit — the value-level single
- * source (the check_id type derives from it). The review-cert/v1 evidence
+ * source (the check_id type derives from it). The review-cert/v2 evidence
  * contract pins its per-run check universe against THIS list, so a harness
  * that omits issue artifacts (the gate then emits a subset — see
  * runSemanticQualityGate) cannot silently shrink the certified comparison. */

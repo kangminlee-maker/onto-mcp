@@ -7,6 +7,7 @@ import type { ReviewExecutionProfile } from "../review/review-execution-profile.
 import type { IssueScopedDeliberationWorkItem } from "../review/controlled-lens-deliberation.js";
 import {
   executeDeliberationResponseUnit,
+  toUnitExecutionResult,
   type ExecutionDispatchResult,
   type RuntimeUnitExecutionContext,
 } from "./run-review-prompt-execution.js";
@@ -219,6 +220,11 @@ describe("deliberation resubmit dispatch E2E (§4-6a)", () => {
     // Healed to a real completion — not degraded.
     expect(outcome.success).toBe(true);
     expect(outcome.childOutcomes ?? []).toEqual([]); // no failed child = no degrade
+    // review-cert/v2 falsifiability gate (§5.3): the healed SUCCESS outcome
+    // must carry the loop-accumulated resubmit marker — the spec fires on the
+    // failed iteration, so per-attempt capture would miss exactly this case.
+    expect(outcome.resubmitApplied).toBe(true);
+    expect(toUnitExecutionResult(outcome).resubmit_applied).toBe(true);
     const output = await fs.readFile(dispatch.output_path, "utf8");
     expect(output).toContain("healed by resubmit");
 
