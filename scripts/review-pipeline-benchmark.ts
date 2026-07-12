@@ -73,6 +73,12 @@ interface BenchmarkOptions {
   unitTimeoutMs?: number;
   unitSweepCandidateOnly: boolean;
   maxConcurrentLenses: number;
+  /** Opt-in: write `retry.resubmit.enabled=true` into the temp project
+   * settings so validation rejections get the error-spec corrective retry
+   * (설계 A / 20260712-format-rescue-ladder-design.md §2.1a). Default OFF
+   * keeps the settings byte-identical — cert runs (M-1 raw-measurement pin)
+   * never pass this flag. */
+  retryResubmit: boolean;
 }
 
 interface UnitResult {
@@ -304,6 +310,8 @@ function usage(): string {
     "                                     Repeatable. Default: both",
     "  --fixture <review-pipeline-target-v1|retry-policy-target-v1>",
     "                                     Repeatable. Default: review-pipeline-target-v1",
+    "  --retry-resubmit                   Opt-in: enable retry.resubmit in the temp project",
+    "                                     settings (error-spec corrective retry). Default: off",
     "  --executor-realization <codex|ts_inline_http>",
     "                                     Debug-only legacy CLI override. Omit to use project config.",
     "  --artifact-generation-realization <live|semantic_mock|boundary_stub|fixture>",
@@ -495,6 +503,7 @@ function parseOptions(argv: string[]): BenchmarkOptions {
     keepTmp:
       hasFlag(argv, "keep-tmp") ||
       process.env.ONTO_REVIEW_BENCHMARK_KEEP_TMP === "1",
+    retryResubmit: hasFlag(argv, "retry-resubmit"),
     timeoutMs,
     unitTimeoutMs,
     unitSweepCandidateOnly: hasFlag(argv, "unit-sweep-candidate-only"),
@@ -712,7 +721,9 @@ function llmSettingsForEffort(
   };
 }
 
-function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkCase): unknown {
+// Exported for the knob's deterministic verification (off → byte-identical
+// settings, on → resubmit enabled); the CLI path is the only other consumer.
+export function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkCase): unknown {
   const executor = executorSelectionForBenchmark(options.executorRealization);
   const defaultUnits = defaultReviewExecutionUnits();
   const units: Record<string, unknown> = {};
@@ -752,7 +763,10 @@ function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkCase): u
         artifact_generation_realization:
           options.artifactGenerationRealization ?? "live",
         max_concurrent_lenses: options.maxConcurrentLenses,
-        retry: defaultReviewRetrySettings(),
+        retry: {
+          ...defaultReviewRetrySettings(),
+          ...(options.retryResubmit ? { resubmit: { enabled: true } } : {}),
+        },
         actors: {
           teamlead: {
             seat: "main",
