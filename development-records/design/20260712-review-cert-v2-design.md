@@ -86,3 +86,70 @@ contract 리터럴을 별도 하드코딩하지 않는지 grep 확인).
   K1 이후를 식별하는 상수)를 추가하고 resume 시 불일치 거부 — "계약 변경
   전후 행 혼합" 재발 방지. v2 스키마 신설과 같은 diff에 넣으면 한계비용 최소.
 - 준승인 tier 표기는 별도 결정(v2 record가 그 입력).
+
+## 5. 다관점 검증 판정 (v1 초안 → v2 개정, 2026-07-12; fable 4-렌즈 + 실코드 재검증)
+
+같은-모델 리뷰(공유 맹점 가능)임을 명기. 구조 축은 4렌즈 전원 clean 확증:
+계약 상수 flip의 G7 자동 추종, registry 무인용(승격 무파손), M-1 재정의 건전
+(salvage 오염 논거는 resubmit에 무해당), **codex/claude 대칭 확증**(검증·freeze
+가 route 무관 부모측 공유 경로 — 양팔 공정성 성립), 강등 유닛의 ok 밀반입
+불가. 아래는 §2/§4를 대체하는 개정 사항.
+
+### 5.1 disclosure는 저장하지 않는다 (lens4-F1, lens1-F4/F5)
+
+`resubmit_disclosure` 저장+재계산검증(§2.1) **기각** — 이 모듈의 비차단
+규약은 "저장 없이 read-time 투영, WARN 소비"(`reviewCertQualityDisclosures`
+:284-302, 소비 check-supported-models:269·review-cert-run:876)이며, 저장+
+`aggregate_mismatch`는 비차단 선언 지표를 실제로 차단하게 만든다. 개정:
+- 행 원자 필드만 저장: `resubmit_applied_unit_count: number`(int≥0, required
+  — 명명은 벤치 `salvaged_unit_count`(:215) `_count` 규약 준수, lens4-F2).
+- record-수준 사용률은 `reviewCertResubmitDisclosure(record)` 투영 함수
+  (동형 패턴, validate 미참여, WARN 소비)로: **ok 행과 not_run 행을 분리
+  집계**(ok 행 rate = 실제 완주에 기여한 사용량; not_run 행 카운트는 진단
+  병기 — "발화 총량"과 "고친 양"의 혼동 방지, lens3-F1). 분모는 ok 행
+  units_total 합(placeholder 오염 없음 — not_run의 fallback 1은 분모 불참).
+
+### 5.2 배선은 8~10좌석, 루프-스코프 누적 필수 (lens1-F2, lens3-F3, lens4-F5)
+
+§2.2.1 "1지점 배선" **정정** — `applyResubmitErrorSpec` 반환 boolean은 현재
+두 호출부(:4104, :4165)에서 폐기되며, resubmit은 실패 iteration에서 발화하고
+성공 return은 다음 iteration이므로 **루프 진입 시 `let resubmitApplied` 누적
+(`||=`) 후 성공(:4134)·실패(:4305)·salvage(:4266) 반환 전부에 접기**가 필수
+(누적 없으면 "고친 케이스"가 체계적 0 집계 → 지표 정반대 왜곡). 경로:
+`ExecutionOutcome` 신규 필드 → `toUnitExecutionResult`(:2687) →
+`ReviewUnitExecutionResult` → execution-result.yaml → benchmark
+`unitsFromExecution`(:1211) → summary `resubmit_applied_unit_ids`(+`_count`)
+→ 하니스 `BenchmarkRunLike`·`rowFromAttempt`. nested-workers flatten/preserve
+경로(:2728, :3783)의 마커 보존 테스트 포함.
+
+### 5.3 반증가능성 게이트 (lens1-F1 HIGH)
+
+silent-zero(미배선인데 전부 0으로 일치·통과)를 막는 2단:
+- 하니스 시작 positive 단언: `settingsForCase({retryResubmit:true})` 산출물이
+  `retry.resubmit.enabled===true`임을 기계 검증(v1의 mechanical-OFF에 상응하는
+  mechanical-ON; lens1-F3).
+- 구현 검증에 **반려-강제 fixture 단위 테스트**: 알려진 unsupported-ref 반려를
+  일으키는 유닛에서 count>0이 벤치 summary까지 관통함을 결정적으로 증명.
+  mock 리허설은 0-관통만 증명함을 §3에 명기(lens3-F4). record 게이트로
+  "count>0 요구"는 두지 않는다(완벽 모델의 정당한 0과 구별 불가).
+
+### 5.4 H3 원안 기각 → resume 출처 스탬프로 대체 (lens2-MED, lens3-F2, lens4-F3)
+
+H3 `contract_fingerprint`(record 저장) **기각**: resume는 record를 읽지 않아
+inert(:713-728은 progress jsonl만 소비)이고, 커밋 sha는 dirty-tree 거짓 핀 +
+무관 커밋에 정당 resume 거짓 거부. 대체(더 작음): **rows.progress.jsonl에
+행별 `run_controls` 스탬프**({salvage_enabled, resubmit_enabled}) — resume
+시드 시 현재 run과 불일치하면 fail-loud 거부. 스탬프는 resume가 실제 읽는
+위치에 있고, v1 행(스탬프 부재)도 불일치로 거부되어 "계약 전환 후 이전 행
+혼입"(lens2 시나리오: OFF-baseline + ON-candidate 혼합 record) 봉쇄.
+
+### 5.5 잔여 정정
+
+- 위반 코드명은 `rescue_channel_not_pinned`(:159)이며 메시지 극성 갱신 필요
+  (lens1-F5). §2.1의 "run_controls 재사용" 표기는 필드명/코드명 혼동 — 정정.
+- v2 승격은 "필요"가 아니라 의미변경 개명 위생: required 행 필드 신설만으로도
+  v1 record는 parse 제외됨. stale "v1" 리터럴(check-supported-models.ts:222
+  주석·:280 메시지, supported-models.ts:72·semantic-quality-gate.ts:7 주석)을
+  grep 갱신 목록에 추가(lens4-F4·부수, lens2-LOW).
+- "applied"의 정의: attempt-0 구조적 pre-injection(:4104, error:null·frozen
+  근거)도 적용으로 계수한다 — 주입이 실제 일어난 모든 경우(lens2-LOW).
