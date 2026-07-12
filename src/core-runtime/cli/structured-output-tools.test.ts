@@ -450,11 +450,19 @@ issue_dependencies: []
 `,
     });
 
-    expect(
-      context.issueStanceSchemaContext?.issue_evidence_refs["issue-002"],
-    ).toEqual(
+    const allowed = context.issueStanceSchemaContext?.issue_evidence_refs["issue-002"];
+    // The lens's RAW finding evidence refs are a per-lens union (on-disk parity).
+    expect(allowed).toEqual(
       expect.arrayContaining([
         ".onto/review/session-001/round1/conciseness.findings.yaml#conciseness-candidate-001",
+      ]),
+    );
+    // finding-ledger anchors are ISSUE-STRICT: finding-005 is not one of
+    // issue-002's surface findings, so its anchor must NOT pass submit — the
+    // on-disk validator rejects it, and the pre-parity union here let a
+    // submit-passing ref die at the terminal on-disk re-validation.
+    expect(allowed).not.toEqual(
+      expect.arrayContaining([
         ".onto/review/session-001/finding-ledger.yaml#finding-005",
       ]),
     );
