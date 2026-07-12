@@ -1937,6 +1937,13 @@ export async function applyResubmitErrorSpec(args: {
   attempt: number;
   reviewExecutionProfile?: ReviewExecutionProfile | undefined;
   errorLogPath: string;
+  /** When provided, a spec application also refreshes the context manifest's
+   * packet_sha256 for the mutated packet. The manifest pins each packet's
+   * dispatch-time hash and continuation FAIL-CLOSES on mismatch
+   * (packet_hash_mismatch), so a runtime-owned packet mutation without a
+   * manifest refresh bricks `onto_review_continue` for any session halted
+   * after a resubmit injection. */
+  executionPlan?: ReviewExecutionPlan | undefined;
 }): Promise<boolean> {
   if (args.reviewExecutionProfile?.retry?.resubmit?.enabled !== true) {
     return false;
@@ -1945,7 +1952,50 @@ export async function applyResubmitErrorSpec(args: {
   const routing = outputFormat
     ? RESUBMIT_UNIT_ROUTING[outputFormat]
     : undefined;
-  return routing ? routing.apply(args) : false;
+  const applied = routing ? await routing.apply(args) : false;
+  if (applied && args.executionPlan !== undefined) {
+    await refreshManifestPacketHash({
+      executionPlan: args.executionPlan,
+      packetPath: args.dispatch.packet_path,
+    });
+  }
+  return applied;
+}
+
+/** K2 (20260712-stance-ref-vocabulary-unification-design.md §5): re-pin the
+ * manifest packet_sha256 after a legitimate runtime-owned packet mutation
+ * (resubmit error spec). No-op when the packet has no manifest ref yet. */
+async function refreshManifestPacketHash(args: {
+  executionPlan: ReviewExecutionPlan;
+  packetPath: string;
+}): Promise<void> {
+  let manifestPath: string;
+  let manifest: ReviewContextManifestArtifact;
+  try {
+    ({ manifestPath, manifest } = await readReviewContextManifest(
+      args.executionPlan,
+    ));
+  } catch {
+    // No materialized manifest (e.g. unit-scoped test harnesses) → nothing is
+    // pinned, so there is nothing to re-pin.
+    return;
+  }
+  const resolvedPacketPath = path.resolve(args.packetPath);
+  const entry = manifest.packet_refs.find(
+    (ref) => path.resolve(ref.packet_ref) === resolvedPacketPath,
+  );
+  if (!entry) return;
+  const packetSha256 = await optionalFileDigest(args.packetPath);
+  if (!packetSha256 || packetSha256 === entry.packet_sha256) return;
+  const updatedManifest: ReviewContextManifestArtifact = {
+    ...manifest,
+    packet_refs: manifest.packet_refs.map((ref) =>
+      path.resolve(ref.packet_ref) === resolvedPacketPath
+        ? { ...ref, packet_sha256: packetSha256 }
+        : ref,
+    ),
+  };
+  await writeYamlDocument(manifestPath, updatedManifest);
 }
 
 /** deliberation unit_id is `deliberation:<issueId>:<lensId>` (the live colon
@@ -4057,6 +4107,7 @@ async function runSingleDispatchWithRetries(args: {
         attempt: 0,
         reviewExecutionProfile,
         errorLogPath: executionPlan.error_log_path,
+        executionPlan,
       });
     }
     try {
@@ -4117,6 +4168,7 @@ async function runSingleDispatchWithRetries(args: {
           attempt,
           reviewExecutionProfile,
           errorLogPath: executionPlan.error_log_path,
+          executionPlan,
         });
         if (dispatch.unit_kind === "synthesize") {
           await appendExecutionProgress(
