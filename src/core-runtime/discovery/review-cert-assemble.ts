@@ -12,12 +12,14 @@ import { SEMANTIC_QUALITY_GATE_CHECK_IDS } from "../review/semantic-quality-gate
 // ─────────────────────────────────────────────────────────────────────────────
 // review-cert assembly + dispatch witness (design 20260711 §4 H-1).
 //
-// The review pipeline dispatches through SPAWNED worker CLIs (codex/claude
-// resolved from PATH — codex-review-unit-executor spawns with an inherited
-// env), so B4's in-process callLlm capture cannot witness it. The review cert
-// harness instead interposes a PATH shim per arm: an executable that appends
-// one JSON line `{"argv": [...]}` per invocation to a capture file, then
-// execs the real binary. This module owns the PURE half: projecting those
+// The review pipeline dispatches through SPAWNED worker CLIs (codex resolved
+// from PATH; claude via resolveClaudeBin, which reads ONTO_CLAUDE_BIN first),
+// so B4's in-process callLlm capture cannot witness it. The review cert
+// harness instead interposes a shim per route (PATH prepend for codex,
+// ONTO_CLAUDE_BIN for claude): an executable that appends one JSON line
+// `{"argv": [...]}` per invocation to a capture file — bulk values like the
+// claude prompt/schema logged as `<label:N bytes>` — then execs the real
+// binary. This module owns the PURE half: projecting those
 // argv lines into a per-arm witnessed (model, reasoning_effort), guarding the
 // declaration against the witness, and assembling the final record. The cert
 // run pins every unit to the arm's single effort, so within-arm consistency
@@ -38,10 +40,44 @@ export interface ReviewCertWitnessProjection {
   violations: string[];
 }
 
-/** Extracts (model, reasoning_effort) from one shim-captured argv. The codex
- * worker invocation carries `-m <model>` and config overrides as
- * `-c model_reasoning_effort=<value>` (value may be TOML-quoted). */
-function parseCodexArgv(
+/** Non-dispatch worker-CLI invocations the shim also witnesses. The claude
+ * availability probe (host-detection.ts detectClaudeBinaryAvailable) runs
+ * `claude auth status` through the same resolveClaudeBin the shim overrides,
+ * so it lands in the capture — in BOTH arms (route resolution probes hosts
+ * regardless of the arm's provider). Probes are classified by EXACT argv and
+ * skipped; every other model-less line still fails loud, and an arm whose
+ * capture holds only probes is a witness violation (availability checking is
+ * not dispatch). The codex availability probe reads ~/.codex/auth.json
+ * directly (no exec), so it never reaches the capture. */
+const WORKER_PROBE_ARGVS: readonly (readonly string[])[] = [["auth", "status"]];
+
+function isWorkerProbeArgv(argv: readonly string[]): boolean {
+  return WORKER_PROBE_ARGVS.some(
+    (probe) => probe.length === argv.length && probe.every((item, i) => item === argv[i]),
+  );
+}
+
+/** True when a raw capture line is a witnessable worker dispatch: string
+ * argv, not an availability probe, and carrying a model knob. The cert
+ * harness uses this to decide whether a rehearsal capture already witnessed
+ * a dispatch or still needs its synthetic declaration-derived line (probes
+ * alone are not dispatch). */
+export function isWitnessableWorkerDispatchLine(raw: unknown): boolean {
+  const argv = typeof raw === "object" && raw !== null &&
+      Array.isArray((raw as Record<string, unknown>).argv)
+    ? ((raw as Record<string, unknown>).argv as unknown[])
+    : null;
+  if (argv === null || argv.some((item) => typeof item !== "string")) return false;
+  if (isWorkerProbeArgv(argv as string[])) return false;
+  return parseWorkerArgv(argv as string[]).model !== null;
+}
+
+/** Extracts (model, reasoning_effort) from one shim-captured argv, covering
+ * both worker CLI flag families. codex: `-m <model>` and config overrides as
+ * `-c model_reasoning_effort=<value>` (value may be TOML-quoted). claude:
+ * `--model <model>` and `--effort <value>`
+ * (claude-code-review-unit-executor.ts runClaudeWorker). */
+function parseWorkerArgv(
   argv: readonly string[],
 ): { model: string | null; reasoning_effort: string | null } {
   let model: string | null = null;
@@ -50,6 +86,8 @@ function parseCodexArgv(
     const arg = argv[index]!;
     if (arg === "-m" || arg === "--model") {
       model = argv[index + 1] ?? null;
+    } else if (arg === "--effort") {
+      effort = argv[index + 1] ?? null;
     } else if (arg === "-c") {
       const override = argv[index + 1];
       const match = override === undefined
@@ -83,6 +121,7 @@ export function projectReviewCertWitness(
     }
     let armWitness: { model: string; reasoning_effort: string | null } | null = null;
     let count = 0;
+    let probeCount = 0;
     for (const [index, raw] of lines.entries()) {
       const argv = typeof raw === "object" && raw !== null &&
           Array.isArray((raw as Record<string, unknown>).argv)
@@ -92,7 +131,11 @@ export function projectReviewCertWitness(
         violations.push(`arm ${arm}: capture line ${index} carries no string argv`);
         continue;
       }
-      const parsed = parseCodexArgv(argv as string[]);
+      if (isWorkerProbeArgv(argv as string[])) {
+        probeCount += 1;
+        continue;
+      }
+      const parsed = parseWorkerArgv(argv as string[]);
       if (parsed.model === null) {
         violations.push(
           `arm ${arm}: capture line ${index} has no -m/--model argument — not a witnessable worker dispatch`,
@@ -119,6 +162,12 @@ export function projectReviewCertWitness(
           : {}),
         invocation_count: count,
       };
+    } else {
+      // Also covers the all-probe capture, which pushes no per-line violation
+      // — without this the arm would silently vanish from the witness.
+      violations.push(
+        `arm ${arm}: no witnessable worker dispatch in ${lines.length} capture line(s) (${probeCount} availability probe(s) skipped) — a declared dispatch without witness is not certifiable`,
+      );
     }
   }
   if (violations.length > 0) return { witnessed: null, violations };

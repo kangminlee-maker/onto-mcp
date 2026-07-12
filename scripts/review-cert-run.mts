@@ -25,14 +25,21 @@
  *    if the default ever flips) and additionally requires salvaged_unit_ids=[]
  *    on every ok row (row-level evidence the pin held).
  *
- * Dispatch witness (design §4 H-1): both arms dispatch spawned codex workers
- * resolved from PATH (codex-review-unit-executor.ts spawn("codex", ...), env
- * inherited). A shim dir is prepended to PATH whose `codex` appends one JSON
- * line {"argv": [...]} to the per-arm capture file named by
- * ONTO_REVIEW_CERT_CAPTURE_FILE, then execs the REAL codex (absolute path
- * resolved BEFORE the prepend). The pure projection/guard/assembly lives in
- * src/core-runtime/discovery/review-cert-assemble.ts. The shim mechanism is
- * self-tested at startup against /usr/bin/true (no spend).
+ * Dispatch witness (design §4 H-1): the arms dispatch spawned worker CLIs,
+ * and each route gets a shim that appends one JSON line {"argv": [...]} to
+ * the per-arm capture file named by ONTO_REVIEW_CERT_CAPTURE_FILE, then execs
+ * the REAL binary (absolute path resolved BEFORE interposition).
+ *  - codex route (codex-review-unit-executor.ts spawn("codex", ...), env
+ *    inherited): a shim dir is prepended to PATH.
+ *  - claude route (claude-code-review-unit-executor.ts spawns
+ *    resolveClaudeBin(), which reads ONTO_CLAUDE_BIN FIRST): the shim is
+ *    injected as ONTO_CLAUDE_BIN=<shim> — no PATH reliance. The bulk values
+ *    after -p / --json-schema are logged as `<label:N bytes>` (the witness
+ *    needs the knobs, not tens-of-KB prompt content), and the shim unsets
+ *    ONTO_CLAUDE_BIN before exec (env analog of the codex PATH strip).
+ * The pure projection/guard/assembly lives in
+ * src/core-runtime/discovery/review-cert-assemble.ts. Both shim mechanisms
+ * are self-tested at startup against /usr/bin/true (no spend).
  *
  * Modes:
  *  - default: CERT run (LIVE spend — baseline arm + candidate arm, each
@@ -79,6 +86,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assembleReviewCertRecord,
+  isWitnessableWorkerDispatchLine,
   type ReviewCertArmDeclaration,
 } from "../src/core-runtime/discovery/review-cert-assemble.ts";
 import {
@@ -88,6 +96,7 @@ import {
   type ReviewCertArm,
   type ReviewCertRun,
 } from "../src/core-runtime/discovery/review-cert-record.ts";
+import { resolveClaudeBin } from "../src/core-runtime/llm/claude-bin.ts";
 import { defaultReviewRetrySettings } from "../src/core-runtime/discovery/settings-chain.ts";
 import { SEMANTIC_QUALITY_GATE_CHECK_IDS } from "../src/core-runtime/review/semantic-quality-gate.ts";
 import { benchmarkFixture } from "./review-pipeline-benchmark.ts";
@@ -104,6 +113,7 @@ const TSX = path.join(
 );
 const BENCHMARK_SCRIPT = path.join(REPO_ROOT, "scripts", "review-pipeline-benchmark.ts");
 const CAPTURE_ENV = "ONTO_REVIEW_CERT_CAPTURE_FILE";
+const CLAUDE_BIN_ENV = "ONTO_CLAUDE_BIN"; // claude-bin.ts resolution order, priority 1
 /** The contract's two semantic fixtures (design §4; gate F6) — pinned, not a knob. */
 const FIXTURE_IDS = ["review-pipeline-target-v1", "retry-policy-target-v1"] as const;
 const CANONICAL_CHECKS = [...SEMANTIC_QUALITY_GATE_CHECK_IDS].sort();
@@ -221,8 +231,23 @@ await fs.mkdir(captureDir, { recursive: true });
 await fs.mkdir(shimDir, { recursive: true });
 log(`out dir: ${outDir}${rehearsal ? " (REHEARSAL — NOT cert-grade)" : ""}`);
 
-// ── codex shim (design §4 H-1) ───────────────────────────────────────────────
-function shimScript(realBinaryPath: string, ownShimDir: string): string {
+// ── worker shims (design §4 H-1): codex via PATH, claude via ONTO_CLAUDE_BIN ─
+function shimScript(
+  realBinaryPath: string,
+  ownShimDir: string,
+  opts: {
+    /** flag → capture label: the argument FOLLOWING each flag is logged as
+     * `<label:N bytes>` instead of its content. claude route: the bounded
+     * prompt rides after `-p` and the submit schema after `--json-schema` —
+     * tens of KB per dispatch; the witness needs the knobs, not the content. */
+    redactValueOfFlag?: Record<string, string>;
+    /** env vars unset before exec. claude route: the child env still carries
+     * ONTO_CLAUDE_BIN=<this shim>, so a descendant resolveClaudeBin would
+     * loop back here — unsetting closes the env recursion channel the way
+     * the PATH strip closes the PATH channel. */
+    unsetEnv?: readonly string[];
+  } = {},
+): string {
   // The JSON encoding runs through node (this process's own binary — no PATH
   // lookup) because argv-safe JSON escaping in bash is not worth hand-rolling.
   // `--` ends node's option parsing so worker flags like -m are never eaten.
@@ -236,22 +261,35 @@ function shimScript(realBinaryPath: string, ownShimDir: string): string {
   // recursion until the strip was added). Stripping also means the wrapper's
   // internal re-dispatch is not double-captured — the witness line is the
   // executor's ORIGINAL argv, exactly the knobs the cert declares.
+  //
+  // The capture JS is single-quoted in bash, so it must contain no single
+  // quotes; the redact map is embedded as a JSON literal (double quotes only).
+  const captureJs =
+    'const fs=require("node:fs");' +
+    `const redact=${JSON.stringify(opts.redactValueOfFlag ?? {})};` +
+    "const argv=process.argv.slice(1);" +
+    "for(let i=0;i<argv.length-1;i+=1){" +
+    "const label=redact[argv[i]];" +
+    'if(label!==undefined){argv[i+1]="<"+label+":"+Buffer.byteLength(argv[i+1],"utf8")+" bytes>";i+=1;}' +
+    "}" +
+    `fs.appendFileSync(process.env.${CAPTURE_ENV},JSON.stringify({argv})+"\\n");`;
   return [
     "#!/bin/bash",
     "# review-cert dispatch witness shim — appends this invocation's argv as one",
     "# JSON line to the per-arm capture file, then execs the real binary resolved",
-    "# BEFORE the PATH prepend. Generated by scripts/review-cert-run.mts.",
+    "# BEFORE interposition. Generated by scripts/review-cert-run.mts.",
     "set -u",
     `if [ -z "\${${CAPTURE_ENV}:-}" ]; then`,
-    `  echo "review-cert codex shim: ${CAPTURE_ENV} is not set — refusing an unwitnessed dispatch" >&2`,
+    `  echo "review-cert worker shim: ${CAPTURE_ENV} is not set — refusing an unwitnessed dispatch" >&2`,
     "  exit 97",
     "fi",
-    `${JSON.stringify(process.execPath)} -e 'const fs=require("node:fs");fs.appendFileSync(process.env.${CAPTURE_ENV},JSON.stringify({argv:process.argv.slice(1)})+"\\n");' -- "$@" || {`,
-    `  echo "review-cert codex shim: capture append failed — refusing an unwitnessed dispatch" >&2`,
+    `${JSON.stringify(process.execPath)} -e '${captureJs}' -- "$@" || {`,
+    `  echo "review-cert worker shim: capture append failed — refusing an unwitnessed dispatch" >&2`,
     "  exit 97",
     "}",
-    "# drop this shim's dir from PATH (component-exact) so a wrapper real-codex",
-    "# re-invoking \`codex\` cannot recurse into the shim",
+    ...(opts.unsetEnv ?? []).map((name) => `unset ${name}`),
+    "# drop this shim's dir from PATH (component-exact) so a wrapper real binary",
+    "# re-invoking its own name via PATH cannot recurse into the shim",
     `_shim_dir=${JSON.stringify(ownShimDir)}`,
     '_new_path=""',
     'IFS=":" read -r -a _parts <<< "$PATH"',
@@ -263,6 +301,28 @@ function shimScript(realBinaryPath: string, ownShimDir: string): string {
     `exec ${JSON.stringify(realBinaryPath)} "$@"`,
     "",
   ].join("\n");
+}
+
+/** claude-route shim knobs (see shimScript opts docs). */
+const CLAUDE_SHIM_OPTS = {
+  redactValueOfFlag: { "-p": "prompt", "--json-schema": "json-schema" },
+  unsetEnv: [CLAUDE_BIN_ENV],
+} as const;
+
+function resolveRealClaude(): string | null {
+  // The SAME resolver the claude executor module-loads (claude-bin.ts) — the
+  // shim's exec target is exactly what the worker would have dispatched
+  // un-shimmed (including an operator's own ONTO_CLAUDE_BIN override, which
+  // this harness reads BEFORE injecting its shim into the subprocess env).
+  // The bare-name "claude" fallback means not-found.
+  const resolved = resolveClaudeBin(process.env);
+  if (!path.isAbsolute(resolved)) return null;
+  try {
+    fsSync.accessSync(resolved, fsSync.constants.X_OK);
+    return resolved;
+  } catch {
+    return null;
+  }
 }
 
 async function resolveRealCodex(): Promise<string | null> {
@@ -334,7 +394,81 @@ async function shimSelfTest(): Promise<void> {
   log("shim self-test: append + PATH-strip + exec verified against a re-resolving wrapper (1 line, argv exact, no recursion)");
 }
 
+/** claude-route counterpart of shimSelfTest: same zero-spend mechanism proof,
+ * plus the two claude-specific behaviors — bulk-value redaction (-p /
+ * --json-schema logged as sizes) and the ONTO_CLAUDE_BIN unset (the wrapper
+ * stand-in fails if either recursion channel is still open at exec time; the
+ * spawn env deliberately arms ONTO_CLAUDE_BIN=<shim> so the unset is what the
+ * wrapper observes, not this env's absence). */
+async function claudeShimSelfTest(): Promise<void> {
+  const selfTestDir = path.join(shimDir, "selftest-claude");
+  await fs.mkdir(selfTestDir, { recursive: true });
+  const shimPath = path.join(selfTestDir, "claude");
+  const wrapperPath = path.join(selfTestDir, "wrapper.sh");
+  const capturePath = path.join(selfTestDir, "capture.jsonl");
+  await fs.writeFile(
+    wrapperPath,
+    [
+      "#!/bin/bash",
+      "# self-test stand-in for the real claude: asserts BOTH recursion channels",
+      "# are closed before dispatch — env (ONTO_CLAUDE_BIN) and PATH.",
+      `if [ -n "\${${CLAUDE_BIN_ENV}:-}" ]; then`,
+      `  echo "claude shim self-test wrapper: ${CLAUDE_BIN_ENV} still set — env recursion hazard" >&2`,
+      "  exit 96",
+      "fi",
+      'resolved="$(command -v claude || true)"',
+      `if [ "$resolved" = ${JSON.stringify(shimPath)} ]; then`,
+      '  echo "claude shim self-test wrapper: claude still resolves to the shim — PATH recursion hazard" >&2',
+      "  exit 96",
+      "fi",
+      'exec /usr/bin/true "$@"',
+      "",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  await fs.writeFile(shimPath, shimScript(wrapperPath, selfTestDir, CLAUDE_SHIM_OPTS), { mode: 0o755 });
+  await fs.writeFile(capturePath, ""); // fresh — the shim appends
+  const prompt = "p".repeat(4096);
+  const schema = '{"type":"object"}';
+  const sampleArgs = [
+    "-p", prompt,
+    "--output-format", "json",
+    "--model", "claude-shim-selftest",
+    "--effort", "low",
+    "--json-schema", schema,
+  ];
+  const expectedArgv = [
+    "-p", `<prompt:${Buffer.byteLength(prompt, "utf8")} bytes>`,
+    "--output-format", "json",
+    "--model", "claude-shim-selftest",
+    "--effort", "low",
+    "--json-schema", `<json-schema:${Buffer.byteLength(schema, "utf8")} bytes>`,
+  ];
+  const exitCode: number | null = await new Promise((resolve, reject) => {
+    const child = spawn(shimPath, sampleArgs, {
+      env: {
+        ...process.env,
+        PATH: `${selfTestDir}${path.delimiter}${process.env.PATH ?? ""}`,
+        [CAPTURE_ENV]: capturePath,
+        [CLAUDE_BIN_ENV]: shimPath,
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    child.on("close", (code) => resolve(code));
+    child.on("error", reject);
+  });
+  if (exitCode !== 0) throw new Error(`claude shim self-test: shim exited ${exitCode}`);
+  const lines = (await fs.readFile(capturePath, "utf8")).split("\n").filter((l) => l.trim());
+  if (lines.length !== 1) throw new Error(`claude shim self-test: expected 1 capture line, got ${lines.length}`);
+  const parsed = JSON.parse(lines[0]!) as { argv?: unknown };
+  if (JSON.stringify(parsed.argv) !== JSON.stringify(expectedArgv)) {
+    throw new Error(`claude shim self-test: captured argv ${JSON.stringify(parsed.argv)} != expected redacted ${JSON.stringify(expectedArgv)}`);
+  }
+  log("claude shim self-test: append + redaction + env-unset + PATH-strip + exec verified (1 line, knobs exact, prompt/schema logged as sizes)");
+}
+
 await shimSelfTest();
+await claudeShimSelfTest();
 
 const realCodex = await resolveRealCodex();
 if (realCodex === null && !rehearsal) {
@@ -345,6 +479,20 @@ if (realCodex !== null) {
   log(`codex shim: ${path.join(shimDir, "codex")} → ${realCodex}`);
 } else {
   log("codex not on PATH — rehearsal continues without a shim (mock path spawns no worker)");
+}
+
+const claudeShimPath = path.join(shimDir, "claude");
+const realClaude = resolveRealClaude();
+if (realClaude === null && !rehearsal && [baseline, candidate].some((arm) => arm.provider === "anthropic")) {
+  throw new Error(
+    "review-cert-run: no claude binary resolvable (claude-bin.ts resolution order) — an anthropic arm dispatches through the claude worker CLI. Install claude or set ONTO_CLAUDE_BIN to the real binary.",
+  );
+}
+if (realClaude !== null) {
+  await fs.writeFile(claudeShimPath, shimScript(realClaude, shimDir, CLAUDE_SHIM_OPTS), { mode: 0o755 });
+  log(`claude shim: ${claudeShimPath} → ${realClaude} (injected as ${CLAUDE_BIN_ENV}; -p/--json-schema values logged as sizes)`);
+} else {
+  log("claude not resolvable — continuing without a claude shim (no anthropic arm dispatch expected)");
 }
 
 const captureFileFor = (arm: ReviewCertArm): string => path.join(captureDir, `${arm}.jsonl`);
@@ -424,13 +572,24 @@ async function runBenchmarkOnce(args: {
     ...process.env,
     PATH: `${shimDir}${path.delimiter}${process.env.PATH ?? ""}`,
     [CAPTURE_ENV]: captureFileFor(args.arm.arm),
-    // Rehearsal: the direct-call route checks OPENAI_API_KEY PRESENCE before
-    // the mock short-circuits. A labeled dummy passes the presence check and
-    // doubles as a negative control — if mock wiring ever leaked to a real
-    // HTTP call it would 401 instead of spending. (Deliberately overrides any
-    // real key in the parent env.)
+    // claude-route witness: resolveClaudeBin reads this FIRST in every
+    // descendant, so any claude worker dispatch lands on the shim. Injected
+    // for both arms — an unexpected claude dispatch in a codex arm shows up
+    // in that arm's capture (and fails within-arm consistency) instead of
+    // escaping the witness.
+    ...(realClaude !== null ? { [CLAUDE_BIN_ENV]: claudeShimPath } : {}),
+    // Rehearsal: the direct-call route checks the provider credential env
+    // PRESENCE (openai → OPENAI_API_KEY, anthropic → ANTHROPIC_API_KEY)
+    // before the mock short-circuits. A labeled dummy passes the presence
+    // check and doubles as a negative control — if mock wiring ever leaked to
+    // a real HTTP call it would 401 instead of spending. (Deliberately
+    // overrides any real key in the parent env.)
     ...(rehearsal
-      ? { ONTO_LLM_MOCK: "1", OPENAI_API_KEY: "onto-review-cert-rehearsal-dummy-not-a-key" }
+      ? {
+          ONTO_LLM_MOCK: "1",
+          OPENAI_API_KEY: "onto-review-cert-rehearsal-dummy-not-a-key",
+          ANTHROPIC_API_KEY: "onto-review-cert-rehearsal-dummy-not-a-key",
+        }
       : {}),
   };
   // Outer last-resort guard only — the benchmark owns the real per-review
@@ -633,8 +792,12 @@ const captureLinesByArm = {
   candidate: await readCaptureLines("candidate"),
 };
 for (const arm of REVIEW_CERT_ARMS) {
-  if (captureLinesByArm[arm].length > 0) {
-    log(`witness: arm ${arm} captured ${captureLinesByArm[arm].length} worker dispatch(es)`);
+  // Probe invocations (claude `auth status` availability checks route through
+  // the same shim) are captured but are NOT dispatch — the gate here and the
+  // projection both classify them via the assemble module's rules.
+  const dispatchCount = captureLinesByArm[arm].filter(isWitnessableWorkerDispatchLine).length;
+  if (dispatchCount > 0) {
+    log(`witness: arm ${arm} captured ${dispatchCount} worker dispatch(es) (${captureLinesByArm[arm].length} capture line(s) incl. probes)`);
     continue;
   }
   if (rehearsal) {
@@ -642,13 +805,23 @@ for (const arm of REVIEW_CERT_ARMS) {
     // synthetic declaration-derived line lets assembly/validation/persist run
     // end-to-end; the distinct .rehearsal.json filename plus the --rehearsal
     // reproduction command keep this from ever reading as witness evidence.
+    // Probe lines (if any) stay in place — the projection skips them.
     log(`witness: arm ${arm} witness_missing (expected under mock rehearsal) — injecting SYNTHETIC declaration-derived capture line (NOT witness evidence)`);
-    captureLinesByArm[arm] = [{
-      argv: ["exec", "-m", declared[arm].model, "-c", `model_reasoning_effort="${declared[arm].reasoning_effort}"`],
+    const armDecl = declared[arm];
+    captureLinesByArm[arm] = [...captureLinesByArm[arm], {
+      // Arm-shaped argv (claude vs codex flag family) so the rehearsal
+      // exercises the same projection branch the live capture would.
+      argv: armDecl.provider === "anthropic"
+        ? [
+            "-p", "<prompt:0 bytes>", "--output-format", "json",
+            "--model", armDecl.model,
+            ...(armDecl.reasoning_effort !== undefined ? ["--effort", armDecl.reasoning_effort] : []),
+          ]
+        : ["exec", "-m", armDecl.model, "-c", `model_reasoning_effort="${armDecl.reasoning_effort}"`],
       rehearsal_synthetic: true,
     }];
   }
-  // cert mode: leave it empty — the assemble projection fails loud below.
+  // cert mode: no injection — the assemble projection fails loud below.
 }
 
 const reproductionCommand = [
