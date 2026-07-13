@@ -89,7 +89,53 @@ export interface SemanticQualityExpectations {
   actionRemediationTerms: string[];
   targetAnchor: string;
   targetAnchorTerms: string[];
+  /**
+   * Clean-target control (v3 G1). The target has ZERO material defects, so the
+   * recall floor cannot catch silence — a boundary decoy carries the load
+   * instead. When set, the gate (a) accepts an empty materialTerms list (there
+   * is nothing to recall), (b) OMITS the recall/grounding/actionability checks
+   * from its emission — they are N/A here, matching the fixture's declared
+   * applicable_check_ids — and (c) turns false_materiality_guard into "ANY
+   * admitted material issue is a false positive" (not just a boundary-decoy
+   * promotion). Yes-man behavior then fails the guard.
+   */
+  expectsNoMaterialDefects?: boolean;
+  /**
+   * Clean-target control (v3 G1). The declared boundary decoy MUST be preserved
+   * as a non-material, boundary-contextualized finding. Turns
+   * boundary_uncertainty_preservation from "!observed || preserved" (which lets
+   * an empty, lazy review pass vacuously) into MUST-preserve, so empty silence
+   * fails. Meaningless without a declared boundary decoy.
+   */
+  requiresBoundaryPreservation?: boolean;
+  /**
+   * Shared-root control (v3 G2). Each pair declares two anchor term-groups whose
+   * findings MUST be connected by a valid shared_cause_candidate relation. Turns
+   * causal_relation_correctness's shared-cause branch from a vacuous `.every`
+   * pass (true when no such relation exists) into a positive existence
+   * requirement. Empty/absent = no positive requirement (existing behavior). A
+   * finding matches a group when its text contains every term in the group.
+   */
+  expectedSharedCauseAnchorPairs?: Array<[string[], string[]]>;
 }
+
+/**
+ * Checks the gate OMITS for a clean-target fixture (expectsNoMaterialDefects):
+ * recall has nothing to recall, and grounding/actionability structurally fail
+ * on an empty material set (they require a material issue to ground / act on).
+ * These are declared N/A via the fixture's applicable_check_ids; the gate emits
+ * exactly the complementary applicable set. Kept as a module constant so the
+ * record-layer emission check (A-1b) can pin the same set.
+ */
+export const CLEAN_TARGET_EXCLUDED_CHECK_IDS: ReadonlySet<
+  SemanticQualityGateCheck["check_id"]
+> = new Set([
+  "material_issue_recall",
+  "final_result_material_issue_recall",
+  "artifact_material_issue_recall",
+  "grounding",
+  "actionability",
+]);
 
 const DEFAULT_FIXTURE_ID: SemanticQualityGateFixtureId = "review-pipeline-target-v1";
 
@@ -255,6 +301,32 @@ function validCausalPath(value: unknown): boolean {
       nonEmptyString(step.claim) &&
       nonEmptyStringArray(step.evidence_refs),
     );
+}
+
+/**
+ * A shared_cause_candidate relation is internally consistent: it carries a
+ * shared_cause block whose from/to cause refs are owned by the relation's own
+ * endpoint findings. The single authority for shared-cause validity — consumed
+ * both by causal_relation_correctness's negative sweep (every relation must be
+ * valid) and by its positive anchor-pair existence requirement (v3 G2).
+ */
+function validSharedCauseRelation(
+  relation: Record<string, unknown>,
+  causeOwnerById: Map<string, string>,
+): boolean {
+  const sharedCause = record(relation.shared_cause);
+  const fromFindingId =
+    typeof relation.from_finding_id === "string" ? relation.from_finding_id : "";
+  const toFindingId =
+    typeof relation.to_finding_id === "string" ? relation.to_finding_id : "";
+  return (
+    sharedCause !== null &&
+    nonEmptyString(sharedCause.cause_claim) &&
+    nonEmptyString(sharedCause.from_cause_ref) &&
+    nonEmptyString(sharedCause.to_cause_ref) &&
+    causeOwnerById.get(sharedCause.from_cause_ref as string) === fromFindingId &&
+    causeOwnerById.get(sharedCause.to_cause_ref as string) === toFindingId
+  );
 }
 
 /**
@@ -457,32 +529,61 @@ function issueArtifactChecks(
     ],
   );
 
+  // v3 G2: when the fixture declares anchor pairs, each pair MUST be connected
+  // by a valid shared_cause_candidate relation between findings anchored to the
+  // two term-groups — closing the `.every`-vacuous pass that lets a missing
+  // relation through. A finding is anchored to a group when its text contains
+  // every term in the group (terms are lowercased to match normalizedText).
+  const anchorPairs = fixture.expectedSharedCauseAnchorPairs ?? [];
+  const findingById = new Map<string, Record<string, unknown>>();
+  for (const finding of findings) {
+    if (typeof finding.finding_id === "string") {
+      findingById.set(finding.finding_id, finding);
+    }
+  }
+  const findingMatchesAnchorGroup = (
+    finding: Record<string, unknown> | undefined,
+    group: string[],
+  ): boolean => {
+    if (!finding) return false;
+    const text = normalizedText(finding);
+    return group.every((term) => text.includes(term.toLowerCase()));
+  };
+  const anchorPairsSatisfied = anchorPairs.every(([groupA, groupB]) =>
+    relationRows.some((relation) => {
+      if (relation.relation !== "shared_cause_candidate") return false;
+      if (!validSharedCauseRelation(relation, causeOwnerById)) return false;
+      const fromFinding =
+        typeof relation.from_finding_id === "string"
+          ? findingById.get(relation.from_finding_id)
+          : undefined;
+      const toFinding =
+        typeof relation.to_finding_id === "string"
+          ? findingById.get(relation.to_finding_id)
+          : undefined;
+      return (
+        (findingMatchesAnchorGroup(fromFinding, groupA) &&
+          findingMatchesAnchorGroup(toFinding, groupB)) ||
+        (findingMatchesAnchorGroup(fromFinding, groupB) &&
+          findingMatchesAnchorGroup(toFinding, groupA))
+      );
+    }),
+  );
+
   const causalRelationCorrectness = check(
     "causal_relation_correctness",
     materialFindingIds.every((findingId) => relationCoveredIds.has(findingId)) &&
-      relationRows.every((relation) => {
-        if (relation.relation !== "shared_cause_candidate") return true;
-        const sharedCause = record(relation.shared_cause);
-        const fromFindingId = typeof relation.from_finding_id === "string"
-          ? relation.from_finding_id
-          : "";
-        const toFindingId = typeof relation.to_finding_id === "string"
-          ? relation.to_finding_id
-          : "";
-        return (
-          sharedCause !== null &&
-          nonEmptyString(sharedCause.cause_claim) &&
-          nonEmptyString(sharedCause.from_cause_ref) &&
-          nonEmptyString(sharedCause.to_cause_ref) &&
-          causeOwnerById.get(sharedCause.from_cause_ref as string) ===
-            fromFindingId &&
-          causeOwnerById.get(sharedCause.to_cause_ref as string) === toFindingId
-        );
-      }),
+      relationRows.every(
+        (relation) =>
+          relation.relation !== "shared_cause_candidate" ||
+          validSharedCauseRelation(relation, causeOwnerById),
+      ) &&
+      anchorPairsSatisfied,
     [
       `material_finding_ids=${materialFindingIds.join(",") || "none"}`,
       `relation_covered_ids=${[...relationCoveredIds].join(",") || "none"}`,
       `shared_cause_relation_ids=${sharedCauseRelationIds.join(",") || "none"}`,
+      `expected_shared_cause_anchor_pairs=${anchorPairs.length} satisfied=${anchorPairsSatisfied}`,
     ],
   );
 
@@ -597,22 +698,27 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
   const fixture = args.expectations ?? semanticFixture(args.fixtureId);
   if (fixture.materialTerms.length === 0) {
     // textContainsAll over an empty list is vacuously true, so the material
-    // recall checks would prove nothing — fail loud instead.
-    throw new Error(
-      "SemanticQualityExpectations.materialTerms must not be empty",
-    );
-  }
-  // 빈 문자열 term/alternate는 text.includes("")가 항상 참이라 해당 entry를
-  // 공허 충족시킨다 — 게이트 진입에서 fail loud.
-  for (const term of fixture.materialTerms) {
-    const alternates = Array.isArray(term) ? term : [term];
-    if (
-      alternates.length === 0 ||
-      alternates.some((alternate) => alternate.trim().length === 0)
-    ) {
+    // recall checks would prove nothing — fail loud UNLESS this is a
+    // clean-target fixture, where there is genuinely nothing to recall and the
+    // recall checks are excluded from emission (see CLEAN_TARGET_EXCLUDED).
+    if (!fixture.expectsNoMaterialDefects) {
       throw new Error(
-        "SemanticQualityExpectations.materialTerms entries must be non-empty strings or non-empty groups of non-empty strings",
+        "SemanticQualityExpectations.materialTerms must not be empty",
       );
+    }
+  } else {
+    // 빈 문자열 term/alternate는 text.includes("")가 항상 참이라 해당 entry를
+    // 공허 충족시킨다 — 게이트 진입에서 fail loud.
+    for (const term of fixture.materialTerms) {
+      const alternates = Array.isArray(term) ? term : [term];
+      if (
+        alternates.length === 0 ||
+        alternates.some((alternate) => alternate.trim().length === 0)
+      ) {
+        throw new Error(
+          "SemanticQualityExpectations.materialTerms entries must be non-empty strings or non-empty groups of non-empty strings",
+        );
+      }
     }
   }
   const summary = args.reviewRecord.result_classification_summary ?? null;
@@ -675,7 +781,12 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
 
   const falseMaterialityGuard = check(
     "false_materiality_guard",
-    !materialBoundarySensitiveFalsePositive &&
+    // Clean-target (v3 G1): the target has zero material defects, so ANY
+    // admitted material issue is a false positive — a yes-man that promotes a
+    // fabricated (or boundary-decoy) issue fails here, not just the boundary
+    // case the base branch catches.
+    (!fixture.expectsNoMaterialDefects || materialIssues.length === 0) &&
+      !materialBoundarySensitiveFalsePositive &&
       (
         !falseMaterialityCandidateObserved ||
         (
@@ -687,6 +798,9 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
       `boundary-sensitive uncertainty terms must be disclosed with boundary context when they are not admitted material issues: ${fixture.boundaryUncertaintyTerms.join(", ")}`,
       `non_material_finding_count=${nonMaterialFindings.length}`,
       `boundary_notes_chars=${boundaryNotes?.length ?? 0}`,
+      ...(fixture.expectsNoMaterialDefects
+        ? [`clean-target: admitted material_issue_count=${materialIssues.length} (must be 0)`]
+        : []),
     ],
   );
 
@@ -703,11 +817,19 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
   // absent from the authority still fails here — authority is where it must live.)
   const boundaryUncertainty = check(
     "boundary_uncertainty_preservation",
-    !falseMaterialityCandidateObserved ||
-      containsBoundarySensitiveUncertainty(nonMaterialText, fixture),
+    // Clean-target (v3 G1): the boundary decoy MUST be preserved — an empty,
+    // lazy review that observes nothing no longer passes the vacuous first
+    // clause. Otherwise the base rule stands: preserve only what was observed.
+    fixture.requiresBoundaryPreservation
+      ? containsBoundarySensitiveUncertainty(nonMaterialText, fixture)
+      : !falseMaterialityCandidateObserved ||
+        containsBoundarySensitiveUncertainty(nonMaterialText, fixture),
     [
       `non_material_boundary_chars=${nonMaterialText.length}`,
       `expected boundary uncertainty (${fixture.boundaryUncertaintyTerms.join(", ")}) preserved in the finding-ledger authority (non-material findings)`,
+      ...(fixture.requiresBoundaryPreservation
+        ? ["clean-target: boundary decoy MUST be preserved (empty silence fails)"]
+        : []),
     ],
   );
 
@@ -768,12 +890,21 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
     actionability,
     grounding,
   ];
+  // Clean-target (v3 G1): emit only the applicable set — the recall/grounding/
+  // actionability checks are N/A with no material defect and would structurally
+  // fail on an empty material set. The record layer's per-fixture emission pin
+  // (A-1b) expects exactly this reduced set for such a fixture.
+  const emittedChecks = fixture.expectsNoMaterialDefects
+    ? checks.filter((item) => !CLEAN_TARGET_EXCLUDED_CHECK_IDS.has(item.check_id))
+    : checks;
   return {
-    status: checks.every((item) => item.status === "passed") ? "passed" : "failed",
+    status: emittedChecks.every((item) => item.status === "passed")
+      ? "passed"
+      : "failed",
     fixture_id: fixture.fixtureId,
     scope: "fixture_specific",
     fixture_target_anchor: fixture.targetAnchor,
     applicability: "real_model_only",
-    checks,
+    checks: emittedChecks,
   };
 }
