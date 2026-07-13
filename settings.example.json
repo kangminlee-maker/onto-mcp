@@ -73,7 +73,7 @@
             # provider는 사용할 모델 제공자입니다.
             "provider": "openai",
             # model은 사용할 모델 이름입니다.
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             # effort는 추론 강도입니다. 보통 medium이면 충분합니다.
             "effort": "medium",
             # service_tier는 Codex OAuth 경로에서 사용할 응답 속도 계층입니다.
@@ -93,7 +93,7 @@
             # provider는 사용할 모델 제공자입니다.
             "provider": "openai",
             # model은 사용할 모델 이름입니다.
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             # effort는 추론 강도입니다. 보통 medium이면 충분합니다.
             "effort": "medium",
             # service_tier는 Codex OAuth 경로에서 사용할 응답 속도 계층입니다.
@@ -113,7 +113,7 @@
             # provider는 사용할 모델 제공자입니다.
             "provider": "openai",
             # model은 사용할 모델 이름입니다.
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             # effort는 추론 강도입니다. xhigh는 더 깊게 검토하지만 비용과 시간이 늘 수 있습니다.
             "effort": "xhigh",
             # service_tier는 Codex OAuth 경로에서 사용할 응답 속도 계층입니다.
@@ -137,7 +137,7 @@
         # 기준: development-records/benchmark/review-unit-effort-all-units-low-medium-high-decision-rerun2-20260610-winner-selection-merged.json
         "lens": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 240000,
@@ -147,7 +147,7 @@
         },
         "finding_ledger": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 240000,
@@ -157,7 +157,7 @@
         },
         "finding_relation_graph": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 240000,
@@ -167,7 +167,7 @@
         },
         "issue_ledger": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 240000,
@@ -177,7 +177,7 @@
         },
         "deliberation_plan": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 240000,
@@ -187,7 +187,7 @@
         },
         "problem_framing": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 240000,
@@ -204,7 +204,7 @@
 
         "issue_stance_response": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 180000,
@@ -214,7 +214,7 @@
         },
         "deliberation_response": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 180000,
@@ -224,7 +224,7 @@
         },
         "deliberation_resolution": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "low"
           },
           "timeout_ms": 240000,
@@ -234,7 +234,7 @@
         },
         "synthesis_response": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 180000,

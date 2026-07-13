@@ -510,7 +510,7 @@ describe("resolveSettingsChain", () => {
           settings.review?.execution?.units?.[
             unitId as (typeof REVIEW_EXECUTION_UNIT_IDS)[number]
           ];
-        expect(unit?.llm?.model, `${settingsPath}:${unitId}`).toBe("gpt-5.5");
+        expect(unit?.llm?.model, `${settingsPath}:${unitId}`).toBe("gpt-5.6-sol");
         expect(unit?.llm?.effort, `${settingsPath}:${unitId}`).toBe(effort);
       }
     }
