@@ -1,5 +1,8 @@
 # cert fixture MECE v3 (M4) — 다음 세션 시작점 (2026-07-13)
 
+> **SUPERSEDED (2026-07-13)**: A-1(지금 가능분) 구현·머지 완료(PR #194). 다음 시작점은
+> `20260713-cert-v3-a2-a3-start-here.md`. 이 문서는 A-1 착수 이력으로만 참조.
+
 owner 지시: seat 인벤토리(C) 완료 후 **cert fixture MECE 개선(v3, M4)** 진행.
 설계 SSOT: `development-records/design/20260712-review-cert-v3-fixture-mece-design.md`.
 
