@@ -674,6 +674,59 @@ function resolveToolProfile(): ToolProfile {
     : "full";
 }
 
+// Published MCP protocol revisions onto's response shapes conform to, newest
+// first. onto emits additive fields from later revisions — tool annotations
+// (2025-03-26), structuredContent/outputSchema (2025-06-18) — and does not use
+// JSON-RPC batching (removed in 2025-06-18), so it honestly supports the whole
+// range. The optional 2025-11-25 server features (icons, tasks, elicitation)
+// are not advertised and not required for conformance. Negotiation echoes the
+// client's requested version when supported; otherwise it returns the latest.
+//
+// Scope: this negotiator governs the `initialize` handshake used by every stable
+// revision through 2025-11-25. The in-progress draft (RC 2026-07-28) removes
+// `initialize` for a stateless model (per-request `_meta` version +
+// `server/discover`); it is intentionally out of scope here. onto degrades
+// gracefully with RC-aware clients — an unknown `server/discover` returns -32601
+// (Method not found), so the client falls back to this handshake — a path locked
+// by protocol-version.test.ts. Full RC support is a separate, deferred workstream
+// (the draft is not yet ready for consumption).
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  "2025-11-25",
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+] as const;
+export const LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
+// The floor is the oldest supported revision — the version a client that never
+// completed negotiation is treated as, so it receives the pre-2025 tool surface.
+const FLOOR_PROTOCOL_VERSION: string =
+  SUPPORTED_PROTOCOL_VERSIONS[SUPPORTED_PROTOCOL_VERSIONS.length - 1]!;
+
+export function negotiateProtocolVersion(requested: unknown): string {
+  return typeof requested === "string" &&
+    (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested)
+    ? requested
+    : LATEST_PROTOCOL_VERSION;
+}
+
+// Connection-scoped: a stdio server serves one client per process, so the
+// version negotiated at `initialize` is remembered here and gates which
+// additive tool-definition fields tools/list may emit. It starts at the floor
+// so a client that skips negotiation gets the conservative legacy surface.
+let negotiatedProtocolVersion: string = FLOOR_PROTOCOL_VERSION;
+
+export function setNegotiatedProtocolVersion(version: string): void {
+  negotiatedProtocolVersion = version;
+}
+
+// Revisions that introduced each additive tool-definition field. onto emits a
+// field only to clients that negotiated its revision (or later), so an older
+// client — including an older Claude Desktop that negotiates 2024-11-05 —
+// receives byte-identical pre-2025 tool definitions. YYYY-MM-DD strings compare
+// chronologically under lexical ordering.
+const TOOL_ANNOTATIONS_SINCE = "2025-03-26";
+const TOOL_OUTPUT_SCHEMA_SINCE = "2025-06-18";
+
 interface ToolAnnotations {
   [key: string]: JsonValue;
   title: string;
@@ -704,19 +757,60 @@ const TOOL_ANNOTATIONS: Record<OntoToolName, ToolAnnotations> = {
   onto_list: { title: "List registry", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
 };
 
-export function advertisedToolDefinitions(): ToolDefinition[] {
+// Declared result schema for tools whose structuredContent shape is stable
+// enough to pin without brittleness. MCP (2025-06-18+, loosened in the draft/RC)
+// requires a tool that declares outputSchema to return conforming
+// structuredContent, so this is intentionally selective. onto_list's three
+// per-kind envelopes are typed and stable; the read/record tools vary by
+// projectionLevel and are deliberately deferred. Parity with the real output is
+// enforced by tool-surface.behavior.test.ts against these declared shapes.
+const TOOL_OUTPUT_SCHEMAS: Partial<Record<OntoToolName, JsonValue>> = {
+  onto_list: {
+    type: "object",
+    anyOf: [
+      {
+        required: ["full", "coreAxis"],
+        properties: {
+          full: { type: "array", items: { type: "string" } },
+          coreAxis: { type: "array", items: { type: "string" } },
+        },
+      },
+      {
+        required: ["domains"],
+        properties: { domains: { type: "array", items: { type: "string" } } },
+      },
+      {
+        required: ["sourceProfiles"],
+        properties: { sourceProfiles: { type: "array" } },
+      },
+    ],
+  },
+};
+
+export function advertisedToolDefinitions(
+  protocolVersion: string = negotiatedProtocolVersion,
+): ToolDefinition[] {
   const base =
     resolveToolProfile() === "simple"
       ? TOOL_DEFINITIONS.filter((tool) =>
           new Set<string>(OntoSimpleProfileToolNames).has(tool.name),
         )
       : TOOL_DEFINITIONS;
-  // Merge advisory hints onto a copy — TOOL_DEFINITIONS stays the pristine
-  // dispatch source; only tools/list carries annotations.
-  return base.map((tool) => ({
-    ...tool,
-    annotations: TOOL_ANNOTATIONS[tool.name],
-  }));
+  const withAnnotations = protocolVersion >= TOOL_ANNOTATIONS_SINCE;
+  const withOutputSchema = protocolVersion >= TOOL_OUTPUT_SCHEMA_SINCE;
+  // Merge additive fields onto a copy — TOOL_DEFINITIONS stays the pristine
+  // dispatch source; only tools/list carries them, and only for clients that
+  // negotiated the revision that introduced each field. A client below both
+  // thresholds receives the definition unchanged.
+  return base.map((tool) => {
+    const merged: ToolDefinition = { ...tool };
+    if (withAnnotations) merged.annotations = TOOL_ANNOTATIONS[tool.name];
+    if (withOutputSchema) {
+      const outputSchema = TOOL_OUTPUT_SCHEMAS[tool.name];
+      if (outputSchema !== undefined) merged.outputSchema = outputSchema;
+    }
+    return merged;
+  });
 }
 
 export const USAGE_GUIDE = `# Using onto via MCP
@@ -1999,38 +2093,6 @@ function jsonRpcError(
   };
 }
 
-// Published MCP protocol revisions onto's response shapes conform to, newest
-// first. onto emits additive fields from later revisions — tool annotations
-// (2025-03-26), structuredContent/outputSchema (2025-06-18) — that older clients
-// ignore, and does not use JSON-RPC batching (removed in 2025-06-18), so it
-// honestly supports the whole range. The optional 2025-11-25 server features
-// (icons, tasks, elicitation) are not advertised and not required for
-// conformance. Negotiation echoes the client's requested version when supported;
-// otherwise it returns the latest, letting the client decide whether to proceed.
-//
-// Scope: this negotiator governs the `initialize` handshake used by every
-// stable revision through 2025-11-25. The in-progress draft (RC 2026-07-28)
-// removes `initialize` for a stateless model (per-request `_meta` version +
-// `server/discover`); it is intentionally out of scope here. onto degrades
-// gracefully with RC-aware clients — an unknown `server/discover` returns
-// -32601 (Method not found), so the client falls back to this handshake — a
-// path locked by protocol-version.test.ts. Full RC support is a separate,
-// deferred workstream (the draft is not yet ready for consumption).
-export const SUPPORTED_PROTOCOL_VERSIONS = [
-  "2025-11-25",
-  "2025-06-18",
-  "2025-03-26",
-  "2024-11-05",
-] as const;
-export const LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
-
-export function negotiateProtocolVersion(requested: unknown): string {
-  return typeof requested === "string" &&
-    (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested)
-    ? requested
-    : LATEST_PROTOCOL_VERSION;
-}
-
 export async function handleRequest(
   message: JsonRpcRequest,
 ): Promise<JsonValue | null> {
@@ -2043,8 +2105,11 @@ export async function handleRequest(
       const params = message.params as
         | { protocolVersion?: unknown }
         | undefined;
+      const negotiated = negotiateProtocolVersion(params?.protocolVersion);
+      // Remember it so tools/list gates its additive fields on the same version.
+      setNegotiatedProtocolVersion(negotiated);
       return jsonRpcResult(message.id, {
-        protocolVersion: negotiateProtocolVersion(params?.protocolVersion),
+        protocolVersion: negotiated,
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: {
           name: "onto-mcp",

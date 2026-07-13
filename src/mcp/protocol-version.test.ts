@@ -99,3 +99,42 @@ describe("graceful downgrade for draft/RC clients", () => {
     }
   });
 });
+
+// End-to-end: the version negotiated at initialize must gate the additive
+// fields tools/list emits on the same connection. An older Claude Desktop that
+// negotiates 2024-11-05 must receive pre-2025 tool definitions.
+describe("initialize → tools/list gating (real connection sequence)", () => {
+  async function toolsListAfterInit(
+    clientVersion: string,
+  ): Promise<Array<Record<string, unknown>>> {
+    await handleRequest({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: clientVersion },
+    });
+    const list = (await handleRequest({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+    })) as { result: { tools: Array<Record<string, unknown>> } };
+    return list.result.tools;
+  }
+
+  it("emits pre-2025 tool defs after a 2024-11-05 initialize", async () => {
+    const tools = await toolsListAfterInit("2024-11-05");
+    expect(tools.length).toBeGreaterThan(0);
+    expect(
+      tools.every(
+        (tool) =>
+          tool.annotations === undefined && tool.outputSchema === undefined,
+      ),
+    ).toBe(true);
+  });
+
+  it("emits annotations + outputSchema after a 2025-11-25 initialize", async () => {
+    const tools = await toolsListAfterInit("2025-11-25");
+    expect(tools.every((tool) => tool.annotations !== undefined)).toBe(true);
+    expect(tools.some((tool) => tool.outputSchema !== undefined)).toBe(true);
+  });
+});
