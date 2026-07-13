@@ -38,7 +38,7 @@
       "units": {
         "lens": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -48,7 +48,7 @@
         },
         "finding_ledger": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -58,7 +58,7 @@
         },
         "finding_relation_graph": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -68,7 +68,7 @@
         },
         "issue_ledger": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -82,7 +82,7 @@
         },
         "deliberation_plan": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -92,7 +92,7 @@
         },
         "problem_framing": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -102,7 +102,7 @@
         },
         "issue_stance_response": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -112,7 +112,7 @@
         },
         "deliberation_response": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -122,7 +122,7 @@
         },
         "deliberation_resolution": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "low"
           },
           "timeout_ms": 600000,
@@ -132,7 +132,7 @@
         },
         "synthesis_response": {
           "llm": {
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium"
           },
           "timeout_ms": 600000,
@@ -147,7 +147,7 @@
           "llm": {
             "auth": "oauth",
             "provider": "openai",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "service_tier": "fast"
           }
         },
@@ -156,7 +156,7 @@
           "llm": {
             "auth": "oauth",
             "provider": "openai",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "service_tier": "fast"
           }
         },
@@ -165,7 +165,7 @@
           "llm": {
             "auth": "oauth",
             "provider": "openai",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "service_tier": "fast"
           }
         }
