@@ -268,6 +268,13 @@ export interface ExecutionOutcome {
   semanticQualityEvidence?: ReviewSemanticQualityEvidence;
   /** Attempt-level recovery marker (opt-in submit salvage). */
   recovery?: "salvaged_submit";
+  /** True when ANY attempt of this dispatch ran with a resubmit error spec
+   * injected (설계 A corrective retry; incl. the attempt-0 structural
+   * pre-injection). Loop-scope accumulated: the spec fires on a FAILED
+   * iteration and the healed submit returns on the NEXT one, so per-attempt
+   * capture would systematically miss exactly the healed cases
+   * (review-cert/v2 disclosure source — 20260712-review-cert-v2-design §5.2). */
+  resubmitApplied?: true;
   /** True when this outcome came from the nested-workers batch WINDOW
    * (batch-ok, or a batch failure finalized under an explicit zero-retry
    * policy) rather than a directly-observed flat dispatch. The dispatch
@@ -1937,6 +1944,13 @@ export async function applyResubmitErrorSpec(args: {
   attempt: number;
   reviewExecutionProfile?: ReviewExecutionProfile | undefined;
   errorLogPath: string;
+  /** When provided, a spec application also refreshes the context manifest's
+   * packet_sha256 for the mutated packet. The manifest pins each packet's
+   * dispatch-time hash and continuation FAIL-CLOSES on mismatch
+   * (packet_hash_mismatch), so a runtime-owned packet mutation without a
+   * manifest refresh bricks `onto_review_continue` for any session halted
+   * after a resubmit injection. */
+  executionPlan?: ReviewExecutionPlan | undefined;
 }): Promise<boolean> {
   if (args.reviewExecutionProfile?.retry?.resubmit?.enabled !== true) {
     return false;
@@ -1945,7 +1959,50 @@ export async function applyResubmitErrorSpec(args: {
   const routing = outputFormat
     ? RESUBMIT_UNIT_ROUTING[outputFormat]
     : undefined;
-  return routing ? routing.apply(args) : false;
+  const applied = routing ? await routing.apply(args) : false;
+  if (applied && args.executionPlan !== undefined) {
+    await refreshManifestPacketHash({
+      executionPlan: args.executionPlan,
+      packetPath: args.dispatch.packet_path,
+    });
+  }
+  return applied;
+}
+
+/** K2 (20260712-stance-ref-vocabulary-unification-design.md §5): re-pin the
+ * manifest packet_sha256 after a legitimate runtime-owned packet mutation
+ * (resubmit error spec). No-op when the packet has no manifest ref yet. */
+async function refreshManifestPacketHash(args: {
+  executionPlan: ReviewExecutionPlan;
+  packetPath: string;
+}): Promise<void> {
+  let manifestPath: string;
+  let manifest: ReviewContextManifestArtifact;
+  try {
+    ({ manifestPath, manifest } = await readReviewContextManifest(
+      args.executionPlan,
+    ));
+  } catch {
+    // No materialized manifest (e.g. unit-scoped test harnesses) → nothing is
+    // pinned, so there is nothing to re-pin.
+    return;
+  }
+  const resolvedPacketPath = path.resolve(args.packetPath);
+  const entry = manifest.packet_refs.find(
+    (ref) => path.resolve(ref.packet_ref) === resolvedPacketPath,
+  );
+  if (!entry) return;
+  const packetSha256 = await optionalFileDigest(args.packetPath);
+  if (!packetSha256 || packetSha256 === entry.packet_sha256) return;
+  const updatedManifest: ReviewContextManifestArtifact = {
+    ...manifest,
+    packet_refs: manifest.packet_refs.map((ref) =>
+      path.resolve(ref.packet_ref) === resolvedPacketPath
+        ? { ...ref, packet_sha256: packetSha256 }
+        : ref,
+    ),
+  };
+  await writeYamlDocument(manifestPath, updatedManifest);
 }
 
 /** deliberation unit_id is `deliberation:<issueId>:<lensId>` (the live colon
@@ -2557,7 +2614,10 @@ async function invokeExecutor(
   return parseExecutorRunMetadata(stdout);
 }
 
-function toUnitExecutionResult(
+// Exported for the resubmit-marker falsifiability tests (review-cert/v2
+// §5.3): the outcome→unit-result projection is where the marker would be
+// silently dropped if the wiring regressed.
+export function toUnitExecutionResult(
   outcome: ExecutionOutcome,
 ): ReviewUnitExecutionResult {
   if (outcome.preservedResult) {
@@ -2580,6 +2640,7 @@ function toUnitExecutionResult(
     ...(outcome.attemptCount !== undefined
       ? { attempt_count: outcome.attemptCount }
       : {}),
+    ...(outcome.resubmitApplied ? { resubmit_applied: true } : {}),
     ...(outcome.packetBytes !== undefined
       ? { packet_bytes: outcome.packetBytes }
       : {}),
@@ -4044,6 +4105,7 @@ async function runSingleDispatchWithRetries(args: {
     dispatch,
     fallback: unitTimeoutMs,
   });
+  let resubmitApplied = false;
   for (let attempt = 0; attempt <= effectiveMaxRetries; attempt += 1) {
     attemptsUsed = attempt + 1;
     if (attempt === 0) {
@@ -4051,13 +4113,14 @@ async function runSingleDispatchWithRetries(args: {
       // 이 루프 밖에서 실패해 frozen salvage input만 남는다 — 그 구조적
       // 근거가 있으면 첫 flat 시도 전에 오류 명세를 주입해 blind 재실행을
       // 막는다. (스위치 OFF·미지원 output_format·freeze 부재 시 no-op)
-      await applyResubmitErrorSpec({
+      resubmitApplied = (await applyResubmitErrorSpec({
         dispatch,
         error: null,
         attempt: 0,
         reviewExecutionProfile,
         errorLogPath: executionPlan.error_log_path,
-      });
+        executionPlan,
+      })) || resubmitApplied;
     }
     try {
       const executorMetadata = await invokeExecutor(
@@ -4086,6 +4149,7 @@ async function runSingleDispatchWithRetries(args: {
         startedAtMs,
         completedAtMs,
         attemptCount: attempt + 1,
+        ...(resubmitApplied ? { resubmitApplied: true as const } : {}),
         ...(executorMetadata !== undefined ? { executorMetadata } : {}),
         artifactGenerationRealization:
           executorMetadata?.artifact_generation_realization ??
@@ -4111,13 +4175,14 @@ async function runSingleDispatchWithRetries(args: {
             `error: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`,
           ],
         );
-        await applyResubmitErrorSpec({
+        resubmitApplied = (await applyResubmitErrorSpec({
           dispatch,
           error,
           attempt,
           reviewExecutionProfile,
           errorLogPath: executionPlan.error_log_path,
-        });
+          executionPlan,
+        })) || resubmitApplied;
         if (dispatch.unit_kind === "synthesize") {
           await appendExecutionProgress(
             executionPlan.error_log_path,
@@ -4218,6 +4283,7 @@ async function runSingleDispatchWithRetries(args: {
           completedAtMs: Date.now(),
           attemptCount: attemptsUsed + 1,
           recovery: "salvaged_submit",
+          ...(resubmitApplied ? { resubmitApplied: true as const } : {}),
           childOutcomes: [failedOutcome],
           ...(executorMetadata !== undefined ? { executorMetadata } : {}),
           artifactGenerationRealization:
@@ -4256,6 +4322,7 @@ async function runSingleDispatchWithRetries(args: {
     startedAtMs,
     completedAtMs,
     attemptCount: attemptsUsed,
+    ...(resubmitApplied ? { resubmitApplied: true as const } : {}),
     packetBytes,
     outputBytes,
     failure,

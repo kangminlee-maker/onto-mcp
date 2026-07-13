@@ -230,11 +230,11 @@ export function parseRuntimeIssueStanceSchemaContext(
       `Runtime Issue Stance Input Projection.finding_summaries[${index}].lens_id`,
     );
     if (lensId !== requestedLensId) continue;
-    const findingId = requireStringValue(
-      finding.finding_id,
-      `Runtime Issue Stance Input Projection.finding_summaries[${index}].finding_id`,
-    );
-    addPromptRefVariants({ refs: requestedLensFindingRefs, artifactRef: findingLedgerRef, anchor: findingId });
+    // Issue-strict parity with the on-disk validator (issue-artifact-runtime
+    // buildStanceEvidenceRefs): the lens's RAW finding evidence refs are a
+    // per-lens union, but finding-ledger#findingId anchors are registered ONLY
+    // per issue (surface_finding_ids loop below) — a cross-issue anchor that
+    // passed submit here used to be rejected at the on-disk re-validation.
     for (const evidenceRef of stringArray(
       finding.evidence_refs,
       `Runtime Issue Stance Input Projection.finding_summaries[${index}].evidence_refs`,
@@ -321,6 +321,10 @@ export function parseRuntimeIssueStanceSchemaContext(
     )) {
       addPromptRefVariants({ refs, artifactRef: findingLedgerRef, anchor: findingId });
       for (const relationId of relationRefsByFindingId.get(findingId) ?? []) {
+        // Bare relation id parity with the on-disk validator, which registers
+        // the raw id for graph-endpoint relations — a bare `rel-N` submit used
+        // to be rejected here but accepted on disk (live-observed class).
+        refs.add(relationId);
         addPromptRefVariants({
           refs,
           artifactRef: relationGraphRef,
@@ -340,6 +344,7 @@ export function parseRuntimeIssueStanceSchemaContext(
       });
     }
     for (const relationId of dependencyRelationRefsByIssueId.get(issueId) ?? []) {
+      refs.add(relationId); // bare-id parity with the on-disk dependency loop
       addPromptRefVariants({
         refs,
         artifactRef: relationGraphRef,

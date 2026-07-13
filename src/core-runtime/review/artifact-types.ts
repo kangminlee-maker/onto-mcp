@@ -770,6 +770,11 @@ export interface ReviewUnitExecutionResult {
    * completions — benchmark surfaces can split self-submitted vs salvaged.
    */
   recovery?: "salvaged_submit" | null;
+  /** True when any attempt of this unit ran with a resubmit error spec
+   * injected (설계 A corrective retry, incl. attempt-0 pre-injection).
+   * Self-authored completions stay unmarked; benchmark surfaces project this
+   * into resubmit_applied_unit_ids/_count (review-cert/v2 disclosure). */
+  resubmit_applied?: boolean;
   packet_bytes?: number | null;
   output_bytes?: number | null;
   input_tokens?: number | null;

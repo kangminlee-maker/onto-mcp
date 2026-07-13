@@ -47,13 +47,13 @@ describe("collectModelSelections", () => {
         provider: "openai",
         model: "gpt-5.5",
         path: "review.execution.actors.teamlead.llm",
-        requiredRole: "author",
+        requiredRole: "review",
       },
       {
         provider: undefined,
         model: "gpt-5.5",
         path: "review.execution.units.lens.llm",
-        requiredRole: "author",
+        requiredRole: "review",
       },
     ]);
   });
@@ -68,7 +68,7 @@ describe("collectModelSelections", () => {
         provider: "grok",
         model: undefined,
         path: "review.execution.lens.llm",
-        requiredRole: "author",
+        requiredRole: "review",
       },
     ]);
   });
@@ -349,11 +349,32 @@ describe("requiredSupportedModelRoleForDispatch", () => {
       .toBe("answer_support_judge");
   });
 
+  it("maps the review execution seats (actors, legacy actors, known units) to review", () => {
+    for (
+      const path of [
+        "review.execution.actors.teamlead.llm",
+        "review.execution.actors.lens.llm",
+        "review.execution.actors.synthesize.llm",
+        "review.execution.teamlead.llm",
+        "review.execution.lens.llm",
+        "review.execution.synthesize.llm",
+        "review.execution.units.lens.llm",
+        "review.execution.units.deliberation_resolution.llm",
+        "review.execution.units.synthesis_response.llm",
+      ]
+    ) {
+      expect(requiredSupportedModelRoleForDispatch({ kind: "settings_path", path }))
+        .toBe("review");
+    }
+  });
+
   it("requires the strongest certification (author) for every unmapped path", () => {
     for (
       const path of [
-        "review.execution.actors.lens.llm",
-        "review.execution.units.lens.llm",
+        // Unknown review actor/unit keys reach the resolver via G7's raw walk
+        // (no strict zod there) — they must stay fail-closed, not become review.
+        "review.execution.actors.bogus_actor.llm",
+        "review.execution.units.bogus_unit.llm",
         "review.execution.retry.salvage.transcription_llm",
         "llm",
         "some.future.unmapped.seat.llm",
@@ -514,12 +535,53 @@ describe("assertSupportedModelRoutes (role coverage)", () => {
     ).toThrow(/seat requires confirmation_provider/);
   });
 
-  // N3 (G7/committed-settings scope): review seats are unmapped → author.
-  it("rejects a role-restricted entry at a review unit seat (unmapped → author)", () => {
+  // N3 (G7/committed-settings scope): review seats now carry their own role —
+  // a synthesize-only entry is still rejected there, with the review detail.
+  it("rejects a role-restricted entry at a review unit seat (requires review)", () => {
     expect(() =>
       assertSupportedModelRoutes(
         [haiku("review.execution.units.lens.llm")],
         roleRestricted,
+      )
+    ).toThrow(/certified for \[semantic_map_synthesize\], seat requires review/);
+  });
+
+  // The review role: certified there and only there (review-role design §3).
+  it("passes a review-roled entry at review seats and rejects it elsewhere", () => {
+    const reviewOnly: SupportedModelRegistry = {
+      schema_version: "1",
+      supported_models: [
+        ...roleRestricted.supported_models,
+        {
+          provider: "openai",
+          model: "gpt-5.6-sol",
+          verified_at: "2026-07-11",
+          benchmark_evidence_refs: ["development-records/benchmark/z.json"],
+          roles: ["review"],
+        },
+      ],
+    };
+    const sol = (path: string) => route("openai", "gpt-5.6-sol", path);
+    expect(() =>
+      assertSupportedModelRoutes(
+        [
+          sol("review.execution.actors.teamlead.llm"),
+          sol("review.execution.lens.llm"),
+          sol("review.execution.units.deliberation_resolution.llm"),
+        ],
+        reviewOnly,
+      )
+    ).not.toThrow();
+    expect(() => assertSupportedModelRoutes([sol(AUTHOR_SEAT)], reviewOnly))
+      .toThrow(/certified for \[review\], seat requires author/);
+    expect(() => assertSupportedModelRoutes([sol(SYNTH_SEAT)], reviewOnly))
+      .toThrow(/seat requires semantic_map_synthesize/);
+    // Unknown unit key: fail-closed author, so the review-roled entry is
+    // rejected — the bound is what keeps G7's raw walk conservative.
+    expect(() =>
+      assertSupportedModelRoutes(
+        [sol("review.execution.units.bogus_unit.llm")],
+        reviewOnly,
       )
     ).toThrow(/seat requires author/);
   });
@@ -709,7 +771,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
         provider: "openai",
         model: "gpt-5.5",
         path: "review.execution.units.lens.llm",
-        requiredRole: "author",
+        requiredRole: "review",
       });
     expect(() => assertSupportedModelRoutes(routes, registry)).not.toThrow();
   });
@@ -721,7 +783,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
         provider: "grok",
         model: "gpt-5.5",
         path: "review.execution.units.lens.llm",
-        requiredRole: "author",
+        requiredRole: "review",
       });
     expect(() => assertSupportedModelRoutes(routes, registry)).toThrow(/grok\/gpt-5\.5/);
   });
@@ -738,7 +800,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
         provider: "grok",
         model: undefined,
         path: "review.execution.lens.llm",
-        requiredRole: "author",
+        requiredRole: "review",
       });
     expect(() => assertSupportedModelRoutes(routes, registry))
       .toThrow(/unresolved model/);
@@ -760,7 +822,7 @@ describe("collectEffectiveModelRoutes (inheritance)", () => {
         provider: "grok",
         model: undefined,
         path: "review.execution.units.lens.llm",
-        requiredRole: "author",
+        requiredRole: "review",
       });
     expect(() => assertSupportedModelRoutes(routes, registry))
       .toThrow(/unresolved model/);

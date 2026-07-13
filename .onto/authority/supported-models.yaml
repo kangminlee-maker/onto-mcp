@@ -88,6 +88,35 @@ supported_models:
       claude-haiku-4-5 candidate fell short (3/90). Support and the
       candidate>=baseline gate — verified; PRELIMINARY for any absolute
       performance claim beyond the candidate>=baseline comparison.
+  - provider: anthropic
+    model: claude-fable-5
+    verified_at: "2026-07-13"
+    roles:
+      - review
+    benchmark_evidence_refs:
+      - development-records/benchmark/review-cert/20260712-215835/review-cert-record.json
+    notes: >-
+      Role-scoped certification for `review` (INV-MODEL-1 review-role
+      registration design §4; review-cert/v2 resubmit-enabled contract).
+      Verified via the two-arm live cert run 20260712-215835: contemporaneous
+      registry-anchored baseline gpt-5.5@medium vs candidate
+      claude-fable-5@medium on the claude OAuth CLI route, 3 reps × 2 fixtures
+      per arm, run_controls {salvage:false, resubmit:true} pinned in-record.
+      Support: all four arm×fixture keys at 3/3 completed reps; the cited
+      record recomputes to zero validateReviewCertRecord violations; the
+      arm-level dispatch witness held (declared == witnessed; 239 baseline /
+      603 candidate worker dispatches). Quality gate: quality_pass=true —
+      candidate >= baseline on all 24 fixture×check pass-rates (22 equal incl.
+      the decisive recall spine at 1.0; 2 above baseline:
+      review-pipeline-target-v1 false_materiality_guard and
+      boundary_uncertainty_preservation 0.667 -> 1.0; zero regressions).
+      resubmit_usage disclosure: candidate 12/218 units (5.5%) vs baseline
+      8/168 (4.8%) — symmetric, no disproportionate healing dependence. All 21
+      not_run rows in the run are environmental (codex 401 token revocation /
+      claude monthly spend limit), zero candidate capability failures — run
+      README carries the honest provenance. Support and the
+      candidate>=baseline gate — verified; PRELIMINARY for any absolute
+      performance claim beyond the candidate>=baseline comparison.
   - provider: openai
     model: gpt-5.6-luna
     verified_at: "2026-07-11"

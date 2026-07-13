@@ -32,18 +32,21 @@ import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { resolveInstallationPath } from "./installation-paths.js";
+import { REVIEW_EXECUTION_UNIT_IDS } from "./review-execution-units.js";
 
 export const SUPPORTED_MODELS_AUTHORITY_PATH =
   ".onto/authority/supported-models.yaml";
 
 /**
- * Role vocabulary — the sealed 5-role set, each grounded in an existing code
- * seat (INV-MODEL-1 role-aware design §2.1): `author` (semantic_author actor,
- * certified by golden full-pipeline completion), `semantic_map_synthesize` /
+ * Role vocabulary — the sealed 6-role set, each grounded in an existing code
+ * seat (INV-MODEL-1 role-aware design §2.1; `review` added by the 2026-07-11
+ * review-role registration design): `author` (semantic_author actor, certified
+ * by golden full-pipeline completion), `semantic_map_synthesize` /
  * `semantic_map_verify` (the semantic-map capability pair), `answer_support_judge`
- * (the judge adoption dispatch), `confirmation_provider` (confirmation actor).
- * The vocabulary is sealed here; which roles are LISTABLE in a registry entry is
- * governed separately by {@link CONTRACTED_ROLES}.
+ * (the judge adoption dispatch), `confirmation_provider` (confirmation actor),
+ * `review` (the review execution seats — actors teamlead/lens/synthesize and
+ * their unit overrides). The vocabulary is sealed here; which roles are
+ * LISTABLE in a registry entry is governed separately by {@link CONTRACTED_ROLES}.
  */
 export const SUPPORTED_MODEL_ROLES = [
   "author",
@@ -51,6 +54,7 @@ export const SUPPORTED_MODEL_ROLES = [
   "semantic_map_verify",
   "answer_support_judge",
   "confirmation_provider",
+  "review",
 ] as const;
 
 export type SupportedModelRole = (typeof SUPPORTED_MODEL_ROLES)[number];
@@ -65,6 +69,10 @@ export type SupportedModelRole = (typeof SUPPORTED_MODEL_ROLES)[number];
 export const CONTRACTED_ROLES: readonly SupportedModelRole[] = [
   "author",
   "semantic_map_synthesize",
+  // Evidence contract: review-cert/v2 (2026-07-11 review-role registration
+  // design §4) — per-check pass-rate vs a contemporaneous baseline arm,
+  // absolute core-check floors, pinned check universe, R7 human curation.
+  "review",
 ];
 
 const SupportedModelEntrySchema = z
@@ -180,6 +188,25 @@ export type SupportedModelDispatch =
  * certification (golden full-pipeline completion) — so a role-restricted entry
  * can never occupy an unmapped seat (fail-closed default).
  */
+/** Bounded matcher for the review execution seats (review-role design §3):
+ * the three actor seats (nested and legacy settings forms — the same fixed
+ * actor names the settings schema accepts) and unit overrides restricted to
+ * the KNOWN unit-id vocabulary. The bound is load-bearing: G7 walks raw
+ * parsed YAML without the strict zod layer, so an unknown actor or unit key
+ * DOES reach the resolver — it must fall through to the fail-closed `author`
+ * default, never be adopted as a review seat. Salvage transcription
+ * (`...retry.salvage.transcription_llm`) deliberately does not match. */
+const REVIEW_ACTOR_SEAT_PATH =
+  /^review\.execution\.(?:actors\.)?(?:teamlead|lens|synthesize)\.llm$/;
+const REVIEW_UNIT_SEAT_PATH = /^review\.execution\.units\.([^.[]+)\.llm$/;
+
+function isReviewSeatPath(path: string): boolean {
+  if (REVIEW_ACTOR_SEAT_PATH.test(path)) return true;
+  const unit = REVIEW_UNIT_SEAT_PATH.exec(path);
+  return unit !== null &&
+    (REVIEW_EXECUTION_UNIT_IDS as readonly string[]).includes(unit[1]!);
+}
+
 export function requiredSupportedModelRoleForDispatch(
   dispatch: SupportedModelDispatch,
 ): SupportedModelRole {
@@ -194,8 +221,10 @@ export function requiredSupportedModelRoleForDispatch(
     case RECONSTRUCT_SEMANTIC_MAP_SYNTHESIZE_LLM_ROUTE_PATH:
       return "semantic_map_synthesize";
     default:
-      // Review seats, salvage transcription, top-level llm, and any future
-      // unmapped path: require the strongest certification (fail-closed).
+      if (isReviewSeatPath(dispatch.path)) return "review";
+      // Salvage transcription, top-level llm, unknown review actor/unit keys,
+      // and any future unmapped path: require the strongest certification
+      // (fail-closed).
       return "author";
   }
 }

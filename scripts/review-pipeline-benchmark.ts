@@ -2,8 +2,10 @@ import { execFile, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import YAML from "yaml";
+import type { ReviewArtifactGenerationRealization } from "../src/core-runtime/review/artifact-types.js";
 import {
   REVIEW_EXECUTION_UNIT_IDS,
   defaultReviewExecutionUnits,
@@ -49,6 +51,11 @@ interface BenchmarkOptions {
   runs: number;
   caseSelectors: string[];
   executorRealization?: ExecutorRealization;
+  /** Written into the temp project settings verbatim. Default "live" preserves
+   * the benchmark's existing behavior; "semantic_mock" (with ONTO_LLM_MOCK=1
+   * and the ts_inline_http executor) is the zero-spend rehearsal path used by
+   * scripts/review-cert-run.mts. */
+  artifactGenerationRealization?: ReviewArtifactGenerationRealization;
   model: string;
   provider: string;
   auth: string;
@@ -66,6 +73,12 @@ interface BenchmarkOptions {
   unitTimeoutMs?: number;
   unitSweepCandidateOnly: boolean;
   maxConcurrentLenses: number;
+  /** Opt-in: write `retry.resubmit.enabled=true` into the temp project
+   * settings so validation rejections get the error-spec corrective retry
+   * (설계 A / 20260712-format-rescue-ladder-design.md §2.1a). Default OFF
+   * keeps the settings byte-identical — cert runs (M-1 raw-measurement pin)
+   * never pass this flag. */
+  retryResubmit: boolean;
 }
 
 interface UnitResult {
@@ -77,6 +90,7 @@ interface UnitResult {
   failure_message?: string | null;
   attempt_count?: number | null;
   recovery?: string | null;
+  resubmit_applied?: boolean;
   packet_bytes?: number | null;
   output_bytes?: number | null;
   input_tokens?: number | null;
@@ -297,8 +311,12 @@ function usage(): string {
     "                                     Repeatable. Default: both",
     "  --fixture <review-pipeline-target-v1|retry-policy-target-v1>",
     "                                     Repeatable. Default: review-pipeline-target-v1",
+    "  --retry-resubmit                   Opt-in: enable retry.resubmit in the temp project",
+    "                                     settings (error-spec corrective retry). Default: off",
     "  --executor-realization <codex|ts_inline_http>",
     "                                     Debug-only legacy CLI override. Omit to use project config.",
+    "  --artifact-generation-realization <live|semantic_mock|boundary_stub|fixture>",
+    "                                     Temp-project settings value. Default: live",
     "  --model <model-id>                  Default: gpt-5.5",
     "  --provider <provider>               Default: openai",
     "  --auth <auth-mode>                  Default: oauth. ts_inline_http requires explicit api_key or local",
@@ -417,6 +435,22 @@ function parseOptions(argv: string[]): BenchmarkOptions {
     );
   }
 
+  const artifactGenerationRealization = readOption(
+    argv,
+    "artifact-generation-realization",
+  ) as ReviewArtifactGenerationRealization | undefined;
+  if (
+    artifactGenerationRealization !== undefined &&
+    artifactGenerationRealization !== "live" &&
+    artifactGenerationRealization !== "semantic_mock" &&
+    artifactGenerationRealization !== "boundary_stub" &&
+    artifactGenerationRealization !== "fixture"
+  ) {
+    throw new Error(
+      `Unknown --artifact-generation-realization value: ${artifactGenerationRealization}`,
+    );
+  }
+
   const timeoutMs = parsePositiveInt(
     readOption(argv, "timeout-ms") ??
       process.env.ONTO_REVIEW_BENCHMARK_TIMEOUT_MS,
@@ -450,6 +484,9 @@ function parseOptions(argv: string[]): BenchmarkOptions {
     runs: parsePositiveInt(readOption(argv, "runs"), 1, "--runs"),
     caseSelectors,
     executorRealization,
+    ...(artifactGenerationRealization !== undefined
+      ? { artifactGenerationRealization }
+      : {}),
     model: readOption(argv, "model") ?? "gpt-5.5",
     provider: readOption(argv, "provider") ?? "openai",
     auth: explicitAuth ?? "oauth",
@@ -467,6 +504,7 @@ function parseOptions(argv: string[]): BenchmarkOptions {
     keepTmp:
       hasFlag(argv, "keep-tmp") ||
       process.env.ONTO_REVIEW_BENCHMARK_KEEP_TMP === "1",
+    retryResubmit: hasFlag(argv, "retry-resubmit"),
     timeoutMs,
     unitTimeoutMs,
     unitSweepCandidateOnly: hasFlag(argv, "unit-sweep-candidate-only"),
@@ -587,7 +625,10 @@ function benchmarkCases(options: BenchmarkOptions): BenchmarkCase[] {
   return cases;
 }
 
-function benchmarkFixture(fixtureId: SemanticQualityGateFixtureId): BenchmarkFixtureSpec {
+/** Exported for scripts/review-cert-run.mts: the cert record's fixture
+ * manifest (target anchor + content sha) derives from THIS single source, so
+ * the manifest can never drift from what the benchmark actually reviews. */
+export function benchmarkFixture(fixtureId: SemanticQualityGateFixtureId): BenchmarkFixtureSpec {
   if (fixtureId === "retry-policy-target-v1") {
     return {
       fixture_id: fixtureId,
@@ -681,7 +722,9 @@ function llmSettingsForEffort(
   };
 }
 
-function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkCase): unknown {
+// Exported for the knob's deterministic verification (off → byte-identical
+// settings, on → resubmit enabled); the CLI path is the only other consumer.
+export function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkCase): unknown {
   const executor = executorSelectionForBenchmark(options.executorRealization);
   const defaultUnits = defaultReviewExecutionUnits();
   const units: Record<string, unknown> = {};
@@ -718,9 +761,13 @@ function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkCase): u
       execution: {
         ...(executor ? { executor } : {}),
         topology: "main-workers",
-        artifact_generation_realization: "live",
+        artifact_generation_realization:
+          options.artifactGenerationRealization ?? "live",
         max_concurrent_lenses: options.maxConcurrentLenses,
-        retry: defaultReviewRetrySettings(),
+        retry: {
+          ...defaultReviewRetrySettings(),
+          ...(options.retryResubmit ? { resubmit: { enabled: true } } : {}),
+        },
         actors: {
           teamlead: {
             seat: "main",
@@ -1212,6 +1259,15 @@ function salvagedUnitIds(units: UnitResult[]): string[] {
     .map((unit) => unit.unit_id as string);
 }
 
+/** Units whose dispatch used the resubmit error-spec channel (설계 A
+ * corrective retry) — marker set by the runner's retry loop, mirrors the
+ * salvaged split above (review-cert/v2 disclosure source). */
+function resubmitAppliedUnitIds(units: UnitResult[]): string[] {
+  return units
+    .filter((unit) => unit.resubmit_applied === true && unit.unit_id)
+    .map((unit) => unit.unit_id as string);
+}
+
 function failureKindCounts(units: UnitResult[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const unit of units) {
@@ -1519,6 +1575,7 @@ async function collectRunSummary(args: {
   );
   const units = unitsFromExecution(execution);
   const salvaged = salvagedUnitIds(units);
+  const resubmitApplied = resubmitAppliedUnitIds(units);
   const packetBytes = units.map((unit) => unit.packet_bytes);
   const outputBytes = units.map((unit) => unit.output_bytes);
   const maxPacketBytes = Math.max(0, ...packetBytes.map((value) => value ?? 0));
@@ -1559,6 +1616,8 @@ async function collectRunSummary(args: {
     total_attempt_count: sumNumbers(units.map((unit) => unit.attempt_count)),
     salvaged_unit_count: salvaged.length,
     salvaged_unit_ids: salvaged,
+    resubmit_applied_unit_count: resubmitApplied.length,
+    resubmit_applied_unit_ids: resubmitApplied,
     failure_kind_counts: failureKindCounts(units),
     unit_summaries: units.map(unitSummary),
     review_profile: manifest.review_execution_profile,
@@ -1772,7 +1831,12 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exit(1);
-});
+// Import guard (codex-review-unit-executor precedent): running the file as a
+// CLI executes the benchmark; importing it (review-cert-run.mts pulls
+// benchmarkFixture) must not.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exit(1);
+  });
+}

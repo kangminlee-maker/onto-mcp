@@ -23,6 +23,7 @@ import {
   SUPPORTED_MODELS_AUTHORITY_PATH,
   type SupportedModelGateOptions,
 } from "./supported-models.js";
+import { REVIEW_EXECUTION_UNIT_IDS } from "./review-execution-units.js";
 
 const LlmAuthModeSchema = z.enum(["api_key", "oauth", "local"]);
 const LlmProviderSchema = z.enum(["openai", "anthropic", "grok", "lmstudio"]);
@@ -96,19 +97,10 @@ const ReviewArtifactGenerationRealizationSchema = z.enum([
 ]);
 const ReviewDeliberationSchema = z.enum(["controlled-lens-deliberation"]);
 const ReviewLensOutputFormatSchema = z.enum(["markdown", "sidecar"]);
-export const REVIEW_EXECUTION_UNIT_IDS = [
-  "lens",
-  "finding_ledger",
-  "finding_relation_graph",
-  "issue_ledger",
-  "issue_stance_matrix",
-  "deliberation_plan",
-  "problem_framing",
-  "issue_stance_response",
-  "deliberation_response",
-  "deliberation_resolution",
-  "synthesis_response",
-] as const;
+// Unit-id vocabulary lives in a leaf module (review-execution-units.ts) so the
+// dispatch-role resolver (supported-models) can bound unit paths without an
+// import cycle; re-exported here so existing consumers keep their import site.
+export { REVIEW_EXECUTION_UNIT_IDS };
 const ReviewExecutionUnitIdSchema = z.enum(REVIEW_EXECUTION_UNIT_IDS);
 const ReviewToolModeSchema = z.enum(["auto", "native", "inline"]);
 const ReviewSubmitSalvageSettingsSchema = z
