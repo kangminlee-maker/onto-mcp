@@ -1943,21 +1943,50 @@ function jsonRpcError(
   };
 }
 
-async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null> {
+// Published MCP protocol revisions onto's response shapes conform to, newest
+// first. onto emits additive fields from later revisions — tool annotations
+// (2025-03-26), structuredContent/outputSchema (2025-06-18) — that older clients
+// ignore, and does not use JSON-RPC batching (removed in 2025-06-18), so it
+// honestly supports the whole range. The optional 2025-11-25 server features
+// (icons, tasks, elicitation) are not advertised and not required for
+// conformance. Negotiation echoes the client's requested version when supported;
+// otherwise it returns the latest, letting the client decide whether to proceed.
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  "2025-11-25",
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+] as const;
+export const LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
+
+export function negotiateProtocolVersion(requested: unknown): string {
+  return typeof requested === "string" &&
+    (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested)
+    ? requested
+    : LATEST_PROTOCOL_VERSION;
+}
+
+export async function handleRequest(
+  message: JsonRpcRequest,
+): Promise<JsonValue | null> {
   if (!message.id && message.method?.startsWith("notifications/")) {
     return null;
   }
 
   switch (message.method) {
-    case "initialize":
+    case "initialize": {
+      const params = message.params as
+        | { protocolVersion?: unknown }
+        | undefined;
       return jsonRpcResult(message.id, {
-        protocolVersion: "2024-11-05",
+        protocolVersion: negotiateProtocolVersion(params?.protocolVersion),
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: {
           name: "onto-mcp",
           version: await readPackageVersion(),
         },
       });
+    }
     case "ping":
       return jsonRpcResult(message.id, {});
     case "tools/list":
