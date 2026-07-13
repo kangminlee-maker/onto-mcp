@@ -118,6 +118,35 @@ supported_models:
       candidate>=baseline gate — verified; PRELIMINARY for any absolute
       performance claim beyond the candidate>=baseline comparison.
   - provider: openai
+    model: gpt-5.6-sol
+    verified_at: "2026-07-13"
+    roles:
+      - review
+    benchmark_evidence_refs:
+      - development-records/benchmark/review-cert/20260713-095011/review-cert-record.json
+    notes: >-
+      Role-scoped certification for `review` (INV-MODEL-1 review-role
+      registration design §4; review-cert/v2 resubmit-enabled contract) at
+      reasoning_effort=medium via the codex OAuth route. Verified via the
+      two-arm live cert run 20260713-095011: contemporaneous registry-anchored
+      baseline gpt-5.5@medium vs candidate gpt-5.6-sol@medium, 3 reps × 2
+      fixtures per arm, run_controls {salvage:false, resubmit:true} pinned
+      in-record. Support: all four arm×fixture keys at 3/3 completed reps; the
+      cited record recomputes to zero validateReviewCertRecord violations; the
+      arm-level dispatch witness held (declared == witnessed at
+      reasoning_effort=medium; 130 baseline / 216 candidate worker dispatches).
+      Quality gate: quality_pass=true — candidate >= baseline on all 24
+      fixture×check pass-rates (20 equal incl. the decisive recall spine at 1.0;
+      4 above baseline: false_materiality_guard and
+      boundary_uncertainty_preservation on BOTH fixtures 0.667 -> 1.0; zero
+      regressions). This medium-effort config passes the guard axis that the
+      earlier gpt-5.6-sol@high attempt (../20260711-140727, a support-axis
+      FAILURE) could not reach. resubmit_usage disclosure: candidate 2/186
+      units (1.1%) vs baseline 3/138 (2.2%). One not_run row (a single
+      non-recurring deliberation-participant degradation, r2) — see run README.
+      Support and the candidate>=baseline gate — verified; PRELIMINARY for any
+      absolute performance claim beyond the candidate>=baseline comparison.
+  - provider: openai
     model: gpt-5.6-luna
     verified_at: "2026-07-11"
     roles:
