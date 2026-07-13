@@ -83,6 +83,19 @@ npm exec -- onto mcp
 Before running reviews, configure an LLM provider in `.onto/settings.json` or
 `~/.onto/settings.json` (see [Configuration](#configuration)).
 
+## onto CLI
+
+The `onto` binary exposes a small set of commands; the actual product work is
+driven through the MCP tools by your host.
+
+| Command | What it does |
+|---|---|
+| `onto mcp` | Start the MCP stdio tool server — each MCP host launches this (see [Quickstart](#quickstart)) |
+| `onto register` | Register the server into supported MCP hosts (see [Quickstart](#quickstart)) |
+| `onto configure-provider` | Write LLM provider/model settings into the settings.json chain (see [Configuration](#configuration)) |
+| `onto seats` | Print a read-only inventory of every LLM model seat the runtime can dispatch, resolved against the settings.json chain (`--json` for machine output); writes nothing |
+| `onto watch [session]` | Open a live, read-only TUI over a review/reconstruct session — pass a session id substring or path, or omit it for the most recent (see [Observing a run](#observing-a-run)) |
+
 ## What it does
 
 ### Review
@@ -159,16 +172,12 @@ point-in-time map (v0.4.7 snapshot, not maintained) is kept at
 | `onto_review_round` | Host-orchestration: return the units ready to execute now, with prompt packets materialized |
 | `onto_review_advance` | Host-orchestration: report host-executed units; onto validates seats, records results, and returns the next round |
 | `onto_review_cancel` | Request cancellation for a running review session |
-| `onto_review_status` | Read structured status and artifact refs |
-| `onto_review_result` | Read bounded result projections; `compact`/`standard` use count-and-signal summaries, `full` includes `review-record.yaml` and final output |
-| `onto_list_lenses` | List canonical lens sets |
-| `onto_list_domains` | List available domain ids |
-| `onto_list_source_profiles` | List reconstruct source profiles |
+| `onto_review_read` | Read a review session — one entry point for liveness while running and the bounded result once complete; `projectionLevel` `compact`/`standard`/`full` (`full` adds `review-record.yaml` and final output) |
+| `onto_list` | List a registry by `kind`: `lenses` (canonical lens sets), `domains` (available domain ids), or `source_profiles` (reconstruct source profiles) |
 | `onto_observe_source` | Materialize reconstruct material profile, inventory, source observations, and initial record |
 | `onto_validate_reconstruct_directive` | Validate LLM-authored reconstruct artifacts |
 | `onto_reconstruct` | Run the material-aware direct-call reconstruct path with runtime validation gates |
-| `onto_reconstruct_status` | Read reconstruct session status, progress, counts, and artifact refs |
-| `onto_reconstruct_result` | Read `reconstruct-record.yaml`, run manifest, progress projection, and final output |
+| `onto_reconstruct_read` | Read a reconstruct session — stage progress, liveness, and counts, or the full record, run manifest, and final output at `projectionLevel=full` |
 
 MCP results include `llmPresentation` prompts: the runtime supplies bounded
 facts, and the host LLM uses those prompts to explain the opening brief and
@@ -185,17 +194,22 @@ onto without external docs:
   `intent`, `reviewMode`) and `reconstruct_seed` (args: `targetRefs`,
   `intent`).
 
-`onto_review_status` accepts `projectionLevel` (`compact` | `standard` |
+`onto_review_read` accepts `projectionLevel` (`compact` | `standard` |
 `full`); use `compact` in token-limited hosts.
 
-### Runtime watcher
+### Observing a run
 
-When a review or reconstruct run starts, the runtime writes a session-local
-`runtime-events.ndjson` stream and tries to open a live watcher in a supported
-terminal (tmux, Warp, Cursor, iTerm2, Apple Terminal, Codex Desktop with a
-configured launcher). Set `ONTO_RUNTIME_WATCHER=0` to disable, or
-`ONTO_RUNTIME_WATCHER_COMMAND` with a `{watcherCommand}` template for
-unsupported hosts.
+`onto watch` opens a live, read-only TUI over a review or reconstruct session:
+browse the workflow tree, node details, and log. Pass a session id substring or
+a session path, or omit it to attach to the most recent session
+(`--project-root` selects where to look for `.onto/{review,reconstruct}`). It
+observes only — it writes nothing and drives nothing.
+
+The runtime also writes a session-local `runtime-events.ndjson` stream and tries
+to open a watcher automatically in a supported terminal (tmux, Warp, Cursor,
+iTerm2, Apple Terminal, Codex Desktop with a configured launcher). Set
+`ONTO_RUNTIME_WATCHER=0` to disable, or `ONTO_RUNTIME_WATCHER_COMMAND` with a
+`{watcherCommand}` template for unsupported hosts.
 
 ## Configuration
 
@@ -322,8 +336,10 @@ onto configure-provider --provider anthropic --model claude-opus-4-8 --auth oaut
 - `--project`는 프로젝트 seat(`.onto/settings.json`)에, 생략하면 사용자 seat
   (`~/.onto/settings.json`)에 기록합니다.
 - 지원 model id는 [`.onto/authority/supported-models.yaml`](.onto/authority/supported-models.yaml)가
-  authority입니다(현재 anthropic: `claude-opus-4-8`; `claude-sonnet-5`는
-  `semantic_map_synthesize` 역할 전용).
+  authority입니다. 범용 seat은 `gpt-5.5`(openai)·`claude-opus-4-8`(anthropic)이고,
+  역할 전용으로 `review`에 `gpt-5.6-sol`·`claude-fable-5`, `semantic_map_synthesize`에
+  `gpt-5.6-luna`·`claude-sonnet-5`가 인증돼 있습니다. 현재 프로젝트에서 실제로
+  해석되는 seat은 `onto seats`로 확인하세요.
 - 이 명령은 actor 블록만 기록합니다. `units[].llm.model`로 unit별 model을 고정해
   두었다면(위 정적 프로필 예시가 그렇습니다) 같은 model로 바꾸거나 그 `model` 키를
   지워 actor 값을 상속하게 하세요.
