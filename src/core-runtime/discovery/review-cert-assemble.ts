@@ -257,10 +257,7 @@ export function assembleReviewCertRecord(
   if (guardViolations.length > 0) {
     return { record: null, violations: guardViolations };
   }
-  const aggregates = computeReviewCertAggregates(
-    args.runs,
-    args.fixtures.map((fixture) => fixture.fixture_id),
-  );
+  const aggregates = computeReviewCertAggregates(args.runs, args.fixtures);
   const armDispatch = (arm: ReviewCertArm) => {
     const effort = projection.witnessed![arm].reasoning_effort;
     return effort !== undefined ? { reasoning_effort: effort } : {};
