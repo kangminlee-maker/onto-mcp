@@ -93,3 +93,66 @@ describe("MCP tool surface — server boundary behavior", () => {
     expect(JSON.stringify(result)).toContain("Unknown tool");
   });
 });
+
+// Advisory tool annotations flow through tools/list so hosts can badge safety
+// (read-only, non-destructive) and cost (open-world LLM dispatch) without
+// parsing descriptions. These hints are carried unchanged into the draft/RC.
+describe("MCP tool annotations", () => {
+  afterEach(() => setProfile(undefined));
+
+  function annotationsByName(): Record<
+    string,
+    Record<string, unknown> | undefined
+  > {
+    const out: Record<string, Record<string, unknown> | undefined> = {};
+    for (const tool of advertisedToolDefinitions()) {
+      out[String(tool.name)] = tool.annotations as
+        | Record<string, unknown>
+        | undefined;
+    }
+    return out;
+  }
+
+  it("annotates every advertised tool in both profiles", () => {
+    for (const profile of [undefined, "simple"] as const) {
+      setProfile(profile);
+      const tools = advertisedToolDefinitions();
+      expect(tools.length).toBeGreaterThan(0);
+      for (const tool of tools) {
+        const ann = tool.annotations as Record<string, unknown> | undefined;
+        expect(ann, String(tool.name)).toBeDefined();
+        expect(typeof ann?.title).toBe("string");
+        expect(typeof ann?.readOnlyHint).toBe("boolean");
+        expect(typeof ann?.destructiveHint).toBe("boolean");
+        expect(typeof ann?.openWorldHint).toBe("boolean");
+      }
+    }
+  });
+
+  it("marks exactly the pure read/list tools read-only", () => {
+    const ann = annotationsByName();
+    const readOnly = Object.keys(ann)
+      .filter((name) => ann[name]?.readOnlyHint === true)
+      .sort();
+    expect(readOnly).toEqual(
+      ["onto_list", "onto_reconstruct_read", "onto_review_read"].sort(),
+    );
+  });
+
+  it("never marks a tool destructive (writes are confined to .onto/)", () => {
+    const ann = annotationsByName();
+    for (const name of Object.keys(ann)) {
+      expect(ann[name]?.destructiveHint, name).toBe(false);
+    }
+  });
+
+  it("marks exactly the LLM-dispatching tools open-world", () => {
+    const ann = annotationsByName();
+    const openWorld = Object.keys(ann)
+      .filter((name) => ann[name]?.openWorldHint === true)
+      .sort();
+    expect(openWorld).toEqual(
+      ["onto_reconstruct", "onto_review", "onto_review_continue"].sort(),
+    );
+  });
+});

@@ -674,12 +674,49 @@ function resolveToolProfile(): ToolProfile {
     : "full";
 }
 
+interface ToolAnnotations {
+  [key: string]: JsonValue;
+  title: string;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  openWorldHint: boolean;
+}
+
+// Advisory MCP tool hints (introduced 2025-03-26, carried unchanged into the
+// draft/RC). onto confines every write to `.onto/` and never destroys user
+// sources, so destructiveHint is false throughout. readOnlyHint marks the pure
+// read/list tools; openWorldHint marks the tools that themselves dispatch to
+// external LLM providers (they spend tokens and are non-deterministic). Keyed by
+// OntoToolName for compile-time completeness — a new advertised tool must
+// declare its hints here or the build fails.
+const TOOL_ANNOTATIONS: Record<OntoToolName, ToolAnnotations> = {
+  onto_review: { title: "Run review", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  onto_prepare_review: { title: "Prepare review session", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_review_continue: { title: "Resume review", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  onto_review_round: { title: "Get review round (host-orchestrated)", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_review_advance: { title: "Advance review round", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_review_cancel: { title: "Cancel review", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_review_read: { title: "Read review session", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  onto_observe_source: { title: "Observe reconstruct sources", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_validate_reconstruct_directive: { title: "Validate reconstruct directive", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_reconstruct: { title: "Reconstruct ontology seed", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  onto_reconstruct_read: { title: "Read reconstruct session", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  onto_list: { title: "List registry", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+};
+
 export function advertisedToolDefinitions(): ToolDefinition[] {
-  if (resolveToolProfile() !== "simple") {
-    return TOOL_DEFINITIONS;
-  }
-  const simple = new Set<string>(OntoSimpleProfileToolNames);
-  return TOOL_DEFINITIONS.filter((tool) => simple.has(tool.name));
+  const base =
+    resolveToolProfile() === "simple"
+      ? TOOL_DEFINITIONS.filter((tool) =>
+          new Set<string>(OntoSimpleProfileToolNames).has(tool.name),
+        )
+      : TOOL_DEFINITIONS;
+  // Merge advisory hints onto a copy — TOOL_DEFINITIONS stays the pristine
+  // dispatch source; only tools/list carries annotations.
+  return base.map((tool) => ({
+    ...tool,
+    annotations: TOOL_ANNOTATIONS[tool.name],
+  }));
 }
 
 export const USAGE_GUIDE = `# Using onto via MCP
