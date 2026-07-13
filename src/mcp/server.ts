@@ -674,12 +674,143 @@ function resolveToolProfile(): ToolProfile {
     : "full";
 }
 
-export function advertisedToolDefinitions(): ToolDefinition[] {
-  if (resolveToolProfile() !== "simple") {
-    return TOOL_DEFINITIONS;
-  }
-  const simple = new Set<string>(OntoSimpleProfileToolNames);
-  return TOOL_DEFINITIONS.filter((tool) => simple.has(tool.name));
+// Published MCP protocol revisions onto's response shapes conform to, newest
+// first. onto emits additive fields from later revisions — tool annotations
+// (2025-03-26), structuredContent/outputSchema (2025-06-18) — and does not use
+// JSON-RPC batching (removed in 2025-06-18), so it honestly supports the whole
+// range. The optional 2025-11-25 server features (icons, tasks, elicitation)
+// are not advertised and not required for conformance. Negotiation echoes the
+// client's requested version when supported; otherwise it returns the latest.
+//
+// Scope: this negotiator governs the `initialize` handshake used by every stable
+// revision through 2025-11-25. The in-progress draft (RC 2026-07-28) removes
+// `initialize` for a stateless model (per-request `_meta` version +
+// `server/discover`); it is intentionally out of scope here. onto degrades
+// gracefully with RC-aware clients — an unknown `server/discover` returns -32601
+// (Method not found), so the client falls back to this handshake — a path locked
+// by protocol-version.test.ts. Full RC support is a separate, deferred workstream
+// (the draft is not yet ready for consumption).
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  "2025-11-25",
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+] as const;
+export const LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
+// The floor is the oldest supported revision — the version a client that never
+// completed negotiation is treated as, so it receives the pre-2025 tool surface.
+const FLOOR_PROTOCOL_VERSION: string =
+  SUPPORTED_PROTOCOL_VERSIONS[SUPPORTED_PROTOCOL_VERSIONS.length - 1]!;
+
+export function negotiateProtocolVersion(requested: unknown): string {
+  return typeof requested === "string" &&
+    (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested)
+    ? requested
+    : LATEST_PROTOCOL_VERSION;
+}
+
+// Connection-scoped: a stdio server serves one client per process, so the
+// version negotiated at `initialize` is remembered here and gates which
+// additive tool-definition fields tools/list may emit. It starts at the floor
+// so a client that skips negotiation gets the conservative legacy surface.
+let negotiatedProtocolVersion: string = FLOOR_PROTOCOL_VERSION;
+
+export function setNegotiatedProtocolVersion(version: string): void {
+  negotiatedProtocolVersion = version;
+}
+
+// Revisions that introduced each additive tool-definition field. onto emits a
+// field only to clients that negotiated its revision (or later), so an older
+// client — including an older Claude Desktop that negotiates 2024-11-05 —
+// receives byte-identical pre-2025 tool definitions. YYYY-MM-DD strings compare
+// chronologically under lexical ordering.
+const TOOL_ANNOTATIONS_SINCE = "2025-03-26";
+const TOOL_OUTPUT_SCHEMA_SINCE = "2025-06-18";
+
+interface ToolAnnotations {
+  [key: string]: JsonValue;
+  title: string;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  openWorldHint: boolean;
+}
+
+// Advisory MCP tool hints (introduced 2025-03-26, carried unchanged into the
+// draft/RC). onto confines every write to `.onto/` and never destroys user
+// sources, so destructiveHint is false throughout. readOnlyHint marks the pure
+// read/list tools; openWorldHint marks the tools that themselves dispatch to
+// external LLM providers (they spend tokens and are non-deterministic). Keyed by
+// OntoToolName for compile-time completeness — a new advertised tool must
+// declare its hints here or the build fails.
+const TOOL_ANNOTATIONS: Record<OntoToolName, ToolAnnotations> = {
+  onto_review: { title: "Run review", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  onto_prepare_review: { title: "Prepare review session", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_review_continue: { title: "Resume review", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  onto_review_round: { title: "Get review round (host-orchestrated)", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_review_advance: { title: "Advance review round", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_review_cancel: { title: "Cancel review", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_review_read: { title: "Read review session", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  onto_observe_source: { title: "Observe reconstruct sources", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_validate_reconstruct_directive: { title: "Validate reconstruct directive", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  onto_reconstruct: { title: "Reconstruct ontology seed", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  onto_reconstruct_read: { title: "Read reconstruct session", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  onto_list: { title: "List registry", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+};
+
+// Declared result schema for tools whose structuredContent shape is stable
+// enough to pin without brittleness. MCP (2025-06-18+, loosened in the draft/RC)
+// requires a tool that declares outputSchema to return conforming
+// structuredContent, so this is intentionally selective. onto_list's three
+// per-kind envelopes are typed and stable; the read/record tools vary by
+// projectionLevel and are deliberately deferred. Parity with the real output is
+// enforced by tool-surface.behavior.test.ts against these declared shapes.
+const TOOL_OUTPUT_SCHEMAS: Partial<Record<OntoToolName, JsonValue>> = {
+  onto_list: {
+    type: "object",
+    anyOf: [
+      {
+        required: ["full", "coreAxis"],
+        properties: {
+          full: { type: "array", items: { type: "string" } },
+          coreAxis: { type: "array", items: { type: "string" } },
+        },
+      },
+      {
+        required: ["domains"],
+        properties: { domains: { type: "array", items: { type: "string" } } },
+      },
+      {
+        required: ["sourceProfiles"],
+        properties: { sourceProfiles: { type: "array" } },
+      },
+    ],
+  },
+};
+
+export function advertisedToolDefinitions(
+  protocolVersion: string = negotiatedProtocolVersion,
+): ToolDefinition[] {
+  const base =
+    resolveToolProfile() === "simple"
+      ? TOOL_DEFINITIONS.filter((tool) =>
+          new Set<string>(OntoSimpleProfileToolNames).has(tool.name),
+        )
+      : TOOL_DEFINITIONS;
+  const withAnnotations = protocolVersion >= TOOL_ANNOTATIONS_SINCE;
+  const withOutputSchema = protocolVersion >= TOOL_OUTPUT_SCHEMA_SINCE;
+  // Merge additive fields onto a copy — TOOL_DEFINITIONS stays the pristine
+  // dispatch source; only tools/list carries them, and only for clients that
+  // negotiated the revision that introduced each field. A client below both
+  // thresholds receives the definition unchanged.
+  return base.map((tool) => {
+    const merged: ToolDefinition = { ...tool };
+    if (withAnnotations) merged.annotations = TOOL_ANNOTATIONS[tool.name];
+    if (withOutputSchema) {
+      const outputSchema = TOOL_OUTPUT_SCHEMAS[tool.name];
+      if (outputSchema !== undefined) merged.outputSchema = outputSchema;
+    }
+    return merged;
+  });
 }
 
 export const USAGE_GUIDE = `# Using onto via MCP
@@ -760,6 +891,25 @@ Discover material profiles with \`onto_list\` (kind="source_profiles").
   they are presentation guidance, not operating instructions.
 - onto writes only under \`{projectRoot}/.onto/\`; it never mutates your sources.
 `;
+
+// Server-level orientation returned in the `initialize` result so a host LLM
+// gets the big picture on connect. Deliberately a short summary plus a pointer:
+// the durable, detailed authority is the `onto://usage` resource, which is why
+// this stays initialize-era-only. The draft/RC drops the initialize handshake,
+// so orientation there falls back to that same resource — no detail is stranded
+// in this field.
+const SERVER_INSTRUCTIONS = [
+  "onto is an MCP-native ontology-as-code runtime with two paths: `review`",
+  "(structured, context-isolated multi-lens review of a target) and `reconstruct`",
+  "(derive a bounded, actionable ontology seed from real sources). The runtime",
+  "owns every artifact and validation gate; tool results put structured data in",
+  "structuredContent and carry llmPresentation prompts for user-facing",
+  "explanation. Both paths execute real LLM work and FAIL LOUD without a provider",
+  "configured in .onto/settings.json (or ~/.onto/settings.json). review is",
+  "long-running — poll onto_review_read until it is no longer running. Read the",
+  "`onto://usage` resource for provider setup and the full workflows before first",
+  "use.",
+].join(" ");
 
 interface ResourceDefinition {
   uri: string;
@@ -1943,21 +2093,31 @@ function jsonRpcError(
   };
 }
 
-async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null> {
+export async function handleRequest(
+  message: JsonRpcRequest,
+): Promise<JsonValue | null> {
   if (!message.id && message.method?.startsWith("notifications/")) {
     return null;
   }
 
   switch (message.method) {
-    case "initialize":
+    case "initialize": {
+      const params = message.params as
+        | { protocolVersion?: unknown }
+        | undefined;
+      const negotiated = negotiateProtocolVersion(params?.protocolVersion);
+      // Remember it so tools/list gates its additive fields on the same version.
+      setNegotiatedProtocolVersion(negotiated);
       return jsonRpcResult(message.id, {
-        protocolVersion: "2024-11-05",
+        protocolVersion: negotiated,
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: {
           name: "onto-mcp",
           version: await readPackageVersion(),
         },
+        instructions: SERVER_INSTRUCTIONS,
       });
+    }
     case "ping":
       return jsonRpcResult(message.id, {});
     case "tools/list":
