@@ -982,8 +982,8 @@
         "candidate_pass_rate": 1
       }
     ],
-    "core_check_floor": 0.6666666666666666,
-    "quality_pass": false
+    "core_check_floor": 1,
+    "quality_pass": true
   },
   "reproduction": {
     "command": "npx tsx scripts/review-cert-run.mts --candidate-model gpt-5.6-sol --candidate-provider openai --candidate-auth oauth --candidate-effort high --baseline-model gpt-5.5 --baseline-provider openai --baseline-auth oauth --baseline-effort medium --reps 3 --max-attempts 12"

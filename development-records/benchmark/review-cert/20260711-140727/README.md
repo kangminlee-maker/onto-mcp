@@ -1,22 +1,35 @@
-# review-cert: gpt-5.6-sol@high — FAILED (quality axis), 2026-07-11/12
+# review-cert: gpt-5.6-sol@high — FAILED (support axis), 2026-07-11/12
 
 First live exercise of the review-cert/v1 contract (`scripts/review-cert-run.mts`).
 **Verdict: certification FAILED — sol is NOT registrable for the `review` role on
-this evidence.** Owner decision 2026-07-12: terminate here and keep this record
-as failure evidence (a retry without model/prompt changes is not worthwhile).
+this evidence.** The decisive failure is the incomplete retry fixture. A dated
+policy correction below supersedes the original quality-axis interpretation.
 
 - Candidate: openai/gpt-5.6-sol @ reasoning_effort=high (codex OAuth route)
 - Baseline: openai/gpt-5.5 @ medium (contemporaneous arm, same harness)
-- Record: `review-cert-record.json` — validator violations:
-  1. `metric_regression` — `review-pipeline-target-v1/false_materiality_guard`:
-     candidate pass-rate 1/3 < baseline 2/3, on a fixture where BOTH arms
-     completed 3/3 (rates final). Reproduces the weakness seen in the 2026-07-10
-     preliminary run. Core checks (material_issue_recall,
-     final_result_material_issue_recall, grounding) were candidate 1.0 across
-     the board — sol's recall/grounding is clean; over-flagging restraint is not.
-  2. `rep_floor` — `candidate/retry-policy-target-v1` finished 1/3 (run cut by
+- Record: `review-cert-record.json` — revised-policy interpretation:
+  1. `rep_floor` — `candidate/retry-policy-target-v1` finished 1/3 (run cut by
      the provider usage limit; see below). Left incomplete deliberately: the
-     regression above already decides the outcome.
+     record does not satisfy the support floor.
+  2. Non-blocking quality disclosure —
+     `review-pipeline-target-v1/false_materiality_guard`: candidate pass-rate
+     1/3 < baseline 2/3. This lexical fixture signal does not establish a general
+     over-flagging tendency and does not reject registration by itself.
+
+## Policy correction — 2026-07-12
+
+Owner clarified the loss asymmetry: surfaced false positives are re-verified by
+the main context before action, while a silently missed issue removes that
+review opportunity. The pre-registration `review-cert/v1` policy was therefore
+corrected without a schema change:
+
+- decisive recall spine: `material_issue_recall`,
+  `artifact_material_issue_recall`, `final_result_material_issue_recall`, and
+  `grounding`, each candidate pass-rate 1.0 over completed runs;
+- all other candidate-vs-baseline regressions remain visible as R7 quality
+  disclosures and do not block G7;
+- this record's candidate recall spine is 1.0 on every observed fixture/check,
+  but the retry fixture still fails structurally at 1/3 completed runs.
 
 Run history (honest provenance; per-run reports/logs retained locally under
 `runs/`, not committed for bulk):

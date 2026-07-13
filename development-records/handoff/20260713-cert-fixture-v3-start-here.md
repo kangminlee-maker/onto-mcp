@@ -3,12 +3,24 @@
 owner 지시: seat 인벤토리(C) 완료 후 **cert fixture MECE 개선(v3, M4)** 진행.
 설계 SSOT: `development-records/design/20260712-review-cert-v3-fixture-mece-design.md`.
 
+> **상태 갱신 (2026-07-13, 단계 0 완료)**: 4-렌즈 adversarial review 완료 → 설계 **material 0**으로
+> 개정(설계 문서 "단계 0 개정 로그" 참조, material 5건 해소). owner 결정: clean-target=**옵션1
+> (대조군 재설계)**, additive-optional로 계약 bump 폐기, floor 불변 정직 프레이밍. **다음 시작점 =
+> A-1 구현**(owner "구현하자" 트리거). 6영역 스코프: v3는 **review 한정 유지**(일반화는 후속).
+> 메모리 [[onto-mcp-cert-v3-stage0-complete-20260713]].
+
+> **재개 브랜치 (중요)**: 이 핸드오프·개정 설계·scratch gitignore는 `docs/cert-v3-stage0-review`에
+> 있다(2026-07-13 push). **미병합이면 main에는 stale 구버전이 있으니 main에서 바로 시작하지 말 것.**
+> A-1 구현은 **별도 feat 브랜치**에서 — 권장: 이 docs 브랜치를 main에 병합 → `git checkout main &&
+> git pull` → `git switch -c feat/cert-v3-a1-gate`. 미병합 상태면 `docs/cert-v3-stage0-review`
+> tip에서 `git switch -c feat/cert-v3-a1-gate`. **docs 브랜치에 구현 코드를 올리지 말 것.**
+
 ## 재개 시 상태 검증 (먼저 실행)
 
 ```
 pwd                          # /Users/kangmin/Documents/onto-mcp
 git fetch origin main && git rev-parse --short origin/main   # 아래 "landed"와 대조
-git branch --show-current    # main 권장 (feature 브랜치는 그때그때)
+git branch --show-current    # 재개 브랜치는 위 "재개 브랜치" 블록 참조
 ```
 
 ## landed (이 세션에서 main에 병합된 것)
