@@ -35,3 +35,19 @@ build/
 # tracked; the local/ sidecar holds real-workbook-derived child-summary PROSE
 # (source-safety: sha-referenced from the capsule, never committed).
 development-records/benchmark/synthesize-cert/*/local/
+
+# review-cert bench: the canonical committed set per run dir is README.md,
+# capture/*.jsonl, review-cert-record.json, and runs/rows.progress.jsonl. The
+# per-attempt run artifacts (baseline/candidate *.json/.log/.partial.json) and
+# rejected-record variants are scratch — never committed.
+development-records/benchmark/review-cert/*/runs/*
+!development-records/benchmark/review-cert/*/runs/rows.progress.jsonl
+development-records/benchmark/review-cert/*/review-cert-record.rejected.json
+development-records/benchmark/review-cert/*/run*.log
+development-records/benchmark/review-cert/*/shim/
+
+# 20260712-101717 was aborted (rep_floor cut) and superseded; only its tracked
+# stance-rejection-diagnosis.md is kept — the incomplete capture/record/rows are scratch.
+development-records/benchmark/review-cert/20260712-101717/capture/
+development-records/benchmark/review-cert/20260712-101717/review-cert-record.json
+development-records/benchmark/review-cert/20260712-101717/runs/rows.progress.jsonl
