@@ -1,0 +1,189 @@
+{
+  "generated_at": "2026-07-13T00:28:41.391Z",
+  "sources_scanned": 107,
+  "execution_status_distribution": {
+    "completed": 39,
+    "halted_partial": 70,
+    "completed_with_degradation": 2
+  },
+  "matrix": [
+    {
+      "fixture_id": "retry-policy-target-v1",
+      "checks": [
+        {
+          "check_id": "actionability",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 40
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 4,
+          "dirty_failed": 0
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "clean_total": 18,
+          "clean_failed": 1,
+          "dirty_total": 44,
+          "dirty_failed": 0
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 40
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 40
+        },
+        {
+          "check_id": "count_list_consistency",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 0
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 0
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 40
+        },
+        {
+          "check_id": "grounding",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 40
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 40
+        },
+        {
+          "check_id": "material_issue_recall",
+          "clean_total": 18,
+          "clean_failed": 2,
+          "dirty_total": 44,
+          "dirty_failed": 40
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "clean_total": 18,
+          "clean_failed": 0,
+          "dirty_total": 44,
+          "dirty_failed": 40
+        }
+      ]
+    },
+    {
+      "fixture_id": "review-pipeline-target-v1",
+      "checks": [
+        {
+          "check_id": "actionability",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 14
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 14,
+          "dirty_failed": 0
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "clean_total": 21,
+          "clean_failed": 4,
+          "dirty_total": 28,
+          "dirty_failed": 4
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 14
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 14
+        },
+        {
+          "check_id": "count_list_consistency",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 0
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "clean_total": 21,
+          "clean_failed": 5,
+          "dirty_total": 28,
+          "dirty_failed": 1
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 15
+        },
+        {
+          "check_id": "grounding",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 13
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 14
+        },
+        {
+          "check_id": "material_issue_recall",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 13
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "clean_total": 21,
+          "clean_failed": 0,
+          "dirty_total": 28,
+          "dirty_failed": 14
+        }
+      ]
+    }
+  ]
+}
