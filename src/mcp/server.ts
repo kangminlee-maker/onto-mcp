@@ -1951,6 +1951,15 @@ function jsonRpcError(
 // (icons, tasks, elicitation) are not advertised and not required for
 // conformance. Negotiation echoes the client's requested version when supported;
 // otherwise it returns the latest, letting the client decide whether to proceed.
+//
+// Scope: this negotiator governs the `initialize` handshake used by every
+// stable revision through 2025-11-25. The in-progress draft (RC 2026-07-28)
+// removes `initialize` for a stateless model (per-request `_meta` version +
+// `server/discover`); it is intentionally out of scope here. onto degrades
+// gracefully with RC-aware clients — an unknown `server/discover` returns
+// -32601 (Method not found), so the client falls back to this handshake — a
+// path locked by protocol-version.test.ts. Full RC support is a separate,
+// deferred workstream (the draft is not yet ready for consumption).
 export const SUPPORTED_PROTOCOL_VERSIONS = [
   "2025-11-25",
   "2025-06-18",

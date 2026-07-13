@@ -73,3 +73,20 @@ describe("initialize dispatch (real handleRequest path)", () => {
     expect(result.protocolVersion).toBe(LATEST_PROTOCOL_VERSION);
   });
 });
+
+// The draft (RC 2026-07-28) drops `initialize` for a stateless model and adds
+// `server/discover`, which RC-aware clients may use as a STDIO backward-compat
+// probe. onto does not implement it; a clean -32601 (Method not found) is what
+// lets those clients fall back to the initialize handshake, so lock it.
+describe("graceful downgrade for draft/RC clients", () => {
+  it("returns -32601 for server/discover and other unknown methods", async () => {
+    for (const method of ["server/discover", "tasks/get", "logging/setLevel"]) {
+      const response = (await handleRequest({
+        jsonrpc: "2.0",
+        id: 7,
+        method,
+      })) as { error?: { code?: number } };
+      expect(response.error?.code).toBe(-32601);
+    }
+  });
+});
