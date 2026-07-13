@@ -72,6 +72,15 @@ describe("initialize dispatch (real handleRequest path)", () => {
     const result = await initializeResult(undefined);
     expect(result.protocolVersion).toBe(LATEST_PROTOCOL_VERSION);
   });
+
+  it("returns server orientation that points at the durable usage resource", async () => {
+    const result = await initializeResult({ protocolVersion: "2025-11-25" });
+    const instructions = result.instructions;
+    expect(typeof instructions).toBe("string");
+    expect(instructions as string).toContain("onto://usage");
+    expect(instructions as string).toContain("review");
+    expect(instructions as string).toContain("reconstruct");
+  });
 });
 
 // The draft (RC 2026-07-28) drops `initialize` for a stateless model and adds

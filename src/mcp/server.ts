@@ -798,6 +798,25 @@ Discover material profiles with \`onto_list\` (kind="source_profiles").
 - onto writes only under \`{projectRoot}/.onto/\`; it never mutates your sources.
 `;
 
+// Server-level orientation returned in the `initialize` result so a host LLM
+// gets the big picture on connect. Deliberately a short summary plus a pointer:
+// the durable, detailed authority is the `onto://usage` resource, which is why
+// this stays initialize-era-only. The draft/RC drops the initialize handshake,
+// so orientation there falls back to that same resource — no detail is stranded
+// in this field.
+const SERVER_INSTRUCTIONS = [
+  "onto is an MCP-native ontology-as-code runtime with two paths: `review`",
+  "(structured, context-isolated multi-lens review of a target) and `reconstruct`",
+  "(derive a bounded, actionable ontology seed from real sources). The runtime",
+  "owns every artifact and validation gate; tool results put structured data in",
+  "structuredContent and carry llmPresentation prompts for user-facing",
+  "explanation. Both paths execute real LLM work and FAIL LOUD without a provider",
+  "configured in .onto/settings.json (or ~/.onto/settings.json). review is",
+  "long-running — poll onto_review_read until it is no longer running. Read the",
+  "`onto://usage` resource for provider setup and the full workflows before first",
+  "use.",
+].join(" ");
+
 interface ResourceDefinition {
   uri: string;
   name: string;
@@ -2031,6 +2050,7 @@ export async function handleRequest(
           name: "onto-mcp",
           version: await readPackageVersion(),
         },
+        instructions: SERVER_INSTRUCTIONS,
       });
     }
     case "ping":
