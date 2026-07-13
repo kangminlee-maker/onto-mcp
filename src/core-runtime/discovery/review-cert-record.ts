@@ -62,15 +62,26 @@ const ArmModelSchema = z
   .object({ provider: IdSchema, model: IdSchema })
   .strict();
 
+const CheckIdSchema = z.enum(SEMANTIC_QUALITY_GATE_CHECK_IDS);
+type CheckId = (typeof SEMANTIC_QUALITY_GATE_CHECK_IDS)[number];
+
 const FixtureManifestEntrySchema = z
   .object({
     fixture_id: IdSchema,
     target_anchor: z.string().min(1),
     content_sha256: Sha256Schema,
+    /** v3 (design 20260712 §D2): the check subset this fixture's ok runs emit
+     * and that aggregates iterate. ABSENT = the full gate universe — so v2
+     * records and the existing code fixtures recompute byte-for-byte. A
+     * clean-target fixture declares its reduced applicable set here (recall/
+     * grounding/actionability are N/A with no material defect). Additive-
+     * optional: the wire contract stays review-cert/v2, no G7 bump. */
+    applicable_check_ids: z.array(CheckIdSchema).min(1).optional(),
   })
   .strict();
-
-const CheckIdSchema = z.enum(SEMANTIC_QUALITY_GATE_CHECK_IDS);
+export type ReviewCertFixtureManifestEntry = z.infer<
+  typeof FixtureManifestEntrySchema
+>;
 
 const RunCheckSchema = z
   .object({
@@ -251,28 +262,47 @@ export interface ReviewCertQualityDisclosure {
   subject_id: string;
 }
 
+/** The check set a fixture's ok runs emit and that aggregates iterate: its
+ * declared applicable_check_ids, or the full gate universe when absent (v2 /
+ * existing fixtures — byte-identical recompute). */
+function applicableChecks(
+  fixture: Pick<ReviewCertFixtureManifestEntry, "applicable_check_ids">,
+): readonly CheckId[] {
+  return fixture.applicable_check_ids ?? SEMANTIC_QUALITY_GATE_CHECK_IDS;
+}
+
 /**
  * The ONE aggregate computation both the validator (recompute/compare) and the
  * harness assembler (declare) consume — a second rate implementation could
- * silently disagree with the gate. Fixture×check pairs where either arm has no
- * completed run are OMITTED (rep_floor reports that state separately).
- * `quality_pass` = every recall-first core check meets the absolute floor.
- * Candidate<baseline regressions outside that decisive spine are retained in
- * the aggregate rows and projected by {@link reviewCertQualityDisclosures}.
+ * silently disagree with the gate. Iterates each fixture's APPLICABLE check set
+ * only (v3 §D2): a clean-target fixture omits recall/grounding/actionability, so
+ * they never enter the core-floor judgment as vacuous 0-rate rows. Fixture×check
+ * pairs where either arm has no completed run are OMITTED (rep_floor reports
+ * that state separately). `quality_pass` = every recall-first core check that IS
+ * applicable meets the absolute floor. Candidate<baseline regressions outside
+ * that decisive spine are retained in the aggregate rows and projected by
+ * {@link reviewCertQualityDisclosures}. Duplicate fixture_ids are collapsed
+ * (first wins; duplicate_manifest_input is reported separately).
  */
 export function computeReviewCertAggregates(
   runs: readonly ReviewCertRun[],
-  fixtureIds: readonly string[],
+  fixtures: readonly Pick<
+    ReviewCertFixtureManifestEntry,
+    "fixture_id" | "applicable_check_ids"
+  >[],
 ): { per_fixture_check: ReviewCertAggregateRow[]; quality_pass: boolean } {
   const rows: ReviewCertAggregateRow[] = [];
   let qualityPass = true;
-  for (const fixtureId of fixtureIds) {
-    for (const checkId of SEMANTIC_QUALITY_GATE_CHECK_IDS) {
-      const baselineRate = passRate(runs, "baseline", fixtureId, checkId);
-      const candidateRate = passRate(runs, "candidate", fixtureId, checkId);
+  const seen = new Set<string>();
+  for (const fixture of fixtures) {
+    if (seen.has(fixture.fixture_id)) continue;
+    seen.add(fixture.fixture_id);
+    for (const checkId of applicableChecks(fixture)) {
+      const baselineRate = passRate(runs, "baseline", fixture.fixture_id, checkId);
+      const candidateRate = passRate(runs, "candidate", fixture.fixture_id, checkId);
       if (baselineRate === null || candidateRate === null) continue;
       rows.push({
-        fixture_id: fixtureId,
+        fixture_id: fixture.fixture_id,
         check_id: checkId,
         baseline_pass_rate: baselineRate,
         candidate_pass_rate: candidateRate,
@@ -324,8 +354,7 @@ export function reviewCertResubmitDisclosure(
 export function reviewCertQualityDisclosures(
   record: ReviewCertRecord,
 ): ReviewCertQualityDisclosure[] {
-  const fixtureIds = [...new Set(record.fixtures.map((fixture) => fixture.fixture_id))];
-  return computeReviewCertAggregates(record.runs, fixtureIds).per_fixture_check
+  return computeReviewCertAggregates(record.runs, record.fixtures).per_fixture_check
     .filter((row) =>
       row.candidate_pass_rate < row.baseline_pass_rate &&
       !ratesEqual(row.candidate_pass_rate, row.baseline_pass_rate)
@@ -422,7 +451,18 @@ export function validateReviewCertRecord(
   }
 
   // Run rows: unique coordinates, manifest membership, completion honesty,
-  // full universe emission on every completed run.
+  // applicable-set emission on every completed run. Each fixture's ok runs must
+  // emit EXACTLY its applicable set (the full universe when it declares none —
+  // v2 / existing fixtures); a clean-target fixture emits its reduced set. The
+  // check_universe pin above stays the full vocabulary regardless (§D2).
+  const expectedEmissionByFixture = new Map<string, string[]>();
+  for (const fixture of record.fixtures) {
+    if (expectedEmissionByFixture.has(fixture.fixture_id)) continue;
+    expectedEmissionByFixture.set(
+      fixture.fixture_id,
+      [...new Set<string>(applicableChecks(fixture))].sort(),
+    );
+  }
   const seen = new Set<string>();
   const fixtureSet = new Set(fixtureIds);
   for (const run of record.runs) {
@@ -445,15 +485,16 @@ export function validateReviewCertRecord(
           coordinate,
         );
       }
+      const expected = expectedEmissionByFixture.get(run.fixture_id) ?? canonical;
       const emitted = [...new Set(run.checks.map((check) => check.check_id))].sort();
       if (
-        run.checks.length !== canonical.length ||
-        emitted.length !== canonical.length ||
-        emitted.some((id, index) => id !== canonical[index])
+        run.checks.length !== expected.length ||
+        emitted.length !== expected.length ||
+        emitted.some((id, index) => id !== expected[index])
       ) {
         push(
           "check_emission_incomplete",
-          `run ${coordinate} must emit the full check universe exactly once (${canonical.length} checks); got ${run.checks.length}`,
+          `run ${coordinate} must emit its applicable check set exactly once (${expected.length} checks); got ${run.checks.length}`,
           coordinate,
         );
       }
@@ -501,7 +542,7 @@ export function validateReviewCertRecord(
       `declared core_check_floor=${record.declared_aggregates.core_check_floor} does not match the contract floor ${REVIEW_CERT_CORE_CHECK_FLOOR}`,
     );
   }
-  const computed = computeReviewCertAggregates(record.runs, [...fixtureSet]);
+  const computed = computeReviewCertAggregates(record.runs, record.fixtures);
   for (const row of computed.per_fixture_check) {
     const subject = `${row.fixture_id}/${row.check_id}`;
     const declared = declaredByKey.get(`${row.fixture_id}\u0000${row.check_id}`);

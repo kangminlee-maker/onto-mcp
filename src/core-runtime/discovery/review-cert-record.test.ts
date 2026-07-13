@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeReviewCertAggregates,
   isReviewCertCandidate,
   parseReviewCertRecord,
   REVIEW_CERT_ARMS,
@@ -13,7 +14,10 @@ import {
   reviewCertResubmitDisclosure,
   validateReviewCertRecord,
 } from "./review-cert-record.js";
-import { SEMANTIC_QUALITY_GATE_CHECK_IDS } from "../review/semantic-quality-gate.js";
+import {
+  CLEAN_TARGET_EXCLUDED_CHECK_IDS,
+  SEMANTIC_QUALITY_GATE_CHECK_IDS,
+} from "../review/semantic-quality-gate.js";
 
 const FIXTURES = ["review-pipeline-target-v1", "retry-policy-target-v1"] as const;
 const REPS = 3;
@@ -401,5 +405,149 @@ describe("review-cert parse", () => {
     expect(record).toBeNull();
     expect(violations.length).toBeGreaterThan(0);
     expect(codes(violations)).toEqual(["schema_shape_invalid"]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v3 §D2: per-fixture applicable_check_ids propagation. A clean-target fixture
+// declares a reduced set (recall/grounding/actionability excluded); emission and
+// aggregates must respect it. Existing fixtures declare none → full universe →
+// the byte-identical recompute proven by the tests above.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("review-cert per-fixture applicable set", () => {
+  const CLEAN_TARGET = "clean-target-v1";
+  const CLEAN_APPLICABLE = SEMANTIC_QUALITY_GATE_CHECK_IDS.filter(
+    (id) => !CLEAN_TARGET_EXCLUDED_CHECK_IDS.has(id),
+  );
+
+  function checksFor(
+    ids: readonly string[],
+    failing: readonly string[] = [],
+  ): ReviewCertRun["checks"] {
+    return ids.map((check_id) => ({
+      check_id: check_id as ReviewCertRun["checks"][number]["check_id"],
+      status: failing.includes(check_id) ? ("failed" as const) : ("passed" as const),
+    }));
+  }
+
+  function okRunWith(
+    arm: (typeof REVIEW_CERT_ARMS)[number],
+    fixtureId: string,
+    rep: number,
+    checkIds: readonly string[],
+  ): ReviewCertRun {
+    return {
+      arm,
+      fixture_id: fixtureId,
+      rep,
+      completion: "ok",
+      units_total: 25,
+      units_completed: 25,
+      resubmit_applied_unit_count: 0,
+      checks: checksFor(checkIds),
+    };
+  }
+
+  /** review-pipeline (full 12, carries the core floor) + clean-target (reduced
+   * 7, no core checks). All-pass; aggregates declared to match. */
+  function mixedRecord(): ReviewCertRecord {
+    const full = [...SEMANTIC_QUALITY_GATE_CHECK_IDS];
+    const runs: ReviewCertRun[] = [];
+    for (const arm of REVIEW_CERT_ARMS) {
+      for (let rep = 1; rep <= 3; rep += 1) {
+        runs.push(okRunWith(arm, "review-pipeline-target-v1", rep, full));
+        runs.push(okRunWith(arm, CLEAN_TARGET, rep, CLEAN_APPLICABLE));
+      }
+    }
+    return {
+      record_contract: REVIEW_CERT_CONTRACT,
+      created_at: "2026-07-13T00:00:00.000Z",
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      arm_model: {
+        baseline: { provider: "openai", model: "gpt-5.5" },
+        candidate: { provider: "openai", model: "gpt-5.6-sol" },
+      },
+      arm_dispatch: {
+        baseline: { reasoning_effort: "medium" },
+        candidate: { reasoning_effort: "high" },
+      },
+      declared_reps: 3,
+      fixtures: [
+        {
+          fixture_id: "review-pipeline-target-v1",
+          target_anchor: "src/target.ts",
+          content_sha256: "a".repeat(64),
+        },
+        {
+          fixture_id: CLEAN_TARGET,
+          target_anchor: "src/clean-target.ts",
+          content_sha256: "b".repeat(64),
+          applicable_check_ids: CLEAN_APPLICABLE,
+        },
+      ],
+      gate_pin: {
+        check_universe: [...SEMANTIC_QUALITY_GATE_CHECK_IDS],
+        issue_artifacts_provided: true,
+      },
+      run_controls: { salvage_enabled: false, resubmit_enabled: true },
+      runs,
+      declared_aggregates: {
+        per_fixture_check: [
+          ...full.map((check_id) => ({
+            fixture_id: "review-pipeline-target-v1",
+            check_id,
+            baseline_pass_rate: 1,
+            candidate_pass_rate: 1,
+          })),
+          ...CLEAN_APPLICABLE.map((check_id) => ({
+            fixture_id: CLEAN_TARGET,
+            check_id,
+            baseline_pass_rate: 1,
+            candidate_pass_rate: 1,
+          })),
+        ],
+        core_check_floor: REVIEW_CERT_CORE_CHECK_FLOOR,
+        quality_pass: true,
+      },
+      reproduction: { command: "npx tsx scripts/review-cert-run.mts" },
+    };
+  }
+
+  it("recomputes a clean-target fixture (reduced applicable set) to zero violations", () => {
+    expect(validateReviewCertRecord(mixedRecord())).toEqual([]);
+  });
+
+  it("does NOT vacuously fail the core floor on a clean-target's excluded recall checks", () => {
+    // Negative control: were aggregates still iterating the full universe, the
+    // clean-target's un-emitted recall/grounding checks would compute rate 0 <
+    // floor and raise core_check_floor. Their exclusion is what keeps it clean.
+    const codesFound = validateReviewCertRecord(mixedRecord()).map((v) => v.code);
+    expect(codesFound).not.toContain("core_check_floor");
+    const record = mixedRecord();
+    const cleanRows = computeReviewCertAggregates(record.runs, record.fixtures)
+      .per_fixture_check.filter((row) => row.fixture_id === CLEAN_TARGET)
+      .map((row) => row.check_id);
+    expect([...cleanRows].sort()).toEqual([...CLEAN_APPLICABLE].sort());
+  });
+
+  it("rejects a clean-target ok run that emits the full universe (superset of its applicable set)", () => {
+    const record = structuredClone(mixedRecord());
+    const cleanRun = record.runs.find((run) => run.fixture_id === CLEAN_TARGET)!;
+    cleanRun.checks = checksFor([...SEMANTIC_QUALITY_GATE_CHECK_IDS]);
+    expect(validateReviewCertRecord(record).map((v) => v.code)).toContain(
+      "check_emission_incomplete",
+    );
+  });
+
+  it("without applicable_check_ids, a reduced-emission run is check_emission_incomplete (field is load-bearing)", () => {
+    const record = structuredClone(mixedRecord());
+    const cleanFixture = record.fixtures.find(
+      (fixture) => fixture.fixture_id === CLEAN_TARGET,
+    )!;
+    delete cleanFixture.applicable_check_ids;
+    expect(validateReviewCertRecord(record).map((v) => v.code)).toContain(
+      "check_emission_incomplete",
+    );
   });
 });
