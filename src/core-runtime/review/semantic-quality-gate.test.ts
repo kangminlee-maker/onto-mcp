@@ -1304,4 +1304,137 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
     ).toBe("failed");
     expect(result.status).toBe("failed");
   });
+
+  // Adversarial cross-verification controls (2026-07-13): each closes a bypass
+  // an independent multi-lens review surfaced that the happy-path tests missed.
+
+  it("clean-target: a fabricated material finding injected ONLY into the finding-ledger (summary clean) FAILS the guard", () => {
+    // F2: false_materiality_guard must catch promotion on BOTH surfaces, not
+    // just the summary. The yes-man keeps summary.material_issues empty and
+    // hides a well-shaped material finding (covered as a singleton to satisfy
+    // relation coverage) in the finding-ledger authority.
+    const artifacts = cleanTargetArtifacts();
+    artifacts.findingLedger.findings.push({
+      finding_id: "finding-fp",
+      severity: "high",
+      materiality_basis: {
+        affected_purpose: "fabricated",
+        failure_condition: "fabricated",
+        impact: "fabricated",
+        evidence_refs: ["src/clean-target.ts:1"],
+      },
+      causal_path: {
+        root_cause_candidate: "fabricated",
+        root_cause_step_id: "finding-fp.cause-001",
+        steps: [
+          {
+            cause_id: "finding-fp.cause-001",
+            claim: "fabricated",
+            relation_to_previous: null,
+            evidence_refs: ["src/clean-target.ts:1"],
+          },
+        ],
+      },
+    } as never);
+    artifacts.relationGraph.singleton_findings.push({
+      finding_id: "finding-fp",
+    } as never);
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executionRoute: "real",
+      expectations: cleanTargetExpectations(),
+      reviewRecord: cleanTargetSilentPreserveRecord(),
+      finalOutputText: CLEAN_TARGET_FINAL_OUTPUT,
+      issueArtifacts: artifacts,
+    });
+    expect(
+      result.checks.find((check) => check.check_id === "false_materiality_guard")
+        ?.status,
+    ).toBe("failed");
+    expect(result.status).toBe("failed");
+  });
+
+  it("clean-target: expectsNoMaterialDefects without requiresBoundaryPreservation fails loud", () => {
+    // F4: a clean-target that forgets the boundary control would let empty
+    // silence pass vacuously — reject the misconfiguration at the gate.
+    const misconfigured: SemanticQualityExpectations = {
+      ...cleanTargetExpectations(),
+      requiresBoundaryPreservation: false,
+    };
+    expect(() =>
+      evaluateReviewPipelineSemanticQualityGate({
+        executionRoute: "real",
+        expectations: misconfigured,
+        reviewRecord: cleanTargetSilentPreserveRecord(),
+        finalOutputText: CLEAN_TARGET_FINAL_OUTPUT,
+        issueArtifacts: cleanTargetArtifacts(),
+      }),
+    ).toThrow(/requiresBoundaryPreservation/);
+  });
+
+  it("shared-root: a self-relation on one finding matching both anchor groups does NOT satisfy the requirement", () => {
+    // F3: G2 needs two DISTINCT surface defects. A single finding with a
+    // self shared-cause relation (from === to) that matches both groups must not
+    // count. Anchor pair here targets two terms both present in finding-001.
+    const expectations: SemanticQualityExpectations = {
+      ...sharedRootExpectations(),
+      expectedSharedCauseAnchorPairs: [[["unstableformat"], ["json.stringify"]]],
+    };
+    const artifacts = passingIssueArtifacts();
+    artifacts.relationGraph = {
+      relations: [
+        {
+          relation_id: "rel-self",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-001",
+          relation: "shared_cause_candidate",
+          shared_cause: {
+            cause_claim: "self loop",
+            from_cause_ref: "finding-001.cause-001",
+            to_cause_ref: "finding-001.cause-002",
+          },
+        },
+      ],
+      singleton_findings: [
+        { finding_id: "finding-001" },
+        { finding_id: "finding-003" },
+      ],
+    } as never;
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executionRoute: "real",
+      expectations,
+      reviewRecord: passingReviewRecord(),
+      finalOutputText: PASSING_FINAL_OUTPUT,
+      issueArtifacts: artifacts,
+    });
+    expect(
+      result.checks.find(
+        (check) => check.check_id === "causal_relation_correctness",
+      )?.status,
+    ).toBe("failed");
+  });
+
+  it("shared-root: a valid shared-cause relation between NON-anchor findings does NOT satisfy the requirement", () => {
+    // F5: locks anchor SPECIFICITY. A valid shared_cause relation exists
+    // (finding-001<->finding-003), but the declared anchor pair names terms no
+    // finding matches — so the requirement must still fail. Guards against
+    // regressing findingMatchesAnchorGroup to "any valid relation exists".
+    const expectations: SemanticQualityExpectations = {
+      ...sharedRootExpectations(),
+      expectedSharedCauseAnchorPairs: [
+        [["nonexistent-anchor-aaa"], ["nonexistent-anchor-bbb"]],
+      ],
+    };
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executionRoute: "real",
+      expectations,
+      reviewRecord: passingReviewRecord(),
+      finalOutputText: PASSING_FINAL_OUTPUT,
+      issueArtifacts: passingIssueArtifacts(),
+    });
+    expect(
+      result.checks.find(
+        (check) => check.check_id === "causal_relation_correctness",
+      )?.status,
+    ).toBe("failed");
+  });
 });

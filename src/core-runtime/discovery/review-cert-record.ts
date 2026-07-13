@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  CLEAN_TARGET_EXCLUDED_CHECK_IDS,
   SEMANTIC_QUALITY_GATE_CHECK_IDS,
 } from "../review/semantic-quality-gate.js";
 import { SynthesizeCertDispatchConfigSchema } from "./synthesize-cert-record.js";
@@ -64,6 +65,25 @@ const ArmModelSchema = z
 
 const CheckIdSchema = z.enum(SEMANTIC_QUALITY_GATE_CHECK_IDS);
 type CheckId = (typeof SEMANTIC_QUALITY_GATE_CHECK_IDS)[number];
+
+/** The single legal reduced applicable set (v3 clean-target): the full gate
+ * universe minus the checks a clean target omits. Derived from the gate's
+ * CLEAN_TARGET_EXCLUDED authority so the two cannot drift. Sorted for compare. */
+const CLEAN_TARGET_APPLICABLE_CHECK_IDS: readonly CheckId[] = [
+  ...SEMANTIC_QUALITY_GATE_CHECK_IDS,
+]
+  .filter((id) => !CLEAN_TARGET_EXCLUDED_CHECK_IDS.has(id))
+  .sort();
+
+/** Fixtures permitted to declare a REDUCED applicable_check_ids. A reduced set
+ * shrinks a fixture's core floor, so the deterministic validator — not just the
+ * honest harness — must gate it: only a designated clean-target fixture may
+ * reduce, or a material-bearing fixture could drop its recall spine and certify
+ * silently. Identity is by fixture_id; binding the id to the actual clean blob
+ * via content_sha256 is Phase B (design §D2/§D5). */
+const REDUCED_APPLICABLE_FIXTURE_IDS: ReadonlySet<string> = new Set([
+  "clean-target-v1",
+]);
 
 const FixtureManifestEntrySchema = z
   .object({
@@ -178,6 +198,7 @@ export interface ReviewCertViolation {
     | "units_incomplete"
     | "check_universe_mismatch"
     | "check_emission_incomplete"
+    | "applicable_check_ids_invalid"
     | "rescue_channel_not_pinned"
     | "core_check_floor"
     | "aggregate_mismatch"
@@ -448,6 +469,34 @@ export function validateReviewCertRecord(
       "check_universe_mismatch",
       "gate_pin.issue_artifacts_provided must be true — without issue artifacts the gate emits a subset universe",
     );
+  }
+
+  // v3 §D2: applicable_check_ids is a per-fixture DECLARATION that can shrink a
+  // fixture's core floor, so the deterministic validator must constrain it — an
+  // unconstrained reduced set lets a MATERIAL-bearing fixture drop its recall
+  // spine and certify silently. Only a designated clean-target fixture may
+  // reduce, and only to the single legal clean-target reduction.
+  for (const fixture of record.fixtures) {
+    if (fixture.applicable_check_ids === undefined) continue;
+    if (!REDUCED_APPLICABLE_FIXTURE_IDS.has(fixture.fixture_id)) {
+      push(
+        "applicable_check_ids_invalid",
+        `fixture ${fixture.fixture_id} declares a reduced applicable_check_ids but is not a designated clean-target fixture — a material-bearing fixture must emit the full check universe`,
+        fixture.fixture_id,
+      );
+      continue;
+    }
+    const declared = [...new Set(fixture.applicable_check_ids)].sort();
+    if (
+      declared.length !== CLEAN_TARGET_APPLICABLE_CHECK_IDS.length ||
+      declared.some((id, index) => id !== CLEAN_TARGET_APPLICABLE_CHECK_IDS[index])
+    ) {
+      push(
+        "applicable_check_ids_invalid",
+        `fixture ${fixture.fixture_id} applicable_check_ids must equal the clean-target reduction (${CLEAN_TARGET_APPLICABLE_CHECK_IDS.length} checks: ${CLEAN_TARGET_APPLICABLE_CHECK_IDS.join(", ")})`,
+        fixture.fixture_id,
+      );
+    }
   }
 
   // Run rows: unique coordinates, manifest membership, completion honesty,

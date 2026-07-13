@@ -550,4 +550,40 @@ describe("review-cert per-fixture applicable set", () => {
       "check_emission_incomplete",
     );
   });
+
+  // F1 (adversarial cross-verification 2026-07-13): applicable_check_ids must not
+  // let a material-bearing fixture shrink its own core floor. Only a designated
+  // clean-target fixture may reduce, and only to the exact legal reduction.
+
+  it("rejects a MATERIAL-bearing fixture that declares a reduced applicable_check_ids (core-floor bypass)", () => {
+    const record = structuredClone(mixedRecord());
+    // The attack: review-pipeline (a material fixture) drops the recall spine.
+    const materialFixture = record.fixtures.find(
+      (fixture) => fixture.fixture_id === "review-pipeline-target-v1",
+    )!;
+    materialFixture.applicable_check_ids = CLEAN_APPLICABLE;
+    // Emit only the reduced set on its runs so the emission check itself passes,
+    // isolating the applicable_check_ids_invalid guard as the rejecter.
+    for (const run of record.runs) {
+      if (run.fixture_id === "review-pipeline-target-v1") {
+        run.checks = checksFor(CLEAN_APPLICABLE);
+      }
+    }
+    expect(validateReviewCertRecord(record).map((v) => v.code)).toContain(
+      "applicable_check_ids_invalid",
+    );
+  });
+
+  it("rejects a clean-target fixture whose applicable_check_ids is not the exact legal reduction", () => {
+    const record = structuredClone(mixedRecord());
+    const cleanFixture = record.fixtures.find(
+      (fixture) => fixture.fixture_id === CLEAN_TARGET,
+    )!;
+    // A reduction that keeps one excluded check (actionability) is not the legal
+    // clean-target set.
+    cleanFixture.applicable_check_ids = [...CLEAN_APPLICABLE, "actionability"];
+    expect(validateReviewCertRecord(record).map((v) => v.code)).toContain(
+      "applicable_check_ids_invalid",
+    );
+  });
 });

@@ -552,6 +552,10 @@ function issueArtifactChecks(
   const anchorPairsSatisfied = anchorPairs.every(([groupA, groupB]) =>
     relationRows.some((relation) => {
       if (relation.relation !== "shared_cause_candidate") return false;
+      // G2 requires TWO DISTINCT surface defects sharing a root — a self-relation
+      // (from === to) on one finding that happens to match both groups is a
+      // degenerate loop, not a genuine cross-defect link.
+      if (relation.from_finding_id === relation.to_finding_id) return false;
       if (!validSharedCauseRelation(relation, causeOwnerById)) return false;
       const fromFinding =
         typeof relation.from_finding_id === "string"
@@ -721,8 +725,28 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
       }
     }
   }
+  // A clean-target's whole control is the boundary decoy: with no material
+  // defect the recall floor cannot catch silence, so distinguishing correct
+  // silence from lazy empty silence REQUIRES MUST-preserve. A clean-target that
+  // forgets requiresBoundaryPreservation would let empty silence pass vacuously
+  // — fail loud on the misconfiguration rather than certify a broken control.
+  if (fixture.expectsNoMaterialDefects && !fixture.requiresBoundaryPreservation) {
+    throw new Error(
+      "SemanticQualityExpectations.expectsNoMaterialDefects requires requiresBoundaryPreservation — without the boundary decoy control, empty silence passes vacuously",
+    );
+  }
   const summary = args.reviewRecord.result_classification_summary ?? null;
   const materialIssues = records(summary?.material_issues);
+  // Clean-target (v3 G1): material promotion must be caught on BOTH surfaces —
+  // the summary AND the finding-ledger authority. false_materiality_guard reads
+  // the summary; this counts artifact-ledger material findings so a fabricated
+  // material finding injected only into the ledger cannot slip past the guard.
+  const artifactMaterialFindingCount = fixture.expectsNoMaterialDefects
+    ? recordArray(record(args.issueArtifacts?.findingLedger)?.findings).filter(
+        (finding) =>
+          ["blocker", "high", "medium"].includes(String(finding.severity)),
+      ).length
+    : 0;
   const nonMaterialFindings = records(summary?.non_material_findings);
   const actionCandidates = records(summary?.action_candidates);
   const materialText = normalizedText(materialIssues);
@@ -782,10 +806,13 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
   const falseMaterialityGuard = check(
     "false_materiality_guard",
     // Clean-target (v3 G1): the target has zero material defects, so ANY
-    // admitted material issue is a false positive — a yes-man that promotes a
-    // fabricated (or boundary-decoy) issue fails here, not just the boundary
-    // case the base branch catches.
-    (!fixture.expectsNoMaterialDefects || materialIssues.length === 0) &&
+    // admitted material issue is a false positive — on EITHER surface. A yes-man
+    // that promotes a fabricated issue fails here whether it lands in the summary
+    // (materialIssues) or only in the finding-ledger authority
+    // (artifactMaterialFindingCount), not just the boundary case the base branch
+    // catches.
+    (!fixture.expectsNoMaterialDefects ||
+      (materialIssues.length === 0 && artifactMaterialFindingCount === 0)) &&
       !materialBoundarySensitiveFalsePositive &&
       (
         !falseMaterialityCandidateObserved ||
@@ -799,7 +826,9 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
       `non_material_finding_count=${nonMaterialFindings.length}`,
       `boundary_notes_chars=${boundaryNotes?.length ?? 0}`,
       ...(fixture.expectsNoMaterialDefects
-        ? [`clean-target: admitted material_issue_count=${materialIssues.length} (must be 0)`]
+        ? [
+            `clean-target: admitted material_issue_count=${materialIssues.length}, artifact_material_finding_count=${artifactMaterialFindingCount} (both must be 0)`,
+          ]
         : []),
     ],
   );
