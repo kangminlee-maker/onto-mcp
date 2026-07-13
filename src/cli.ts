@@ -40,6 +40,7 @@ function printHelp(): void {
       "  mcp            Start the MCP stdio tool server",
       "  register       Register the onto MCP server into supported hosts",
       "  configure-provider  Write LLM provider settings into the settings.json chain",
+      "  seats          List every LLM model seat, resolved (--json for machine output)",
       "  watch          Live read-only TUI for review/reconstruct sessions",
       "",
       "Available MCP tools:",
@@ -66,7 +67,7 @@ function printHelp(): void {
 function unsupportedCommandMessage(subcommand: string): string {
   return [
     `[onto] Unsupported public CLI subcommand: ${subcommand}`,
-    "Active public commands: onto mcp, onto register, onto configure-provider, onto watch",
+    "Active public commands: onto mcp, onto register, onto configure-provider, onto seats, onto watch",
   ].join("\n");
 }
 
@@ -98,6 +99,11 @@ async function main(): Promise<number> {
         "./core-runtime/onboard/configure-provider.js"
       );
       return runConfigureProvider(argv.slice(1));
+    }
+
+    case "seats": {
+      const { runSeats } = await import("./core-runtime/cli/run-seats.js");
+      return runSeats(argv.slice(1));
     }
 
     case "--version":
