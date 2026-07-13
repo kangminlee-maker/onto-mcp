@@ -3,6 +3,12 @@
 owner 지시: seat 인벤토리(C) 완료 후 **cert fixture MECE 개선(v3, M4)** 진행.
 설계 SSOT: `development-records/design/20260712-review-cert-v3-fixture-mece-design.md`.
 
+> **상태 갱신 (2026-07-13, 단계 0 완료)**: 4-렌즈 adversarial review 완료 → 설계 **material 0**으로
+> 개정(설계 문서 "단계 0 개정 로그" 참조, material 5건 해소). owner 결정: clean-target=**옵션1
+> (대조군 재설계)**, additive-optional로 계약 bump 폐기, floor 불변 정직 프레이밍. **다음 시작점 =
+> A-1 구현**(owner "구현하자" 트리거). 6영역 스코프: v3는 **review 한정 유지**(일반화는 후속).
+> 메모리 [[onto-mcp-cert-v3-stage0-complete-20260713]].
+
 ## 재개 시 상태 검증 (먼저 실행)
 
 ```
