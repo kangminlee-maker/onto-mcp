@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   computeReviewCertAggregates,
@@ -18,6 +21,7 @@ import {
   CLEAN_TARGET_EXCLUDED_CHECK_IDS,
   SEMANTIC_QUALITY_GATE_CHECK_IDS,
 } from "../review/semantic-quality-gate.js";
+import { loadSupportedModelRegistry } from "./supported-models.js";
 
 const FIXTURES = ["review-pipeline-target-v1", "retry-policy-target-v1"] as const;
 const REPS = 3;
@@ -585,5 +589,122 @@ describe("review-cert per-fixture applicable set", () => {
     expect(validateReviewCertRecord(record).map((v) => v.code)).toContain(
       "applicable_check_ids_invalid",
     );
+  });
+
+  // A-2 over-declaration symmetry: the declared aggregate set must equal the
+  // COMPUTED set exactly — not just be a superset. A declared row for a check the
+  // clean-target excludes (recall/grounding/actionability) has no completed run
+  // to recompute against, so it is a spurious rate. Before A-2 the validator only
+  // walked computed rows and silently ignored this declared-only excess.
+  it("rejects an over-declared aggregate row referencing a non-applicable check", () => {
+    const record = structuredClone(mixedRecord());
+    // Sanity: the excess row targets a check that is genuinely excluded and thus
+    // absent from the computed clean-target rows (non-vacuous negative control).
+    expect(CLEAN_TARGET_EXCLUDED_CHECK_IDS.has("grounding")).toBe(true);
+    record.declared_aggregates.per_fixture_check.push({
+      fixture_id: CLEAN_TARGET,
+      check_id: "grounding",
+      baseline_pass_rate: 1,
+      candidate_pass_rate: 1,
+    });
+    const violations = validateReviewCertRecord(record);
+    // The ONLY defect is the over-declaration — isolate it precisely.
+    expect(violations.map((v) => v.code)).toEqual(["aggregate_mismatch"]);
+    expect(violations[0]!.subject_id).toBe(`${CLEAN_TARGET}/grounding`);
+    expect(violations[0]!.message).toContain("over-declaration");
+  });
+
+  // "Exactly the computed set" is a multiset claim: a duplicate declared row for
+  // an applicable pair (both keys present in computed) escapes the over-declaration
+  // membership test, and the forward loop's last-wins Map would let a spurious rate
+  // ride alongside the honest twin. The set-integrity guard rejects the repeat.
+  it("rejects a duplicate declared aggregate row (same pair, divergent rate)", () => {
+    const record = structuredClone(mixedRecord());
+    const applicableRow = record.declared_aggregates.per_fixture_check.find(
+      (row) => row.fixture_id === CLEAN_TARGET,
+    )!;
+    // Prepend a spurious twin with a wrong rate so the HONEST row stays last: the
+    // forward last-wins Map then recomputes clean and stays silent, leaving the
+    // set-integrity guard as the sole rejecter of the divergent duplicate.
+    record.declared_aggregates.per_fixture_check.unshift({
+      ...applicableRow,
+      candidate_pass_rate: 0.5,
+    });
+    const violations = validateReviewCertRecord(record);
+    expect(violations.map((v) => v.code)).toEqual(["aggregate_mismatch"]);
+    expect(violations[0]!.subject_id).toBe(
+      `${applicableRow.fixture_id}/${applicableRow.check_id}`,
+    );
+    expect(violations[0]!.message).toContain("more than once");
+  });
+
+  // A-2 not_run handling under a reduced applicable set: a transport-lost
+  // clean-target run carries no checks and is not counted toward the rep floor —
+  // identical to the full-universe path (the reduced set never reaches not_run
+  // rows). Confirms the reduction does not corrupt not_run bookkeeping.
+  it("handles a not_run row on a reduced-applicable-set fixture (rep_floor only, no check noise)", () => {
+    const record = structuredClone(mixedRecord());
+    const lost = record.runs.find(
+      (run) => run.arm === "candidate" && run.fixture_id === CLEAN_TARGET,
+    )!;
+    lost.completion = "not_run";
+    lost.units_completed = 3;
+    lost.checks = [];
+    // Two ok clean-target candidate runs remain (all-pass) → rates stay 1, so the
+    // declared aggregates still recompute; only the rep floor is short.
+    const violations = validateReviewCertRecord(record);
+    expect(codes(violations)).toContain("rep_floor");
+    expect(violations.some((v) => v.subject_id === `candidate/${CLEAN_TARGET}`))
+      .toBe(true);
+    // A not_run row carrying no checks must NOT trip emission or aggregate noise.
+    expect(codes(violations)).not.toContain("check_emission_incomplete");
+    expect(codes(violations)).not.toContain("aggregate_mismatch");
+    expect(codes(violations)).not.toContain("core_check_floor");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A-2 G7 binding regression on the REAL registry. The v3 applicable_check_ids
+// field is additive-optional, so the two REGISTERED review-cert/v2 records (which
+// declare none → full universe) must still bind their registry entries to zero
+// violations after the validator hardening. This loads the actual
+// `.onto/authority/supported-models.yaml` and the on-disk records, mirroring
+// `assertReviewCertBinding` in check-supported-models.ts — a recompute regression
+// from any future validator change fails HERE, in unit CI, not silently at G7.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("review-cert binding — registered v2 records (real-registry regression)", () => {
+  const REPO_ROOT = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../..",
+  );
+
+  it("binds every registered review-role entry to zero violations", () => {
+    const registry = loadSupportedModelRegistry();
+    const supportedModelKeys = new Set(
+      registry.supported_models.map((entry) => `${entry.provider}/${entry.model}`),
+    );
+    const reviewEntries = registry.supported_models.filter((entry) =>
+      entry.roles?.includes("review"),
+    );
+    // Non-vacuous: there ARE registered review entries whose binding this pins.
+    expect(reviewEntries.length).toBeGreaterThan(0);
+    for (const entry of reviewEntries) {
+      const evidenceByRef = new Map<string, unknown>();
+      for (const ref of entry.benchmark_evidence_refs) {
+        try {
+          evidenceByRef.set(
+            ref,
+            JSON.parse(readFileSync(path.join(REPO_ROOT, ref), "utf8")),
+          );
+        } catch {
+          // Mirrors G7: an unreadable/non-JSON ref cannot serve as the cert
+          // record; the tracked-file check polices ref existence separately.
+        }
+      }
+      expect(
+        reviewCertBindingViolations({ entry, evidenceByRef, supportedModelKeys }),
+        `${entry.provider}/${entry.model} must bind to a passing review-cert record`,
+      ).toEqual([]);
+    }
   });
 });

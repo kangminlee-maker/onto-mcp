@@ -618,6 +618,39 @@ export function validateReviewCertRecord(
       );
     }
   }
+  // Declared-aggregate set integrity (v3 A-2): the loop above proves every
+  // COMPUTED row is declared and recomputes; this reverse pass proves the declared
+  // side carries no EXTRA and no DUPLICATE rows. A declared aggregate for a
+  // fixture×check pair that is not applicable (a clean-target's excluded recall/
+  // grounding checks) or has no completed run never appears in `computed`, so its
+  // asserted rate cannot be recomputed; a repeated pair would let a spurious rate
+  // ride alongside the honest one. Together the passes pin the declared aggregate
+  // set to EXACTLY the computed set — one rate per applicable, computed pair.
+  const computedKeys = new Set(
+    computed.per_fixture_check.map(
+      (row) => `${row.fixture_id}\u0000${row.check_id}`,
+    ),
+  );
+  const declaredSeen = new Set<string>();
+  for (const row of record.declared_aggregates.per_fixture_check) {
+    const key = `${row.fixture_id}\u0000${row.check_id}`;
+    const subject = `${row.fixture_id}/${row.check_id}`;
+    if (declaredSeen.has(key)) {
+      push(
+        "aggregate_mismatch",
+        `declared aggregate for ${subject} appears more than once — a fixture×check pair must declare exactly one rate`,
+        subject,
+      );
+      continue;
+    }
+    declaredSeen.add(key);
+    if (computedKeys.has(key)) continue;
+    push(
+      "aggregate_mismatch",
+      `declared aggregate for ${subject} does not recompute — the pair is not applicable or has no completed run (over-declaration)`,
+      subject,
+    );
+  }
   if (record.declared_aggregates.quality_pass !== computed.quality_pass) {
     push(
       "aggregate_mismatch",
