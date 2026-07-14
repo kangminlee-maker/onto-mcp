@@ -76,7 +76,12 @@ describe("review-cert fixture defect V1 proofs", () => {
     const { callees } = fixtureBlobStructure(source!);
     expect(callees.unstableFormat).toContain("rawFormat");
     expect(callees.alternateFormat).toContain("rawFormat");
-    expect(callees.truncate ?? []).not.toContain("rawFormat");
+    // truncate is independent — its only callee is the safe slice, NOT rawFormat.
+    // Asserted by exact equality (not `?? [] .not.toContain`) so the proof fails
+    // LOUD if fixtureBlobStructure ever stops seeing truncate (e.g. an arrow-const
+    // refactor the FunctionDeclaration-only scanner can't read) instead of passing
+    // vacuously on an empty callee list.
+    expect(callees.truncate).toEqual(["text.slice"]);
     const rootCarriers = Object.entries(callees)
       .filter(([, called]) => called.includes("JSON.stringify"))
       .map(([fn]) => fn);

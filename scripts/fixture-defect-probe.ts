@@ -56,6 +56,14 @@ export interface FixtureBlobStructure {
  * Parsing uses the real TypeScript AST (not regex) so the delegation facts are
  * exact — the repo's other structural guards (check-graceful-signal-rethrow.ts)
  * take the same approach.
+ *
+ * SCOPE: `callees` is computed only for top-level `function` DECLARATIONS. An
+ * arrow-const export (`export const f = () => …`) lands in `exportedSymbols` but
+ * gets NO `callees` entry — the current fixture blobs use only declarations. A
+ * V1 proof over a blob whose reviewed functions are arrows would read an empty
+ * callee list, so such proofs must assert EXACT callees (fail loud) rather than
+ * `callees.x ?? []` (which would pass vacuously); extend the scanner here if a
+ * future fixture needs arrow bodies.
  */
 export function fixtureBlobStructure(tsSource: string): FixtureBlobStructure {
   const sf = ts.createSourceFile(
