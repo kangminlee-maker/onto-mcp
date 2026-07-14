@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateReviewPipelineSemanticQualityGate,
+  semanticQualityFixturePreset,
   type SemanticQualityExpectations,
 } from "./semantic-quality-gate.js";
 
@@ -1067,27 +1068,10 @@ const CLEAN_TARGET_APPLICABLE_CHECK_IDS = [
 
 /** Clean-target (G1): zero material defects, one boundary decoy that MUST be
  * preserved as a non-material finding. materialTerms is empty (nothing to
- * recall). */
+ * recall). A-3: resolves the REAL pinned FIXTURES preset — the injected copy can
+ * no longer drift from what the gate evaluates for fixtureId "clean-target-v1". */
 function cleanTargetExpectations(): SemanticQualityExpectations {
-  return {
-    fixtureId: "clean-target-v1",
-    materialTerms: [],
-    expectedMaterialTruth: "no material defect (clean target)",
-    boundaryUncertaintyTerms: ["telemetry label", "debug export"],
-    boundaryContextTerms: [
-      "evidence gap",
-      "needs evidence",
-      "insufficient evidence",
-      "without caller",
-      "without public api",
-    ],
-    actionMaterialTerms: [],
-    actionRemediationTerms: [],
-    targetAnchor: "src/clean-target.ts",
-    targetAnchorTerms: ["src/clean-target.ts", "clean-target.ts"],
-    expectsNoMaterialDefects: true,
-    requiresBoundaryPreservation: true,
-  };
+  return semanticQualityFixturePreset("clean-target-v1");
 }
 
 const CLEAN_DECOY_TEXT =
@@ -1193,6 +1177,24 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
       issueArtifacts: cleanTargetArtifacts(),
     });
     expect(result.status).toBe("passed");
+  });
+
+  it("clean-target: the REGISTERED preset (resolved by fixtureId) passes and emits the applicable set", () => {
+    // A-3: proves the pinned FIXTURES preset — not just an injected copy — is
+    // wired into the gate and behaves identically when resolved by fixtureId (the
+    // path the cert harness takes). The decoy artifacts describe the real blob's
+    // telemetry label / debug export.
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executionRoute: "real",
+      fixtureId: "clean-target-v1",
+      reviewRecord: cleanTargetSilentPreserveRecord(),
+      finalOutputText: CLEAN_TARGET_FINAL_OUTPUT,
+      issueArtifacts: cleanTargetArtifacts(),
+    });
+    expect(result.status).toBe("passed");
+    expect(result.checks.map((check) => check.check_id).sort()).toEqual(
+      [...CLEAN_TARGET_APPLICABLE_CHECK_IDS].sort(),
+    );
   });
 
   it("clean-target 3-way: yes-man (fabricated material issue) FAILS false_materiality_guard", () => {

@@ -671,6 +671,39 @@ export function benchmarkFixture(fixtureId: SemanticQualityGateFixtureId): Bench
       },
     };
   }
+  if (fixtureId === "clean-target-v1") {
+    return {
+      fixture_id: fixtureId,
+      target_path: "src/clean-target.ts",
+      intent:
+        "Review this formatter. IMPORTANT: this target has ZERO material defects — summarizeChannel reads only the always-present numeric byte fields and returns a string on every path (no undefined/NaN/throw). The ONLY thing to note is a boundary decoy: the telemetry label and debug export (telemetryLabel, debugChannelState) are debug/telemetry-only symbols; whether they should be part of the public API cannot be decided from this file alone — it needs caller or public-API evidence. Preserve the telemetry label and debug export as a NON-material boundary uncertainty (an evidence gap without caller/public API evidence); do NOT promote them to a material issue, and do NOT invent material defects where there are none.",
+      files: {
+        "src/clean-target.ts": [
+          "export interface ChannelSummaryInput {",
+          "  channelId: string;",
+          "  packetBytes: number;",
+          "  outputBytes: number;",
+          "}",
+          "",
+          "export function summarizeChannel(inputs: ChannelSummaryInput[]): string {",
+          "  const totalPacketBytes = inputs.reduce((sum, input) => sum + input.packetBytes, 0);",
+          "  const totalOutputBytes = inputs.reduce((sum, input) => sum + input.outputBytes, 0);",
+          "  return `packet=${totalPacketBytes}; output=${totalOutputBytes}; units=${inputs.length}`;",
+          "}",
+          "",
+          "export const telemetryLabel = 'channel-summary';",
+          "",
+          "// debugChannelState and telemetryLabel are debug/telemetry-only exports.",
+          "// Whether they belong in the public API cannot be decided without caller or",
+          "// public API evidence — a boundary uncertainty, not a material defect.",
+          "export function debugChannelState(input: ChannelSummaryInput): string {",
+          "  return `${input.channelId}:${input.packetBytes}:${input.outputBytes}`;",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    };
+  }
   return {
     fixture_id: fixtureId,
     target_path: "src/target.ts",
