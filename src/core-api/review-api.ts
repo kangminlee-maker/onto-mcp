@@ -34,6 +34,7 @@ import {
   type PerCallLlmOverride,
   type ReviewRetrySettings,
 } from "../core-runtime/discovery/settings-chain.js";
+import { applyReviewLlmOverride } from "../core-runtime/discovery/llm-override.js";
 import { loadCoreLensRegistry } from "../core-runtime/discovery/lens-registry.js";
 import {
   fileExists,
@@ -3827,8 +3828,16 @@ function reviewExecutionProfileFromActorProfiles(args: {
 async function projectReviewExecutionProfileForContinuation(args: {
   projectRoot: string;
   ontoHome: string;
+  llmOverride?: PerCallLlmOverride;
 }): Promise<ReviewExecutionProfile | undefined> {
-  const settings = await resolveSettingsChain(args.ontoHome, args.projectRoot);
+  const projectSettings = await resolveSettingsChain(
+    args.ontoHome,
+    args.projectRoot,
+  );
+  // Re-apply the session's per-call override (design v4 §7) so the unit
+  // execution policy this profile carries stays on the overridden route rather
+  // than reverting to the non-overlaid project models. Identity when absent.
+  const settings = applyReviewLlmOverride(projectSettings, args.llmOverride);
   const resolved = resolveReviewExecutionProfile({
     explicitCodex: false,
     settings,
@@ -4673,6 +4682,9 @@ export function createOntoReviewCoreApi(
         : await projectReviewExecutionProfileForContinuation({
             projectRoot,
             ontoHome,
+            ...(executionPlan.llm_override
+              ? { llmOverride: executionPlan.llm_override }
+              : {}),
           });
       const actorProfileReviewExecutionProfile = manifestReviewExecutionProfile
         ? undefined

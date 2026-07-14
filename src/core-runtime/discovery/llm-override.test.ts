@@ -317,4 +317,36 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
     expect(after.profile.provider).toBe("anthropic");
     expect(after.profile.model).toBe("claude-opus-4-8");
   });
+
+  it("provider-switch drops a unit's own llm so it inherits the overridden actor (continuation fix, v4 §7)", () => {
+    // The continuation fix re-applies the stamped override to the freshly
+    // resolved project profile. Its correctness rests on this: a provider switch
+    // must drop a unit's own (old-provider) llm so the unit inherits the
+    // replaced actor — otherwise the unit reverts to the non-overlaid project
+    // model while the actors are overridden (mixed route).
+    const settings = reviewSettingsWith(openAiOauthActor);
+    (settings.review!.execution as Record<string, unknown>).units = {
+      lens: { llm: { provider: "openai", auth: "oauth", model: "gpt-5.5", effort: "low" } },
+    };
+    const overlaid = applyReviewLlmOverride(settings, {
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-opus-4-8",
+    });
+    // The unit's stale openai llm is dropped (not retained on the old provider).
+    const lensUnit = overlaid.review?.execution?.units?.lens as { llm?: unknown } | undefined;
+    expect(lensUnit).toBeDefined();
+    expect(lensUnit?.llm).toBeUndefined();
+    const after = resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings: overlaid,
+      codexAvailable: true,
+      claudeAvailable: true,
+      env: hermeticEnv,
+    });
+    expect(after.type).toBe("resolved");
+    if (after.type !== "resolved") return;
+    expect(after.profile.worker_executor).toBe("claude_code");
+    expect(after.profile.provider).toBe("anthropic");
+  });
 });

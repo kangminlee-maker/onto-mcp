@@ -313,6 +313,10 @@ export async function runPrepareReviewSessionCli(
   const bindingParams = {
     projectRoot,
     ontoConfig,
+    // Stamp the RAW override into the execution plan too: ontoConfig carries its
+    // effect on the actors, but continuation re-resolves the project profile for
+    // unit execution policy and must re-overlay it (design v4 §7).
+    ...(overlay ? { llmOverride: overlay } : {}),
     requestedTarget: requireString(values["requested-target"], "requested-target"),
     requestedDomainToken: optionalString(values["requested-domain-token"]),
     targetScopeKind,

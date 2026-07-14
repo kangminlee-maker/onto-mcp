@@ -41,6 +41,7 @@ import {
   defaultReviewRetrySettings,
   resolveSettingsChain,
   type OntoSettings,
+  type PerCallLlmOverride,
   type ReviewLlmRef,
   type ResolvedReviewExecutionSettings,
   completeReviewRetrySettings,
@@ -100,6 +101,14 @@ export interface WriteInvocationInterpretationArtifactParams {
 export interface BootstrapInvocationBindingArtifactsParams {
   projectRoot: string;
   ontoConfig?: OntoSettings;
+  /**
+   * The RAW per-call override this session was prepared with (design v4 §7).
+   * `ontoConfig` already carries its EFFECT (overlaid actors), but continuation
+   * re-resolves the project profile from current settings for unit execution
+   * policy, so it needs the override itself to re-overlay those units. Stamped
+   * into the execution plan; absent → default-off.
+   */
+  llmOverride?: PerCallLlmOverride;
   requestedTarget: string;
   requestedDomainToken?: string;
   ontoHome?: string;
@@ -906,6 +915,10 @@ export async function bootstrapInvocationBindingArtifacts(
     retry_policy: completeReviewRetrySettings(
       ontoConfig?.review?.execution?.retry,
     ),
+    // Durable stamp of the per-call override (design v4 §7): continuation
+    // re-overlays the freshly resolved project profile with it so an overridden
+    // session's units cannot revert to the non-overlaid project models.
+    ...(params.llmOverride ? { llm_override: params.llmOverride } : {}),
     interpretation_artifact_path: interpretationArtifactPath,
     binding_output_path: bindingOutputPath,
     session_metadata_path: sessionMetadataPath,
