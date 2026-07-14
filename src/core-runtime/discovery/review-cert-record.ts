@@ -85,6 +85,20 @@ const REDUCED_APPLICABLE_FIXTURE_IDS: ReadonlySet<string> = new Set([
   "clean-target-v1",
 ]);
 
+/** The applicable_check_ids a fixture's manifest entry MUST declare — the single
+ * authority shared by the cert-record PRODUCER (scripts/review-cert-run.mts) and
+ * this validator, so the two cannot drift. A designated clean-target fixture
+ * declares the reduced set; every other fixture declares nothing (undefined =
+ * absent = full universe, byte-identical v2 recompute). The producer emits
+ * exactly this; the validator below recomputes and rejects any mismatch. */
+export function fixtureApplicableCheckIds(
+  fixtureId: string,
+): readonly CheckId[] | undefined {
+  return REDUCED_APPLICABLE_FIXTURE_IDS.has(fixtureId)
+    ? CLEAN_TARGET_APPLICABLE_CHECK_IDS
+    : undefined;
+}
+
 const FixtureManifestEntrySchema = z
   .object({
     fixture_id: IdSchema,

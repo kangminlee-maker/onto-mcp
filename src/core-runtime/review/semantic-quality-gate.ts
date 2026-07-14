@@ -2,7 +2,8 @@ export type SemanticQualityGateStatus = "passed" | "failed" | "not_applicable";
 export type SemanticQualityGateFixtureId =
   | "review-pipeline-target-v1"
   | "retry-policy-target-v1"
-  | "clean-target-v1";
+  | "clean-target-v1"
+  | "shared-root-target-v1";
 
 /** The complete check-id universe this gate can emit — the value-level single
  * source (the check_id type derives from it). The review-cert/v2 evidence
@@ -222,6 +223,44 @@ const FIXTURES: Record<SemanticQualityGateFixtureId, SemanticQualityExpectations
     targetAnchorTerms: ["src/clean-target.ts", "clean-target.ts"],
     expectsNoMaterialDefects: true,
     requiresBoundaryPreservation: true,
+  },
+  // v3 G2 shared-root (design §D1/§D3): ONE common root (rawFormat delegating to
+  // JSON.stringify, which returns undefined for top-level undefined) surfaces as
+  // TWO distinct defects (unstableFormat + alternateFormat both delegate to it),
+  // plus one INDEPENDENT defect (truncate off-by-one) and a lensId boundary decoy.
+  // The control is expectedSharedCauseAnchorPairs: the shared_cause branch of
+  // causal_relation_correctness no longer passes vacuously (`.every` over an empty
+  // relation set) — a valid shared_cause_candidate relation MUST connect the
+  // unstableFormat and alternate findings. All 12 checks are emitted (full
+  // universe): shared-root has real material defects, so the recall floor applies.
+  "shared-root-target-v1": {
+    fixtureId: "shared-root-target-v1",
+    materialTerms: ["unstableformat", "json.stringify", "undefined"],
+    expectedMaterialTruth: "unstableFormat + JSON.stringify + undefined",
+    boundaryUncertaintyTerms: ["lensid", "lens id", "lens ids", "lens identity"],
+    boundaryContextTerms: [
+      "evidence gap",
+      "needs evidence",
+      "insufficient evidence",
+      "low-confidence",
+      "unresolved",
+      "without caller",
+      "without public api",
+      "caller evidence",
+      "public api evidence",
+    ],
+    actionMaterialTerms: ["unstableformat", "json.stringify", "undefined"],
+    actionRemediationTerms: [
+      "return type",
+      "fallback",
+      "widen",
+      "guard",
+      "focused test",
+      "verify",
+    ],
+    targetAnchor: "src/shared-root.ts",
+    targetAnchorTerms: ["src/shared-root.ts", "shared-root.ts"],
+    expectedSharedCauseAnchorPairs: [[["unstableformat"], ["alternate"]]],
   },
 };
 

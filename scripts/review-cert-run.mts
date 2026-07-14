@@ -90,6 +90,7 @@ import {
   type ReviewCertArmDeclaration,
 } from "../src/core-runtime/discovery/review-cert-assemble.ts";
 import {
+  fixtureApplicableCheckIds,
   parseReviewCertRecord,
   REVIEW_CERT_ARMS,
   reviewCertQualityDisclosures,
@@ -116,8 +117,15 @@ const TSX = path.join(
 const BENCHMARK_SCRIPT = path.join(REPO_ROOT, "scripts", "review-pipeline-benchmark.ts");
 const CAPTURE_ENV = "ONTO_REVIEW_CERT_CAPTURE_FILE";
 const CLAUDE_BIN_ENV = "ONTO_CLAUDE_BIN"; // claude-bin.ts resolution order, priority 1
-/** The contract's two semantic fixtures (design §4; gate F6) — pinned, not a knob. */
-const FIXTURE_IDS = ["review-pipeline-target-v1", "retry-policy-target-v1"] as const;
+/** The contract's semantic fixtures (design §4; v3 §D1 — pinned, not a knob):
+ * the two material fixtures + the v3 clean-target (G1) and shared-root (G2)
+ * controls. clean-target declares a reduced applicable_check_ids (below). */
+const FIXTURE_IDS = [
+  "review-pipeline-target-v1",
+  "retry-policy-target-v1",
+  "clean-target-v1",
+  "shared-root-target-v1",
+] as const;
 const CANONICAL_CHECKS = [...SEMANTIC_QUALITY_GATE_CHECK_IDS].sort();
 const DEFAULT_REVIEW_TIMEOUT_MS = 240000; // the benchmark's own per-review default
 
@@ -540,11 +548,17 @@ const fixtureManifest = FIXTURE_IDS.map((fixtureId) => {
   if (content === undefined) {
     throw new Error(`review-cert-run: fixture ${fixtureId} has no content at its target_path ${spec.target_path}`);
   }
+  // clean-target declares its reduced applicable_check_ids; every other fixture
+  // omits the field (absent = full universe). Derived from the record layer's
+  // single authority (fixtureApplicableCheckIds) so producer and validator can
+  // never disagree — hardcoding the set here would reopen that drift.
+  const applicable = fixtureApplicableCheckIds(fixtureId);
   return {
     fixture_id: fixtureId as string,
     // Same value the gate reports as fixture_target_anchor for these fixtures.
     target_anchor: spec.target_path,
     content_sha256: crypto.createHash("sha256").update(content).digest("hex"),
+    ...(applicable ? { applicable_check_ids: [...applicable] } : {}),
   };
 });
 
@@ -664,7 +678,8 @@ async function runBenchmarkOnce(args: {
   return { exitCode, summary, logPath };
 }
 
-// ── row projection (contract §4: ok = full completion + full 12-check universe) ──
+// ── row projection (contract §4: ok = full completion + the fixture's APPLICABLE
+// check set — the full 12-check universe, or a clean-target's reduced set) ──
 function rowFromAttempt(args: {
   arm: ReviewCertArm;
   fixtureId: string;
@@ -689,14 +704,24 @@ function rowFromAttempt(args: {
     if (typeof unitCount !== "number" || unitCount < 1) reasons.push("no units observed");
     if (failedUnits !== 0) reasons.push(`failed_unit_count=${failedUnits ?? "unknown"}`);
     if (salvaged.length > 0) reasons.push(`salvaged_unit_ids=[${salvaged.join(",")}] (rescue pin breached)`);
+    // ok requires the gate to emit EXACTLY this fixture's applicable check set —
+    // the full 12-check universe, or a clean-target's reduced set (design §D2 /
+    // MF-1: run.mts's completion judgment is a fourth applicable-set-aware
+    // consumer alongside record-layer emission/passRate/aggregate — a hardcoded
+    // 12 here would mis-flag a legitimate reduced-set run as not_run). Derived
+    // from the same single authority the manifest and validator use.
+    const applicableChecks = fixtureApplicableCheckIds(args.fixtureId);
+    const expectedChecks = applicableChecks
+      ? [...applicableChecks].sort()
+      : CANONICAL_CHECKS;
     const emitted = summary.semantic_quality_gate?.checks ?? [];
     const emittedIds = [...new Set(emitted.map((check) => check.check_id))].sort();
     if (
-      emitted.length !== CANONICAL_CHECKS.length ||
-      emittedIds.length !== CANONICAL_CHECKS.length ||
-      emittedIds.some((id, index) => id !== CANONICAL_CHECKS[index])
+      emitted.length !== expectedChecks.length ||
+      emittedIds.length !== expectedChecks.length ||
+      emittedIds.some((id, index) => id !== expectedChecks[index])
     ) {
-      reasons.push(`gate emitted ${emitted.length} checks (need the full ${CANONICAL_CHECKS.length}-check universe)`);
+      reasons.push(`gate emitted ${emitted.length} checks (need this fixture's applicable ${expectedChecks.length}-check set)`);
     }
   }
   const ok = reasons.length === 0;
@@ -805,7 +830,7 @@ for (const arm of [baseline, candidate]) {
       await fs.appendFile(progressPath, `${JSON.stringify({ ...row, run_controls: RUN_CONTROLS })}\n`);
       if (row.completion === "ok") {
         ok += 1;
-        log(`${key}: attempt ${attempt} ok (${row.units_total} units, 12 checks)`);
+        log(`${key}: attempt ${attempt} ok (${row.units_total} units, ${row.checks.length} checks)`);
       } else {
         log(`${key}: attempt ${attempt} → not_run: ${notOkReason}`);
         log(`${key}: log tail:\n${await tailOf(outcome.logPath, 12)}`);
