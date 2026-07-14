@@ -896,6 +896,7 @@ describe("resolveJudgeLlmConfig", () => {
 // ─── INV-MODEL-1 role-aware B3: semantic-map synthesize wiring seam (§5.4/§5.5) ───
 import { resolveSemanticMapSynthesizeWiring } from "./reconstruct-api.js";
 import type { OntoSettings } from "../core-runtime/discovery/settings-chain.js";
+import { applyReconstructLlmOverride } from "../core-runtime/discovery/llm-override.js";
 
 describe("resolveSemanticMapSynthesizeWiring", () => {
   const haikuSeat = {
@@ -979,13 +980,17 @@ describe("resolveSemanticMapSynthesizeWiring", () => {
     expect(config?.reasoning_effort).toBe("low");
   });
 
-  // §5.2 rank 2: the request llmEffort pin wins over the seat's own effort
-  // (judge precedent — never silently weaker/stronger than the pinned run).
-  it("the request llmEffort pin overrides the seat effort", () => {
+  // §5.2 rank 2 (design v4 §6(a)): the per-call override effort reaches the
+  // synthesize seat through the OVERLAID settings — the replacement for the
+  // removed request `llmEffort` pin. Effort now lives on the seat's own llm block
+  // (never silently weaker/stronger than the pinned run).
+  it("the per-call override effort reaches the synthesize seat via the overlay", () => {
     const wiring = resolveSemanticMapSynthesizeWiring({
-      settings: settingsWith({ seat: true, optIn: true }),
+      settings: applyReconstructLlmOverride(
+        settingsWith({ seat: true, optIn: true }),
+        { effort: "high" },
+      ),
       mockRealizationEnabled: false,
-      llmEffortOverride: { reasoning_effort: "high" },
     });
     expect(wiring.semanticMapSynthesizeLlmConfig?.reasoning_effort).toBe("high");
   });

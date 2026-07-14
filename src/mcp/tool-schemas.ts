@@ -3,6 +3,7 @@ import {
   RECONSTRUCT_DOMAIN_ID_GRAMMAR_DESCRIPTION,
   RECONSTRUCT_DOMAIN_ID_PATTERN,
 } from "../core-runtime/reconstruct/domain-id.js";
+import { PerCallLlmOverrideSchema } from "../core-runtime/discovery/settings-chain.js";
 
 const ReviewModeSchema = z.enum(["core-axis", "full"]);
 const ReviewTargetScopeKindSchema = z.enum(["file", "directory", "bundle"]);
@@ -37,11 +38,26 @@ const OntoReviewToolInputBaseSchema = z.object({
   confirmValueAlignment: z.boolean().optional(),
   prepareOnly: z.boolean().optional(),
   returnRunningAfterMs: z.number().int().min(0).optional(),
+  // Per-call LLM override: ephemeral settings-`llm` overlay applied to every
+  // review dispatch seat (all actors + units) for this invocation. Omit → settings
+  // unchanged (default-off, byte-identical). See tool-schemas import.
+  llmOverride: PerCallLlmOverrideSchema.optional(),
 }).strict();
 
-export const OntoReviewToolInputSchema = OntoReviewToolInputBaseSchema.refine((input) => !(input.domain && input.noDomain), {
-  message: "Use either domain or noDomain, not both.",
-});
+// A provider switch needs an explicit model (the switched-in provider has no
+// default model to inherit); `auth` stays optional — the model-switcher
+// normalizer defaults it per provider, matching settings behavior.
+const requireModelWhenOverrideProvider = (input: {
+  llmOverride?: { provider?: string | undefined; model?: string | undefined } | undefined;
+}): boolean => !(input.llmOverride?.provider && !input.llmOverride.model);
+const overrideModelRefineMessage =
+  "llmOverride.model is required when llmOverride.provider is set (a provider switch needs an explicit model).";
+
+export const OntoReviewToolInputSchema = OntoReviewToolInputBaseSchema
+  .refine((input) => !(input.domain && input.noDomain), {
+    message: "Use either domain or noDomain, not both.",
+  })
+  .refine(requireModelWhenOverrideProvider, { message: overrideModelRefineMessage });
 
 export const OntoPrepareReviewToolInputSchema =
   OntoReviewToolInputBaseSchema.extend({
@@ -118,15 +134,20 @@ export const OntoReconstructToolInputSchema = OntoObserveSourceToolInputSchema.e
   resumeMode: z.enum(["fresh", "reuse_existing_authored_artifacts"]).optional(),
   semanticAuthorRealization: z.enum(["direct_call"]).default("direct_call"),
   confirmationProviderRealization: z.enum(["direct_call"]).default("direct_call"),
-  // Optional reasoning-effort pin applied to both reconstruct actors (live only).
-  llmEffort: z.string().min(1).optional(),
   // Opt-in per-stage answer-support JUDGE overrides (live only). judgeLlmEffort
   // runs the judge at a different effort; judgeModel swaps the judge MODEL on the
   // semantic author's provider. An unsupported judgeModel degrades to the author
   // model (INV-MODEL-1); the judge otherwise inherits the semantic-author config.
   judgeLlmEffort: z.string().min(1).optional(),
   judgeModel: z.string().min(1).optional(),
-}).strict();
+  // Per-call LLM override: ephemeral settings-`llm` overlay applied to the
+  // reconstruct actor seats (semantic_author, confirmation_provider,
+  // semantic_map_synthesize, dispatch_fallback) for this invocation. The judge
+  // keeps its own judgeModel/judgeLlmEffort knobs. Omit → settings unchanged.
+  llmOverride: PerCallLlmOverrideSchema.optional(),
+}).strict().refine(requireModelWhenOverrideProvider, {
+  message: overrideModelRefineMessage,
+});
 
 export const OntoReconstructSessionInputSchema = z.object({
   sessionRoot: z.string().min(1),

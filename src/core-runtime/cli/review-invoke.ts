@@ -24,11 +24,16 @@ import {
 import { isOntoRoot, resolveOntoHome } from "../discovery/onto-home.js";
 import { resolveInstallationPath } from "../discovery/installation-paths.js";
 import {
+  assertSettingsModelsSupported,
   REVIEW_EXECUTION_UNIT_IDS,
   resolveSettingsChain,
   type OntoConfig,
   type ReviewExecutionUnitId,
 } from "../discovery/settings-chain.js";
+import {
+  applyReviewLlmOverride,
+  parsePerCallLlmOverrideArg,
+} from "../discovery/llm-override.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   isPathInsideRoot,
@@ -217,6 +222,9 @@ const KNOWN_PASSTHROUGH_OPTION_NAMES = [
   "max-listing-depth",
   "max-listing-entries",
   "max-embed-lines",
+  // Per-call LLM override JSON — passthrough so it reaches the prepare-session
+  // bake (prepare-review-session.ts) as well as the orchestrator profile resolve.
+  "llm-override",
 ] as const;
 
 const KNOWN_PASSTHROUGH_FLAG_NAMES = [
@@ -2966,9 +2974,25 @@ export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewIn
   const projectRoot = path.resolve(
     readSingleOptionValueFromArgv(argv, "project-root") ?? ".",
   );
-  const ontoConfig = ontoHome
+  const resolvedOntoConfig = ontoHome
     ? await resolveSettingsChain(ontoHome, projectRoot)
     : await readOntoConfig(projectRoot);
+  // Per-call LLM override (design v4): overlay the resolved settings BEFORE the
+  // execution profile is resolved, so the profile route/adapter/model reflects
+  // the effective settings and flows into the spawn `--provider/--model/...`
+  // flags. Identity when absent → default-off is byte-identical. When an override
+  // IS present, fail loud (cause = override) if it selects an unsupported model
+  // (INV-MODEL-1) — the one new review-side model-support gate; it stays scoped
+  // to overrides so an existing (ungated) config's behavior is unchanged.
+  const llmOverride = parsePerCallLlmOverrideArg(
+    readSingleOptionValueFromArgv(argv, "llm-override"),
+  );
+  const ontoConfig = llmOverride
+    ? applyReviewLlmOverride(resolvedOntoConfig, llmOverride)
+    : resolvedOntoConfig;
+  if (llmOverride) {
+    assertSettingsModelsSupported(ontoConfig);
+  }
   const resolvedInvokeInputs = await resolveReviewInvokeInputs(
     argvWithSessionId,
     ontoConfig,

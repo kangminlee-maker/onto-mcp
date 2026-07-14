@@ -35,6 +35,7 @@ import type {
   LlmExecutionAdapter,
   LlmExecutionRoute,
 } from "../llm/model-switcher.js";
+import type { PerCallLlmOverride } from "../discovery/settings-chain.js";
 import {
   fileExists,
   normalizeDomainValue,
@@ -63,6 +64,13 @@ export interface ReviewInvocationRequest {
   executionAdapter?: LlmExecutionAdapter;
   /** Debug-only legacy executor override. Prefer executionRoute. */
   executorRealization?: ReviewExecutorRealization;
+  /**
+   * Per-call LLM override (design v4): serialized to a `--llm-override <json>`
+   * passthrough arg so it reaches BOTH the orchestrator profile resolve
+   * (initial dispatch flags) and the prepare-session bake (actor-invocation
+   * profiles that continuation replays). Omit → settings unchanged.
+   */
+  llmOverride?: PerCallLlmOverride;
 }
 
 export interface ReviewInvocationArgvOptions {
@@ -208,6 +216,12 @@ export function appendReviewInvocationRequestArgs(
   }
   if (request.confirmValueAlignment) {
     result.push("--confirm-value-alignment");
+  }
+  if (request.llmOverride) {
+    // Serialize the per-call override as a single JSON passthrough arg — it must
+    // survive into the start argv so both the orchestrator profile resolve and
+    // the prepare-session bake apply the same overlay (design v4 §2.3).
+    result.push("--llm-override", JSON.stringify(request.llmOverride));
   }
   return result;
 }

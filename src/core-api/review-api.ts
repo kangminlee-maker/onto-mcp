@@ -31,6 +31,7 @@ import {
   defaultReviewRetrySettings,
   resolveSettingsChain,
   type DispatchBreakerSettingsInput,
+  type PerCallLlmOverride,
   type ReviewRetrySettings,
 } from "../core-runtime/discovery/settings-chain.js";
 import { loadCoreLensRegistry } from "../core-runtime/discovery/lens-registry.js";
@@ -145,6 +146,13 @@ export interface PrepareReviewRequest {
   executionRoute?: LlmExecutionRoute;
   /** Disambiguates an external_oauth_worker override into codex_cli vs claude_code. */
   executionAdapter?: LlmExecutionAdapter;
+  /**
+   * Optional per-call LLM override (design v4): an ephemeral settings-`llm`
+   * overlay applied to the resolved settings' review dispatch seats (actors +
+   * units) for this invocation, before the profile is resolved and the plan is
+   * materialized. Omit → settings unchanged (byte-identical default-off).
+   */
+  llmOverride?: PerCallLlmOverride;
 }
 
 export interface PreparedReview {
