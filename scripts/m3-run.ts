@@ -1,50 +1,53 @@
 /**
- * M3 defect-spectrum run harness — end-to-end: load a fixture's ground truth +
- * persisted review evidence, run the attribution judge (Opus 4.8) over the
- * surfaced issues, CAPTURE the attributions, and score the graded spectrum.
+ * M3 defect-spectrum run harness — end-to-end with the INTRA-JUDGE STABILITY
+ * CONTROL as the default scoring path (design §3-3). For each fixture it loads
+ * the ground truth + persisted review evidence, dispatches the Opus 4.8
+ * attribution judge K times over the surfaced issues, CAPTURES every attribution
+ * set, scores each, and AGGREGATES: a band is reported only if it is stable
+ * across all K judge runs — otherwise the fixture is `indeterminate` with the
+ * metric range. A single judge dispatch was shown to flip bands near a threshold
+ * (H3+H4 confirmed empirically), so a single-draw band is never a verdict.
  *
- * Design SSOT: development-records/design/20260716-m3-model-characteristic-benchmark-design.md (§5).
+ * Design SSOT: development-records/design/20260716-model-characteristic-benchmark-design.md (§3-3, §5).
  *
  * Modes:
- *   run    (default) — dispatch the judge (small spend), capture, score, report.
+ *   run    (default) — dispatch the judge K× per fixture (small spend), capture,
+ *            score, aggregate, report.
  *   replay --replay <run-dir> — re-score from captured attributions (NO spend,
- *            deterministic). The captured judge output is the replay authority.
+ *            deterministic): reproduces the same per-run scores and aggregate.
  *
  * Usage:
- *   npx tsx scripts/m3-run.ts [--fixture <id> ...] [--session <fixture>:<session>]
- *                             [--judge-auth api_key|oauth] [--out <dir>]
+ *   npx tsx scripts/m3-run.ts [--fixture <id> ...] [--session <fixture>:<sess>]
+ *          [--judge-auth api_key|oauth] [--judge-effort <level>] [--judge-runs K]
+ *          [--out <dir>]
  *   npx tsx scripts/m3-run.ts --replay <run-dir>
- *
- * Band thresholds are anchored to the fixture-intrinsic ground truth (design
- * §3-1 / review F4), NEVER calibrated to the scored distribution.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import {
   parseSeededDefects,
   parseSurfacedIssues,
   scoreDefectSpectrum,
   type BandThresholds,
+  type DefectSpectrumBand,
   type DefectSpectrumResult,
   type IssueAttribution,
   type SeededDefect,
   type SurfacedIssue,
 } from "./m3-defect-spectrum.ts";
-import {
-  createAttributionJudge,
-  JUDGE_MODEL_ID,
-  type AttributionDispatch,
-} from "./m3-attribution-judge.ts";
+import { createAttributionJudge, JUDGE_MODEL_ID, type AttributionDispatch } from "./m3-attribution-judge.ts";
 
 const FIXTURES_ROOT = "development-records/benchmark/fixtures/ontology";
 const DEFAULT_FIXTURES = ["clinical-lab-workflow", "credit-risk-taxonomy", "manufacturing-bom"];
+const DEFAULT_JUDGE_RUNS = 3;
 
 /**
  * M3 band methodology (design §3-1). Anchored to intrinsic ground truth:
  * 도달 = every seeded material defect detected; 상회 = that AND precision ≥ 0.9;
- * 미달 = precision below 0.8 (a fabricator can't buy a band with volume) OR
- * incomplete material recall. NOT derived from the scored runs (review F4).
+ * 미달 = precision below 0.8 OR incomplete material recall. NOT derived from the
+ * scored runs (review F4).
  */
 const M3_BAND_THRESHOLDS: BandThresholds = {
   meet_material_recall: 1,
@@ -53,19 +56,70 @@ const M3_BAND_THRESHOLDS: BandThresholds = {
   floor_precision: 0.8,
 };
 
+export interface RunStats {
+  min: number;
+  max: number;
+  mean: number;
+}
+
+export interface FixtureStabilityResult {
+  fixture: string;
+  evidence_session: string;
+  judge_runs: number;
+  /** The stable band, or "indeterminate" when the K runs disagree. */
+  band: DefectSpectrumBand | "indeterminate";
+  band_stable: boolean;
+  bands_observed: DefectSpectrumBand[];
+  recall_material: RunStats;
+  recall_overall: RunStats;
+  precision: RunStats;
+  per_run: DefectSpectrumResult[];
+}
+
 interface CaptureFile {
-  schema_version: "m3-capture/1";
+  schema_version: "m3-capture/2";
   fixture: string;
   evidence_session: string;
   judge_model: string;
+  judge_effort?: string;
   band_thresholds: BandThresholds;
-  attributions: IssueAttribution[];
+  /** K attribution sets, one per judge dispatch (the replay authority). */
+  runs: IssueAttribution[][];
 }
 
-interface FixtureRunOutput {
-  fixture: string;
-  evidence_session: string;
-  result: DefectSpectrumResult;
+export function stats(xs: number[]): RunStats {
+  return {
+    min: Math.min(...xs),
+    max: Math.max(...xs),
+    mean: xs.reduce((a, b) => a + b, 0) / xs.length,
+  };
+}
+
+/**
+ * Aggregate K single-run scores into a stability verdict. The band is reported
+ * only if every run agrees; any disagreement → "indeterminate" (never force a
+ * single-draw band — design §3-3).
+ */
+export function aggregate(
+  fixture: string,
+  session: string,
+  perRun: DefectSpectrumResult[],
+): FixtureStabilityResult {
+  if (perRun.length === 0) throw new Error("m3 aggregate: no judge runs to aggregate");
+  const bands = perRun.map((r) => r.band);
+  const stable = new Set(bands).size === 1;
+  return {
+    fixture,
+    evidence_session: session,
+    judge_runs: perRun.length,
+    band: stable ? bands[0]! : "indeterminate",
+    band_stable: stable,
+    bands_observed: bands,
+    recall_material: stats(perRun.map((r) => r.recall_material)),
+    recall_overall: stats(perRun.map((r) => r.recall_overall)),
+    precision: stats(perRun.map((r) => r.precision)),
+    per_run: perRun,
+  };
 }
 
 function readOption(argv: string[], name: string): string | undefined {
@@ -115,9 +169,9 @@ async function loadFixtureInputs(
 
 /**
  * Build the judge dispatch for the chosen anthropic auth route. `effort` is
- * PINNED (design: an effort-unset judge showed a ~40× output-token swing that
- * flipped bands — H4 on the instrument). A fixed effort makes the judge's
- * adaptive-thinking behavior consistent across dispatches.
+ * PINNED (an effort-unset judge showed a ~40× output-token swing that flipped
+ * bands — H4 on the instrument); a fixed effort makes adaptive-thinking behavior
+ * consistent.
  */
 function judgeDispatch(auth: "api_key" | "oauth", effort?: string): AttributionDispatch {
   return async (systemPrompt, userPrompt) => {
@@ -135,54 +189,17 @@ function judgeDispatch(auth: "api_key" | "oauth", effort?: string): AttributionD
   };
 }
 
-/**
- * Intra-judge stability probe (design §3-3): dispatch the judge K times on the
- * SAME fixture input and report whether the band is stable. Real spend (K judge
- * calls). Does not capture — it is a diagnostic on the measurement instrument.
- */
-async function stabilityProbe(args: {
-  fixtures: string[];
-  sessionPins: Map<string, string>;
-  auth: "api_key" | "oauth";
-  effort?: string;
-  repeat: number;
-}): Promise<void> {
-  const judge = createAttributionJudge({ dispatch: judgeDispatch(args.auth, args.effort) });
-  for (const fixture of args.fixtures) {
-    const session = args.sessionPins.get(fixture) ?? (await latestEvidenceSession(fixture));
-    const { seededDefects, issues } = await loadFixtureInputs(fixture, session);
-    console.log(`\n▶ stability ${fixture} (${session}) — judge ${JUDGE_MODEL_ID} effort=${args.effort ?? "(unset)"} ×${args.repeat}`);
-    const runs: DefectSpectrumResult[] = [];
-    for (let k = 0; k < args.repeat; k += 1) {
-      const attributions = await judge({ issues, seededDefects });
-      const result = scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: M3_BAND_THRESHOLDS });
-      runs.push(result);
-      console.log(`  run ${k + 1}: ${result.band}  material ${result.recall_material.toFixed(3)}  precision ${result.precision.toFixed(3)}  detected ${result.detected_defect_ids.length}/${result.seeded_total}`);
-    }
-    const bands = new Set(runs.map((r) => r.band));
-    const recallSpread = Math.max(...runs.map((r) => r.recall_material)) - Math.min(...runs.map((r) => r.recall_material));
-    const precSpread = Math.max(...runs.map((r) => r.precision)) - Math.min(...runs.map((r) => r.precision));
-    console.log(`  → band ${bands.size === 1 ? `STABLE (${[...bands][0]})` : `UNSTABLE (${[...bands].join("/")})`} · material-recall spread ${recallSpread.toFixed(3)} · precision spread ${precSpread.toFixed(3)}`);
-  }
-}
-
-function stamp(now: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${now.getUTCFullYear()}${p(now.getUTCMonth() + 1)}${p(now.getUTCDate())}-${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}`;
-}
-
-function bandLabel(band: DefectSpectrumResult["band"]): string {
+function bandLabel(band: DefectSpectrumBand): string {
   return band === "exceeds" ? "상회 (exceeds)" : band === "meets" ? "도달 (meets)" : "미달 (below)";
 }
 
-function reportLine(o: FixtureRunOutput): string {
-  const r = o.result;
+function reportLine(a: FixtureStabilityResult): string {
+  const verdict = a.band_stable ? bandLabel(a.band as DefectSpectrumBand) : `INDETERMINATE (${a.bands_observed.join("/")})`;
+  const range = (s: RunStats) => `${s.min.toFixed(3)}–${s.max.toFixed(3)} (mean ${s.mean.toFixed(3)})`;
   return [
-    `[${o.fixture}] ${bandLabel(r.band)}`,
-    `  recall material ${r.detected_material_defect_ids.length}/${r.seeded_material_total} = ${r.recall_material.toFixed(3)} · overall ${r.detected_defect_ids.length}/${r.seeded_total} = ${r.recall_overall.toFixed(3)}`,
-    `  precision ${r.attributed_issues}/${r.surfaced_issues_total} = ${r.precision.toFixed(3)} (fabricated ${r.fabricated_issues})`,
-    `  severity aligned ${r.severity_aligned_defect_ids.length}/${r.detected_defect_ids.length}${r.severity_alignment_rate === null ? "" : ` = ${r.severity_alignment_rate.toFixed(3)}`}`,
-    `  detected: ${r.detected_defect_ids.join(", ") || "(none)"}`,
+    `[${a.fixture}] ${verdict}  (judge ×${a.judge_runs})`,
+    `  material recall ${range(a.recall_material)} · overall ${range(a.recall_overall)}`,
+    `  precision       ${range(a.precision)}`,
   ].join("\n");
 }
 
@@ -191,78 +208,82 @@ async function runFixtures(args: {
   sessionPins: Map<string, string>;
   auth: "api_key" | "oauth";
   effort?: string;
+  judgeRuns: number;
   outDir: string;
-}): Promise<FixtureRunOutput[]> {
+}): Promise<FixtureStabilityResult[]> {
   const judge = createAttributionJudge({ dispatch: judgeDispatch(args.auth, args.effort) });
   await fs.mkdir(path.join(args.outDir, "capture"), { recursive: true });
-  const outputs: FixtureRunOutput[] = [];
+  const outputs: FixtureStabilityResult[] = [];
   for (const fixture of args.fixtures) {
     const session = args.sessionPins.get(fixture) ?? (await latestEvidenceSession(fixture));
     const { seededDefects, issues } = await loadFixtureInputs(fixture, session);
-    console.log(`\n▶ ${fixture} (evidence ${session}) — ${issues.length} material issues, ${seededDefects.length} seeded defects → dispatching judge…`);
-    const attributions = await judge({ issues, seededDefects });
+    console.log(`\n▶ ${fixture} (evidence ${session}) — ${issues.length} material issues, ${seededDefects.length} seeded defects → judge ×${args.judgeRuns}`);
+    const runs: IssueAttribution[][] = [];
+    const perRun: DefectSpectrumResult[] = [];
+    for (let k = 0; k < args.judgeRuns; k += 1) {
+      const attributions = await judge({ issues, seededDefects });
+      runs.push(attributions);
+      const result = scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: M3_BAND_THRESHOLDS });
+      perRun.push(result);
+      console.log(`  run ${k + 1}: ${result.band}  material ${result.recall_material.toFixed(3)}  precision ${result.precision.toFixed(3)}  detected ${result.detected_defect_ids.length}/${result.seeded_total}`);
+    }
     const capture: CaptureFile = {
-      schema_version: "m3-capture/1",
+      schema_version: "m3-capture/2",
       fixture,
       evidence_session: session,
       judge_model: JUDGE_MODEL_ID,
+      ...(args.effort ? { judge_effort: args.effort } : {}),
       band_thresholds: M3_BAND_THRESHOLDS,
-      attributions,
+      runs,
     };
-    await fs.writeFile(
-      path.join(args.outDir, "capture", `${fixture}.json`),
-      `${JSON.stringify(capture, null, 2)}\n`,
-      "utf8",
-    );
-    const result = scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: M3_BAND_THRESHOLDS });
-    outputs.push({ fixture, evidence_session: session, result });
-    console.log(reportLine({ fixture, evidence_session: session, result }));
+    await fs.writeFile(path.join(args.outDir, "capture", `${fixture}.json`), `${JSON.stringify(capture, null, 2)}\n`, "utf8");
+    const agg = aggregate(fixture, session, perRun);
+    outputs.push(agg);
+    console.log(reportLine(agg));
   }
   return outputs;
 }
 
-async function replayRun(runDir: string): Promise<FixtureRunOutput[]> {
+async function replayRun(runDir: string): Promise<FixtureStabilityResult[]> {
   const captureDir = path.join(runDir, "capture");
-  const outputs: FixtureRunOutput[] = [];
+  const outputs: FixtureStabilityResult[] = [];
   for (const file of (await fs.readdir(captureDir)).filter((f) => f.endsWith(".json")).sort()) {
     const capture = JSON.parse(await fs.readFile(path.join(captureDir, file), "utf8")) as CaptureFile;
     const { seededDefects, issues } = await loadFixtureInputs(capture.fixture, capture.evidence_session);
-    const result = scoreDefectSpectrum({
-      seededDefects,
-      issues,
-      attributions: capture.attributions,
-      thresholds: capture.band_thresholds,
-    });
-    outputs.push({ fixture: capture.fixture, evidence_session: capture.evidence_session, result });
-    console.log(reportLine({ fixture: capture.fixture, evidence_session: capture.evidence_session, result }));
+    const perRun = capture.runs.map((attributions) =>
+      scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: capture.band_thresholds }),
+    );
+    const agg = aggregate(capture.fixture, capture.evidence_session, perRun);
+    outputs.push(agg);
+    console.log(reportLine(agg));
   }
   return outputs;
+}
+
+function summaryReport(outputs: FixtureStabilityResult[]) {
+  return {
+    schema_version: "m3-report/2",
+    judge_model: JUDGE_MODEL_ID,
+    band_thresholds: M3_BAND_THRESHOLDS,
+    fixtures: outputs.map((o) => ({
+      fixture: o.fixture,
+      evidence_session: o.evidence_session,
+      judge_runs: o.judge_runs,
+      band: o.band,
+      band_stable: o.band_stable,
+      bands_observed: o.bands_observed,
+      recall_material: o.recall_material,
+      recall_overall: o.recall_overall,
+      precision: o.precision,
+    })),
+  };
 }
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const replayDir = readOption(argv, "replay");
-  const repeat = Number(readOption(argv, "repeat") ?? "1");
 
-  // Stability probe: dispatch the judge K times per fixture, no capture/report.
-  if (!replayDir && repeat > 1) {
-    const fixtures = readMulti(argv, "fixture");
-    const sessionPins = new Map<string, string>();
-    for (const pin of readMulti(argv, "session")) {
-      const [f, s] = pin.split(":");
-      if (f && s) sessionPins.set(f, s);
-    }
-    await stabilityProbe({
-      fixtures: fixtures.length > 0 ? fixtures : DEFAULT_FIXTURES,
-      sessionPins,
-      auth: (readOption(argv, "judge-auth") ?? "oauth") as "api_key" | "oauth",
-      effort: readOption(argv, "judge-effort"),
-      repeat,
-    });
-    return;
-  }
-
-  let outputs: FixtureRunOutput[];
+  let outputs: FixtureStabilityResult[];
   let outDir: string;
   if (replayDir) {
     outDir = replayDir;
@@ -276,35 +297,38 @@ async function main(): Promise<void> {
       if (f && s) sessionPins.set(f, s);
     }
     const auth = (readOption(argv, "judge-auth") ?? "api_key") as "api_key" | "oauth";
-    // effort=low is the validated default: an effort-unset judge showed a ~40×
-    // output-token swing that flipped bands (H4 on the instrument); low is stable
-    // (0.000 band spread over K=4) and more faithful to refute-by-default (the
-    // thinking-heavy path over-attributed a specimen-mentioning issue to the
-    // lifecycle defect the review never actually surfaced).
+    // effort=low is the validated default: an effort-unset judge flipped bands
+    // via a ~40× thinking swing; low is the stable, refute-by-default-faithful
+    // setting (development-records/benchmark/m3/20260716-baseline-evidence).
     const effort = readOption(argv, "judge-effort") ?? "low";
+    const judgeRuns = Number(readOption(argv, "judge-runs") ?? String(DEFAULT_JUDGE_RUNS));
     outDir = readOption(argv, "out") ?? path.join("development-records/benchmark/m3", stamp(new Date()));
-    console.log(`M3 RUN — judge ${JUDGE_MODEL_ID} (${auth}, effort=${effort ?? "(unset)"}) → ${outDir}`);
+    console.log(`M3 RUN — judge ${JUDGE_MODEL_ID} (${auth}, effort=${effort}) ×${judgeRuns} → ${outDir}`);
     outputs = await runFixtures({
       fixtures: fixtures.length > 0 ? fixtures : DEFAULT_FIXTURES,
       sessionPins,
       auth,
       effort,
+      judgeRuns,
       outDir,
     });
   }
 
-  const summary = {
-    schema_version: "m3-report/1",
-    judge_model: JUDGE_MODEL_ID,
-    band_thresholds: M3_BAND_THRESHOLDS,
-    fixtures: outputs.map((o) => ({ fixture: o.fixture, evidence_session: o.evidence_session, ...o.result })),
-  };
   await fs.mkdir(outDir, { recursive: true });
-  await fs.writeFile(path.join(outDir, "report.json"), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
-  console.log(`\n✔ ${outputs.length} fixtures scored → ${path.join(outDir, "report.json")}`);
+  await fs.writeFile(path.join(outDir, "report.json"), `${JSON.stringify(summaryReport(outputs), null, 2)}\n`, "utf8");
+  const stableCount = outputs.filter((o) => o.band_stable).length;
+  console.log(`\n✔ ${outputs.length} fixtures scored (${stableCount} stable, ${outputs.length - stableCount} indeterminate) → ${path.join(outDir, "report.json")}`);
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.stack ?? err.message : String(err));
-  process.exit(1);
-});
+function stamp(now: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${now.getUTCFullYear()}${p(now.getUTCMonth() + 1)}${p(now.getUTCDate())}-${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}`;
+}
+
+// Run only when invoked directly (so the exported aggregate/stats stay unit-testable).
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.stack ?? err.message : String(err));
+    process.exit(1);
+  });
+}
