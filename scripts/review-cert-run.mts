@@ -211,13 +211,20 @@ if (rehearsal && opts["out"] === undefined) {
 }
 
 // ── run_controls pin assertion (design §4 M-1; see module doc for mechanism) ──
+// SALVAGE must default OFF: the benchmark inherits defaultReviewRetrySettings()
+// verbatim (settingsForCase) without overlaying salvage, so a salvaged unit would
+// pollute the cert measurement (RUN_CONTROLS.salvage_enabled: false). RESUBMIT is
+// intentionally NOT pinned OFF here since the 2026-07-15 breaker-observation
+// promotion: it is a product default AND the cert contract runs it ON anyway
+// (RUN_CONTROLS.resubmit_enabled: true; --retry-resubmit is passed unconditionally
+// and the v2 mechanical-ON assertion below verifies the resulting settings).
 const retryDefaults = defaultReviewRetrySettings();
-if (retryDefaults.salvage.enabled !== false || retryDefaults.resubmit.enabled !== false) {
+if (retryDefaults.salvage.enabled !== false) {
   throw new Error(
-    `review-cert-run: defaultReviewRetrySettings() no longer pins rescue channels OFF (salvage=${retryDefaults.salvage.enabled}, resubmit=${retryDefaults.resubmit.enabled}) — the benchmark's temp-project settings would inherit this. Restore the default or add an explicit override before certifying.`,
+    `review-cert-run: defaultReviewRetrySettings() no longer pins the salvage rescue channel OFF (salvage=${retryDefaults.salvage.enabled}) — the benchmark's temp-project settings would inherit it and pollute the cert measurement. Restore the salvage default or add an explicit override before certifying.`,
   );
 }
-log("run_controls pin: defaultReviewRetrySettings() has salvage/resubmit OFF (benchmark temp-project settings carry it explicitly; project layer beats user layer)");
+log("run_controls pin: defaultReviewRetrySettings() has salvage OFF (benchmark temp-project inherits it verbatim); resubmit runs ON per the cert contract.");
 
 // v2 mechanical-ON assertion (design §5.3): the harness passes
 // --retry-resubmit unconditionally; verify the benchmark's settings builder
