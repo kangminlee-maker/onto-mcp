@@ -33,6 +33,8 @@ const DECISION_GRADE_STATUS = "decision-grade";
 const SEMANTIC_FIXTURE_IDS = [
   "review-pipeline-target-v1",
   "retry-policy-target-v1",
+  "clean-target-v1",
+  "shared-root-target-v1",
 ] as const satisfies readonly SemanticQualityGateFixtureId[];
 
 type BenchmarkCaseId = string;
@@ -309,7 +311,7 @@ function usage(): string {
     "  --runs <n>                         Runs per case+fixture. Default: 1",
     "  --case <existing-low-effort|controlled-high-effort|both|all-low|all-medium|all-high|all-xhigh|unit-sweep>",
     "                                     Repeatable. Default: both",
-    "  --fixture <review-pipeline-target-v1|retry-policy-target-v1>",
+    "  --fixture <review-pipeline-target-v1|retry-policy-target-v1|clean-target-v1|shared-root-target-v1>",
     "                                     Repeatable. Default: review-pipeline-target-v1",
     "  --retry-resubmit                   Opt-in: enable retry.resubmit in the temp project",
     "                                     settings (error-spec corrective retry). Default: off",
@@ -665,6 +667,86 @@ export function benchmarkFixture(fixtureId: SemanticQualityGateFixtureId): Bench
           "",
           "export function debugRetryState(request: RetryRequest): string {",
           "  return `${request.telemetryLabel ?? telemetryLabel}:${retryBudget(request)}`;",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    };
+  }
+  if (fixtureId === "clean-target-v1") {
+    return {
+      fixture_id: fixtureId,
+      target_path: "src/clean-target.ts",
+      intent:
+        "Review this formatter. IMPORTANT: this target has ZERO material defects — summarizeChannel reads only the always-present numeric byte fields and returns a string on every path (no undefined/NaN/throw). The ONLY thing to note is a boundary decoy: the telemetry label and debug export (telemetryLabel, debugChannelState) are debug/telemetry-only symbols; whether they should be part of the public API cannot be decided from this file alone — it needs caller or public-API evidence. Preserve the telemetry label and debug export as a NON-material boundary uncertainty (an evidence gap without caller/public API evidence); do NOT promote them to a material issue, and do NOT invent material defects where there are none.",
+      files: {
+        "src/clean-target.ts": [
+          "export interface ChannelSummaryInput {",
+          "  channelId: string;",
+          "  packetBytes: number;",
+          "  outputBytes: number;",
+          "}",
+          "",
+          "export function summarizeChannel(inputs: ChannelSummaryInput[]): string {",
+          "  const totalPacketBytes = inputs.reduce((sum, input) => sum + input.packetBytes, 0);",
+          "  const totalOutputBytes = inputs.reduce((sum, input) => sum + input.outputBytes, 0);",
+          "  return `packet=${totalPacketBytes}; output=${totalOutputBytes}; units=${inputs.length}`;",
+          "}",
+          "",
+          "export const telemetryLabel = 'channel-summary';",
+          "",
+          "// debugChannelState and telemetryLabel are debug/telemetry-only exports.",
+          "// Whether they belong in the public API cannot be decided without caller or",
+          "// public API evidence — a boundary uncertainty, not a material defect.",
+          "export function debugChannelState(input: ChannelSummaryInput): string {",
+          "  return `${input.channelId}:${input.packetBytes}:${input.outputBytes}`;",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    };
+  }
+  if (fixtureId === "shared-root-target-v1") {
+    return {
+      fixture_id: fixtureId,
+      target_path: "src/shared-root.ts",
+      intent:
+        "Review formatter behavior. unstableFormat and alternateFormat are TWO distinct surface defects that BOTH delegate to a shared rawFormat root — JSON.stringify can return undefined for a top-level undefined value despite the string return contract. Link them by their shared cause. truncate is an INDEPENDENT off-by-one defect (a slice(0, max - 1) that drops the last character), unrelated to rawFormat. lensId/lens identity is intentionally NOT a material defect: the target provides no caller requirement, expected summary contract, or public API obligation to expose identity — preserve it only as boundary/evidence-gap context.",
+      files: {
+        "src/shared-root.ts": [
+          "export interface ShardChannelInput {",
+          "  lensId: string;",
+          "  packetBytes: number;",
+          "  outputBytes: number;",
+          "}",
+          "",
+          "export function summarizeShards(inputs: ShardChannelInput[]): string {",
+          "  const totalPacketBytes = inputs.reduce((sum, input) => sum + input.packetBytes, 0);",
+          "  const totalOutputBytes = inputs.reduce((sum, input) => sum + input.outputBytes, 0);",
+          "  return `packet=${totalPacketBytes}; output=${totalOutputBytes}; units=${inputs.length}`;",
+          "}",
+          "",
+          "// rawFormat is the shared root of two surface defects: JSON.stringify",
+          "// returns undefined for a top-level undefined value despite the string",
+          "// return contract.",
+          "function rawFormat(value: unknown): string {",
+          "  return JSON.stringify(value);",
+          "}",
+          "",
+          "// unstableFormat and alternateFormat are two DISTINCT surface defects that",
+          "// both derive from the same rawFormat root — the shared-cause topology.",
+          "export function unstableFormat(value: unknown): string {",
+          "  return rawFormat(value);",
+          "}",
+          "",
+          "export function alternateFormat(value: unknown): string {",
+          "  return rawFormat(value);",
+          "}",
+          "",
+          "// truncate is an INDEPENDENT off-by-one defect (drops the last character);",
+          "// it does not share the rawFormat root, so it must not be linked to it.",
+          "export function truncate(text: string, max: number): string {",
+          "  return text.slice(0, max - 1);",
           "}",
           "",
         ].join("\n"),

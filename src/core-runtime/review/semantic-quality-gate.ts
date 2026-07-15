@@ -1,7 +1,9 @@
 export type SemanticQualityGateStatus = "passed" | "failed" | "not_applicable";
 export type SemanticQualityGateFixtureId =
   | "review-pipeline-target-v1"
-  | "retry-policy-target-v1";
+  | "retry-policy-target-v1"
+  | "clean-target-v1"
+  | "shared-root-target-v1";
 
 /** The complete check-id universe this gate can emit — the value-level single
  * source (the check_id type derives from it). The review-cert/v2 evidence
@@ -195,6 +197,71 @@ const FIXTURES: Record<SemanticQualityGateFixtureId, SemanticQualityExpectations
     targetAnchor: "src/retry.ts",
     targetAnchorTerms: ["src/retry.ts", "retry.ts"],
   },
+  // v3 G1 clean-target (design §D1/§D3): ZERO material defects + one boundary
+  // decoy (an accepted-but-unread field whose defect status cannot be decided
+  // without caller/public-API evidence). materialTerms is empty (nothing to
+  // recall — accepted only because expectsNoMaterialDefects); recall/grounding/
+  // actionability are excluded from emission (CLEAN_TARGET_EXCLUDED). The control
+  // is the boundary decoy: yes-man → false_materiality_guard fails; empty silence
+  // → boundary_uncertainty_preservation MUST-preserve fails; correct silence
+  // (decoy preserved as non-material boundary context) passes.
+  "clean-target-v1": {
+    fixtureId: "clean-target-v1",
+    materialTerms: [],
+    expectedMaterialTruth: "no material defect (clean target)",
+    boundaryUncertaintyTerms: ["telemetry label", "debug export"],
+    boundaryContextTerms: [
+      "evidence gap",
+      "needs evidence",
+      "insufficient evidence",
+      "without caller",
+      "without public api",
+    ],
+    actionMaterialTerms: [],
+    actionRemediationTerms: [],
+    targetAnchor: "src/clean-target.ts",
+    targetAnchorTerms: ["src/clean-target.ts", "clean-target.ts"],
+    expectsNoMaterialDefects: true,
+    requiresBoundaryPreservation: true,
+  },
+  // v3 G2 shared-root (design §D1/§D3): ONE common root (rawFormat delegating to
+  // JSON.stringify, which returns undefined for top-level undefined) surfaces as
+  // TWO distinct defects (unstableFormat + alternateFormat both delegate to it),
+  // plus one INDEPENDENT defect (truncate off-by-one) and a lensId boundary decoy.
+  // The control is expectedSharedCauseAnchorPairs: the shared_cause branch of
+  // causal_relation_correctness no longer passes vacuously (`.every` over an empty
+  // relation set) — a valid shared_cause_candidate relation MUST connect the
+  // unstableFormat and alternate findings. All 12 checks are emitted (full
+  // universe): shared-root has real material defects, so the recall floor applies.
+  "shared-root-target-v1": {
+    fixtureId: "shared-root-target-v1",
+    materialTerms: ["unstableformat", "json.stringify", "undefined"],
+    expectedMaterialTruth: "unstableFormat + JSON.stringify + undefined",
+    boundaryUncertaintyTerms: ["lensid", "lens id", "lens ids", "lens identity"],
+    boundaryContextTerms: [
+      "evidence gap",
+      "needs evidence",
+      "insufficient evidence",
+      "low-confidence",
+      "unresolved",
+      "without caller",
+      "without public api",
+      "caller evidence",
+      "public api evidence",
+    ],
+    actionMaterialTerms: ["unstableformat", "json.stringify", "undefined"],
+    actionRemediationTerms: [
+      "return type",
+      "fallback",
+      "widen",
+      "guard",
+      "focused test",
+      "verify",
+    ],
+    targetAnchor: "src/shared-root.ts",
+    targetAnchorTerms: ["src/shared-root.ts", "shared-root.ts"],
+    expectedSharedCauseAnchorPairs: [[["unstableformat"], ["alternate"]]],
+  },
 };
 
 function semanticFixture(
@@ -205,6 +272,16 @@ function semanticFixture(
     throw new Error(`Unknown semantic quality fixture: ${resolved}`);
   }
   return FIXTURES[resolved];
+}
+
+/** SSOT accessor for a built-in fixture's pinned expectation preset (design §D3 —
+ * Phase A fixtures are code-presets). Returns a deep copy so callers cannot mutate
+ * the shared preset; tests and the cert manifest read the SAME source, so an
+ * injected copy can never drift from what the gate actually evaluates. */
+export function semanticQualityFixturePreset(
+  fixtureId: SemanticQualityGateFixtureId,
+): SemanticQualityExpectations {
+  return structuredClone(semanticFixture(fixtureId));
 }
 
 function records(value: unknown): ReviewResultIssueLike[] {

@@ -90,6 +90,7 @@ import {
   type ReviewCertArmDeclaration,
 } from "../src/core-runtime/discovery/review-cert-assemble.ts";
 import {
+  fixtureApplicableCheckIds,
   parseReviewCertRecord,
   REVIEW_CERT_ARMS,
   reviewCertQualityDisclosures,
@@ -100,8 +101,8 @@ import {
 } from "../src/core-runtime/discovery/review-cert-record.ts";
 import { resolveClaudeBin } from "../src/core-runtime/llm/claude-bin.ts";
 import { defaultReviewRetrySettings } from "../src/core-runtime/discovery/settings-chain.ts";
-import { SEMANTIC_QUALITY_GATE_CHECK_IDS } from "../src/core-runtime/review/semantic-quality-gate.ts";
 import { benchmarkFixture, settingsForCase } from "./review-pipeline-benchmark.ts";
+import { rowFromAttempt, type BenchmarkRunLike } from "./review-cert-row.ts";
 
 const ts = () => new Date().toISOString();
 const log = (m: string) => console.log(`[review-cert-run ${ts()}] ${m}`);
@@ -116,9 +117,15 @@ const TSX = path.join(
 const BENCHMARK_SCRIPT = path.join(REPO_ROOT, "scripts", "review-pipeline-benchmark.ts");
 const CAPTURE_ENV = "ONTO_REVIEW_CERT_CAPTURE_FILE";
 const CLAUDE_BIN_ENV = "ONTO_CLAUDE_BIN"; // claude-bin.ts resolution order, priority 1
-/** The contract's two semantic fixtures (design §4; gate F6) — pinned, not a knob. */
-const FIXTURE_IDS = ["review-pipeline-target-v1", "retry-policy-target-v1"] as const;
-const CANONICAL_CHECKS = [...SEMANTIC_QUALITY_GATE_CHECK_IDS].sort();
+/** The contract's semantic fixtures (design §4; v3 §D1 — pinned, not a knob):
+ * the two material fixtures + the v3 clean-target (G1) and shared-root (G2)
+ * controls. clean-target declares a reduced applicable_check_ids (below). */
+const FIXTURE_IDS = [
+  "review-pipeline-target-v1",
+  "retry-policy-target-v1",
+  "clean-target-v1",
+  "shared-root-target-v1",
+] as const;
 const DEFAULT_REVIEW_TIMEOUT_MS = 240000; // the benchmark's own per-review default
 
 // ── args (b4-cert-run style) ──────────────────────────────────────────────────
@@ -540,29 +547,21 @@ const fixtureManifest = FIXTURE_IDS.map((fixtureId) => {
   if (content === undefined) {
     throw new Error(`review-cert-run: fixture ${fixtureId} has no content at its target_path ${spec.target_path}`);
   }
+  // clean-target declares its reduced applicable_check_ids; every other fixture
+  // omits the field (absent = full universe). Derived from the record layer's
+  // single authority (fixtureApplicableCheckIds) so producer and validator can
+  // never disagree — hardcoding the set here would reopen that drift.
+  const applicable = fixtureApplicableCheckIds(fixtureId);
   return {
     fixture_id: fixtureId as string,
     // Same value the gate reports as fixture_target_anchor for these fixtures.
     target_anchor: spec.target_path,
     content_sha256: crypto.createHash("sha256").update(content).digest("hex"),
+    ...(applicable ? { applicable_check_ids: [...applicable] } : {}),
   };
 });
 
 // ── per-attempt benchmark invocation ─────────────────────────────────────────
-interface BenchmarkRunLike {
-  status?: string;
-  execution_status?: string;
-  unit_count?: number;
-  failed_unit_count?: number;
-  salvaged_unit_ids?: string[];
-  resubmit_applied_unit_count?: number;
-  resubmit_applied_unit_ids?: string[];
-  semantic_quality_gate?: {
-    status?: string;
-    checks?: Array<{ check_id: string; status: string }>;
-  };
-}
-
 async function tailOf(filePath: string, lineCount: number): Promise<string> {
   try {
     const text = await fs.readFile(filePath, "utf8");
@@ -664,80 +663,6 @@ async function runBenchmarkOnce(args: {
   return { exitCode, summary, logPath };
 }
 
-// ── row projection (contract §4: ok = full completion + full 12-check universe) ──
-function rowFromAttempt(args: {
-  arm: ReviewCertArm;
-  fixtureId: string;
-  rep: number;
-  exitCode: number | null;
-  summary: BenchmarkRunLike | null;
-}): { row: ReviewCertRun; notOkReason: string | null } {
-  const { summary } = args;
-  const reasons: string[] = [];
-  if (args.exitCode !== 0) reasons.push(`benchmark exit=${args.exitCode}`);
-  if (summary === null) reasons.push("no run summary in benchmark report");
-  const unitCount = summary?.unit_count;
-  const failedUnits = summary?.failed_unit_count;
-  const salvaged = summary?.salvaged_unit_ids ?? [];
-  const resubmitApplied =
-    summary?.resubmit_applied_unit_ids?.length ??
-    summary?.resubmit_applied_unit_count ?? 0;
-  if (summary !== null) {
-    if (summary.status !== "completed" || summary.execution_status !== "completed") {
-      reasons.push(`execution_status=${summary.execution_status ?? summary.status ?? "unknown"}`);
-    }
-    if (typeof unitCount !== "number" || unitCount < 1) reasons.push("no units observed");
-    if (failedUnits !== 0) reasons.push(`failed_unit_count=${failedUnits ?? "unknown"}`);
-    if (salvaged.length > 0) reasons.push(`salvaged_unit_ids=[${salvaged.join(",")}] (rescue pin breached)`);
-    const emitted = summary.semantic_quality_gate?.checks ?? [];
-    const emittedIds = [...new Set(emitted.map((check) => check.check_id))].sort();
-    if (
-      emitted.length !== CANONICAL_CHECKS.length ||
-      emittedIds.length !== CANONICAL_CHECKS.length ||
-      emittedIds.some((id, index) => id !== CANONICAL_CHECKS[index])
-    ) {
-      reasons.push(`gate emitted ${emitted.length} checks (need the full ${CANONICAL_CHECKS.length}-check universe)`);
-    }
-  }
-  const ok = reasons.length === 0;
-  if (ok) {
-    return {
-      row: {
-        arm: args.arm,
-        fixture_id: args.fixtureId,
-        rep: args.rep,
-        completion: "ok",
-        units_total: unitCount as number,
-        units_completed: unitCount as number,
-        resubmit_applied_unit_count: resubmitApplied,
-        checks: (summary!.semantic_quality_gate!.checks ?? []).map((check) => ({
-          check_id: check.check_id as ReviewCertRun["checks"][number]["check_id"],
-          status: check.status === "passed" ? "passed" : "failed",
-        })),
-      },
-      notOkReason: null,
-    };
-  }
-  const knownTotal = typeof unitCount === "number" && unitCount >= 1 ? unitCount : 1;
-  const knownCompleted =
-    typeof unitCount === "number" && typeof failedUnits === "number"
-      ? Math.min(Math.max(unitCount - failedUnits, 0), knownTotal)
-      : 0;
-  return {
-    row: {
-      arm: args.arm,
-      fixture_id: args.fixtureId,
-      rep: args.rep,
-      completion: "not_run",
-      units_total: knownTotal,
-      units_completed: knownCompleted,
-      resubmit_applied_unit_count: resubmitApplied,
-      checks: [], // a lost/partial/rescued/short-universe run carries no check evidence
-    },
-    notOkReason: reasons.join("; "),
-  };
-}
-
 // ── arm × fixture rep loop ───────────────────────────────────────────────────
 const progressPath = path.join(runsDir, "rows.progress.jsonl");
 /** v2 run_controls — single source for the record declaration, the per-row
@@ -805,7 +730,7 @@ for (const arm of [baseline, candidate]) {
       await fs.appendFile(progressPath, `${JSON.stringify({ ...row, run_controls: RUN_CONTROLS })}\n`);
       if (row.completion === "ok") {
         ok += 1;
-        log(`${key}: attempt ${attempt} ok (${row.units_total} units, 12 checks)`);
+        log(`${key}: attempt ${attempt} ok (${row.units_total} units, ${row.checks.length} checks)`);
       } else {
         log(`${key}: attempt ${attempt} → not_run: ${notOkReason}`);
         log(`${key}: log tail:\n${await tailOf(outcome.logPath, 12)}`);

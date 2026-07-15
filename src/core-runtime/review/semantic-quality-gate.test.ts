@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateReviewPipelineSemanticQualityGate,
+  SEMANTIC_QUALITY_GATE_CHECK_IDS,
+  semanticQualityFixturePreset,
   type SemanticQualityExpectations,
 } from "./semantic-quality-gate.js";
 
@@ -1067,27 +1069,10 @@ const CLEAN_TARGET_APPLICABLE_CHECK_IDS = [
 
 /** Clean-target (G1): zero material defects, one boundary decoy that MUST be
  * preserved as a non-material finding. materialTerms is empty (nothing to
- * recall). */
+ * recall). A-3: resolves the REAL pinned FIXTURES preset — the injected copy can
+ * no longer drift from what the gate evaluates for fixtureId "clean-target-v1". */
 function cleanTargetExpectations(): SemanticQualityExpectations {
-  return {
-    fixtureId: "clean-target-v1",
-    materialTerms: [],
-    expectedMaterialTruth: "no material defect (clean target)",
-    boundaryUncertaintyTerms: ["telemetry label", "debug export"],
-    boundaryContextTerms: [
-      "evidence gap",
-      "needs evidence",
-      "insufficient evidence",
-      "without caller",
-      "without public api",
-    ],
-    actionMaterialTerms: [],
-    actionRemediationTerms: [],
-    targetAnchor: "src/clean-target.ts",
-    targetAnchorTerms: ["src/clean-target.ts", "clean-target.ts"],
-    expectsNoMaterialDefects: true,
-    requiresBoundaryPreservation: true,
-  };
+  return semanticQualityFixturePreset("clean-target-v1");
 }
 
 const CLEAN_DECOY_TEXT =
@@ -1135,38 +1120,172 @@ function cleanTargetArtifacts() {
   };
 }
 
-/** Shared-root (G2): mirrors review-pipeline-target-v1 terms and adds an anchor
- * pair, so passingReviewRecord/passingIssueArtifacts satisfy every base check
- * AND the shared-cause existence requirement. */
+/** Shared-root (G2): resolves the REAL pinned FIXTURES preset (anchor
+ * src/shared-root.ts, anchor pair unstableFormat↔alternate). A-3: the injected
+ * copy can no longer drift from what the gate evaluates for fixtureId
+ * "shared-root-target-v1". The dedicated artifacts below (anchored to the real
+ * blob) satisfy every base check AND the shared-cause existence requirement. */
 function sharedRootExpectations(): SemanticQualityExpectations {
+  return semanticQualityFixturePreset("shared-root-target-v1");
+}
+
+/** Mirrors passingReviewRecord but anchored to the real shared-root blob
+ * (src/shared-root.ts): one summary material issue over the shared rawFormat
+ * root, one non-material lensId boundary decoy. */
+function sharedRootReviewRecord() {
   return {
-    fixtureId: "shared-root-target-v1",
-    materialTerms: ["unstableformat", "json.stringify", "undefined"],
-    expectedMaterialTruth: "unstableFormat + JSON.stringify + undefined",
-    boundaryUncertaintyTerms: ["lensid", "lens id", "lens ids", "lens identity"],
-    boundaryContextTerms: [
-      "evidence gap",
-      "needs evidence",
-      "insufficient evidence",
-      "low-confidence",
-      "unresolved",
-      "without caller",
-      "without public api",
-      "caller evidence",
-      "public api evidence",
-    ],
-    actionMaterialTerms: ["unstableformat", "json.stringify", "undefined"],
-    actionRemediationTerms: [
-      "return type",
-      "fallback",
-      "widen",
-      "guard",
-      "focused test",
-      "verify",
-    ],
-    targetAnchor: "src/target.ts",
-    targetAnchorTerms: ["src/target.ts", "target.ts"],
-    expectedSharedCauseAnchorPairs: [[["unstableformat"], ["alternate"]]],
+    result_classification_summary: {
+      material_issue_count: 1,
+      non_material_finding_count: 1,
+      material_issues: [
+        {
+          issue_id: "issue-001",
+          problem_definition:
+            "unstableFormat returns JSON.stringify(value) while declaring string.",
+          failure_condition:
+            "src/shared-root.ts can return undefined when JSON.stringify receives top-level undefined.",
+          evidence_refs: ["round1/logic.md:16"],
+          source_lens_ids: ["logic"],
+          action_candidates: ["fix_before_release"],
+        },
+      ],
+      non_material_findings: [
+        {
+          issue_id: "issue-002",
+          problem_definition:
+            "ShardChannelInput.lensId and orphan export status are evidence gaps.",
+          material: false,
+        },
+      ],
+      action_candidates: [
+        {
+          issue_id: "issue-001",
+          candidates: ["fix_before_release"],
+        },
+      ],
+    },
+  };
+}
+
+const SHARED_ROOT_FINAL_OUTPUT = [
+  "### Final Review Result",
+  "unstableFormat and alternateFormat share a rawFormat root that should not return raw JSON.stringify output when undefined is possible.",
+  "",
+  "### Boundary Notes",
+  "- The bounded review cannot decide whether lensId or orphan exported symbols are defects without caller or public API evidence.",
+  "",
+  "### Immediate Actions Required",
+  "- Fix unstableFormat and alternateFormat's shared rawFormat root by adding a fallback or widening the return type, then add a focused test for top-level undefined.",
+].join("\n");
+
+/** Mirrors passingIssueArtifacts but anchored to src/shared-root.ts. Two material
+ * findings (finding-001 unstableFormat, finding-003 alternate) linked by a valid
+ * shared_cause_candidate relation (finding-001↔finding-003), plus one
+ * non-material lensId decoy (finding-002). Same finding/relation ids as
+ * passingIssueArtifacts so the shared-root gate tests can mutate them by id. */
+function sharedRootArtifacts() {
+  return {
+    findingLedger: {
+      findings: [
+        {
+          finding_id: "finding-001",
+          severity: "medium",
+          materiality_basis: {
+            affected_purpose: "declared formatter contract",
+            failure_condition: "top-level undefined input",
+            impact: "caller receives undefined despite string contract",
+            evidence_refs: ["src/shared-root.ts:18"],
+          },
+          causal_path: {
+            root_cause_candidate: "JSON.stringify can return undefined",
+            root_cause_step_id: "finding-001.cause-002",
+            steps: [
+              {
+                cause_id: "finding-001.cause-001",
+                claim: "unstableFormat delegates directly to the rawFormat root (JSON.stringify).",
+                relation_to_previous: null,
+                evidence_refs: ["src/shared-root.ts:18"],
+              },
+              {
+                cause_id: "finding-001.cause-002",
+                claim: "JSON.stringify(undefined) returns undefined",
+                relation_to_previous: "causes",
+                evidence_refs: ["src/shared-root.ts:14"],
+              },
+            ],
+          },
+        },
+        {
+          finding_id: "finding-002",
+          severity: "low",
+          claim:
+            "ShardChannelInput.lensId and orphan export status remain an evidence gap without caller or public API evidence.",
+          materiality_basis: null,
+          causal_path: null,
+        },
+        {
+          finding_id: "finding-003",
+          severity: "medium",
+          materiality_basis: {
+            affected_purpose: "declared formatter contract",
+            failure_condition: "alternate formatter path also returns undefined",
+            impact: "caller receives undefined through a second path",
+            evidence_refs: ["src/shared-root.ts:22"],
+          },
+          causal_path: {
+            root_cause_candidate: "alternate formatter also trusts the rawFormat root",
+            root_cause_step_id: "finding-003.cause-001",
+            steps: [
+              {
+                cause_id: "finding-003.cause-001",
+                claim: "The alternate path shares the same rawFormat / JSON.stringify undefined behavior.",
+                relation_to_previous: null,
+                evidence_refs: ["src/shared-root.ts:22"],
+              },
+            ],
+          },
+        },
+      ],
+    },
+    relationGraph: {
+      relations: [
+        {
+          relation_id: "rel-001",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-003",
+          relation: "shared_cause_candidate",
+          shared_cause: {
+            cause_claim: "Both formatter issues depend on the rawFormat root's JSON.stringify undefined behavior.",
+            from_cause_ref: "finding-001.cause-002",
+            to_cause_ref: "finding-003.cause-001",
+          },
+        },
+      ],
+      singleton_findings: [],
+    },
+    issueLedger: {
+      issues: [
+        {
+          issue_id: "issue-001",
+          surface_finding_ids: ["finding-001"],
+          relation_refs: [],
+        },
+        {
+          issue_id: "issue-002",
+          surface_finding_ids: ["finding-003"],
+          relation_refs: [],
+        },
+      ],
+      issue_dependencies: [
+        {
+          dependency_id: "dep-001",
+          dependency_kind: "shared_cause_candidate",
+          issue_ids: ["issue-001", "issue-002"],
+          relation_refs: ["rel-001"],
+          rationale: "The issues are distinct but share the rawFormat root.",
+        },
+      ],
+    },
   };
 }
 
@@ -1193,6 +1312,24 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
       issueArtifacts: cleanTargetArtifacts(),
     });
     expect(result.status).toBe("passed");
+  });
+
+  it("clean-target: the REGISTERED preset (resolved by fixtureId) passes and emits the applicable set", () => {
+    // A-3: proves the pinned FIXTURES preset — not just an injected copy — is
+    // wired into the gate and behaves identically when resolved by fixtureId (the
+    // path the cert harness takes). The decoy artifacts describe the real blob's
+    // telemetry label / debug export.
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executionRoute: "real",
+      fixtureId: "clean-target-v1",
+      reviewRecord: cleanTargetSilentPreserveRecord(),
+      finalOutputText: CLEAN_TARGET_FINAL_OUTPUT,
+      issueArtifacts: cleanTargetArtifacts(),
+    });
+    expect(result.status).toBe("passed");
+    expect(result.checks.map((check) => check.check_id).sort()).toEqual(
+      [...CLEAN_TARGET_APPLICABLE_CHECK_IDS].sort(),
+    );
   });
 
   it("clean-target 3-way: yes-man (fabricated material issue) FAILS false_materiality_guard", () => {
@@ -1267,9 +1404,9 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
     const result = evaluateReviewPipelineSemanticQualityGate({
       executionRoute: "real",
       expectations: sharedRootExpectations(),
-      reviewRecord: passingReviewRecord(),
-      finalOutputText: PASSING_FINAL_OUTPUT,
-      issueArtifacts: passingIssueArtifacts(),
+      reviewRecord: sharedRootReviewRecord(),
+      finalOutputText: SHARED_ROOT_FINAL_OUTPUT,
+      issueArtifacts: sharedRootArtifacts(),
     });
     expect(result.status).toBe("passed");
     expect(
@@ -1279,8 +1416,27 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
     ).toBe("passed");
   });
 
+  it("shared-root: the REGISTERED preset (resolved by fixtureId) passes and emits the FULL universe", () => {
+    // A-3: proves the pinned FIXTURES preset — not just an injected copy — is
+    // wired into the gate and behaves identically when resolved by fixtureId (the
+    // path the cert harness takes). Unlike clean-target, shared-root has real
+    // material defects, so the full 12-check universe is emitted (no reduction).
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executionRoute: "real",
+      fixtureId: "shared-root-target-v1",
+      reviewRecord: sharedRootReviewRecord(),
+      finalOutputText: SHARED_ROOT_FINAL_OUTPUT,
+      issueArtifacts: sharedRootArtifacts(),
+    });
+    expect(result.status).toBe("passed");
+    expect(result.checks.map((check) => check.check_id).sort()).toEqual(
+      [...SEMANTIC_QUALITY_GATE_CHECK_IDS].sort(),
+    );
+    expect(result.fixture_target_anchor).toBe("src/shared-root.ts");
+  });
+
   it("shared-root: fails when both defects surface but the shared-cause relation is missing", () => {
-    const artifacts = passingIssueArtifacts();
+    const artifacts = sharedRootArtifacts();
     // Model found both defects but never linked them to their shared root:
     // they surface as independent singletons with no shared_cause relation.
     artifacts.relationGraph = {
@@ -1293,8 +1449,8 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
     const result = evaluateReviewPipelineSemanticQualityGate({
       executionRoute: "real",
       expectations: sharedRootExpectations(),
-      reviewRecord: passingReviewRecord(),
-      finalOutputText: PASSING_FINAL_OUTPUT,
+      reviewRecord: sharedRootReviewRecord(),
+      finalOutputText: SHARED_ROOT_FINAL_OUTPUT,
       issueArtifacts: artifacts,
     });
     expect(
@@ -1379,7 +1535,7 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
       ...sharedRootExpectations(),
       expectedSharedCauseAnchorPairs: [[["unstableformat"], ["json.stringify"]]],
     };
-    const artifacts = passingIssueArtifacts();
+    const artifacts = sharedRootArtifacts();
     artifacts.relationGraph = {
       relations: [
         {
@@ -1402,8 +1558,8 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
     const result = evaluateReviewPipelineSemanticQualityGate({
       executionRoute: "real",
       expectations,
-      reviewRecord: passingReviewRecord(),
-      finalOutputText: PASSING_FINAL_OUTPUT,
+      reviewRecord: sharedRootReviewRecord(),
+      finalOutputText: SHARED_ROOT_FINAL_OUTPUT,
       issueArtifacts: artifacts,
     });
     expect(
@@ -1427,9 +1583,9 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
     const result = evaluateReviewPipelineSemanticQualityGate({
       executionRoute: "real",
       expectations,
-      reviewRecord: passingReviewRecord(),
-      finalOutputText: PASSING_FINAL_OUTPUT,
-      issueArtifacts: passingIssueArtifacts(),
+      reviewRecord: sharedRootReviewRecord(),
+      finalOutputText: SHARED_ROOT_FINAL_OUTPUT,
+      issueArtifacts: sharedRootArtifacts(),
     });
     expect(
       result.checks.find(
