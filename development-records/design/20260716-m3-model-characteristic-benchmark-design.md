@@ -201,6 +201,28 @@ judge 출력은 **캡처**해 결정론 replay 가능(§5 P0).
 - cert 채점 모델(재사용 소스): `.onto/processes/review/material-issue-contract.md`,
   `src/core-runtime/review/semantic-quality-gate.ts`
 
+## 10. P0 실증 결과 (2026-07-16, 브랜치 feat/m3-defect-spectrum-benchmark)
+
+구현·실행됨(11커밋, 35 단위테스트): 순수 스코어러(`scripts/m3-defect-spectrum.ts`) +
+ground-truth/issue-ledger 파서(채점 단위=issue, severity=surface_finding_ids MAX 유도) +
+Opus 4.8 attribution judge(`m3-attribution-judge.ts`, dispatch 주입·coverage 검증) +
+K-run 하니스(`m3-run.ts`, capture/replay). 라이브 실행은 disclosure
+`development-records/benchmark/m3/20260716-baseline-evidence/`.
+
+실증으로 확립(설계 예측 대비):
+- **파이프라인 작동·결정론**: judge가 실 개념 탐지 측정(어휘 반향 아님), 스코어러·replay byte-동일.
+- **judge effort-pin 필수(§3-1 보강)**: effort-unset은 ~40× 토큰 스윙으로 밴드 flip(H4). `effort=low`
+  핀이 gross swing 제거 + **더 정확**(refute-by-default 충실 — thinking-heavy는 과대귀속). **effort=low가
+  검증된 기본값.**
+- **band 판정은 near-threshold 취약, small-K agreement 신뢰불가(H3 실증)**: K=3 배치들이 서로 불일치
+  (credit-risk 거짓 unstable, manufacturing 거짓 stable). 14런 특성: clinical-lab 안정 미달, credit-risk
+  지배적 상회+드문(~7%) miss, manufacturing precision가 0.8 floor를 진성 straddle(0.731/0.769/0.808).
+
+**§3-3 정정(다음 이터레이션)**: K-run 안정성 대조를 **small-K band-agreement로 게이팅하지 말 것**.
+대신 (a) 충분한 K(≥~8, 관측 spread에서 유도), (b) **metric 분포(mean+range/CI)를 1차 출력·band는
+advisory**, (c) 분포가 cut을 진성 span하면 indeterminate, 드문 노이즈면 dominant band+noise율 —
+small-K agreement가 못 하는 이 구분을 명시. 상세: 위 disclosure README.
+
 ## 9. 설계 검증 이력 (2026-07-16)
 
 4-kind 독립 적대적 리뷰(구현 전 게이트), 전 발화 main이 실코드 재확증:
