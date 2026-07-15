@@ -1,0 +1,1722 @@
+{
+  "record_contract": "review-cert/v2",
+  "created_at": "2026-07-15T14:08:43.283Z",
+  "provider": "openai",
+  "model": "gpt-5.6-sol",
+  "arm_model": {
+    "baseline": {
+      "provider": "openai",
+      "model": "gpt-5.5"
+    },
+    "candidate": {
+      "provider": "openai",
+      "model": "gpt-5.6-sol"
+    }
+  },
+  "arm_dispatch": {
+    "baseline": {
+      "reasoning_effort": "medium"
+    },
+    "candidate": {
+      "reasoning_effort": "medium"
+    }
+  },
+  "declared_reps": 3,
+  "fixtures": [
+    {
+      "fixture_id": "review-pipeline-target-v1",
+      "target_anchor": "src/target.ts",
+      "content_sha256": "0f8a478771661b560de364083087fc8dac00c9f57889aa071fd6dac3cc50cda2"
+    },
+    {
+      "fixture_id": "retry-policy-target-v1",
+      "target_anchor": "src/retry.ts",
+      "content_sha256": "0f8d1952985d56cf99d4295e9c88b4153bb158e282d28596b14ea67f85711182"
+    },
+    {
+      "fixture_id": "clean-target-v1",
+      "target_anchor": "src/clean-target.ts",
+      "content_sha256": "840f4512e43817df9c94816c2e6dde7c9fe1229ecaf37756a5373f1f560bcecd",
+      "applicable_check_ids": [
+        "boundary_uncertainty_preservation",
+        "causal_materiality_shape",
+        "causal_relation_correctness",
+        "count_list_consistency",
+        "false_materiality_guard",
+        "issue_dependency_preservation",
+        "non_material_finding_preservation"
+      ]
+    },
+    {
+      "fixture_id": "shared-root-target-v1",
+      "target_anchor": "src/shared-root.ts",
+      "content_sha256": "1ae3fa1888a59525257eb01faac0a279bb2a017a7459bc4a4888d85014990e30"
+    }
+  ],
+  "gate_pin": {
+    "check_universe": [
+      "material_issue_recall",
+      "final_result_material_issue_recall",
+      "false_materiality_guard",
+      "boundary_uncertainty_preservation",
+      "non_material_finding_preservation",
+      "artifact_material_issue_recall",
+      "causal_materiality_shape",
+      "causal_relation_correctness",
+      "issue_dependency_preservation",
+      "actionability",
+      "count_list_consistency",
+      "grounding"
+    ],
+    "issue_artifacts_provided": true
+  },
+  "run_controls": {
+    "salvage_enabled": false,
+    "resubmit_enabled": true
+  },
+  "runs": [
+    {
+      "arm": "baseline",
+      "fixture_id": "review-pipeline-target-v1",
+      "rep": 1,
+      "completion": "ok",
+      "units_total": 23,
+      "units_completed": 23,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "review-pipeline-target-v1",
+      "rep": 2,
+      "completion": "ok",
+      "units_total": 19,
+      "units_completed": 19,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "review-pipeline-target-v1",
+      "rep": 3,
+      "completion": "not_run",
+      "units_total": 1,
+      "units_completed": 0,
+      "resubmit_applied_unit_count": 0,
+      "checks": []
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "review-pipeline-target-v1",
+      "rep": 4,
+      "completion": "ok",
+      "units_total": 23,
+      "units_completed": 23,
+      "resubmit_applied_unit_count": 1,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 1,
+      "completion": "ok",
+      "units_total": 19,
+      "units_completed": 19,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 2,
+      "completion": "not_run",
+      "units_total": 1,
+      "units_completed": 0,
+      "resubmit_applied_unit_count": 0,
+      "checks": []
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 3,
+      "completion": "not_run",
+      "units_total": 1,
+      "units_completed": 0,
+      "resubmit_applied_unit_count": 0,
+      "checks": []
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 4,
+      "completion": "not_run",
+      "units_total": 28,
+      "units_completed": 28,
+      "resubmit_applied_unit_count": 1,
+      "checks": []
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 5,
+      "completion": "not_run",
+      "units_total": 1,
+      "units_completed": 0,
+      "resubmit_applied_unit_count": 0,
+      "checks": []
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 6,
+      "completion": "ok",
+      "units_total": 46,
+      "units_completed": 46,
+      "resubmit_applied_unit_count": 2,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 7,
+      "completion": "ok",
+      "units_total": 26,
+      "units_completed": 26,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "clean-target-v1",
+      "rep": 1,
+      "completion": "ok",
+      "units_total": 19,
+      "units_completed": 19,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "clean-target-v1",
+      "rep": 2,
+      "completion": "ok",
+      "units_total": 19,
+      "units_completed": 19,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "clean-target-v1",
+      "rep": 3,
+      "completion": "ok",
+      "units_total": 19,
+      "units_completed": 19,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 1,
+      "completion": "not_run",
+      "units_total": 1,
+      "units_completed": 0,
+      "resubmit_applied_unit_count": 0,
+      "checks": []
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 2,
+      "completion": "not_run",
+      "units_total": 1,
+      "units_completed": 0,
+      "resubmit_applied_unit_count": 0,
+      "checks": []
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 3,
+      "completion": "not_run",
+      "units_total": 1,
+      "units_completed": 0,
+      "resubmit_applied_unit_count": 0,
+      "checks": []
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 4,
+      "completion": "ok",
+      "units_total": 34,
+      "units_completed": 34,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 5,
+      "completion": "ok",
+      "units_total": 53,
+      "units_completed": 53,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 6,
+      "completion": "ok",
+      "units_total": 69,
+      "units_completed": 69,
+      "resubmit_applied_unit_count": 2,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "review-pipeline-target-v1",
+      "rep": 1,
+      "completion": "ok",
+      "units_total": 28,
+      "units_completed": 28,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "failed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "failed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "review-pipeline-target-v1",
+      "rep": 2,
+      "completion": "ok",
+      "units_total": 28,
+      "units_completed": 28,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "review-pipeline-target-v1",
+      "rep": 3,
+      "completion": "ok",
+      "units_total": 29,
+      "units_completed": 29,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 1,
+      "completion": "ok",
+      "units_total": 32,
+      "units_completed": 32,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 2,
+      "completion": "ok",
+      "units_total": 37,
+      "units_completed": 37,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "retry-policy-target-v1",
+      "rep": 3,
+      "completion": "ok",
+      "units_total": 37,
+      "units_completed": 37,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "clean-target-v1",
+      "rep": 1,
+      "completion": "ok",
+      "units_total": 19,
+      "units_completed": 19,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "clean-target-v1",
+      "rep": 2,
+      "completion": "ok",
+      "units_total": 19,
+      "units_completed": 19,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "clean-target-v1",
+      "rep": 3,
+      "completion": "ok",
+      "units_total": 19,
+      "units_completed": 19,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 1,
+      "completion": "ok",
+      "units_total": 36,
+      "units_completed": 36,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 2,
+      "completion": "ok",
+      "units_total": 36,
+      "units_completed": 36,
+      "resubmit_applied_unit_count": 0,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "fixture_id": "shared-root-target-v1",
+      "rep": 3,
+      "completion": "ok",
+      "units_total": 36,
+      "units_completed": 36,
+      "resubmit_applied_unit_count": 1,
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed"
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed"
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed"
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed"
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed"
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed"
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed"
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "declared_aggregates": {
+    "per_fixture_check": [
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "final_result_material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "false_materiality_guard",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 0.6666666666666666
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "boundary_uncertainty_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 0.6666666666666666
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "non_material_finding_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "artifact_material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "causal_materiality_shape",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "causal_relation_correctness",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "issue_dependency_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "actionability",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "count_list_consistency",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "review-pipeline-target-v1",
+        "check_id": "grounding",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "final_result_material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "false_materiality_guard",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "boundary_uncertainty_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "non_material_finding_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "artifact_material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "causal_materiality_shape",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "causal_relation_correctness",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "issue_dependency_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "actionability",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "count_list_consistency",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "retry-policy-target-v1",
+        "check_id": "grounding",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "clean-target-v1",
+        "check_id": "boundary_uncertainty_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "clean-target-v1",
+        "check_id": "causal_materiality_shape",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "clean-target-v1",
+        "check_id": "causal_relation_correctness",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "clean-target-v1",
+        "check_id": "count_list_consistency",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "clean-target-v1",
+        "check_id": "false_materiality_guard",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "clean-target-v1",
+        "check_id": "issue_dependency_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "clean-target-v1",
+        "check_id": "non_material_finding_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "final_result_material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "false_materiality_guard",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "boundary_uncertainty_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "non_material_finding_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "artifact_material_issue_recall",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "causal_materiality_shape",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "causal_relation_correctness",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "issue_dependency_preservation",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "actionability",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "count_list_consistency",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      },
+      {
+        "fixture_id": "shared-root-target-v1",
+        "check_id": "grounding",
+        "baseline_pass_rate": 1,
+        "candidate_pass_rate": 1
+      }
+    ],
+    "core_check_floor": 1,
+    "quality_pass": true
+  },
+  "reproduction": {
+    "command": "npx tsx scripts/review-cert-run.mts --candidate-model gpt-5.6-sol --candidate-provider openai --candidate-auth oauth --candidate-effort medium --baseline-model gpt-5.5 --baseline-provider openai --baseline-auth oauth --baseline-effort medium --reps 3 --max-attempts 10"
+  }
+}
