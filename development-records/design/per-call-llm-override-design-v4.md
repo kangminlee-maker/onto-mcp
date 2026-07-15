@@ -30,8 +30,12 @@ llmOverride: { provider?, auth?, model?, effort?, service_tier? }   // .strict()
 
 ### 2.2 overlay = 프로그램적 settings 편집
 override를 resolved OntoSettings에 적용해 **effective settings**를 만든다. 의미는 "사용자가 해당 값으로 settings를 편집한 것과 동일"(v1 검증에서 손으로 한 그 편집):
-- **provider 있음(전환)**: 대상 subsystem의 모든 model/effort 소비 actor llm 블록을 override로 교체하고, unit-level llm은 drop해 상속(구 provider 잔재 제거).
-- **provider 없음(부분)**: 대상 actor·unit llm의 명시 필드만 덮어씀.
+모드는 필드의 **존재**가 아니라 **effective route 변화**로 가른다. override가 현재 provider/auth를 그대로 재기술하는 것은 전환이 아니며, 그 경우 route를 바꾸면 호출자가 요청하지 않은 route flip(예: 생략된 auth가 provider 기본값으로 되돌아 api_key→oauth)이 되어 이 설계가 금지하는 "X 믿고 Y 실행"이 된다.
+
+- **provider가 실제로 바뀜(전환)**: 대상 subsystem의 모든 model/effort 소비 actor llm 블록을 override로 교체하고, unit-level llm은 drop해 상속(구 provider 잔재 제거). provider-scoped runtime(`llm_runtime`)도 함께 drop.
+- **auth만 바뀜**: provider 정체성은 유지하되 이전 route 스코프 필드(`service_tier`·`api_key_env`·`base_url`)를 drop. auth 비교는 **defaulted 값** 기준(블록이 auth를 생략하면 `defaultAuthForProvider`가 실제 route를 정하므로).
+- **route 불변(부분 override, provider/auth 재기술 포함)**: 명시 필드만 덮어쓰고 transport·runtime은 보존.
+- **unit**: unit llm은 actor 위에 병합되는 **부분 블록**이므로, route 판정은 병합된(상속된) 블록 기준으로 한다(`reviewExecutionUnitActor`). 부분 블록만 보면 provider 없는 unit이 모든 provider-포함 override에서 전환으로 오판된다.
 - 적용 대상 = 그냥 settings 소비자. review는 actors+units(+salvage transcription은 settings 소비자이므로 자동 포함), reconstruct는 actor 4종. **census를 새로 만들 필요 없음** — overlay가 settings를 바꾸면 기존 census(`collectEffectiveModelRoutes`)가 그대로 소비.
 - judge는 overlay 대상 아님: reconstruct judge는 author 유효 selection을 상속(기존 동작)하고, `judgeModel`/`judgeLlmEffort`는 별도 per-call 파라미터로 유지.
 
