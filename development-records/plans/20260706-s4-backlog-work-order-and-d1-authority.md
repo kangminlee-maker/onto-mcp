@@ -4,6 +4,20 @@
 `development-records/handoff/20260705-breaker-observation-and-followups-handoff.md` §4.
 실코드 재검증 근거: 메모리 `onto-mcp-s4-backlog-validity-20260706`.
 
+> **잔여 트랙 재검증·해소 (2026-07-15, main `fb987ed`)**. 실코드 재확인 결과 세 잔여
+> 트랙 모두 **active 작업 없음**으로 확정 — 열린 항목에서 제외한다:
+> - **§4-1·§4-2·§4-6a/b/c**: 전부 착지(별도 세션 검증). §4-6c stance handoff는 `685c27f`로 종결.
+> - **§4-4 provider swap**: fallback 배선·default OFF 확실, E2E는 **증거 경계 기록 완료**
+>   (design §15/§17): deterministic SDK 429 + injected-primary + real-alternate-provider는
+>   DONE, **natural real-provider 429 incident E2E만 기회 대기**(제조 불가). "진행 중"이 아니라
+>   달성 가능 증거 경계에 도달한 상태. 승인 시 injected/deterministic을 cert 경계로 수용.
+> - **deliberation-response resubmit**: 배선 + **controlled dispatch E2E 발화 관측됨**
+>   (`deliberation-resubmit-dispatch.test.ts`: resubmit_applied·"healed by resubmit"·2 invocation).
+>   PR #203로 `resubmit.enabled` **기본 활성** → 다음 실 run이 자연 exercise. live-paid 관측만 기회 대기.
+> - **관찰 opt-in 4종 DEFAULT 승격**: PR #203 머지(owner-directed, 관찰 게이트 waived).
+> - **관찰 승격 사후 관측(3회 무결)**·**A-4 v3 cert run**·**M3 perf 벤치**·**Phase B**만 owner spend/결정 대기.
+> - **B6 미착수(아래)는 낡음**: 아래 §2 참조 정정.
+
 ## 0. 완료(머지됨)
 
 - §4-7 stance halt progress-step 매핑 — #171
@@ -39,7 +53,10 @@
 - B4 (§6 벤치 하니스·`semantic_map_synthesize` record·G7 재계산): **머지**.
 - B5 record 검증기(synthesize-cert/v1 + G7 role↔record 결속): **머지**(#176, `discovery/synthesize-cert-record.ts`).
   단 **Haiku 레지스트리 엔트리는 미착지** — `supported-models.yaml`은 `gpt-5.5`·`claude-opus-4-8`뿐.
-- B6 (INVARIANTS·G4 패턴·matcher export·문서): 미착수.
+- B6 (INVARIANTS·G4 패턴·matcher export·문서): ~~미착수~~ **대부분 흡수(2026-07-15 재검증)** —
+  INVARIANTS·G4 마커·문서 부분은 B7과 함께 착지(`INVARIANTS.md` INV-MODEL-1 §48/52/98/101,
+  커밋 `d788da8`/`274d446`). 미착지는 독립 role matcher export뿐이나 소비자 없음(**YAGNI** —
+  G7·CONTRACTED_ROLES가 role 판정을 이미 소유). non-load-bearing 잔여.
 - B7 (benchCandidate scoped capability·allowlist·구조 가드·양성 소비자): 미착수.
 
 종속 매핑: §4-5→B4/B5(흡수), §4-6c→Haiku 엔트리(미착지) + B7, §4-2→B4/B5(reconstruct semantic-map 경로), §4-4→B1(family)+B7(allowlist).
