@@ -516,6 +516,57 @@ describe("createOntoReconstructCoreApi", () => {
     })).rejects.toThrow(/cannot be combined with dispatch_fallback/);
   });
 
+  it("rejects a cross-provider llmOverride combined with judgeModel before any provider call", async () => {
+    // design v4 §2.5: judgeModel names a model ON THE AUTHOR'S PROVIDER, so
+    // pairing it with an override that switches that provider is ambiguous — the
+    // judge would silently resolve/degrade on the switched-in provider.
+    const projectRoot = await tempProjectRoot();
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    const openAiAuthor = {
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5.5",
+      effort: "low",
+      api_key_env: "UNSET_TEST_OPENAI_KEY",
+    };
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      `${JSON.stringify({
+        schema_version: "settings.json/v3",
+        reconstruct: {
+          execution: {
+            actors: {
+              semantic_author: { llm: openAiAuthor },
+              confirmation_provider: { llm: openAiAuthor },
+            },
+          },
+        },
+      }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const api = createOntoReconstructCoreApi({ ontoHome: path.resolve(".") });
+    const base = {
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "schedule.csv")],
+      sessionRoot: path.join(projectRoot, ".onto", "reconstruct", "judge-xprovider"),
+      intent: "must reject before dispatch",
+    };
+    await expect(api.runReconstruct({
+      ...base,
+      llmOverride: { provider: "anthropic", auth: "api_key", model: "claude-opus-4-8" },
+      judgeModel: "gpt-5.5",
+    })).rejects.toThrow(/switches the semantic author's provider/);
+
+    // Negative control: the SAME judgeModel is fine when the override keeps the
+    // author's provider (it is then unambiguous), so the guard is not blanket.
+    await expect(api.runReconstruct({
+      ...base,
+      llmOverride: { effort: "high" },
+      judgeModel: "gpt-5.5",
+    })).rejects.not.toThrow(/switches the semantic author's provider/);
+  });
+
   it("fails before provider capability creation when dispatch fallback is enabled but its breaker is off", async () => {
     const projectRoot = await tempProjectRoot();
     const previousHome = process.env.HOME;

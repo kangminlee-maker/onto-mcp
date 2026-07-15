@@ -317,6 +317,14 @@ describe("parsePerCallLlmOverrideArg", () => {
   it("rejects an unknown key (strict schema)", () => {
     expect(() => parsePerCallLlmOverrideArg(JSON.stringify({ base_url: "http://x" }))).toThrow();
   });
+
+  it("canonicalizes an EMPTY override to undefined (ultracode: {} must equal omission)", () => {
+    // `{}` is schema-valid but semantically an omission. If it parsed to a truthy
+    // `{}`, the overlay would be identity while `if (llmOverride)` gates still
+    // fired — making `{}` observably different from omitting the field.
+    expect(parsePerCallLlmOverrideArg("{}")).toBeUndefined();
+    expect(parsePerCallLlmOverrideArg(undefined)).toBeUndefined();
+  });
 });
 
 // ── behavior: overlay flips the resolved review execution profile ─────────────
@@ -475,6 +483,37 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
     // Positive control: a real switch away from the defaulted auth still cleans.
     const switched = applyReviewLlmOverride(settings, { auth: "oauth" });
     expect(switched.review?.execution?.teamlead?.llm?.api_key_env).toBeUndefined();
+  });
+
+  it("judges a provider-less UNIT on its inherited route, not its partial block (ultracode)", () => {
+    // A unit's llm is partial and merges over its actor. Restating the actor's
+    // CURRENT provider is not a route change, so the unit must keep its own
+    // calibrated fields instead of being dropped (which would lose its effort).
+    const settings = reviewSettingsWith(openAiOauthActor); // openai/oauth actors
+    (settings.review!.execution as Record<string, unknown>).units = {
+      // provider omitted → inherits the openai actor
+      deliberation_resolution: { llm: { model: "gpt-5.5", effort: "low" } },
+    };
+    const overlaid = applyReviewLlmOverride(settings, {
+      provider: "openai", // restates the inherited provider — NOT a switch
+      model: "gpt-5.6",
+    });
+    const unit = overlaid.review?.execution?.units?.deliberation_resolution as
+      | { llm?: Record<string, unknown> }
+      | undefined;
+    expect(unit?.llm).toBeDefined(); // not dropped
+    expect(unit?.llm?.model).toBe("gpt-5.6"); // override applied
+    expect(unit?.llm?.effort).toBe("low"); // unit's own calibration preserved
+    // Positive control: a REAL provider switch still drops the unit's llm.
+    const switched = applyReviewLlmOverride(settings, {
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-opus-4-8",
+    });
+    const switchedUnit = switched.review?.execution?.units?.deliberation_resolution as
+      | { llm?: unknown }
+      | undefined;
+    expect(switchedUnit?.llm).toBeUndefined();
   });
 
   it("provider-switch drops a unit's own llm so it inherits the overridden actor (continuation fix, v4 §7)", () => {

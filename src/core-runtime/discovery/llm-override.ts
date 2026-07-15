@@ -2,6 +2,7 @@ import {
   defaultAuthForProvider,
   type LlmModelSwitcherConfig,
 } from "../llm/model-switcher.js";
+import { reviewExecutionUnitActor } from "../review/review-execution-profile.js";
 import {
   PerCallLlmOverrideSchema,
   RECONSTRUCT_ACTOR_KEYS,
@@ -46,7 +47,12 @@ export function parsePerCallLlmOverrideArg(
   raw: string | undefined,
 ): PerCallLlmOverride | undefined {
   if (raw === undefined || raw.length === 0) return undefined;
-  return PerCallLlmOverrideSchema.parse(JSON.parse(raw));
+  const parsed = PerCallLlmOverrideSchema.parse(JSON.parse(raw));
+  // An EMPTY override is semantically an omission. Canonicalize it to undefined
+  // so every downstream truthiness check agrees: otherwise the overlay treats
+  // `{}` as identity while a `if (llmOverride)` gate still fires, making `{}`
+  // observably different from omission (breaking the default-off guarantee).
+  return isEmptyOverride(parsed) ? undefined : parsed;
 }
 
 /**
@@ -83,12 +89,22 @@ function overrideChangesRoute(
   return providerChanged || authChanged;
 }
 
-/** Core per-`llm`-block override (REPLACE vs route-cleaned vs field-OVERLAY). */
+/**
+ * Core per-`llm`-block override (REPLACE vs route-cleaned vs field-OVERLAY).
+ *
+ * `routeBasis` is the block whose ROUTE identity the decision is made on, which
+ * is not always `block` itself: a review UNIT's llm is a PARTIAL block merged
+ * over its default actor, so its route lives in the merged result. Judging a
+ * provider-less unit on its own partial block would report a provider change for
+ * every provider-bearing override (comparing against `undefined`). The override
+ * is still APPLIED to `block` so the unit keeps its partial shape.
+ */
 function applyLlmBlockOverride(
   block: LlmModelSwitcherConfig,
   override: PerCallLlmOverride,
+  routeBasis: LlmModelSwitcherConfig = block,
 ): LlmModelSwitcherConfig {
-  const { providerChanged, authChanged } = effectiveRoute(block, override);
+  const { providerChanged, authChanged } = effectiveRoute(routeBasis, override);
   if (providerChanged) {
     // REPLACE (provider switch): drop the old block so no stale transport
     // (base_url/api_key_env/service_tier/timeout_ms) leaks into the new
@@ -160,7 +176,14 @@ export function applyReviewLlmOverride(
         nextUnits[unitId] = unit;
         continue;
       }
-      if (effectiveRoute(unit.llm, override).providerChanged) {
+      // A unit's llm is a PARTIAL block that the runtime merges over its default
+      // actor ({...actorLlm, ...unitLlm}), so the unit's real route is that
+      // merge — judge the override against it, not against the partial block.
+      const unitRouteBasis: LlmModelSwitcherConfig = {
+        ...(execution[reviewExecutionUnitActor(unitId)]?.llm ?? {}),
+        ...unit.llm,
+      };
+      if (effectiveRoute(unitRouteBasis, override).providerChanged) {
         // REPLACE: drop the unit's llm so it inherits the replaced actor
         // (no stale unit model on the old provider).
         const { llm: _dropped, ...rest } = unit;
@@ -170,7 +193,10 @@ export function applyReviewLlmOverride(
         // would keep the previous route's scoped fields (e.g. a unit's own
         // openai/oauth `service_tier` surviving an `auth: "api_key"` override),
         // so the unit route would be rejected even though the actor was cleaned.
-        nextUnits[unitId] = { ...unit, llm: applyLlmBlockOverride(unit.llm, override) };
+        nextUnits[unitId] = {
+          ...unit,
+          llm: applyLlmBlockOverride(unit.llm, override, unitRouteBasis),
+        };
       }
     }
     nextExecution.units = nextUnits;
