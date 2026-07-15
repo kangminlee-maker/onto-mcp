@@ -113,17 +113,57 @@ async function loadFixtureInputs(
   return { seededDefects, issues };
 }
 
-/** Build the judge dispatch for the chosen anthropic auth route. */
-function judgeDispatch(auth: "api_key" | "oauth"): AttributionDispatch {
+/**
+ * Build the judge dispatch for the chosen anthropic auth route. `effort` is
+ * PINNED (design: an effort-unset judge showed a ~40× output-token swing that
+ * flipped bands — H4 on the instrument). A fixed effort makes the judge's
+ * adaptive-thinking behavior consistent across dispatches.
+ */
+function judgeDispatch(auth: "api_key" | "oauth", effort?: string): AttributionDispatch {
   return async (systemPrompt, userPrompt) => {
     const { callLlm } = await import("../src/core-runtime/llm/llm-caller.ts");
     const base =
       auth === "oauth"
         ? { provider: "anthropic" as const, execution_adapter: "claude_code" as const, model_id: JUDGE_MODEL_ID }
         : { provider: "anthropic" as const, model_id: JUDGE_MODEL_ID };
-    const result = await callLlm(systemPrompt, userPrompt, { ...base, max_tokens: 8192 });
+    const result = await callLlm(systemPrompt, userPrompt, {
+      ...base,
+      max_tokens: 8192,
+      ...(effort ? { reasoning_effort: effort } : {}),
+    });
     return { text: result.text };
   };
+}
+
+/**
+ * Intra-judge stability probe (design §3-3): dispatch the judge K times on the
+ * SAME fixture input and report whether the band is stable. Real spend (K judge
+ * calls). Does not capture — it is a diagnostic on the measurement instrument.
+ */
+async function stabilityProbe(args: {
+  fixtures: string[];
+  sessionPins: Map<string, string>;
+  auth: "api_key" | "oauth";
+  effort?: string;
+  repeat: number;
+}): Promise<void> {
+  const judge = createAttributionJudge({ dispatch: judgeDispatch(args.auth, args.effort) });
+  for (const fixture of args.fixtures) {
+    const session = args.sessionPins.get(fixture) ?? (await latestEvidenceSession(fixture));
+    const { seededDefects, issues } = await loadFixtureInputs(fixture, session);
+    console.log(`\n▶ stability ${fixture} (${session}) — judge ${JUDGE_MODEL_ID} effort=${args.effort ?? "(unset)"} ×${args.repeat}`);
+    const runs: DefectSpectrumResult[] = [];
+    for (let k = 0; k < args.repeat; k += 1) {
+      const attributions = await judge({ issues, seededDefects });
+      const result = scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: M3_BAND_THRESHOLDS });
+      runs.push(result);
+      console.log(`  run ${k + 1}: ${result.band}  material ${result.recall_material.toFixed(3)}  precision ${result.precision.toFixed(3)}  detected ${result.detected_defect_ids.length}/${result.seeded_total}`);
+    }
+    const bands = new Set(runs.map((r) => r.band));
+    const recallSpread = Math.max(...runs.map((r) => r.recall_material)) - Math.min(...runs.map((r) => r.recall_material));
+    const precSpread = Math.max(...runs.map((r) => r.precision)) - Math.min(...runs.map((r) => r.precision));
+    console.log(`  → band ${bands.size === 1 ? `STABLE (${[...bands][0]})` : `UNSTABLE (${[...bands].join("/")})`} · material-recall spread ${recallSpread.toFixed(3)} · precision spread ${precSpread.toFixed(3)}`);
+  }
 }
 
 function stamp(now: Date): string {
@@ -150,9 +190,10 @@ async function runFixtures(args: {
   fixtures: string[];
   sessionPins: Map<string, string>;
   auth: "api_key" | "oauth";
+  effort?: string;
   outDir: string;
 }): Promise<FixtureRunOutput[]> {
-  const judge = createAttributionJudge({ dispatch: judgeDispatch(args.auth) });
+  const judge = createAttributionJudge({ dispatch: judgeDispatch(args.auth, args.effort) });
   await fs.mkdir(path.join(args.outDir, "capture"), { recursive: true });
   const outputs: FixtureRunOutput[] = [];
   for (const fixture of args.fixtures) {
@@ -201,6 +242,25 @@ async function replayRun(runDir: string): Promise<FixtureRunOutput[]> {
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const replayDir = readOption(argv, "replay");
+  const repeat = Number(readOption(argv, "repeat") ?? "1");
+
+  // Stability probe: dispatch the judge K times per fixture, no capture/report.
+  if (!replayDir && repeat > 1) {
+    const fixtures = readMulti(argv, "fixture");
+    const sessionPins = new Map<string, string>();
+    for (const pin of readMulti(argv, "session")) {
+      const [f, s] = pin.split(":");
+      if (f && s) sessionPins.set(f, s);
+    }
+    await stabilityProbe({
+      fixtures: fixtures.length > 0 ? fixtures : DEFAULT_FIXTURES,
+      sessionPins,
+      auth: (readOption(argv, "judge-auth") ?? "oauth") as "api_key" | "oauth",
+      effort: readOption(argv, "judge-effort"),
+      repeat,
+    });
+    return;
+  }
 
   let outputs: FixtureRunOutput[];
   let outDir: string;
@@ -216,12 +276,19 @@ async function main(): Promise<void> {
       if (f && s) sessionPins.set(f, s);
     }
     const auth = (readOption(argv, "judge-auth") ?? "api_key") as "api_key" | "oauth";
+    // effort=low is the validated default: an effort-unset judge showed a ~40×
+    // output-token swing that flipped bands (H4 on the instrument); low is stable
+    // (0.000 band spread over K=4) and more faithful to refute-by-default (the
+    // thinking-heavy path over-attributed a specimen-mentioning issue to the
+    // lifecycle defect the review never actually surfaced).
+    const effort = readOption(argv, "judge-effort") ?? "low";
     outDir = readOption(argv, "out") ?? path.join("development-records/benchmark/m3", stamp(new Date()));
-    console.log(`M3 RUN — judge ${JUDGE_MODEL_ID} (${auth}) → ${outDir}`);
+    console.log(`M3 RUN — judge ${JUDGE_MODEL_ID} (${auth}, effort=${effort ?? "(unset)"}) → ${outDir}`);
     outputs = await runFixtures({
       fixtures: fixtures.length > 0 ? fixtures : DEFAULT_FIXTURES,
       sessionPins,
       auth,
+      effort,
       outDir,
     });
   }
