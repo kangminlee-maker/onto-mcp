@@ -284,9 +284,11 @@ const DEFAULT_REVIEW_RETRY_SETTINGS = {
   deliberation_max_retries: 2,
   synthesis_max_retries: 2,
   retry_initial_delay_ms: 3000,
-  // opt-in: 벤치마크 재현성 보호 — 활성화는 settings로만. (NOT part of the
-  // 2026-07-15 breaker-observation promotion; stays default OFF.)
-  salvage: { enabled: false, delta_completion: "unit_llm" },
+  // DEFAULT ON (2026-07-15 owner-directed promotion): submit-salvage recovery is
+  // on in real usage unless disabled with `salvage.enabled=false`. The review-cert
+  // harness pins it OFF explicitly (benchmark --no-salvage) for raw, reproducible
+  // measurement — that pin is cert-only, not the product default.
+  salvage: { enabled: true, delta_completion: "unit_llm" },
   // DEFAULT ON (2026-07-15 owner-directed promotion): bounded unit resubmit on
   // validation rejection is on unless disabled with `resubmit.enabled=false`.
   resubmit: { enabled: true },

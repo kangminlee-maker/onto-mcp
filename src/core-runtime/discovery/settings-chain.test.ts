@@ -248,7 +248,7 @@ describe("resolveSettingsChain", () => {
       deliberation_max_retries: 5,
       synthesis_max_retries: 1,
       retry_initial_delay_ms: 250,
-      salvage: { enabled: false, delta_completion: "unit_llm" },
+      salvage: { enabled: true, delta_completion: "unit_llm" },
       resubmit: { enabled: true },
       dispatch_breaker: {
         enabled: true,
@@ -360,7 +360,7 @@ describe("resolveSettingsChain", () => {
       deliberation_max_retries: 2,
       synthesis_max_retries: 2,
       retry_initial_delay_ms: 3000,
-      salvage: { enabled: false, delta_completion: "unit_llm" },
+      salvage: { enabled: true, delta_completion: "unit_llm" },
       resubmit: { enabled: true },
       dispatch_breaker: {
         enabled: true,

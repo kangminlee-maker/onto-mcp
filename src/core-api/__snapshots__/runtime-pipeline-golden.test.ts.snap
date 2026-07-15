@@ -49,7 +49,7 @@ exports[`A runtime pipeline goldens (4f F1) > golden: cancellation before dispat
     "retry_initial_delay_ms": 3000,
     "salvage": {
       "delta_completion": "unit_llm",
-      "enabled": false,
+      "enabled": true,
     },
     "synthesis_max_retries": 2,
   },
@@ -216,7 +216,7 @@ exports[`A runtime pipeline goldens (4f F1) > golden: failing lens blocks the ba
     "retry_initial_delay_ms": 3000,
     "salvage": {
       "delta_completion": "unit_llm",
-      "enabled": false,
+      "enabled": true,
     },
     "synthesis_max_retries": 2,
   },
@@ -550,7 +550,7 @@ exports[`A runtime pipeline goldens (4f F1) > golden: full pipeline completes (e
     "retry_initial_delay_ms": 3000,
     "salvage": {
       "delta_completion": "unit_llm",
-      "enabled": false,
+      "enabled": true,
     },
     "synthesis_max_retries": 2,
   },
@@ -639,7 +639,7 @@ exports[`A runtime pipeline goldens (4f F1) > golden: full pipeline completes (e
     "retry_initial_delay_ms": 3000,
     "salvage": {
       "delta_completion": "unit_llm",
-      "enabled": false,
+      "enabled": true,
     },
     "synthesis_max_retries": 2,
   },

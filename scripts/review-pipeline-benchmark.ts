@@ -81,6 +81,11 @@ interface BenchmarkOptions {
    * keeps the settings byte-identical — cert runs (M-1 raw-measurement pin)
    * never pass this flag. */
   retryResubmit: boolean;
+  /** Opt-in: write `retry.salvage.enabled=false` into the temp project settings.
+   * The product default is now ON (settings-chain 2026-07-15 promotion); the
+   * cert harness passes this to pin salvage OFF for raw, reproducible
+   * measurement (RUN_CONTROLS.salvage_enabled: false). */
+  disableSalvage: boolean;
 }
 
 interface UnitResult {
@@ -313,6 +318,8 @@ function usage(): string {
     "                                     Repeatable. Default: both",
     "  --fixture <review-pipeline-target-v1|retry-policy-target-v1|clean-target-v1|shared-root-target-v1>",
     "                                     Repeatable. Default: review-pipeline-target-v1",
+    "  --no-salvage                       Opt-in: pin retry.salvage OFF in the temp project",
+    "                                     (product default is ON; cert uses this for raw measurement)",
     "  --retry-resubmit                   Opt-in: enable retry.resubmit in the temp project",
     "                                     settings (error-spec corrective retry). Default: off",
     "  --executor-realization <codex|ts_inline_http>",
@@ -507,6 +514,7 @@ function parseOptions(argv: string[]): BenchmarkOptions {
       hasFlag(argv, "keep-tmp") ||
       process.env.ONTO_REVIEW_BENCHMARK_KEEP_TMP === "1",
     retryResubmit: hasFlag(argv, "retry-resubmit"),
+    disableSalvage: hasFlag(argv, "no-salvage"),
     timeoutMs,
     unitTimeoutMs,
     unitSweepCandidateOnly: hasFlag(argv, "unit-sweep-candidate-only"),
@@ -849,6 +857,17 @@ export function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkC
         retry: {
           ...defaultReviewRetrySettings(),
           ...(options.retryResubmit ? { resubmit: { enabled: true } } : {}),
+          // review-cert pins salvage OFF for raw, reproducible measurement even
+          // though the product default is now ON (settings-chain 2026-07-15
+          // promotion); a salvaged unit would perturb the certified comparison.
+          ...(options.disableSalvage
+            ? {
+                salvage: {
+                  ...defaultReviewRetrySettings().salvage,
+                  enabled: false,
+                },
+              }
+            : {}),
         },
         actors: {
           teamlead: {
