@@ -977,16 +977,26 @@ describe("resolveSemanticMapSynthesizeWiring", () => {
       },
     }) as unknown as OntoSettings;
 
-  it("no seat: passes only the opt-in through", () => {
+  it("no seat: authoring is on by default; only an explicit false disables it", () => {
+    // 2026-07-15 owner-directed promotion: semantic_map_authoring default ON.
+    // explicit true → on
     expect(
       resolveSemanticMapSynthesizeWiring({
         settings: settingsWith({ optIn: true }),
         mockRealizationEnabled: true,
       }),
     ).toEqual({ enableSemanticMapAuthoring: true });
+    // absent → on (the promoted default)
     expect(
       resolveSemanticMapSynthesizeWiring({
         settings: settingsWith({}),
+        mockRealizationEnabled: true,
+      }),
+    ).toEqual({ enableSemanticMapAuthoring: true });
+    // explicit false → off (the disable path)
+    expect(
+      resolveSemanticMapSynthesizeWiring({
+        settings: settingsWith({ optIn: false }),
         mockRealizationEnabled: true,
       }),
     ).toEqual({ enableSemanticMapAuthoring: false });

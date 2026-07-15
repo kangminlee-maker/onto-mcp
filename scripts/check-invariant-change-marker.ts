@@ -60,8 +60,10 @@ const PROTECTED_TARGETS: ProtectedTarget[] = [
   },
   {
     // settings 수용 스키마와 chain 완성 기본값 (AGENTS §0-2: 스키마 변경은 확인 필수).
+    // `enabled`/`semantic_map_authoring`도 감지: 안전/회복 opt-in의 DEFAULT 토글
+    // (예: 2026-07-15 breaker-observation 승격)은 제품 전역 동작을 바꾸므로 마커 필수.
     file: "src/core-runtime/discovery/settings-chain.ts",
-    linePattern: /Schema\b|max_retries|retry_initial_delay_ms/,
+    linePattern: /Schema\b|max_retries|retry_initial_delay_ms|enabled|semantic_map_authoring/,
     invariants: ["INV-CFG-1"],
   },
   {

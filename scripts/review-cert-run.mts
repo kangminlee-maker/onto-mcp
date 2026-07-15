@@ -14,16 +14,18 @@
  * `--reps` ok rows per arm × fixture, capped by --max-attempts) its natural
  * granularity.
  *
- * run_controls pinning (design §4 M-1) — mechanism, no new knob needed:
- *  - the benchmark's settingsForCase writes `retry: defaultReviewRetrySettings()`
- *    VERBATIM into the temp project's .onto/settings.json, and that default is
- *    explicitly `salvage.enabled=false` + `resubmit.enabled=false`
- *    (settings-chain.ts DEFAULT_REVIEW_RETRY_SETTINGS — both opt-in);
+ * run_controls pinning (design §4 M-1) — mechanism:
+ *  - the cert measures the raw product path with resubmit ON and salvage OFF.
+ *    Since the 2026-07-15 promotion made both product DEFAULTS, the harness pins
+ *    them EXPLICITLY rather than relying on the default: every benchmark
+ *    invocation passes `--retry-resubmit` and `--no-salvage`, and settingsForCase
+ *    overlays `resubmit.enabled=true` + `salvage.enabled=false` into the temp
+ *    project's .onto/settings.json;
  *  - mergeReviewRetrySettings spreads project OVER user, so the temp project's
- *    EXPLICIT false wins even against a user-level ~/.onto/settings.json opt-in;
- *  - this script asserts both defaults are still false at startup (fail loud
- *    if the default ever flips) and additionally requires salvaged_unit_ids=[]
- *    on every ok row (row-level evidence the pin held).
+ *    EXPLICIT values win even against a user-level ~/.onto/settings.json;
+ *  - a startup MECHANICAL probe asserts settingsForCase actually yields resubmit
+ *    ON + salvage OFF (fail loud if the knob regresses), and every ok row
+ *    additionally requires salvaged_unit_ids=[] (row-level evidence the pin held).
  *
  * Dispatch witness (design §4 H-1): the arms dispatch spawned worker CLIs,
  * and each route gets a shim that appends one JSON line {"argv": [...]} to
@@ -100,7 +102,6 @@ import {
   type ReviewCertRun,
 } from "../src/core-runtime/discovery/review-cert-record.ts";
 import { resolveClaudeBin } from "../src/core-runtime/llm/claude-bin.ts";
-import { defaultReviewRetrySettings } from "../src/core-runtime/discovery/settings-chain.ts";
 import { benchmarkFixture, settingsForCase } from "./review-pipeline-benchmark.ts";
 import { rowFromAttempt, type BenchmarkRunLike } from "./review-cert-row.ts";
 
@@ -211,18 +212,13 @@ if (rehearsal && opts["out"] === undefined) {
 }
 
 // ── run_controls pin assertion (design §4 M-1; see module doc for mechanism) ──
-const retryDefaults = defaultReviewRetrySettings();
-if (retryDefaults.salvage.enabled !== false || retryDefaults.resubmit.enabled !== false) {
-  throw new Error(
-    `review-cert-run: defaultReviewRetrySettings() no longer pins rescue channels OFF (salvage=${retryDefaults.salvage.enabled}, resubmit=${retryDefaults.resubmit.enabled}) — the benchmark's temp-project settings would inherit this. Restore the default or add an explicit override before certifying.`,
-  );
-}
-log("run_controls pin: defaultReviewRetrySettings() has salvage/resubmit OFF (benchmark temp-project settings carry it explicitly; project layer beats user layer)");
-
-// v2 mechanical-ON assertion (design §5.3): the harness passes
-// --retry-resubmit unconditionally; verify the benchmark's settings builder
-// actually turns that into retry.resubmit.enabled=true — a silent knob
-// regression must fail HERE, not surface as an all-zero disclosure.
+// The cert measures the raw product path with resubmit ON and salvage OFF
+// (RUN_CONTROLS). Since the 2026-07-15 promotion made BOTH resubmit and salvage
+// product defaults, the harness no longer relies on the default — it passes
+// --retry-resubmit and --no-salvage explicitly, and this MECHANICAL probe
+// verifies the benchmark's settings builder actually turns those into
+// retry.resubmit.enabled=true AND retry.salvage.enabled=false. A silent knob
+// regression must fail HERE, not surface as a polluted/all-zero disclosure.
 {
   const probeSettings = settingsForCase(
     {
@@ -231,17 +227,32 @@ log("run_controls pin: defaultReviewRetrySettings() has salvage/resubmit OFF (be
       sweepEfforts: [], sweepUnits: [], sweepAllUnits: false,
       fixtureIds: ["review-pipeline-target-v1"], lensIds: [], keepTmp: false,
       timeoutMs: 1000, unitSweepCandidateOnly: false, maxConcurrentLenses: 1,
-      retryResubmit: true,
+      retryResubmit: true, disableSalvage: true,
     } as never,
     { case_id: "all-medium", label: "probe", profile_role: "candidate",
       comparison_axis: "run-effort", base_effort: "medium", unit_efforts: {} } as never,
-  ) as { review?: { execution?: { retry?: { resubmit?: { enabled?: boolean } } } } };
-  if (probeSettings.review?.execution?.retry?.resubmit?.enabled !== true) {
+  ) as {
+    review?: {
+      execution?: {
+        retry?: {
+          resubmit?: { enabled?: boolean };
+          salvage?: { enabled?: boolean };
+        };
+      };
+    };
+  };
+  const probeRetry = probeSettings.review?.execution?.retry;
+  if (probeRetry?.resubmit?.enabled !== true) {
     throw new Error(
       "review-cert-run: settingsForCase({retryResubmit:true}) did not yield retry.resubmit.enabled=true — the v2 contract cannot be dispatched. Fix the benchmark knob before certifying.",
     );
   }
-  log("v2 mechanical-ON: settingsForCase({retryResubmit:true}) yields retry.resubmit.enabled=true");
+  if (probeRetry?.salvage?.enabled !== false) {
+    throw new Error(
+      `review-cert-run: settingsForCase({disableSalvage:true}) did not yield retry.salvage.enabled=false (got ${probeRetry?.salvage?.enabled}) — a salvaged unit would pollute the cert measurement. Fix the benchmark knob before certifying.`,
+    );
+  }
+  log("run_controls mechanical pin: settingsForCase yields resubmit ON + salvage OFF for the cert temp-project.");
 }
 
 // ── out dir (--resume: continue INTO a prior run's dir — completed rows and
@@ -595,6 +606,9 @@ async function runBenchmarkOnce(args: {
     // review-cert/v2: resubmit ON is the CONTRACT (both arms, always) — the
     // cert measures the product path; salvage stays OFF via the defaults pin.
     "--retry-resubmit",
+    // salvage product default is ON since the 2026-07-15 promotion; the cert
+    // pins it OFF for raw, reproducible measurement (RUN_CONTROLS.salvage_enabled).
+    "--no-salvage",
     ...(rehearsal
       ? ["--executor-realization", "ts_inline_http", "--artifact-generation-realization", "semantic_mock"]
       : []),

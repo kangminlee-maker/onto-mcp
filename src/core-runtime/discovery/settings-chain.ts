@@ -249,8 +249,10 @@ export interface DispatchBreakerSettingsInput {
 export type DispatchBreakerSettings = DispatchBreakerPolicy;
 
 export const DEFAULT_DISPATCH_BREAKER_SETTINGS = {
-  // opt-in: OFF = 현행 동작 보존 — 활성화는 settings로만.
-  enabled: false,
+  // DEFAULT ON (2026-07-15 owner-directed promotion): the fan-out dispatch
+  // breaker (trip/poison/recover) is on unless a setting disables it. Disable
+  // with `dispatch_breaker.enabled=false`.
+  enabled: true,
   systemic_threshold: 3,
   per_call_max_attempts: 3,
   backoff_initial_ms: 3000,
@@ -282,11 +284,15 @@ const DEFAULT_REVIEW_RETRY_SETTINGS = {
   deliberation_max_retries: 2,
   synthesis_max_retries: 2,
   retry_initial_delay_ms: 3000,
-  // opt-in: 벤치마크 재현성 보호 — 활성화는 settings로만.
-  salvage: { enabled: false, delta_completion: "unit_llm" },
-  // opt-in: OFF = 현행 halt 동작 보존 — 활성화는 settings로만.
-  resubmit: { enabled: false },
-  // opt-in: OFF = 현행 halt/배리어 동작 보존 — 활성화는 settings로만.
+  // DEFAULT ON (2026-07-15 owner-directed promotion): submit-salvage recovery is
+  // on in real usage unless disabled with `salvage.enabled=false`. The review-cert
+  // harness pins it OFF explicitly (benchmark --no-salvage) for raw, reproducible
+  // measurement — that pin is cert-only, not the product default.
+  salvage: { enabled: true, delta_completion: "unit_llm" },
+  // DEFAULT ON (2026-07-15 owner-directed promotion): bounded unit resubmit on
+  // validation rejection is on unless disabled with `resubmit.enabled=false`.
+  resubmit: { enabled: true },
+  // DEFAULT ON via DEFAULT_DISPATCH_BREAKER_SETTINGS (2026-07-15 promotion).
   dispatch_breaker: DEFAULT_DISPATCH_BREAKER_SETTINGS,
 } as const satisfies ReviewRetrySettings;
 
@@ -918,13 +924,14 @@ export function resolveOptionalReconstructActorLlmSettings(
   return actor.llm;
 }
 
-/** Production opt-in for the semantic-map authoring stage (design §5.5).
- * Absent/false = off: the capability pair is not attached AND the synthesize
- * seat is dormant (excluded from the gate walk — U6, salvage precedent). */
+/** Semantic-map authoring stage (design §5.5). DEFAULT ON (2026-07-15
+ * owner-directed promotion): absent = on; only an explicit `false` disables it,
+ * which detaches the capability pair AND leaves the synthesize seat dormant
+ * (excluded from the gate walk — U6, salvage precedent). */
 export function isReconstructSemanticMapAuthoringEnabled(
   settings: OntoSettings,
 ): boolean {
-  return settings.reconstruct?.execution?.semantic_map_authoring === true;
+  return settings.reconstruct?.execution?.semantic_map_authoring !== false;
 }
 
 export const SETTINGS_FILENAME = "settings.json";
