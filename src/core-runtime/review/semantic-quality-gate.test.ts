@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateReviewPipelineSemanticQualityGate,
   SEMANTIC_QUALITY_GATE_CHECK_IDS,
+  SEMANTIC_QUALITY_GATE_FIXTURE_IDS,
   semanticQualityFixturePreset,
   type SemanticQualityExpectations,
+  type SemanticQualityGateFixtureId,
 } from "./semantic-quality-gate.js";
 
 function passingReviewRecord() {
@@ -1592,5 +1594,356 @@ describe("evaluateReviewPipelineSemanticQualityGate v3 controls", () => {
         (check) => check.check_id === "causal_relation_correctness",
       )?.status,
     ).toBe("failed");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V2 scoring non-vacuity — completeness meta-test (design 20260712 §D5).
+//
+// A check that never FAILS anywhere in the corpus is unproven: it could be
+// stuck-on-pass and the cert would not notice. This ledger forces, for every
+// fixture × every check the gate actually emits for it, at least one passing AND
+// one failing scenario.
+//
+// Coverage is per (fixture, check) — NOT per check globally — because fixture
+// data switches real gate branches (clean-target's expectsNoMaterialDefects /
+// requiresBoundaryPreservation; shared-root's expectedSharedCauseAnchorPairs), so
+// a check proven discriminating on one fixture is NOT thereby proven on another.
+// This is what makes clean-target's causal/dependency checks — which §D2 keeps in
+// its emission "for regression detection" — provably live detectors rather than
+// decoration.
+//
+// The applicable set is read from the gate's OWN emission for each fixture's
+// healthy baseline, so this cannot drift from what the gate does.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CheckId = (typeof SEMANTIC_QUALITY_GATE_CHECK_IDS)[number];
+
+const SCORED_FIXTURE_IDS = [
+  "review-pipeline-target-v1",
+  "retry-policy-target-v1",
+  "clean-target-v1",
+  "shared-root-target-v1",
+] as const satisfies readonly SemanticQualityGateFixtureId[];
+
+/** Permissive view of a scenario's gate args: the gate reads every field through
+ * unknown-tolerant accessors, so the corpus mutates a deep clone through this
+ * shape rather than each fixture's concrete builder type. */
+interface ScenarioArgs {
+  executionRoute: string;
+  fixtureId: SemanticQualityGateFixtureId;
+  reviewRecord: {
+    result_classification_summary: {
+      material_issue_count: number;
+      non_material_finding_count: number;
+      material_issues: Record<string, unknown>[];
+      non_material_findings: Record<string, unknown>[];
+      action_candidates: Record<string, unknown>[];
+    };
+  };
+  finalOutputText: string;
+  issueArtifacts: {
+    findingLedger: { findings: Record<string, unknown>[] };
+    relationGraph: {
+      relations: Record<string, unknown>[];
+      singleton_findings: Record<string, unknown>[];
+    };
+    issueLedger: {
+      issues: Record<string, unknown>[];
+      issue_dependencies: Record<string, unknown>[];
+    };
+  };
+}
+
+function healthyArgs(fixtureId: SemanticQualityGateFixtureId): ScenarioArgs {
+  const base = { executionRoute: "real", fixtureId };
+  const built =
+    fixtureId === "retry-policy-target-v1"
+      ? {
+          ...base,
+          reviewRecord: retryPolicyReviewRecord(),
+          finalOutputText: RETRY_POLICY_FINAL_OUTPUT,
+          issueArtifacts: retryPolicyIssueArtifacts(),
+        }
+      : fixtureId === "clean-target-v1"
+        ? {
+            ...base,
+            reviewRecord: cleanTargetSilentPreserveRecord(),
+            finalOutputText: CLEAN_TARGET_FINAL_OUTPUT,
+            issueArtifacts: cleanTargetArtifacts(),
+          }
+        : fixtureId === "shared-root-target-v1"
+          ? {
+              ...base,
+              reviewRecord: sharedRootReviewRecord(),
+              finalOutputText: SHARED_ROOT_FINAL_OUTPUT,
+              issueArtifacts: sharedRootArtifacts(),
+            }
+          : {
+              ...base,
+              reviewRecord: passingReviewRecord(),
+              finalOutputText: PASSING_FINAL_OUTPUT,
+              issueArtifacts: passingIssueArtifacts(),
+            };
+  return structuredClone(built) as unknown as ScenarioArgs;
+}
+
+function evaluateScenario(args: ScenarioArgs) {
+  return evaluateReviewPipelineSemanticQualityGate(
+    args as unknown as Parameters<
+      typeof evaluateReviewPipelineSemanticQualityGate
+    >[0],
+  );
+}
+
+/** Replace a markdown section's body, keeping the heading and every other
+ * section — so a mutation aimed at one section cannot silently break another. */
+function replaceSection(markdown: string, heading: string, body: string): string {
+  const out: string[] = [];
+  let skipping = false;
+  for (const line of markdown.split("\n")) {
+    if (/^#{2,4}\s+\S/.test(line)) {
+      skipping = new RegExp(`^#{2,4}\\s+${heading}\\s*$`).test(line);
+      out.push(line);
+      if (skipping) out.push(body);
+      continue;
+    }
+    if (!skipping) out.push(line);
+  }
+  return out.join("\n");
+}
+
+const MATERIAL_SEVERITIES = ["blocker", "high", "medium"];
+const materialFindings = (args: ScenarioArgs): Record<string, unknown>[] =>
+  args.issueArtifacts.findingLedger.findings.filter((finding) =>
+    MATERIAL_SEVERITIES.includes(String(finding.severity)),
+  );
+
+/**
+ * One targeted mutation per check: the smallest realistic model behaviour that
+ * SHOULD make that check fail. Keyed by CheckId, so a new check in the universe
+ * cannot be added without authoring its failing scenario (TS exhaustiveness).
+ */
+const FAILING_MUTATION: Record<CheckId, (args: ScenarioArgs) => void> = {
+  count_list_consistency: (args) => {
+    args.reviewRecord.result_classification_summary.material_issue_count += 1;
+  },
+  material_issue_recall: (args) => {
+    // Model admits an issue but loses the target truth — the anchor stays, so
+    // grounding is unaffected and this isolates recall.
+    const anchor = semanticQualityFixturePreset(args.fixtureId).targetAnchor;
+    for (const issue of args.reviewRecord.result_classification_summary
+      .material_issues) {
+      issue.problem_definition = "A concern was noted during review.";
+      issue.failure_condition = `${anchor} may behave unexpectedly.`;
+    }
+  },
+  final_result_material_issue_recall: (args) => {
+    args.finalOutputText = replaceSection(
+      args.finalOutputText,
+      "Final Review Result",
+      "Nothing notable was found.",
+    );
+  },
+  false_materiality_guard: (args) => {
+    // Yes-man: promotes the fixture's boundary decoy to a material issue.
+    const preset = semanticQualityFixturePreset(args.fixtureId);
+    args.reviewRecord.result_classification_summary.material_issues.push({
+      issue_id: "issue-meta-fp",
+      problem_definition: `${preset.boundaryUncertaintyTerms[0]} is an ${preset.boundaryContextTerms[0]} and must be fixed before release.`,
+      failure_condition: `${preset.targetAnchor} exposes it.`,
+      evidence_refs: ["round1/logic.md:1"],
+      source_lens_ids: ["logic"],
+      action_candidates: ["fix_before_release"],
+    });
+    args.reviewRecord.result_classification_summary.material_issue_count += 1;
+  },
+  boundary_uncertainty_preservation: (args) => {
+    // Decoy dropped from the finding-ledger authority (the Boundary Notes echo
+    // in the final output stays, so the uncertainty WAS observed).
+    args.reviewRecord.result_classification_summary.non_material_findings = [];
+    args.reviewRecord.result_classification_summary.non_material_finding_count = 0;
+  },
+  non_material_finding_preservation: (args) => {
+    // Non-material findings must stay OUTSIDE relation coverage.
+    for (const finding of args.issueArtifacts.findingLedger.findings) {
+      if (MATERIAL_SEVERITIES.includes(String(finding.severity))) continue;
+      args.issueArtifacts.relationGraph.singleton_findings.push({
+        finding_id: finding.finding_id,
+      });
+    }
+  },
+  artifact_material_issue_recall: (args) => {
+    args.issueArtifacts.findingLedger.findings =
+      args.issueArtifacts.findingLedger.findings.filter(
+        (finding) => !MATERIAL_SEVERITIES.includes(String(finding.severity)),
+      );
+  },
+  causal_materiality_shape: (args) => {
+    const material = materialFindings(args);
+    if (material.length > 0) {
+      material[0]!.materiality_basis = null; // material finding without a basis
+      return;
+    }
+    // clean-target has no material findings: break the mirror rule instead — a
+    // non-material finding must carry NO basis.
+    const nonMaterial = args.issueArtifacts.findingLedger.findings[0];
+    if (nonMaterial) {
+      nonMaterial.materiality_basis = {
+        affected_purpose: "fabricated",
+        failure_condition: "fabricated",
+        impact: "fabricated",
+        evidence_refs: ["fabricated:1"],
+      };
+    }
+  },
+  causal_relation_correctness: (args) => {
+    if (materialFindings(args).length > 0) {
+      // Material findings left with no relation/singleton coverage at all.
+      args.issueArtifacts.relationGraph.relations = [];
+      args.issueArtifacts.relationGraph.singleton_findings = [];
+      return;
+    }
+    // clean-target: no material findings, so coverage is vacuous — prove the
+    // emitted check is a live detector by planting an INVALID shared-cause.
+    args.issueArtifacts.relationGraph.relations.push({
+      relation_id: "rel-meta-invalid",
+      from_finding_id: "finding-nm-001",
+      to_finding_id: "finding-nm-002",
+      relation: "shared_cause_candidate",
+      shared_cause: {
+        cause_claim: "unowned cause refs",
+        from_cause_ref: "nobody.cause-001",
+        to_cause_ref: "nobody.cause-002",
+      },
+    });
+  },
+  issue_dependency_preservation: (args) => {
+    const hasSharedCause = args.issueArtifacts.relationGraph.relations.some(
+      (relation) => relation.relation === "shared_cause_candidate",
+    );
+    if (hasSharedCause) {
+      args.issueArtifacts.issueLedger.issue_dependencies = [];
+      return;
+    }
+    // clean-target: plant a shared-cause whose endpoints belong to no issue —
+    // the dependency context is then unrepresented by construction.
+    args.issueArtifacts.relationGraph.relations.push({
+      relation_id: "rel-meta-orphan",
+      from_finding_id: "finding-nm-001",
+      to_finding_id: "finding-nm-002",
+      relation: "shared_cause_candidate",
+      shared_cause: {
+        cause_claim: "orphan",
+        from_cause_ref: "nobody.cause-001",
+        to_cause_ref: "nobody.cause-002",
+      },
+    });
+  },
+  actionability: (args) => {
+    args.finalOutputText = replaceSection(
+      args.finalOutputText,
+      "Immediate Actions Required",
+      "- Consider a follow-up at some point.",
+    );
+    args.finalOutputText = replaceSection(
+      args.finalOutputText,
+      "Recommendations",
+      "- Consider a follow-up at some point.",
+    );
+  },
+  grounding: (args) => {
+    for (const issue of args.reviewRecord.result_classification_summary
+      .material_issues) {
+      issue.evidence_refs = [];
+    }
+  },
+};
+
+/** The checks the gate ACTUALLY emits for a fixture's healthy baseline — the
+ * applicable set, read from the gate itself rather than restated here. */
+function applicableChecksFor(fixtureId: SemanticQualityGateFixtureId): CheckId[] {
+  return evaluateScenario(healthyArgs(fixtureId)).checks.map(
+    (check) => check.check_id,
+  );
+}
+
+const SCORING_CORPUS = SCORED_FIXTURE_IDS.flatMap((fixtureId) =>
+  applicableChecksFor(fixtureId).map((checkId) => ({
+    label: `${fixtureId} / ${checkId}`,
+    fixtureId,
+    checkId,
+  })),
+);
+
+describe("semantic quality gate V2 scoring non-vacuity", () => {
+  it("scores EVERY built-in fixture — a new fixture cannot enter the cert set unproven", () => {
+    // A runtime pin, not a compile-time one: tsconfig excludes *.test.ts, so a
+    // type-level exhaustiveness guard here would be inert (it never runs, and
+    // `tsc --noEmit` never reads this file). vitest does run this.
+    expect([...SCORED_FIXTURE_IDS].sort()).toEqual(
+      [...SEMANTIC_QUALITY_GATE_FIXTURE_IDS].sort(),
+    );
+  });
+
+  it.each(SCORED_FIXTURE_IDS)(
+    "%s: the healthy baseline passes every applicable check (pass coverage)",
+    (fixtureId) => {
+      const result = evaluateScenario(healthyArgs(fixtureId));
+      // Non-vacuous subject: a fixture emitting nothing would pass every
+      // "no failing check" assertion below for free.
+      expect(result.checks.length).toBeGreaterThan(0);
+      expect(
+        result.checks
+          .filter((check) => check.status !== "passed")
+          .map((check) => check.check_id),
+      ).toEqual([]);
+      expect(result.status).toBe("passed");
+    },
+  );
+
+  it.each(SCORING_CORPUS.map((entry) => [entry.label, entry] as const))(
+    "%s: the targeted failing scenario makes that check fail (fail coverage)",
+    (_label, entry) => {
+      const args = healthyArgs(entry.fixtureId);
+      FAILING_MUTATION[entry.checkId](args);
+      const result = evaluateScenario(args);
+      const target = result.checks.find(
+        (check) => check.check_id === entry.checkId,
+      );
+      expect(target, `${entry.checkId} must still be emitted`).toBeDefined();
+      expect(target?.status).toBe("failed");
+      expect(result.status).toBe("failed");
+    },
+  );
+
+  it("every fixture × applicable check has BOTH a passing and a failing scenario", () => {
+    const missing: string[] = [];
+    for (const fixtureId of SCORED_FIXTURE_IDS) {
+      const applicable = applicableChecksFor(fixtureId);
+      expect(
+        applicable.length,
+        `${fixtureId} emits no checks — nothing to prove`,
+      ).toBeGreaterThan(0);
+
+      const passed = new Set(
+        evaluateScenario(healthyArgs(fixtureId))
+          .checks.filter((check) => check.status === "passed")
+          .map((check) => check.check_id),
+      );
+      const failed = new Set<CheckId>();
+      for (const checkId of applicable) {
+        const args = healthyArgs(fixtureId);
+        FAILING_MUTATION[checkId](args);
+        for (const check of evaluateScenario(args).checks) {
+          if (check.status === "failed") failed.add(check.check_id);
+        }
+      }
+      for (const checkId of applicable) {
+        if (!passed.has(checkId)) missing.push(`${fixtureId}/${checkId}: no PASSING scenario`);
+        if (!failed.has(checkId)) missing.push(`${fixtureId}/${checkId}: no FAILING scenario`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });

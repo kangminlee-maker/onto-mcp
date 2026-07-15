@@ -1,9 +1,20 @@
 export type SemanticQualityGateStatus = "passed" | "failed" | "not_applicable";
+
+/** The built-in code fixtures this gate can score — the value-level single
+ * source (the fixture-id type derives from it), mirroring
+ * SEMANTIC_QUALITY_GATE_CHECK_IDS below. FIXTURES is keyed by this type, so a new
+ * id here must ship a preset; the V2 scoring-completeness meta-test pins its
+ * scored set against THIS list at runtime, so a new fixture cannot enter the cert
+ * set with unproven (possibly stuck-on-pass) scoring. */
+export const SEMANTIC_QUALITY_GATE_FIXTURE_IDS = [
+  "review-pipeline-target-v1",
+  "retry-policy-target-v1",
+  "clean-target-v1",
+  "shared-root-target-v1",
+] as const;
+
 export type SemanticQualityGateFixtureId =
-  | "review-pipeline-target-v1"
-  | "retry-policy-target-v1"
-  | "clean-target-v1"
-  | "shared-root-target-v1";
+  (typeof SEMANTIC_QUALITY_GATE_FIXTURE_IDS)[number];
 
 /** The complete check-id universe this gate can emit — the value-level single
  * source (the check_id type derives from it). The review-cert/v2 evidence
