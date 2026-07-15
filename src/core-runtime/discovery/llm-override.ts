@@ -58,8 +58,36 @@ function applyLlmBlockOverride(
     // service_tier?}, so the copy is transport-clean by construction.
     return { ...override };
   }
-  // OVERLAY (same provider): only the named fields win.
+  if (override.auth !== undefined && override.auth !== block.auth) {
+    // AUTH switch is ALSO a route switch (oauth ↔ api_key normalize to
+    // different execution routes/adapters), so the previous route's scoped
+    // fields must not survive: `service_tier` is openai+oauth-only (
+    // normalizeLlmModelSwitcher rejects it on any other route) and
+    // `api_key_env`/`base_url` belong to the direct-call routes. Keeping them
+    // would turn an otherwise valid auth switch into a hard failure (or leak an
+    // api-key endpoint into an OAuth route). The override may re-state
+    // service_tier; base_url/api_key_env stay settings-owned by design.
+    const {
+      service_tier: _serviceTier,
+      api_key_env: _apiKeyEnv,
+      base_url: _baseUrl,
+      ...routeAgnostic
+    } = block;
+    return { ...routeAgnostic, ...override };
+  }
+  // OVERLAY (same route): only the named fields win.
   return { ...block, ...override };
+}
+
+/** Whether an override changes the block's ROUTE identity (provider or auth). */
+function overrideChangesRoute(
+  block: LlmModelSwitcherConfig,
+  override: PerCallLlmOverride,
+): boolean {
+  return (
+    override.provider !== undefined ||
+    (override.auth !== undefined && override.auth !== block.auth)
+  );
 }
 
 // ── review scope ──────────────────────────────────────────────────────────
@@ -190,10 +218,15 @@ export function applyReconstructLlmOverride(
     for (const actorKey of RECONSTRUCT_ACTOR_KEYS) {
       const actor = execution.actors[actorKey];
       if (actor) {
-        nextActors[actorKey] = {
-          ...actor,
-          llm: applyLlmBlockOverride(actor.llm, override),
-        };
+        const llm = applyLlmBlockOverride(actor.llm, override);
+        // `llm_runtime` (openai Responses output headroom) is scoped to the
+        // openai + api_key direct-call route, so it must NOT survive a route
+        // change: reconstruct would apply openai-only headroom to the new route
+        // and fail before dispatch, and the caller cannot clear it through
+        // `llmOverride` (transport/runtime fields are settings-owned).
+        nextActors[actorKey] = overrideChangesRoute(actor.llm, override)
+          ? { llm }
+          : { ...actor, llm };
       }
     }
     nextExecution.actors = nextActors;

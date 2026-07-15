@@ -171,6 +171,50 @@ const openAiApiAuthor = {
   api_key_env: "OPENAI_API_KEY",
 } as const;
 
+describe("applyReconstructLlmOverride — provider-scoped llm_runtime (PR #197 codex P2)", () => {
+  // llm_runtime (openai Responses output headroom) is valid ONLY on the
+  // openai + api_key route. It must not survive a route change, or reconstruct
+  // applies openai-only headroom to the new route and fails before dispatch —
+  // with no way for the caller to clear it through llmOverride.
+  function authorWithRuntime(): OntoSettings {
+    const settings = reconstructSettingsWith({
+      authorLlm: { provider: "openai", auth: "api_key", model: "gpt-5.5", effort: "medium" },
+    });
+    (settings.reconstruct!.execution!.actors!.semantic_author as Record<string, unknown>)
+      .llm_runtime = { openai_responses_output_headroom_tokens: 4096 };
+    return settings;
+  }
+
+  it("drops llm_runtime when the override switches provider", () => {
+    const switched = applyReconstructLlmOverride(authorWithRuntime(), {
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-opus-4-8",
+    });
+    const author = switched.reconstruct?.execution?.actors?.semantic_author as
+      | { llm_runtime?: unknown; llm?: { provider?: string } }
+      | undefined;
+    expect(author?.llm?.provider).toBe("anthropic");
+    expect(author?.llm_runtime).toBeUndefined();
+  });
+
+  it("drops llm_runtime when the override switches auth (api_key → oauth)", () => {
+    const switched = applyReconstructLlmOverride(authorWithRuntime(), { auth: "oauth" });
+    const author = switched.reconstruct?.execution?.actors?.semantic_author as
+      | { llm_runtime?: unknown }
+      | undefined;
+    expect(author?.llm_runtime).toBeUndefined();
+  });
+
+  it("keeps llm_runtime when the route is unchanged (effort-only override)", () => {
+    const same = applyReconstructLlmOverride(authorWithRuntime(), { effort: "high" });
+    const author = same.reconstruct?.execution?.actors?.semantic_author as
+      | { llm_runtime?: { openai_responses_output_headroom_tokens?: number } }
+      | undefined;
+    expect(author?.llm_runtime?.openai_responses_output_headroom_tokens).toBe(4096);
+  });
+});
+
 describe("applyReconstructLlmOverride", () => {
   it("is the identity (same reference) when the override is absent or empty", () => {
     const settings = reconstructSettingsWith({ authorLlm: openAiApiAuthor });
@@ -316,6 +360,44 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
     expect(after.profile.host).toBe("anthropic");
     expect(after.profile.provider).toBe("anthropic");
     expect(after.profile.model).toBe("claude-opus-4-8");
+  });
+
+  it("an auth switch drops the previous route's scoped fields (PR #197 codex P2)", () => {
+    // openai OAuth seats carry service_tier=fast. Switching auth to api_key is a
+    // ROUTE change; keeping service_tier would make normalizeLlmModelSwitcher
+    // reject the otherwise valid api-key route (service_tier is oauth-only).
+    const settings = reviewSettingsWith(openAiOauthActor); // has service_tier: "fast"
+    const overlaid = applyReviewLlmOverride(settings, {
+      auth: "api_key",
+      model: "gpt-5.5",
+    });
+    const teamlead = overlaid.review?.execution?.teamlead?.llm;
+    expect(teamlead?.auth).toBe("api_key");
+    expect(teamlead?.provider).toBe("openai"); // provider identity preserved
+    expect(teamlead?.service_tier).toBeUndefined(); // stale oauth-only field dropped
+    // The merged block must now normalize instead of throwing.
+    expect(() => resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings: overlaid,
+      codexAvailable: true,
+      claudeAvailable: true,
+      env: hermeticEnv,
+    })).not.toThrow();
+  });
+
+  it("an api_key→oauth switch drops api_key_env/base_url (PR #197 codex P2)", () => {
+    const settings = reviewSettingsWith({
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5.5",
+      api_key_env: "OPENAI_API_KEY",
+      base_url: "https://api.openai.com/v1",
+    });
+    const overlaid = applyReviewLlmOverride(settings, { auth: "oauth" });
+    const teamlead = overlaid.review?.execution?.teamlead?.llm;
+    expect(teamlead?.auth).toBe("oauth");
+    expect(teamlead?.api_key_env).toBeUndefined();
+    expect(teamlead?.base_url).toBeUndefined();
   });
 
   it("provider-switch drops a unit's own llm so it inherits the overridden actor (continuation fix, v4 §7)", () => {

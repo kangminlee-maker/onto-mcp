@@ -2991,7 +2991,15 @@ export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewIn
     ? applyReviewLlmOverride(resolvedOntoConfig, llmOverride)
     : resolvedOntoConfig;
   if (llmOverride) {
-    assertSettingsModelsSupported(ontoConfig);
+    // Gate ONLY the review dispatch seats. The shared gate walks every seat in
+    // the object it is handed, so passing the whole config would fail a review
+    // because of an unrelated reconstruct model the review never dispatches.
+    // Review resolves its route from `review.execution` actors + units alone
+    // (llmRouteEntries), and salvage lives under review.execution.retry — so the
+    // review block is exactly the set this run can dispatch.
+    assertSettingsModelsSupported(
+      ontoConfig.review ? { review: ontoConfig.review } : {},
+    );
   }
   const resolvedInvokeInputs = await resolveReviewInvokeInputs(
     argvWithSessionId,
