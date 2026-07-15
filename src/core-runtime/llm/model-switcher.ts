@@ -62,7 +62,13 @@ export function isDirectModelCallSelection(
 export const DEFAULT_GROK_BASE_URL = "https://api.x.ai/v1";
 export const DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1";
 
-function defaultAuthForProvider(provider: LlmProviderName): LlmAuthMode {
+/**
+ * The auth a block resolves to when it omits `auth`. Exported because callers
+ * that reason about ROUTE IDENTITY (e.g. the per-call llmOverride overlay) must
+ * compare the DEFAULTED auth, not the raw field — a block without `auth` still
+ * dispatches on this route, so an override restating it is not a route change.
+ */
+export function defaultAuthForProvider(provider: LlmProviderName): LlmAuthMode {
   if (provider === "openai") return "oauth";
   if (provider === "lmstudio") return "local";
   return "api_key";

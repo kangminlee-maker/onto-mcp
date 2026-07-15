@@ -455,6 +455,28 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
     expect(teamlead?.base_url).toBe("https://api.openai.com/v1");
   });
 
+  it("restating a DEFAULTED auth is not a route change — transport survives (PR #199 codex P2)", () => {
+    // A block that omits `auth` still dispatches on defaultAuthForProvider()
+    // (anthropic → api_key). An override restating that effective auth must not
+    // be read as a switch, or it discards the block's still-valid credential env.
+    const settings = reviewSettingsWith({
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      api_key_env: "ANTHROPIC_API_KEY",
+      // auth intentionally omitted → defaults to api_key
+    });
+    const overlaid = applyReviewLlmOverride(settings, {
+      auth: "api_key",
+      model: "claude-fable-5",
+    });
+    const teamlead = overlaid.review?.execution?.teamlead?.llm;
+    expect(teamlead?.model).toBe("claude-fable-5");
+    expect(teamlead?.api_key_env).toBe("ANTHROPIC_API_KEY"); // NOT dropped
+    // Positive control: a real switch away from the defaulted auth still cleans.
+    const switched = applyReviewLlmOverride(settings, { auth: "oauth" });
+    expect(switched.review?.execution?.teamlead?.llm?.api_key_env).toBeUndefined();
+  });
+
   it("provider-switch drops a unit's own llm so it inherits the overridden actor (continuation fix, v4 §7)", () => {
     // The continuation fix re-applies the stamped override to the freshly
     // resolved project profile. Its correctness rests on this: a provider switch

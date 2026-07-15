@@ -1,4 +1,7 @@
-import type { LlmModelSwitcherConfig } from "../llm/model-switcher.js";
+import {
+  defaultAuthForProvider,
+  type LlmModelSwitcherConfig,
+} from "../llm/model-switcher.js";
 import {
   PerCallLlmOverrideSchema,
   RECONSTRUCT_ACTOR_KEYS,
@@ -57,9 +60,17 @@ function effectiveRoute(
   block: LlmModelSwitcherConfig,
   override: PerCallLlmOverride,
 ): { providerChanged: boolean; authChanged: boolean } {
+  // Compare the DEFAULTED auth, not the raw field: a block that omits `auth`
+  // still dispatches on `defaultAuthForProvider(provider)` (anthropic/grok →
+  // api_key, openai → oauth, lmstudio → local). Comparing the raw undefined
+  // would read an override that merely restates that effective auth as a switch
+  // and discard the block's still-valid transport (api_key_env/base_url).
+  const blockAuth =
+    block.auth ??
+    (block.provider !== undefined ? defaultAuthForProvider(block.provider) : undefined);
   return {
     providerChanged: (override.provider ?? block.provider) !== block.provider,
-    authChanged: (override.auth ?? block.auth) !== block.auth,
+    authChanged: (override.auth ?? blockAuth) !== blockAuth,
   };
 }
 
