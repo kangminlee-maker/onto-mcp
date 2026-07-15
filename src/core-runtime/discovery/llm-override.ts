@@ -46,19 +46,46 @@ export function parsePerCallLlmOverrideArg(
   return PerCallLlmOverrideSchema.parse(JSON.parse(raw));
 }
 
-/** Core per-`llm`-block override (REPLACE vs field-OVERLAY). */
+/**
+ * Route identity of a block AFTER an override. Compared by EFFECTIVE value, not
+ * by field presence: an override may legitimately restate the current
+ * provider/auth just to change the model, and that is NOT a route change — so it
+ * must keep the block's route-scoped transport (api_key_env/base_url/
+ * service_tier) and any provider-scoped runtime settings.
+ */
+function effectiveRoute(
+  block: LlmModelSwitcherConfig,
+  override: PerCallLlmOverride,
+): { providerChanged: boolean; authChanged: boolean } {
+  return {
+    providerChanged: (override.provider ?? block.provider) !== block.provider,
+    authChanged: (override.auth ?? block.auth) !== block.auth,
+  };
+}
+
+/** Whether an override changes the block's ROUTE identity (provider or auth). */
+function overrideChangesRoute(
+  block: LlmModelSwitcherConfig,
+  override: PerCallLlmOverride,
+): boolean {
+  const { providerChanged, authChanged } = effectiveRoute(block, override);
+  return providerChanged || authChanged;
+}
+
+/** Core per-`llm`-block override (REPLACE vs route-cleaned vs field-OVERLAY). */
 function applyLlmBlockOverride(
   block: LlmModelSwitcherConfig,
   override: PerCallLlmOverride,
 ): LlmModelSwitcherConfig {
-  if (override.provider !== undefined) {
+  const { providerChanged, authChanged } = effectiveRoute(block, override);
+  if (providerChanged) {
     // REPLACE (provider switch): drop the old block so no stale transport
     // (base_url/api_key_env/service_tier/timeout_ms) leaks into the new
     // provider. override carries only {provider, auth?, model?, effort?,
     // service_tier?}, so the copy is transport-clean by construction.
     return { ...override };
   }
-  if (override.auth !== undefined && override.auth !== block.auth) {
+  if (authChanged) {
     // AUTH switch is ALSO a route switch (oauth ↔ api_key normalize to
     // different execution routes/adapters), so the previous route's scoped
     // fields must not survive: `service_tier` is openai+oauth-only (
@@ -75,19 +102,9 @@ function applyLlmBlockOverride(
     } = block;
     return { ...routeAgnostic, ...override };
   }
-  // OVERLAY (same route): only the named fields win.
+  // OVERLAY (same route — including an override that restates the current
+  // provider/auth): only the named fields win; transport is preserved.
   return { ...block, ...override };
-}
-
-/** Whether an override changes the block's ROUTE identity (provider or auth). */
-function overrideChangesRoute(
-  block: LlmModelSwitcherConfig,
-  override: PerCallLlmOverride,
-): boolean {
-  return (
-    override.provider !== undefined ||
-    (override.auth !== undefined && override.auth !== block.auth)
-  );
 }
 
 // ── review scope ──────────────────────────────────────────────────────────
@@ -132,13 +149,17 @@ export function applyReviewLlmOverride(
         nextUnits[unitId] = unit;
         continue;
       }
-      if (override.provider !== undefined) {
+      if (effectiveRoute(unit.llm, override).providerChanged) {
         // REPLACE: drop the unit's llm so it inherits the replaced actor
         // (no stale unit model on the old provider).
         const { llm: _dropped, ...rest } = unit;
         nextUnits[unitId] = rest;
       } else {
-        nextUnits[unitId] = { ...unit, llm: { ...unit.llm, ...override } };
+        // Units go through the SAME block rules as actors — a raw spread here
+        // would keep the previous route's scoped fields (e.g. a unit's own
+        // openai/oauth `service_tier` surviving an `auth: "api_key"` override),
+        // so the unit route would be rejected even though the actor was cleaned.
+        nextUnits[unitId] = { ...unit, llm: applyLlmBlockOverride(unit.llm, override) };
       }
     }
     nextExecution.units = nextUnits;

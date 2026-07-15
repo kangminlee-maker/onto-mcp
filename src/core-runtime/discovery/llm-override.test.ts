@@ -213,6 +213,25 @@ describe("applyReconstructLlmOverride — provider-scoped llm_runtime (PR #197 c
       | undefined;
     expect(author?.llm_runtime?.openai_responses_output_headroom_tokens).toBe(4096);
   });
+
+  it("keeps llm_runtime when the override RESTATES the same provider/auth (PR #199 codex P2)", () => {
+    // Route identity must be compared by effective value, not field presence:
+    // repeating provider/auth to change only the model keeps the same route, so
+    // the still-valid Responses headroom must survive.
+    const same = applyReconstructLlmOverride(authorWithRuntime(), {
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5.6",
+    });
+    const author = same.reconstruct?.execution?.actors?.semantic_author as
+      | {
+          llm_runtime?: { openai_responses_output_headroom_tokens?: number };
+          llm?: { model?: string; api_key_env?: string };
+        }
+      | undefined;
+    expect(author?.llm?.model).toBe("gpt-5.6");
+    expect(author?.llm_runtime?.openai_responses_output_headroom_tokens).toBe(4096);
+  });
 });
 
 describe("applyReconstructLlmOverride", () => {
@@ -398,6 +417,42 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
     expect(teamlead?.auth).toBe("oauth");
     expect(teamlead?.api_key_env).toBeUndefined();
     expect(teamlead?.base_url).toBeUndefined();
+  });
+
+  it("an auth switch cleans a UNIT's own route-scoped fields too (PR #199 codex P2)", () => {
+    // The actor cleanup alone is not enough: a unit carrying its own oauth-only
+    // service_tier would keep it through an api_key override and get rejected.
+    const settings = reviewSettingsWith(openAiOauthActor);
+    (settings.review!.execution as Record<string, unknown>).units = {
+      lens: {
+        llm: { provider: "openai", auth: "oauth", model: "gpt-5.5", service_tier: "fast" },
+      },
+    };
+    const overlaid = applyReviewLlmOverride(settings, { auth: "api_key" });
+    const lensUnitLlm = (overlaid.review?.execution?.units?.lens as { llm?: Record<string, unknown> })?.llm;
+    expect(lensUnitLlm?.auth).toBe("api_key");
+    expect(lensUnitLlm?.service_tier).toBeUndefined(); // cleaned, like the actor
+  });
+
+  it("restating the CURRENT provider/auth is not a route change — transport is preserved (PR #199 codex P2)", () => {
+    // An override may repeat provider/auth just to change the model. Treating
+    // provider PRESENCE as a route change would wipe still-valid transport.
+    const settings = reviewSettingsWith({
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5.5",
+      api_key_env: "OPENAI_API_KEY",
+      base_url: "https://api.openai.com/v1",
+    });
+    const overlaid = applyReviewLlmOverride(settings, {
+      provider: "openai",
+      auth: "api_key",
+      model: "gpt-5.6",
+    });
+    const teamlead = overlaid.review?.execution?.teamlead?.llm;
+    expect(teamlead?.model).toBe("gpt-5.6"); // model overridden
+    expect(teamlead?.api_key_env).toBe("OPENAI_API_KEY"); // same route → preserved
+    expect(teamlead?.base_url).toBe("https://api.openai.com/v1");
   });
 
   it("provider-switch drops a unit's own llm so it inherits the overridden actor (continuation fix, v4 §7)", () => {
