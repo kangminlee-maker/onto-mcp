@@ -204,20 +204,6 @@ export function applyReviewLlmOverride(
 
   const transcription = execution.retry?.salvage?.transcription_llm;
   if (transcription) {
-    // An ENABLED salvage seat that the switched-in provider cannot express must
-    // not be left silently on the previous route: salvage would then dispatch a
-    // model/provider the caller did not ask for (a mixed route), or the gate
-    // would reject the run for a seat the override never touched. Fail loud
-    // instead — the caller can disable salvage for this call. A DISABLED salvage
-    // seat never dispatches, so leaving it untouched is inert (design v4 §7).
-    if (
-      execution.retry?.salvage?.enabled === true &&
-      (override.provider === "grok" || override.provider === "lmstudio")
-    ) {
-      throw new Error(
-        `llmOverride switches review to provider="${override.provider}", which the salvage transcription seat cannot express (it runs on the unit's own adapter: anthropic or openai only). Disable review.execution.retry.salvage for this call, or override to an anthropic/openai provider.`,
-      );
-    }
     nextExecution.retry = {
       ...execution.retry,
       salvage: {
@@ -240,10 +226,15 @@ export function applyReviewLlmOverride(
  * Salvage transcription_llm has a RESTRICTED shape ({provider?: "anthropic" |
  * "openai"; model: string}) — it is a cheap-tier transcription model run by the
  * unit's OWN adapter, so only anthropic/openai are representable. Overlay the
- * model always; overlay the provider only when salvage can express it. A
- * grok/lmstudio override reaches here only when salvage is DISABLED (an enabled
- * one fails loud at the caller above), and a disabled seat never dispatches — so
- * leaving it untouched is inert rather than a silent mixed route.
+ * model always; overlay the provider only when salvage can express it.
+ *
+ * A grok/lmstudio override leaves the seat untouched, and that is INERT rather
+ * than a mixed route: those providers resolve to the direct-call route, and the
+ * runner only attempts salvage on a `claude_code`/`codex` worker executor (see
+ * run-review-prompt-execution: `salvageAdapter === "claude_code" || "codex"`),
+ * so salvage cannot dispatch there at all. This is also exactly what editing the
+ * same provider into settings would do — the override is a settings overlay, so
+ * it must not invent a stricter contract than the settings path has.
  */
 function applySalvageTranscriptionOverride(
   transcription: { provider?: "anthropic" | "openai" | undefined; model: string },

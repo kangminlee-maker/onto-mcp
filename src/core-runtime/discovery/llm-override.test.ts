@@ -102,7 +102,7 @@ describe("applyReviewLlmOverride", () => {
     });
   });
 
-  it("overlays salvage transcription_llm for anthropic/openai, and fails loud when enabled salvage cannot follow", () => {
+  it("overlays salvage transcription_llm for anthropic/openai and leaves it inert for grok", () => {
     const base = reviewSettingsWith(openAiOauthActor);
     (base.review!.execution as { retry?: unknown }).retry = {
       salvage: { enabled: true, transcription_llm: { provider: "anthropic", model: "claude-haiku" } },
@@ -117,11 +117,20 @@ describe("applyReviewLlmOverride", () => {
       provider: "openai",
       model: "gpt-5.5",
     });
-    // grok switch → an ENABLED salvage seat cannot follow. Leaving it on the old
-    // route would silently mix providers, so the call is rejected instead.
-    expect(() =>
-      applyReviewLlmOverride(base, { provider: "grok", auth: "api_key", model: "grok-4" }),
-    ).toThrow(/salvage transcription seat cannot express/);
+    // grok switch → salvage cannot express grok, so the seat is left untouched.
+    // That is INERT, not a mixed route: grok resolves to the direct-call route
+    // and the runner only salvages on a claude_code/codex worker executor. It is
+    // also what editing grok into settings would do — the overlay must not
+    // invent a stricter contract than the settings path.
+    const toGrok = applyReviewLlmOverride(base, {
+      provider: "grok",
+      auth: "api_key",
+      model: "grok-4",
+    });
+    expect(toGrok.review?.execution?.retry?.salvage?.transcription_llm).toEqual({
+      provider: "anthropic",
+      model: "claude-haiku",
+    });
   });
 });
 
@@ -426,37 +435,26 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
     expect(teamlead?.base_url).toBeUndefined();
   });
 
-  it("fails loud when an ENABLED salvage seat cannot express the switched-in provider", () => {
-    // grok/lmstudio are not representable on the salvage transcription seat (it
-    // runs on the unit's own anthropic/openai adapter). Leaving it on the old
-    // route would silently mix providers, so an enabled seat must fail loud.
-    const settings = reviewSettingsWith(openAiOauthActor);
+  it("does not reject a SAME-provider override on a grok project with salvage enabled (PR #200 codex P2)", () => {
+    // A project already on grok that restates grok to change the model is not a
+    // provider switch under the effective-route semantics — it must not be
+    // rejected just because the named provider is one salvage cannot express.
+    const settings = reviewSettingsWith({
+      provider: "grok",
+      auth: "api_key",
+      model: "grok-4",
+      api_key_env: "XAI_API_KEY",
+    });
     (settings.review!.execution as Record<string, unknown>).retry = {
       salvage: { enabled: true, transcription_llm: { provider: "openai", model: "gpt-5-mini" } },
     };
-    expect(() =>
-      applyReviewLlmOverride(settings, { provider: "grok", auth: "api_key", model: "grok-4" }),
-    ).toThrow(/salvage transcription seat cannot express/);
-
-    // Negative control 1: a DISABLED salvage seat never dispatches → inert, no throw.
-    const disabled = reviewSettingsWith(openAiOauthActor);
-    (disabled.review!.execution as Record<string, unknown>).retry = {
-      salvage: { enabled: false, transcription_llm: { provider: "openai", model: "gpt-5-mini" } },
-    };
-    expect(() =>
-      applyReviewLlmOverride(disabled, { provider: "grok", auth: "api_key", model: "grok-4" }),
-    ).not.toThrow();
-
-    // Negative control 2: an expressible provider switch still applies normally.
-    const ok = applyReviewLlmOverride(settings, {
-      provider: "anthropic",
-      auth: "oauth",
-      model: "claude-opus-4-8",
+    const overlaid = applyReviewLlmOverride(settings, {
+      provider: "grok",
+      auth: "api_key",
+      model: "grok-4-fast",
     });
-    expect(
-      (ok.review?.execution?.retry as { salvage?: { transcription_llm?: { provider?: string } } })
-        ?.salvage?.transcription_llm?.provider,
-    ).toBe("anthropic");
+    expect(overlaid.review?.execution?.teamlead?.llm?.model).toBe("grok-4-fast");
+    expect(overlaid.review?.execution?.teamlead?.llm?.api_key_env).toBe("XAI_API_KEY");
   });
 
   it("an auth switch cleans a UNIT's own route-scoped fields too (PR #199 codex P2)", () => {
