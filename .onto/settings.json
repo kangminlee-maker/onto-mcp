@@ -21,7 +21,7 @@
       "topology": "main-workers",
       "deliberation": "controlled-lens-deliberation",
       "artifact_generation_realization": "live",
-      "max_concurrent_lenses": 3,
+      "max_concurrent_lenses": 4,
       "retry": {
         "lens_max_retries": 2,
         "issue_artifact_max_retries": 2,
