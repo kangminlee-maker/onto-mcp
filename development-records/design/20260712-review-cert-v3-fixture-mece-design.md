@@ -186,6 +186,12 @@ Phase A: arm 2 × fixture **3** × reps 3 = ok **18회** 필요(현 12회의 1.5
 기존과 같은 소형 코드라 attempt당 비용 동급 — **run 비용 ≈ 1.5×**. (clean-target 드롭 대신
 유지·재설계이므로 3종. Phase B는 별도 산정 후 owner spend 승인.)
 
+> **정정 (2026-07-15, 구현 실측)**: 위 산정은 fixture 3종 기준이나, 구현은 기존 2종 +
+> clean-target + shared-root = **4종**으로 착지했다(`FIXTURE_IDS` review-cert-run.mts,
+> `SEMANTIC_FIXTURE_IDS` review-pipeline-benchmark.ts). 따라서 A-4 실비용은
+> arm 2 × fixture **4** × reps 3 = ok **24회 = 2×**(현 12회 대비). `--max-attempts`
+> 기본 reps+2까지 실패 재시도分 별도. candidate 2종(fable-5·sol@medium) 전부면 48 ok.
+
 ## 3. 구현 프로세스 (승인 후)
 
 | 단계 | 내용 | 검증 게이트 |

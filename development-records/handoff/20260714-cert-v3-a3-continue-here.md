@@ -1,3 +1,8 @@
+> **SUPERSEDED (2026-07-15)**: A-3는 PR #198로 머지 완료(main `a4d7cba`) — shared-root
+> fixture·V1 구조증명·4-fixture applicable-set 배선 전부 착지. 이 문서의 "이어가기" 작업은
+> 종결됐다. 현재 상태·남은 백로그는 `IMPLEMENTATION_MAP.html` M4 카드와 메모리
+> `onto-mcp-cert-v3-a3-progress-20260713` 참조. 이력 참고용으로만 보존.
+
 # cert v3 A-3 이어가기 — 다음 세션 시작점 (2026-07-14)
 
 선행 완료: A-1(PR #194 머지) · A-2(PR #196, `feat/cert-v3-a2-validator-harden`, 오픈) ·
