@@ -63,6 +63,7 @@ import {
   resolveSettingsChain,
   resolveReconstructActorLlmSettings,
   resolveReconstructSemanticAuthorLlmRuntimeSettings,
+  PerCallLlmOverrideSchema,
   type OntoSettings,
   type PerCallLlmOverride,
 } from "../core-runtime/discovery/settings-chain.js";
@@ -1090,10 +1091,35 @@ export function createOntoReconstructCoreApi(
       // supported-model gate, actor/judge provider resolution, census,
       // provenance) reads the SAME effective settings. Identity when absent →
       // byte-identical default-off.
-      const settings = applyReconstructLlmOverride(
-        await resolveSettingsChain(ontoHome ?? projectRoot, projectRoot),
-        request.llmOverride,
+      // The strict override schema IS the security boundary (it excludes
+      // base_url/api_key_env/timeout_ms so a per-call input cannot pick an
+      // endpoint or credential env). The MCP handler validates, but this Core
+      // API is also called programmatically, where a static type enforces
+      // nothing at runtime — so re-parse here, at admission, and overlay ONLY
+      // the parsed value.
+      const llmOverride =
+        request.llmOverride === undefined
+          ? undefined
+          : PerCallLlmOverrideSchema.parse(request.llmOverride);
+      const baseSettings = await resolveSettingsChain(
+        ontoHome ?? projectRoot,
+        projectRoot,
       );
+      // design v4 §2.5: `judgeModel` names a model ON THE AUTHOR'S PROVIDER, so
+      // combining it with an override that switches that provider is ambiguous —
+      // the judge would silently resolve (or degrade) on the switched-in
+      // provider, reintroducing the "believe X, run Y" failure the override
+      // contract forbids. Reject at the handler, before any dispatch.
+      const settings = applyReconstructLlmOverride(baseSettings, llmOverride);
+      const authorProviderBefore =
+        baseSettings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
+      const authorProviderAfter =
+        settings.reconstruct?.execution?.actors?.semantic_author?.llm?.provider;
+      if (request.judgeModel && authorProviderAfter !== authorProviderBefore) {
+        throw new Error(
+          `llmOverride switches the semantic author's provider (${String(authorProviderBefore)} → ${String(authorProviderAfter)}) while judgeModel="${request.judgeModel}" names a model on the author's provider. This combination is ambiguous: drop judgeModel, or keep the author's provider.`,
+        );
+      }
       await assertDispatchFallbackSessionAdmission({
         sessionRoot,
         enabled: settings.reconstruct?.execution?.dispatch_fallback?.enabled === true,

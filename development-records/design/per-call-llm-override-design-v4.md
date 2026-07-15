@@ -30,8 +30,12 @@ llmOverride: { provider?, auth?, model?, effort?, service_tier? }   // .strict()
 
 ### 2.2 overlay = 프로그램적 settings 편집
 override를 resolved OntoSettings에 적용해 **effective settings**를 만든다. 의미는 "사용자가 해당 값으로 settings를 편집한 것과 동일"(v1 검증에서 손으로 한 그 편집):
-- **provider 있음(전환)**: 대상 subsystem의 모든 model/effort 소비 actor llm 블록을 override로 교체하고, unit-level llm은 drop해 상속(구 provider 잔재 제거).
-- **provider 없음(부분)**: 대상 actor·unit llm의 명시 필드만 덮어씀.
+모드는 필드의 **존재**가 아니라 **effective route 변화**로 가른다. override가 현재 provider/auth를 그대로 재기술하는 것은 전환이 아니며, 그 경우 route를 바꾸면 호출자가 요청하지 않은 route flip(예: 생략된 auth가 provider 기본값으로 되돌아 api_key→oauth)이 되어 이 설계가 금지하는 "X 믿고 Y 실행"이 된다.
+
+- **provider가 실제로 바뀜(전환)**: 대상 subsystem의 모든 model/effort 소비 actor llm 블록을 override로 교체하고, unit-level llm은 drop해 상속(구 provider 잔재 제거). provider-scoped runtime(`llm_runtime`)도 함께 drop.
+- **auth만 바뀜**: provider 정체성은 유지하되 이전 route 스코프 필드(`service_tier`·`api_key_env`·`base_url`)를 drop. auth 비교는 **defaulted 값** 기준(블록이 auth를 생략하면 `defaultAuthForProvider`가 실제 route를 정하므로).
+- **route 불변(부분 override, provider/auth 재기술 포함)**: 명시 필드만 덮어쓰고 transport·runtime은 보존.
+- **unit**: unit llm은 actor 위에 병합되는 **부분 블록**이므로, route 판정은 병합된(상속된) 블록 기준으로 한다(`reviewExecutionUnitActor`). 부분 블록만 보면 provider 없는 unit이 모든 provider-포함 override에서 전환으로 오판된다.
 - 적용 대상 = 그냥 settings 소비자. review는 actors+units(+salvage transcription은 settings 소비자이므로 자동 포함), reconstruct는 actor 4종. **census를 새로 만들 필요 없음** — overlay가 settings를 바꾸면 기존 census(`collectEffectiveModelRoutes`)가 그대로 소비.
 - judge는 overlay 대상 아님: reconstruct judge는 author 유효 selection을 상속(기존 동작)하고, `judgeModel`/`judgeLlmEffort`는 별도 per-call 파라미터로 유지.
 
@@ -83,7 +87,8 @@ overlay는 override 미지정 시 **항등(settings 그대로 반환)** → 기�
 ## 7. 구현 노트 / 알려진 한계 (2026-07-14 착지)
 구현 위치: overlay 헬퍼 `src/core-runtime/discovery/llm-override.ts`(`applyReviewLlmOverride`/`applyReconstructLlmOverride`, identity=default-off). review seam=`review-invoke.ts`(resolveSettingsChain 직후, resolveReviewExecutionProfile 이전) + `prepare-review-session.ts`(actor-invocation-profiles bake), reconstruct seam=`reconstruct-api.ts`(gate 직전). `--llm-override <json>` argv passthrough로 두 seam에 전달.
 
-- **review model-support gate는 override-present일 때만** 실행(`if(llmOverride) assertSettingsModelsSupported`). 무조건 실행은 게이트가 없던 기존 리뷰를 새로 실패시켜 default-off byte-identical을 깨므로 scope함(§2.4 취지). override 있을 땐 전체 settings(reconstruct 포함)를 검증 — 기존 reconstruct gate와 동일.
+- **review model-support gate는 override-present일 때만 + review seat로 스코프**. 무조건 실행은 게이트가 없던 기존 리뷰를 새로 실패시켜 default-off byte-identical을 깨므로 override-present로 scope. 또한 전체 settings를 넘기면 review가 dispatch하지도 않는 reconstruct 모델 때문에 실패할 수 있어 `{review: ontoConfig.review}`만 넘긴다 — review 라우트는 `llmRouteEntries`(actors+units)만 참조하고 salvage도 review.execution.retry 아래라, review 블록이 곧 이 run의 dispatch 집합이다. (PR #197 codex 리뷰 P2 반영)
+- **route 변경(provider 또는 auth) 시 이전 route 스코프 필드를 버린다**: auth 전환(oauth↔api_key)도 route 전환이므로 `service_tier`(openai+oauth 전용)·`api_key_env`·`base_url`을 drop하지 않으면 정상 전환이 normalize에서 거부되거나 api-key endpoint가 OAuth 경로로 샌다. reconstruct actor의 `llm_runtime`(openai Responses headroom, openai+api_key 전용)도 route 변경 시 drop — 아니면 타 provider에 openai 전용 headroom이 적용돼 dispatch 전 실패하고 호출자가 clear할 수단이 없다. (PR #197 codex 리뷰 P2 반영)
 - **dispatch_fallback은 effort-only overlay**. fallback은 primary와 다른 alternate provider가 설계 목적이라 provider/model 전환을 강제 collapse하지 않음(제거된 llmEffort가 여기 적용하던 것과 동일).
 - **[해결됨] cross-provider override + 유닛레벨 llm + continuation**: continuation은 `applyProjectContinuationUnitPolicy`(review-api.ts)가 unit 실행정책을 위해 project profile을 현재 settings에서 재해석한다. raw override를 execution-plan에 durable stamp(`llm_override`, `retry_policy` 선례와 동형)로 기록하고, continuation의 `projectReviewExecutionProfileForContinuation`이 그 stamp를 읽어 재해석된 project settings에 `applyReviewLlmOverride`를 재적용한다 → units가 override provider로 유지되어 mixed route가 제거됨. stamp 부재(override 없는 세션)면 identity → default-off 불변.
 - 벤치 `scripts/reconstruct-pipeline-benchmark.ts`는 `llmEffort` → `llmOverride:{effort}`로 이관.
