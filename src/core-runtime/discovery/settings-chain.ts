@@ -76,6 +76,24 @@ const ReviewActorLlmSettingsSchema = z
   })
   .strict();
 
+// Per-call LLM override (MCP tool surface): an ephemeral settings-`llm` overlay
+// applied to the resolved settings for one review/reconstruct invocation, after
+// which the existing pipeline runs unchanged. Single-sourced from
+// LlmSettingsSchema minus the transport/credential fields (base_url, api_key_env,
+// timeout_ms) — those stay settings-owned so a per-call override cannot select an
+// arbitrary endpoint or credential env. The chosen provider's transport resolves
+// from settings exactly as a settings edit would. .strict() rejects the excluded
+// fields. See development-records/design/per-call-llm-override-design-v4.md.
+export const PerCallLlmOverrideSchema = LlmSettingsSchema.pick({
+  provider: true,
+  auth: true,
+  model: true,
+  effort: true,
+  service_tier: true,
+}).strict();
+
+export type PerCallLlmOverride = z.infer<typeof PerCallLlmOverrideSchema>;
+
 const LlmRefSchema = LlmSettingsSchema;
 
 const ReviewWorkerSeatSchema = z.enum(["main", "worker"]);

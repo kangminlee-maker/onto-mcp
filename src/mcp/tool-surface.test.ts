@@ -2,10 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   OntoDeprecatedToolAliases,
   OntoReconstructToolInputSchema,
+  OntoReviewToolInputSchema,
   OntoSimpleProfileToolNames,
   OntoToolNames,
 } from "./tool-schemas.js";
 import { advertisedToolDefinitions, USAGE_GUIDE } from "./server.js";
+
+function advertisedProperties(toolName: string): Record<string, unknown> {
+  const tool = advertisedToolDefinitions().find((t) => t.name === toolName);
+  expect(tool).toBeDefined();
+  return (tool!.inputSchema as { properties: Record<string, unknown> }).properties;
+}
 
 // Pins the consolidated MCP tool surface from the Host Usability Roadmap
 // (docs/architecture/mcp-native-tool-surface.md §Phase 1). INV-TEST-1: these
@@ -73,31 +80,73 @@ describe("MCP tool surface (Host Usability Roadmap Phase 1)", () => {
     }
   });
 
-  it("exposes the reconstruct tuning + opt-in judge override fields on the onto_reconstruct surface", () => {
-    // The judge override (and the sibling llmEffort) must be reachable through
-    // the canonical MCP host path, not only the Core API / benchmark harness.
+  it("exposes the opt-in judge override fields on the onto_reconstruct surface", () => {
+    // The judge overrides must be reachable through the canonical MCP host path,
+    // not only the Core API / benchmark harness.
     const parsed = OntoReconstructToolInputSchema.parse({
       targetRefs: ["schedule.csv"],
       intent: "reconstruct the schedule",
-      llmEffort: "high",
       judgeLlmEffort: "high",
       judgeModel: "gpt-5.5",
     });
-    expect(parsed.llmEffort).toBe("high");
     expect(parsed.judgeLlmEffort).toBe("high");
     expect(parsed.judgeModel).toBe("gpt-5.5");
 
     // Advertised JSON schema (what MCP clients see) carries the same fields.
-    const reconstructTool = advertisedToolDefinitions().find(
-      (tool) => tool.name === "onto_reconstruct",
-    );
-    expect(reconstructTool).toBeDefined();
-    const properties = (reconstructTool!.inputSchema as {
-      properties: Record<string, unknown>;
-    }).properties;
-    expect(properties.llmEffort).toBeDefined();
+    const properties = advertisedProperties("onto_reconstruct");
     expect(properties.judgeLlmEffort).toBeDefined();
     expect(properties.judgeModel).toBeDefined();
+  });
+
+  it("exposes the per-call llmOverride and has removed llmEffort on review + reconstruct", () => {
+    // llmOverride replaces the removed llmEffort (design v4 §6(a)): reachable on
+    // both the zod parse surface and the advertised JSON schema, for review and
+    // reconstruct; llmEffort is gone from both.
+    const reconstructParsed = OntoReconstructToolInputSchema.parse({
+      targetRefs: ["schedule.csv"],
+      intent: "reconstruct the schedule",
+      llmOverride: { provider: "anthropic", auth: "oauth", model: "claude-opus-4-8" },
+    });
+    expect(reconstructParsed.llmOverride).toEqual({
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-opus-4-8",
+    });
+    expect("llmEffort" in reconstructParsed).toBe(false);
+
+    const reviewParsed = OntoReviewToolInputSchema.parse({
+      target: "src/x.ts",
+      intent: "review it",
+      llmOverride: { effort: "high" },
+    });
+    expect(reviewParsed.llmOverride).toEqual({ effort: "high" });
+
+    // Refine: a provider switch requires an explicit model on both surfaces.
+    expect(() =>
+      OntoReconstructToolInputSchema.parse({
+        targetRefs: ["schedule.csv"],
+        intent: "reconstruct the schedule",
+        llmOverride: { provider: "anthropic" },
+      })
+    ).toThrow();
+    expect(() =>
+      OntoReviewToolInputSchema.parse({
+        target: "src/x.ts",
+        intent: "review it",
+        llmOverride: { provider: "anthropic" },
+      })
+    ).toThrow();
+
+    // Advertised JSON schema: llmOverride present, llmEffort removed, on both.
+    for (const toolName of ["onto_review", "onto_reconstruct"]) {
+      const properties = advertisedProperties(toolName);
+      expect(properties.llmOverride).toBeDefined();
+      expect(properties.llmEffort).toBeUndefined();
+    }
+    for (const toolName of ["onto_review", "onto_reconstruct"]) {
+      const tool = advertisedToolDefinitions().find((t) => t.name === toolName);
+      expect(JSON.stringify(tool!.inputSchema)).not.toContain("llmEffort");
+    }
   });
 
   it("does not expose a benchCandidate escape hatch on the onto_reconstruct product surface", () => {

@@ -3,6 +3,7 @@ import type {
   TargetMaterialSupportStatus,
 } from "../target-material-kind.js";
 import type {
+  PerCallLlmOverride,
   ReviewOrchestrationOwner,
   ReviewRetrySettings,
 } from "../discovery/settings-chain.js";
@@ -351,6 +352,15 @@ export interface ReviewExecutionPlan {
    * serialized before this field existed (those fall back to the default).
    */
   retry_policy?: ReviewRetrySettings;
+  /**
+   * Durable, immutable stamp of the per-call LLM override this session was
+   * prepared with (design v4 §7). Continuation re-resolves the project profile
+   * from CURRENT settings to carry unit execution policy; without this stamp an
+   * overridden session's units would revert to the non-overlaid project models
+   * while the actors stayed overridden (mixed route). Absent → no override was
+   * used, so continuation resolves the project profile unchanged (default-off).
+   */
+  llm_override?: PerCallLlmOverride;
   interpretation_artifact_path: string;
   binding_output_path: string;
   session_metadata_path: string;

@@ -10596,8 +10596,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
    * `reconstruct.execution.actors.semantic_map_synthesize` settings seat (own
    * auth/adapter — cross-provider capable). Absent = inherit the base llmConfig
    * (byte-parity). Effective-effort priority: the ⑤a arg above wins over this
-   * config's own reasoning_effort (a request llmEffort pin is already applied
-   * to this config at seat resolution, so pin > seat effort holds upstream).
+   * config's own reasoning_effort (a per-call override effort is already applied
+   * to this config at settings-overlay time, so override > seat effort holds upstream).
    * The effective identity reaches the stage reuse fingerprint via
    * semanticMapSynthesizeModelIdentity (canonical serialization — model,
    * adapter, base_url, effort all rotate the key; silent-stale guard).
@@ -10818,7 +10818,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     // of the EFFECTIVE config (model/adapter/base_url/effort — always folded,
     // no equality judgment); else ⑤a arg present → legacy string, byte-identical
     // to the pre-seat format (existing reuse keys never rotate); else absent
-    // (seat 부재·인자 부재 = 현행 byte-parity — a request llmEffort pin alone
+    // (seat 부재·인자 부재 = 현행 byte-parity — a per-call override effort alone
     // reaches synthesize through the base config on BOTH sides, so no fold).
     ...(args.semanticMapSynthesizeLlmConfig !== undefined
       ? {

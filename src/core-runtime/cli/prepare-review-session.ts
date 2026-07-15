@@ -36,6 +36,10 @@ import { detectCodexEnvSignal } from "../discovery/host-detection.js";
 import { resolveOntoHome } from "../discovery/onto-home.js";
 import type { OntoSettings } from "../discovery/settings-chain.js";
 import { resolveSettingsChain } from "../discovery/settings-chain.js";
+import {
+  applyReviewLlmOverride,
+  parsePerCallLlmOverrideArg,
+} from "../discovery/llm-override.js";
 
 /**
  * Stage 1 — resolve the window-proportional review prompt budget multiplier from
@@ -246,6 +250,7 @@ export async function runPrepareReviewSessionCli(
       "max-listing-depth": { type: "string" },
       "max-listing-entries": { type: "string" },
       "max-embed-lines": { type: "string" },
+      "llm-override": { type: "string" },
     },
     strict: true,
     allowPositionals: false,
@@ -278,7 +283,16 @@ export async function runPrepareReviewSessionCli(
     requireString(values["project-root"], "project-root"),
   );
   const ontoHome = resolveOntoHome(optionalString(values["onto-home"]) || undefined);
-  const ontoConfig = await resolveSettingsChain(ontoHome, projectRoot);
+  // Per-call LLM override (design v4): overlay the resolved settings so the
+  // baked artifacts (session-metadata resolved_llm_plan, actor-invocation
+  // profiles) carry the effective actor LLM — this is what onto_review_continue
+  // replays. Same overlay applied at the orchestrator profile seam
+  // (resolveReviewInvokeSetup); identity when absent → byte-identical default-off.
+  const overlay = parsePerCallLlmOverrideArg(values["llm-override"]);
+  const resolvedConfig = await resolveSettingsChain(ontoHome, projectRoot);
+  const ontoConfig = overlay
+    ? applyReviewLlmOverride(resolvedConfig, overlay)
+    : resolvedConfig;
 
   // Stage 1 — resolve the window-proportional review prompt budget ONCE, here,
   // and thread it to both consumers: the spreadsheet inventory prompt caps
@@ -299,6 +313,10 @@ export async function runPrepareReviewSessionCli(
   const bindingParams = {
     projectRoot,
     ontoConfig,
+    // Stamp the RAW override into the execution plan too: ontoConfig carries its
+    // effect on the actors, but continuation re-resolves the project profile for
+    // unit execution policy and must re-overlay it (design v4 §7).
+    ...(overlay ? { llmOverride: overlay } : {}),
     requestedTarget: requireString(values["requested-target"], "requested-target"),
     requestedDomainToken: optionalString(values["requested-domain-token"]),
     targetScopeKind,

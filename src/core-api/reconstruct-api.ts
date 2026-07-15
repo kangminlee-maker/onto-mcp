@@ -64,7 +64,9 @@ import {
   resolveReconstructActorLlmSettings,
   resolveReconstructSemanticAuthorLlmRuntimeSettings,
   type OntoSettings,
+  type PerCallLlmOverride,
 } from "../core-runtime/discovery/settings-chain.js";
+import { applyReconstructLlmOverride } from "../core-runtime/discovery/llm-override.js";
 import { assertDispatchFallbackSessionAdmission } from "../core-runtime/reconstruct/dispatch-fallback-artifacts.js";
 import {
   normalizeLlmModelSwitcher,
@@ -145,12 +147,17 @@ export interface RunReconstructRequest extends PrepareReconstructRequest {
   semanticAuthorRealization?: "direct_call";
   confirmationProviderRealization?: "direct_call";
   /**
-   * Optional reasoning-effort override applied to both reconstruct actors,
-   * winning over the resolved settings-chain effort. Used by the benchmark
-   * harness to pin a reproducible effort independent of the runner's personal
-   * settings; the chosen effort is recorded in per-unit execution telemetry.
+   * Optional per-call LLM override (design v4): an ephemeral settings-`llm`
+   * overlay applied to the resolved settings' reconstruct actor seats
+   * (semantic_author, confirmation_provider, semantic_map_synthesize) and the
+   * opt-in dispatch_fallback effort BEFORE the supported-model gate, so the whole
+   * pipeline (census, provider resolution, dispatch, provenance) runs on the
+   * effective settings. Omit → settings unchanged (byte-identical default-off).
+   * `llmOverride.effort` is the sole author-side effort knob (the former
+   * `llmEffort` request field was removed). The judge keeps its own judgeModel/
+   * judgeLlmEffort knobs (overlay-independent).
    */
-  llmEffort?: string;
+  llmOverride?: PerCallLlmOverride;
   /**
    * Optional per-stage override for the answer-support JUDGE only (opt-in
    * semantic-independence lever against rubber-stamping; the judge otherwise
@@ -704,7 +711,6 @@ export interface SemanticMapSynthesizeWiring {
 export function resolveSemanticMapSynthesizeWiring(args: {
   settings: OntoSettings;
   mockRealizationEnabled: boolean;
-  llmEffortOverride?: { reasoning_effort: string } | undefined;
 }): SemanticMapSynthesizeWiring {
   const enabled = isReconstructSemanticMapAuthoringEnabled(args.settings);
   const seat = resolveOptionalReconstructActorLlmSettings(
@@ -721,13 +727,12 @@ export function resolveSemanticMapSynthesizeWiring(args: {
   }
   return {
     enableSemanticMapAuthoring: true,
+    // Effort comes from the seat's own (already overlaid) llm block —
+    // resolveLlmProviderConfig reads config.llm.effort (design v4 §6(a)).
     semanticMapSynthesizeLlmConfig: args.mockRealizationEnabled
       ? synthesizeSeatIdentityProjection(seat)
       : resolveLlmProviderConfig({
         config: { llm: seat },
-        ...(args.llmEffortOverride
-          ? { cliOverrides: args.llmEffortOverride }
-          : {}),
       }),
   };
 }
@@ -1080,7 +1085,15 @@ export function createOntoReconstructCoreApi(
       const targetRefs = request.targetRefs.map((targetRef) =>
         resolveFromBase(projectRoot, targetRef)
       );
-      const settings = await resolveSettingsChain(ontoHome ?? projectRoot, projectRoot);
+      // Per-call LLM override (design v4): overlay the resolved settings ONCE,
+      // here, so every downstream consumer (dispatch-fallback admission, the
+      // supported-model gate, actor/judge provider resolution, census,
+      // provenance) reads the SAME effective settings. Identity when absent →
+      // byte-identical default-off.
+      const settings = applyReconstructLlmOverride(
+        await resolveSettingsChain(ontoHome ?? projectRoot, projectRoot),
+        request.llmOverride,
+      );
       await assertDispatchFallbackSessionAdmission({
         sessionRoot,
         enabled: settings.reconstruct?.execution?.dispatch_fallback?.enabled === true,
@@ -1102,9 +1115,9 @@ export function createOntoReconstructCoreApi(
       // Mock realization needs no provider config: actor llm settings stay
       // required only for live direct_call execution, and the recorded route
       // comes from the mock result marker, not from a configured provider.
-      const llmEffortOverride = request.llmEffort
-        ? { reasoning_effort: request.llmEffort }
-        : undefined;
+      // The author-side effort is carried on each actor's (already overlaid) llm
+      // block — resolveLlmProviderConfig reads config.llm.effort — so no separate
+      // effort-override plumbing is needed (design v4 §6(a)).
       // The semantic_author actor settings (non-mock). The MODEL provider here
       // (e.g. "openai") is the supported-models registry key, DISTINCT from the
       // resolved RUNTIME provider (openai OAuth resolves to "codex"). The document
@@ -1116,7 +1129,6 @@ export function createOntoReconstructCoreApi(
       let semanticAuthorLlmConfig = semanticAuthorActorLlm
         ? resolveLlmProviderConfig({
           config: { llm: semanticAuthorActorLlm },
-          ...(llmEffortOverride ? { cliOverrides: llmEffortOverride } : {}),
         })
         : {};
       const confirmationProviderLlmConfig = mockRealizationEnabled
@@ -1128,7 +1140,6 @@ export function createOntoReconstructCoreApi(
               "confirmation_provider",
             ),
           },
-          ...(llmEffortOverride ? { cliOverrides: llmEffortOverride } : {}),
         });
       // The supported-models registry (non-mock only): loaded once and shared by
       // the judge-override support check and the document projection-budget
@@ -1164,13 +1175,12 @@ export function createOntoReconstructCoreApi(
       // Semantic-map authoring opt-in + optional synthesize seat (INV-MODEL-1
       // role-aware design §5.4/§5.5): ONE deterministic seam owns the wiring
       // (resolveSemanticMapSynthesizeWiring) — live completes the seat into a
-      // provider config (own auth/adapter, cross-provider; the request
-      // llmEffort pin applies as cliOverrides, so pin > seat effort), mock
-      // takes an identity-only projection (no auth material required).
+      // provider config (own auth/adapter, cross-provider; effort comes from the
+      // seat's own — already overlaid — llm block), mock takes an identity-only
+      // projection (no auth material required).
       const semanticMapWiring = resolveSemanticMapSynthesizeWiring({
         settings,
         mockRealizationEnabled,
-        llmEffortOverride,
       });
       // Single seed-stage document projection budget (chars), derived once from
       // the semantic author's MODEL window.
@@ -1222,21 +1232,22 @@ export function createOntoReconstructCoreApi(
             "reconstruct dispatch_fallback requires reconstruct.execution.semantic_map_authoring=true.",
           );
         }
-        const effectiveEffort = request.llmEffort;
+        // Effort is carried on each (already overlaid) llm block: the primary
+        // seats via the semantic_map_synthesize/semantic_author actors, the
+        // fallback via dispatch_fallback.llm (applyReconstructLlmOverride threads
+        // override.effort into it). No separate request-effort pin (design v4 §6(a)).
+        // Fresh copies keep these dispatch inputs independent of the shared settings.
         const primarySynthesizeLlm = {
           ...(resolveOptionalReconstructActorLlmSettings(
             settings,
             "semantic_map_synthesize",
           ) ?? resolveReconstructActorLlmSettings(settings, "semantic_author")),
-          ...(effectiveEffort ? { effort: effectiveEffort } : {}),
         };
         const primaryVerifyLlm = {
           ...resolveReconstructActorLlmSettings(settings, "semantic_author"),
-          ...(effectiveEffort ? { effort: effectiveEffort } : {}),
         };
         const fallbackLlm = {
           ...dispatchFallbackSettings.llm,
-          ...(effectiveEffort ? { effort: effectiveEffort } : {}),
         };
         const [primarySynthesize, primaryVerify, fallbackSynthesize, fallbackVerify] =
           await Promise.all([

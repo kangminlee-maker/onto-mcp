@@ -88,6 +88,26 @@ interface ToolDefinition {
 const reviewApi = createOntoReviewCoreApi();
 const reconstructApi = createOntoReconstructCoreApi();
 
+// Shared advertised JSON-schema fragment for the per-call `llmOverride` property.
+// Kept in sync with PerCallLlmOverrideSchema (settings-chain); tool-surface.test.ts
+// asserts both the zod and advertised surfaces carry it.
+const LLM_OVERRIDE_PROPERTY_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    provider: {
+      type: "string",
+      enum: ["openai", "anthropic", "grok", "lmstudio"],
+    },
+    auth: { type: "string", enum: ["api_key", "oauth", "local"] },
+    model: { type: "string" },
+    effort: { type: "string" },
+    service_tier: { type: "string" },
+  },
+  description:
+    "Optional per-call LLM override: an ephemeral settings-llm overlay applied to this invocation's dispatch seats (provider switch replaces the actor block; a partial block field-overlays same-provider). Transport (base_url/api_key_env/timeout) stays settings-owned. Omit → settings unchanged (byte-identical default-off).",
+};
+
 const REVIEW_INPUT_SCHEMA: JsonValue = {
   type: "object",
   additionalProperties: false,
@@ -175,6 +195,7 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
       description:
         "Optional synchronous wait budget in milliseconds. When exceeded after session planning, onto_review returns a running handle and background execution continues; recover via onto_review_read(latest=true). The default is profile-aware (simple 45s, full 25s; override with env ONTO_MCP_REVIEW_RETURN_RUNNING_AFTER_MS or ..._SIMPLE) — most core-axis reviews exceed any host-safe window and return a handle.",
     },
+    llmOverride: LLM_OVERRIDE_PROPERTY_SCHEMA,
   },
 };
 
@@ -474,11 +495,6 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       description:
         "Explicit confirmation provider realization. direct_call uses configured llm provider.",
     },
-    llmEffort: {
-      type: "string",
-      description:
-        "Optional reasoning-effort pin applied to both reconstruct actors (live only; mock ignores it).",
-    },
     judgeLlmEffort: {
       type: "string",
       description:
@@ -489,6 +505,7 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       description:
         "Opt-in: swap the answer-support judge MODEL (on the semantic author's provider; live only). An unsupported model degrades to the author model (INV-MODEL-1); a degrade is recorded as a runtime status note.",
     },
+    llmOverride: LLM_OVERRIDE_PROPERTY_SCHEMA,
   },
 };
 
@@ -1028,6 +1045,9 @@ function toReviewRequest(input: unknown): PrepareReviewRequest {
       : {}),
     ...(parsed.confirmValueAlignment !== undefined
       ? { confirmValueAlignment: parsed.confirmValueAlignment }
+      : {}),
+    ...(parsed.llmOverride !== undefined
+      ? { llmOverride: parsed.llmOverride }
       : {}),
   };
   return request;
@@ -2026,9 +2046,9 @@ export async function callTool(
             semanticAuthorRealization: parsed.semanticAuthorRealization,
             confirmationProviderRealization:
               parsed.confirmationProviderRealization,
-            ...(parsed.llmEffort !== undefined ? { llmEffort: parsed.llmEffort } : {}),
             ...(parsed.judgeLlmEffort !== undefined ? { judgeLlmEffort: parsed.judgeLlmEffort } : {}),
             ...(parsed.judgeModel !== undefined ? { judgeModel: parsed.judgeModel } : {}),
+            ...(parsed.llmOverride !== undefined ? { llmOverride: parsed.llmOverride } : {}),
             ...(sessionRoot ? { sessionRoot } : {}),
             ...(profilesRoot ? { profilesRoot } : {}),
             ...(filesystemAllowedRoots ? { filesystemAllowedRoots } : {}),

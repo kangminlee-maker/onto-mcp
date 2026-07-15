@@ -8899,8 +8899,9 @@ describe("semanticMapSynthesizeModelIdentity fold — canonical seat serializati
 
   it("no seat, no arg → no fold (pin-only runs stay fold-free)", () => {
     expect(foldOf({ llmConfig: base })).toBeUndefined();
-    // A request llmEffort pin reaches synthesize through the BASE config on
-    // both author and synthesize sides, so it must not create a fold.
+    // A per-call override effort reaches synthesize through the BASE config on
+    // both author and synthesize sides (the overlay lands it on each actor's llm
+    // block; design v4 §6(a)), so it must not create a fold.
     expect(foldOf({ llmConfig: { ...base, reasoning_effort: "high" } }))
       .toBeUndefined();
   });

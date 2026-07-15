@@ -343,7 +343,7 @@ async function executeRun(args: {
       intent: spec.intent,
       semanticAuthorRealization: "direct_call",
       confirmationProviderRealization: "direct_call",
-      ...(args.effort ? { llmEffort: args.effort } : {}),
+      ...(args.effort ? { llmOverride: { effort: args.effort } } : {}),
       ...(args.judgeEffort ? { judgeLlmEffort: args.judgeEffort } : {}),
       ...(args.judgeModel ? { judgeModel: args.judgeModel } : {}),
     });
