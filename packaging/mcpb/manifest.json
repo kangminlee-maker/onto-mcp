@@ -3,7 +3,7 @@
   "name": "onto",
   "display_name": "onto — Ontology Review Runtime",
   "version": "0.4.11",
-  "description": "MCP-native ontology review runtime with context-isolated lenses and controlled deliberation. Installs a one-click Claude Desktop server that reviews and reconstructs ontologies; collects provider config on first run and seeds ~/.onto/settings.json.",
+  "description": "Check an artifact's ontological integrity — the logical consistency of its concepts, authority, and purpose — and derive a domain ontology from real sources; an MCP server for LLM agents with runtime validation gates owning every structured claim. One-click Claude Desktop install; collects provider config on first run and seeds ~/.onto/settings.json.",
   "author": {
     "name": "kangminlee-maker",
     "url": "https://github.com/kangminlee-maker"

@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> 운영 온보딩(INVARIANTS·개발 원칙 포인터·canonical terms·현재 우선순위)의 SSOT는 [AGENTS.md](AGENTS.md)다. 작업 시작 시 함께 읽는다. 이 파일은 Authority 위계와 repo/runtime 구조의 SSOT다.
+
 ## Authority 위계
 
 | 순위 | 역할 | 위치 |
@@ -20,6 +22,8 @@
 .onto/authority/ 구성: 개념 SSOT + runtime lens registry (core-lens-registry.yaml)
 .onto/principles/ 구성: rank 2~4 개발 규범 문서 7개 (배포 제외)
 위계 밖: development-records/ (이력/참조)
+
+이 위계표가 SSOT다. [AGENTS.md](AGENTS.md) §2는 빠른 참조용 미러이며, 위계를 바꿀 때는 여기를 먼저 고치고 AGENTS.md §2를 동기화한다. 이중 존재는 아래 "동일 순위 충돌 해소"의 상호 참조·범위 명기 예외를 따른다.
 
 ## repo / runtime 구조
 
