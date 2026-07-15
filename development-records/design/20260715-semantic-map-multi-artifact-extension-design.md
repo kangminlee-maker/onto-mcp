@@ -130,6 +130,7 @@ scout(`source-scout-pack-validation.ts`의 CODE_PATTERNS/DOCUMENT_PATTERNS). 갭
 - **비전 dispatch 역량**: 멀티모달 provider 경로(현재 reconstruct는 텍스트 direct-call 중심) — 신규.
 - **제네릭 추상화가 검증된 스프레드시트 불변식을 깨지 않는가**: Phase 1의 하드 게이트(diff 불변 + monoid/honesty 증명).
 - **멀티파일 스케일**: 파일 집합이 크면 재귀 fan-out↑ — 동시성/토큰 예산(max_concurrent_lenses·output-budget)과 상호작용.
+- **prompt 캐싱 (#8을 여기 접음, 2026-07-16 실코드 검증)**: sealed semantic_map dispatch의 anthropic arm(`sealed-dispatch-capability.ts:417` `messages.create`, dispatch_fallback ON + Sonnet 5 등 anthropic arm일 때 실재)은 `cache_control`을 넣을 수 있는 유일한 수동-캐싱 사이트다. **그러나 현 스프레드시트 경로에선 no-op**: 유일한 안정 prefix인 system(`SEMANTIC_MAP_SYNTHESIZE_SYSTEM_PROMPT`≈478토큰 / `SEMANTIC_MAP_VERIFY_SYSTEM_PROMPT`≈201토큰, run.ts:2082/2091 — 순수 상수, per-node 변동은 전부 `userPayload`로 격리되어 안정성은 완벽)이 Anthropic 최소 캐시 문턱(1,024~2,048토큰)에 한참 미달이고, 큰 것(per-node payload)은 노드마다 변해 재사용 불가. **캐싱이 값어치를 갖는 조건 = "큰 안정 prefix"인데, 그건 이 확장이 노드마다 동일하게 앞에 붙는 큰 공유 컨텍스트**(파일 전체 소스·domain 명세·공유 reduce 스켈레톤)**를 도입할 때 비로소 생긴다.** ⇒ 그 공유 블록을 설계에 넣는 순간, 같은 sealed:417 사이트에 `cache_control`(system 상수가 아니라 그 공유 블록에)을 부여하는 것이 자연스러운 항목. **#8을 단독으로 지금 하지 말 것**(죽은 코드). openai arm(`responses.create`)은 자동 prefix 캐싱이라 별도 opt-in 불필요, 마찬가지로 sub-threshold면 이득 0.
 
 ## 8. 관련 문서 / SSOT
 
