@@ -1,5 +1,5 @@
 {
-  "schema_version": "m3-report/1",
+  "schema_version": "m3-report/2",
   "judge_model": "claude-opus-4-8",
   "band_thresholds": {
     "meet_material_recall": 1,
@@ -11,138 +11,83 @@
     {
       "fixture": "clinical-lab-workflow",
       "evidence_session": "20260611-f1a64fc4",
-      "seeded_total": 10,
-      "seeded_material_total": 7,
-      "detected_defect_ids": [
-        "CLW-1",
-        "CLW-10",
-        "CLW-2",
-        "CLW-3",
-        "CLW-4",
-        "CLW-7",
-        "CLW-8",
-        "CLW-9"
+      "judge_runs": 3,
+      "band": "below",
+      "band_stable": true,
+      "bands_observed": [
+        "below",
+        "below",
+        "below"
       ],
-      "detected_material_defect_ids": [
-        "CLW-1",
-        "CLW-2",
-        "CLW-3",
-        "CLW-4",
-        "CLW-7",
-        "CLW-9"
-      ],
-      "recall_overall": 0.8,
-      "recall_material": 0.8571428571428571,
-      "surfaced_issues_total": 12,
-      "attributed_issues": 11,
-      "fabricated_issues": 1,
-      "precision": 0.9166666666666666,
-      "severity_aligned_defect_ids": [
-        "CLW-1",
-        "CLW-10",
-        "CLW-2",
-        "CLW-3",
-        "CLW-4",
-        "CLW-7",
-        "CLW-8",
-        "CLW-9"
-      ],
-      "severity_alignment_rate": 1,
-      "band": "below"
+      "recall_material": {
+        "min": 0.8571428571428571,
+        "max": 0.8571428571428571,
+        "mean": 0.8571428571428571
+      },
+      "recall_overall": {
+        "min": 0.8,
+        "max": 0.8,
+        "mean": 0.8000000000000002
+      },
+      "precision": {
+        "min": 0.9166666666666666,
+        "max": 0.9166666666666666,
+        "mean": 0.9166666666666666
+      }
     },
     {
       "fixture": "credit-risk-taxonomy",
       "evidence_session": "20260611-5161a370",
-      "seeded_total": 10,
-      "seeded_material_total": 8,
-      "detected_defect_ids": [
-        "CRT-1",
-        "CRT-10",
-        "CRT-2",
-        "CRT-3",
-        "CRT-4",
-        "CRT-5",
-        "CRT-7",
-        "CRT-8",
-        "CRT-9"
+      "judge_runs": 3,
+      "band": "exceeds",
+      "band_stable": true,
+      "bands_observed": [
+        "exceeds",
+        "exceeds",
+        "exceeds"
       ],
-      "detected_material_defect_ids": [
-        "CRT-1",
-        "CRT-10",
-        "CRT-2",
-        "CRT-3",
-        "CRT-4",
-        "CRT-5",
-        "CRT-7",
-        "CRT-8"
-      ],
-      "recall_overall": 0.9,
-      "recall_material": 1,
-      "surfaced_issues_total": 11,
-      "attributed_issues": 10,
-      "fabricated_issues": 1,
-      "precision": 0.9090909090909091,
-      "severity_aligned_defect_ids": [
-        "CRT-1",
-        "CRT-10",
-        "CRT-2",
-        "CRT-3",
-        "CRT-4",
-        "CRT-5",
-        "CRT-7",
-        "CRT-8",
-        "CRT-9"
-      ],
-      "severity_alignment_rate": 1,
-      "band": "exceeds"
+      "recall_material": {
+        "min": 1,
+        "max": 1,
+        "mean": 1
+      },
+      "recall_overall": {
+        "min": 0.9,
+        "max": 0.9,
+        "mean": 0.9
+      },
+      "precision": {
+        "min": 0.9090909090909091,
+        "max": 0.9090909090909091,
+        "mean": 0.9090909090909091
+      }
     },
     {
       "fixture": "manufacturing-bom",
       "evidence_session": "20260611-ca3c674b",
-      "seeded_total": 10,
-      "seeded_material_total": 8,
-      "detected_defect_ids": [
-        "MBO-1",
-        "MBO-10",
-        "MBO-2",
-        "MBO-3",
-        "MBO-4",
-        "MBO-5",
-        "MBO-6",
-        "MBO-7",
-        "MBO-8",
-        "MBO-9"
+      "judge_runs": 3,
+      "band": "below",
+      "band_stable": true,
+      "bands_observed": [
+        "below",
+        "below",
+        "below"
       ],
-      "detected_material_defect_ids": [
-        "MBO-1",
-        "MBO-10",
-        "MBO-2",
-        "MBO-3",
-        "MBO-5",
-        "MBO-6",
-        "MBO-7",
-        "MBO-9"
-      ],
-      "recall_overall": 1,
-      "recall_material": 1,
-      "surfaced_issues_total": 26,
-      "attributed_issues": 19,
-      "fabricated_issues": 7,
-      "precision": 0.7307692307692307,
-      "severity_aligned_defect_ids": [
-        "MBO-1",
-        "MBO-10",
-        "MBO-2",
-        "MBO-3",
-        "MBO-4",
-        "MBO-5",
-        "MBO-6",
-        "MBO-7",
-        "MBO-8",
-        "MBO-9"
-      ],
-      "severity_alignment_rate": 1,
-      "band": "below"
+      "recall_material": {
+        "min": 1,
+        "max": 1,
+        "mean": 1
+      },
+      "recall_overall": {
+        "min": 1,
+        "max": 1,
+        "mean": 1
+      },
+      "precision": {
+        "min": 0.7692307692307693,
+        "max": 0.7692307692307693,
+        "mean": 0.7692307692307693
+      }
     }
   ]
 }
