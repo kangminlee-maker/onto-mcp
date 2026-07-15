@@ -43,7 +43,8 @@
     {
       "issue_id": "issue-006",
       "attributed_defect_ids": [
-        "CRT-5"
+        "CRT-5",
+        "CRT-8"
       ]
     },
     {

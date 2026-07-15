@@ -63,6 +63,7 @@
         "CRT-4",
         "CRT-5",
         "CRT-7",
+        "CRT-8",
         "CRT-9"
       ],
       "detected_material_defect_ids": [
@@ -72,10 +73,11 @@
         "CRT-3",
         "CRT-4",
         "CRT-5",
-        "CRT-7"
+        "CRT-7",
+        "CRT-8"
       ],
-      "recall_overall": 0.8,
-      "recall_material": 0.875,
+      "recall_overall": 0.9,
+      "recall_material": 1,
       "surfaced_issues_total": 11,
       "attributed_issues": 10,
       "fabricated_issues": 1,
@@ -88,10 +90,11 @@
         "CRT-4",
         "CRT-5",
         "CRT-7",
+        "CRT-8",
         "CRT-9"
       ],
       "severity_alignment_rate": 1,
-      "band": "below"
+      "band": "exceeds"
     },
     {
       "fixture": "manufacturing-bom",
@@ -123,9 +126,9 @@
       "recall_overall": 1,
       "recall_material": 1,
       "surfaced_issues_total": 26,
-      "attributed_issues": 20,
-      "fabricated_issues": 6,
-      "precision": 0.7692307692307693,
+      "attributed_issues": 19,
+      "fabricated_issues": 7,
+      "precision": 0.7307692307692307,
       "severity_aligned_defect_ids": [
         "MBO-1",
         "MBO-10",

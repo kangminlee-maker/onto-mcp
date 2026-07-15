@@ -52,9 +52,7 @@
     },
     {
       "issue_id": "issue-010",
-      "attributed_defect_ids": [
-        "MBO-5"
-      ]
+      "attributed_defect_ids": []
     },
     {
       "issue_id": "issue-011",
