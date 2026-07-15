@@ -142,6 +142,22 @@ describe("MCP tool surface (Host Usability Roadmap Phase 1)", () => {
       const properties = advertisedProperties(toolName);
       expect(properties.llmOverride).toBeDefined();
       expect(properties.llmEffort).toBeUndefined();
+      // The advertised contract must carry the same provider->model condition the
+      // zod boundary enforces, so a client reading tools/list learns it there
+      // instead of from a rejection. Excluded credential/endpoint fields must
+      // stay absent from the advertised surface too.
+      const llmOverride = properties.llmOverride as Record<string, unknown>;
+      expect(llmOverride.additionalProperties).toBe(false);
+      expect(llmOverride.if).toEqual({ required: ["provider"] });
+      expect(llmOverride.then).toEqual({ required: ["model"] });
+      expect(llmOverride.dependentRequired).toEqual({ provider: ["model"] });
+      const overrideProps = llmOverride.properties as Record<string, unknown>;
+      expect(Object.keys(overrideProps).sort()).toEqual(
+        ["auth", "effort", "model", "provider", "service_tier"],
+      );
+      for (const excluded of ["base_url", "api_key_env", "timeout_ms"]) {
+        expect(overrideProps[excluded]).toBeUndefined();
+      }
     }
     for (const toolName of ["onto_review", "onto_reconstruct"]) {
       const tool = advertisedToolDefinitions().find((t) => t.name === toolName);

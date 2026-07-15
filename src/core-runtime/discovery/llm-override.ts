@@ -225,12 +225,16 @@ export function applyReviewLlmOverride(
 /**
  * Salvage transcription_llm has a RESTRICTED shape ({provider?: "anthropic" |
  * "openai"; model: string}) — it is a cheap-tier transcription model run by the
- * unit's OWN adapter, so only anthropic/openai are representable. Handle the
- * override defensively (v4 §9(a)): always safe to overlay the model; overlay the
- * provider only when the override provider is one salvage supports. A
- * grok/lmstudio override leaves salvage unchanged (salvage is opt-in /
- * default-off, so under-applying here can only fail closed, never dispatch an
- * unverified call). Never crashes on an incompatible provider.
+ * unit's OWN adapter, so only anthropic/openai are representable. Overlay the
+ * model always; overlay the provider only when salvage can express it.
+ *
+ * A grok/lmstudio override leaves the seat untouched, and that is INERT rather
+ * than a mixed route: those providers resolve to the direct-call route, and the
+ * runner only attempts salvage on a `claude_code`/`codex` worker executor (see
+ * run-review-prompt-execution: `salvageAdapter === "claude_code" || "codex"`),
+ * so salvage cannot dispatch there at all. This is also exactly what editing the
+ * same provider into settings would do — the override is a settings overlay, so
+ * it must not invent a stricter contract than the settings path has.
  */
 function applySalvageTranscriptionOverride(
   transcription: { provider?: "anthropic" | "openai" | undefined; model: string },
