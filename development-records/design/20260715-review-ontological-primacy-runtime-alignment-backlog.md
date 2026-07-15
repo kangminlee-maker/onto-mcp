@@ -46,13 +46,43 @@ review에선 enrichment지만 **reconstruct의 전제**다(무에서 유 불가)
 `affected_purpose`를 술어에 편입할지는 설계 결정. INV(materiality 정의·출력 계약)에 닿으므로
 사용자 확인 게이트 필요.
 
+### 재검증 (2026-07-15, 실코드 — 위 workflow-파생 프레이밍 정정)
+
+위 1~3은 intent-alignment workflow 산출이었고, 실코드 재확증에서 **방향은 맞으나 과장·부정확**이
+드러났다. 정정본(이 블록이 위 1~3의 프레이밍을 대체한다):
+
+- **Point 1 정정 (범위 축소)**: `materialKindReviewObligations()` 실제로는 **code**(123-128)에
+  작동-편향 의무 집중 — 단 "**declared review goal 위반 시** material" **goal-scoped**이고,
+  type/contract-mismatch = satisfiability라 **논리-무결성 절**과 순수-작동 절(edge-case/null-path/
+  failure-mode)이 **혼재**. **spreadsheet**(129-174)는 작동이 아니라 **구조-무결성**(formula/
+  reference/named-range/validation integrity) = **온톨로지 정렬**. **document**(175-179)·
+  **mixed**(185-189)·**unknown**은 개념/정합. ⇒ workflow의 "code/db/spreadsheet 전부 작동"은
+  **틀림**; 작동 주입은 **code(+일부 database)에 국한**. (1230은 per-lens 템플릿이라 axiology 도달은
+  사실 — 확인.)
+- **Point 2 정정 (설계 의도이지 결함 아님)**: severity-band predicate는 **의도된
+  llm-capability-boundary**다 — `material-issue-contract.md` §1이 "상대적/질적 판단은 severity·
+  problem-framing으로 **구조화 후 predicate에 투영**"이라 명시. 즉 온톨로지 판단은 **severity 부여
+  단계에 살도록 설계**됨. predicate에 온톨로지 절을 추가하거나 semantic 결함을 차단화하는 것은
+  **그 원칙 위반** — owner가 경계 자체를 옮기기로 결정하지 않는 한 결함이 아니다.
+- **Point 3 확인 (뉘앙스)**: correctness #1 > purpose/value #4 — 확인. 단 이는 **conflict-type
+  선택 precedence**(다중 충돌 시 어느 축을 숙의)라, correctness+purpose 동시 이슈가 correctness로
+  분류돼 목적 프레이밍이 종속되는 효과.
+
+**정정된 스코프**:
+- *실제 정렬 대상*: (a) **code 패킷의 순수-작동 절**(edge-case/null-path/failure-mode)이 axiology까지
+  도달 → 논리-무결성 절과 **분리·종속화**(또는 "contract 정합"으로 리프레이밍) · (b) **deliberation
+  correctness-#1**을 목적/가치 위로 재고 · (c) **severity 부여·problem-framing을 authority/purpose에
+  앵커** — §1이 지정한 "온톨로지 판단의 자리"라 **최고 레버리지·design-consistent**.
+- *결함 아님(설계 의도, 손대지 말 것)*: 결정론 severity-predicate + semantic=disclosure 경계 =
+  llm-capability-boundary. 바꾸려면 **owner의 경계-이동 결정이 선행**.
+
 ## 백로그 B — artifact별 비대칭 접근성 해소
 
 owner 지적: 모든 콘텐츠는 artifact 형식을 가지며, 문서/코드/스프레드시트/DB는 온톨로지 검증을
 위해 **대칭적으로** 다뤄야 하는 레이어다. 그러나 현재 `materialKindReviewObligations()`의
-material-kind별 의무가 **비대칭**이다 — code/database/spreadsheet는 작동-편향 의무를 받고
-document(≈175–179)는 개념형. 즉 같은 온톨로지 무결성 검토인데 artifact 형식에 따라 렌즈가
-"무엇을 보라"고 지시받는 내용이 갈린다.
+material-kind별 의무가 **비대칭**이다 — 같은 온톨로지 무결성 검토인데 artifact 형식에 따라 렌즈가
+"무엇을 보라"고 지시받는 내용의 **성격이 갈린다**(§A 재검증 참조: code=작동-편향, spreadsheet=구조-
+무결성, document=개념형, mixed=cross-artifact). 형식에 따라 강조 축이 달라지는 것 자체가 비대칭.
 
 정렬 방향(설계 시 확정): 각 artifact 형식을 **온톨로지를 읽어내는 대칭적 접근 경로**로
 재정의 — 형식별 접근성(관찰·materialize·해석) 격차를 메우되, 형식-특수 처리는 "그 형식에서
