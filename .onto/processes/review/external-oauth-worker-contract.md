@@ -65,11 +65,18 @@ Output formats are shared: `lens-sidecar`, `issue-artifact`,
 ### 3.1 Adapter-specific schema delivery
 
 - `codex_cli`: the schema is written to a file and passed via `codex exec --output-schema`.
-- `claude_code`: the schema is embedded in the prompt; `claude --json-schema` is
-  **not** used because its validator silently rejects the runtime's complex
-  submit schemas (`additionalProperties:false` + deep `required`) and exits with
-  no output. The in-process submit tool remains the authoritative validator, so
-  schema enforcement is preserved regardless of delivery mechanism.
+- `claude_code`: `claude --json-schema <schema>` **is** used — it constrains
+  output at the API level (grammar-based structured outputs) so the model cannot
+  emit syntactically malformed JSON, and the CLI returns a parsed
+  `structured_output` object. The earlier claim here that its validator "silently
+  rejects the runtime's complex submit schemas" was **inaccurate**: empirically
+  (opus-4.8 + haiku, 2026-07) the flag accepts the runtime's submit schemas
+  (`additionalProperties:false` + deep `required`, ~20 params, enums) and returns
+  native objects; without it, opus free-forms the JSON in-prompt and can drop a
+  comma on large findings → an unrecoverable `output_contract` failure. The
+  in-prompt schema remains as a redundant semantic hint, and the in-process submit
+  tool remains the authoritative validator of field CONTENT — so schema
+  enforcement holds regardless of delivery mechanism.
 
 ### 3.2 Result extraction
 
