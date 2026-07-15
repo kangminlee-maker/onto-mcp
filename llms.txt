@@ -1,0 +1,63 @@
+# onto-mcp
+
+> MCP server that lets LLM agents check an artifact's **ontological integrity** —
+> the logical consistency of its concepts, authority, and purpose — and derive a
+> domain ontology from real sources, with every structured claim owned by a
+> runtime validation gate (fail-loud, not best-effort). An artifact's form (code,
+> spreadsheet, document, database, mixed) is just the layer the ontology is read
+> through. The interface is MCP-native: install once, register with your host,
+> and drive it through tools.
+
+## Use this when
+
+- You want to **review an artifact for ontological integrity** — check that its
+  concepts, authority, and purpose stay logically consistent — across whatever
+  form it takes (code, spreadsheet, document, database). Independent
+  context-isolated lenses, controlled deliberation, conservative synthesis, and a
+  `ReviewRecord` as the primary artifact; findings surface as material issues.
+  Tool: `onto_review`.
+- You want to **derive / reconstruct a bounded domain ontology** from real
+  sources (a codebase, spreadsheet, or document) and mature it until it is
+  actionable, with runtime gates owning every structured claim. Tool:
+  `onto_reconstruct`.
+
+Not a fit for: linting/formatting, running tests, one-shot chat summaries,
+freeform generation, or adversarial hunting for operational/runtime bugs (edge
+cases, crashes, performance) — that is complemented by a separate adversarial
+multi-perspective tool.
+
+## Install
+
+- `npm install -g onto-mcp`, then `onto register` — registers the server into
+  detected MCP hosts (Claude Code, Codex CLI, Claude Desktop, Cursor). Restart
+  the host app afterward.
+- Configure an LLM provider in `.onto/settings.json` or `~/.onto/settings.json`
+  (or run `onto configure-provider`) before running reviews.
+
+## Tool surface (12 advertised, consolidated entry points)
+
+- `onto_review` — run the full review path; returns artifact refs + summary
+- `onto_prepare_review` — prepare a review session and prompt packets (no run)
+- `onto_review_continue` — continue a prepared/halted review from the frontier
+- `onto_review_round` / `onto_review_advance` — host-orchestration loop (host executes units, onto keeps truth + gates)
+- `onto_review_cancel` — request cooperative cancellation of a running review
+- `onto_review_read` — read a review session: liveness while running + bounded result once complete (`projectionLevel` compact/standard/full)
+- `onto_reconstruct` — run the material-aware reconstruct path with runtime validation gates
+- `onto_observe_source` — materialize reconstruct material profile, inventory, and source observations
+- `onto_validate_reconstruct_directive` — validate LLM-authored reconstruct artifacts
+- `onto_reconstruct_read` — read a reconstruct session: stage progress/counts, or the full record at `projectionLevel=full`
+- `onto_list` — list a registry by `kind`: `lenses` / `domains` / `source_profiles`
+
+The full, authoritative input schema for every tool is served to the host at
+runtime via MCP `tools/list` (JSON Schema). `onto_review` and `onto_reconstruct`
+also accept an optional per-call `llmOverride` (`{ provider?, auth?, model?,
+effort?, service_tier? }`) that overlays the settings-resolved LLM for that one
+call only.
+
+## Docs
+
+- [README](https://github.com/kangminlee-maker/onto-mcp#readme): install, usage, tool call schemas, configuration
+- [tool schema SSOT](https://github.com/kangminlee-maker/onto-mcp/blob/main/src/mcp/tool-schemas.ts): authoritative tool input schemas (served via `tools/list`)
+- [supported models](https://github.com/kangminlee-maker/onto-mcp/blob/main/.onto/authority/supported-models.yaml): certified model ids per role
+- [reconstruct contract registry](https://github.com/kangminlee-maker/onto-mcp/blob/main/.onto/processes/reconstruct/reconstruct-contract-registry.yaml): reconstruct artifact/gate authority graph
+- [repo layout](https://github.com/kangminlee-maker/onto-mcp/blob/main/docs/architecture/repo-layout.md): repository structure SSOT

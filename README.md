@@ -2,9 +2,10 @@
 
 [![npm version](https://img.shields.io/npm/v/onto-mcp)](https://www.npmjs.com/package/onto-mcp)
 
-MCP-native ontology tools that help LLMs **review** implementation artifacts,
-**derive an ontology** from real sources, and guide extensions — with runtime
-validation gates owning every structured claim.
+MCP-native ontology tools that help LLMs **review an artifact's ontological
+integrity** — the logical consistency of its concepts, authority, and purpose —
+and **derive an ontology** from real sources, with runtime validation gates
+owning every structured claim.
 
 ```text
 .onto contracts and domain documents
@@ -19,6 +20,39 @@ your MCP host, and drive it through tools. Targets are not assumed to be code �
 runtime contracts classify the material form (`code`, `spreadsheet`,
 `document`, `database`, `mixed`, or `unknown`) before choosing observation,
 validation, or adapter behavior.
+
+## What you can do with it
+
+Point an LLM host at the server and drive it through tools to:
+
+- **Review an artifact for ontological integrity** — check that its *concepts,
+  authority, and purpose* stay logically consistent (do definitions, authority
+  seats, and stated goals agree?). The artifact can take any form — code, a
+  spreadsheet, a document, a database, or a mixed bundle; the form is just the
+  layer the ontology is read through. Independent lenses, controlled
+  deliberation, and conservative synthesis; findings surface as *material
+  issues*. → `onto_review`
+- **Derive a domain ontology from real sources** — reconstruct a bounded,
+  validated ontology seed from an actual codebase / spreadsheet / document and
+  mature it until it is actionable. → `onto_reconstruct`
+
+**Use this when** your goal is to *check whether an artifact holds together
+conceptually* — the logical / ontological integrity of its concepts, authority,
+and purpose — or to *derive a structured domain ontology from real sources*, and
+you want every structured claim owned by a runtime validation gate (fail-loud,
+not best-effort). Code is in scope because code only works if it is logically
+consistent.
+
+**Not the right fit for** linting/formatting, running tests, one-shot chat
+summaries, freeform generation, or adversarial hunting for operational/runtime
+bugs (edge cases, crashes, performance) — that last one is complemented by a
+separate adversarial multi-perspective tool.
+
+| If your goal is… | Use |
+|---|---|
+| Check an artifact's concept / authority / purpose consistency (any form: code, spreadsheet, document, DB) | `onto_review` (then `onto_review_read` for results) |
+| Derive / reconstruct a domain ontology from real sources | `onto_reconstruct` (then `onto_reconstruct_read`) |
+| Discover available lenses, domains, or source profiles | `onto_list` |
 
 ## Quickstart
 
@@ -182,6 +216,58 @@ point-in-time map (v0.4.7 snapshot, not maintained) is kept at
 MCP results include `llmPresentation` prompts: the runtime supplies bounded
 facts, and the host LLM uses those prompts to explain the opening brief and
 final result without inventing settings or findings.
+
+### Tool call schemas
+
+Every tool's full, authoritative input schema is served to your host at runtime
+via MCP `tools/list` (JSON Schema) and defined in
+[`src/mcp/tool-schemas.ts`](https://github.com/kangminlee-maker/onto-mcp/blob/main/src/mcp/tool-schemas.ts).
+The two primary entry points:
+
+**`onto_review`** — required `target` (what to review) and `intent` (why);
+common optionals: `reviewMode` (`core-axis` | `full`), `domain` (or
+`noDomain: true`), `targetScopeKind` (`file` | `directory` | `bundle`),
+`diffRange`, `projectRoot`, `prepareOnly`, `returnRunningAfterMs`, `llmOverride`.
+
+```json
+{
+  "name": "onto_review",
+  "arguments": {
+    "target": "src/payments/",
+    "intent": "Review the refund path for material correctness and safety issues.",
+    "reviewMode": "full",
+    "projectRoot": "/path/to/project"
+  }
+}
+```
+
+**`onto_reconstruct`** — required `projectRoot`, `targetRefs`, `intent`; common
+optionals: `domain`, `sessionRoot`, `resumeMode` (`fresh` |
+`reuse_existing_authored_artifacts`), `judgeModel`, `judgeLlmEffort`,
+`llmOverride` (see the [Reconstruct](#reconstruct) example above).
+
+**Reading results** — `onto_review_read` / `onto_reconstruct_read` take
+`projectionLevel` (`compact` | `standard` | `full`); use `compact` in
+token-limited hosts and `full` to include the record and final output.
+
+**Per-call LLM override (`llmOverride`)** — `onto_review` and `onto_reconstruct`
+accept an optional `llmOverride` that overlays the settings-resolved LLM **for
+that one call only** (settings unchanged, default-off). Fields are a subset of a
+settings `llm` block — `{ provider?, auth?, model?, effort?, service_tier? }` —
+and only the fields you set are overridden. Setting `provider` requires an
+explicit `model`. Supported model ids are authored in
+[`.onto/authority/supported-models.yaml`](https://github.com/kangminlee-maker/onto-mcp/blob/main/.onto/authority/supported-models.yaml).
+
+```json
+{
+  "name": "onto_review",
+  "arguments": {
+    "target": "src/example.ts",
+    "intent": "Second-opinion review with a stronger model.",
+    "llmOverride": { "model": "gpt-5.6-sol", "effort": "high" }
+  }
+}
+```
 
 ### Self-documentation
 

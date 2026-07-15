@@ -56,7 +56,7 @@
 
 ## 2. Authority Hierarchy
 
-문서가 충돌하면 아래 우선순위를 따른다. 상세 위계는 `CLAUDE.md`를 참조한다.
+문서가 충돌하면 아래 우선순위를 따른다. 아래 표는 [CLAUDE.md](CLAUDE.md)의 Authority 위계를 빠른 참조용으로 **미러**한 것이며 **SSOT는 CLAUDE.md**다 — 위계 자체를 바꿀 때는 CLAUDE.md를 먼저 고치고 이 표를 동기화한다. 위계 구성 노트와 "동일 순위 충돌 해소" 규칙은 CLAUDE.md가 소유한다.
 
 | 순위 | 파일 | 폴더 |
 |---|---|---|
@@ -272,6 +272,8 @@ core 제품화 계층은 TypeScript다.
 
 현재 host-facing review entrypoint는 MCP tool call이다.
 
+광고되는 canonical tool surface는 12종(consolidated)이다. SSOT는 [src/mcp/tool-schemas.ts](src/mcp/tool-schemas.ts) `OntoToolNames`이며, 정합은 `tool-surface.test.ts`가 핀한다.
+
 review tools:
 
 - `onto_review` — review 실행
@@ -280,19 +282,20 @@ review tools:
 - `onto_review_round` — host orchestration(B): 지금 실행 가능한 unit과 packet 반환 (onto는 실행하지 않음)
 - `onto_review_advance` — host orchestration(B): host가 실행한 unit 보고 → seat 검증·기록 후 다음 round 또는 record 조립
 - `onto_review_cancel` — 실행 중 review의 cooperative cancellation 요청
-- `onto_review_status` — 진행/상태 조회
-- `onto_review_result` — 완료 결과 조회
-- `onto_list_lenses` — canonical lens set 조회
-- `onto_list_domains` — 사용 가능한 domain 조회
+- `onto_review_read` — review session 단일 조회 진입점: 실행 중 liveness + 완료 후 bounded 결과 (`projectionLevel` `compact`/`standard`/`full`)
 
-reconstruct tools:
+reconstruct·list tools:
 
-- `onto_list_source_profiles` — target material kind별 source profile 조회
 - `onto_observe_source` — reconstruct source observation materialize
 - `onto_validate_reconstruct_directive` — LLM-authored reconstruct directive 검증
 - `onto_reconstruct` — material-aware reconstruct 실행
-- `onto_reconstruct_status` — reconstruct 진행/상태 조회
-- `onto_reconstruct_result` — reconstruct 결과 조회
+- `onto_reconstruct_read` — reconstruct session 단일 조회 진입점: stage progress·liveness·counts, `projectionLevel=full`이면 record·run manifest·final output
+- `onto_list` — 레지스트리 조회 (`kind`: `lenses` / `domains` / `source_profiles`)
+
+> deprecated alias (7종, tools/list 미광고·핸들러 보존, major bump 시에만 제거):
+> `onto_review_status`·`onto_review_result` → `onto_review_read`;
+> `onto_list_lenses`·`onto_list_domains`·`onto_list_source_profiles` → `onto_list`;
+> `onto_reconstruct_status`·`onto_reconstruct_result` → `onto_reconstruct_read`.
 
 `onto mcp`는 stdio MCP 서버 시작 명령이며 단발성 review 실행 명령이 아니다.
 `src/core-runtime/cli/review-invoke.ts`는 내부 argv adapter와 live E2E 검증 entry로만 취급한다.

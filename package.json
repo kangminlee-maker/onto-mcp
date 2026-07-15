@@ -1,7 +1,23 @@
 {
   "name": "onto-mcp",
   "version": "0.4.14",
-  "description": "MCP-native ontology review runtime with context-isolated lenses and controlled deliberation",
+  "description": "MCP server for LLM agents: check an artifact's ontological integrity (the logical consistency of its concepts, authority, and purpose) and derive a domain ontology from real sources, with every structured claim gated by runtime validation.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "llm",
+    "ai-agents",
+    "agent-tools",
+    "code-review",
+    "static-analysis",
+    "ontology",
+    "ontology-extraction",
+    "domain-model",
+    "knowledge-graph",
+    "spreadsheet-review",
+    "structured-output"
+  ],
   "homepage": "https://github.com/kangminlee-maker/onto-mcp#readme",
   "bugs": {
     "url": "https://github.com/kangminlee-maker/onto-mcp/issues"
