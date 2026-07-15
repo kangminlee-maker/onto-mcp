@@ -104,6 +104,14 @@ const LLM_OVERRIDE_PROPERTY_SCHEMA: JsonValue = {
     effort: { type: "string" },
     service_tier: { type: "string" },
   },
+  // A provider switch needs an explicit model (the switched-in provider has no
+  // default model to inherit). The zod boundary enforces this; declaring it here
+  // too means a client reading tools/list sees the same contract instead of
+  // discovering it from a rejection. Both draft-07 (`if`/`then`) and 2019-09+
+  // (`dependentRequired`) spellings are supplied so either validator honors it.
+  if: { required: ["provider"] },
+  then: { required: ["model"] },
+  dependentRequired: { provider: ["model"] },
   description:
     "Optional per-call LLM override: an ephemeral settings-llm overlay applied to this invocation's dispatch seats (provider switch replaces the actor block; a partial block field-overlays same-provider). Transport (base_url/api_key_env/timeout) stays settings-owned. Omit → settings unchanged (byte-identical default-off).",
 };

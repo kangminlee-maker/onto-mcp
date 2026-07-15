@@ -204,6 +204,20 @@ export function applyReviewLlmOverride(
 
   const transcription = execution.retry?.salvage?.transcription_llm;
   if (transcription) {
+    // An ENABLED salvage seat that the switched-in provider cannot express must
+    // not be left silently on the previous route: salvage would then dispatch a
+    // model/provider the caller did not ask for (a mixed route), or the gate
+    // would reject the run for a seat the override never touched. Fail loud
+    // instead — the caller can disable salvage for this call. A DISABLED salvage
+    // seat never dispatches, so leaving it untouched is inert (design v4 §7).
+    if (
+      execution.retry?.salvage?.enabled === true &&
+      (override.provider === "grok" || override.provider === "lmstudio")
+    ) {
+      throw new Error(
+        `llmOverride switches review to provider="${override.provider}", which the salvage transcription seat cannot express (it runs on the unit's own adapter: anthropic or openai only). Disable review.execution.retry.salvage for this call, or override to an anthropic/openai provider.`,
+      );
+    }
     nextExecution.retry = {
       ...execution.retry,
       salvage: {
@@ -225,12 +239,11 @@ export function applyReviewLlmOverride(
 /**
  * Salvage transcription_llm has a RESTRICTED shape ({provider?: "anthropic" |
  * "openai"; model: string}) — it is a cheap-tier transcription model run by the
- * unit's OWN adapter, so only anthropic/openai are representable. Handle the
- * override defensively (v4 §9(a)): always safe to overlay the model; overlay the
- * provider only when the override provider is one salvage supports. A
- * grok/lmstudio override leaves salvage unchanged (salvage is opt-in /
- * default-off, so under-applying here can only fail closed, never dispatch an
- * unverified call). Never crashes on an incompatible provider.
+ * unit's OWN adapter, so only anthropic/openai are representable. Overlay the
+ * model always; overlay the provider only when salvage can express it. A
+ * grok/lmstudio override reaches here only when salvage is DISABLED (an enabled
+ * one fails loud at the caller above), and a disabled seat never dispatches — so
+ * leaving it untouched is inert rather than a silent mixed route.
  */
 function applySalvageTranscriptionOverride(
   transcription: { provider?: "anthropic" | "openai" | undefined; model: string },

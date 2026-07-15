@@ -102,7 +102,7 @@ describe("applyReviewLlmOverride", () => {
     });
   });
 
-  it("overlays salvage transcription_llm for anthropic/openai and leaves it unchanged for grok", () => {
+  it("overlays salvage transcription_llm for anthropic/openai, and fails loud when enabled salvage cannot follow", () => {
     const base = reviewSettingsWith(openAiOauthActor);
     (base.review!.execution as { retry?: unknown }).retry = {
       salvage: { enabled: true, transcription_llm: { provider: "anthropic", model: "claude-haiku" } },
@@ -117,12 +117,11 @@ describe("applyReviewLlmOverride", () => {
       provider: "openai",
       model: "gpt-5.5",
     });
-    // grok provider switch → salvage cannot follow → left entirely unchanged.
-    const toGrok = applyReviewLlmOverride(base, { provider: "grok", model: "grok-4" });
-    expect(toGrok.review?.execution?.retry?.salvage?.transcription_llm).toEqual({
-      provider: "anthropic",
-      model: "claude-haiku",
-    });
+    // grok switch → an ENABLED salvage seat cannot follow. Leaving it on the old
+    // route would silently mix providers, so the call is rejected instead.
+    expect(() =>
+      applyReviewLlmOverride(base, { provider: "grok", auth: "api_key", model: "grok-4" }),
+    ).toThrow(/salvage transcription seat cannot express/);
   });
 });
 
@@ -425,6 +424,39 @@ describe("review overlay changes the resolved execution profile (design v4 §2.6
     expect(teamlead?.auth).toBe("oauth");
     expect(teamlead?.api_key_env).toBeUndefined();
     expect(teamlead?.base_url).toBeUndefined();
+  });
+
+  it("fails loud when an ENABLED salvage seat cannot express the switched-in provider", () => {
+    // grok/lmstudio are not representable on the salvage transcription seat (it
+    // runs on the unit's own anthropic/openai adapter). Leaving it on the old
+    // route would silently mix providers, so an enabled seat must fail loud.
+    const settings = reviewSettingsWith(openAiOauthActor);
+    (settings.review!.execution as Record<string, unknown>).retry = {
+      salvage: { enabled: true, transcription_llm: { provider: "openai", model: "gpt-5-mini" } },
+    };
+    expect(() =>
+      applyReviewLlmOverride(settings, { provider: "grok", auth: "api_key", model: "grok-4" }),
+    ).toThrow(/salvage transcription seat cannot express/);
+
+    // Negative control 1: a DISABLED salvage seat never dispatches → inert, no throw.
+    const disabled = reviewSettingsWith(openAiOauthActor);
+    (disabled.review!.execution as Record<string, unknown>).retry = {
+      salvage: { enabled: false, transcription_llm: { provider: "openai", model: "gpt-5-mini" } },
+    };
+    expect(() =>
+      applyReviewLlmOverride(disabled, { provider: "grok", auth: "api_key", model: "grok-4" }),
+    ).not.toThrow();
+
+    // Negative control 2: an expressible provider switch still applies normally.
+    const ok = applyReviewLlmOverride(settings, {
+      provider: "anthropic",
+      auth: "oauth",
+      model: "claude-opus-4-8",
+    });
+    expect(
+      (ok.review?.execution?.retry as { salvage?: { transcription_llm?: { provider?: string } } })
+        ?.salvage?.transcription_llm?.provider,
+    ).toBe("anthropic");
   });
 
   it("an auth switch cleans a UNIT's own route-scoped fields too (PR #199 codex P2)", () => {
