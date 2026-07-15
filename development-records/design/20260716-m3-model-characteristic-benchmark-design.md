@@ -223,6 +223,32 @@ K-run 하니스(`m3-run.ts`, capture/replay). 라이브 실행은 disclosure
 advisory**, (c) 분포가 cut을 진성 span하면 indeterminate, 드문 노이즈면 dominant band+noise율 —
 small-K agreement가 못 하는 이 구분을 명시. 상세: 위 disclosure README.
 
+## 11. 구현 결함 리뷰 정정 (2026-07-16, 로컬 4렌즈 교차검증)
+
+구현 후 4-kind 독립 리뷰(correctness/validity/concept/tests) + main 실코드 재확증. 착지한
+**surgical 하드닝**(전 항목 실 데이터 20세션/343이슈에서 score-neutral 확증, replay byte-동일):
+경로 앵커(cwd-상대 crash 제거), 벤치의 review-executor import 결합 제거(순수 util 인라인),
+0-material 픽스처의 공허 material-recall throw, dangling `surface_finding_id`/중복 finding_id throw
+(silent-drop 봉인), 단일 프로덕션 dispatch factory(`anthropicJudgeDispatch`, 8192 single-source·
+auth/effort 파라미터화·route 배선 테스트), `judge_auth` + source-file **sha256 캡처·replay 검증**
+(fixture drift fail-loud; 구 capture는 warn-only 하위호환), `--judge-runs` 양수 검증. 48 단위테스트.
+
+**미해결 owner 결정(측정 도구 변경 — 임의 변경 금지, 별도 판단 대기):**
+1. **F6 severity 축(§8 "severity 정합")은 as-built 불활성 → 제거함(redesign 대기).** 채점 단위가
+   material-only(owner 2026-07-16)라 `parseSurfacedIssues`가 하위-material 이슈를 채점 전 제거 →
+   scoreDefectSpectrum에 도달하는 모든 이슈가 material-band → severity 정합률이 구조적으로 항상 1.0,
+   report에도 미방출(死지표+false-green 테스트). "탐지됐으나 과소평가" 신호는 recall miss로 흡수됨.
+   **F6를 진짜 측정하려면** 채점 파이프라인이 하위-material 이슈를 severity 비교용으로 포함해야 함
+   (material-only 단위와 상충) → 재설계 필요. **결정: F6 realize(재설계) vs 공식 retire(recall이 흡수).**
+2. **judge projection이 위치 신호를 withhold(validity HIGH).** `buildAttributionUserPrompt`가 judge에
+   {issue_id, statement, severity}만 주고 위치(finding.target/evidence_refs)를 드롭하는데, 시스템
+   프롬프트는 "그 위치에서 그 문제를 기술할 때만 귀속"을 refute-by-default로 요구. meet_material_recall=1과
+   결합 시 systematic bias → 강한 리뷰가 거짓 "미달". K-run 안정성이 못 잡음(variance 아닌 bias).
+   **결정: finding.target를 `where`로 SurfacedIssue에 실어 projection에 포함 vs 현행 유지**(측정 수치
+   변동 → 기록된 P0 baseline 재현 불가하게 함).
+3. **engagement/canary 대조 부재(validity MEDIUM).** 붕괴/미참여 judge가 안정적 "미달"을 real verdict와
+   구분 불가. **결정: fixture별 canary(정답 issue↔defect 쌍) 또는 attributed_issues>0 게이트 추가.**
+
 ## 9. 설계 검증 이력 (2026-07-16)
 
 4-kind 독립 적대적 리뷰(구현 전 게이트), 전 발화 main이 실코드 재확증:

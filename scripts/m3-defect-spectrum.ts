@@ -8,8 +8,10 @@
  *
  * Scored unit = the deliberated ISSUE (issue-ledger), the model's final
  * deduplicated material claims — not raw per-lens findings (owner decision
- * 2026-07-16). An issue carries no severity field; it is derived from the
- * MAX severity of its `surface_finding_ids` in the finding-ledger.
+ * 2026-07-16). The scorer derives each issue's severity from the MAX severity of
+ * its `surface_finding_ids` in the finding-ledger (the issue-ledger's own
+ * `severity` is not relied upon here — the finding-ledger is the severity source
+ * of record for scoring).
  *
  * Why an injected JUDGE, not lexical token matching (design §3-1, review F1):
  * the ground-truth material terms are literal schema identifiers present in the
@@ -98,9 +100,6 @@ export interface DefectSpectrumResult {
   attributed_issues: number;
   fabricated_issues: number;
   precision: number;
-  /** Detected defects whose attributed issue met the expected severity floor. */
-  severity_aligned_defect_ids: string[];
-  severity_alignment_rate: number | null;
   band: DefectSpectrumBand;
 }
 
@@ -176,10 +175,11 @@ export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: u
   const severityByFinding = new Map<string, FindingSeverity>();
   findingRows.forEach((row, i) => {
     const r = asRecord(row, `findings[${i}]`);
-    severityByFinding.set(
-      asString(r.finding_id, `findings[${i}].finding_id`),
-      asSeverity(r.severity, `findings[${i}].severity`),
-    );
+    const findingId = asString(r.finding_id, `findings[${i}].finding_id`);
+    if (severityByFinding.has(findingId)) {
+      throw new Error(`defect-spectrum: duplicate finding id '${findingId}' in finding-ledger`);
+    }
+    severityByFinding.set(findingId, asSeverity(r.severity, `findings[${i}].severity`));
   });
 
   const issues: SurfacedIssue[] = [];
@@ -193,10 +193,19 @@ export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: u
     if (!Array.isArray(surfaceIds) || surfaceIds.length === 0) {
       throw new Error(`defect-spectrum: issues[${i}] (${issueId}) has no surface_finding_ids — cannot derive severity`);
     }
+    // Reference integrity: EVERY surface_finding_id must resolve in the
+    // finding-ledger. Silently skipping a dangling id would under-derive the
+    // issue's severity (and could drop a material issue) — the same
+    // validation-bypass class the attribution layer guards against.
     let severity: FindingSeverity | null = null;
     for (const fid of surfaceIds) {
       const s = severityByFinding.get(String(fid));
-      if (s) severity = severity === null ? s : moreSevere(severity, s);
+      if (s === undefined) {
+        throw new Error(
+          `defect-spectrum: issue ${issueId} references surface finding '${String(fid)}' absent from the finding-ledger`,
+        );
+      }
+      severity = severity === null ? s : moreSevere(severity, s);
     }
     if (severity === null) {
       throw new Error(`defect-spectrum: issue ${issueId} references no resolvable surface finding severity`);
@@ -256,8 +265,6 @@ function classifyBand(
  * recall_material = detected `material`-expectation defects / all such defects.
  * precision = issues attributed to ≥1 real defect / all surfaced issues (an
  *   issue attributed to no defect is a fabrication).
- * severity alignment = of the detected defects, the fraction whose attributed
- *   issue met the expected severity floor.
  */
 export function scoreDefectSpectrum(args: {
   seededDefects: readonly SeededDefect[];
@@ -301,26 +308,20 @@ export function scoreDefectSpectrum(args: {
   const materialDefectIds = seededDefects
     .filter((d) => d.severity_expectation === "material")
     .map((d) => d.id);
+  // Material recall over an empty material set is vacuously 1.0 and would let a
+  // fixture with zero `material` defects reach meets/exceeds on precision alone —
+  // the same vacuous-pass class the empty-seededDefects guard above blocks, one
+  // level down. A material-band verdict requires a non-empty material ground
+  // truth (CLAUDE.md vacuous-pass guard).
+  if (materialDefectIds.length === 0) {
+    throw new Error(
+      "defect-spectrum: no `material`-expectation seeded defects — material recall is undefined; this fixture cannot yield a material-band verdict.",
+    );
+  }
   const detectedMaterial = materialDefectIds.filter((id) => detected.has(id));
 
-  // Severity alignment: a detected defect is aligned if ANY issue attributing to
-  // it met the expected floor. Both `material` and `medium_or_above` currently
-  // require material-band severity; kept explicit so a future non-material band
-  // can loosen `medium_or_above` independently. Judged over detected defects
-  // only — you cannot align a defect you never surfaced.
-  const severityAligned: string[] = [];
-  for (const id of detected) {
-    const attributingIssues = issues.filter((issue) =>
-      byIssue.get(issue.issue_id)!.attributed_defect_ids.includes(id),
-    );
-    if (attributingIssues.some((issue) => isMaterialSeverity(issue.severity))) {
-      severityAligned.push(id);
-    }
-  }
-
   const recallOverall = detected.size / seededDefects.length;
-  const recallMaterial =
-    materialDefectIds.length === 0 ? 1 : detectedMaterial.length / materialDefectIds.length;
+  const recallMaterial = detectedMaterial.length / materialDefectIds.length;
   const precision = issues.length === 0 ? 1 : attributedIssues / issues.length;
 
   return {
@@ -334,8 +335,6 @@ export function scoreDefectSpectrum(args: {
     attributed_issues: attributedIssues,
     fabricated_issues: issues.length - attributedIssues,
     precision,
-    severity_aligned_defect_ids: severityAligned.sort(),
-    severity_alignment_rate: detected.size === 0 ? null : severityAligned.length / detected.size,
     band: classifyBand(recallMaterial, precision, thresholds),
   };
 }

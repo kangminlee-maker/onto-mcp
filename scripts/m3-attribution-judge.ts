@@ -10,11 +10,10 @@
  * the seeded defect's problem at its location.
  *
  * The LLM dispatch is injected (`AttributionDispatch`) so the parse/coverage
- * logic is unit-testable with a stub and no spend. In production the default
- * dispatch calls Opus 4.8; the judge output is captured so a score replays
- * deterministically (design §5 P0).
+ * logic is unit-testable with a stub and no spend. In production
+ * `anthropicJudgeDispatch` calls Opus 4.8; the judge output is captured so a
+ * score replays deterministically (design §5 P0).
  */
-import { extractJsonObjectText } from "../src/core-runtime/cli/claude-code-review-unit-executor.ts";
 import type {
   DefectAttributionJudge,
   IssueAttribution,
@@ -24,6 +23,42 @@ import type {
 
 /** Pinned for replay / provenance — the judge is a measurement instrument. */
 export const JUDGE_MODEL_ID = "claude-opus-4-8";
+
+/** Judge output-token budget. Single-sourced so the api_key cap and any route
+ *  that honors max_tokens never silently diverge. */
+export const JUDGE_MAX_TOKENS = 8192;
+
+/**
+ * Extract the first balanced top-level JSON object from text that may be wrapped
+ * in prose or code fences (a low-effort model can prepend/append explanation).
+ * Inlined — self-contained benchmark util, deliberately NOT importing the
+ * review-runtime executor (that would pull the whole review-execution stack into
+ * the M3 load graph). Returns the original text when no `{` is present so the
+ * JSON parse fails with a clear message.
+ */
+export function extractJsonObjectText(text: string): string {
+  const start = text.indexOf("{");
+  if (start === -1) return text;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const ch = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+  return text.slice(start);
+}
 
 export const ATTRIBUTION_JUDGE_SYSTEM_PROMPT = [
   "You are an INDEPENDENT attribution judge for an ontology-review benchmark. You are given:",
@@ -119,27 +154,49 @@ export type AttributionDispatch = (
   userPrompt: string,
 ) => Promise<{ text: string }>;
 
+/** Anthropic auth route for the judge. The two routes are NON-equivalent
+ *  instruments (different token ceilings / thinking mechanics), so the chosen
+ *  route is recorded in the capture for provenance. */
+export type AttributionAuth = "api_key" | "oauth";
+
 /**
- * Build a `DefectAttributionJudge`. With no `dispatch`, the default calls Opus
- * 4.8 via the runtime's `callLlm` (anthropic api_key route → needs
- * ANTHROPIC_API_KEY; this is the P0 small-spend step). Empty issue lists never
+ * The one production dispatch: Opus 4.8 via the runtime's `callLlm`. This is the
+ * single site that owns the callLlm config (route, model, token budget, effort),
+ * so no two copies can silently diverge.
+ *
+ * - `api_key` → anthropic SDK (needs ANTHROPIC_API_KEY); honors max_tokens.
+ * - `oauth`   → claude CLI via the claude_code execution adapter.
+ * `effort` is PINNED by the caller (an effort-unset judge showed a ~40× thinking
+ * swing that flipped bands — design §3-3); passed through only when set.
+ */
+export function anthropicJudgeDispatch(opts: {
+  auth: AttributionAuth;
+  effort?: string;
+  maxTokens?: number;
+}): AttributionDispatch {
+  const maxTokens = opts.maxTokens ?? JUDGE_MAX_TOKENS;
+  return async (systemPrompt, userPrompt) => {
+    const { callLlm } = await import("../src/core-runtime/llm/llm-caller.ts");
+    const base =
+      opts.auth === "oauth"
+        ? { provider: "anthropic" as const, execution_adapter: "claude_code" as const, model_id: JUDGE_MODEL_ID }
+        : { provider: "anthropic" as const, model_id: JUDGE_MODEL_ID };
+    const result = await callLlm(systemPrompt, userPrompt, {
+      ...base,
+      max_tokens: maxTokens,
+      ...(opts.effort ? { reasoning_effort: opts.effort } : {}),
+    });
+    return { text: result.text };
+  };
+}
+
+/**
+ * Build a `DefectAttributionJudge` over an injected `dispatch` (production passes
+ * `anthropicJudgeDispatch(...)`; tests pass a stub). Empty issue lists never
  * dispatch (no spend, no dead LLM call).
  */
-export function createAttributionJudge(
-  opts: { dispatch?: AttributionDispatch; maxTokens?: number } = {},
-): DefectAttributionJudge {
-  const maxTokens = opts.maxTokens ?? 8192;
-  const dispatch: AttributionDispatch =
-    opts.dispatch ??
-    (async (systemPrompt, userPrompt) => {
-      const { callLlm } = await import("../src/core-runtime/llm/llm-caller.ts");
-      const result = await callLlm(systemPrompt, userPrompt, {
-        provider: "anthropic",
-        model_id: JUDGE_MODEL_ID,
-        max_tokens: maxTokens,
-      });
-      return { text: result.text };
-    });
+export function createAttributionJudge(opts: { dispatch: AttributionDispatch }): DefectAttributionJudge {
+  const { dispatch } = opts;
   return async ({ issues, seededDefects }) => {
     if (issues.length === 0) return [];
     const { text } = await dispatch(

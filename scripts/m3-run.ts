@@ -8,7 +8,7 @@
  * metric range. A single judge dispatch was shown to flip bands near a threshold
  * (H3+H4 confirmed empirically), so a single-draw band is never a verdict.
  *
- * Design SSOT: development-records/design/20260716-model-characteristic-benchmark-design.md (§3-3, §5).
+ * Design SSOT: development-records/design/20260716-m3-model-characteristic-benchmark-design.md (§3-3, §5).
  *
  * Modes:
  *   run    (default) — dispatch the judge K× per fixture (small spend), capture,
@@ -22,6 +22,7 @@
  *          [--out <dir>]
  *   npx tsx scripts/m3-run.ts --replay <run-dir>
  */
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,9 +38,19 @@ import {
   type SeededDefect,
   type SurfacedIssue,
 } from "./m3-defect-spectrum.ts";
-import { createAttributionJudge, JUDGE_MODEL_ID, type AttributionDispatch } from "./m3-attribution-judge.ts";
+import {
+  anthropicJudgeDispatch,
+  createAttributionJudge,
+  JUDGE_MODEL_ID,
+  type AttributionAuth,
+} from "./m3-attribution-judge.ts";
 
-const FIXTURES_ROOT = "development-records/benchmark/fixtures/ontology";
+// Anchor to the repo root via this module's own path (NOT cwd) so the harness
+// resolves fixtures regardless of the directory `npx tsx scripts/m3-run.ts` runs
+// from — a bare cwd-relative root crashes outside the repo root.
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const FIXTURES_ROOT = path.join(REPO_ROOT, "development-records/benchmark/fixtures/ontology");
+const DEFAULT_OUT_ROOT = path.join(REPO_ROOT, "development-records/benchmark/m3");
 const DEFAULT_FIXTURES = ["clinical-lab-workflow", "credit-risk-taxonomy", "manufacturing-bom"];
 const DEFAULT_JUDGE_RUNS = 3;
 
@@ -66,6 +77,9 @@ export interface FixtureStabilityResult {
   fixture: string;
   evidence_session: string;
   judge_runs: number;
+  /** Anthropic auth route the judge ran on (provenance — the routes are
+   *  non-equivalent instruments). Undefined when replaying a pre-provenance capture. */
+  judge_auth?: AttributionAuth;
   /** The stable band, or "indeterminate" when the K runs disagree. */
   band: DefectSpectrumBand | "indeterminate";
   band_stable: boolean;
@@ -76,13 +90,25 @@ export interface FixtureStabilityResult {
   per_run: DefectSpectrumResult[];
 }
 
+/** SHA-256 of the three scored source files, pinned in the capture so replay
+ *  fails loud when a fixture drifts under the same session name (otherwise
+ *  "deterministic replay" is silently re-scored against different inputs). */
+interface SourceDigests {
+  ground_truth: string;
+  issue_ledger: string;
+  finding_ledger: string;
+}
+
 interface CaptureFile {
-  schema_version: "m3-capture/2";
+  schema_version: "m3-capture/2" | "m3-capture/3";
   fixture: string;
   evidence_session: string;
   judge_model: string;
+  judge_auth?: AttributionAuth;
   judge_effort?: string;
   band_thresholds: BandThresholds;
+  /** Present from m3-capture/3 on; absent in older captures (replay warns, cannot verify). */
+  source_digests?: SourceDigests;
   /** K attribution sets, one per judge dispatch (the replay authority). */
   runs: IssueAttribution[][];
 }
@@ -104,6 +130,7 @@ export function aggregate(
   fixture: string,
   session: string,
   perRun: DefectSpectrumResult[],
+  auth?: AttributionAuth,
 ): FixtureStabilityResult {
   if (perRun.length === 0) throw new Error("m3 aggregate: no judge runs to aggregate");
   const bands = perRun.map((r) => r.band);
@@ -112,6 +139,7 @@ export function aggregate(
     fixture,
     evidence_session: session,
     judge_runs: perRun.length,
+    ...(auth ? { judge_auth: auth } : {}),
     band: stable ? bands[0]! : "indeterminate",
     band_stable: stable,
     bands_observed: bands,
@@ -167,26 +195,39 @@ async function loadFixtureInputs(
   return { seededDefects, issues };
 }
 
-/**
- * Build the judge dispatch for the chosen anthropic auth route. `effort` is
- * PINNED (an effort-unset judge showed a ~40× output-token swing that flipped
- * bands — H4 on the instrument); a fixed effort makes adaptive-thinking behavior
- * consistent.
- */
-function judgeDispatch(auth: "api_key" | "oauth", effort?: string): AttributionDispatch {
-  return async (systemPrompt, userPrompt) => {
-    const { callLlm } = await import("../src/core-runtime/llm/llm-caller.ts");
-    const base =
-      auth === "oauth"
-        ? { provider: "anthropic" as const, execution_adapter: "claude_code" as const, model_id: JUDGE_MODEL_ID }
-        : { provider: "anthropic" as const, model_id: JUDGE_MODEL_ID };
-    const result = await callLlm(systemPrompt, userPrompt, {
-      ...base,
-      max_tokens: 8192,
-      ...(effort ? { reasoning_effort: effort } : {}),
-    });
-    return { text: result.text };
-  };
+function sha256(text: string): string {
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+/** Content digests of the three scored source files (raw bytes, not re-serialized YAML). */
+export async function computeSourceDigests(fixtureId: string, session: string): Promise<SourceDigests> {
+  const evidenceDir = path.join(FIXTURES_ROOT, fixtureId, "evidence", session);
+  const [gt, il, fl] = await Promise.all([
+    fs.readFile(path.join(FIXTURES_ROOT, fixtureId, "ground-truth.yaml"), "utf8"),
+    fs.readFile(path.join(evidenceDir, "issue-ledger.yaml"), "utf8"),
+    fs.readFile(path.join(evidenceDir, "finding-ledger.yaml"), "utf8"),
+  ]);
+  return { ground_truth: sha256(gt), issue_ledger: sha256(il), finding_ledger: sha256(fl) };
+}
+
+/** Fail loud if a capture's pinned source digests no longer match on-disk content
+ *  (fixture drifted since capture); warn-only for pre-provenance captures that
+ *  carry no digests. */
+export async function verifySourceDigests(capture: CaptureFile): Promise<void> {
+  if (!capture.source_digests) {
+    console.warn(
+      `⚠ ${capture.fixture}: capture ${capture.schema_version} predates content-pinning — replay is NOT content-verified (fixture drift would go unnoticed).`,
+    );
+    return;
+  }
+  const now = await computeSourceDigests(capture.fixture, capture.evidence_session);
+  for (const key of ["ground_truth", "issue_ledger", "finding_ledger"] as const) {
+    if (now[key] !== capture.source_digests[key]) {
+      throw new Error(
+        `m3 replay: ${capture.fixture} ${key} changed since capture (${capture.source_digests[key].slice(0, 12)}… → ${now[key].slice(0, 12)}…) — replay is not reproducible against a mutated fixture.`,
+      );
+    }
+  }
 }
 
 function bandLabel(band: DefectSpectrumBand): string {
@@ -206,17 +247,20 @@ function reportLine(a: FixtureStabilityResult): string {
 async function runFixtures(args: {
   fixtures: string[];
   sessionPins: Map<string, string>;
-  auth: "api_key" | "oauth";
+  auth: AttributionAuth;
   effort?: string;
   judgeRuns: number;
   outDir: string;
 }): Promise<FixtureStabilityResult[]> {
-  const judge = createAttributionJudge({ dispatch: judgeDispatch(args.auth, args.effort) });
+  const judge = createAttributionJudge({
+    dispatch: anthropicJudgeDispatch({ auth: args.auth, ...(args.effort ? { effort: args.effort } : {}) }),
+  });
   await fs.mkdir(path.join(args.outDir, "capture"), { recursive: true });
   const outputs: FixtureStabilityResult[] = [];
   for (const fixture of args.fixtures) {
     const session = args.sessionPins.get(fixture) ?? (await latestEvidenceSession(fixture));
     const { seededDefects, issues } = await loadFixtureInputs(fixture, session);
+    const sourceDigests = await computeSourceDigests(fixture, session);
     console.log(`\n▶ ${fixture} (evidence ${session}) — ${issues.length} material issues, ${seededDefects.length} seeded defects → judge ×${args.judgeRuns}`);
     const runs: IssueAttribution[][] = [];
     const perRun: DefectSpectrumResult[] = [];
@@ -228,32 +272,35 @@ async function runFixtures(args: {
       console.log(`  run ${k + 1}: ${result.band}  material ${result.recall_material.toFixed(3)}  precision ${result.precision.toFixed(3)}  detected ${result.detected_defect_ids.length}/${result.seeded_total}`);
     }
     const capture: CaptureFile = {
-      schema_version: "m3-capture/2",
+      schema_version: "m3-capture/3",
       fixture,
       evidence_session: session,
       judge_model: JUDGE_MODEL_ID,
+      judge_auth: args.auth,
       ...(args.effort ? { judge_effort: args.effort } : {}),
       band_thresholds: M3_BAND_THRESHOLDS,
+      source_digests: sourceDigests,
       runs,
     };
     await fs.writeFile(path.join(args.outDir, "capture", `${fixture}.json`), `${JSON.stringify(capture, null, 2)}\n`, "utf8");
-    const agg = aggregate(fixture, session, perRun);
+    const agg = aggregate(fixture, session, perRun, args.auth);
     outputs.push(agg);
     console.log(reportLine(agg));
   }
   return outputs;
 }
 
-async function replayRun(runDir: string): Promise<FixtureStabilityResult[]> {
+export async function replayRun(runDir: string): Promise<FixtureStabilityResult[]> {
   const captureDir = path.join(runDir, "capture");
   const outputs: FixtureStabilityResult[] = [];
   for (const file of (await fs.readdir(captureDir)).filter((f) => f.endsWith(".json")).sort()) {
     const capture = JSON.parse(await fs.readFile(path.join(captureDir, file), "utf8")) as CaptureFile;
+    await verifySourceDigests(capture);
     const { seededDefects, issues } = await loadFixtureInputs(capture.fixture, capture.evidence_session);
     const perRun = capture.runs.map((attributions) =>
       scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: capture.band_thresholds }),
     );
-    const agg = aggregate(capture.fixture, capture.evidence_session, perRun);
+    const agg = aggregate(capture.fixture, capture.evidence_session, perRun, capture.judge_auth);
     outputs.push(agg);
     console.log(reportLine(agg));
   }
@@ -262,13 +309,14 @@ async function replayRun(runDir: string): Promise<FixtureStabilityResult[]> {
 
 function summaryReport(outputs: FixtureStabilityResult[]) {
   return {
-    schema_version: "m3-report/2",
+    schema_version: "m3-report/3",
     judge_model: JUDGE_MODEL_ID,
     band_thresholds: M3_BAND_THRESHOLDS,
     fixtures: outputs.map((o) => ({
       fixture: o.fixture,
       evidence_session: o.evidence_session,
       judge_runs: o.judge_runs,
+      judge_auth: o.judge_auth,
       band: o.band,
       band_stable: o.band_stable,
       bands_observed: o.bands_observed,
@@ -296,13 +344,21 @@ async function main(): Promise<void> {
       const [f, s] = pin.split(":");
       if (f && s) sessionPins.set(f, s);
     }
-    const auth = (readOption(argv, "judge-auth") ?? "api_key") as "api_key" | "oauth";
+    const authRaw = readOption(argv, "judge-auth") ?? "api_key";
+    if (authRaw !== "api_key" && authRaw !== "oauth") {
+      throw new Error(`m3: --judge-auth must be api_key|oauth, got ${JSON.stringify(authRaw)}`);
+    }
+    const auth: AttributionAuth = authRaw;
     // effort=low is the validated default: an effort-unset judge flipped bands
     // via a ~40× thinking swing; low is the stable, refute-by-default-faithful
     // setting (development-records/benchmark/m3/20260716-baseline-evidence).
     const effort = readOption(argv, "judge-effort") ?? "low";
-    const judgeRuns = Number(readOption(argv, "judge-runs") ?? String(DEFAULT_JUDGE_RUNS));
-    outDir = readOption(argv, "out") ?? path.join("development-records/benchmark/m3", stamp(new Date()));
+    const judgeRunsRaw = readOption(argv, "judge-runs");
+    const judgeRuns = Number(judgeRunsRaw ?? String(DEFAULT_JUDGE_RUNS));
+    if (!Number.isInteger(judgeRuns) || judgeRuns < 1) {
+      throw new Error(`m3: --judge-runs must be a positive integer, got ${JSON.stringify(judgeRunsRaw)}`);
+    }
+    outDir = readOption(argv, "out") ?? path.join(DEFAULT_OUT_ROOT, stamp(new Date()));
     console.log(`M3 RUN — judge ${JUDGE_MODEL_ID} (${auth}, effort=${effort}) ×${judgeRuns} → ${outDir}`);
     outputs = await runFixtures({
       fixtures: fixtures.length > 0 ? fixtures : DEFAULT_FIXTURES,

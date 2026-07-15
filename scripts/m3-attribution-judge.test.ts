@@ -1,12 +1,21 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  anthropicJudgeDispatch,
   createAttributionJudge,
   parseAttributionResponse,
   buildAttributionUserPrompt,
   JUDGE_MODEL_ID,
+  JUDGE_MAX_TOKENS,
   type AttributionDispatch,
 } from "./m3-attribution-judge.ts";
 import { attributeAndScore, type SeededDefect, type SurfacedIssue, type BandThresholds } from "./m3-defect-spectrum.ts";
+
+// Mock the runtime LLM caller so the production dispatch's callLlm config is
+// asserted without spend. anthropicJudgeDispatch dynamic-imports this exact path.
+vi.mock("../src/core-runtime/llm/llm-caller.ts", () => ({
+  callLlm: vi.fn(async () => ({ text: '{"attributions":[]}' })),
+}));
+import { callLlm } from "../src/core-runtime/llm/llm-caller.ts";
 
 const DEFECTS: SeededDefect[] = [
   { id: "D1", kind: "duplicate_concept", where: "A", description: "d1", severity_expectation: "material" },
@@ -99,6 +108,32 @@ describe("createAttributionJudge", () => {
     expect(r.recall_overall).toBe(1);
     expect(r.precision).toBe(1);
     expect(r.band).toBe("exceeds");
+  });
+});
+
+describe("anthropicJudgeDispatch (production route wiring)", () => {
+  it("api_key route: no execution_adapter, single-sourced model + max_tokens, effort threaded when set", async () => {
+    const mock = vi.mocked(callLlm);
+    mock.mockClear();
+    await anthropicJudgeDispatch({ auth: "api_key", effort: "low" })("sys", "user");
+    expect(mock).toHaveBeenCalledOnce();
+    const cfg = mock.mock.calls[0]![2] as Record<string, unknown>;
+    expect(cfg.provider).toBe("anthropic");
+    expect(cfg.model_id).toBe(JUDGE_MODEL_ID);
+    expect(cfg.max_tokens).toBe(JUDGE_MAX_TOKENS); // single-sourced, not a stray literal
+    expect(cfg.reasoning_effort).toBe("low");
+    expect(cfg).not.toHaveProperty("execution_adapter"); // api_key ≠ oauth instrument
+  });
+
+  it("oauth route: adds the claude_code execution adapter; omits reasoning_effort when unset", async () => {
+    const mock = vi.mocked(callLlm);
+    mock.mockClear();
+    await anthropicJudgeDispatch({ auth: "oauth" })("sys", "user");
+    const cfg = mock.mock.calls[0]![2] as Record<string, unknown>;
+    expect(cfg.execution_adapter).toBe("claude_code");
+    expect(cfg.model_id).toBe(JUDGE_MODEL_ID);
+    expect(cfg.max_tokens).toBe(JUDGE_MAX_TOKENS);
+    expect(cfg).not.toHaveProperty("reasoning_effort"); // no effort passed ⇒ not sent
   });
 });
 

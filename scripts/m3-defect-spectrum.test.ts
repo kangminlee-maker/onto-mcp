@@ -90,16 +90,19 @@ describe("scoreDefectSpectrum", () => {
     expect(r.band).toBe("meets");
   });
 
-  it("FALSIFIABLE: a material defect surfaced only at low severity is detected but NOT severity-aligned", () => {
-    const r = scoreDefectSpectrum({
-      seededDefects: DEFECTS,
-      issues: [issue("i1", "low"), issue("i2"), issue("i3"), issue("i4")],
-      attributions: [attr("i1", "D1"), attr("i2", "D2"), attr("i3", "D3"), attr("i4", "D4")],
-      thresholds: THRESHOLDS,
-    });
-    expect(r.detected_defect_ids).toContain("D1"); // still detected
-    expect(r.severity_aligned_defect_ids).not.toContain("D1"); // but not aligned (low < material)
-    expect(r.severity_alignment_rate).toBeCloseTo(3 / 4);
+  it("FALSIFIABLE boundary: full material recall with precision exactly at the exceed cut (0.9) → exceeds", () => {
+    // 9 attributed material issues + 1 fabrication → precision 0.9 == exceed_precision.
+    // Pins classifyBand's `>=` (a `>` mutation would drop this to "meets").
+    const issues = Array.from({ length: 10 }, (_, i) => issue(`i${i}`));
+    const attributions = [
+      attr("i0", "D1"), attr("i1", "D2"), attr("i2", "D3"), attr("i3", "D4"),
+      attr("i4", "D1"), attr("i5", "D2"), attr("i6", "D3"), attr("i7", "D4"), attr("i8", "D1"),
+      attr("i9"), // fabrication → 9/10 = 0.9
+    ];
+    const r = scoreDefectSpectrum({ seededDefects: DEFECTS, issues, attributions, thresholds: THRESHOLDS });
+    expect(r.recall_material).toBe(1);
+    expect(r.precision).toBeCloseTo(0.9);
+    expect(r.band).toBe("exceeds");
   });
 
   it("one issue may surface multiple seeded defects (attributed_defect_ids is a set)", () => {
@@ -130,6 +133,18 @@ describe("scoreDefectSpectrum", () => {
     expect(() =>
       scoreDefectSpectrum({ seededDefects: [], issues: [], attributions: [], thresholds: THRESHOLDS }),
     ).toThrow(/empty/);
+  });
+
+  it("guards: seeded set with zero `material`-expectation defects throws (vacuous material recall)", () => {
+    // All medium_or_above → materialDefectIds empty → material recall would be a
+    // vacuous 1.0 and buy a meets/exceeds on precision alone. Must fail loud.
+    const allMedium: SeededDefect[] = [
+      { id: "M1", kind: "k", where: "w", description: "d", severity_expectation: "medium_or_above" },
+      { id: "M2", kind: "k", where: "w", description: "d", severity_expectation: "medium_or_above" },
+    ];
+    expect(() =>
+      scoreDefectSpectrum({ seededDefects: allMedium, issues: [], attributions: [], thresholds: THRESHOLDS }),
+    ).toThrow(/no .material.-expectation seeded defects/);
   });
 
   it("guards: a surfaced issue with no attribution throws (no silent drop)", () => {
@@ -228,6 +243,26 @@ describe("parseSurfacedIssues", () => {
     expect(issues[0].severity).toBe("high"); // max(medium, high) = high
   });
 
+  it("takes the running MAX regardless of finding order (descending: high then low → high)", () => {
+    // Guards moreSevere accumulation: a `return latest` mutation would yield low
+    // here (→ non-material → dropped), so the kept high issue kills it.
+    const issues = parseSurfacedIssues(
+      { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1", "f3"] }] },
+      findingLedger,
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe("high"); // max(high, low) = high
+  });
+
+  it("keeps a medium-max issue (the material keep-side boundary)", () => {
+    const issues = parseSurfacedIssues(
+      { issues: [{ issue_id: "iss-m", issue_statement: "s", surface_finding_ids: ["f2"] }] },
+      findingLedger,
+    );
+    expect(issues.map((i) => i.issue_id)).toEqual(["iss-m"]);
+    expect(issues[0].severity).toBe("medium"); // medium is retained (bottom of the material band)
+  });
+
   it("drops a non-material issue (all its surface findings low/info)", () => {
     const issues = parseSurfacedIssues(
       {
@@ -242,16 +277,37 @@ describe("parseSurfacedIssues", () => {
     expect(issues[0].severity).toBe("blocker");
   });
 
-  it("throws when an issue has no surface_finding_ids or references no resolvable severity", () => {
+  it("throws when an issue has no surface_finding_ids", () => {
     expect(() =>
       parseSurfacedIssues({ issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: [] }] }, findingLedger),
     ).toThrow(/no surface_finding_ids/);
+  });
+
+  it("throws on a dangling surface_finding_id (reference integrity — no silent skip)", () => {
+    // Fully dangling.
     expect(() =>
       parseSurfacedIssues(
         { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["nope"] }] },
         findingLedger,
       ),
-    ).toThrow(/no resolvable surface finding severity/);
+    ).toThrow(/surface finding 'nope' absent from the finding-ledger/);
+    // MIXED resolvable + dangling: the dangling id must still throw (it previously
+    // was silently skipped, under-deriving severity and risking a dropped issue).
+    expect(() =>
+      parseSurfacedIssues(
+        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1", "gone"] }] },
+        findingLedger,
+      ),
+    ).toThrow(/surface finding 'gone' absent from the finding-ledger/);
+  });
+
+  it("throws on a duplicate finding_id in the finding-ledger (symmetry with issue/seeded dup guards)", () => {
+    expect(() =>
+      parseSurfacedIssues(
+        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1"] }] },
+        { findings: [{ finding_id: "f1", severity: "high" }, { finding_id: "f1", severity: "low" }] },
+      ),
+    ).toThrow(/duplicate finding id 'f1'/);
   });
 
   it("parses the real clinical-lab evidence issue-ledger + finding-ledger (material issues, cardinality > 0)", async () => {
@@ -262,6 +318,11 @@ describe("parseSurfacedIssues", () => {
     const findingLedger = YAML.parse(await fs.readFile(`${base}/finding-ledger.yaml`, "utf8"));
     const issues = parseSurfacedIssues(issueLedger, findingLedger);
     expect(issues.length).toBeGreaterThan(0); // non-vacuous: real evidence yields material issues
+    // Exact count pin: a mutation dropping the `medium` keep (this session is 4
+    // high + 8 medium) would silently shrink the scored set — the count catches it
+    // where `every(isMaterial)` (which stays true on the survivors) cannot.
+    expect(issues.length).toBe(12);
+    expect(issues.filter((i) => i.severity === "medium")).toHaveLength(8);
     expect(issues.every((i) => isMaterialSeverity(i.severity))).toBe(true);
     expect(new Set(issues.map((i) => i.issue_id)).size).toBe(issues.length); // unique
   });
