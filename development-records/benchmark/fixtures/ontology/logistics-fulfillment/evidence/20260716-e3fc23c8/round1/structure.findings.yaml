@@ -1,0 +1,238 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: logistics-fulfillment-ontology.yaml / entities.OrderLine and relation
+      fulfills
+    evidence_anchor: 'Embedded Materialized Input: OrderLine attributes only define
+      sku_ref and qty; relations includes only fulfills from Shipment to Order
+      with note "주문 단위 관계이며 OrderLine 단위 매핑은 두지 않는다."'
+    claim: OrderLine is not structurally connected to Shipment at fulfillment
+      granularity.
+    what: The ontology links Shipment to Order, but provides no relationship or
+      reference that connects a specific OrderLine, quantity, or partial
+      fulfillment allocation to the Shipment or DeliveryLeg that fulfilled it.
+    why: OrderLine is reachable from Order and Shipment is connected to Order, but
+      the only fulfillment edge is order-level. The target declares itself as a
+      concept baseline for WMS/TMS/ERP integration across order, inventory
+      allocation, shipment, and delivery. In that declared structure, line-level
+      fulfillment is a necessary bridge between order content and physical
+      movement; without it, partial shipments or split fulfillment cannot be
+      represented as connected paths inside the ontology.
+    how_to_fix: Add a line-level fulfillment/allocation concept, such as
+      ShipmentLine or FulfillmentAllocation, with refs to OrderLine and Shipment
+      plus fulfilled quantity and timing/status fields as needed.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory
+        allocation, shipment, and delivery.
+      failure_condition: When one order has multiple lines, partial shipments, split
+        shipments, or multiple delivery legs, the ontology cannot answer which
+        OrderLine quantity was fulfilled by which Shipment/DeliveryLeg.
+      impact: This weakens structural completeness for integration because OMS order
+        lines and TMS/WMS shipment execution cannot be reconciled through the
+        model; downstream systems would need out-of-model joins or assumptions.
+      evidence_refs:
+        - 'Embedded Materialized Input: title/comment declares "주문 → 재고 할당 → 출하
+          → 배송의 개념 모델. WMS/TMS/ERP 통합의 개념 기준 문서."'
+        - "Embedded Materialized Input: Order.lines target OrderLine; OrderLine
+          attributes sku_ref and qty only"
+        - "Embedded Materialized Input: relations fulfills from Shipment to
+          Order with note that OrderLine mapping is not included"
+    causal_path:
+      root_cause_candidate: The fulfillment relation is modeled only at
+        Shipment-to-Order granularity while OrderLine has no outgoing or
+        incoming fulfillment relation.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: OrderLine contains sku_ref and qty but no Shipment, DeliveryLeg, or
+            fulfillment-allocation reference.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: OrderLine attributes define sku_ref
+              and qty only"
+        - cause_id: structure-candidate-001.cause-002
+          claim: The ontology's only declared relation connects Shipment to Order rather
+            than Shipment to OrderLine.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations: fulfills from Shipment to
+              Order"
+        - cause_id: structure-candidate-001.cause-003
+          claim: The relation note explicitly excludes OrderLine-level mapping.
+          relation_to_previous: causes
+          evidence_refs:
+            - 'Embedded Materialized Input: fulfills note: "주문 단위 관계이며 OrderLine
+              단위 매핑은 두지 않는다."'
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: logistics-fulfillment-ontology.yaml / InventoryAggregate and
+      InventoryRecord structure
+    evidence_anchor: "Embedded Materialized Input: InventoryRecord references
+      Warehouse and Sku; InventoryAggregate references only Sku and has
+      available_qty; integrity rule says allocation reads
+      InventoryAggregate.available_qty."
+    claim: InventoryAggregate is structurally disconnected from the warehouse-level
+      inventory records it summarizes.
+    what: InventoryAggregate is defined as enterprise-wide available inventory by
+      SKU, but there is no relation or derivation edge connecting it to the
+      InventoryRecord entries that are the warehouse/SKU source records.
+    why: The structure contains InventoryRecord.wh_ref and sku_ref, and
+      InventoryAggregate.sku_ref, but no aggregate-of, derived-from, or snapshot
+      relation between them. Because allocation is declared to read
+      InventoryAggregate.available_qty, the concept used for fulfillment
+      decisions has no explicit structural path back to the warehouse records or
+      warehouses that would execute the pick/ship flow.
+    how_to_fix: Add an explicit relation such as InventoryAggregate aggregates
+      InventoryRecord, or model InventorySnapshot/AvailabilityByWarehouse with
+      source InventoryRecord refs, aggregation time, and scope. If enterprise
+      aggregate is intentionally independent, document its authoritative source
+      relation explicitly.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Concept baseline for inventory allocation in WMS/TMS/ERP integration.
+      failure_condition: When allocation decisions must be traced from enterprise
+        available_qty to specific warehouse stock records for picking or
+        reconciliation, the ontology has no connected structural path.
+      impact: "This makes the allocation concept structurally incomplete: the value
+        used to accept orders is disconnected from warehouse-level execution and
+        reconciliation records, reducing actionability and auditability for
+        integration."
+      evidence_refs:
+        - "Embedded Materialized Input: InventoryRecord definition and
+          attributes wh_ref, sku_ref, quantity_on_hand"
+        - "Embedded Materialized Input: InventoryAggregate definition and
+          attributes sku_ref, available_qty"
+        - 'Embedded Materialized Input: integrity rule: "재고 할당은
+          InventoryAggregate.available_qty를 확인해 수행한다"'
+    causal_path:
+      root_cause_candidate: InventoryAggregate is modeled as a standalone SKU-level
+        entity with no declared aggregate/source relation to InventoryRecord.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: InventoryRecord provides the warehouse/SKU inventory structure via wh_ref
+            and sku_ref.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: InventoryRecord attributes wh_ref
+              target Warehouse and sku_ref target Sku"
+        - cause_id: structure-candidate-002.cause-002
+          claim: InventoryAggregate provides SKU-level available_qty but only references
+            Sku.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: InventoryAggregate attributes
+              sku_ref target Sku and available_qty"
+        - cause_id: structure-candidate-002.cause-003
+          claim: No relation in the ontology connects InventoryAggregate to
+            InventoryRecord; the only relation listed is fulfills from Shipment
+            to Order.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations list contains only
+              fulfills from Shipment to Order"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: logistics-fulfillment-ontology.yaml / DeliveryLeg as Shipment subtype
+    evidence_anchor: "Embedded Materialized Input: Shipment definition says
+      DeliveryLeg is also a kind of Shipment; DeliveryLeg is_a Shipment and has
+      leg_seq/from_ref/to_ref; no attribute or relation links DeliveryLeg
+      instances to a parent end-to-end Shipment."
+    claim: DeliveryLeg lacks a structural parent path to the shipment route it
+      composes.
+    what: DeliveryLeg is modeled as a subtype of Shipment, but there is no
+      contains/composes/parent_shipment relation connecting multiple legs into
+      one end-to-end Shipment path.
+    why: The target intends to model shipment and delivery, and DeliveryLeg is
+      defined as a route segment. A sequence number alone is not structurally
+      meaningful without a parent route/shipment scope. Because DeliveryLeg
+      inherits Shipment rather than being linked as a component, the model
+      cannot represent which legs belong to the same shipment or reconstruct a
+      route as connected segments.
+    how_to_fix: Model DeliveryLeg as a component of Shipment with a required
+      shipment_ref or relation such as Shipment has_leg DeliveryLeg, keeping
+      leg_seq scoped to that parent shipment. If legs remain subtypes, add a
+      parent_shipment_ref for route composition.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Concept baseline for shipment and delivery path integration.
+      failure_condition: When a Shipment has multiple route segments, the ontology
+        cannot determine which DeliveryLegs compose that shipment or whether
+        their sequence belongs to the same route.
+      impact: This breaks structural route completeness for TMS-style shipment
+        execution and tracking because segment data cannot be reliably connected
+        into one shipment movement.
+      evidence_refs:
+        - 'Embedded Materialized Input: Shipment definition: "배송
+          구간(DeliveryLeg)도 Shipment의 일종이다."'
+        - "Embedded Materialized Input: DeliveryLeg is_a Shipment and attributes
+          leg_seq, from_ref, to_ref"
+        - "Embedded Materialized Input: relations list contains only fulfills
+          from Shipment to Order"
+    causal_path:
+      root_cause_candidate: The model uses inheritance for DeliveryLeg but omits a
+        composition relation from Shipment to DeliveryLeg.
+      root_cause_step_id: structure-candidate-003.cause-003
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: DeliveryLeg is defined as a route segment with leg_seq/from_ref/to_ref.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: DeliveryLeg definition and
+              attributes"
+        - cause_id: structure-candidate-003.cause-002
+          claim: DeliveryLeg is declared as is_a Shipment, making it a Shipment subtype
+            rather than an explicit component connected to a parent Shipment.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: DeliveryLeg is_a Shipment; Shipment
+              definition says DeliveryLeg is a kind of Shipment"
+        - cause_id: structure-candidate-003.cause-003
+          claim: No relation or attribute connects DeliveryLeg instances to a parent
+            end-to-end Shipment.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations list contains only
+              fulfills from Shipment to Order; DeliveryLeg attributes omit
+              shipment_ref or parent_ref"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-004
+    target: logistics-fulfillment-ontology.yaml / TrackingEvent linkage
+    evidence_anchor: "Embedded Materialized Input: TrackingEvent has shipment_ref to
+      Shipment; DeliveryLeg is_a Shipment; no relation assigns events to a
+      specific DeliveryLeg or leg sequence."
+    claim: TrackingEvent is not structurally connectable to a specific delivery leg.
+    what: TrackingEvent can reference a Shipment, and DeliveryLeg is a Shipment
+      subtype, but the ontology does not define whether events attach to the
+      overall shipment or a particular leg, nor does it provide a leg_ref or
+      location-to-leg structural path.
+    why: For a route with multiple DeliveryLegs, a carrier event such as arrived_hub
+      or exception needs a structural attachment point to a leg or stop to
+      preserve delivery-path context. The current single shipment_ref can point
+      at the broad Shipment concept while the route segments are not composed
+      under it, so event-to-leg connectivity is underspecified.
+    how_to_fix: Add an optional or required leg_ref from TrackingEvent to
+      DeliveryLeg, or define event scoping rules plus a Shipment-to-DeliveryLeg
+      composition relation that lets events be associated with a leg by route
+      location and sequence.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - The review used only the embedded materialized input and the structure lens
+    role included in the prompt packet; no domain document was used because
+    session_domain is none.
+  - For this structure lens, findings are limited to missing or incomplete
+    connections among already-present ontology elements, not broader domain
+    coverage or semantic correctness.
+validation:
+  unaddressable_candidates: []

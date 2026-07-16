@@ -1,0 +1,16 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+lens_id: axiology
+human_output_ref: null
+findings: []
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []
+  no_findings_rationale: Cannot perform the bounded axiology review because the
+    required value-authority inputs for axiology-specific findings are not
+    included in the allowed output schema or embedded packet, and this
+    constrained output schema has no field for the required
+    value_authority_anchor/value_type/alignment_direction. Producing findings
+    without those authority anchors would violate the authoritative axiology
+    role contract.

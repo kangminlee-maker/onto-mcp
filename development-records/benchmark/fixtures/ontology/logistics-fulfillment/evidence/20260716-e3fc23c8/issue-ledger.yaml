@@ -1,0 +1,611 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: Fulfillment is modeled only at Shipment-to-Order
+      granularity, leaving no line-level allocation path from OrderLine
+      quantities to shipment execution.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: OrderLine fulfillment cannot be traced to the shipments or
+      shipment quantities that actually fulfilled each line.
+    proposed_action: Add a line-level fulfillment/allocation concept linking
+      OrderLine, Shipment, fulfilled quantity, timing, and status; keep the
+      order-level relation only as a derived summary if needed.
+    affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory,
+      freight, and delivery consistency.
+    failure_condition: When an order has multiple lines, partial shipment, split
+      shipment, or delayed/backordered lines, the ontology cannot identify which
+      line quantity moved in which shipment.
+    impact: The model cannot support reconciliation between OMS order promises, WMS
+      picking/packing, TMS shipment execution, and customer delivery evidence at
+      the operational unit where fulfillment actually happens.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-001
+      - logistics-fulfillment-ontology.yaml:20-26
+      - logistics-fulfillment-ontology.yaml:100-104
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-001 is a duplicates relation, not a
+      same_root_candidate relation.
+  - issue_id: issue-002
+    root_cause_hypothesis: Inventory is represented as current or nightly aggregate
+      quantities rather than time-qualified snapshots, movements, reservations,
+      or effective intervals.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+      - finding-009
+    relation_refs:
+      - rel-002
+    raised_by_lens_ids:
+      - coverage
+      - evolution
+    issue_statement: Inventory quantities lack the temporal and lifecycle structure
+      needed to audit allocation decisions or evolve from nightly batch to
+      event-based synchronization.
+    proposed_action: Introduce InventorySnapshot, InventoryMovement/Transaction, and
+      Reservation/Allocation concepts with as_of/effective time, source_system,
+      lifecycle state, and derivation rules for available_qty.
+    affected_purpose: Inventory consistency, allocation correctness, and stable
+      WMS/ERP inventory authority across fulfillment operations.
+    failure_condition: When inventory changes between nightly snapshots, when orders
+      are allocated intraday, or when the system moves from nightly batch to
+      real-time/event-based inventory synchronization, the model cannot
+      reconstruct or preserve the basis of past inventory decisions.
+    impact: The integration baseline cannot reliably support inventory audit,
+      allocation dispute resolution, or continuous evolution of inventory
+      semantics without changing the meaning of existing quantity fields.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-002
+      - logistics-fulfillment-ontology.yaml:71-85
+      - logistics-fulfillment-ontology.yaml:106-107
+      - .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-004
+      - "Embedded Materialized Input: `InventoryRecord.quantity_on_hand` note
+        and inline comment"
+      - "Embedded Materialized Input: `InventoryAggregate.available_qty` note"
+      - "Embedded Materialized Input: integrity rule on allocation reading
+        `InventoryAggregate.available_qty`"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-003
+    root_cause_hypothesis: Measured logistics quantities are represented as bare
+      numbers or source-dependent strings rather than value-plus-unit concepts
+      with conversion authority.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-003
+      - finding-008
+    relation_refs:
+      - rel-006
+    raised_by_lens_ids:
+      - coverage
+      - evolution
+    issue_statement: Weight, dimension, order quantity, and inventory quantity
+      values lack explicit unit and conversion semantics for cross-system
+      integration.
+    proposed_action: Add Measurement/Quantity value objects with value, unit, unit
+      authority, measured/effective time, and conversion basis; structure
+      dimensions into components and define Shipment.total_weight as a
+      normalized derived measurement.
+    affected_purpose: Freight, shipment, inventory, and unit consistency across
+      WMS/TMS/ERP integrations.
+    failure_condition: When warehouses, countries, ERPs, WMSs, or carriers use
+      different kg/lb, dimensional, sales-unit, storage-unit, or conversion
+      conventions, numeric values cannot be safely compared, aggregated, or
+      evolved.
+    impact: The ontology can produce ambiguous or incorrect freight weights,
+      dimensions, inventory quantities, and transportation decisions while
+      appearing to provide a shared integration baseline.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-003
+      - logistics-fulfillment-ontology.yaml:28-33
+      - logistics-fulfillment-ontology.yaml:35-44
+      - .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-003
+      - "Embedded Materialized Input: `Sku.weight` note"
+      - "Embedded Materialized Input: `Sku.dims` note"
+      - "Embedded Materialized Input: `OrderLine.qty`,
+        `InventoryRecord.quantity_on_hand`, `InventoryAggregate.available_qty`
+        definitions"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-004
+    root_cause_hypothesis: Shared and manually adjusted operational values are
+      represented only as final scalar attributes, without source-authority or
+      adjustment-event concepts.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: The ontology lacks audit evidence and authority concepts for
+      values that are reconciled across systems or manually overridden.
+    proposed_action: Add SourceAuthority/SourceSystem ownership and
+      Adjustment/OverrideEvent concepts with actor, time, reason, source value,
+      adjusted value, approval, and affected field.
+    affected_purpose: Authority, auditability, and operational risk control for
+      WMS/TMS/ERP integration.
+    failure_condition: When WMS and ERP quantities disagree, or when an ETA is
+      manually changed after carrier data arrives, the ontology cannot identify
+      the authoritative value or preserve evidence of the intervention.
+    impact: The concept baseline leaves high-risk operational controls outside the
+      model, weakening dispute resolution, SLA explanations, and reconciliation
+      audit trails.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-004
+      - logistics-fulfillment-ontology.yaml:43-45
+      - logistics-fulfillment-ontology.yaml:76-85
+      - logistics-fulfillment-ontology.yaml:110-112
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-007 is a shared_cause_candidate dependency
+      relation and must not be merged into the issue.
+  - issue_id: issue-005
+    root_cause_hypothesis: Lifecycle coverage is success-path oriented and leaves
+      exception, post-delivery, and reverse-logistics states outside the core
+      Order and Shipment status models.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Order, Shipment, and Tracking lifecycle models omit common
+      terminal and exception paths needed for fulfillment operations.
+    proposed_action: Extend lifecycle coverage with explicit terminal and exception
+      states plus lifecycle event concepts for cancellation, backorder,
+      return/RMA, delivery failure, loss/damage, correction/reissue, and
+      closure.
+    affected_purpose: Status model completeness for order, shipment, and delivery operations.
+    failure_condition: When a shipment fails, is returned, corrected after delivery,
+      or a carrier reports an exception, the ontology has no first-class
+      lifecycle path except successful delivery or independent unmapped tracking
+      events.
+    impact: The integration baseline cannot consistently represent exception
+      handling, reverse logistics, or post-terminal correction, making status
+      reconciliation fragile across OMS, TMS, and carriers.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-005
+      - logistics-fulfillment-ontology.yaml:14-17
+      - logistics-fulfillment-ontology.yaml:39-42
+      - logistics-fulfillment-ontology.yaml:55-63
+      - logistics-fulfillment-ontology.yaml:106-108
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-012 is a shared_cause_candidate dependency
+      relation and must not be merged into the issue.
+  - issue_id: issue-006
+    root_cause_hypothesis: DeliveryLeg is modeled as a subtype of Shipment even
+      though it is semantically a route segment or component of an end-to-end
+      shipment.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-006
+      - finding-013
+    relation_refs:
+      - rel-008
+    raised_by_lens_ids:
+      - evolution
+      - semantics
+    issue_statement: The ontology binds route segments and whole shipments through
+      inheritance, mixing their meanings and making future shipment-state
+      evolution global rather than local.
+    proposed_action: Keep Shipment as the order-fulfillment cargo movement and model
+      DeliveryLeg/TransportMovement as a component with its own state model;
+      connect it to Shipment through has_leg or part_of relations.
+    affected_purpose: WMS/TMS/ERP integration concept baseline for shipment,
+      delivery, and long-term status-model evolution.
+    failure_condition: When international/customs delivery, multi-leg hub routes,
+      returns, carrier handoffs, or leg-specific ETA/status data are added,
+      DeliveryLeg inherits the whole-Shipment contract instead of evolving as a
+      route component.
+    impact: Shipment meaning and status enums become unstable integration-wide,
+      while route-level status and ETA semantics can be confused with
+      whole-shipment delivery semantics.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-001
+      - "Embedded Materialized Input: `Shipment` definition and
+        attributes.status"
+      - "Embedded Materialized Input: `DeliveryLeg` definition and `is_a:
+        Shipment`"
+      - "Embedded Materialized Input: notes item `국제/통관 배송은 이 온톨로지의 범위 밖으로 둔다.`"
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:40-58
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-007
+    root_cause_hypothesis: External carrier events and internal Shipment status
+      mappings are delegated to individual integrations rather than modeled as
+      ontology-owned mapping authority.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: Carrier status changes and new carrier onboarding cannot
+      preserve a shared status interpretation because mapping authority lives
+      outside the ontology.
+    proposed_action: Separate carrier source event codes from internal standard
+      states and add versioned TrackingStatusMapping or status-transition rules
+      in the ontology.
+    affected_purpose: Common interpretation of freight and delivery status across
+      TMS and carrier integrations.
+    failure_condition: When a new carrier is onboarded, carrier status codes change,
+      or exception events are subdivided, each integration must decide mapping
+      behavior independently.
+    impact: The same carrier event can map to different Shipment states across
+      integrations, and external standard changes cannot be absorbed while
+      preserving historical status meaning.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-002
+      - "Embedded Materialized Input: `TrackingEvent.event_type` note"
+      - "Embedded Materialized Input: integrity rule on independent management
+        of Order/Shipment/TrackingEvent states"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-011 and rel-012 are shared_cause_candidate
+      dependency relations and must not be merged into the issue.
+  - issue_id: issue-008
+    root_cause_hypothesis: Route segments inherit Shipment's unqualified final
+      delivery state because DeliveryLeg is declared as a Shipment subtype.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: DeliveryLeg inherits a shipment-level final-state rule that
+      over-constrains intermediate route legs.
+    proposed_action: Separate DeliveryLeg from Shipment inheritance, or split the
+      state model into Shipment.status and DeliveryLeg.status with distinct
+      terminal meanings.
+    affected_purpose: WMS/TMS/ERP integration concept baseline for shipment and
+      delivery status consistency.
+    failure_condition: A multi-leg route includes an intermediate leg such as
+      warehouse-to-hub and uses inherited Shipment.status.delivered as the leg's
+      terminal status.
+    impact: The same terminal status can represent leg completion or customer
+      shipment delivery, so integrations may close the whole shipment when only
+      a leg completed or fail to close a leg without implying customer delivery.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/logic.findings.yaml#logic-candidate-001
+      - "Embedded Materialized Input: `Shipment.definition` says DeliveryLeg is
+        a kind of Shipment."
+      - "Embedded Materialized Input: `Shipment.status.values` includes
+        `delivered` and its note says delivered is final."
+      - "Embedded Materialized Input: `DeliveryLeg.definition` gives
+        warehouse-to-hub as an example leg."
+      - "Embedded Materialized Input: `DeliveryLeg.is_a: Shipment`."
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation directly connects this finding
+      to another issue member; rel-009 is a causes relation and must not be used
+      as a merge relation.
+  - issue_id: issue-009
+    root_cause_hypothesis: InventoryRecord.quantity_on_hand collapses WMS physical
+      stock and ERP accounting stock into one attribute without a
+      source-authority distinction.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: The quantity_on_hand attribute loses authority meaning by
+      naming two different inventory quantities as one current stock value.
+    proposed_action: Split inventory quantities by authority and basis, such as
+      physical_on_hand_qty and accounting_on_hand_qty, and add reconciliation or
+      adjustment-event concepts.
+    affected_purpose: WMS/TMS/ERP integration concept baseline for consistent
+      inventory authority and meaning.
+    failure_condition: WMS physical inventory and ERP accounting inventory disagree
+      and an integrator interprets quantity_on_hand as a single current on-hand
+      quantity.
+    impact: Order promise, picking, accounting adjustment, and reconciliation logic
+      can treat distinct authoritative quantities as one field, weakening
+      inventory precedence and operational correctness.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:76-84
+      - materialized-input.md:115-116
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-007 is a shared_cause_candidate dependency
+      relation and must not be merged into the issue.
+  - issue_id: issue-010
+    root_cause_hypothesis: A nightly snapshot value is exposed as unqualified
+      current availability and used for intraday allocation without an explicit
+      time basis.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: InventoryAggregate.available_qty names and uses a nightly
+      snapshot as if it were current allocatable inventory.
+    proposed_action: Rename or model available_qty as a time-qualified snapshot with
+      as_of_at and reservation basis, and have intraday allocation reference a
+      real-time ATP or reservation ledger concept.
+    affected_purpose: Order and inventory temporal meaning and operational risk
+      control inside the integration baseline.
+    failure_condition: After intraday orders, reservations, or shipments change
+      stock, allocation rules still read prior nightly snapshot available_qty as
+      current availability.
+    impact: Availability may mean either past snapshot or current allocatable stock,
+      creating oversell, under-allocation, and inventory drift risk across
+      systems.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:86-90
+      - materialized-input.md:111-112
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation directly connects this finding
+      to another issue member; rel-003 is a symptom_of relation and must not be
+      used as a merge relation.
+  - issue_id: issue-011
+    root_cause_hypothesis: Identical status labels across OMS, TMS, and carrier
+      events are not semantically namespaced or mapped under a shared authority.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-014
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: The label delivered appears in order, shipment, and tracking
+      status models with different authorities and completion conditions but no
+      ontology-owned disambiguation.
+    proposed_action: Namespace or separate status concepts by authority and define
+      standard transition/mapping rules among carrier events, shipment
+      completion, and order fulfillment completion.
+    affected_purpose: Semantic consistency and precedence for order, shipment, and
+      delivery status models.
+    failure_condition: An OMS, TMS, or carrier delivered value is treated as
+      equivalent to another system's delivered state for order completion,
+      customer notification, settlement, or SLA decisions.
+    impact: Delivery completion timing and responsible authority can differ by
+      integration because the same label carries multiple meanings without a
+      shared mapping contract.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:19-22
+      - materialized-input.md:44-47
+      - materialized-input.md:63-66
+      - materialized-input.md:111-113
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-011 is a shared_cause_candidate dependency
+      relation and must not be merged into the issue.
+  - issue_id: issue-012
+    root_cause_hypothesis: Shipment.total_weight is a derived aggregate over
+      SKU/order-line weights without preserving unit or conversion basis.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-015
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: SKU weight and dimension units may vary by source, but
+      Shipment.total_weight stores only a bare numeric total.
+    proposed_action: Model weight and dimensions as value-plus-unit structures and
+      store total_weight with unit, conversion basis, and calculation time or
+      source.
+    affected_purpose: Freight and inventory measurement semantics in the WMS/TMS/ERP
+      integration baseline.
+    failure_condition: SKU weights from different warehouses or source systems with
+      different units are combined into one Shipment.total_weight calculation.
+    impact: The total weight can lose its measurement meaning and drive incorrect
+      freight rating, load-limit, or carrier-integration decisions.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-005
+      - materialized-input.md:33-38
+      - materialized-input.md:40-49
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-005 is a shared_cause_candidate dependency
+      relation and must not be merged into the issue.
+  - issue_id: issue-013
+    root_cause_hypothesis: The fulfillment relation is modeled only as
+      Shipment-to-Order while OrderLine has no incoming or outgoing fulfillment
+      relation.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-016
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: OrderLine is not structurally connected to Shipment at
+      fulfillment granularity.
+    proposed_action: Add ShipmentLine or FulfillmentAllocation with references to
+      OrderLine and Shipment plus fulfilled quantity, timing, and status fields.
+    affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory
+      allocation, shipment, and delivery.
+    failure_condition: When one order has multiple lines, partial shipments, split
+      shipments, or multiple delivery legs, the ontology cannot answer which
+      OrderLine quantity was fulfilled by which Shipment or DeliveryLeg.
+    impact: OMS order lines and WMS/TMS shipment execution cannot be reconciled
+      through connected ontology paths, forcing downstream systems to use
+      out-of-model joins or assumptions.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-001
+      - 'Embedded Materialized Input: title/comment declares "주문 → 재고 할당 → 출하 →
+        배송의 개념 모델. WMS/TMS/ERP 통합의 개념 기준 문서."'
+      - "Embedded Materialized Input: Order.lines target OrderLine; OrderLine
+        attributes sku_ref and qty only"
+      - "Embedded Materialized Input: relations fulfills from Shipment to Order
+        with note that OrderLine mapping is not included"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-001 is a duplicates relation, not a
+      same_root_candidate relation.
+  - issue_id: issue-014
+    root_cause_hypothesis: InventoryAggregate is modeled as a standalone SKU-level
+      entity with no declared aggregate/source relation to InventoryRecord.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-017
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: InventoryAggregate is structurally disconnected from the
+      warehouse-level inventory records it summarizes.
+    proposed_action: Add an explicit aggregates/derived-from relation from
+      InventoryAggregate to InventoryRecord, or model
+      InventorySnapshot/AvailabilityByWarehouse with source records, aggregation
+      time, and scope.
+    affected_purpose: Concept baseline for inventory allocation in WMS/TMS/ERP integration.
+    failure_condition: When allocation decisions must be traced from enterprise
+      available_qty to specific warehouse stock records for picking or
+      reconciliation, the ontology has no connected structural path.
+    impact: The value used to accept orders is disconnected from warehouse-level
+      execution and reconciliation records, reducing actionability and
+      auditability for integration.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-002
+      - "Embedded Materialized Input: InventoryRecord definition and attributes
+        wh_ref, sku_ref, quantity_on_hand"
+      - "Embedded Materialized Input: InventoryAggregate definition and
+        attributes sku_ref, available_qty"
+      - 'Embedded Materialized Input: integrity rule: "재고 할당은
+        InventoryAggregate.available_qty를 확인해 수행한다"'
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph; rel-004 is a shared_cause_candidate dependency
+      relation and must not be merged into the issue.
+  - issue_id: issue-015
+    root_cause_hypothesis: DeliveryLeg is modeled through inheritance but lacks a
+      composition relation from Shipment to DeliveryLeg.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-018
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: DeliveryLeg instances lack a structural parent path to the
+      shipment route they compose.
+    proposed_action: Model DeliveryLeg as a component of Shipment with a required
+      shipment_ref or has_leg relation, keeping leg_seq scoped to the parent
+      shipment.
+    affected_purpose: Concept baseline for shipment and delivery path integration.
+    failure_condition: When a Shipment has multiple route segments, the ontology
+      cannot determine which DeliveryLegs compose that shipment or whether their
+      sequence belongs to the same route.
+    impact: Segment data cannot be reliably connected into one shipment movement,
+      breaking structural route completeness for TMS-style shipment execution
+      and tracking.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-003
+      - 'Embedded Materialized Input: Shipment definition: "배송 구간(DeliveryLeg)도
+        Shipment의 일종이다."'
+      - "Embedded Materialized Input: DeliveryLeg is_a Shipment and attributes
+        leg_seq, from_ref, to_ref"
+      - "Embedded Materialized Input: relations list contains only fulfills from
+        Shipment to Order"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation directly connects this finding
+      to another issue member; rel-010 is a causes relation and must not be used
+      as a merge relation.
+  - issue_id: issue-016
+    root_cause_hypothesis: TrackingEvent attaches only to Shipment while leg-level
+      route composition and event scoping are not modeled.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-019
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: TrackingEvent is not structurally connectable to a specific delivery leg.
+    proposed_action: Add a leg_ref from TrackingEvent to DeliveryLeg, or define
+      event scoping rules together with a Shipment-to-DeliveryLeg composition
+      relation.
+    affected_purpose: Declared review purpose for shipment and delivery path context.
+    failure_condition: For a multi-leg route, a carrier event such as arrived_hub or
+      exception needs to be attached to a specific leg or stop, but only a broad
+      shipment_ref is available.
+    impact: The bounded evidence shows underspecified event-to-leg connectivity;
+      this is an improvement opportunity rather than a proven material failure
+      because the finding ledger classifies it as low severity with no material
+      failure condition shown.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-004
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation is available for this finding
+      within the relation graph.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-002
+      - issue-014
+    relation_refs:
+      - rel-004
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (InventoryAggregate.available_qty is a standalone
+      allocation input without a declared derivation/provenance path or
+      time-qualified basis.)."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-012
+    relation_refs:
+      - rel-005
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Shipment.total_weight is derived from SKU/order-line
+      weights without declaring unit or conversion basis.)."
+  - dependency_id: dep-003
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-004
+      - issue-009
+    relation_refs:
+      - rel-007
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (InventoryRecord.quantity_on_hand combines WMS and
+      ERP-held values without modeling authority, reconciliation, or separate
+      physical/accounting meanings.)."
+  - dependency_id: dep-004
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-007
+      - issue-011
+    relation_refs:
+      - rel-011
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Carrier TrackingEvent values and internal
+      Shipment/Order statuses are independently managed, and mapping authority
+      is delegated outside the ontology.)."
+  - dependency_id: dep-005
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-005
+      - issue-007
+    relation_refs:
+      - rel-012
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (TrackingEvent.exception exists, but carrier events
+      and internal shipment/order statuses are independently managed and mapped
+      outside the ontology.)."
+validation:
+  unclustered_finding_ids: []

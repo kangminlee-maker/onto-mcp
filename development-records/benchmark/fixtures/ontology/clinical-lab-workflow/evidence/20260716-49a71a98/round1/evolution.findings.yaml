@@ -1,0 +1,160 @@
+schema_version: 1
+session_id: 20260716-49a71a98
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: "clinical-lab-ontology.yaml: Test/Assay catalog model"
+    evidence_anchor: clinical-lab-ontology.yaml:41-55; clinical-lab-ontology.yaml:121-122
+    claim: 신규 검사 항목 추가 시 Test와 Assay를 이중 등록해야 하며, 둘 사이의 권위 관계나 매핑 관계가 없다.
+    what: 온톨로지는 Test를 주문 가능한 카탈로그 단위로, Assay를 분석기 수행 단위로 별도 정의하지만 두 엔티티 간 관계를 정의하지
+      않는다. notes는 현재 신규 항목을 두 곳 모두에 등록한다고 명시한다.
+    why: EMR/LIS 통합의 개념 권위 문서라면 주문 카탈로그(Test)와 수행 카탈로그(Assay) 사이의 연속성이 확장 가능한 구조로
+      표현되어야 한다. 현재 구조에서는 새 검사, 패널 분해, 장비별 수행 코드 추가 때 동일한 의미를 두 엔티티에 수동 복제해야 하므로
+      코드 불일치와 누락이 생기기 쉽고, 기존 구조를 수정하지 않는 확장이 어렵다.
+    how_to_fix: Test를 주문 권위 카탈로그로 두고 Assay를 수행 구현으로 명확히 분리한 뒤 Test-to-Assay 매핑 관계를
+      추가한다. 신규 항목 등록 권위는 한 곳으로 정하고, 장비/부서별 변형은 매핑 엔티티나 관계 속성으로 확장되게 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 주문 카탈로그와 수행 카탈로그의 확장 가능한 연결을 제공하는 목적.
+      failure_condition: 신규 검사 항목이나 장비별 Assay가 추가될 때 Test와 Assay를 각각 등록해야 하지만 둘 사이의 권위
+        매핑이 없어 한쪽만 갱신되거나 의미가 갈라지는 경우.
+      impact: 주문에서 수행, 수행에서 결과로 이어지는 카탈로그 연속성이 깨져 EMR/LIS 통합 설계자가 어느 코드가 권위인지 판단할 수
+        없고, 신규 항목 추가가 반복될수록 재정비나 마이그레이션이 필요해진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml:41-55
+        - clinical-lab-ontology.yaml:121-122
+    causal_path:
+      root_cause_candidate: 주문 카탈로그(Test)와 수행 카탈로그(Assay)를 별도 엔티티로 만들었지만, 둘 사이의
+        canonical mapping 또는 단일 등록 권위를 모델링하지 않았다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: Test는 주문 가능한 카탈로그 단위로 정의되고 Assay는 분석기 수행 단위로 별도 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml:41-55
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 현재 신규 항목은 두 곳 모두에 등록한다고 명시되어 수동 이중 등록이 확장 경로가 된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:121-122
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 두 엔티티 사이의 관계 목록에는 Test-to-Assay 연결이 없어 이중 등록된 항목의 동일성이나 변형 관계를 추적할 수 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml:103-114
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: "clinical-lab-ontology.yaml: specimen type extensibility"
+    evidence_anchor: clinical-lab-ontology.yaml:37; clinical-lab-ontology.yaml:47;
+      clinical-lab-ontology.yaml:55
+    claim: 검체 종류가 enum과 자유 문자열로 동시에 표현되어 새 검체 범주 추가 시 기존 구조 수정과 값 불일치가 필요해진다.
+    what: Specimen.specimen_type과 Test.requires_specimen_type은 [blood, urine,
+      tissue, swab] enum으로 고정되어 있지만 Assay.specimen_kind는 문자열이며 예시로 'WB',
+      'Serum', 'Urine-random'처럼 더 세분화된 값을 둔다.
+    why: 검체 범주는 검사 카탈로그 확장과 장비 수행 조건 변경 때 계속 세분화될 수 있다. 현재 모델은 상위 enum에는 없는 세부 검체를
+      Assay 문자열에만 담을 수 있어, 새 범주를 공식 수용하려면 enum 수정과 문자열 정규화가 동시에 필요하다. 이로 인해
+      Order-Test-Specimen-Assay 연결에서 같은 검체 의미가 서로 다른 표현으로 흩어진다.
+    how_to_fix: 검체 종류를 별도 SpecimenType 또는 SpecimenKind 카탈로그 엔티티로 승격하고 Specimen,
+      Test, Assay가 동일한 ref를 사용하게 한다. 필요하면 parent/alias/external_code 속성으로 blood와
+      Serum/WB 같은 계층 및 표준 코드 변경을 흡수한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 새 검사, 새 장비, 새 검체 처리 유형을 기존 온톨로지에 연속적으로 추가할 수 있어야 하는 확장성 목적.
+      failure_condition: enum에 없는 세부 검체 유형이 Assay나 LIS 쪽에서 필요해질 때 Specimen/Test enum을
+        수정하거나 Assay 문자열과 수동 매핑해야 하는 경우.
+      impact: 확장 시 스키마와 값 체계가 함께 바뀌어 기존 데이터의 해석 연속성이 약해지고, EMR/LIS 사이에서 검체 적합성 검증이
+        불안정해진다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml:37
+        - clinical-lab-ontology.yaml:47
+        - clinical-lab-ontology.yaml:55
+    causal_path:
+      root_cause_candidate: 검체 종류가 공유 카탈로그가 아니라 일부 필드의 폐쇄 enum과 일부 필드의 자유 문자열로 분산되어 있다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Specimen과 Test는 검체 종류를 네 값 enum으로 제한한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml:37
+            - clinical-lab-ontology.yaml:47
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Assay는 검체 종류를 문자열로 기록하며 enum보다 세분화된 예시 값을 포함한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml:55
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 동일한 검체 개념을 참조하는 세 필드가 하나의 권위 카탈로그를 공유하지 않으므로 새 검체 범주 추가 시 구조 변경 또는 수동
+            정규화가 필요하다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:37
+            - clinical-lab-ontology.yaml:47
+            - clinical-lab-ontology.yaml:55
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: "clinical-lab-ontology.yaml: Result.status and Report.result_status"
+    evidence_anchor: clinical-lab-ontology.yaml:64-78; clinical-lab-ontology.yaml:116-118
+    claim: 결과 상태가 Result와 Report에 서로 다른 enum으로 중복되어 상태 확장이나 LIS 상태 변경 시 매핑 수정 없이는
+      연속성이 깨진다.
+    what: Result.status는 preliminary/final/corrected 값을 가지며 LIS가 기록한다고 설명한다.
+      Report.result_status는 prelim/finalized/amended 값을 가지며 임상의가 신뢰하는 권위 값이라고
+      설명한다. state_rules는 corrected가 되면 amended로 동기화되어야 하며 동기화는 야간 1회라고 한다.
+    why: 상태 모델은 운영 중 외부 LIS 상태, 보고서 수정 정책, 임상 표시 정책 변경의 영향을 가장 많이 받는 축이다. 현재는 같은 상태
+      의미가 두 enum에 다른 이름으로 존재하고, 동기화 규칙이 별도 문장으로만 표현된다. 새 상태를 추가하거나 상태 이름을 바꾸면 두
+      enum과 동기화 규칙을 함께 수정해야 하며, 야간 동기화 전에는 권위 상태가 서로 갈라질 수 있다.
+    how_to_fix: 단일 Result/Report status vocabulary 또는 명시적 StatusMapping 엔티티를 도입한다. 각
+      상태에 source_system, clinical_display_value, terminal 여부, transition rule을
+      속성으로 두어 새 상태 추가가 enum 수정과 임시 문장 규칙이 아니라 카탈로그 확장으로 처리되게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 결과 상태의 권위와 상태 변경 연속성을 제공하는 목적.
+      failure_condition: LIS가 새 결과 상태를 제공하거나 보고 정책이 바뀌어 Result.status와
+        Report.result_status의 enum 및 동기화 규칙을 함께 갱신해야 하는 경우.
+      impact: 상태 확장이 모델 변경과 수동 매핑 변경을 요구하고, 보고서가 임상의 신뢰 값이라고 선언된 상태에서 LIS 권위 상태와 표시
+        상태의 일시적 또는 지속적 불일치가 발생할 수 있다.
+      evidence_refs:
+        - clinical-lab-ontology.yaml:64-78
+        - clinical-lab-ontology.yaml:116-118
+    causal_path:
+      root_cause_candidate: 결과 상태 권위가 Result.status와 Report.result_status로 분산되어 있고 두
+        상태 체계의 매핑이 구조화된 개념이 아니라 문장 규칙으로만 존재한다.
+      root_cause_step_id: evolution-candidate-003.cause-004
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Result.status는 LIS가 기록하는 상태로 preliminary/final/corrected enum을 사용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml:64-68
+        - cause_id: evolution-candidate-003.cause-002
+          claim: Report.result_status는 임상의가 신뢰하는 권위 값으로 prelim/finalized/amended enum을 별도로
+            사용한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml:75-78
+        - cause_id: evolution-candidate-003.cause-003
+          claim: corrected에서 amended로의 연결은 야간 1회 동기화 문장 규칙에 의존한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:116-118
+        - cause_id: evolution-candidate-003.cause-004
+          claim: 따라서 상태 체계 변경 시 두 enum과 문장 규칙을 함께 바꾸어야 하며, 변경 전후 데이터의 상태 연속성을 구조적으로 보장하지
+            못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:64-78
+            - clinical-lab-ontology.yaml:116-118
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 검사 카탈로그, 검체 유형, 결과 상태는 EMR/LIS 통합 운영 중 신규 검사·장비·보고 정책에 따라 확장될 수 있는 개념 축으로
+    보았다.
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았고, 판단은 제공된 온톨로지와 review target
+    profile의 개념 권위 문서 목적에 한정했다.
+validation:
+  unaddressable_candidates: []

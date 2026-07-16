@@ -1,0 +1,80 @@
+schema_version: 1
+session_id: 20260716-acee24d9
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml entities.RiskAppetite / relations
+    evidence_anchor: .onto/review/20260716-acee24d9/execution-preparation/materialized-input.md:78
+      and
+      .onto/review/20260716-acee24d9/execution-preparation/materialized-input.md:85
+    claim: RiskAppetite is structurally orphaned despite being defined as the
+      compliance target for ExposureAggregate.
+    what: The ontology defines RiskAppetite and says ExposureAggregate exceeding
+      RiskAppetite determines the compliance state, but the relations list
+      contains no edge to or from RiskAppetite. RiskAppetite also has no ref
+      attribute to Borrower, ExposureAggregate, Limit, segment, product, or
+      another scoping entity.
+    why: The declared target is a shared concept authority for a risk engine and
+      reporting system. With no structural connection, consumers cannot traverse
+      from borrower exposure totals to the appetite threshold or compliance
+      status using the ontology itself. The evidence supports this because
+      RiskAppetite is declared at lines 78-83, while the complete relations list
+      at lines 85-90 connects Borrower, Exposure, Collateral, RiskRating, Limit,
+      and ExposureAggregate but omits RiskAppetite entirely.
+    how_to_fix: Add explicit structural relations and/or ref attributes that connect
+      RiskAppetite to the entity it constrains, for example ExposureAggregate ->
+      RiskAppetite with a kind such as tested_against or governed_by, plus the
+      required scope keys such as borrower segment, product type, currency, and
+      as_of if those determine which threshold applies.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology's stated purpose as a shared concept authority
+        for risk engine and reporting systems.
+      failure_condition: When a consumer needs to compute, audit, or report
+        RiskAppetite compliance from ExposureAggregate values, the target
+        threshold/status concept is not reachable from the exposure aggregate
+        graph.
+      impact: This weakens review trust because a central compliance concept is
+        present but disconnected; different consumers may invent separate joins
+        or scoping assumptions, producing inconsistent compliance outputs from
+        the same ontology.
+      evidence_refs:
+        - .onto/review/20260716-acee24d9/execution-preparation/materialized-input.md:7
+        - .onto/review/20260716-acee24d9/execution-preparation/materialized-input.md:78
+        - .onto/review/20260716-acee24d9/execution-preparation/materialized-input.md:85
+    causal_path:
+      root_cause_candidate: RiskAppetite was added as an entity and rule target
+        without adding the required graph edge or reference that binds it to
+        ExposureAggregate or another scoping authority.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite is declared as an entity with threshold and
+            compliance_status attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-acee24d9/execution-preparation/materialized-input.md:78
+        - cause_id: structure-candidate-001.cause-002
+          claim: Its definition depends on a comparison between ExposureAggregate and
+            RiskAppetite.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260716-acee24d9/execution-preparation/materialized-input.md:79
+        - cause_id: structure-candidate-001.cause-003
+          claim: The ontology's relations section omits any relation involving
+            RiskAppetite, leaving that comparison outside the navigable
+            structure.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260716-acee24d9/execution-preparation/materialized-input.md:85
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Session domain is none, so no domain-specific structure_spec was used.
+  - The structure lens is limited to connection completeness among
+    already-present elements; semantic correctness of relation direction or
+    financial adequacy of the risk model was not assessed.
+validation:
+  unaddressable_candidates: []

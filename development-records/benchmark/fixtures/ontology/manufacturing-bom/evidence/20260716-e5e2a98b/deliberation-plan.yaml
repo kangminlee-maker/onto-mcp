@@ -1,0 +1,71 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+planned_issues: []
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: All applicable lenses support keeping the material issue and severity.
+      Semantics only narrows the root toward quantity meaning while accepting
+      the issue, and structure's insufficient-evidence stance is a lens evidence
+      gap rather than a contradictory material claim requiring deliberation.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the ECO effectivity versus
+      Part.rev transition-window issue and keep high severity. Structure lacks
+      independent evidence, but no lens contests the root, action, or severity
+      on the merits.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the as-of revision/effectivity
+      issue and keep high severity. Logic is not applicable and structure
+      reports insufficient evidence, neither of which creates a material
+      conflict against the supported root or action.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: Applicable lenses support the missing controlled-action evidence issue
+      and keep medium severity. Semantics narrows the root toward
+      provenance/action meaning while accepting the issue; structure's
+      insufficient evidence does not materially conflict with the supporting
+      stances.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Applicable lenses support the fixed-UOM and conversion-authority issue
+      and keep medium severity. Logic is not applicable and structure has
+      insufficient evidence, but there is no substantive disagreement over the
+      root, action, or severity.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: Applicable lenses support the ambiguous WorkCenter capacity measure
+      issue and keep medium severity. Structure's insufficient-evidence stance
+      does not oppose the issue and no lens materially disputes the proposed
+      capacity-measure remedy.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: "The lenses present compatible framings of the same defect: logic
+      identifies the unsatisfiable BOM acyclicity case, while coverage and
+      semantics narrow the explanation toward missing scrap/rework scope and
+      relation-meaning separation. These positions refine the root/action but do
+      not create a material conflict requiring deliberation."
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: All applicable lenses support keeping the AlternatePart
+      symmetric-versus-directional issue at medium severity. Structure narrows
+      its support to the disconnected relationship-entity contributor, which is
+      compatible with the broader semantic root rather than a material conflict.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the InspectionPlan subtype issue
+      and keep medium severity. Structure lacks evidence and logic is not
+      applicable, but no lens disputes the plan-versus-operation distinction or
+      proposed modeling action.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the manufactured_by applicability
+      issue and keep medium severity. Structure has insufficient evidence and
+      logic is not applicable, but there is no material disagreement over the
+      broad Part-scope root or remedy.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: "The runtime projection already marks this issue as having consistent
+      stances: all applicable lenses support the structural AlternatePart
+      reachability issue and keep medium severity, with no conflict signals."

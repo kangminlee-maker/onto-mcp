@@ -1,0 +1,564 @@
+schema_version: 1
+session_id: 20260716-49a71a98
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: The ontology accepts batch-delayed correction propagation
+      even though Report.result_status is declared as the clinician-facing
+      authority.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: Corrected LIS results can leave the clinician-trusted report
+      status stale until nightly synchronization.
+    proposed_action: Make correction propagation an authoritative workflow with an
+      immediate or bounded transition, pending-correction visibility if batching
+      remains, and clinician-facing notification requirements.
+    affected_purpose: Use the ontology as the concept authority document for EMR/LIS
+      integration, especially entity, relation, state-model validity, and
+      operational risk.
+    failure_condition: A corrected LIS result exists after report release, but
+      Report.result_status remains finalized until the nightly batch runs.
+    impact: The ontology weakens trust exactly where EMR/LIS consumers need reliable
+      authority for corrected clinical information.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:80-83
+      - materialized-input.md:121-123
+      - review-value-alignment-criteria.yaml:5-7
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; related correction findings are only symptom/shared-cause
+      candidates.
+  - issue_id: issue-002
+    root_cause_hypothesis: The model conflates critical threshold, actual critical
+      result, and notification completion in one CriticalValue concept.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+      - finding-016
+    relation_refs:
+      - rel-003
+    raised_by_lens_ids:
+      - axiology
+      - semantics
+    issue_statement: Critical-value semantics and notification auditability are
+      weakened because threshold rules, critical-result instances, and notified
+      state are modeled as one concept.
+    proposed_action: Separate critical threshold/range, actual critical result or
+      alert, and notification event/record concepts, with notification evidence
+      owned or explicitly linked.
+    affected_purpose: Use the ontology to guide EMR/LIS integration around
+      operational risks and critical-result notification workflow semantics.
+    failure_condition: A consuming system must interpret CriticalValue as threshold
+      setting, patient critical result, or notification completion state, while
+      only notified=true and external phone-log evidence are modeled.
+    impact: Critical-result notification can appear complete while omitting the
+      evidence and semantic separation needed for audit, escalation, and
+      clinical accountability.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:100-106
+      - review-value-alignment-criteria.yaml:5-7
+      - .onto/review/20260716-49a71a98/round1/semantics.findings.yaml#semantics-candidate-004
+      - clinical-lab-ontology.yaml:95-101
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-003
+    root_cause_hypothesis: The ontology defines a cross-system TAT metric but leaves
+      executable calculation ownership outside the authority document.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: TAT can drift across dashboard, EMR, and LIS consumers because
+      its formula is described informally while owned externally.
+    proposed_action: Promote TAT to an authoritative derived concept or versioned
+      metric rule that names timestamps, edge cases, and downstream consumption
+      expectations.
+    affected_purpose: Use the ontology as a shared conceptual authority for EMR/LIS integration.
+    failure_condition: Dashboard, EMR, and LIS consumers compute TAT differently
+      because the ontology defines the metric informally while formula ownership
+      remains local to the dashboard team.
+    impact: A key workflow metric can diverge across systems, reducing shared
+      operational interpretation.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/axiology.findings.yaml#axiology-candidate-003
+      - materialized-input.md:6-8
+      - materialized-input.md:126-128
+      - review-value-alignment-criteria.yaml:5-7
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; its relation to finding-006 is shared_cause_candidate and
+      must remain dependency context.
+  - issue_id: issue-004
+    root_cause_hypothesis: CriticalValue and notification state are kept outside the
+      result/report workflow graph, causing both evidence coverage loss and
+      graph disconnection.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+      - finding-018
+    relation_refs:
+      - rel-002
+    raised_by_lens_ids:
+      - coverage
+      - structure
+    issue_statement: The ontology lacks an evidence-bearing notification concept and
+      a workflow relation path for critical values.
+    proposed_action: Add a CriticalValueNotification or NotificationEvent and
+      connect CriticalValue or the resulting alert to Result, Report, Staff, and
+      any authoritative notification record as appropriate.
+    affected_purpose: Use the ontology as a concept authority for operational
+      EMR/LIS workflow integration, including critical-value notification risk.
+    failure_condition: A critical result must be communicated or audited, but the
+      ontology can only represent a notified boolean and has no structural path
+      from Result/Report to CriticalValue or notification handling.
+    impact: Critical notification may be implemented outside the authority graph,
+      weakening traceability, auditability, escalation, and consistent
+      integration behavior.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/coverage.findings.yaml#coverage-candidate-001
+      - CriticalValue.attributes.notified note
+      - CriticalValue entity lacks notification event attributes or relations
+      - .onto/review/20260716-49a71a98/round1/structure.findings.yaml#structure-candidate-002
+      - "Embedded Materialized Input: entities.CriticalValue definition and
+        attributes"
+      - "Embedded Materialized Input: relations list omits CriticalValue"
+      - "Embedded Materialized Input: CriticalValue.notified note references
+        notification records outside the graph"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-005
+    root_cause_hypothesis: The ontology bounds Specimen lifecycle to the analytical
+      phase and leaves end-of-life handling outside the shared concept model.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Specimen storage, retention, disposal, retrieval, and exception
+      states are omitted after analyzed.
+    proposed_action: Extend the Specimen lifecycle with post-analysis states and add
+      retention/disposal event concepts or governed department-policy
+      references.
+    affected_purpose: A complete clinical lab workflow ontology from order to report
+      that can guide operational EMR/LIS integration.
+    failure_condition: After Specimen reaches analyzed, the model has no canonical
+      state or event vocabulary for storage, retention, disposal, or
+      post-analysis exceptions.
+    impact: Systems may diverge on specimen end-of-life semantics, weakening
+      retention, disposal audit, retesting, and exception handling.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/coverage.findings.yaml#coverage-candidate-002
+      - "Specimen.lifecycle: [collected, received, in_analysis, analyzed]"
+      - state_rules post-analysis storage/disposal delegated to department policy
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Runtime relation graph marks this as a singleton finding with
+      no accepted semantic relation.
+  - issue_id: issue-006
+    root_cause_hypothesis: Mutable reference data is modeled as unversioned
+      current-state entities and at least one derived calculation is outside the
+      authority model.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Catalogs, thresholds, units, and TAT rules lack
+      effective-period and history coverage for historical reconstruction.
+    proposed_action: Add versioned/effective-dated concepts for Test, Assay,
+      CriticalValue thresholds, units/reference metadata, and TAT calculation
+      rules, and relate results/reports to the effective version used.
+    affected_purpose: Conceptual authority for EMR/LIS integration that supports
+      reliable historical reconstruction of lab results and operational metrics.
+    failure_condition: Catalog mappings, thresholds, units, or TAT formulas change,
+      but the ontology has no concept for the version that applied at
+      collection, verification, or release time.
+    impact: Historical reports, corrected results, audits, and dashboard metrics may
+      be interpreted under current definitions instead of event-time
+      definitions.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/coverage.findings.yaml#coverage-candidate-003
+      - Test attributes lack validity/version fields
+      - Assay attributes lack validity/version fields
+      - CriticalValue lower_bound/upper_bound lack effective period
+      - notes mention dual Test/Assay registration and external TAT calculation
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; related relations are shared_cause_candidate dependency
+      context.
+  - issue_id: issue-007
+    root_cause_hypothesis: Result and Report status are duplicated as separate enum
+      carriers without a canonical mapping/projection model.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-007
+      - finding-010
+      - finding-013
+    relation_refs:
+      - rel-006
+      - rel-009
+    raised_by_lens_ids:
+      - coverage
+      - evolution
+      - semantics
+    issue_statement: Duplicated result/report status vocabularies lack a single
+      authority, projection, and status-evolution model.
+    proposed_action: Introduce a canonical status concept or explicit
+      mapping/projection model with authority, freshness, synchronization
+      events, transition rules, and extensibility semantics.
+    affected_purpose: EMR/LIS integration concept authority with clear precedence,
+      operationally safe status interpretation, and future status evolution
+      continuity.
+    failure_condition: Consumers must interpret or extend Result.status and
+      Report.result_status across LIS and clinician-facing paths while the
+      ontology uses separate enum names and only partial synchronization rules.
+    impact: Systems may choose different precedence, mapping, or extension behavior,
+      causing stale or inconsistent report-facing status and divergent state
+      semantics.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/coverage.findings.yaml#coverage-candidate-004
+      - Result.status note says LIS records and same information is maintained
+        in Report.result_status
+      - Report.result_status note says report status is the authority value
+        clinicians trust
+      - state_rules say corrected Result.status changes Report.result_status via
+        nightly batch
+      - .onto/review/20260716-49a71a98/round1/evolution.findings.yaml#evolution-candidate-003
+      - clinical-lab-ontology.yaml:64-78
+      - clinical-lab-ontology.yaml:116-118
+      - .onto/review/20260716-49a71a98/round1/semantics.findings.yaml#semantics-candidate-001
+      - clinical-lab-ontology.yaml:117-118
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-008
+    root_cause_hypothesis: Test and Assay are separate catalog/execution concepts
+      without a canonical mapping or single registration authority.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: New tests and assays require dual registration without an
+      authoritative Test-to-Assay mapping.
+    proposed_action: Make Test the order catalog and Assay the execution
+      implementation, then add an authoritative Test-to-Assay mapping or
+      relation with ownership for new-item registration.
+    affected_purpose: EMR/LIS integration authority for extensible continuity
+      between order catalog and execution catalog.
+    failure_condition: A new test item or analyzer-specific assay is added, but Test
+      and Assay must be registered separately without an authoritative mapping.
+    impact: Catalog continuity from order to execution to result can break, leaving
+      implementers unable to identify the authoritative code or relation.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/evolution.findings.yaml#evolution-candidate-001
+      - clinical-lab-ontology.yaml:41-55
+      - clinical-lab-ontology.yaml:121-122
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; duplicate/shared-cause relations are not admissible merge
+      edges for this artifact.
+  - issue_id: issue-009
+    root_cause_hypothesis: Specimen kind is split across closed enums and free
+      strings instead of a shared authoritative specimen-kind catalog.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: Specimen compatibility vocabulary can diverge between Specimen,
+      Test, and Assay.
+    proposed_action: Promote specimen kind to a shared SpecimenType or SpecimenKind
+      catalog referenced by Specimen, Test, and Assay, with aliases or hierarchy
+      for variants.
+    affected_purpose: Extensibility for adding new tests, devices, and specimen
+      handling types without breaking ontology continuity.
+    failure_condition: A detailed specimen type absent from the enum is needed by
+      Assay or LIS and must be represented through enum changes or manual string
+      normalization.
+    impact: Schema and value systems change together, weakening historical
+      interpretation and cross-system specimen compatibility validation.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/evolution.findings.yaml#evolution-candidate-002
+      - clinical-lab-ontology.yaml:37
+      - clinical-lab-ontology.yaml:47
+      - clinical-lab-ontology.yaml:55
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; relation to finding-017 is shared_cause_candidate
+      dependency context.
+  - issue_id: issue-010
+    root_cause_hypothesis: The durable Order.completed lifecycle state is derived
+      from mutable Result.status values without post-completion correction
+      semantics.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: Order.completed can remain true after a later allowed
+      correction makes the stated completion predicate false.
+    proposed_action: Define completion against a stable milestone or versioned
+      snapshot, or add explicit corrected/amended/reopened semantics and
+      terminal-state rules.
+    affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+      integration state behavior from Order through Report.
+    failure_condition: A Result that was final at Order completion is later changed
+      to corrected under the ontology's own correction rule.
+    impact: Integrations can observe or propagate an Order.completed state whose
+      stated predicate is false, weakening closure, billing/reporting triggers,
+      and workflow trust.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/logic.findings.yaml#logic-candidate-001
+      - "clinical-lab-ontology.yaml Order.lifecycle: [draft, placed,
+        in_progress, completed, cancelled]"
+      - "clinical-lab-ontology.yaml Result.status values: [preliminary, final,
+        corrected]"
+      - 'clinical-lab-ontology.yaml state_rules: "Order는 모든 Result가 final일 때
+        completed로 전이한다."'
+      - 'clinical-lab-ontology.yaml state_rules: "Result.status가 corrected로 바뀌면
+        Report.result_status는 amended가 되어야 한다"'
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; related completion/correction relations are
+      shared_cause_candidate dependency context.
+  - issue_id: issue-011
+    root_cause_hypothesis: The ontology splits one declared status information
+      concept into two enum domains and only partially constrains equivalence.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: Result.status and Report.result_status claim to maintain the
+      same information but lack a total equivalence rule.
+    proposed_action: Add a total status mapping table or unify the enum, and clarify
+      whether Report.result_status is derived or authoritative.
+    affected_purpose: Conceptual authority for EMR/LIS status synchronization
+      between LIS result state and clinician-facing report state.
+    failure_condition: An implementation must decide whether and how Result.status
+      and Report.result_status represent the same status information outside the
+      corrected-to-amended case.
+    impact: Different systems can satisfy local enum constraints while disagreeing
+      on valid cross-system state, undermining integration precedence and
+      invalid-input behavior.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/logic.findings.yaml#logic-candidate-002
+      - 'clinical-lab-ontology.yaml Result.status note: "Report.result_status에도
+        동일 정보가 유지된다."'
+      - "clinical-lab-ontology.yaml Result.status values: [preliminary, final,
+        corrected]"
+      - "clinical-lab-ontology.yaml Report.result_status values: [prelim,
+        finalized, amended]"
+      - 'clinical-lab-ontology.yaml Report.result_status note: "보고서에 표시되는 결과 상태의
+        권위 값."'
+      - clinical-lab-ontology.yaml state_rules correction sentence
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding directly
+      to another finding; duplicate/shared-cause relations are not admissible
+      merge edges for this artifact.
+  - issue_id: issue-012
+    root_cause_hypothesis: STAT is modeled simultaneously as an Order priority
+      value, boolean flag, and subtype without an authority or invariant rule.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-014
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: STAT order meaning can conflict across priority, is_stat, and
+      StatOrder representations.
+    proposed_action: Choose one authoritative STAT representation and make any
+      retained alternate forms explicit derived aliases with invariants.
+    affected_purpose: Shared EMR/LIS meaning for order priority and STAT orders.
+    failure_condition: Integrated systems or rules read STAT status from different
+      fields or subtype membership.
+    impact: Urgent test routing, SLA/TAT calculation, and notification policy may
+      operate on different STAT criteria.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/semantics.findings.yaml#semantics-candidate-002
+      - clinical-lab-ontology.yaml:16-24
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Runtime relation graph marks this as a singleton finding with
+      no accepted semantic relation.
+  - issue_id: issue-013
+    root_cause_hypothesis: The model assigns the result-producing action verb to
+      Specimen, conflating source material lineage with assay/result generation.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-015
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: Specimen produces Result misstates specimen semantics as if the
+      specimen were the result-producing actor.
+    proposed_action: Rename or replace the relation with source_for, used_for, or
+      has_result, and connect result generation to Test, Assay, or an analysis
+      event where appropriate.
+    affected_purpose: Concept authority for specimen traceability and result
+      production relationships.
+    failure_condition: Designers rely on the Specimen produces Result relation for
+      lineage, analysis actor, or result provenance semantics.
+    impact: Specimen source, assay/test execution, analyzer action, and result
+      provenance boundaries become ambiguous.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/semantics.findings.yaml#semantics-candidate-003
+      - clinical-lab-ontology.yaml:49-58
+      - clinical-lab-ontology.yaml:111-114
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; it only enables a separate completion-scope ambiguity.
+  - issue_id: issue-014
+    root_cause_hypothesis: Assay was introduced as a separate execution/catalog
+      concept without structural relations to the order-result-report graph.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-017
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Assay is structurally orphaned from ordered tests and produced results.
+    proposed_action: Add Test-to-Assay and Result-to-Assay relations, or merge Assay
+      into Test if no separate authority concept is intended.
+    affected_purpose: Use the ontology as the concept authority for EMR/LIS
+      integration from Order through Report.
+    failure_condition: Implementers need to map ordered catalog tests to
+      LIS/analyzer execution units or trace a result back to the performed
+      assay.
+    impact: The integration contract is structurally incomplete for a central
+      cross-system mapping, pushing teams toward incompatible local joins.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/structure.findings.yaml#structure-candidate-001
+      - "Embedded Materialized Input: entities.Assay definition and attributes"
+      - "Embedded Materialized Input: relations list has no Assay relation"
+      - "Embedded Materialized Input: notes says new items are registered in
+        both Test and Assay"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; duplicate/shared-cause relations are not admissible merge
+      edges for this artifact.
+  - issue_id: issue-015
+    root_cause_hypothesis: The lifecycle rule aggregates over Result without
+      declaring the authoritative result-set ownership path from Order.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-019
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Order completion depends on all Results but the model does not
+      structurally scope which Results belong to an Order.
+    proposed_action: Declare the authoritative scoping relation for order completion
+      and reference that relation explicitly in the state rule.
+    affected_purpose: Use the ontology as an authority for state behavior in the
+      Order-to-Report workflow.
+    failure_condition: Consumers must compute Order.completed and choose among
+      indirect paths such as Report.contains Result, Specimen.produces Result,
+      or Test.has_many Result.
+    impact: Completion behavior may diverge across EMR/LIS components because the
+      state rule depends on an unstated traversal choice.
+    evidence_refs:
+      - .onto/review/20260716-49a71a98/round1/structure.findings.yaml#structure-candidate-003
+      - "Embedded Materialized Input: entities.Order.lifecycle"
+      - "Embedded Materialized Input: entities.Result.attributes.status"
+      - "Embedded Materialized Input: relations list"
+      - "Embedded Materialized Input: state_rules first item"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation connects this finding to
+      another finding; relation to finding-011 is shared_cause_candidate
+      dependency context.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-007
+      - issue-011
+    relation_refs:
+      - rel-008
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (The ontology splits one declared status information
+      concept across Result.status and Report.result_status without a complete
+      authority/projection/equivalence model.)."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-010
+      - issue-015
+    relation_refs:
+      - rel-010
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (The ontology defines Order.completed by an aggregate
+      over Result.status while omitting the structural or state semantics needed
+      to evaluate that aggregate unambiguously over time.)."
+  - dependency_id: dep-003
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-010
+    relation_refs:
+      - rel-011
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (The ontology permits Result.status to change to
+      corrected after release/completion without modeling all downstream state
+      transitions immediately and explicitly.)."
+  - dependency_id: dep-004
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-006
+    relation_refs:
+      - rel-012
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (TAT is described in notes while its executable
+      calculation formula is maintained externally by the dashboard team, with
+      no ontology-owned calculation-rule concept or version.)."
+  - dependency_id: dep-005
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-006
+      - issue-008
+    relation_refs:
+      - rel-014
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Test and Assay are modeled as separate
+      catalog/current execution units without effective dates, version, history,
+      or a canonical mapping authority.)."
+  - dependency_id: dep-006
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-009
+      - issue-014
+    relation_refs:
+      - rel-015
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Assay is a separate execution concept whose key
+      compatibility fields are not tied to shared authoritative catalog
+      relations.)."
+validation:
+  unclustered_finding_ids: []

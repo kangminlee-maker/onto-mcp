@@ -1,0 +1,195 @@
+schema_version: 1
+session_id: 20260716-acee24d9
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+    conflict_summary: Lenses agree that rating authority is materially
+      under-modeled, but disagree on whether one broad root should combine
+      report-side manual overrides, historical assignment replay, and rating
+      mapping/version changes, or whether the issue should be narrowed to the
+      directly evidenced authority conflict while logic evidence remains
+      insufficient.
+    resolution_question: Should issue-001 remain a broad governed rating-event root
+      covering assignments, mappings, manual overrides, approval, effective
+      period, and replay metadata, or should it be narrowed or split to only the
+      directly evidenced rating-authority failures?
+  - issue_id: issue-004
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: Coverage supports adding an authoritative default/delinquency
+      lifecycle reference, while axiology and evolution narrow the claim to a
+      minimal external-authority reference or extension point and semantics has
+      insufficient lens-specific evidence.
+    resolution_question: Is the material issue a full missing default/delinquency
+      lifecycle-status concept inside the shared ontology, or only a minimal
+      sourced and time-stamped reference to an externally authoritative
+      default-management state?
+  - issue_id: issue-005
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - axiology
+      - semantics
+      - coverage
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.evolution
+      - issue-stance-matrix.yaml#stances.issue-005.axiology
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.logic
+    conflict_summary: All applicable lenses support the root that rating conversion
+      needs an owned versioned concept, but evolution and coverage keep high
+      severity while axiology and semantics lower the issue to medium and logic
+      lacks contradiction-specific evidence.
+    resolution_question: Should consumer-side rating conversion be classified as
+      high severity because it breaks change continuity and replay across engine
+      and reports, or medium severity because the directly evidenced authority
+      and semantic ambiguity is material but not universally blocking?
+  - issue_id: issue-006
+    priority: 7
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - evolution
+      - coverage
+      - axiology
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+      - issue-stance-matrix.yaml#stances.issue-006.structure
+    conflict_summary: Evolution, coverage, and axiology support the combined
+      snapshot/source/FX metadata issue, but logic, semantics, and structure all
+      report insufficient lens-specific evidence for the combined root as
+      framed.
+    resolution_question: Is the combined utilization replay issue sufficiently
+      evidenced as a cross-lens material issue, or should it be limited to the
+      evolution and coverage-supported calculation provenance gap without logic,
+      semantics, or structure support?
+  - issue_id: issue-008
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+    conflict_summary: Lenses agree that Collateral-as-Exposure is a real type and
+      role conflict, but logic lowers severity relative to the issue-level high
+      classification while semantics and structure keep high severity and
+      evolution frames the underlying change-risk as narrower.
+    resolution_question: Should the collateral/exposure conflation retain high
+      severity because subtype semantics can propagate wrong exposure treatment
+      to collateral assets, or be reduced because the direct logic finding rates
+      the formal contradiction as medium?
+  - issue_id: issue-009
+    priority: 6
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - evolution
+      - logic
+      - structure
+      - axiology
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+    conflict_summary: Semantics, axiology, and coverage support LTV as an
+      under-specified derived or snapshot measure, while evolution narrows it to
+      a consequence of the broader exposure-collateral valuation/link lifecycle
+      and logic and structure have insufficient evidence.
+    resolution_question: Should issue-009 stand as an independent LTV authority and
+      derivation issue, or be treated as a narrower consequence of the broader
+      exposure-collateral valuation/link modeling problem?
+  - issue_id: issue-011
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - structure
+      - logic
+      - axiology
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+    conflict_summary: Semantics and structure support the full claim that compliance
+      status must be separated from RiskAppetite and structurally bound to
+      ExposureAggregate, scope, and time, while logic narrows the issue to
+      relation/evaluation consistency where derivation from an aggregate is
+      intended.
+    resolution_question: Should RiskAppetite compliance be resolved as a full
+      semantic and structural evaluation-result concept, or only as a narrower
+      missing relation/evaluation binding needed for consistency with
+      aggregate-derived compliance?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: The runtime signals mostly reflect lens-specific evidence limits and a
+      severity raise by evolution, but the applicable lenses support the missing
+      canonical RatingScale/RatingMapping root and proposed action; no
+      deliberation is needed beyond related rating-cluster issues already
+      planned under issue-001 and issue-005.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Axiology, coverage, and evolution support the missing shared time and FX
+      authority root, while semantics only narrows to its directly evidenced
+      compliance time-scope concern and logic lacks contradiction-specific
+      evidence; this does not create a material dispute requiring deliberation.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: The issue is materially supported as an evolution and coverage concern
+      about brittle closed enums; axiology narrowness and semantics
+      insufficiency are lens-scope limits rather than conflicting claims about
+      the issue's root, action, or materiality.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: The applicable lenses support the semantic rating-scale authority
+      problem and proposed mapping/naming action; evolution's severity raise
+      overlaps with the planned rating-conversion severity deliberation for
+      issue-005 rather than creating a separate material conflict for this
+      narrower semantic issue.

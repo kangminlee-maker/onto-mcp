@@ -1,0 +1,306 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: OrderLine fulfillment coverage
+    evidence_anchor: logistics-fulfillment-ontology.yaml:20-26;
+      logistics-fulfillment-ontology.yaml:100-104
+    claim: OrderLine-to-Shipment fulfillment mapping is absent, so partial
+      fulfillment coverage stops at the order level.
+    what: The ontology defines OrderLine with SKU and quantity only, and the only
+      fulfillment relation links Shipment to Order. The target text explicitly
+      notes that there is no reference from a line to the shipment or leg that
+      actually fulfilled it.
+    why: For a WMS/TMS/ERP integration baseline, order fulfillment must reconstruct
+      which quantities of which order lines were picked, shipped, split, or
+      delayed. An order-level Shipment-to-Order relation cannot represent
+      partial shipments, split shipments, substitutions, short picks, or
+      line-level proof of fulfillment.
+    how_to_fix: Add a line-level fulfillment/allocation concept such as
+      FulfillmentLine or ShipmentLine with order_line_ref, shipment_ref,
+      shipped_qty, picked_qty, fulfilled_at, and status; keep the order-level
+      relation as a derived summary if needed.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory,
+        freight, and delivery consistency.
+      failure_condition: When an order has multiple lines, partial shipment, split
+        shipment, or delayed/backordered lines, the ontology cannot identify
+        which line quantity moved in which shipment.
+      impact: The model cannot support reconciliation between OMS order promises, WMS
+        picking/packing, TMS shipment execution, and customer delivery evidence
+        at the operational unit where fulfillment actually happens.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:20-26
+        - logistics-fulfillment-ontology.yaml:100-104
+    causal_path:
+      root_cause_candidate: Fulfillment is modeled only as a Shipment-to-Order
+        relation, while OrderLine has no fulfillment allocation or shipment-line
+        concept.
+      root_cause_step_id: coverage-candidate-001.cause-002
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: OrderLine includes sku_ref and qty but no reference to a fulfillment,
+            shipment, shipment line, delivery leg, or fulfilled quantity.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:20-26
+        - cause_id: coverage-candidate-001.cause-002
+          claim: The sole fulfills relation links Shipment to Order and explicitly states
+            that OrderLine-level mapping is not included.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:100-104
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: InventoryRecord and InventoryAggregate temporal coverage
+    evidence_anchor: logistics-fulfillment-ontology.yaml:71-85;
+      logistics-fulfillment-ontology.yaml:106-107
+    claim: Inventory quantities lack effective time, event history, and reservation
+      lifecycle coverage.
+    what: InventoryRecord exposes only a current quantity_on_hand, and
+      InventoryAggregate exposes an available_qty snapshot saved nightly. The
+      target text notes there is no as_of concept for historical inventory
+      queries, while the allocation rule says intraday orders read the aggregate
+      available quantity.
+    why: Inventory is time-dependent. Without as_of timestamps,
+      transaction/reservation events, and allocation lifecycle states, the
+      ontology cannot reconstruct inventory at order placement, explain
+      oversell/undersell conditions, or reconcile WMS physical stock with ERP
+      accounting stock across time.
+    how_to_fix: Introduce inventory temporal concepts such as
+      InventorySnapshot(as_of), InventoryTransaction, Reservation/Allocation
+      with lifecycle status, source_system, and quantity deltas. Define whether
+      available_qty is derived from these records or an externally authoritative
+      snapshot.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Inventory consistency and allocation correctness across WMS,
+        ERP, OMS, and fulfillment operations.
+      failure_condition: When inventory changes between nightly snapshots, or when
+        users need to audit the inventory basis for an order accepted earlier in
+        the day, the model has no historical or event-level representation to
+        answer the question.
+      impact: The integration baseline cannot support inventory audit, allocation
+        dispute resolution, or reliable reconstruction of past fulfillment
+        decisions.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:71-85
+        - logistics-fulfillment-ontology.yaml:106-107
+    causal_path:
+      root_cause_candidate: Inventory is represented as current/snapshot quantities
+        rather than as time-qualified records and lifecycle events.
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: InventoryRecord.quantity_on_hand is defined as current stock and lacks an
+            as_of/effective-time attribute.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:71-79
+        - cause_id: coverage-candidate-002.cause-002
+          claim: InventoryAggregate.available_qty is a nightly snapshot, yet intraday
+            allocation reads it for new orders.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:81-85
+            - logistics-fulfillment-ontology.yaml:106-107
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: Measurement unit coverage for SKU and shipment quantities
+    evidence_anchor: logistics-fulfillment-ontology.yaml:28-33;
+      logistics-fulfillment-ontology.yaml:35-44
+    claim: Weight and dimension values lack explicit unit-of-measure coverage
+      despite cross-system unit variation.
+    what: Sku.weight is a number whose unit follows each warehouse's kg/lb practice,
+      and dims is an unstructured string whose unit differs by source system.
+      Shipment.total_weight is then stored as a computed number without a unit
+      or conversion basis.
+    why: Freight rating, carrier selection, packing, customs-adjacent data, and
+      warehouse handling depend on comparable units and dimensional weight. A
+      WMS/TMS/ERP concept standard that allows raw numeric weights and string
+      dimensions from mixed unit systems cannot provide a stable integration
+      contract.
+    how_to_fix: "Add structured measurement concepts: weight_value, weight_uom,
+      dimension components, dimension_uom, measurement_source,
+      measured_at/effective_at, and conversion rules. Define
+      Shipment.total_weight as derived from normalized line or package
+      measurements with a declared unit."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Freight and shipment consistency across warehouse, transport,
+        and ERP integrations.
+      failure_condition: When different warehouses or source systems provide kg/lb or
+        dimension strings with different units, shipment totals and
+        carrier-facing data cannot be compared or safely aggregated.
+      impact: The ontology can produce ambiguous or incorrect freight weights,
+        dimensions, and downstream transportation decisions despite claiming to
+        be an integration baseline.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:28-33
+        - logistics-fulfillment-ontology.yaml:35-44
+    causal_path:
+      root_cause_candidate: Measurement values are modeled as bare numbers or
+        free-form strings rather than unit-qualified measurements.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Sku.weight is a number and the note says warehouses use kg or lb
+            according to local practice.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:28-33
+        - cause_id: coverage-candidate-003.cause-002
+          claim: Sku.dims is a string and the note says units differ by source system.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:28-33
+        - cause_id: coverage-candidate-003.cause-003
+          claim: Shipment.total_weight stores the sum of OrderLine weights without
+            declaring unit or conversion basis.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:35-44
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: Manual adjustment and multi-source authority evidence coverage
+    evidence_anchor: logistics-fulfillment-ontology.yaml:43-45;
+      logistics-fulfillment-ontology.yaml:76-85;
+      logistics-fulfillment-ontology.yaml:110-112
+    claim: The ontology lacks audit evidence and single-authority concepts for
+      values managed across systems or manually adjusted.
+    what: Inventory quantity is said to exist separately in WMS and ERP and be
+      aligned by nightly batch. ETA mixes carrier API values and operations-team
+      manual adjustments, with the final display value based on operations
+      judgment. No entity captures actor, timestamp, reason, source value,
+      override value, or authoritative source selection.
+    why: Coverage for WMS/TMS/ERP integration must include who can override
+      operational facts, when, why, and which source wins. Without those
+      concepts, the model cannot audit inventory reconciliation or ETA
+      overrides, and downstream systems cannot distinguish carrier-reported
+      facts from human-edited operational estimates.
+    how_to_fix: Add SourceAuthority/SourceSystem ownership for shared values and an
+      Adjustment or OverrideEvent concept with actor_ref, occurred_at,
+      reason_code, source_value, adjusted_value, approved_by, and affected
+      field. Use it for ETA and inventory reconciliation at minimum.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Authority, auditability, and operational risk control for
+        WMS/TMS/ERP integration.
+      failure_condition: When WMS and ERP quantities disagree, or when an ETA is
+        manually changed after carrier data arrives, the ontology cannot
+        identify the authoritative value or preserve evidence of the
+        intervention.
+      impact: The concept baseline leaves high-risk operational controls outside the
+        model, weakening dispute resolution, SLA explanations, and
+        reconciliation audit trails.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:43-45
+        - logistics-fulfillment-ontology.yaml:76-85
+        - logistics-fulfillment-ontology.yaml:110-112
+    causal_path:
+      root_cause_candidate: Shared and manually adjusted operational values are
+        represented only as final scalar attributes, without authority or
+        adjustment-event concepts.
+      root_cause_step_id: coverage-candidate-004.cause-002
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: InventoryRecord.quantity_on_hand notes that WMS and ERP each hold values
+            and are reconciled nightly to ERP, but the model has no authority or
+            reconciliation event entity.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:76-85
+            - logistics-fulfillment-ontology.yaml:110-111
+        - cause_id: coverage-candidate-004.cause-002
+          claim: Shipment.eta is a scalar datetime manually adjusted by operations, and
+            the notes say carrier API values and manual adjustments are mixed
+            into a final operations-judgment value.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:43-45
+            - logistics-fulfillment-ontology.yaml:112
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: Order, Shipment, and Tracking lifecycle coverage
+    evidence_anchor: logistics-fulfillment-ontology.yaml:14-17;
+      logistics-fulfillment-ontology.yaml:39-42;
+      logistics-fulfillment-ontology.yaml:55-63;
+      logistics-fulfillment-ontology.yaml:106-108
+    claim: Lifecycle models omit common terminal and exception paths needed for
+      fulfillment operations.
+    what: Order status ends at delivered and omits cancellation, rejection,
+      backorder, return, refund, or closed states. Shipment status ends at
+      delivered and omits cancelled, failed, returned, lost, damaged,
+      exception-held, or corrected states, while TrackingEvent includes
+      exception as a carrier event managed independently.
+    why: Coverage is incomplete for operational lifecycle states after or instead of
+      successful delivery. Exceptions and post-delivery corrections are normal
+      in fulfillment, and independent OMS/TMS/carrier status streams need a
+      concept that can absorb them without making delivered the only terminal
+      state.
+    how_to_fix: Extend lifecycle coverage with explicit terminal and exception
+      states, plus lifecycle event concepts for cancellation, backorder,
+      return/RMA, delivery failure, loss/damage, correction/reissue, and
+      closure. Define how carrier TrackingEvent.exception maps into
+      shipment/order lifecycle transitions.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Status model completeness for order, shipment, and delivery operations.
+      failure_condition: When a shipment fails, is returned, corrected after delivery,
+        or a carrier reports an exception, the ontology has no first-class
+        lifecycle path except successful delivery or independent unmapped
+        tracking events.
+      impact: The integration baseline cannot consistently represent exception
+        handling, reverse logistics, or post-terminal correction, making status
+        reconciliation fragile across OMS, TMS, and carriers.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:14-17
+        - logistics-fulfillment-ontology.yaml:39-42
+        - logistics-fulfillment-ontology.yaml:55-63
+        - logistics-fulfillment-ontology.yaml:106-108
+    causal_path:
+      root_cause_candidate: Lifecycle coverage is success-path oriented and leaves
+        exception/post-delivery states outside the core Order and Shipment
+        status models.
+      root_cause_step_id: coverage-candidate-005.cause-003
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: Order.fulfillment_status includes received, allocated, picking, shipped,
+            delivered only.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:14-17
+        - cause_id: coverage-candidate-005.cause-002
+          claim: Shipment.status includes created, picked, in_transit, delivered only and
+            states that delivered is final.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:39-42
+        - cause_id: coverage-candidate-005.cause-003
+          claim: TrackingEvent includes exception, but carrier events and internal
+            statuses are managed independently and mapped by each integration.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:55-63
+            - logistics-fulfillment-ontology.yaml:106-108
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Because session_domain is none, no external logistics standard or domain
+    document was used; findings are based on the target's declared purpose as a
+    WMS/TMS/ERP integration concept baseline and the embedded ontology text.
+  - For such an integration baseline, line-level fulfillment, time-qualified
+    inventory, unit-qualified measurements, authority/audit concepts, and
+    exception-capable lifecycle coverage are assumed to be in-scope because the
+    request explicitly asks about order, inventory, freight, delivery,
+    authority, temporality, units, and status models.
+validation:
+  unaddressable_candidates: []

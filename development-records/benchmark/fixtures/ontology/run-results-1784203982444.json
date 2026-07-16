@@ -1,0 +1,42 @@
+[
+  {
+    "fixture": "logistics-fulfillment",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-logistics-fulfillment-AE9U4I/.onto/review/20260716-e3fc23c8",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/logistics-fulfillment/evidence/20260716-e3fc23c8",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-logistics-fulfillment-AE9U4I",
+    "elapsed_sec": 689,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  },
+  {
+    "fixture": "clinical-lab-workflow",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-UKa4RN/.onto/review/20260716-49a71a98",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/clinical-lab-workflow/evidence/20260716-49a71a98",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-clinical-lab-workflow-UKa4RN",
+    "elapsed_sec": 644,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  },
+  {
+    "fixture": "credit-risk-taxonomy",
+    "status": "completed_with_degradation",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-4DNlET/.onto/review/20260716-acee24d9",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/credit-risk-taxonomy/evidence/20260716-acee24d9",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-credit-risk-taxonomy-4DNlET",
+    "elapsed_sec": 670,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  },
+  {
+    "fixture": "manufacturing-bom",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-sVb7Gt/.onto/review/20260716-e5e2a98b",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/manufacturing-bom/evidence/20260716-e5e2a98b",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-manufacturing-bom-sVb7Gt",
+    "elapsed_sec": 379,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  }
+]

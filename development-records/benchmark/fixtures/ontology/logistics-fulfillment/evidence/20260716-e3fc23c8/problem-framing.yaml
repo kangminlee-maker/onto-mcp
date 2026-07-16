@@ -1,0 +1,279 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Line-level fulfillment allocation is missing, so OrderLine
+      quantities cannot be traced to the shipments that fulfilled them.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The projection resolves the issue as the high-severity integrated
+      fulfillment-allocation gap, accepted by coverage, structure, logic, and
+      semantics. Because the ontology is being reviewed as an integration
+      baseline, line-to-shipment traceability must be present in the target
+      artifact rather than deferred.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: Inventory quantities lack time-qualified snapshots,
+      movements, reservations, and effective intervals needed for allocation
+      audit and evolution beyond nightly batch synchronization.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The deliberation resolution preserves the broad high-severity
+      temporal and lifecycle inventory root, with the narrower aggregate
+      provenance concern kept separately in issue-014. This directly affects
+      allocation correctness and auditability in the declared WMS/ERP purpose.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-009
+  - issue_id: issue-003
+    problem_definition: Measured logistics quantities are not modeled as
+      value-plus-unit facts with conversion authority, leaving cross-system
+      quantity semantics partly under-evidenced outside freight measurements.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Evolution, logic, and semantics support the generalized high-severity
+      measurement root, while coverage preserves an evidence limitation for
+      order and inventory quantity variation. The freight measurement portion is
+      established now, but the broader cross-quantity scope needs follow-up
+      evidence before fully closing.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-008
+  - issue_id: issue-004
+    problem_definition: Shared or manually adjusted operational values lack
+      source-authority and override-event concepts, leaving reconciled values as
+      final scalars only.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Applicable lenses consistently support the authority and audit root
+      at medium severity. It is not the primary happy-path blocker, but it must
+      be addressed before the ontology can serve as a reliable integration
+      governance baseline.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: Order, Shipment, and Tracking lifecycle coverage is
+      success-path oriented and omits common exception, reverse, and
+      post-terminal states.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is consistently supported as a medium-severity lifecycle
+      completeness gap. It affects common operational paths and should close
+      before the ontology advances as a fulfillment operations baseline.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: DeliveryLeg is modeled as a Shipment subtype even though it
+      is a route component, coupling leg-level evolution to the whole-shipment
+      contract.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The resolution keeps this as a high-severity category and evolution
+      problem accepted by all participating lenses. The inheritance choice is
+      the root for several downstream leg/status/composition failures, so it
+      must be corrected in the reviewed target.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-013
+  - issue_id: issue-007
+    problem_definition: Carrier event to internal shipment status mapping authority
+      is outside the ontology, so carrier onboarding and status changes cannot
+      preserve shared interpretation.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The projection treats this as a high-severity mapping-authority root
+      with consistent applicable-lens support. Shared status interpretation is
+      central to the declared TMS/carrier integration purpose.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: DeliveryLeg inherits Shipment's final delivered state,
+      over-constraining intermediate route legs as if leg completion and
+      customer delivery were the same terminal condition.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue remains a distinct medium defect, but the resolution
+      explicitly scopes it as downstream of issue-006 and preserves evolution's
+      preference to fold it under that broader root. It should be carried with
+      the DeliveryLeg redesign rather than treated as an independent top-level
+      root.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-009
+    problem_definition: InventoryRecord.quantity_on_hand collapses WMS physical
+      stock and ERP accounting stock into one authoritative-looking current
+      stock value.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Applicable lenses consistently support the high-severity
+      authority-collapse issue. Because it can affect promise, picking,
+      accounting, and reconciliation authority, the target ontology should not
+      ship with the collapsed meaning.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-010
+    problem_definition: InventoryAggregate.available_qty exposes a nightly snapshot
+      as unqualified current allocatable inventory for intraday allocation.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The resolution keeps this as a standalone high-severity
+      temporal/semantic issue while noting it is a specific manifestation of
+      issue-002. Its direct oversell and allocation-risk condition makes it
+      target-blocking despite the shared root context.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-011
+    problem_definition: The delivered status label is reused across order, shipment,
+      and tracking contexts without namespacing or ontology-owned mapping rules.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is consistently supported at medium severity as a semantic
+      label conflict across OMS, TMS, and carrier authorities. It must be
+      resolved before downstream integrations can rely on status equivalence.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-012
+    problem_definition: Shipment.total_weight is a derived bare numeric aggregate
+      that does not preserve unit, conversion basis, calculation time, or
+      source.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The resolution retains this as a distinct medium aggregate-weight
+      issue while tying it to the broader measurement-unit root in issue-003. It
+      should be carried forward with measurement modeling, with closure possible
+      during the next modeling stage.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-013
+    problem_definition: OrderLine has no structural fulfillment relation to
+      Shipment, leaving fulfillment connected only at Shipment-to-Order
+      granularity.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue remains the distinct medium structural expression of the
+      broader high-severity line-fulfillment issue-001. It should be tracked as
+      the structural connectivity work item under the broader
+      fulfillment-allocation fix.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-014
+    problem_definition: InventoryAggregate is a standalone SKU-level entity without
+      a declared source or derivation relation to warehouse-level
+      InventoryRecord records.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The projection consistently supports this medium structural
+      provenance issue. It enables the broader inventory audit and temporal
+      concerns by disconnecting allocation values from their warehouse-level
+      evidence, so it should close before the next stage.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-015
+    problem_definition: DeliveryLeg has sequence and endpoint fields but no parent
+      Shipment composition path to define the route it belongs to.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is consistently supported as a medium structural
+      composition gap and is closely tied to the DeliveryLeg inheritance root in
+      issue-006. It should be carried as part of the DeliveryLeg composition
+      redesign.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-016
+    problem_definition: TrackingEvent cannot attach to a specific DeliveryLeg,
+      leaving event-to-leg scoping underspecified for multi-leg routes.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: defer_watch
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The projection explicitly classifies this as low severity and
+      non-material, with no proven material failure condition. It is a useful
+      improvement opportunity that should be watched or handled after the
+      material DeliveryLeg composition issues are resolved.
+    related_surface_finding_ids:
+      - finding-019

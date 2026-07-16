@@ -1,0 +1,1264 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+findings:
+  - finding_id: finding-001
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-001
+    target: OrderLine fulfillment coverage
+    evidence_anchor: logistics-fulfillment-ontology.yaml:20-26;
+      logistics-fulfillment-ontology.yaml:100-104
+    claim: OrderLine-to-Shipment fulfillment mapping is absent, so partial
+      fulfillment coverage stops at the order level.
+    lens_rationale_summary: For a WMS/TMS/ERP integration baseline, order
+      fulfillment must reconstruct which quantities of which order lines were
+      picked, shipped, split, or delayed. An order-level Shipment-to-Order
+      relation cannot represent partial shipments, split shipments,
+      substitutions, short picks, or line-level proof of fulfillment.
+    proposed_action: Add a line-level fulfillment/allocation concept such as
+      FulfillmentLine or ShipmentLine with order_line_ref, shipment_ref,
+      shipped_qty, picked_qty, fulfilled_at, and status; keep the order-level
+      relation as a derived summary if needed.
+    affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory,
+      freight, and delivery consistency.
+    failure_condition: When an order has multiple lines, partial shipment, split
+      shipment, or delayed/backordered lines, the ontology cannot identify which
+      line quantity moved in which shipment.
+    impact: The model cannot support reconciliation between OMS order promises, WMS
+      picking/packing, TMS shipment execution, and customer delivery evidence at
+      the operational unit where fulfillment actually happens.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-001
+      - logistics-fulfillment-ontology.yaml:20-26
+      - logistics-fulfillment-ontology.yaml:100-104
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory,
+        freight, and delivery consistency.
+      failure_condition: When an order has multiple lines, partial shipment, split
+        shipment, or delayed/backordered lines, the ontology cannot identify
+        which line quantity moved in which shipment.
+      impact: The model cannot support reconciliation between OMS order promises, WMS
+        picking/packing, TMS shipment execution, and customer delivery evidence
+        at the operational unit where fulfillment actually happens.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:20-26
+        - logistics-fulfillment-ontology.yaml:100-104
+    causal_path:
+      root_cause_candidate: Fulfillment is modeled only as a Shipment-to-Order
+        relation, while OrderLine has no fulfillment allocation or shipment-line
+        concept.
+      root_cause_step_id: finding-001.cause-002
+      steps:
+        - cause_id: finding-001.cause-001
+          claim: OrderLine includes sku_ref and qty but no reference to a fulfillment,
+            shipment, shipment line, delivery leg, or fulfilled quantity.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:20-26
+        - cause_id: finding-001.cause-002
+          claim: The sole fulfills relation links Shipment to Order and explicitly states
+            that OrderLine-level mapping is not included.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:100-104
+      unresolved_beyond_evidence: null
+  - finding_id: finding-002
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-002
+    target: InventoryRecord and InventoryAggregate temporal coverage
+    evidence_anchor: logistics-fulfillment-ontology.yaml:71-85;
+      logistics-fulfillment-ontology.yaml:106-107
+    claim: Inventory quantities lack effective time, event history, and reservation
+      lifecycle coverage.
+    lens_rationale_summary: Inventory is time-dependent. Without as_of timestamps,
+      transaction/reservation events, and allocation lifecycle states, the
+      ontology cannot reconstruct inventory at order placement, explain
+      oversell/undersell conditions, or reconcile WMS physical stock with ERP
+      accounting stock across time.
+    proposed_action: Introduce inventory temporal concepts such as
+      InventorySnapshot(as_of), InventoryTransaction, Reservation/Allocation
+      with lifecycle status, source_system, and quantity deltas. Define whether
+      available_qty is derived from these records or an externally authoritative
+      snapshot.
+    affected_purpose: Inventory consistency and allocation correctness across WMS,
+      ERP, OMS, and fulfillment operations.
+    failure_condition: When inventory changes between nightly snapshots, or when
+      users need to audit the inventory basis for an order accepted earlier in
+      the day, the model has no historical or event-level representation to
+      answer the question.
+    impact: The integration baseline cannot support inventory audit, allocation
+      dispute resolution, or reliable reconstruction of past fulfillment
+      decisions.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-002
+      - logistics-fulfillment-ontology.yaml:71-85
+      - logistics-fulfillment-ontology.yaml:106-107
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Inventory consistency and allocation correctness across WMS,
+        ERP, OMS, and fulfillment operations.
+      failure_condition: When inventory changes between nightly snapshots, or when
+        users need to audit the inventory basis for an order accepted earlier in
+        the day, the model has no historical or event-level representation to
+        answer the question.
+      impact: The integration baseline cannot support inventory audit, allocation
+        dispute resolution, or reliable reconstruction of past fulfillment
+        decisions.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:71-85
+        - logistics-fulfillment-ontology.yaml:106-107
+    causal_path:
+      root_cause_candidate: Inventory is represented as current/snapshot quantities
+        rather than as time-qualified records and lifecycle events.
+      root_cause_step_id: finding-002.cause-002
+      steps:
+        - cause_id: finding-002.cause-001
+          claim: InventoryRecord.quantity_on_hand is defined as current stock and lacks an
+            as_of/effective-time attribute.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:71-79
+        - cause_id: finding-002.cause-002
+          claim: InventoryAggregate.available_qty is a nightly snapshot, yet intraday
+            allocation reads it for new orders.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:81-85
+            - logistics-fulfillment-ontology.yaml:106-107
+      unresolved_beyond_evidence: null
+  - finding_id: finding-003
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-003
+    target: Measurement unit coverage for SKU and shipment quantities
+    evidence_anchor: logistics-fulfillment-ontology.yaml:28-33;
+      logistics-fulfillment-ontology.yaml:35-44
+    claim: Weight and dimension values lack explicit unit-of-measure coverage
+      despite cross-system unit variation.
+    lens_rationale_summary: Freight rating, carrier selection, packing,
+      customs-adjacent data, and warehouse handling depend on comparable units
+      and dimensional weight. A WMS/TMS/ERP concept standard that allows raw
+      numeric weights and string dimensions from mixed unit systems cannot
+      provide a stable integration contract.
+    proposed_action: "Add structured measurement concepts: weight_value, weight_uom,
+      dimension components, dimension_uom, measurement_source,
+      measured_at/effective_at, and conversion rules. Define
+      Shipment.total_weight as derived from normalized line or package
+      measurements with a declared unit."
+    affected_purpose: Freight and shipment consistency across warehouse, transport,
+      and ERP integrations.
+    failure_condition: When different warehouses or source systems provide kg/lb or
+      dimension strings with different units, shipment totals and carrier-facing
+      data cannot be compared or safely aggregated.
+    impact: The ontology can produce ambiguous or incorrect freight weights,
+      dimensions, and downstream transportation decisions despite claiming to be
+      an integration baseline.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-003
+      - logistics-fulfillment-ontology.yaml:28-33
+      - logistics-fulfillment-ontology.yaml:35-44
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Freight and shipment consistency across warehouse, transport,
+        and ERP integrations.
+      failure_condition: When different warehouses or source systems provide kg/lb or
+        dimension strings with different units, shipment totals and
+        carrier-facing data cannot be compared or safely aggregated.
+      impact: The ontology can produce ambiguous or incorrect freight weights,
+        dimensions, and downstream transportation decisions despite claiming to
+        be an integration baseline.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:28-33
+        - logistics-fulfillment-ontology.yaml:35-44
+    causal_path:
+      root_cause_candidate: Measurement values are modeled as bare numbers or
+        free-form strings rather than unit-qualified measurements.
+      root_cause_step_id: finding-003.cause-003
+      steps:
+        - cause_id: finding-003.cause-001
+          claim: Sku.weight is a number and the note says warehouses use kg or lb
+            according to local practice.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:28-33
+        - cause_id: finding-003.cause-002
+          claim: Sku.dims is a string and the note says units differ by source system.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:28-33
+        - cause_id: finding-003.cause-003
+          claim: Shipment.total_weight stores the sum of OrderLine weights without
+            declaring unit or conversion basis.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:35-44
+      unresolved_beyond_evidence: null
+  - finding_id: finding-004
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-004
+    target: Manual adjustment and multi-source authority evidence coverage
+    evidence_anchor: logistics-fulfillment-ontology.yaml:43-45;
+      logistics-fulfillment-ontology.yaml:76-85;
+      logistics-fulfillment-ontology.yaml:110-112
+    claim: The ontology lacks audit evidence and single-authority concepts for
+      values managed across systems or manually adjusted.
+    lens_rationale_summary: Coverage for WMS/TMS/ERP integration must include who
+      can override operational facts, when, why, and which source wins. Without
+      those concepts, the model cannot audit inventory reconciliation or ETA
+      overrides, and downstream systems cannot distinguish carrier-reported
+      facts from human-edited operational estimates.
+    proposed_action: Add SourceAuthority/SourceSystem ownership for shared values
+      and an Adjustment or OverrideEvent concept with actor_ref, occurred_at,
+      reason_code, source_value, adjusted_value, approved_by, and affected
+      field. Use it for ETA and inventory reconciliation at minimum.
+    affected_purpose: Authority, auditability, and operational risk control for
+      WMS/TMS/ERP integration.
+    failure_condition: When WMS and ERP quantities disagree, or when an ETA is
+      manually changed after carrier data arrives, the ontology cannot identify
+      the authoritative value or preserve evidence of the intervention.
+    impact: The concept baseline leaves high-risk operational controls outside the
+      model, weakening dispute resolution, SLA explanations, and reconciliation
+      audit trails.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-004
+      - logistics-fulfillment-ontology.yaml:43-45
+      - logistics-fulfillment-ontology.yaml:76-85
+      - logistics-fulfillment-ontology.yaml:110-112
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Authority, auditability, and operational risk control for
+        WMS/TMS/ERP integration.
+      failure_condition: When WMS and ERP quantities disagree, or when an ETA is
+        manually changed after carrier data arrives, the ontology cannot
+        identify the authoritative value or preserve evidence of the
+        intervention.
+      impact: The concept baseline leaves high-risk operational controls outside the
+        model, weakening dispute resolution, SLA explanations, and
+        reconciliation audit trails.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:43-45
+        - logistics-fulfillment-ontology.yaml:76-85
+        - logistics-fulfillment-ontology.yaml:110-112
+    causal_path:
+      root_cause_candidate: Shared and manually adjusted operational values are
+        represented only as final scalar attributes, without authority or
+        adjustment-event concepts.
+      root_cause_step_id: finding-004.cause-002
+      steps:
+        - cause_id: finding-004.cause-001
+          claim: InventoryRecord.quantity_on_hand notes that WMS and ERP each hold values
+            and are reconciled nightly to ERP, but the model has no authority or
+            reconciliation event entity.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:76-85
+            - logistics-fulfillment-ontology.yaml:110-111
+        - cause_id: finding-004.cause-002
+          claim: Shipment.eta is a scalar datetime manually adjusted by operations, and
+            the notes say carrier API values and manual adjustments are mixed
+            into a final operations-judgment value.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:43-45
+            - logistics-fulfillment-ontology.yaml:112
+      unresolved_beyond_evidence: null
+  - finding_id: finding-005
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-005
+    target: Order, Shipment, and Tracking lifecycle coverage
+    evidence_anchor: logistics-fulfillment-ontology.yaml:14-17;
+      logistics-fulfillment-ontology.yaml:39-42;
+      logistics-fulfillment-ontology.yaml:55-63;
+      logistics-fulfillment-ontology.yaml:106-108
+    claim: Lifecycle models omit common terminal and exception paths needed for
+      fulfillment operations.
+    lens_rationale_summary: Coverage is incomplete for operational lifecycle states
+      after or instead of successful delivery. Exceptions and post-delivery
+      corrections are normal in fulfillment, and independent OMS/TMS/carrier
+      status streams need a concept that can absorb them without making
+      delivered the only terminal state.
+    proposed_action: Extend lifecycle coverage with explicit terminal and exception
+      states, plus lifecycle event concepts for cancellation, backorder,
+      return/RMA, delivery failure, loss/damage, correction/reissue, and
+      closure. Define how carrier TrackingEvent.exception maps into
+      shipment/order lifecycle transitions.
+    affected_purpose: Status model completeness for order, shipment, and delivery operations.
+    failure_condition: When a shipment fails, is returned, corrected after delivery,
+      or a carrier reports an exception, the ontology has no first-class
+      lifecycle path except successful delivery or independent unmapped tracking
+      events.
+    impact: The integration baseline cannot consistently represent exception
+      handling, reverse logistics, or post-terminal correction, making status
+      reconciliation fragile across OMS, TMS, and carriers.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/coverage.findings.yaml#coverage-candidate-005
+      - logistics-fulfillment-ontology.yaml:14-17
+      - logistics-fulfillment-ontology.yaml:39-42
+      - logistics-fulfillment-ontology.yaml:55-63
+      - logistics-fulfillment-ontology.yaml:106-108
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Status model completeness for order, shipment, and delivery operations.
+      failure_condition: When a shipment fails, is returned, corrected after delivery,
+        or a carrier reports an exception, the ontology has no first-class
+        lifecycle path except successful delivery or independent unmapped
+        tracking events.
+      impact: The integration baseline cannot consistently represent exception
+        handling, reverse logistics, or post-terminal correction, making status
+        reconciliation fragile across OMS, TMS, and carriers.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:14-17
+        - logistics-fulfillment-ontology.yaml:39-42
+        - logistics-fulfillment-ontology.yaml:55-63
+        - logistics-fulfillment-ontology.yaml:106-108
+    causal_path:
+      root_cause_candidate: Lifecycle coverage is success-path oriented and leaves
+        exception/post-delivery states outside the core Order and Shipment
+        status models.
+      root_cause_step_id: finding-005.cause-003
+      steps:
+        - cause_id: finding-005.cause-001
+          claim: Order.fulfillment_status includes received, allocated, picking, shipped,
+            delivered only.
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:14-17
+        - cause_id: finding-005.cause-002
+          claim: Shipment.status includes created, picked, in_transit, delivered only and
+            states that delivered is final.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:39-42
+        - cause_id: finding-005.cause-003
+          claim: TrackingEvent includes exception, but carrier events and internal
+            statuses are managed independently and mapped by each integration.
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:55-63
+            - logistics-fulfillment-ontology.yaml:106-108
+      unresolved_beyond_evidence: null
+  - finding_id: finding-006
+    lens_id: evolution
+    source_ref: .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-001
+    target: "logistics-fulfillment-ontology.yaml: Shipment / DeliveryLeg evolution
+      model"
+    evidence_anchor: 'Embedded Materialized Input: `Shipment` definition says "창고에서
+      고객으로 가는 물리적 화물 이동. 배송 구간(DeliveryLeg)도 Shipment의 일종이다."; `DeliveryLeg`
+      declares `is_a: Shipment`; `Shipment.status` values are `[created, picked,
+      in_transit, delivered]`; `notes` says "국제/통관 배송은 이 온톨로지의 범위 밖으로 둔다."'
+    claim: 배송 구간을 Shipment의 하위유형으로 고정해 통관·멀티모달·역물류 같은 새 이동 유형을 추가할 때 기존 Shipment 상태와
+      의미를 수정해야 한다.
+    lens_rationale_summary: "`DeliveryLeg is_a Shipment`이므로 구간은 Shipment의 속성과 상태 모델을
+      그대로 물려받는다. 동시에 `Shipment` 정의는 창고에서 고객으로 가는 전체 물리 이동이고, `DeliveryLeg` 정의는 그
+      이동의 한 구간이다. 이 두 개념의 변화 축이 다르기 때문에, 새 배송 도메인을 수용하려면 하위 구간 확장만으로 닫히지 않고 공통
+      부모의 상태 enum과 정의를 수정하게 된다. WMS/TMS/ERP 통합 기준 문서에서는 이런 부모 enum 수정이 기존 데이터
+      해석과 연동 매핑을 흔들 수 있다."
+    proposed_action: "`Shipment`를 주문 충족 화물 단위로 두고, 경로 실행 단위는 별도
+      `DeliveryLeg`/`TransportMovement` 엔티티로 분리한다. 상태도 `Shipment.status`와
+      `DeliveryLeg.status`를 분리하고, 통관·인계·반송 같은 미래 상태는 구간/이벤트 코드 확장 테이블이나 상태 매핑
+      개념으로 수용하게 한다."
+    affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 주문·화물·배송 상태 모델을 장기간 확장 가능하게 유지하는 목적.
+    failure_condition: 국제/통관 배송, 허브 간 다중 구간, 반송/교환, 운송사 인계 등 새 이동 유형을 온톨로지에 포함하려 할 때
+      `Shipment.status`와 `Shipment` 정의를 기존 데이터와 함께 수정해야 하는 조건.
+    impact: 통합 기준의 중심 개념인 Shipment의 의미와 상태 enum이 계속 변하면 기존 TMS/OMS/캐리어 연동 데이터의 상태 해석
+      연속성이 깨지고, 새 도메인 추가가 국소 확장이 아니라 전역 재분류 작업이 된다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-001
+      - "Embedded Materialized Input: `Shipment` definition and
+        attributes.status"
+      - "Embedded Materialized Input: `DeliveryLeg` definition and `is_a:
+        Shipment`"
+      - "Embedded Materialized Input: notes item `국제/통관 배송은 이 온톨로지의 범위 밖으로 둔다.`"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 주문·화물·배송 상태 모델을 장기간 확장 가능하게 유지하는 목적.
+      failure_condition: 국제/통관 배송, 허브 간 다중 구간, 반송/교환, 운송사 인계 등 새 이동 유형을 온톨로지에 포함하려 할 때
+        `Shipment.status`와 `Shipment` 정의를 기존 데이터와 함께 수정해야 하는 조건.
+      impact: 통합 기준의 중심 개념인 Shipment의 의미와 상태 enum이 계속 변하면 기존 TMS/OMS/캐리어 연동 데이터의 상태 해석
+        연속성이 깨지고, 새 도메인 추가가 국소 확장이 아니라 전역 재분류 작업이 된다.
+      evidence_refs:
+        - "Embedded Materialized Input: `Shipment` definition and
+          attributes.status"
+        - "Embedded Materialized Input: `DeliveryLeg` definition and `is_a:
+          Shipment`"
+        - "Embedded Materialized Input: notes item `국제/통관 배송은 이 온톨로지의 범위 밖으로
+          둔다.`"
+    causal_path:
+      root_cause_candidate: 전체 화물 이동과 배송 구간이라는 서로 다른 변화 축의 개념을 상속 관계로 결합했다.
+      root_cause_step_id: finding-006.cause-003
+      steps:
+        - cause_id: finding-006.cause-001
+          claim: "`DeliveryLeg` is declared as `is_a: Shipment`, so it inherits the parent
+            Shipment contract rather than having an independently evolvable
+            execution-state contract."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `DeliveryLeg: is_a: Shipment`"
+        - cause_id: finding-006.cause-002
+          claim: "`Shipment.status` is a closed enum with only created, picked,
+            in_transit, delivered, and its note says delivered is final."
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Shipment.status` values and note"
+        - cause_id: finding-006.cause-003
+          claim: The ontology explicitly excludes international/customs delivery, so
+            adding that scope later would need states and meanings not
+            represented in the inherited Shipment status set.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: notes item `국제/통관 배송은 이 온톨로지의 범위 밖으로
+              둔다.`"
+      unresolved_beyond_evidence: The bounded artifact does not show existing
+        integration payloads, so the exact migration cost is inferred from the
+        ontology contract rather than measured from implementations.
+  - finding_id: finding-007
+    lens_id: evolution
+    source_ref: .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-002
+    target: "logistics-fulfillment-ontology.yaml: TrackingEvent.event_type and
+      Shipment.status integration boundary"
+    evidence_anchor: 'Embedded Materialized Input: `TrackingEvent.event_type` values
+      `[dispatched, arrived_hub, out_for_delivery, delivered, exception]` with
+      note "캐리어별 상태 코드. 자사 Shipment.status와의 매핑은 각 연동에서 알아서 한다."; integrity rule
+      says `Order.fulfillment_status`, `Shipment.status`, and
+      `TrackingEvent.event_type` are independently managed.'
+    claim: 캐리어 상태 변경이나 신규 운송사 추가 시 매핑 권위가 온톨로지 밖의 각 연동으로 흩어져 상태 모델의 연속성이 유지되지 않는다.
+    lens_rationale_summary: evolution 관점에서 외부 표준 변경에 대한 내성이 핵심인데, 이 모델은 외부 캐리어 코드
+      변화의 흡수 지점을 공통 개념으로 두지 않는다. `TrackingEvent.event_type` 자체도 닫힌 enum이고, 매핑은 각
+      연동의 재량이므로 새 이벤트는 enum 수정과 여러 연동별 매핑 수정이 동시에 필요하다. 이는 TMS/캐리어 통합에서 가장 자주
+      변하는 상태 코드 영역의 확장성을 약하게 만든다.
+    proposed_action: 캐리어 원천 이벤트 코드(`carrier_event_code`,
+      `carrier_code_set_version`)와 내부 표준 이벤트/상태를 분리하고, 온톨로지에 버전 있는
+      `TrackingStatusMapping` 또는 상태 전이 규칙 개념을 추가한다. 신규 캐리어는 매핑 레코드 추가로 수용하고, 내부
+      `Shipment.status` enum 변경은 최소화한다.
+    affected_purpose: TMS와 캐리어 연동을 포함한 물류 통합에서 화물·배송 상태의 공통 해석 기준을 제공하는 목적.
+    failure_condition: 신규 운송사 온보딩, 캐리어 상태 코드 개편, 예외 이벤트 세분화가 발생하는 조건.
+    impact: 상태 매핑 권위가 각 연동에 분산되면 같은 캐리어 이벤트가 연동마다 다른 Shipment 상태로 해석될 수 있고, 외부 표준 변경
+      시 기존 데이터와 규칙의 연속성을 온톨로지로 보장할 수 없다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-002
+      - "Embedded Materialized Input: `TrackingEvent.event_type` note"
+      - "Embedded Materialized Input: integrity rule on independent management
+        of Order/Shipment/TrackingEvent states"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: TMS와 캐리어 연동을 포함한 물류 통합에서 화물·배송 상태의 공통 해석 기준을 제공하는 목적.
+      failure_condition: 신규 운송사 온보딩, 캐리어 상태 코드 개편, 예외 이벤트 세분화가 발생하는 조건.
+      impact: 상태 매핑 권위가 각 연동에 분산되면 같은 캐리어 이벤트가 연동마다 다른 Shipment 상태로 해석될 수 있고, 외부 표준 변경
+        시 기존 데이터와 규칙의 연속성을 온톨로지로 보장할 수 없다.
+      evidence_refs:
+        - "Embedded Materialized Input: `TrackingEvent.event_type` note"
+        - "Embedded Materialized Input: integrity rule on independent management
+          of Order/Shipment/TrackingEvent states"
+    causal_path:
+      root_cause_candidate: 외부 캐리어 이벤트와 내부 Shipment 상태 사이의 매핑 개념을 온톨로지 권위로 모델링하지 않았다.
+      root_cause_step_id: finding-007.cause-003
+      steps:
+        - cause_id: finding-007.cause-001
+          claim: "`TrackingEvent.event_type` is modeled as a closed enum while also being
+            described as carrier-specific status code."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `TrackingEvent.event_type` values
+              and note"
+        - cause_id: finding-007.cause-002
+          claim: The mapping from carrier events to internal `Shipment.status` is
+            delegated to each integration rather than represented as a shared
+            ontology concept.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `TrackingEvent.event_type` note `자사
+              Shipment.status와의 매핑은 각 연동에서 알아서 한다.`"
+        - cause_id: finding-007.cause-003
+          claim: The integrity rule further states the order, shipment, and tracking
+            states are independently managed by OMS, TMS, and carriers.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: integrity_rules second item"
+      unresolved_beyond_evidence: The artifact does not include actual connector
+        mappings, so this finding is limited to the ontology's absence of a
+        shared mapping authority.
+  - finding_id: finding-008
+    lens_id: evolution
+    source_ref: .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-003
+    target: "logistics-fulfillment-ontology.yaml: quantity, weight, and dimensions
+      attributes"
+    evidence_anchor: "Embedded Materialized Input: `Sku.weight` note says
+      warehouse-specific measuring conventions, kg or lb, are used as-is;
+      `Sku.dims` note says dimensions are a string and units differ by source
+      system; `OrderLine.qty`, `InventoryRecord.quantity_on_hand`, and
+      `InventoryAggregate.available_qty` are plain numbers without
+      unit-of-measure attributes."
+    claim: 단위 모델이 값 속성에 붙어 있지 않아 창고·국가·ERP 기준이 추가될수록 기존 숫자 필드의 의미 연속성이 깨진다.
+    lens_rationale_summary: 확장 가능한 통합 온톨로지라면 값과 단위를 분리해 새 단위계를 추가해도 기존 데이터를 재해석할 수
+      있어야 한다. 현재 구조에서는 단위 권위가 각 소스 시스템 관례에 묻혀 있어, 새 시스템 추가가 필드 추가나 전역 변환 규칙 수정으로
+      이어진다. 이는 ERP 회계 수량, WMS 물리 수량, TMS 중량 계산 간 통합 충돌을 만든다.
+    proposed_action: "`Measurement`/`Quantity` 값 객체를 도입해 `value`, `unit`,
+      `uom_authority`, `measured_at` 또는 `basis`를 명시한다. `dims`는 구조화된
+      length/width/height와 단위로 분해하고, 주문/재고 수량에는 판매 단위·보관 단위·환산 규칙을 별도 개념으로 둔다."
+    affected_purpose: WMS/TMS/ERP 통합의 단위 기준과 재고·화물 계산의 확장 가능성을 제공하는 목적.
+    failure_condition: kg/lb 창고 혼재, 해외 거점 추가, SKU별 포장 단위/판매 단위 차이, ERP와 WMS의 단위 기준 차이를 통합해야 하는 조건.
+    impact: 단위 없는 숫자와 단위가 섞인 문자열은 새 소스가 추가될 때 기존 값의 의미를 보존하지 못하고, 중량 합산·재고 가용성·운임 계산
+      같은 핵심 통합 계산을 재구성하게 만든다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-003
+      - "Embedded Materialized Input: `Sku.weight` note"
+      - "Embedded Materialized Input: `Sku.dims` note"
+      - "Embedded Materialized Input: `OrderLine.qty`,
+        `InventoryRecord.quantity_on_hand`, `InventoryAggregate.available_qty`
+        definitions"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 단위 기준과 재고·화물 계산의 확장 가능성을 제공하는 목적.
+      failure_condition: kg/lb 창고 혼재, 해외 거점 추가, SKU별 포장 단위/판매 단위 차이, ERP와 WMS의 단위 기준
+        차이를 통합해야 하는 조건.
+      impact: 단위 없는 숫자와 단위가 섞인 문자열은 새 소스가 추가될 때 기존 값의 의미를 보존하지 못하고, 중량 합산·재고 가용성·운임 계산
+        같은 핵심 통합 계산을 재구성하게 만든다.
+      evidence_refs:
+        - "Embedded Materialized Input: `Sku.weight` note"
+        - "Embedded Materialized Input: `Sku.dims` note"
+        - "Embedded Materialized Input: `OrderLine.qty`,
+          `InventoryRecord.quantity_on_hand`, `InventoryAggregate.available_qty`
+          definitions"
+    causal_path:
+      root_cause_candidate: 측정값을 단위와 기준을 가진 독립 개념으로 모델링하지 않고 원천 시스템 관례에 의존했다.
+      root_cause_step_id: finding-008.cause-003
+      steps:
+        - cause_id: finding-008.cause-001
+          claim: "`Sku.weight` stores a number while the note allows either kg or lb
+            depending on warehouse measuring convention."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Sku.weight` attribute note"
+        - cause_id: finding-008.cause-002
+          claim: "`Sku.dims` stores dimensions as a source-dependent string rather than
+            structured dimensions with units."
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Sku.dims` attribute note"
+        - cause_id: finding-008.cause-003
+          claim: Order and inventory quantities are plain numbers with no explicit
+            unit-of-measure or conversion basis.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `OrderLine.qty`,
+              `InventoryRecord.quantity_on_hand`,
+              `InventoryAggregate.available_qty` attributes"
+      unresolved_beyond_evidence: The artifact does not state whether all current SKUs
+        are single-unit domestic goods; the extensibility risk is based on the
+        declared WMS/TMS/ERP integration purpose.
+  - finding_id: finding-009
+    lens_id: evolution
+    source_ref: .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-004
+    target: "logistics-fulfillment-ontology.yaml: InventoryRecord /
+      InventoryAggregate temporal evolution"
+    evidence_anchor: "Embedded Materialized Input:
+      `InventoryRecord.quantity_on_hand` note says WMS and ERP each have values
+      and ERP is reconciled by nightly batch; comment says no `as_of` concept;
+      `InventoryAggregate.available_qty` note says daily nightly snapshot;
+      integrity rule says intraday orders also read
+      `InventoryAggregate.available_qty`."
+    claim: 재고 시간성 모델이 현재값/야간 스냅샷에 고정되어 이벤트 기반·실시간 할당으로 확장할 때 기존 재고 개념을 재구축해야 한다.
+    lens_rationale_summary: 새로운 주문 채널이나 더 촘촘한 재고 동기화가 필요해지면 기존
+      `InventoryAggregate.available_qty`의 의미가 '야간 기준'에서 '실시간 기준'으로 바뀌거나 별도 필드가
+      추가되어야 한다. 시간 기준이 개념에 포함되어 있지 않기 때문에 과거 주문 당시 재고, 재처리, 감사, 재고 불일치 조정 규칙을 기존
+      데이터와 연결해 유지하기 어렵다.
+    proposed_action: "`InventorySnapshot`과 `InventoryMovement`/`Reservation`을 분리하고,
+      모든 재고 수량에 `as_of`, `source_system`, `snapshot_type`, `version` 또는
+      `effective_interval`을 둔다. 주문 할당은 최신 집계 필드가 아니라 특정 시점의 가용성 계산 또는 예약 이벤트를
+      참조하게 한다."
+    affected_purpose: WMS/ERP 재고 권위와 주문 할당 기준을 통합 개념으로 안정적으로 유지하는 목적.
+    failure_condition: 야간 배치에서 실시간 또는 이벤트 기반 재고 동기화로 전환하거나, 주문 당시 재고 상태를 감사/재처리해야 하는 조건.
+    impact: 시간 기준 없는 재고 숫자는 새 동기화 방식 추가 시 기존 값의 의미가 바뀌며, 주문 할당 로직과 감사 질의가 동일 개념 위에서
+      연속적으로 확장되지 않는다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/evolution.findings.yaml#evolution-candidate-004
+      - "Embedded Materialized Input: `InventoryRecord.quantity_on_hand` note
+        and inline comment"
+      - "Embedded Materialized Input: `InventoryAggregate.available_qty` note"
+      - "Embedded Materialized Input: integrity rule on allocation reading
+        `InventoryAggregate.available_qty`"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: WMS/ERP 재고 권위와 주문 할당 기준을 통합 개념으로 안정적으로 유지하는 목적.
+      failure_condition: 야간 배치에서 실시간 또는 이벤트 기반 재고 동기화로 전환하거나, 주문 당시 재고 상태를 감사/재처리해야 하는 조건.
+      impact: 시간 기준 없는 재고 숫자는 새 동기화 방식 추가 시 기존 값의 의미가 바뀌며, 주문 할당 로직과 감사 질의가 동일 개념 위에서
+        연속적으로 확장되지 않는다.
+      evidence_refs:
+        - "Embedded Materialized Input: `InventoryRecord.quantity_on_hand` note
+          and inline comment"
+        - "Embedded Materialized Input: `InventoryAggregate.available_qty` note"
+        - "Embedded Materialized Input: integrity rule on allocation reading
+          `InventoryAggregate.available_qty`"
+    causal_path:
+      root_cause_candidate: 재고 수량 개념에 유효 시점과 변동/예약 이력을 포함하지 않았다.
+      root_cause_step_id: finding-009.cause-003
+      steps:
+        - cause_id: finding-009.cause-001
+          claim: "`InventoryRecord.quantity_on_hand` is a current quantity with WMS and
+            ERP each holding values and nightly reconciliation to ERP."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `InventoryRecord.quantity_on_hand`
+              note"
+        - cause_id: finding-009.cause-002
+          claim: "`InventoryAggregate.available_qty` is a nightly snapshot, but intraday
+            allocation also reads it."
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `InventoryAggregate.available_qty`
+              note"
+            - "Embedded Materialized Input: first integrity rule"
+        - cause_id: finding-009.cause-003
+          claim: The target text explicitly notes the absence of an `as_of` concept for
+            inventory point-in-time queries.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: inline comment under
+              `InventoryRecord.quantity_on_hand`"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-010
+    lens_id: logic
+    source_ref: .onto/review/20260716-e3fc23c8/round1/logic.findings.yaml#logic-candidate-001
+    target: logistics-fulfillment-ontology.yaml / Shipment.status and DeliveryLeg
+      inheritance
+    evidence_anchor: 'Embedded Materialized Input, `Shipment.definition`: "배송
+      구간(DeliveryLeg)도 Shipment의 일종이다."; `Shipment.attributes.status.values`:
+      `[created, picked, in_transit, delivered]`;
+      `Shipment.attributes.status.note`: "delivered가 최종 상태다.";
+      `DeliveryLeg.is_a: Shipment`; `DeliveryLeg.definition`: "화물 경로의 한 구간(예:
+      창고→허브, 허브→고객)."'
+    claim: "`DeliveryLeg` inherits a shipment-level final-state rule that is
+      satisfiable for a whole shipment but logically over-constrains
+      intermediate route legs."
+    lens_rationale_summary: The conflict is between the necessary inheritance claim
+      (`DeliveryLeg is_a Shipment`) and the necessary status-finality claim
+      attached to `Shipment`. Under the explicit example `창고→허브`, the leg's
+      completion condition is arrival at a hub, but the inherited final status
+      is `delivered`; this forces the same entity type to use one terminal state
+      for both leg-complete and shipment/customer-delivered. That weakens the
+      document as a WMS/TMS/ERP concept baseline because downstream integrations
+      cannot consistently decide whether `delivered` closes a route segment or
+      the customer shipment.
+    proposed_action: Separate `DeliveryLeg` from `Shipment` inheritance, or split
+      the state model into `Shipment.status` and `DeliveryLeg.status` with
+      distinct terminal meanings such as `arrived_destination` for a leg and
+      `delivered_to_customer` for a shipment.
+    affected_purpose: WMS/TMS/ERP integration concept baseline for shipment and
+      delivery concepts, especially status model consistency.
+    failure_condition: A multi-leg route includes an intermediate leg such as
+      warehouse-to-hub and uses inherited `Shipment.status.delivered` as the
+      leg's terminal status.
+    impact: The same terminal status can represent two different closure events, so
+      integrations may close the whole shipment when only a leg has completed,
+      or fail to close a leg without implying customer delivery.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/logic.findings.yaml#logic-candidate-001
+      - "Embedded Materialized Input: `Shipment.definition` says DeliveryLeg is
+        a kind of Shipment."
+      - "Embedded Materialized Input: `Shipment.status.values` includes
+        `delivered` and its note says delivered is final."
+      - "Embedded Materialized Input: `DeliveryLeg.definition` gives
+        warehouse-to-hub as an example leg."
+      - "Embedded Materialized Input: `DeliveryLeg.is_a: Shipment`."
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP integration concept baseline for shipment and
+        delivery concepts, especially status model consistency.
+      failure_condition: A multi-leg route includes an intermediate leg such as
+        warehouse-to-hub and uses inherited `Shipment.status.delivered` as the
+        leg's terminal status.
+      impact: The same terminal status can represent two different closure events, so
+        integrations may close the whole shipment when only a leg has completed,
+        or fail to close a leg without implying customer delivery.
+      evidence_refs:
+        - "Embedded Materialized Input: `Shipment.definition` says DeliveryLeg
+          is a kind of Shipment."
+        - "Embedded Materialized Input: `Shipment.status.values` includes
+          `delivered` and its note says delivered is final."
+        - "Embedded Materialized Input: `DeliveryLeg.definition` gives
+          warehouse-to-hub as an example leg."
+        - "Embedded Materialized Input: `DeliveryLeg.is_a: Shipment`."
+    causal_path:
+      root_cause_candidate: The ontology models route segments as subclasses of whole
+        physical shipments while placing an unqualified final delivery state on
+        the parent type.
+      root_cause_step_id: finding-010.cause-003
+      steps:
+        - cause_id: finding-010.cause-001
+          claim: "`DeliveryLeg` is declared as a subtype of `Shipment`."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `DeliveryLeg.is_a: Shipment`."
+        - cause_id: finding-010.cause-002
+          claim: All `DeliveryLeg` instances inherit the `Shipment.status` enum and its
+            unqualified final `delivered` rule.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Shipment.attributes.status.values`:
+              `[created, picked, in_transit, delivered]`."
+            - "Embedded Materialized Input: `Shipment.attributes.status.note`:
+              `delivered가 최종 상태다.`"
+        - cause_id: finding-010.cause-003
+          claim: The inherited final state must also apply to intermediate route legs such
+            as warehouse-to-hub legs.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `DeliveryLeg.definition`: `화물 경로의 한
+              구간(예: 창고→허브, 허브→고객).`"
+      unresolved_beyond_evidence: This finding treats `delivered` as customer delivery
+        because the parent `Shipment` is defined as movement from warehouse to
+        customer; if the intended meaning was generic
+        arrival-at-leg-destination, the ambiguity itself would route primarily
+        to semantics.
+  - finding_id: finding-011
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-001
+    target: InventoryRecord.quantity_on_hand
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:76-84,115-116
+    claim: "`quantity_on_hand`가 WMS 실물 재고와 ERP 회계 재고라는 서로 다른 의미의 수량을 하나의 속성명으로 합쳐 권위
+      의미를 잃는다."
+    lens_rationale_summary: WMS/TMS/ERP 통합 기준 문서에서 재고 수량은 어떤 시스템과 어떤 기준이 권위인지가 핵심
+      의미다. 물리적 보유량과 회계상 수량은 불일치할 수 있다고 문서가 직접 인정하므로, 하나의 `quantity_on_hand`로
+      모델링하면 동일 이름의 다른 의미를 구분하지 못한다.
+    proposed_action: "재고 수량 개념을 권위와 기준별로 분리한다. 예: `physical_on_hand_qty`(WMS 권위, 창고
+      실물 기준), `accounting_on_hand_qty`(ERP 권위, 회계 기준), 그리고 두 값의 조정/대사 이벤트 또는 기준
+      시점을 별도 개념으로 둔다."
+    affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 재고 권위와 의미를 정합하게 정의하는 목적.
+    failure_condition: WMS 실물 재고와 ERP 회계 재고가 불일치하는 상태에서 통합자가 `quantity_on_hand`를 단일
+      의미의 현재 보유 수량으로 해석할 때.
+    impact: 주문 가능 여부, 피킹 가능 수량, 회계 조정 수량이 같은 필드로 오인되어 재고 약속, 출고, 대사 로직의 권위가 흔들린다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:76-84
+      - materialized-input.md:115-116
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 재고 권위와 의미를 정합하게 정의하는 목적.
+      failure_condition: WMS 실물 재고와 ERP 회계 재고가 불일치하는 상태에서 통합자가 `quantity_on_hand`를 단일
+        의미의 현재 보유 수량으로 해석할 때.
+      impact: 주문 가능 여부, 피킹 가능 수량, 회계 조정 수량이 같은 필드로 오인되어 재고 약속, 출고, 대사 로직의 권위가 흔들린다.
+      evidence_refs:
+        - materialized-input.md:76-84
+        - materialized-input.md:115-116
+    causal_path:
+      root_cause_candidate: 서로 다른 권위 기준의 재고 수량을 하나의 속성명과 정의로 표현했다.
+      root_cause_step_id: finding-011.cause-003
+      steps:
+        - cause_id: finding-011.cause-001
+          claim: "`quantity_on_hand`는 '현재 보유 수량'으로 명명되어 단일 현재 재고처럼 보인다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:81-83
+        - cause_id: finding-011.cause-002
+          claim: 동일 설명 안에서 WMS와 ERP가 각자 값을 가진다고 하여 필드가 둘 이상의 권위 값을 담는다고 밝힌다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:83
+            - materialized-input.md:115-116
+        - cause_id: finding-011.cause-003
+          claim: 따라서 속성명이 실제 의미를 정확히 반영하지 못하고 WMS physical stock과 ERP accounting stock의
+            동음이의어적 충돌을 만든다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:76-84
+            - materialized-input.md:115-116
+      unresolved_beyond_evidence: null
+  - finding_id: finding-012
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-002
+    target: InventoryAggregate.available_qty and inventory allocation rule
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:86-90,111-112
+    claim: "`available_qty`가 매일 밤 저장되는 스냅샷인데 일중 주문 할당의 가용 재고로 쓰여 시간 의미가 이름과 맞지 않는다."
+    lens_rationale_summary: "`available_qty`라는 이름은 할당 시점의 가용 수량을 뜻하지만, 정의상 값은 야간
+      스냅샷이다. 시간 기준(`as_of`, snapshot time, reservation cutoff)이 없어서 '현재 가용'과
+      '스냅샷 가용'이 같은 개념으로 합쳐진다."
+    proposed_action: 속성명을 `available_qty_snapshot`처럼 시간성을 드러내거나, `as_of_at`, 집계 기준,
+      예약/할당 반영 범위를 함께 모델링한다. 일중 할당은 실시간 ATP/예약 원장 등 별도 권위 개념을 참조하게 한다.
+    affected_purpose: 주문·재고 개념의 시간성과 운영 위험을 통합 기준 문서 안에서 명확히 하는 목적.
+    failure_condition: 일중 주문/예약/출고로 재고가 변한 뒤에도 allocation rule이 전일 야간 스냅샷
+      `available_qty`를 현재 가용 재고로 사용할 때.
+    impact: 가용 재고 의미가 과거 스냅샷인지 현재 할당 가능량인지 불명확해져 과판매, 미할당, 시스템 간 재고 드리프트 위험을 만든다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:86-90
+      - materialized-input.md:111-112
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 주문·재고 개념의 시간성과 운영 위험을 통합 기준 문서 안에서 명확히 하는 목적.
+      failure_condition: 일중 주문/예약/출고로 재고가 변한 뒤에도 allocation rule이 전일 야간 스냅샷
+        `available_qty`를 현재 가용 재고로 사용할 때.
+      impact: 가용 재고 의미가 과거 스냅샷인지 현재 할당 가능량인지 불명확해져 과판매, 미할당, 시스템 간 재고 드리프트 위험을 만든다.
+      evidence_refs:
+        - materialized-input.md:86-90
+        - materialized-input.md:111-112
+    causal_path:
+      root_cause_candidate: 시간 기준이 있는 스냅샷 값을 시간 기준 없는 현재 가용 재고 이름으로 노출했다.
+      root_cause_step_id: finding-012.cause-003
+      steps:
+        - cause_id: finding-012.cause-001
+          claim: "`available_qty`는 '가용 수량'으로 정의되어 현재 할당 가능한 수량처럼 보인다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:86-90
+        - cause_id: finding-012.cause-002
+          claim: 동일 속성 설명은 이 값이 매일 밤 배치로 저장되는 스냅샷이라고 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:90
+        - cause_id: finding-012.cause-003
+          claim: 재고 할당 규칙은 일중 주문도 이 스냅샷 값을 읽는다고 하여 현재 가용 의미와 스냅샷 의미의 불일치를 운영 경로에 연결한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:111-112
+      unresolved_beyond_evidence: null
+  - finding_id: finding-013
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-003
+    target: DeliveryLeg.is_a Shipment
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:40-58
+    claim: "`DeliveryLeg`를 `Shipment`의 하위 유형으로 둔 것은 경로 구간과 전체 화물 이동의 부분-전체 의미를 하위유형
+      의미로 잘못 표현한다."
+    lens_rationale_summary: 배송 구간은 shipment의 구성 구간 또는 운송 실행 단위일 수 있지만, 정의상 '창고에서
+      고객으로 가는' 전체 물리 이동과 동일한 종류는 아니다. 이 상속은 구간별 상태/ETA/무게와 shipment 전체
+      상태/ETA/무게를 같은 의미로 만들 위험이 있다.
+    proposed_action: "`DeliveryLeg is_a Shipment`를 제거하고 `Shipment has_leg
+      DeliveryLeg` 또는 `DeliveryLeg part_of Shipment` 관계로 바꾼다. 구간별 carrier,
+      status, ETA가 필요하면 DeliveryLeg 고유 속성으로 정의한다."
+    affected_purpose: 화물·배송 개념의 의미 정합성을 WMS/TMS/ERP 통합 기준으로 제공하는 목적.
+    failure_condition: TMS가 shipment 전체와 route leg를 별도 객체로 다루거나 구간별 상태/ETA를 통합할 때,
+      leg가 shipment로 상속되어 전체와 부분의 의미가 섞이는 경우.
+    impact: 전체 shipment의 delivered/in_transit 의미와 개별 구간의 arrived/departed 의미가 같은 상태
+      모델로 오인될 수 있어 운송 추적과 ETA 집계가 부정확해진다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:40-58
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 화물·배송 개념의 의미 정합성을 WMS/TMS/ERP 통합 기준으로 제공하는 목적.
+      failure_condition: TMS가 shipment 전체와 route leg를 별도 객체로 다루거나 구간별 상태/ETA를 통합할 때,
+        leg가 shipment로 상속되어 전체와 부분의 의미가 섞이는 경우.
+      impact: 전체 shipment의 delivered/in_transit 의미와 개별 구간의 arrived/departed 의미가 같은 상태
+        모델로 오인될 수 있어 운송 추적과 ETA 집계가 부정확해진다.
+      evidence_refs:
+        - materialized-input.md:40-58
+    causal_path:
+      root_cause_candidate: 부분-전체 관계로 정의된 DeliveryLeg를 하위유형 관계로 표현했다.
+      root_cause_step_id: finding-013.cause-003
+      steps:
+        - cause_id: finding-013.cause-001
+          claim: Shipment는 창고에서 고객으로 가는 물리적 화물 이동으로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:40-41
+        - cause_id: finding-013.cause-002
+          claim: DeliveryLeg는 화물 경로의 한 구간으로 정의된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:52-53
+        - cause_id: finding-013.cause-003
+          claim: "그런데 DeliveryLeg가 `is_a: Shipment`로 선언되어 구간이 전체 이동의 하위유형처럼 취급된다."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:52-58
+      unresolved_beyond_evidence: null
+  - finding_id: finding-014
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-004
+    target: Order.fulfillment_status, Shipment.status, TrackingEvent.event_type
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:19-22,44-47,63-66,111-113
+    claim: "`delivered`가 주문 상태, 화물 상태, 캐리어 이벤트에서 같은 표기로 쓰이지만 각 시스템이 독립 관리한다고 되어 있어
+      동음이의 의미가 구분되지 않는다."
+    lens_rationale_summary: 주문이 delivered라는 것은 주문의 모든 필요한 fulfillment가 완료되었다는 OMS
+      판단일 수 있고, shipment delivered는 특정 화물의 도착 완료, tracking delivered는 캐리어가 보고한
+      이벤트 발생을 뜻한다. 같은 문자열이 서로 다른 권위와 완료 조건을 갖는데, 문서는 매핑을 각 연동에 맡겨 의미 기준을 제공하지
+      않는다.
+    proposed_action: 상태 값을 네임스페이스 또는 별도 개념으로 구분하고, `carrier_delivered_event`,
+      `shipment_delivery_completed`, `order_fulfillment_delivered`처럼 권위와 완료 조건을
+      명시한다. 세 모델 간 전이/매핑 규칙은 통합 기준 문서 안에서 표준화한다.
+    affected_purpose: 주문·화물·배송 상태 모델의 의미 정합성과 시스템 간 precedence를 정의하는 목적.
+    failure_condition: OMS, TMS, 캐리어 이벤트 중 하나의 `delivered`를 다른 시스템의 완료 상태와 동일시해 주문
+      완료, 고객 알림, 정산, SLA 판단을 수행할 때.
+    impact: 동일 표기 상태가 서로 다른 권위와 완료 조건을 갖기 때문에 배송 완료의 기준 시점과 책임 시스템이 통합마다 달라진다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:19-22
+      - materialized-input.md:44-47
+      - materialized-input.md:63-66
+      - materialized-input.md:111-113
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 주문·화물·배송 상태 모델의 의미 정합성과 시스템 간 precedence를 정의하는 목적.
+      failure_condition: OMS, TMS, 캐리어 이벤트 중 하나의 `delivered`를 다른 시스템의 완료 상태와 동일시해 주문
+        완료, 고객 알림, 정산, SLA 판단을 수행할 때.
+      impact: 동일 표기 상태가 서로 다른 권위와 완료 조건을 갖기 때문에 배송 완료의 기준 시점과 책임 시스템이 통합마다 달라진다.
+      evidence_refs:
+        - materialized-input.md:19-22
+        - materialized-input.md:44-47
+        - materialized-input.md:63-66
+        - materialized-input.md:111-113
+    causal_path:
+      root_cause_candidate: 서로 다른 시스템 상태의 동일 표기 값을 의미적으로 네임스페이스화하거나 매핑하지 않았다.
+      root_cause_step_id: finding-014.cause-004
+      steps:
+        - cause_id: finding-014.cause-001
+          claim: Order.fulfillment_status는 OMS 관리 주문 단위 진행 상태이며 `delivered` 값을 포함한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19-22
+        - cause_id: finding-014.cause-002
+          claim: Shipment.status는 화물 상태이며 `delivered`를 최종 상태로 둔다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:44-47
+        - cause_id: finding-014.cause-003
+          claim: TrackingEvent.event_type도 캐리어 보고 이벤트로 `delivered`를 포함하고,
+            Shipment.status와의 매핑은 각 연동에 맡긴다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:63-66
+        - cause_id: finding-014.cause-004
+          claim: Integrity rule은 세 상태가 각 시스템에서 독립 관리된다고 하므로 동일 표기 값의 의미 동일성을 보장하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:111-113
+      unresolved_beyond_evidence: null
+  - finding_id: finding-015
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-005
+    target: Sku.weight, Sku.dims, Shipment.total_weight
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:33-38,40-49
+    claim: SKU 중량·치수의 단위가 소스별로 다른데 Shipment.total_weight는 합계로 저장되어 단위 의미가 계산 결과에
+      보존되지 않는다.
+    lens_rationale_summary: 중량 합계는 같은 측정 단위의 값끼리만 의미가 있다. SKU 단위가 kg/lb로 섞일 수 있는데
+      total_weight에 단위나 변환 기준이 없으면 이름이 가리키는 '총중량'과 실제 저장값의 의미가 불일치한다.
+    proposed_action: 중량과 치수를 값+단위 구조로 모델링한다. `weight_value`, `weight_unit`,
+      `dimension_unit` 또는 표준 단위 환산 규칙을 두고, `total_weight`도 단위와 계산 기준 시점을 함께
+      저장한다.
+    affected_purpose: 화물·재고 단위 개념의 정합성을 통합 기준 문서로 제공하는 목적.
+    failure_condition: 서로 다른 창고나 소스 시스템의 SKU 중량이 하나의 Shipment.total_weight 계산에 섞일 때.
+    impact: 총중량 의미가 수치만 남고 단위 의미를 잃어 운임, 적재 제한, 운송사 연동에서 잘못된 물류 판단을 유발할 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/semantics.findings.yaml#semantics-candidate-005
+      - materialized-input.md:33-38
+      - materialized-input.md:40-49
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 화물·재고 단위 개념의 정합성을 통합 기준 문서로 제공하는 목적.
+      failure_condition: 서로 다른 창고나 소스 시스템의 SKU 중량이 하나의 Shipment.total_weight 계산에 섞일 때.
+      impact: 총중량 의미가 수치만 남고 단위 의미를 잃어 운임, 적재 제한, 운송사 연동에서 잘못된 물류 판단을 유발할 수 있다.
+      evidence_refs:
+        - materialized-input.md:33-38
+        - materialized-input.md:40-49
+    causal_path:
+      root_cause_candidate: 측정값의 단위를 속성 의미에 포함하지 않은 채 파생 합계 값을 정의했다.
+      root_cause_step_id: finding-015.cause-003
+      steps:
+        - cause_id: finding-015.cause-001
+          claim: Sku.weight는 숫자형이며 창고별 계량 관례에 따라 kg 또는 lb를 그대로 쓴다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:33-38
+        - cause_id: finding-015.cause-002
+          claim: Shipment.total_weight는 구성 OrderLine 중량의 합으로 계산해 저장된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:40-49
+        - cause_id: finding-015.cause-003
+          claim: 단위가 다른 숫자들이 합산될 수 있으므로 `total_weight`라는 이름의 총중량 의미가 실제 계산값과 어긋난다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-38
+            - materialized-input.md:48
+      unresolved_beyond_evidence: null
+  - finding_id: finding-016
+    lens_id: structure
+    source_ref: .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-001
+    target: logistics-fulfillment-ontology.yaml / entities.OrderLine and relation
+      fulfills
+    evidence_anchor: 'Embedded Materialized Input: OrderLine attributes only define
+      sku_ref and qty; relations includes only fulfills from Shipment to Order
+      with note "주문 단위 관계이며 OrderLine 단위 매핑은 두지 않는다."'
+    claim: OrderLine is not structurally connected to Shipment at fulfillment
+      granularity.
+    lens_rationale_summary: OrderLine is reachable from Order and Shipment is
+      connected to Order, but the only fulfillment edge is order-level. The
+      target declares itself as a concept baseline for WMS/TMS/ERP integration
+      across order, inventory allocation, shipment, and delivery. In that
+      declared structure, line-level fulfillment is a necessary bridge between
+      order content and physical movement; without it, partial shipments or
+      split fulfillment cannot be represented as connected paths inside the
+      ontology.
+    proposed_action: Add a line-level fulfillment/allocation concept, such as
+      ShipmentLine or FulfillmentAllocation, with refs to OrderLine and Shipment
+      plus fulfilled quantity and timing/status fields as needed.
+    affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory
+      allocation, shipment, and delivery.
+    failure_condition: When one order has multiple lines, partial shipments, split
+      shipments, or multiple delivery legs, the ontology cannot answer which
+      OrderLine quantity was fulfilled by which Shipment/DeliveryLeg.
+    impact: This weakens structural completeness for integration because OMS order
+      lines and TMS/WMS shipment execution cannot be reconciled through the
+      model; downstream systems would need out-of-model joins or assumptions.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-001
+      - 'Embedded Materialized Input: title/comment declares "주문 → 재고 할당 → 출하 →
+        배송의 개념 모델. WMS/TMS/ERP 통합의 개념 기준 문서."'
+      - "Embedded Materialized Input: Order.lines target OrderLine; OrderLine
+        attributes sku_ref and qty only"
+      - "Embedded Materialized Input: relations fulfills from Shipment to Order
+        with note that OrderLine mapping is not included"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP integration concept baseline for order, inventory
+        allocation, shipment, and delivery.
+      failure_condition: When one order has multiple lines, partial shipments, split
+        shipments, or multiple delivery legs, the ontology cannot answer which
+        OrderLine quantity was fulfilled by which Shipment/DeliveryLeg.
+      impact: This weakens structural completeness for integration because OMS order
+        lines and TMS/WMS shipment execution cannot be reconciled through the
+        model; downstream systems would need out-of-model joins or assumptions.
+      evidence_refs:
+        - 'Embedded Materialized Input: title/comment declares "주문 → 재고 할당 → 출하
+          → 배송의 개념 모델. WMS/TMS/ERP 통합의 개념 기준 문서."'
+        - "Embedded Materialized Input: Order.lines target OrderLine; OrderLine
+          attributes sku_ref and qty only"
+        - "Embedded Materialized Input: relations fulfills from Shipment to
+          Order with note that OrderLine mapping is not included"
+    causal_path:
+      root_cause_candidate: The fulfillment relation is modeled only at
+        Shipment-to-Order granularity while OrderLine has no outgoing or
+        incoming fulfillment relation.
+      root_cause_step_id: finding-016.cause-003
+      steps:
+        - cause_id: finding-016.cause-001
+          claim: OrderLine contains sku_ref and qty but no Shipment, DeliveryLeg, or
+            fulfillment-allocation reference.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: OrderLine attributes define sku_ref
+              and qty only"
+        - cause_id: finding-016.cause-002
+          claim: The ontology's only declared relation connects Shipment to Order rather
+            than Shipment to OrderLine.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations: fulfills from Shipment to
+              Order"
+        - cause_id: finding-016.cause-003
+          claim: The relation note explicitly excludes OrderLine-level mapping.
+          relation_to_previous: causes
+          evidence_refs:
+            - 'Embedded Materialized Input: fulfills note: "주문 단위 관계이며 OrderLine
+              단위 매핑은 두지 않는다."'
+      unresolved_beyond_evidence: null
+  - finding_id: finding-017
+    lens_id: structure
+    source_ref: .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-002
+    target: logistics-fulfillment-ontology.yaml / InventoryAggregate and
+      InventoryRecord structure
+    evidence_anchor: "Embedded Materialized Input: InventoryRecord references
+      Warehouse and Sku; InventoryAggregate references only Sku and has
+      available_qty; integrity rule says allocation reads
+      InventoryAggregate.available_qty."
+    claim: InventoryAggregate is structurally disconnected from the warehouse-level
+      inventory records it summarizes.
+    lens_rationale_summary: The structure contains InventoryRecord.wh_ref and
+      sku_ref, and InventoryAggregate.sku_ref, but no aggregate-of,
+      derived-from, or snapshot relation between them. Because allocation is
+      declared to read InventoryAggregate.available_qty, the concept used for
+      fulfillment decisions has no explicit structural path back to the
+      warehouse records or warehouses that would execute the pick/ship flow.
+    proposed_action: Add an explicit relation such as InventoryAggregate aggregates
+      InventoryRecord, or model InventorySnapshot/AvailabilityByWarehouse with
+      source InventoryRecord refs, aggregation time, and scope. If enterprise
+      aggregate is intentionally independent, document its authoritative source
+      relation explicitly.
+    affected_purpose: Concept baseline for inventory allocation in WMS/TMS/ERP integration.
+    failure_condition: When allocation decisions must be traced from enterprise
+      available_qty to specific warehouse stock records for picking or
+      reconciliation, the ontology has no connected structural path.
+    impact: "This makes the allocation concept structurally incomplete: the value
+      used to accept orders is disconnected from warehouse-level execution and
+      reconciliation records, reducing actionability and auditability for
+      integration."
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-002
+      - "Embedded Materialized Input: InventoryRecord definition and attributes
+        wh_ref, sku_ref, quantity_on_hand"
+      - "Embedded Materialized Input: InventoryAggregate definition and
+        attributes sku_ref, available_qty"
+      - 'Embedded Materialized Input: integrity rule: "재고 할당은
+        InventoryAggregate.available_qty를 확인해 수행한다"'
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Concept baseline for inventory allocation in WMS/TMS/ERP integration.
+      failure_condition: When allocation decisions must be traced from enterprise
+        available_qty to specific warehouse stock records for picking or
+        reconciliation, the ontology has no connected structural path.
+      impact: "This makes the allocation concept structurally incomplete: the value
+        used to accept orders is disconnected from warehouse-level execution and
+        reconciliation records, reducing actionability and auditability for
+        integration."
+      evidence_refs:
+        - "Embedded Materialized Input: InventoryRecord definition and
+          attributes wh_ref, sku_ref, quantity_on_hand"
+        - "Embedded Materialized Input: InventoryAggregate definition and
+          attributes sku_ref, available_qty"
+        - 'Embedded Materialized Input: integrity rule: "재고 할당은
+          InventoryAggregate.available_qty를 확인해 수행한다"'
+    causal_path:
+      root_cause_candidate: InventoryAggregate is modeled as a standalone SKU-level
+        entity with no declared aggregate/source relation to InventoryRecord.
+      root_cause_step_id: finding-017.cause-003
+      steps:
+        - cause_id: finding-017.cause-001
+          claim: InventoryRecord provides the warehouse/SKU inventory structure via wh_ref
+            and sku_ref.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: InventoryRecord attributes wh_ref
+              target Warehouse and sku_ref target Sku"
+        - cause_id: finding-017.cause-002
+          claim: InventoryAggregate provides SKU-level available_qty but only references
+            Sku.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: InventoryAggregate attributes
+              sku_ref target Sku and available_qty"
+        - cause_id: finding-017.cause-003
+          claim: No relation in the ontology connects InventoryAggregate to
+            InventoryRecord; the only relation listed is fulfills from Shipment
+            to Order.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations list contains only
+              fulfills from Shipment to Order"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-018
+    lens_id: structure
+    source_ref: .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-003
+    target: logistics-fulfillment-ontology.yaml / DeliveryLeg as Shipment subtype
+    evidence_anchor: "Embedded Materialized Input: Shipment definition says
+      DeliveryLeg is also a kind of Shipment; DeliveryLeg is_a Shipment and has
+      leg_seq/from_ref/to_ref; no attribute or relation links DeliveryLeg
+      instances to a parent end-to-end Shipment."
+    claim: DeliveryLeg lacks a structural parent path to the shipment route it
+      composes.
+    lens_rationale_summary: The target intends to model shipment and delivery, and
+      DeliveryLeg is defined as a route segment. A sequence number alone is not
+      structurally meaningful without a parent route/shipment scope. Because
+      DeliveryLeg inherits Shipment rather than being linked as a component, the
+      model cannot represent which legs belong to the same shipment or
+      reconstruct a route as connected segments.
+    proposed_action: Model DeliveryLeg as a component of Shipment with a required
+      shipment_ref or relation such as Shipment has_leg DeliveryLeg, keeping
+      leg_seq scoped to that parent shipment. If legs remain subtypes, add a
+      parent_shipment_ref for route composition.
+    affected_purpose: Concept baseline for shipment and delivery path integration.
+    failure_condition: When a Shipment has multiple route segments, the ontology
+      cannot determine which DeliveryLegs compose that shipment or whether their
+      sequence belongs to the same route.
+    impact: This breaks structural route completeness for TMS-style shipment
+      execution and tracking because segment data cannot be reliably connected
+      into one shipment movement.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-003
+      - 'Embedded Materialized Input: Shipment definition: "배송 구간(DeliveryLeg)도
+        Shipment의 일종이다."'
+      - "Embedded Materialized Input: DeliveryLeg is_a Shipment and attributes
+        leg_seq, from_ref, to_ref"
+      - "Embedded Materialized Input: relations list contains only fulfills from
+        Shipment to Order"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Concept baseline for shipment and delivery path integration.
+      failure_condition: When a Shipment has multiple route segments, the ontology
+        cannot determine which DeliveryLegs compose that shipment or whether
+        their sequence belongs to the same route.
+      impact: This breaks structural route completeness for TMS-style shipment
+        execution and tracking because segment data cannot be reliably connected
+        into one shipment movement.
+      evidence_refs:
+        - 'Embedded Materialized Input: Shipment definition: "배송
+          구간(DeliveryLeg)도 Shipment의 일종이다."'
+        - "Embedded Materialized Input: DeliveryLeg is_a Shipment and attributes
+          leg_seq, from_ref, to_ref"
+        - "Embedded Materialized Input: relations list contains only fulfills
+          from Shipment to Order"
+    causal_path:
+      root_cause_candidate: The model uses inheritance for DeliveryLeg but omits a
+        composition relation from Shipment to DeliveryLeg.
+      root_cause_step_id: finding-018.cause-003
+      steps:
+        - cause_id: finding-018.cause-001
+          claim: DeliveryLeg is defined as a route segment with leg_seq/from_ref/to_ref.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: DeliveryLeg definition and
+              attributes"
+        - cause_id: finding-018.cause-002
+          claim: DeliveryLeg is declared as is_a Shipment, making it a Shipment subtype
+            rather than an explicit component connected to a parent Shipment.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: DeliveryLeg is_a Shipment; Shipment
+              definition says DeliveryLeg is a kind of Shipment"
+        - cause_id: finding-018.cause-003
+          claim: No relation or attribute connects DeliveryLeg instances to a parent
+            end-to-end Shipment.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations list contains only
+              fulfills from Shipment to Order; DeliveryLeg attributes omit
+              shipment_ref or parent_ref"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-019
+    lens_id: structure
+    source_ref: .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-004
+    target: logistics-fulfillment-ontology.yaml / TrackingEvent linkage
+    evidence_anchor: "Embedded Materialized Input: TrackingEvent has shipment_ref to
+      Shipment; DeliveryLeg is_a Shipment; no relation assigns events to a
+      specific DeliveryLeg or leg sequence."
+    claim: TrackingEvent is not structurally connectable to a specific delivery leg.
+    lens_rationale_summary: For a route with multiple DeliveryLegs, a carrier event
+      such as arrived_hub or exception needs a structural attachment point to a
+      leg or stop to preserve delivery-path context. The current single
+      shipment_ref can point at the broad Shipment concept while the route
+      segments are not composed under it, so event-to-leg connectivity is
+      underspecified.
+    proposed_action: Add an optional or required leg_ref from TrackingEvent to
+      DeliveryLeg, or define event scoping rules plus a Shipment-to-DeliveryLeg
+      composition relation that lets events be associated with a leg by route
+      location and sequence.
+    affected_purpose: declared review purpose
+    failure_condition: no material failure condition is shown by the current bounded lens evidence
+    impact: For a route with multiple DeliveryLegs, a carrier event such as
+      arrived_hub or exception needs a structural attachment point to a leg or
+      stop to preserve delivery-path context. The current single shipment_ref
+      can point at the broad Shipment concept while the route segments are not
+      composed under it, so event-to-leg connectivity is underspecified.
+    evidence_refs:
+      - .onto/review/20260716-e3fc23c8/round1/structure.findings.yaml#structure-candidate-004
+    severity: low
+    domain_threshold_used: null
+    materiality_basis: null
+    causal_path: null
+validation:
+  unaddressable_findings: []

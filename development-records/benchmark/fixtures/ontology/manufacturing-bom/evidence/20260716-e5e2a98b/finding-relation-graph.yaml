@@ -1,0 +1,189 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: The ontology externalizes operational quantity authority
+      instead of modeling unit/conversion governance as first-class integration
+      concepts.
+    shared_cause:
+      cause_claim: Unit conversion and quantity interpretation are left to
+        non-authoritative or local practices rather than a modeled source of
+        truth.
+      from_cause_ref: finding-001.cause-002
+      to_cause_ref: finding-007.cause-003
+    rationale: "finding-001 identifies copied/local quantity semantics as weakening
+      PLM/MES trust, while finding-007 identifies missing unit conversion and
+      source authority coverage. Both rely on the same evidence pattern:
+      conversion basis is not an authoritative modeled concept."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-007
+    to_finding_id: finding-008
+    relation: same_root_candidate
+    root_hypothesis: The unit system is modeled as a fixed enum plus unmapped field
+      practice rather than an extensible UnitOfMeasure and conversion authority
+      model.
+    shared_cause: null
+    rationale: finding-007 frames the missing unit conversion authority as coverage
+      risk; finding-008 frames the same modeling choice as evolution risk when
+      new units or item-specific conversions arrive. The root hypothesis is
+      falsifiable by adding a first-class UOM/conversion master with ownership,
+      factors, and effectivity.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: Operationally material values are modeled as bare attributes or
+      notes without authoritative source, actor, time, and evidence concepts.
+    shared_cause:
+      cause_claim: Manual or local operational inputs are acknowledged but not
+        governed by first-class evidence/authority concepts.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-006.cause-003
+    rationale: finding-001 focuses on copied scrap/UOM quantity semantics, and
+      finding-006 focuses on missing actor/time/evidence for controlled or
+      manual changes. Both point to the same governance gap for operational
+      values used by PLM/MES integration.
+    confidence: medium
+  - relation_id: rel-004
+    from_finding_id: finding-002
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: ECO effectivity and part revision are not represented through a
+      versioned/effective-dated revision artifact model, leaving transition
+      windows ambiguous.
+    shared_cause: null
+    rationale: Both findings cite Part.rev, current ECO/effective_date, and weekly
+      synchronization to show that current revision identity can diverge from
+      required production behavior. finding-010 extends the scenario to broader
+      evolution cases, but the central defect duplicates finding-002's
+      effectivity-versus-revision gap.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-004
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: The ontology lacks an as-of revision/effectivity model that
+      binds BOM, routing, ECO, and production history to valid intervals or
+      applicability conditions.
+    shared_cause: null
+    rationale: finding-004 identifies missing BOM/routing validity history, while
+      finding-010 identifies revision/effectivity continuity failure under
+      multiple or delayed ECO scenarios. Both would be resolved by a first-class
+      revisioned artifact/effectivity interval concept spanning BOM, routing,
+      and ECO.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-002
+    to_finding_id: finding-004
+    relation: shared_cause_candidate
+    root_hypothesis: Change effectivity is declared as an operational rule without a
+      controlled as-of structure that systems can resolve consistently.
+    shared_cause:
+      cause_claim: ECO effective date can control production behavior while current
+        Part.rev and BOM/routing structures remain non-versioned or
+        asynchronously synchronized.
+      from_cause_ref: finding-002.cause-004
+      to_cause_ref: finding-004.cause-003
+    rationale: finding-002 describes stale revision identity during the ECO
+      transition window; finding-004 describes the missing
+      historical/effective-dated BOM and routing space needed to reconstruct
+      that window. The shared cause is the absence of modeled transition
+      authority.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-005
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: Change-controlled manufacturing artifacts lack lifecycle and
+      revision-state concepts rich enough to represent termination, correction,
+      replacement, and historical applicability.
+    shared_cause: null
+    rationale: finding-005 focuses on missing terminal/correction states for Routing
+      and ECO, while finding-010 focuses on continuity across revisions and
+      effectivity. Both arise because operational lifecycle/change state is
+      compressed into minimal current-state fields.
+    confidence: medium
+  - relation_id: rel-008
+    from_finding_id: finding-003
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: WorkCenter capacity is modeled as a plain number whose unit
+      semantics vary by work center.
+    shared_cause: null
+    rationale: finding-003 and finding-014 both identify that capacity_per_shift can
+      be count or time without an explicit unit, making routing/order planning
+      semantics unsafe. finding-003 adds release/order eligibility context, but
+      the core defect is the same capacity-unit ambiguity.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-009
+    to_finding_id: finding-014
+    relation: same_root_candidate
+    root_hypothesis: Capacity lacks a typed measure model separating value,
+      unit/dimension, basis period, and capacity type.
+    shared_cause: null
+    rationale: finding-009 frames the capacity ambiguity as an evolution problem for
+      new work-center types; finding-014 frames it as a semantic
+      incompatibility. Both derive from capacity_per_shift carrying multiple
+      meanings in one numeric field.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Production-order-relevant routing capacity is not modeled with
+      explicit comparable capacity measures.
+    shared_cause: null
+    rationale: finding-003 shows released routing/order use is weakened by
+      unit-ambiguous capacity, while finding-009 shows the same capacity
+      representation fails as equipment/process types evolve. The common root is
+      the absence of typed capacity measures in the routing baseline.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-007
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: Measurement semantics are represented as values without
+      required unit authority or unit references.
+    shared_cause:
+      cause_claim: WorkCenter capacity has varying count/time units but no modeled
+        unit attribute or reference.
+      from_cause_ref: finding-007.cause-002
+      to_cause_ref: finding-014.cause-002
+    rationale: finding-007 includes capacity unit authority as part of the broader
+      unit-conversion coverage gap, and finding-014 isolates the same capacity
+      field as a semantic issue.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-012
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: Alternate-part meaning is split between an attributed
+      relationship entity and a shorthand Part-to-Part relation that does not
+      preserve direction semantics.
+    shared_cause:
+      cause_claim: The shortcut alternate relation hides or disconnects the
+        relationship entity attributes that qualify substitution direction.
+      from_cause_ref: finding-012.cause-003
+      to_cause_ref: finding-016.cause-003
+    rationale: finding-012 identifies the semantic conflict between reciprocal
+      alternates and default one-way direction; finding-016 identifies the
+      structural orphaning that prevents relation consumers from reaching the
+      direction attribute. These are two manifestations of the same
+      AlternatePart modeling split.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-011
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-013
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-015
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

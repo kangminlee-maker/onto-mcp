@@ -1,0 +1,207 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - structure
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: Coverage, logic, and semantics keep the high-severity
+      line-level fulfillment gap, while structure accepts the root but lowers
+      severity because its own structural finding is medium and overlaps the
+      structural expression in issue-013.
+    resolution_question: Should the OrderLine-to-Shipment fulfillment gap remain a
+      high-severity integrated issue, or should severity/scope be narrowed to
+      the medium structural connectivity defect represented by issue-013?
+  - issue_id: issue-002
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - structure
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+    conflict_summary: Coverage, evolution, logic, and semantics support the broad
+      temporal/lifecycle inventory root and high severity, while structure
+      narrows the root to missing derivation/provenance from aggregate
+      allocation values to warehouse records and lowers severity.
+    resolution_question: Should issue-002 be resolved as the broad high-severity
+      temporal/lifecycle inventory model gap, or narrowed to a medium structural
+      provenance gap covered more directly by issue-014?
+  - issue_id: issue-003
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+    conflict_summary: Evolution, logic, and semantics accept the generalized
+      measurement-unit root across weight, dimensions, order quantity, and
+      inventory quantity, while coverage narrows the evidence to freight-facing
+      weight and dimension values and lowers severity.
+    resolution_question: Should the measurement issue remain a generalized
+      high-severity cross-quantity unit/conversion problem, or be narrowed to
+      the medium freight measurement coverage evidenced by coverage and
+      issue-012?
+  - issue_id: issue-006
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - structure
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+      - issue-stance-matrix.yaml#stances.issue-006.structure
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+    conflict_summary: Evolution, structure, and logic keep high severity for
+      DeliveryLeg-as-Shipment because inheritance destabilizes route and status
+      evolution, while semantics accepts the category error but lowers severity
+      because the direct semantic finding alone was medium.
+    resolution_question: Is the DeliveryLeg inheritance error high severity due to
+      integration-wide evolution and structural instability, or medium when
+      limited to the semantic category error itself?
+  - issue_id: issue-008
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - logic
+      - evolution
+      - coverage
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+    conflict_summary: Logic treats inherited delivered-final-state semantics as a
+      direct medium issue, while evolution treats it as a downstream surface
+      manifestation of the broader DeliveryLeg-as-Shipment issue-006.
+    resolution_question: Should issue-008 remain a distinct medium issue about
+      inherited final-state over-constraint, or be folded under issue-006 as a
+      surface consequence of the DeliveryLeg inheritance root?
+  - issue_id: issue-010
+    priority: 5
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - evolution
+      - coverage
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+    conflict_summary: Semantics, coverage, and logic support the
+      nightly-snapshot-as-current-availability issue as high severity, while
+      evolution treats it as a narrower symptom of the broader temporal
+      inventory root in issue-002.
+    resolution_question: Should issue-010 remain a standalone high-severity
+      semantic/temporal inventory issue, or be absorbed as a narrower
+      manifestation of issue-002?
+  - issue_id: issue-012
+    priority: 4
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - evolution
+      - coverage
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+    conflict_summary: Semantics, coverage, and logic support Shipment.total_weight
+      as a valid medium measurement issue, while evolution treats it as a
+      surface subset of the broader measurement-unit issue-003.
+    resolution_question: Should issue-012 remain as a distinct medium
+      shipment-total-weight issue, or be folded into issue-003 as a specific
+      instance of the broader value-plus-unit measurement root?
+  - issue_id: issue-013
+    priority: 3
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - coverage
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.structure
+      - issue-stance-matrix.yaml#stances.issue-013.coverage
+      - issue-stance-matrix.yaml#stances.issue-013.logic
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+    conflict_summary: Structure keeps issue-013 as a medium structural version of
+      the line-fulfillment gap, while coverage would raise severity to high
+      because it sees the same practical defect as issue-001.
+    resolution_question: Should issue-013 stay a medium structural connectivity
+      issue distinct from issue-001, or should it inherit issue-001's high
+      severity or merge into that broader fulfillment-allocation issue?
+skipped_issues:
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: All applicable lenses support the authority/audit root and medium
+      severity; axiology has insufficient evidence and structure is not
+      applicable, but neither creates a material conflict requiring
+      deliberation.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Coverage, evolution, logic, and semantics consistently support the
+      lifecycle incompleteness issue at medium severity; axiology insufficiency
+      and structure non-applicability do not oppose the issue.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the carrier status mapping
+      authority root and high severity; axiology insufficiency and structure
+      non-applicability are evidence limitations, not material disagreement.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the WMS/ERP quantity
+      authority-collapse root and high severity; axiology insufficiency and
+      structure non-applicability do not materially alter the claim.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the delivered-label namespacing
+      and mapping issue at medium severity; no lens materially opposes or
+      narrows the root.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the InventoryAggregate
+      provenance/connectivity issue at medium severity; the axiology evidence
+      gap does not create a material conflict.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: Applicable lenses consistently support the missing
+      Shipment-to-DeliveryLeg composition path at medium severity; axiology
+      insufficiency does not create a material conflict.
+  - issue_id: issue-016
+    reason_code: non_material_issue
+    reason: The issue is explicitly low severity and non-material in the projection,
+      so it is outside planned deliberation even though several lenses narrow or
+      surface-scope it.

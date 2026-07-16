@@ -1,0 +1,188 @@
+schema_version: 1
+session_id: 20260716-49a71a98
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: "clinical-lab-ontology.yaml state_rules: Order completion rule and
+      Report correction rule"
+    evidence_anchor: 'clinical-lab-ontology.yaml state_rules: "Order는 모든 Result가
+      final일 때 completed로 전이한다." and "Report는 released_at 기록 시점에 finalized 상태가
+      된다. 단, Result.status가 corrected로 바뀌면 Report.result_status는 amended가 되어야
+      한다(동기화 배치는 야간 1회)."; Result.status values: [preliminary, final,
+      corrected]; Order.lifecycle: [draft, placed, in_progress, completed,
+      cancelled]'
+    claim: Order completion is defined from a reversible Result.status condition
+      while the model also allows later correction of Result.status, making the
+      completed state inconsistent after an allowed correction event.
+    what: The ontology states that an Order becomes completed when all Results are
+      final, but also states that a Result may later become corrected after
+      report release. Once a Result changes from final to corrected, the earlier
+      universal condition "all Result are final" is no longer true, while the
+      Order lifecycle provides no reopened, amended, or recomputed
+      post-completion state to restore consistency.
+    why: "The conflict is formed by explicit claims only: completion requires all
+      related Results to be final, and correction later changes at least one
+      Result.status to corrected, which is a distinct enum value from final.
+      Because completed is a lifecycle state with no stated retraction or
+      amendment transition, a permitted later status change can leave an Order
+      simultaneously treated as completed and no longer satisfying its declared
+      completion condition. This matters for an EMR/LIS conceptual authority
+      document because downstream integration can derive closure from
+      Order.completed while report/result state has moved beyond the condition
+      that justified closure."
+    how_to_fix: Define completion against a stable milestone or versioned snapshot,
+      or add explicit post-final states/transitions such as amended/reopened and
+      specify how Order.completed is preserved or revised when a Result becomes
+      corrected. If corrected should still count as final for Order completion,
+      state that explicitly, e.g. completion condition is all Results in
+      final-or-corrected terminal statuses.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+        integration state behavior from Order through Report.
+      failure_condition: A Result that was final at Order completion is later changed
+        to corrected under the ontology's own Report correction rule.
+      impact: Integrations can observe or propagate an Order.completed state whose
+        stated predicate is false, weakening trust in closure, downstream
+        billing/reporting triggers, and clinician-facing workflow state.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml Order.lifecycle: [draft, placed,
+          in_progress, completed, cancelled]"
+        - "clinical-lab-ontology.yaml Result.status values: [preliminary, final,
+          corrected]"
+        - 'clinical-lab-ontology.yaml state_rules: "Order는 모든 Result가 final일 때
+          completed로 전이한다."'
+        - 'clinical-lab-ontology.yaml state_rules: "Result.status가 corrected로
+          바뀌면 Report.result_status는 amended가 되어야 한다"'
+    causal_path:
+      root_cause_candidate: The completion rule uses the mutable Result.status value
+        final as the necessary condition for a durable Order.completed lifecycle
+        state while the same model permits later mutation of that Result.status
+        to corrected.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: Order completion is triggered when all Results are final.
+          relation_to_previous: null
+          evidence_refs:
+            - 'clinical-lab-ontology.yaml state_rules: "Order는 모든 Result가 final일
+              때 completed로 전이한다."'
+        - cause_id: logic-candidate-001.cause-002
+          claim: Result.status has corrected as a separate value from final and the model
+            allows Result.status to change to corrected after release.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml Result.status values: [preliminary,
+              final, corrected]"
+            - 'clinical-lab-ontology.yaml state_rules: "Result.status가
+              corrected로 바뀌면 Report.result_status는 amended가 되어야 한다"'
+        - cause_id: logic-candidate-001.cause-003
+          claim: The Order lifecycle does not include a post-completion amended/reopened
+            state or any rule preserving completed as a snapshot despite later
+            correction.
+          relation_to_previous: enables
+          evidence_refs:
+            - "clinical-lab-ontology.yaml Order.lifecycle: [draft, placed,
+              in_progress, completed, cancelled]"
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml Result.status and Report.result_status
+      synchronization rule
+    evidence_anchor: 'clinical-lab-ontology.yaml Result.status values: [preliminary,
+      final, corrected]; Report.result_status values: [prelim, finalized,
+      amended]; state_rules: "Report는 released_at 기록 시점에 finalized 상태가 된다. 단,
+      Result.status가 corrected로 바뀌면 Report.result_status는 amended가 되어야 한다(동기화
+      배치는 야간 1회)."'
+    claim: The rule obligates Report.result_status to be amended when any
+      Result.status becomes corrected, but the ontology also records the same
+      status information in two non-identical enum domains, leaving
+      same-information synchronization under-specified as a formal constraint.
+    what: Result.status and Report.result_status are both described as carrying
+      result status information, but their allowed values are not the same
+      strings. The correction rule only covers corrected -> amended; it does not
+      define the full mapping that makes the claim of maintained same
+      information satisfiable across preliminary/prelim and final/finalized,
+      especially because Report is finalized at release time independent of a
+      stated Result.status mapping.
+    why: "This is not merely naming preference: the ontology asserts duplicate
+      maintenance of the same information while declaring two different enum
+      domains. A model instance can satisfy each enum locally, but the
+      cross-field sameness claim lacks the explicit equivalence relation needed
+      to satisfy the synchronization obligation for all allowed states. For an
+      authority document, that creates conflicting implementer interpretations
+      about which field is authoritative and when mismatched statuses are
+      valid."
+    how_to_fix: "Add a total status mapping table or unify the enum. For example:
+      preliminary <-> prelim, final <-> finalized, corrected <-> amended, plus
+      rules for multiple Results in one Report. Also clarify whether
+      Report.result_status is derived from Result.status or is the authority
+      with an explicit propagation rule."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Conceptual authority for EMR/LIS status synchronization
+        between LIS result state and clinician-facing report state.
+      failure_condition: Any implementation must decide whether and how Result.status
+        and Report.result_status represent the same status information outside
+        the single corrected -> amended case.
+      impact: Because the ontology gives two enum sets for the same maintained
+        information without a total equivalence relation, different systems can
+        satisfy local enum constraints while disagreeing on valid cross-system
+        state, undermining integration precedence and invalid-input behavior.
+      evidence_refs:
+        - 'clinical-lab-ontology.yaml Result.status note:
+          "Report.result_status에도 동일 정보가 유지된다."'
+        - "clinical-lab-ontology.yaml Result.status values: [preliminary, final,
+          corrected]"
+        - "clinical-lab-ontology.yaml Report.result_status values: [prelim,
+          finalized, amended]"
+        - 'clinical-lab-ontology.yaml Report.result_status note: "보고서에 표시되는 결과
+          상태의 권위 값."'
+        - clinical-lab-ontology.yaml state_rules correction sentence
+    causal_path:
+      root_cause_candidate: The ontology splits one declared status information
+        concept into two separate enum domains and only partially constrains
+        their equivalence.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: Result.status is declared to be maintained also in Report.result_status
+            as the same information.
+          relation_to_previous: null
+          evidence_refs:
+            - 'clinical-lab-ontology.yaml Result.status note:
+              "Report.result_status에도 동일 정보가 유지된다."'
+        - cause_id: logic-candidate-002.cause-002
+          claim: The two fields have non-identical enum values and Report.result_status is
+            also described as the authority value trusted by clinicians.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml Result.status values: [preliminary,
+              final, corrected]"
+            - "clinical-lab-ontology.yaml Report.result_status values: [prelim,
+              finalized, amended]"
+            - 'clinical-lab-ontology.yaml Report.result_status note: "보고서에 표시되는
+              결과 상태의 권위 값. 임상의는 이 값을 신뢰한다."'
+        - cause_id: logic-candidate-002.cause-003
+          claim: Only the corrected-to-amended synchronization case is explicitly
+            constrained, leaving other allowed states without a formal
+            equivalence rule.
+          relation_to_previous: enables
+          evidence_refs:
+            - 'clinical-lab-ontology.yaml state_rules: "Result.status가
+              corrected로 바뀌면 Report.result_status는 amended가 되어야 한다"'
+      unresolved_beyond_evidence: A domain-specific interpretation might treat
+        prelim/finalized/amended as obvious aliases, but no domain document is
+        available and the target itself does not state the total mapping.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Domain is none, so findings are limited to explicit claim-set satisfiability
+    and do not rely on clinical-lab domain rules.
+  - The ontology uses lifecycle/status enum values as formal state predicates
+    for integration behavior.
+  - A later Result.status change to corrected is treated as an allowed event
+    because it is explicitly named in a state rule.
+validation:
+  unaddressable_candidates: []

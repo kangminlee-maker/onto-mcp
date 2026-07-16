@@ -1,0 +1,255 @@
+schema_version: 1
+session_id: 20260716-49a71a98
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Correction propagation is under-modeled, allowing
+      clinician-facing report status to remain stale after a corrected LIS
+      result.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The issue identifies a high-severity authority and timing defect in
+      the state model: corrected clinical information can exist while the
+      trusted report status remains finalized. Because this weakens
+      clinician-facing trust, it should be closed before relying on the ontology
+      for integration design."
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: Critical threshold policy, actual critical-result
+      occurrence, and notification completion/evidence are collapsed into one
+      CriticalValue concept.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The deliberation resolution preserves the broad high-severity
+      conflation root. The collapse directly weakens auditability, escalation,
+      and clinical accountability, so it is a root-level safety and governance
+      problem that must be addressed before the next integration stage.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-016
+  - issue_id: issue-003
+    problem_definition: TAT lacks an authoritative metric rule, leaving cross-system
+      calculation semantics outside the ontology.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is a medium-severity authority gap affecting metric
+      consistency rather than immediate clinical state correctness. It should be
+      carried forward as a required modeling improvement during the next stage.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Critical-value notification lacks an evidence-bearing
+      workflow concept and graph path to result, report, staff, and notification
+      records.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is directly supported as a missing workflow/evidence
+      concept and structural relation path. Because critical notification
+      traceability is central to operational safety and audit, this is a
+      next-stage blocker.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-018
+  - issue_id: issue-005
+    problem_definition: The specimen lifecycle ends at analyzed and omits
+      post-analysis retention, disposal, retrieval, and exception states.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: This is a medium-severity lifecycle coverage gap. It affects
+      operational completeness and audit consistency, but the projection does
+      not frame it as blocking the immediate happy path.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Mutable catalogs, thresholds, units, and TAT rules are
+      modeled without effective-period or historical version authority.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue concerns historical reconstruction and audit
+      interpretation. It is materially important for governance and
+      reproducibility, but can be carried into the next modeling stage rather
+      than blocking all current review closure.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: Result and Report status vocabularies duplicate status
+      authority without a canonical projection, mapping, freshness, or evolution
+      model.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: All lenses support this high-severity duplicated-authority problem.
+      It is a root cause behind stale or inconsistent status interpretation and
+      must be resolved before the ontology can serve as a reliable EMR/LIS
+      status authority.
+    related_surface_finding_ids:
+      - finding-007
+      - finding-010
+      - finding-013
+  - issue_id: issue-008
+    problem_definition: Test and Assay are separate catalog/execution concepts
+      without an authoritative mapping or registration authority.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The missing Test-to-Assay authority threatens core order-to-execution
+      continuity. Because that bridge is foundational for EMR/LIS integration,
+      this high-severity issue blocks the next stage.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: Specimen kind is split across closed enums and free strings
+      instead of one shared specimen-kind catalog.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is a medium-severity vocabulary evolution and compatibility
+      risk. It should be carried forward to preserve extensibility and
+      cross-system validation consistency.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: Order.completed is derived from mutable Result.status values
+      without post-completion correction, snapshot, reopening, or amendment
+      semantics.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The high-severity issue describes an allowed transition that can
+      invalidate the predicate behind a durable lifecycle state. That is a core
+      state-model correctness problem and should be closed before next-stage
+      use.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-011
+    problem_definition: Result.status and Report.result_status claim shared
+      information but lack a total equivalence or authority rule.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: This is a narrower formal counterpart of the broader duplicated
+      status-authority issue. It remains material as a consistency defect, but
+      its closure can be carried with the broader status projection work.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: STAT is represented as priority value, boolean flag, and
+      subtype without a single authority or invariant rule.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is a medium-severity semantic authority defect that can
+      cause urgent-order routing and SLA divergence. It should be addressed
+      during continued model hardening, but is not framed as an immediate
+      blocker.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-013
+    problem_definition: The Specimen produces Result relation assigns
+      result-production agency to specimen material rather than to assay, test,
+      or analysis execution.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The relation label creates bounded provenance and role-semantics
+      ambiguity. It is a real correctness issue for conceptual interpretation,
+      but the projected severity supports carrying it forward rather than
+      blocking the next stage alone.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-014
+    problem_definition: Assay is introduced as an execution/catalog concept but is
+      structurally disconnected from ordered tests and produced results.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The orphaned Assay issue is a medium-severity structural completeness
+      gap. It should be resolved with the Test-to-Assay mapping work, but is
+      classified as carry-forward because the broader high-severity authority
+      issue captures the blocking catalog bridge.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-015
+    problem_definition: Order completion quantifies over all Results without
+      declaring the authoritative Order-to-Result result-set scope.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The missing result-set scope can cause divergent completion
+      computation across consumers. It is a material medium-severity state-rule
+      correctness issue, but can be carried with the related completion and
+      correction-state modeling work.
+    related_surface_finding_ids:
+      - finding-019

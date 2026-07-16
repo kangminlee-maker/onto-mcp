@@ -1,0 +1,213 @@
+schema_version: 1
+session_id: 20260716-acee24d9
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Rating assignments, mappings, and report-side overrides are
+      under-modeled as mutable grade attributes rather than governed time-bound
+      rating events with authority, precedence, effective period, approval, and
+      audit/replay metadata.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The deliberation resolution keeps this as a broad governed
+      rating-event authority issue with high severity and no remaining
+      disagreement. Because it affects the shared authoritative rating value for
+      both engine and reporting, it must be closed in the target ontology before
+      the artifact can serve its declared purpose.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-005
+      - finding-004
+  - issue_id: issue-002
+    problem_definition: Coexisting rating scales are left to consumer-side
+      conversion instead of being represented by a canonical
+      RatingScale/RatingMapping concept with owned versioned mapping authority.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The issue is materially supported without a deliberation conflict. It
+      directly weakens cross-system consistency of grade meaning and conversion
+      criteria, so the target should close it as part of the rating authority
+      model rather than defer it to consumers.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: Limit utilization and RiskAppetite compliance lack shared
+      time basis and FX authority concepts, leaving valuation time, aggregation
+      cutoff, freshness, and currency conversion authority to consuming systems
+      or batch timing.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Axiology, coverage, and evolution support the missing shared time and
+      FX authority root, with semantics narrowing only to directly evidenced
+      time-scope semantics. The issue affects reproducible
+      compliance/utilization signals, so it should be fixed in the target
+      concept model.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Default and delinquency states are excluded from the shared
+      ontology instead of represented as a minimal externally authoritative
+      lifecycle-status reference with source, status, timing, and history
+      metadata.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Controlled deliberation narrowed the issue from owning a full
+      lifecycle model to carrying a minimal sourced external-authority
+      reference. The narrowed gap is still a material completeness issue for
+      shared classification and reporting consistency.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-005
+    problem_definition: Rating conversion among coexisting scales is delegated to
+      external consumer systems instead of modeled as a versioned owned concept,
+      making rating-scale evolution, replay, and engine/report continuity
+      brittle.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: All applicable lenses accept the missing owned
+      RatingScale/RatingMapping root, while severity disagreement is preserved
+      only as lens-specific attribution. The final issue retains high severity
+      due to evolution and replay impact, so target closure is required.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-006
+    problem_definition: Utilization calculations combine exposure aggregates,
+      approved limits, and FX conversion without canonical snapshot, version,
+      source, cutoff/as-of, and valuation metadata needed for replayable
+      calculation provenance.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The final resolution accepts this as a utilization calculation
+      provenance and authority gap, primarily supported by evolution and
+      coverage with axiology materiality support. Logic, semantics, and
+      structure limits are evidence-scope caveats, not blockers to classifying
+      the issue as a target-level root cause.
+    related_surface_finding_ids:
+      - finding-009
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: Volatile business classifications are encoded as closed
+      attribute-local enums rather than managed taxonomy concepts with lifecycle
+      and compatibility metadata.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is materially supported as evolution and coverage concern,
+      but it is less immediately blocking than authority/replay defects. It
+      should be carried forward as a managed-taxonomy improvement that may be
+      closed during the next modeling stage.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-008
+    problem_definition: Collateral is conflated with credit exposure by making
+      Collateral an Exposure subtype while also modeling it as the asset that
+      secures an Exposure.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: All participating lenses accept the root, and the final resolution
+      retains high severity because subtype semantics can propagate incorrect
+      exposure treatment to collateral assets. This is a current correctness
+      blocker for the ontology's core type model.
+    related_surface_finding_ids:
+      - finding-011
+      - finding-012
+      - finding-013
+  - issue_id: issue-009
+    problem_definition: LTV is named as a collateralized ratio but modeled as an
+      independent entered value rather than a governed derived, snapshot,
+      entered, or approved override measure with formula, timing, valuation
+      source, authority, and override semantics.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The issue stands independently while preserving its dependency on the
+      broader exposure-collateral valuation/link lifecycle. It weakens authority
+      and reproducibility for a shared risk measure, so it should be closed in
+      the target model.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-010
+    problem_definition: Historically separate borrower, engine, and reporting grade
+      scales are presented as credit/risk grades without canonical semantic
+      authority, distinct concept names, or explicit mapping inside the shared
+      artifact.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Applicable lenses support the semantic rating-scale authority
+      problem, and the issue overlaps with but is not eliminated by the broader
+      rating conversion issue. It should be fixed in the target because grade
+      concept naming and mapping are central to shared interpretation.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-011
+    problem_definition: RiskAppetite compliance is modeled as an intrinsic status on
+      a policy threshold and omitted from the navigable relation graph instead
+      of as a scoped evaluation result over an ExposureAggregate at a time.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: All participating lenses converge on the evaluation-result framing,
+      with logic's earlier narrowing absorbed into the intended
+      aggregate-derived compliance scope. The missing semantic and structural
+      binding can produce inconsistent breach outputs, so target-level closure
+      is required.
+    related_surface_finding_ids:
+      - finding-016
+      - finding-017

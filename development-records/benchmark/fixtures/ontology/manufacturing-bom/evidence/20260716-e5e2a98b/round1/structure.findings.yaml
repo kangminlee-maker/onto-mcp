@@ -1,0 +1,88 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml / entities.AlternatePart and relations
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37
+      and
+      .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:84
+    claim: AlternatePart is declared as an entity but is not connected by any formal
+      relation.
+    what: "The ontology defines `AlternatePart` with `primary_ref`, `alternate_ref`,
+      and `direction`, but the `relations` list contains only a direct `Part ->
+      Part alternate_of` relation with a note that it is shorthand through
+      AlternatePart. No relation has `from: AlternatePart` or `to:
+      AlternatePart`."
+    why: "Within the structural relation graph, `AlternatePart` is effectively
+      orphaned: graph consumers can traverse `Part -> Part alternate_of`, but
+      cannot reach the entity that carries the alternate relationship's own
+      attributes, especially `direction`. For a PLM/MES integration concept
+      baseline, this weakens the completeness of the declared alternate-part
+      structure because the relationship entity exists in `entities` but is
+      absent from the formal connectivity surface."
+    how_to_fix: Make `AlternatePart` the explicit relationship node in `relations`,
+      for example add relations from `AlternatePart` to `Part` for `primary_ref`
+      and `alternate_ref`, and either remove the shorthand `Part -> Part
+      alternate_of` relation or define it as a derived projection that preserves
+      linkage to `AlternatePart.direction`.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as a PLM/MES integration concept baseline for
+        BOM, routing, and related manufacturing master-data structures.
+      failure_condition: When integration or validation logic relies on the formal
+        `relations` list to discover connected ontology concepts,
+        `AlternatePart` is not reachable as a relationship entity despite
+        carrying the alternate-part fields.
+      impact: The alternate-part concept is split between an entity and an unconnected
+        shorthand relation, so downstream consumers can miss the entity
+        attributes that qualify the relationship. This reduces trust in the
+        ontology as a structurally complete concept baseline.
+      evidence_refs:
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:40
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:41
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:42
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:84
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:91
+    causal_path:
+      root_cause_candidate: The formal relation list models alternates as a direct
+        `Part -> Part` shorthand instead of connecting the declared
+        `AlternatePart` entity into the graph.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: "`AlternatePart` is declared as an entity with references to two `Part`
+            endpoints and a `direction` attribute."
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:40
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:41
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:42
+        - cause_id: structure-candidate-001.cause-002
+          claim: The `relations` list does not include any edge whose `from` or `to`
+            endpoint is `AlternatePart`; it includes only `Part -> Part
+            alternate_of`.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:84
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:91
+        - cause_id: structure-candidate-001.cause-003
+          claim: Because the relationship entity is absent from the formal relation graph,
+            its qualifying field `direction` is not structurally attached to the
+            shorthand alternate relation.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:42
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:91
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain document was used; the finding is
+    limited to structural connectivity visible in the materialized ontology
+    input.
+validation:
+  unaddressable_candidates: []
