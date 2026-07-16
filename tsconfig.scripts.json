@@ -1,0 +1,23 @@
+{
+  // Typecheck gate for hand-run scripts/ files. They are executed with tsx, so
+  // they are covered by NEITHER the src-only tsconfig.json (check:ts-core) NOR
+  // vitest's transform — without this, a type error in a script ships silently.
+  //
+  // Scope is the typecheck-clean subset (currently the M3 model-characteristic
+  // benchmark scripts). Other scripts/ files carry pre-existing type errors that
+  // only surface under strict tsc; add a script here once it is made clean.
+  // Test files are intentionally omitted, mirroring tsconfig.json's exclusion of
+  // src/**/*.test.ts (tests are exercised by vitest at runtime).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "scripts/m3-defect-spectrum.ts",
+    "scripts/m3-attribution-judge.ts",
+    "scripts/m3-run.ts"
+  ],
+  "exclude": []
+}

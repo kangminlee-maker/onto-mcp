@@ -1,0 +1,93 @@
+{
+  "schema_version": "m3-report/2",
+  "judge_model": "claude-opus-4-8",
+  "band_thresholds": {
+    "meet_material_recall": 1,
+    "exceed_material_recall": 1,
+    "exceed_precision": 0.9,
+    "floor_precision": 0.8
+  },
+  "fixtures": [
+    {
+      "fixture": "clinical-lab-workflow",
+      "evidence_session": "20260611-f1a64fc4",
+      "judge_runs": 3,
+      "band": "below",
+      "band_stable": true,
+      "bands_observed": [
+        "below",
+        "below",
+        "below"
+      ],
+      "recall_material": {
+        "min": 0.8571428571428571,
+        "max": 0.8571428571428571,
+        "mean": 0.8571428571428571
+      },
+      "recall_overall": {
+        "min": 0.8,
+        "max": 0.8,
+        "mean": 0.8000000000000002
+      },
+      "precision": {
+        "min": 0.9166666666666666,
+        "max": 0.9166666666666666,
+        "mean": 0.9166666666666666
+      }
+    },
+    {
+      "fixture": "credit-risk-taxonomy",
+      "evidence_session": "20260611-5161a370",
+      "judge_runs": 3,
+      "band": "exceeds",
+      "band_stable": true,
+      "bands_observed": [
+        "exceeds",
+        "exceeds",
+        "exceeds"
+      ],
+      "recall_material": {
+        "min": 1,
+        "max": 1,
+        "mean": 1
+      },
+      "recall_overall": {
+        "min": 0.9,
+        "max": 0.9,
+        "mean": 0.9
+      },
+      "precision": {
+        "min": 0.9090909090909091,
+        "max": 0.9090909090909091,
+        "mean": 0.9090909090909091
+      }
+    },
+    {
+      "fixture": "manufacturing-bom",
+      "evidence_session": "20260611-ca3c674b",
+      "judge_runs": 3,
+      "band": "below",
+      "band_stable": true,
+      "bands_observed": [
+        "below",
+        "below",
+        "below"
+      ],
+      "recall_material": {
+        "min": 1,
+        "max": 1,
+        "mean": 1
+      },
+      "recall_overall": {
+        "min": 1,
+        "max": 1,
+        "mean": 1
+      },
+      "precision": {
+        "min": 0.7692307692307693,
+        "max": 0.7692307692307693,
+        "mean": 0.7692307692307693
+      }
+    }
+  ]
+}

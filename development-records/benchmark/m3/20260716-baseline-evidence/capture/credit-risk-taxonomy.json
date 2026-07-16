@@ -1,0 +1,219 @@
+{
+  "schema_version": "m3-capture/2",
+  "fixture": "credit-risk-taxonomy",
+  "evidence_session": "20260611-5161a370",
+  "judge_model": "claude-opus-4-8",
+  "judge_effort": "low",
+  "band_thresholds": {
+    "meet_material_recall": 1,
+    "exceed_material_recall": 1,
+    "exceed_precision": 0.9,
+    "floor_precision": 0.8
+  },
+  "runs": [
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "CRT-9"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "CRT-1"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "CRT-7"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": [
+          "CRT-4"
+        ]
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "CRT-9"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "CRT-1",
+          "CRT-5",
+          "CRT-8"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "CRT-10"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "CRT-2"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "CRT-2"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": [
+          "CRT-3"
+        ]
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": []
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "CRT-9"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "CRT-1"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "CRT-7"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": [
+          "CRT-4"
+        ]
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "CRT-9"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "CRT-1",
+          "CRT-5",
+          "CRT-8"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "CRT-10"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "CRT-2"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "CRT-2"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": [
+          "CRT-3"
+        ]
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": []
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "CRT-9"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "CRT-1"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "CRT-7"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": [
+          "CRT-4"
+        ]
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "CRT-9"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "CRT-1",
+          "CRT-5",
+          "CRT-8"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "CRT-10"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "CRT-2"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "CRT-2"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": [
+          "CRT-3"
+        ]
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": []
+      }
+    ]
+  ]
+}

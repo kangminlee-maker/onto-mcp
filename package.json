@@ -56,6 +56,7 @@
     "build:ts-core": "npm run clean:ts-core && tsc -p tsconfig.json",
     "build:mcpb": "node scripts/build-mcpb.mjs",
     "check:ts-core": "tsc -p tsconfig.json --noEmit",
+    "check:ts-scripts": "tsc -p tsconfig.scripts.json",
     "check:review:invocation-runner": "tsx scripts/review-invocation-runner-conformance.ts",
     "check:retired-root-paths": "bash scripts/check-retired-root-paths.sh",
     "check:mcp:review": "tsx scripts/mcp-review-conformance.ts",

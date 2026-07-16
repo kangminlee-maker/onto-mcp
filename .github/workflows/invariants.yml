@@ -18,6 +18,10 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - name: TS typecheck (M3 benchmark scripts)
+        # scripts/ run via tsx → covered by neither the src-only tsconfig nor
+        # vitest's transform. Gates the typecheck-clean M3 set (tsconfig.scripts.json).
+        run: npm run check:ts-scripts
       - name: G1 import boundary (INV-MOCK-1, repo-layout)
         run: npx tsx scripts/check-import-boundary.ts
       - name: G2 hardcoded spec defaults (INV-AUTH-1, INV-CFG-1)
