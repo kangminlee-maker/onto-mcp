@@ -1,0 +1,1073 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+findings:
+  - finding_id: finding-001
+    lens_id: axiology
+    source_ref: .onto/review/20260716-e5e2a98b/round1/axiology.findings.yaml#axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml / BomLine.scrap_rate and uom handling
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:35
+      and :100;
+      .onto/review/20260716-e5e2a98b/execution-preparation/review-value-alignment-criteria.yaml
+      criterion user-request-intent
+    claim: Operational quantity semantics are accepted outside the PLM/MES concept
+      baseline, weakening the document’s declared integration purpose.
+    lens_rationale_summary: For a PLM/MES integration concept standard, BOM
+      quantities, scrap/yield, and UOM conversion are purpose-critical operating
+      semantics. The target does not model an authoritative source, validity,
+      unit basis, or governance for those values; instead it normalizes
+      copied/manual operational inputs as acceptable supporting assumptions.
+      That is a value-alignment problem because the document’s stated purpose is
+      to be the concept baseline for integration, not merely a vocabulary over
+      locally maintained spreadsheets and shop-floor conversions.
+    proposed_action: Add explicit authoritative concepts for scrap/yield and
+      item-specific UOM conversion, including source ownership, unit basis,
+      effective scope/date, and whether MES or PLM consumes the value. Remove
+      the “copied” and ad hoc shop-floor conversion assumptions from the
+      canonical ontology or mark them as non-authoritative migration notes.
+    affected_purpose: Review intent asks whether this BOM/process ontology is
+      suitable as a PLM/MES integration concept standard, focused on item, BOM,
+      routing, change-management consistency and manufacturing operating risk.
+    failure_condition: When production planning, BOM explosion, inventory
+      consumption, costing, or MES order generation depends on scrap/yield or
+      UOM conversion, the integration baseline lacks authoritative, stable
+      quantity semantics.
+    impact: Cross-system trust is weakened because two systems can conform to the
+      ontology while still using divergent spreadsheet-copied scrap values or
+      local UOM conversions, creating real manufacturing planning and execution
+      risk.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:35
+      - materialized-input.md:100
+      - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Review intent asks whether this BOM/process ontology is
+        suitable as a PLM/MES integration concept standard, focused on item,
+        BOM, routing, change-management consistency and manufacturing operating
+        risk.
+      failure_condition: When production planning, BOM explosion, inventory
+        consumption, costing, or MES order generation depends on scrap/yield or
+        UOM conversion, the integration baseline lacks authoritative, stable
+        quantity semantics.
+      impact: Cross-system trust is weakened because two systems can conform to the
+        ontology while still using divergent spreadsheet-copied scrap values or
+        local UOM conversions, creating real manufacturing planning and
+        execution risk.
+      evidence_refs:
+        - materialized-input.md:35
+        - materialized-input.md:100
+        - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    causal_path:
+      root_cause_candidate: The ontology treats operationally critical quantity data
+        as attributes while leaving their authority and conversion governance
+        outside the concept baseline.
+      root_cause_step_id: finding-001.cause-003
+      steps:
+        - cause_id: finding-001.cause-001
+          claim: "`BomLine.scrap_rate` is included as a canonical BOM-line attribute, but
+            its note says the value is copied from a production-planning Excel
+            file."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+        - cause_id: finding-001.cause-002
+          claim: The ontology also states that UOM conversion lacks an item
+            conversion-factor master and is performed on the shop floor as
+            needed.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:100
+        - cause_id: finding-001.cause-003
+          claim: These choices allow PLM/MES integration to depend on copied or local
+            quantity interpretations rather than a shared authoritative concept.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:100
+            - review-value-alignment-criteria.yaml
+              criterion_id=user-request-intent
+      unresolved_beyond_evidence: null
+  - finding_id: finding-002
+    lens_id: axiology
+    source_ref: .onto/review/20260716-e5e2a98b/round1/axiology.findings.yaml#axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml / ECO effectivity and Part revision
+      synchronization
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:20-21,
+      :69-75, :96;
+      .onto/review/20260716-e5e2a98b/execution-preparation/review-value-alignment-criteria.yaml
+      criterion user-request-intent
+    claim: The ontology accepts a hidden tradeoff where ECO effectivity can outrun
+      the part revision identity used by integrated systems.
+    lens_rationale_summary: For PLM/MES integration, change effectivity is not just
+      descriptive metadata; it controls which design revision production should
+      build. The ontology’s stated rule creates a time window in which
+      production should follow a new revision while the part revision field may
+      still show the old one. Accepting that delay without a first-class
+      effectivity model or release gate prioritizes batch synchronization
+      convenience over the document’s purpose of providing a safe shared concept
+      baseline.
+    proposed_action: Represent ECO effectivity and revision applicability as
+      first-class versioned/effective-dated relationships, and require released
+      production orders to resolve the applicable revision from ECO state plus
+      effectivity rather than from a potentially stale `Part.rev` batch copy.
+      Make the source-of-truth precedence explicit for the transition window.
+    affected_purpose: The declared review purpose is PLM/MES integration suitability
+      with emphasis on change-management consistency and manufacturing operating
+      risk.
+    failure_condition: During the period after an ECO effective date but before
+      weekly `Part.rev` synchronization, MES or downstream consumers may see a
+      stale revision while the integrity rule says production must follow the
+      new revision.
+    impact: The concept baseline can permit wrong-revision manufacturing or
+      ambiguous revision traceability, which is material to manufacturing
+      execution and change-control trust.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:20
+      - materialized-input.md:21
+      - materialized-input.md:69-75
+      - materialized-input.md:96
+      - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The declared review purpose is PLM/MES integration suitability
+        with emphasis on change-management consistency and manufacturing
+        operating risk.
+      failure_condition: During the period after an ECO effective date but before
+        weekly `Part.rev` synchronization, MES or downstream consumers may see a
+        stale revision while the integrity rule says production must follow the
+        new revision.
+      impact: The concept baseline can permit wrong-revision manufacturing or
+        ambiguous revision traceability, which is material to manufacturing
+        execution and change-control trust.
+      evidence_refs:
+        - materialized-input.md:20
+        - materialized-input.md:21
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+        - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    causal_path:
+      root_cause_candidate: The ontology separates change effectivity authority from
+        part revision synchronization without modeling the precedence and
+        transition state as a controlled integration concept.
+      root_cause_step_id: finding-002.cause-004
+      steps:
+        - cause_id: finding-002.cause-001
+          claim: "`Part.rev` is present as the part revision field, with the drawing
+            ledger named as its source of truth."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20
+        - cause_id: finding-002.cause-002
+          claim: "`ECO` carries affected parts, effective date, and status, and
+            `Part.current_eco` separately points to the latest ECO."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:21
+            - materialized-input.md:69-75
+        - cause_id: finding-002.cause-003
+          claim: The integrity rule says production after `ECO.effective_date` follows the
+            new revision, but `Part.rev` is synchronized later by weekly batch
+            after drawing-ledger reflection.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: finding-002.cause-004
+          claim: This creates a bounded transition where the integration baseline can
+            expose stale revision identity while requiring new-revision
+            production behavior.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:96
+      unresolved_beyond_evidence: null
+  - finding_id: finding-003
+    lens_id: axiology
+    source_ref: .onto/review/20260716-e5e2a98b/round1/axiology.findings.yaml#axiology-candidate-003
+    target: manufacturing-bom-ontology.yaml / WorkCenter.capacity_per_shift
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:53,
+      :55-61, :67, :95;
+      .onto/review/20260716-e5e2a98b/execution-preparation/review-value-alignment-criteria.yaml
+      criterion user-request-intent
+    claim: Routing release is tied to production-order eligibility while work-center
+      capacity is allowed to remain unit-ambiguous.
+    lens_rationale_summary: A PLM/MES concept standard should make released routing
+      data operationally comparable enough for order creation and scheduling.
+      Leaving capacity units implicit per work center accepts local flexibility
+      at the expense of integrated routing/capacity meaning. That is a purpose
+      drift from “concept 기준 문서” toward a loosely documented data shape.
+    proposed_action: Split capacity into explicit typed measures or add required
+      unit and basis fields, such as capacity quantity, capacity time, shift
+      calendar, UOM, and conversion basis. Define how released routings validate
+      that operation time and work-center capacity are comparable before
+      production-order creation.
+    affected_purpose: The review asks whether the ontology is suitable as a PLM/MES
+      concept baseline, especially routing consistency and manufacturing
+      operating risk.
+    failure_condition: When released routings are used to create or schedule
+      production orders, capacity values cannot be safely interpreted without
+      per-work-center out-of-band unit knowledge.
+    impact: MES consumers can misread capacity as count or time while still
+      conforming to the ontology, reducing the actionability of the routing
+      concept model.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/axiology.findings.yaml#axiology-candidate-003
+      - materialized-input.md:53
+      - materialized-input.md:55-61
+      - materialized-input.md:67
+      - materialized-input.md:95
+      - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The review asks whether the ontology is suitable as a PLM/MES
+        concept baseline, especially routing consistency and manufacturing
+        operating risk.
+      failure_condition: When released routings are used to create or schedule
+        production orders, capacity values cannot be safely interpreted without
+        per-work-center out-of-band unit knowledge.
+      impact: MES consumers can misread capacity as count or time while still
+        conforming to the ontology, reducing the actionability of the routing
+        concept model.
+      evidence_refs:
+        - materialized-input.md:53
+        - materialized-input.md:55-61
+        - materialized-input.md:67
+        - materialized-input.md:95
+        - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    causal_path:
+      root_cause_candidate: The ontology models capacity as a bare number and
+        delegates its unit meaning to work-center-local convention.
+      root_cause_step_id: finding-003.cause-004
+      steps:
+        - cause_id: finding-003.cause-001
+          claim: Operations define standard time in minutes, establishing an explicit time
+            basis for routing steps.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:53
+        - cause_id: finding-003.cause-002
+          claim: Released routings are the condition for production-order creation.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:55-61
+            - materialized-input.md:95
+        - cause_id: finding-003.cause-003
+          claim: Work-center capacity is modeled as a number, but its note says the unit
+            differs by work center between quantity and time.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+        - cause_id: finding-003.cause-004
+          claim: This lets production-order-relevant routing and capacity data remain
+            semantically incomparable inside the integration baseline.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:53
+            - materialized-input.md:67
+            - materialized-input.md:95
+      unresolved_beyond_evidence: null
+  - finding_id: finding-004
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e5e2a98b/round1/coverage.findings.yaml#coverage-candidate-001
+    target: manufacturing-bom-ontology.yaml — BOM/routing/engineering-change
+      effectivity coverage
+    evidence_anchor: manufacturing-bom-ontology.yaml:24-30, 42-56, 64-70, 88-91
+    claim: 시점별 BOM·라우팅 구성을 재구성할 유효기간/이력 개념이 누락되어 있다.
+    lens_rationale_summary: 문서는 PLM/MES 통합의 개념 기준을 표방하고, 무결성 규칙은 ECO.effective_date
+      이후 생산분이 신규 rev를 따른다고 선언한다. 그러나 BOM 라인과 라우팅이 적용기간 및 이력 버전을 갖지 않으면 ECO 전후
+      생산분을 서로 다른 구조/공정으로 분리할 개념 공간이 없다. 특히 Part.rev가 도면 관리대장 반영 후 주간 배치로 동기화된다고
+      되어 있어, 단일 current 값만으로는 배치 지연 구간의 실제 적용 상태를 판정하기 어렵다.
+    proposed_action: BOMLine, Routing, Operation 또는 별도
+      Effectivity/RevisionedStructure 개념에 valid_from, valid_to,
+      supersedes/superseded_by, applicable_rev/ECO, 적용 조건(일자·로트·공장 등 필요한 범위)을
+      추가하고, as-of 시점의 BOM/라우팅을 산출하는 권위 규칙을 명시한다.
+    affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목·BOM·라우팅·변경관리의 운영 기준을 제공하는 목적
+    failure_condition: ECO 적용 전후, 주간 배치 동기화 지연, 과거 생산오더 재추적처럼 특정 시점의 구조와 공정을 재구성해야 하는 경우
+    impact: MES 생산오더, 원가/시간 계산, 품질 추적이 어떤 BOM·라우팅 버전을 기준으로 했는지 판정할 수 없어 통합 기준의 신뢰와
+      감사 가능성이 약해진다.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/coverage.findings.yaml#coverage-candidate-001
+      - manufacturing-bom-ontology.yaml:24-30
+      - manufacturing-bom-ontology.yaml:42-56
+      - manufacturing-bom-ontology.yaml:64-70
+      - manufacturing-bom-ontology.yaml:88-91
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목·BOM·라우팅·변경관리의 운영 기준을 제공하는 목적
+      failure_condition: ECO 적용 전후, 주간 배치 동기화 지연, 과거 생산오더 재추적처럼 특정 시점의 구조와 공정을 재구성해야 하는 경우
+      impact: MES 생산오더, 원가/시간 계산, 품질 추적이 어떤 BOM·라우팅 버전을 기준으로 했는지 판정할 수 없어 통합 기준의 신뢰와
+        감사 가능성이 약해진다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:24-30
+        - manufacturing-bom-ontology.yaml:42-56
+        - manufacturing-bom-ontology.yaml:64-70
+        - manufacturing-bom-ontology.yaml:88-91
+    causal_path:
+      root_cause_candidate: 온톨로지가 BOM/라우팅/변경관리의 현재 구조와 단일 effective_date를 표현하지만, 시점 의존
+        구조를 독립 개념으로 모델링하지 않는다.
+      root_cause_step_id: finding-004.cause-003
+      steps:
+        - cause_id: finding-004.cause-001
+          claim: BomLine은 parent_ref, child_ref, qty_per, scrap_rate만 정의하며 적용기간이나 이력 속성이
+            없다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:24-30
+        - cause_id: finding-004.cause-002
+          claim: Routing은 part_ref, operations, status만 정의하며 공정 순서의 버전 또는 적용기간을 갖지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:50-56
+        - cause_id: finding-004.cause-003
+          claim: ECO 무결성 규칙은 effective_date 이후 생산분이 신규 rev를 따른다고 하지만 Part.rev 동기화가 주간 배치라고
+            하여 current 값과 실제 적용 시점이 어긋날 수 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:64-70
+            - manufacturing-bom-ontology.yaml:88-91
+      unresolved_beyond_evidence: null
+  - finding_id: finding-005
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e5e2a98b/round1/coverage.findings.yaml#coverage-candidate-002
+    target: manufacturing-bom-ontology.yaml — lifecycle coverage for
+      released/change-controlled objects
+    evidence_anchor: manufacturing-bom-ontology.yaml:50-56, 64-70, 88-91
+    claim: 상태를 갖는 주요 객체의 lifecycle이 도입부터 종료·정정까지 포괄하지 못한다.
+    lens_rationale_summary: 라우팅은 released 상태만 생산오더 생성 조건으로 사용되고 ECO는 생산 적용 시점까지
+      통제한다. 그런데 종결·폐기·대체·정정 상태가 없으면 더 이상 사용하면 안 되는 라우팅이나 잘못 적용된 ECO를 상태 모델 안에서
+      표현할 수 없다. 이는 범위 누락이며, 존재하는 상태값의 정확성보다 상태 lifecycle의 빈 구간이 문제다.
+    proposed_action: Routing과 ECO에 최소한 폐기/대체/보류/취소/반려/정정 또는 재발행 상태를 추가하고, 각 상태가 생산오더
+      생성, rev 적용, 감사 추적에 미치는 의미를 무결성 규칙으로 정의한다.
+    affected_purpose: PLM/MES 통합 기준에서 라우팅 릴리스와 변경관리 상태가 운영 행위를 통제하는 목적
+    failure_condition: 릴리스된 라우팅이 단종·대체되거나 승인된 ECO가 취소/정정/재발행되는 경우
+    impact: 상태 모델이 운영상 금지 또는 예외 처리해야 할 종료 이후 상황을 표현하지 못해 MES 생산 가능 여부와 변경 적용 판단이 모호해진다.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/coverage.findings.yaml#coverage-candidate-002
+      - manufacturing-bom-ontology.yaml:50-56
+      - manufacturing-bom-ontology.yaml:64-70
+      - manufacturing-bom-ontology.yaml:88-91
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 기준에서 라우팅 릴리스와 변경관리 상태가 운영 행위를 통제하는 목적
+      failure_condition: 릴리스된 라우팅이 단종·대체되거나 승인된 ECO가 취소/정정/재발행되는 경우
+      impact: 상태 모델이 운영상 금지 또는 예외 처리해야 할 종료 이후 상황을 표현하지 못해 MES 생산 가능 여부와 변경 적용 판단이
+        모호해진다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:50-56
+        - manufacturing-bom-ontology.yaml:64-70
+        - manufacturing-bom-ontology.yaml:88-91
+    causal_path:
+      root_cause_candidate: 상태 enum이 초기 작성과 릴리스/적용까지만 정의되어 있고 종료 및 정정 사건을 별도 개념으로 포함하지 않는다.
+      root_cause_step_id: finding-005.cause-003
+      steps:
+        - cause_id: finding-005.cause-001
+          claim: Routing.status는 draft와 released만 허용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:50-56
+        - cause_id: finding-005.cause-002
+          claim: ECO.status는 open, approved, applied만 허용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:64-70
+        - cause_id: finding-005.cause-003
+          claim: 생산오더 생성과 rev 적용 규칙이 이 제한된 상태값에 의존한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:88-91
+      unresolved_beyond_evidence: null
+  - finding_id: finding-006
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e5e2a98b/round1/coverage.findings.yaml#coverage-candidate-003
+    target: manufacturing-bom-ontology.yaml — audit evidence for controlled actions
+      and manual values
+    evidence_anchor: manufacturing-bom-ontology.yaml:64-70, 72-77, 93-95
+    claim: 승인·수기입력·현장환산 같은 통제 행위의 행위자·시각·근거 증거 개념이 누락되어 있다.
+    lens_rationale_summary: PLM/MES 통합에서는 승인과 수동 조정이 생산 가능 여부, 검사 합격 기준, 원가/시간 계산에
+      영향을 준다. 현재 모델은 결과값이나 상태만 담고 그 값을 만든 통제 행위의 actor/time/rationale를 담지 않아 사후
+      감사와 오류 원인 추적 범위가 비어 있다.
+    proposed_action: ApprovalRecord, ManualOverride/Adjustment, ConversionEvent 또는
+      SourceEvidence 같은 공통 증거 개념을 추가하고 actor, timestamp, source_doc/version,
+      rationale, affected_field, previous_value/new_value를 연결한다.
+    affected_purpose: 제조 운영 위험을 줄이는 PLM/MES 통합 기준으로서 승인·검사·원가/시간 값의 추적성을 제공하는 목적
+    failure_condition: ECO 승인, 검사 기준 변경, 표준시간 수기 입력, 현장 단위 환산이 생산/품질/원가 판단에 영향을 준 뒤
+      감사나 원인 분석이 필요한 경우
+    impact: 누가 언제 어떤 근거로 값을 승인하거나 바꾸었는지 알 수 없어 통합 데이터의 통제성과 책임 추적이 약해진다.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/coverage.findings.yaml#coverage-candidate-003
+      - manufacturing-bom-ontology.yaml:64-70
+      - manufacturing-bom-ontology.yaml:72-77
+      - manufacturing-bom-ontology.yaml:93-95
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 제조 운영 위험을 줄이는 PLM/MES 통합 기준으로서 승인·검사·원가/시간 값의 추적성을 제공하는 목적
+      failure_condition: ECO 승인, 검사 기준 변경, 표준시간 수기 입력, 현장 단위 환산이 생산/품질/원가 판단에 영향을 준 뒤
+        감사나 원인 분석이 필요한 경우
+      impact: 누가 언제 어떤 근거로 값을 승인하거나 바꾸었는지 알 수 없어 통합 데이터의 통제성과 책임 추적이 약해진다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:64-70
+        - manufacturing-bom-ontology.yaml:72-77
+        - manufacturing-bom-ontology.yaml:93-95
+    causal_path:
+      root_cause_candidate: 통제 행위가 상태나 메모로만 표현되고, 행위 증거를 담는 별도 개념이 없다.
+      root_cause_step_id: finding-006.cause-003
+      steps:
+        - cause_id: finding-006.cause-001
+          claim: ECO는 approved 상태를 갖지만 승인 행위의 행위자·시각·근거 속성이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:64-70
+        - cause_id: finding-006.cause-002
+          claim: InspectionPlan의 acceptance_criteria는 품질팀 SOP가 원본이라고만 기록하고 SOP 버전 또는 승인
+            증거를 연결하지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:72-77
+        - cause_id: finding-006.cause-003
+          claim: 표준원가 시스템 수기 입력과 현장 uom 환산이 notes에 언급되지만 수기 조정/환산 증거 개념은 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:93-95
+      unresolved_beyond_evidence: null
+  - finding_id: finding-007
+    lens_id: coverage
+    source_ref: .onto/review/20260716-e5e2a98b/round1/coverage.findings.yaml#coverage-candidate-004
+    target: manufacturing-bom-ontology.yaml — unit conversion and source authority
+      coverage
+    evidence_anchor: manufacturing-bom-ontology.yaml:14, 58-62, 93-95
+    claim: 단위 변환과 능력 단위의 기준 마스터/권위 개념이 누락되어 있다.
+    lens_rationale_summary: BOM qty_per, 작업장 capacity, 생산계획은 단위 해석이 일치해야 한다. 그런데 변환
+      기준과 단위 권위가 빠져 있으면 같은 품목/공정 수량이 시스템마다 다르게 계산될 수 있으며, 이는 단순 속성 누락을 넘어 통합 기준
+      문서의 범위 빈 영역이다.
+    proposed_action: ItemUomConversion 또는 UnitOfMeasureMaster 개념을 추가해 source_uom,
+      target_uom, factor, valid_from/to, owning_system, approval/source
+      evidence를 정의하고, WorkCenter capacity 단위도 명시적 uom_ref로 모델링한다.
+    affected_purpose: PLM/MES 통합에서 BOM 수량, 생산능력, 계획 계산의 공통 기준을 제공하는 목적
+    failure_condition: kg↔ea 등 변환이 필요한 품목이나 작업장별 capacity 단위가 혼재된 생산계획/오더 계산을 수행하는 경우
+    impact: 동일 수량과 능력 값이 시스템 또는 현장 판단마다 다르게 해석되어 계획, 자재소요, 원가 계산의 기준성이 깨질 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/coverage.findings.yaml#coverage-candidate-004
+      - manufacturing-bom-ontology.yaml:14
+      - manufacturing-bom-ontology.yaml:58-62
+      - manufacturing-bom-ontology.yaml:93-95
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 BOM 수량, 생산능력, 계획 계산의 공통 기준을 제공하는 목적
+      failure_condition: kg↔ea 등 변환이 필요한 품목이나 작업장별 capacity 단위가 혼재된 생산계획/오더 계산을 수행하는 경우
+      impact: 동일 수량과 능력 값이 시스템 또는 현장 판단마다 다르게 해석되어 계획, 자재소요, 원가 계산의 기준성이 깨질 수 있다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:14
+        - manufacturing-bom-ontology.yaml:58-62
+        - manufacturing-bom-ontology.yaml:93-95
+    causal_path:
+      root_cause_candidate: 온톨로지가 단위 enum과 단위가 섞인 capacity 값은 표현하지만 변환 기준과 원본 권위를 별도 개념으로 두지 않는다.
+      root_cause_step_id: finding-007.cause-003
+      steps:
+        - cause_id: finding-007.cause-001
+          claim: Part.uom은 고정 enum만 정의한다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:14
+        - cause_id: finding-007.cause-002
+          claim: WorkCenter.capacity_per_shift의 단위는 작업장마다 개수 또는 시간으로 다르다고 되어 있지만 단위 속성이나
+            참조가 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:58-62
+        - cause_id: finding-007.cause-003
+          claim: notes는 품목별 환산계수 마스터가 없고 필요 시 현장에서 환산한다고 명시한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:93-95
+      unresolved_beyond_evidence: null
+  - finding_id: finding-008
+    lens_id: evolution
+    source_ref: .onto/review/20260716-e5e2a98b/round1/evolution.findings.yaml#evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml / Part.uom and unit conversion handling
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:19
+      and :100
+    claim: 새 단위나 품목별 환산 규칙이 추가되면 기존 Part.uom enum과 현장 환산 관행 때문에 기준 모델 수정 또는 외부 보정이
+      필요하다.
+    lens_rationale_summary: PLM/MES 통합의 개념 기준 문서라면 단위와 환산은 품목, BOM 수량, 생산 실적, 재고,
+      원가가 공유하는 확장 가능한 기준이어야 한다. 현재 구조는 새 단위(liter, set, roll 등)나 kg↔ea 환산이 필요한
+      품목을 받을 때 enum 값 추가와 현장별 해석에 의존하므로, 기존 데이터/규칙의 연속성과 시스템 간 비교 가능성이 약해진다.
+    proposed_action: uom을 고정 enum이 아니라 UnitOfMeasure 참조로 분리하고, 품목별 또는 공정별 conversion
+      factor/effective period/source를 가진 UomConversion 개념을 추가한다. 최소한 Part.uom에는
+      기준 단위만 두고 BomLine.qty_per와 생산/재고 수량이 참조할 명시적 단위 및 환산 규칙을 모델링한다.
+    affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목, BOM, 생산, 재고 수량을 일관되게 연결하는 목적.
+    failure_condition: 새 단위 또는 품목별 환산이 필요한 데이터가 들어오거나 PLM/MES/원가 시스템이 같은 수량을 서로 다른 단위로 교환할 때.
+    impact: 단위 의미가 enum 밖 또는 현장 관행에 머물러 통합 기준 문서가 변경 내성을 제공하지 못하고, 새 단위 추가마다 스키마/규칙
+      수정 또는 수기 보정이 필요해진다.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/evolution.findings.yaml#evolution-candidate-001
+      - materialized-input.md:19
+      - materialized-input.md:100
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목, BOM, 생산, 재고 수량을 일관되게 연결하는 목적.
+      failure_condition: 새 단위 또는 품목별 환산이 필요한 데이터가 들어오거나 PLM/MES/원가 시스템이 같은 수량을 서로 다른 단위로 교환할 때.
+      impact: 단위 의미가 enum 밖 또는 현장 관행에 머물러 통합 기준 문서가 변경 내성을 제공하지 못하고, 새 단위 추가마다 스키마/규칙
+        수정 또는 수기 보정이 필요해진다.
+      evidence_refs:
+        - materialized-input.md:19
+        - materialized-input.md:100
+    causal_path:
+      root_cause_candidate: 단위 체계를 확장 가능한 기준 엔티티가 아니라 고정 enum과 비모델링 현장 환산으로 표현한다.
+      root_cause_step_id: finding-008.cause-003
+      steps:
+        - cause_id: finding-008.cause-001
+          claim: Part.uom은 ea, kg, m 세 값만 허용하는 enum으로 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19
+        - cause_id: finding-008.cause-002
+          claim: 품목별 환산계수 마스터가 없고 필요 시 현장에서 환산한다고 명시되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:100
+        - cause_id: finding-008.cause-003
+          claim: 따라서 새 단위나 환산 규칙이 필요한 품목을 추가하면 모델 내부의 기준 데이터로 흡수되지 않고 enum 수정 또는 외부 관행에
+            의존한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:100
+      unresolved_beyond_evidence: null
+  - finding_id: finding-009
+    lens_id: evolution
+    source_ref: .onto/review/20260716-e5e2a98b/round1/evolution.findings.yaml#evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml / WorkCenter.capacity_per_shift
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:63-67
+    claim: 작업장 능력 단위가 작업장마다 달라지는 값을 단일 number로 둬서 새 설비/공정 유형 추가 시 기존 구조가 의미를 보존하지 못한다.
+    lens_rationale_summary: 라우팅과 MES 통합에서 capacity는 공정 계획, 부하 산정, 생산 오더 가능 여부에 직접
+      쓰이는 확장 지점이다. 현재 모델은 값의 차원(count/time), 기간, 기준 교대, 산정 방식이 속성으로 분리되어 있지 않아 새
+      작업장이나 설비 유형을 추가할수록 같은 필드가 서로 다른 의미를 담게 된다.
+    proposed_action: capacity_per_shift를 CapacityMeasure 같은 구조로 분리해 value, unit,
+      basis_period, capacity_type(count/time/throughput 등), source/effective
+      period를 명시한다. WorkCenter는 하나 이상의 CapacityMeasure를 참조하게 해 새 설비 유형을 기존 필드 의미
+      변경 없이 추가할 수 있게 한다.
+    affected_purpose: PLM/MES 통합 기준에서 라우팅의 작업장 능력과 생산 계획 가능성을 안정적으로 표현하는 목적.
+    failure_condition: 개수 기준 설비와 시간 기준 설비가 혼재하거나, 새로운 능력 기준을 가진 작업장을 추가할 때.
+    impact: 동일한 number 필드가 여러 의미를 갖게 되어 MES나 계획 시스템이 capacity를 일관되게 해석하기 어렵고, 새 작업장
+      유형을 수용할 때 외부 규칙 또는 필드 재정의가 필요해진다.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/evolution.findings.yaml#evolution-candidate-002
+      - materialized-input.md:63
+      - materialized-input.md:67
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 기준에서 라우팅의 작업장 능력과 생산 계획 가능성을 안정적으로 표현하는 목적.
+      failure_condition: 개수 기준 설비와 시간 기준 설비가 혼재하거나, 새로운 능력 기준을 가진 작업장을 추가할 때.
+      impact: 동일한 number 필드가 여러 의미를 갖게 되어 MES나 계획 시스템이 capacity를 일관되게 해석하기 어렵고, 새 작업장
+        유형을 수용할 때 외부 규칙 또는 필드 재정의가 필요해진다.
+      evidence_refs:
+        - materialized-input.md:63
+        - materialized-input.md:67
+    causal_path:
+      root_cause_candidate: capacity의 값과 측정 단위/차원/기준 기간을 분리하지 않고 단일 숫자 속성에 결합했다.
+      root_cause_step_id: finding-009.cause-003
+      steps:
+        - cause_id: finding-009.cause-001
+          claim: WorkCenter는 capacity_per_shift를 number로만 정의한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63
+            - materialized-input.md:67
+        - cause_id: finding-009.cause-002
+          claim: 같은 속성의 단위가 작업장마다 개수 또는 시간으로 다르다고 명시되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+        - cause_id: finding-009.cause-003
+          claim: 따라서 새 작업장 유형이 추가될수록 capacity_per_shift의 의미가 필드 밖 관행에 의존하고 통합 시스템에서 안정적으로
+            확장되기 어렵다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+            - materialized-input.md:87-89
+      unresolved_beyond_evidence: null
+  - finding_id: finding-010
+    lens_id: evolution
+    source_ref: .onto/review/20260716-e5e2a98b/round1/evolution.findings.yaml#evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml / ECO, Part.rev, and revision effectivity
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:20-21,
+      :69-75, :96
+    claim: 변경 이력과 적용 시점이 현재 Part.rev와 ECO.effective_date에만 걸려 있어 다중 리비전·단계적 적용·과거 생산
+      이력 확장 시 연속성이 깨진다.
+    lens_rationale_summary: PLM/MES 통합에서 변경관리는 현재 상태뿐 아니라 특정 생산일, 공장, 오더, BOM 버전,
+      라우팅 버전의 유효성을 보존해야 한다. 현재 구조는 '최신 ECO'와 단일 날짜 중심이라 향후 여러 ECO가 겹치거나 단계적으로
+      적용되거나, 과거 생산분의 as-planned/as-built 기준을 조회해야 할 때 기존 데이터가 어떤 BOM/라우팅/rev에
+      속했는지 모델 내부에서 연속적으로 표현하기 어렵다.
+    proposed_action: PartRev 또는 EngineeringRevision을 별도 엔티티로 두고 BOM, Routing,
+      Operation/InspectionPlan을 revisioned artifact로 연결한다. ECO에는 affected
+      artifact, valid_from/valid_to, applicability 조건, applied/sync 상태를 두어
+      current_rev는 파생 뷰로 취급하고, 생산 오더는 생성 시점의 명시적 revision/effectivity snapshot을
+      참조하게 한다.
+    affected_purpose: 품목·BOM·라우팅·변경관리 개념의 정합성을 PLM/MES 통합 기준으로 제공하는 목적.
+    failure_condition: ECO가 여러 건 병행되거나, 적용일과 주간 배치 동기화 사이의 생산분이 생기거나, 과거 생산 오더의
+      BOM/라우팅/rev 기준을 재현해야 할 때.
+    impact: 변경 전후 데이터의 연속성을 기준 모델이 보존하지 못하면 MES 생산 오더, PLM 도면 리비전, BOM/라우팅 적용 상태가 서로
+      다른 현재값을 보게 되어 제조 운영상 잘못된 revision으로 생산하거나 추적성을 잃을 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/evolution.findings.yaml#evolution-candidate-003
+      - materialized-input.md:20
+      - materialized-input.md:21
+      - materialized-input.md:69-75
+      - materialized-input.md:96
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅·변경관리 개념의 정합성을 PLM/MES 통합 기준으로 제공하는 목적.
+      failure_condition: ECO가 여러 건 병행되거나, 적용일과 주간 배치 동기화 사이의 생산분이 생기거나, 과거 생산 오더의
+        BOM/라우팅/rev 기준을 재현해야 할 때.
+      impact: 변경 전후 데이터의 연속성을 기준 모델이 보존하지 못하면 MES 생산 오더, PLM 도면 리비전, BOM/라우팅 적용 상태가 서로
+        다른 현재값을 보게 되어 제조 운영상 잘못된 revision으로 생산하거나 추적성을 잃을 수 있다.
+      evidence_refs:
+        - materialized-input.md:20
+        - materialized-input.md:21
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: 변경관리의 권위 개념을 revisioned artifact/effectivity interval이 아니라
+        현재 Part 속성과 ECO 단일 적용일로 모델링했다.
+      root_cause_step_id: finding-010.cause-004
+      steps:
+        - cause_id: finding-010.cause-001
+          claim: Part.rev는 문자열 속성이며 도면 관리대장이 원본이라고 되어 있고, current_eco는 최신 설계변경만 참조한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:21
+        - cause_id: finding-010.cause-002
+          claim: ECO는 affected_parts와 effective_date만 가지고, BOM이나 Routing의 버전별 적용 범위를 직접
+            참조하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:84-90
+        - cause_id: finding-010.cause-003
+          claim: 무결성 규칙은 effective_date 이후 신규 rev를 따르지만 Part.rev 갱신은 도면 관리대장 반영 후 주간 배치로
+            동기화된다고 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: finding-010.cause-004
+          claim: 따라서 변경 적용 시점과 현재 rev 동기화 시점이 분리되는 시나리오에서 기존 구조만으로 BOM/라우팅/생산분의 유효
+            revision 연속성을 보존하기 어렵다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+            - materialized-input.md:96
+      unresolved_beyond_evidence: 대상 파일 밖에 실제 PLM/MES가 별도 effectivity snapshot을 갖는지는
+        확인하지 않았다. 본 finding은 개념 기준 문서 자체에 그 확장 구조가 보이지 않는다는 범위 내 판단이다.
+  - finding_id: finding-011
+    lens_id: logic
+    source_ref: .onto/review/20260716-e5e2a98b/round1/logic.findings.yaml#logic-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules BOM acyclicity rule
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:93-95
+    claim: The BOM acyclicity rule is internally unsatisfiable for the stated scrap
+      re-input modeling case.
+    lens_rationale_summary: "Conflict pair: materialized-input.md:94 vs
+      materialized-input.md:94. Satisfiability: intra-claim conflict. Modality:
+      mixed necessary/possible exception; the same rule makes acyclicity
+      mandatory while permitting a modeling pattern that necessarily violates
+      acyclicity. For a PLM/MES concept baseline, this weakens validation
+      because the same target graph can be both forbidden as cyclic and required
+      as the representation of scrap re-input."
+    proposed_action: Separate normal BOM acyclicity from scrap/rework flow modeling.
+      For example, keep product BOM strictly acyclic and represent scrap
+      re-input through a distinct process/recovery relation, or explicitly
+      define a different graph scope where self-reference is allowed and
+      excluded from the BOM acyclicity invariant.
+    affected_purpose: Use the ontology as a PLM/MES concept baseline for BOM and
+      routing validation.
+    failure_condition: A scrap re-input Assembly is modeled as its own child while
+      the BOM invariant still says BOMs must be acyclic.
+    impact: Validators or integrations cannot consistently decide whether the
+      self-referential BOM is valid, creating invalid-input and precedence
+      ambiguity at the BOM/MES boundary.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/logic.findings.yaml#logic-candidate-001
+      - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:93-95
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use the ontology as a PLM/MES concept baseline for BOM and
+        routing validation.
+      failure_condition: A scrap re-input Assembly is modeled as its own child while
+        the BOM invariant still says BOMs must be acyclic.
+      impact: Validators or integrations cannot consistently decide whether the
+        self-referential BOM is valid, creating invalid-input and precedence
+        ambiguity at the BOM/MES boundary.
+      evidence_refs:
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:93-95
+    causal_path:
+      root_cause_candidate: The same integrity rule uses the BOM parent-child graph
+        for both product structure and scrap re-input process flow without
+        separating their invariants.
+      root_cause_step_id: finding-011.cause-003
+      steps:
+        - cause_id: finding-011.cause-001
+          claim: The ontology declares BOMs must be acyclic.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:94
+        - cause_id: finding-011.cause-002
+          claim: The same rule permits scrap re-input to be modeled as an Assembly
+            containing itself as a child.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:94
+        - cause_id: finding-011.cause-003
+          claim: An Assembly containing itself creates a one-edge cycle in the BOM graph,
+            contradicting the mandatory acyclicity rule.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:23-35
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:94
+      unresolved_beyond_evidence: null
+  - finding_id: finding-012
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e5e2a98b/round1/semantics.findings.yaml#semantics-candidate-001
+    target: AlternatePart entity and alternate_of shortcut relation
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37-45,91
+    claim: AlternatePart is defined as symmetric while its attributes model a
+      directional substitution by default.
+    lens_rationale_summary: A symmetric definition and a default one-way attribute
+      describe different meanings. In PLM/MES use, interchangeable substitutes,
+      engineering-approved alternates, and one-way supersessions are materially
+      different because they control whether production may replace one part
+      with another in either direction.
+    proposed_action: "Split the concepts or definitions: model symmetric
+      interchangeability separately from directional substitution/supersession,
+      or change the definition to explicitly say `AlternatePart` can be
+      directional and require the shortcut `alternate_of` to preserve
+      direction."
+    affected_purpose: PLM/MES integration concept baseline for item/BOM/change concepts.
+    failure_condition: A downstream consumer interprets `alternate_of` or the entity
+      definition as bidirectional while the data defaults to `one_way`, or vice
+      versa.
+    impact: Part substitution rules can be applied in the wrong direction, weakening
+      production planning, procurement substitution, and change-control trust in
+      the ontology.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:37-45
+      - materialized-input.md:91
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: PLM/MES integration concept baseline for item/BOM/change concepts.
+      failure_condition: A downstream consumer interprets `alternate_of` or the entity
+        definition as bidirectional while the data defaults to `one_way`, or
+        vice versa.
+      impact: Part substitution rules can be applied in the wrong direction, weakening
+        production planning, procurement substitution, and change-control trust
+        in the ontology.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: The ontology assigns one concept name,
+        `AlternatePart`/`alternate_of`, to both symmetric alternates and
+        directional substitution relationships.
+      root_cause_step_id: finding-012.cause-003
+      steps:
+        - cause_id: finding-012.cause-001
+          claim: The entity definition states the alternate relationship is reciprocal.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-38
+        - cause_id: finding-012.cause-002
+          claim: The entity attributes then encode direction and default it to `one_way`.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:42-45
+        - cause_id: finding-012.cause-003
+          claim: The shortcut `alternate_of` relation hides that direction semantics
+            unless consumers inspect the `AlternatePart` entity.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+  - finding_id: finding-013
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e5e2a98b/round1/semantics.findings.yaml#semantics-candidate-002
+    target: InspectionPlan is_a Operation
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:47-53,77-82
+    claim: InspectionPlan is classified as a subtype of Operation even though its
+      definition describes a plan/specification, not a routing step.
+    lens_rationale_summary: The inheritance says every inspection plan is an
+      operation. That forces plan-level attributes such as sampling rules and
+      acceptance criteria into the same ontological type as executable routing
+      steps, which can confuse whether the ontology is referring to a
+      manufacturing action or the quality specification governing that action.
+    proposed_action: Model inspection as an `Operation` subtype only if the entity
+      represents the executable inspection step. Otherwise, keep
+      `InspectionPlan` as a separate specification entity referenced by an
+      inspection `Operation`.
+    affected_purpose: Concept baseline for routing and manufacturing operation
+      semantics in PLM/MES integration.
+    failure_condition: MES/routing consumers treat quality inspection specifications
+      as executable routing operations or require operation fields for plan
+      records.
+    impact: The ontology weakens the distinction between work execution and
+      quality-control specification, which can produce ambiguous routing,
+      scheduling, and inspection master-data mappings.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:47-53
+      - materialized-input.md:77-82
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Concept baseline for routing and manufacturing operation
+        semantics in PLM/MES integration.
+      failure_condition: MES/routing consumers treat quality inspection specifications
+        as executable routing operations or require operation fields for plan
+        records.
+      impact: The ontology weakens the distinction between work execution and
+        quality-control specification, which can produce ambiguous routing,
+        scheduling, and inspection master-data mappings.
+      evidence_refs:
+        - materialized-input.md:47-53
+        - materialized-input.md:77-82
+    causal_path:
+      root_cause_candidate: The ontology uses subtype inheritance where a
+        reference/extension relation would better preserve the
+        plan-versus-operation type distinction.
+      root_cause_step_id: finding-013.cause-002
+      steps:
+        - cause_id: finding-013.cause-001
+          claim: "`Operation` denotes an executable routing step with work center and
+            standard time."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:47-53
+        - cause_id: finding-013.cause-002
+          claim: "`InspectionPlan` is named and defined as a plan and parameter extension,
+            then declared `is_a: Operation`."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:77-82
+      unresolved_beyond_evidence: null
+  - finding_id: finding-014
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e5e2a98b/round1/semantics.findings.yaml#semantics-candidate-003
+    target: WorkCenter.capacity_per_shift
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:63-67
+    claim: "`capacity_per_shift` has a single numeric field while its note says the
+      unit differs by work center."
+    lens_rationale_summary: Capacity expressed as pieces per shift and capacity
+      expressed as time per shift are not the same measure. A PLM/MES concept
+      baseline needs capacity semantics to be explicit enough for scheduling,
+      load calculation, and routing interpretation.
+    proposed_action: Add an explicit capacity unit or split the field into typed
+      measures, such as quantity capacity and time capacity, with clear units
+      and conversion rules.
+    affected_purpose: PLM/MES routing and manufacturing operation concept baseline.
+    failure_condition: Consumers aggregate, compare, or schedule work centers using
+      `capacity_per_shift` without knowing whether the number is a count or a
+      time value.
+    impact: The ontology permits semantically incompatible values in the same
+      attribute, undermining capacity planning and MES scheduling mappings.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:63-67
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: PLM/MES routing and manufacturing operation concept baseline.
+      failure_condition: Consumers aggregate, compare, or schedule work centers using
+        `capacity_per_shift` without knowing whether the number is a count or a
+        time value.
+      impact: The ontology permits semantically incompatible values in the same
+        attribute, undermining capacity planning and MES scheduling mappings.
+      evidence_refs:
+        - materialized-input.md:63-67
+    causal_path:
+      root_cause_candidate: The capacity concept lacks unit as part of its semantic identity.
+      root_cause_step_id: finding-014.cause-002
+      steps:
+        - cause_id: finding-014.cause-001
+          claim: "`capacity_per_shift` is modeled as a plain number."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:65-67
+        - cause_id: finding-014.cause-002
+          claim: The note states that the unit varies between count and time by work
+            center.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+      unresolved_beyond_evidence: null
+  - finding_id: finding-015
+    lens_id: semantics
+    source_ref: .onto/review/20260716-e5e2a98b/round1/semantics.findings.yaml#semantics-candidate-004
+    target: Part to Routing relation `manufactured_by`
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:14-21,55-61,87
+    claim: The `manufactured_by` relation is attached to all Parts although Part
+      includes purchased items.
+    lens_rationale_summary: A purchased part and a manufactured part have different
+      routing semantics. If every `Part` is related to a manufacturing routing
+      by `manufactured_by`, the ontology blurs item identity with make/buy
+      behavior.
+    proposed_action: Restrict routing relations to manufactured parts or add an
+      explicit make/buy/manufacturing applicability concept so purchased parts
+      are not semantically implied to have manufacturing routings.
+    affected_purpose: Concept baseline for item, BOM, and routing integration
+      between PLM and MES.
+    failure_condition: The integration treats all `Part` records as candidates for
+      manufacturing routing because the relation is declared at the parent
+      `Part` level.
+    impact: Purchased items can be misclassified as manufacturable in downstream
+      routing and production-order logic, reducing trust in the ontology as an
+      integration reference.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:14-21
+      - materialized-input.md:55-61
+      - materialized-input.md:87
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Concept baseline for item, BOM, and routing integration
+        between PLM and MES.
+      failure_condition: The integration treats all `Part` records as candidates for
+        manufacturing routing because the relation is declared at the parent
+        `Part` level.
+      impact: Purchased items can be misclassified as manufacturable in downstream
+        routing and production-order logic, reducing trust in the ontology as an
+        integration reference.
+      evidence_refs:
+        - materialized-input.md:14-21
+        - materialized-input.md:55-61
+        - materialized-input.md:87
+    causal_path:
+      root_cause_candidate: The ontology places manufacturing-specific semantics on
+        the broad `Part` concept rather than on a manufactured-part subset or
+        applicability condition.
+      root_cause_step_id: finding-015.cause-003
+      steps:
+        - cause_id: finding-015.cause-001
+          claim: "`Part` includes both purchased and manufactured managed items."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:14-15
+        - cause_id: finding-015.cause-002
+          claim: "`Routing` is defined as the manufacturing process sequence for an item."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:55-61
+        - cause_id: finding-015.cause-003
+          claim: The relation `Part -> Routing` is named `manufactured_by`, applying that
+            manufacturing meaning to the broad `Part` class.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:87
+      unresolved_beyond_evidence: null
+  - finding_id: finding-016
+    lens_id: structure
+    source_ref: .onto/review/20260716-e5e2a98b/round1/structure.findings.yaml#structure-candidate-001
+    target: manufacturing-bom-ontology.yaml / entities.AlternatePart and relations
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37
+      and
+      .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:84
+    claim: AlternatePart is declared as an entity but is not connected by any formal
+      relation.
+    lens_rationale_summary: "Within the structural relation graph, `AlternatePart`
+      is effectively orphaned: graph consumers can traverse `Part -> Part
+      alternate_of`, but cannot reach the entity that carries the alternate
+      relationship's own attributes, especially `direction`. For a PLM/MES
+      integration concept baseline, this weakens the completeness of the
+      declared alternate-part structure because the relationship entity exists
+      in `entities` but is absent from the formal connectivity surface."
+    proposed_action: Make `AlternatePart` the explicit relationship node in
+      `relations`, for example add relations from `AlternatePart` to `Part` for
+      `primary_ref` and `alternate_ref`, and either remove the shorthand `Part
+      -> Part alternate_of` relation or define it as a derived projection that
+      preserves linkage to `AlternatePart.direction`.
+    affected_purpose: Use the ontology as a PLM/MES integration concept baseline for
+      BOM, routing, and related manufacturing master-data structures.
+    failure_condition: When integration or validation logic relies on the formal
+      `relations` list to discover connected ontology concepts, `AlternatePart`
+      is not reachable as a relationship entity despite carrying the
+      alternate-part fields.
+    impact: The alternate-part concept is split between an entity and an unconnected
+      shorthand relation, so downstream consumers can miss the entity attributes
+      that qualify the relationship. This reduces trust in the ontology as a
+      structurally complete concept baseline.
+    evidence_refs:
+      - .onto/review/20260716-e5e2a98b/round1/structure.findings.yaml#structure-candidate-001
+      - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37
+      - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:40
+      - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:41
+      - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:42
+      - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:84
+      - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:91
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Use the ontology as a PLM/MES integration concept baseline for
+        BOM, routing, and related manufacturing master-data structures.
+      failure_condition: When integration or validation logic relies on the formal
+        `relations` list to discover connected ontology concepts,
+        `AlternatePart` is not reachable as a relationship entity despite
+        carrying the alternate-part fields.
+      impact: The alternate-part concept is split between an entity and an unconnected
+        shorthand relation, so downstream consumers can miss the entity
+        attributes that qualify the relationship. This reduces trust in the
+        ontology as a structurally complete concept baseline.
+      evidence_refs:
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:40
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:41
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:42
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:84
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:91
+    causal_path:
+      root_cause_candidate: The formal relation list models alternates as a direct
+        `Part -> Part` shorthand instead of connecting the declared
+        `AlternatePart` entity into the graph.
+      root_cause_step_id: finding-016.cause-003
+      steps:
+        - cause_id: finding-016.cause-001
+          claim: "`AlternatePart` is declared as an entity with references to two `Part`
+            endpoints and a `direction` attribute."
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:40
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:41
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:42
+        - cause_id: finding-016.cause-002
+          claim: The `relations` list does not include any edge whose `from` or `to`
+            endpoint is `AlternatePart`; it includes only `Part -> Part
+            alternate_of`.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:84
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:91
+        - cause_id: finding-016.cause-003
+          claim: Because the relationship entity is absent from the formal relation graph,
+            its qualifying field `direction` is not structurally attached to the
+            shorthand alternate relation.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:42
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:91
+      unresolved_beyond_evidence: null
+validation:
+  unaddressable_findings: []

@@ -1,0 +1,221 @@
+schema_version: 1
+session_id: 20260716-49a71a98
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml entities.Assay
+    evidence_anchor: "Embedded Materialized Input: entities.Assay defines department
+      ref to Department and specimen_kind, but no relation includes Assay;
+      relations list connects Order, Specimen, Test, Result, Report, Department,
+      Staff only."
+    claim: Assay is structurally orphaned from the workflow graph.
+    what: The ontology defines Assay as the analyzer execution unit and notes that
+      new items must be registered in both Test and Assay, but Assay has no
+      declared relation to Test, Result, Specimen, or any execution/reporting
+      path.
+    why: From the structure lens, an entity intended to represent the performed
+      laboratory unit should be reachable from the order-to-report graph. In the
+      current relation set, Test connects to Result, Result connects to Report
+      and Specimen, and Department connects to Staff, while Assay is only
+      connected through an attribute reference to Department. That leaves no
+      structural path that says which catalog Test maps to which analyzer Assay
+      or which Result came from an Assay. As a concept-authority document for
+      EMR/LIS integration, this weakens the model because a key LIS-side
+      execution concept cannot be traversed from ordered tests or produced
+      results.
+    how_to_fix: Add explicit relations such as Test maps_to/realized_by Assay and
+      Result produced_by Assay, or merge Assay into Test if they are not meant
+      to be separate authority concepts yet.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the concept authority for EMR/LIS
+        integration from Order through Report.
+      failure_condition: When implementers need to map ordered catalog tests to
+        LIS/analyzer execution units or trace a result back to the performed
+        assay, the graph has no declared Test-Assay or Result-Assay connection.
+      impact: The integration contract becomes structurally incomplete for a central
+        cross-system mapping, so different teams may create incompatible local
+        joins outside the authority document.
+      evidence_refs:
+        - "Embedded Materialized Input: entities.Assay definition and attributes"
+        - "Embedded Materialized Input: relations list has no Assay relation"
+        - "Embedded Materialized Input: notes says new items are registered in
+          both Test and Assay"
+    causal_path:
+      root_cause_candidate: Assay was introduced as a separate execution/catalog
+        concept without a declared structural relation to the existing
+        order-result-report graph.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay is defined as an analyzer-performed test item and separate from
+            Test.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: entities.Assay definition"
+            - "Embedded Materialized Input: notes: Test and Assay integration to
+              be reconsidered; new items registered in both"
+        - cause_id: structure-candidate-001.cause-002
+          claim: The relations section does not include Assay as either a from or to
+            endpoint.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations list"
+        - cause_id: structure-candidate-001.cause-003
+          claim: Therefore Assay cannot be traversed from Order, Test, Specimen, Result,
+            or Report except indirectly sharing Department references.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: entities.Test.department target
+              Department"
+            - "Embedded Materialized Input: entities.Assay.department target
+              Department"
+            - "Embedded Materialized Input: relations list"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml entities.CriticalValue
+    evidence_anchor: "Embedded Materialized Input: entities.CriticalValue has
+      test_ref to Test and notified boolean, but no relation connects
+      CriticalValue to Result, Report, Staff, Order, or notification records;
+      relations list omits CriticalValue."
+    claim: CriticalValue is structurally disconnected from the result/report workflow.
+    what: CriticalValue is modeled as a dangerous result range requiring immediate
+      notification, but it is not connected to the Result that triggers it, the
+      Report that carries it, the Staff/recipient who handles it, or any
+      notification path.
+    why: The structure lens checks whether necessary connections exist among
+      declared elements. CriticalValue is not just a static catalog annotation
+      in its definition; it includes a workflow state, notified, and says
+      notification evidence exists in another log. Without any relation to
+      Result or Report, the model cannot express which actual result breached a
+      critical range or how that condition enters the order-to-report workflow.
+      This is operationally material because critical notification is a
+      high-risk exception path in EMR/LIS integration.
+    how_to_fix: Connect CriticalValue to the actual workflow with relations such as
+      Result triggers CriticalValue, CriticalValue applies_to Test,
+      CriticalValue notified_by Staff, and optionally CriticalValue
+      documented_in NotificationRecord if notification records are in scope;
+      otherwise remove workflow state like notified from this ontology and keep
+      it as a pure reference range.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as a concept authority for operational
+        EMR/LIS workflow integration.
+      failure_condition: When a result falls in a critical range and requires
+        immediate communication, the ontology has no structural path from the
+        Result/Report workflow to CriticalValue or notification handling.
+      impact: A critical exception process can be implemented outside the authority
+        graph, undermining traceability and consistent integration behavior for
+        urgent clinical notifications.
+      evidence_refs:
+        - "Embedded Materialized Input: entities.CriticalValue definition and
+          attributes"
+        - "Embedded Materialized Input: relations list omits CriticalValue"
+        - "Embedded Materialized Input: CriticalValue.notified note references
+          notification records outside the graph"
+    causal_path:
+      root_cause_candidate: CriticalValue was defined with workflow-relevant
+        notification state but not attached to the workflow relation graph.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue represents immediately notifiable dangerous result ranges
+            and includes notified state.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: entities.CriticalValue definition"
+            - "Embedded Materialized Input:
+              entities.CriticalValue.attributes.notified"
+        - cause_id: structure-candidate-002.cause-002
+          claim: The relation graph omits CriticalValue entirely.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations list"
+        - cause_id: structure-candidate-002.cause-003
+          claim: Therefore the model lacks a declared path from actual Result/Report
+            instances to the critical value notification condition.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: entities.Result"
+            - "Embedded Materialized Input: entities.Report"
+            - "Embedded Materialized Input: relations list"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: clinical-lab-ontology.yaml state_rules
+    evidence_anchor: "Embedded Materialized Input: Order lifecycle includes
+      completed; Result.status values include preliminary/final/corrected;
+      relations include Test->Result, Result->Report, Report->Order, but no
+      Order->Result relation; state_rules says Order completes when all Result
+      are final."
+    claim: The Order completion rule depends on Results that are not structurally
+      scoped to an Order.
+    what: The state rule says an Order transitions to completed when all Result
+      instances are final, but the relation graph does not declare which Results
+      belong to an Order. Results can be reached from Report and Specimen, but
+      there is no direct or explicitly scoped Order-to-Result
+      ownership/containment relation.
+    why: "A lifecycle rule that quantifies over 'all Result' needs a structural
+      boundary for the result set. The current graph has Order to Report and
+      Report to Result, plus Order to Specimen and Specimen to Result, but
+      neither path is declared as the authoritative result scope for Order
+      completion. In a concept authority document, that makes the completion
+      transition structurally under-specified: different consumers could choose
+      Report.contains Result, Specimen.produces Result, or Test.has_many Result
+      as the source set."
+    how_to_fix: Declare the authoritative scoping relation for order completion, for
+      example Order has_many Result via Report.contains or Specimen.produces,
+      and update the state rule to reference that relation explicitly.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as an authority for state behavior in the
+        Order-to-Report workflow.
+      failure_condition: When computing or implementing Order.completed, consumers
+        must determine the set of Results for an Order without an explicit
+        structural scope.
+      impact: Completion behavior may diverge across EMR/LIS components because the
+        state rule depends on an unstated traversal choice.
+      evidence_refs:
+        - "Embedded Materialized Input: entities.Order.lifecycle"
+        - "Embedded Materialized Input: entities.Result.attributes.status"
+        - "Embedded Materialized Input: relations list"
+        - "Embedded Materialized Input: state_rules first item"
+    causal_path:
+      root_cause_candidate: The lifecycle rule uses an aggregate over Result without
+        declaring the result-set ownership path from Order.
+      root_cause_step_id: structure-candidate-003.cause-003
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: Order.completed is defined by all Result statuses being final.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules first item"
+        - cause_id: structure-candidate-003.cause-002
+          claim: The relation graph has multiple indirect paths involving Order and Result
+            but no explicit Order-to-Result scoping relation.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: relations Order->Specimen,
+              Specimen->Result, Order->Report, Report->Result, Test->Result"
+        - cause_id: structure-candidate-003.cause-003
+          claim: Therefore the completion rule lacks a structurally unambiguous set of
+            Results to evaluate.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules first item"
+            - "Embedded Materialized Input: relations list"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - The review is limited to structural connectivity and required relation
+    completeness, not clinical correctness of the domain terminology.
+  - Attribute references such as patient_ref or test_ref count as weak
+    structural links, but workflow-critical concepts still need explicit
+    relations when lifecycle or integration behavior depends on traversal.
+  - No domain-specific structure specification was used because session_domain
+    is none.
+validation:
+  unaddressable_candidates: []

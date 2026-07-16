@@ -1,0 +1,93 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: logistics-fulfillment-ontology.yaml / Shipment.status and DeliveryLeg
+      inheritance
+    evidence_anchor: 'Embedded Materialized Input, `Shipment.definition`: "배송
+      구간(DeliveryLeg)도 Shipment의 일종이다."; `Shipment.attributes.status.values`:
+      `[created, picked, in_transit, delivered]`;
+      `Shipment.attributes.status.note`: "delivered가 최종 상태다.";
+      `DeliveryLeg.is_a: Shipment`; `DeliveryLeg.definition`: "화물 경로의 한 구간(예:
+      창고→허브, 허브→고객)."'
+    claim: "`DeliveryLeg` inherits a shipment-level final-state rule that is
+      satisfiable for a whole shipment but logically over-constrains
+      intermediate route legs."
+    what: The ontology declares every `DeliveryLeg` to be a kind of `Shipment`,
+      while `Shipment.status` has `delivered` as its final state. Because a leg
+      can terminate at an intermediate hub, inheriting the customer-delivery
+      final state makes a hub-arrival leg simultaneously a completed leg and a
+      shipment whose final state means delivered.
+    why: The conflict is between the necessary inheritance claim (`DeliveryLeg is_a
+      Shipment`) and the necessary status-finality claim attached to `Shipment`.
+      Under the explicit example `창고→허브`, the leg's completion condition is
+      arrival at a hub, but the inherited final status is `delivered`; this
+      forces the same entity type to use one terminal state for both
+      leg-complete and shipment/customer-delivered. That weakens the document as
+      a WMS/TMS/ERP concept baseline because downstream integrations cannot
+      consistently decide whether `delivered` closes a route segment or the
+      customer shipment.
+    how_to_fix: Separate `DeliveryLeg` from `Shipment` inheritance, or split the
+      state model into `Shipment.status` and `DeliveryLeg.status` with distinct
+      terminal meanings such as `arrived_destination` for a leg and
+      `delivered_to_customer` for a shipment.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP integration concept baseline for shipment and
+        delivery concepts, especially status model consistency.
+      failure_condition: A multi-leg route includes an intermediate leg such as
+        warehouse-to-hub and uses inherited `Shipment.status.delivered` as the
+        leg's terminal status.
+      impact: The same terminal status can represent two different closure events, so
+        integrations may close the whole shipment when only a leg has completed,
+        or fail to close a leg without implying customer delivery.
+      evidence_refs:
+        - "Embedded Materialized Input: `Shipment.definition` says DeliveryLeg
+          is a kind of Shipment."
+        - "Embedded Materialized Input: `Shipment.status.values` includes
+          `delivered` and its note says delivered is final."
+        - "Embedded Materialized Input: `DeliveryLeg.definition` gives
+          warehouse-to-hub as an example leg."
+        - "Embedded Materialized Input: `DeliveryLeg.is_a: Shipment`."
+    causal_path:
+      root_cause_candidate: The ontology models route segments as subclasses of whole
+        physical shipments while placing an unqualified final delivery state on
+        the parent type.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: "`DeliveryLeg` is declared as a subtype of `Shipment`."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `DeliveryLeg.is_a: Shipment`."
+        - cause_id: logic-candidate-001.cause-002
+          claim: All `DeliveryLeg` instances inherit the `Shipment.status` enum and its
+            unqualified final `delivered` rule.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Shipment.attributes.status.values`:
+              `[created, picked, in_transit, delivered]`."
+            - "Embedded Materialized Input: `Shipment.attributes.status.note`:
+              `delivered가 최종 상태다.`"
+        - cause_id: logic-candidate-001.cause-003
+          claim: The inherited final state must also apply to intermediate route legs such
+            as warehouse-to-hub legs.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `DeliveryLeg.definition`: `화물 경로의 한
+              구간(예: 창고→허브, 허브→고객).`"
+      unresolved_beyond_evidence: This finding treats `delivered` as customer delivery
+        because the parent `Shipment` is defined as movement from warehouse to
+        customer; if the intended meaning was generic
+        arrival-at-leg-destination, the ambiguity itself would route primarily
+        to semantics.
+domain_constraints_used: []
+domain_context_assumptions:
+  - No domain-specific logic rules were used because `session_domain` is `none`.
+  - The analysis is limited to explicit claims in the embedded materialized
+    input and generic satisfiability of those claims.
+validation:
+  unaddressable_candidates: []

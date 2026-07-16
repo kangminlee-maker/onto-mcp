@@ -1,0 +1,108 @@
+schema_version: 1
+session_id: 20260716-49a71a98
+planned_issues:
+  - issue_id: issue-002
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+      - evolution
+      - coverage
+      - structure
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+    conflict_summary: Most lenses keep high severity for CriticalValue conflation
+      because threshold, patient critical-result occurrence, and notification
+      completion collapse undermines auditability and accountability; the
+      evolution stance supports a narrower extensibility root and lowers
+      severity for its lens-specific concern. Deliberation is needed because the
+      severity/action choice affects whether the issue is treated primarily as a
+      high-risk clinical notification auditability defect or a narrower
+      evolvability/concept-overload concern.
+    resolution_question: Should issue-002 retain high severity and the broad root
+      that CriticalValue conflates threshold, actual critical result, and
+      notification completion, or should the final issue be narrowed/lowered to
+      the evolution-focused extensibility burden?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: "The differing stances are lens-scope refinements rather than a material
+      conflict: five lenses support or narrow while keeping high severity, and
+      structure reports insufficient structure-specific evidence without
+      disputing the workflow/status-authority issue."
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: The narrow logic and semantics stances refine the root to an absent
+      authoritative metric derivation rule, while structure has insufficient
+      structure-specific evidence; no stance materially disputes the medium TAT
+      authority-drift issue.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: All applicable lenses support the missing evidence-bearing
+      notification/workflow path and keep high severity; evolution only narrows
+      the concern to an extensible workflow node, which does not require
+      deliberation.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Coverage, axiology, and evolution support the post-analysis specimen
+      lifecycle gap at medium severity; logic and structure are not applicable
+      and semantics has insufficient lens-specific evidence, which does not
+      materially oppose the coverage issue.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: All applicable stances accept the need for versioned/effective-dated
+      mutable reference data and keep medium severity; logic and semantics
+      merely narrow the root, while structure lacks independent evidence.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: The runtime projection marks no conflict signals, and all six lenses
+      support the duplicated status authority/projection issue while keeping
+      high severity.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: The logic lens narrows the root to missing identity or mapping
+      constraints, but all lenses support the Test-to-Assay authority gap and
+      keep high severity.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Structure narrows the issue to structural normalization, while the other
+      lenses support the shared specimen-kind catalog concern and keep medium
+      severity; this is scope refinement, not a material disagreement.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: Structure narrows the root to the missing completion-scope path, but all
+      lenses support the post-completion correction problem and keep high
+      severity.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: Evolution and structure narrow the duplicated-status equivalence issue
+      to their lens concerns, but all lenses support the need for a total
+      mapping or clarified authority and keep medium severity.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: Evolution narrows the STAT representation problem to multiple change
+      points, while all applicable lenses support the authority/invariant
+      concern and keep medium severity; structure is outside scope.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: Coverage and structure narrow the root toward clearer provenance and
+      traversal paths, while semantics and axiology support the relation-verb
+      problem; non-applicable lens stances do not materially contest the medium
+      issue.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: Logic narrows the orphaned Assay issue to missing identity and traversal
+      constraints, but all lenses support the structural gap and keep medium
+      severity.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: Evolution and semantics narrow the root to their lens-specific concerns,
+      but all lenses support the missing authoritative result-set scope and keep
+      medium severity.

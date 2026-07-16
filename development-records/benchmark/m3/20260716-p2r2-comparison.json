@@ -1,0 +1,207 @@
+{
+  "schema_version": "m3-compare/1",
+  "arms": [
+    "gpt-5.6-sol",
+    "gpt-5.5"
+  ],
+  "review_reps": 2,
+  "directional": false,
+  "fixtures": [
+    {
+      "fixture": "clinical-lab-workflow",
+      "metrics": [
+        {
+          "metric": "recall_material",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 16,
+                "min": 0.8571428571428571,
+                "max": 1,
+                "mean": 0.8750000000000001,
+                "stdev": 0.047245559126153434
+              },
+              "band": "below"
+            }
+          ],
+          "excluded": [
+            {
+              "label": "gpt-5.6-sol",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            }
+          ],
+          "outcome": "insufficient",
+          "leader": null
+        },
+        {
+          "metric": "precision",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 16,
+                "min": 0.7333333333333333,
+                "max": 0.9333333333333333,
+                "mean": 0.8124999999999998,
+                "stdev": 0.07534642216677138
+              },
+              "band": "below"
+            }
+          ],
+          "excluded": [
+            {
+              "label": "gpt-5.6-sol",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            }
+          ],
+          "outcome": "insufficient",
+          "leader": null
+        }
+      ]
+    },
+    {
+      "fixture": "credit-risk-taxonomy",
+      "metrics": [
+        {
+          "metric": "recall_material",
+          "ranked": [],
+          "excluded": [
+            {
+              "label": "gpt-5.6-sol",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            },
+            {
+              "label": "gpt-5.5",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            }
+          ],
+          "outcome": "insufficient",
+          "leader": null
+        },
+        {
+          "metric": "precision",
+          "ranked": [],
+          "excluded": [
+            {
+              "label": "gpt-5.6-sol",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            },
+            {
+              "label": "gpt-5.5",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            }
+          ],
+          "outcome": "insufficient",
+          "leader": null
+        }
+      ]
+    },
+    {
+      "fixture": "logistics-fulfillment",
+      "metrics": [
+        {
+          "metric": "recall_material",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 16,
+                "min": 0.8888888888888888,
+                "max": 0.8888888888888888,
+                "mean": 0.8888888888888892,
+                "stdev": 3.3306690738754696e-16
+              },
+              "band": "below"
+            }
+          ],
+          "excluded": [
+            {
+              "label": "gpt-5.6-sol",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            }
+          ],
+          "outcome": "insufficient",
+          "leader": null
+        },
+        {
+          "metric": "precision",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 16,
+                "min": 0.9333333333333333,
+                "max": 1,
+                "mean": 0.9666666666666668,
+                "stdev": 0.033333333333333326
+              },
+              "band": "below"
+            }
+          ],
+          "excluded": [
+            {
+              "label": "gpt-5.6-sol",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            }
+          ],
+          "outcome": "insufficient",
+          "leader": null
+        }
+      ]
+    },
+    {
+      "fixture": "manufacturing-bom",
+      "metrics": [
+        {
+          "metric": "recall_material",
+          "ranked": [
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 16,
+                "min": 1,
+                "max": 1,
+                "mean": 1,
+                "stdev": 0
+              },
+              "band": "meets"
+            }
+          ],
+          "excluded": [
+            {
+              "label": "gpt-5.5",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            }
+          ],
+          "outcome": "insufficient",
+          "leader": null
+        },
+        {
+          "metric": "precision",
+          "ranked": [
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 16,
+                "min": 0.8,
+                "max": 0.9411764705882353,
+                "mean": 0.8191176470588237,
+                "stdev": 0.033502311029101506
+              },
+              "band": "meets"
+            }
+          ],
+          "excluded": [
+            {
+              "label": "gpt-5.5",
+              "reason": "intra-model UNSTABLE across 2 reviews (§3-3)"
+            }
+          ],
+          "outcome": "insufficient",
+          "leader": null
+        }
+      ]
+    }
+  ]
+}

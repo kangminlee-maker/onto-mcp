@@ -1,0 +1,169 @@
+schema_version: 1
+session_id: 20260716-fcd46f25
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 공유 위험값의 운영 권위와 변경·대사 계약이 소비자에게 분산되어 시스템별 결과가 분기될 수 있다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 등급·FX·한도에 공통되는 상위 원인이라는 데 다수 렌즈가 수렴했으며 공유 결과의 일관성을 직접 좌우한다. 다만
+      FX·한도까지 동일한 구조적 원인으로 볼 직접 근거가 약하다는 structure 렌즈의 잔여 이견을 보존한다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-006
+      - finding-007
+  - issue_id: issue-002
+    problem_definition: 위험성향 정책과 시점·범위별 준수 평가가 결합되고 평가 입력 관계가 없어 권위 있는 준수 판정을 재현할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 정책과 평가의 정체성·생명주기 혼합 및 입력 관계 누락이 직접 확인되며 오래되거나 상충하는 준수 상태를 허용한다. 모든
+      렌즈가 원인과 높은 영향에 합의했다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-014
+      - finding-015
+  - issue_id: issue-003
+    problem_definition: 연체·부도 lifecycle과 외부 권위를 연결하는 최소 공유 의미 경계가 없어 핵심 신용악화 상태의 분류 계약이 단절된다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 핵심 lifecycle 구간의 명시적 경계가 누락된 독립적인 범위 결손이다. 운영 소유권이 외부에 있더라도 공유 분류 목적을
+      충족하려면 대상 온톨로지에서 경계를 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 변경 가능한 위험 사실 전반에 공통 시간·이력 계약이 없어 과거 시점의 상태를 결정적으로 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 유효기간·기록시각·버전·수정 및 대체 이력의 전반적 부재가 역사적 결과 불일치의 canonical 원인으로 합의되었다.
+      계산과 보고의 재현성에 직접 영향을 준다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: 수동 조정·입력·승인의 결과만 남고 결정 행위와 provenance가 없어 통제 결과를 감사하거나 복원할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 행위자·시각·근거·승인·원천 기록의 누락이 직접 확인되며 감사 가능한 공유 권위를 약화한다. 영향은 통제된 수동 경로에
+      한정되지만 운영 단계 진입 전에는 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 모델·정책·수동 조정의 시간·버전 결손은 공통 시간·이력 계약 부재가 특정 리스크 판단 영역에 나타난 고심각도 하위 문제다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 결함 자체는 확인되었지만 독립 원인이 아니라 issue-004의 canonical root가 전문 영역에 투영된 것으로
+      심의에서 정리되었다. 상위 문제의 폐쇄 여부를 검증하는 필수 하위 범위다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-007
+    problem_definition: 분류 코드를 닫힌 열거형으로 고정해 코드의 안정적 정체성, 버전 및 폐기·대체 lifecycle을 보존할 수 없다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 비동시 배포와 분류 변경 시 호환성 실패를 만드는 독립적인 진화 계약 결손이다. 현재 계산을 항상 막지는 않지만 안전한
+      확장과 점진 배포 전에 해소해야 한다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-008
+    problem_definition: 현재 완전합과 지연된 배치 스냅샷이라는 상충 계약 때문에 배치 사이 총익스포저의 권위 있는 의미를 결정할 수 없다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 두 규칙은 배치 사이에 동시에 충족될 수 없으며 소비자가 서로 다른 총익스포저를 정당하게 선택하게 한다. 스냅샷 의미와
+      실시간 완전합 중 계약 선택이 대상 안에서 확정되어야 한다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-009
+    problem_definition: 독립 담보자산을 Exposure subtype으로도 선언해 정체성 상속과 담보 연관관계가 충돌한다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 명시된 subtype과 연관관계의 구조적 충돌이 직접 관찰되며 검증·질의·집계에서 담보를 익스포저로 오분류할 수 있다. 다른
+      이슈에 의존하지 않는 국소적이지만 현재적인 정확성 결함이다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-010
+    problem_definition: 공존하는 등급 스케일의 의미 역할·우선순위·버전 매핑 권위와 조정 계보가 닫히지 않아 동일 대상의 등급 의미가 분기된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 상위 운영 거버넌스는 issue-001과 공유하지만 등급 의미와 구체적 매핑 계약은 별도 원인·검증 범위로 합의되었다. 핵심
+      신용분류의 시스템 간 일관성을 직접 좌우한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-011
+    problem_definition: LTV가 관측값인지 파생값인지와 권위 있는 피연산자·평가시점·provenance가 정해지지 않아 복수의 상충 값이 허용된다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 현재 모델에서 LTV의 의미 구성요소와 권위가 누락된 사실이 직접 확인된다. 저장값과 재계산값이 모두 유효해질 수 있어 현재
+      위험 판단과 보고의 일관성을 훼손한다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-012
+    problem_definition: 상위 등급 의미·매핑 권위 결손이 RiskRating–Exposure 도출 및 계보 관계의 구조적 누락으로 나타난다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 관계 누락은 실재하지만 독립 root가 아니라 issue-010의 하위 구조 표면으로 전 렌즈가 수렴했다. 상위 등급 계약이
+      실제 구조와 계보에 투영되었는지 확인하는 필수 완료 조건이다.
+    related_surface_finding_ids:
+      - finding-016

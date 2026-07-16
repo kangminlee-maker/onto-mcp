@@ -1,0 +1,236 @@
+schema_version: 1
+session_id: 20260716-dd3002c6
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 시점별 Part·BOM·Routing 버전과 유효시점 및 ECO 변경 전후 구성 연결이 없어 적용 구성을
+      일관되게 판정·재현할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여러 변경관리 결함을 설명하는 통합 원인으로 좁혀졌으며 영향은 high로 유지됐다. 감사·취소·롤백 전체의 필수성은 입증되지
+      않았지만, 구성 선택과 재현에 필요한 버전·유효시점 연결은 개념 기준 문서에서 즉시 해소해야 한다.
+    related_surface_finding_ids:
+      - finding-005
+      - finding-007
+      - finding-018
+      - finding-023
+  - issue_id: issue-002
+    problem_definition: 확장 가능한 단위와 시점별 품목 환산 권위가 없어 수량 계산과 단위 확장이 비결정적이다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 적용 가능한 렌즈들이 원인과 medium 영향에 합의했다. PLM/MES 수량 계산을 구현하기 전에 단위 및 환산 권위를
+      확정해야 한다.
+    related_surface_finding_ids:
+      - finding-008
+      - finding-012
+  - issue_id: issue-003
+    problem_definition: 회수·재투입 흐름을 BOM containment로 표현해 비순환 제품구조 계약과 형식적으로 충돌한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 자기포함 BOM과 보편적 비순환 규칙은 동시에 만족될 수 없다는 데 렌즈들이 합의했다. 전개와 소요량 계산의 신뢰성을 위해
+      대상 온톨로지에서 반드시 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-014
+  - issue_id: issue-004
+    problem_definition: AlternatePart의 endpoint·direction 권위와 대칭성 계약이 분산·충돌하여 대체 방향을 단일하게 판정할 수 없다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: canonical association과 direction·대칭성 정합화 필요성에는 수렴했지만 one_way 보존 여부와
+      high·medium 영향 평가는 남아 있다. 모순 없는 대체 계약을 선택해야 대상이 기준 문서 역할을 할 수 있다.
+    related_surface_finding_ids:
+      - finding-016
+      - finding-022
+  - issue_id: issue-005
+    problem_definition: 원자적 시점별 제조 구성의 부재가 ECO 효력과 MES 적용 리비전의 시간적 불일치를 초래한다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 구 리비전 생산 위험은 버전·유효시점·권위 연결 부재가 운영 경계에서 드러난 결과다. 온톨로지는 불일치 상태와 금지 결과를
+      명시해야 하며 실제 차단 집행은 소비자 정책으로 남는다는 책임 경계를 보존한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-006
+    problem_definition: 병행 운영값의 권위·계보·유효시점이 없고 수기 복사본이 권위값과 구분되지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 값 충돌과 신선도를 판정하지 못하는 직접 원인으로 합의됐으며 medium 영향이다. 운영값을 통합 소비하기 전에 권위와 파생
+      투영의 구분이 필요하다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-007
+    problem_definition: 수량과 능력이 단위·차원 없는 숫자로 표현되고 환산 권위가 데이터로 관리되지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: typed measure와 환산 권위 부재가 계산 비결정성의 직접 원인이라는 데 합의됐다. MES 계산 경로가 이 기준을
+      사용하기 전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-008
+    problem_definition: 최소 제조 실행 사실과 적용 설계 버전을 연결하는 추적 구조가 없어 설계와 실제 생산을 대조할 수 없다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 현재 범위가 제조 마스터에서 끝난다는 독립적인 coverage 공백이며 영향은 high다. PLM/MES 통합 개념
+      기준이라는 목적을 달성하려면 최소 실행·계보 연결을 대상에 포함해야 한다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-009
+    problem_definition: 병행 관리값에 권위·동기화 상태와 조정 증거가 없어 충돌 시 사용할 값을 판정할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 적용 가능한 렌즈들이 원인과 medium 영향에 합의했다. 다중 장부 값을 통합하기 전에 권위와 조정 감사 계약을 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: 안정적인 Part 정체성과 시점별 제조 구성 개정이 결합되어 과거·현재·미래 구성을 함께 표현할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 개정 공존과 ECO 전환 실패를 직접 설명하는 버전 모델의 근본 결함이며 high 영향에 합의됐다. 변경관리 기준의 핵심
+      구조이므로 대상에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: 라우팅을 선형 Operation 목록으로 고정해 분기·병렬·재작업 경로를 호환 가능하게 표현할 수 없다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 현재 선형 happy path 자체의 실패보다 향후 비선형 라우팅을 수용할 권위 구조의 부재가 핵심인 medium 이슈다.
+      StepTransition 기반 확장 경계는 다음 단계에서 폐쇄할 수 있으나 명시적으로 이월해야 한다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-012
+    problem_definition: 용량의 값·측정 차원·기간·적용 대상이 단일 숫자 필드에 결합되어 작업장별 의미가 달라진다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: CapacityProfile 부재는 용량 모델 확장과 비교 가능성을 약화하는 medium 이슈다. 구체적 MES 계획 모델을
+      전개하는 다음 단계에서 명시적 프로필 구조로 닫을 수 있다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-013
+    problem_definition: 무조건적 대칭성 정의와 one_way 허용이 동일 대체 인스턴스에 상충하는 요구를 부과한다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 논리 모순 자체는 확인됐지만 방향성 모델과 대칭 전용 모델 중 선택 및 high·medium 영향은 미확정이다. 실제 단방향
+      대체 요구를 확인해 하나의 계약을 선택해야 한다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-014
+    problem_definition: 검사 규격 계획과 실제 검사 실행 단계를 동일 상속 계층에 두어 의미와 수명주기를 혼동한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 계획과 실행의 잘못된 존재론적 분류가 직접 원인이며 적용 가능한 렌즈들이 분리 조치에 합의했다. 라우팅·검사 통합 전에 유형
+      경계를 바로잡아야 한다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-015
+    problem_definition: 손실률과 수량 보정계수라는 다른 산식 개념이 scrap_rate 하나에 결합되어 계산 의미가 불명확하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 복수 의미의 결합은 확인됐고 분리가 필요하다는 데 합의했지만 권위 의미를 손실률로 한정할지 별도 계수로 둘지는 계약 선택이
+      필요하다. 소요량 계산 구현 전에 결정해야 한다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-016
+    problem_definition: 처리량과 가용 시간이라는 서로 다른 능력 차원을 무단위 capacity_per_shift 하나로 합쳤다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 용량 비교와 부하 계산의 차원 오류를 유발하는 직접 원인이며 medium 영향에 합의됐다. MES 능력계획이 이 개념을
+      소비하기 전에 종류와 단위를 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-017
+    problem_definition: BOM 구성 수량과 공정 재투입량의 의미 혼동은 제품구조를 재투입 흐름에 재사용한 상위 결함의 의미적 표면이다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 숙의 결과 별도 근본 원인이 아니라 issue-003의 의미 하위 범위로 정리됐다. 독립 가시성은 유지하되 비순환 BOM과
+      별도 물질 흐름이라는 상위 조치와 함께 폐쇄해야 한다.
+    related_surface_finding_ids:
+      - finding-021

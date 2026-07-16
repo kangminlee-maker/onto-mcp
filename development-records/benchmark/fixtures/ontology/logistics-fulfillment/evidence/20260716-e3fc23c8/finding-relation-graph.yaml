@@ -1,0 +1,184 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: The ontology lacks a line-level fulfillment/allocation concept
+      connecting OrderLine quantities to Shipment execution.
+    shared_cause: null
+    rationale: "Both findings identify the same structural coverage gap: OrderLine
+      has only sku_ref/qty, while the only fulfillment relation is
+      Shipment-to-Order and explicitly excludes OrderLine-level mapping. The
+      coverage lens frames the operational impact; the structure lens frames the
+      graph disconnect."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-002
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Inventory is modeled as current or nightly aggregate quantities
+      without time-qualified snapshots, movements, reservations, or effective
+      intervals.
+    shared_cause: null
+    rationale: Both findings trace inventory audit/allocation weakness to quantity
+      concepts that lack as_of/effective-time and event history. finding-002
+      emphasizes coverage for audit and allocation decisions; finding-009
+      emphasizes future evolution from nightly batch to real-time/event-based
+      synchronization.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-012
+    to_finding_id: finding-002
+    relation: symptom_of
+    root_hypothesis: The semantic mismatch in available_qty arises because inventory
+      availability is not modeled as a time-qualified snapshot or event-derived
+      availability concept.
+    shared_cause: null
+    rationale: "finding-012's claim that available_qty reads like current
+      availability while being a nightly snapshot is a semantic symptom of
+      finding-002's broader root: inventory quantities lack effective time,
+      event history, and reservation lifecycle coverage."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-017
+    to_finding_id: finding-002
+    relation: shared_cause_candidate
+    root_hypothesis: Inventory allocation values are modeled as standalone aggregate
+      scalars without explicit provenance to the records, timing, or events that
+      make them authoritative.
+    shared_cause:
+      cause_claim: InventoryAggregate.available_qty is a standalone allocation input
+        without a declared derivation/provenance path or time-qualified basis.
+      from_cause_ref: finding-017.cause-003
+      to_cause_ref: finding-002.cause-002
+    rationale: finding-017 shows InventoryAggregate is structurally disconnected
+      from InventoryRecord; finding-002 shows the same aggregate is a nightly
+      snapshot used for allocation without temporal/event support. Both depend
+      on InventoryAggregate.available_qty being treated as an authoritative
+      scalar without explicit source and timing structure.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-003
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: Shipment weight calculations are unsafe because measurement
+      values are stored without unit-qualified measurement semantics.
+    shared_cause:
+      cause_claim: Shipment.total_weight is derived from SKU/order-line weights
+        without declaring unit or conversion basis.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-015.cause-002
+    rationale: finding-003 identifies missing unit coverage across SKU
+      weights/dimensions and Shipment.total_weight; finding-015 identifies the
+      semantic consequence that total_weight can sum kg/lb values while
+      preserving only a bare number. They share the same measurement-unit root
+      in the shipment weight path.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-008
+    to_finding_id: finding-003
+    relation: same_root_candidate
+    root_hypothesis: Measured logistics quantities are represented as bare numbers
+      or source-dependent strings rather than value-plus-unit concepts with
+      conversion authority.
+    shared_cause: null
+    rationale: finding-008 generalizes the unit problem across weight, dimensions,
+      order quantity, and inventory quantity evolution; finding-003 focuses on
+      the freight/shipment unit coverage subset. Both propose structured
+      Measurement/Quantity concepts with explicit unit and conversion basis.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-004
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: Inventory authority is ambiguous because values from WMS and
+      ERP are collapsed into final scalar attributes without source-authority or
+      reconciliation-event concepts.
+    shared_cause:
+      cause_claim: InventoryRecord.quantity_on_hand combines WMS and ERP-held values
+        without modeling authority, reconciliation, or separate
+        physical/accounting meanings.
+      from_cause_ref: finding-004.cause-001
+      to_cause_ref: finding-011.cause-002
+    rationale: finding-004 frames the missing authority/audit event model for
+      inventory and ETA overrides; finding-011 narrows the same inventory
+      authority issue to quantity_on_hand conflating WMS physical stock and ERP
+      accounting stock under one name.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-006
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: DeliveryLeg is modeled as a subtype of Shipment even though it
+      is semantically a route segment or component of an end-to-end shipment.
+    shared_cause: null
+    rationale: finding-006 and finding-013 both center on DeliveryLeg is_a Shipment
+      as the root modeling error. The evolution lens emphasizes future extension
+      pressure on Shipment semantics and status enums; the semantics lens
+      emphasizes the part-whole versus subtype category error.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-013
+    to_finding_id: finding-010
+    relation: causes
+    root_hypothesis: Treating DeliveryLeg as a Shipment subtype causes route legs to
+      inherit Shipment's unqualified delivered final-state rule.
+    shared_cause: null
+    rationale: "finding-013 identifies the incorrect subtype relationship between
+      route segments and whole shipments. finding-010 is the logical downstream
+      contradiction: intermediate legs inherit Shipment.status.delivered as a
+      final state, making leg completion and customer shipment delivery
+      ambiguous."
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-013
+    to_finding_id: finding-018
+    relation: causes
+    root_hypothesis: Using inheritance instead of composition for DeliveryLeg causes
+      the ontology to omit a parent-shipment route-composition path.
+    shared_cause: null
+    rationale: "finding-018's structural gap, no parent path from DeliveryLeg to the
+      shipment route it composes, follows from the same modeling choice
+      described in finding-013: DeliveryLeg is represented as is_a Shipment
+      rather than part_of/has_leg Shipment."
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-007
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: Status semantics are not centralized or namespaced across OMS,
+      TMS, and carrier event models, leaving mappings to individual
+      integrations.
+    shared_cause:
+      cause_claim: Carrier TrackingEvent values and internal Shipment/Order statuses
+        are independently managed, and mapping authority is delegated outside
+        the ontology.
+      from_cause_ref: finding-007.cause-002
+      to_cause_ref: finding-014.cause-003
+    rationale: finding-007 targets the evolution risk from distributed
+      carrier-status mapping authority; finding-014 targets the semantic
+      ambiguity of identical delivered labels across independently managed
+      systems. Both arise because the ontology lacks a shared mapping/namespace
+      concept for cross-system statuses.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-005
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: Shipment and tracking lifecycle concepts are success-path and
+      integration-local, without a central exception/status transition model.
+    shared_cause:
+      cause_claim: TrackingEvent.exception exists, but carrier events and internal
+        shipment/order statuses are independently managed and mapped outside the
+        ontology.
+      from_cause_ref: finding-005.cause-003
+      to_cause_ref: finding-007.cause-003
+    rationale: finding-005 notes exception and post-terminal lifecycle paths are not
+      first-class despite TrackingEvent.exception; finding-007 notes
+      carrier-status mapping authority is outside the ontology. Both point to
+      absent shared lifecycle transition/mapping concepts for exceptions and
+      carrier events.
+    confidence: medium
+singleton_findings: []

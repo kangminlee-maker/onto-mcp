@@ -1,0 +1,61 @@
+schema_version: 1
+session_id: 20260716-fcd46f25
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml — ExposureAggregate 정의 및 total_amount 시간성 계약
+    evidence_anchor: credit-risk-ontology.yaml:64-71 — line 65는 ExposureAggregate를
+      "모든 Exposure.amount의 합"으로 정의하지만, line 70은 total_amount가 월말 배치 값이며 일중 신규
+      여신을 다음 배치까지 제외한다고 명시한다.
+    claim: ExposureAggregate.total_amount의 완전합 정의와 배치 지연 규칙은 배치 사이 상태에서 동시에 만족될 수 없다.
+    what: 일중 신규 Exposure가 존재하는 동안 total_amount는 명시적으로 그 금액을 포함하지 않으므로, 같은 객체를 모든
+      Exposure.amount의 합이라고도 할 수 없다.
+    why: 충돌 쌍은 credit-risk-ontology.yaml:65와 credit-risk-ontology.yaml:70이다. 이는 두
+      claim 사이의 inter-claim 충돌이며, line 65의 necessary한 완전성 조건과 line 70이 허용하는 지연
+      상태가 mixed modality에서 충돌한다. 리스크 엔진과 보고 시스템이 어느 claim을 권위로 삼는지에 따라 동일 차주의
+      총익스포저가 달라질 수 있다.
+    how_to_fix: ExposureAggregate를 명시적인 시점 스냅숏으로 정의해 "as_of 시점까지 배치에 반영된
+      Exposure.amount의 합"으로 한정하거나, 반대로 모든 현재 Exposure를 포함해야 한다면 total_amount를
+      실시간 갱신하도록 계약을 변경한다. as_of의 기준시각·포함 경계도 함께 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 총익스포저 개념 기준
+      failure_condition: 월말 배치 후 신규 여신이 발생하고 다음 배치가 아직 실행되지 않은 기간
+      impact: 두 소비자가 각각 완전합 정의와 저장값 규칙을 따르면 동일 개념에 서로 다른 값을 산출해 한도 소진율과 리스크 보고의 일관성을
+        약화한다.
+      evidence_refs:
+        - credit-risk-ontology.yaml:3
+        - credit-risk-ontology.yaml:65
+        - credit-risk-ontology.yaml:70-71
+        - credit-risk-ontology.yaml:89
+    causal_path:
+      root_cause_candidate: ExposureAggregate의 정체성을 현재의 완전합으로 선언하면서 동일 필드의 배치 스냅숏 시간
+        경계를 정의에 반영하지 않았다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 배치 사이에는 total_amount가 일중 신규 Exposure.amount를 누락할 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:70
+        - cause_id: logic-candidate-001.cause-002
+          claim: 그 누락 상태도 모든 Exposure.amount의 합이라는 무조건적 정의를 동시에 적용받는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml:65
+        - cause_id: logic-candidate-001.cause-003
+          claim: as_of 속성은 존재하지만 완전합 정의나 배치 포함 경계와 연결되지 않아 두 규칙을 조화시키지 못한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml:65
+            - credit-risk-ontology.yaml:70-71
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - ExposureAggregate 정의와 total_amount 설명은 동일 저장 값에 적용되는 계약으로 해석했다.
+  - 별도 시점 한정이 없는 "모든 Exposure.amount의 합"은 현재 대상 집합에 대한 완전성을 요구하는 necessary
+    claim으로 해석했다.
+validation:
+  unaddressable_candidates: []

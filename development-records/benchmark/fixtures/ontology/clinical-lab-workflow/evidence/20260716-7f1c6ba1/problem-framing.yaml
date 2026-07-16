@@ -1,0 +1,270 @@
+schema_version: 1
+session_id: 20260716-7f1c6ba1
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Result와 Report 상태의 권위·의미적 상관관계 및 정정 전파 계약이 없어 임상의용 상태가 원천 상태와 불일치할 수 있다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 계약 없는 병행 상태 모델을 high 심각도의 공통 근본 원인으로 수용했으며, 개념 권위 문서의 현재 상태
+      일관성을 직접 훼손한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: 임계값 정책과 Result별 통보 사건·증거가 분리되지 않아 통보 책임과 완료 상태를 판정할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 정책과 사건의 혼합 및 증거 외부화를 high 심각도의 원인으로 합의했으며, 중요 결과 통제의 안전성과 책임성을 훼손한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: Test와 Assay의 역할·동일성·매핑 다중성·권위가 미정이어서 주문과 수행의 대응이 비결정적이다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 근본 원인과 필요한 권위 경계에는 합의했지만 medium과 high 사이의 심각도 판단은 실제 확장 규모와 드리프트 영향
+      증거 부족으로 미해결이다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-017
+  - issue_id: issue-004
+    problem_definition: 하나의 주문 긴급성을 세 독립 표현으로 저장하면서 권위·파생 불변식을 정의하지 않아 모순 상태가 허용된다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 STAT 표현의 계약 결손과 medium 심각도에 합의했으며, 다음 통합 단계 전에 단일한 분류 의미가 결정되어야 한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: Test–Assay 매핑과 실제 수행 개념이 없어 주문에서 수행과 Result까지의 권위 있는 계보를 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 핵심 주문–수행–결과 경로의 부재를 high 심각도의 완전성 결손으로 합의했으므로 권위 문서 자체에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Result와 Report 상태 각각의 권위와 완전한 버전형 상관관계 계약이 없어 현재 불일치와 향후 상태 드리프트가 발생할 수 있다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 공통 근본 원인에는 전 렌즈가 합의했지만 두 상태를 공통 권위로 둘지 별도 권위로 둘지는 의미·수명주기 계약에 따른 결정을 요구한다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-012
+  - issue_id: issue-007
+    problem_definition: 중요 결과 통보를 Result별 사건과 식별 가능한 증거로 모델링하지 않아 통보·실패·재시도 이력을 감사할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 감사 경로 단절과 high 심각도에 합의했으며, 환자 안전 통제의 수행 여부를 증명하지 못하는 현재 차단 문제다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: Specimen lifecycle에 분석 후 종결과 정상 분석 전 예외 종결이 없어 검체 상태 공간이 닫히지 않는다.
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 적용 가능한 렌즈가 종결·예외 상태 누락과 medium 심각도에 합의했으며, 논리 렌즈의 비적용은 반대가 아니다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 시점 의존 카탈로그와 중요값 정책에 버전·유효기간 참조가 없어 과거 사건에 적용된 기준을 복원할 수 없다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 medium 심각도에 합의했으며, 개별 개념 수명주기 결손이 과거 판정과 감사 가능성에서 드러난 구체적 표면이다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: Test와 Assay 카탈로그 사이의 단일 권위와 버전형 매핑이 없어 변경이 누적될수록 드리프트가 커진다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 high 심각도에 합의했으며, Test–Assay 권위 경계 결손이 확장과 변경 과정에서 나타나는 진화 위험이다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: 검체 유형이 여러 enum과 자유 문자열에 중복 내장되어 확장·호환 규칙이 분산된다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 공통 검체 유형 권위의 부재와 medium 심각도에 합의했으며, 신규 코드와 범주 도입 전 해소해야 할 진화 결손이다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-012
+    problem_definition: 문서 전체 버전만 존재하고 개별 개념·값의 수명주기와 호환 관계가 없어 버전 간 의미 연속성이 끊긴다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 개념별 버전 권위 결손과 medium 심각도에 합의했으며, 장기 통합 권위로 사용하기 전 폐기·대체·미지원 값
+      의미를 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-013
+    problem_definition: 동시에 성립 가능한 release와 correction 규칙에 우선순위·상호배제·시간 계약이 없어 Report 상태가 비결정적이다.
+    issue_role: enabler
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 high 심각도에 합의했으며, 상충 규칙은 상태 권위 불일치를 직접 가능하게 하는 독립적인 논리 결손이다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-014
+    problem_definition: ResultStatus와 ReportStatus 사이의 권위·전체 매핑·전이·정정 전파 계약이 없어
+      corrected와 amended의 관계를 확정할 수 없다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 계약 부재에는 합의했지만 두 상태의 개념적 분리와 안전 정당화 없는 권위 분할을 추가 근본 원인으로 볼지는 렌즈 간 이견과
+      증거 부족이 남아 있다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-015
+    problem_definition: 재사용 임계값 정책과 Result별 통보 사건을 같은 개념에 결합해 notified의 적용 대상을 식별할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 정책과 사건의 의미 혼합 및 high 심각도에 합의했으며, 결과별 필수 통보 상태의 오귀속을 허용한다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-016
+    problem_definition: priority, is_stat, StatOrder가 등가·파생 제약 없이 같은 긴급성을 표현해 모순 인스턴스를 허용한다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 medium 심각도에 합의했으며, 주문 긴급성의 단일 권위 결손이 허용 상태 공간의 모순으로 나타난 표면 문제다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-017
+    problem_definition: 주문·채취·수행 검체가 공통 의미 체계를 참조하지 않아 서로의 호환성을 판정할 수 없다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 공통 SpecimenType과 호환 관계 부재 및 medium 심각도에 합의했으며, 분산된 검체 유형 권위가
+      실제 적합성 판정에서 드러난 문제다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-018
+    problem_definition: 다중 Specimen·Report에서 TAT 계산 레코드와 산식을 선택하는 권위 계약이 없어 동일 데이터로 여러 값이 산출될 수 있다.
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 TAT 계산 의미의 비결정성과 medium 심각도에 합의했으며, 공유 운영 지표로 사용하기 전에 계산 권위를 정해야 한다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-019
+    problem_definition: Order의 주문 항목에서 수행과 Result까지 이어지는 필수 소유 관계가 없어 완료 판정 집합이 닫히지 않는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 high 심각도에 합의했으며, 아직 결과가 없는 주문 항목을 포함할 구조가 없어 완료 판정의 핵심 계약을 위반한다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-020
+    problem_definition: Test–Assay 구조적 매핑과 실행 경로가 없어 Assay가 주문–수행–결과 워크플로에서 고립된다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 medium 심각도에 합의했으며, 더 넓은 수행 개념과 권위 경로 결손이 Assay의 구조적 고립으로 나타난 표면이다.
+    related_surface_finding_ids:
+      - finding-022
+  - issue_id: issue-021
+    problem_definition: CriticalValue가 Result 및 통보 증거와 식별 관계를 갖지 않아 notified 상태의 결과별 귀속이 결정되지 않는다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 근본 원인과 분리·연결 필요성에는 합의했지만 실제 필수 통보 실패를 입증하는 경로와 심각도 기준이 부족해 medium과
+      high 판단이 미해결이다.
+    related_surface_finding_ids:
+      - finding-023

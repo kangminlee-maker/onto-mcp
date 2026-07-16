@@ -1,0 +1,124 @@
+schema_version: 1
+session_id: 20260716-dd3002c6
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart connectivity
+    evidence_anchor: materialized-input.md:37-45,84-91
+    claim: AlternatePart is absent from the explicit relation graph even though
+      alternate_of is documented as being represented through it.
+    what: AlternatePart contains primary_ref, alternate_ref, and direction, but no
+      relation in the relations section has AlternatePart as an endpoint. The
+      only alternate relation is a direct Part-to-Part shortcut.
+    why: A consumer traversing the declared relation graph cannot reach the
+      association entity that owns substitution direction. This breaks the
+      model’s stated representation and weakens its use as a shared PLM/MES
+      conceptual baseline.
+    how_to_fix: Make AlternatePart the canonical relation entity by adding explicit
+      Part-to-AlternatePart connections for the primary and alternate roles,
+      then define the Part-to-Part alternate_of edge as a derived projection
+      rather than the sole graph connection.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide a structurally coherent conceptual baseline for
+        PLM/MES item and substitute-part integration.
+      failure_condition: When consumers use the explicit relations section to discover
+        alternate-part paths, they cannot reach AlternatePart.direction or
+        distinguish the two endpoint roles.
+      impact: Integrations can omit or misapply directional substitution constraints
+        because the relationship metadata is disconnected from the published
+        graph.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: The direct Part-to-Part shortcut replaces, rather than
+        projects from, the association entity in the explicit relation graph.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: The explicit alternate_of relation connects Part directly to Part and has
+            no AlternatePart endpoint.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-001.cause-002
+          claim: Consequently, the graph has no path to the AlternatePart entity that owns
+            primary_ref, alternate_ref, and direction.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-45
+            - materialized-input.md:84-91
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml — ECO change-target structure
+    evidence_anchor: materialized-input.md:14-21,29-35,55-61,69-75,84-96
+    claim: ECO is connected only to affected Part records, with no structural link
+      to the revision, BOM lines, or routing content that the change makes
+      effective.
+    what: The model records ECO.affected_parts, effective_date, and status and a
+      generic ECO-to-Part changes relation, while the integrity rule requires
+      production after the effective date to follow a new revision. No entity or
+      relation identifies the resulting revision or the affected BOM/routing
+      elements.
+    why: The declared effective-change rule cannot be traversed from an ECO to the
+      concrete manufacturing definition that should apply. As a result, the
+      ontology does not structurally close the change-management path needed by
+      a PLM/MES integration baseline.
+    how_to_fix: Introduce a versioned manufacturing-definition concept, or explicit
+      ECO relations to old/new Part revision and affected
+      BomLine/Routing/Operation objects, so the effective date resolves to a
+      concrete post-change configuration.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Serve as a coherent PLM/MES conceptual baseline for BOM,
+        routing, and engineering-change management.
+      failure_condition: When an approved or applied ECO changes BOM or routing
+        content, a consumer must determine which revision and manufacturing
+        definition becomes effective.
+      impact: The target cannot express or validate that transition, weakening
+        integration traceability and allowing production interpretation to
+        diverge across systems.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:69-75
+        - materialized-input.md:84-96
+    causal_path:
+      root_cause_candidate: The ontology models revision as a scalar Part attribute
+        and ECO impact as a generic Part reference, without a connected
+        versioned change-target structure.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: The effective-date integrity rule requires production to follow a new
+            revision, but the relation graph only states that an ECO changes a
+            Part.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:84-96
+        - cause_id: structure-candidate-002.cause-002
+          claim: Neither ECO nor Part identifies the resulting revision object or the
+            BOM/routing elements changed by the ECO.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:14-21
+            - materialized-input.md:29-35
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+      unresolved_beyond_evidence: The bounded artifact does not establish whether
+        external PLM records provide this mapping, but such external closure is
+        not represented in this conceptual baseline.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The explicit relations section is intended to expose the ontology’s
+    canonical traversable connectivity, while entity reference attributes
+    provide compatible endpoint detail.
+  - A PLM/MES conceptual baseline must structurally connect an engineering
+    change to the manufacturing definition that becomes effective; this
+    assumption is derived from the artifact’s declared purpose and integrity
+    rule, not an external domain document.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,253 @@
+schema_version: 1
+session_id: 20260716-acee24d9
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: credit-risk-ontology.yaml / RiskRating, Borrower.internal_rating,
+      Exposure.risk_grade
+    evidence_anchor: "Embedded materialized input:
+      Borrower.attributes.internal_rating note; RiskRating.attributes.grade
+      note; Exposure.attributes.risk_grade note; notes[0];
+      classification_rules[0]"
+    claim: 병존하는 3개 신용등급 스케일에 대해 유효기간, 이력, 매핑 기준시점 개념이 누락되어 과거 시점의 등급 재구성이 불가능하다.
+    what: 온톨로지는 Borrower.internal_rating(1~10), RiskRating.grade(R1~R5),
+      Exposure.risk_grade(AAA~CCC)를 모두 신용등급으로 둔다. 하지만 RiskRating에는 산출 시각이나 유효기간이
+      없고, Borrower.internal_rating 및 Exposure.risk_grade에도 적용 시작/종료 시각, 변경 이력,
+      등급 매핑의 기준일 개념이 없다.
+    why: 대상 문서는 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서를 지향한다고 선언한다. 그러나 보고서 팀이
+      Exposure.risk_grade를 사용하고 수동 조정할 수 있으며, 3개 등급 스케일 변환을 각 소비 시스템이 수행한다고 되어
+      있어 등급 값은 시스템·시점 의존적이다. 이 상태에서 유효기간과 이력 개념이 없으면 특정 보고 기준일이나 과거 의사결정 시점에 어떤
+      등급과 매핑이 권위 있었는지 복원할 수 없어 엔진 산출과 보고 값의 공유 기준이 약해진다.
+    how_to_fix: 등급 관련 개념을 RatingScale, RatingAssignment, RatingMappingVersion 같은 별도
+      개념으로 분리하고, 각 등급 부여 및 매핑에 effective_from/effective_to, calculated_at 또는
+      assigned_at, source_system, superseded_by를 추가한다. Exposure.risk_grade의 수동
+      조정도 원등급과 조정등급을 구분해 기준시점별로 보존한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 신용등급 개념 기준 및 과거 기준일 보고 재현성
+      failure_condition: 등급 스케일 또는 매핑이 변경되거나 보고서 팀이 시장 상황에 따라 Exposure.risk_grade를 수동
+        조정한 뒤 과거 기준일의 등급을 재현해야 하는 경우
+      impact: 공유 권위 문서가 현재 값만 표현하므로 엔진 산출 등급, 차주 내부등급, 보고용 익스포저 등급 중 어느 값이 특정 시점의 권위
+        값인지 판별할 수 없고, 과거 보고·감사·리스크 재계산의 신뢰성이 손상된다.
+      evidence_refs:
+        - "Borrower.internal_rating note: 내부 신용등급. 1~10 숫자 등급 체계."
+        - "RiskRating.grade note: 엔진 등급. Borrower.internal_rating과 매핑 테이블은 리스크팀
+          위키 참조."
+        - "Exposure.risk_grade note: 익스포저 단위 리스크 등급. 보고서 팀이 사용."
+        - "classification_rules[0]: Exposure.risk_grade는 RiskRating.grade에서
+          도출하되, 보고서 팀이 시장 상황에 따라 수동 조정할 수 있다."
+        - "notes[0]: 차주 등급(internal_rating 1~10, RiskRating R1~R5, Exposure
+          risk_grade AAA~CCC)의 3개 스케일은 역사적 이유로 병존한다. 변환은 각 소비 시스템이 수행한다."
+    causal_path:
+      root_cause_candidate: 등급을 시점 의존 assignment와 versioned mapping으로 모델링하지 않고 여러 엔티티의
+        현재 속성으로만 둔 개념 범위 결손
+      root_cause_step_id: coverage-candidate-001.cause-004
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: 대상 온톨로지는 세 개의 신용등급 스케일을 병존시키고 각 소비 시스템이 변환한다고 설명한다.
+          relation_to_previous: null
+          evidence_refs:
+            - notes[0]
+        - cause_id: coverage-candidate-001.cause-002
+          claim: Exposure.risk_grade는 RiskRating.grade에서 도출되지만 보고서 팀의 수동 조정도 허용한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - classification_rules[0]
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 등급 속성에는 적용 기간, 산출/부여 시각, 매핑 버전, 변경 이력 개념이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Borrower.internal_rating attributes
+            - RiskRating.attributes.grade and score
+            - Exposure.attributes.risk_grade
+        - cause_id: coverage-candidate-001.cause-004
+          claim: 따라서 특정 기준일의 권위 등급과 매핑을 재구성하는 데 필요한 시간성 범위가 온톨로지에 포함되지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - RiskRating.attributes lacks temporal fields in embedded
+              materialized input
+            - Exposure.risk_grade lacks temporal fields in embedded materialized
+              input
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: credit-risk-ontology.yaml / classification_rules[0] and notes[0]
+    evidence_anchor: "Embedded materialized input: classification_rules[0];
+      notes[0]; RiskRating.grade note"
+    claim: 등급 변환과 보고용 수동 조정에 대한 감사 증거 개념이 누락되어 통제 행위의 행위자·시각·근거를 추적할 수 없다.
+    what: 분류 규칙은 보고서 팀이 시장 상황에 따라 Exposure.risk_grade를 수동 조정할 수 있다고 하지만, 조정 이벤트,
+      조정자, 승인자, 조정 시각, 조정 사유, 근거 자료, 원래 엔진 등급 같은 감사 추적 개념을 제공하지 않는다. 또한 등급 매핑
+      테이블이 리스크팀 위키에 있다고만 되어 있어 매핑 변경의 권위·버전·승인 증거도 대상 온톨로지 안에 없다.
+    why: 수동 조정은 통제가 필요한 행위이며, 리스크 엔진 산출값과 보고 시스템 표시값을 달라지게 할 수 있다. 공유 개념 기준 문서가 조정의
+      감사 증거 범주를 포함하지 않으면 보고 값이 엔진 값과 다른 이유를 사후에 설명하거나 승인된 조정과 임의 변경을 구분하기 어렵다.
+    how_to_fix: ManualRatingAdjustment 또는 RatingOverride 엔티티를 추가하고 original_grade,
+      adjusted_grade, actor, approver, adjusted_at, reason_code, evidence_ref,
+      approval_status, effective_period를 포함한다. 등급 매핑도
+      MappingVersion/MappingApproval로 모델링해 위키 참조가 아니라 온톨로지 내 권위 개념으로 편입한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진 산출과 보고 시스템 사용 값 사이의 통제 가능하고 감사 가능한 공유 기준
+      failure_condition: 보고서 팀이 Exposure.risk_grade를 수동 조정하거나 리스크팀 매핑 테이블 변경으로 소비 시스템별
+        등급 변환 결과가 달라지는 경우
+      impact: 수동 조정의 행위자·시각·근거가 개념화되지 않아 보고 등급 변경의 정당성, 승인 여부, 원천 등급 대비 차이를 검증할 수 없고
+        운영 리스크와 감사 대응 결함이 발생한다.
+      evidence_refs:
+        - "classification_rules[0]: Exposure.risk_grade는 RiskRating.grade에서
+          도출하되, 보고서 팀이 시장 상황에 따라 수동 조정할 수 있다."
+        - "RiskRating.grade note: 엔진 등급. Borrower.internal_rating과 매핑 테이블은 리스크팀
+          위키 참조."
+        - "notes[0]: 변환은 각 소비 시스템이 수행한다."
+    causal_path:
+      root_cause_candidate: 통제 행위인 등급 override와 매핑 변경을 독립된 감사 가능한 사건 개념으로 포함하지 않은 범위 결손
+      root_cause_step_id: coverage-candidate-002.cause-004
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: 온톨로지는 보고서 팀의 시장 상황 기반 수동 등급 조정을 허용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - classification_rules[0]
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 등급 변환은 각 소비 시스템이 수행하고 매핑 테이블은 대상 온톨로지 밖의 리스크팀 위키를 참조한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - RiskRating.grade note
+            - notes[0]
+        - cause_id: coverage-candidate-002.cause-003
+          claim: 대상 엔티티에는 수동 조정 이벤트나 매핑 변경 승인·증거를 담는 개념이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "entities list: Borrower, Exposure, Collateral, RiskRating, Limit,
+              ExposureAggregate, RiskAppetite only"
+            - Exposure.attributes contains risk_grade but no adjustment audit
+              fields
+        - cause_id: coverage-candidate-002.cause-004
+          claim: 그 결과 엔진 등급과 보고 등급이 달라지는 행위의 감사 추적 범위가 비어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[0]
+            - Exposure.risk_grade attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: credit-risk-ontology.yaml / Limit.approved_amount and
+      classification_rules[1]
+    evidence_anchor: "Embedded materialized input: Limit.attributes.approved_amount
+      note; classification_rules[1]"
+    claim: 한도와 환율처럼 복수 시스템에 걸쳐 관리되는 값에 단일 원본 권위와 기준시점 개념이 누락되어 한도 소진율 계산 기준이 분산된다.
+    what: Limit.approved_amount는 승인 시스템이 기록하지만 영업점 CRM의 available_limit과 합산 관리된다고 되어
+      있고, 통화가 다를 때 환산은 각 시스템의 당일 환율 테이블을 사용한다고 되어 있다. 그러나 approved_amount,
+      available_limit, 환율 테이블, 합산 결과 중 어느 시스템 값이 권위 원본인지, 환율의 기준시각과 출처가 무엇인지, 상충
+      시 우선순위가 무엇인지 표현하는 개념이 없다.
+    why: Limit 소진율은 ExposureAggregate.total_amount / Limit.approved_amount로 정의되어 리스크
+      위반 판단과 보고에 직접 쓰일 수 있는 지표다. 그런데 구성 값의 단일 권위와 환산 기준이 없으면 리스크 엔진과 보고 시스템이 같은
+      차주·같은 날짜에 서로 다른 소진율을 계산할 수 있으며, 공유 개념 기준으로서의 역할이 약해진다.
+    how_to_fix: LimitSourceAuthority 또는 BookOfRecord 개념을 추가해 승인 시스템, CRM, 환율 테이블의
+      역할과 우선순위를 명시한다. CurrencyConversionRate에는 rate_source, rate_timestamp,
+      effective_date, currency_pair, version을 두고, LimitUtilization 계산에는 사용한 원천값과
+      환율 기준을 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 한도 소진율 및 통화 환산 기준
+      failure_condition: 승인 시스템과 CRM의 한도 값이 다르거나 각 시스템의 당일 환율 테이블이 다른 값을 제공하는 경우
+      impact: 소진율 계산의 입력 권위와 환산 기준이 분산되어 동일 익스포저에 대해 시스템별 결과가 달라질 수 있고, RiskAppetite
+        위반 판단 또는 보고 숫자의 재현성이 떨어진다.
+      evidence_refs:
+        - "Limit.approved_amount note: 승인 한도. 승인 시스템이 기록한다. 영업점 CRM의
+          available_limit과 합산 관리."
+        - "classification_rules[1]: Limit 소진율 = ExposureAggregate.total_amount /
+          Limit.approved_amount. 통화가 다른 경우 환산은 각 시스템의 당일 환율 테이블을 사용한다."
+        - "ExposureAggregate.total_amount note: 월말 배치로 계산해 저장. 일중 신규 여신은 다음 배치까지
+          미반영."
+    causal_path:
+      root_cause_candidate: 복수 시스템 관리 값과 환산 기준에 대한 권위 원본 및 우선순위 개념이 없는 범위 결손
+      root_cause_step_id: coverage-candidate-003.cause-004
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Limit.approved_amount는 승인 시스템 값이지만 CRM의 available_limit과 합산 관리된다고 설명된다.
+          relation_to_previous: null
+          evidence_refs:
+            - Limit.approved_amount note
+        - cause_id: coverage-candidate-003.cause-002
+          claim: 통화 환산은 각 시스템의 당일 환율 테이블을 사용한다고 되어 있어 환산 입력도 시스템별로 분산된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - classification_rules[1]
+        - cause_id: coverage-candidate-003.cause-003
+          claim: 온톨로지에는 source of record, 우선순위, 환율 기준시각/버전 개념이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities list lacks source authority or currency conversion
+              entities
+            - Limit.attributes includes limit_id, borrower_ref, approved_amount,
+              currency only
+        - cause_id: coverage-candidate-003.cause-004
+          claim: 따라서 Limit 소진율을 공유 계산 기준으로 삼는 데 필요한 권위 범위가 닫혀 있지 않다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: credit-risk-ontology.yaml / Exposure and notes[1]
+    evidence_anchor: "Embedded materialized input: Exposure entity; notes[1]"
+    claim: 연체·부실 상태를 범위 밖으로 제외해 여신 리스크 분류의 상태 lifecycle이 정상 익스포저 중심으로만 닫히고, 부실 전이
+      이후의 리스크 상태 범주가 누락된다.
+    what: Exposure는 amount, product_type, risk_grade, ltv를 갖지만 정상, 연체, 부실, 상각, 회수,
+      종료 같은 상태나 상태 이력 개념이 없다. notes는 연체/부실(default) 상태를 별도 시스템에서 다루므로 범위 밖이라고
+      명시한다.
+    why: 대상은 여신 리스크 관리의 개념 모델로서 익스포저, 등급, 한도, 담보를 정의하고 리스크 엔진과 보고 시스템이 공유할 기준을 지향한다.
+      그러나 여신 리스크에서 익스포저 lifecycle의 핵심 상태인 연체·부실을 제외하면, 리스크 엔진 등급과 보고 시스템의 상태 기반
+      집계가 같은 차주/익스포저를 어느 단계로 분류해야 하는지 공유할 수 없다. 별도 시스템이 소유하더라도 최소한 외부 권위 상태 참조,
+      기준시점, 수신 이벤트 개념은 필요하다.
+    how_to_fix: DefaultStatus 또는 ExposureLifecycleStatus를 온톨로지에 최소 참조 개념으로 포함하고,
+      source_system, status, status_effective_at, status_received_at,
+      status_history_ref를 둔다. 연체관리 시스템이 권위 원본이라면 out-of-scope 배제가 아니라 외부 권위 참조로
+      명시해 보고와 엔진이 동일 상태를 사용할 수 있게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 여신 리스크 분류 온톨로지의 주요 리스크 상태 포괄성과 리스크 엔진·보고 시스템 간 상태 기준 공유
+      failure_condition: 익스포저가 연체 또는 부실로 전이되어 등급, 한도 소진, 담보 평가, 보고 집계가 상태에 따라 달라져야 하는 경우
+      impact: 온톨로지가 정상/등급/한도 중심 상태만 제공하고 부실 상태 참조를 배제하므로 주요 리스크 lifecycle 구간이 공유 기준 밖에
+        남아 보고·엔진 간 분류 불일치가 발생할 수 있다.
+      evidence_refs:
+        - "Exposure.definition: 차주에 대한 신용 익스포저(대출, 한도성 여신 포함)."
+        - "Exposure.attributes: exposure_id, borrower_ref, amount, product_type,
+          risk_grade, ltv"
+        - "notes[1]: 연체/부실(default) 상태는 별도 시스템(연체관리)에서 다루므로 이 온톨로지의 범위 밖이다."
+    causal_path:
+      root_cause_candidate: 외부 시스템 소유 상태를 공유 온톨로지 안의 참조 가능한 lifecycle 개념으로 모델링하지 않고 범위 밖으로 배제한 범위 결정
+      root_cause_step_id: coverage-candidate-004.cause-004
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: 대상은 여신 리스크 관리 개념 모델로 Exposure를 핵심 엔티티로 둔다.
+          relation_to_previous: null
+          evidence_refs:
+            - header comment in embedded materialized input
+            - Exposure.definition
+        - cause_id: coverage-candidate-004.cause-002
+          claim: Exposure에는 상태나 상태 이력 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Exposure.attributes
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 연체/부실(default) 상태는 별도 시스템에서 다룬다는 이유로 온톨로지 범위 밖으로 제외된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[1]
+        - cause_id: coverage-candidate-004.cause-004
+          claim: 그 결과 익스포저 lifecycle의 부실 전이 이후 구간이 공유 개념 기준에 포함되지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[1]
+            - Exposure.attributes
+      unresolved_beyond_evidence: 별도 연체관리 시스템의 실제 데이터 계약은 이 단위 경계 밖이라 검증하지 않았다. 이
+        finding은 대상 온톨로지 내부에 최소 참조 개념이 없다는 범위 결손에 한정된다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 외부 도메인 문서나 업계 표준 자료는 사용하지 않았다.
+  - 검토는 제공된 materialized input의 credit-risk-ontology.yaml만을 권위 대상으로 삼았다.
+  - "'리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서'라는 대상 문서의 선언을 포괄성 판단 기준으로 사용했다."
+validation:
+  unaddressable_candidates: []

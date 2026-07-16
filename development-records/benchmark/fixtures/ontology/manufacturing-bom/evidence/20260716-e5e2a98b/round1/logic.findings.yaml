@@ -1,0 +1,70 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules BOM acyclicity rule
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:93-95
+    claim: The BOM acyclicity rule is internally unsatisfiable for the stated scrap
+      re-input modeling case.
+    what: The rule first requires BOMs to be acyclic, then states that scrap
+      re-input is modeled by an Assembly including itself as its own child. A
+      self-child edge is a cycle of length one.
+    why: "Conflict pair: materialized-input.md:94 vs materialized-input.md:94.
+      Satisfiability: intra-claim conflict. Modality: mixed necessary/possible
+      exception; the same rule makes acyclicity mandatory while permitting a
+      modeling pattern that necessarily violates acyclicity. For a PLM/MES
+      concept baseline, this weakens validation because the same target graph
+      can be both forbidden as cyclic and required as the representation of
+      scrap re-input."
+    how_to_fix: Separate normal BOM acyclicity from scrap/rework flow modeling. For
+      example, keep product BOM strictly acyclic and represent scrap re-input
+      through a distinct process/recovery relation, or explicitly define a
+      different graph scope where self-reference is allowed and excluded from
+      the BOM acyclicity invariant.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as a PLM/MES concept baseline for BOM and
+        routing validation.
+      failure_condition: A scrap re-input Assembly is modeled as its own child while
+        the BOM invariant still says BOMs must be acyclic.
+      impact: Validators or integrations cannot consistently decide whether the
+        self-referential BOM is valid, creating invalid-input and precedence
+        ambiguity at the BOM/MES boundary.
+      evidence_refs:
+        - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:93-95
+    causal_path:
+      root_cause_candidate: The same integrity rule uses the BOM parent-child graph
+        for both product structure and scrap re-input process flow without
+        separating their invariants.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: The ontology declares BOMs must be acyclic.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:94
+        - cause_id: logic-candidate-001.cause-002
+          claim: The same rule permits scrap re-input to be modeled as an Assembly
+            containing itself as a child.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:94
+        - cause_id: logic-candidate-001.cause-003
+          claim: An Assembly containing itself creates a one-edge cycle in the BOM graph,
+            contradicting the mandatory acyclicity rule.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:23-35
+            - .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:94
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - No domain-specific manufacturing rule document was used because
+    session_domain is none.
+  - A BomLine parent_ref to Assembly and child_ref to Part forms the BOM graph
+    governed by the acyclicity integrity rule.
+validation:
+  unaddressable_candidates: []

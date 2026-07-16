@@ -328,6 +328,20 @@ agreement가 못 잡던 모델 신호. canary 게이트 양 arm 통과. disclosu
 R<2면 directional 라벨, untrustworthy verdict(underpowered/instrument_broken)는 비교서 제외(§3-3 intra-model
 안정 전제). 8 falsifiable 테스트, check:ts-scripts 게이트.
 
-**남은 것**: **확정 랭킹**엔 R≥2 리뷰/셀 + intra-model 안정 선통과 필요(리뷰생성 분산 포함, §3-3) — R=1 방향성은
-precision 분리가 일관·명확하나 분산 미통제. P1 잔여(review-pipeline-benchmark RUN 통합 등)는 standalone
-하니스가 이미 전 흐름 제공해 **대부분 무의미/불필요**로 재평가됨(설계 §12 상단 P1 재구성).
+**R=2 variance-controlled 실행 = 완료(PR 대기, 브랜치 feat/m3-p2-rge2): 확정 랭킹 불가 판정**. R≥2 하니스
+확장 착지(`aggregateReviews`: R×K pool→range에 리뷰-생성 분산 포함, per-review verdict로 intra-model 안정성,
+m3-report/5·capture당 `<fixture>__<session>.json`; m3-compare가 R≥2 unstable 셀 제외·directional을 per-cell
+R에서 유도; 89테스트). 각 arm +1리뷰(8회, salvaged 0; manuf rep-2 judge 1콜 claude 일시 disconnect→고립
+재채점+8캡처 replay 재구성). **결과: R=2에서 어느 fixture도 양 arm 모두 STABLE 아님→전 셀 §3-3 게이트 제외
+(insufficient)**. R=1의 "gpt-5.5 precision 3/4 우세"는 **단일 리뷰 draw 인공물**—variance 통제 시 재현 안 됨.
+게이트 무관 관측: recall gap 없음·**wall-time 5.5가 8리뷰 전부 빠름(비중첩 379–758 vs 770–1255s, robust 신호)**·
+canary 16리뷰 전부 통과. disclosure `20260716-p2r2-comparison/README.md`. **정직성 payoff**: 안정성 게이트가 R=1이
+과대주장할 뻔한 랭킹을 정확히 거부.
+
+**inter-model 비교 레이어 = 신규(`scripts/m3-compare.ts`, PR #216)**: §3-3의 CI/overlap을 실데이터 유입 시점에
+구현(speculative 회피). arm별 report를 fixture×metric으로 distinguishable(range disjoint) vs overlapping 판정,
+R<2면 directional, untrustworthy/unstable verdict는 비교서 제외(§3-3 intra-model 안정 전제).
+
+**남은 것**: precision 질문의 확답엔 **R≥3(또는 관측 리뷰-level SD 유도 reps)**로 양 arm이 공유 fixture에서
+intra-model 안정 도달해야 — 그때만 R=1이 제기한 질문에 답 가능(현재는 미결). P1 잔여(review-pipeline-benchmark
+RUN 통합 등)는 standalone 하니스가 이미 전 흐름 제공해 **대부분 무의미/불필요**로 재평가됨(§12 상단 P1 재구성).

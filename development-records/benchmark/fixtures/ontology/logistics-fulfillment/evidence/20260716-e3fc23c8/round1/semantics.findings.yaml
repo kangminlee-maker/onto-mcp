@@ -1,0 +1,238 @@
+schema_version: 1
+session_id: 20260716-e3fc23c8
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: InventoryRecord.quantity_on_hand
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:76-84,115-116
+    claim: "`quantity_on_hand`가 WMS 실물 재고와 ERP 회계 재고라는 서로 다른 의미의 수량을 하나의 속성명으로 합쳐 권위
+      의미를 잃는다."
+    what: InventoryRecord는 '특정 창고의 특정 SKU 재고 한 건'으로 정의되지만, `quantity_on_hand` 설명은
+      WMS와 ERP가 각자 값을 가지며 야간 배치로 ERP 기준에 맞춘다고 말한다. 즉 같은 필드가 창고 실물 기준 수량과 회계 기준
+      수량을 동시에 가리킨다.
+    why: WMS/TMS/ERP 통합 기준 문서에서 재고 수량은 어떤 시스템과 어떤 기준이 권위인지가 핵심 의미다. 물리적 보유량과 회계상 수량은
+      불일치할 수 있다고 문서가 직접 인정하므로, 하나의 `quantity_on_hand`로 모델링하면 동일 이름의 다른 의미를 구분하지
+      못한다.
+    how_to_fix: "재고 수량 개념을 권위와 기준별로 분리한다. 예: `physical_on_hand_qty`(WMS 권위, 창고 실물
+      기준), `accounting_on_hand_qty`(ERP 권위, 회계 기준), 그리고 두 값의 조정/대사 이벤트 또는 기준 시점을
+      별도 개념으로 둔다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 재고 권위와 의미를 정합하게 정의하는 목적.
+      failure_condition: WMS 실물 재고와 ERP 회계 재고가 불일치하는 상태에서 통합자가 `quantity_on_hand`를 단일
+        의미의 현재 보유 수량으로 해석할 때.
+      impact: 주문 가능 여부, 피킹 가능 수량, 회계 조정 수량이 같은 필드로 오인되어 재고 약속, 출고, 대사 로직의 권위가 흔들린다.
+      evidence_refs:
+        - materialized-input.md:76-84
+        - materialized-input.md:115-116
+    causal_path:
+      root_cause_candidate: 서로 다른 권위 기준의 재고 수량을 하나의 속성명과 정의로 표현했다.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: "`quantity_on_hand`는 '현재 보유 수량'으로 명명되어 단일 현재 재고처럼 보인다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:81-83
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 동일 설명 안에서 WMS와 ERP가 각자 값을 가진다고 하여 필드가 둘 이상의 권위 값을 담는다고 밝힌다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:83
+            - materialized-input.md:115-116
+        - cause_id: semantics-candidate-001.cause-003
+          claim: 따라서 속성명이 실제 의미를 정확히 반영하지 못하고 WMS physical stock과 ERP accounting stock의
+            동음이의어적 충돌을 만든다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:76-84
+            - materialized-input.md:115-116
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: InventoryAggregate.available_qty and inventory allocation rule
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:86-90,111-112
+    claim: "`available_qty`가 매일 밤 저장되는 스냅샷인데 일중 주문 할당의 가용 재고로 쓰여 시간 의미가 이름과 맞지 않는다."
+    what: InventoryAggregate는 SKU별 전사 가용 재고 집계이고 `available_qty`는 매일 밤 배치로 저장되는
+      스냅샷이다. 그러나 integrity rule은 일중 주문도 이 값을 읽어 재고 할당을 수행한다고 한다.
+    why: "`available_qty`라는 이름은 할당 시점의 가용 수량을 뜻하지만, 정의상 값은 야간 스냅샷이다. 시간 기준(`as_of`,
+      snapshot time, reservation cutoff)이 없어서 '현재 가용'과 '스냅샷 가용'이 같은 개념으로 합쳐진다."
+    how_to_fix: 속성명을 `available_qty_snapshot`처럼 시간성을 드러내거나, `as_of_at`, 집계 기준, 예약/할당
+      반영 범위를 함께 모델링한다. 일중 할당은 실시간 ATP/예약 원장 등 별도 권위 개념을 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문·재고 개념의 시간성과 운영 위험을 통합 기준 문서 안에서 명확히 하는 목적.
+      failure_condition: 일중 주문/예약/출고로 재고가 변한 뒤에도 allocation rule이 전일 야간 스냅샷
+        `available_qty`를 현재 가용 재고로 사용할 때.
+      impact: 가용 재고 의미가 과거 스냅샷인지 현재 할당 가능량인지 불명확해져 과판매, 미할당, 시스템 간 재고 드리프트 위험을 만든다.
+      evidence_refs:
+        - materialized-input.md:86-90
+        - materialized-input.md:111-112
+    causal_path:
+      root_cause_candidate: 시간 기준이 있는 스냅샷 값을 시간 기준 없는 현재 가용 재고 이름으로 노출했다.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: "`available_qty`는 '가용 수량'으로 정의되어 현재 할당 가능한 수량처럼 보인다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:86-90
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 동일 속성 설명은 이 값이 매일 밤 배치로 저장되는 스냅샷이라고 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:90
+        - cause_id: semantics-candidate-002.cause-003
+          claim: 재고 할당 규칙은 일중 주문도 이 스냅샷 값을 읽는다고 하여 현재 가용 의미와 스냅샷 의미의 불일치를 운영 경로에 연결한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:111-112
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: DeliveryLeg.is_a Shipment
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:40-58
+    claim: "`DeliveryLeg`를 `Shipment`의 하위 유형으로 둔 것은 경로 구간과 전체 화물 이동의 부분-전체 의미를 하위유형
+      의미로 잘못 표현한다."
+    what: "Shipment는 창고에서 고객으로 가는 물리적 화물 이동으로 정의되고, DeliveryLeg는 그 경로의 한 구간으로 정의된다.
+      그런데 DeliveryLeg가 `is_a: Shipment`로 선언되어 구간이 전체 shipment와 같은 존재론적 유형처럼
+      모델링된다."
+    why: 배송 구간은 shipment의 구성 구간 또는 운송 실행 단위일 수 있지만, 정의상 '창고에서 고객으로 가는' 전체 물리 이동과 동일한
+      종류는 아니다. 이 상속은 구간별 상태/ETA/무게와 shipment 전체 상태/ETA/무게를 같은 의미로 만들 위험이 있다.
+    how_to_fix: "`DeliveryLeg is_a Shipment`를 제거하고 `Shipment has_leg DeliveryLeg` 또는
+      `DeliveryLeg part_of Shipment` 관계로 바꾼다. 구간별 carrier, status, ETA가 필요하면
+      DeliveryLeg 고유 속성으로 정의한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 화물·배송 개념의 의미 정합성을 WMS/TMS/ERP 통합 기준으로 제공하는 목적.
+      failure_condition: TMS가 shipment 전체와 route leg를 별도 객체로 다루거나 구간별 상태/ETA를 통합할 때,
+        leg가 shipment로 상속되어 전체와 부분의 의미가 섞이는 경우.
+      impact: 전체 shipment의 delivered/in_transit 의미와 개별 구간의 arrived/departed 의미가 같은 상태
+        모델로 오인될 수 있어 운송 추적과 ETA 집계가 부정확해진다.
+      evidence_refs:
+        - materialized-input.md:40-58
+    causal_path:
+      root_cause_candidate: 부분-전체 관계로 정의된 DeliveryLeg를 하위유형 관계로 표현했다.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: Shipment는 창고에서 고객으로 가는 물리적 화물 이동으로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:40-41
+        - cause_id: semantics-candidate-003.cause-002
+          claim: DeliveryLeg는 화물 경로의 한 구간으로 정의된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:52-53
+        - cause_id: semantics-candidate-003.cause-003
+          claim: "그런데 DeliveryLeg가 `is_a: Shipment`로 선언되어 구간이 전체 이동의 하위유형처럼 취급된다."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:52-58
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: Order.fulfillment_status, Shipment.status, TrackingEvent.event_type
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:19-22,44-47,63-66,111-113
+    claim: "`delivered`가 주문 상태, 화물 상태, 캐리어 이벤트에서 같은 표기로 쓰이지만 각 시스템이 독립 관리한다고 되어 있어
+      동음이의 의미가 구분되지 않는다."
+    what: Order.fulfillment_status, Shipment.status, TrackingEvent.event_type 모두
+      `delivered` 값을 포함하거나 배송 완료 이벤트를 표현한다. 동시에 integrity rule은 세 상태/이벤트를 OMS,
+      TMS, 캐리어가 독립 관리한다고 한다.
+    why: 주문이 delivered라는 것은 주문의 모든 필요한 fulfillment가 완료되었다는 OMS 판단일 수 있고, shipment
+      delivered는 특정 화물의 도착 완료, tracking delivered는 캐리어가 보고한 이벤트 발생을 뜻한다. 같은 문자열이
+      서로 다른 권위와 완료 조건을 갖는데, 문서는 매핑을 각 연동에 맡겨 의미 기준을 제공하지 않는다.
+    how_to_fix: 상태 값을 네임스페이스 또는 별도 개념으로 구분하고, `carrier_delivered_event`,
+      `shipment_delivery_completed`, `order_fulfillment_delivered`처럼 권위와 완료 조건을
+      명시한다. 세 모델 간 전이/매핑 규칙은 통합 기준 문서 안에서 표준화한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문·화물·배송 상태 모델의 의미 정합성과 시스템 간 precedence를 정의하는 목적.
+      failure_condition: OMS, TMS, 캐리어 이벤트 중 하나의 `delivered`를 다른 시스템의 완료 상태와 동일시해 주문
+        완료, 고객 알림, 정산, SLA 판단을 수행할 때.
+      impact: 동일 표기 상태가 서로 다른 권위와 완료 조건을 갖기 때문에 배송 완료의 기준 시점과 책임 시스템이 통합마다 달라진다.
+      evidence_refs:
+        - materialized-input.md:19-22
+        - materialized-input.md:44-47
+        - materialized-input.md:63-66
+        - materialized-input.md:111-113
+    causal_path:
+      root_cause_candidate: 서로 다른 시스템 상태의 동일 표기 값을 의미적으로 네임스페이스화하거나 매핑하지 않았다.
+      root_cause_step_id: semantics-candidate-004.cause-004
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: Order.fulfillment_status는 OMS 관리 주문 단위 진행 상태이며 `delivered` 값을 포함한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19-22
+        - cause_id: semantics-candidate-004.cause-002
+          claim: Shipment.status는 화물 상태이며 `delivered`를 최종 상태로 둔다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:44-47
+        - cause_id: semantics-candidate-004.cause-003
+          claim: TrackingEvent.event_type도 캐리어 보고 이벤트로 `delivered`를 포함하고,
+            Shipment.status와의 매핑은 각 연동에 맡긴다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:63-66
+        - cause_id: semantics-candidate-004.cause-004
+          claim: Integrity rule은 세 상태가 각 시스템에서 독립 관리된다고 하므로 동일 표기 값의 의미 동일성을 보장하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:111-113
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: Sku.weight, Sku.dims, Shipment.total_weight
+    evidence_anchor: .onto/review/20260716-e3fc23c8/execution-preparation/materialized-input.md:33-38,40-49
+    claim: SKU 중량·치수의 단위가 소스별로 다른데 Shipment.total_weight는 합계로 저장되어 단위 의미가 계산 결과에
+      보존되지 않는다.
+    what: Sku.weight는 창고별 관례에 따라 kg 또는 lb를 그대로 쓰고, dims도 소스 시스템마다 단위가 다르다.
+      Shipment.total_weight는 구성 OrderLine 중량의 합으로 계산해 저장한다고 한다.
+    why: 중량 합계는 같은 측정 단위의 값끼리만 의미가 있다. SKU 단위가 kg/lb로 섞일 수 있는데 total_weight에 단위나 변환
+      기준이 없으면 이름이 가리키는 '총중량'과 실제 저장값의 의미가 불일치한다.
+    how_to_fix: 중량과 치수를 값+단위 구조로 모델링한다. `weight_value`, `weight_unit`,
+      `dimension_unit` 또는 표준 단위 환산 규칙을 두고, `total_weight`도 단위와 계산 기준 시점을 함께
+      저장한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 화물·재고 단위 개념의 정합성을 통합 기준 문서로 제공하는 목적.
+      failure_condition: 서로 다른 창고나 소스 시스템의 SKU 중량이 하나의 Shipment.total_weight 계산에 섞일 때.
+      impact: 총중량 의미가 수치만 남고 단위 의미를 잃어 운임, 적재 제한, 운송사 연동에서 잘못된 물류 판단을 유발할 수 있다.
+      evidence_refs:
+        - materialized-input.md:33-38
+        - materialized-input.md:40-49
+    causal_path:
+      root_cause_candidate: 측정값의 단위를 속성 의미에 포함하지 않은 채 파생 합계 값을 정의했다.
+      root_cause_step_id: semantics-candidate-005.cause-003
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: Sku.weight는 숫자형이며 창고별 계량 관례에 따라 kg 또는 lb를 그대로 쓴다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:33-38
+        - cause_id: semantics-candidate-005.cause-002
+          claim: Shipment.total_weight는 구성 OrderLine 중량의 합으로 계산해 저장된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:40-49
+        - cause_id: semantics-candidate-005.cause-003
+          claim: 단위가 다른 숫자들이 합산될 수 있으므로 `total_weight`라는 이름의 총중량 의미가 실제 계산값과 어긋난다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-38
+            - materialized-input.md:48
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 물류 통합 기준 문서에서 WMS 재고는 주로 창고 실물 수량, ERP 재고는 회계/재무 기준 수량을 나타낼 수 있으며 두 값은 운영상
+    불일치할 수 있다.
+  - 배송 구간은 일반적으로 전체 shipment의 부분 또는 실행 구간으로 해석되며, 전체 shipment와 동일한 하위유형이라고 보려면
+    별도 정의가 필요하다.
+  - 상태명은 동일 문자열이라도 권위 시스템과 완료 조건이 다르면 별도 의미로 취급되어야 한다.
+validation:
+  unaddressable_candidates: []

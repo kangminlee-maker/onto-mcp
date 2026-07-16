@@ -1,0 +1,128 @@
+schema_version: 1
+session_id: 20260716-422472ec
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment
+      structure
+    evidence_anchor: OrderLine.attributes comment; relations[fulfills];
+      Shipment.total_weight note
+    claim: OrderLine과 Shipment 사이의 필수 충족 연결이 누락되어 부분출하 구조를 추적할 수 없다.
+    what: 유일한 충족 관계는 Shipment→Order 단위이며, 주문 줄과 출하 화물 사이의 품목·수량 연결이 없다.
+    why: 대상은 부분출하 시 추적 불가를 명시하고, Shipment.total_weight가 구성 OrderLine 중량의 합이라고 정의한다.
+      그러나 구성 OrderLine을 식별할 구조가 없어 출하별 충족 수량, 잔량, 중량 산출 근거를 WMS/TMS/ERP 간에 일관되게
+      연결할 수 없다.
+    how_to_fix: Shipment와 OrderLine을 연결하고 출하 수량을 보유하는 ShipmentLine 또는
+      FulfillmentAllocation 개념을 추가한 뒤, OrderLine별 출하 수량 합계와 주문 수량의 정합성 규칙을 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문→재고 할당→출하 흐름을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적
+      failure_condition: 한 OrderLine이 여러 Shipment로 나뉘거나 한 Shipment가 주문 일부만 충족하는 경우
+      impact: 시스템 간 출하 귀속, 부분충족, 잔량 및 Shipment.total_weight의 근거를 동일한 구조로 교환하거나 감사할 수
+        없다.
+      evidence_refs:
+        - OrderLine.attributes의 Shipment 참조 부재 주석
+        - "relations[fulfills]: Shipment→Order"
+        - Shipment.attributes.total_weight note
+    causal_path:
+      root_cause_candidate: 충족 관계가 주문 단위 Shipment→Order 하나로만 모델링되고 줄별 수량 연결 개념이 없다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: 부분출하에서 어느 OrderLine의 몇 개가 어느 Shipment로 출하되었는지 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - OrderLine.attributes의 Shipment 참조 부재 주석
+        - cause_id: structure-candidate-001.cause-002
+          claim: Shipment의 유일한 주문 연결은 Order 단위 fulfills 관계이며 줄별 연결이나 출하 수량 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - relations[fulfills]
+            - OrderLine.attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: logistics-fulfillment-ontology.yaml — Shipment/DeliveryLeg route structure
+    evidence_anchor: Shipment.definition; DeliveryLeg.definition; DeliveryLeg.is_a
+      and attributes
+    claim: DeliveryLeg을 상위 Shipment의 경로 구간으로 묶는 관계가 없어 다구간 배송 경로가 구조적으로 끊겨 있다.
+    what: DeliveryLeg에는 순번과 출발·도착 위치가 있지만 어느 상위 화물 경로에 속하는지 나타내는 참조가 없다. 대신
+      DeliveryLeg이 Shipment를 상속할 뿐이다.
+    why: ‘화물 경로의 한 구간’이라는 정의와 leg_seq는 여러 구간을 특정 화물 아래 배열해야 함을 전제한다. 상속만으로는 동일 주문의
+      별도 Shipment와 한 Shipment에 속한 여러 DeliveryLeg을 구분하거나 구간 순서를 화물 단위로 검증할 수 없다.
+    how_to_fix: Shipment→DeliveryLeg 구성 관계 또는 DeliveryLeg.shipment_ref를 추가하고,
+      shipment별 leg_seq 유일성 및 인접 구간의 to_ref/from_ref 연속성 규칙을 정의한다. 상속은 구간이 실제로
+      Shipment와 동일한 정체성·수명주기를 가질 때만 유지한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 화물·배송 개념을 TMS 통합의 공통 구조로 제공하는 목적
+      failure_condition: 하나의 Shipment가 둘 이상의 DeliveryLeg을 거치는 경우
+      impact: 이벤트와 상태가 어느 전체 화물 또는 어느 구간에 속하는지 연결할 수 없고, 경로 순서와 연속성을 검증할 수 없다.
+      evidence_refs:
+        - Shipment.definition
+        - DeliveryLeg.definition
+        - "DeliveryLeg.is_a: Shipment"
+        - DeliveryLeg.attributes.leg_seq/from_ref/to_ref
+    causal_path:
+      root_cause_candidate: DeliveryLeg에 상위 Shipment 구성 관계가 없고 is_a 연결만 사용되었다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: 여러 DeliveryLeg을 하나의 Shipment 경로로 그룹화할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - DeliveryLeg.attributes
+            - Shipment.attributes
+        - cause_id: structure-candidate-002.cause-002
+          claim: DeliveryLeg은 Shipment를 상속하지만 상위 화물을 가리키는 구성 참조가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "DeliveryLeg.is_a: Shipment"
+            - DeliveryLeg.attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: logistics-fulfillment-ontology.yaml — InventoryRecord/InventoryAggregate
+      structure
+    evidence_anchor: InventoryRecord.definition and attributes;
+      InventoryAggregate.definition and attributes; allocation integrity rule
+    claim: 전사 재고 집계와 창고별 재고 원천 사이의 구조적 연결이 누락되어 있다.
+    what: InventoryAggregate는 SKU만 참조하며, 어떤 InventoryRecord 또는 Warehouse 범위를 집계했는지
+      연결하지 않는다.
+    why: InventoryAggregate는 ‘SKU별 전사 가용 재고 집계’이고 일중 할당의 직접 입력이지만, 원천 레코드와의 관계가 없어
+      집계 포함 범위, 누락 창고, 재계산 근거를 온톨로지 안에서 추적할 수 없다.
+    how_to_fix: InventoryAggregate가 집계하는 InventoryRecord 집합 또는 명시적인 집계 범위·원천 관계를
+      추가하고, 스냅샷 시점별로 원천 합계와 available_qty를 검증할 수 있는 구조를 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: WMS와 ERP의 재고 데이터를 연결하고 재고 할당의 공통 기준을 제공하는 목적
+      failure_condition: 여러 Warehouse의 InventoryRecord를 합산하거나 특정 창고를 집계에서 제외·포함해야 하는 경우
+      impact: 일중 주문 할당에 사용되는 값의 구성 근거를 시스템 간에 재현하거나 조정할 수 없어 통합 기준 문서로서 추적성이 약화된다.
+      evidence_refs:
+        - InventoryRecord.definition 및 wh_ref/sku_ref
+        - InventoryAggregate.definition 및 sku_ref/available_qty
+        - integrity_rules의 InventoryAggregate.available_qty 기반 할당 규칙
+    causal_path:
+      root_cause_candidate: 집계 엔터티가 원천 재고 레코드 또는 집계 범위와 연결되지 않았다.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: InventoryAggregate.available_qty의 구성 레코드와 창고 범위를 식별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - InventoryAggregate.attributes
+            - InventoryRecord.attributes
+        - cause_id: structure-candidate-003.cause-002
+          claim: InventoryAggregate와 InventoryRecord는 Sku를 각각 참조할 뿐 직접적인 집계 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - InventoryAggregate.attributes.sku_ref
+            - InventoryRecord.attributes.sku_ref
+            - relations 전체
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []

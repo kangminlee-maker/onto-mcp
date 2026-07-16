@@ -1,0 +1,207 @@
+schema_version: 1
+session_id: 20260716-7f1c6ba1
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: Test/Assay catalog model
+    evidence_anchor: entities.Test; entities.Assay; notes[0] ("현재 신규 항목은 두 곳 모두에 등록한다")
+    claim: 새 검사 항목을 추가할 때 두 카탈로그를 함께 수정해야 하며, 양자의 동일성·매핑·버전 규칙이 없어 확장할수록 드리프트가 누적된다.
+    what: 주문 단위인 Test와 수행 단위인 Assay가 별도 엔티티로 존재하지만 둘 사이의 관계나 변환 규칙이 없다. 신규 항목은 두 곳에
+      중복 등록하도록 되어 있다.
+    why: 새 항목, 분석기 또는 수행 변형이 추가될 때 Test와 Assay를 원자적으로 맞출 구조가 없다. 한쪽만 갱신되거나 서로 다른
+      코드·검체 표현이 사용되면 EMR 주문과 LIS 수행 항목의 대응이 불명확해져 개념 권위 문서 역할이 약화된다.
+    how_to_fix: Test를 주문 카탈로그의 권위 개념으로 유지하고 Assay를 명시적으로 연결하는 performs_test 또는
+      realizes_test 관계를 추가한다. 매핑의 유효기간·버전·다대다 허용 여부와 신규 등록 시 단일 권위 갱신 절차를 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계에서 검사 카탈로그와 수행 항목의 개념 권위를 제공하는 목적
+      failure_condition: 신규 검사, 분석기별 수행 항목 또는 기존 코드 변경이 추가되어 Test와 Assay의 중복 등록 내용이 불일치할 때
+      impact: 주문 코드와 실제 수행 코드의 대응을 문서만으로 결정할 수 없어 통합 구현마다 별도 매핑을 만들게 되고, 동일 검사의 의미가
+        시스템별로 분기될 수 있다.
+      evidence_refs:
+        - entities.Test
+        - entities.Assay
+        - notes[0]
+    causal_path:
+      root_cause_candidate: 주문 카탈로그와 수행 카탈로그 사이에 단일 권위와 명시적 식별·버전 매핑이 정의되지 않았다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 신규 항목은 Test와 Assay 두 곳 모두에 등록해야 한다.
+          relation_to_previous: null
+          evidence_refs:
+            - notes[0]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: Test와 Assay는 별도 코드와 검체 속성을 갖지만 둘을 연결하는 관계가 relations에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Test.attributes
+            - entities.Assay.attributes
+            - relations
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 두 카탈로그의 동일성, 매핑 및 변경 권위를 정하는 모델이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Test
+            - entities.Assay
+            - relations
+            - notes[0]
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: Specimen terminology model
+    evidence_anchor: entities.Specimen.attributes.specimen_type;
+      entities.Test.attributes.requires_specimen_type;
+      entities.Assay.attributes.specimen_kind
+    claim: 검체 유형이 두 개의 폐쇄형 enum과 하나의 자유 문자열로 분산되어 있어 새 검체 범주나 외부 코드 체계를 도입할 때 기존 구조
+      수정과 별도 변환 로직이 필요하다.
+    what: Specimen과 Test는 [blood, urine, tissue, swab]만 허용하지만 Assay는 'WB', 'Serum',
+      'Urine-random' 같은 문자열을 사용한다. 이 표현들 사이의 계층, 동의어 또는 버전 매핑이 없다.
+    why: 새 검체 유형이나 더 세분화된 유형을 추가하면 두 enum을 동시에 변경해야 하고 Assay 문자열과의 호환 규칙도 별도로 만들어야
+      한다. 과거 데이터가 어느 용어 버전을 사용했는지도 보존되지 않아 카탈로그 변경 후 연속성이 깨질 수 있다.
+    how_to_fix: 검체 유형을 독립된 권위 개념 또는 버전된 코드 체계로 모델링하고 Specimen, Test, Assay가 이를 참조하게
+      한다. 상위·하위 유형, 동의어, 외부 코드, 유효기간과 폐기·대체 매핑을 포함한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 간 검체 요구사항과 실제 검체 표현을 지속적으로 해석할 수 있는 개념 권위 제공
+      failure_condition: 현재 네 가지 범주 밖의 검체 유형, 분석기별 세부 유형 또는 새로운 외부 코드가 도입될 때
+      impact: 스키마와 여러 속성을 동시 수정해야 하며, 과거 값과 신규 값의 의미 연결을 문서가 보장하지 못해 시스템별 변환 규칙이 분기된다.
+      evidence_refs:
+        - entities.Specimen.attributes.specimen_type
+        - entities.Test.attributes.requires_specimen_type
+        - entities.Assay.attributes.specimen_kind
+    causal_path:
+      root_cause_candidate: 검체 유형이 재사용 가능한 버전형 개념이 아니라 여러 속성에 중복 내장되어 있다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Specimen과 Test의 검체 유형은 동일한 네 값의 폐쇄형 enum으로 각각 정의되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Specimen.attributes.specimen_type
+            - entities.Test.attributes.requires_specimen_type
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Assay는 동일 영역을 통제되지 않은 문자열과 다른 세분성으로 표현한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Assay.attributes.specimen_kind
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 공통 검체 유형 개념과 enum·문자열 간 버전 매핑이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Specimen
+            - entities.Test
+            - entities.Assay
+            - relations
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: Result/Report status evolution
+    evidence_anchor: entities.Result.attributes.status;
+      entities.Report.attributes.result_status; state_rules[1]
+    claim: 동일한 결과 상태가 서로 다른 두 enum과 야간 동기화 규칙으로 중복되어 있어 새 상태 추가나 전이 변경 시 두 모델과 변환
+      로직을 함께 수정해야 한다.
+    what: Result는 preliminary/final/corrected를, Report는 prelim/finalized/amended를
+      사용하며 Report 값을 권위 값으로 선언한다. 상태 대응은 일부 자연어 규칙과 야간 배치에 의존한다.
+    why: 예를 들어 취소, 철회, 정정 대기 같은 상태를 추가하면 두 enum, 대응표, 완료 조건과 배치 동작을 동시에 바꿔야 한다. 현재는
+      완전한 대응표나 버전 정책이 없어 신규 상태가 한쪽에만 도입되거나 기존 기록의 의미가 달라질 수 있다.
+    how_to_fix: 결과 상태를 하나의 버전된 상태 개념으로 정의하고 Result와 Report에는 그 상태의 필요한 투영만 둔다. 상태별
+      명시적 매핑, 허용 전이, 유효 버전 및 미지원 상태 처리 규칙을 기계 판독 가능한 형태로 추가한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR이 신뢰하는 보고 상태와 LIS 결과 상태의 장기적 호환성 및 권위 유지
+      failure_condition: 새 상태나 전이 규칙이 추가되거나 기존 상태 명칭·의미가 변경될 때
+      impact: 복수 정의를 동시에 갱신하지 않으면 EMR과 LIS가 서로 다른 상태 의미를 관찰하며, 기존 데이터와 신규 규칙의 연속성도
+        보장되지 않는다.
+      evidence_refs:
+        - entities.Result.attributes.status
+        - entities.Report.attributes.result_status
+        - state_rules[0]
+        - state_rules[1]
+    causal_path:
+      root_cause_candidate: 하나의 상태 권위에서 파생해야 할 표현을 독립 enum으로 중복 정의했고, 완전한 버전형 변환 계약을 두지 않았다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Result와 Report가 동일 정보를 서로 다른 enum 값으로 보유한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 두 표현의 일치는 즉시 불변식이 아니라 일부 자연어 규칙과 야간 배치에 맡겨져 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - state_rules[1]
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 공통 상태 개념, 전체 매핑표 및 변경 버전 정책이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+            - state_rules
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: Ontology-wide change continuity
+    evidence_anchor: top-level version "0.3"; enum-valued attributes and lifecycle
+      lists throughout entities; absence of concept-level identifiers, effective
+      periods, deprecation aliases, and migration mappings in the materialized
+      input
+    claim: 온톨로지에는 문서 버전만 있고 개념별 변경 이력을 연결할 식별·유효기간·대체 매핑이 없어 외부 표준이나 내부 분류 변경 시 과거
+      데이터의 의미 연속성을 보장할 수 없다.
+    what: 엔티티, 상태, 역할, 우선순위 및 검체 범주는 현재 값만 열거한다. 값의 도입·폐기 시점, 이전 값의 대체 관계, 호환 가능한
+      온톨로지 버전 또는 미지원 값 처리 방식이 정의되지 않았다.
+    why: 문서 버전이 올라가면서 enum이나 상태 의미가 변경되면 기존 EMR/LIS 기록이 어느 정의에 따라 생성됐는지 판단할 수 없다. 통합
+      소비자는 자체 호환 규칙을 만들게 되어 이 문서가 장기적인 개념 권위로 기능하지 못한다.
+    how_to_fix: 안정적인 개념·코드 식별자와 개념별 버전을 도입하고, introduced/deprecated/effective 기간,
+      replaced_by 또는 equivalent_to 매핑, 호환성 정책과 알 수 없는 신규 값의 처리 규칙을 정의한다. 변경 로그가
+      아니라 현재 모델에서 과거 버전 해석이 가능한 기계 판독 계약으로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 지속적인 개념 권위 문서로서 버전 간 의미 연속성을 제공하는 목적
+      failure_condition: 외부 표준, 병원 정책 또는 카탈로그 변경으로 열거값·상태·개념 정의가 추가, 폐기 또는 재해석될 때
+      impact: 과거 데이터가 생성 당시의 의미와 연결되지 않고 소비자별 마이그레이션이 달라져 장기 호환성과 감사 가능성이 약화된다.
+      evidence_refs:
+        - top-level version
+        - entities.Order.attributes.priority
+        - entities.Specimen.attributes.specimen_type
+        - entities.Result.attributes.status
+        - entities.Report.attributes.result_status
+        - entities.Staff.attributes.role
+    causal_path:
+      root_cause_candidate: 버전 권위가 문서 전체 버전에만 존재하고 개별 개념과 값의 수명주기 및 호환 관계에는 존재하지 않는다.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 모델은 여러 enum과 lifecycle의 현재 값만 열거한다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Order.lifecycle
+            - entities.Order.attributes.priority
+            - entities.Specimen.lifecycle
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+            - entities.Staff.attributes.role
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 각 값에는 안정 식별자, 유효기간, 폐기 또는 대체 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities
+            - state_rules
+        - cause_id: evolution-candidate-004.cause-003
+          claim: 유일한 버전 표시는 온톨로지 최상위의 "0.3"이며 버전 간 개념 매핑 계약이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - top-level version
+            - notes
+      unresolved_beyond_evidence: 향후 어떤 외부 표준을 채택할지는 경계 내 증거로 확인할 수 없지만, 표준 종류와 무관하게
+        버전 간 연속성 메커니즘이 없는 점은 현재 대상에서 확인된다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - EMR과 LIS는 서로 다른 배포 주기로 카탈로그·코드·상태 정의를 갱신할 수 있다.
+  - 개념 권위 문서는 현재 정의뿐 아니라 기존 기록을 신규 정의와 연결할 수 있는 변경 연속성을 제공해야 한다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,147 @@
+schema_version: 1
+session_id: 20260716-7f1c6ba1
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: 오래된 임상의용 상태 노출의 근본 원인을 독립 저장과 지연 배치 자체로 볼지, 상태별 권위·상관관계·전파 계약의
+      부재로 한정할지 견해가 갈린다.
+    resolution_question: Result와 Report 상태 불일치의 근본 원인을 어떤 권위·상관관계·전파 계약 결손으로 규정해야
+      하며, 독립 상태 저장 자체도 원인에 포함해야 하는가?
+  - issue_id: issue-006
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - semantics
+      - axiology
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+      - issue-stance-matrix.yaml#stances.issue-006.structure
+    conflict_summary: 다수 렌즈는 공통 상태 권위와 버전형 투영 계약의 부재를 원인으로 보지만, semantics는
+      ResultStatus와 ReportStatus를 통합하지 않고 각 상태의 별도 권위와 전체 상관관계를 정의해야 한다고 본다.
+    resolution_question: 현재 및 향후 상태 합의를 위해 하나의 공통 상태 권위를 정의해야 하는가, 아니면 별도 상태 권위들과
+      버전형 전체 상관관계를 정의해야 하는가?
+  - issue_id: issue-014
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - coverage
+      - logic
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+      - issue-stance-matrix.yaml#stances.issue-014.logic
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+    conflict_summary: corrected와 amended를 별도 상태 개념으로 확정할 수 있는지, 아니면 증거상 확정 가능한 원인을
+      권위·매핑·전이 계약 부재로만 좁혀야 하는지 견해가 갈린다. axiology는 의미론적 구분보다 권위 분할과 지연 전파를 정당화하지
+      않은 가치 결정을 근본 원인으로 본다.
+    resolution_question: Result.corrected와 Report.amended의 개념적 분리를 근본 원인에 확정적으로 포함할
+      것인가, 아니면 권위·매핑·전이·전파 계약 부재만을 공통 근본 원인으로 채택할 것인가?
+  - issue_id: issue-021
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-021.structure
+      - issue-stance-matrix.yaml#stances.issue-021.axiology
+      - issue-stance-matrix.yaml#stances.issue-021.semantics
+    conflict_summary: 구조 렌즈는 medium 심각도를 유지하지만 axiology와 semantics는 Result 귀속 불가능성이
+      필수 통보의 누락·중복과 안전 통제 실패를 유발할 수 있어 high로 상향해야 한다고 본다.
+    resolution_question: CriticalValue.notified의 Result 귀속 불가능성은 감사성과 판정 품질을 약화하는
+      medium 문제인가, 필수 통보 실패를 초래하는 high 문제인가?
+  - issue_id: issue-003
+    priority: 6
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+    conflict_summary: 모든 참여 렌즈가 원인과 조치를 지지하지만 evolution은 Test–Assay 매핑 결손이 확장 시 누적
+      드리프트를 만든다는 이유로 medium보다 높은 심각도를 요구한다.
+    resolution_question: Test–Assay 역할·다중성·권위 매핑 결손은 현재의 의미 모호성과 중복 위험에 근거해 medium을
+      유지할 것인가, 확장 시 누적되는 시스템적 드리프트를 반영해 high로 상향할 것인가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 근본 원인, 높은 심각도, 정책과 결과별 통보 사건의 분리 조치에 일치한다.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 STAT 표현의 권위·파생 계약 부재와 medium 심각도에 일치한다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 Test–Assay 매핑 및 수행 개념 부재가 주문-결과 권위 경로를 끊는다는 진단과 high 심각도에 일치한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 결과별 통보 사건과 증거 관계 부재로 감사 경로가 단절된다는 진단과 high 심각도에 일치한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들은 lifecycle 종결·예외 상태 누락과 medium 심각도에 일치하며, logic의 비적용 입장은 실질적
+      반대가 아니다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 카탈로그와 임계값 정책의 버전·유효기간 부재 및 medium 심각도에 일치한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 Test–Assay 간 단일 권위와 버전형 매핑 부재 및 high 심각도에 일치한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 검체 유형의 중복 내장이 확장·호환 규칙을 분산시킨다는 진단과 medium 심각도에 일치한다.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 개별 개념·값의 수명주기와 호환 관계 부재 및 medium 심각도에 일치한다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 release와 correction 규칙의 우선순위·상호배제·시간 계약 부재 및 high 심각도에 일치한다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 임계값 정책과 결과별 통보 사건의 혼합 및 high 심각도에 일치한다.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 세 STAT 표현의 등가·파생 제약 부재 및 medium 심각도에 일치한다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 공통 SpecimenType과 호환 관계 부재 및 medium 심각도에 일치한다.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 TAT 계산 대상·레코드 선택·버전형 산식 부재 및 medium 심각도에 일치한다.
+  - issue_id: issue-019
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 주문 항목에서 수행·Result로 이어지는 필수 소유 경로 부재 및 high 심각도에 일치한다.
+  - issue_id: issue-020
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 Test–Assay 구조적 매핑과 실행 경로 부재 및 medium 심각도에 일치한다.

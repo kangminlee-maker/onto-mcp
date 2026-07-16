@@ -1,0 +1,89 @@
+schema_version: 1
+session_id: 20260716-acee24d9
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml / entities.Collateral
+    evidence_anchor: "Embedded Materialized Input: `Exposure` definition;
+      `Collateral` definition with `is_a: Exposure`; relation `Exposure ->
+      Collateral` with `kind: secured_by`."
+    claim: "`Collateral` is simultaneously modeled as an `Exposure` subtype and as
+      the asset secured by an `Exposure`, creating a type-level conflict for the
+      same entity role."
+    what: "The ontology states that Collateral is an asset securing an exposure, but
+      its type declaration says Collateral is an Exposure. Under subtype
+      semantics for `is_a`, every Collateral instance must also satisfy the
+      definition of Exposure: a credit exposure to a borrower. That conflicts
+      with the same entity being the collateral asset secured by an Exposure."
+    why: "The conflict is formed by explicit claims in the artifact: `Exposure` is
+      the credit exposure, `Collateral` is the securing asset, `Collateral is_a
+      Exposure`, and the relation `Exposure secured_by Collateral` uses
+      Collateral as the secured asset target. These cannot all be satisfied
+      without collapsing exposure and collateral asset into the same class,
+      which weakens the ontology as a shared concept authority for a risk engine
+      and reporting system because systems may inherit exposure attributes onto
+      collateral records or count collateral as exposure."
+    how_to_fix: "Remove `is_a: Exposure` from `Collateral` and keep collateral
+      connected through the `Exposure -> Collateral secured_by` relation; if a
+      shared parent is needed, introduce a neutral parent such as `RiskObject`
+      only with attributes valid for both concepts."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared credit-risk concept authority for risk engine and
+        reporting systems.
+      failure_condition: When consumers interpret `is_a` as inheritance/subtyping,
+        collateral assets become valid Exposure instances while also serving as
+        assets securing exposures.
+      impact: This can make type-based consumers apply exposure fields, aggregation,
+        or reporting logic to collateral records, undermining the declared
+        shared taxonomy contract.
+      evidence_refs:
+        - "credit-risk-ontology.yaml: Exposure definition in Embedded
+          Materialized Input"
+        - "credit-risk-ontology.yaml: Collateral definition and `is_a: Exposure`
+          in Embedded Materialized Input"
+        - "credit-risk-ontology.yaml: `Exposure -> Collateral secured_by`
+          relation in Embedded Materialized Input"
+    causal_path:
+      root_cause_candidate: The ontology uses `is_a` to connect Collateral to Exposure
+        even though Collateral's own definition and relation role describe a
+        secured asset, not a credit exposure.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: "Collateral is declared as an asset that secures an exposure and as
+            `is_a: Exposure`."
+          relation_to_previous: null
+          evidence_refs:
+            - "credit-risk-ontology.yaml: Collateral definition and `is_a:
+              Exposure` in Embedded Materialized Input"
+        - cause_id: logic-candidate-001.cause-002
+          claim: Exposure is separately defined as the credit exposure to a borrower, and
+            the relation declares Exposure as secured by Collateral.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml: Exposure definition in Embedded
+              Materialized Input"
+            - "credit-risk-ontology.yaml: `Exposure -> Collateral secured_by`
+              relation in Embedded Materialized Input"
+        - cause_id: logic-candidate-001.cause-003
+          claim: Together these claims require Collateral to be both a kind of Exposure
+            and the asset target that secures an Exposure.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml: Exposure, Collateral, and relations
+              sections in Embedded Materialized Input"
+      unresolved_beyond_evidence: If this ontology defines `is_a` with non-subtype
+        semantics elsewhere, that could alter the conflict, but no such
+        alternative semantics is present in the bounded target.
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`is_a` in the YAML ontology is interpreted as a subtype/inheritance
+    assertion because no alternative local semantics is declared."
+  - The review is limited to explicit claims in the materialized target and
+    generic domain-none logic checks; no credit-risk domain rule document was
+    used.
+validation:
+  unaddressable_candidates: []

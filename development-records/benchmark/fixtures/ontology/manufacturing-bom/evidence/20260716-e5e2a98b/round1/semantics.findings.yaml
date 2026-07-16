@@ -1,0 +1,217 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: AlternatePart entity and alternate_of shortcut relation
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:37-45,91
+    claim: AlternatePart is defined as symmetric while its attributes model a
+      directional substitution by default.
+    what: The definition says if B is an alternate for A, then A is also an
+      alternate for B, but the same entity has a `direction` enum with `one_way`
+      and `bidirectional`, and notes that the default is `one_way`. The later
+      `alternate_of` shortcut relation also names the relationship without
+      carrying the direction distinction.
+    why: A symmetric definition and a default one-way attribute describe different
+      meanings. In PLM/MES use, interchangeable substitutes,
+      engineering-approved alternates, and one-way supersessions are materially
+      different because they control whether production may replace one part
+      with another in either direction.
+    how_to_fix: "Split the concepts or definitions: model symmetric
+      interchangeability separately from directional substitution/supersession,
+      or change the definition to explicitly say `AlternatePart` can be
+      directional and require the shortcut `alternate_of` to preserve
+      direction."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES integration concept baseline for item/BOM/change concepts.
+      failure_condition: A downstream consumer interprets `alternate_of` or the entity
+        definition as bidirectional while the data defaults to `one_way`, or
+        vice versa.
+      impact: Part substitution rules can be applied in the wrong direction, weakening
+        production planning, procurement substitution, and change-control trust
+        in the ontology.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: The ontology assigns one concept name,
+        `AlternatePart`/`alternate_of`, to both symmetric alternates and
+        directional substitution relationships.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: The entity definition states the alternate relationship is reciprocal.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-38
+        - cause_id: semantics-candidate-001.cause-002
+          claim: The entity attributes then encode direction and default it to `one_way`.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:42-45
+        - cause_id: semantics-candidate-001.cause-003
+          claim: The shortcut `alternate_of` relation hides that direction semantics
+            unless consumers inspect the `AlternatePart` entity.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: InspectionPlan is_a Operation
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:47-53,77-82
+    claim: InspectionPlan is classified as a subtype of Operation even though its
+      definition describes a plan/specification, not a routing step.
+    what: "`Operation` is defined as a routing process step with work center and
+      standard time. `InspectionPlan` is named and defined as an inspection plan
+      and parameter extension, but is modeled with `is_a: Operation`. A
+      plan/specification is semantically different from the operation step that
+      executes inspection."
+    why: The inheritance says every inspection plan is an operation. That forces
+      plan-level attributes such as sampling rules and acceptance criteria into
+      the same ontological type as executable routing steps, which can confuse
+      whether the ontology is referring to a manufacturing action or the quality
+      specification governing that action.
+    how_to_fix: Model inspection as an `Operation` subtype only if the entity
+      represents the executable inspection step. Otherwise, keep
+      `InspectionPlan` as a separate specification entity referenced by an
+      inspection `Operation`.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Concept baseline for routing and manufacturing operation
+        semantics in PLM/MES integration.
+      failure_condition: MES/routing consumers treat quality inspection specifications
+        as executable routing operations or require operation fields for plan
+        records.
+      impact: The ontology weakens the distinction between work execution and
+        quality-control specification, which can produce ambiguous routing,
+        scheduling, and inspection master-data mappings.
+      evidence_refs:
+        - materialized-input.md:47-53
+        - materialized-input.md:77-82
+    causal_path:
+      root_cause_candidate: The ontology uses subtype inheritance where a
+        reference/extension relation would better preserve the
+        plan-versus-operation type distinction.
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: "`Operation` denotes an executable routing step with work center and
+            standard time."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:47-53
+        - cause_id: semantics-candidate-002.cause-002
+          claim: "`InspectionPlan` is named and defined as a plan and parameter extension,
+            then declared `is_a: Operation`."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:77-82
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: WorkCenter.capacity_per_shift
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:63-67
+    claim: "`capacity_per_shift` has a single numeric field while its note says the
+      unit differs by work center."
+    what: The attribute name and type imply a comparable numeric capacity per shift,
+      but the note says the unit can be either count or time depending on the
+      work center. That makes the same field carry different meanings across
+      instances.
+    why: Capacity expressed as pieces per shift and capacity expressed as time per
+      shift are not the same measure. A PLM/MES concept baseline needs capacity
+      semantics to be explicit enough for scheduling, load calculation, and
+      routing interpretation.
+    how_to_fix: Add an explicit capacity unit or split the field into typed
+      measures, such as quantity capacity and time capacity, with clear units
+      and conversion rules.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES routing and manufacturing operation concept baseline.
+      failure_condition: Consumers aggregate, compare, or schedule work centers using
+        `capacity_per_shift` without knowing whether the number is a count or a
+        time value.
+      impact: The ontology permits semantically incompatible values in the same
+        attribute, undermining capacity planning and MES scheduling mappings.
+      evidence_refs:
+        - materialized-input.md:63-67
+    causal_path:
+      root_cause_candidate: The capacity concept lacks unit as part of its semantic identity.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: "`capacity_per_shift` is modeled as a plain number."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:65-67
+        - cause_id: semantics-candidate-003.cause-002
+          claim: The note states that the unit varies between count and time by work
+            center.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: Part to Routing relation `manufactured_by`
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:14-21,55-61,87
+    claim: The `manufactured_by` relation is attached to all Parts although Part
+      includes purchased items.
+    what: "`Part` is defined as the minimum managed item that may be purchased or
+      manufactured. The relation list then states `Part` to `Routing` as
+      `manufactured_by`, and `Routing.part_ref` points to `Part` generally. The
+      relation name does not fit purchased-only parts."
+    why: A purchased part and a manufactured part have different routing semantics.
+      If every `Part` is related to a manufacturing routing by
+      `manufactured_by`, the ontology blurs item identity with make/buy
+      behavior.
+    how_to_fix: Restrict routing relations to manufactured parts or add an explicit
+      make/buy/manufacturing applicability concept so purchased parts are not
+      semantically implied to have manufacturing routings.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Concept baseline for item, BOM, and routing integration
+        between PLM and MES.
+      failure_condition: The integration treats all `Part` records as candidates for
+        manufacturing routing because the relation is declared at the parent
+        `Part` level.
+      impact: Purchased items can be misclassified as manufacturable in downstream
+        routing and production-order logic, reducing trust in the ontology as an
+        integration reference.
+      evidence_refs:
+        - materialized-input.md:14-21
+        - materialized-input.md:55-61
+        - materialized-input.md:87
+    causal_path:
+      root_cause_candidate: The ontology places manufacturing-specific semantics on
+        the broad `Part` concept rather than on a manufactured-part subset or
+        applicability condition.
+      root_cause_step_id: semantics-candidate-004.cause-003
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: "`Part` includes both purchased and manufactured managed items."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:14-15
+        - cause_id: semantics-candidate-004.cause-002
+          claim: "`Routing` is defined as the manufacturing process sequence for an item."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:55-61
+        - cause_id: semantics-candidate-004.cause-003
+          claim: The relation `Part -> Routing` is named `manufactured_by`, applying that
+            manufacturing meaning to the broad `Part` class.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:87
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 검토는 제공된 단일 materialized input과 session_domain=none 조건 안에서 수행했다.
+  - PLM/MES 통합에서는 품목 대체 방향, 작업 실행 단계와 품질 계획, 작업장 capacity 단위, 구매품과 제조품의 make/buy
+    차이가 의미적으로 구분되어야 한다고 보았다.
+validation:
+  unaddressable_candidates: []

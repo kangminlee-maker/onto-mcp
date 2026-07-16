@@ -1,0 +1,552 @@
+{
+  "schema_version": "m3-capture/4",
+  "fixture": "manufacturing-bom",
+  "evidence_session": "20260716-e5e2a98b",
+  "judge_model": "claude-opus-4-8",
+  "judge_auth": "oauth",
+  "judge_effort": "low",
+  "band_thresholds": {
+    "meet_material_recall": 1,
+    "exceed_material_recall": 1,
+    "exceed_precision": 0.9,
+    "floor_precision": 0.8
+  },
+  "verdict_policy": {
+    "min_adequate_runs": 8,
+    "dominant_min_fraction": 0.85,
+    "significant_mode_fraction": 0.15
+  },
+  "source_digests": {
+    "ground_truth": "d0580a3f7d171b6404d6c6f0b72bd00d40bb27bfa4d33df6f712b589c53ce57d",
+    "issue_ledger": "7a6ce4ff485d9bc37b23269ca425824dbd244fd7e1494e799b4ee74b2a69a66b",
+    "finding_ledger": "328e5a785aeca0ccd1d859bb415ce1ae94609c98e1e4a3b7ffbc45581ac267d6"
+  },
+  "runs": [
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "MBO-5",
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "MBO-2"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "MBO-8",
+          "MBO-10"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "MBO-1"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "MBO-3"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "MBO-7"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": [
+          "MBO-4"
+        ]
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "MBO-5",
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "MBO-2"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "MBO-8",
+          "MBO-10"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "MBO-1"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "MBO-3"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "MBO-7"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": []
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "MBO-5",
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "MBO-2"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "MBO-8",
+          "MBO-10"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "MBO-1"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "MBO-3"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "MBO-7"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": [
+          "MBO-4"
+        ]
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "MBO-5",
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "MBO-2"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "MBO-8",
+          "MBO-10"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "MBO-1"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "MBO-3"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "MBO-7"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": [
+          "MBO-4"
+        ]
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "MBO-5"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "MBO-2"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "MBO-8",
+          "MBO-10"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": [
+          "MBO-9"
+        ]
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "MBO-1"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "MBO-3",
+          "MBO-4"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "MBO-7"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": [
+          "MBO-4"
+        ]
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "MBO-5"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "MBO-2"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "MBO-8",
+          "MBO-10"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": [
+          "MBO-9"
+        ]
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "MBO-1"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "MBO-3",
+          "MBO-4"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "MBO-7"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": [
+          "MBO-4"
+        ]
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "MBO-5",
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "MBO-2"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "MBO-8",
+          "MBO-10"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "MBO-1"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "MBO-3"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "MBO-7"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": []
+      }
+    ],
+    [
+      {
+        "issue_id": "issue-001",
+        "attributed_defect_ids": [
+          "MBO-5",
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-002",
+        "attributed_defect_ids": [
+          "MBO-2"
+        ]
+      },
+      {
+        "issue_id": "issue-003",
+        "attributed_defect_ids": [
+          "MBO-8",
+          "MBO-10"
+        ]
+      },
+      {
+        "issue_id": "issue-004",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-005",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-006",
+        "attributed_defect_ids": [
+          "MBO-6"
+        ]
+      },
+      {
+        "issue_id": "issue-007",
+        "attributed_defect_ids": [
+          "MBO-1"
+        ]
+      },
+      {
+        "issue_id": "issue-008",
+        "attributed_defect_ids": [
+          "MBO-3"
+        ]
+      },
+      {
+        "issue_id": "issue-009",
+        "attributed_defect_ids": [
+          "MBO-7"
+        ]
+      },
+      {
+        "issue_id": "issue-010",
+        "attributed_defect_ids": []
+      },
+      {
+        "issue_id": "issue-011",
+        "attributed_defect_ids": []
+      }
+    ]
+  ]
+}

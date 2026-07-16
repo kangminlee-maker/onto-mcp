@@ -1,0 +1,240 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml / BomLine.scrap_rate and uom handling
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:35
+      and :100;
+      .onto/review/20260716-e5e2a98b/execution-preparation/review-value-alignment-criteria.yaml
+      criterion user-request-intent
+    claim: Operational quantity semantics are accepted outside the PLM/MES concept
+      baseline, weakening the document’s declared integration purpose.
+    what: The ontology makes `scrap_rate` an attribute on `BomLine`, but says the
+      value is copied from a production-planning Excel file. It also states that
+      kg-to-ea conversion has no item conversion-factor master and is handled on
+      the shop floor when needed.
+    why: For a PLM/MES integration concept standard, BOM quantities, scrap/yield,
+      and UOM conversion are purpose-critical operating semantics. The target
+      does not model an authoritative source, validity, unit basis, or
+      governance for those values; instead it normalizes copied/manual
+      operational inputs as acceptable supporting assumptions. That is a
+      value-alignment problem because the document’s stated purpose is to be the
+      concept baseline for integration, not merely a vocabulary over locally
+      maintained spreadsheets and shop-floor conversions.
+    how_to_fix: Add explicit authoritative concepts for scrap/yield and
+      item-specific UOM conversion, including source ownership, unit basis,
+      effective scope/date, and whether MES or PLM consumes the value. Remove
+      the “copied” and ad hoc shop-floor conversion assumptions from the
+      canonical ontology or mark them as non-authoritative migration notes.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Review intent asks whether this BOM/process ontology is
+        suitable as a PLM/MES integration concept standard, focused on item,
+        BOM, routing, change-management consistency and manufacturing operating
+        risk.
+      failure_condition: When production planning, BOM explosion, inventory
+        consumption, costing, or MES order generation depends on scrap/yield or
+        UOM conversion, the integration baseline lacks authoritative, stable
+        quantity semantics.
+      impact: Cross-system trust is weakened because two systems can conform to the
+        ontology while still using divergent spreadsheet-copied scrap values or
+        local UOM conversions, creating real manufacturing planning and
+        execution risk.
+      evidence_refs:
+        - materialized-input.md:35
+        - materialized-input.md:100
+        - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    causal_path:
+      root_cause_candidate: The ontology treats operationally critical quantity data
+        as attributes while leaving their authority and conversion governance
+        outside the concept baseline.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: "`BomLine.scrap_rate` is included as a canonical BOM-line attribute, but
+            its note says the value is copied from a production-planning Excel
+            file."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+        - cause_id: axiology-candidate-001.cause-002
+          claim: The ontology also states that UOM conversion lacks an item
+            conversion-factor master and is performed on the shop floor as
+            needed.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:100
+        - cause_id: axiology-candidate-001.cause-003
+          claim: These choices allow PLM/MES integration to depend on copied or local
+            quantity interpretations rather than a shared authoritative concept.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:100
+            - review-value-alignment-criteria.yaml
+              criterion_id=user-request-intent
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml / ECO effectivity and Part revision
+      synchronization
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:20-21,
+      :69-75, :96;
+      .onto/review/20260716-e5e2a98b/execution-preparation/review-value-alignment-criteria.yaml
+      criterion user-request-intent
+    claim: The ontology accepts a hidden tradeoff where ECO effectivity can outrun
+      the part revision identity used by integrated systems.
+    what: The ontology says production after `ECO.effective_date` follows the new
+      revision, but also says `Part.rev` is updated only after the drawing
+      ledger is reflected by a weekly batch. `Part.rev` and `current_eco` are
+      both modeled as Part attributes with external source-of-truth notes.
+    why: For PLM/MES integration, change effectivity is not just descriptive
+      metadata; it controls which design revision production should build. The
+      ontology’s stated rule creates a time window in which production should
+      follow a new revision while the part revision field may still show the old
+      one. Accepting that delay without a first-class effectivity model or
+      release gate prioritizes batch synchronization convenience over the
+      document’s purpose of providing a safe shared concept baseline.
+    how_to_fix: Represent ECO effectivity and revision applicability as first-class
+      versioned/effective-dated relationships, and require released production
+      orders to resolve the applicable revision from ECO state plus effectivity
+      rather than from a potentially stale `Part.rev` batch copy. Make the
+      source-of-truth precedence explicit for the transition window.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: The declared review purpose is PLM/MES integration suitability
+        with emphasis on change-management consistency and manufacturing
+        operating risk.
+      failure_condition: During the period after an ECO effective date but before
+        weekly `Part.rev` synchronization, MES or downstream consumers may see a
+        stale revision while the integrity rule says production must follow the
+        new revision.
+      impact: The concept baseline can permit wrong-revision manufacturing or
+        ambiguous revision traceability, which is material to manufacturing
+        execution and change-control trust.
+      evidence_refs:
+        - materialized-input.md:20
+        - materialized-input.md:21
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+        - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    causal_path:
+      root_cause_candidate: The ontology separates change effectivity authority from
+        part revision synchronization without modeling the precedence and
+        transition state as a controlled integration concept.
+      root_cause_step_id: axiology-candidate-002.cause-004
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: "`Part.rev` is present as the part revision field, with the drawing
+            ledger named as its source of truth."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20
+        - cause_id: axiology-candidate-002.cause-002
+          claim: "`ECO` carries affected parts, effective date, and status, and
+            `Part.current_eco` separately points to the latest ECO."
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:21
+            - materialized-input.md:69-75
+        - cause_id: axiology-candidate-002.cause-003
+          claim: The integrity rule says production after `ECO.effective_date` follows the
+            new revision, but `Part.rev` is synchronized later by weekly batch
+            after drawing-ledger reflection.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: axiology-candidate-002.cause-004
+          claim: This creates a bounded transition where the integration baseline can
+            expose stale revision identity while requiring new-revision
+            production behavior.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:96
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-003
+    target: manufacturing-bom-ontology.yaml / WorkCenter.capacity_per_shift
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:53,
+      :55-61, :67, :95;
+      .onto/review/20260716-e5e2a98b/execution-preparation/review-value-alignment-criteria.yaml
+      criterion user-request-intent
+    claim: Routing release is tied to production-order eligibility while work-center
+      capacity is allowed to remain unit-ambiguous.
+    what: "`Operation.std_time_min` uses minutes, `Routing.status=released` gates
+      production-order creation, but `WorkCenter.capacity_per_shift` is a number
+      whose unit varies by work center, either count or time."
+    why: A PLM/MES concept standard should make released routing data operationally
+      comparable enough for order creation and scheduling. Leaving capacity
+      units implicit per work center accepts local flexibility at the expense of
+      integrated routing/capacity meaning. That is a purpose drift from “concept
+      기준 문서” toward a loosely documented data shape.
+    how_to_fix: Split capacity into explicit typed measures or add required unit and
+      basis fields, such as capacity quantity, capacity time, shift calendar,
+      UOM, and conversion basis. Define how released routings validate that
+      operation time and work-center capacity are comparable before
+      production-order creation.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The review asks whether the ontology is suitable as a PLM/MES
+        concept baseline, especially routing consistency and manufacturing
+        operating risk.
+      failure_condition: When released routings are used to create or schedule
+        production orders, capacity values cannot be safely interpreted without
+        per-work-center out-of-band unit knowledge.
+      impact: MES consumers can misread capacity as count or time while still
+        conforming to the ontology, reducing the actionability of the routing
+        concept model.
+      evidence_refs:
+        - materialized-input.md:53
+        - materialized-input.md:55-61
+        - materialized-input.md:67
+        - materialized-input.md:95
+        - review-value-alignment-criteria.yaml criterion_id=user-request-intent
+    causal_path:
+      root_cause_candidate: The ontology models capacity as a bare number and
+        delegates its unit meaning to work-center-local convention.
+      root_cause_step_id: axiology-candidate-003.cause-004
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: Operations define standard time in minutes, establishing an explicit time
+            basis for routing steps.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:53
+        - cause_id: axiology-candidate-003.cause-002
+          claim: Released routings are the condition for production-order creation.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:55-61
+            - materialized-input.md:95
+        - cause_id: axiology-candidate-003.cause-003
+          claim: Work-center capacity is modeled as a number, but its note says the unit
+            differs by work center between quantity and time.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+        - cause_id: axiology-candidate-003.cause-004
+          claim: This lets production-order-relevant routing and capacity data remain
+            semantically incomparable inside the integration baseline.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:53
+            - materialized-input.md:67
+            - materialized-input.md:95
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - No domain-specific document was bound; findings use only the embedded role,
+    the target materialized input, the review target profile, and the confirmed
+    review value-alignment criterion.
+  - The phrase PLM/MES integration concept standard is treated as requiring
+    shared authoritative operational semantics for cross-system consumption, as
+    directly inferred from the confirmed review intent rather than from an
+    external manufacturing standard.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,165 @@
+schema_version: 1
+session_id: 20260716-dd3002c6
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml — 품목·BOM·라우팅·ECO 개정 모델
+    evidence_anchor: materialized-input.md:14-35, 55-75, 84-96
+    claim: 개정별 BOM과 라우팅의 유효기간을 보존할 구조가 없어 설계변경 시 과거·현재·미래 구성을 함께 표현할 수 없다.
+    what: Part에는 현재 rev와 최신 ECO만 있고, Assembly의 bom_lines와 Routing의 part_ref는 개정이나
+      유효기간 없이 품목에 직접 연결된다. ECO도 affected_parts와 단일 effective_date만 제공한다.
+    why: 신규 개정이 발효되거나 주간 동기화가 지연되는 동안 어느 BOM·라우팅이 어느 생산분에 유효한지 모델만으로 결정할 수 없다. 새 개정
+      수용 시 기존 연결을 덮어쓰거나 별도 비표준 필드를 추가해야 하므로 PLM/MES 간 이력 연속성과 생산 추적성이 깨질 수 있다.
+    how_to_fix: Part를 안정적인 품목 식별자로 유지하고 PartRevision, BomRevision, RoutingRevision과
+      valid_from/valid_to를 도입한다. ECO 변경 항목이 생성·대체하는 개정과 유효 조건을 명시하고, 현재 rev는
+      유효기간에서 계산되는 투영값으로 둔다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅·변경관리의 PLM/MES 통합 개념 기준 제공
+      failure_condition: 둘 이상의 품목 개정이 과거 이력, 현재 생산, 미래 발효분에 걸쳐 공존하거나 ECO 발효와 Part.rev
+        배치 동기화 사이에 시차가 생길 때
+      impact: 생산 오더가 적용해야 할 정확한 BOM과 라우팅을 기준 문서만으로 판정할 수 없어 변경 통제와 제조 이력에 대한 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:20-27
+        - materialized-input.md:55-75
+        - materialized-input.md:84-96
+    causal_path:
+      root_cause_candidate: 안정적인 품목 정체성과 시간에 따라 유효한 개정 객체를 분리하지 않고 현재 상태 필드와 직접 참조로 모델링했다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 신구 BOM·라우팅 개정의 동시 존재와 적용 범위를 표현할 속성 또는 엔티티가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-35
+            - materialized-input.md:55-61
+        - cause_id: evolution-candidate-001.cause-002
+          claim: ECO는 품목 목록과 날짜만 참조하며 변경 전후 개정이나 BOM·라우팅 버전을 연결하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:90-96
+        - cause_id: evolution-candidate-001.cause-003
+          claim: Part의 단일 rev/current_eco가 개정 상태를 대표하고 BOM·라우팅은 개정 없는 Part에 직접 연결된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:14-27
+            - materialized-input.md:55-60
+      unresolved_beyond_evidence: 실제 PLM/MES가 별도 개정·유효성 모델로 이 공백을 보완하는지는 현재 경계에서 확인되지 않았다.
+  - candidate_id: evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml — Routing.operations
+    evidence_anchor: materialized-input.md:47-61, 87-89
+    claim: 라우팅을 단일 ordered_list로 고정해 분기·병렬·재작업·조건부 경로 추가 시 기존 구조 변경이 필요하다.
+    what: Routing은 Operation 참조의 선형 순서만 표현하며 단계 간 전이 조건이나 대체 경로를 담는 개념이 없다.
+    why: 복합 제조 경로가 추가되면 ordered_list 의미를 비표준적으로 확장하거나 새 필드와 소비자 로직을 동시에 도입해야 한다. 기존
+      단순 라우팅과 확장 라우팅의 호환 규칙도 현재 모델에서 정의할 수 없다.
+    how_to_fix: RoutingStep과 StepTransition을 추가해 순서, 분기 조건, 병렬 합류, 재작업 전이를 표현한다. 단순
+      선형 라우팅은 이 그래프의 ordered projection으로 유지해 기존 소비자와의 호환 경로를 제공한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅 개념을 PLM/MES가 공유할 수 있는 확장 가능한 기준 제공
+      failure_condition: 제품 또는 공정에 둘 이상의 대체·조건부·병렬·재작업 경로가 필요할 때
+      impact: 새 공정 유형의 도입이 데이터 추가가 아니라 스키마와 소비자 계약 변경으로 번져 통합 확장 비용과 오해 위험이 커진다.
+      evidence_refs:
+        - materialized-input.md:47-61
+        - materialized-input.md:87-89
+    causal_path:
+      root_cause_candidate: 공정 순서를 확장 가능한 전이 구조가 아니라 Operation 참조의 선형 컨테이너로 고정했다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 비선형 라우팅의 경로와 조건을 기존 필드로 구별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:55-61
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Routing과 Operation 사이의 유일한 구조적 관계가 has_ordered이다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:87-89
+        - cause_id: evolution-candidate-002.cause-003
+          claim: Routing.operations가 ordered_list로 고정되어 전이 자체가 일급 개념이 아니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:55-61
+      unresolved_beyond_evidence: 검토 대상 제품군이 실제로 비선형 라우팅을 사용하는지는 현재 자료에 없다. finding은
+        해당 확장 시나리오에서의 구조적 실패를 지적한다.
+  - candidate_id: evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml — Part.uom 및 단위 변환
+    evidence_anchor: materialized-input.md:14-20, 98-100
+    claim: 폐쇄형 UOM 열거와 품목별 환산 모델 부재로 새 단위 또는 복수 단위 수용 시 스키마 수정과 현장 계산이 필요하다.
+    what: Part.uom은 ea, kg, m만 허용하며, 문서는 kg↔ea 같은 변환을 현장에서 수행한다고 명시한다.
+    why: 새 단위를 추가하면 온톨로지 enum과 각 소비자의 검증 계약을 바꿔야 한다. 동일 품목을 구매·재고·투입 단위로 달리 표현하면 환산
+      시점과 계수를 이력화할 수 없어 시스템 확장 후에도 수량 의미의 연속성이 보장되지 않는다.
+    how_to_fix: Uom을 확장 가능한 참조 마스터로 분리하고 품목별 기준 단위 및 유효기간을 가진 변환계수를 모델링한다. 기존
+      ea/kg/m 값은 초기 마스터 데이터로 이관한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 사이에서 품목과 BOM 수량 의미를 지속적으로 공유하는 기준 제공
+      failure_condition: 현재 세 단위 밖의 단위가 추가되거나 동일 품목에 서로 다른 구매·재고·생산 단위가 사용될 때
+      impact: 통상적인 단위 확장이 스키마 변경으로 번지고 환산 결과를 재현할 수 없어 BOM 소요량과 MES 투입량의 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:14-20
+        - materialized-input.md:98-100
+    causal_path:
+      root_cause_candidate: 측정 단위와 품목별 변환 규칙을 독립적으로 확장 가능한 기준 개념으로 모델링하지 않았다.
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 새 단위나 복수 단위가 필요한 품목은 현 구조에 데이터만 추가해 수용할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19-20
+            - materialized-input.md:100
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 허용 단위가 세 enum 값으로 닫혀 있고 변환은 모델 밖 현장 처리로 남아 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:100
+      unresolved_beyond_evidence: 실제 현장에서 필요한 추가 단위와 환산 규칙의 종류·빈도는 현재 경계에서 확인되지 않았다.
+  - candidate_id: evolution-candidate-004
+    target: manufacturing-bom-ontology.yaml — WorkCenter.capacity_per_shift
+    evidence_anchor: materialized-input.md:63-67
+    claim: 하나의 무단위 capacity_per_shift가 서로 다른 용량 차원을 겸해 설비·사업장 확장 시 기존 필드의 의미가 충돌한다.
+    what: capacity_per_shift는 숫자 하나지만 단위가 작업장마다 개수 또는 시간으로 달라질 수 있다고 정의돼 있다.
+    why: 새 WorkCenter를 추가할 때 같은 속성이 처리수량과 가용시간이라는 다른 의미를 가지므로 소비자는 작업장별 예외를 알아야 한다.
+      품목별 처리율, 교대 길이, 설비 캘린더 같은 용량 모델을 추가하면 기존 구조를 수정하거나 별도 병렬 필드를 누적하게 된다.
+    how_to_fix: Capacity를 값·단위·기간/교대·적용 대상이 명시된 개념으로 분리하고 WorkCenter가 하나 이상의
+      CapacityProfile을 참조하도록 한다. 기존 capacity_per_shift는 명시적 단위를 가진 기본 프로필로 변환한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: MES와 공유할 작업장 및 제조 운영 개념의 확장 가능한 기준 제공
+      failure_condition: 서로 다른 용량 차원을 쓰는 작업장이나 품목별·기간별 용량 계획을 통합할 때
+      impact: 동일 필드의 의미가 작업장에 따라 바뀌어 새 설비 추가가 예외 로직과 스키마 확장을 요구하고, 용량 비교와 계획 결과의 해석
+        가능성이 낮아진다.
+      evidence_refs:
+        - materialized-input.md:63-67
+    causal_path:
+      root_cause_candidate: 용량의 수치와 측정 차원·적용 기간을 분리하지 않고 다형적 의미를 단일 숫자 필드에 부여했다.
+      root_cause_step_id: evolution-candidate-004.cause-002
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: 추가되는 작업장의 capacity_per_shift를 공통 방식으로 해석하거나 비교할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63-67
+        - cause_id: evolution-candidate-004.cause-002
+          claim: capacity_per_shift의 단위가 개수 또는 시간으로 작업장마다 달라질 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+      unresolved_beyond_evidence: 실제 MES에 별도 용량 단위와 캘린더 모델이 있는지는 현재 검토 경계에서 확인되지 않았다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준은 동일 품목의 복수 개정과 그에 대응하는 BOM·라우팅 이력을 구별해야 한다는 변경 시나리오를 사용했다.
+  - 미래 제품 또는 공정에서 분기·병렬·재작업 라우팅이 필요할 수 있다는 조건부 확장 시나리오를 사용했다.
+  - 현재 열거에 없는 측정 단위와 서로 다른 용량 차원의 작업장이 추가될 수 있다는 조건부 확장 시나리오를 사용했다.
+  - session_domain이 none이므로 특정 제조 표준이나 외부 도메인 문서의 규칙은 적용하지 않았다.
+validation:
+  unaddressable_candidates: []

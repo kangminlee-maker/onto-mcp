@@ -1,0 +1,60 @@
+schema_version: 1
+session_id: 20260716-7f1c6ba1
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml의 Report 상태 모델
+    evidence_anchor: materialized-input.md:80-84, 121-123
+    claim: Result가 corrected인 상태에서 Report가 release되면 동일한 Report.result_status에
+      finalized와 amended가 동시에 요구된다.
+    what: released_at 기록은 Report를 finalized로 만들지만, Result.status=corrected 조건은 같은 단일
+      enum 속성을 amended로 만들도록 의무화한다. 두 조건의 우선순위나 상호 배제 조건이 없다.
+    why: 모델은 corrected가 release 이전이나 같은 시점에 발생하는 경로를 금지하지 않는다. 따라서 두 조건이 겹치는 허용 경로에서
+      값 하나만 가질 수 있는 result_status가 서로 다른 두 값을 동시에 만족해야 한다. 또한 'amended가 되어야 한다'는
+      의무와 야간 1회 동기화는 즉시성 또는 허용 지연 시간이 정의되지 않아 배치 전 상태의 계약 준수 여부도 결정할 수 없다. 임상의가
+      신뢰한다고 명시된 권위 값이므로 EMR/LIS가 서로 다른 상태를 선택할 수 있다.
+    how_to_fix: Report 상태 전이표에 조건 우선순위와 시점을 명시한다. 예를 들어 corrected 결과가 있으면 release 시
+      amended로 설정하고, release 후 correction은 finalized→amended로 전이하도록 정의하며, 배치 지연이
+      허용된다면 최대 지연 시간과 그동안의 표시 상태를 별도로 규정한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 임상의가 신뢰하는 Report.result_status의 개념 권위 계약
+      failure_condition: Result.status가 corrected인 상태에서 Report.released_at이 기록되거나 두
+        사건이 같은 처리 구간에 발생할 때
+      impact: 두 시스템이 finalized와 amended 중 서로 다른 값을 정당하게 선택할 수 있어 권위 상태가 결정적이지 않고 임상의에게
+        오래된 최종 상태가 노출될 수 있다.
+      evidence_refs:
+        - materialized-input.md:80-84
+        - materialized-input.md:123
+    causal_path:
+      root_cause_candidate: 동시에 참이 될 수 있는 release 조건과 correction 조건이 같은 단일 상태 속성에 서로
+        다른 필수 값을 할당하지만 우선순위·상호 배제·시간 양상이 정의되지 않았다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 동일한 Report.result_status가 release 조건에서는 finalized, correction 조건에서는
+            amended로 요구된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:80-84
+            - materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-002
+          claim: corrected와 release의 순서를 제한하는 규칙이나 충돌 시 우선순위가 없어 두 조건의 중첩 경로가 허용된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+        - cause_id: logic-candidate-001.cause-003
+          claim: 야간 동기화 문구가 amended 의무의 즉시성 또는 허용 지연 시간을 형식화하지 않아 충돌을 해소하지 못한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:123
+      unresolved_beyond_evidence: corrected가 운영상 반드시 release 이후에만 발생하는지는 경계 내 문서에 규정되어
+        있지 않다. 그러한 외부 관행이 있더라도 권위 문서 자체에 선행조건으로 명시되어야 충돌이 닫힌다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - enum 속성 Report.result_status는 한 시점에 하나의 값만 가진다.
+  - 문서에 명시되지 않은 corrected와 release 간 사건 순서 제한은 가정하지 않는다.
+validation:
+  unaddressable_candidates: []

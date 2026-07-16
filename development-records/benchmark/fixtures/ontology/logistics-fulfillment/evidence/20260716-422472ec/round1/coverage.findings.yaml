@@ -1,0 +1,301 @@
+schema_version: 1
+session_id: 20260716-422472ec
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: OrderLine 및 fulfills 관계
+    evidence_anchor: "materialized-input.md: OrderLine 주석;
+      relations.fulfills(Shipment→Order) note"
+    claim: 부분 출하를 표현할 주문행 단위 충족 개념이 누락되어 있다.
+    what: Shipment가 어떤 OrderLine의 수량을 얼마나 충족했는지 표현하는 할당·충족 엔티티 또는 관계가 없다.
+    why: 현재 관계는 Shipment와 Order만 연결한다. 따라서 한 주문행의 분할 출하, 여러 주문행의 합배송, 미충족 잔량을 온톨로지
+      안에서 재구성할 수 없어 주문 충족 기준 문서의 핵심 범위를 충족하지 못한다.
+    how_to_fix: OrderLineFulfillment 같은 연결 개념을 추가해 order_line_ref, shipment_ref,
+      fulfilled_qty, quantity_uom과 생성·취소 시각을 표현한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문→출하 전 과정의 WMS/TMS/ERP 통합 개념 기준 제공
+      failure_condition: 부분 출하, 합배송 또는 한 주문행의 다회 출하가 발생할 때
+      impact: 주문행별 출하량과 잔량을 시스템 간 일관되게 대사하거나 추적할 수 없다.
+      evidence_refs:
+        - "OrderLine.attributes 주석: 실제 충족 화물/구간 참조 부재"
+        - "relations.fulfills: Shipment→Order이며 OrderLine 단위 매핑 없음"
+    causal_path:
+      root_cause_candidate: 충족 관계의 최소 단위가 Order로만 모델링되어 있다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: 부분 출하에서 주문행별 실제 출하량을 추적할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - OrderLine 주석
+        - cause_id: coverage-candidate-001.cause-002
+          claim: Shipment와 OrderLine 사이의 수량 포함 연결 개념이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - relations.fulfills
+            - OrderLine.attributes
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 유일한 충족 관계가 Shipment→Order 단위로 정의되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - relations.fulfills.from/to/note
+      unresolved_beyond_evidence: 외부 시스템에 별도 매핑이 있을 수 있으나, 선언된 온톨로지에는 포함되지 않는다.
+  - candidate_id: coverage-candidate-002
+    target: InventoryRecord 및 InventoryAggregate
+    evidence_anchor: "materialized-input.md: InventoryRecord.quantity_on_hand 주석;
+      InventoryAggregate.available_qty note; inventory_rules[0]"
+    claim: 재고의 유효시점·변동 이력·예약/할당 차원이 누락되어 있다.
+    what: 현재 수량과 야간 스냅샷만 있고 as_of, 유효기간, 재고 변동, 예약·할당·해제 및 가용수량 구성 요소가 없다.
+    why: 일중 주문도 매일 밤 생성된 available_qty를 읽도록 되어 있어 주문 시점 재고와 가용성 판단을 재구성할 수 없다. 수량
+      차이가 판매, 예약, 피킹, 조정 중 무엇에서 발생했는지도 표현할 수 없다.
+    how_to_fix: 시점이 있는 InventoryBalance와 불변 InventoryMovement/Reservation 개념을 추가하고,
+      available_qty의 산식·기준시각·포함 수량 범주를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문 할당과 재고를 WMS/ERP 간 일관되게 해석하는 기준 제공
+      failure_condition: 야간 스냅샷 이후 입출고·예약·조정이 발생하거나 과거 주문의 할당 근거를 확인할 때
+      impact: 가용재고 과대판단, 중복 할당 및 사후 대사 불가능 위험이 생긴다.
+      evidence_refs:
+        - "InventoryRecord: as_of 개념 부재 주석"
+        - "InventoryAggregate.available_qty: 매일 밤 스냅샷"
+        - "integrity_rules: 일중 주문도 available_qty 확인"
+    causal_path:
+      root_cause_candidate: 재고가 시점과 원인 사건을 가진 장부가 아니라 현재 숫자와 일일 집계로만 모델링되어 있다.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: 주문 시점의 재고와 할당 근거를 재구성할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - InventoryRecord 주석
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 가용재고는 일일 스냅샷인데 일중 주문도 동일 값을 사용한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - InventoryAggregate.available_qty note
+            - integrity_rules[0]
+        - cause_id: coverage-candidate-002.cause-003
+          claim: 재고 유효시점, 변동, 예약 및 해제 개념이 정의되어 있지 않다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - InventoryRecord.attributes
+            - InventoryAggregate.attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: Sku 및 수량·중량 속성
+    evidence_anchor: "materialized-input.md: Sku.weight/dims; OrderLine.qty;
+      Shipment.total_weight; InventoryRecord.quantity_on_hand;
+      InventoryAggregate.available_qty"
+    claim: 물리량과 재고수량에 단위 및 변환 기준이 누락되어 있다.
+    what: weight, total_weight, qty, quantity_on_hand, available_qty가 단위 없는 number이고
+      dims는 단위 없는 문자열이다. 특히 weight는 창고별 kg/lb 관례를 그대로 사용한다고 명시한다.
+    why: 서로 다른 소스의 값이 같은 속성에 들어가도 의미가 구분되지 않아 합산, 비교, 적재계획 및 재고 대사가 잘못될 수 있다.
+    how_to_fix: Quantity/Measurement 구조를 재사용해 value, uom, 기준단위 변환 규칙을 표현하고,
+      dimensions는 length/width/height 각각의 단위 있는 값으로 분리한다. SKU의 재고 기준단위와 포장단위 환산도
+      정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP가 공유할 물류 수량·중량 의미의 기준 제공
+      failure_condition: kg/lb 또는 서로 다른 포장·치수 단위를 사용하는 시스템의 데이터가 통합될 때
+      impact: 수량과 중량이 형식상 유효해도 의미상 비교 불가능하여 운임, 적재 및 재고 계산을 훼손한다.
+      evidence_refs:
+        - "Sku.weight note: kg 또는 lb를 그대로 사용"
+        - "Sku.dims note: 소스 시스템마다 단위가 다름"
+        - "Shipment.total_weight: OrderLine 중량 합"
+        - 수량 속성들이 모두 단위 없는 number
+    causal_path:
+      root_cause_candidate: 측정값을 값과 단위의 결합 개념이 아닌 원시 number/string으로 모델링했다.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: 통합된 물리량과 수량을 안전하게 합산·비교할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - Sku.weight/dims notes
+            - Shipment.total_weight note
+        - cause_id: coverage-candidate-003.cause-002
+          claim: 동일 속성이 서로 다른 단위의 값을 허용한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Sku.weight note
+            - Sku.dims note
+        - cause_id: coverage-candidate-003.cause-003
+          claim: 공통 측정단위 및 변환 개념이 정의되어 있지 않다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities 전체의 수량·중량 속성
+      unresolved_beyond_evidence: SKU 수량이 항상 개수인지 또는 중량·포장 단위도 허용하는지는 경계 내 자료로 확정할 수 없다.
+  - candidate_id: coverage-candidate-004
+    target: Order.fulfillment_status 및 Shipment.status
+    evidence_anchor: "materialized-input.md: Order.fulfillment_status values;
+      Shipment.status values/note; TrackingEvent.event_type values"
+    claim: 주문과 화물 lifecycle이 정상 배송 완료 경로에 편중되어 종결·예외·역방향 흐름을 포괄하지 못한다.
+    what: 주문에는 취소, 거절, 보류, 백오더, 부분충족, 반품 상태가 없고, 화물에는 취소, 배송실패, 분실, 반송 상태가 없다.
+      TrackingEvent의 exception을 해소하거나 Shipment lifecycle에 반영하는 개념도 없다.
+    why: 실제 예외가 발생하면 기존 상태에 억지로 남기거나 delivered로 잘못 종결해야 하며, 완료 후 반품·정정도 표현할 수 없다.
+    how_to_fix: Order와 Shipment 각각에 정상·취소·실패·반품 종결 경로를 포함한 전이 모델을 정의하고, 예외의 발생·해결 및
+      완료 후 reversal/return 사건을 별도 사건으로 표현한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문·출하·배송 상태를 통합 시스템 간 공통 lifecycle로 제공
+      failure_condition: 취소, 부분충족, 배송실패, 분실, 반송 또는 배송 완료 후 반품이 발생할 때
+      impact: 운영 상태를 공통 모델에 손실 없이 투영할 수 없고 후속 처리와 책임 추적이 불명확해진다.
+      evidence_refs:
+        - "Order.fulfillment_status: received부터 delivered까지만 존재"
+        - "Shipment.status: created부터 delivered까지만 존재하며 delivered가 최종"
+        - TrackingEvent.event_type에는 exception이 있으나 대응 Shipment 상태 없음
+    causal_path:
+      root_cause_candidate: 상태 모델이 정상적인 정방향 배송 완료 시나리오만 열거한다.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: 예외·취소·반품 흐름을 상태 모델에 표현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - Order.fulfillment_status values
+            - Shipment.status values
+        - cause_id: coverage-candidate-004.cause-002
+          claim: TrackingEvent에는 exception이 있지만 Shipment lifecycle에는 대응 상태나 해결 단계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - TrackingEvent.event_type values
+            - Shipment.status values
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 두 lifecycle 모두 정상 진행 단계와 delivered 종결만 정의한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Order.fulfillment_status
+            - Shipment.status note
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: InventoryRecord.quantity_on_hand 및 재고 진실 notes
+    evidence_anchor: "materialized-input.md: InventoryRecord.quantity_on_hand note; notes[0]"
+    claim: WMS 실물 수량과 ERP 회계 수량을 하나의 속성에 병행시키면서 값별 권위와 대사 결과 개념이 누락되어 있다.
+    what: quantity_on_hand 한 필드에 WMS와 ERP가 각자 값을 가진다고 서술하지만, source_system, 수량 종류,
+      authoritative_for, 대사 차이, 조정 근거가 없다.
+    why: WMS와 ERP가 각각 다른 관점의 진실이라는 설명만으로는 어떤 소비자가 어느 값을 사용해야 하는지 결정할 수 없다. 야간에 ERP
+      기준으로 맞춘다는 규칙은 WMS 실물 권위 설명과도 구분 없이 섞인다.
+    how_to_fix: PhysicalInventoryBalance와 AccountingInventoryBalance를 구분하거나 하나의
+      Balance에 balance_type과 source_authority를 추가한다. Reconciliation/Adjustment에
+      이전값, 새값, 양측 값, 기준시각, 근거를 기록한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/ERP 간 재고 개념과 권위의 통합 기준 제공
+      failure_condition: 두 시스템의 수량이 불일치하거나 소비자가 재고 값을 선택해야 할 때
+      impact: 동일 이름의 값이 서로 다른 의미와 권위를 가져 자동화된 선택·대사·감사가 불가능하다.
+      evidence_refs:
+        - "InventoryRecord.quantity_on_hand note: WMS와 ERP가 각자 값을 보유"
+        - "notes[0]: WMS는 실물, ERP는 회계 수량 기준"
+        - "notes[0]: 야간 배치가 불일치 조정"
+    causal_path:
+      root_cause_candidate: 서로 다른 재고 관점과 권위를 단일 quantity_on_hand 개념으로 축약했다.
+      root_cause_step_id: coverage-candidate-005.cause-003
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: 재고 불일치 시 사용할 값과 조정 결과를 온톨로지에서 판별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - InventoryRecord.quantity_on_hand note
+            - notes[0]
+        - cause_id: coverage-candidate-005.cause-002
+          claim: WMS 실물 수량과 ERP 회계 수량에 별도 유형·출처·권위 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - InventoryRecord.attributes
+        - cause_id: coverage-candidate-005.cause-003
+          claim: 두 장부의 값이 하나의 quantity_on_hand 속성으로 모델링되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - InventoryRecord.quantity_on_hand
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-006
+    target: Shipment.eta
+    evidence_anchor: "materialized-input.md: Shipment.eta note; notes[1]"
+    claim: ETA의 출처별 값, 유효시점, 변경 이력 및 수동 조정 감사 증거가 누락되어 있다.
+    what: 캐리어 API 값과 운영팀 수기 조정값이 단일 eta에 섞이며, 조정 행위자·시각·이유·원본값을 표현하지 않는다.
+    why: 최종 표시값이 운영팀 판단을 따른다는 우선순위만 있고 그 판단의 증거가 없어 ETA 변경의 재현, 감사, 정확도 평가와 잘못된 수동
+      입력의 복구가 어렵다.
+    how_to_fix: EtaEstimate/EtaRevision 개념에 value, source, observed_at, valid_from,
+      supersedes, actor_ref, reason을 추가하고 최종 표시 ETA를 이 이력에서 결정되는 파생값으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 배송 예측 값을 TMS·캐리어·운영 시스템 간 일관되게 공유
+      failure_condition: 캐리어 ETA와 수동 ETA가 다르거나 운영팀이 값을 여러 번 수정할 때
+      impact: 표시값의 출처와 변경 근거를 확인하거나 과거 예측을 재구성할 수 없어 운영 판단의 신뢰가 약화된다.
+      evidence_refs:
+        - "Shipment.eta note: 운영팀이 수기로 조정"
+        - "notes[1]: 캐리어 API 값과 수기 조정값이 섞임"
+        - "notes[1]: 최종 표시값은 운영팀 판단"
+    causal_path:
+      root_cause_candidate: ETA를 출처와 시간성을 가진 추정 이력이 아니라 덮어쓰는 단일 값으로 모델링했다.
+      root_cause_step_id: coverage-candidate-006.cause-003
+      steps:
+        - cause_id: coverage-candidate-006.cause-001
+          claim: 현재 ETA의 출처와 수동 변경 근거를 추적할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - Shipment.eta note
+            - notes[1]
+        - cause_id: coverage-candidate-006.cause-002
+          claim: 캐리어 값과 운영팀 값이 하나의 eta 속성에 혼합된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - notes[1]
+        - cause_id: coverage-candidate-006.cause-003
+          claim: ETA revision 및 감사 증거 개념이 정의되어 있지 않다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Shipment.attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-007
+    target: TrackingEvent.event_type와 상태 통합 규칙
+    evidence_anchor: "materialized-input.md: TrackingEvent.event_type note; integrity_rules[1]"
+    claim: 캐리어 이벤트와 내부 주문·화물 상태 사이의 표준 매핑 및 매핑 버전 개념이 누락되어 있다.
+    what: 캐리어별 코드와 Shipment.status 매핑을 각 연동에 맡기고, OMS·TMS·캐리어 상태가 독립 관리된다고만 정의한다.
+    why: 동일 이벤트가 연동마다 다른 내부 상태로 해석될 수 있으며, 매핑 변경 후 과거 이벤트가 어떤 규칙으로 처리됐는지 재현할 수 없다.
+    how_to_fix: CarrierEventMapping을 정식 개념으로 추가해 carrier, external_code,
+      canonical_event/status, 유효기간, 버전, 우선순위 및 미매핑 처리 규칙을 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: OMS/TMS/캐리어 간 상태 의미의 통합 기준 제공
+      failure_condition: 여러 캐리어 또는 여러 연동이 같은 Shipment 상태를 갱신할 때
+      impact: 통합 기준 문서가 상태 변환을 규정하지 못해 연동별 의미 드리프트와 상충 상태를 허용한다.
+      evidence_refs:
+        - "TrackingEvent.event_type note: 매핑은 각 연동에서 알아서 함"
+        - "integrity_rules[1]: 세 상태를 각 시스템이 독립 관리"
+    causal_path:
+      root_cause_candidate: 외부 이벤트를 내부 표준 상태로 정규화하는 매핑을 온톨로지 범위 밖의 연동 구현에 위임했다.
+      root_cause_step_id: coverage-candidate-007.cause-003
+      steps:
+        - cause_id: coverage-candidate-007.cause-001
+          claim: 캐리어 이벤트의 내부 상태 해석이 연동마다 달라질 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - TrackingEvent.event_type note
+        - cause_id: coverage-candidate-007.cause-002
+          claim: 세 상태 체계가 독립 관리되지만 이를 연결하는 공통 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - integrity_rules[1]
+        - cause_id: coverage-candidate-007.cause-003
+          claim: 매핑을 각 연동이 개별 결정하도록 명시한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - TrackingEvent.event_type note
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 검토 범위는 문서가 선언한 국내 주문→재고 할당→출하→배송 흐름이며, 명시적으로 제외된 국제·통관 배송은 누락으로 평가하지 않았다.
+  - 부분 출하, 재고 변동, 취소·배송 예외, 단위 변환은 선언된 WMS/TMS/ERP 통합 목적을 달성하기 위해 표현되어야 하는 운영
+    차원으로 보았다.
+validation:
+  unaddressable_candidates: []

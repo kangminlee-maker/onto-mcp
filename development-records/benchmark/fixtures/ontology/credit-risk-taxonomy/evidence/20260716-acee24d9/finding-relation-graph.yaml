@@ -1,0 +1,213 @@
+schema_version: 1
+session_id: 20260716-acee24d9
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-005
+    relation: same_root_candidate
+    root_hypothesis: Manual report-side rating adjustment is modeled as an allowed
+      mutation of Exposure.risk_grade instead of as a governed override event
+      with authority, approval, reason, timing, and audit evidence.
+    shared_cause: null
+    rationale: "Both findings target the same manual adjustment surface: finding-001
+      frames it as a shared-authority conflict between engine and reporting
+      grades, while finding-005 frames the same modeling choice as missing
+      auditability for the adjustment/control action."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: Rating conversion is delegated to consuming systems rather than
+      represented as a versioned, owned ontology concept, so shared grade
+      semantics can diverge as scales evolve.
+    shared_cause: null
+    rationale: "The claims, failure modes, and proposed actions substantially
+      overlap: both identify three rating scales, consumer-side conversion,
+      missing canonical RatingScale/RatingMapping authority, and engine/report
+      inconsistency under change."
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-002
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: The ontology lacks a canonical semantic mapping and authority
+      boundary for Borrower.internal_rating, RiskRating.grade, and
+      Exposure.risk_grade.
+    shared_cause: null
+    rationale: "Finding-002 states the shared-standard problem in value/authority
+      terms, while finding-015 states the same problem in semantic terms:
+      consumers must locally interpret or convert three non-equivalent grade
+      concepts."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: Historical replay and future rating-scale evolution both fail
+      if rating mappings are not modeled as versioned authoritative concepts.
+    shared_cause:
+      cause_claim: The ontology does not represent rating conversion as a versioned,
+        owned mapping/assignment concept inside the target artifact.
+      from_cause_ref: finding-004.cause-004
+      to_cause_ref: finding-008.cause-003
+    rationale: Finding-004 emphasizes reconstructing past grades; finding-008
+      emphasizes continuity under future scale changes. Both depend on the same
+      missing versioned rating mapping authority.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-004
+    to_finding_id: finding-005
+    relation: same_root_candidate
+    root_hypothesis: Rating changes, mappings, and report-side overrides are not
+      modeled as time-bound, auditable events distinct from current grade
+      attributes.
+    shared_cause: null
+    rationale: Finding-004 focuses on effective periods/history for replay, while
+      finding-005 focuses on actor, approval, and evidence. Both point to the
+      same absent event/version model for grade changes and overrides.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-010
+    to_finding_id: finding-008
+    relation: enables
+    root_hypothesis: Closed inline grade enums make the missing versioned rating
+      conversion authority more brittle when rating scales evolve.
+    shared_cause: null
+    rationale: Finding-010 is broader than ratings, but its closed enum concern
+      includes RiskRating.grade and Exposure.risk_grade. That structural choice
+      enables the evolution failure described in finding-008 because new grades
+      require schema edits rather than additive taxonomy or mapping records.
+    confidence: medium
+  - relation_id: rel-007
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: duplicates
+    root_hypothesis: Exposure aggregation and limit utilization lack canonical
+      temporal snapshot and FX valuation authority, allowing stale or
+      system-specific utilization/compliance results.
+    shared_cause: null
+    rationale: Both findings cite month-end ExposureAggregate storage, intraday
+      omissions, and system-local FX tables. Finding-003 frames the current
+      authority drift; finding-009 frames the same issue as evolution risk under
+      intraday, currency, and cutoff changes.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-003
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: Limit utilization cannot be shared reliably because its input
+      values and currency conversion basis lack a single source-of-record and
+      timing policy.
+    shared_cause:
+      cause_claim: The ontology leaves limit, aggregate, and FX valuation authority
+        distributed across systems rather than closing it with canonical source,
+        priority, and time concepts.
+      from_cause_ref: finding-003.cause-004
+      to_cause_ref: finding-006.cause-004
+    rationale: Finding-003 focuses on RiskAppetite compliance drift from batch
+      timing and FX; finding-006 focuses on source authority for Limit and FX
+      inputs. Both are driven by missing authority/time concepts for the same
+      utilization calculation.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-009
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: The ontology combines stored exposure aggregates, approved
+      limits, and FX conversion without canonical snapshot/version/source
+      metadata for replayable utilization calculations.
+    shared_cause: null
+    rationale: Finding-009 highlights temporal versioning and future continuity,
+      while finding-006 highlights source-of-record and FX authority. Both
+      affect the same Limit utilization rule and require snapshot/source
+      metadata to resolve.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-016
+    to_finding_id: finding-017
+    relation: same_root_candidate
+    root_hypothesis: RiskAppetite compliance is not modeled as a separate evaluation
+      relation/result that binds a threshold to a scoped ExposureAggregate at a
+      time.
+    shared_cause: null
+    rationale: Finding-016 identifies semantic conflation of policy threshold and
+      compliance result; finding-017 identifies the structural orphaning that
+      leaves RiskAppetite unreachable from ExposureAggregate. Both are resolved
+      by an explicit compliance evaluation concept or relation.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-003
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: RiskAppetite breach/compliance cannot be authoritative without
+      a time-scoped evaluation result over a defined exposure aggregate and
+      valuation basis.
+    shared_cause:
+      cause_claim: RiskAppetite compliance is derived from ExposureAggregate threshold
+        comparison but lacks explicit evaluation time, subject, and authority
+        semantics.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-016.cause-003
+    rationale: Finding-003 concerns divergent compliance status due to stale
+      aggregates and FX; finding-016 concerns ambiguous status semantics. Both
+      share the missing time-scoped compliance evaluation concept.
+    confidence: medium
+  - relation_id: rel-012
+    from_finding_id: finding-011
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: The ontology uses subtype inheritance for Collateral even
+      though Collateral is a securing asset related to Exposure, not a kind of
+      Exposure.
+    shared_cause: null
+    rationale: Finding-011 frames the issue as evolution risk for collateral
+      lifecycle expansion; finding-012 frames it as a type-level logic conflict.
+      Both rely on the same Collateral is_a Exposure plus Exposure secured_by
+      Collateral modeling choice.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-012
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: Collateral is incorrectly typed as an Exposure while also being
+      defined and related as the asset securing an Exposure.
+    shared_cause: null
+    rationale: Both findings identify the same contradiction between Collateral's
+      definition/relation role and its is_a Exposure declaration. The difference
+      is lens framing, not substance.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-011
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: Exposure and collateral asset lifecycles are conflated by
+      making Collateral inherit from Exposure instead of modeling it as a
+      separate support asset linked to exposures.
+    shared_cause: null
+    rationale: Finding-013 states the semantic kind error; finding-011 describes its
+      future extension consequences. They share the same root modeling defect.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-014
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: Collateralized-risk measures are not modeled through a distinct
+      exposure-collateral valuation relationship with formula, timing, and
+      lifecycle metadata.
+    shared_cause:
+      cause_claim: The ontology does not separate exposure, collateral asset, and
+        their valuation/link semantics into explicit concepts sufficient for
+        collateral-specific lifecycle and derived ratio behavior.
+      from_cause_ref: finding-014.cause-003
+      to_cause_ref: finding-011.cause-003
+    rationale: Finding-014 concerns LTV drifting from Exposure.amount and
+      Collateral.appraised_value because the ratio lacks formula/timestamp
+      authority; finding-011 concerns collateral lifecycle constraints from the
+      exposure subtype model. Both point to an under-modeled exposure-collateral
+      valuation/link concept, though the findings are not duplicates.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-007
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

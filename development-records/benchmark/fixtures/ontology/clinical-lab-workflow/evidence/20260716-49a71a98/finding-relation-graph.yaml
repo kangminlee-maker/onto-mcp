@@ -1,0 +1,246 @@
+schema_version: 1
+session_id: 20260716-49a71a98
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-002
+    to_finding_id: finding-004
+    relation: duplicates
+    root_hypothesis: The critical-value notification issue is the same defect if the
+      ontology's only in-scope notification representation is a boolean while
+      recipient/time/acknowledgement evidence is outside the authority model.
+    shared_cause: null
+    rationale: Both findings target CriticalValue notification modeling, cite the
+      modeled `notified` boolean and external phone log evidence, and conclude
+      that EMR/LIS consumers lack authoritative notification evidence for audit
+      and safety-critical workflow handling.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-004
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: CriticalValue was modeled as a threshold/flag object without an
+      attached notification/result workflow event, causing both evidence
+      coverage loss and graph disconnection.
+    shared_cause: null
+    rationale: "Finding-004 identifies the missing notification evidence concept;
+      finding-018 identifies that CriticalValue is omitted from workflow
+      relations. Both follow from the same modeling choice: keeping
+      CriticalValue and notification state outside the result/report workflow
+      graph."
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-002
+    to_finding_id: finding-016
+    relation: same_root_candidate
+    root_hypothesis: The model conflates critical threshold, actual critical result,
+      and notification completion in one CriticalValue concept, making
+      notification evidence insufficient and the concept semantically ambiguous.
+    shared_cause: null
+    rationale: Finding-002 focuses on the lossy notification boolean and external
+      evidence; finding-016 explains why the CriticalValue concept itself mixes
+      threshold range, patient-result criticality, and notified state. The
+      semantic conflation plausibly produces the auditability gap.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-016
+    to_finding_id: finding-018
+    relation: enables
+    root_hypothesis: If CriticalValue combines threshold and workflow notification
+      state without a separate critical-result or notification-event concept,
+      the relation graph has no clear entity to connect to Result/Report.
+    shared_cause: null
+    rationale: Finding-016's root cause is the merged CriticalValue concept.
+      Finding-018's structural gap is enabled by that merge because the model
+      lacks a distinct workflow event or critical-result instance that could
+      naturally attach to Result, Report, Staff, or notification records.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: symptom_of
+    root_hypothesis: The stale clinician-facing report-status window is a symptom of
+      the broader missing canonical status authority/projection model between
+      Result.status and Report.result_status.
+    shared_cause: null
+    rationale: "Finding-001 describes the operational failure during nightly
+      correction synchronization. Finding-007 generalizes the cause: duplicated
+      status carriers without explicit authority, freshness, or synchronization
+      event semantics."
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-007
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: Result and Report status are duplicated as separate enum
+      carriers without a canonical mapping/projection model, so both current
+      synchronization safety and future status evolution break.
+    shared_cause: null
+    rationale: Finding-007 is a coverage/status-authority issue and finding-010 is
+      an evolution/status-continuity issue. Both cite the two status enum
+      domains and nightly corrected-to-amended synchronization rule as the
+      source of integration risk.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-012
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: The two findings report the same defect if Result.status and
+      Report.result_status are claimed to maintain the same information but use
+      non-identical enums without a total equivalence mapping.
+    shared_cause: null
+    rationale: Both findings center on non-identical status vocabularies, the
+      same-information claim, clinician-facing authority wording, and the
+      partial corrected-to-amended synchronization rule. The lens framing
+      differs, but the defect and remedy are effectively the same.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-007
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: The status authority coverage gap and formal synchronization
+      underspecification share the split status-domain design as their cause.
+    shared_cause:
+      cause_claim: The ontology splits one declared status information concept across
+        Result.status and Report.result_status without a complete
+        authority/projection/equivalence model.
+      from_cause_ref: finding-007.cause-004
+      to_cause_ref: finding-012.cause-003
+    rationale: Finding-007 emphasizes missing canonical authority, staleness, and
+      sync event coverage; finding-012 emphasizes the missing total equivalence
+      constraint. Both causal paths terminate in the absence of an explicit
+      model tying the duplicated status fields together.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-010
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: The status vocabulary mismatch is the same underlying concept
+      split that causes both semantic ambiguity and future evolution burden.
+    shared_cause: null
+    rationale: Finding-010 frames the duplicate enums as an extensibility problem;
+      finding-013 frames them as a semantic authority problem. Both depend on
+      different status enum names, separate authority wording, and only partial
+      synchronization semantics.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-011
+    to_finding_id: finding-019
+    relation: shared_cause_candidate
+    root_hypothesis: "Order completion is under-modeled because the rule depends on
+      Results without a stable, explicit completion basis: both the result set
+      and the result terminal-state semantics are insufficiently specified."
+    shared_cause:
+      cause_claim: The ontology defines Order.completed by an aggregate over
+        Result.status while omitting the structural or state semantics needed to
+        evaluate that aggregate unambiguously over time.
+      from_cause_ref: finding-011.cause-001
+      to_cause_ref: finding-019.cause-001
+    rationale: Finding-011 shows the aggregate predicate can become false after a
+      permitted correction; finding-019 shows the aggregate's Result set is not
+      structurally scoped to Order. Both attack the same completion rule from
+      temporal/state and graph-scope angles.
+    confidence: medium
+  - relation_id: rel-011
+    from_finding_id: finding-001
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: Correction is modeled as a late mutation to Result.status
+      without a full post-release amendment workflow, producing both stale
+      report authority and inconsistent completed-order semantics.
+    shared_cause:
+      cause_claim: The ontology permits Result.status to change to corrected after
+        release/completion without modeling all downstream state transitions
+        immediately and explicitly.
+      from_cause_ref: finding-001.cause-002
+      to_cause_ref: finding-011.cause-002
+    rationale: Finding-001 concerns the delayed Report.result_status update after
+      correction; finding-011 concerns the effect of the same correction on an
+      already completed Order. Both rely on the correction event being
+      under-specified downstream.
+    confidence: medium
+  - relation_id: rel-012
+    from_finding_id: finding-003
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: TAT is defined as a cross-system metric but left outside the
+      ontology's authoritative, versioned rule model, causing both authority
+      drift and historical reconstruction risk.
+    shared_cause:
+      cause_claim: TAT is described in notes while its executable calculation formula
+        is maintained externally by the dashboard team, with no ontology-owned
+        calculation-rule concept or version.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-006.cause-003
+    rationale: Finding-003 focuses on shared-authority drift from dashboard-owned
+      TAT calculation. Finding-006 includes TAT among time-dependent concepts
+      lacking effective-period/history coverage. Both cite the same external
+      formula ownership.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-008
+    to_finding_id: finding-017
+    relation: duplicates
+    root_hypothesis: The Test/Assay issue is the same defect if Assay is a separate
+      execution concept but has no declared Test-to-Assay or Result-to-Assay
+      relation and new items must be registered in both places.
+    shared_cause: null
+    rationale: Finding-008 identifies missing authority/mapping for dual Test and
+      Assay registration; finding-017 identifies Assay as structurally orphaned
+      from the workflow graph. Both rely on the absence of Assay relations and
+      the note that new items are registered in both Test and Assay.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-006
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: Mutable lab reference data is modeled as current-state catalog
+      entities without authoritative mapping/version concepts, producing both
+      historical reconstruction gaps and Test/Assay expansion drift.
+    shared_cause:
+      cause_claim: Test and Assay are modeled as separate catalog/current execution
+        units without effective dates, version, history, or a canonical mapping
+        authority.
+      from_cause_ref: finding-006.cause-001
+      to_cause_ref: finding-008.cause-003
+    rationale: Finding-006 addresses unversioned catalog/reference data; finding-008
+      addresses the absent Test-Assay mapping. The shared cause is the lack of a
+      governed catalog authority model for Test/Assay continuity across time and
+      execution variants.
+    confidence: medium
+  - relation_id: rel-015
+    from_finding_id: finding-009
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: Assay is modeled separately but not normalized into shared
+      catalog relations, so both specimen-kind compatibility and Test/Assay
+      traversal depend on local string or external joins.
+    shared_cause:
+      cause_claim: Assay is a separate execution concept whose key compatibility
+        fields are not tied to shared authoritative catalog relations.
+      from_cause_ref: finding-009.cause-002
+      to_cause_ref: finding-017.cause-002
+    rationale: Finding-009 shows Assay.specimen_kind uses a free string instead of
+      the shared Specimen/Test specimen vocabulary; finding-017 shows Assay has
+      no relation to the workflow graph. Both indicate Assay-side concepts were
+      added without integration into shared authority structures.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-015
+    to_finding_id: finding-019
+    relation: enables
+    root_hypothesis: The ambiguous Specimen-to-Result `produces` relation helps
+      create ambiguity in which Result path should scope Order completion.
+    shared_cause: null
+    rationale: Finding-015 says Specimen.produces Result misstates
+      lineage/provenance semantics. Finding-019 notes consumers may choose paths
+      such as Specimen.produces Result or Report.contains Result to determine
+      all Results for Order completion. The misleading relation therefore
+      enables, though does not fully cause, the completion-scope ambiguity.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-005
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-014
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

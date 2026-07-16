@@ -1,0 +1,170 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml / Part.uom and unit conversion handling
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:19
+      and :100
+    claim: 새 단위나 품목별 환산 규칙이 추가되면 기존 Part.uom enum과 현장 환산 관행 때문에 기준 모델 수정 또는 외부 보정이
+      필요하다.
+    what: Part.uom은 [ea, kg, m]으로 고정된 enum이고, 별도 품목별 환산계수 마스터가 없으며 필요 시 현장에서 환산한다고
+      되어 있다.
+    why: PLM/MES 통합의 개념 기준 문서라면 단위와 환산은 품목, BOM 수량, 생산 실적, 재고, 원가가 공유하는 확장 가능한 기준이어야
+      한다. 현재 구조는 새 단위(liter, set, roll 등)나 kg↔ea 환산이 필요한 품목을 받을 때 enum 값 추가와 현장별
+      해석에 의존하므로, 기존 데이터/규칙의 연속성과 시스템 간 비교 가능성이 약해진다.
+    how_to_fix: uom을 고정 enum이 아니라 UnitOfMeasure 참조로 분리하고, 품목별 또는 공정별 conversion
+      factor/effective period/source를 가진 UomConversion 개념을 추가한다. 최소한 Part.uom에는
+      기준 단위만 두고 BomLine.qty_per와 생산/재고 수량이 참조할 명시적 단위 및 환산 규칙을 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목, BOM, 생산, 재고 수량을 일관되게 연결하는 목적.
+      failure_condition: 새 단위 또는 품목별 환산이 필요한 데이터가 들어오거나 PLM/MES/원가 시스템이 같은 수량을 서로 다른 단위로 교환할 때.
+      impact: 단위 의미가 enum 밖 또는 현장 관행에 머물러 통합 기준 문서가 변경 내성을 제공하지 못하고, 새 단위 추가마다 스키마/규칙
+        수정 또는 수기 보정이 필요해진다.
+      evidence_refs:
+        - materialized-input.md:19
+        - materialized-input.md:100
+    causal_path:
+      root_cause_candidate: 단위 체계를 확장 가능한 기준 엔티티가 아니라 고정 enum과 비모델링 현장 환산으로 표현한다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: Part.uom은 ea, kg, m 세 값만 허용하는 enum으로 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 품목별 환산계수 마스터가 없고 필요 시 현장에서 환산한다고 명시되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:100
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 따라서 새 단위나 환산 규칙이 필요한 품목을 추가하면 모델 내부의 기준 데이터로 흡수되지 않고 enum 수정 또는 외부 관행에
+            의존한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:100
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml / WorkCenter.capacity_per_shift
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:63-67
+    claim: 작업장 능력 단위가 작업장마다 달라지는 값을 단일 number로 둬서 새 설비/공정 유형 추가 시 기존 구조가 의미를 보존하지 못한다.
+    what: WorkCenter.capacity_per_shift는 number 하나이며, note에는 단위가 작업장마다 개수 또는 시간으로
+      다르다고 되어 있다.
+    why: 라우팅과 MES 통합에서 capacity는 공정 계획, 부하 산정, 생산 오더 가능 여부에 직접 쓰이는 확장 지점이다. 현재 모델은
+      값의 차원(count/time), 기간, 기준 교대, 산정 방식이 속성으로 분리되어 있지 않아 새 작업장이나 설비 유형을 추가할수록
+      같은 필드가 서로 다른 의미를 담게 된다.
+    how_to_fix: capacity_per_shift를 CapacityMeasure 같은 구조로 분리해 value, unit,
+      basis_period, capacity_type(count/time/throughput 등), source/effective
+      period를 명시한다. WorkCenter는 하나 이상의 CapacityMeasure를 참조하게 해 새 설비 유형을 기존 필드 의미
+      변경 없이 추가할 수 있게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 기준에서 라우팅의 작업장 능력과 생산 계획 가능성을 안정적으로 표현하는 목적.
+      failure_condition: 개수 기준 설비와 시간 기준 설비가 혼재하거나, 새로운 능력 기준을 가진 작업장을 추가할 때.
+      impact: 동일한 number 필드가 여러 의미를 갖게 되어 MES나 계획 시스템이 capacity를 일관되게 해석하기 어렵고, 새 작업장
+        유형을 수용할 때 외부 규칙 또는 필드 재정의가 필요해진다.
+      evidence_refs:
+        - materialized-input.md:63
+        - materialized-input.md:67
+    causal_path:
+      root_cause_candidate: capacity의 값과 측정 단위/차원/기준 기간을 분리하지 않고 단일 숫자 속성에 결합했다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: WorkCenter는 capacity_per_shift를 number로만 정의한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63
+            - materialized-input.md:67
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 같은 속성의 단위가 작업장마다 개수 또는 시간으로 다르다고 명시되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 따라서 새 작업장 유형이 추가될수록 capacity_per_shift의 의미가 필드 밖 관행에 의존하고 통합 시스템에서 안정적으로
+            확장되기 어렵다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+            - materialized-input.md:87-89
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml / ECO, Part.rev, and revision effectivity
+    evidence_anchor: .onto/review/20260716-e5e2a98b/execution-preparation/materialized-input.md:20-21,
+      :69-75, :96
+    claim: 변경 이력과 적용 시점이 현재 Part.rev와 ECO.effective_date에만 걸려 있어 다중 리비전·단계적 적용·과거 생산
+      이력 확장 시 연속성이 깨진다.
+    what: Part.rev는 도면 관리대장을 원본으로 하는 문자열이고 current_eco는 최신 설계변경만 참조한다. ECO는
+      affected_parts와 effective_date를 갖지만, BOM/Routing/Operation의 revisioned
+      snapshot이나 effectivity interval은 없다. 규칙은 effective_date 이후 생산분은 신규 rev를
+      따르되 Part.rev는 주간 배치로 동기화된다고 한다.
+    why: PLM/MES 통합에서 변경관리는 현재 상태뿐 아니라 특정 생산일, 공장, 오더, BOM 버전, 라우팅 버전의 유효성을 보존해야 한다.
+      현재 구조는 '최신 ECO'와 단일 날짜 중심이라 향후 여러 ECO가 겹치거나 단계적으로 적용되거나, 과거 생산분의
+      as-planned/as-built 기준을 조회해야 할 때 기존 데이터가 어떤 BOM/라우팅/rev에 속했는지 모델 내부에서
+      연속적으로 표현하기 어렵다.
+    how_to_fix: PartRev 또는 EngineeringRevision을 별도 엔티티로 두고 BOM, Routing,
+      Operation/InspectionPlan을 revisioned artifact로 연결한다. ECO에는 affected
+      artifact, valid_from/valid_to, applicability 조건, applied/sync 상태를 두어
+      current_rev는 파생 뷰로 취급하고, 생산 오더는 생성 시점의 명시적 revision/effectivity snapshot을
+      참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅·변경관리 개념의 정합성을 PLM/MES 통합 기준으로 제공하는 목적.
+      failure_condition: ECO가 여러 건 병행되거나, 적용일과 주간 배치 동기화 사이의 생산분이 생기거나, 과거 생산 오더의
+        BOM/라우팅/rev 기준을 재현해야 할 때.
+      impact: 변경 전후 데이터의 연속성을 기준 모델이 보존하지 못하면 MES 생산 오더, PLM 도면 리비전, BOM/라우팅 적용 상태가 서로
+        다른 현재값을 보게 되어 제조 운영상 잘못된 revision으로 생산하거나 추적성을 잃을 수 있다.
+      evidence_refs:
+        - materialized-input.md:20
+        - materialized-input.md:21
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: 변경관리의 권위 개념을 revisioned artifact/effectivity interval이 아니라
+        현재 Part 속성과 ECO 단일 적용일로 모델링했다.
+      root_cause_step_id: evolution-candidate-003.cause-004
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Part.rev는 문자열 속성이며 도면 관리대장이 원본이라고 되어 있고, current_eco는 최신 설계변경만 참조한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:21
+        - cause_id: evolution-candidate-003.cause-002
+          claim: ECO는 affected_parts와 effective_date만 가지고, BOM이나 Routing의 버전별 적용 범위를 직접
+            참조하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:84-90
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 무결성 규칙은 effective_date 이후 신규 rev를 따르지만 Part.rev 갱신은 도면 관리대장 반영 후 주간 배치로
+            동기화된다고 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:96
+        - cause_id: evolution-candidate-003.cause-004
+          claim: 따라서 변경 적용 시점과 현재 rev 동기화 시점이 분리되는 시나리오에서 기존 구조만으로 BOM/라우팅/생산분의 유효
+            revision 연속성을 보존하기 어렵다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+            - materialized-input.md:96
+      unresolved_beyond_evidence: 대상 파일 밖에 실제 PLM/MES가 별도 effectivity snapshot을 갖는지는
+        확인하지 않았다. 본 finding은 개념 기준 문서 자체에 그 확장 구조가 보이지 않는다는 범위 내 판단이다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준 문서는 품목, BOM, 라우팅, 작업장, 변경 적용 상태를 여러 시스템이 같은 의미로 해석할 수 있게 해야 한다.
+  - 제조 운영에서는 단위, 능력, revision/effectivity가 시간이 지나며 추가·변경되는 확장 지점이다.
+validation:
+  unaddressable_candidates: []

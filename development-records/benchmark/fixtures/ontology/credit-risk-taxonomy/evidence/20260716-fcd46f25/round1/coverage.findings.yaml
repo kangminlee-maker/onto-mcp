@@ -1,0 +1,245 @@
+schema_version: 1
+session_id: 20260716-fcd46f25
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: credit-risk-ontology.yaml — default/delinquency domain coverage
+    evidence_anchor: File header declares a shared credit-risk concept authority;
+      notes explicitly state that delinquency/default status is outside this
+      ontology, while no external-status reference entity or contract is
+      defined.
+    claim: The ontology omits even a boundary representation of delinquency and
+      default, leaving a core credit-risk lifecycle segment unavailable to
+      shared consumers.
+    what: There is no concept for delinquency/default status, occurrence time, cure,
+      write-off, or a governed reference to the external delinquency-management
+      system.
+    why: Excluding operational ownership need not exclude the shared semantic
+      contract. Under the declared engine/reporting purpose, exposures that
+      deteriorate cannot be classified or reported consistently through the
+      ontology once they enter delinquency or default.
+    how_to_fix: Add a minimal canonical CreditQualityStatus or DefaultEvent concept
+      with effective dates, lifecycle states, and an authoritative
+      external-system reference; keep operational processing outside the
+      ontology if desired.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Providing a shared credit-risk concept authority for the risk
+        engine and reporting system.
+      failure_condition: An exposure becomes delinquent, defaults, cures, or is
+        written off and either consumer must classify or reproduce that state.
+      impact: Consumers must invent external mappings and lifecycle semantics, so
+        shared risk classification ceases at the point of greatest credit
+        deterioration.
+      evidence_refs:
+        - credit-risk-ontology.yaml header
+        - "credit-risk-ontology.yaml notes: delinquency/default is outside scope"
+        - "credit-risk-ontology.yaml entities: no delinquency/default boundary
+          concept"
+    causal_path:
+      root_cause_candidate: The scope exclusion removes the default domain without
+        defining a governed semantic boundary to its owning system.
+      root_cause_step_id: coverage-candidate-001.cause-002
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: No delinquency/default status or lifecycle concept exists in the
+            ontology.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml notes
+            - credit-risk-ontology.yaml entities
+        - cause_id: coverage-candidate-001.cause-002
+          claim: This absence is a symptom of excluding the entire domain rather than
+            separating operational ownership from shared semantic
+            representation.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "credit-risk-ontology.yaml notes: separate delinquency-management
+              system"
+      unresolved_beyond_evidence: The external system's detailed lifecycle is
+        unavailable within the boundary, so the precise state vocabulary cannot
+        be assessed.
+  - candidate_id: coverage-candidate-002
+    target: credit-risk-ontology.yaml — temporal coverage of ratings, limits,
+      exposure values, and appetite status
+    evidence_anchor: Borrower.internal_rating, Exposure.amount/risk_grade/ltv,
+      RiskRating.grade/score, Limit.approved_amount, and
+      RiskAppetite.threshold/compliance_status lack valid-from, valid-to, as-of,
+      version, or event history; only ExposureAggregate.as_of and
+      Collateral.appraised_at carry time.
+    claim: Most time-dependent risk values have no validity or history model,
+      preventing historical reconstruction.
+    what: The ontology models mutable ratings, balances, limits, thresholds, and
+      compliance states as timeless attributes.
+    why: A risk engine and reporting system cannot determine which value applied at
+      a past reporting or decision date. The isolated timestamps on aggregates
+      and appraisals do not establish history for the source ratings, limits,
+      overrides, or appetite states.
+    how_to_fix: Represent mutable values as effective-dated records or events with
+      valid_from/valid_to, recorded_at, version, and correction/supersession
+      semantics; define report-time selection rules.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Sharing reproducible credit-risk concepts between calculation
+        and reporting consumers.
+      failure_condition: A report, recalculation, audit, or correction targets a date
+        after any rating, limit, amount, LTV, threshold, or compliance change.
+      impact: Consumers cannot reconstruct the same historical state and may produce
+        irreconcilable results.
+      evidence_refs:
+        - credit-risk-ontology.yaml Borrower.attributes.internal_rating
+        - credit-risk-ontology.yaml Exposure.attributes
+        - credit-risk-ontology.yaml RiskRating.attributes
+        - credit-risk-ontology.yaml Limit.attributes
+        - credit-risk-ontology.yaml RiskAppetite.attributes
+        - credit-risk-ontology.yaml ExposureAggregate.attributes.as_of
+    causal_path:
+      root_cause_candidate: Temporal validity and change-history are modeled only for
+        isolated fields rather than as a shared dimension for mutable risk
+        facts.
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Mutable risk facts generally lack effective dates and history
+            identifiers.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml entity attributes
+        - cause_id: coverage-candidate-002.cause-002
+          claim: This is a symptom of incomplete temporal coverage across the ontology's
+            mutable concepts.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml ExposureAggregate.as_of
+            - credit-risk-ontology.yaml Collateral.appraised_at
+            - credit-risk-ontology.yaml remaining mutable attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: credit-risk-ontology.yaml — audit evidence for controlled actions
+    evidence_anchor: classification_rules allows the reporting team to manually
+      adjust Exposure.risk_grade; Exposure.ltv is entered by an examiner;
+      Limit.approved_amount is recorded by an approval system, but no actor,
+      action time, reason, approval, or source-record concept exists.
+    claim: Manual adjustment, human input, and approval actions lack audit-evidence
+      concepts.
+    what: The ontology stores resulting values but not who changed or approved them,
+      when the action occurred, what source value was replaced, or the
+      supporting rationale.
+    why: Manual grade overrides and approved limits materially affect
+      classifications and utilization. Without provenance, engine-derived values
+      cannot be distinguished from overrides, and reports cannot evidence
+      controlled decisions.
+    how_to_fix: Add a reusable DecisionOrAdjustment event linked to the affected
+      fact, with actor, occurred_at, reason/evidence, prior/new value, approval
+      status, and source-system record identifier.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Operating the ontology as a trustworthy shared authority for
+        risk calculations and reports.
+      failure_condition: A grade is manually overridden, LTV is entered or corrected,
+        or a limit approval is challenged or reproduced.
+      impact: Consumers receive the outcome without evidence needed to explain, audit,
+        or reverse the controlled action.
+      evidence_refs:
+        - "credit-risk-ontology.yaml classification_rules: manual risk_grade
+          adjustment"
+        - credit-risk-ontology.yaml Exposure.attributes.ltv note
+        - credit-risk-ontology.yaml Limit.attributes.approved_amount note
+        - "credit-risk-ontology.yaml entities: no audit event"
+    causal_path:
+      root_cause_candidate: The model covers controlled-action outputs but omits a
+        general provenance/audit-event dimension.
+      root_cause_step_id: coverage-candidate-003.cause-002
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: No actor, action timestamp, reason, prior value, or approval evidence
+            accompanies controlled values.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml Exposure attributes
+            - credit-risk-ontology.yaml Limit attributes
+            - credit-risk-ontology.yaml classification_rules
+        - cause_id: coverage-candidate-003.cause-002
+          claim: This absence is a symptom of modeling only current result attributes
+            rather than the actions that establish them.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml entities and classification_rules
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: credit-risk-ontology.yaml — authority coverage for parallel ratings and
+      cross-system monetary inputs
+    evidence_anchor: notes says three rating scales coexist and each consumer
+      performs conversion; RiskRating.grade points to a wiki mapping; the
+      utilization rule permits each system's daily FX table;
+      Limit.approved_amount is combined with CRM available_limit, which is not
+      modeled.
+    claim: Values managed or derived across multiple systems lack a single
+      designated authority and governed mapping concepts.
+    what: The ontology does not identify the canonical rating scale or mapping
+      version, authoritative FX source, or authoritative source and
+      reconciliation rule for available and approved limits.
+    why: The document aims to be a concept authority, yet delegates decisive
+      transformations and inputs to consumers. Engine and reporting
+      implementations can validly select different mappings, exchange rates, or
+      limit snapshots.
+    how_to_fix: Designate an authoritative source for each shared fact; model
+      versioned RatingMapping, FxRateSet, and LimitAvailability/snapshot
+      concepts with source-system identifiers, effective times, precedence, and
+      reconciliation rules.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serving as the shared concept authority for the risk engine
+        and reporting system.
+      failure_condition: Consumers translate ratings, convert currencies, or calculate
+        utilization using independently maintained inputs.
+      impact: The same exposure can receive different grades, converted amounts, or
+        utilization results with no ontology-defined way to select the
+        authoritative result.
+      evidence_refs:
+        - credit-risk-ontology.yaml RiskRating.grade note
+        - "credit-risk-ontology.yaml notes: three rating scales and
+          consumer-side conversion"
+        - "credit-risk-ontology.yaml classification_rules: each system's FX
+          table"
+        - credit-risk-ontology.yaml Limit.approved_amount note
+    causal_path:
+      root_cause_candidate: The ontology acknowledges parallel sources but does not
+        model authority, precedence, and versioned mappings as shared concepts.
+      root_cause_step_id: coverage-candidate-004.cause-002
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Canonical sources and governed mapping/version concepts are absent for
+            ratings, FX, and split limit data.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml RiskRating
+            - credit-risk-ontology.yaml Limit
+            - credit-risk-ontology.yaml classification_rules
+            - credit-risk-ontology.yaml notes
+        - cause_id: coverage-candidate-004.cause-002
+          claim: This absence is a symptom of delegating shared-data resolution to
+            individual consuming systems.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "credit-risk-ontology.yaml notes: conversion by each consumer"
+            - "credit-risk-ontology.yaml classification_rules: each system's
+              daily FX table"
+      unresolved_beyond_evidence: The actual wiki mapping, FX tables, CRM schema, and
+        organizational source-of-record decisions are outside the bounded
+        evidence.
+domain_constraints_used: []
+domain_context_assumptions:
+  - A concept authority shared by a risk engine and reporting system must
+    support reproducible point-in-time interpretation of mutable risk facts.
+  - Operational ownership by an external system can coexist with a minimal
+    canonical boundary concept in the shared ontology.
+  - Manual grade adjustment and limit approval are controlled actions whose
+    provenance affects trust in shared risk results.
+validation:
+  unaddressable_candidates: []

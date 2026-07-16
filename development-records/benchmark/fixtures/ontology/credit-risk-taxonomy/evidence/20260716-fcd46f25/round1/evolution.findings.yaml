@@ -1,0 +1,154 @@
+schema_version: 1
+session_id: 20260716-fcd46f25
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml — rating scales and transformation policy
+    evidence_anchor: materialized-input.md:20-22, 31-34, 48-57, 92-98
+    claim: 등급 체계나 모델이 변경되면 소비 시스템별 변환 규칙이 독립적으로 갈라져 기존 데이터와 보고 결과의 연속성이 깨진다.
+    what: 세 가지 등급 스케일이 고정 값으로 병존하지만 스케일 식별자, 버전, 유효기간, 온톨로지 내부 매핑이 없고 변환을 각 소비 시스템과
+      외부 위키에 위임한다.
+    why: 새 등급 추가, 모델 재보정, 매핑 변경 시 어느 매핑이 어느 시점의 데이터에 적용됐는지 공통 문서만으로 판별할 수 없다. 리스크
+      엔진과 보고 시스템이 서로 다른 시점에 매핑을 갱신하면 같은 신용상태를 다르게 분류하고 과거 보고서를 재현할 수 없어 공유 개념
+      권위라는 목적이 실패한다.
+    how_to_fix: 등급 스케일과 스케일 간 매핑을 버전 있는 온톨로지 개념으로 만들고, 각 매핑에 source_scale,
+      target_scale, mapping_version, effective_from/to를 두며 등급 사실이 사용한
+      scale_version과 mapping_version을 기록한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 및 외부·내부 등급 변경 후의 분류 연속성
+      failure_condition: 등급 값, 산출 모델 또는 스케일 간 변환 규칙이 변경되거나 소비 시스템의 배포 시점이 달라질 때
+      impact: 동일 데이터의 시스템별 분류가 달라지고 과거 결과의 재현·대사가 불가능해져 공통 기준으로서 신뢰할 수 없게 된다.
+      evidence_refs:
+        - materialized-input.md:20-22
+        - materialized-input.md:31-34
+        - materialized-input.md:48-57
+        - materialized-input.md:92-98
+    causal_path:
+      root_cause_candidate: 등급 스케일과 변환 매핑이 버전·유효기간을 가진 공통 권위 개념으로 모델링되지 않고 소비 시스템에 위임되어 있다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 세 등급 스케일의 변환을 각 소비 시스템이 수행하도록 명시한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:97-98
+        - cause_id: evolution-candidate-001.cause-002
+          claim: RiskRating과 Exposure의 등급 값은 닫힌 열거형이지만 스케일 버전이나 매핑 버전을 참조하지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:31-34
+            - materialized-input.md:48-57
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 매핑의 실제 권위는 온톨로지 밖의 위키와 소비 시스템에 분산되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:56
+            - materialized-input.md:97-98
+      unresolved_beyond_evidence: 실제 소비 시스템들이 현재 동일한 매핑을 사용하는지는 경계 내 자료로 확인할 수 없지만, 변경
+        시 연속성을 보장할 계약이 대상에 없다는 점은 확인된다.
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml — temporal identity of mutable risk facts
+    evidence_anchor: materialized-input.md:35-37, 48-57, 69-83, 92-95
+    claim: 모델·정책·수동 조정이 바뀌면 현재 값과 과거 값의 의미를 구분할 시간·버전 정보가 없어 역사적 리스크 결과를 재현할 수 없다.
+    what: RiskRating에는 평가 기준시점과 모델 버전이 없고, RiskAppetite에는 적용 범위와 유효기간이 없으며,
+      Exposure.risk_grade의 수동 조정에는 조정 시점·근거·원본 등급이 없다. 반면 ExposureAggregate에만
+      as_of가 있어 시간 모델이 부분적으로만 존재한다.
+    why: 새 평가모델 도입, 리스크 성향 한도 개정, 보고팀 수동 조정 이후 저장된 값은 어느 규칙과 기준시점에서 생성됐는지 식별되지 않는다.
+      변경 전후 자료를 함께 처리하거나 과거 보고서를 다시 생성할 때 당시 의미를 복원할 수 없어 버전 변경의 연속성이 단절된다.
+    how_to_fix: RiskRating, RiskAppetite, 등급 조정을 시간 버전이 있는 사실로 모델링한다. 최소한
+      observed/as_of, effective_from/to, model_or_policy_version, source,
+      supersedes를 추가하고 수동 조정에는 original_grade, adjusted_grade, reason,
+      adjusted_at를 기록한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 시간에 따라 변하는 리스크 판단을 엔진과 보고 시스템이 동일하게 해석하고 재현하는 공통 개념 기준
+      failure_condition: 평가모델, 정책 한도 또는 수동 조정 규칙이 변경된 뒤 과거와 현재 데이터를 함께 조회·재계산할 때
+      impact: 변경 당시 적용된 규칙을 결정할 수 없어 역사적 보고, 대사, 재처리 결과의 신뢰가 훼손된다.
+      evidence_refs:
+        - materialized-input.md:48-57
+        - materialized-input.md:69-83
+        - materialized-input.md:92-95
+    causal_path:
+      root_cause_candidate: 변경 가능한 리스크 판단과 정책을 버전 있는 시간적 사실이 아니라 무시점 현재 속성으로 모델링했다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: RiskRating과 RiskAppetite의 변경 가능한 결과·정책 값에 기준시점, 유효기간 또는 모델·정책 버전이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:48-57
+            - materialized-input.md:78-83
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 등급 수동 조정 규칙도 원본 값, 적용 시점, 근거를 보존하는 개념을 정의하지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:92-93
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 시간 속성은 ExposureAggregate.as_of와 담보 평가 시점 등에 국소적으로만 존재하고 공통 시간·버전 계약으로
+            확장되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:35-37
+            - materialized-input.md:45-46
+            - materialized-input.md:69-76
+      unresolved_beyond_evidence: 실제 저장소가 별도 감사 이력이나 모델 버전을 보존하는지는 확인할 수 없으나, 이 온톨로지를
+        단독 공통 권위로 사용할 계약은 경계 내에서 닫히지 않는다.
+  - candidate_id: evolution-candidate-003
+    target: credit-risk-ontology.yaml — extensibility of classification vocabularies
+    evidence_anchor: materialized-input.md:10-11, 15-19, 24-30, 39-46
+    claim: 새 고객군·상품·담보 유형을 추가하려면 기존 열거형과 모든 소비자의 검증 로직을 동시에 수정해야 하며 점진적 확장이 불가능하다.
+    what: segment, product_type, collateral_type이 닫힌 인라인 열거형으로 정의되어 있지만 코드 목록의 독립
+      버전, 확장 namespace, unknown/other 처리, 폐기·대체 관계, 호환성 정책이 없다.
+    why: 새 사업부나 상품 도입 시 온톨로지 자체를 수정해야 하고, 구버전 소비자는 새 값을 유효하지 않은 입력으로 처리할 수 있다. 생산자와
+      소비자를 동시에 배포하지 못하면 데이터 거부 또는 임의 치환이 발생하며, 기존 코드의 이름 변경·폐기 시 역사적 의미도 보존되지
+      않는다.
+    how_to_fix: 분류 코드 목록을 식별자와 버전을 가진 별도 개념으로 분리하고 각 코드에 stable_id, label,
+      effective_from/to, status, superseded_by를 둔다. 소비자 계약에는 알 수 없는 미래 코드의 보존·거부
+      정책과 호환 가능한 확장 규칙을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 새 여신 상품과 분류 범주를 기존 엔진·보고 시스템의 연속성을 유지하며 수용하는 확장성
+      failure_condition: 새 segment, product_type 또는 collateral_type을 추가·개명·폐기하고 생산자와
+        소비자의 배포 버전이 일시적으로 다를 때
+      impact: 기존 구조와 소비자 검증을 동시 수정해야 하며, 구버전 소비자의 입력 거부나 분류 손실 때문에 안전한 점진 배포가 어렵다.
+      evidence_refs:
+        - materialized-input.md:10-11
+        - materialized-input.md:15-19
+        - materialized-input.md:24-30
+        - materialized-input.md:39-46
+    causal_path:
+      root_cause_candidate: 확장 가능한 버전 코드 목록 대신 엔티티 속성 안에 닫힌 열거형 값을 직접 고정했다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 고객군, 상품, 담보 유형이 각각 고정된 인라인 enum 값으로 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:30
+            - materialized-input.md:44
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 코드 목록의 버전, 유효기간, 폐기·대체 또는 미래 값 처리 계약이 정의되지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:10-11
+            - materialized-input.md:15-46
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 따라서 새 범주 수용은 기존 enum 정의와 이에 의존하는 소비자 계약의 변경을 요구한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:19
+            - materialized-input.md:30
+            - materialized-input.md:44
+      unresolved_beyond_evidence: 소비 시스템이 실제로 미지의 enum 값을 보존하는지는 경계 내에서 알 수 없지만, 온톨로지에는 그러한 호환성 보장이 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 리스크 엔진과 보고 시스템은 이 온톨로지의 열거형과 등급 정의를 교환·검증 계약으로 사용한다.
+  - 등급 모델, 정책 한도, 상품 및 분류 코드는 운영 기간 중 변경될 수 있으며 과거 결과의 재현이 요구된다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,129 @@
+schema_version: 1
+session_id: 20260716-7f1c6ba1
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml — Order/Test/Result 연결 및 Order 완료 규칙
+    evidence_anchor: entities.Order.attributes.ordered_tests; relations 전체; state_rules[0]
+    claim: Order 완료 규칙이 평가해야 할 주문별 Test/Result 집합을 구조적으로 닫는 관계가 없다.
+    what: Order에는 ordered_tests 참조가 있지만 relations에는 Order→Test 관계가 없고, Test→Result만
+      존재한다. Order 완료 규칙은 '모든 Result'를 요구하지만 어떤 Result가 해당 Order의 완료 판정 대상인지 직접
+      연결하지 않는다.
+    why: Order에서 Result로 가는 경로는 Specimen 또는 Report를 경유하지만, 주문된 Test가 아직 Result를 만들지
+      않은 경우를 표현하거나 완료 판정 집합에 포함시키는 연결이 없다. 따라서 구현체마다 결과가 존재하는 항목만 세어 주문을 조기
+      완료하거나 서로 다른 경로로 대상 결과를 계산할 수 있어, EMR/LIS 개념 권위 문서로서 완료 판정 구조가 불안정하다.
+    how_to_fix: Order→Test 관계를 명시하고, 필요하면 주문 항목/검사 수행을 나타내는 기존 또는 새 중간 개념을 통해 각 주문
+      항목을 Result에 연결한다. 완료 규칙은 그 관계로 도달하는 필수 결과 집합을 기준으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Order부터 Report까지의 모델을 EMR/LIS 통합의 개념 권위 문서로 사용하는 목적
+      failure_condition: 주문된 Test 중 아직 Result가 생성되지 않았거나 하나의 검체·보고서에 여러 주문 항목이 섞여 있을 때
+      impact: 시스템별 완료 대상 집합이 달라져 Order가 조기 완료되거나 영구 미완료로 남을 수 있으며 상태 동기화의 신뢰가 약화된다.
+      evidence_refs:
+        - entities.Order.attributes.ordered_tests
+        - "relations: Test→Result, Order→Specimen, Order→Report만 존재"
+        - "state_rules[0]: 모든 Result가 final일 때 Order completed"
+    causal_path:
+      root_cause_candidate: 주문 항목과 그 수행 결과를 동일한 소유 경로로 묶는 필수 관계가 모델에 없다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Order 완료 규칙은 주문별 Result 집합을 전제한다.
+          relation_to_previous: null
+          evidence_refs:
+            - state_rules[0]
+        - cause_id: structure-candidate-001.cause-002
+          claim: relations에는 Order→Test 또는 Order→Result 연결이 없고 ordered_tests는 Result까지
+            이어지지 않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.Order.attributes.ordered_tests
+            - relations 전체
+            - "relations: Test→Result"
+      unresolved_beyond_evidence: 실제 EMR/LIS 구현이 어떤 우회 키로 결과 소유권을 계산하는지는 현재 경계 밖이지만, 권위 문서 자체의 연결 누락은 확인된다.
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml — Assay 엔티티
+    evidence_anchor: entities.Assay; relations 전체; notes[0]
+    claim: Assay가 검사 수행 단위로 선언되어 있으나 주문-검체-결과 워크플로와 연결되지 않았다.
+    what: Assay는 분석기에서 수행되는 단위로 정의되지만 relations에서 한 번도 등장하지 않는다. 속성상 Department만
+      참조하며 Test, Specimen, Result 중 어느 것과도 연결되지 않는다.
+    why: 신규 항목을 Test와 Assay 양쪽에 등록하도록 요구하면서 두 카탈로그 간 매핑 또는 수행 연결이 없으므로, 주문된 Test가 어떤
+      Assay로 수행되고 어떤 Result를 산출했는지 구조적으로 추적할 수 없다. 이에 따라 Assay는 핵심 워크플로에서 고립된 병행
+      카탈로그가 된다.
+    how_to_fix: Test와 Assay 사이의 명시적 수행/매핑 관계를 추가하고, Assay를 Specimen 또는 Result의 실제 수행
+      경로에 연결한다. 통합 전 과도기라면 관계의 다중성, 매핑 권위 및 미매핑 처리도 함께 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문부터 분석 및 결과 보고까지 연결되는 EMR/LIS 통합 개념 모델
+      failure_condition: Test 코드와 분석기 Assay 코드가 다르거나 하나의 Test가 여러 Assay 수행을 요구할 때
+      impact: 주문·분석·결과 간 추적 경로가 끊겨 시스템 간 코드 매핑과 수행 이력의 단일 해석을 제공하지 못한다.
+      evidence_refs:
+        - entities.Assay.definition
+        - relations 전체에서 Assay 부재
+        - "notes[0]: 신규 항목은 Test와 Assay 두 곳 모두 등록"
+    causal_path:
+      root_cause_candidate: 병행 유지되는 Test와 Assay 카탈로그 사이의 구조적 매핑이 정의되지 않았다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: Assay는 relations에서 고아이며 핵심 워크플로로 도달하는 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Assay
+            - relations 전체
+        - cause_id: structure-candidate-002.cause-002
+          claim: Test와 Assay를 병행 등록하지만 두 개념의 대응 관계가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - notes[0]
+            - entities.Test
+            - entities.Assay
+      unresolved_beyond_evidence: 실제 LIS 내부에 별도 매핑 테이블이 있는지는 확인할 수 없으나, 해당 매핑은 현재 권위 문서에 포함되지 않았다.
+  - candidate_id: structure-candidate-003
+    target: clinical-lab-ontology.yaml — CriticalValue와 Result 연결
+    evidence_anchor: entities.CriticalValue; entities.Result; relations 전체
+    claim: CriticalValue 규칙을 실제 Result 및 통보 상태에 귀속시키는 필수 관계가 없다.
+    what: CriticalValue는 Test만 참조하고 notified 불리언을 보유하지만, 어떤 Result가 임계 범위에 해당했는지
+      연결하는 Result 관계가 없다. 통보 시각과 수신자는 외부 전화 기록 대장에 있다고만 되어 있으며 연결 식별자도 없다.
+    why: 동일 Test에서 여러 환자·주문·Result가 발생할 때 단일 CriticalValue 객체의 notified 값이 어느 결과의 통보
+      완료를 뜻하는지 결정할 수 없다. 따라서 임계 결과에서 통보 증거까지의 경로가 끊긴다.
+    how_to_fix: CriticalValue를 임계값 정의와 임계 결과 발생/통보 기록으로 분리하거나, 최소한
+      Result→CriticalValue 및 결과별 통보 기록 관계를 추가한다. 외부 전화 기록을 권위로 유지한다면 Result와 해당
+      기록을 연결하는 식별 관계를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 운영 위험을 포함해 Result를 신뢰성 있게 교환하는 EMR/LIS 개념 권위 문서
+      failure_condition: 같은 Test에 대해 여러 Result가 생성되고 일부만 임계값 통보 대상이거나 통보 완료된 경우
+      impact: 임계 결과별 통보 여부를 구조적으로 추적할 수 없어 시스템 간 통보 상태가 잘못 결합되거나 감사 경로가 단절될 수 있다.
+      evidence_refs:
+        - entities.CriticalValue.attributes.test_ref
+        - entities.CriticalValue.attributes.notified
+        - entities.Result
+        - relations 전체에서 CriticalValue 부재
+    causal_path:
+      root_cause_candidate: 임계값 정의와 결과별 임계 사건/통보 기록이 하나의 연결되지 않은 CriticalValue 개념에 혼합되어 있다.
+      root_cause_step_id: structure-candidate-003.cause-002
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: CriticalValue는 실제 Result와 관계로 연결되지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.CriticalValue
+            - relations 전체
+        - cause_id: structure-candidate-003.cause-002
+          claim: notified 상태는 Result 식별자나 통보 기록 식별자 없이 CriticalValue 자체에 배치되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.CriticalValue.attributes.notified
+            - entities.CriticalValue.attributes.test_ref
+      unresolved_beyond_evidence: 전화 기록 대장의 실제 스키마와 연결 키는 경계 밖이므로 평가할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - relations 목록은 EMR/LIS가 공통으로 해석할 명시적 관계 카탈로그이며, 속성 참조만으로 누락된 수행·소유 관계의 의미가 자동
+    보완되지는 않는다고 보았다.
+validation:
+  unaddressable_candidates: []

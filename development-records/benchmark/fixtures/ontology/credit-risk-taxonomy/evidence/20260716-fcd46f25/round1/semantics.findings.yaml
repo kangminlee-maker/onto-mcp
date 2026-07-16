@@ -1,0 +1,221 @@
+schema_version: 1
+session_id: 20260716-fcd46f25
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: credit-risk-ontology.yaml — Collateral entity classification
+    evidence_anchor: materialized-input.md:39-46, 85-87
+    claim: Collateral is incorrectly modeled as a subtype of Exposure despite being
+      defined as an asset that secures an exposure.
+    what: "`Collateral.is_a: Exposure` asserts that every collateral instance is an
+      exposure, while the definitions and `secured_by` relation distinguish the
+      collateral asset from the credit exposure it secures."
+    why: Subtype inheritance carries identity and meaning, not merely association.
+      Consumers sharing this ontology could consequently treat collateral as
+      exposure, inherit exposure semantics, or aggregate collateral assets into
+      exposure populations.
+    how_to_fix: "Remove `Collateral.is_a: Exposure`; retain Collateral as an
+      independent entity connected through `Exposure secured_by Collateral`."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide a shared conceptual authority for risk-engine and
+        reporting-system exposure and collateral concepts.
+      failure_condition: A consumer interprets `is_a` as subtype inheritance when
+        validating, querying, or aggregating Exposure instances.
+      impact: The authority document then licenses mutually incompatible identity and
+        classification behavior across consumers.
+      evidence_refs:
+        - materialized-input.md:39-46
+        - materialized-input.md:85-87
+        - materialized-input.md:6-8
+    causal_path:
+      root_cause_candidate: An association between two distinct entity types is also
+        encoded as subtype identity.
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: Collateral is declared both as an Exposure subtype and as the target of
+            Exposure's `secured_by` relation.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:39-46
+            - materialized-input.md:85-87
+        - cause_id: semantics-candidate-001.cause-002
+          claim: This contradictory classification is caused by using `is_a` to represent
+            the collateral–exposure association already represented by
+            `secured_by`.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:40-41
+            - materialized-input.md:87
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: credit-risk-ontology.yaml — borrower and exposure credit-grade concepts
+    evidence_anchor: materialized-input.md:20-22, 31-34, 48-57, 92-98
+    claim: Three incompatible grade scales share the meaning “credit rating,” while
+      derivation, mapping authority, and manual adjustment are delegated to
+      consumers.
+    what: "`Borrower.internal_rating`, `RiskRating.grade`, and `Exposure.risk_grade`
+      use 1–10, R1–R5, and AAA–CCC scales. The exposure grade is described as
+      derived from the engine grade but may be manually changed by reporting,
+      and the canonical mappings are absent from the ontology."
+    why: The same grade value can mean an engine assessment, a historical internal
+      scale, or a reporting adjustment. Because consumers perform their own
+      transformations, neither the source grade nor the adjusted report grade
+      has a single shared meaning or precedence.
+    how_to_fix: Define distinct canonical concepts for rating observation, scale,
+      and reported/adjusted grade; include a versioned authoritative mapping and
+      record source, effective time, derivation, and override provenance in the
+      shared contract.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serve as the shared concept authority for risk-engine and
+        reporting-system credit classifications.
+      failure_condition: The engine and reporting system translate or override a
+        borrower or exposure grade independently.
+      impact: Identical borrowers or exposures can receive non-comparable grades while
+        each consumer remains nominally conformant to the ontology, undermining
+        shared classification and reporting trust.
+      evidence_refs:
+        - materialized-input.md:20-22
+        - materialized-input.md:31-34
+        - materialized-input.md:48-57
+        - materialized-input.md:92-98
+        - materialized-input.md:6-8
+    causal_path:
+      root_cause_candidate: The ontology does not assign canonical semantic roles,
+        precedence, or mapping authority to the coexisting grade scales.
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: Three grade attributes use incompatible value sets, and
+            `Exposure.risk_grade` can be both derived and manually adjusted.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-22
+            - materialized-input.md:31-34
+            - materialized-input.md:53-56
+            - materialized-input.md:93
+        - cause_id: semantics-candidate-002.cause-002
+          claim: This ambiguity is enabled by leaving one mapping in a team wiki and
+            assigning transformations to each consuming system.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:56
+            - materialized-input.md:98
+      unresolved_beyond_evidence: The correctness of the external wiki mapping cannot
+        be assessed within the declared boundary, but its absence from the
+        purported authority document is directly evidenced.
+  - candidate_id: semantics-candidate-003
+    target: credit-risk-ontology.yaml — Exposure.ltv
+    evidence_anchor: materialized-input.md:24-46
+    claim: The ratio-named `ltv` is modeled as an independent manual input without
+      authoritative operands, formula, valuation time, or provenance.
+    what: "`Exposure.ltv` is a bare number entered at underwriting time, while
+      exposure amount and collateral appraisal value/time coexist in the model.
+      No rule identifies which amount, collateral valuation, aggregation method,
+      or observation time defines the ratio."
+    why: A stored input and a value derived from the modeled exposure and collateral
+      can diverge without either being identifiable as authoritative. Risk and
+      reporting consumers may therefore assign different meanings to the same
+      `ltv` field.
+    how_to_fix: Define the authoritative LTV formula and operand selection,
+      including collateral aggregation and valuation timestamp. Either make
+      `ltv` a derived projection or rename it as an observed/approved LTV and
+      attach source and effective-time provenance.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Give risk-engine and reporting consumers one shared meaning
+        for exposure and collateral risk measures.
+      failure_condition: A consumer recomputes LTV from modeled amounts while another
+        uses the manually entered value.
+      impact: Both values can conform structurally yet disagree semantically,
+        producing inconsistent risk decisions and reports.
+      evidence_refs:
+        - materialized-input.md:24-37
+        - materialized-input.md:39-46
+        - materialized-input.md:6-8
+    causal_path:
+      root_cause_candidate: A ratio-valued concept is represented without making its
+        derivation or observation provenance part of the concept contract.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: "`ltv` is an independently entered number alongside exposure amount and
+            time-stamped collateral appraisal values."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29
+            - materialized-input.md:35-37
+            - materialized-input.md:45-46
+        - cause_id: semantics-candidate-003.cause-002
+          claim: The potential divergence is enabled by the absence of a canonical
+            formula, operand-selection rule, and authority designation.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:24-46
+            - materialized-input.md:92-95
+      unresolved_beyond_evidence: The intended business formula and treatment of
+        multiple collateral items are not specified in the bounded artifact.
+  - candidate_id: semantics-candidate-004
+    target: credit-risk-ontology.yaml — RiskAppetite and compliance_status
+    evidence_anchor: materialized-input.md:69-83
+    claim: Risk appetite policy, numeric threshold, and compliance assessment are
+      conflated in one entity.
+    what: "`RiskAppetite` is defined as a threshold and also stores
+      `compliance_status`, although the same definition says that status is
+      determined by comparing an `ExposureAggregate` with the appetite. The
+      entity contains no borrower/scope link, currency, aggregate snapshot
+      reference, or assessment time."
+    why: A policy threshold and the result of evaluating a time-specific aggregate
+      against that threshold have different identity and lifecycle. Conflating
+      them makes `compliance_status` appear intrinsic to RiskAppetite even
+      though it varies by evaluated population and time.
+    how_to_fix: Keep RiskAppetite as the scoped, versioned policy threshold and
+      model compliance as a derived assessment referencing the appetite and a
+      specific ExposureAggregate snapshot, with currency and assessment time.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Provide a shared meaning for risk-appetite limits and breach reporting.
+      failure_condition: Consumers evaluate different aggregate snapshots or scopes
+        but read or write the same appetite-level compliance status.
+      impact: The same RiskAppetite instance can be simultaneously compliant and
+        breached under different evaluation contexts, making the shared status
+        non-authoritative.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:6-8
+    causal_path:
+      root_cause_candidate: The model assigns a context-dependent assessment result as
+        an intrinsic attribute of the policy being assessed.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: "`compliance_status` is stored on RiskAppetite even though its definition
+            derives the status from an ExposureAggregate comparison."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:78-83
+        - cause_id: semantics-candidate-004.cause-002
+          claim: This inconsistency is caused by treating the appetite policy and each
+            scoped, time-dependent compliance assessment as one concept.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+      unresolved_beyond_evidence: The intended appetite scope and currency
+        normalization cannot be determined from the bounded artifact.
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`is_a` expresses subtype identity, whereas `secured_by` expresses an
+    association between distinct entity types."
+  - A ratio-valued field requires defined operands or explicit observation
+    provenance to have a stable shared meaning.
+  - A policy threshold and the result of evaluating a dated population against
+    it have distinct identity and lifecycle.
+validation:
+  unaddressable_candidates: []

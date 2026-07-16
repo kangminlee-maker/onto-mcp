@@ -1,0 +1,345 @@
+schema_version: 1
+session_id: 20260716-acee24d9
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml / classification_rules[0] and notes[0]
+    evidence_anchor: "Embedded Materialized Input: `classification_rules` states
+      `Exposure.risk_grade는 RiskRating.grade에서 도출하되, 보고서 팀이 시장 상황에 따라 수동 조정할 수
+      있다.`; `notes` states `차주 등급(internal_rating 1~10, RiskRating R1~R5,
+      Exposure risk_grade AAA~CCC)의 3개 스케일은 역사적 이유로 병존한다. 변환은 각 소비 시스템이 수행한다.`"
+    claim: Three rating scales are left to consumer-side conversion, so rating-scale
+      evolution requires coordinated changes in every consuming system and can
+      break continuity between engine and reports.
+    what: The ontology declares three concurrent credit-rating scales but does not
+      define a canonical mapping entity, versioned conversion table, effective
+      dates, or ownership for transformations. It explicitly assigns conversion
+      to each consumer system while also allowing reports to manually adjust
+      derived exposure grades.
+    why: Because the ontology is intended as the shared concept authority for a risk
+      engine and reporting system, leaving scale conversion outside the ontology
+      means any new grade, rating-model change, or report override policy change
+      must be reimplemented across consumers. Historical results also cannot be
+      consistently reinterpreted because there is no versioned conversion
+      authority tying `RiskRating.grade`, `Borrower.internal_rating`, and
+      `Exposure.risk_grade` together over time.
+    how_to_fix: Add a canonical `RatingScale`/`RatingMapping` concept with source
+      scale, target scale, mapping rules, owner, version,
+      effective_from/effective_to, and override provenance. Make
+      `Exposure.risk_grade` derivation reference that mapping rather than
+      consumer-local conversion.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: The ontology's declared purpose as a shared concept authority
+        for risk engine and reporting systems.
+      failure_condition: When a rating scale changes, a new grade is introduced, or
+        report-side manual adjustment policy changes, consumers must
+        independently update conversion logic and may produce inconsistent or
+        non-replayable classifications.
+      impact: "This weakens review trust in the ontology as an extensible shared
+        basis: the central classification concept is not change-tolerant, and
+        engine/report continuity depends on undocumented external
+        implementations."
+      evidence_refs:
+        - "Embedded Materialized Input: header comment says the model targets
+          shared concept authority for risk engine and report systems."
+        - "Embedded Materialized Input: `RiskRating.grade` values `[R1, R2, R3,
+          R4, R5]` with note pointing to a risk-team wiki mapping."
+        - "Embedded Materialized Input: `Exposure.risk_grade` values `[AAA, AA,
+          A, BBB, BB, B, CCC]`."
+        - "Embedded Materialized Input: `Borrower.internal_rating` note says
+          `1~10 숫자 등급 체계`."
+        - "Embedded Materialized Input: notes say transformations are performed
+          by each consuming system."
+    causal_path:
+      root_cause_candidate: The ontology does not make rating conversion a versioned,
+        owned concept inside the target artifact and instead delegates it to
+        external consumer systems.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: The target contains three rating scales for borrower/internal, engine,
+            and exposure/report classifications.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Borrower.internal_rating` note says
+              `1~10 숫자 등급 체계`."
+            - "Embedded Materialized Input: `RiskRating.grade` values `[R1, R2,
+              R3, R4, R5]`."
+            - "Embedded Materialized Input: `Exposure.risk_grade` values `[AAA,
+              AA, A, BBB, BB, B, CCC]`."
+        - cause_id: evolution-candidate-001.cause-002
+          claim: The target does not define the conversion as an ontology entity or
+            versioned relation; it points to an external wiki and each consumer
+            system.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: `RiskRating.grade` note says mapping
+              table is in the risk-team wiki."
+            - "Embedded Materialized Input: notes say transformations are
+              performed by each consuming system."
+        - cause_id: evolution-candidate-001.cause-003
+          claim: Consumer-side conversion enables divergent behavior when grades or
+            mapping rules evolve.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: classification rule derives
+              `Exposure.risk_grade` from `RiskRating.grade` while allowing
+              report team manual adjustment."
+            - "Embedded Materialized Input: notes say transformations are
+              performed by each consuming system."
+      unresolved_beyond_evidence: The bounded target does not show the external wiki
+        or consumer implementations, so the finding is limited to the ontology
+        contract's lack of an internal conversion authority.
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml / ExposureAggregate and classification_rules[1]
+    evidence_anchor: "Embedded Materialized Input: `ExposureAggregate.total_amount`
+      note says `월말 배치로 계산해 저장. 일중 신규 여신은 다음 배치까지 미반영.`; classification rule
+      says `Limit 소진율 = ExposureAggregate.total_amount / Limit.approved_amount.
+      통화가 다른 경우 환산은 각 시스템의 당일 환율 테이블을 사용한다.`"
+    claim: Exposure aggregation and limit-utilization rules are not temporally
+      versioned, so adding intraday products, currencies, or reporting cutoffs
+      can break continuity of limit calculations.
+    what: The ontology stores borrower-level exposure totals as month-end batch
+      values while defining limit utilization from that stored total. It also
+      delegates currency conversion to each system's same-day exchange-rate
+      table without naming a canonical rate source, rate timestamp, or
+      calculation as-of policy.
+    why: A credit risk taxonomy that must serve both engines and reports needs
+      stable temporal semantics for replay, audit, and future product/currency
+      expansion. Here, intraday exposures are explicitly excluded until the next
+      batch, while limit utilization uses that stale aggregate and system-local
+      FX. When new intraday facilities, currencies, or reporting frequencies are
+      added, the existing concepts cannot absorb them without changing
+      calculation semantics or accepting inconsistent utilization outputs.
+    how_to_fix: "Introduce explicit temporal and valuation concepts:
+      `ExposureSnapshot` or `ExposureAggregate` with calculation_frequency,
+      included_exposure_cutoff, as_of timestamp, source batch/run id, and FX
+      source/rate_time. Define limit utilization against a named snapshot and
+      canonical FX policy."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared risk-engine and reporting basis for limit utilization
+        and exposure aggregation.
+      failure_condition: When the ontology must support intraday lending, additional
+        currencies, or different report cutoffs, the same borrower and limit can
+        receive different utilization results depending on batch timing and each
+        system's FX table.
+      impact: "The ontology is not evolution-resilient for temporal expansion: future
+        reporting or engine changes require reworking core aggregate semantics
+        and may disrupt comparability with historical stored totals."
+      evidence_refs:
+        - "Embedded Materialized Input: `ExposureAggregate.definition` says it
+          is the borrower-level total of all `Exposure.amount`."
+        - "Embedded Materialized Input: `ExposureAggregate.total_amount` note
+          says month-end batch storage and intraday omissions."
+        - "Embedded Materialized Input: `ExposureAggregate.as_of` is a date, not
+          a timestamp or run/version reference."
+        - "Embedded Materialized Input: classification rule for limit
+          utilization uses each system's same-day exchange-rate table."
+    causal_path:
+      root_cause_candidate: The ontology combines stored batch aggregates with
+        system-local FX conversion but lacks canonical snapshot/version and
+        valuation-time concepts.
+      root_cause_step_id: evolution-candidate-002.cause-004
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: "`ExposureAggregate.total_amount` is defined as the total of all exposure
+            amounts but is stored from a month-end batch that omits intraday new
+            credit until the next batch."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `ExposureAggregate.definition`: `차주
+              단위 총익스포저. 모든 Exposure.amount의 합.`"
+            - "Embedded Materialized Input: `ExposureAggregate.total_amount`
+              note: month-end batch and intraday omission."
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Limit utilization is computed from that aggregate and approved limit
+            amount.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: classification rule `Limit 소진율 =
+              ExposureAggregate.total_amount / Limit.approved_amount`."
+        - cause_id: evolution-candidate-002.cause-003
+          claim: Currency conversion is delegated to each system's same-day FX table,
+            leaving no stable valuation authority in the ontology.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: classification rule says different
+              currencies use each system's same-day exchange-rate table."
+        - cause_id: evolution-candidate-002.cause-004
+          claim: Future intraday, multi-currency, or higher-frequency reporting changes
+            can alter utilization results without a versioned snapshot or FX
+            policy preserving continuity.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `ExposureAggregate.as_of` only
+              provides a date."
+            - "Embedded Materialized Input: month-end aggregate note and
+              each-system FX rule."
+      unresolved_beyond_evidence: The bounded target does not include actual batch or
+        FX table implementations; the finding is about missing ontology-level
+        temporal and valuation authority.
+  - candidate_id: evolution-candidate-003
+    target: credit-risk-ontology.yaml / enumerated category attributes
+    evidence_anchor: "Embedded Materialized Input: `Borrower.segment` values
+      `[retail, sme, corporate]`; `Exposure.product_type` values `[term_loan,
+      revolving, guarantee]`; `Collateral.collateral_type` values `[real_estate,
+      deposit, securities]`; `Exposure.risk_grade` and `RiskRating.grade` are
+      also closed enum lists."
+    claim: Core business classifications are modeled as closed inline enums, so new
+      borrower segments, products, collateral classes, or grades require schema
+      edits rather than additive extension.
+    what: The ontology represents major change-prone classification axes as inline
+      enum value lists with no separate taxonomy entity, lifecycle status,
+      aliasing, or effective-version metadata.
+    why: For an evolving credit-risk concept standard, categories such as product
+      type, collateral type, segment, and grade are expected to expand as
+      portfolios, regulations, and reporting needs change. Inline closed enums
+      force changes directly into existing attribute definitions, increasing
+      migration pressure and making it harder to preserve historical category
+      meaning or support consumer compatibility.
+    how_to_fix: Promote volatile classifications to managed taxonomy concepts such
+      as `ProductType`, `CollateralType`, `BorrowerSegment`, and `GradeCode`
+      with stable ids, labels, active/deprecated status, version/effective
+      dates, and parent/category relations. Keep attributes as references to
+      those taxonomy entries.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Extensible shared classification ontology for credit-risk
+        engine and reporting concepts.
+      failure_condition: When a new segment, product, collateral class, or grade is
+        introduced, the ontology must edit existing enum declarations and
+        downstream validators instead of adding a new taxonomy record with
+        compatibility metadata.
+      impact: This creates brittle evolution and migration risk in the core
+        classification surface, especially for systems that rely on the ontology
+        as a shared validation and reporting basis.
+      evidence_refs:
+        - "Embedded Materialized Input: `Borrower.segment` inline enum values."
+        - "Embedded Materialized Input: `Exposure.product_type` inline enum
+          values."
+        - "Embedded Materialized Input: `Collateral.collateral_type` inline enum
+          values."
+        - "Embedded Materialized Input: `RiskRating.grade` and
+          `Exposure.risk_grade` inline enum values."
+    causal_path:
+      root_cause_candidate: The ontology encodes volatile classification vocabularies
+        as closed attribute-local enums instead of first-class extensible
+        taxonomy concepts.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Multiple core classification axes are closed inline enum lists inside
+            attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Borrower.segment`,
+              `Exposure.product_type`, `Collateral.collateral_type`,
+              `RiskRating.grade`, and `Exposure.risk_grade` enum declarations."
+        - cause_id: evolution-candidate-003.cause-002
+          claim: Inline enum expansion requires modifying existing attribute schemas
+            rather than adding separate taxonomy records.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: enum values are embedded directly
+              under each attribute; no separate taxonomy entities for product,
+              collateral, segment, or grade codes are defined."
+        - cause_id: evolution-candidate-003.cause-003
+          claim: Without lifecycle or effective-version metadata, future category changes
+            cannot preserve historical meaning or compatibility in the ontology
+            itself.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: no enum entries include
+              active/deprecated status, aliases, or effective dates; ontology
+              version is only global `1.1`."
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: credit-risk-ontology.yaml / Collateral entity inheritance
+    evidence_anchor: "Embedded Materialized Input: `Collateral.definition` says
+      `익스포저를 담보하는 자산. 담보 평가의 기본 단위.` while `Collateral` also declares `is_a:
+      Exposure`; relations include `{ from: Exposure, to: Collateral, kind:
+      secured_by }`."
+    claim: Collateral is modeled both as a subtype of Exposure and as a secured
+      asset related from Exposure, limiting future collateral model evolution.
+    what: The ontology makes `Collateral` inherit from `Exposure` even though its
+      definition describes an asset that secures an exposure, and a separate
+      `secured_by` relation also connects exposure to collateral.
+    why: From an evolution perspective, this conflates credit exposure and securing
+      asset lifecycles. Adding collateral-specific extensions such as pooled
+      collateral, multiple valuations, guarantees as collateral support, lien
+      priority, or asset substitution may require untangling inheritance because
+      collateral would inherit exposure attributes like borrower reference,
+      amount, product type, risk grade, and LTV even when those are not
+      properties of the asset itself.
+    how_to_fix: Remove `Collateral is_a Exposure` and model collateral as a separate
+      asset/support concept related to exposures through a relationship entity
+      such as `SecurityAgreement` or `CollateralLink`, carrying allocation,
+      priority, valuation, and effective dates.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: A change-tolerant concept basis for exposure and collateral
+        management shared across systems.
+      failure_condition: When collateral coverage expands beyond one asset directly
+        attached to one exposure, the inherited exposure structure forces
+        collateral records to carry exposure fields or requires a breaking
+        remodel.
+      impact: The current inheritance choice narrows future collateral extensions and
+        increases the likelihood of a disruptive schema change in a core
+        risk-management concept.
+      evidence_refs:
+        - "Embedded Materialized Input: `Collateral.definition` describes a
+          securing asset and valuation unit."
+        - "Embedded Materialized Input: `Collateral` declares `is_a: Exposure`."
+        - "Embedded Materialized Input: relation `Exposure -> Collateral` with
+          kind `secured_by`."
+        - "Embedded Materialized Input: `Exposure` attributes include borrower,
+          amount, product type, risk grade, and LTV that are inherited by
+          `Collateral` through `is_a`."
+    causal_path:
+      root_cause_candidate: The ontology uses inheritance for an association/lifecycle
+        relationship between exposure and collateral.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: Collateral is defined as an asset securing an exposure.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Collateral.definition`."
+        - cause_id: evolution-candidate-004.cause-002
+          claim: The ontology simultaneously declares `Collateral is_a Exposure` and a
+            separate `Exposure secured_by Collateral` relation.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Collateral.is_a: Exposure`."
+            - "Embedded Materialized Input: relation from `Exposure` to
+              `Collateral` kind `secured_by`."
+        - cause_id: evolution-candidate-004.cause-003
+          claim: Inheritance makes collateral structurally depend on exposure attributes,
+            constraining later collateral-specific lifecycle extensions.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Exposure` attributes include
+              `borrower_ref`, `amount`, `product_type`, `risk_grade`, and `ltv`;
+              `Collateral` has its own `collateral_id`, `collateral_type`,
+              `appraised_value`, and `appraised_at`."
+      unresolved_beyond_evidence: The bounded ontology does not define inheritance
+        semantics beyond `is_a`; the risk is inferred from the visible subtype
+        declaration and inherited attribute surface.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The review treats the embedded materialized input as the authoritative
+    target, per the prompt packet.
+  - Because session_domain is none, no external domain document or web source
+    was used.
+  - The evolution lens evaluates change tolerance and extensibility, not full
+    logical correctness or coverage except where those concerns create
+    future-change risk.
+validation:
+  unaddressable_candidates: []

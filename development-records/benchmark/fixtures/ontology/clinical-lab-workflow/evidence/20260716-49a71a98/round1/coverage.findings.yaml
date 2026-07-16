@@ -1,0 +1,285 @@
+schema_version: 1
+session_id: 20260716-49a71a98
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: clinical-lab-ontology.yaml / CriticalValue notification model
+    evidence_anchor: 'CriticalValue.attributes.notified note: "통보 완료 여부. 통보 시각과 수신자는
+      전화 기록 대장에 있다."'
+    claim: Critical-value notification is modeled only as a boolean and omits the
+      notification evidence concept needed for EMR/LIS authority.
+    what: The ontology includes CriticalValue thresholds and a notified flag, but it
+      does not model a notification event, recipient, notifier, timestamp,
+      channel, acknowledgement, or escalation outcome. The note places key
+      evidence in an external phone log rather than in the ontology.
+    why: Critical-value notification is a controlled clinical action. A boolean
+      cannot reconstruct who notified whom, when, on what basis, and whether the
+      notice was acknowledged. For a concept authority document used in EMR/LIS
+      integration, leaving that evidence concept outside the model weakens
+      downstream auditability and patient-safety workflows.
+    how_to_fix: Add a CriticalValueNotification or NotificationEvent entity related
+      to CriticalValue/Result/Order, with notifier, recipient, notified_at,
+      channel, acknowledgement status/time, escalation fields, and source-system
+      authority. Replace or derive notified from that event instead of making it
+      the only modeled fact.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use as the conceptual authority document for EMR/LIS
+        integration from order through report, including operational risk
+        concepts.
+      failure_condition: When a critical result must be communicated or audited, the
+        ontology can only represent a completed/not-completed flag while the
+        actor, time, recipient, and acknowledgement evidence are outside the
+        modeled concept space.
+      impact: Implementers may integrate only a lossy boolean status, making
+        critical-result communication non-reconstructable and weakening clinical
+        audit, escalation, and dispute handling.
+      evidence_refs:
+        - CriticalValue.attributes.notified note
+        - CriticalValue entity lacks notification event attributes or relations
+        - Request summary asks for operational risks around entity, relation,
+          and state model
+    causal_path:
+      root_cause_candidate: The ontology treats critical-value notification as an
+        attribute of the threshold concept instead of modeling the controlled
+        notification action as its own evidence-bearing event.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: CriticalValue contains threshold fields and a boolean notified flag, but
+            no notification event or relation to Staff/clinician/recipient.
+          relation_to_previous: null
+          evidence_refs:
+            - CriticalValue.attributes.test_ref/lower_bound/upper_bound/notified
+        - cause_id: coverage-candidate-001.cause-002
+          claim: The only mentioned notification details, time and recipient, are
+            described as existing in a separate phone log outside the ontology.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "CriticalValue.attributes.notified note: 통보 시각과 수신자는 전화 기록 대장에 있다."
+        - cause_id: coverage-candidate-001.cause-003
+          claim: Because the evidence-bearing action is outside the concept model, the
+            ontology cannot serve as the integration authority for
+            critical-value notification audit semantics.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Ontology header: EMR/LIS 연동 설계의 개념 권위 문서로 사용 예정"
+            - CriticalValue notification evidence omission
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: clinical-lab-ontology.yaml / Specimen lifecycle
+    evidence_anchor: 'Specimen.lifecycle: [collected, received, in_analysis,
+      analyzed]; state_rules: "Specimen이 analyzed가 된 뒤의 보관/폐기 처리는 각 부서 내규를
+      따른다."'
+    claim: Specimen lifecycle stops at analyzed and omits post-analysis storage,
+      retention, disposal, and exception states.
+    what: The specimen lifecycle covers collection through analysis, then delegates
+      storage/disposal to department policy without representing those lifecycle
+      stages in the ontology.
+    why: Specimen handling does not end at analysis in operational workflows.
+      Post-analysis storage, retention, disposal, and possible retrieval/retest
+      are lifecycle concepts that EMR/LIS integration may need to coordinate or
+      audit. Delegating them to local policy leaves a coverage gap in the
+      concept authority document.
+    how_to_fix: Extend Specimen lifecycle with post-analysis states such as stored,
+      retained, disposed, rejected, lost, or recalled as appropriate, and add
+      retention/disposal event concepts with actor, time, reason, and department
+      policy reference if policy variability must remain.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: A complete clinical lab workflow ontology from order to report
+        that can guide operational EMR/LIS integration.
+      failure_condition: After Specimen reaches analyzed, the model has no canonical
+        state or event vocabulary for storage, retention, disposal, or
+        post-analysis exceptions.
+      impact: Systems using the ontology may diverge on specimen end-of-life
+        semantics, making retention, disposal audit, retesting, and exception
+        handling inconsistent across departments.
+      evidence_refs:
+        - "Specimen.lifecycle: [collected, received, in_analysis, analyzed]"
+        - state_rules post-analysis storage/disposal delegated to department
+          policy
+    causal_path:
+      root_cause_candidate: The ontology bounds Specimen lifecycle to the analytical
+        phase and leaves end-of-life handling outside the shared concept model.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Specimen lifecycle enumerates only collected, received, in_analysis, and
+            analyzed.
+          relation_to_previous: null
+          evidence_refs:
+            - Specimen.lifecycle
+        - cause_id: coverage-candidate-002.cause-002
+          claim: The only post-analyzed handling rule says storage/disposal follows each
+            department's internal rules, without modeling shared states or
+            events.
+          relation_to_previous: causes
+          evidence_refs:
+            - state_rules post-analysis storage/disposal sentence
+        - cause_id: coverage-candidate-002.cause-003
+          claim: This leaves the integration authority without canonical post-analysis
+            lifecycle concepts for specimen end-of-life operations.
+          relation_to_previous: causes
+          evidence_refs:
+            - Ontology header declares concept model for hospital lab pipeline
+              and EMR/LIS integration authority
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: clinical-lab-ontology.yaml / Test, Assay, CriticalValue, and TAT
+      reference data
+    evidence_anchor: 'Test and Assay catalog attributes lack effective
+      dates/history; CriticalValue has bounds but no effective period; notes:
+      "현재 신규 항목은 두 곳 모두에 등록한다" and "대시보드 팀이 자체 계산식을 유지한다."'
+    claim: Time-dependent catalog, threshold, and calculation concepts lack
+      effective-period and history coverage.
+    what: The ontology models Test, Assay, CriticalValue bounds, and TAT calculation
+      references as current values only. It does not include
+      effective_from/effective_to, version, supersession, historical threshold,
+      unit history, or calculation-version concepts.
+    why: Catalog definitions, assay mappings, critical thresholds, units, and TAT
+      formulas are time-dependent operational facts. Without validity intervals
+      or history, a past result/report cannot be reliably interpreted under the
+      rules and thresholds that were in force when it was produced.
+    how_to_fix: Add versioned/effective-dated concepts for Test, Assay,
+      CriticalValue thresholds, units/reference metadata, and TAT calculation
+      rules. Relate Result/Report to the effective catalog or rule version used
+      at verification/release time.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Conceptual authority for EMR/LIS integration that supports
+        reliable historical reconstruction of lab results and operational
+        metrics.
+      failure_condition: When catalog mappings, thresholds, units, or TAT formulas
+        change, the ontology has no concept for the value version that applied
+        at a past collection, verification, or release time.
+      impact: Historical reports, corrected results, audits, and dashboard metrics may
+        be reinterpreted using current definitions rather than the definitions
+        in force at the event time.
+      evidence_refs:
+        - Test attributes lack validity/version fields
+        - Assay attributes lack validity/version fields
+        - CriticalValue lower_bound/upper_bound lack effective period
+        - notes mention dual Test/Assay registration and external TAT calculation
+    causal_path:
+      root_cause_candidate: The model represents mutable reference data as unversioned
+        current-state entities and leaves at least one derived calculation
+        outside the authority model.
+      root_cause_step_id: coverage-candidate-003.cause-004
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Test and Assay are modeled as catalog/current execution units without
+            effective dates, version, or history attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - Test.attributes
+            - Assay.attributes
+        - cause_id: coverage-candidate-003.cause-002
+          claim: CriticalValue thresholds are modeled as bounds for a Test but without an
+            effective period or threshold version.
+          relation_to_previous: causes
+          evidence_refs:
+            - CriticalValue.attributes.lower_bound/upper_bound/test_ref
+        - cause_id: coverage-candidate-003.cause-003
+          claim: TAT is described as a value calculated by a dashboard team's own formula,
+            with no calculation-rule concept or version in the ontology.
+          relation_to_previous: causes
+          evidence_refs:
+            - "notes: turnaround_time(TAT)은 collected_at부터 released_at까지로 계산하며,
+              대시보드 팀이 자체 계산식을 유지한다."
+        - cause_id: coverage-candidate-003.cause-004
+          claim: Therefore past results and metrics cannot be reconstructed against the
+            catalog, threshold, and formula state that existed at the relevant
+            time.
+          relation_to_previous: causes
+          evidence_refs:
+            - absence of effective/history fields across these entities and notes
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: clinical-lab-ontology.yaml / Result.status and Report.result_status
+      authority coverage
+    evidence_anchor: 'Result.status note: "LIS가 기록하며, Report.result_status에도 동일 정보가
+      유지된다."; Report.result_status note: "보고서에 표시되는 결과 상태의 권위 값. 임상의는 이 값을
+      신뢰한다."'
+    claim: Duplicated result-status concepts lack a single source-of-truth coverage
+      model across LIS and report-facing values.
+    what: Result.status and Report.result_status both carry result-state information
+      with different enum vocabularies. The model says LIS records
+      Result.status, while Report.result_status is the authority value trusted
+      by clinicians, but it does not model a canonical status authority or an
+      explicit projection/synchronization event.
+    why: The ontology explicitly describes the same status information being
+      maintained in two places and synchronized nightly after corrections.
+      Without a single authority concept and a modeled projection/update event,
+      EMR and LIS implementers lack a complete concept for status precedence,
+      staleness, and reconciliation.
+    how_to_fix: Introduce a canonical ResultStatus concept or designate one existing
+      field as authoritative, then model Report.result_status as a derived
+      projection with mapping, freshness, last_synced_at, and
+      correction/amendment event semantics. Include who/what may update the
+      canonical status.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS integration concept authority with clear precedence
+        and operationally safe status interpretation.
+      failure_condition: During the interval between Result.status correction and the
+        nightly report-status sync, the ontology contains two status carriers
+        but no canonical authority/staleness concept that consumers can use
+        consistently.
+      impact: Clinicians or integrated systems may trust a report-facing status that
+        is stale relative to LIS correction state, or implementations may choose
+        different precedence rules.
+      evidence_refs:
+        - Result.status note says LIS records and same information is maintained
+          in Report.result_status
+        - Report.result_status note says report status is the authority value
+          clinicians trust
+        - state_rules say corrected Result.status changes Report.result_status
+          via nightly batch
+    causal_path:
+      root_cause_candidate: The ontology duplicates a status fact across Result and
+        Report without covering the single authority/projection model needed for
+        multi-system integration.
+      root_cause_step_id: coverage-candidate-004.cause-004
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Result.status is recorded by LIS and includes preliminary, final,
+            corrected.
+          relation_to_previous: null
+          evidence_refs:
+            - Result.status values and note
+        - cause_id: coverage-candidate-004.cause-002
+          claim: Report.result_status contains corresponding but different values and is
+            described as the authority value clinicians trust.
+          relation_to_previous: causes
+          evidence_refs:
+            - Report.result_status values and note
+        - cause_id: coverage-candidate-004.cause-003
+          claim: The synchronization rule updates Report.result_status to amended only
+            through a nightly batch after Result.status becomes corrected.
+          relation_to_previous: causes
+          evidence_refs:
+            - state_rules second rule
+        - cause_id: coverage-candidate-004.cause-004
+          claim: The model lacks an explicit canonical status source, staleness marker, or
+            synchronization event to cover this duplicated multi-system value.
+          relation_to_previous: causes
+          evidence_refs:
+            - absence of status authority/projection/sync event entity in
+              entities and relations
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Review used only the embedded materialized input and the embedded coverage
+    role text because session_domain is none and web research is denied.
+  - Clinical lab workflows commonly require reconstructable audit concepts for
+    critical-value notification, specimen handling, mutable catalog/reference
+    data, and cross-system status authority; this is applied as domain context
+    rather than an external standard citation.
+validation:
+  unaddressable_candidates: []

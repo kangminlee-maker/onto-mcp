@@ -1,0 +1,201 @@
+schema_version: 1
+session_id: 20260716-e5e2a98b
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Operational quantity meaning for scrap, yield, and
+      item-specific UOM conversion is not governed as part of the PLM/MES
+      baseline, so conforming systems can compute production quantities
+      differently.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The issue identifies a baseline authority gap rather than a
+      downstream symptom: quantity semantics remain outside the canonical model.
+      Because PLM/MES integration depends on shared quantity interpretation,
+      this should be closed before the ontology is used as an integration
+      standard."
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: ECO effectivity and Part revision synchronization can
+      diverge without a modeled transition or precedence concept, creating
+      hidden wrong-revision risk.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The supported finding frames a missing authority and transition-state
+      model for change control. It affects the next integration stage because
+      downstream consumers need deterministic revision applicability before
+      production-order or MES use.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: BOM, routing, ECO, lifecycle, and production-history states
+      lack an as-of revision/effectivity model, preventing reliable
+      reconstruction of change-controlled manufacturing states.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This is the broad temporal modeling gap that explains multiple
+      current-state compression problems. Since the target is a concept baseline
+      for BOM/routing/change-management consistency, the missing as-of model is
+      central enough to require closure in the target artifact.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-010
+      - finding-005
+  - issue_id: issue-004
+    problem_definition: Controlled actions such as approvals, manual adjustments,
+      and conversion events are represented only as resulting states or notes,
+      leaving audit evidence unavailable.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is a provenance and auditability gap rather than a direct
+      blocker to basic concept reading. It should be carried into the next
+      modeling stage so controlled operational changes have actor, time,
+      rationale, and before/after evidence.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-005
+    problem_definition: The unit system is fixed and lacks first-class unit
+      conversion authority, making item-specific or future unit changes
+      dependent on schema edits or local interpretation.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The fixed-enum UOM model is a root extensibility and interpretation
+      defect. It overlaps with the broader quantity-semantics issue but remains
+      a distinct concept-surface problem that must be resolved before dependable
+      integration expansion.
+    related_surface_finding_ids:
+      - finding-007
+      - finding-008
+  - issue_id: issue-006
+    problem_definition: WorkCenter capacity is a single numeric field with variable
+      implicit units, making routing capacity incomparable for scheduling and
+      production-order creation.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue directly concerns a model element whose value cannot be
+      safely interpreted without out-of-band knowledge. Because routing capacity
+      feeds scheduling and production-order behavior, explicit measure semantics
+      are needed before downstream use.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-009
+      - finding-014
+  - issue_id: issue-007
+    problem_definition: The BOM graph is required to be acyclic while also being
+      used for a scrap re-input self-reference case, making the rule surface
+      internally unsatisfiable.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This is an explicit conflict between an invariant and a stated
+      modeling case. It blocks validation semantics for the target ontology
+      itself, so it should be fixed in the target rather than deferred.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-008
+    problem_definition: AlternatePart combines symmetric interchangeability and
+      directional substitution under one concept and shortcut relation, allowing
+      consumers to apply substitution in the wrong direction.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The core problem is competing meanings assigned to the same
+      alternate-part concept. It materially affects item and substitution
+      interpretation, so the distinction should be resolved before integration
+      consumers rely on it.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-009
+    problem_definition: InspectionPlan is modeled as an Operation subtype even
+      though its described meaning is a plan or specification rather than
+      necessarily an executable routing step.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is a type-semantics conflict that can confuse routing and
+      quality mappings. It is material but narrower than the core
+      BOM/change-control blockers, so it can be carried into the next modeling
+      stage.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-010
+    problem_definition: Manufacturing routing semantics are attached to the broad
+      Part concept even though Part includes purchased items.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The relation placement overgeneralizes manufacturing applicability
+      and can mislead downstream routing logic. It is a root modeling-scope
+      issue, but its bounded impact makes it suitable for next-stage closure
+      rather than immediate target blocking.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-011
+    problem_definition: AlternatePart exists as an attributed entity but is
+      unreachable through formal relations, so graph consumers cannot access
+      qualifying relationship attributes.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: This is a structural completeness defect in the formal graph surface.
+      Because the ontology is intended as an integration baseline, graph
+      consumers must be able to traverse to the relationship entity and its
+      qualifiers before relying on alternate-part semantics.
+    related_surface_finding_ids:
+      - finding-016
