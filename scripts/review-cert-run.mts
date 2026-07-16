@@ -102,7 +102,7 @@ import {
   type ReviewCertRun,
 } from "../src/core-runtime/discovery/review-cert-record.ts";
 import { resolveClaudeBin } from "../src/core-runtime/llm/claude-bin.ts";
-import { benchmarkFixture, settingsForCase } from "./review-pipeline-benchmark.ts";
+import { benchmarkFixture, settingsForCase, type BenchmarkOptions, type BenchmarkCase } from "./review-pipeline-benchmark.ts";
 import { rowFromAttempt, type BenchmarkRunLike } from "./review-cert-row.ts";
 
 const ts = () => new Date().toISOString();
@@ -220,18 +220,24 @@ if (rehearsal && opts["out"] === undefined) {
 // retry.resubmit.enabled=true AND retry.salvage.enabled=false. A silent knob
 // regression must fail HERE, not surface as a polluted/all-zero disclosure.
 {
-  const probeSettings = settingsForCase(
-    {
-      runs: 1, caseSelectors: ["all-medium"], model: "probe", provider: "openai",
-      auth: "oauth", baseEffort: "medium", baselineEffort: "low", candidateEffort: "xhigh",
-      sweepEfforts: [], sweepUnits: [], sweepAllUnits: false,
-      fixtureIds: ["review-pipeline-target-v1"], lensIds: [], keepTmp: false,
-      timeoutMs: 1000, unitSweepCandidateOnly: false, maxConcurrentLenses: 1,
-      retryResubmit: true, disableSalvage: true,
-    } as never,
-    { case_id: "all-medium", label: "probe", profile_role: "candidate",
-      comparison_axis: "run-effort", base_effort: "medium", unit_efforts: {} } as never,
-  ) as {
+  // Typed probe (HIGH-1): the case options + case assignment are annotated with
+  // settingsForCase's real parameter types, NOT `as never`. A knob regression
+  // (renamed/removed `retryResubmit`/`disableSalvage`, or a drifted field like the
+  // stale `comparison_axis: "run-effort"` this cast previously hid) now fails at
+  // COMPILE, not only at the runtime assertion below.
+  const probeOptions: BenchmarkOptions = {
+    runs: 1, caseSelectors: ["all-medium"], model: "probe", provider: "openai",
+    auth: "oauth", baseEffort: "medium", baselineEffort: "low", candidateEffort: "xhigh",
+    sweepEfforts: [], sweepUnits: [], sweepAllUnits: false,
+    fixtureIds: ["review-pipeline-target-v1"], lensIds: [], keepTmp: false,
+    timeoutMs: 1000, unitSweepCandidateOnly: false, maxConcurrentLenses: 1,
+    retryResubmit: true, disableSalvage: true,
+  };
+  const probeCase: BenchmarkCase = {
+    case_id: "all-medium", label: "probe", profile_role: "candidate",
+    comparison_axis: "all_effort", base_effort: "medium", unit_efforts: {},
+  };
+  const probeSettings = settingsForCase(probeOptions, probeCase) as {
     review?: {
       execution?: {
         retry?: {
