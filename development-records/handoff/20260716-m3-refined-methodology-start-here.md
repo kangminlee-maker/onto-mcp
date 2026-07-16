@@ -9,13 +9,20 @@ band 판정 방법론 정제다. 이 문서는 `/clear` 후 재개용.
 pwd                              # /Users/kangmin/Documents/onto-mcp
 git fetch origin
 git checkout feat/m3-defect-spectrum-benchmark   # PR #211의 브랜치
-git log --oneline -1             # 4465afa docs(design): record M3 P0 empirical results …
+git log --oneline -1             # a2e0d8e fix(m3): harden defect-spectrum … (4-lens review union)
 npx vitest run scripts/m3-defect-spectrum.test.ts scripts/m3-attribution-judge.test.ts scripts/m3-run.test.ts
-                                 # 35 passed
-npx tsc --noEmit                 # clean
+                                 # 48 passed
+# ⚠ `npx tsc --noEmit`(check:ts-core)는 src/**만 커버 — scripts/는 tsc·vitest 어느 쪽도 타입체크 안 함.
+#   scripts 타입체크는 임시 tsconfig(extends ./tsconfig.json, rootDir ".",
+#   allowImportingTsExtensions true, include scripts/m3-*.ts)로 별도 실행.
 ```
 
 PR #211이 아직 오픈이면 이 브랜치에서 계속; 머지됐으면 main에서 follow-up 브랜치.
+
+**구현 하드닝 반영됨(commit a2e0d8e)**: 4렌즈 로컬 교차검증 union을 실코드+20세션 재확증 후 착지
+(score-neutral). 경로 앵커·executor import 결합 제거·0-material/dangling/중복 throw·단일 dispatch
+factory(8192 single-source)·judge_auth+source sha256 capture·replay 검증·--judge-runs 검증.
+**F6 severity 축은 owner 결정으로 retire**(불활성 死지표 제거). 상세: 설계 §11.
 
 ## 왜 정제가 필요한가 (이 세션 실증, 재도출 불필요)
 
@@ -42,6 +49,21 @@ PR #211이 아직 오픈이면 이 브랜치에서 계속; 머지됐으면 main�
 
 착수 전 `scripts/m3-run.ts` `aggregate`/`stats`와 그 테스트 `m3-run.test.ts` 재확인.
 
+### 이 이터레이션에 함께 처리할 계기-타당성 픽스 (owner 결정 2026-07-16, 설계 §11)
+
+K↑·분포화 재작업이 어차피 baseline **1회 재실행**을 요구하므로, 아래 두 계기 변경을 같은 재실행에 묶는다:
+
+5. **judge projection에 위치 신호 포함(validity HIGH)**: `buildAttributionUserPrompt`가 현재
+   {issue_id, statement, severity}만 전달 → judge가 프롬프트의 "그 위치에서 그 문제" 요구를 못 지켜
+   강한 리뷰를 거짓 "미달"로 채점(systematic bias, K-run 미포착). `parseSurfacedIssues`가 이미
+   finding-ledger를 조인하니 finding.target를 `SurfacedIssue.where`로 실어 projection(+issue.evidence_refs)에
+   포함. LOCATION만 — proposed_action/impact는 over-match/precision 리스크라 제외. 필드 실재 확인됨
+   (target 18/18·16/16·40/40, evidence_refs 전 이슈).
+   ⚠ **이 픽스 착지 전 fresh run은 authoritative 취급 금지**(귀속·수치가 바뀜).
+6. **engagement/canary 대조 추가(validity MEDIUM)**: 붕괴/미참여 judge가 안정적 "미달"을 real
+   verdict와 구분 불가. fixture별 canary(정답 issue↔defect 쌍을 ground-truth에 authoring) miss ⇒
+   instrument-broken abort. 최소판: ≥1 진성 탐지 확실한 fixture에서 "미달" 신뢰 전 attributed_issues>0 게이트.
+
 ## 실행 방법 (judge = 소량 spend)
 
 - 인증: `ANTHROPIC_API_KEY` 미설정 → **oauth 경로 사용**(`--judge-auth oauth`, 실 claude 바이너리
@@ -57,6 +79,6 @@ PR #211이 아직 오픈이면 이 브랜치에서 계속; 머지됐으면 main�
 - P2(owner spend): 라이브 모델 비교.
 
 ## 참조
-- SSOT: `development-records/design/20260716-m3-model-characteristic-benchmark-design.md` (§3-3 정정·§10 실증)
+- SSOT: `development-records/design/20260716-m3-model-characteristic-benchmark-design.md` (§3-3 정정·§10 실증·§11 구현리뷰+owner 결정)
 - PR #211, 브랜치 feat/m3-defect-spectrum-benchmark
 - disclosure: `development-records/benchmark/m3/20260716-baseline-evidence/`

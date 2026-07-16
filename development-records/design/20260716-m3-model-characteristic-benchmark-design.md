@@ -233,21 +233,24 @@ small-K agreement가 못 하는 이 구분을 명시. 상세: 위 disclosure REA
 auth/effort 파라미터화·route 배선 테스트), `judge_auth` + source-file **sha256 캡처·replay 검증**
 (fixture drift fail-loud; 구 capture는 warn-only 하위호환), `--judge-runs` 양수 검증. 48 단위테스트.
 
-**미해결 owner 결정(측정 도구 변경 — 임의 변경 금지, 별도 판단 대기):**
-1. **F6 severity 축(§8 "severity 정합")은 as-built 불활성 → 제거함(redesign 대기).** 채점 단위가
+**owner 결정(2026-07-16) — 3건 모두 정제 방법론 이터레이션 안건으로 확정:**
+1. **F6 severity 축(§8 "severity 정합") = 공식 retire 확정.** as-built 불활성: 채점 단위가
    material-only(owner 2026-07-16)라 `parseSurfacedIssues`가 하위-material 이슈를 채점 전 제거 →
    scoreDefectSpectrum에 도달하는 모든 이슈가 material-band → severity 정합률이 구조적으로 항상 1.0,
-   report에도 미방출(死지표+false-green 테스트). "탐지됐으나 과소평가" 신호는 recall miss로 흡수됨.
-   **F6를 진짜 측정하려면** 채점 파이프라인이 하위-material 이슈를 severity 비교용으로 포함해야 함
-   (material-only 단위와 상충) → 재설계 필요. **결정: F6 realize(재설계) vs 공식 retire(recall이 흡수).**
-2. **judge projection이 위치 신호를 withhold(validity HIGH).** `buildAttributionUserPrompt`가 judge에
-   {issue_id, statement, severity}만 주고 위치(finding.target/evidence_refs)를 드롭하는데, 시스템
-   프롬프트는 "그 위치에서 그 문제를 기술할 때만 귀속"을 refute-by-default로 요구. meet_material_recall=1과
-   결합 시 systematic bias → 강한 리뷰가 거짓 "미달". K-run 안정성이 못 잡음(variance 아닌 bias).
-   **결정: finding.target를 `where`로 SurfacedIssue에 실어 projection에 포함 vs 현행 유지**(측정 수치
-   변동 → 기록된 P0 baseline 재현 불가하게 함).
-3. **engagement/canary 대조 부재(validity MEDIUM).** 붕괴/미참여 judge가 안정적 "미달"을 real verdict와
-   구분 불가. **결정: fixture별 canary(정답 issue↔defect 쌍) 또는 attributed_issues>0 게이트 추가.**
+   report에도 미방출(死지표+false-green 테스트). "탐지됐으나 과소평가" 신호는 **recall miss로 흡수**되는
+   것으로 정리. severity_aligned_defect_ids/severity_alignment_rate + 마스킹 테스트 **제거함**(commit
+   a2e0d8e). §8의 severity 축 항목은 이 결정으로 무효.
+2. **judge projection 위치-withhold 편향(validity HIGH) = 정제 방법론과 묶어 수정.** `buildAttributionUserPrompt`가
+   judge에 {issue_id, statement, severity}만 주고 위치(finding.target/evidence_refs)를 드롭하는데,
+   시스템 프롬프트는 "그 위치에서 그 문제를 기술할 때만 귀속"을 refute-by-default로 요구 →
+   meet_material_recall=1과 결합 시 systematic bias(강한 리뷰가 거짓 "미달", K-run이 못 잡음). 수정안:
+   finding.target를 `where`로 SurfacedIssue에 실어 projection(+evidence_refs)에 포함. **K↑·분포화 재작업과
+   1회 재실행으로 통합**(§3-3). ⚠ **제약: projection 수정 전까지 어떤 fresh run도 authoritative 취급 금지**
+   (수정이 귀속·수치를 바꿈 — 기록된 P0 baseline은 replay 전용, 특성 규명 disclosure).
+3. **engagement/canary 대조 = 추가 확정(정제 방법론 이터레이션).** 붕괴/미참여 judge가 안정적 "미달"을
+   real verdict와 구분 불가(K-run은 variance만, systematic bias 못 잡음). 구현: fixture별 canary(정답
+   issue↔defect 쌍, ground-truth에 authoring) miss ⇒ instrument-broken abort; 최소판은 ≥1 진성 탐지
+   확실한 fixture에서 "미달" 신뢰 전 attributed_issues>0 게이트.
 
 ## 9. 설계 검증 이력 (2026-07-16)
 
