@@ -527,6 +527,30 @@ describe("resolveSettingsChain", () => {
     expect(settings.review?.execution?.max_concurrent_lenses).toBe(3);
   });
 
+  it("parses review ontological_anchoring flags from project settings and defaults to absent", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.ontological_anchoring = {
+      obligations: { enabled: true },
+      judgment_anchor: { enabled: false },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(
+      settings.review?.execution?.ontological_anchoring?.obligations?.enabled,
+    ).toBe(true);
+    expect(
+      settings.review?.execution?.ontological_anchoring?.judgment_anchor?.enabled,
+    ).toBe(false);
+
+    const bareRoot = path.join(scratchRoot, "project-bare-anchoring");
+    writeJson(projectSettingsPath(bareRoot), v3ReviewSettings());
+    const bareSettings = await resolveSettingsChain("/unused", bareRoot);
+    expect(bareSettings.review?.execution?.ontological_anchoring).toBeUndefined();
+  });
+
   it("defaults review execution orchestration owner to runtime", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), v3ReviewSettings());

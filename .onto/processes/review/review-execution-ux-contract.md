@@ -123,6 +123,16 @@ Rules:
 8. Non-material findings are preserved as review output and must not be forced
    to zero.
 
+Flag-gated anchor (`review.execution.ontological_anchoring.judgment_anchor`,
+default off; design `development-records/design/20260716-review-ontological-
+primacy-runtime-alignment-design.md` §3-(c)): when enabled, runtime prompts
+additionally anchor severity judgment to the session's declared purpose — the
+confirmed `review-value-alignment-criteria.yaml` entries are projected into the
+issue-artifact Severity Contract block, and scope exclusion routes through the
+admission context fields (rule 2's predicate and the holistic definitions above
+are unchanged; severity is never demoted for scope reasons). On default-on
+promotion this note merges into the table prose.
+
 ---
 
 ## 5. Required Finding Presentation Fields

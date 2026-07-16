@@ -2940,3 +2940,115 @@ describe("buildIssueArtifactPrompt — boundary read authority", () => {
     );
   });
 });
+
+describe("buildIssueArtifactPrompt — ontological anchoring (design §3-(c)/(b))", () => {
+  const projectRoot = "/repo";
+  const lensOutputPaths = [
+    "/repo/.onto/review/session/round1/logic.findings.yaml",
+  ];
+
+  function promptFor(
+    artifactId: "issue-ledger" | "deliberation-plan" | "problem-framing",
+    anchoring?: { confirmedCriteria: { criterion_id: string; statement: string }[] },
+  ): string {
+    return buildIssueArtifactPrompt({
+      artifactId,
+      sessionId: "session-001",
+      projectRoot,
+      outputPath: `/repo/.onto/review/session/${artifactId}.yaml`,
+      lensOutputPaths,
+      executionPlan: minimalExecutionPlan(projectRoot),
+      ...(anchoring ? { ontologicalAnchoring: anchoring } : {}),
+    });
+  }
+
+  it("off: no anchor block, current Severity Contract preserved", () => {
+    const prompt = promptFor("issue-ledger");
+    expect(prompt).not.toContain("Declared-purpose anchor");
+    expect(prompt).not.toContain("Confirmed value-alignment criteria");
+    expect(prompt).toContain(
+      "the declared primary happy path cannot be achieved by any intended user",
+    );
+  });
+
+  it("on with confirmed criteria: additive anchor + criteria embed, holistic ladder retained (§7-3, E-1/E-2 controls)", () => {
+    const prompt = promptFor("issue-ledger", {
+      confirmedCriteria: [
+        { criterion_id: "user-request-intent", statement: "verify the design" },
+      ],
+    });
+    expect(prompt).toContain("Declared-purpose anchor:");
+    expect(prompt).toContain("Confirmed value-alignment criteria:");
+    expect(prompt).toContain("- user-request-intent: verify the design");
+    // E-2 control: the holistic ladder definitions stay authoritative and intact.
+    expect(prompt).toContain(
+      "the declared primary happy path cannot be achieved by any intended user",
+    );
+    expect(prompt).toContain("holistic severity definitions above stay authoritative");
+    // B-1 (§7-3b): scope exclusion routes through admission, never severity demotion.
+    expect(prompt).toContain("keeps its honest severity");
+    expect(prompt).toContain("judgment_state: outside_boundary");
+    expect(prompt).toContain("closure_obligation: out_of_scope");
+  });
+
+  it("on without criteria: anchor present, embed absent (§7-3 both directions)", () => {
+    const prompt = promptFor("issue-ledger", { confirmedCriteria: [] });
+    expect(prompt).toContain("Declared-purpose anchor:");
+    expect(prompt).not.toContain("Confirmed value-alignment criteria:");
+    expect(prompt).not.toContain("Weigh the confirmed review value-alignment criteria below");
+  });
+
+  it("deliberation-plan on: precedence ladder block with option-1 order, allowed values stay complete (§7-4 + E-3 negative control)", () => {
+    const prompt = promptFor("deliberation-plan", { confirmedCriteria: [] });
+    expect(prompt).toContain("Conflict-type precedence");
+    const ladder = [
+      "1. root_hypothesis",
+      "2. purpose_value",
+      "3. domain_constraint",
+      "4. correctness_or_blocking_execution",
+      "5. action_or_severity",
+      "6. partial_overlap_or_cluster_scope",
+    ];
+    let previousIndex = -1;
+    for (const rung of ladder) {
+      const index = prompt.indexOf(rung);
+      expect(index, `missing precedence rung: ${rung}`).toBeGreaterThan(-1);
+      expect(index).toBeGreaterThan(previousIndex);
+      previousIndex = index;
+    }
+    // E-3: the allowed-values enumeration is untouched — all 8 tokens present
+    // between the list heading and the precedence block.
+    const allowedStart = prompt.indexOf("Allowed conflict_type values:");
+    const precedenceStart = prompt.indexOf("Conflict-type precedence");
+    expect(allowedStart).toBeGreaterThan(-1);
+    expect(precedenceStart).toBeGreaterThan(allowedStart);
+    const allowedSegment = prompt.slice(allowedStart, precedenceStart);
+    for (const token of [
+      "correctness_or_blocking_execution",
+      "root_hypothesis",
+      "domain_constraint",
+      "purpose_value",
+      "action_or_severity",
+      "partial_overlap_or_cluster_scope",
+      "evidence_gap",
+      "stance_conflict",
+    ]) {
+      expect(allowedSegment, `allowed values lost token: ${token}`).toContain(
+        `- ${token}`,
+      );
+    }
+  });
+
+  it("deliberation-plan off: no precedence block", () => {
+    const prompt = promptFor("deliberation-plan");
+    expect(prompt).not.toContain("Conflict-type precedence");
+  });
+
+  it("problem-framing on: admission-routing classification instruction; off: absent", () => {
+    const on = promptFor("problem-framing", { confirmedCriteria: [] });
+    expect(on).toContain("scope-disqualified through the admission context fields");
+    expect(on).toContain("instead of being demoted");
+    const off = promptFor("problem-framing");
+    expect(off).not.toContain("scope-disqualified through the admission context fields");
+  });
+});
