@@ -49,7 +49,7 @@ const LLM_REVIEW_EXECUTION_UNIT_IDS = REVIEW_EXECUTION_UNIT_IDS.filter(
   (unitId): unitId is LlmReviewExecutionUnitId => unitId !== "issue_stance_matrix",
 );
 
-interface BenchmarkOptions {
+export interface BenchmarkOptions {
   runs: number;
   caseSelectors: string[];
   executorRealization?: ExecutorRealization;
@@ -158,7 +158,7 @@ interface CommandResult {
   durationMs: number;
 }
 
-interface BenchmarkCase {
+export interface BenchmarkCase {
   case_id: BenchmarkCaseId;
   label: string;
   profile_role: "baseline" | "candidate";
@@ -222,6 +222,8 @@ interface BenchmarkRunSummary {
   total_attempt_count?: number;
   salvaged_unit_count?: number;
   salvaged_unit_ids?: string[];
+  resubmit_applied_unit_count?: number;
+  resubmit_applied_unit_ids?: string[];
   failure_kind_counts?: Record<string, number>;
   unit_summaries?: BenchmarkUnitSummary[];
   review_profile?: ReviewRunManifest["review_execution_profile"];
@@ -1345,7 +1347,7 @@ function unitsFromExecution(execution: ReviewExecutionResult): UnitResult[] {
 }
 
 function sumNumbers(values: Array<number | null | undefined>): number {
-  return values.reduce((sum, value) => sum + (typeof value === "number" ? value : 0), 0);
+  return values.reduce<number>((sum, value) => sum + (typeof value === "number" ? value : 0), 0);
 }
 
 /**
