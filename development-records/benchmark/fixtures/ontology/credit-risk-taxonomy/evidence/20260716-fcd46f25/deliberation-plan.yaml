@@ -1,0 +1,111 @@
+schema_version: 1
+session_id: 20260716-fcd46f25
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: 공유 위험값 전반의 권위 결손으로 유지할지, 등급 문제는 issue-010으로 분리하고 이 이슈를 FX·한도
+      중심의 상위 거버넌스 문제 또는 등급 매핑 구조로 좁힐지 견해가 갈린다.
+    resolution_question: issue-001의 canonical 권위 결손 범위에 등급·FX·한도를 모두 포함할 것인가, 아니면 등급
+      의미와 매핑은 issue-010에 귀속하고 이 이슈의 경계를 다시 정할 것인가?
+  - issue_id: issue-010
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.axiology
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+    conflict_summary: 등급 스케일의 의미·역할·매핑 권위 결손을 독립적인 핵심 이슈로 볼지, issue-001의 광범위한
+      canonical 권위 결손이 등급 영역에 드러난 하위 표면으로 볼지 충돌한다.
+    resolution_question: issue-010을 독립적인 등급 의미 이슈로 유지해야 하는가, 아니면 issue-001의 하위 범위나 표면으로 통합해야 하는가?
+  - issue_id: issue-012
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+    conflict_summary: coverage는 누락된 RiskRating–Exposure 도출·계보 관계를 독립적으로 검증 가능한 구조
+      결함으로 지지하지만, 다수 렌즈는 issue-001 또는 issue-010의 매핑 권위 결손이 만든 표면 증상으로 본다.
+    resolution_question: issue-012를 독립 이슈로 유지할 것인가, 아니면 issue-001 또는 issue-010의 조치에
+      포함되는 구조적 표면으로 귀속할 것인가?
+  - issue_id: issue-006
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+      - issue-stance-matrix.yaml#stances.issue-006.structure
+    conflict_summary: 일부 렌즈는 모델·정책·조정의 무시점 현재값 모델링을 독립 원인으로 지지하지만,
+      logic·semantics·structure는 issue-004의 공통 시간 계약 부재가 만든 전문 사례 또는 표면으로 본다.
+    resolution_question: issue-006의 독립 root를 유지해야 하는가, 아니면 issue-004의 공통 시간·이력 계약
+      결손을 canonical root로 삼고 issue-006을 그 하위 적용 범위로 재분류해야 하는가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 정책과 준수 평가의 분리, 원인, high 심각도에 일치한다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 연체·부도 lifecycle의 최소 공유 의미 경계 누락과 high 심각도에 일치한다.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 변경 가능한 위험 사실의 공통 시간·이력 계약 부재를 지지한다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 통제 행위와 provenance의 별도 모델링 필요성 및 medium 심각도에 일치한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 닫힌 열거형 대신 lifecycle이 있는 버전 코드 목록이 필요하다는 데 일치한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 완전합 정의와 배치 스냅샷 규칙의 충돌 및 해결 방향에 일치한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 Collateral subtype 선언 제거와 secured_by 관계 유지에 일치한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 LTV의 공식 또는 관측 역할과 provenance를 명시해야 한다는 데 일치한다.

@@ -1,0 +1,13 @@
+schema_version: 1
+session_id: 20260716-422472ec
+lens_id: logic
+human_output_ref: null
+findings: []
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []
+  no_findings_rationale: 명시된 타입·상속·관계·무결성 규칙은 경계 내에서 동시에 만족 가능하며, 직접적인 형식 모순은 확인되지
+    않았다. 단위 혼용, 재고 스냅숏의 시간성, 상태 매핑 부재, OrderLine–Shipment 연결 부재는 운영·의미·구조상 위험일 수
+    있으나, session_domain=none인 현재 증거만으로 논리적 비충족성을 도출할 수 없어 logic finding으로 분류하지
+    않았다.

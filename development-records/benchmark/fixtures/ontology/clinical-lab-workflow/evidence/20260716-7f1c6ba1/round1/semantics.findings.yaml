@@ -1,0 +1,338 @@
+schema_version: 1
+session_id: 20260716-7f1c6ba1
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: Result.status, Report.result_status, and their synchronization rule
+    evidence_anchor: materialized-input.md:69-84,121-123
+    claim: The ontology labels result-level and report-level states as the same
+      information while assigning them incompatible vocabularies, meanings, and
+      authorities.
+    what: Result uses preliminary/final/corrected, while Report uses
+      prelim/finalized/amended. Result.status is recorded by the LIS, but
+      Report.result_status is separately declared authoritative for clinicians
+      and may remain stale until a nightly batch.
+    why: Corrected describes a result revision, whereas amended describes a report
+      revision; they are related but not synonymous. Treating them as duplicated
+      copies makes authority and mapping ambiguous and explicitly permits
+      clinician-visible divergence after a correction.
+    how_to_fix: Define separate ResultStatus and ReportStatus concepts, specify the
+      total mapping and transition rules between them, and name one
+      authoritative source for each concept. Require correction propagation
+      before a corrected result is presented as current.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+        result reporting.
+      failure_condition: A finalized report contains a Result whose status changes to
+        corrected before the nightly synchronization updates
+        Report.result_status to amended.
+      impact: The ontology permits two systems to expose conflicting current-state
+        claims, including a stale status explicitly designated as
+        clinician-trusted.
+      evidence_refs:
+        - materialized-input.md:69-84
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: Result revision state and report publication state are
+        conflated as duplicated information while authority is split across two
+        fields.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: A corrected Result can coexist temporarily with a Report still marked
+            finalized.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: semantics-candidate-001.cause-002
+          claim: This divergence is enabled by maintaining two differently coded state
+            fields with delayed synchronization.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-84
+            - materialized-input.md:121-123
+        - cause_id: semantics-candidate-001.cause-003
+          claim: The duplicated fields are described as the same information even though
+            corrected and amended denote states of different entities.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-84
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: CriticalValue entity
+    evidence_anchor: materialized-input.md:100-106
+    claim: CriticalValue conflates a reusable threshold definition with a
+      result-specific notification occurrence.
+    what: The entity is defined as a dangerous value range and contains
+      test-specific bounds, but also carries notified, an event state whose
+      timestamp and recipient are stored in an external telephone log. It has no
+      reference to the particular Result or notification occurrence.
+    why: A threshold policy can apply to many results, whereas notification
+      completion is true only for one detected occurrence and recipient
+      interaction. Attaching notified to the range makes it unclear whether one
+      notification marks the threshold globally notified and prevents reliable
+      event-level interpretation.
+    how_to_fix: Keep CriticalValueThreshold as test-specific policy data. Introduce
+      a result-bound CriticalValueOccurrence or Notification event containing
+      result_ref, threshold_ref, status, notified_at, recipient, and channel.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Reliable conceptual authority for critical-result exchange and
+        operational notification tracking.
+      failure_condition: Multiple results match the same test threshold and
+        integrations interpret the threshold-level notified Boolean as the
+        notification state of each occurrence.
+      impact: Systems can suppress required notifications, duplicate them, or disagree
+        about which critical result was communicated.
+      evidence_refs:
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: Policy configuration and event occurrence are modeled as
+        one ontological type.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: A notification-completion flag is attached to an entity defined as a
+            value range.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: semantics-candidate-002.cause-002
+          claim: The flag cannot identify the Result, time, or recipient to which
+            completion applies.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: semantics-candidate-002.cause-003
+          claim: This ambiguity arises because reusable threshold semantics and
+            per-occurrence notification semantics are conflated.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: Test and Assay concepts
+    evidence_anchor: materialized-input.md:46-60,126-127
+    claim: The semantic identity boundary between Test and Assay is underdefined
+      despite both being maintained as catalog entries.
+    what: Both concepts are named and defined as 검사 항목; one is described as an
+      orderable catalog unit and the other as an analyzer execution unit. New
+      entries must be registered in both, but no identity, equivalence,
+      decomposition, or mapping semantics are declared.
+    why: Orderable clinical intent and executable laboratory procedure can
+      legitimately be distinct, but dual registration without a declared
+      distinction or mapping leaves integrations unable to determine whether
+      records are synonyms, one-to-one counterparts, or panel-to-component
+      relationships.
+    how_to_fix: Define Test as the canonical orderable service and Assay as the
+      canonical executable procedure, then declare the allowed mapping
+      cardinalities and identity rules. If they are intended as synonyms, select
+      one canonical concept and represent the other as an alias rather than
+      independent registration.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared EMR/LIS interpretation of ordered and performed
+        laboratory services.
+      failure_condition: An EMR sends a Test identifier while the LIS records one or
+        more Assay identifiers under the mandated dual-registration practice.
+      impact: Implementers cannot derive stable identity or mapping semantics from the
+        purported authority document, risking duplicate catalog records and
+        incorrect result association.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: The ontology postpones the synonymy-versus-distinction
+        decision while simultaneously requiring both concepts to be populated.
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: Test and Assay are both defined as laboratory test items but emphasize
+            different operational units.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+        - cause_id: semantics-candidate-003.cause-002
+          claim: Their identity relationship remains undecided even though new items are
+            registered in both catalogs.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: The bounded artifact does not establish whether the
+        intended mapping is synonymous, one-to-one, or compositional.
+  - candidate_id: semantics-candidate-004
+    target: Order priority, is_stat, and StatOrder
+    evidence_anchor: materialized-input.md:15-29
+    claim: STAT ordering is modeled simultaneously as an enum value, a Boolean, and
+      a subtype, without equivalence constraints.
+    what: Order can have priority=stat and is_stat=true or false independently,
+      while StatOrder is also declared as an Order subtype. The artifact does
+      not state whether subtype membership is derived from either field or has
+      separate meaning.
+    why: STAT is presented as an order's urgency classification, which is contingent
+      state rather than an essential kind of order. Three independent
+      representations permit semantically contradictory instances and
+      inconsistent classification across EMR/LIS implementations.
+    how_to_fix: Make priority the canonical representation and derive is_stat and
+      any StatOrder view from priority=stat. If StatOrder has genuinely distinct
+      identity or lifecycle semantics, define those semantics and enforce
+      equivalence constraints explicitly.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Consistent interpretation and routing of urgent orders across
+        EMR/LIS boundaries.
+      failure_condition: An Order carries conflicting subtype, priority, and Boolean
+        values, such as priority=routine with is_stat=true or StatOrder
+        membership.
+      impact: Different consumers can classify and route the same order differently
+        because the authority document provides no canonical interpretation.
+      evidence_refs:
+        - materialized-input.md:15-29
+    causal_path:
+      root_cause_candidate: One contingent urgency property is promoted into three
+        unconstrained representations.
+      root_cause_step_id: semantics-candidate-004.cause-003
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: STAT status is independently expressible through priority, is_stat, and
+            StatOrder membership.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:15-29
+        - cause_id: semantics-candidate-004.cause-002
+          claim: No equivalence or derivation rule relates those representations.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:15-29
+        - cause_id: semantics-candidate-004.cause-003
+          claim: The subtype models a mutable urgency classification as though it were an
+            intrinsic order kind.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:21-29
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: Specimen terminology in Test.requires_specimen_type and Assay.specimen_kind
+    evidence_anchor: materialized-input.md:37-60
+    claim: The ontology uses incompatible specimen vocabularies and abstraction
+      levels for ordering and execution concepts.
+    what: Specimen and Test use the closed values blood, urine, tissue, and swab,
+      while Assay uses unrestricted strings exemplified by WB, Serum, and
+      Urine-random. No canonical terminology or mapping semantics are declared.
+    why: Broad source categories and more specific preparation/material terms are
+      not interchangeable labels. Without a common hierarchy or mapping,
+      compatibility between an ordered Test, a collected Specimen, and an
+      executable Assay cannot be interpreted consistently.
+    how_to_fix: Create one canonical SpecimenType concept with stable codes,
+      aliases, and broader/narrower relationships. Reference it from Specimen,
+      Test, and Assay, and model collection material versus processed specimen
+      when that distinction matters.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Semantic interoperability of specimen requirements between EMR
+        order entry and LIS execution.
+      failure_condition: An order requires blood while the LIS assay requires WB or
+        Serum and consumers must decide compatibility without a declared
+        mapping.
+      impact: Equivalent terms may be rejected and non-equivalent materials may be
+        accepted, undermining execution safety and integration consistency.
+      evidence_refs:
+        - materialized-input.md:37-60
+    causal_path:
+      root_cause_candidate: Specimen meaning is encoded through separate local
+        vocabularies rather than one canonical concept system.
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: Test and Specimen use a broad closed enum while Assay uses free-text
+            terms at mixed specificity.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-60
+        - cause_id: semantics-candidate-005.cause-002
+          claim: Cross-system specimen compatibility therefore depends on undeclared term
+            interpretation.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+      unresolved_beyond_evidence: The bounded artifact provides no external
+        terminology mapping against which individual specimen codes can be
+        validated.
+  - candidate_id: semantics-candidate-006
+    target: turnaround_time (TAT) definition
+    evidence_anchor: materialized-input.md:37-44,75-84,108-128
+    claim: TAT is declared as a derived measure without defining which specimen and
+      report timestamps govern when an order has multiple related records.
+    what: TAT is defined as collected_at to released_at and its formula is delegated
+      to the dashboard team. The model permits multiple Specimens per Order and
+      produces Reports from Orders, but the note does not specify aggregation,
+      episode boundaries, exclusions, or the authoritative calculation.
+    why: A derived measure is not semantically determined merely by naming two
+      timestamp fields when either endpoint may have multiple candidates.
+      Independent dashboard logic can select different timestamps and drift from
+      the ontology while still claiming conformance.
+    how_to_fix: Model TAT as a derived metric with an explicit subject and selection
+      rule, such as per specimen-result-report chain or order-level earliest
+      collection to final report release. Declare exclusions, correction
+      behavior, and the ontology-owned formula or versioned metric definition.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use of the ontology as the shared conceptual authority for
+        operational laboratory metrics.
+      failure_condition: An Order has multiple specimens or reports and separate
+        consumers choose different collected_at or released_at values.
+      impact: EMR, LIS, and dashboard implementations can produce incompatible TAT
+        values from the same workflow data with no authoritative resolution.
+      evidence_refs:
+        - materialized-input.md:37-44
+        - materialized-input.md:75-84
+        - materialized-input.md:108-128
+    causal_path:
+      root_cause_candidate: A multi-record derived concept is specified only as two
+        field names and delegated to an external calculation authority.
+      root_cause_step_id: semantics-candidate-006.cause-003
+      steps:
+        - cause_id: semantics-candidate-006.cause-001
+          claim: TAT is stated as released_at minus collected_at without a
+            record-selection rule.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:126-128
+        - cause_id: semantics-candidate-006.cause-002
+          claim: The ontology permits multiple specimen candidates for an Order, making
+            the start timestamp non-unique.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:37-44
+            - materialized-input.md:108-110
+        - cause_id: semantics-candidate-006.cause-003
+          claim: The formula is maintained independently by the dashboard team rather than
+            governed by the conceptual authority document.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:126-128
+      unresolved_beyond_evidence: The bounded artifact does not state whether multiple
+        Reports per Order are allowed, but specimen multiplicity alone is
+        sufficient to make the formula ambiguous.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Result.status and Report.result_status are interpreted as single-valued
+    current-state fields because each is declared as an enum attribute.
+  - WB is interpreted as whole blood, and Serum as a specimen material distinct
+    from the broad category blood, based on the artifact's own specimen_kind
+    examples.
+  - A reusable critical-value threshold may match more than one Result;
+    notification completion applies to a particular detected occurrence rather
+    than permanently to the threshold.
+  - The declared intended use as an EMR/LIS conceptual authority makes
+    conflicting authority and unmapped terminology contract-affecting.
+validation:
+  unaddressable_candidates: []

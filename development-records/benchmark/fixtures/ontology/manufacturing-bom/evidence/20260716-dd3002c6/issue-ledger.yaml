@@ -1,0 +1,424 @@
+schema_version: 1
+session_id: 20260716-dd3002c6
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: ECO를 감사 가능한 변경 전이 및 시점별 Part·BOM·Routing 버전과 연결하면
+      current_eco의 의미 모호성, 변경 대상 단절, 적용 구성 재현 불가가 함께 해소된다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-005
+      - finding-007
+      - finding-018
+      - finding-023
+    relation_refs:
+      - rel-003
+      - rel-004
+      - rel-005
+    raised_by_lens_ids:
+      - coverage
+      - semantics
+      - structure
+    issue_statement: 변경 가능한 제조 구성을 현재값과 단일 ECO 상태로 축약하여 변경 전후 대상, 효력 시점, 감사 행위를 일관되게 식별할 수 없다.
+    proposed_action: 식별 가능한 Part·BOM·Routing 버전과 유효구간을 도입하고, ECO를 근거·행위자·시각·변경 전후
+      대상을 갖는 전이로 연결한다.
+    affected_purpose: PLM/MES 통합에서 BOM·라우팅·변경 적용을 일관되게 판정하고 추적하는 개념 기준 제공
+    failure_condition: ECO 승인·효력 전후의 적용 구성을 결정하거나 과거 구성을 재현하고 변경 행위를 감사·취소·롤백해야 할 때
+    impact: 시스템별로 서로 다른 제조 구성을 선택할 수 있고 변경 근거와 이력을 재현할 수 없어 생산 및 감사 결과를 신뢰하기 어렵다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/coverage.findings.yaml#coverage-candidate-001
+      - manufacturing-bom-ontology.yaml > Part.attributes.rev/current_eco
+      - manufacturing-bom-ontology.yaml > Assembly.attributes.bom_lines
+      - manufacturing-bom-ontology.yaml > Routing.attributes.operations/status
+      - manufacturing-bom-ontology.yaml > integrity_rules[3]
+      - .onto/review/20260716-dd3002c6/round1/coverage.findings.yaml#coverage-candidate-003
+      - manufacturing-bom-ontology.yaml > ECO.definition
+      - manufacturing-bom-ontology.yaml > ECO.attributes
+      - manufacturing-bom-ontology.yaml > relations ECO-to-Part
+      - .onto/review/20260716-dd3002c6/round1/semantics.findings.yaml#semantics-candidate-003
+      - entities.Part.attributes.current_eco
+      - entities.Part.attributes.rev
+      - entities.ECO.attributes.status
+      - entities.ECO.attributes.effective_date
+      - integrity_rules[2]
+      - .onto/review/20260716-dd3002c6/round1/structure.findings.yaml#structure-candidate-002
+      - materialized-input.md:20-21
+      - materialized-input.md:69-75
+      - materialized-input.md:84-96
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-002
+    root_cause_hypothesis: 확장 가능한 UnitOfMeasure와 유효기간이 있는 품목별 ConversionFactor를 도입하면
+      현재 수량 계산의 비결정성과 향후 단위 확장 실패가 함께 해소된다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-008
+      - finding-012
+    relation_refs:
+      - rel-008
+    raised_by_lens_ids:
+      - coverage
+      - evolution
+    issue_statement: 수량과 단위 변환을 독립적인 권위 개념으로 모델링하지 않아 현재 계산과 향후 단위 확장이 모두 비결정적이다.
+    proposed_action: 모든 수량값에 확장 가능한 단위 참조를 결합하고 품목·유효기간별 환산계수와 원본·승인 정보를 모델링한다.
+    affected_purpose: PLM/MES 사이에서 BOM 소요량과 제조 계획값을 지속적으로 동일하게 해석하는 기준 제공
+    failure_condition: 서로 다른 기본단위를 사용하거나 새 단위 및 구매·재고·생산 단위 간 환산이 필요할 때
+    impact: 소요량과 투입량을 재현 가능하게 계산할 수 없고 통상적인 단위 추가도 스키마 변경과 소비자 예외 처리를 요구한다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/coverage.findings.yaml#coverage-candidate-004
+      - manufacturing-bom-ontology.yaml > Part.attributes.uom
+      - manufacturing-bom-ontology.yaml > BomLine.attributes.qty_per/scrap_rate
+      - manufacturing-bom-ontology.yaml >
+        WorkCenter.attributes.capacity_per_shift
+      - manufacturing-bom-ontology.yaml > notes[2]
+      - .onto/review/20260716-dd3002c6/round1/evolution.findings.yaml#evolution-candidate-003
+      - materialized-input.md:14-20
+      - materialized-input.md:98-100
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-003
+    root_cause_hypothesis: 재투입 물질 흐름을 BOM containment에서 분리하면 제품구조 불안정성과 비순환 규칙의 형식적 모순이 함께 사라진다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+      - finding-014
+    relation_refs:
+      - rel-011
+    raised_by_lens_ids:
+      - axiology
+      - logic
+    issue_statement: 공정 내 회수·재투입 흐름을 BOM 자기포함으로 표현하면서 일반 BOM 비순환 규칙도 유지해 구조와 검증 계약이 충돌한다.
+    proposed_action: BOM을 비순환 제품구조로 유지하고 스크랩 회수·재투입을 수량·단위·수율·종료 조건이 있는 별도 물질 흐름으로 분리한다.
+    affected_purpose: PLM 제품구조와 MES 공정 흐름을 정합적으로 연결하고 일관되게 검증하는 BOM 기준 제공
+    failure_condition: 스크랩 재투입 자기참조를 포함한 BOM을 일반 전개·소요량 계산·비순환 검증에 입력할 때
+    impact: 동일 인스턴스의 허용 여부와 전개 결과가 소비자별로 달라져 무한 전개 또는 잘못된 소요량 계산이 발생할 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/axiology.findings.yaml#axiology-candidate-004
+      - materialized-input.md:23-35
+      - materialized-input.md:93-95
+      - review-value-alignment-criteria.yaml:6-8
+      - .onto/review/20260716-dd3002c6/round1/logic.findings.yaml#logic-candidate-001
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-004
+    root_cause_hypothesis: AlternatePart를 endpoint 역할과 direction의 단일 권위인 association
+      entity로 연결하면 대체 의미 충돌과 관계 그래프 단절이 함께 해소된다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-016
+      - finding-022
+    relation_refs:
+      - rel-014
+    raised_by_lens_ids:
+      - semantics
+      - structure
+    issue_statement: 부품 대체의 방향 권위가 엔티티 정의·속성·직접 Part 간선에 분산되어 의미와 그래프 구조가 일치하지 않는다.
+    proposed_action: AlternatePart를 역할과 방향을 소유하는 canonical 관계 엔티티로 명시적으로 연결하고 직접
+      Part-to-Part 간선은 파생 투영으로 제한한다.
+    affected_purpose: PLM/MES가 부품 대체 가능성과 방향 제약을 동일하게 해석할 수 있는 구조적 개념 기준 제공
+    failure_condition: 소비자가 명시적 관계 그래프로 대체 경로를 탐색하거나 one_way 대체를 판정할 때
+    impact: 시스템별로 역방향 대체 허용 여부가 달라져 잘못된 자재 투입, 누락 또는 생산 중단이 발생할 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/semantics.findings.yaml#semantics-candidate-001
+      - entities.AlternatePart.definition
+      - entities.AlternatePart.attributes.direction
+      - .onto/review/20260716-dd3002c6/round1/structure.findings.yaml#structure-candidate-001
+      - materialized-input.md:37-45
+      - materialized-input.md:84-91
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-005
+    root_cause_hypothesis: ECO, Part revision, BOM 및 Routing을 원자적인 시점별 유효 구성으로 연결하면
+      배치 동기화 지연 중 구 리비전 생산을 방지할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 변경 효력의 권위가 분산되고 불일치 처리 규칙이 없어 ECO 효력과 MES 품목 상태가 시간적으로 어긋난다.
+    proposed_action: ECO와 제조 구성 버전을 유효 시점 및 상태로 연결하고 동기화 불일치 시 생산을 차단하거나 권위 원본의 as-of 값을 사용한다.
+    affected_purpose: PLM/MES 통합에서 변경관리의 단일하고 실행 가능한 개념 기준 제공
+    failure_condition: ECO 효력일 이후 Part.rev 주간 배치 갱신 전에 생산 오더가 생성될 때
+    impact: PLM과 MES가 서로 다른 유효 리비전을 사용해 잘못된 자재·공정 기준으로 생산할 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:20-21
+      - materialized-input.md:69-75
+      - materialized-input.md:93-96
+      - review-value-alignment-criteria.yaml:6-8
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: finding-005와 symptom_of 관계만 있으며 same_root_candidate 관계로 연결되지
+      않아 별도 이슈로 유지한다.
+  - issue_id: issue-006
+    root_cause_hypothesis: 운영값의 권위·계보·시간 유효성을 모델링하고 수기 복사본을 파생 투영으로 구분하면 시스템 간 값 불일치를 판정할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 수기 복제된 scrap rate와 표준시간을 권위·유효시점 없는 정규 속성으로 취급해 값 충돌을 정상 상태처럼 노출한다.
+    proposed_action: 운영값에 원본·버전·유효기간·소유 시스템·단위를 부여하고 복사본의 신선도, 충돌 우선순위 및 사용 차단 기준을 정의한다.
+    affected_purpose: PLM/MES 간 BOM·라우팅 운영값의 신뢰 가능한 공통 의미 제공
+    failure_condition: 복사 또는 수기 입력 후 원본 값이 변경되고 다음 대사 전에 계획·원가 계산이 수행될 때
+    impact: 동일 BOM과 라우팅의 소요량 및 표준원가가 시스템별로 달라져 운영 판단의 신뢰성이 낮아진다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:29-35
+      - materialized-input.md:47-53
+      - materialized-input.md:98-99
+      - review-value-alignment-criteria.yaml:6-8
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-009와 duplicates 관계만 있으며 same_root_candidate 관계가 없어 별도 이슈로 유지한다.
+  - issue_id: issue-007
+    root_cause_hypothesis: 측정값을 단위가 결합된 typed measure로 만들고 환산 권위를 데이터로 관리하면 수량 및 능력 계산을 재현할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 수량과 능력을 무차원 숫자로 모델링하고 환산을 현장 판단에 맡겨 계산 의미가 비결정적이다.
+    proposed_action: 수량과 능력에 단위·차원·기간을 결합하고 품목별 버전 관리 환산계수와 유효기간을 권위 데이터로 추가한다.
+    affected_purpose: PLM/MES 통합에서 BOM 수량과 제조 능력의 기계 해석 가능하고 재현 가능한 의미 제공
+    failure_condition: 서로 다른 단위의 품목 또는 작업장을 포함한 계획·소요량·능력 계산을 수행할 때
+    impact: 동일 데이터에서도 시스템이나 담당자별 결과가 달라져 제조계획 신뢰성이 약화된다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/axiology.findings.yaml#axiology-candidate-003
+      - materialized-input.md:14-19
+      - materialized-input.md:29-35
+      - materialized-input.md:63-67
+      - materialized-input.md:98-100
+      - review-value-alignment-criteria.yaml:6-8
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-008과 duplicates 관계만 있으며 same_root_candidate 관계가 없어 별도 이슈로 유지한다.
+  - issue_id: issue-008
+    root_cause_hypothesis: PLM/MES 통합 범위에 최소 실행 트랜잭션과 설계 정의 참조를 포함하면 실제 생산 사실과 설계 기준을 연결할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 모델이 제조 마스터 정의에서 끝나 생산 오더, 실제 소비, 공정 실적, 검사 결과 및 계보를 설계 기준과 연결하지 못한다.
+    proposed_action: 최소 실행 엔티티를 추가하고 각 실행 기록이 적용 BOM·Routing 버전, ECO, 실제 부품 및 공정 결과를 참조하게 한다.
+    affected_purpose: PLM/MES 통합 개념 기준으로서 설계 정의와 제조 운영 사실을 연결하는 목적
+    failure_condition: 생산 오더·실제 자재 소비·공정 실적·검사 결과·생산품 계보를 PLM 정의와 대조해야 할 때
+    impact: 변경 영향 분석, 불량 추적, 리콜 범위 및 생산 적합성 판정을 위한 핵심 추적 경로가 성립하지 않는다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/coverage.findings.yaml#coverage-candidate-002
+      - manufacturing-bom-ontology.yaml > ontology header comment
+      - manufacturing-bom-ontology.yaml > entities 전체
+      - manufacturing-bom-ontology.yaml > integrity_rules[2]
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: 관계 그래프에 이 finding을 포함하는 accepted semantic relation이 없다.
+  - issue_id: issue-009
+    root_cause_hypothesis: 병행 관리값에 권위·동기화 상태와 조정 증거를 모델링하면 충돌 시 사용할 값을 일관되게 판정할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 병행 관리되는 값을 독립 필드와 서술형 대사 관행으로만 두어 값 충돌의 권위와 해결 증거가 없다.
+    proposed_action: 각 값의 권위 원본·소유자·유효구간·동기화 버전을 지정하고 대사 및 수동 조정의 차이·행위자·근거·승인·상태를 기록한다.
+    affected_purpose: PLM/MES 및 주변 장부 간 동일 개념의 권위와 운영 일관성 제공
+    failure_condition: 엑셀·MES·표준원가 시스템 값이 다르거나 복사·수기 조정 후 사용할 값을 결정해야 할 때
+    impact: 계산 결과가 시스템 선택에 따라 달라지고 수동 조정의 감사 가능성이 사라진다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/coverage.findings.yaml#coverage-candidate-005
+      - manufacturing-bom-ontology.yaml > BomLine.attributes.scrap_rate.note
+      - manufacturing-bom-ontology.yaml > Operation.attributes.std_time_min
+      - manufacturing-bom-ontology.yaml > notes[1]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-002와 duplicates 관계만 있으며 same_root_candidate 관계가 없어 별도 이슈로 유지한다.
+  - issue_id: issue-010
+    root_cause_hypothesis: 안정적인 Part 정체성과 시점별
+      PartRevision·BomRevision·RoutingRevision을 분리하면 공존하는 개정의 적용 구성을 판정할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: 품목 정체성과 시간별 개정을 현재 상태 필드와 직접 참조로 합쳐 과거·현재·미래 제조 구성을 함께 표현할 수 없다.
+    proposed_action: 안정적인 품목과 시점별 제조 구성 개정을 분리하고 ECO가 생성·대체하는 개정 및 유효 조건을 명시한다.
+    affected_purpose: 품목·BOM·라우팅·변경관리의 PLM/MES 통합 개념 기준 제공
+    failure_condition: 여러 개정이 과거 이력, 현재 생산, 미래 발효분에 걸쳐 공존하거나 ECO 효력과 배치 동기화 사이에 시차가 있을 때
+    impact: 생산 오더에 적용할 정확한 BOM과 라우팅을 판정할 수 없어 변경 통제와 제조 이력 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/evolution.findings.yaml#evolution-candidate-001
+      - materialized-input.md:20-27
+      - materialized-input.md:55-75
+      - materialized-input.md:84-96
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: finding-005와 duplicates 관계만 있으며 same_root_candidate 관계가 없어 별도 이슈로 유지한다.
+  - issue_id: issue-011
+    root_cause_hypothesis: RoutingStep과 명시적 StepTransition을 도입하면 분기·병렬·재작업을 스키마 변경 없이 표현할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: 공정 순서를 Operation 참조의 선형 컨테이너로 고정해 비선형 라우팅을 표현할 확장 경로가 없다.
+    proposed_action: 라우팅 단계와 조건부 전이 구조를 도입하고 단순 선형 라우팅은 그 그래프의 ordered projection으로 유지한다.
+    affected_purpose: 라우팅 개념을 PLM/MES가 공유할 수 있는 확장 가능한 기준 제공
+    failure_condition: 대체·조건부·병렬·재작업 공정 경로가 필요할 때
+    impact: 새 공정 유형이 데이터 추가가 아니라 스키마와 소비자 계약 변경으로 번져 통합 비용과 오해 위험이 커진다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/evolution.findings.yaml#evolution-candidate-002
+      - materialized-input.md:47-61
+      - materialized-input.md:87-89
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: 관계 그래프에 이 finding을 포함하는 accepted semantic relation이 없다.
+  - issue_id: issue-012
+    root_cause_hypothesis: Capacity를 값·측정 차원·기간·적용 대상으로 분리하면 작업장별 의미 변화와 확장 비용을 줄일 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-013
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: 용량의 수치와 측정 차원·적용 기간을 분리하지 않고 단일 숫자 필드에 다형적 의미를 부여했다.
+    proposed_action: WorkCenter가 명시적 단위와 기간을 가진 하나 이상의 CapacityProfile을 참조하도록 한다.
+    affected_purpose: MES와 공유할 작업장 및 제조 운영 개념의 확장 가능한 기준 제공
+    failure_condition: 서로 다른 용량 차원의 작업장이나 품목별·기간별 용량 계획을 통합할 때
+    impact: 새 설비마다 예외 로직과 스키마 확장이 필요하고 용량 비교 및 계획 결과의 해석 가능성이 낮아진다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/evolution.findings.yaml#evolution-candidate-004
+      - materialized-input.md:63-67
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-020과 duplicates 관계만 있으며 same_root_candidate 관계가 없어 별도 이슈로 유지한다.
+  - issue_id: issue-013
+    root_cause_hypothesis: 대체 관계를 방향성 관계로 정의하거나 대칭 관계로 제한하면 one_way 인스턴스의 논리 모순이 제거된다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-015
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: 대칭적 대체와 방향성 대체를 하나의 정의에 조건 없이 결합해 one_way 인스턴스가 상충하는 요구를 받는다.
+    proposed_action: direction을 권위로 하는 방향성 관계로 정의하거나 대칭성을 유지한다면 one_way와 해당 기본값을 제거한다.
+    affected_purpose: PLM/MES가 공유할 부품 대체 가능성의 일관된 개념 계약
+    failure_condition: direction이 one_way인 AlternatePart 인스턴스를 생성하거나 기본값을 적용할 때
+    impact: 역방향 대체의 참·거짓이 동시에 요구되어 시스템별로 잘못된 대체 허용 또는 거부가 발생할 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/logic.findings.yaml#logic-candidate-002
+      - materialized-input.md:37-45
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-016과 duplicates 관계만 있으며 same_root_candidate 관계가 없어 별도 이슈로 유지한다.
+  - issue_id: issue-014
+    root_cause_hypothesis: InspectionPlan을 독립 규격으로 두고 실행 단계가 이를 참조하게 하면 계획과 실행의 의미를 분리할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-017
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 검사 규격 계획과 실제 검사 실행 단계를 동일 상속 계층으로 모델링해 서로 다른 수명주기와 의미를 혼동한다.
+    proposed_action: InspectionPlan을 독립 계획·규격 엔티티로 만들고 InspectionOperation이
+      applicable_plan 또는 governed_by로 참조하게 한다.
+    affected_purpose: 라우팅과 검사 기준의 개념을 PLM/MES 사이에서 정확히 구분하는 기준 제공
+    failure_condition: InspectionPlan이 일반 Operation과 같은 실행 단위로 처리될 때
+    impact: 검사 기준의 재사용·개정과 실제 라우팅 단계가 결합되어 잘못된 공정 삽입, 시간 산정 또는 기준 적용이 발생할 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/semantics.findings.yaml#semantics-candidate-002
+      - entities.InspectionPlan.definition
+      - entities.InspectionPlan.is_a
+      - entities.Operation.definition
+      - entities.Operation.attributes
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: 관계 그래프에 이 finding을 포함하는 accepted semantic relation이 없다.
+  - issue_id: issue-015
+    root_cause_hypothesis: scrap_rate를 손실률 또는 소요량 계수 중 하나로 한정하고 범위와 산식을 명시하면 시스템별 계산 해석 차이가 사라진다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-019
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 손실 비율과 수량 보정계수라는 서로 다른 산식 개념을 scrap_rate 하나에 결합했다.
+    proposed_action: 손실률이면 0~1 범위와 적용 산식을 정의하고, 계수이면 scrap_factor로 구분해 범위·산식·권위 원천을 명시한다.
+    affected_purpose: BOM 수량과 공정 손실을 PLM/MES에서 동일하게 계산하는 개념 기준 제공
+    failure_condition: 소비 시스템이 scrap_rate를 손실 비율, 직접 승수 또는 수율 보정계수로 다르게 해석할 때
+    impact: 자재 소요량, 구매량 및 생산계획 수량이 체계적으로 과대 또는 과소 계산될 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/semantics.findings.yaml#semantics-candidate-004
+      - entities.BomLine.attributes.qty_per
+      - entities.BomLine.attributes.scrap_rate
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: 관계 그래프에 이 finding을 포함하는 accepted semantic relation이 없다.
+  - issue_id: issue-016
+    root_cause_hypothesis: 처리량 용량과 시간 가용성을 별도 개념으로 분리하거나 capacity_kind와 uom을 필수화하면 용량 비교의 차원 오류가 제거된다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-020
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 처리량과 가용 시간이라는 서로 다른 능력 개념을 무단위 capacity_per_shift 하나로 합쳤다.
+    proposed_action: throughput_capacity와 available_time_per_shift를 분리하거나 값에 필수
+      capacity_kind와 단위를 결합하고 부하 대비 산식을 정의한다.
+    affected_purpose: 작업장 능력과 라우팅 부하를 MES에서 일관되게 해석하는 개념 기준 제공
+    failure_condition: 수량 기반 및 시간 기반 작업장의 capacity_per_shift를 같은 차원의 용량으로 처리할 때
+    impact: 능력 계획과 병목 판정이 단위상 무의미해져 생산 일정의 실행 가능성을 잘못 판단할 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/semantics.findings.yaml#semantics-candidate-005
+      - entities.WorkCenter.definition
+      - entities.WorkCenter.attributes.capacity_per_shift
+      - entities.Operation.attributes.std_time_min
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-013과는 duplicates, finding-008과는 shared_cause_candidate
+      관계뿐이며 same_root_candidate 관계가 없어 별도 이슈로 유지한다.
+  - issue_id: issue-017
+    root_cause_hypothesis: 제품 구성 관계와 공정 중 회수·재투입 물질 흐름을 분리하면 BOM 전개와 재생 투입 의미를 각각 일관되게 유지할 수 있다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-021
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 제품 구성 관계를 공정 중 회수·재투입 물질 흐름의 표현 수단으로 재사용해 BOM 의미를 혼동한다.
+    proposed_action: BOM은 비순환 제품구조로 유지하고 스크랩 산출·회수·재투입은 Routing/Operation에 연결된 별도 흐름과 수율로 모델링한다.
+    affected_purpose: 제품 구조와 제조 공정 흐름을 PLM/MES가 동일한 개념으로 교환하는 기준 제공
+    failure_condition: 스크랩 재투입 품목의 BOM을 제품구조 전개나 자재 소요 계산에 사용할 때
+    impact: BOM 전개가 순환하거나 재생 투입량이 제품 구성 수량으로 오해되어 계획 결과의 신뢰성이 약화된다.
+    evidence_refs:
+      - .onto/review/20260716-dd3002c6/round1/semantics.findings.yaml#semantics-candidate-006
+      - entities.BomLine.definition
+      - entities.BomLine.attributes.parent_ref
+      - entities.BomLine.attributes.child_ref
+      - integrity_rules[0]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-004와 duplicates 관계만 있으며 same_root_candidate 관계가 없어 별도 이슈로 유지한다.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-002
+      - issue-016
+    relation_refs:
+      - rel-009
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (qty_per, scrap_rate, capacity_per_shift를 측정 차원이나 단위와
+      결합하지 않은 원시 숫자로 모델링했다.)."
+validation:
+  unclustered_finding_ids: []

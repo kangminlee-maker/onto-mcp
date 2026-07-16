@@ -1,0 +1,203 @@
+schema_version: 1
+session_id: 20260716-422472ec
+planned_issues:
+  - issue_id: issue-001
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: semantics는 핵심 결함을 수량 유형·권위·시점 계약으로 한정하지만 coverage와 structure는
+      일중 할당 및 대사 재현을 위해 잔액·변동 장부와 집계 provenance까지 근본 해결 범위에 포함한다.
+    resolution_question: issue-001의 근본 원인과 필수 조치를 권위·수량 유형·시점 계약으로 한정할 것인가, 아니면
+      잔액·변동 기록과 집계 provenance까지 포함해야 하는가?
+  - issue_id: issue-003
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - axiology
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+    conflict_summary: coverage와 evolution은 직접 입증된 결함을 원천 이벤트와 내부 상태의 버전형 매핑 계약으로
+      좁히지만, axiology·semantics·structure는 canonical fulfillment milestone과
+      Shipment에서 Order로의 파생 규칙 부재까지 직접 근본 원인으로 본다.
+    resolution_question: issue-003의 확정 범위에 버전형 상태 매핑만 포함할 것인가, 아니면 canonical
+      milestone과 Order 상태 파생 규칙까지 필수 계약으로 포함할 것인가?
+  - issue_id: issue-004
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - axiology
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: structure는 OrderLine별 수량 연결 부재가 잔량과 완료 근거를 함께 막는 직접 구조 결함이므로
+      현재 medium보다 심각도를 높여야 한다고 보지만, 다른 참여 렌즈들은 medium을 유지한다.
+    resolution_question: 부분출하의 완료·잔량 근거 부재를 medium으로 유지할 것인가, 아니면 핵심 주문충족 경로의 구조적
+      실패로 보아 high로 상향할 것인가?
+  - issue_id: issue-009
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - axiology
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+    conflict_summary: coverage는 직접 발견된 현재 상태 매핑 drift를 medium으로 평가해 issue의 high 심각도를
+      낮추지만, evolution을 포함한 다른 렌즈들은 과거 의미 재현 실패와 변경 취약성을 합쳐 high를 유지한다.
+    resolution_question: 버전 관리된 상태 매핑 계약 부재의 심각도를 현재 연동 drift 중심의 medium으로 볼 것인가, 변경
+      후 과거 의미 재현 실패까지 포함한 high로 유지할 것인가?
+  - issue_id: issue-012
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - coverage
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+    conflict_summary: evolution은 실물·회계 수량 혼합을 issue-010의 권위 변경·시간성 결함에 속한 구체적 표면으로
+      보지만, semantics·coverage·structure는 목적별 수량 권위 선택을 막는 독립적인 고위험 의미·구조 결함으로
+      다룬다.
+    resolution_question: issue-012를 issue-010에 흡수되는 표면으로 처리할 것인가, 아니면 수량 유형과 목적별 권위
+      혼합을 다루는 독립 material issue로 유지할 것인가?
+  - issue_id: issue-013
+    priority: 10
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - semantics
+      - axiology
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.coverage
+      - issue-stance-matrix.yaml#stances.issue-013.evolution
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+      - issue-stance-matrix.yaml#stances.issue-013.axiology
+      - issue-stance-matrix.yaml#stances.issue-013.structure
+    conflict_summary: coverage와 evolution은 available_qty의 시간 의미 불일치를 더 넓은 재고
+      관측·변동·권위·산출 provenance 결함의 표면으로 대체하지만, semantics·axiology·structure는 야간
+      스냅샷을 현재 가용량으로 노출하는 행위 자체를 독립적인 고위험 계약 위반으로 본다.
+    resolution_question: issue-013을 issue-001 또는 issue-010의 표면으로 병합할 것인가, 아니면 현재 가용성
+      명칭과 스냅샷 시간 의미의 불일치를 독립 high issue로 유지할 것인가?
+  - issue_id: issue-014
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - semantics
+      - axiology
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+    conflict_summary: coverage와 evolution은 total_weight 비결정성을 issue-002의 공통 측정·변환 계약
+      부재에서 파생된 표면으로 보지만, semantics·axiology·structure는 출하 라인, 수량, 계량값과 계산
+      provenance가 필요한 독립적인 고위험 파생값 계약 결함으로 본다.
+    resolution_question: issue-014를 issue-002의 측정 단위 결함에 흡수할 것인가, 아니면 total_weight
+      산식과 provenance를 별도로 해결해야 하는 독립 material issue로 유지할 것인가?
+  - issue_id: issue-016
+    priority: 5
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - coverage
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-016.evolution
+      - issue-stance-matrix.yaml#stances.issue-016.semantics
+      - issue-stance-matrix.yaml#stances.issue-016.coverage
+      - issue-stance-matrix.yaml#stances.issue-016.structure
+    conflict_summary: evolution은 단일 ETA의 출처·신선도 모호성을 issue-005와 issue-008의 revision
+      모델 부재가 드러난 의미적 표면으로 보지만, semantics·coverage·structure는 서로 다른 ETA 주장을 혼합한
+      독립 의미·구조 결함으로 지지한다.
+    resolution_question: issue-016을 ETA 이력·감사 문제인 issue-005 또는 issue-008에 병합할 것인가,
+      아니면 원천별 ETA 주장과 표시값 선택 권위를 다루는 독립 issue로 유지할 것인가?
+  - issue_id: issue-017
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - structure
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-017.evolution
+      - issue-stance-matrix.yaml#stances.issue-017.structure
+      - issue-stance-matrix.yaml#stances.issue-017.coverage
+      - issue-stance-matrix.yaml#stances.issue-017.semantics
+    conflict_summary: evolution은 OrderLine–Shipment 수량 연결 부재를 issue-006의 구조적 표면으로
+      분류하지만, structure·coverage·semantics는 부분충족뿐 아니라 total_weight 구성 근거까지 단절하는
+      독립적인 고위험 구조 결함으로 본다.
+    resolution_question: issue-017을 issue-006의 동일 근본 원인에 병합할 것인가, 아니면 출하별 라인 구성과 중량
+      provenance까지 포함하는 별도 material issue로 유지할 것인가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: logic의 insufficient_evidence는 형식 논리 렌즈의 증거 한계를 나타낼 뿐이며, 나머지 렌즈는 단위 계약
+      부재의 원인·심각도·조치에 일치한다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들은 단일 ETA 덮어쓰기 모델의 원인, medium 심각도와 revision 기반 조치에 일치한다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: logic의 형식 증거 부족 외에는 모든 렌즈가 수량을 가진 FulfillmentAllocation 부재라는 근본 원인과 high
+      심각도에 일치한다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: logic의 비적용성은 범위 불완전성 주장과 충돌하지 않으며, 나머지 렌즈는 예외·역방향 lifecycle 누락과 high
+      심각도에 일치한다.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: 적용 가능한 렌즈들은 ETA revision과 감사 증거 누락의 원인, medium 심각도 및 조치에 일치한다.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: logic은 형식적 모순을 판정할 증거가 없다고 했을 뿐이며, 다른 모든 렌즈는 재고 관측의 출처·시점·산출 버전 부재와 high
+      심각도에 일치한다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: coverage의 범위 한정은 현재 다구간 표현 누락에 초점을 둔 보완적 관점이며, 구성 관계로의 전환이나 medium 심각도와
+      충돌하지 않는다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: logic의 형식 증거 부족 외에는 모든 렌즈가 DeliveryLeg의 is-a/part-of 혼동과 구성 참조 누락,
+      medium 심각도 및 조치에 일치한다.
+  - issue_id: issue-018
+    reason_code: no_material_conflict
+    reason: logic의 공리적 증거 부족은 provenance 결함의 부정이 아니며, 다른 렌즈들은 집계 원천·범위 연결 부재와 medium
+      심각도에 일치한다.

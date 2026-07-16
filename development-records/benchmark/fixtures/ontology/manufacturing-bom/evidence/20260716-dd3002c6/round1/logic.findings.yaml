@@ -1,0 +1,84 @@
+schema_version: 1
+session_id: 20260716-dd3002c6
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules의 BOM 비순환 규칙
+    evidence_anchor: .onto/review/20260716-dd3002c6/execution-preparation/materialized-input.md:93-95
+    claim: "[fail] BOM의 보편적 비순환 의무와 Assembly 자기포함 허용은 동시에 만족될 수 없다."
+    what: 같은 규칙이 모든 BOM에 비순환성을 요구하면서, 스크랩 재투입은 Assembly가 자기 하위에 자신을 포함하는 순환으로 모델링하도록
+      허용한다. conflict_pair는 materialized-input.md:94의 첫 문장과 같은 줄의 예외 문장이다.
+    why: 자기참조 간선은 길이 1의 순환이므로, 예외 인스턴스는 비순환 의무를 필연적으로 위반한다. 이는 단일 규칙 내부의 intra-claim
+      모순이며 modality 축은 necessary와 possible이 충돌하는 mixed이다. 이 상태로는 검증기가 해당 BOM을
+      허용하면서 동시에 비순환 무결성 규칙을 통과시킬 수 없어 개념 기준의 판정 결과가 구현마다 달라진다.
+    how_to_fix: 비순환 규칙의 적용 범위를 일반 자재 BOM으로 한정하고, 스크랩 재투입은 BOM 자기참조가 아닌 별도의 회수·재투입 흐름
+      관계로 모델링한다. 자기참조를 유지해야 한다면 ‘허용된 재투입 간선을 제외한 BOM 그래프는 비순환’처럼 검사 대상 간선과 예외
+      조건을 형식적으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준으로서 BOM 무결성 규칙에 일관된 판정을 제공하는 목적
+      failure_condition: 스크랩 재투입을 Assembly 자기포함으로 표현하는 모든 BOM 인스턴스
+      impact: 동일 인스턴스가 명시적 예외에 따라 허용되면서 보편적 비순환 규칙에는 실패하여, 시스템별 검증·전개·동기화 결과를 신뢰할 수 없게
+        된다.
+      evidence_refs:
+        - materialized-input.md:93-95
+    causal_path:
+      root_cause_candidate: 재투입 공정 흐름을 BOM 구성 관계의 자기참조로 표현하면서 비순환 규칙의 적용 범위를 축소하지 않았다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 스크랩 재투입 BOM은 허용된 모델링을 따르는 순간 비순환 무결성 규칙을 위반한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:94
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이는 보편적 비순환 의무와 자기참조 예외를 동일한 BOM 관계에 함께 부여한 데서 발생한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:94
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: manufacturing-bom-ontology.yaml AlternatePart 정의와 direction 속성
+    evidence_anchor: .onto/review/20260716-dd3002c6/execution-preparation/materialized-input.md:37-45
+    claim: "[fail] 모든 대체 관계가 대칭이라는 정의와 one_way 대체 관계의 허용·기본값은 양립할 수 없다."
+    what: AlternatePart 정의는 A의 대체가 B이면 B의 대체도 A라고 무조건 선언하지만, direction은 one_way를 유효한
+      값으로 허용하고 기본값으로 지정한다. conflict_pair는 materialized-input.md:38과
+      materialized-input.md:42-45이다.
+    why: one_way 인스턴스는 역방향 대체가 성립하지 않아 엔티티 정의의 대칭 조건을 위반한다. 이는 여러 claim 사이의
+      inter-claim 모순이며, 정의의 necessary 대칭성과 속성이 허용하는 possible 비대칭성이 충돌하는 mixed
+      modality이다. 명칭의 의미를 달리 해석하지 않아도 충돌이 남으므로 logic 소유이며, 동시에 대칭 관계와 방향성 관계를 한
+      용어로 표현한 의미 문제는 semantics lens로도 전달할 수 있다.
+    how_to_fix: 대체 관계를 방향성 관계로 정의하고 bidirectional을 양방향 간선 두 개의 축약으로 규정하거나, 대칭성을 필수로
+      유지하려면 direction에서 one_way와 해당 기본값을 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES가 공유할 부품 대체 가능성의 일관된 개념 계약
+      failure_condition: direction이 one_way인 AlternatePart 인스턴스를 생성하거나 기본값을 적용할 때
+      impact: 같은 인스턴스에서 역방향 대체의 참·거짓이 동시에 요구되어 시스템마다 잘못된 자재 대체 허용 또는 거부가 발생할 수 있다.
+      evidence_refs:
+        - materialized-input.md:37-45
+    causal_path:
+      root_cause_candidate: 대칭적 대체와 방향성 대체를 하나의 AlternatePart 정의에 통합하면서 정의의 양상을 조건부로 제한하지 않았다.
+      root_cause_step_id: logic-candidate-002.cause-002
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: 유효한 one_way 인스턴스는 AlternatePart의 무조건적 역방향 대체 정의를 만족하지 못한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:42-45
+        - cause_id: logic-candidate-002.cause-002
+          claim: 이는 대칭성을 필수 정의로 두면서 비대칭 상태를 같은 타입의 유효값이자 기본값으로 허용했기 때문이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:38-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - integrity_rules의 선언문은 온톨로지 인스턴스가 준수해야 하는 의무 규칙으로 해석했다.
+  - 엔티티 definition의 선언문은 해당 엔티티의 모든 인스턴스에 적용되는 필요조건으로 해석했다.
+validation:
+  unaddressable_candidates: []

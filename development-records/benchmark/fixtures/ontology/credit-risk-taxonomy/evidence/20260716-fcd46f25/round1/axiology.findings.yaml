@@ -1,0 +1,112 @@
+schema_version: 1
+session_id: 20260716-fcd46f25
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: credit-risk-ontology.yaml — 신용등급 분류 및 변환 권위
+    evidence_anchor: 'materialized-input.md:7-8,20-22,31-34,48-56,92-98.
+      value_authority_anchor={source:
+      .onto/review/20260716-fcd46f25/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: lines 6-8, excerpt: "리스크 엔진과 보고 시스템이 공유할 개념 기준으로 적절한지 검토"};
+      value_type=purpose; alignment_direction=misaligned'
+    claim: 소비 시스템별 등급 변환과 보고팀 수동 조정을 허용해 공유 개념 권위라는 목적을 훼손한다.
+    what: 차주 등급이 세 스케일로 병존하면서 매핑은 외부 위키와 각 소비 시스템에 위임되고, 보고팀은 도출된
+      Exposure.risk_grade를 별도 기준으로 조정할 수 있다. 조정 우선순위·근거·버전·유효시점도 정의되지 않는다.
+    why: 동일 차주나 익스포저를 리스크 엔진과 보고 시스템이 서로 다르게 분류할 수 있으며, 어느 값이 canonical한지 이 문서만으로
+      결정할 수 없다. 이는 두 시스템이 공유할 개념 기준이라는 명시적 목적과 직접 충돌한다.
+    how_to_fix: canonical 등급과 버전된 매핑 규칙을 이 온톨로지 안에 두고, 파생 우선순위와 유효기간을 정의한다. 수동 조정이
+      필요하면 원본 등급과 분리된 override 개념으로 모델링하고 승인 주체·사유·시각·적용 범위를 필수화한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 단일 개념 권위 제공
+      failure_condition: 소비 시스템이 서로 다른 매핑 버전을 사용하거나 보고팀이 엔진 등급을 수동 조정하는 경우
+      impact: 동일 위험이 시스템별로 다르게 분류되어 보고 수치, 한도 판단 및 설명 가능성에 대한 신뢰가 약화된다.
+      evidence_refs:
+        - materialized-input.md:7-8
+        - materialized-input.md:20-22
+        - materialized-input.md:31-34
+        - materialized-input.md:48-56
+        - materialized-input.md:92-98
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 온톨로지가 등급 변환·조정 권위를 canonical 규칙으로 소유하지 않고 소비 시스템과 외부 위키에 위임한다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 리스크 엔진과 보고 시스템이 같은 대상에 서로 다른 등급을 사용할 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:31-34
+            - materialized-input.md:48-56
+            - materialized-input.md:92-98
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 세 등급 스케일의 변환을 각 소비 시스템이 수행하고 보고팀의 수동 조정도 허용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:92-98
+        - cause_id: axiology-candidate-001.cause-003
+          claim: canonical 매핑, 우선순위, 버전, 유효시점 및 override provenance가 대상 문서에 정의되어 있지 않다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:20-22
+            - materialized-input.md:31-34
+            - materialized-input.md:48-56
+            - materialized-input.md:92-98
+      unresolved_beyond_evidence: 외부 위키나 소비 시스템에 실제 통제 규칙이 있을 수 있으나, 경계 정책상 추적하지 않았으며
+        그런 외부 규칙은 현재 온톨로지 자체의 공유 권위를 닫지 못한다.
+  - candidate_id: axiology-candidate-002
+    target: credit-risk-ontology.yaml — ExposureAggregate와 RiskAppetite 준수 상태의 시간성
+    evidence_anchor: 'materialized-input.md:69-83. value_authority_anchor={source:
+      .onto/review/20260716-fcd46f25/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: lines 6-8, excerpt: "분류체계·권위·시간성 관점의 개념 결함과 운영 위험을 중심으로"};
+      value_type=commitment; alignment_direction=misaligned'
+    claim: 월말 스냅샷을 현재의 RiskAppetite 준수 상태처럼 사용할 수 있어 시간적으로 오도되는 공유 분류를 만든다.
+    what: ExposureAggregate.total_amount는 일중 신규 여신을 다음 월말 배치까지 반영하지 않지만,
+      RiskAppetite.compliance_status는 이 집계가 임계치를 넘는지만으로 compliant 또는 breached로
+      정의된다. 상태의 기준시점, 허용 지연, stale/unknown 상태는 없다.
+    why: 월말 이후 신규 여신으로 실제 익스포저가 임계치를 넘더라도 다음 배치까지 compliant로 표현될 수 있다. 리스크 엔진과 보고
+      시스템이 서로 다른 갱신 시점의 값을 읽으면 동일한 준수 개념에 대해 상충하는 판단을 공유하게 된다.
+    how_to_fix: 준수 판정에 aggregate_as_of와 threshold_effective_at을 명시하고 최대 허용 지연을 정의한다.
+      허용 지연을 넘은 경우 compliant 대신 stale 또는 unknown을 반환하거나, 준수 판단용 집계를 필요한 주기로
+      갱신하도록 규칙을 닫는다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 시간적으로 일관된 위험·준수 개념을 공유하는 것
+      failure_condition: 월말 배치 이후 신규 여신이 발생해 실제 총익스포저가 RiskAppetite 임계치를 초과하지만 집계가 갱신되지 않은 기간
+      impact: 위반을 compliant로 보고하거나 시스템별 상태가 달라져 위험 통제와 보고의 신뢰성이 훼손된다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 준수 상태가 월말 스냅샷에 의존하면서도 freshness 계약과 비현재 상태 표현을 갖지 않는다.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: 실제 익스포저가 임계치를 초과한 동안에도 준수 상태가 compliant로 남을 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+        - cause_id: axiology-candidate-002.cause-002
+          claim: ExposureAggregate.total_amount가 월말 배치 값이며 일중 신규 여신을 다음 배치까지 반영하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:69-76
+        - cause_id: axiology-candidate-002.cause-003
+          claim: RiskAppetite 준수 상태는 해당 집계와 임계치 비교로 정의되지만 기준시점 정합성, 허용 지연, stale/unknown
+            처리가 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:69-83
+      unresolved_beyond_evidence: 실제 소비 시스템이 별도 freshness 검사를 할 가능성은 있으나 대상 온톨로지에는 그
+        공유 계약이 없으며, 허용된 경계 밖 구현은 확인하지 않았다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 여신 규제나 산업별 외부 규칙은 적용하지 않았다.
+  - 가치 판단은 review-value-alignment-criteria.yaml의 확정된 사용자 목적과 대상 문서가 선언한 공유 권위
+    목적에만 근거했다.
+  - 연체·부실 상태의 범위 제외가 산업적으로 적절한지는 도메인 권위가 없어 판단하지 않았다.
+validation:
+  unaddressable_candidates: []

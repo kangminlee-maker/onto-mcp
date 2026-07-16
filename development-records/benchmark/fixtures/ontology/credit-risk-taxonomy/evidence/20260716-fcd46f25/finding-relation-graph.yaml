@@ -1,0 +1,119 @@
+schema_version: 1
+session_id: 20260716-fcd46f25
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: 등급을 포함한 공유 위험 값의 권위·우선순위·버전 규칙을 온톨로지가 소유하도록 하면 두 finding의 시스템별
+      결과 분기가 함께 해소된다.
+    shared_cause: null
+    rationale: finding-001은 등급 변환과 수동 조정에 초점을 두고, finding-006은 등급·FX·한도 입력 전반으로 범위를
+      넓히지만, 둘 다 공유 데이터 해석을 소비 시스템에 위임한 동일한 권위 결손을 지목한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: 버전과 유효기간을 가진 canonical 등급 매핑을 온톨로지 내부에 두면 현재의 시스템별 등급 불일치와 변경 후
+      분류 연속성 단절이 모두 방지된다.
+    shared_cause: null
+    rationale: 두 finding은 동일한 등급 속성, 외부 위키 매핑, 소비 시스템별 변환을 근거로 삼는다. finding-001은 현재
+      권위의 분산을, finding-007은 그 상태에서 매핑이 변경될 때 발생하는 진화 실패를 설명한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-012
+    relation: duplicates
+    root_hypothesis: 등급 스케일의 canonical 역할·매핑·override 우선순위가 정의되면 두 finding이 지적한 동일
+      대상의 비일관 분류 문제가 하나의 수정으로 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 세 등급 스케일, 소비자별 변환, 수동 조정, 외부 매핑 권위를 같은 증거 구간에서 지적하며, 공유
+      등급 의미와 권위가 닫히지 않는다는 실질적으로 동일한 결함을 서로 다른 렌즈 언어로 기술한다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-016
+    to_finding_id: finding-012
+    relation: symptom_of
+    root_hypothesis: 등급 스케일 간 canonical 의미와 매핑 권위를 온톨로지에 부여하면 RiskRating–Exposure
+      사이의 형식적 도출·계보 연결도 필수 구조로 도출된다.
+    shared_cause: null
+    rationale: finding-012가 등급 의미·우선순위·매핑 권위의 부재를 상위 의미 결함으로 제시하고, finding-016은 그 결과
+      관계 그래프에 정규 도출 연결이 나타나지 않은 구조적 증상을 제시한다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: 변경 가능한 위험 사실에 공통 유효기간·버전·수정 이력 계약을 적용하면 두 finding의 역사적 재현 불가
+      문제가 동일한 수정으로 해소된다.
+    shared_cause: null
+    rationale: finding-004는 mutable risk values 전반의 시간·이력 누락을 coverage 관점에서,
+      finding-008은 모델·정책·조정 변경 후 의미 복원 실패를 evolution 관점에서 설명한다. 대상 속성, 실패 조건,
+      영향과 제안 조치가 대부분 중첩된다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-004
+    to_finding_id: finding-009
+    relation: shared_cause_candidate
+    root_hypothesis: 온톨로지가 변경 가능한 사실과 분류 어휘 모두를 버전·유효기간·대체 관계를 가진 시간적 개념으로 다루지 않은 것이
+      역사 재현 실패와 점진적 어휘 확장 실패의 공통 원인이다.
+    shared_cause:
+      cause_claim: 변경 가능한 값과 코드 목록에 공통 버전, 유효기간, 폐기·대체 계약이 없다.
+      from_cause_ref: finding-004.cause-001
+      to_cause_ref: finding-009.cause-002
+    rationale: 두 finding의 직접 대상은 위험 사실과 분류 코드로 다르지만, 변경 전후의 정체성을 보존할 버전·유효기간 계약이 없다는
+      명시적 원인이 공통이다. 이 가설은 해당 계약 추가 후 과거 값 선택과 구·신 코드 공존이 모두 가능해지는지로 검증할 수 있다.
+    confidence: medium
+  - relation_id: rel-007
+    from_finding_id: finding-005
+    to_finding_id: finding-013
+    relation: shared_cause_candidate
+    root_hypothesis: 수동으로 설정되는 위험 값에 source, actor, occurred/effective time, 근거 및 원래
+      값을 요구하는 공통 provenance 계약이 없어서 감사 증거 결손과 LTV 의미 분기가 함께 발생한다.
+    shared_cause:
+      cause_claim: 수동 또는 통제된 값에 권위 지정과 provenance가 결여되어 결과만 현재 속성으로 남는다.
+      from_cause_ref: finding-005.cause-001
+      to_cause_ref: finding-013.cause-002
+    rationale: finding-005는 수동 등급·LTV·승인한도의 감사 증거 전반을 다루고, finding-013은 그중 LTV가
+      관측값인지 파생값인지 판별할 권위와 provenance가 없음을 구체화한다.
+    confidence: medium
+  - relation_id: rel-008
+    from_finding_id: finding-010
+    to_finding_id: finding-002
+    relation: enables
+    root_hypothesis: ExposureAggregate를 명시적 as_of 스냅샷으로 한정하고 포함 경계를 정의하면 배치 값이 현재의
+      완전합처럼 해석되어 오래된 compliant 상태를 정당화하는 경로가 차단된다.
+    shared_cause: null
+    rationale: finding-010의 무조건적 완전합 정의와 배치 지연의 충돌은 오래된 total_amount가 현재 총액으로 해석될 수
+      있게 한다. finding-002의 오도된 준수 상태는 이 모호한 집계를 임계치와 비교할 때 발생하므로 전자가 후자의 발생을 가능하게
+      한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-002
+    to_finding_id: finding-014
+    relation: same_root_candidate
+    root_hypothesis: 준수 상태를 정책의 속성이 아니라 특정 aggregate snapshot과 threshold version을
+      참조하는 별도 평가 사실로 모델링하면 stale 준수 표시와 평가 맥락별 상태 충돌이 함께 해소된다.
+    shared_cause: null
+    rationale: finding-002는 준수 상태의 시간적 최신성 실패를, finding-014는 정책과 시간·범위 의존 평가 결과의 개념
+      혼합을 지적한다. 둘 다 compliance assessment가 독립적인 시점·범위·입력 정체성을 갖지 않는 데서 발생한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-014
+    to_finding_id: finding-015
+    relation: same_root_candidate
+    root_hypothesis: RiskAppetite 정책과 ExposureAggregate 기반 ComplianceAssessment를
+      분리하고 둘 사이의 명시적 관계를 추가하면 의미적 혼합과 RiskAppetite의 구조적 고립이 동시에 제거된다.
+    shared_cause: null
+    rationale: finding-014는 정책과 평가 결과가 한 엔티티에 혼합된 의미 결함을, finding-015는 그 평가에 필요한
+      aggregate–appetite 연결이 없는 구조 결함을 설명한다. 별도 평가 개념과 두 참조 관계를 도입하는 동일한 구조 변경으로
+      두 문제를 함께 검증할 수 있다.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-003
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-011
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

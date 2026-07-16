@@ -1,0 +1,126 @@
+schema_version: 1
+session_id: 20260716-dd3002c6
+planned_issues:
+  - issue_id: issue-004
+    priority: 10
+    conflict_type: correctness_or_blocking_execution
+    participating_lens_ids:
+      - semantics
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: semantics는 canonical AlternatePart association entity가 의미·그래프
+      불일치를 함께 해소한다고 보지만, logic은 direction을 권위로 삼아 대칭성 정의를 수정하거나 one_way를 제거하지
+      않으면 논리 모순이 남는다고 본다. structure도 그래프 연결 복구만 증거로 확정하며 심각도를 medium으로 낮춘다.
+    resolution_question: canonical association entity 연결만으로 이 이슈가 해소되는가, 아니면
+      direction 권위와 대칭성 계약의 명시적 수정이 필수이며 최종 심각도는 high와 medium 중 무엇인가?
+  - issue_id: issue-001
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - semantics
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: coverage와 semantics는 버전·유효구간뿐 아니라 행위자·근거·감사·롤백을 포함한 ECO 전이를 통합
+      근본 원인으로 수용하지만, evolution과 structure는 증거가 지지하는 원인을 변경 전후 구성 연결과 버전 구조 부재로
+      한정한다. structure는 구조적 영향의 심각도도 medium으로 낮춘다.
+    resolution_question: 근본 원인을 버전·유효시점·변경 전후 구성 연결 부재로 한정할 것인가, 감사 가능한 ECO
+      lifecycle 전체를 포함할 것인가, 그리고 그 범위에서 high 심각도가 유지되는가?
+  - issue_id: issue-005
+    priority: 8
+    conflict_type: domain_constraint
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.axiology
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.evolution
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+    conflict_summary: axiology·coverage·evolution은 동기화 불일치 시 생산 차단 또는 as-of 선택을 근본
+      조치에 포함하지만, semantics는 온톨로지가 권위와 시점 의미만 제공하고 생산 차단·선택은 소비 운영정책으로 제한해야 한다고
+      본다.
+    resolution_question: 이 이슈의 온톨로지 조치 범위에 생산 차단 또는 as-of 선택 규칙까지 포함할 것인가, 아니면
+      권위·유효시점·적용 구성의 의미 계약만 포함하고 실행정책은 외부 소비자 책임으로 둘 것인가?
+  - issue_id: issue-013
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.logic
+      - issue-stance-matrix.yaml#stances.issue-013.evolution
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+    conflict_summary: logic은 방향성 관계로 재정의하거나 one_way를 제거하는 두 해법을 모두 허용하지만, evolution은
+      향후 요구를 보존하기 위해 direction을 권위로 하는 방향성 관계만 적절하다고 한정한다. semantics는 실제 자재 대체
+      위험을 근거로 심각도를 medium에서 high로 높인다.
+    resolution_question: 대체 계약을 direction 권위의 방향성 관계로 확정할 것인가, 대칭 관계로 제한하는 대안도 유지할
+      것인가, 그리고 실제 운영 위험을 반영해 심각도를 high로 올릴 것인가?
+  - issue_id: issue-017
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-017.semantics
+      - issue-stance-matrix.yaml#stances.issue-017.logic
+    conflict_summary: semantics는 제품 구성과 재투입 흐름의 혼동을 독립 material issue로 유지하지만, logic은
+      이를 issue-003의 BOM 비순환 모순을 유발하는 표면 표현으로 본다.
+    resolution_question: issue-017을 독립적인 의미 결함으로 유지할 것인가, 아니면 동일한 흐름 분리 원인과 조치를 가진
+      issue-003의 표면 또는 하위 범위로 병합할 것인가?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 확장 가능한 단위와 유효기간별 환산 권위라는 원인·조치 및 medium 심각도에 일치한다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 재투입 흐름을 BOM containment에서 분리해야 한다는 원인·조치와 high 심각도를 지지한다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: coverage의 한정은 일반 계보보다 병행 관리값의 권위·대사 기록에 초점을 맞춘 호환 가능한 범위 정교화이며, 다른 입장과
+      결과를 바꾸는 충돌이 아니다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 typed measure와 환산 권위 도입 및 medium 심각도에 일치한다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: evolution의 한정은 최소 실행 트랜잭션의 구체적 목록을 coverage 판단에 맡기면서 버전 참조 필요성을 지지하므로 근본
+      원인이나 조치에 실질적 반대가 없다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 병행 관리값의 권위·동기화 상태·조정 증거 모델링과 medium 심각도에 일치한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 안정적 Part 정체성과 시점별 개정의 분리 및 high 심각도에 일치한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 RoutingStep과 StepTransition을 권위 구조로 도입하고 선형 경로를 투영으로 유지하는
+      조치에 일치한다.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 값·측정 차원·기간·적용 대상을 분리한 CapacityProfile 도입과 medium 심각도에 일치한다.
+  - issue_id: issue-014
+    reason_code: no_material_conflict
+    reason: coverage의 surface_only 입장은 자신의 관할을 관계 보완으로 제한한 것이며,
+      semantics·axiology·evolution의 계획-실행 분리 원인과 조치에 반대하지 않는다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 손실률과 수량 보정계수의 의미·범위·산식 분리 및 medium 심각도에 일치한다.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: coverage의 한정은 일반 UOM 공백에서 용량 종류와 단위의 누락을 구체화한 것으로, 용량 개념 분리 또는 kind·uom
+      필수화 조치와 양립한다.
