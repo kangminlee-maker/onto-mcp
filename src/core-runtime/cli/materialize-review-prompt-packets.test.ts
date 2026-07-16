@@ -5,6 +5,7 @@ import type {
 } from "../review/artifact-types.js";
 import {
   renderBoundaryPolicySection,
+  resolveEffectiveEmbedBudget,
   renderEmbeddedMaterializedInputSection,
   renderLensOutputSchemaGate,
   renderLensSidecarOutputContract,
@@ -245,5 +246,28 @@ describe("material_kind_obligations honesty (R3)", () => {
     // access_and_protection_hygiene is backed -> its prose appears; formula prose does not.
     expect(summary).toContain("sheet protection");
     expect(summary).not.toContain("recalculation behavior");
+  });
+});
+
+describe("resolveEffectiveEmbedBudget — post-precedence witness (design §4-4, R2-4)", () => {
+  it("CLI override wins and is witnessed as source=cli (the settings-knob channel)", () => {
+    expect(resolveEffectiveEmbedBudget(120, 600, 300)).toEqual({
+      max_embed_lines_effective: 120,
+      max_embed_lines_source: "cli",
+    });
+  });
+
+  it("falls to the plan's prepare-time value when no CLI override", () => {
+    expect(resolveEffectiveEmbedBudget(undefined, 600, 300)).toEqual({
+      max_embed_lines_effective: 600,
+      max_embed_lines_source: "plan",
+    });
+  });
+
+  it("falls to DEFAULT when neither is present", () => {
+    expect(resolveEffectiveEmbedBudget(undefined, undefined, 300)).toEqual({
+      max_embed_lines_effective: 300,
+      max_embed_lines_source: "default",
+    });
   });
 });

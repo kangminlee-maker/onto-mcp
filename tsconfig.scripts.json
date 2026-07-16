@@ -34,7 +34,8 @@
     "scripts/m3-compare.ts",
     "scripts/review-cert-run.mts",
     "scripts/review-pipeline-benchmark.ts",
-    "scripts/review-cert-row.ts"
+    "scripts/review-cert-row.ts",
+    "scripts/effort-bench-prereg.ts"
   ],
   "exclude": []
 }

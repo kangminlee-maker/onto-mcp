@@ -1,0 +1,79 @@
+# Effort-bench pre-registration manifest — TEMPLATE (adaptive-effort design §4-1).
+#
+# Freeze discipline: copy this file to the run's evidence directory, fill the
+# values, and COMMIT it BEFORE any pilot review is dispatched — the commit hash
+# is the freeze. Every field below is frozen at registration; evaluating the
+# bench against anything not declared here is a protocol violation (fail-closed:
+# an unmet or unevaluable predicate means NOT VALIDATED, never a reinterpreted
+# pass). Validator/evaluator: scripts/effort-bench-prereg.ts.
+#
+# The values below are the design's illustrative defaults, NOT decided numbers —
+# the min-effect sizes must be anchored to each fixture's coverage ground truth
+# (deterministic out-of-cut defect counts from the embed-coverage map), never to
+# an observed score distribution.
+schema_version: effort-bench-prereg/1
+
+# The measured quantity (design §1, finding R2-2): the intent-to-treat effect of
+# the default inline embed budget policy. Tail content stays recoverable via
+# voluntary tool reads, so this is NOT a defect-invisibility claim, and the
+# result must never be promoted beyond the embed-expansion lever.
+estimand: inline_budget_itt
+
+# Viable-gate thresholds (ground-truth anchored; consumed by the graded adapter).
+gate:
+  recall_cut: 1.0
+  precision_floor: 0.8
+
+# The coverage zones realized by the max_embed_lines knob ladder and the
+# whole-pipeline effort bundles under test (owner F2 — no per-stage claims).
+coverage_levels: [full, partial, low]
+efforts: [medium, high]
+
+# Cluster / power structure (design §4-3, finding R2-7): K judge draws repeat
+# WITHIN one review; R reviews repeat within a fixture. Never pool R×K as one
+# distribution.
+cluster:
+  min_reps_per_cell: 3        # R — the bench's own gate (m3-compare's R<2 label is weaker)
+  min_fixtures_per_level: 2   # INV-BENCH-1
+  judge_runs: 8               # K, pinned effort=low
+
+# Declared analysis rules (consumed by the P1 analyzer; declared here so they
+# are frozen with the contrasts, finding R2-1).
+analysis:
+  ci: cluster-bootstrap-by-review
+  multiplicity: all-registered-contrasts-must-hold
+
+# How per-fixture verdicts aggregate: every fixture with a complete observation
+# pair must individually show the effect (conservative; the only mode in /1).
+aggregation: per_fixture_all
+
+# Registered contrasts — absolute recall-point differences between coverage
+# zones at a fixed effort. The primary question is the coverage MAIN effect;
+# any effort×coverage interaction is a separately registered contrast, never a
+# post-hoc reading (finding R2-1).
+contrasts:
+  - id: C1-coverage-main-medium
+    metric: recall_material
+    effort: medium
+    baseline_zone: full
+    treatment_zone: partial
+    direction: decrease
+    min_effect_recall_points: 0.15
+  - id: C2-coverage-main-medium-low
+    metric: recall_material
+    effort: medium
+    baseline_zone: full
+    treatment_zone: low
+    direction: decrease
+    min_effect_recall_points: 0.3
+
+# Recovery predicate (design §4-1 ⑤): restoring full coverage must bring recall
+# back within the declared band of the full-coverage baseline.
+recovery:
+  baseline_zone: full
+  restored_zone: full-restored
+  effort: medium
+  within_recall_points: 0.05
+
+# Fail-closed is not optional — the validator rejects a manifest without it.
+fail_closed: true
