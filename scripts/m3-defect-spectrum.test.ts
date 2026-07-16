@@ -4,6 +4,7 @@ import {
   attributeAndScore,
   parseSeededDefects,
   parseSurfacedIssues,
+  parseCanaryDefectIds,
   isMaterialSeverity,
   type SeededDefect,
   type SurfacedIssue,
@@ -221,6 +222,27 @@ describe("parseSeededDefects", () => {
     ).toThrow(/severity_expectation/);
     const dup = { id: "A1", kind: "k", where: "w", description: "d", severity_expectation: "material" };
     expect(() => parseSeededDefects({ seeded_defects: [dup, dup] })).toThrow(/duplicate seeded defect id/);
+  });
+});
+
+describe("parseCanaryDefectIds", () => {
+  it("returns [] when the field is absent (canary check no-ops)", () => {
+    expect(parseCanaryDefectIds({ fixture: "x" }, DEFECTS)).toEqual([]);
+  });
+
+  it("returns the ids when each names a real seeded defect", () => {
+    expect(parseCanaryDefectIds({ canary_defect_ids: ["D1", "D3"] }, DEFECTS)).toEqual(["D1", "D3"]);
+  });
+
+  it("throws on a canary id that is not a seeded defect (no dangling canary)", () => {
+    expect(() => parseCanaryDefectIds({ canary_defect_ids: ["D1", "NOPE"] }, DEFECTS)).toThrow(
+      /canary_defect_ids names unknown seeded defect 'NOPE'/,
+    );
+  });
+
+  it("throws on a duplicate canary id and on a non-array value", () => {
+    expect(() => parseCanaryDefectIds({ canary_defect_ids: ["D1", "D1"] }, DEFECTS)).toThrow(/duplicate canary_defect_id 'D1'/);
+    expect(() => parseCanaryDefectIds({ canary_defect_ids: "D1" }, DEFECTS)).toThrow(/canary_defect_ids must be a string array/);
   });
 });
 

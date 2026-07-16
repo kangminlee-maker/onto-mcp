@@ -191,6 +191,27 @@ describe("classifyVerdict — distribution-based band (design §3-3)", () => {
   it("throws on an empty run set — no vacuous instrument_broken from every([]) === true", () => {
     expect(() => classifyVerdict([], POLICY)).toThrow(/no judge runs/);
   });
+
+  it("canary gate: a canary defect detected in ZERO runs → instrument_broken (design §11 item 3)", () => {
+    // Adequate K, healthy attribution — would be a clean `dominant` — but the
+    // canary defect appears in NO run's detected set ⇒ the instrument dropped a
+    // known-detectable defect (collapsed/mis-projected judge), not a real miss.
+    const runs = band("exceeds", 10).map((r) => ({ ...r, detected_defect_ids: ["OTHER"] }));
+    expect(classifyVerdict(runs, POLICY, ["CANARY-1"]).kind).toBe("instrument_broken");
+  });
+
+  it("canary gate: a canary detected in ≥1 run passes (contrast — one detection clears it)", () => {
+    const runs = band("exceeds", 10).map((r, i) => ({
+      ...r,
+      detected_defect_ids: i === 0 ? ["CANARY-1"] : ["OTHER"],
+    }));
+    expect(classifyVerdict(runs, POLICY, ["CANARY-1"]).kind).toBe("dominant");
+  });
+
+  it("canary gate: no canary configured ⇒ no-op (empty list never fires)", () => {
+    const runs = band("exceeds", 10).map((r) => ({ ...r, detected_defect_ids: [] }));
+    expect(classifyVerdict(runs, POLICY, []).kind).toBe("dominant");
+  });
 });
 
 describe("aggregate", () => {

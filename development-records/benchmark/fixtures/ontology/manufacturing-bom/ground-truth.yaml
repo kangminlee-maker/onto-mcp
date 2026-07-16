@@ -1,5 +1,10 @@
 # Ground truth — manufacturing-bom fixture의 seeded 개념 결함 (채점 전용, 타깃 비포함)
 fixture: manufacturing-bom
+# Instrument canary (design §11 item 3): MBO-1 (acyclic-invariant self-contradiction) is the
+# most unambiguous material defect — detected in every baseline judge run. Detected in ZERO
+# of the K runs ⇒ instrument_broken (collapsed/mis-projected judge, not a real miss).
+# Validated against the 20260611-ca3c674b baseline evidence.
+canary_defect_ids: [MBO-1]
 seeded_defects:
   - id: MBO-1
     kind: contradictory_invariant

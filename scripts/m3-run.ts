@@ -38,6 +38,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import {
+  parseCanaryDefectIds,
   parseSeededDefects,
   parseSurfacedIssues,
   scoreDefectSpectrum,
@@ -190,7 +191,11 @@ function bandFrequencies(bands: DefectSpectrumBand[]): Partial<Record<DefectSpec
  * verdict, §11 item 3); then the ADEQUACY floor (too few draws to tell rare noise
  * from a genuine straddle — H3); then the dominant/indeterminate split.
  */
-export function classifyVerdict(perRun: DefectSpectrumResult[], policy: VerdictPolicy): BandVerdict {
+export function classifyVerdict(
+  perRun: DefectSpectrumResult[],
+  policy: VerdictPolicy,
+  canaryDefectIds: readonly string[] = [],
+): BandVerdict {
   // Guard the vacuous case: an empty run set makes `every(...)` vacuously true
   // (→ a bogus instrument_broken) and leaves no most-frequent band. Fail loud
   // instead (symmetry with aggregate's own empty-runs throw).
@@ -202,6 +207,17 @@ export function classifyVerdict(perRun: DefectSpectrumResult[], policy: VerdictP
   // Engagement gate: zero attribution across EVERY run ⇒ the instrument is broken.
   if (perRun.every((r) => r.attributed_issues === 0)) {
     return { kind: "instrument_broken", band: null, noise_rate: null, band_frequencies: freq };
+  }
+
+  // Canary gate (design §11 item 3, fuller form): a canary defect detected in ZERO
+  // of the K runs is a known-detectable defect the instrument dropped — a broken /
+  // mis-projected judge, not a real miss. One vanished canary condemns the run.
+  if (canaryDefectIds.length > 0) {
+    const detectedAny = new Set<string>();
+    for (const r of perRun) for (const id of r.detected_defect_ids) detectedAny.add(id);
+    if (canaryDefectIds.some((id) => !detectedAny.has(id))) {
+      return { kind: "instrument_broken", band: null, noise_rate: null, band_frequencies: freq };
+    }
   }
 
   // Most-frequent band, deterministic tie-break by canonical band order.
@@ -235,6 +251,7 @@ export function aggregate(
   perRun: DefectSpectrumResult[],
   policy: VerdictPolicy,
   auth?: AttributionAuth,
+  canaryDefectIds: readonly string[] = [],
 ): FixtureStabilityResult {
   if (perRun.length === 0) throw new Error("m3 aggregate: no judge runs to aggregate");
   return {
@@ -242,7 +259,7 @@ export function aggregate(
     evidence_session: session,
     judge_runs: perRun.length,
     ...(auth ? { judge_auth: auth } : {}),
-    verdict: classifyVerdict(perRun, policy),
+    verdict: classifyVerdict(perRun, policy, canaryDefectIds),
     recall_material: stats(perRun.map((r) => r.recall_material)),
     recall_overall: stats(perRun.map((r) => r.recall_overall)),
     precision: stats(perRun.map((r) => r.precision)),
@@ -283,16 +300,16 @@ async function latestEvidenceSession(fixtureId: string): Promise<string> {
 async function loadFixtureInputs(
   fixtureId: string,
   session: string,
-): Promise<{ seededDefects: SeededDefect[]; issues: SurfacedIssue[] }> {
-  const seededDefects = parseSeededDefects(
-    await readYaml(path.join(FIXTURES_ROOT, fixtureId, "ground-truth.yaml")),
-  );
+): Promise<{ seededDefects: SeededDefect[]; issues: SurfacedIssue[]; canaryDefectIds: string[] }> {
+  const groundTruthRaw = await readYaml(path.join(FIXTURES_ROOT, fixtureId, "ground-truth.yaml"));
+  const seededDefects = parseSeededDefects(groundTruthRaw);
+  const canaryDefectIds = parseCanaryDefectIds(groundTruthRaw, seededDefects);
   const evidenceDir = path.join(FIXTURES_ROOT, fixtureId, "evidence", session);
   const issues = parseSurfacedIssues(
     await readYaml(path.join(evidenceDir, "issue-ledger.yaml")),
     await readYaml(path.join(evidenceDir, "finding-ledger.yaml")),
   );
-  return { seededDefects, issues };
+  return { seededDefects, issues, canaryDefectIds };
 }
 
 function sha256(text: string): string {
@@ -382,9 +399,9 @@ async function runFixtures(args: {
   const outputs: FixtureStabilityResult[] = [];
   for (const fixture of args.fixtures) {
     const session = args.sessionPins.get(fixture) ?? (await latestEvidenceSession(fixture));
-    const { seededDefects, issues } = await loadFixtureInputs(fixture, session);
+    const { seededDefects, issues, canaryDefectIds } = await loadFixtureInputs(fixture, session);
     const sourceDigests = await computeSourceDigests(fixture, session);
-    console.log(`\n▶ ${fixture} (evidence ${session}) — ${issues.length} material issues, ${seededDefects.length} seeded defects → judge ×${args.judgeRuns}`);
+    console.log(`\n▶ ${fixture} (evidence ${session}) — ${issues.length} material issues, ${seededDefects.length} seeded defects${canaryDefectIds.length ? `, canary [${canaryDefectIds.join(",")}]` : ""} → judge ×${args.judgeRuns}`);
     const runs: IssueAttribution[][] = [];
     const perRun: DefectSpectrumResult[] = [];
     for (let k = 0; k < args.judgeRuns; k += 1) {
@@ -407,7 +424,7 @@ async function runFixtures(args: {
       runs,
     };
     await fs.writeFile(path.join(args.outDir, "capture", `${fixture}.json`), `${JSON.stringify(capture, null, 2)}\n`, "utf8");
-    const agg = aggregate(fixture, session, perRun, VERDICT_POLICY, args.auth);
+    const agg = aggregate(fixture, session, perRun, VERDICT_POLICY, args.auth, canaryDefectIds);
     outputs.push(agg);
     console.log(reportLine(agg));
   }
@@ -420,18 +437,20 @@ export async function replayRun(runDir: string): Promise<FixtureStabilityResult[
   for (const file of (await fs.readdir(captureDir)).filter((f) => f.endsWith(".json")).sort()) {
     const capture = JSON.parse(await fs.readFile(path.join(captureDir, file), "utf8")) as CaptureFile;
     await verifySourceDigests(capture);
-    const { seededDefects, issues } = await loadFixtureInputs(capture.fixture, capture.evidence_session);
+    const { seededDefects, issues, canaryDefectIds } = await loadFixtureInputs(capture.fixture, capture.evidence_session);
     const perRun = capture.runs.map((attributions) =>
       scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: capture.band_thresholds }),
     );
     // Pre-m3-capture/4 captures carry no verdict_policy → fall back to the current
     // default (documented, like the source_digests warn-only fallback above).
+    // Canary ids are re-derived from ground-truth (source_digests pins its bytes).
     const agg = aggregate(
       capture.fixture,
       capture.evidence_session,
       perRun,
       capture.verdict_policy ?? VERDICT_POLICY,
       capture.judge_auth,
+      canaryDefectIds,
     );
     outputs.push(agg);
     console.log(reportLine(agg));

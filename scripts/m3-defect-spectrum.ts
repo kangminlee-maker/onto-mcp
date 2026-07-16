@@ -168,6 +168,31 @@ export function parseSeededDefects(raw: unknown): SeededDefect[] {
   });
 }
 
+/**
+ * Parse a fixture's optional `canary_defect_ids` — seeded defects so unambiguous
+ * that a genuinely-engaged, correctly-projected judge detects them on competent
+ * review evidence (design §11 item 3, fuller form). A canary detected in ZERO of
+ * the K runs indicts the INSTRUMENT (collapsed / mis-projected judge), not the
+ * review. Each id must name a real seeded defect (validated here); absent →
+ * empty (the check no-ops). Validated per pinned baseline evidence at authoring
+ * time — run canary-bearing fixtures with the session they were validated against.
+ */
+export function parseCanaryDefectIds(raw: unknown, seededDefects: readonly SeededDefect[]): string[] {
+  const root = asRecord(raw, "ground-truth");
+  if (root.canary_defect_ids === undefined) return [];
+  const ids = asStringArray(root.canary_defect_ids, "ground-truth.canary_defect_ids");
+  const known = new Set(seededDefects.map((d) => d.id));
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (!known.has(id)) {
+      throw new Error(`defect-spectrum: canary_defect_ids names unknown seeded defect '${id}'`);
+    }
+    if (seen.has(id)) throw new Error(`defect-spectrum: duplicate canary_defect_id '${id}'`);
+    seen.add(id);
+  }
+  return ids;
+}
+
 function moreSevere(a: FindingSeverity, b: FindingSeverity): FindingSeverity {
   return SEVERITY_RANK.indexOf(a) <= SEVERITY_RANK.indexOf(b) ? a : b;
 }
