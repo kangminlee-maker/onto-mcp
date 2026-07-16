@@ -1,0 +1,287 @@
+schema_version: 1
+session_id: 20260716-533b3a03
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: manufacturing-bom-ontology.yaml / BOM, Routing, ECO effectivity coverage
+    evidence_anchor: entities.BomLine.attributes only parent_ref, child_ref,
+      qty_per, scrap_rate; entities.Routing.attributes.status values [draft,
+      released]; entities.ECO.attributes effective_date/status; integrity_rules
+      ECO.effective_date plus weekly Part.rev sync
+    claim: BOM and routing effectivity/history concepts are missing, so past
+      production configuration cannot be reconstructed reliably.
+    what: The ontology has an ECO effective_date, but BOM lines, quantities, scrap
+      rates, routings, operations, standard times, and work-center capacity have
+      no valid-from/valid-to, revision, supersession, or history concepts.
+      Routing lifecycle is only draft/released.
+    why: PLM/MES integration depends on knowing which BOM, routing, operation
+      parameters, and rates were valid for a production date. The target
+      explicitly includes time-dependent change behavior via ECO.effective_date
+      and delayed Part.rev synchronization, but the changed production structure
+      and routing parameters do not carry their own effectivity or history. This
+      weakens the document as a concept baseline for traceability, backflush,
+      cost, quality investigation, and rework after engineering changes.
+    how_to_fix: Add effectivity/version concepts for BomLine, Routing, Operation,
+      InspectionPlan, WorkCenter capacity, std_time_min, qty_per, and
+      scrap_rate, including valid_from/valid_to or effective ECO references,
+      supersession, and historical snapshot rules for MES consumption.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES integration concept baseline for item, BOM, routing,
+        and change-management alignment.
+      failure_condition: When production, costing, or quality records must be
+        interpreted for a date before or after an ECO, the ontology cannot
+        identify the exact BOM/routing parameter set valid at that time.
+      impact: Review trust is weakened because a core manufacturing integration
+        requirement, time-effective production definition, is only partially
+        represented by ECO.effective_date and not carried through BOM/routing
+        concepts.
+      evidence_refs:
+        - "entities.BomLine.attributes: parent_ref, child_ref, qty_per,
+          scrap_rate with no effectivity/history"
+        - "entities.Routing.attributes.status: [draft, released]"
+        - "entities.ECO.attributes: effective_date, status [open, approved,
+          applied]"
+        - "integrity_rules: ECO.effective_date 이후 생산분은 신규 rev를 따른다; Part.rev
+          updates after drawing ledger weekly batch"
+    causal_path:
+      root_cause_candidate: The ontology localizes time effectivity at ECO/Part.rev
+        but does not model effectivity as a shared dimension of
+        production-definition elements.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: BOM lines and routing parameters include operationally variable values
+            but no validity or history attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - "entities.BomLine.attributes: qty_per, scrap_rate"
+            - "entities.Operation.attributes: std_time_min"
+            - "entities.WorkCenter.attributes: capacity_per_shift"
+            - "entities.Routing.attributes: operations, status"
+        - cause_id: coverage-candidate-001.cause-002
+          claim: ECO introduces date-based change semantics that require downstream
+            BOM/routing state to be date-resolvable.
+          relation_to_previous: enables
+          evidence_refs:
+            - entities.ECO.attributes.effective_date
+            - "integrity_rules: ECO.effective_date 이후 생산분은 신규 rev를 따른다"
+        - cause_id: coverage-candidate-001.cause-003
+          claim: Part.rev is synchronized weekly from an external drawing ledger, creating
+            a period where current identifiers may lag the effective change.
+          relation_to_previous: enables
+          evidence_refs:
+            - "integrity_rules: Part.rev 갱신은 도면 관리대장 반영 후 주간 배치로 동기화한다"
+            - "entities.Part.attributes.rev note: 도면 관리대장이 원본"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: manufacturing-bom-ontology.yaml / controlled actions and manual adjustments
+    evidence_anchor: entities.ECO.status [open, approved, applied]; notes standard
+      cost manual input and quarterly reconciliation; BomLine.scrap_rate copied
+      from production-planning Excel; notes uom conversion performed on shop
+      floor
+    claim: Audit evidence concepts for approvals, manual copies, reconciliations,
+      and shop-floor conversions are absent.
+    what: The model includes controlled or manually performed actions, but no
+      Approval, Adjustment, Reconciliation, ConversionEvent, actor, timestamp,
+      reason, evidence document, or audit trail concept.
+    why: "The target explicitly describes approvals and manual/system-crossing
+      actions: ECO approval, copied scrap rates, manual standard-cost fields,
+      quarterly reconciliation, and field UOM conversion. Without audit evidence
+      concepts, PLM/MES integration cannot tell who changed or approved a value,
+      when it happened, what source was used, or why a discrepancy was accepted.
+      This is a coverage gap, not merely an internal-link issue, because the
+      necessary audit subdomain is not represented at all."
+    how_to_fix: Introduce a compact AuditEvent or ControlAction concept with actor,
+      timestamp, action_type, source_system/document, reason, before/after
+      values, and approval/reconciliation references. Attach it to ECO status
+      transitions, scrap_rate copies, standard-cost reconciliations, and UOM
+      conversions.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Manufacturing operation risk review for PLM/MES integration,
+        especially controlled change and manually maintained operational values.
+      failure_condition: When an approved ECO, copied scrap rate, reconciled standard
+        time/cost, or shop-floor conversion is disputed or investigated, the
+        ontology has no concept for the evidentiary trail.
+      impact: The concept baseline is incomplete for governed manufacturing operations
+        because it represents resulting values/statuses but not the control
+        evidence needed to trust them across systems.
+      evidence_refs:
+        - "entities.ECO.attributes.status: [open, approved, applied]"
+        - "entities.BomLine.attributes.scrap_rate note: production-planning
+          Excel value is copied"
+        - "notes: standard-cost system has manually entered field reconciled
+          quarterly"
+        - "notes: uom conversion has no item conversion-factor master and is
+          performed as needed on site"
+    causal_path:
+      root_cause_candidate: The ontology models controlled outcomes as attributes but
+        omits the action/evidence layer that creates or validates those
+        outcomes.
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Several target values and statuses are produced by approval, copying,
+            manual entry, reconciliation, or field conversion.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.ECO.attributes.status
+            - entities.BomLine.attributes.scrap_rate note
+            - "notes: 표준원가 시스템에도 수기 입력 필드가 있어 분기마다 대사한다"
+            - "notes: 필요 시 현장에서 환산한다"
+        - cause_id: coverage-candidate-002.cause-002
+          claim: No entity or attribute captures actor, time, basis, before/after value,
+            or evidence for those actions.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "entities list: Part, Assembly, BomLine, AlternatePart, Operation,
+              Routing, WorkCenter, ECO, InspectionPlan only"
+            - ECO attributes contain eco_no, affected_parts, effective_date,
+              status only
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: manufacturing-bom-ontology.yaml / UOM conversion and quantity semantics
+    evidence_anchor: Part.uom values [ea, kg, m]; BomLine.qty_per number; notes say
+      uom conversion master is absent and field converts kg<->ea as needed
+    claim: Unit conversion master and quantity basis concepts are missing despite
+      cross-unit BOM quantities.
+    what: The ontology has item UOM and BOM qty_per, but no conversion factor,
+      conversion basis, lot/material condition, dimensional basis, or controlled
+      conversion authority. The notes explicitly state that no item-specific
+      conversion-factor master exists.
+    why: BOM/MES integration frequently consumes quantities across units such as kg,
+      ea, and m. The target acknowledges kg-to-ea conversion is handled ad hoc
+      on the shop floor. Without a conversion master or quantity-basis concept,
+      the ontology cannot standardize material issue, backflush, yield, scrap,
+      or cost calculations across PLM and MES.
+    how_to_fix: Add an ItemUomConversion or QuantityBasis concept with from_uom,
+      to_uom, factor, valid period, basis/condition, source authority, and
+      allowed-use context. Require BomLine.qty_per and scrap calculations to
+      reference the applicable basis when parent/child UOMs differ.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM/routing ontology as a PLM/MES integration baseline for
+        production quantities and material movement.
+      failure_condition: When parent and child items use different units,
+        MES/material/cost calculations require a conversion rule that the
+        ontology does not provide.
+      impact: This creates operational risk because quantity interpretation is left
+        outside the concept model even though the target itself identifies the
+        missing master and shop-floor conversion behavior.
+      evidence_refs:
+        - "entities.Part.attributes.uom values: [ea, kg, m]"
+        - "entities.BomLine.attributes.qty_per: type number"
+        - "notes: uom 변환(kg↔ea 등)은 품목별 환산계수 마스터가 없고, 필요 시 현장에서 환산한다"
+    causal_path:
+      root_cause_candidate: The ontology treats UOM as a simple item attribute and
+        quantity as a bare number instead of modeling conversion as a governed
+        concept.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Part has UOM values and BomLine has numeric qty_per, creating cross-unit
+            quantity semantics.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Part.attributes.uom
+            - entities.BomLine.attributes.qty_per
+        - cause_id: coverage-candidate-003.cause-002
+          claim: The target explicitly says item-specific conversion-factor master is
+            absent and conversions occur on site as needed.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "notes: uom 변환(kg↔ea 등)은 품목별 환산계수 마스터가 없고, 필요 시 현장에서 환산한다"
+        - cause_id: coverage-candidate-003.cause-003
+          claim: No conversion entity, relation, or authority appears among the modeled
+            entities or relations.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "entities list: Part, Assembly, BomLine, AlternatePart, Operation,
+              Routing, WorkCenter, ECO, InspectionPlan"
+            - relations list contains BOM/routing/ECO/alternate links only
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: manufacturing-bom-ontology.yaml / source authority for operational values
+    evidence_anchor: Part.rev and current_eco name external originals;
+      BomLine.scrap_rate copied from production-planning Excel; notes MES
+      calculates cumulative std_time while standard-cost system also has manual
+      field reconciled quarterly
+    claim: Single source-of-authority coverage is inconsistent for values managed
+      across multiple systems.
+    what: Some attributes name an original source, but copied or duplicated
+      operational values such as scrap_rate and cumulative standard time/cost
+      lack a modeled authority, ownership, or precedence concept.
+    why: The document is intended as a PLM/MES integration concept baseline. It
+      names authority for Part.rev and current_eco, but for values explicitly
+      managed across Excel, MES, and a standard-cost system it only describes
+      copying or reconciliation. Coverage is incomplete because a cross-system
+      integration ontology needs a concept for which system or ledger is
+      authoritative under which condition.
+    how_to_fix: Add a SourceAuthority or SystemOfRecord concept applicable to
+      attributes and derived values, including owner system, precedence,
+      synchronization cadence, reconciliation policy, and conflict-resolution
+      rule. Apply it consistently to scrap_rate, std_time/cumulative time,
+      standard-cost fields, acceptance criteria, Part.rev, and current_eco.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES integration concept baseline for cross-system
+        precedence and operational trust.
+      failure_condition: When copied or duplicated values disagree between Excel, MES,
+        PLM/drawing ledger, SOP, or standard-cost system, the ontology cannot
+        determine which value governs production or downstream calculations.
+      impact: The review goal includes precedence and invalid-input behavior;
+        inconsistent source-authority coverage makes the concept document
+        insufficient for resolving cross-system conflicts.
+      evidence_refs:
+        - "entities.Part.attributes.rev note: drawing ledger is source"
+        - "entities.Part.attributes.current_eco note: ECO system is source"
+        - "entities.BomLine.attributes.scrap_rate note: production-planning
+          Excel value is copied"
+        - "notes: MES calculates cumulative std_time, standard-cost system has
+          manual field and quarterly reconciliation"
+    causal_path:
+      root_cause_candidate: Authority is documented as ad hoc attribute notes rather
+        than as a reusable modeled dimension for cross-system values.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: The ontology sometimes states a source of record in notes for Part.rev
+            and current_eco.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Part.attributes.rev note
+            - entities.Part.attributes.current_eco note
+        - cause_id: coverage-candidate-004.cause-002
+          claim: Other cross-system values are described as copied, manually entered,
+            calculated elsewhere, or reconciled, without an authority/precedence
+            concept.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.BomLine.attributes.scrap_rate note
+            - "notes: MES가 Routing에서 계산하지만, 표준원가 시스템에도 수기 입력 필드가 있어 분기마다 대사한다"
+        - cause_id: coverage-candidate-004.cause-003
+          claim: No reusable authority, ownership, or precedence entity exists in the
+            entity/relation set.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "entities list: Part, Assembly, BomLine, AlternatePart, Operation,
+              Routing, WorkCenter, ECO, InspectionPlan"
+            - relations list contains no source-of-record or precedence relation
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no external domain document or industry standard
+    was used.
+  - For a PLM/MES integration baseline, date-effective production definitions,
+    controlled manual action evidence, unit conversion governance, and
+    source-of-authority coverage are treated as necessary
+    manufacturing-operations concept dimensions based on the target's own stated
+    scope and notes.
+validation:
+  unaddressable_candidates: []

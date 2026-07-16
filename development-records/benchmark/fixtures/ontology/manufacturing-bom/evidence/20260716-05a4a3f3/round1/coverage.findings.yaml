@@ -1,0 +1,213 @@
+schema_version: 1
+session_id: 20260716-05a4a3f3
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: manufacturing-bom-ontology.yaml — BOM·라우팅·품목 리비전의 시간성
+    evidence_anchor: materialized-input.md:20-35, 55-61, 69-75, 93-96
+    claim: 적용 시점별 제품 구성을 재구성할 BOM·라우팅 버전 및 유효기간 개념이 없다.
+    what: Part에는 현재 rev만 있고, BomLine과 Routing에는 revision, valid_from/valid_to, 적용
+      공장·로트·일련번호 같은 effectivity 차원이 없다. ECO의 effective_date만으로는 변경 전후 BOM과 라우팅
+      상태를 보존하지 못한다.
+    why: ECO 적용일과 Part.rev 주간 동기화 사이에 시차가 명시되어 있으므로 현재값만 조회하면 특정 생산 시점에 어떤 부품 구성과 공정
+      순서가 유효했는지 결정할 수 없다. 이는 PLM 설계 기준과 MES 생산 실행 기준의 시점 정합성을 약화시킨다.
+    how_to_fix: PartRevision, BomRevision, RoutingRevision 또는 공통
+      ConfigurationRevision 개념을 도입하고 각 버전에 유효 시작·종료, 변경 근거 ECO, 상태, 적용 범위를 연결한다.
+      현재값은 유효 버전에서 파생되는 투영으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 품목·BOM·라우팅의 적용 기준을 일관되게 제공하는 개념 기준 문서
+      failure_condition: ECO effective_date와 Part.rev 동기화 시점이 다르거나 과거 생산분·변경 경계 시점의 구성을 조회할 때
+      impact: MES가 적용해야 할 BOM과 라우팅을 단일하게 판정하거나 과거 생산 구성을 감사·재현할 수 없다.
+      evidence_refs:
+        - materialized-input.md:20-21
+        - materialized-input.md:29-35
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: 시간에 따라 변하는 제품 구성에 대해 독립된 버전/effectivity 개념을 모델링하지 않았다.
+      root_cause_step_id: coverage-candidate-001.cause-002
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: 특정 시점의 BOM·라우팅·품목 리비전을 재구성할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-21
+            - materialized-input.md:29-35
+            - materialized-input.md:55-61
+        - cause_id: coverage-candidate-001.cause-002
+          claim: ECO에는 단일 effective_date만 있고 Part.rev는 지연 동기화되며, BomLine과 Routing에는 유효기간이나
+            이력이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-75
+            - materialized-input.md:96
+      unresolved_beyond_evidence: 공장·로트·일련번호별 effectivity가 실제 요구되는지는 경계 내 자료로 확정할 수
+        없지만, 날짜 기준 이력 부재는 명시된 변경 규칙만으로도 확인된다.
+  - candidate_id: coverage-candidate-002
+    target: manufacturing-bom-ontology.yaml — MES 생산 실행 범위
+    evidence_anchor: materialized-input.md:12-82, 93-96
+    claim: 생산 오더를 참조하면서도 이를 표현할 엔티티와 실제 실행 추적 개념이 없다.
+    what: 무결성 규칙은 생산 오더 생성을 통제하지만 엔티티 목록에는 생산 오더, 공정 실행, 실제 자재 투입·산출, 실적 또는 추적성 개념이
+      없다.
+    why: 라우팅 release 여부에서 생산 실행으로 넘어가는 통합 경계가 규칙 문장에만 존재한다. 따라서 MES가 어떤 품목
+      리비전·BOM·라우팅으로 주문을 실행했고 무엇을 실제 소비·생산했는지 온톨로지로 연결할 수 없다.
+    how_to_fix: 최소한 ManufacturingOrder와 OperationExecution 개념을 추가하고 주문을 적용
+      Part/BOM/Routing revision에 연결한다. 실제 투입·산출 및 로트/일련번호 추적이 통합 범위라면
+      MaterialConsumption, ProductionOutput 또는 동등한 실행 기록도 포함한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM의 제품 정의와 MES의 생산 실행을 잇는 개념 기준 제공
+      failure_condition: released 라우팅을 근거로 생산 오더를 만들거나 실행 결과를 설계 기준과 대조할 때
+      impact: 문서가 통합의 핵심 인계 객체와 실행 증거를 표현하지 못해 PLM 기준과 MES 실적 사이의 추적 사슬이 끊긴다.
+      evidence_refs:
+        - materialized-input.md:12-82
+        - materialized-input.md:95
+    causal_path:
+      root_cause_candidate: 모델 범위가 제품·공정 정의에 머물고 MES 실행 인계 및 실적 하위 영역을 포함하지 않았다.
+      root_cause_step_id: coverage-candidate-002.cause-002
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: 생산 오더와 실제 실행 결과를 BOM·라우팅에 연결할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:12-82
+            - materialized-input.md:95
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 생산 오더는 무결성 규칙에서만 언급되고 대응 엔티티·관계가 정의되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:12-82
+            - materialized-input.md:95
+      unresolved_beyond_evidence: 상세 MES 실적과 genealogy 전체가 문서 범위인지 명시되어 있지 않지만, 생산 오더
+        생성 규칙을 선언한 이상 최소 주문 인계 개념의 부재는 경계 내에서 확인된다.
+  - candidate_id: coverage-candidate-003
+    target: manufacturing-bom-ontology.yaml — ECO 및 Routing lifecycle·감사 증거
+    evidence_anchor: materialized-input.md:55-61, 69-75, 93-96
+    claim: 변경 승인과 릴리스 통제를 입증할 lifecycle 종결 상태 및 감사 증거 개념이 없다.
+    what: ECO는 open/approved/applied, Routing은 draft/released만 갖는다. 거절·취소·대체·폐기·단종
+      등의 종결 상태와 승인자, 승인 시각, 근거, 적용 확인, 정정·재발행 사건이 표현되지 않는다.
+    why: approved 또는 released 값만으로는 누가 어떤 근거로 통제 행위를 수행했는지, 이후 취소·대체되었는지 판단할 수 없다.
+      변경관리와 생산 허가의 책임 추적 및 종료 이후 정정 처리가 불완전하다.
+    how_to_fix: ECO와 Routing의 허용 전이 및 종결 상태를 정의하고, Approval/ReleaseEvent 같은 감사 사건에
+      actor, occurred_at, rationale/evidence, from_status, to_status를 기록한다.
+      대체·취소·정정은 원 사건과 연결한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 변경관리와 생산 릴리스의 통제 기준 및 감사 가능성 제공
+      failure_condition: 승인·릴리스의 근거를 감사하거나 적용 후 변경을 취소·대체·정정해야 할 때
+      impact: 동일 상태값이 서로 다른 승인 경로와 현재 효력을 숨겨 통제 판단과 책임 추적의 신뢰를 낮춘다.
+      evidence_refs:
+        - materialized-input.md:55-61
+        - materialized-input.md:69-75
+        - materialized-input.md:95-96
+    causal_path:
+      root_cause_candidate: 상태값만 모델링하고 상태 전이 사건과 통제 증거 및 lifecycle 종료 구간을 독립 개념으로 두지 않았다.
+      root_cause_step_id: coverage-candidate-003.cause-002
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: 승인·릴리스의 행위자·시각·근거와 이후 취소·대체 여부를 재구성할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+        - cause_id: coverage-candidate-003.cause-002
+          claim: ECO와 Routing에는 제한된 현재 상태 enum만 있으며 감사 사건과 종결 상태가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:55-61
+            - materialized-input.md:69-75
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: manufacturing-bom-ontology.yaml — 단위와 환산 기준
+    evidence_anchor: materialized-input.md:17-20, 29-35, 63-67, 98-100
+    claim: 수량·용량 계산에 필요한 단위 차원과 품목별 환산계수 마스터가 누락되어 있다.
+    what: Part.uom은 ea/kg/m로 제한되지만 BomLine.qty_per에는 자체 단위가 없고
+      WorkCenter.capacity_per_shift의 단위는 작업장마다 다르다. 문서는 kg↔ea 환산계수 마스터가 없고 현장에서
+      환산한다고 명시한다.
+    why: BOM 소요량, 스크랩 반영량, 작업장 용량을 통합 계산할 때 값의 차원과 환산 근거가 기계적으로 결정되지 않는다. 현장별 수동 환산은
+      동일 주문에 서로 다른 계획·투입 결과를 만들 수 있다.
+    how_to_fix: Uom과 UomConversion 개념을 추가해 수량 속성이 단위를 명시적으로 참조하게 하고, 품목·유효기간별 변환계수와
+      권위 시스템을 지정한다. capacity에는 수량/시간 기준과 교대 시간 정의를 분리해 표현한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM BOM 수량과 MES 계획·생산 용량을 일관된 의미로 교환하는 기준 제공
+      failure_condition: 서로 다른 단위의 자재 수량을 환산하거나 작업장별 capacity를 비교·계획할 때
+      impact: 소요량·구매량·생산능력 계산이 현장 판단에 의존하여 과소/과다 투입 및 일정 오류 위험이 생긴다.
+      evidence_refs:
+        - materialized-input.md:17-20
+        - materialized-input.md:29-35
+        - materialized-input.md:63-67
+        - materialized-input.md:100
+    causal_path:
+      root_cause_candidate: 측정 단위와 품목별 변환계수를 독립된 권위 개념으로 모델링하지 않았다.
+      root_cause_step_id: coverage-candidate-004.cause-002
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: BOM 수량과 작업장 용량을 일관되게 환산·비교할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:34-35
+            - materialized-input.md:67
+            - materialized-input.md:100
+        - cause_id: coverage-candidate-004.cause-002
+          claim: qty_per에는 단위가 없고 capacity 단위는 가변이며 환산계수 마스터가 명시적으로 부재한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:34-35
+            - materialized-input.md:67
+            - materialized-input.md:100
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: manufacturing-bom-ontology.yaml — 병행 관리 값의 권위·이력
+    evidence_anchor: materialized-input.md:29-35, 47-53, 98-100
+    claim: 복수 장부에서 병행 관리되는 scrap_rate와 표준시간에 단일 권위 및 대사 이력 개념이 없다.
+    what: scrap_rate는 생산계획팀 Excel 값을 복사하고, 누적 std_time은 MES 계산값과 표준원가 시스템 수기 입력값을 분기
+      대사한다. 그러나 원본 시스템, 값의 유효기간, 복사·수정 주체, 대사 시각·차이·해결 결과를 모델링하지 않는다.
+    why: 동일 의미의 값이 여러 시스템에 존재하는데 어떤 값을 운영 기준으로 선택해야 하는지 결정할 수 없고, 오래된 복사본이나 수기 조정이
+      BOM 소요량·원가 계산에 사용되어도 추적하기 어렵다.
+    how_to_fix: 각 관리 값에 authoritative_source와 valid_from/valid_to를 지정하고, 수동 조정은
+      actor, timestamp, reason을 가진 AdjustmentEvent로 기록한다. 대사는 비교 대상·차이·판정·해결 결과를
+      가진 ReconciliationEvent로 표현한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 및 원가·계획 시스템 사이에서 제조 기준값의 의미와 권위를 통일하는 개념 기준 제공
+      failure_condition: 복사본과 계산값·수기값이 불일치하거나 과거 시점의 scrap_rate·표준시간을 재현할 때
+      impact: 시스템별 값이 갈릴 때 기준값을 판정할 수 없어 자재계획·원가·공정시간 결과의 신뢰와 감사 가능성이 낮아진다.
+      evidence_refs:
+        - materialized-input.md:35
+        - materialized-input.md:53
+        - materialized-input.md:99
+    causal_path:
+      root_cause_candidate: 병행 관리되는 시점 의존 기준값에 권위 출처, 유효기간, 조정·대사 사건을 모델링하지 않았다.
+      root_cause_step_id: coverage-candidate-005.cause-002
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: 불일치 시 운영 기준값과 변경 경위를 판정할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35
+            - materialized-input.md:99
+        - cause_id: coverage-candidate-005.cause-002
+          claim: 값의 복사·수기 입력·분기 대사는 서술되지만 권위, 이력, 감사 증거 속성이나 엔티티가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:47-53
+            - materialized-input.md:98-100
+      unresolved_beyond_evidence: 현재 실제 시스템 운영 규정에서 Excel, MES 또는 표준원가 시스템 중 하나를 권위로
+        지정했는지는 경계 내 자료로 확인할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합의 개념 기준 문서는 특정 생산 시점에 적용된 품목·BOM·라우팅 구성을 재구성할 수 있어야 한다.
+  - 생산 오더 생성 규칙을 포함한 모델은 최소한 설계·공정 기준에서 MES 실행 객체로 이어지는 인계 개념을 포함해야 한다.
+  - 수량·표준시간·스크랩률처럼 운영 계산에 쓰이는 값은 단위, 시점, 권위 출처와 감사 가능한 변경 근거가 필요하다.
+validation:
+  unaddressable_candidates: []

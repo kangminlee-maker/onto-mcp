@@ -1,0 +1,339 @@
+schema_version: 1
+session_id: 20260716-6faff1a1
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: credit-risk-ontology.yaml — Collateral entity typing
+    evidence_anchor: entities.Collateral.definition; entities.Collateral.is_a;
+      relations Exposure secured_by Collateral
+    claim: Collateral is incorrectly typed as a subtype of Exposure even though its
+      definition and relation describe a distinct securing asset.
+    what: The ontology states `Collateral is_a Exposure`, while defining collateral
+      as an asset that secures an exposure and separately relating Exposure to
+      Collateral through `secured_by`.
+    why: An exposure is a credit position, whereas collateral is an asset supporting
+      that position. Subtyping makes every collateral instance inherit the
+      meaning of an exposure, so shared engines may count or classify collateral
+      as credit exposure.
+    how_to_fix: "Remove `Collateral.is_a: Exposure`; retain Collateral as an
+      independent entity connected to Exposure by `secured_by`, with cardinality
+      or allocation semantics defined if needed."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: A common conceptual authority for the risk engine and reporting system.
+      failure_condition: A consumer interprets `is_a` as type inheritance or queries
+        all Exposure instances including subtypes.
+      impact: Collateral assets can be treated as exposures, corrupting exposure
+        classification, aggregation, and reporting semantics.
+      evidence_refs:
+        - entities.Collateral.definition
+        - entities.Collateral.is_a
+        - "relations: Exposure -> Collateral secured_by"
+    causal_path:
+      root_cause_candidate: The ontology confuses a securing-asset relationship with
+        ontological subtype inheritance.
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: Collateral is declared as an Exposure subtype despite being defined as an
+            asset securing an exposure.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Collateral.definition
+            - entities.Collateral.is_a
+        - cause_id: semantics-candidate-001.cause-002
+          claim: The same intended meaning is already expressed as a `secured_by`
+            relation, showing that association was modeled again as inheritance.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "relations: Exposure -> Collateral secured_by"
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: credit-risk-ontology.yaml — credit-rating concepts and classification rule
+    evidence_anchor: Borrower.internal_rating; RiskRating.grade;
+      Exposure.risk_grade; classification_rules[0]; notes[0]
+    claim: The ontology uses one credit-rating meaning across three incompatible
+      scales and multiple authorities without a canonical mapping, provenance,
+      or effective time.
+    what: Borrower carries a 1–10 internal rating, RiskRating uses R1–R5, and
+      Exposure uses AAA–CCC. The mapping is external to the ontology, each
+      consumer performs conversion, and reporting may manually override the
+      derived exposure grade.
+    why: A rating value cannot be interpreted consistently without its scale,
+      source, derivation or override status, and effective time. Consumer-local
+      conversions and unqualified manual adjustments permit the same borrower or
+      exposure to have divergent meanings in the risk engine and reports.
+    how_to_fix: Model a canonical time-indexed RatingAssessment with explicit
+      subject, scale, grade, source authority, effective/as-of time, and
+      derivation/override provenance. Include versioned mappings between scales
+      in the authority artifact and distinguish engine-derived grade from
+      report-adjusted grade.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Shared rating classification and authority between the risk
+        engine and reporting system.
+      failure_condition: Consumers translate a rating, reconcile engine and report
+        grades, or query the rating applicable at a given time.
+      impact: Different local mappings or overrides can yield contradictory
+        classifications with no authoritative way to reconcile which value,
+        scale, or time is intended.
+      evidence_refs:
+        - Borrower.internal_rating note
+        - RiskRating.grade values and note
+        - Exposure.risk_grade values and note
+        - classification_rules[0]
+        - notes[0]
+    causal_path:
+      root_cause_candidate: Credit rating is modeled as unrelated scalar fields rather
+        than a governed, time-indexed assessment concept.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: Three rating fields use mutually different enumerations, while the target
+            supplies no mapping between them.
+          relation_to_previous: null
+          evidence_refs:
+            - Borrower.internal_rating
+            - RiskRating.grade
+            - Exposure.risk_grade
+            - notes[0]
+        - cause_id: semantics-candidate-002.cause-002
+          claim: The exposure grade can additionally be manually adjusted without
+            recording the derived value, adjustment provenance, or effective
+            time.
+          relation_to_previous: enables
+          evidence_refs:
+            - classification_rules[0]
+        - cause_id: semantics-candidate-002.cause-003
+          claim: Mappings and conversions are delegated to a wiki and individual consumer
+            systems rather than governed by the stated authority artifact.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - RiskRating.grade.note
+            - notes[0]
+      unresolved_beyond_evidence: The actual external mapping tables and override
+        policies are outside the permitted evidence boundary, so their
+        consistency cannot be assessed.
+  - candidate_id: semantics-candidate-003
+    target: credit-risk-ontology.yaml — ExposureAggregate.total_amount
+    evidence_anchor: Exposure.amount; Limit.currency; ExposureAggregate.definition;
+      ExposureAggregate.total_amount; classification_rules[1]
+    claim: "`ExposureAggregate.total_amount` is defined as an unconditional sum of
+      amounts whose currency semantics are absent."
+    what: Exposure.amount has no currency, but ExposureAggregate is defined as the
+      sum of all Exposure.amount values. A related limit has a currency, and the
+      utilization rule delegates cross-currency conversion to each system's own
+      daily exchange-rate table.
+    why: Amounts in different currencies are not directly additive. Even after
+      conversion, different systems or run times can select different daily
+      rates, so the same named total and utilization ratio need not denote the
+      same measurement.
+    how_to_fix: Add currency to each Exposure amount and define aggregate reporting
+      currency, conversion-rate source/version, valuation time, and included
+      exposure population. Persist those semantics with the aggregate and
+      require the utilization calculation to use the same conversion context.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: A shared definition of total exposure and limit utilization.
+      failure_condition: A borrower has exposures in multiple currencies or the engine
+        and report evaluate the rule using different exchange-rate tables or
+        dates.
+      impact: The shared `total_amount` and utilization classification can produce
+        materially different values while appearing semantically identical.
+      evidence_refs:
+        - Exposure.amount
+        - ExposureAggregate.definition
+        - ExposureAggregate.total_amount.note
+        - Limit.currency
+        - classification_rules[1]
+    causal_path:
+      root_cause_candidate: The amount model omits a governed monetary-measurement context.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: The aggregate is declared to sum every Exposure.amount although
+            Exposure.amount has no currency.
+          relation_to_previous: null
+          evidence_refs:
+            - Exposure.amount
+            - ExposureAggregate.definition
+        - cause_id: semantics-candidate-003.cause-002
+          claim: Cross-currency conversion is consumer-local and refers only to each
+            system's daily rate table.
+          relation_to_previous: enables
+          evidence_refs:
+            - classification_rules[1]
+        - cause_id: semantics-candidate-003.cause-003
+          claim: Aggregate currency, rate authority/version, and valuation time are not
+            part of the aggregate meaning.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - ExposureAggregate.attributes
+            - classification_rules[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: credit-risk-ontology.yaml — Exposure.ltv
+    evidence_anchor: Exposure.ltv; Exposure.amount; Collateral.appraised_value;
+      Collateral.appraised_at
+    claim: LTV is modeled as an independent manually entered number despite being a
+      derived ratio whose source measures also exist in the ontology.
+    what: Exposure.ltv is entered by an underwriter, while exposure amount and
+      collateral appraised value are separately stored; no numerator,
+      denominator, collateral allocation, valuation time, or formula is bound to
+      the LTV value.
+    why: A stored ratio can disagree with its source amounts as balances or
+      appraisals change. With multiple possible collateral or exposure amounts,
+      consumers also cannot determine which inputs the value represents.
+    how_to_fix: Define LTV as a derived, time-indexed measurement with explicit
+      numerator, denominator, linked collateral set/allocation, valuation date,
+      and formula/version. If manual entry must remain, mark it as an asserted
+      assessment with provenance and validation against the derived value.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Consistent collateral-risk classification shared by
+        underwriting, risk, and reporting consumers.
+      failure_condition: Exposure balance, collateral valuation, or collateral
+        allocation changes after manual LTV entry, or consumers independently
+        recompute LTV.
+      impact: The same exposure can carry conflicting collateralization measures with
+        no semantic basis for selecting the authoritative value.
+      evidence_refs:
+        - Exposure.ltv.note
+        - Exposure.amount
+        - Collateral.appraised_value
+        - Collateral.appraised_at
+    causal_path:
+      root_cause_candidate: A derived measurement is represented as an unqualified independent input.
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: LTV is a manually entered number with no declared formula or measurement
+            context.
+          relation_to_previous: null
+          evidence_refs:
+            - Exposure.ltv
+        - cause_id: semantics-candidate-004.cause-002
+          claim: Potential source measures and appraisal time coexist but are not linked
+            to the stored LTV.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Exposure.amount
+            - Collateral.appraised_value
+            - Collateral.appraised_at
+      unresolved_beyond_evidence: The intended numerator, denominator, and collateral
+        allocation policy are not stated within the bounded target.
+  - candidate_id: semantics-candidate-005
+    target: credit-risk-ontology.yaml — Limit.approved_amount
+    evidence_anchor: Limit.definition; Limit.approved_amount.note; classification_rules[1]
+    claim: The `approved_amount` definition conflates approved limit with available
+      limit, which are different measurements.
+    what: Limit is defined as a credit limit and `approved_amount` as the approved
+      amount, but its note says it is managed by summing the CRM's
+      `available_limit`. The utilization rule then uses approved_amount as its
+      denominator.
+    why: Approved limit is an authorization ceiling; available limit is normally a
+      residual amount affected by usage and reservations. Adding or substituting
+      available limit changes the denominator's meaning and can make utilization
+      circular or understated.
+    how_to_fix: Represent approved limit and available limit as separate named
+      measures. Define available limit as a time-indexed projection from the
+      approved ceiling and relevant usage/reservations, and use only the
+      governed approved ceiling in the utilization denominator unless another
+      formula is explicitly intended.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: A shared semantic basis for limit and utilization reporting.
+      failure_condition: The CRM available balance differs from the approved ceiling
+        and a consumer follows the aggregation note or utilization rule.
+      impact: Consumers can calculate different utilization values from quantities
+        labeled as the same limit.
+      evidence_refs:
+        - Limit.definition
+        - Limit.approved_amount.note
+        - classification_rules[1]
+    causal_path:
+      root_cause_candidate: Distinct authorization and remaining-capacity concepts are
+        collapsed into one amount field.
+      root_cause_step_id: semantics-candidate-005.cause-002
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: "`approved_amount` is described both as an approved limit and as a
+            quantity aggregated with `available_limit`."
+          relation_to_previous: null
+          evidence_refs:
+            - Limit.approved_amount.note
+        - cause_id: semantics-candidate-005.cause-002
+          claim: The conflated field is used as the utilization denominator.
+          relation_to_previous: enables
+          evidence_refs:
+            - classification_rules[1]
+      unresolved_beyond_evidence: The CRM field's exact contract is outside the
+        bounded target, but the ontology itself supplies no equivalence or
+        reconciliation rule.
+  - candidate_id: semantics-candidate-006
+    target: credit-risk-ontology.yaml — RiskAppetite entity
+    evidence_anchor: RiskAppetite.definition; RiskAppetite.threshold;
+      RiskAppetite.compliance_status
+    claim: "`RiskAppetite` is named as an appetite concept but actually combines an
+      unspecified threshold with a mutable compliance result."
+    what: The entity contains a threshold and `compliance_status`, while its
+      definition treats exceeding the entity itself as a violation. It does not
+      identify the governed scope, measure, currency, effective period, or
+      evaluation time.
+    why: A policy appetite or limit and the observed result of testing exposure
+      against it have different identity, lifecycle, and time semantics.
+      Combining them makes a status appear intrinsic to the policy even though
+      it depends on a particular aggregate snapshot and evaluation context.
+    how_to_fix: Separate a time-bounded RiskAppetiteLimit policy from a
+      ComplianceAssessment result. Define the limit's governed scope, metric,
+      unit/currency, effective interval, and authority; link each assessment to
+      the exact ExposureAggregate snapshot and evaluation time.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Consistent interpretation of appetite limits and breach reporting.
+      failure_condition: The threshold changes, multiple borrower or portfolio scopes
+        exist, or compliance is evaluated against different aggregate snapshots.
+      impact: A single stored status can be stale or refer to an unknown scope while
+        still being treated as the authoritative appetite state.
+      evidence_refs:
+        - RiskAppetite.definition
+        - RiskAppetite.threshold
+        - RiskAppetite.compliance_status
+        - ExposureAggregate.as_of
+    causal_path:
+      root_cause_candidate: The ontology collapses a policy constraint and its
+        time-dependent evaluation into one entity.
+      root_cause_step_id: semantics-candidate-006.cause-002
+      steps:
+        - cause_id: semantics-candidate-006.cause-001
+          claim: RiskAppetite contains both the threshold and the resulting compliance
+            status.
+          relation_to_previous: null
+          evidence_refs:
+            - RiskAppetite.definition
+            - RiskAppetite.attributes
+        - cause_id: semantics-candidate-006.cause-002
+          claim: The status has no link to an aggregate snapshot or evaluation time.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - RiskAppetite.compliance_status
+            - ExposureAggregate.as_of
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - LTV was interpreted as a derived loan/exposure-to-collateral-value ratio
+    because the target names it 담보인정비율 and also models exposure amount and
+    collateral appraised value.
+  - Monetary amounts require a common currency or an explicit conversion context
+    before aggregation or comparison.
+  - "Approved limit and available limit were treated as semantically distinct:
+    an authorization ceiling versus remaining capacity at a point in time."
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,141 @@
+schema_version: 1
+session_id: 20260716-b0f9e3b8
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment
+      structure
+    evidence_anchor: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:25-31,105-109
+    claim: 주문행과 출하 간의 수량 포함 연결이 없어 부분출하 추적 경로가 끊겨 있다.
+    what: "`fulfills`는 `Shipment`를 주문 전체에만 연결하며, 어떤 `OrderLine`의 몇 개가 해당 출하에 실렸는지를
+      나타내는 관계가 없다."
+    why: 대상 자체가 부분출하 시 주문행과 Shipment의 대응을 추적할 수 없다고 명시한다. 따라서 한 주문이 여러 출하로 나뉘거나 한 행이
+      분할 출하되면 OMS 주문행과 WMS/TMS 화물을 정합하게 연결할 수 없다.
+    how_to_fix: "`ShipmentLine` 같은 연결 엔터티를 추가해 `Shipment`, `OrderLine`,
+      `fulfilled_qty`를 필수로 연결하고, 주문 단위 `fulfills`는 이 연결에서 유도되도록 한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적
+      failure_condition: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우
+      impact: 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 통합 기준 문서의 핵심 추적성이 깨진다.
+      evidence_refs:
+        - materialized-input.md:6-7
+        - materialized-input.md:25-31
+        - materialized-input.md:105-109
+    causal_path:
+      root_cause_candidate: 모델이 Shipment와 OrderLine을 수량과 함께 연결하는 구성 요소를 생략했다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: 부분출하에서 각 Shipment가 충족한 주문행과 수량을 식별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:25-31
+        - cause_id: structure-candidate-001.cause-002
+          claim: 유일한 출하-주문 관계인 `fulfills`가 Shipment에서 Order 전체로만 연결된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:105-109
+        - cause_id: structure-candidate-001.cause-003
+          claim: Shipment와 OrderLine 사이의 연결 엔터티 또는 관계와 충족 수량 속성이 존재하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:25-31
+            - materialized-input.md:40-50
+            - materialized-input.md:105-109
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: logistics-fulfillment-ontology.yaml — Shipment/DeliveryLeg route structure
+    evidence_anchor: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:40-58
+    claim: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로를 구성할 수 없다.
+    what: "`DeliveryLeg`에는 순번과 출발·도착지만 있고, 자신이 어느 상위 Shipment의 구간인지 나타내는 참조나 포함 관계가
+      없다. `is_a: Shipment`는 유형 계층만 표현한다."
+    why: 여러 Shipment와 여러 구간이 존재하면 `leg_seq`만으로 구간을 특정 화물에 묶을 수 없다. 그 결과 TMS가 한 화물의
+      구간 순서와 경로를 재구성할 구조적 경로가 없다.
+    how_to_fix: "`DeliveryLeg.shipment_ref -> Shipment` 또는 `Shipment contains
+      DeliveryLeg` 관계를 추가하고, `leg_seq`가 Shipment 내부에서 유일하도록 무결성 규칙을 둔다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델
+      failure_condition: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우
+      impact: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다.
+      evidence_refs:
+        - materialized-input.md:40-58
+    causal_path:
+      root_cause_candidate: 유형 상속(`is_a`)만 정의하고 Shipment 인스턴스와 DeliveryLeg 인스턴스의 구성 관계를 생략했다.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: 특정 Shipment를 구성하는 DeliveryLeg 목록과 순서를 판정할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:52-58
+        - cause_id: structure-candidate-002.cause-002
+          claim: DeliveryLeg에는 `leg_seq`, `from_ref`, `to_ref`만 있고 상위 Shipment 참조가 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:52-58
+        - cause_id: structure-candidate-002.cause-003
+          claim: Shipment와 DeliveryLeg 사이에는 `is_a` 외에 인스턴스 포함 관계가 정의되지 않았다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:40-58
+            - materialized-input.md:105-109
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: logistics-fulfillment-ontology.yaml — inventory allocation structure
+    evidence_anchor: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:14-31,70-90,105-113
+    claim: 주문행과 창고 재고 사이의 할당 연결이 없어 선언된 주문→재고 할당 단계가 구조적으로 기록되지 않는다.
+    what: "`OrderLine`은 SKU와 주문 수량만 가지며, `InventoryRecord`와 `InventoryAggregate`도
+      SKU를 통해서만 간접적으로 연결된다. 어느 주문행에 어느 창고 재고를 몇 개 예약했는지 표현하는 관계나 엔터티가 없다."
+    why: SKU가 같다는 사실은 특정 주문에 대한 재고 예약을 나타내지 않는다. 같은 SKU의 여러 주문이나 창고 재고가 존재하면 할당 결과를
+      주문행별로 식별·대사할 수 없고, 텍스트 무결성 규칙의 `available_qty` 확인도 영속적인 연결을 만들지 않는다.
+    how_to_fix: "`InventoryAllocation` 같은 연결 엔터티를 추가해 `OrderLine`, `InventoryRecord`
+      또는 Warehouse, `allocated_qty`를 연결하고, 필요하면 할당 상태·생성 시각을 그 엔터티의 속성으로 둔다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적
+      failure_condition: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우
+      impact: OMS 주문 수요와 WMS 창고 예약의 대응 관계를 검증할 수 없어 중복 할당, 미할당, 출하 전 재고 대사가 구조적으로 판정
+        불가능하다.
+      evidence_refs:
+        - materialized-input.md:6-7
+        - materialized-input.md:14-31
+        - materialized-input.md:70-90
+        - materialized-input.md:105-113
+    causal_path:
+      root_cause_candidate: 모델이 주문행과 창고 재고 사이의 할당 행위 및 할당 수량을 독립된 연결 구조로 표현하지 않았다.
+      root_cause_step_id: structure-candidate-003.cause-003
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: 특정 OrderLine에 예약된 창고와 수량을 온톨로지에서 식별할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:14-31
+            - materialized-input.md:70-90
+        - cause_id: structure-candidate-003.cause-002
+          claim: OrderLine, InventoryRecord, InventoryAggregate는 SKU를 공유하지만 특정 할당 인스턴스를
+            연결하는 참조가 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:25-29
+            - materialized-input.md:76-90
+        - cause_id: structure-candidate-003.cause-003
+          claim: 명시된 관계는 Shipment에서 Order로 향하는 `fulfills`뿐이고, 재고 할당은 연결 구조 없이 텍스트 규칙으로만
+            언급된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:105-113
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 대상 문서가 선언한 주문→재고 할당→출하→배송 흐름을 필수 연결 구조의 설계 의도로 해석했다.
+  - "`is_a`는 유형 상속이며, 특정 Shipment 인스턴스가 특정 DeliveryLeg 인스턴스를 포함한다는 구성 관계를 대신하지
+    않는다고 해석했다."
+  - 공통 SKU 참조는 특정 주문에 대한 재고 예약 또는 특정 Shipment의 주문행 충족 사실을 자체적으로 표현하지 않는다고 해석했다.
+validation:
+  unaddressable_candidates: []

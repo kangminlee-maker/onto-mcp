@@ -1,0 +1,189 @@
+schema_version: 1
+session_id: 20260716-ea9773ff
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 등급 scale과 주요 business classification code-set이 버전 있는 공유 권위
+      개념으로 승격되지 않아 rating 및 borrower/product/collateral 분류 변경이 소비자별 매핑과 로컬 enum에
+      분산된다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 다수 렌즈와 deliberation resolution이 broad governed classification
+      authority 결함을 유지했다. Semantics는 rating/classification meaning authority 범위로
+      증거를 좁혔으므로 판단은 contested로 보존하되, 공유 권위 문서라는 목적을 직접 약화하는 root-level
+      governance 문제다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-009
+      - finding-010
+  - issue_id: issue-002
+    problem_definition: 월말 batch aggregate와 시간 의존 risk state 및 derived calculations가
+      공통 as-of, run, cutoff, source, rule-version context 없이 같은 권위 값처럼 사용된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 substantive lens가 지지했고 logic evidence도 all-exposure sum과 month-end
+      lagged value의 truth condition 충돌을 직접 지적한다. 한도 소진율, 과거 재현, 감사 비교의 핵심 계산을
+      틀리게 만들 수 있어 현재 target에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-005
+      - finding-011
+      - finding-012
+  - issue_id: issue-003
+    problem_definition: RiskAppetite policy, threshold, compliance result와
+      ExposureAggregate 기반 utilization/appetite dependency가 evaluation concept 및
+      graph edge가 아니라 prose rule에 남아 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Semantics와 structure가 직접 지지하고 다른 렌즈도 평가 결과와 dependency 개념의 결여를 인정한다.
+      공유 graph contract로 breach와 utilization을 소비하게 하려면 policy와 evaluated result
+      및 dependency edge의 의미 일관성이 target 안에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-016
+      - finding-017
+      - finding-018
+  - issue_id: issue-004
+    problem_definition: 통화가 다른 한도 소진율 계산에서 FX source, rate date, precedence,
+      fallback, recalculation policy가 canonical rule로 닫혀 있지 않다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 비-logic 렌즈들이 FX calculation authority gap을 지지하지만 logic contradiction은
+      독립적으로 제시되지 않았다. 동일 포지션의 utilization이 시스템별 FX table에 따라 달라질 수 있으므로 다음 단계 전에
+      canonical calculation authority로 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-005
+    problem_definition: 연체/부실 상태가 외부 운영 소관이라는 note로만 처리되고 shared ontology boundary
+      contract 또는 reference status concept으로 닫혀 있지 않다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 연체/부실은 핵심 credit-risk state이나 외부 authority, identifier, as-of time,
+      reporting relationship이 없다. 운영 소유권은 외부에 둘 수 있지만 공유 개념 기준의 boundary
+      contract는 다음 단계 전에 필요하다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-006
+    problem_definition: 수동 조정, underwriter 입력, approval 기록을 actor, time, reason,
+      before/after value, evidence URI가 있는 control event/evidence entity로 표현하지
+      않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: coverage가 직접 제기했고 대부분 렌즈가 audit provenance gap을 지지한다. 엔진값과 보고값의 차이를
+      통제된 조정으로 입증할 수 없게 하므로 공유 권위와 감사 가능성의 현재 blocker다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 병행 관리되는 등급, 한도, 환율 값과 외부 참조에 대해 canonical source,
+      precedence, fallback, reconciliation rule이 SourceOfRecord/AuthorityPolicy
+      개념으로 정의되지 않았다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: coverage가 직접 제기했고 axiology, evolution, semantics, structure가 모두 권위와
+      precedence 결여를 지지한다. 공유 개념 권위 문서가 충돌 값을 해소하지 못하는 핵심 결함이므로 target에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: 연체/부실 lifecycle/status coverage가 issue-005의 외부 소유
+      delinquency/default boundary-contract 결함의 lifecycle 및 graph-linkage
+      facet으로 남아 있다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: deliberation resolution은 issue-008을 독립 root가 아니라 issue-005에 연결된
+      lifecycle/status facet으로 좁혔다. traceability를 위해 별도 분류하되, closure는
+      issue-005의 boundary-contract 수리와 함께 다음 단계에서 수행될 수 있다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: Collateral을 Exposure subtype으로 선언해 pledged asset과 credit
+      exposure의 type boundary를 혼동하고 secured_by association과 의미 충돌을 만든다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: semantics와 structure가 직접 지지하는 type-modeling error이며
+      coverage/evolution은 lens scope 밖으로 보았을 뿐 반박하지 않았다. consumer가 is_a를 상속으로
+      해석하면 collateral asset에 exposure semantics가 적용되므로 target 안에서 바로 수정해야 하는
+      correctness 문제다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-010
+    problem_definition: LTV가 derived collateral ratio처럼 명명·배치되어 있지만 독립 수동 입력 권위를 가지며
+      formula, valuation basis, rule/version authority, override provenance가 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation은 derived-ratio/manual-input mismatch를 trigger로 유지하면서
+      LTV-specific derivation, valuation, override authority 문제로 좁혔다. 같은
+      exposure의 LTV 계산과 수동 입력 해석이 갈라질 수 있으므로 target 내에서 의미와 권위를 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-011
+    problem_definition: Borrower.internal_rating, RiskRating.grade,
+      Exposure.risk_grade의 rating-specific scope, scale ownership, effective
+      dates, derivation, conversion authority, override/provenance semantics가
+      ontology-owned mapping으로 정의되지 않았다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: resolution은 issue-011을 issue-001에 종속·연결된 focused rating-scale mapping
+      issue로 유지했다. Axiology는 broad classification authority issue의 표현으로 좁혔으므로
+      contested를 보존한다. rating-specific traceability 때문에 별도 carry-forward가 필요하지만
+      broader issue-001 remediation 중 함께 닫을 수 있다.
+    related_surface_finding_ids:
+      - finding-015

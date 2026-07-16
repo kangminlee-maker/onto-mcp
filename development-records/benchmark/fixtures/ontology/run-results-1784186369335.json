@@ -1,0 +1,12 @@
+[
+  {
+    "fixture": "logistics-fulfillment",
+    "status": "completed",
+    "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-logistics-fulfillment-VbfQ0N/.onto/review/20260716-b0f9e3b8",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/logistics-fulfillment/evidence/20260716-b0f9e3b8",
+    "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-logistics-fulfillment-VbfQ0N",
+    "elapsed_sec": 918,
+    "salvaged_unit_count": 0,
+    "salvaged_unit_ids": []
+  }
+]

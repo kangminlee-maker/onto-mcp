@@ -1,0 +1,12 @@
+schema_version: 1
+session_id: 20260716-b0f9e3b8
+lens_id: logic
+human_output_ref: null
+findings: []
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []
+  no_findings_rationale: 허용된 범위의 명시적 정의·타입·규칙은 동시에 만족 가능합니다. 재고 시점·단위,
+    OrderLine–Shipment 추적, 독립 상태 매핑의 결손은 품질상 우려이지만, domain 문서 없이 현재 claim들만으로
+    형식적 모순이나 상태 전개상의 불가능성을 도출할 수는 없습니다.

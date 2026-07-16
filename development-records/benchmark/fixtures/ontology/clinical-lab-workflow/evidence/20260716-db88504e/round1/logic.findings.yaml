@@ -1,0 +1,61 @@
+schema_version: 1
+session_id: 20260716-db88504e
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml — Report.result_status 및 두 번째 state_rule
+    evidence_anchor: .onto/review/20260716-db88504e/execution-preparation/materialized-input.md:80-84,121-123
+    claim: released_at이 기록된 시점에 연결 Result가 이미 corrected인 경우, 단일
+      Report.result_status에 finalized와 amended가 동시에 요구된다.
+    what: Report.result_status는 단일값 enum인데, 같은 상태 전개에서 finalized 전이와 amended 의무가 겹치며
+      우선순위나 배타 조건이 정의되지 않았다.
+    why: 충돌 쌍은 materialized-input.md:123의 ‘released_at 기록 시 finalized’ 규칙과 같은 줄의
+      ‘Result.status가 corrected이면 amended’ 규칙이다. corrected가 release보다 앞서거나 같은
+      시점인 경로를 모델이 금지하지 않으므로 두 조건이 동시에 참일 수 있다. 이때 lines 80-82의 단일 enum 속성은 두 값을
+      함께 만족할 수 없다. 이는 inter-claim, mixed necessary/obligatory 충돌이며 EMR/LIS가 동일
+      사건에 서로 다른 권위 상태를 선택하게 만든다.
+    how_to_fix: "상태 규칙을 배타적으로 정의한다. 예: release 시 corrected Result가 하나라도 있으면 amended,
+      그렇지 않으면 finalized로 정하고, correction의 선후관계와 전이 우선순위를 명시한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 Report.result_status를 임상의가 신뢰하는 단일 권위 상태로 사용하는 계약
+      failure_condition: Report에 released_at이 존재하고 연결된 Result.status가 release 이전 또는 같은
+        시점에 corrected인 경우
+      impact: 동일 입력 상태에 대해 finalized와 amended가 모두 의무화되어 구현별 상태 선택이 갈리고 권위 문서의 결정성이
+        사라진다.
+      evidence_refs:
+        - materialized-input.md:80-84
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 서로 겹칠 수 있는 release 조건과 correction 조건에 배타 가드 또는 우선순위가 없다.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 단일값 Report.result_status가 finalized와 amended를 동시에 요구받을 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:80-82
+            - materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-002
+          claim: released_at 존재와 Result.status=corrected가 동시에 성립하는 경로가 금지되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-72
+            - materialized-input.md:84
+            - materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-003
+          claim: 두 상태 할당 규칙 사이에 배타 조건이나 전이 우선순위가 선언되지 않았다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:123
+      unresolved_beyond_evidence: ‘단’이 corrected 조건의 암묵적 우선순위를 뜻할 의도였는지는 확인할 수 있으나, 현재
+        기계 판독 가능한 계약에는 그 우선순위가 형식화되어 있지 않다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - enum 속성은 한 시점에 하나의 열거값만 갖는 단일값 속성으로 해석했다.
+  - 모델에 금지 조건이 없으므로 Result correction이 Report release 이전 또는 같은 시점에 발생하는 경로도
+    허용된다고 해석했다.
+validation:
+  unaddressable_candidates: []

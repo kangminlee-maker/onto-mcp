@@ -1,0 +1,174 @@
+schema_version: 1
+session_id: 20260716-ea9773ff
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: credit-risk-ontology.yaml classification_rules / notes
+    evidence_anchor: classification_rules[0]; notes[0]; header purpose comment
+    claim: 보고서 수동 조정과 소비자별 등급 변환은 공유 개념 권위라는 목적에서 drift를 만든다.
+    what: Exposure.risk_grade가 RiskRating.grade에서 도출된다고 하면서도 보고서 팀이 시장 상황에 따라 수동 조정할
+      수 있고, 세 등급 스케일 변환도 각 소비 시스템이 수행하도록 둔다.
+    why: 이 온톨로지는 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서를 지향한다. 그런데 등급의 도출·조정·변환 권위를 소비 시스템과
+      보고서 팀에 분산하면 같은 차주/익스포저가 엔진·보고서·소비 시스템별로 다른 리스크 의미를 갖게 된다. 이는 운영 유연성이라는 국소
+      최적화가 공유 기준이라는 핵심 목적을 약화하는 트레이드오프다.
+    how_to_fix: 등급 체계의 canonical source와 변환 테이블을 온톨로지 안에 명시하고, 수동 조정은 별도 override
+      개념으로 분리해 사유, 적용 범위, 승인 권위, 원등급 보존, 유효기간을 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서로 사용되는 것.
+      failure_condition: RiskRating.grade, Exposure.risk_grade,
+        Borrower.internal_rating 간 변환 또는 보고 조정이 시스템별로 다르게 적용될 때.
+      impact: 동일 리스크 판단이 시스템별로 달라져 보고 수치와 엔진 판단의 비교·추적·감사가 약해진다.
+      evidence_refs:
+        - "header purpose comment: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향"
+        - "classification_rules[0]: 보고서 팀이 시장 상황에 따라 수동 조정 가능"
+        - "notes[0]: 변환은 각 소비 시스템이 수행"
+    causal_path:
+      root_cause_candidate: 등급 의미와 변환/조정 권위가 온톨로지 내부의 단일 권위로 닫혀 있지 않다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 대상은 공유 개념 권위 문서를 지향한다고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - header purpose comment
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 하지만 등급 변환은 각 소비 시스템이 수행하도록 되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[0]
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 보고서 팀은 엔진 산출 등급에서 도출되는 Exposure.risk_grade를 수동 조정할 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[0]
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: ExposureAggregate.total_amount and Limit utilization rule
+    evidence_anchor: ExposureAggregate.attributes.total_amount.note; classification_rules[1]
+    claim: 월말 배치 집계가 한도 소진율의 기준값이 되면서 리스크 통제 목적보다 보고 편의가 우선된다.
+    what: ExposureAggregate.total_amount는 모든 Exposure.amount의 합이라고 정의되지만 실제로는 월말 배치로
+      저장되고 일중 신규 여신은 다음 배치까지 미반영된다. 이 값이 Limit 소진율 계산의 분자로 사용된다.
+    why: 한도 소진율은 여신 한도 관리의 운영 판단에 쓰이는 기준인데, 일중 신규 여신을 제외한 값을 공식 집계로 쓰면 한도 초과나 리스크 성향
+      위반을 늦게 인지할 수 있다. 시간성 비용이 명시적 통제 없이 수용되어 공유 리스크 기준의 목적을 훼손한다.
+    how_to_fix: ExposureAggregate를 reporting_snapshot과 control_current_exposure처럼
+      목적별로 분리하거나, total_amount의 freshness SLA, 포함/제외 범위, 일중 보정 방식, 한도 소진율에 사용할
+      권위 값을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 리스크/한도 판단 기준 제공.
+      failure_condition: 일중 신규 여신이 발생했지만 월말 배치 전 한도 소진율이나 RiskAppetite 준수 상태가 계산될 때.
+      impact: 실제 익스포저보다 낮은 집계가 공식 계산에 사용되어 한도 관리와 보고 신뢰를 동시에 약화한다.
+      evidence_refs:
+        - "ExposureAggregate.total_amount.note: 월말 배치 저장, 일중 신규 여신 미반영"
+        - "classification_rules[1]: Limit 소진율 = ExposureAggregate.total_amount /
+          Limit.approved_amount"
+    causal_path:
+      root_cause_candidate: 집계 값의 목적과 freshness 권위가 분리되지 않았다.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: ExposureAggregate.total_amount는 모든 Exposure.amount의 합으로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - ExposureAggregate.definition
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 동일 필드는 월말 배치로 계산되어 일중 신규 여신을 다음 배치까지 반영하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - ExposureAggregate.total_amount.note
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 그 값이 Limit 소진율 계산에 사용된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-003
+    target: classification_rules[1] currency conversion
+    evidence_anchor: classification_rules[1]; Limit.attributes.currency
+    claim: 통화 환산 권위를 각 시스템에 맡겨 한도 소진율의 공유 기준을 약화한다.
+    what: Limit은 currency를 갖지만, 통화가 다른 경우 Limit 소진율 환산은 각 시스템의 당일 환율 테이블을 사용한다고 규정한다.
+    why: 한도 소진율은 공유 리스크/보고 기준이어야 하는데 환율 출처가 시스템별이면 동일 익스포저와 한도에서도 다른 소진율이 산출될 수 있다.
+      이는 시스템 자율성을 위해 canonical 계산 권위를 포기하는 숨은 트레이드오프다.
+    how_to_fix: 환율 기준일, 환율 소스, 우선순위, 재계산 정책을 온톨로지의 canonical 계산 규칙으로 정하거나
+      ExchangeRateSource 같은 권위 개념을 추가한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 한도 소진율 계산 기준.
+      failure_condition: 리스크 엔진과 보고 시스템의 당일 환율 테이블 값이나 갱신 시각이 다를 때.
+      impact: 동일 포지션의 한도 소진율이 시스템별로 달라져 보고·통제 간 reconciliation 비용과 판단 불일치를 만든다.
+      evidence_refs:
+        - "classification_rules[1]: 통화가 다른 경우 각 시스템의 당일 환율 테이블 사용"
+        - Limit.currency attribute
+    causal_path:
+      root_cause_candidate: 환율 변환의 계산 권위가 온톨로지에 닫혀 있지 않고 소비 시스템에 분산되어 있다.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: Limit은 통화를 속성으로 갖는다.
+          relation_to_previous: null
+          evidence_refs:
+            - Limit.attributes.currency
+        - cause_id: axiology-candidate-003.cause-002
+          claim: 통화가 다른 경우 환산은 각 시스템의 환율 테이블을 사용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[1]
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 따라서 한도 소진율 계산 결과가 시스템별 환율 상태에 의존한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-004
+    target: notes[1] default status boundary
+    evidence_anchor: notes[1]; ontology header purpose
+    claim: 연체/부실 상태를 경계 밖으로만 둔 것은 여신 리스크 공유 기준의 목적상 중요한 경계 약속을 불충분하게 만든다.
+    what: 연체/부실(default) 상태가 별도 시스템에서 다뤄진다는 이유로 온톨로지 범위 밖이라고만 적고, 이 온톨로지의 등급·익스포저·보고
+      개념과 어떻게 연결되는지 정의하지 않는다.
+    why: default 상태는 여신 리스크 분류와 보고에서 목적상 핵심적인 상태다. 별도 시스템 소관일 수는 있지만, 공유 개념 권위 문서라면
+      최소한 외부 권위, 참조 키, 반영 시점, 등급/보고와의 관계를 경계 계약으로 닫아야 한다. 단순 제외는 시스템 경계 편의가 리스크
+      의미의 완결성을 약화하는 선택이다.
+    how_to_fix: DefaultStatus를 외부 권위 개념으로 참조하거나, out-of-scope라도 external authority,
+      식별자, 갱신 시점, RiskRating/Exposure 보고 반영 규칙을 명시한 boundary contract를 추가한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 여신 리스크 관리 개념 모델이 리스크 엔진과 보고 시스템의 공유 기준이 되는 것.
+      failure_condition: 차주나 익스포저가 연체/부실 상태인데 이 온톨로지의 등급·익스포저·보고 산출물과 연결해 해석해야 할 때.
+      impact: 핵심 리스크 상태가 공유 모델에서 끊겨 리스크 엔진과 보고 시스템의 의미 정렬과 경계 책임 추적이 어려워진다.
+      evidence_refs:
+        - "notes[1]: 연체/부실(default) 상태는 별도 시스템에서 다루므로 범위 밖"
+        - "header purpose comment: 여신 리스크 관리 개념 모델 및 공유 권위 문서 지향"
+    causal_path:
+      root_cause_candidate: 목적상 핵심 외부 상태에 대한 boundary contract가 없다.
+      root_cause_step_id: axiology-candidate-004.cause-003
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: 온톨로지는 여신 리스크 관리의 개념 모델과 공유 권위 문서를 지향한다.
+          relation_to_previous: null
+          evidence_refs:
+            - header purpose comment
+        - cause_id: axiology-candidate-004.cause-002
+          claim: 연체/부실(default) 상태는 별도 시스템에서 다룬다는 이유로 범위 밖이라고만 정의된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[1]
+        - cause_id: axiology-candidate-004.cause-003
+          claim: 외부 상태와 내부 리스크 등급/익스포저/보고 개념의 연결 규칙이 대상 안에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - notes[1]; entities and relations list
+      unresolved_beyond_evidence: 별도 연체관리 시스템에 실제 계약이 있을 수 있으나, 현재 bounded target에는 그 계약이 드러나지 않는다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific rule document was used.
+  - The target's own declared purpose in the embedded materialized input is
+    treated as the bounded purpose authority for this lens output.
+  - No web research or recursive reference expansion was used.
+validation:
+  unaddressable_candidates: []

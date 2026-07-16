@@ -1,0 +1,242 @@
+schema_version: 1
+session_id: 20260716-6faff1a1
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 등급 척도·변환·조정의 canonical 권위가 없어 동일 위험상태에 소비자별 상충 등급이 허용된다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 분산된 등급 권위를 근본 원인으로 지지하며, 공유 분류 기준이라는 핵심 목적이 현재 충족되지 않는다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: 공통 valuation 시점·신선도·환율 권위가 없어 집계와 준수 판단의 시간적 의미가 일치하지 않는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 공통 측정 시점과 환율 스냅숏의 부재가 시스템별 결과 차이의 직접 원인이라는 데 합의가 있으며 운영 판단을 즉시 약화한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: DefaultStatus가 실제 소비되는지 확인되지 않아 최소 공유 참조 계약의 필수 범위를 확정할 수 없다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 외부 소유와 의미 경계를 동일시한 문제는 조건부로 인정되지만, 실제 소비 경로가 경계 내에서 입증되지 않아 영향과 의무
+      범위는 추가 증거가 필요하다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 변경 가능한 리스크 값 전반에 공통 temporal/versioning 계약이 없어 과거 기준일 상태를 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 전 렌즈가 공통 시간·버전 계약 부재와 과거 결과 재현 실패의 인과관계를 지지하며, 공유 권위의 핵심 재현성 계약을 훼손한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: Adjustment와 DerivedMeasurement가 provenance 없는 결과 속성으로 저장되어
+      정당성·재계산·감사를 검증할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 공통 provenance 결함에는 합의가 있고 두 하위 개념의 생명주기와 검증 규칙을 구분해야 한다는 심의 결론도 확정되었다.
+    related_surface_finding_ids:
+      - finding-005
+      - finding-016
+  - issue_id: issue-006
+    problem_definition: 승인 한도와 가용 잔액이 권위·종류·시점이 구분되지 않은 채 혼합되어 소진율 분모가 결정되지 않는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 서로 다른 측정량을 단일 한도처럼 취급하고 우선순위를 두지 않은 모델이 소비자별 계산 차이의 직접 원인이다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-017
+  - issue_id: issue-007
+    problem_definition: Delinquency/DefaultStatus의 최소 공유 계약이 누락되었으나 실제 소비 경로와 high 영향은 확인되지 않았다.
+    issue_role: evidence_gap
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 구조·의미 누락은 다수 렌즈가 인정하지만 logic은 실제 소비 증거가 없어 영향과 심각도를 조건부로 유지하며, 해당 이견이
+      해소되지 않았다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: Limit과 RiskAppetite의 lifecycle 및 상태 전이 계약이 없어 활성 정책과 종결·정정
+      상태를 일관되게 선택할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 정책 lifecycle 부재가 변경·만료·대체 시 소비자별 상태 선택을 유발한다는 데 합의가 있으며, 다음 운영 단계 전에
+      계약화해야 한다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 등급 정책 변경 시 버전·유효기간·조정 이력이 없어 소비자별 결과 분기와 과거 결과 단절이 발생한다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 등급 권위와 canonical assessment 부재가 변경 시점에 드러나는 연속성 실패이며, 모든 렌즈가 고영향 결과를 지지한다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: 등급·한도·리스크 성향에 시간·버전 축이 없어 현재 상태와 과거 적용 상태를 구분할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 공통 temporal/versioning 계약 부재가 개별 핵심 개념에서 나타난 표면이며, 과거 재산출과 시스템 간 시점
+      일치를 직접 저해한다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: 변화하는 분류 코드가 폐쇄형 enum에 고정되어 신규·변경 코드를 안전하게 수용할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 폐쇄형 enum 구조와 그 배포 호환성 영향이 확인되었지만 현재 분류 결과의 즉각적 오류보다는 안전한 확장 경로에 관한 중기
+      개선 사항이다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-012
+    problem_definition: 기준시점·컷오프 없는 완전합 정의가 배치 사이 불완전성을 허용하는 저장 규칙과 모순된다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 명시된 두 규칙은 일중 신규 여신 조건에서 동시에 참일 수 없으며, 상위 valuation·snapshot 계약 누락이 직접
+      드러난 모순이다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-013
+    problem_definition: Collateral을 Exposure subtype으로 선언해 담보 자산과 신용 익스포저의 타입 정체성이 충돌한다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 잘못된 상속 공리가 직접 확인되었고 별도 관계 모델과 충돌하여 분류·집계에 잘못된 인스턴스를 유입할 수 있다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-014
+    problem_definition: 신용등급이 governed, time-indexed assessment가 아닌 무관한 scalar 필드로
+      표현되어 권위 있는 해석이 불가능하다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 canonical RatingAssessment 부재를 등급 권위·시점·변환 문제의 근본 모델링 결함으로 지지한다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-015
+    problem_definition: 금액에 통화·환율 버전·valuation 시점이 결여되어 total_amount와 소진율이 단일한 값으로 결정되지 않는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 서로 다른 통화의 합산에는 governed monetary context가 필수이며, 전 렌즈가 현재 정의의 불완전성과
+      고영향을 지지한다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-016
+    problem_definition: RiskAppetite 정책과 시점 의존 ComplianceAssessment가 하나의 엔터티로 결합되어
+      준수 결과의 범위와 시점이 불명확하다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 정체성·생명주기가 다른 정책과 평가를 결합한 모델이 오래되거나 범위가 불명확한 준수 상태를 권위 있는 결과로 오인하게 한다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-017
+    problem_definition: RiskAppetite와 적용 ExposureAggregate 사이 canonical 관계가 없어 준수
+      평가의 탐색·비교 대상을 선택할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 관계 누락은 직접 관찰된 구조 결함이지만, 상위 원인은 특정 정책·스냅숏·시점을 결속하는
+      ComplianceAssessment 계약 부재로 정리되었다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-018
+    problem_definition: 세 등급 척도 사이의 버전된 canonical mapping 자산이 없으며 상위
+      RatingAssessment 이슈와의 종속성과 영향 규모가 미확정이다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: mapping 부재와 medium 영향은 직접 지지되지만, 독립 이슈인지 상위 assessment 결함의 증상인지와 과거
+      연속성에 따른 high 상향 여부에 렌즈 간 이견이 남아 있다.
+    related_surface_finding_ids:
+      - finding-020

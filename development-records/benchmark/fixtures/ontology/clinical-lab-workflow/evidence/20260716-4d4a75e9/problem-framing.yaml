@@ -1,0 +1,268 @@
+schema_version: 1
+session_id: 20260716-4d4a75e9
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Result and report status authority is duplicated during the
+      correction window, leaving no determinate source of truth for
+      clinician-facing status.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The projection shows substantive lens agreement that corrected Result
+      state can coexist with stale Report.result_status until nightly
+      synchronization. Because the ontology is intended as EMR/LIS concept
+      authority, this is a direct authority and clinical-trust risk that should
+      be closed in the target model.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-012
+  - issue_id: issue-002
+    problem_definition: Critical-value notification is reduced to a boolean,
+      omitting auditable communication evidence such as recipient, time,
+      acknowledgement, and authority source.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The boolean is the visible modeling failure, while the deeper shared
+      cause is the absence of a first-class notification event/evidence concept.
+      The issue materially weakens operational-risk traceability, but can be
+      closed with the broader critical-value event modeling work.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: TAT is named as an ontology concept without an explicit
+      authority boundary or governed derived-metric contract.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "Deliberation narrowed the issue to a decision: model TAT as governed
+      inside ontology authority or explicitly declare the dashboard formula
+      outside it. The defect affects reproducibility and authority, and the
+      remaining closure need is a boundary decision rather than detailed fix
+      design."
+    related_surface_finding_ids:
+      - finding-003
+      - finding-007
+  - issue_id: issue-004
+    problem_definition: The specimen lifecycle stops before post-analysis custody,
+      retention, retrieval, storage, and disposal are modeled or governed.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is a coverage/completeness gap in the authority model. It
+      is material for downstream traceability, but less immediately blocking
+      than status or catalog authority defects and may be addressed in the next
+      modeling stage.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: CriticalValue conflates threshold/range rules with
+      patient-result notification events, making threshold semantics and
+      notification evidence ambiguous.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Multiple lenses converge that the mixed concept is the deeper type
+      and authority problem behind critical-value audit gaps. Because it affects
+      safety-relevant notification handling and relation targets, it should be
+      corrected in the ontology target.
+    related_surface_finding_ids:
+      - finding-005
+      - finding-017
+  - issue_id: issue-006
+    problem_definition: Orderable Test and executable Assay are parallel catalog
+      structures without governed mapping, source of truth, shared-attribute
+      ownership, or effective history.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Deliberation resolved this as a high-severity catalog authority
+      defect that can propagate divergence across EMR, LIS, analyzer, and
+      dashboard consumers. It is a root authority problem and should be closed
+      in the target model.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-008
+      - finding-016
+  - issue_id: issue-007
+    problem_definition: Specimen kind is duplicated across Specimen/Test closed
+      enums and Assay free strings without a governed code-set or mapping
+      authority.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: This issue enables future catalog and specimen-code drift, especially
+      alongside the broader Test-Assay mapping problem. It is material but
+      scoped as an extensibility and code-set governance concern rather than the
+      main catalog authority root.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-008
+    problem_definition: STAT priority is represented redundantly as an enum value,
+      boolean, and subtype without a canonical source or invariant.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue identifies the redundant modeling cause that can make STAT
+      interpretation diverge under policy or interface changes. It should be
+      resolved before dependent integration design proceeds, but it is narrower
+      than the highest-risk result/report status defects.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-009
+    problem_definition: Order completion depends on reversible Result.status
+      finality without defining how later corrections affect the order
+      lifecycle.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The issue is a lifecycle-rule gap: completed is ambiguous as
+      historical event versus maintained invariant after result correction. It
+      materially affects lifecycle interpretation and should be closed before
+      the next integration stage."
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-010
+    problem_definition: Result.status and Report.result_status duplicate status
+      authority with different vocabularies and no governed mapping, versioning,
+      authority, or transition rules.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Deliberation resolved this as a high-severity current
+      status-authority ambiguity, while preserving narrower evolution and
+      coverage caveats. It is a core root for several status and
+      correction-window risks and must be closed in the target ontology.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-011
+  - issue_id: issue-011
+    problem_definition: priority=stat, is_stat=true, and StatOrder encode the same
+      STAT meaning without an invariant that keeps them aligned.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: This is a current consistency symptom of the same redundant STAT
+      modeling root captured in issue-008, framed from semantic authority. It
+      remains actionable under the projection contract and should close with the
+      canonical STAT-source decision.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-012
+    problem_definition: Specimen produces Result overstates specimen agency and
+      conflicts with the lineage meaning already expressed by Result
+      derived_from Specimen.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Deliberation retained this as the scoped relation defect while
+      recognizing the missing execution/result-production concept as broader
+      remediation context. Closure requires deciding whether to rename the
+      relation as lineage/source or introduce an execution producer concept.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-013
+    problem_definition: Patient is referenced as an Order attribute target but is
+      absent from the explicit workflow relations graph or an explicit rule
+      making attributes authoritative relationships.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: "The problem depends on which structural surface is authoritative:
+      relation list or attribute references. The projection supports a
+      structural authority gap, best closed by either adding explicit relations
+      or documenting the attribute-reference rule."
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-014
+    problem_definition: Assay is disconnected from Test and Result because the
+      ontology has not assigned executable Assay a governed mapping or
+      result-production role in the explicit graph.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation narrowed this to a bounded structural manifestation of
+      the broader Test-Assay mapping and orderable-versus-executable boundary
+      problem. The graph break is actionable and should be closed with issue-006
+      rather than treated as a competing independent root.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-015
+    problem_definition: CriticalValue is detached from Result instances and
+      notification actors because the concept mixes threshold catalog meaning
+      with result-specific notification state.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation folds this structural detachment into the broader
+      threshold-versus-notification-event modeling issue while preserving the
+      need for explicit traversal. It is safety-relevant, but closure should
+      occur through the issue-005 concept split or equivalent typing decision.
+    related_surface_finding_ids:
+      - finding-021

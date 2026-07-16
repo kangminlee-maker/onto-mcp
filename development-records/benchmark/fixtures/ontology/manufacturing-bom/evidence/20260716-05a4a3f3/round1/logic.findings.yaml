@@ -1,0 +1,52 @@
+schema_version: 1
+session_id: 20260716-05a4a3f3
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml의 AlternatePart 정의 및 direction 속성
+    evidence_anchor: .onto/review/20260716-05a4a3f3/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart의 대칭성 필수 정의와 one_way 허용 규칙은 동시에 만족할 수 없다.
+    what: 정의는 모든 대체 관계가 역방향으로도 성립해야 한다고 선언하지만, direction 열거형은 비대칭인 one_way를 허용하고
+      기본값으로 설명한다. 충돌 쌍은 38행의 정의와 42-45행의 direction 규칙이며, 여러 claim 사이의
+      inter-claim 모순이다. 대칭성을 necessary로 선언하면서 비대칭 상태를 possible로 허용한 mixed
+      modality 충돌이다.
+    why: one_way 인스턴스는 정의가 요구하는 역방향 대체 관계를 만족하지 못한다. 따라서 같은 온톨로지를 따르는 PLM과 MES가 각각
+      정의와 direction 값을 기준으로 해석하면 서로 다른 대체 가능 집합을 도출할 수 있어, 개념 기준 문서라는 목적의 신뢰성이
+      약화된다.
+    how_to_fix: direction을 권위 있는 구분자로 유지하고 정의를 “direction이 bidirectional이면 역방향도
+      성립하며, one_way이면 primary_ref에서 alternate_ref 방향만 성립한다”로 수정한다. 모든 대체 관계를
+      대칭으로 만들 의도라면 one_way 값과 기본 one_way 설명을 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합을 위한 품목·BOM·라우팅·변경관리 개념 기준 제공
+      failure_condition: AlternatePart.direction이 one_way인 관계를 한 소비자는 비대칭으로, 다른 소비자는
+        엔티티 정의에 따라 대칭으로 해석할 때
+      impact: 동일 모델에서 상반된 대체부품 관계가 도출되어 시스템 간 대체 승인·자재 선택 판단이 일치하지 않을 수 있다.
+      evidence_refs:
+        - materialized-input.md:7
+        - materialized-input.md:37-45
+    causal_path:
+      root_cause_candidate: 대체 관계의 방향성을 하나의 일관된 규칙으로 정의하지 않고, 엔티티 정의에는 보편적 대칭성을 선언하면서
+        속성 모델에는 비대칭 상태를 허용했다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: one_way 값이 허용되고 기본 방향으로 설명된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이 허용 상태는 모든 대체 관계의 역관계가 성립한다는 정의와 양립할 수 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:38
+            - materialized-input.md:42-45
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - ‘A의 대체가 B이면 B의 대체도 A다’를 모든 AlternatePart 관계에 적용되는 필수 대칭성 명제로 해석했다.
+  - ‘one_way’를 역방향 관계를 함의하지 않는 비대칭 상태로 해석했다.
+validation:
+  unaddressable_candidates: []

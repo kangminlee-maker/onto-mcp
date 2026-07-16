@@ -1,0 +1,167 @@
+schema_version: 1
+session_id: 20260716-05a4a3f3
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: integrity_rules의 스크랩 재투입 예외와 BomLine 의미
+    evidence_anchor: materialized-input.md:29-35, 93-96 — BomLine은 상위 품목의 하위 품목
+      사용량으로 정의되지만, 스크랩 재투입은 Assembly가 자신을 하위에 포함하는 방식으로 모델링한다.
+    claim: 재생 원료의 공정 환류를 제품구조상의 자기 소비로 표현해 BOM 관계의 실제 의미를 왜곡한다.
+    what: 물질 회수·재투입 흐름을 parent-child 구성 관계인 BomLine으로 표현한다.
+    why: BomLine의 선언된 의미는 조립품 구성량인데, 재투입은 공정 산출물이 이전 또는 후속 공정으로 돌아가는 물질 흐름이다. 두 의미를
+      같은 관계로 표현하면 PLM의 제품구조와 MES의 공정 투입 흐름이 구분되지 않고, BOM 전개 소비자가 자기 참조를 실제 구성
+      요구량으로 해석할 수 있다.
+    how_to_fix: BOM은 비순환 제품구조로 유지하고, 스크랩 회수·재투입은 별도의 MaterialReturn 또는 ReworkFlow
+      관계로 모델링하여 출발 공정, 투입 공정, 회수율과 유효 조건을 표현한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 품목·BOM·공정 개념 기준
+      failure_condition: 스크랩 재투입이 있는 품목의 BOM을 제품구조 전개, 소요량 계산 또는 MES 투입 흐름으로 변환할 때
+      impact: 하나의 자기 참조가 제품 구성과 공정 환류라는 서로 다른 의미를 동시에 가져 통합 소비자의 해석을 비결정적으로 만들고 순환 전개
+        또는 잘못된 자재 소요를 유발할 수 있다.
+      evidence_refs:
+        - materialized-input.md:29-35
+        - materialized-input.md:93-96
+    causal_path:
+      root_cause_candidate: 제품구조상의 구성 관계와 제조공정상의 물질 환류 관계를 하나의 BomLine 개념으로 합성한 모델링 결정
+      root_cause_step_id: semantics-candidate-001.cause-002
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: 스크랩 재투입을 Assembly가 자기 자신을 하위 품목으로 포함하는 BomLine으로 표현한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:93-96
+        - cause_id: semantics-candidate-001.cause-002
+          claim: BomLine은 상위 품목이 하위 품목을 얼마나 사용하는지를 나타내는 제품구조 관계로 정의되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:29-35
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: AlternatePart의 정의, direction 속성 및 alternate_of 단축 관계
+    evidence_anchor: materialized-input.md:37-45, 91 — 정의는 대체 관계를 대칭으로 선언하지만
+      direction은 one_way와 bidirectional을 허용하고 기본값은 one_way이며, 단축 관계에는 방향 표현이 없다.
+    claim: 대체 관계가 대칭 관계인지 방향 관계인지 동일 모델 안에서 상충한다.
+    what: AlternatePart 정의는 A와 B의 상호 대체를 보장하지만 속성은 일방향 대체를 기본으로 하고, Part 간
+      alternate_of 단축 표기는 그 방향을 보존하지 않는다.
+    why: 일방향 승인 대체와 상호 호환은 제조 운영에서 다른 의미다. 현재 정의대로라면 같은 인스턴스를 PLM은 상호 대체로, MES는
+      primary에서 alternate로만 허용되는 관계로 해석할 수 있으며 단축 관계를 사용하면 방향 정보가 소실된다.
+    how_to_fix: 대체 관계를 기본적으로 directed substitution으로 정의하고 source_part,
+      substitute_part를 사용한다. 상호 대체는 두 방향 관계 또는 명시적인 symmetric 호환 관계로 표현하며,
+      alternate_of 단축 표기도 방향을 보존하거나 제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 대체 부품의 일관된 승인 의미 제공
+      failure_condition: one_way 대체 인스턴스 또는 alternate_of 단축 관계를 시스템 간 교환할 때
+      impact: 허용되지 않은 역방향 대체가 승인된 것으로 해석되거나, 허용된 방향이 손실되어 생산 투입 판단의 신뢰성이 약해진다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: 방향성 대체와 대칭적 상호 호환이라는 두 개념을 AlternatePart 하나에 상충하는 정의로 결합함
+      root_cause_step_id: semantics-candidate-002.cause-002
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: AlternatePart의 자연어 정의와 direction/default가 서로 반대되는 관계 성질을 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+        - cause_id: semantics-candidate-002.cause-002
+          claim: 방향을 표현하지 않는 alternate_of 단축 관계가 같은 개념의 또 다른 의미 투영으로 제공된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: InspectionPlan의 Operation 상속
+    evidence_anchor: "materialized-input.md:47-53, 77-82 — Operation은 라우팅의 공정 단계이고
+      InspectionPlan은 검사 계획이지만 is_a: Operation으로 분류된다."
+    claim: 검사 계획이라는 정보 객체를 검사 작업 단계라는 공정 객체의 하위 유형으로 분류한 존재론적 유형 오류가 있다.
+    what: InspectionPlan이 Operation을 상속하여 작업장과 표준 작업시간을 가진 라우팅 단계처럼 취급된다.
+    why: 검사 활동이 Operation일 수 있다는 사실은 그 활동을 규정하는 계획 자체가 Operation임을 뜻하지 않는다. 계획과 실행
+      단계를 동일시하면 라우팅이 계획 문서를 공정 단계로 참조하거나 하나의 계획을 여러 검사 공정에 재사용하는 의미를 표현하기 어렵다.
+    how_to_fix: InspectionOperation을 Operation의 하위 유형으로 두고, InspectionPlan은 별도 정보
+      객체로 분리하여 InspectionOperation이 plan_ref로 참조하게 한다. sampling_rule과
+      acceptance_criteria는 계획에 유지한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅과 품질검사 개념을 PLM/MES 사이에서 정확히 매핑하는 기준 제공
+      failure_condition: 검사 공정과 검사 기준 문서를 별도 생명주기 또는 다대일 관계로 관리할 때
+      impact: 공정 실행 단위와 관리 문서의 식별자, 개정, 재사용 및 배포 의미가 혼합되어 시스템 간 매핑이 부정확해진다.
+      evidence_refs:
+        - materialized-input.md:47-53
+        - materialized-input.md:77-82
+    causal_path:
+      root_cause_candidate: 검사 활동이 라우팅에 포함된다는 사실로부터 검사 계획도 활동 자체라는 잘못된 is-a 관계를 도출함
+      root_cause_step_id: semantics-candidate-003.cause-002
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: InspectionPlan이 Operation의 하위 유형으로 선언되어 Operation의 공정 단계 속성을 상속한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:47-53
+            - materialized-input.md:77-82
+        - cause_id: semantics-candidate-003.cause-002
+          claim: 정의의 근거가 검사 활동과 그 활동을 규정하는 계획을 구분하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:77-79
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: WorkCenter.capacity_per_shift
+    evidence_anchor: materialized-input.md:63-67 — capacity_per_shift의 단위가 작업장별로 개수
+      또는 시간이라고 정의된다.
+    claim: 하나의 capacity_per_shift 속성이 처리량과 가용시간이라는 차원이 다른 값을 같은 의미로 취급한다.
+    what: 숫자 하나가 어떤 작업장에서는 교대당 개수이고 다른 작업장에서는 시간으로 해석되지만 단위나 용량 유형이 속성에 포함되지 않는다.
+    why: 개수/교대는 처리량이고 시간/교대는 가용시간이므로 직접 비교하거나 같은 산식에 투입할 수 없는 물리량이다. PLM/MES 소비자는
+      숫자만으로 의미를 판별할 수 없어 능력계획 계산이 단위상 유효한지 확인할 수 없다.
+    how_to_fix: available_time_per_shift와 throughput_per_shift를 분리하거나, capacity를
+      value, unit, capacity_kind 및 기준 품목·공정과 함께 표현하는 측정값 객체로 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: MES 라우팅과 작업장 능력의 일관된 제조 운영 의미 제공
+      failure_condition: 서로 다른 작업장의 capacity_per_shift를 부하·능력 계산에 통합할 때
+      impact: 차원이 다른 수치가 같은 필드로 전달되어 계산 결과가 형식상 성공해도 의미상 무효가 될 수 있다.
+      evidence_refs:
+        - materialized-input.md:63-67
+    causal_path:
+      root_cause_candidate: 작업장 능력을 단위와 능력 종류를 가진 측정 개념이 아니라 무차원 숫자 하나로 축약함
+      root_cause_step_id: semantics-candidate-004.cause-002
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: capacity_per_shift가 개수와 시간 중 어느 단위도 가질 수 있는 number로 선언된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63-67
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 처리량과 가용시간이라는 서로 다른 능력 개념을 하나의 속성명으로 결합했다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: Part에서 Routing으로의 manufactured_by 관계명
+    evidence_anchor: materialized-input.md:55-60, 84-88 — Routing은 제조 공정 순서로 정의되지만
+      Part와의 관계명은 manufactured_by이다.
+    claim: manufactured_by가 제조 주체가 아닌 공정 순서인 Routing을 목적어로 삼아 관계 이름과 실제 의미가 맞지 않는다.
+    what: 품목이 라우팅에 의해 제조된다고 표현하지만 Routing은 제조자나 설비가 아니라 제조 방법을 규정하는 순서 객체다.
+    why: 관계 소비자는 manufactured_by를 제조 주체 관계로 해석할 수 있어 제조 방법 또는 적용 라우팅 관계와 혼동한다.
+    how_to_fix: 관계명을 has_routing, uses_routing 또는 manufactured_via로 바꾸고, 제조 주체가 필요하면
+      별도의 manufacturer 관계를 둔다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 제품구조의 구성 관계와 제조공정의 스크랩·재작업 환류 관계는 서로 다른 의미를 가진다.
+  - 일방향 승인 대체와 상호 호환은 제조 운영에서 구별되어야 한다.
+  - 검사 계획은 검사 활동을 규정하는 정보 객체이며 검사 활동 자체와 동일하지 않다.
+  - 처리량과 가용시간은 단위 차원이 다른 작업장 능력 측정값이다.
+validation:
+  unaddressable_candidates: []

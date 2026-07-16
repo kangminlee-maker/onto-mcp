@@ -1,0 +1,165 @@
+schema_version: 1
+session_id: 20260716-05a4a3f3
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml — 분산 원본·수기 보정 운영 모델
+    evidence_anchor: "review-value-alignment-criteria.yaml criterion
+      `user-request-intent`: “PLM/MES 통합의 개념 기준 문서로 적절한지… 제조 운영 위험을 중심으로”;
+      target `BomLine.scrap_rate` note, `notes`의 표준원가 수기 입력 및 UOM 현장 환산"
+    claim: "[value_type=purpose; alignment_direction=misaligned;
+      value_authority_anchor={source:
+      .onto/review/20260716-05a4a3f3/execution-preparation/review-value-alignme\
+      nt-criteria.yaml, anchor: criterion user-request-intent, excerpt: “PLM/MES
+      통합의 개념 기준 문서로 적절한지 검토”}] 핵심 제조 값의 권위와 동기화 계약을 정의하지 않고 복사·수기 입력·현장 판단을 정상
+      경로로 수용하여 통합 기준 문서라는 목적을 훼손한다."
+    what: 스크랩률은 생산계획팀 엑셀에서 복사하고, 누적 표준시간은 MES 계산값과 표준원가 시스템 수기값을 분기별 대사하며, UOM 환산은
+      마스터 없이 현장에서 수행한다.
+    why: 동일한 계획·원가·소요량 계산에 쓰이는 값이 서로 다른 주체와 주기로 관리되지만 권위 원본, 변환 규칙, 충돌 해결, 유효시점이 없다.
+      이 문서를 PLM/MES 공통 기준으로 채택해도 시스템별 결과가 달라질 수 있어 통합 목적과 제조 운영의 예측 가능성이 약화된다.
+    how_to_fix: 스크랩률·표준시간·UOM 환산을 각각 하나의 권위 개념으로 모델링하고 원본 시스템, 단위, 유효기간, 승인 상태,
+      동기화·충돌 정책을 명시한다. 수기 사본은 권위 값이 아닌 추적 가능한 파생값으로 한정한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목·BOM·라우팅 값을 일관되게 해석하고 제조 운영 위험을 줄이는 목적
+      failure_condition: PLM, MES, 생산계획 또는 표준원가 시스템이 복사·수기 입력·현장 환산된 서로 다른 값을 사용해 소요량,
+        능력 또는 원가를 계산할 때
+      impact: 공통 온톨로지가 시스템 간 동일 의미와 결과를 보장하지 못해 계획·원가·실행 판단의 신뢰성과 통합 기준으로서의 채택 가능성이
+        낮아진다.
+      evidence_refs:
+        - materialized-input.md `BomLine.scrap_rate` note
+        - materialized-input.md `notes` 누적 std_time 수기 입력 및 분기 대사
+        - materialized-input.md `notes` UOM 환산계수 마스터 부재
+        - review-value-alignment-criteria.yaml criterion `user-request-intent`
+    causal_path:
+      root_cause_candidate: 통합 대상의 공유 제조 값에 대해 단일 권위, 유효시점, 변환 및 동기화 정책을 온톨로지 계약으로 승격하지 않았다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 스크랩률·표준시간·UOM 환산이 복사, 수기 입력 또는 현장 판단에 의존한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md `BomLine.scrap_rate` note
+            - materialized-input.md `notes` 두 항목
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 시스템 간 값의 일치가 개념 계약이 아니라 사후 대사와 작업자 판단에 맡겨진다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "materialized-input.md `notes`: 분기마다 대사"
+            - "materialized-input.md `notes`: 필요 시 현장에서 환산"
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 공유 제조 값의 권위·유효성·변환 규칙이 모델에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md 전체 속성 및 notes에서 원본/수기 경로는 언급되나 해당 계약은 부재
+      unresolved_beyond_evidence: 실제 시스템에 별도 통제나 환산 마스터가 있는지는 경계 밖이지만, 이 개념 기준 문서에는 그 계약이 없다.
+  - candidate_id: axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml — ECO 유효일과 Part.rev 동기화 규칙
+    evidence_anchor: "review-value-alignment-criteria.yaml criterion
+      `user-request-intent`: “변경관리 개념의 정합성과 제조 운영 위험”; target integrity rule:
+      “ECO.effective_date 이후 생산분은 신규 rev를 따른다. 단 Part.rev 갱신은 … 주간 배치로 동기화한다.”"
+    claim: "[value_type=commitment; alignment_direction=misaligned;
+      value_authority_anchor={source:
+      .onto/review/20260716-05a4a3f3/execution-preparation/review-value-alignme\
+      nt-criteria.yaml, anchor: criterion user-request-intent, excerpt: “변경관리
+      개념의 정합성과 제조 운영 위험을 중심으로”}] 신규 리비전 적용 약속과 주간 지연 동기화를 함께 허용하면서 생산 판단의 권위 기준을
+      정하지 않아 변경관리 목적을 훼손한다."
+    what: ECO 유효일 이후 생산분은 신규 리비전을 따라야 하지만, `Part.rev`는 도면 관리대장 반영 후 주간 배치로 갱신된다. 그
+      사이 생산 오더가 ECO와 Part 중 무엇을 따라야 하는지 명시되지 않는다.
+    why: 유효일과 배치 갱신 사이에는 `ECO.effective_date`가 신규 리비전을 요구하면서 `Part.rev`는 구 리비전을 표시할
+      수 있다. 통합 소비자가 `Part.rev`를 기준으로 삼으면 유효하지 않은 설계로 생산할 위험이 있고, ECO를 직접 따르면
+      Part 기준정보와 불일치한다.
+    how_to_fix: 변경 적용의 권위를 유효 리비전 레코드로 단일화하고 `part_ref`, `revision`,
+      `effective_from/to`, ECO 승인·적용 상태를 연결한다. 생산 오더 생성 시점에는 유효 리비전이 동기화·승인되지
+      않았으면 명시적으로 차단하거나 예외 승인 경로를 요구한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 변경관리 개념을 일관되게 적용하고 잘못된 리비전 생산을 방지하는 목적
+      failure_condition: ECO 유효일이 지났지만 주간 배치가 아직 `Part.rev`를 갱신하지 않은 기간에 생산 오더 또는 작업 지시가 생성될 때
+      impact: 두 시스템이 서로 다른 유효 리비전을 판단할 수 있으며, 잘못된 도면·BOM·공정 기준으로 생산하는 직접적인 운영 위험이 생긴다.
+      evidence_refs:
+        - materialized-input.md `Part.rev` note
+        - materialized-input.md `Part.current_eco` note
+        - materialized-input.md ECO attributes
+        - materialized-input.md 세 번째 integrity rule
+        - review-value-alignment-criteria.yaml criterion `user-request-intent`
+    causal_path:
+      root_cause_candidate: 변경의 유효성 권위를 ECO, 도면 관리대장, `Part.rev` 사이에서 하나의 시점 기반 계약으로 정하지 않았다.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: ECO 유효일 이후 신규 리비전 적용을 요구하면서 `Part.rev` 갱신은 주간 배치까지 지연된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md 세 번째 integrity rule
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 지연 구간에 ECO와 Part가 서로 다른 현재 리비전을 나타낼 수 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md `Part.rev` 및 `current_eco` notes
+            - materialized-input.md ECO `effective_date`
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 생산 소비자가 따라야 할 단일 유효 리비전 권위와 불일치 차단 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md 변경관리 관련 entities 및 integrity rule
+      unresolved_beyond_evidence: 실제 PLM/MES 인터페이스가 별도 차단을 수행하는지는 경계 밖이지만, 기준 문서에는 그 의무가 표현되지 않는다.
+  - candidate_id: axiology-candidate-003
+    target: manufacturing-bom-ontology.yaml — 재생 원료 회수를 자기참조 BOM으로 표현한 예외
+    evidence_anchor: "review-value-alignment-criteria.yaml criterion
+      `user-request-intent`: “BOM … 개념의 정합성과 제조 운영 위험”; target first integrity
+      rule: “BOM은 비순환이어야 한다. 단, 재생 원료 회수 공정… Assembly가 자기 하위에 자신을 포함”"
+    claim: "[value_type=tradeoff; alignment_direction=misaligned;
+      value_authority_anchor={source:
+      .onto/review/20260716-05a4a3f3/execution-preparation/review-value-alignme\
+      nt-criteria.yaml, anchor: criterion user-request-intent, excerpt:
+      “BOM·라우팅… 개념의 정합성과 제조 운영 위험을 중심으로”}] 회수 공정을 표현하기 위해 BOM 비순환성과 계산 종료 가능성을
+      희생하는 트레이드오프가 정당화·격리되지 않았다."
+    what: 온톨로지는 BOM을 비순환으로 선언한 직후 재생 원료 회수를 동일 Assembly의 자기 하위 포함으로 모델링하도록 한다.
+    why: 회수·재투입은 제조 흐름의 별도 현상인데 제품 구성 관계에 넣으면 BOM 전개, 소요량 계산, 원가 롤업 같은 통합 소비자가 무한
+      순환하거나 임의 예외 처리를 갖게 된다. 한 공정 사례의 국소 표현 편의가 공통 BOM 기준의 안정성을 희생한다.
+    how_to_fix: BOM은 엄격히 비순환으로 유지하고, 회수·스크랩·재투입을 별도의 자재흐름 또는 공정 산출/투입 관계로 모델링한다.
+      수율·회수율, 적용 공정, 유효기간과 계산 규칙을 그 관계에 둔다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES가 공유할 정합한 BOM 개념과 안전한 제조 소요량·원가 계산 기준 제공
+      failure_condition: BOM 전개 또는 롤업 소비자가 자기참조 재투입 Assembly를 일반 BOM 관계로 순회할 때
+      impact: 통합 소비자마다 순환 처리 방식이 달라지거나 계산이 종료되지 않아 공통 개념 기준과 제조 계획 결과를 신뢰할 수 없게 된다.
+      evidence_refs:
+        - materialized-input.md first integrity rule
+        - materialized-input.md `Assembly` definition
+        - materialized-input.md `BomLine` definition
+        - review-value-alignment-criteria.yaml criterion `user-request-intent`
+    causal_path:
+      root_cause_candidate: 회수 공정의 물질 흐름과 제품 구성 BOM을 별도 개념으로 분리하지 않았다.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: 비순환 BOM 원칙에 자기참조 Assembly 예외가 동시에 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md first integrity rule
+        - cause_id: axiology-candidate-003.cause-002
+          claim: 재투입 흐름이 제품 구성 관계로 표현되어 일반 BOM 소비자가 순환을 접하게 된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md `Assembly` 및 `BomLine` definitions
+            - materialized-input.md first integrity rule
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 제품 구성과 공정 회수 흐름이 하나의 관계에 결합되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md first integrity rule
+      unresolved_beyond_evidence: 소비 시스템에 순환 차단 로직이 있는지는 경계 밖이지만, 온톨로지 자체가 공통 처리 의미를 제공하지 않는다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합의 개념 기준 문서는 두 시스템이 동일한 권위 값, 유효시점, 단위 및 관계 의미를 결정할 수 있어야 한다는 사용자
+    목적을 적용했다.
+  - BOM 전개·소요량 계산·원가 롤업과 생산 오더의 리비전 선택은 이 문서가 명시적으로 언급한 제조 운영 소비 경로로 보았다.
+  - session_domain이 none이므로 외부 제조 표준이나 도메인 규정은 사용하지 않았다.
+validation:
+  unaddressable_candidates: []

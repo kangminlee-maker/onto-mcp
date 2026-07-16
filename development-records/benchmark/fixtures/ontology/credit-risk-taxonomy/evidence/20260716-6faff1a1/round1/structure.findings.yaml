@@ -1,0 +1,130 @@
+schema_version: 1
+session_id: 20260716-6faff1a1
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: "credit-risk-ontology.yaml: RiskAppetite entity and relations graph"
+    evidence_anchor: entities.RiskAppetite; entities.RiskAppetite.definition; relations
+    claim: RiskAppetite is an orphan entity despite its declared dependency on
+      ExposureAggregate.
+    what: RiskAppetite has no incoming or outgoing relation. Its definition says
+      that ExposureAggregate exceeding RiskAppetite determines a breach, but the
+      relation graph contains no edge connecting the two concepts.
+    why: The ontology declares appetite compliance as a comparison between these
+      entities, yet consumers traversing the canonical relation graph cannot
+      identify which aggregate is evaluated against which appetite. This leaves
+      the compliance concept structurally unusable as a shared engine/reporting
+      contract.
+    how_to_fix: Add an explicit relation between the applicable RiskAppetite and
+      ExposureAggregate, including the scope or applicability key needed to
+      select the relevant appetite; model compliance_status as the result of
+      that connected comparison.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Serving as the shared concept authority for the risk engine
+        and reporting system, including RiskAppetite compliance.
+      failure_condition: A consumer attempts to determine or report appetite
+        compliance using the ontology's declared relations.
+      impact: The consumer cannot traverse from an exposure aggregate to an applicable
+        appetite, so compliance may be omitted or joined through undocumented
+        system-specific logic.
+      evidence_refs:
+        - entities.RiskAppetite.definition
+        - entities.RiskAppetite.attributes.compliance_status
+        - relations
+    causal_path:
+      root_cause_candidate: The canonical relations list omits the dependency declared
+        between RiskAppetite and ExposureAggregate.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite is disconnected from every other entity in the relation
+            graph.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.RiskAppetite
+            - relations
+        - cause_id: structure-candidate-001.cause-002
+          claim: The disconnected state is caused by omission of the
+            ExposureAggregate–RiskAppetite comparison relation required by the
+            entity definition.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.RiskAppetite.definition
+            - relations
+      unresolved_beyond_evidence: The bounded artifact does not specify whether
+        appetite applicability should be borrower-, segment-, product-,
+        currency-, or portfolio-scoped.
+  - candidate_id: structure-candidate-002
+    target: "credit-risk-ontology.yaml: rating concepts and classification_rules"
+    evidence_anchor: entities.Borrower.attributes.internal_rating;
+      entities.RiskRating.attributes.grade;
+      entities.Exposure.attributes.risk_grade; classification_rules[0];
+      notes[0]; relations
+    claim: The required connections among the three rating scales are not
+      represented in the ontology graph or a canonical mapping artifact.
+    what: The artifact declares that Exposure.risk_grade is derived from
+      RiskRating.grade and identifies a third Borrower.internal_rating scale,
+      but provides no explicit mapping relation among these concepts. The only
+      mapping reference points outside the ontology, and transformations are
+      delegated to each consumer.
+    why: The entities are connected only through borrower-level associations; those
+      edges do not encode grade derivation or value correspondence.
+      Consequently, the risk engine and reporting system cannot derive the
+      declared rating transformation from the shared ontology and must supply
+      separate, potentially divergent connections.
+    how_to_fix: Define one canonical rating-scale concept and explicit, versioned
+      mapping relations from source grades to consumer projections within the
+      ontology or a directly governed companion artifact; link
+      Exposure.risk_grade to that mapping rather than delegating conversion to
+      each consumer.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Providing a shared concept standard for risk-engine ratings
+        and reporting grades.
+      failure_condition: A consumer implements the declared derivation of
+        Exposure.risk_grade or reconciles it with Borrower.internal_rating.
+      impact: The structural contract does not provide the required mapping path, so
+        independently implemented transformations can produce incompatible
+        classifications.
+      evidence_refs:
+        - entities.Borrower.attributes.internal_rating
+        - entities.RiskRating.attributes.grade
+        - entities.Exposure.attributes.risk_grade
+        - classification_rules[0]
+        - notes[0]
+        - relations
+    causal_path:
+      root_cause_candidate: Rating transformations are described in free text and
+        assigned to external or consumer-specific mappings instead of being
+        connected in the canonical ontology structure.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: No relation or mapping structure connects RiskRating.grade to
+            Exposure.risk_grade or Borrower.internal_rating.
+          relation_to_previous: null
+          evidence_refs:
+            - relations
+            - entities.Borrower.attributes.internal_rating
+            - entities.RiskRating.attributes.grade
+            - entities.Exposure.attributes.risk_grade
+        - cause_id: structure-candidate-002.cause-002
+          claim: The missing structural connection reflects the artifact's delegation of
+            mappings to an external wiki and individual consuming systems.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - entities.RiskRating.attributes.grade.note
+            - notes[0]
+      unresolved_beyond_evidence: The external mapping table's existence, governance,
+        and consistency cannot be evaluated within the declared boundary.
+domain_constraints_used: []
+domain_context_assumptions:
+  - Machine-readable relations or governed mapping structures are required when
+    the artifact declares a cross-entity derivation intended for shared system
+    use; prose alone does not provide an executable structural connection.
+validation:
+  unaddressable_candidates: []

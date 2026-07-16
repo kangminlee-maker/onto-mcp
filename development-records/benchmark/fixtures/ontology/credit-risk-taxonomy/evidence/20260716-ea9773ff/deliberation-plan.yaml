@@ -1,0 +1,134 @@
+schema_version: 1
+session_id: 20260716-ea9773ff
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: Most supporting lenses frame the root as a broad governed
+      classification authority gap covering rating scales and
+      borrower/product/collateral classification growth, while semantics narrows
+      support to shared rating/classification meaning authority and treats the
+      broader closed-code-set evolution portion as outside its direct evidence.
+    resolution_question: Should issue-001 remain a broad governed classification
+      authority issue across rating scales and core business classification code
+      sets, or be narrowed to the rating/classification meaning authority
+      supported by the semantics evidence?
+  - issue_id: issue-010
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - coverage
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.axiology
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+    conflict_summary: Semantics and structure support the root as a derived-ratio
+      versus manual-input mismatch, while axiology, coverage, and evolution
+      narrow the concern toward missing override provenance, derivation
+      coverage, valuation basis, and rule/version control around LTV.
+    resolution_question: Should issue-010 be deliberated as primarily a semantic
+      derived-measure/input mismatch, or should the admitted root and action be
+      narrowed to missing LTV derivation, override provenance, valuation basis,
+      and rule/version authority?
+  - issue_id: issue-011
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - coverage
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+    conflict_summary: Semantics, coverage, evolution, and structure support
+      issue-011 as a focused rating-scale mapping gap, while axiology narrows it
+      as a semantic expression of the broader governed classification authority
+      problem already captured in issue-001.
+    resolution_question: Should issue-011 remain as a separate focused rating-scale
+      mapping issue, or be merged into or subordinated under issue-001 as part
+      of the broader governed classification authority issue?
+  - issue_id: issue-008
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+    conflict_summary: All substantive stances support the excluded
+      delinquency/default lifecycle concern, but axiology explicitly frames it
+      as the same purpose-level defect as issue-005 expressed from coverage as
+      lifecycle scope severance, creating a material cluster-scope question
+      rather than a lens disagreement.
+    resolution_question: Should issue-008 remain a separate lifecycle/status
+      coverage issue, or be merged with issue-005 as the same externally owned
+      delinquency/default boundary-contract defect?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: All substantive lenses support the issue, accept the root hypothesis,
+      and keep severity; there are no runtime conflict signals requiring
+      deliberation.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: The evolution narrowing refines why prose-only dependencies are brittle,
+      while semantics and structure directly support the same
+      evaluation/dependency repair; logic's insufficient-evidence stance is a
+      lens-specific evidence gap rather than a substantive contradiction.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: All applicable non-logic lenses support the FX calculation-authority
+      issue; the logic lens only reports no independent contradiction evidence,
+      which does not materially conflict with the authority and calculation-rule
+      stances.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: All applicable non-logic lenses support the external delinquency/default
+      boundary-contract issue; logic's insufficient evidence is lens-scope
+      limited. The related lifecycle-cluster question is planned under issue-008
+      to avoid duplicating the same deliberation.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: All applicable non-logic lenses support the missing event/evidence
+      entity issue and the proposed audit-provenance action; logic's
+      insufficient evidence does not create a material disagreement.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: All applicable non-logic lenses support the source-of-record and
+      precedence authority issue; the logic lens has no independent evidence but
+      does not refute or narrow the root.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Semantics and structure directly support the Collateral subtype error,
+      axiology supports the purpose impact, and coverage/evolution mark the
+      issue outside their lens scope rather than disputing the issue.

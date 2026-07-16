@@ -1,0 +1,200 @@
+schema_version: 1
+session_id: 20260716-db88504e
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Result와 Report의 변경 가능한 현재 상태가 별도 권위로 유지되어 정정 시 일관성과 변경 이력을 함께 보장하지 못한다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 복수의 현재값 권위와 불변 이력 부재라는 원인 및 high 영향에 렌즈들이 합의했다. 개념 권위 문서가 정정 상태와 과거
+      보고를 신뢰성 있게 재구성하려면 현재 대상에서 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-008
+  - issue_id: issue-002
+    problem_definition: 재사용 임계 규칙과 결과별 통보 사실이 혼합·분산되어 개별 결과의 통보 귀속과 증거가 완결되지 않는다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 원인과 개선 필요성에는 합의가 있지만, 핵심 즉시 통보 경로 실패인 high인지 감사성 저하인 medium인지 해결되지
+      않았다. 환자별 통보 신뢰에 직접 닿으므로 현재 차단 요인으로 유지하되 운영 경로와 도메인 심각도 근거가 필요하다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-016
+  - issue_id: issue-003
+    problem_definition: Test와 Assay를 별도 등록하면서 권위 있는 대응 및 변경 규칙을 두지 않아 동일 항목의 정체성이 결정되지 않는다.
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 카탈로그 이중 등록의 국소적 동일성 결함은 독립 이슈로 합의되었고 issue-009와는 수명주기 정렬만 필요하다. 현재 행복
+      경로를 전면 차단하지는 않지만 통합 적용 전에 권위와 대응 규칙을 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 축약된 Specimen 모델이 검체 lifecycle·계보와 원천 검체·분석 재료의 의미 수준을 충분히 표현하지 못한다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Specimen의 과도한 축약은 유력한 공통 상위 원인이지만 두 하위 결함이 단일 직접 원인이라는 단정은 배제되었다.
+      정상적인 검사 전 경로와 결과 신뢰 근거가 누락되는 high 문제이므로 현재 대상에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-019
+  - issue_id: issue-005
+    problem_definition: Result가 문자열 값과 상태 중심으로 축약되어 임상적 해석과 재현에 필요한 관찰 차원이 누락된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: typed observation 부재와 high 영향에는 실질적 이견이 없다. 값 유형과 적용 맥락이 없는 결과는 정상적인
+      표시·판정·재해석을 신뢰할 수 없게 하므로 개념 권위 문서의 현재 차단 요인이다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 검증·배포·긴급 통보가 독립된 불변 사건으로 보존되지 않아 행위자, 시각, 근거와 결과를 감사 가능하게 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 현재 속성 또는 외부 대장으로의 축약이 감사 증거 손실을 만든다는 점과 high 영향에 모든 입장이 일치한다. 운영 통제의
+      권위와 책임 추적을 제공하려면 현재 대상에서 해결되어야 한다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 임계 기준에 버전·유효기간·적용 참조가 없어 변경 뒤 과거 판정의 기준과 의미를 재현할 수 없다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 버전형 정책 권위가 필요하다는 점은 합의되었지만, 결함이 high의 경로 실패인지 medium의 장기 감사성 저하인지는
+      미해결이다. 정책 변경을 수반하는 다음 운영 단계 전에 실제 경로 증거와 심각도 기준으로 판정을 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-007
+      - finding-013
+  - issue_id: issue-008
+    problem_definition: Result와 Report 상태의 동일성 및 수명주기가 불명확한 채 각각 저장되고 권위·시점화 매핑·충돌 처리 규칙이 정의되지 않았다.
+    issue_role: conflicting_interpretation
+    judgment_state: insufficient_evidence
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 불일치 노출과 high 영향은 확인되었지만 두 상태가 하나의 개념인지 별도 수명주기인지 현재 증거로 확정할 수 없다. 권위
+      모델 선택이 핵심 계약을 바꾸므로 상태 의미와 전이 사례를 확보해 현재 대상에서 결정해야 한다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-009
+    problem_definition: 주문 가능 단위, 수행 단위와 결과 산출 단위가 분리·연결되지 않아 주문에서 실제 수행과 결과로 이어지는 경로가 결정되지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 단위 분리와 권위 있는 수행 매핑의 부재, high 영향에 모든 참여 렌즈가 합의했다. EMR 주문에서 LIS
+      수행·결과까지의 핵심 통합 경로가 끊기므로 현재 권위 문서의 차단 요인이다.
+    related_surface_finding_ids:
+      - finding-010
+      - finding-018
+      - finding-020
+  - issue_id: issue-010
+    problem_definition: 검체 표현이 위치별 폐쇄 enum과 자유 문자열에 분산되어 권위와 버전 이력이 갈리지만, 표현들이 같은 의미
+      수준인지는 확인되지 않았다.
+    issue_role: conflicting_interpretation
+    judgment_state: insufficient_evidence
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 분산 권위를 제거해야 한다는 데에는 수렴했으나 원천 검체와 처리 재료를 하나로 볼지 분리할지는 경계 내 증거로 판단할 수
+      없다. 실제 필드 의미와 값 사례를 확인한 뒤 통합 적용 전에 개념 경계를 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-011
+    problem_definition: Result와 Report의 폐쇄 상태 어휘 사이에 버전·유효기간을 가진 권위 매핑이 없어 상태 추가와 의미
+      변경의 연속성을 보장하지 못한다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 각 상태 체계의 별도 권위를 보존하면서 시점화된 매핑을 권위화한다는 방향에 합의했다. 현재 행복 경로는 가능하더라도 상태
+      체계 변경 전에는 장기 통합 계약을 확정해야 한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: Result와 Report의 상태 의미와 매핑을 분리하지 않은 겹치는 전이 조건이 동일 입력에 상충하는 보고 상태를 요구한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: release와 correction 조건이 동시에 성립할 때 모순된 상태 의무가 발생한다는 직접 증거가 있으며 원인과
+      high 영향에 합의했다. 결정적 상태 계약을 제공하려면 현재 대상에서 해결해야 한다.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-015
+  - issue_id: issue-013
+    problem_definition: 가변적인 STAT 우선순위가 enum, boolean과 하위 유형으로 중복 실체화되어 동일 주문에 모순된 분류가 가능하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 중복 권위가 모순 상태를 허용한다는 점과 단일 권위 필요성에는 실질적 이견이 없다. medium 영향이므로 현재 전체 경로의
+      차단보다는 운영 라우팅과 SLA 적용 전에 닫아야 할 다음 단계 차단 요인으로 분류한다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-014
+    problem_definition: 재사용 임계 규칙과 결과별 발생·통보 기록이 결합되고 Result·수신자 연결이 없어 통보 사실을 개별 위험 결과에 귀속할 수 없다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 구조적 원인과 귀속 경로 필요성에는 합의했지만 medium 추적성 약화인지 high 핵심 통보 경로 실패인지는 해결되지
+      않았다. 환자별 미통보 오인 가능성이 있어 현재 차단 요인으로 유지하고 실제 운영 경로 및 도메인 심각도 근거를 요구한다.
+    related_surface_finding_ids:
+      - finding-021

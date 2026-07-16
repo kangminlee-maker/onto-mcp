@@ -1,0 +1,67 @@
+schema_version: 1
+session_id: 20260716-05a4a3f3
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml — AlternatePart and relations
+    evidence_anchor: 'entities.AlternatePart.attributes.{primary_ref,alternate_ref,direction};
+      relations entry `{ from: Part, to: Part, kind: alternate_of, note:
+      "AlternatePart를 통해 표현되는 관계의 단축 표기" }`'
+    claim: AlternatePart is absent as an endpoint from the declared relation graph
+      even though `alternate_of` claims to be its shortcut.
+    what: The association entity stores both participating Part references and
+      direction metadata, but every top-level relation bypasses it through a
+      direct Part-to-Part edge.
+    why: The shortcut cannot be structurally expanded through the declared
+      relations, so a consumer traversing the ontology's relation graph cannot
+      reach the association record that owns directionality. This weakens the
+      document's use as a shared PLM/MES concept model for alternate-part
+      relationships.
+    how_to_fix: Add explicit relations connecting AlternatePart to its primary and
+      alternate Part endpoints, or model `Part -> AlternatePart -> Part`; retain
+      `Part -> Part alternate_of` only as a clearly derived projection.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Serving as the conceptual reference model for PLM/MES
+        integration, including alternate-part relationships.
+      failure_condition: A consumer uses the declared `relations` section to discover
+        or traverse alternate-part connectivity and needs the direction metadata
+        owned by AlternatePart.
+      impact: The consumer reaches only a flattened Part-to-Part edge and cannot
+        structurally resolve the authoritative association record or its
+        direction, making integration mappings incomplete or inconsistent.
+      evidence_refs:
+        - entities.AlternatePart.attributes.primary_ref
+        - entities.AlternatePart.attributes.alternate_ref
+        - entities.AlternatePart.attributes.direction
+        - relations[Part->Part:alternate_of].note
+    causal_path:
+      root_cause_candidate: The reified AlternatePart association was flattened into a
+        shortcut relation without wiring the association entity into the
+        canonical relation graph.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: No top-level relation has AlternatePart as its source or target.
+          relation_to_previous: null
+          evidence_refs:
+            - relations
+        - cause_id: structure-candidate-001.cause-002
+          claim: The only alternate-part relation is a direct Part-to-Part shortcut, while
+            direction is stored on the bypassed AlternatePart entity.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - relations[Part->Part:alternate_of]
+            - entities.AlternatePart.attributes.direction
+      unresolved_beyond_evidence: Whether consuming PLM/MES implementations traverse
+        only the top-level relation graph is not shown within the bounded
+        evidence.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The top-level `relations` section is intended to provide the ontology's
+    canonical traversable relationship inventory because the artifact declares
+    itself a PLM/MES conceptual reference document.
+validation:
+  unaddressable_candidates: []

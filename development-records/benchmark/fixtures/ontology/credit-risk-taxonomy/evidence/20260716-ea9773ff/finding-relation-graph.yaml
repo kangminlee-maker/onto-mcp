@@ -1,0 +1,224 @@
+schema_version: 1
+session_id: 20260716-ea9773ff
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: The same rating-scale authority defect exists if
+      RiskRating.grade, Exposure.risk_grade, and Borrower.internal_rating
+      conversion semantics remain outside the ontology or are locally adjusted
+      by consumers.
+    shared_cause: null
+    rationale: Both findings identify that multiple credit rating scales are treated
+      as shared concepts while conversion and manual reporting adjustment are
+      not governed by an ontology-owned mapping. finding-001 frames the purpose
+      drift; finding-015 frames the semantic instability, but the underlying
+      defect and affected values are the same.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Rating-scale evolution and current reporting drift share the
+      root that rating mapping and override authority are delegated to external
+      or per-consumer mechanisms instead of a versioned canonical ontology
+      concept.
+    shared_cause: null
+    rationale: finding-001 describes present divergence from consumer conversion and
+      manual reporting adjustment; finding-009 describes future continuity
+      breakage when rating scales evolve. Both causal paths terminate in
+      distributed rating conversion authority.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: If source-of-record and precedence are missing for parallel
+      system values, rating, limit, and FX outputs can diverge while appearing
+      ontology-conformant.
+    shared_cause:
+      cause_claim: 병행 관리되는 값과 외부 참조를 source-of-record/precedence 개념으로 승격하지 않고 주석 수준에 남겼다.
+      from_cause_ref: finding-001.cause-002
+      to_cause_ref: finding-007.cause-003
+    rationale: finding-001 is a concrete rating/reporting manifestation of
+      finding-007's broader authority-policy gap. Both cite consumer-side
+      conversion and lack of a canonical source for choosing among parallel
+      values.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-003
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: FX conversion disagreement occurs when the ontology
+      acknowledges multiple system tables but does not model a canonical source,
+      precedence, or reconciliation rule.
+    shared_cause:
+      cause_claim: 통화/환율 변환의 계산 권위가 온톨로지에 닫혀 있지 않고 소비 시스템 또는 외부 장소에 분산되어 있다.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-007.cause-003
+    rationale: finding-003 isolates the FX-table instance; finding-007 generalizes
+      the missing source-of-record pattern across ratings, CRM limit values, and
+      FX conversion.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: The aggregate/control defect exists if
+      ExposureAggregate.total_amount is simultaneously treated as an
+      authoritative all-exposure sum and as a lagged month-end batch projection.
+    shared_cause: null
+    rationale: finding-002 emphasizes the risk-control consequence of using a
+      month-end value for utilization; finding-012 identifies the logical
+      contradiction in the aggregate definition that permits that consequence.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-002
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: Time-sensitive calculations lose continuity when derived values
+      do not carry explicit cutoff, batch/run, source-table, and rule-version
+      context.
+    shared_cause: null
+    rationale: finding-002 focuses on stale exposure aggregates used for limit
+      utilization; finding-011 generalizes the same issue to batch timing, FX
+      tables, and rule changes over time.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-003
+    to_finding_id: finding-011
+    relation: symptom_of
+    root_hypothesis: Per-system FX table use is a symptom of the broader absence of
+      versioned calculation context for derived risk calculations.
+    shared_cause: null
+    rationale: finding-003's system-specific exchange-rate tables are one
+      operational context missing from the versioned calculation context
+      described in finding-011.
+    confidence: medium
+  - relation_id: rel-008
+    from_finding_id: finding-005
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: Historical reconstruction fails when time-dependent values and
+      derived calculations lack common as-of, validity, source event, and
+      rule-version concepts.
+    shared_cause: null
+    rationale: finding-005 identifies missing valid-time/history fields across
+      ratings, limits, and appetite state; finding-011 identifies missing
+      calculation context for aggregates and derivations. Both weaken
+      reproducibility of past risk states.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-005
+    to_finding_id: finding-009
+    relation: shared_cause_candidate
+    root_hypothesis: Rating continuity cannot be reconstructed if rating values and
+      mappings lack version/effective-date concepts.
+    shared_cause:
+      cause_claim: 시간성/버전성이 등급 값과 등급 매핑의 공통 이력 개념으로 모델링되지 않았다.
+      from_cause_ref: finding-005.cause-003
+      to_cause_ref: finding-009.cause-003
+    rationale: finding-005 covers temporal reconstruction across time-dependent
+      values; finding-009 is the rating-scale evolution instance where the
+      absence of versioned mappings breaks historical continuity.
+    confidence: medium
+  - relation_id: rel-010
+    from_finding_id: finding-006
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: Manual input or override values become untrustworthy when the
+      ontology models the value but not the event, actor, reason, timestamp,
+      before/after value, or derivation/override semantics.
+    shared_cause:
+      cause_claim: 값을 생성·변경·승인하는 통제 행위와 그 증거가 값 개념에서 분리되어 모델링되지 않았다.
+      from_cause_ref: finding-006.cause-003
+      to_cause_ref: finding-014.cause-003
+    rationale: finding-006 names the missing audit evidence concept for manual
+      adjustment and approvals; finding-014 is the LTV-specific case where a
+      derived-looking value is manually entered without formula or override
+      provenance.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: The same default-status boundary defect exists if
+      delinquency/default is only declared out of scope and no external
+      authority contract or reference status concept is modeled.
+    shared_cause: null
+    rationale: Both findings address the exclusion of delinquency/default from a
+      shared credit-risk ontology. finding-004 emphasizes boundary contract
+      insufficiency; finding-008 emphasizes lifecycle coverage loss, but the
+      evidence and remediation converge.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-016
+    to_finding_id: finding-017
+    relation: same_root_candidate
+    root_hypothesis: RiskAppetite is not operationally consumable because its
+      policy/evaluation boundary is blurred and its dependency on
+      ExposureAggregate is not represented as a graph relation.
+    shared_cause: null
+    rationale: finding-016 identifies a semantic conflation between appetite policy
+      and compliance result; finding-017 identifies the missing relation to the
+      aggregate used for that result. Both arise from modeling RiskAppetite
+      without a separate evaluation concept and dependency edge.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-017
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: Declared classification or compliance rules are under-specified
+      when cross-entity dependencies are stated in prose but not represented in
+      the ontology relation graph.
+    shared_cause: null
+    rationale: finding-017 covers the missing ExposureAggregate-to-RiskAppetite
+      edge; finding-018 covers the missing ExposureAggregate-to-Limit
+      utilization edge. Both are structural omissions for declared rules.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-010
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Classification evolution becomes a schema migration when
+      classifications are fixed inline values rather than governed, versioned
+      code-set or scale concepts.
+    shared_cause: null
+    rationale: finding-010 addresses borrower/product/collateral enum extension;
+      finding-009 addresses rating-scale evolution. Both are future-change
+      failures caused by missing governed versioned classification concepts.
+    confidence: medium
+  - relation_id: rel-015
+    from_finding_id: finding-010
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: The ontology lacks governance concepts for values that change,
+      coexist, or need precedence, whether those values are classification codes
+      or system-owned authorities.
+    shared_cause:
+      cause_claim: Business values are encoded as local fields or inline lists without
+        owner, lifecycle, version, precedence, or compatibility metadata.
+      from_cause_ref: finding-010.cause-002
+      to_cause_ref: finding-007.cause-002
+    rationale: finding-010's closed enum problem and finding-007's source-of-record
+      problem both point to absent governance metadata for shared concepts that
+      must evolve or reconcile across consumers.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-012
+    to_finding_id: finding-018
+    relation: enables
+    root_hypothesis: The ambiguous aggregate concept makes the utilization rule
+      harder to implement consistently, and the missing graph edge leaves
+      consumers to infer the same dependency differently.
+    shared_cause: null
+    rationale: finding-012 shows ExposureAggregate.total_amount has conflicting
+      temporal truth conditions; finding-018 shows the utilization dependency
+      between ExposureAggregate and Limit is not structurally declared. The
+      former increases the risk and consequence of the latter.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-013
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

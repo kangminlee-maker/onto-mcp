@@ -1,0 +1,1556 @@
+---
+session_id: 20260716-b0f9e3b8
+process: review
+target: "logistics-fulfillment-ontology.yaml"
+domain: none
+date: 2026-07-16
+---
+
+## 9-Lens Review Result
+
+### Review Target
+- `logistics-fulfillment-ontology.yaml`
+
+### Verification Context
+- Domain: none
+- Review mode: core-axis
+- Execution realization: worker
+- Host runtime: codex
+- Artifact generation realization: live
+- Semantic quality evidence: not_evaluated (real_semantic_path_only)
+- Finding ledger: `.onto/review/20260716-b0f9e3b8/finding-ledger.yaml`
+- Issue ledger: `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`
+- Problem framing: `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+- Controlled deliberation: `.onto/review/20260716-b0f9e3b8/deliberation.md`
+- Source artifact: `.onto/review/20260716-b0f9e3b8/synthesis-ledger.yaml`
+- Synthesis projection: `.onto/review/20260716-b0f9e3b8/synthesis.md`
+- Execution status: completed
+
+### Domain Selection
+- Explicit no-domain token was provided; runtime will run without domain documents.
+
+### Final Review Result
+#### Review Basis
+- Execution status: completed
+- Deliberation status: performed
+- Participating lenses: 6/6
+- Degraded lenses: none
+- Halt reason: none
+
+#### Synthesis Summary
+19 material issue(s) require attention. Highest-priority issue: issue-001 (high) — 재고 값의 목적별 권위와 시간 계약이 모델에 연결되지 않은 상태에서 일중 할당이 전일 InventoryAggregate.available_qty를 사용하므로, 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다. Controlled deliberation did not leave a blocking unresolved disagreement for the highest-priority issue.
+
+#### Classification Summary
+- Highest severity: high
+- Severity counts: blocker=0, high=14, medium=10, low=0, info=0
+- Finding count: 27
+- Root-cause issue count: 24
+- Material issue count: 19
+- Non-material finding count: 5
+
+#### Material Issues
+- issue-001 (high)
+  - affected purpose: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공
+  - failure condition: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때
+  - impact: 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다. Source finding context: 동일 온톨로지를 채택한 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-001`, `materialized-input.md:83-90`, `materialized-input.md:112`, `materialized-input.md:116`, `review-value-alignment-criteria.yaml:6-8`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - problem definition: 재고 값의 목적별 권위와 시간 계약이 모델에 연결되지 않아 동일 시점의 가용재고를 일관되게 해석할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-003 (high)
+  - affected purpose: OMS/TMS/캐리어의 주문·화물·배송 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: OMS/TMS/캐리어 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: 주문·화물·배송의 공통 상태 기준 제공
+  - failure condition: 캐리어 이벤트로 상태를 갱신하거나 취소·부분충족·배송 실패·반품·종결 후 정정이 발생할 때 Source finding context: 캐리어 이벤트로 Shipment 또는 Order 상태를 갱신하거나 시스템 간 상태 충돌을 해결할 때 Source finding context: 정상 배송 외의 취소, 부분충족, 실패, 반품 또는 종결 후 정정이 발생할 때
+  - impact: 각 연동이 별도 상태 의미를 발명하게 되어 상태 일관성, 운영 대사 및 고객 판단을 신뢰할 수 없다. Source finding context: 각 연동이 별도 의미를 발명하게 되어 통합 전반의 상태 일관성과 고객·운영 판단을 신뢰할 수 없다. Source finding context: 운영 사건을 공통 상태 모델로 표현할 수 없어 시스템별 상태가 분기되고 대사가 어려워진다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-003`, `materialized-input.md:19-22`, `materialized-input.md:44-47`, `materialized-input.md:60-68`, `materialized-input.md:113`, `review-value-alignment-criteria.yaml:6-8`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-005`, `materialized-input.md: Order.fulfillment_status values`, `materialized-input.md: Shipment.status values 및 delivered 최종 상태 note`, `materialized-input.md: TrackingEvent.event_type에 exception 존재`
+  - source lenses: axiology, coverage
+  - action candidates: fix_now
+  - problem definition: 주문·화물·배송 상태를 공통 생명주기와 연결 계약 없이 독립 enum으로 정의해 정상·예외 상태를 일관되게 판정할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-006 (high)
+  - affected purpose: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공
+  - failure condition: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때
+  - impact: 과다 할당 방지와 주문별 재고 소비 추적을 개념 모델로 보장할 수 없다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001`, `materialized-input.md: InventoryAggregate.available_qty는 매일 밤 저장`, `materialized-input.md: integrity_rules[0]은 일중 주문도 available_qty를 조회한다고 명시`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - problem definition: 재고를 잔액 스냅샷으로만 모델링해 주문별 예약·할당 수량과 생명주기를 표현할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-007 (high)
+  - affected purpose: 주문에서 출하·배송까지의 통합 추적
+  - failure condition: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때
+  - impact: 주문 잔량, 출하량과 배송 결과를 시스템 간에 대사할 수 없다. Source finding context: 주문 잔량, 출하량, 배송 결과를 시스템 간에 대사할 수 없다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `materialized-input.md: OrderLine 주석이 Shipment 참조 부재를 명시`, `materialized-input.md: fulfills 관계는 Shipment→Order 단위만 제공`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - problem definition: 행 단위 충족 수량을 기록하지 못해 부분·분할 출하의 잔여 주문량과 실제 출하량을 대사할 수 없다.
+  - problem framing: symptom / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-009 (high)
+  - affected purpose: 시간에 따라 변하는 주문충족 정보와 WMS/ERP 재고의 권위·시간 기준 및 확장성 제공 Source finding context: 시간에 따라 변하는 주문충족 정보를 시스템 간 일관되게 해석하는 기준 제공 Source finding context: WMS/ERP 재고 통합의 권위·시간 기준 및 새로운 재고 원천에 대한 확장성
+  - failure condition: 현재 값 갱신 후 과거 판단을 재구성하거나 추가 WMS·3PL·실시간 이벤트·새 계산 규칙을 도입할 때 Source finding context: 현재 값이 갱신된 뒤 과거 주문·할당·배송 판단을 재구성해야 할 때 Source finding context: 추가 창고 시스템, 3PL, 실시간 재고 이벤트 또는 새로운 가용재고 계산 규칙을 도입할 때
+  - impact: 과거 상태와 원천별 의미를 보존할 수 없어 감사, 운영 분석, 단계적 마이그레이션과 통합 소비자의 검증 신뢰가 약화된다. Source finding context: 동일 값의 시점별 의미를 구별할 수 없어 감사와 운영 분석의 신뢰가 약화된다. Source finding context: 기존 값의 의미와 과거 상태를 보존한 채 점진적으로 확장할 수 없고, 통합 소비자가 어느 시점의 어느 권위 값을 사용했는지 검증할 수 없다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004`, `materialized-input.md: InventoryRecord의 as_of 부재 주석`, `materialized-input.md: InventoryAggregate.available_qty note`, `materialized-input.md: Shipment.eta note`, `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-004`, `materialized-input.md:76-90`, `materialized-input.md:111-116`
+  - source lenses: coverage, evolution
+  - action candidates: fix_before_release, accept_risk
+  - problem definition: 변동 값을 원천·시점·버전이 있는 이력 대신 덮어쓰는 현재값으로 모델링해 과거 재구성과 단계적 확장을 지원하지 못한다.
+  - problem framing: root_cause / next_step_blocker / needs_decision / must_close_before_next_stage / contested
+
+- issue-012 (high)
+  - affected purpose: OMS/TMS/캐리어 간 공통 배송 상태 기준과 외부 상태 체계 변경에 대한 연속성 Source finding context: TMS와 캐리어 연동 사이의 공통 배송 상태 기준 제공 Source finding context: OMS/TMS/캐리어 간 상태 통합 기준과 외부 상태 체계 변경에 대한 연속성
+  - failure condition: 캐리어별 코드를 Shipment 상태로 변환하거나 캐리어·내부 시스템이 상태 코드를 추가·변경할 때 Source finding context: 캐리어별 코드가 Shipment.status로 변환되거나 새로운 코드가 유입될 때 Source finding context: 캐리어가 상태 코드를 추가·변경하거나 내부 OMS/TMS 워크플로가 세분화될 때
+  - impact: 정규화 결과가 구현마다 달라지고 매핑 드리프트와 반복 수정이 누적되며 과거 이벤트 해석도 안정적으로 유지되지 않는다. Source finding context: 정규화 결과가 연동 구현마다 달라져 상태 대사와 자동화가 불안정해진다. Source finding context: 모든 연동이 개별 수정 대상이 되고 매핑 드리프트가 누적되며, 과거 이벤트의 재해석 결과가 안정적으로 유지되지 않는다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-008`, `materialized-input.md: TrackingEvent.event_type note`, `materialized-input.md: integrity_rules[1]`, `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-002`, `materialized-input.md:19-22`, `materialized-input.md:44-47`, `materialized-input.md:60-68`, `materialized-input.md:111-113`
+  - source lenses: coverage, evolution
+  - action candidates: fix_before_release, accept_risk
+  - problem definition: 외부 상태 상호운용성을 버전형 공통 매핑이 아닌 닫힌 enum과 연동별 코드에 맡겨 현재 정규화와 과거 해석의 연속성을 보장할 수 없다.
+  - problem framing: root_cause / next_step_blocker / needs_decision / must_close_before_next_stage / contested
+
+- issue-013 (high)
+  - affected purpose: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성
+  - failure condition: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때
+  - impact: 기존 스키마와 소비 로직을 동시에 변경해야 하고 과거 데이터의 의미 연속성도 확보할 수 없다. Source finding context: 통합 시스템들이 공통 관계를 재사용할 수 없고 기존 스키마와 소비 로직을 동시에 변경해야 하며, 과거 데이터의 의미 연속성도 확보할 수 없다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-001`, `materialized-input.md:25-31`, `materialized-input.md:105-109`
+  - source lenses: evolution
+  - action candidates: fix_now
+  - problem definition: 주문–출하 이진 관계에 의존해 부분출하·분할충족 도입 시 기존 관계와 소비 로직을 재구성해야 한다.
+  - problem framing: symptom / current_blocker / fix_now / must_close_in_target / inferred
+
+- issue-015 (high)
+  - affected purpose: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준
+  - failure condition: TMS의 다구간 운송 데이터를 교환하거나 주문 충족 관계를 해석할 때 Source finding context: TMS의 다구간 운송 데이터를 Shipment/DeliveryLeg로 교환하거나 주문 충족 관계를 해석할 때
+  - impact: 하나의 출하와 그 운송 구간이 동일 종류로 취급되어 식별, 상태 집계와 주문 충족 판정이 시스템마다 달라질 수 있다. Source finding context: 하나의 출하와 그 운송 구간들이 동일 종류로 취급되어 식별, 상태 집계, 주문 충족 판정이 서로 다른 시스템에서 달라질 수 있다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-001`, `materialized-input.md:40-58`, `materialized-input.md:105-109`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - problem definition: 운송 구간과 전체 화물의 부분–전체 관계를 하위유형 관계로 모델링해 식별·상태·충족 의미를 충돌시킨다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-017 (high)
+  - affected purpose: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공
+  - failure condition: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때
+  - impact: 동일 필드가 상반된 진실 기준을 나타내어 할당, 조정과 감사에서 어느 값이 맞는지 판정할 수 없다. Source finding context: 동일 필드가 상반된 진실 기준을 나타내어 할당, 재고조정, 감사에서 어느 값이 맞는지 판정할 수 없다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-003`, `materialized-input.md:76-84`, `materialized-input.md:115-117`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - problem definition: 물리 재고와 회계 재고를 하나의 quantity_on_hand에 수용해 목적별 의미와 권위를 구별할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-018 (high)
+  - affected purpose: 재고 할당을 위한 일관된 가용 재고 기준
+  - failure condition: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때
+  - impact: 가용량의 시점과 계산 의미가 불명확해 중복 할당이나 시스템 간 가용 재고 불일치가 발생할 수 있다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-004`, `materialized-input.md:76-90`, `materialized-input.md:111-112`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - problem definition: 시간 의존적 available_qty를 산식·원천·유효시점 없는 야간 스냅샷으로 모델링해 일중 현재 가용량으로 신뢰할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-019 (high)
+  - affected purpose: 주문에서 출하와 배송까지의 일관된 충족 상태 기준
+  - failure condition: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때
+  - impact: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하와 고객 상태 표시 오류를 판별하기 어렵다. Source finding context: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하 및 고객 상태 표시 오류를 판별하기 어렵다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-005`, `materialized-input.md:14-31`, `materialized-input.md:105-109`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - problem definition: 충족 사실을 주문 전체에만 결합해 부분출하에서 shipped·delivered의 완료 범위와 주문선별 수량을 판정할 수 없다.
+  - problem framing: symptom / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-022 (high)
+  - affected purpose: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적
+  - failure condition: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우
+  - impact: 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 핵심 추적성이 깨진다. Source finding context: 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 통합 기준 문서의 핵심 추적성이 깨진다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-001`, `materialized-input.md:6-7`, `materialized-input.md:25-31`, `materialized-input.md:105-109`
+  - source lenses: structure
+  - action candidates: fix_now
+  - problem definition: Shipment와 OrderLine을 수량과 함께 연결하는 구성요소가 없어 부분출하 추적 경로가 구조적으로 존재하지 않는다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-024 (high)
+  - affected purpose: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적
+  - failure condition: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우
+  - impact: OMS 주문 수요와 WMS 창고 예약의 대응을 검증할 수 없어 중복·미할당과 출하 전 재고 대사를 판정할 수 없다. Source finding context: OMS 주문 수요와 WMS 창고 예약의 대응 관계를 검증할 수 없어 중복 할당, 미할당, 출하 전 재고 대사가 구조적으로 판정 불가능하다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-003`, `materialized-input.md:6-7`, `materialized-input.md:14-31`, `materialized-input.md:70-90`, `materialized-input.md:105-113`
+  - source lenses: structure
+  - action candidates: fix_now
+  - problem definition: 주문행과 창고 재고 사이의 할당 행위·수량·상태를 독립 연결 구조로 표현하지 않아 주문→재고 할당 단계를 기록할 수 없다.
+  - problem framing: root_cause / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-004 (medium)
+  - affected purpose: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공
+  - failure condition: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때
+  - impact: 시스템 간 충족 사실을 재구성할 수 없어 운영 조사와 고객 응대의 실행 가능성이 약화된다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-004`, `materialized-input.md:25-31`, `materialized-input.md:105-109`, `review-value-alignment-criteria.yaml:6-8`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - problem definition: 수량을 가진 주문선–화물 대응이 없어 부분출하의 충족 사실과 상태를 재구성할 수 없다.
+  - problem framing: symptom / current_blocker / fix_now / must_close_in_target / observed
+
+- issue-005 (medium)
+  - affected purpose: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공
+  - failure condition: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때
+  - impact: 표시값의 근거와 신선도를 검증할 수 없어 고객 약속과 운영 판단의 신뢰가 약화된다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-005`, `materialized-input.md:49`, `materialized-input.md:117`, `review-value-alignment-criteria.yaml:6-8`
+  - source lenses: axiology
+  - action candidates: fix_before_release, follow_up
+  - problem definition: 서로 다른 ETA 주장과 수기 오버라이드를 단일 변경 가능 값으로 합쳐 출처·신선도·변경 책임을 검증할 수 없다.
+  - problem framing: symptom / next_step_blocker / carry_forward / must_close_before_next_stage / observed
+
+- issue-010 (medium)
+  - affected purpose: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공
+  - failure condition: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때
+  - impact: 중요 운영값 변경의 근거와 책임을 검증할 수 없어 감사성과 장애 조사 신뢰가 약화된다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006`, `materialized-input.md: Shipment.eta note`, `materialized-input.md: InventoryRecord.quantity_on_hand note`, `materialized-input.md: notes의 ETA 및 재고 조정 설명`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - problem definition: 수동 ETA 변경과 재고 조정을 독립 감사 사건으로 모델링하지 않아 행위자·시각·사유·증거를 보존할 수 없다.
+  - problem framing: root_cause / next_step_blocker / carry_forward / must_close_before_next_stage / observed
+
+- issue-011 (medium)
+  - affected purpose: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공
+  - failure condition: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때
+  - impact: 신뢰할 값과 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다. Source finding context: 소비자가 신뢰할 값과 그 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007`, `materialized-input.md: InventoryRecord.quantity_on_hand note`, `materialized-input.md: notes의 재고 진실 및 ETA 설명`, `materialized-input.md: integrity_rules[1]`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - problem definition: 다중 원본의 값별 권위 범위와 계보를 일급 개념으로 모델링하지 않아 충돌 시 신뢰할 값을 일관되게 선택할 수 없다.
+  - problem framing: root_cause / next_step_blocker / carry_forward / must_close_before_next_stage / observed
+
+- issue-021 (medium)
+  - affected purpose: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성
+  - failure condition: 캐리어 ETA 갱신이나 수기 조정 후 시스템 간 동기화 또는 예측 품질 분석을 수행할 때 Source finding context: 캐리어 ETA가 갱신되거나 운영팀이 수기 조정한 뒤 시스템 간 ETA를 동기화하거나 예측 품질을 분석할 때
+  - impact: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사와 예측 정확도 평가가 불가능해진다. Source finding context: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사 및 예측 정확도 평가가 불가능해진다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-007`, `materialized-input.md:48-50`, `materialized-input.md:115-117`
+  - source lenses: semantics
+  - action candidates: fix_before_release, follow_up
+  - problem definition: 출처가 다른 ETA 관측값과 최종 표시값을 단일 속성에 덮어써 출처와 기준시각을 복원할 수 없다.
+  - problem framing: symptom / next_step_blocker / carry_forward / must_close_before_next_stage / observed
+
+- issue-023 (medium)
+  - affected purpose: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델
+  - failure condition: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우
+  - impact: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-002`, `materialized-input.md:40-58`
+  - source lenses: structure
+  - action candidates: fix_before_release, follow_up
+  - problem definition: DeliveryLeg 인스턴스를 소속 Shipment에 연결하지 않아 화물별 구간 그룹화와 순서를 구성할 수 없다.
+  - problem framing: symptom / next_step_blocker / carry_forward / must_close_before_next_stage / observed
+
+#### Synthesized Material Issue Explanations
+- issue-001 (high): 재고 값의 목적별 권위와 시간 계약이 모델에 연결되지 않은 상태에서 일중 할당이 전일 InventoryAggregate.available_qty를 사용하므로, 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: axiology
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 분할된 재고 권위와 전일 스냅샷 기반 할당 때문에 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다. Source finding context: InventoryRecord, InventoryAggregate 및 재고 할당 규칙 Source finding context: 대상: materialized-input.md:76-90,111-116. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: WMS/TMS/ERP 통합의 개념 기준 문서이며 권위·시간성·운영 위험을 검토). value_type=purpose; alignment_direction=misaligned. Source finding context: 분할된 재고 권위와 전일 스냅샷 기반 할당은 통합 기준 문서라는 목적에 정렬되지 않는다. Source finding context: 어느 수량이 어떤 목적에서 권위 있는지와 값의 기준시점이 모델에 없으므로, 이 문서를 따르는 시스템도 동일 시점의 가용재고를 일관되게 해석할 수 없다. 재고 부족, 중복 할당 또는 감사 불가능성을 감수하는 트레이드오프가 정당화되지 않았다. Source finding context: 실물·회계·가용 수량별 권위 시스템을 명시하고 각 값에 `as_of`, 출처, 갱신 시각을 추가한다. 할당에는 예약을 반영한 최신 가용수량과 허용 신선도 규칙을 사용하도록 계약화한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공 Source finding context: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때 Source finding context: 동일 온톨로지를 채택한 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다. Source finding context: 배치 조정 관행을 수용하면서 재고 값의 목적별 권위와 시간 계약을 모델링하지 않았다. Source finding context: 일중 할당이 매일 밤 저장되는 InventoryAggregate.available_qty를 읽는다. Source finding context: 이 값과 창고별 현재고에는 유효시점이 없고 WMS·ERP가 서로 다른 값을 보유한다. Source finding context: 재고 권위와 신선도 대신 야간 ERP 기준 조정만 규정되어 있다.
+  - affected purpose: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공
+  - failure condition: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때
+  - impact: 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다. Source finding context: 동일 온톨로지를 채택한 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다.
+  - root hypothesis: 배치 조정 관행을 수용하면서 재고 값의 목적별 권위와 시간 계약을 모델링하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-001`, `materialized-input.md:83-90`, `materialized-input.md:112`, `materialized-input.md:116`, `review-value-alignment-criteria.yaml:6-8`, `finding-ledger.yaml#finding-001`, `finding-001.cause-001`, `materialized-input.md:86-90`, `finding-001.cause-002`, `materialized-input.md:76-84`, `finding-001.cause-003`, `materialized-input.md:83`, `issue-stance-matrix.yaml#stances.issue-001.axiology`, `issue-stance-matrix.yaml#stances.issue-001.coverage`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-001`, `issue-stance-matrix.yaml#stances.issue-001.evolution`, `issue-stance-matrix.yaml#stances.issue-001.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-001.semantics`, `issue-stance-matrix.yaml#stances.issue-001.structure`, `issue-ledger.yaml#dep-001`, `rel-006`, `issue-ledger.yaml#dep-002`, `rel-007`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: 이 결함은 WMS·TMS·ERP 통합을 위한 재고 권위·시간성의 개념 기준이라는 목적을 직접 약화한다. 실물·회계·가용 수량의 권위와 기준시점이 불명확하면 동일 온톨로지를 채택한 구성요소도 서로 다른 재고 진실로 판단하여 재고 부족, 중복 할당, 감사 불가능성의 위험을 만든다.
+  - root cause: 출발점은 배치 조정 관행 자체가 아니라 재고 값의 목적별 권위와 시간 메타데이터를 모델 구조에 연결하지 않은 것이다. 이 부재 때문에 WMS와 ERP의 상이한 수량을 구분하고 최신성을 판단할 공통 계약이 없으며, 전일 집계값을 현재 가용량처럼 사용하는 문제가 가능해진다.
+  - causal path: 일중 할당은 매일 밤 저장된 InventoryAggregate.available_qty를 직접 읽는다. 그러나 이 값과 창고별 현재고에는 유효시점이 없고 WMS와 ERP가 서로 다른 값을 보유하며, 모델은 권위와 신선도 규칙 대신 야간 ERP 기준 조정만 규정한다. 따라서 전일 스냅샷 또는 불일치한 원천 값이 현재 가용재고로 해석되어 구성요소별 운영 판단이 갈라진다.
+  - action: 먼저 실물·회계·가용 수량별 권위 시스템을 구분하고 각 재고 값에 기준시점(as_of), 출처, 갱신 시각을 연결해야 한다. 그다음 할당 계약이 예약을 반영한 최신 가용수량만 소비하고 명시된 허용 신선도를 초과한 값은 사용하지 않도록 해야 한다. 권위·시간 계약을 먼저 확립해야 할당 규칙과 향후 WMS·3PL·실시간 원천 확장이 같은 의미를 유지할 수 있다.
+
+- issue-003 (high): Order·Shipment·TrackingEvent가 공통 생명주기와 연결 계약 없이 독립 enum으로 정의되어, 연동별 상태 해석이 달라지고 취소·부분충족·배송 실패·반품·종결 후 정정 같은 비정상 운영을 일관되게 표현할 수 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: logic
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: axiology, coverage
+  - remaining disagreement: 0/2 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology, coverage
+  - issue statement: 공통 상태 의미·전이·충돌 권위와 예외 생명주기가 없어 연동마다 상태 해석이 달라지고 비정상 운영을 일관되게 표현할 수 없다. Source finding context: Order.fulfillment_status, Shipment.status 및 TrackingEvent.event_type Source finding context: 대상: materialized-input.md:19-22,44-47,60-68,111-113. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 상태 모델 정합성과 운영 위험을 갖춘 통합 개념 기준). value_type=purpose; alignment_direction=misaligned. Source finding context: 상태 의미의 통합을 각 연동에 위임한 것은 공통 개념 기준이라는 목적을 역전시킨다. Source finding context: 온톨로지가 공통 상태 의미와 선후관계, 충돌 시 권위를 제공하지 않으므로 연동마다 다른 `delivered` 또는 예외 해석이 생길 수 있다. 통합 복잡성을 중앙 기준에서 제거하지 않고 소비자에게 분산한다. Source finding context: 각 상태의 canonical 의미와 전이 조건을 정의하고, 외부 이벤트→Shipment→Order 상태의 명시적 crosswalk, 권위, 우선순위 및 충돌 처리 규칙을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-003 Source finding context: OMS/TMS/캐리어 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: 캐리어 이벤트로 Shipment 또는 Order 상태를 갱신하거나 시스템 간 상태 충돌을 해결할 때 Source finding context: 각 연동이 별도 의미를 발명하게 되어 통합 전반의 상태 일관성과 고객·운영 판단을 신뢰할 수 없다. Source finding context: 상태 조정 책임을 ontology의 canonical 계약이 아니라 개별 연동에 배분했다. Source finding context: TrackingEvent.event_type와 Shipment.status의 매핑이 연동별 재량이다. Source finding context: Order, Shipment, TrackingEvent 상태는 각 소유 시스템이 독립 관리한다. Source finding context: 상태 간 canonical mapping, 전이 및 충돌 권위가 정의되지 않았다. Source finding context: Order and Shipment lifecycle coverage Source finding context: materialized-input.md → Order.fulfillment_status; Shipment.status; TrackingEvent.event_type Source finding context: 주문·화물 상태 모델이 취소, 부분충족, 실패, 반품 및 종결 후 정정 구간을 포함하지 않는다. Source finding context: 취소, 배송 실패, 반송, 재출하 같은 일반적인 비정상 운영을 기존 상태에 왜곡해 기록하거나 외부 시스템별 임의 상태로 남겨야 한다. Source finding context: Order와 Shipment 각각에 canceled, partially_fulfilled, failed_delivery, returned 등 필요한 종결·예외 상태와 허용 전이를 정의하고, delivered 이후 정정·재개·재출하 사건의 처리 규칙을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-005 Source finding context: 주문·화물·배송의 공통 상태 기준 제공 Source finding context: 정상 배송 외의 취소, 부분충족, 실패, 반품 또는 종결 후 정정이 발생할 때 Source finding context: 운영 사건을 공통 상태 모델로 표현할 수 없어 시스템별 상태가 분기되고 대사가 어려워진다. Source finding context: 생명주기가 정상 진행 경로 중심으로만 열거되고 예외·역방향·종결 후 전이가 모델링되지 않았다. Source finding context: TrackingEvent에는 exception이 있으나 Order와 Shipment 상태에는 대응 예외 상태가 없다. Source finding context: Order와 Shipment의 상태 열거가 정상 배송 완료까지의 단방향 구간만 포함한다.
+  - affected purpose: OMS/TMS/캐리어의 주문·화물·배송 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: OMS/TMS/캐리어 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: 주문·화물·배송의 공통 상태 기준 제공
+  - failure condition: 캐리어 이벤트로 상태를 갱신하거나 취소·부분충족·배송 실패·반품·종결 후 정정이 발생할 때 Source finding context: 캐리어 이벤트로 Shipment 또는 Order 상태를 갱신하거나 시스템 간 상태 충돌을 해결할 때 Source finding context: 정상 배송 외의 취소, 부분충족, 실패, 반품 또는 종결 후 정정이 발생할 때
+  - impact: 각 연동이 별도 상태 의미를 발명하게 되어 상태 일관성, 운영 대사 및 고객 판단을 신뢰할 수 없다. Source finding context: 각 연동이 별도 의미를 발명하게 되어 통합 전반의 상태 일관성과 고객·운영 판단을 신뢰할 수 없다. Source finding context: 운영 사건을 공통 상태 모델로 표현할 수 없어 시스템별 상태가 분기되고 대사가 어려워진다.
+  - root hypothesis: Order·Shipment·TrackingEvent 상태를 공통 생명주기 계약 없이 정상 경로 중심의 독립 enum으로 정의했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-003`, `materialized-input.md:19-22`, `materialized-input.md:44-47`, `materialized-input.md:60-68`, `materialized-input.md:113`, `review-value-alignment-criteria.yaml:6-8`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-005`, `materialized-input.md: Order.fulfillment_status values`, `materialized-input.md: Shipment.status values 및 delivered 최종 상태 note`, `materialized-input.md: TrackingEvent.event_type에 exception 존재`, `finding-ledger.yaml#finding-003`, `finding-ledger.yaml#finding-010`, `rel-018`, `finding-relation-graph.yaml#rel-018`, `finding-003.cause-001`, `materialized-input.md:63-66`, `finding-003.cause-002`, `finding-003.cause-003`, `finding-010.cause-001`, `materialized-input.md: TrackingEvent.event_type`, `materialized-input.md: Order 및 Shipment 상태값`, `finding-010.cause-002`, `materialized-input.md: Shipment.status values`, `issue-stance-matrix.yaml#stances.issue-003.axiology`, `issue-stance-matrix.yaml#stances.issue-003.coverage`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-003`, `issue-stance-matrix.yaml#stances.issue-003.evolution`, `issue-stance-matrix.yaml#stances.issue-003.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-003.semantics`, `issue-stance-matrix.yaml#stances.issue-003.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: axiology, coverage
+  - action candidates: fix_now
+  - materiality: 이 결함은 OMS·TMS·캐리어 상태를 공통 기준으로 연결하려는 목적을 직접 약화한다. 캐리어 이벤트로 상태를 갱신하거나 시스템 간 충돌을 조정할 때 각 연동이 의미와 예외 처리를 따로 정하게 되어 상태 일관성, 운영 대사, 고객 판단을 신뢰하기 어렵다.
+  - root cause: 문제의 출발점은 Order·Shipment·TrackingEvent 상태를 하나의 canonical 생명주기 및 연결 계약이 아닌 정상 경로 중심의 독립 enum으로 정의한 것이다. 이 구조에는 상태 의미, 허용 전이, 외부 이벤트 매핑, 판정 권위와 충돌 처리의 공통 기준이 들어갈 권위 지점이 없다.
+  - causal path: TrackingEvent.event_type에서 Shipment.status로의 매핑이 연동별 재량이고 세 객체의 상태가 독립 관리되므로, canonical 매핑·전이·충돌 권위가 부재한다. 동시에 Order와 Shipment의 상태 열거는 정상 완료까지의 단방향 흐름에 치우쳐 TrackingEvent의 exception에 대응하는 예외 상태와 종결 후 정정 경로를 제공하지 않는다. 그 결과 동일 사건이 시스템마다 다르게 해석되고 비정상 운영은 기존 상태에 왜곡되거나 시스템별 임의 상태로 분기된다. 심의는 구조 렌즈의 ‘연결 계약 부재’라는 한정을 공통 생명주기 계약 부재와 양립하는 것으로 받아들였고, 형식 공리 부족은 이 의미·구조 결함을 반박하지 않는다고 정리했다.
+  - action: 먼저 Order와 Shipment의 canonical 상태 의미와 정상·예외 생명주기를 정의하고, 취소·부분충족·배송 실패·반품 및 delivered 이후 정정·재개·재출하의 허용 전이를 명시해야 한다. 그다음 외부 TrackingEvent에서 Shipment, 다시 Order로 이어지는 crosswalk를 연결하고, 판정 권위·우선순위·충돌 처리 규칙을 같은 계약에 포함해야 한다. 의미와 전이를 먼저 확정해야 후속 매핑과 충돌 규칙이 안정된 기준을 참조할 수 있다.
+
+- issue-006 (high): 재고 예약·할당 거래가 독립 개념으로 모델링되지 않아 주문별 할당 수량과 생명주기를 표현할 수 없으며, 동일한 야간 재고 스냅샷을 여러 일중 주문이 반복 참조할 때 과다 할당 방지와 소비 이력 추적이 불가능하다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 재고 예약·할당의 수량과 생명주기를 표현할 개념이 없어 과다 할당 방지와 주문별 소비 추적이 불가능하다. Source finding context: Inventory allocation model Source finding context: materialized-input.md → InventoryAggregate.available_qty; integrity_rules[0] Source finding context: 재고 예약·할당의 수량과 생명주기를 표현하는 개념이 없다. Source finding context: 동시 주문과 부분 할당이 스냅샷 하나를 반복해서 참조할 수 있어 과다 할당을 방지하거나 어떤 주문이 가용재고를 소비했는지 재구성할 수 없다. 이는 주문→재고 할당을 포함한다는 선언 목적을 직접 약화한다. Source finding context: OrderLine과 InventoryRecord를 연결하는 InventoryReservation 또는 Allocation 엔터티를 추가하고 수량, 상태, 생성·만료·해제 시각 및 가용재고 반영 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001 Source finding context: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공 Source finding context: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때 Source finding context: 과다 할당 방지와 주문별 재고 소비 추적을 개념 모델로 보장할 수 없다. Source finding context: 온톨로지가 재고를 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 개념으로 포함하지 않았다. Source finding context: 일중 주문 할당이 야간 available_qty 스냅샷을 직접 읽는다. Source finding context: 주문별 예약·할당·해제를 나타내는 엔터티나 관계가 없다.
+  - affected purpose: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공
+  - failure condition: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때
+  - impact: 과다 할당 방지와 주문별 재고 소비 추적을 개념 모델로 보장할 수 없다.
+  - root hypothesis: 재고를 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 개념으로 포함하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001`, `materialized-input.md: InventoryAggregate.available_qty는 매일 밤 저장`, `materialized-input.md: integrity_rules[0]은 일중 주문도 available_qty를 조회한다고 명시`, `finding-ledger.yaml#finding-006`, `finding-006.cause-001`, `materialized-input.md: integrity_rules[0]`, `finding-006.cause-002`, `materialized-input.md: entities 및 relations 전체`, `materialized-input.md: InventoryAggregate 정의`, `issue-stance-matrix.yaml#stances.issue-006.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-006`, `issue-stance-matrix.yaml#stances.issue-006.coverage`, `issue-stance-matrix.yaml#stances.issue-006.evolution`, `issue-stance-matrix.yaml#stances.issue-006.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-006.semantics`, `issue-stance-matrix.yaml#stances.issue-006.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - materiality: 이는 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공이라는 선언 목적을 직접 약화한다. 가용재고가 주문별 예약·할당·해제와 연결되지 않으므로 시스템은 특정 주문이 얼마의 재고를 소비했는지 재구성하거나 복수 주문의 총할당량이 가용량을 넘지 않음을 보장할 수 없다.
+  - root cause: 문제의 출발점은 재고를 야간 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 엔터티나 관계로 포함하지 않은 것이다. 이 누락 때문에 OrderLine과 InventoryRecord 사이의 수량 있는 소비 관계와 그 상태 변화를 기록할 권위 있는 개념이 없다.
+  - causal path: 일중 주문이 매일 밤 저장된 available_qty를 직접 조회하지만, 주문별 예약·할당·해제를 나타내는 엔터티나 관계가 없다. 따라서 동시 주문과 부분 할당이 같은 스냅샷을 반복 소비해도 이를 차감·조정할 거래 상태가 없고, 결과적으로 과다 할당을 막거나 주문별 재고 소비를 추적할 수 없다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 수용했으며 남은 이견은 없다.
+  - action: OrderLine과 InventoryRecord를 연결하는 예약 또는 할당 엔터티를 먼저 도입하고, 할당 수량, 상태, 생성·만료·해제 시각을 정의해야 한다. 이어 각 상태 전이가 available_qty에 언제 반영되거나 복원되는지 규칙을 정하고, 동시 주문과 부분 할당에서도 유효 예약·할당 합계가 가용재고를 초과하지 않으며 주문별 소비 이력이 보존되도록 해야 한다.
+
+- issue-007 (high): 현재 모델은 Shipment가 어떤 Order를 충족하는지만 나타내고 주문행별 충족 수량은 기록하지 못하므로, 부분·분할 출하에서 잔여 주문량과 실제 출하량을 대사할 수 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 부분출하를 표현할 주문행-화물 수량 매핑 개념이 없어 잔여 주문량과 실제 출하량을 대사할 수 없다. Source finding context: OrderLine-to-Shipment fulfillment traceability Source finding context: materialized-input.md → OrderLine comment; relations.fulfills Source finding context: 부분출하를 표현할 주문행-화물 수량 매핑 개념이 없다. Source finding context: 분할 출하, 부분 충족, 재출하 상황에서 잔여 주문량과 실제 출하량을 대사할 수 없어 OMS·WMS·TMS 간 기준 모델 역할을 수행하지 못한다. Source finding context: FulfillmentLine 또는 ShipmentLine을 추가해 OrderLine, Shipment, fulfilled_qty와 단위를 연결하고 분할·취소·재출하 시의 수량 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002 Source finding context: 주문에서 출하·배송까지의 통합 추적 Source finding context: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때 Source finding context: 주문 잔량, 출하량, 배송 결과를 시스템 간에 대사할 수 없다. Source finding context: 충족 관계의 최소 단위가 Order로만 정의되고 수량을 가진 행 단위 연결 개념이 생략되었다. Source finding context: 부분출하 시 어느 주문행이 어느 Shipment로 나갔는지 추적할 수 없다. Source finding context: 유일한 fulfills 관계가 Shipment와 Order만 연결하고 OrderLine 매핑을 명시적으로 제외한다.
+  - affected purpose: 주문에서 출하·배송까지의 통합 추적
+  - failure condition: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때
+  - impact: 주문 잔량, 출하량과 배송 결과를 시스템 간에 대사할 수 없다. Source finding context: 주문 잔량, 출하량, 배송 결과를 시스템 간에 대사할 수 없다.
+  - root hypothesis: 충족 관계의 최소 단위를 Order로만 정의하고 수량을 가진 행 단위 연결 개념을 생략했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `materialized-input.md: OrderLine 주석이 Shipment 참조 부재를 명시`, `materialized-input.md: fulfills 관계는 Shipment→Order 단위만 제공`, `finding-ledger.yaml#finding-007`, `finding-007.cause-001`, `materialized-input.md: OrderLine 주석`, `finding-007.cause-002`, `materialized-input.md: relations.fulfills.note`, `issue-stance-matrix.yaml#stances.issue-007.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-007`, `issue-stance-matrix.yaml#stances.issue-007.coverage`, `issue-stance-matrix.yaml#stances.issue-007.evolution`, `issue-stance-matrix.yaml#stances.issue-007.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-007.semantics`, `issue-stance-matrix.yaml#stances.issue-007.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - materiality: 한 OrderLine이 여러 Shipment로 나뉘거나 일부만 출하될 때 주문 잔량, 실제 출하량, 배송 결과를 OMS·WMS·TMS가 동일한 기준으로 연결할 수 없다. 따라서 선언된 목적인 주문부터 출하·배송까지의 통합 추적을 현재 지원 경로에서 직접 저해하는 high 수준의 완전성 결함이다.
+  - root cause: 충족 관계의 최소 단위를 Order로 두고 수량을 가진 OrderLine–Shipment 연결 개념을 생략한 것이 출발점이다. 이 모델링 결정 때문에 어느 주문행이 어느 화물로 얼마나 충족되었는지를 표현할 권위 있는 단위가 존재하지 않는다.
+  - causal path: 유일한 fulfills 관계가 Shipment와 Order만 연결하고 OrderLine 매핑을 명시적으로 제공하지 않으므로, 부분출하 시 주문행과 Shipment의 대응 및 충족 수량을 기록할 수 없다. 그 결과 분할·부분 충족과 재출하에서 행별 출하량과 잔량을 산출·대사할 근거가 사라져 관찰된 통합 추적 실패로 이어진다.
+  - action: FulfillmentLine 또는 ShipmentLine과 같은 행 단위 충족 개념을 추가해 OrderLine, Shipment, fulfilled_qty 및 수량 단위를 연결해야 한다. 이어 분할, 부분 충족, 취소, 재출하 시 수량의 증감·잔량·중복 방지 규칙을 정의해야 시스템 간 대사 기준이 완성된다. 이 조치는 현재 차단 요인이므로 대상 범위에서 즉시 닫아야 한다.
+
+- issue-009 (high): 재고와 ETA를 덮어쓰는 현재값으로만 표현한 모델은 과거 주문·할당·배송 판단의 재구성과 새 WMS·3PL·실시간 이력의 점진적 도입을 함께 막는 중대한 설계 문제다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: coverage, evolution
+  - remaining disagreement: 2/2 deliberation participants
+  - remaining disagreement lenses: coverage, evolution
+  - raised by lenses: coverage, evolution
+  - issue statement: 재고와 ETA의 현재값 모델은 과거 상태 재구성뿐 아니라 새 재고 원천과 실시간 이력의 점진적 도입도 지원하지 못한다. Source finding context: Inventory and ETA temporal history Source finding context: materialized-input.md → InventoryRecord.quantity_on_hand comment; InventoryAggregate.available_qty; Shipment.eta Source finding context: 변동 값의 기준시점·유효기간·변경 이력을 표현하는 시간 차원이 없다. Source finding context: 주문 접수나 할당 당시의 재고·ETA를 재구성할 수 없어 사후 대사, SLA 분석 및 변경 원인 확인이 불가능하다. Source finding context: 재고 스냅샷과 ETA 예측에 observed_at/as_of, valid_from/valid_to, recorded_at 및 버전 또는 이벤트 이력을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004 Source finding context: 시간에 따라 변하는 주문충족 정보를 시스템 간 일관되게 해석하는 기준 제공 Source finding context: 현재 값이 갱신된 뒤 과거 주문·할당·배송 판단을 재구성해야 할 때 Source finding context: 동일 값의 시점별 의미를 구별할 수 없어 감사와 운영 분석의 신뢰가 약화된다. Source finding context: 시점 의존 속성을 현재값 필드로만 모델링하고 시간 버전 또는 변경 이벤트 개념을 포함하지 않았다. Source finding context: 재고와 ETA가 갱신되지만 과거 시점 값을 식별하는 속성이 없다. Source finding context: 스냅샷·예측 값에 기준시점, 유효기간 또는 버전 모델이 정의되지 않았다. Source finding context: logistics-fulfillment-ontology.yaml — InventoryRecord/InventoryAggregate 시간·권위 모델 Source finding context: materialized-input.md:76-90, 111-116 Source finding context: 새 재고 원천이나 실시간 이력을 도입하면 기존 현재값 모델로는 데이터 연속성과 원천별 의미를 유지할 수 없다. Source finding context: 추가 WMS, 3PL, 예약 재고, 실시간 이벤트를 수용하려면 현재값 필드의 의미를 바꾸거나 별도 모델로 이관해야 한다. 원천과 시점이 보존되지 않아 과거 값의 재현, 새 계산 규칙의 병행, 단계적 마이그레이션이 불가능하다. Source finding context: 원천 시스템, 재고 의미(실물·회계·가용·예약), 관측 시각, 유효 시각, 단위와 버전을 가진 InventoryObservation 또는 InventoryLedger를 권위 기록으로 도입한다. InventoryRecord와 InventoryAggregate는 명시된 시점과 계산 규칙에서 생성되는 투영으로 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-004 Source finding context: WMS/ERP 재고 통합의 권위·시간 기준 및 새로운 재고 원천에 대한 확장성 Source finding context: 추가 창고 시스템, 3PL, 실시간 재고 이벤트 또는 새로운 가용재고 계산 규칙을 도입할 때 Source finding context: 기존 값의 의미와 과거 상태를 보존한 채 점진적으로 확장할 수 없고, 통합 소비자가 어느 시점의 어느 권위 값을 사용했는지 검증할 수 없다. Source finding context: 재고를 원천과 시간 차원을 가진 관측/원장으로 모델링하지 않고 덮어쓰는 현재값과 무시점 집계로 모델링했다. Source finding context: 새 재고 원천이나 실시간 이력을 추가하면 기존 quantity 필드만으로 값들을 구분할 수 없다. Source finding context: WMS와 ERP가 각자 값을 가지지만 야간에 ERP 기준으로 조정한다. Source finding context: InventoryRecord와 InventoryAggregate에 원천 및 유효 시점 계약이 없다.
+  - affected purpose: 시간에 따라 변하는 주문충족 정보와 WMS/ERP 재고의 권위·시간 기준 및 확장성 제공 Source finding context: 시간에 따라 변하는 주문충족 정보를 시스템 간 일관되게 해석하는 기준 제공 Source finding context: WMS/ERP 재고 통합의 권위·시간 기준 및 새로운 재고 원천에 대한 확장성
+  - failure condition: 현재 값 갱신 후 과거 판단을 재구성하거나 추가 WMS·3PL·실시간 이벤트·새 계산 규칙을 도입할 때 Source finding context: 현재 값이 갱신된 뒤 과거 주문·할당·배송 판단을 재구성해야 할 때 Source finding context: 추가 창고 시스템, 3PL, 실시간 재고 이벤트 또는 새로운 가용재고 계산 규칙을 도입할 때
+  - impact: 과거 상태와 원천별 의미를 보존할 수 없어 감사, 운영 분석, 단계적 마이그레이션과 통합 소비자의 검증 신뢰가 약화된다. Source finding context: 동일 값의 시점별 의미를 구별할 수 없어 감사와 운영 분석의 신뢰가 약화된다. Source finding context: 기존 값의 의미와 과거 상태를 보존한 채 점진적으로 확장할 수 없고, 통합 소비자가 어느 시점의 어느 권위 값을 사용했는지 검증할 수 없다.
+  - root hypothesis: 변동 값을 원천·시점·버전이 있는 관측 이력 대신 덮어쓰는 현재값으로 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004`, `materialized-input.md: InventoryRecord의 as_of 부재 주석`, `materialized-input.md: InventoryAggregate.available_qty note`, `materialized-input.md: Shipment.eta note`, `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-004`, `materialized-input.md:76-90`, `materialized-input.md:111-116`, `finding-ledger.yaml#finding-009`, `finding-ledger.yaml#finding-017`, `rel-008`, `finding-relation-graph.yaml#rel-008`, `finding-009.cause-001`, `materialized-input.md: InventoryRecord 주석`, `finding-009.cause-002`, `materialized-input.md: InventoryRecord, InventoryAggregate, Shipment 속성 정의`, `finding-017.cause-001`, `materialized-input.md:115-116`, `finding-017.cause-002`, `materialized-input.md:81-84`, `finding-017.cause-003`, `issue-stance-matrix.yaml#stances.issue-009.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-009`, `issue-stance-matrix.yaml#stances.issue-009.coverage`, `issue-stance-matrix.yaml#stances.issue-009.evolution`, `issue-stance-matrix.yaml#stances.issue-009.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-009.semantics`, `issue-stance-matrix.yaml#stances.issue-009.structure`, `직접 재구성 실패와 단계적 확장 실패를 종합해 high로 분류하는 심각도 기준`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage, evolution
+  - action candidates: fix_before_release, accept_risk
+  - materiality: 원천별 값과 시간에 따른 의미가 보존되지 않아 감사, 사후 대사, SLA 분석과 변경 원인 확인의 신뢰가 약화된다. 또한 기존 의미와 과거 상태를 유지하면서 새 원천이나 계산 규칙을 병행할 수 없어 WMS/ERP 통합의 권위·시간 기준 및 확장성이라는 목적을 훼손한다.
+  - root cause: 출발점은 변동 값을 원천·의미·관측 시각·유효 시각·기록 시각·버전이 있는 이력으로 모델링하지 않고 현재값으로 덮어쓴 것이다. 이 선택 때문에 이후 투영이나 소비 단계에서는 어느 원천의 값이 어느 시점에 유효했는지를 복원할 근거가 없다.
+  - causal path: InventoryRecord, InventoryAggregate와 Shipment의 변동 값에 기준시점·유효기간·버전 계약이 없으므로 갱신 전 재고와 ETA를 식별할 수 없다. 같은 구조에서 새 재고 원천이나 실시간 이벤트를 추가하면 기존 수량 필드로 원천별 의미를 구분할 수도 없다. 그 결과 과거 판단 재현, 통합 소비자의 권위 값 검증, 새 계산 규칙의 병행과 단계적 마이그레이션이 모두 어려워진다.
+  - action: 다음 단계 전에 원천 시스템, 재고 의미, 관측·유효·기록 시각과 버전을 갖는 InventoryObservation 또는 InventoryLedger 같은 이력 모델을 권위 기록으로 결정해야 한다. 재고 현재값과 집계, ETA는 명시된 기준시점과 계산 규칙에서 생성되는 투영으로 정의해 과거 재구성과 새 원천의 병행 도입을 가능하게 해야 한다. 아울러 직접 재구성 실패와 진화상 확장 실패를 합산하는 심각도 기준을 정해 fix-before-release와 위험 수용 중 하나를 확정해야 한다.
+  - unresolved disagreement: coverage와 evolution은 원인과 실패 범위에는 합의했지만, 직접 재구성 실패와 단계적 확장 실패를 종합해 심각도를 medium 또는 high로 판단할 기준이 경계 내에 없어 최종 심각도는 확정되지 않았다.
+
+- issue-012 (high): 버전형 StatusMapping 계약의 부재로 캐리어 상태의 canonical 정규화가 연동별 구현에 분산되어 현재 결과의 일관성과 변경 이후 과거 이벤트 해석의 연속성을 보장할 수 없다. 원인과 필요한 조치에는 합의했으며, 다음 단계 전에 닫아야 하는 material 이슈다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: logic
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: coverage, evolution
+  - remaining disagreement: 2/2 deliberation participants
+  - remaining disagreement lenses: coverage, evolution
+  - raised by lenses: coverage, evolution
+  - issue statement: 캐리어 상태를 canonical 상태로 정규화하는 버전형 매핑 계약이 없어 현재 결과가 연동마다 달라지고 새 코드 도입 시 반복 수정과 과거 재해석이 발생한다. Source finding context: Carrier-to-canonical tracking status mapping Source finding context: materialized-input.md → TrackingEvent.event_type note; integrity_rules[1] Source finding context: 캐리어 상태 코드를 공통 Shipment 상태로 정규화하는 매핑 개념이 없다. Source finding context: 같은 캐리어 사건이 연동마다 다른 화물 상태를 만들 수 있어 온톨로지가 통합의 공통 상태 기준이 되지 못한다. Source finding context: CarrierStatusMapping 개념을 추가해 carrier_ref, external_code, canonical_event/status, effective period, mapping version과 unknown-code 처리 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-008 Source finding context: TMS와 캐리어 연동 사이의 공통 배송 상태 기준 제공 Source finding context: 캐리어별 코드가 Shipment.status로 변환되거나 새로운 코드가 유입될 때 Source finding context: 정규화 결과가 연동 구현마다 달라져 상태 대사와 자동화가 불안정해진다. Source finding context: 외부 상태 정규화를 온톨로지 개념이 아닌 개별 연동의 책임으로 남겼다. Source finding context: 캐리어 상태와 Shipment.status의 매핑을 각 연동이 처리한다. Source finding context: 공통 매핑 엔터티와 미매핑·버전 처리 규칙이 없다. Source finding context: logistics-fulfillment-ontology.yaml — Order/Shipment/TrackingEvent 상태 모델 Source finding context: materialized-input.md:19-22, 44-47, 60-68, 111-113 Source finding context: 새 캐리어 상태나 내부 상태가 추가되면 온톨로지 열거형과 개별 연동 매핑을 반복 수정해야 한다. Source finding context: 외부 캐리어 코드나 OMS/TMS 상태가 변경되면 공통 기준에서 흡수할 확장 계층이 없어 enum과 여러 연동을 동시에 고쳐야 한다. 서로 다른 시점의 매핑이 구분되지 않아 동일한 과거 이벤트가 새 규칙에서 다른 상태로 해석될 수도 있다. Source finding context: 원천 시스템·원천 코드·정규 상태·매핑 버전·유효 기간을 갖는 버전형 StatusMapping 개념을 두고, 원천 이벤트는 원래 코드 그대로 보존한다. 정의되지 않은 코드는 명시적인 unknown/unmapped 경로로 수용한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-002 Source finding context: OMS/TMS/캐리어 간 상태 통합 기준과 외부 상태 체계 변경에 대한 연속성 Source finding context: 캐리어가 상태 코드를 추가·변경하거나 내부 OMS/TMS 워크플로가 세분화될 때 Source finding context: 모든 연동이 개별 수정 대상이 되고 매핑 드리프트가 누적되며, 과거 이벤트의 재해석 결과가 안정적으로 유지되지 않는다. Source finding context: 상태 상호운용성을 버전 가능한 공통 매핑 개념으로 모델링하지 않고 닫힌 enum과 연동별 구현에 위임했다. Source finding context: 새 원천 상태를 수용하려면 닫힌 enum 또는 연동별 매핑을 변경해야 한다. Source finding context: 각 시스템이 상태를 독립 관리하고 캐리어 매핑은 각 연동이 알아서 수행한다. Source finding context: 원천 코드와 정규 상태 사이의 버전형 매핑 및 유효 시점 개념이 없다.
+  - affected purpose: OMS/TMS/캐리어 간 공통 배송 상태 기준과 외부 상태 체계 변경에 대한 연속성 Source finding context: TMS와 캐리어 연동 사이의 공통 배송 상태 기준 제공 Source finding context: OMS/TMS/캐리어 간 상태 통합 기준과 외부 상태 체계 변경에 대한 연속성
+  - failure condition: 캐리어별 코드를 Shipment 상태로 변환하거나 캐리어·내부 시스템이 상태 코드를 추가·변경할 때 Source finding context: 캐리어별 코드가 Shipment.status로 변환되거나 새로운 코드가 유입될 때 Source finding context: 캐리어가 상태 코드를 추가·변경하거나 내부 OMS/TMS 워크플로가 세분화될 때
+  - impact: 정규화 결과가 구현마다 달라지고 매핑 드리프트와 반복 수정이 누적되며 과거 이벤트 해석도 안정적으로 유지되지 않는다. Source finding context: 정규화 결과가 연동 구현마다 달라져 상태 대사와 자동화가 불안정해진다. Source finding context: 모든 연동이 개별 수정 대상이 되고 매핑 드리프트가 누적되며, 과거 이벤트의 재해석 결과가 안정적으로 유지되지 않는다.
+  - root hypothesis: 외부 상태 상호운용성을 버전 가능한 공통 매핑 레지스트리가 아니라 닫힌 enum과 연동별 코드로 구현했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-008`, `materialized-input.md: TrackingEvent.event_type note`, `materialized-input.md: integrity_rules[1]`, `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-002`, `materialized-input.md:19-22`, `materialized-input.md:44-47`, `materialized-input.md:60-68`, `materialized-input.md:111-113`, `finding-ledger.yaml#finding-013`, `finding-ledger.yaml#finding-015`, `rel-017`, `finding-relation-graph.yaml#rel-017`, `finding-013.cause-001`, `finding-013.cause-002`, `materialized-input.md: entities, relations, integrity_rules 전체`, `finding-015.cause-001`, `materialized-input.md:63-66`, `finding-015.cause-002`, `materialized-input.md:66`, `finding-015.cause-003`, `issue-stance-matrix.yaml#stances.issue-012.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-012`, `issue-stance-matrix.yaml#stances.issue-012.coverage`, `issue-stance-matrix.yaml#stances.issue-012.evolution`, `issue-stance-matrix.yaml#stances.issue-012.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-012.semantics`, `issue-stance-matrix.yaml#stances.issue-012.structure`, `현재 상호운용성 영향과 반복 수정·매핑 드리프트·과거 재해석의 누적 영향을 종합하는 심각도 기준`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage, evolution
+  - action candidates: fix_before_release, accept_risk
+  - materiality: 이 문제는 OMS·TMS·캐리어 사이에 공통 배송 상태 기준을 제공한다는 목적을 직접 약화한다. 같은 외부 사건이 연동이나 적용 시점에 따라 다른 Shipment 상태가 될 수 있어 상태 대사와 자동화가 불안정해지고, 코드 변경 때마다 반복 수정과 매핑 드리프트가 누적되며 과거 이벤트의 해석도 달라질 수 있다.
+  - root cause: 인과 사슬의 출발점은 외부 상태 상호운용성을 버전 가능한 공통 매핑 레지스트리로 모델링하지 않고 닫힌 enum과 연동별 코드에 맡긴 것이다. 이 구조에는 원천 시스템·원천 코드와 canonical 상태를 연결하는 단일 계약, 적용 버전과 유효 시점, 미매핑 코드 처리 기준이 없으므로 각 연동이 독립적으로 의미를 결정하게 된다.
+  - causal path: 공통 매핑 엔터티가 없으므로 캐리어 코드와 Shipment.status의 대응을 각 연동이 구현한다. 새 캐리어 코드나 내부 상태가 생기면 닫힌 enum 또는 여러 연동을 각각 수정해야 하고, 버전과 유효 기간이 없으면 어느 규칙이 사건 발생 시점에 유효했는지 재현할 수 없다. 그 결과 현재 정규화 결과의 불일치, 반복 수정, 매핑 드리프트, 과거 이벤트 재해석으로 이어진다.
+  - action: 다음 단계로 진행하기 전에 원천 시스템·원천 코드, canonical 이벤트·상태, 매핑 버전과 유효 기간을 권위 있게 관리하는 StatusMapping을 도입해야 한다. 먼저 원시 코드를 변경 없이 보존하고 unknown/unmapped 경로를 명시한 뒤, 모든 연동이 사건 시점에 유효한 매핑을 사용하도록 연결해야 현재 일관성과 과거 결과의 재현성을 함께 확보할 수 있다.
+  - unresolved disagreement: coverage와 evolution은 원인과 조치에는 합의했지만, 현재 상호운용성 공백과 장기적인 반복 수정·매핑 드리프트·과거 재해석의 누적 영향을 하나의 심각도로 가중하는 기준이 없어 medium과 high 중 어느 수준인지 경계 내에서 확정하지 못했다. 또한 실제 연동 구현에 별도 매핑 레지스트리가 존재하는지는 현재 증거 범위에서 확인되지 않았다.
+
+- issue-013 (high): 현재의 Shipment→Order 주문 단위 fulfills 관계만으로는 부분출하·분할충족을 표현할 수 없다. 따라서 부분출하 도입 전에 라인별 수량 할당 모델로 재구성해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: evolution
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: evolution
+  - issue statement: 부분 출하·분할 충족을 추가하려면 기존 주문 단위 fulfills 관계와 소비 로직을 재구성해야 한다. Source finding context: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment model Source finding context: materialized-input.md:25-31, 105-109 Source finding context: 부분 출하·분할 충족을 추가하려면 기존 주문 단위 fulfills 모델을 재구성해야 한다. Source finding context: 대상 자체가 부분 출하를 추적할 수 없다고 명시한다. 부분 출하, 백오더, 다중 창고 출하를 도입하면 단순한 새 유형 추가로 끝나지 않고 기존 관계의 의미와 소비 로직을 함께 변경해야 하며, 과거 주문의 라인별 충족 내역도 복원할 수 없다. Source finding context: OrderLine과 Shipment(필요하면 DeliveryLeg)를 잇는 FulfillmentAllocation 같은 연관 개념을 추가하고 할당 수량·단위·유효 시점·상태를 둔다. 기존 주문 단위 fulfills는 이 연관에서 계산되는 호환용 투영으로 유지한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성 Source finding context: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때 Source finding context: 통합 시스템들이 공통 관계를 재사용할 수 없고 기존 스키마와 소비 로직을 동시에 변경해야 하며, 과거 데이터의 의미 연속성도 확보할 수 없다. Source finding context: 충족을 수량을 가진 라인-출하 연관이 아니라 주문-출하 이진 관계로만 모델링했다. Source finding context: 부분 출하 시 어느 OrderLine이 어느 Shipment로 나갔는지 표현할 수 없다. Source finding context: 기존 fulfills 관계가 Shipment→Order의 주문 단위 관계로 고정되어 있다. Source finding context: 라인별 충족 수량을 담는 독립 연관 개념이 없다.
+  - affected purpose: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성
+  - failure condition: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때
+  - impact: 기존 스키마와 소비 로직을 동시에 변경해야 하고 과거 데이터의 의미 연속성도 확보할 수 없다. Source finding context: 통합 시스템들이 공통 관계를 재사용할 수 없고 기존 스키마와 소비 로직을 동시에 변경해야 하며, 과거 데이터의 의미 연속성도 확보할 수 없다.
+  - root hypothesis: 충족을 수량을 가진 라인-출하 연관이 아니라 주문-출하 이진 관계로만 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-001`, `materialized-input.md:25-31`, `materialized-input.md:105-109`, `finding-ledger.yaml#finding-014`, `finding-014.cause-001`, `finding-014.cause-002`, `finding-014.cause-003`, `issue-stance-matrix.yaml#stances.issue-013.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-013`, `issue-stance-matrix.yaml#stances.issue-013.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `issue-stance-matrix.yaml#stances.issue-013.evolution`, `issue-stance-matrix.yaml#stances.issue-013.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-013.semantics`, `issue-stance-matrix.yaml#stances.issue-013.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: evolution
+  - action candidates: fix_now
+  - materiality: 한 주문 라인이 여러 출하로 나뉘는 운영에서는 어느 OrderLine이 어느 Shipment에서 얼마만큼 충족됐는지 공통으로 표현할 수 없다. 이 때문에 WMS·TMS·ERP가 기존 관계를 재사용하지 못하고 스키마와 소비 로직을 함께 변경해야 하며, 과거 데이터와 새 모델 사이의 의미 연속성도 보장하기 어려워 주문→출하 통합 기준과 확장성을 중대하게 약화한다.
+  - root cause: 문제의 출발점은 충족을 수량을 가진 OrderLine–Shipment 연관으로 모델링하지 않고 Shipment→Order 이진 관계로만 고정한 것이다. 라인별 충족 수량을 담는 독립 개념이 없으므로 부분충족의 대상, 수량, 단위, 시점과 상태를 현재 구조에서 표현할 수 없다.
+  - causal path: 라인별 충족 수량을 담는 독립 연관이 없고 fulfills가 주문 단위 관계로 고정되어 있어, 부분출하 시 어느 주문 행이 어느 출하로 나갔는지 기록할 수 없다. 그 결과 부분출하·백오더·다중 창고 출하를 지원하려면 기존 관계의 의미와 이를 소비하는 로직을 동시에 재구성해야 한다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 일관되게 수용했으며 별도 숙의가 필요하지 않다고 결론냈다.
+  - action: OrderLine과 Shipment를 연결하는 FulfillmentAllocation을 추가하고 할당 수량·단위·유효 시점·상태를 그 연관의 속성으로 정의해야 한다. 먼저 이 연관을 충족 정보의 권위 있는 모델로 확립한 뒤, 기존 주문 단위 fulfills는 할당에서 계산되는 호환용 투영으로 유지해야 소비자 전환을 단계화하고 향후 충족 방식 확장을 수용할 수 있다.
+
+- issue-015 (high): DeliveryLeg는 Shipment의 하위유형이 아니라 특정 Shipment를 구성하는 독립 운송 구간이어야 한다. 현재 분류는 구간과 전체 화물의 식별·상태·주문 충족 의미를 충돌시키는 high 심각도의 현재 차단 이슈다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: logic
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: DeliveryLeg를 Shipment의 하위유형으로 분류해 경로 구간과 전체 화물의 식별·상태·충족 의미가 충돌한다. Source finding context: DeliveryLeg의 존재론적 유형과 Shipment 상속 Source finding context: materialized-input.md:40-58, 105-109 Source finding context: 배송 구간을 전체 화물 이동인 Shipment의 하위유형으로 분류해 부분-전체 관계를 종류-하위종류 관계로 오인한다. Source finding context: 경로 구간은 일반적으로 전체 Shipment를 구성하는 부분이다. 현재 모델에서는 각 구간이 독립적인 shipment_no, 전체 중량, 최종 배송 상태 및 Order 충족 주체로 해석될 수 있어 TMS 구간과 ERP/OMS 출하의 식별 의미가 충돌한다. Source finding context: DeliveryLeg를 독립 엔티티로 두고 `part_of` 또는 `shipment_ref`로 Shipment에 연결한다. 구간별 상태·ETA·운송사가 필요하면 구간 속성으로 명시하고 전체 Shipment 속성과 구분한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준 Source finding context: TMS의 다구간 운송 데이터를 Shipment/DeliveryLeg로 교환하거나 주문 충족 관계를 해석할 때 Source finding context: 하나의 출하와 그 운송 구간들이 동일 종류로 취급되어 식별, 상태 집계, 주문 충족 판정이 서로 다른 시스템에서 달라질 수 있다. Source finding context: 운송 구간과 전체 화물 이동 사이의 부분-전체 관계를 하위유형 관계로 모델링했다. Source finding context: DeliveryLeg는 화물 경로의 한 구간으로 정의된다. Source finding context: 그 구간이 전체 물리적 화물 이동으로 정의된 Shipment의 하위유형으로 선언된다. Source finding context: Shipment와 DeliveryLeg 사이의 의미적으로 필요한 부분-전체 관계가 하위유형 관계로 대체되었다.
+  - affected purpose: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준
+  - failure condition: TMS의 다구간 운송 데이터를 교환하거나 주문 충족 관계를 해석할 때 Source finding context: TMS의 다구간 운송 데이터를 Shipment/DeliveryLeg로 교환하거나 주문 충족 관계를 해석할 때
+  - impact: 하나의 출하와 그 운송 구간이 동일 종류로 취급되어 식별, 상태 집계와 주문 충족 판정이 시스템마다 달라질 수 있다. Source finding context: 하나의 출하와 그 운송 구간들이 동일 종류로 취급되어 식별, 상태 집계, 주문 충족 판정이 서로 다른 시스템에서 달라질 수 있다.
+  - root hypothesis: 운송 구간과 전체 화물 이동 사이의 부분-전체 관계를 하위유형 관계로 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-001`, `materialized-input.md:40-58`, `materialized-input.md:105-109`, `finding-ledger.yaml#finding-018`, `finding-018.cause-001`, `materialized-input.md:52-58`, `finding-018.cause-002`, `materialized-input.md:40-54`, `finding-018.cause-003`, `issue-stance-matrix.yaml#stances.issue-015.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-015`, `issue-stance-matrix.yaml#stances.issue-015.coverage`, `issue-stance-matrix.yaml#stances.issue-015.evolution`, `issue-stance-matrix.yaml#stances.issue-015.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-015.semantics`, `issue-stance-matrix.yaml#stances.issue-015.structure`, `issue-ledger.yaml#dep-004`, `rel-019`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - materiality: WMS·TMS·ERP가 다구간 운송을 교환하거나 주문 충족을 판정할 때 구간을 전체 출하와 같은 종류로 해석하면 shipment_no, 중량, 최종 배송 상태와 충족 책임의 범위가 모호해진다. 그 결과 시스템별 식별, 상태 집계와 충족 판정이 달라져 통합을 위한 공통 화물·배송 개념 기준을 약화시킨다.
+  - root cause: 문제의 시작점은 Shipment와 DeliveryLeg 사이에 필요한 부분–전체 관계를 종류–하위종류 관계로 대체한 것이다. 이 모델링 선택 때문에 DeliveryLeg가 전체 Shipment의 의미를 상속하며, 이후의 식별·속성 범위·집계 경계 충돌이 발생한다.
+  - causal path: DeliveryLeg는 화물 경로의 한 구간으로 정의되지만 전체 물리적 화물 이동인 Shipment의 하위유형으로 선언되어 있다. 따라서 구간이 독립 Shipment처럼 식별되고 전체 중량·최종 상태·Order 충족 의미를 가질 수 있게 되며, 다구간 TMS 데이터와 ERP/OMS 출하 해석이 충돌한다. 심의는 이 의미·구조 결함과 high 심각도를 수용했으며, 형식적 모순을 확정할 공리가 부족하다는 logic 관점의 한계는 해당 결론을 반박하지 않는 것으로 정리했다.
+  - action: 먼저 DeliveryLeg의 Shipment 하위유형 분류를 제거하고 독립 엔터티로 정의한 뒤, part_of 또는 shipment_ref로 각 구간을 해당 Shipment에 연결해야 한다. 이어 구간별 상태·ETA·운송사와 전체 Shipment의 식별자·중량·최종 상태·주문 충족 속성을 명확히 분리해야 한다. 관계와 속성 범위를 먼저 바로잡아야 이후 시스템 매핑과 상태 집계가 동일한 의미 경계를 따를 수 있다.
+
+- issue-017 (high): 물리적 보유량과 회계 장부량이 하나의 quantity_on_hand에 혼합되어 WMS와 ERP 중 어느 값이 목적별 진실인지 판정할 수 없는 현재의 high 심각도 문제이며, 대상 범위에서 반드시 해소해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: 서로 다른 물리·회계 재고 수량을 단일 속성에 합쳐 그 의미와 WMS·ERP 간 권위가 충돌한다. Source finding context: InventoryRecord.quantity_on_hand의 의미와 권위 Source finding context: materialized-input.md:76-84, 115-117 Source finding context: 물리 재고와 회계 재고라는 서로 다른 수량을 하나의 quantity_on_hand 속성으로 합치면서 권위도 WMS와 ERP 사이에서 충돌한다. Source finding context: 물리적 보유량과 회계 장부량은 불일치할 수 있는 별도 의미다. 하나의 속성으로 표현하면 사용자는 값이 실물 출고 가능량인지 장부 수량인지 구분할 수 없고, 야간 조정은 물리적 진실을 회계 값으로 덮는 것으로 해석될 수 있다. Source finding context: `physical_on_hand`와 `accounting_on_hand`를 분리하거나, 재고 관측값에 `quantity_kind`, `source_system`, `as_of`를 둔다. 각 사용 사례별 권위와 조정 결과의 의미를 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-003 Source finding context: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공 Source finding context: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때 Source finding context: 동일 필드가 상반된 진실 기준을 나타내어 할당, 재고조정, 감사에서 어느 값이 맞는지 판정할 수 없다. Source finding context: 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용했다. Source finding context: quantity_on_hand는 현재 보유 수량으로 단일 정의된다. Source finding context: WMS와 ERP가 같은 속성의 값을 각각 가지며 ERP 기준 야간 조정이 수행된다. Source finding context: WMS의 실물 기준과 ERP의 회계 기준이 서로 다른 진실로 별도 선언되어 있다.
+  - affected purpose: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공
+  - failure condition: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때
+  - impact: 동일 필드가 상반된 진실 기준을 나타내어 할당, 조정과 감사에서 어느 값이 맞는지 판정할 수 없다. Source finding context: 동일 필드가 상반된 진실 기준을 나타내어 할당, 재고조정, 감사에서 어느 값이 맞는지 판정할 수 없다.
+  - root hypothesis: 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-003`, `materialized-input.md:76-84`, `materialized-input.md:115-117`, `finding-ledger.yaml#finding-020`, `finding-020.cause-001`, `materialized-input.md:76-83`, `finding-020.cause-002`, `materialized-input.md:81-84`, `finding-020.cause-003`, `issue-stance-matrix.yaml#stances.issue-017.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-017`, `issue-stance-matrix.yaml#stances.issue-017.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007`, `issue-stance-matrix.yaml#stances.issue-017.evolution`, `issue-stance-matrix.yaml#stances.issue-017.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-017.semantics`, `issue-stance-matrix.yaml#stances.issue-017.structure`, `issue-ledger.yaml#dep-002`, `rel-007`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - materiality: 두 수량은 불일치할 수 있고 출고 할당과 회계 결산의 목적도 다르다. 단일 필드가 상반된 진실 기준을 나타내면 할당, 재고조정, 감사에서 올바른 값을 선택할 수 없어 ‘WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공’하려는 목적을 직접 약화한다.
+  - root cause: 출발점은 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용한 것이다. 이 개념 혼합 때문에 각 수량의 의미, 원천 시스템, 기준 시점과 사용 사례별 권위를 표현할 구조가 없다.
+  - causal path: quantity_on_hand가 단일한 현재 보유 수량으로 정의된 상태에서 WMS와 ERP가 같은 속성에 각자의 값을 보유하고 ERP 기준 야간 조정까지 수행한다. 동시에 WMS는 실물 기준, ERP는 회계 기준의 진실로 선언되어 있으므로 값이 불일치하면 동일 필드가 서로 다른 의미와 권위를 갖게 되고, 결과적으로 출고 가능량인지 장부 수량인지 판정할 수 없게 된다.
+  - action: 먼저 physical_on_hand와 accounting_on_hand를 분리하거나 재고 관측값에 quantity_kind, source_system, as_of를 도입해 서로 다른 관점을 명시해야 한다. 그다음 할당, 결산, 조정과 감사별 권위 시스템을 지정하고, 야간 조정이 물리 수량의 덮어쓰기가 아니라 관점 간 조정 결과로 해석되도록 의미를 정의해야 한다. 이 의미·권위 분리를 재고 선택 및 조정 로직보다 먼저 확정해야 downstream 동작이 올바른 값을 사용할 수 있다.
+
+- issue-018 (high): 야간 available_qty 스냅샷을 일중 현재 가용재고로 사용하는 구조는 유효 시점과 계산 산식이 없어 중복 할당 위험을 만들므로 즉시 수정해야 하는 high 심각도 이슈다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: 야간 available_qty 스냅샷을 일중 현재 가용재고로 사용하면서 유효 시점과 계산 산식을 정의하지 않았다. Source finding context: InventoryAggregate.available_qty의 시간성과 파생 의미 Source finding context: materialized-input.md:76-90, 111-112 Source finding context: 매일 밤 생성한 스냅샷을 일중에도 현재 가용 재고로 취급하면서 유효 시점과 가용량 산식을 정의하지 않았다. Source finding context: 가용 재고는 특정 시점과 예약 상태에 의존하는 파생 의미다. 시점 없는 전일 값을 현재 가용량으로 사용하면 이미 할당된 수량을 다시 가용하다고 해석할 수 있으며, 시스템마다 available의 계산 의미도 달라진다. Source finding context: `as_of`와 계산/갱신 시점을 추가하고, available_qty의 권위 시스템 및 산식(예: 물리 보유량에서 예약·차단 수량 등을 차감)을 명시한다. 일중 할당에는 갱신 가능한 권위 값을 사용한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-004 Source finding context: 재고 할당을 위한 일관된 가용 재고 기준 Source finding context: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때 Source finding context: 가용량의 시점과 계산 의미가 불명확해 중복 할당이나 시스템 간 가용 재고 불일치가 발생할 수 있다. Source finding context: 시간 의존적 파생값인 available_qty를 원천·산식·유효시점 없는 독립 스냅샷 필드로 모델링했다. Source finding context: 일중 재고 할당이 InventoryAggregate.available_qty를 기준으로 수행된다. Source finding context: available_qty는 매일 밤 저장되는 스냅샷일 뿐 유효 시점이 없다. Source finding context: 가용량을 구성하는 원천 수량과 산식이 모델에 정의되지 않았다.
+  - affected purpose: 재고 할당을 위한 일관된 가용 재고 기준
+  - failure condition: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때
+  - impact: 가용량의 시점과 계산 의미가 불명확해 중복 할당이나 시스템 간 가용 재고 불일치가 발생할 수 있다.
+  - root hypothesis: 시간 의존적 파생값인 available_qty를 원천·산식·유효시점 없는 독립 스냅샷 필드로 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-004`, `materialized-input.md:76-90`, `materialized-input.md:111-112`, `finding-ledger.yaml#finding-021`, `finding-021.cause-001`, `finding-021.cause-002`, `materialized-input.md:86-90`, `finding-021.cause-003`, `issue-stance-matrix.yaml#stances.issue-018.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-018`, `issue-stance-matrix.yaml#stances.issue-018.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004`, `issue-stance-matrix.yaml#stances.issue-018.evolution`, `issue-stance-matrix.yaml#stances.issue-018.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-018.semantics`, `issue-stance-matrix.yaml#stances.issue-018.structure`, `issue-ledger.yaml#dep-001`, `rel-006`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - materiality: 야간 스냅샷 이후 주문·예약·입출고·조정이 발생하면 저장값이 현재 상태를 반영하지 못한다. 그럼에도 일중 할당 기준으로 사용하면 이미 할당된 수량을 다시 가용하다고 판단하거나 시스템별로 서로 다른 가용량을 계산할 수 있어, 일관된 재고 할당 기준이라는 목적을 훼손한다.
+  - root cause: 문제의 출발점은 시간과 운영 상태에 의존하는 파생값인 available_qty를 원천 수량, 계산 산식, 권위 시스템, 유효 시점 없이 독립 스냅샷 필드로 모델링한 것이다. 이 때문에 값이 무엇을 뜻하고 언제까지 유효한지 판단할 권위가 없다.
+  - causal path: 일중 할당이 InventoryAggregate.available_qty를 직접 기준으로 삼지만, 해당 값은 매일 밤 저장될 뿐 as_of가 없고 구성 원천과 산식도 정의되지 않았다. 따라서 스냅샷 이후 상태 변화가 반영되지 않은 값을 현재 가용량으로 오인하게 되고, 중복 할당과 시스템 간 불일치로 이어진다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 일관되게 수용했으며 별도 숙의가 필요하지 않았다.
+  - action: available_qty의 권위 시스템과 물리 보유량·예약량·차단량 등 입력을 사용하는 계산 산식을 정의하고, as_of와 계산·갱신 시점을 모델에 추가해야 한다. 그다음 일중 할당 경로가 야간 스냅샷이 아니라 갱신 가능한 권위 값을 사용하도록 전환해야 하며, 권위와 갱신 규칙을 먼저 확정한 뒤 소비 경로를 바꿔야 의미 불일치가 재발하지 않는다.
+
+- issue-019 (high): 주문 전체의 단일 fulfillment_status와 Shipment→Order 관계만으로는 부분출하에서 shipped·delivered가 일부 완료인지 전량 완료인지 판정할 수 없습니다. 따라서 주문선별 충족 범위와 수량을 재구성할 수 없는 현재의 high 심각도 정확성 이슈를 목표 범위에서 반드시 수정해야 합니다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: logic
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: 주문 단위 상태와 Shipment→Order 관계만으로는 부분출하 시 shipped와 delivered의 완료 범위를 판정할 수 없다. Source finding context: Order.fulfillment_status와 fulfills 관계의 주문 충족 의미 Source finding context: materialized-input.md:14-31, 105-109 Source finding context: 주문 단위 상태와 Shipment→Order 관계만으로 부분출하 시 `shipped` 및 `delivered`의 의미를 단일하게 판정할 수 없다. Source finding context: 일부 주문 줄이나 일부 수량만 출하된 경우 `shipped`가 일부 출하인지 전량 출하인지, 한 Shipment가 주문 전체를 충족하는지 일부만 충족하는지 구분되지 않는다. 동일 상태명이 OMS, WMS, TMS에서 다른 사실을 뜻하게 된다. Source finding context: Shipment와 OrderLine 사이에 충족 수량을 가진 할당/출하명세 관계를 추가한다. 주문 상태는 line 수준 사실에서 도출하고 `partially_allocated`, `partially_shipped`, `partially_delivered` 등 전이 의미와 완료 조건을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-005 Source finding context: 주문에서 출하와 배송까지의 일관된 충족 상태 기준 Source finding context: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때 Source finding context: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하 및 고객 상태 표시 오류를 판별하기 어렵다. Source finding context: 충족 사실의 의미 단위가 OrderLine/수량이 아니라 Order 전체로만 모델링되었다. Source finding context: Order에는 주문 전체를 나타내는 단일 fulfillment_status가 있다. Source finding context: Shipment의 fulfills 관계도 Order 전체만 대상으로 한다. Source finding context: OrderLine별 충족 Shipment와 수량을 표현하는 의미 단위가 없다.
+  - affected purpose: 주문에서 출하와 배송까지의 일관된 충족 상태 기준
+  - failure condition: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때
+  - impact: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하와 고객 상태 표시 오류를 판별하기 어렵다. Source finding context: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하 및 고객 상태 표시 오류를 판별하기 어렵다.
+  - root hypothesis: 충족 사실의 의미 단위를 OrderLine과 수량이 아니라 Order 전체로만 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-005`, `materialized-input.md:14-31`, `materialized-input.md:105-109`, `finding-ledger.yaml#finding-022`, `finding-022.cause-001`, `materialized-input.md:14-23`, `finding-022.cause-002`, `finding-022.cause-003`, `materialized-input.md:25-31`, `materialized-input.md:109`, `issue-stance-matrix.yaml#stances.issue-019.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-019`, `issue-stance-matrix.yaml#stances.issue-019.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `issue-stance-matrix.yaml#stances.issue-019.evolution`, `issue-stance-matrix.yaml#stances.issue-019.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-019.semantics`, `issue-stance-matrix.yaml#stances.issue-019.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - materiality: 주문이 여러 Shipment로 분할되거나 일부 주문선·수량만 처리되면 완료 여부와 출하별 충족 범위를 확인할 수 없어 과소·중복 출하를 판별하기 어렵고, 고객 상태 표시와 OMS·WMS·TMS의 운영 대사가 서로 다른 사실을 나타낼 수 있습니다. 이는 주문부터 출하·배송까지 일관된 충족 상태를 제공한다는 목적을 직접 훼손합니다.
+  - root cause: 인과 사슬의 시작점은 충족 사실의 의미 단위를 OrderLine과 수량이 아니라 Order 전체로만 모델링한 것입니다. 행·수량별 원천 사실이 없으므로 주문 상태를 정확히 도출하거나 부분 완료와 전량 완료를 구분할 근거 자체가 없습니다.
+  - causal path: Order에는 주문 전체의 단일 fulfillment_status만 있고 Shipment의 fulfills 관계도 Order 전체만 가리킵니다. 여기에 Shipment가 어느 OrderLine을 얼마만큼 충족했는지 표현하는 관계가 없으므로, 부분출하 시 shipped·delivered의 적용 범위와 주문선별 누적 충족량을 계산할 수 없고 결국 주문 완료 여부가 미결정 상태로 남습니다. 심의는 이 원인과 high 판단을 수용했으며, 논리 렌즈의 증거 부족은 특정 형식 논리 충돌을 입증할 수 없다는 범위로만 판단을 제한했습니다.
+  - action: 먼저 Shipment와 OrderLine 사이에 충족 수량을 기록하는 관계를 추가해 행·수량별 사실을 권위 있는 근거로 만들어야 합니다. 그다음 그 사실에서 주문 상태를 도출하고 partially_allocated, partially_shipped, partially_delivered 같은 부분 상태의 전이 의미와 shipped·delivered의 전량 완료 조건을 명시해야 합니다. 이 순서를 지켜야 상태 정의가 주문 전체의 모호한 값이 아니라 재구성 가능한 충족 사실에 의존합니다.
+
+- issue-022 (high): Shipment와 OrderLine을 충족 수량과 함께 연결하는 구조가 없어, 부분·분할 출하에서 주문행별 출하 추적 경로가 끊겨 있다. 이 문제는 현재 차단 요인이므로 대상 모델에서 반드시 수정해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: structure
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: structure
+  - issue statement: 주문행과 출하 간 수량 포함 연결이 없어 부분출하 추적 경로가 구조적으로 끊겨 있다. Source finding context: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:25-31,105-109 Source finding context: 주문행과 출하 간의 수량 포함 연결이 없어 부분출하 추적 경로가 끊겨 있다. Source finding context: 대상 자체가 부분출하 시 주문행과 Shipment의 대응을 추적할 수 없다고 명시한다. 따라서 한 주문이 여러 출하로 나뉘거나 한 행이 분할 출하되면 OMS 주문행과 WMS/TMS 화물을 정합하게 연결할 수 없다. Source finding context: `ShipmentLine` 같은 연결 엔터티를 추가해 `Shipment`, `OrderLine`, `fulfilled_qty`를 필수로 연결하고, 주문 단위 `fulfills`는 이 연결에서 유도되도록 한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-001 Source finding context: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적 Source finding context: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우 Source finding context: 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 통합 기준 문서의 핵심 추적성이 깨진다. Source finding context: 모델이 Shipment와 OrderLine을 수량과 함께 연결하는 구성 요소를 생략했다. Source finding context: 부분출하에서 각 Shipment가 충족한 주문행과 수량을 식별할 수 없다. Source finding context: 유일한 출하-주문 관계인 `fulfills`가 Shipment에서 Order 전체로만 연결된다. Source finding context: Shipment와 OrderLine 사이의 연결 엔터티 또는 관계와 충족 수량 속성이 존재하지 않는다.
+  - affected purpose: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적
+  - failure condition: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우
+  - impact: 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 핵심 추적성이 깨진다. Source finding context: 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 통합 기준 문서의 핵심 추적성이 깨진다.
+  - root hypothesis: Shipment와 OrderLine을 수량과 함께 연결하는 구성 요소를 생략했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-001`, `materialized-input.md:6-7`, `materialized-input.md:25-31`, `materialized-input.md:105-109`, `finding-ledger.yaml#finding-025`, `finding-025.cause-001`, `finding-025.cause-002`, `finding-025.cause-003`, `materialized-input.md:40-50`, `issue-stance-matrix.yaml#stances.issue-022.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-022`, `issue-stance-matrix.yaml#stances.issue-022.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `issue-stance-matrix.yaml#stances.issue-022.evolution`, `issue-stance-matrix.yaml#stances.issue-022.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-022.semantics`, `issue-stance-matrix.yaml#stances.issue-022.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_now
+  - materiality: 한 주문이나 주문행이 여러 Shipment로 나뉘면 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능하다. 따라서 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하려는 핵심 목적과 추적성이 직접 훼손된다.
+  - root cause: 출하와 주문 전체를 잇는 `fulfills`만 있고 Shipment와 OrderLine을 수량과 함께 연결하는 구성요소가 생략된 것이 인과 사슬의 시작점이다. 이 구조적 누락 때문에 행 단위 충족 사실을 표현할 권위 있는 경로 자체가 존재하지 않는다.
+  - causal path: Shipment–OrderLine 연결 엔터티 또는 관계와 충족 수량 속성이 없고, 기존 `fulfills`는 Shipment에서 Order 전체로만 이어진다. 그 결과 각 Shipment가 어느 주문행을 얼마나 충족했는지 식별할 수 없어 부분출하 대사와 잔량 판정이 불가능해진다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 일관되게 지지했으며, 추가 숙의나 범위 축소는 필요하지 않은 것으로 확정되었다.
+  - action: `ShipmentLine` 또는 동등한 연결 엔터티를 추가하고 각 인스턴스가 `Shipment`, `OrderLine`, `fulfilled_qty`를 필수로 참조하도록 해야 한다. 주문 단위 `fulfills`는 이 행 단위 연결에서 유도되도록 하여 행 단위 기록을 원천으로 삼아야 하며, 그래야 부분·분할 출하의 출하량 대사와 미충족 수량 계산이 일관되게 가능하다.
+
+- issue-024 (high): 주문행과 창고 재고 사이에 할당 인스턴스가 없어 주문→재고 할당 단계가 구조적으로 기록되지 않는다. 이는 선언된 핵심 흐름을 막는 high 심각도의 현재 결함이며 목표 범위에서 반드시 수정해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: structure
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: structure
+  - issue statement: 주문행과 창고 재고 사이의 할당 연결이 없어 선언된 주문→재고 할당 단계가 구조적으로 기록되지 않는다. Source finding context: logistics-fulfillment-ontology.yaml — inventory allocation structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:14-31,70-90,105-113 Source finding context: SKU가 같다는 사실은 특정 주문에 대한 재고 예약을 나타내지 않는다. 같은 SKU의 여러 주문이나 창고 재고가 존재하면 할당 결과를 주문행별로 식별·대사할 수 없고, 텍스트 무결성 규칙의 `available_qty` 확인도 영속적인 연결을 만들지 않는다. Source finding context: `InventoryAllocation` 같은 연결 엔터티를 추가해 `OrderLine`, `InventoryRecord` 또는 Warehouse, `allocated_qty`를 연결하고, 필요하면 할당 상태·생성 시각을 그 엔터티의 속성으로 둔다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-003 Source finding context: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적 Source finding context: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우 Source finding context: OMS 주문 수요와 WMS 창고 예약의 대응 관계를 검증할 수 없어 중복 할당, 미할당, 출하 전 재고 대사가 구조적으로 판정 불가능하다. Source finding context: 모델이 주문행과 창고 재고 사이의 할당 행위 및 할당 수량을 독립된 연결 구조로 표현하지 않았다. Source finding context: 특정 OrderLine에 예약된 창고와 수량을 온톨로지에서 식별할 수 없다. Source finding context: OrderLine, InventoryRecord, InventoryAggregate는 SKU를 공유하지만 특정 할당 인스턴스를 연결하는 참조가 없다. Source finding context: 명시된 관계는 Shipment에서 Order로 향하는 `fulfills`뿐이고, 재고 할당은 연결 구조 없이 텍스트 규칙으로만 언급된다.
+  - affected purpose: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적
+  - failure condition: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우
+  - impact: OMS 주문 수요와 WMS 창고 예약의 대응을 검증할 수 없어 중복·미할당과 출하 전 재고 대사를 판정할 수 없다. Source finding context: OMS 주문 수요와 WMS 창고 예약의 대응 관계를 검증할 수 없어 중복 할당, 미할당, 출하 전 재고 대사가 구조적으로 판정 불가능하다.
+  - root hypothesis: 주문행과 창고 재고 사이의 할당 행위 및 할당 수량을 독립된 연결 구조로 표현하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-003`, `materialized-input.md:6-7`, `materialized-input.md:14-31`, `materialized-input.md:70-90`, `materialized-input.md:105-113`, `finding-ledger.yaml#finding-027`, `finding-027.cause-001`, `finding-027.cause-002`, `materialized-input.md:25-29`, `materialized-input.md:76-90`, `finding-027.cause-003`, `issue-stance-matrix.yaml#stances.issue-024.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-024`, `issue-stance-matrix.yaml#stances.issue-024.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001`, `issue-stance-matrix.yaml#stances.issue-024.evolution`, `issue-stance-matrix.yaml#stances.issue-024.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-024.semantics`, `issue-stance-matrix.yaml#stances.issue-024.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_now
+  - materiality: 동일 SKU에 여러 주문행이나 여러 창고 재고가 존재하면 SKU 공유만으로 특정 주문행에 어느 재고의 얼마가 예약되었는지 식별할 수 없다. 그 결과 OMS 주문 수요와 WMS 예약을 대응시켜 중복 할당, 미할당, 출하 전 재고 대사를 판정할 수 없어 주문→재고 할당→출하→배송의 통합 개념 기준이라는 목적이 약화된다.
+  - root cause: 인과 사슬의 출발점은 주문행과 창고 재고 사이의 할당 행위와 수량을 독립된 연결 구조로 모델링하지 않은 것이다. 할당 자체가 권위 있는 인스턴스로 존재하지 않으므로 상태, 생성 시각, 부분 예약이나 재할당 같은 생명주기도 주문별로 기록할 기반이 없다.
+  - causal path: OrderLine, InventoryRecord, InventoryAggregate가 SKU를 공유해도 특정 OrderLine에 예약된 창고와 수량은 식별되지 않는다. 명시적 관계는 Shipment에서 Order로 향하는 fulfills뿐이며, available_qty를 확인하는 텍스트 규칙도 영속적인 할당 참조를 만들지 않는다. 따라서 특정 할당 결과를 주문행별로 식별·대사할 수 없고, 선언된 주문→재고 할당 단계가 구조적으로 누락된다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 일관되게 지지했으며 별도 심의가 필요하지 않았다.
+  - action: InventoryAllocation 연결 엔터티를 추가해 각 OrderLine을 해당 InventoryRecord 또는 Warehouse 및 allocated_qty와 연결해야 한다. 할당 상태와 생성 시각도 이 엔터티에 정의하여 예약의 생명주기를 추적할 수 있게 해야 한다. 이 연결을 먼저 권위 있는 할당 기록으로 확립해야 이후 출하 연결과 재고 대사가 주문행별 할당을 일관되게 참조할 수 있다.
+
+- issue-004 (medium): 수량을 가진 OrderLine–Shipment 대응이 없어 부분출하 시 주문선별 충족 사실과 상태를 재구성할 수 없으며, 이는 목표 범위에서 즉시 보완해야 하는 현재 결손이다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 3/3 deliberation participants
+  - accepted lenses: axiology, semantics, structure
+  - remaining disagreement: 0/3 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 주문 단위 관계만으로는 부분출하 시 주문선별 충족 사실과 수량을 추적할 수 없다. Source finding context: OrderLine과 Shipment의 충족 관계 Source finding context: 대상: materialized-input.md:25-31,105-109. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 주문·화물·배송 정합성을 갖춘 통합 개념 기준). value_type=stakeholder; alignment_direction=misaligned. Source finding context: 주문 단위 관계만 두는 단순화는 부분출하 추적이라는 핵심 주문충족 목적을 희생한다. Source finding context: 부분출하, 분할배송, 부족수량 상황에서 OMS·WMS·TMS가 동일한 충족 사실을 교환하거나 고객 문의·운영 조사를 수행할 수 없다. 모델 단순화의 이익보다 추적성과 책임성 손실이 크지만 그 트레이드오프가 정당화되지 않았다. Source finding context: OrderLine과 Shipment를 연결하며 충족 수량을 담는 `FulfillmentAllocation` 또는 `ShipmentLine` 개념을 추가하고, Order 수준 `fulfills`는 그 합계에서 파생되도록 한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-004 Source finding context: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공 Source finding context: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때 Source finding context: 시스템 간 충족 사실을 재구성할 수 없어 운영 조사와 고객 응대의 실행 가능성이 약화된다. Source finding context: 관계를 주문 수준으로만 단순화하면서 수량을 가진 주문선-화물 대응 개념을 의도적으로 제외했다. Source finding context: 부분출하 시 어느 주문선이 어느 Shipment로 나갔는지 추적할 수 없다. Source finding context: 유일한 충족 관계가 Shipment→Order이며 OrderLine 매핑을 두지 않는다.
+  - affected purpose: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공
+  - failure condition: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때
+  - impact: 시스템 간 충족 사실을 재구성할 수 없어 운영 조사와 고객 응대의 실행 가능성이 약화된다.
+  - root hypothesis: 관계를 주문 수준으로만 단순화하면서 수량을 가진 주문선-화물 대응 개념을 제외했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-004`, `materialized-input.md:25-31`, `materialized-input.md:105-109`, `review-value-alignment-criteria.yaml:6-8`, `finding-ledger.yaml#finding-004`, `finding-004.cause-001`, `materialized-input.md:30-31`, `finding-004.cause-002`, `issue-stance-matrix.yaml#stances.issue-004.axiology`, `issue-stance-matrix.yaml#stances.issue-004.coverage`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-004`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `issue-stance-matrix.yaml#stances.issue-004.evolution`, `issue-stance-matrix.yaml#stances.issue-004.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-004.semantics`, `issue-stance-matrix.yaml#stances.issue-004.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: 한 주문선이 여러 Shipment로 나뉘거나 일부 수량만 출하되면 OMS·WMS·TMS가 동일한 충족 사실을 교환할 수 없다. 그 결과 운영 조사와 고객 응대가 약화되고, 주문부터 출하·배송까지 일관된 충족 추적 기준을 제공한다는 목적이 훼손된다.
+  - root cause: 문제의 시작점은 충족 관계를 Shipment→Order 수준으로만 단순화하고 수량을 가진 OrderLine–Shipment 대응 개념을 제외한 것이다. 이 구조에서는 주문선별 할당량이 원천적으로 표현되지 않으므로 하위 상태나 집계 로직만으로 정확한 부분출하 사실을 복원할 수 없다.
+  - causal path: OrderLine 매핑이 없으므로 각 Shipment가 어느 주문선의 몇 개를 충족했는지 기록할 수 없고, 이에 따라 부분출하·분할배송·부족수량 상황에서 fulfills와 shipped·delivered가 전체 주문인지 일부인지 판정할 수 없다. 숙의에서는 axiology·semantics·structure 렌즈가 이 원인과 영향에 수렴했고, 추적 결손이 핵심 상태 의미까지 불확정하게 한다는 점을 수용했다.
+  - action: OrderLine과 Shipment를 충족 수량과 함께 연결하는 FulfillmentAllocation 또는 ShipmentLine을 먼저 도입해야 한다. 이후 주문 수준 fulfills와 관련 출하·배송 상태를 해당 행 단위 수량의 합계에서 파생하도록 바꿔, 주문선별 사실을 단일 권위로 삼고 시스템 간 재구성과 조사가 가능하게 해야 한다.
+
+- issue-005 (medium): 캐리어 예측과 운영팀의 수기 판단을 단일 변경 가능 ETA에 혼합하면 최종 표시값의 출처, 신선도와 변경 책임을 검증할 수 없다. 적용 가능한 렌즈들은 이 원인과 medium 심각도 및 조치 방향을 일관되게 지지했다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: axiology
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 단일 ETA 값에 캐리어 예측과 수기 판단이 혼합되어 출처, 신선도와 변경 책임을 검증할 수 없다. Source finding context: Shipment.eta의 권위와 이력 Source finding context: 대상: materialized-input.md:49,115-117. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 권위·시간성과 물류 운영 위험을 다루는 통합 개념 기준). value_type=tradeoff; alignment_direction=misaligned. Source finding context: 단일 ETA 값에 캐리어 예측과 수기 판단을 혼합하는 설계는 운영 재량을 보존하는 대신 출처와 시간 신뢰성을 잃는다. Source finding context: 소비자는 ETA가 관측된 캐리어 예측인지 수기 재정의인지 구분하거나 오래된 값을 탐지할 수 없다. 운영팀 재량을 최종 권위로 선택한 근거와 감사·복구 장치가 없어 통합 기준의 권위 및 시간성 약속을 약화한다. Source finding context: ETA 추정치를 출처, 산출·수신·수정 시각, 수정 주체와 함께 이력으로 보존하고, 캐리어 값과 운영 오버라이드를 구분한다. 최종 표시 ETA는 명시된 우선순위 규칙에서 파생한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-005 Source finding context: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공 Source finding context: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때 Source finding context: 표시값의 근거와 신선도를 검증할 수 없어 고객 약속과 운영 판단의 신뢰가 약화된다. Source finding context: 서로 다른 ETA 주장과 수기 오버라이드를 출처 있는 추정 이력으로 분리하지 않고 하나의 mutable 값으로 합쳤다. Source finding context: 최종 ETA가 운영팀 판단에 따라 수기로 조정된다. Source finding context: 캐리어 API 값과 수기 값이 같은 ETA 속성에 혼합된다. Source finding context: 출처, 기준시각, 오버라이드 이력 및 파생 우선순위가 정의되지 않았다.
+  - affected purpose: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공
+  - failure condition: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때
+  - impact: 표시값의 근거와 신선도를 검증할 수 없어 고객 약속과 운영 판단의 신뢰가 약화된다.
+  - root hypothesis: 서로 다른 ETA 주장과 수기 오버라이드를 출처 있는 추정 이력으로 분리하지 않고 하나의 mutable 값으로 합쳤다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-005`, `materialized-input.md:49`, `materialized-input.md:117`, `review-value-alignment-criteria.yaml:6-8`, `finding-ledger.yaml#finding-005`, `finding-005.cause-001`, `finding-005.cause-002`, `finding-005.cause-003`, `issue-stance-matrix.yaml#stances.issue-005.axiology`, `issue-stance-matrix.yaml#stances.issue-005.coverage`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-005`, `issue-stance-matrix.yaml#stances.issue-005.evolution`, `issue-stance-matrix.yaml#stances.issue-005.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-005.semantics`, `issue-stance-matrix.yaml#stances.issue-005.structure`, `issue-ledger.yaml#dep-003`, `rel-011`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_before_release, follow_up
+  - materiality: 운영팀이 ETA를 수정하거나 여러 시스템이 이를 교환·표시할 때 값의 근거와 기준시각을 복원할 수 없어, 배송 예상시각의 권위와 시간성을 일관되게 해석하려는 목적이 약화된다. 그 결과 고객 약속과 운영 판단의 신뢰도도 낮아진다.
+  - root cause: 문제의 출발점은 출처와 의미가 다른 캐리어 예측 및 수기 오버라이드를 각각의 추정 이력으로 보존하지 않고 하나의 mutable 값으로 합친 것이다. 이 모델에서는 원본 주장과 변경 행위가 덮어써지므로 이후 단계에서 계보와 책임을 복구할 수 없다.
+  - causal path: 최종 ETA가 운영 판단에 따라 수기로 조정되고, 캐리어 API 값과 수기 값이 동일 속성에 저장된다. 여기에 출처, 기준시각, 오버라이드 이력과 파생 우선순위가 정의되지 않아 소비자는 표시값이 어느 주장에 근거하는지, 최신인지, 누가 변경했는지를 확인할 수 없게 된다.
+  - action: 먼저 각 ETA 추정치를 출처, 산출·수신·수정 시각, 수정 주체와 함께 불변 이력으로 보존하고 캐리어 예측과 운영 오버라이드를 구분해야 한다. 그다음 명시적인 우선순위 규칙으로 최종 표시 ETA를 파생해야 한다. 이력 및 책임 계약을 먼저 마련해야 표시 규칙이 검증·감사·복구 가능한 결과를 만들 수 있으며, 다음 단계 전에 이 결손을 해소해야 한다.
+
+- issue-010 (medium): 수동 ETA 변경과 WMS·ERP 재고 불일치 조정을 독립된 감사 사건으로 보존하지 않아 변경의 책임과 근거를 검증하거나 당시 상태를 재현할 수 없다. 이 문제는 다음 단계 전에 해소해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, semantics, structure, evolution
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 수동 ETA 변경과 재고 조정의 행위자·시각·사유·증거가 보존되지 않아 변경을 감사하거나 재현할 수 없다. Source finding context: Manual ETA and inventory reconciliation controls Source finding context: materialized-input.md → Shipment.eta note; InventoryRecord.quantity_on_hand note; notes[0:2] Source finding context: 수동 조정과 야간 재고 조정의 행위자·시각·근거를 보존하는 감사 증거 개념이 없다. Source finding context: 운영 판단이나 재고 차이 조정이 잘못되었을 때 책임과 근거를 추적하거나 변경을 재현할 수 없다. Source finding context: Adjustment/AuditEvent 개념을 추가해 대상 값, 이전·변경 값, actor 또는 process, occurred_at, reason, evidence/source 및 승인 정보를 기록한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006 Source finding context: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공 Source finding context: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때 Source finding context: 중요 운영값 변경의 근거와 책임을 검증할 수 없어 감사성과 장애 조사 신뢰가 약화된다. Source finding context: 변경 가능한 값만 정의하고 그 값을 변경하는 통제 행위를 독립된 감사 사건으로 모델링하지 않았다. Source finding context: ETA 수동 조정과 재고 배치 조정이 수행된다고 명시되어 있다. Source finding context: 조정의 행위자·시각·사유·증거를 담는 엔터티나 속성이 없다.
+  - affected purpose: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공
+  - failure condition: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때
+  - impact: 중요 운영값 변경의 근거와 책임을 검증할 수 없어 감사성과 장애 조사 신뢰가 약화된다.
+  - root hypothesis: 변경 가능한 값만 정의하고 그 값을 변경하는 통제 행위를 독립된 감사 사건으로 모델링하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006`, `materialized-input.md: Shipment.eta note`, `materialized-input.md: InventoryRecord.quantity_on_hand note`, `materialized-input.md: notes의 ETA 및 재고 조정 설명`, `finding-ledger.yaml#finding-011`, `finding-011.cause-001`, `materialized-input.md: notes[0:2]`, `finding-011.cause-002`, `materialized-input.md: entities 및 relations 전체`, `issue-stance-matrix.yaml#stances.issue-010.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-010`, `issue-stance-matrix.yaml#stances.issue-010.coverage`, `issue-stance-matrix.yaml#stances.issue-010.evolution`, `issue-stance-matrix.yaml#stances.issue-010.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-010.semantics`, `issue-stance-matrix.yaml#stances.issue-010.structure`, `issue-ledger.yaml#dep-003`, `rel-011`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - materiality: 중요 운영값이 변경될 때 행위자·시각·사유·증거가 남지 않으면 승인 적정성, 책임 소재, 장애 원인을 확인할 수 없다. 따라서 통합 기준 문서의 목적인 운영상 통제되는 변경의 추적 가능성이 직접 약화된다.
+  - root cause: 현재 모델은 ETA와 재고 수량처럼 변경 가능한 값만 정의하고, 그 값을 누가 왜 언제 어떤 근거로 변경했는지를 나타내는 통제 행위를 별도의 감사 사건으로 모델링하지 않았다. 이 구조적 누락이 후속 증거 부재의 출발점이다.
+  - causal path: 모델은 ETA 수동 조정과 야간 재고 조정이 수행됨을 전제하지만, 조정의 행위자·시각·사유·증거를 담는 엔터티나 속성이 없다. 그 결과 변경 전후 상태와 책임·승인 근거를 연결할 수 없어 조정을 감사하거나 재현할 수 없다. 심의에서는 이 원인과 medium 심각도를 수용하되, 적용 범위를 모든 변경값이 아니라 수동 조정 및 정책 변경처럼 이전 의미를 재현해야 하는 통제값으로 한정했다.
+  - action: 다음 단계 전에 수동 ETA 변경과 재고 불일치 조정 등 통제값 변경에 Adjustment 또는 AuditEvent를 도입해야 한다. 각 사건에는 대상 값, 변경 전·후 값, 행위자 또는 실행 프로세스, 발생 시각, 사유, 증거·원천 및 승인 정보를 기록하고 해당 운영값과 연결해야 변경 이력의 감사와 재현이 가능하다.
+
+- issue-011 (medium): 재고·ETA·배송 상태에 값별 권위 범위, 출처, 우선순위와 계보가 없어 다중 원본이 충돌할 때 신뢰할 값을 일관되게 선택할 수 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 복수 시스템이 관리하는 재고·ETA·배송 상태에 값별 권위 범위, 출처, 우선순위와 계보가 없다. Source finding context: Cross-system source authority and provenance Source finding context: materialized-input.md → InventoryRecord.quantity_on_hand note; notes on inventory truth and ETA; integrity_rules[1] Source finding context: 복수 시스템이 관리하는 재고·ETA·배송 상태에 단일 권위와 값 출처를 지정하는 모델이 부족하다. Source finding context: 통합 소비자가 동일 명칭의 값 중 무엇을 어떤 목적과 시점에 신뢰해야 하는지 결정할 수 없고, 야간 조정이나 수동 판단이 원본 계보를 소실시킬 수 있다. Source finding context: SystemOfRecord/AuthorityScope와 ValueProvenance 개념을 추가하고 물리재고·회계재고·가용재고·표시 ETA·정규화 상태별 권위자, 우선순위, 원본 값 및 파생 규칙을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007 Source finding context: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공 Source finding context: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때 Source finding context: 소비자가 신뢰할 값과 그 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다. Source finding context: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않았다. Source finding context: 재고·ETA·상태가 복수 시스템 또는 행위자에 의해 병행 관리된다. Source finding context: 값별 권위 범위, 출처, 우선순위 또는 원본 계보 속성이 없다.
+  - affected purpose: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공
+  - failure condition: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때
+  - impact: 신뢰할 값과 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다. Source finding context: 소비자가 신뢰할 값과 그 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다.
+  - root hypothesis: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007`, `materialized-input.md: InventoryRecord.quantity_on_hand note`, `materialized-input.md: notes의 재고 진실 및 ETA 설명`, `materialized-input.md: integrity_rules[1]`, `finding-ledger.yaml#finding-012`, `finding-012.cause-001`, `materialized-input.md: notes`, `finding-012.cause-002`, `materialized-input.md: InventoryRecord, InventoryAggregate, Shipment, TrackingEvent 속성 정의`, `issue-stance-matrix.yaml#stances.issue-011.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-011`, `issue-stance-matrix.yaml#stances.issue-011.coverage`, `issue-stance-matrix.yaml#stances.issue-011.evolution`, `issue-stance-matrix.yaml#stances.issue-011.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-011.semantics`, `issue-stance-matrix.yaml#stances.issue-011.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - materiality: 이는 WMS/TMS/ERP 통합 소비자가 동일한 값 이름에 대해 서로 다른 선택을 하게 만들어 통합 결과가 구현별로 달라지므로, 단일 개념 기준을 제공하려는 목적을 실질적으로 약화한다.
+  - root cause: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않은 것이 출발점이다. 이 구조적 결손 때문에 값의 목적별 권위자, 적용 범위, 우선순위와 유도 근거를 기계적으로 판별할 수 없다.
+  - causal path: 재고·ETA·상태가 여러 시스템이나 행위자에 의해 병행 관리되지만 값별 권위 범위, 출처, 우선순위와 원본 계보 속성이 없다. 따라서 값이 충돌하면 소비자는 어느 값을 어떤 목적과 시점에 신뢰할지 공통 규칙으로 결정하지 못하고, 조정이나 수동 판단 과정에서 원본 계보도 소실될 수 있다. 적용 가능한 렌즈들은 이 원인과 medium 심각도를 일관되게 지지했으며 별도 숙의는 필요하지 않았다.
+  - action: 다음 단계 전에 SystemOfRecord, AuthorityScope, ValueProvenance를 일급 개념으로 추가해야 한다. 물리재고·회계재고·가용재고·표시 ETA·정규화 상태 등 값 종류별로 권위자와 적용 범위, 충돌 시 우선순위, 원본 값, 파생 규칙을 명시하여 통합 소비자가 동일한 기준으로 값을 선택하고 계보를 보존하도록 해야 한다.
+
+- issue-021 (medium): 캐리어 예측 ETA와 운영팀 수기 조정 ETA가 Shipment의 단일 eta에 덮어써져, 최종 값의 출처와 기준시각을 복원할 수 없는 중간 심각도의 중요 이슈다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: 캐리어 예측과 운영팀 수기 판단을 하나의 eta에 혼합해 예측 출처와 기준시각의 의미를 잃는다. Source finding context: Shipment.eta의 값 의미와 출처 Source finding context: materialized-input.md:48-50, 115-117 Source finding context: 캐리어 예측값과 운영팀 수기 판단값을 하나의 eta에 혼합해 예측 출처와 기준시각의 의미를 잃는다. Source finding context: 캐리어가 계산한 예상 도착시각과 운영팀이 덮어쓴 표시값은 출처, 계산 시점, 신뢰도, 변경 책임이 다른 개념이다. 단일 값만으로는 시스템 간 어떤 ETA를 교환했는지 또는 예측 오차를 무엇과 비교해야 하는지 알 수 없다. Source finding context: 캐리어 ETA와 운영 조정 ETA를 별도 관측/예측값으로 보존하고 `source`, `calculated_at`, `effective_at`, `supersedes` 또는 선택 근거를 둔다. 최종 표시 ETA는 이 원천들로부터 도출되는 명시적 projection으로 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-007 Source finding context: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성 Source finding context: 캐리어 ETA가 갱신되거나 운영팀이 수기 조정한 뒤 시스템 간 ETA를 동기화하거나 예측 품질을 분석할 때 Source finding context: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사 및 예측 정확도 평가가 불가능해진다. Source finding context: 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓰기 방식으로 수용했다. Source finding context: Shipment에는 단일 eta datetime만 존재한다. Source finding context: 그 값에는 캐리어 API 예측과 운영팀 수기 조정이 혼합된다. Source finding context: 원천 예측과 운영상 선택 결과를 별도 개념으로 보존하지 않는다.
+  - affected purpose: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성
+  - failure condition: 캐리어 ETA 갱신이나 수기 조정 후 시스템 간 동기화 또는 예측 품질 분석을 수행할 때 Source finding context: 캐리어 ETA가 갱신되거나 운영팀이 수기 조정한 뒤 시스템 간 ETA를 동기화하거나 예측 품질을 분석할 때
+  - impact: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사와 예측 정확도 평가가 불가능해진다. Source finding context: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사 및 예측 정확도 평가가 불가능해진다.
+  - root hypothesis: 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓰기 방식으로 수용했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-007`, `materialized-input.md:48-50`, `materialized-input.md:115-117`, `finding-ledger.yaml#finding-024`, `finding-024.cause-001`, `finding-024.cause-002`, `finding-024.cause-003`, `issue-stance-matrix.yaml#stances.issue-021.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-021`, `issue-stance-matrix.yaml#stances.issue-021.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006`, `issue-stance-matrix.yaml#stances.issue-021.evolution`, `issue-stance-matrix.yaml#stances.issue-021.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-021.semantics`, `issue-stance-matrix.yaml#stances.issue-021.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_before_release, follow_up
+  - materiality: 캐리어 ETA 갱신이나 운영팀 조정 후에는 시스템 간 어떤 ETA가 교환되었는지, 누가 어떤 근거로 값을 바꿨는지, 예측 오차를 어느 원천값과 비교해야 하는지 알 수 없다. 따라서 TMS·캐리어·운영 화면 간 ETA 의미의 일관성과 추적 가능성이 훼손되고, 충돌 처리·감사·예측 정확도 평가가 불가능해진다.
+  - root cause: 문제의 시작점은 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓴 모델 결손이다. 원천 예측과 운영상 선택 결과를 별도 개념으로 보존하지 않으므로 이후 단계에서 출처, 계산 시점, 변경 책임을 복원할 근거 자체가 남지 않는다.
+  - causal path: Shipment에 단일 eta datetime만 존재하고, 여기에 캐리어 API 예측과 운영팀 수기 조정이 함께 기록된다. 덮어쓰기 과정에서 원천 예측과 운영상 선택 결과가 분리 보존되지 않아 최종 ETA의 출처와 기준시각이 소실되며, 그 결과 동기화 충돌 해결, 변경 감사, 제공자별 예측 품질 비교가 막힌다. 적용 가능한 렌즈들은 이 원인과 medium 심각도를 일관되게 수용했으며 별도 숙의는 필요하지 않았다.
+  - action: 다음 단계 전에 캐리어 ETA와 운영 조정 ETA를 별도 관측값으로 먼저 보존하고 각 값에 source, calculated_at, effective_at, supersedes 및 선택 근거를 기록해야 한다. 그 후 최종 표시 ETA를 원천 관측값에서 도출되는 명시적 projection으로 정의해야 한다. 원천 이력 보존이 선행되어야 표시값을 재계산하고 선택 이유를 감사할 수 있다.
+
+- issue-023 (medium): DeliveryLeg가 소속 Shipment와 연결되지 않아 복수 화물·다구간 배송에서 화물별 경로와 구간 순서를 구성할 수 없다. 적용 가능한 렌즈들은 이 결함과 medium 심각도 판단을 일관되게 수용했으며, 남은 이견은 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: structure
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: structure
+  - issue statement: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로와 구간 순서를 구성할 수 없다. Source finding context: logistics-fulfillment-ontology.yaml — Shipment/DeliveryLeg route structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:40-58 Source finding context: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로를 구성할 수 없다. Source finding context: 여러 Shipment와 여러 구간이 존재하면 `leg_seq`만으로 구간을 특정 화물에 묶을 수 없다. 그 결과 TMS가 한 화물의 구간 순서와 경로를 재구성할 구조적 경로가 없다. Source finding context: `DeliveryLeg.shipment_ref -> Shipment` 또는 `Shipment contains DeliveryLeg` 관계를 추가하고, `leg_seq`가 Shipment 내부에서 유일하도록 무결성 규칙을 둔다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-002 Source finding context: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델 Source finding context: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우 Source finding context: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다. Source finding context: 유형 상속(`is_a`)만 정의하고 Shipment 인스턴스와 DeliveryLeg 인스턴스의 구성 관계를 생략했다. Source finding context: 특정 Shipment를 구성하는 DeliveryLeg 목록과 순서를 판정할 수 없다. Source finding context: DeliveryLeg에는 `leg_seq`, `from_ref`, `to_ref`만 있고 상위 Shipment 참조가 없다. Source finding context: Shipment와 DeliveryLeg 사이에는 `is_a` 외에 인스턴스 포함 관계가 정의되지 않았다.
+  - affected purpose: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델
+  - failure condition: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우
+  - impact: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다.
+  - root hypothesis: 유형 상속만 정의하고 Shipment 인스턴스와 DeliveryLeg 인스턴스의 구성 관계를 생략했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-002`, `materialized-input.md:40-58`, `finding-ledger.yaml#finding-026`, `finding-026.cause-001`, `materialized-input.md:52-58`, `finding-026.cause-002`, `finding-026.cause-003`, `materialized-input.md:105-109`, `issue-stance-matrix.yaml#stances.issue-023.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-023`, `issue-stance-matrix.yaml#stances.issue-023.coverage`, `issue-stance-matrix.yaml#stances.issue-023.evolution`, `issue-stance-matrix.yaml#stances.issue-023.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-023.semantics`, `issue-stance-matrix.yaml#stances.issue-023.structure`, `issue-ledger.yaml#dep-004`, `rel-019`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_before_release, follow_up
+  - materiality: 이 모델의 목적은 WMS/TMS/ERP가 화물과 배송 구간을 공통 구조로 교환·통합하도록 하는 것이다. 그러나 구간의 소속 화물을 판별할 수 없으면 둘 이상의 Shipment가 존재할 때 DeliveryLeg를 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다.
+  - root cause: Shipment와 DeliveryLeg 사이에 유형 상속만 정의하고 인스턴스 수준의 부분–전체 구성 관계를 생략한 것이 출발점이다. 이 누락 때문에 각 DeliveryLeg의 소속 Shipment와 leg_seq의 적용 범위가 구조적으로 정해지지 않는다.
+  - causal path: 구성 관계가 없으므로 DeliveryLeg의 leg_seq, from_ref, to_ref만으로는 상위 Shipment를 식별할 수 없다. 따라서 특정 Shipment를 구성하는 구간 목록을 만들거나 그 내부 순서를 판정할 수 없고, 결국 화물별 배송 경로를 재구성할 수 없게 된다.
+  - action: 다음 단계 전에 Shipment–DeliveryLeg의 권위 있는 구성 관계를 하나로 정의해야 한다. DeliveryLeg.shipment_ref 또는 Shipment contains DeliveryLeg 중 모델의 기존 방향성에 맞는 관계를 추가한 뒤, leg_seq가 해당 Shipment 내부에서 유일하도록 무결성 규칙을 둬야 한다. dep-004가 issue-015와의 공통 원인 가능성을 보존하므로 관련 관계 수정과 정합성을 맞춰 중복되거나 충돌하는 모델링을 피해야 한다.
+
+#### Non-Material Findings
+- issue-016 (high)
+  - affected purpose: WMS/TMS/ERP 간 SKU 및 화물 물성의 일관된 교환과 출하 중량 계산
+  - failure condition: 단위 관례가 다른 창고나 소스 시스템의 SKU를 동일 Shipment에 포함하거나 전송할 때
+  - impact: 동일 숫자가 다른 물리량으로 해석되고 파생 중량이 틀려 운영 및 비용 판단의 신뢰성이 훼손된다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-002`, `materialized-input.md:33-38`, `materialized-input.md:40-49`
+  - source lenses: semantics
+  - action candidates: needs_evidence
+  - problem definition: 단위 없는 중량과 혼합 단위 total_weight 때문에 물리량의 의미와 계산 결과를 확정할 수 없다.
+  - problem framing: symptom / next_step_blocker / needs_evidence / must_close_before_next_stage / contested
+
+- issue-002 (medium)
+  - affected purpose: WMS/TMS/ERP 간 단위가 일관된 상품·화물 개념 기준 제공
+  - failure condition: 서로 다른 계량 관례의 SKU가 동일 Shipment 계산 또는 시스템 간 교환에 포함될 때
+  - impact: 값의 비교와 합산이 보장되지 않아 운영·비용 판단의 신뢰가 약화된다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-002`, `materialized-input.md:33-38`, `materialized-input.md:48`, `review-value-alignment-criteria.yaml:6-8`
+  - source lenses: axiology
+  - action candidates: needs_evidence
+  - problem definition: 측정값을 단위와 변환 규칙이 있는 canonical 수량으로 정규화하지 않아 물리량의 비교·합산을 보장할 수 없다.
+  - problem framing: root_cause / next_step_blocker / needs_evidence / must_close_before_next_stage / contested
+
+- issue-008 (medium)
+  - affected purpose: WMS/TMS/ERP 사이의 정량 데이터 통합 기준 제공
+  - failure condition: kg와 lb 또는 서로 다른 길이 단위를 사용하는 소스 값을 교환·합산할 때
+  - impact: 중량 합계, 용적, 운임 및 수량 대사가 의미적으로 안전하지 않다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-003`, `materialized-input.md: Sku.weight note`, `materialized-input.md: Sku.dims note`, `materialized-input.md: Shipment.total_weight note`
+  - source lenses: coverage
+  - action candidates: needs_evidence
+  - problem definition: 정량 값을 단위 결합 Measurement로 구조화하지 않아 수량·중량·치수의 비교와 계산이 의미적으로 안전하지 않다.
+  - problem framing: root_cause / next_step_blocker / needs_evidence / must_close_before_next_stage / contested
+
+- issue-014 (medium)
+  - affected purpose: WMS/TMS/ERP 사이에서 재사용 가능한 SKU 및 화물 측정 기준
+  - failure condition: kg와 lb 또는 서로 다른 길이 단위를 사용하는 창고·운송사·지역을 통합할 때
+  - impact: 기존 값과 신규 값의 의미를 구분할 수 없어 운송 계산과 제한 검증이 신뢰할 수 없고 표준화 시 전면 정제가 필요하다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-003`, `materialized-input.md:33-38`, `materialized-input.md:40-49`
+  - source lenses: evolution
+  - action candidates: needs_evidence
+  - problem definition: 단위와 분리된 측정 표현 때문에 다른 단위 관례를 도입할 때 기존 값의 의미와 계산 결과가 충돌한다.
+  - problem framing: symptom / next_step_blocker / needs_evidence / must_close_before_next_stage / contested
+
+- issue-020 (medium)
+  - affected purpose: OMS/TMS/캐리어 상태의 의미적 정합성과 통합 상태 판정
+  - failure condition: 여러 캐리어 또는 연동 구현이 동일 원시 이벤트를 Shipment 상태로 변환할 때
+  - impact: 동일 배송이 서로 다른 상태로 표시되어 최종 배송 판정의 신뢰성이 낮아진다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-006`, `materialized-input.md:40-47`, `materialized-input.md:60-68`, `materialized-input.md:111-113`
+  - source lenses: semantics
+  - action candidates: needs_evidence
+  - problem definition: 원시 캐리어 상태의 의미 매핑과 Shipment 상태 판정 권위를 개별 연동에 위임해 동일 이벤트가 서로 다르게 투영될 수 있다.
+  - problem framing: symptom / next_step_blocker / needs_evidence / must_close_before_next_stage / contested
+
+#### Action Candidates
+- issue-001: fix_now
+  - rationale: 재고 권위·시간성은 통합 기준의 핵심 계약이며, 부재 시 WMS와 ERP가 서로 다른 진실과 시점으로 운영 판단을 내린다. high 판단에 이견이 없다. Source finding context: InventoryRecord, InventoryAggregate 및 재고 할당 규칙 Source finding context: 대상: materialized-input.md:76-90,111-116. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: WMS/TMS/ERP 통합의 개념 기준 문서이며 권위·시간성·운영 위험을 검토). value_type=purpose; alignment_direction=misaligned. Source finding context: 분할된 재고 권위와 전일 스냅샷 기반 할당은 통합 기준 문서라는 목적에 정렬되지 않는다. Source finding context: 어느 수량이 어떤 목적에서 권위 있는지와 값의 기준시점이 모델에 없으므로, 이 문서를 따르는 시스템도 동일 시점의 가용재고를 일관되게 해석할 수 없다. 재고 부족, 중복 할당 또는 감사 불가능성을 감수하는 트레이드오프가 정당화되지 않았다. Source finding context: 실물·회계·가용 수량별 권위 시스템을 명시하고 각 값에 `as_of`, 출처, 갱신 시각을 추가한다. 할당에는 예약을 반영한 최신 가용수량과 허용 신선도 규칙을 사용하도록 계약화한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공 Source finding context: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때 Source finding context: 동일 온톨로지를 채택한 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다. Source finding context: 배치 조정 관행을 수용하면서 재고 값의 목적별 권위와 시간 계약을 모델링하지 않았다. Source finding context: 일중 할당이 매일 밤 저장되는 InventoryAggregate.available_qty를 읽는다. Source finding context: 이 값과 창고별 현재고에는 유효시점이 없고 WMS·ERP가 서로 다른 값을 보유한다. Source finding context: 재고 권위와 신선도 대신 야간 ERP 기준 조정만 규정되어 있다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-003: fix_now
+  - rationale: 공통 상태 의미·전이·충돌 권위의 부재는 연동별 해석 분기를 만들며 핵심 상태 통합을 직접 저해한다. 형식 공리 부족은 이 의미·구조 결함을 반박하지 않는다. Source finding context: Order.fulfillment_status, Shipment.status 및 TrackingEvent.event_type Source finding context: 대상: materialized-input.md:19-22,44-47,60-68,111-113. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 상태 모델 정합성과 운영 위험을 갖춘 통합 개념 기준). value_type=purpose; alignment_direction=misaligned. Source finding context: 상태 의미의 통합을 각 연동에 위임한 것은 공통 개념 기준이라는 목적을 역전시킨다. Source finding context: 온톨로지가 공통 상태 의미와 선후관계, 충돌 시 권위를 제공하지 않으므로 연동마다 다른 `delivered` 또는 예외 해석이 생길 수 있다. 통합 복잡성을 중앙 기준에서 제거하지 않고 소비자에게 분산한다. Source finding context: 각 상태의 canonical 의미와 전이 조건을 정의하고, 외부 이벤트→Shipment→Order 상태의 명시적 crosswalk, 권위, 우선순위 및 충돌 처리 규칙을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-003 Source finding context: OMS/TMS/캐리어 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: 캐리어 이벤트로 Shipment 또는 Order 상태를 갱신하거나 시스템 간 상태 충돌을 해결할 때 Source finding context: 각 연동이 별도 의미를 발명하게 되어 통합 전반의 상태 일관성과 고객·운영 판단을 신뢰할 수 없다. Source finding context: 상태 조정 책임을 ontology의 canonical 계약이 아니라 개별 연동에 배분했다. Source finding context: TrackingEvent.event_type와 Shipment.status의 매핑이 연동별 재량이다. Source finding context: Order, Shipment, TrackingEvent 상태는 각 소유 시스템이 독립 관리한다. Source finding context: 상태 간 canonical mapping, 전이 및 충돌 권위가 정의되지 않았다. Source finding context: Order and Shipment lifecycle coverage Source finding context: materialized-input.md → Order.fulfillment_status; Shipment.status; TrackingEvent.event_type Source finding context: 주문·화물 상태 모델이 취소, 부분충족, 실패, 반품 및 종결 후 정정 구간을 포함하지 않는다. Source finding context: 취소, 배송 실패, 반송, 재출하 같은 일반적인 비정상 운영을 기존 상태에 왜곡해 기록하거나 외부 시스템별 임의 상태로 남겨야 한다. Source finding context: Order와 Shipment 각각에 canceled, partially_fulfilled, failed_delivery, returned 등 필요한 종결·예외 상태와 허용 전이를 정의하고, delivered 이후 정정·재개·재출하 사건의 처리 규칙을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-005 Source finding context: 주문·화물·배송의 공통 상태 기준 제공 Source finding context: 정상 배송 외의 취소, 부분충족, 실패, 반품 또는 종결 후 정정이 발생할 때 Source finding context: 운영 사건을 공통 상태 모델로 표현할 수 없어 시스템별 상태가 분기되고 대사가 어려워진다. Source finding context: 생명주기가 정상 진행 경로 중심으로만 열거되고 예외·역방향·종결 후 전이가 모델링되지 않았다. Source finding context: TrackingEvent에는 exception이 있으나 Order와 Shipment 상태에는 대응 예외 상태가 없다. Source finding context: Order와 Shipment의 상태 열거가 정상 배송 완료까지의 단방향 구간만 포함한다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-006: fix_now
+  - rationale: 예약·할당 거래의 부재는 선언된 주문→재고 할당 경로를 끊고 동일 재고의 과다 할당 위험을 만든다. high 판단에 이견이 없다. Source finding context: Inventory allocation model Source finding context: materialized-input.md → InventoryAggregate.available_qty; integrity_rules[0] Source finding context: 재고 예약·할당의 수량과 생명주기를 표현하는 개념이 없다. Source finding context: 동시 주문과 부분 할당이 스냅샷 하나를 반복해서 참조할 수 있어 과다 할당을 방지하거나 어떤 주문이 가용재고를 소비했는지 재구성할 수 없다. 이는 주문→재고 할당을 포함한다는 선언 목적을 직접 약화한다. Source finding context: OrderLine과 InventoryRecord를 연결하는 InventoryReservation 또는 Allocation 엔터티를 추가하고 수량, 상태, 생성·만료·해제 시각 및 가용재고 반영 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001 Source finding context: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공 Source finding context: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때 Source finding context: 과다 할당 방지와 주문별 재고 소비 추적을 개념 모델로 보장할 수 없다. Source finding context: 온톨로지가 재고를 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 개념으로 포함하지 않았다. Source finding context: 일중 주문 할당이 야간 available_qty 스냅샷을 직접 읽는다. Source finding context: 주문별 예약·할당·해제를 나타내는 엔터티나 관계가 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-007: fix_now
+  - rationale: 주문선–화물 수량 연결 누락에서 직접 파생된 대사 실패이며, 지원되는 부분출하 경로를 달성할 수 없어 high로 일관되게 평가됐다. Source finding context: OrderLine-to-Shipment fulfillment traceability Source finding context: materialized-input.md → OrderLine comment; relations.fulfills Source finding context: 부분출하를 표현할 주문행-화물 수량 매핑 개념이 없다. Source finding context: 분할 출하, 부분 충족, 재출하 상황에서 잔여 주문량과 실제 출하량을 대사할 수 없어 OMS·WMS·TMS 간 기준 모델 역할을 수행하지 못한다. Source finding context: FulfillmentLine 또는 ShipmentLine을 추가해 OrderLine, Shipment, fulfilled_qty와 단위를 연결하고 분할·취소·재출하 시의 수량 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002 Source finding context: 주문에서 출하·배송까지의 통합 추적 Source finding context: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때 Source finding context: 주문 잔량, 출하량, 배송 결과를 시스템 간에 대사할 수 없다. Source finding context: 충족 관계의 최소 단위가 Order로만 정의되고 수량을 가진 행 단위 연결 개념이 생략되었다. Source finding context: 부분출하 시 어느 주문행이 어느 Shipment로 나갔는지 추적할 수 없다. Source finding context: 유일한 fulfills 관계가 Shipment와 Order만 연결하고 OrderLine 매핑을 명시적으로 제외한다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-009: fix_before_release, accept_risk
+  - rationale: 현재값 중심 모델이라는 원인과 실패 범위에는 합의했지만 직접 재구성 실패와 진화상 실패를 종합하는 심각도 기준이 없어 medium과 high가 확정되지 않았다. Source finding context: Inventory and ETA temporal history Source finding context: materialized-input.md → InventoryRecord.quantity_on_hand comment; InventoryAggregate.available_qty; Shipment.eta Source finding context: 변동 값의 기준시점·유효기간·변경 이력을 표현하는 시간 차원이 없다. Source finding context: 주문 접수나 할당 당시의 재고·ETA를 재구성할 수 없어 사후 대사, SLA 분석 및 변경 원인 확인이 불가능하다. Source finding context: 재고 스냅샷과 ETA 예측에 observed_at/as_of, valid_from/valid_to, recorded_at 및 버전 또는 이벤트 이력을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004 Source finding context: 시간에 따라 변하는 주문충족 정보를 시스템 간 일관되게 해석하는 기준 제공 Source finding context: 현재 값이 갱신된 뒤 과거 주문·할당·배송 판단을 재구성해야 할 때 Source finding context: 동일 값의 시점별 의미를 구별할 수 없어 감사와 운영 분석의 신뢰가 약화된다. Source finding context: 시점 의존 속성을 현재값 필드로만 모델링하고 시간 버전 또는 변경 이벤트 개념을 포함하지 않았다. Source finding context: 재고와 ETA가 갱신되지만 과거 시점 값을 식별하는 속성이 없다. Source finding context: 스냅샷·예측 값에 기준시점, 유효기간 또는 버전 모델이 정의되지 않았다. Source finding context: logistics-fulfillment-ontology.yaml — InventoryRecord/InventoryAggregate 시간·권위 모델 Source finding context: materialized-input.md:76-90, 111-116 Source finding context: 새 재고 원천이나 실시간 이력을 도입하면 기존 현재값 모델로는 데이터 연속성과 원천별 의미를 유지할 수 없다. Source finding context: 추가 WMS, 3PL, 예약 재고, 실시간 이벤트를 수용하려면 현재값 필드의 의미를 바꾸거나 별도 모델로 이관해야 한다. 원천과 시점이 보존되지 않아 과거 값의 재현, 새 계산 규칙의 병행, 단계적 마이그레이션이 불가능하다. Source finding context: 원천 시스템, 재고 의미(실물·회계·가용·예약), 관측 시각, 유효 시각, 단위와 버전을 가진 InventoryObservation 또는 InventoryLedger를 권위 기록으로 도입한다. InventoryRecord와 InventoryAggregate는 명시된 시점과 계산 규칙에서 생성되는 투영으로 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-004 Source finding context: WMS/ERP 재고 통합의 권위·시간 기준 및 새로운 재고 원천에 대한 확장성 Source finding context: 추가 창고 시스템, 3PL, 실시간 재고 이벤트 또는 새로운 가용재고 계산 규칙을 도입할 때 Source finding context: 기존 값의 의미와 과거 상태를 보존한 채 점진적으로 확장할 수 없고, 통합 소비자가 어느 시점의 어느 권위 값을 사용했는지 검증할 수 없다. Source finding context: 재고를 원천과 시간 차원을 가진 관측/원장으로 모델링하지 않고 덮어쓰는 현재값과 무시점 집계로 모델링했다. Source finding context: 새 재고 원천이나 실시간 이력을 추가하면 기존 quantity 필드만으로 값들을 구분할 수 없다. Source finding context: WMS와 ERP가 각자 값을 가지지만 야간에 ERP 기준으로 조정한다. Source finding context: InventoryRecord와 InventoryAggregate에 원천 및 유효 시점 계약이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-012: fix_before_release, accept_risk
+  - rationale: 버전형 StatusMapping 부재와 조치에는 합의했지만 현재 상호운용성 영향과 장기 누적 영향을 단일 심각도로 평가하는 기준이 없어 이견이 남는다. Source finding context: Carrier-to-canonical tracking status mapping Source finding context: materialized-input.md → TrackingEvent.event_type note; integrity_rules[1] Source finding context: 캐리어 상태 코드를 공통 Shipment 상태로 정규화하는 매핑 개념이 없다. Source finding context: 같은 캐리어 사건이 연동마다 다른 화물 상태를 만들 수 있어 온톨로지가 통합의 공통 상태 기준이 되지 못한다. Source finding context: CarrierStatusMapping 개념을 추가해 carrier_ref, external_code, canonical_event/status, effective period, mapping version과 unknown-code 처리 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-008 Source finding context: TMS와 캐리어 연동 사이의 공통 배송 상태 기준 제공 Source finding context: 캐리어별 코드가 Shipment.status로 변환되거나 새로운 코드가 유입될 때 Source finding context: 정규화 결과가 연동 구현마다 달라져 상태 대사와 자동화가 불안정해진다. Source finding context: 외부 상태 정규화를 온톨로지 개념이 아닌 개별 연동의 책임으로 남겼다. Source finding context: 캐리어 상태와 Shipment.status의 매핑을 각 연동이 처리한다. Source finding context: 공통 매핑 엔터티와 미매핑·버전 처리 규칙이 없다. Source finding context: logistics-fulfillment-ontology.yaml — Order/Shipment/TrackingEvent 상태 모델 Source finding context: materialized-input.md:19-22, 44-47, 60-68, 111-113 Source finding context: 새 캐리어 상태나 내부 상태가 추가되면 온톨로지 열거형과 개별 연동 매핑을 반복 수정해야 한다. Source finding context: 외부 캐리어 코드나 OMS/TMS 상태가 변경되면 공통 기준에서 흡수할 확장 계층이 없어 enum과 여러 연동을 동시에 고쳐야 한다. 서로 다른 시점의 매핑이 구분되지 않아 동일한 과거 이벤트가 새 규칙에서 다른 상태로 해석될 수도 있다. Source finding context: 원천 시스템·원천 코드·정규 상태·매핑 버전·유효 기간을 갖는 버전형 StatusMapping 개념을 두고, 원천 이벤트는 원래 코드 그대로 보존한다. 정의되지 않은 코드는 명시적인 unknown/unmapped 경로로 수용한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-002 Source finding context: OMS/TMS/캐리어 간 상태 통합 기준과 외부 상태 체계 변경에 대한 연속성 Source finding context: 캐리어가 상태 코드를 추가·변경하거나 내부 OMS/TMS 워크플로가 세분화될 때 Source finding context: 모든 연동이 개별 수정 대상이 되고 매핑 드리프트가 누적되며, 과거 이벤트의 재해석 결과가 안정적으로 유지되지 않는다. Source finding context: 상태 상호운용성을 버전 가능한 공통 매핑 개념으로 모델링하지 않고 닫힌 enum과 연동별 구현에 위임했다. Source finding context: 새 원천 상태를 수용하려면 닫힌 enum 또는 연동별 매핑을 변경해야 한다. Source finding context: 각 시스템이 상태를 독립 관리하고 캐리어 매핑은 각 연동이 알아서 수행한다. Source finding context: 원천 코드와 정규 상태 사이의 버전형 매핑 및 유효 시점 개념이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-013: fix_now
+  - rationale: 행 단위 수량 관계 부재가 향후 파괴적 변경과 과거 의미 단절로 이어지는 진화상 결과이며, 예상 가능한 확장 경로를 막으므로 high로 합의됐다. Source finding context: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment model Source finding context: materialized-input.md:25-31, 105-109 Source finding context: 부분 출하·분할 충족을 추가하려면 기존 주문 단위 fulfills 모델을 재구성해야 한다. Source finding context: 대상 자체가 부분 출하를 추적할 수 없다고 명시한다. 부분 출하, 백오더, 다중 창고 출하를 도입하면 단순한 새 유형 추가로 끝나지 않고 기존 관계의 의미와 소비 로직을 함께 변경해야 하며, 과거 주문의 라인별 충족 내역도 복원할 수 없다. Source finding context: OrderLine과 Shipment(필요하면 DeliveryLeg)를 잇는 FulfillmentAllocation 같은 연관 개념을 추가하고 할당 수량·단위·유효 시점·상태를 둔다. 기존 주문 단위 fulfills는 이 연관에서 계산되는 호환용 투영으로 유지한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성 Source finding context: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때 Source finding context: 통합 시스템들이 공통 관계를 재사용할 수 없고 기존 스키마와 소비 로직을 동시에 변경해야 하며, 과거 데이터의 의미 연속성도 확보할 수 없다. Source finding context: 충족을 수량을 가진 라인-출하 연관이 아니라 주문-출하 이진 관계로만 모델링했다. Source finding context: 부분 출하 시 어느 OrderLine이 어느 Shipment로 나갔는지 표현할 수 없다. Source finding context: 기존 fulfills 관계가 Shipment→Order의 주문 단위 관계로 고정되어 있다. Source finding context: 라인별 충족 수량을 담는 독립 연관 개념이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-015: fix_now
+  - rationale: DeliveryLeg를 Shipment의 종류로 분류한 모델링 오류는 다구간 운송의 의미와 집계 경계를 직접 왜곡한다. 형식 모순 증거 부족과 무관하게 high 의미·구조 결함으로 확인됐다. Source finding context: DeliveryLeg의 존재론적 유형과 Shipment 상속 Source finding context: materialized-input.md:40-58, 105-109 Source finding context: 배송 구간을 전체 화물 이동인 Shipment의 하위유형으로 분류해 부분-전체 관계를 종류-하위종류 관계로 오인한다. Source finding context: 경로 구간은 일반적으로 전체 Shipment를 구성하는 부분이다. 현재 모델에서는 각 구간이 독립적인 shipment_no, 전체 중량, 최종 배송 상태 및 Order 충족 주체로 해석될 수 있어 TMS 구간과 ERP/OMS 출하의 식별 의미가 충돌한다. Source finding context: DeliveryLeg를 독립 엔티티로 두고 `part_of` 또는 `shipment_ref`로 Shipment에 연결한다. 구간별 상태·ETA·운송사가 필요하면 구간 속성으로 명시하고 전체 Shipment 속성과 구분한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준 Source finding context: TMS의 다구간 운송 데이터를 Shipment/DeliveryLeg로 교환하거나 주문 충족 관계를 해석할 때 Source finding context: 하나의 출하와 그 운송 구간들이 동일 종류로 취급되어 식별, 상태 집계, 주문 충족 판정이 서로 다른 시스템에서 달라질 수 있다. Source finding context: 운송 구간과 전체 화물 이동 사이의 부분-전체 관계를 하위유형 관계로 모델링했다. Source finding context: DeliveryLeg는 화물 경로의 한 구간으로 정의된다. Source finding context: 그 구간이 전체 물리적 화물 이동으로 정의된 Shipment의 하위유형으로 선언된다. Source finding context: Shipment와 DeliveryLeg 사이의 의미적으로 필요한 부분-전체 관계가 하위유형 관계로 대체되었다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-016: needs_evidence
+  - rationale: 단위 결합 측정 모델 부재의 계산상 결과이며, 실제 적재·운임·제한 판단 경로에서의 실패 증거가 없어 medium과 high 이견이 남아 있다. Source finding context: Sku.weight, Sku.dims 및 Shipment.total_weight의 단위 의미 Source finding context: materialized-input.md:33-38, 40-49 Source finding context: 동일 숫자 속성에 kg와 lb 등 서로 다른 단위를 허용하면서 단위 식별 없이 합산 중량을 저장하므로 중량 의미가 확정되지 않는다. Source finding context: 단위 없는 숫자는 시스템 간 동일한 물리량을 나타낸다고 보장할 수 없다. 서로 다른 단위의 값을 합산하면 total_weight라는 파생값도 의미적으로 무효가 되어 적재, 운임, 운송사 제한 판단에 잘못 사용될 수 있다. Source finding context: 중량과 각 치수를 값+단위로 모델링하고 통합 기준 단위 및 변환 규칙을 정한다. total_weight에는 계산 기준 단위, 구성 수량, 계산 시점 또는 원천 계측값을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-002 Source finding context: WMS/TMS/ERP 간 SKU 및 화물 물성의 일관된 교환과 출하 중량 계산 Source finding context: 단위 관례가 다른 창고나 소스 시스템의 SKU를 동일 Shipment에 포함하거나 시스템 간 전송할 때 Source finding context: 동일 숫자가 다른 물리량으로 해석되고 파생 중량 계산이 틀려 운영 및 비용 판단의 신뢰성이 훼손된다. Source finding context: 물리량의 값과 측정 단위를 분리하지 않고 숫자 또는 문자열 하나에 소스별 관례를 수용했다. Source finding context: Shipment.total_weight는 구성 OrderLine 중량의 합으로 저장된다. Source finding context: 합산 원천인 Sku.weight가 kg 또는 lb 중 어느 단위인지 표현하지 않는다. Source finding context: 물리량 속성에 명시적 단위와 정규화 규칙이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-017: fix_now
+  - rationale: 서로 다른 재고 관점을 한 속성에 합친 개념 혼합은 할당·조정·감사에서 권위 판정을 불가능하게 하며 high 판단에 이견이 없다. Source finding context: InventoryRecord.quantity_on_hand의 의미와 권위 Source finding context: materialized-input.md:76-84, 115-117 Source finding context: 물리 재고와 회계 재고라는 서로 다른 수량을 하나의 quantity_on_hand 속성으로 합치면서 권위도 WMS와 ERP 사이에서 충돌한다. Source finding context: 물리적 보유량과 회계 장부량은 불일치할 수 있는 별도 의미다. 하나의 속성으로 표현하면 사용자는 값이 실물 출고 가능량인지 장부 수량인지 구분할 수 없고, 야간 조정은 물리적 진실을 회계 값으로 덮는 것으로 해석될 수 있다. Source finding context: `physical_on_hand`와 `accounting_on_hand`를 분리하거나, 재고 관측값에 `quantity_kind`, `source_system`, `as_of`를 둔다. 각 사용 사례별 권위와 조정 결과의 의미를 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-003 Source finding context: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공 Source finding context: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때 Source finding context: 동일 필드가 상반된 진실 기준을 나타내어 할당, 재고조정, 감사에서 어느 값이 맞는지 판정할 수 없다. Source finding context: 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용했다. Source finding context: quantity_on_hand는 현재 보유 수량으로 단일 정의된다. Source finding context: WMS와 ERP가 같은 속성의 값을 각각 가지며 ERP 기준 야간 조정이 수행된다. Source finding context: WMS의 실물 기준과 ERP의 회계 기준이 서로 다른 진실로 별도 선언되어 있다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-018: fix_now
+  - rationale: 시점과 산식이 없는 파생값을 일중 할당에 사용하는 구조가 중복 할당 위험을 직접 만들며, 모든 적용 가능 렌즈가 high에 합의했다. Source finding context: InventoryAggregate.available_qty의 시간성과 파생 의미 Source finding context: materialized-input.md:76-90, 111-112 Source finding context: 매일 밤 생성한 스냅샷을 일중에도 현재 가용 재고로 취급하면서 유효 시점과 가용량 산식을 정의하지 않았다. Source finding context: 가용 재고는 특정 시점과 예약 상태에 의존하는 파생 의미다. 시점 없는 전일 값을 현재 가용량으로 사용하면 이미 할당된 수량을 다시 가용하다고 해석할 수 있으며, 시스템마다 available의 계산 의미도 달라진다. Source finding context: `as_of`와 계산/갱신 시점을 추가하고, available_qty의 권위 시스템 및 산식(예: 물리 보유량에서 예약·차단 수량 등을 차감)을 명시한다. 일중 할당에는 갱신 가능한 권위 값을 사용한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-004 Source finding context: 재고 할당을 위한 일관된 가용 재고 기준 Source finding context: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때 Source finding context: 가용량의 시점과 계산 의미가 불명확해 중복 할당이나 시스템 간 가용 재고 불일치가 발생할 수 있다. Source finding context: 시간 의존적 파생값인 available_qty를 원천·산식·유효시점 없는 독립 스냅샷 필드로 모델링했다. Source finding context: 일중 재고 할당이 InventoryAggregate.available_qty를 기준으로 수행된다. Source finding context: available_qty는 매일 밤 저장되는 스냅샷일 뿐 유효 시점이 없다. Source finding context: 가용량을 구성하는 원천 수량과 산식이 모델에 정의되지 않았다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-019: fix_now
+  - rationale: 행·수량별 충족 관계 부재에서 파생되는 상태 판정 실패이며 고객 표시와 운영 대사의 핵심 정확성을 훼손한다. high 판단에 실질적 이견이 없다. Source finding context: Order.fulfillment_status와 fulfills 관계의 주문 충족 의미 Source finding context: materialized-input.md:14-31, 105-109 Source finding context: 주문 단위 상태와 Shipment→Order 관계만으로 부분출하 시 `shipped` 및 `delivered`의 의미를 단일하게 판정할 수 없다. Source finding context: 일부 주문 줄이나 일부 수량만 출하된 경우 `shipped`가 일부 출하인지 전량 출하인지, 한 Shipment가 주문 전체를 충족하는지 일부만 충족하는지 구분되지 않는다. 동일 상태명이 OMS, WMS, TMS에서 다른 사실을 뜻하게 된다. Source finding context: Shipment와 OrderLine 사이에 충족 수량을 가진 할당/출하명세 관계를 추가한다. 주문 상태는 line 수준 사실에서 도출하고 `partially_allocated`, `partially_shipped`, `partially_delivered` 등 전이 의미와 완료 조건을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-005 Source finding context: 주문에서 출하와 배송까지의 일관된 충족 상태 기준 Source finding context: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때 Source finding context: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하 및 고객 상태 표시 오류를 판별하기 어렵다. Source finding context: 충족 사실의 의미 단위가 OrderLine/수량이 아니라 Order 전체로만 모델링되었다. Source finding context: Order에는 주문 전체를 나타내는 단일 fulfillment_status가 있다. Source finding context: Shipment의 fulfills 관계도 Order 전체만 대상으로 한다. Source finding context: OrderLine별 충족 Shipment와 수량을 표현하는 의미 단위가 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-022: fix_now
+  - rationale: 행 단위 충족·대사·상태 문제들의 직접적인 구조 원인으로, 선언된 주문→출하 추적 경로를 끊는다. high 판단에 이견이 없다. Source finding context: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:25-31,105-109 Source finding context: 주문행과 출하 간의 수량 포함 연결이 없어 부분출하 추적 경로가 끊겨 있다. Source finding context: 대상 자체가 부분출하 시 주문행과 Shipment의 대응을 추적할 수 없다고 명시한다. 따라서 한 주문이 여러 출하로 나뉘거나 한 행이 분할 출하되면 OMS 주문행과 WMS/TMS 화물을 정합하게 연결할 수 없다. Source finding context: `ShipmentLine` 같은 연결 엔터티를 추가해 `Shipment`, `OrderLine`, `fulfilled_qty`를 필수로 연결하고, 주문 단위 `fulfills`는 이 연결에서 유도되도록 한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-001 Source finding context: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적 Source finding context: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우 Source finding context: 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 통합 기준 문서의 핵심 추적성이 깨진다. Source finding context: 모델이 Shipment와 OrderLine을 수량과 함께 연결하는 구성 요소를 생략했다. Source finding context: 부분출하에서 각 Shipment가 충족한 주문행과 수량을 식별할 수 없다. Source finding context: 유일한 출하-주문 관계인 `fulfills`가 Shipment에서 Order 전체로만 연결된다. Source finding context: Shipment와 OrderLine 사이의 연결 엔터티 또는 관계와 충족 수량 속성이 존재하지 않는다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-024: fix_now
+  - rationale: 선언된 핵심 흐름의 할당 구간 자체가 구조적으로 누락되어 주문 수요와 창고 예약을 검증할 수 없다. 모든 적용 가능 렌즈가 high에 합의했다. Source finding context: logistics-fulfillment-ontology.yaml — inventory allocation structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:14-31,70-90,105-113 Source finding context: 주문행과 창고 재고 사이의 할당 연결이 없어 선언된 주문→재고 할당 단계가 구조적으로 기록되지 않는다. Source finding context: SKU가 같다는 사실은 특정 주문에 대한 재고 예약을 나타내지 않는다. 같은 SKU의 여러 주문이나 창고 재고가 존재하면 할당 결과를 주문행별로 식별·대사할 수 없고, 텍스트 무결성 규칙의 `available_qty` 확인도 영속적인 연결을 만들지 않는다. Source finding context: `InventoryAllocation` 같은 연결 엔터티를 추가해 `OrderLine`, `InventoryRecord` 또는 Warehouse, `allocated_qty`를 연결하고, 필요하면 할당 상태·생성 시각을 그 엔터티의 속성으로 둔다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-003 Source finding context: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적 Source finding context: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우 Source finding context: OMS 주문 수요와 WMS 창고 예약의 대응 관계를 검증할 수 없어 중복 할당, 미할당, 출하 전 재고 대사가 구조적으로 판정 불가능하다. Source finding context: 모델이 주문행과 창고 재고 사이의 할당 행위 및 할당 수량을 독립된 연결 구조로 표현하지 않았다. Source finding context: 특정 OrderLine에 예약된 창고와 수량을 온톨로지에서 식별할 수 없다. Source finding context: OrderLine, InventoryRecord, InventoryAggregate는 SKU를 공유하지만 특정 할당 인스턴스를 연결하는 참조가 없다. Source finding context: 명시된 관계는 Shipment에서 Order로 향하는 `fulfills`뿐이고, 재고 할당은 연결 구조 없이 텍스트 규칙으로만 언급된다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-002: needs_evidence
+  - rationale: 단위 계약의 결손과 조치 방향은 확인됐지만 실제 핵심 운영·비용 경로 실패가 입증되지 않아 medium과 high 사이의 심각도 이견이 남아 있다. Source finding context: Sku.weight, Sku.dims 및 Shipment.total_weight Source finding context: 대상: materialized-input.md:33-38,40-49. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 통합 개념 기준의 단위 정합성 검토). value_type=commitment; alignment_direction=misaligned. Source finding context: 소스별 단위 관례를 그대로 보존하는 설계는 시스템 간 비교 가능한 단위 기준을 제공하지 못한다. Source finding context: 같은 숫자와 문자열이 시스템마다 다른 물리량을 뜻할 수 있어 총중량, 운임, 용량 판단을 신뢰할 수 없다. 소스 편의성을 선택한 대가로 통합 문서의 정규화 목적을 훼손한다. Source finding context: 중량과 각 치수를 값·단위의 구조화된 수량으로 모델링하고 canonical 단위와 변환 규칙을 지정한다. `total_weight`에는 계산 단위와 구성값의 정규화 조건을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-002 Source finding context: WMS/TMS/ERP 간 단위가 일관된 상품·화물 개념 기준 제공 Source finding context: 서로 다른 계량 관례의 SKU가 동일 Shipment 계산 또는 시스템 간 교환에 포함될 때 Source finding context: 통합 문서가 값의 비교와 합산을 보장하지 못해 운영·비용 판단의 신뢰가 약화된다. Source finding context: 소스 시스템의 표현을 canonical 수량 모델로 정규화하지 않고 공통 속성에 직접 수용했다. Source finding context: Shipment.total_weight가 구성 OrderLine 중량의 합으로 저장된다. Source finding context: 합산 원천인 SKU 중량에는 단위 필드가 없고 kg 또는 lb가 혼재할 수 있다. Source finding context: 치수 역시 단위 없는 소스별 문자열로 정의되어 있다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-004: fix_now
+  - rationale: 근본 구조 결손은 행 단위 수량 연결의 부재이며, 이 이슈는 그 결과로 나타나는 부분출하 추적 실패다. 숙의에서 high로 수렴했다. Source finding context: OrderLine과 Shipment의 충족 관계 Source finding context: 대상: materialized-input.md:25-31,105-109. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 주문·화물·배송 정합성을 갖춘 통합 개념 기준). value_type=stakeholder; alignment_direction=misaligned. Source finding context: 주문 단위 관계만 두는 단순화는 부분출하 추적이라는 핵심 주문충족 목적을 희생한다. Source finding context: 부분출하, 분할배송, 부족수량 상황에서 OMS·WMS·TMS가 동일한 충족 사실을 교환하거나 고객 문의·운영 조사를 수행할 수 없다. 모델 단순화의 이익보다 추적성과 책임성 손실이 크지만 그 트레이드오프가 정당화되지 않았다. Source finding context: OrderLine과 Shipment를 연결하며 충족 수량을 담는 `FulfillmentAllocation` 또는 `ShipmentLine` 개념을 추가하고, Order 수준 `fulfills`는 그 합계에서 파생되도록 한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-004 Source finding context: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공 Source finding context: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때 Source finding context: 시스템 간 충족 사실을 재구성할 수 없어 운영 조사와 고객 응대의 실행 가능성이 약화된다. Source finding context: 관계를 주문 수준으로만 단순화하면서 수량을 가진 주문선-화물 대응 개념을 의도적으로 제외했다. Source finding context: 부분출하 시 어느 주문선이 어느 Shipment로 나갔는지 추적할 수 없다. Source finding context: 유일한 충족 관계가 Shipment→Order이며 OrderLine 매핑을 두지 않는다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-005: fix_before_release, follow_up
+  - rationale: 단일 ETA 표현이라는 더 근본적인 관측·표시값 분리 결손이 검증성과 책임성 약화로 나타난 문제이며, 적용 가능한 렌즈가 medium에 합의했다. Source finding context: Shipment.eta의 권위와 이력 Source finding context: 대상: materialized-input.md:49,115-117. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 권위·시간성과 물류 운영 위험을 다루는 통합 개념 기준). value_type=tradeoff; alignment_direction=misaligned. Source finding context: 단일 ETA 값에 캐리어 예측과 수기 판단을 혼합하는 설계는 운영 재량을 보존하는 대신 출처와 시간 신뢰성을 잃는다. Source finding context: 소비자는 ETA가 관측된 캐리어 예측인지 수기 재정의인지 구분하거나 오래된 값을 탐지할 수 없다. 운영팀 재량을 최종 권위로 선택한 근거와 감사·복구 장치가 없어 통합 기준의 권위 및 시간성 약속을 약화한다. Source finding context: ETA 추정치를 출처, 산출·수신·수정 시각, 수정 주체와 함께 이력으로 보존하고, 캐리어 값과 운영 오버라이드를 구분한다. 최종 표시 ETA는 명시된 우선순위 규칙에서 파생한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-005 Source finding context: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공 Source finding context: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때 Source finding context: 표시값의 근거와 신선도를 검증할 수 없어 고객 약속과 운영 판단의 신뢰가 약화된다. Source finding context: 서로 다른 ETA 주장과 수기 오버라이드를 출처 있는 추정 이력으로 분리하지 않고 하나의 mutable 값으로 합쳤다. Source finding context: 최종 ETA가 운영팀 판단에 따라 수기로 조정된다. Source finding context: 캐리어 API 값과 수기 값이 같은 ETA 속성에 혼합된다. Source finding context: 출처, 기준시각, 오버라이드 이력 및 파생 우선순위가 정의되지 않았다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-008: needs_evidence
+  - rationale: 측정 모델 결손은 확인됐으나 합산·운임·용적 계산이 실제 지원 경로인지와 실패 영향이 입증되지 않아 medium과 high 판단이 남아 있다. Source finding context: Quantities, weight, and dimensions Source finding context: materialized-input.md → Sku.weight, Sku.dims, OrderLine.qty, Shipment.total_weight Source finding context: 수량·중량·치수 값에 단위 개념과 변환 기준이 없다. Source finding context: 서로 다른 시스템의 값을 동일 의미로 비교·합산할 수 없고, total_weight 계산이나 운송 계획에서 단위 혼합 오류가 발생할 수 있다. Source finding context: Quantity/Measure와 UnitOfMeasure 개념을 도입하고 weight·length·dimension·order quantity의 표준 단위, 원본 단위, 변환 규칙을 명시한다. dims는 세 축의 수치와 단위로 구조화한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-003 Source finding context: WMS/TMS/ERP 사이의 정량 데이터 통합 기준 제공 Source finding context: kg와 lb 또는 서로 다른 길이 단위를 사용하는 소스 값을 교환·합산할 때 Source finding context: 중량 합계, 용적, 운임 및 수량 대사가 의미적으로 안전하지 않다. Source finding context: 측정값을 단위가 결합된 개념으로 모델링하지 않고 number 또는 string 원시값으로만 정의했다. Source finding context: 소스별로 다른 단위를 그대로 사용하는 값들이 존재한다. Source finding context: 해당 속성들과 합산 결과에 UnitOfMeasure 또는 변환 기준이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-010: fix_before_release, follow_up
+  - rationale: 통제값 변경의 감사 사건 부재가 변경 재현과 책임 추적을 직접 약화하며, 적용 가능한 렌즈가 medium과 제한된 적용 범위에 합의했다. Source finding context: Manual ETA and inventory reconciliation controls Source finding context: materialized-input.md → Shipment.eta note; InventoryRecord.quantity_on_hand note; notes[0:2] Source finding context: 수동 조정과 야간 재고 조정의 행위자·시각·근거를 보존하는 감사 증거 개념이 없다. Source finding context: 운영 판단이나 재고 차이 조정이 잘못되었을 때 책임과 근거를 추적하거나 변경을 재현할 수 없다. Source finding context: Adjustment/AuditEvent 개념을 추가해 대상 값, 이전·변경 값, actor 또는 process, occurred_at, reason, evidence/source 및 승인 정보를 기록한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006 Source finding context: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공 Source finding context: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때 Source finding context: 중요 운영값 변경의 근거와 책임을 검증할 수 없어 감사성과 장애 조사 신뢰가 약화된다. Source finding context: 변경 가능한 값만 정의하고 그 값을 변경하는 통제 행위를 독립된 감사 사건으로 모델링하지 않았다. Source finding context: ETA 수동 조정과 재고 배치 조정이 수행된다고 명시되어 있다. Source finding context: 조정의 행위자·시각·사유·증거를 담는 엔터티나 속성이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-011: fix_before_release, follow_up
+  - rationale: 재고·ETA·상태 충돌을 구현별로 다르게 해소하게 만드는 공통 권위 계약의 결손이며, medium 판단에 이견이 없다. Source finding context: Cross-system source authority and provenance Source finding context: materialized-input.md → InventoryRecord.quantity_on_hand note; notes on inventory truth and ETA; integrity_rules[1] Source finding context: 복수 시스템이 관리하는 재고·ETA·배송 상태에 단일 권위와 값 출처를 지정하는 모델이 부족하다. Source finding context: 통합 소비자가 동일 명칭의 값 중 무엇을 어떤 목적과 시점에 신뢰해야 하는지 결정할 수 없고, 야간 조정이나 수동 판단이 원본 계보를 소실시킬 수 있다. Source finding context: SystemOfRecord/AuthorityScope와 ValueProvenance 개념을 추가하고 물리재고·회계재고·가용재고·표시 ETA·정규화 상태별 권위자, 우선순위, 원본 값 및 파생 규칙을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007 Source finding context: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공 Source finding context: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때 Source finding context: 소비자가 신뢰할 값과 그 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다. Source finding context: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않았다. Source finding context: 재고·ETA·상태가 복수 시스템 또는 행위자에 의해 병행 관리된다. Source finding context: 값별 권위 범위, 출처, 우선순위 또는 원본 계보 속성이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-014: needs_evidence
+  - rationale: Measurement 부재에서 파생되는 확장 문제는 확인됐지만 현재 지원 경로의 실제 실패 증거가 없어 medium과 high 사이의 판단이 미결이다. Source finding context: logistics-fulfillment-ontology.yaml — Sku 측정값 모델 Source finding context: materialized-input.md:33-38, 40-49 Source finding context: 새 창고·국가·운송사를 추가하면 중량과 치수의 의미가 기존 데이터와 충돌한다. Source finding context: 다른 단위 관례를 쓰는 시스템이 추가되면 같은 값과 문자열이 서로 다른 물리량을 뜻한다. 단위 변환 규칙과 원천 단위가 없어 기존 데이터를 안정적으로 변환하거나 새 표준으로 이행할 수 없고, 합산 중량의 연속성도 깨진다. Source finding context: 중량과 각 치수를 value+unit 구조의 Measurement로 모델링하고 표준 단위 코드, 변환 규칙, 원천 값·원천 단위를 보존한다. dims 문자열은 길이 축별 구조로 분리하고 total_weight에는 계산 단위와 계산 버전을 기록한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-003 Source finding context: WMS/TMS/ERP 사이에서 재사용 가능한 SKU 및 화물 측정 기준 Source finding context: kg와 lb 또는 서로 다른 길이 단위를 사용하는 창고·운송사·지역을 통합할 때 Source finding context: 기존 값과 신규 값의 의미를 구분할 수 없어 운송 계산과 제한 검증이 신뢰할 수 없게 되고, 단위 표준화 시 전면 데이터 정제가 필요하다. Source finding context: 물리량을 단위와 분리된 숫자 또는 비정형 문자열로 모델링했다. Source finding context: 서로 다른 단위 관례의 시스템을 추가하면 동일 필드 값의 의미가 충돌한다. Source finding context: Shipment.total_weight가 단위 없는 SKU 중량의 합으로 저장된다. Source finding context: 측정값에 단위, 변환 기준, 원천 표현을 담는 구조가 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-020: needs_evidence
+  - rationale: 공통 버전형 상태 매핑 부재가 현재 의미 불일치로 나타난 문제다. 변경 빈도·수정 범위·운영 실패 증거가 없어 medium과 high 이견이 남는다. Source finding context: Shipment.status와 TrackingEvent.event_type의 상태 의미 매핑 Source finding context: materialized-input.md:40-47, 60-68, 111-113 Source finding context: 캐리어별 이벤트와 자사 화물 상태의 의미 대응을 통합 기준에서 정의하지 않고 각 연동에 위임한다. Source finding context: 동일한 `delivered` 또는 이동 관련 이벤트가 캐리어·TMS·OMS에서 서로 다른 완료 조건이나 시점을 가질 수 있다. 매핑 권위를 연동별로 두면 같은 이벤트가 Shipment.status로 다르게 투영되어 통합 개념 기준 역할을 수행하지 못한다. Source finding context: 원시 `carrier_event_code`와 정규화된 이벤트 의미를 분리하고, 버전이 있는 canonical mapping 및 미매핑/예외 처리 규칙을 정의한다. Shipment 상태 전이의 판정 조건과 권위 시스템도 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-006 Source finding context: OMS/TMS/캐리어 상태의 의미적 정합성과 통합 상태 판정 Source finding context: 여러 캐리어 또는 연동 구현이 동일 원시 이벤트를 Shipment 상태로 변환할 때 Source finding context: 연동별 매핑 차이로 동일 배송이 서로 다른 상태로 표시되고 최종 배송 판정의 신뢰성이 낮아진다. Source finding context: 원시 제공자 상태와 canonical 상태 사이의 의미 매핑 및 그 권위를 온톨로지 밖의 개별 연동에 위임했다. Source finding context: TrackingEvent.event_type과 Shipment.status는 서로 다른 enum을 사용한다. Source finding context: 두 상태의 매핑은 각 연동이 개별 결정한다. Source finding context: OMS, TMS, 캐리어의 상태 모델이 독립적으로 관리되며 canonical 판정 규칙이 없다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-021: fix_before_release, follow_up
+  - rationale: 관측 이력과 표시 투영을 분리하지 않은 모델 결손이 ETA 충돌 처리·감사·정확도 평가 불능으로 나타나며 medium 판단에 합의됐다. Source finding context: Shipment.eta의 값 의미와 출처 Source finding context: materialized-input.md:48-50, 115-117 Source finding context: 캐리어 예측값과 운영팀 수기 판단값을 하나의 eta에 혼합해 예측 출처와 기준시각의 의미를 잃는다. Source finding context: 캐리어가 계산한 예상 도착시각과 운영팀이 덮어쓴 표시값은 출처, 계산 시점, 신뢰도, 변경 책임이 다른 개념이다. 단일 값만으로는 시스템 간 어떤 ETA를 교환했는지 또는 예측 오차를 무엇과 비교해야 하는지 알 수 없다. Source finding context: 캐리어 ETA와 운영 조정 ETA를 별도 관측/예측값으로 보존하고 `source`, `calculated_at`, `effective_at`, `supersedes` 또는 선택 근거를 둔다. 최종 표시 ETA는 이 원천들로부터 도출되는 명시적 projection으로 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-007 Source finding context: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성 Source finding context: 캐리어 ETA가 갱신되거나 운영팀이 수기 조정한 뒤 시스템 간 ETA를 동기화하거나 예측 품질을 분석할 때 Source finding context: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사 및 예측 정확도 평가가 불가능해진다. Source finding context: 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓰기 방식으로 수용했다. Source finding context: Shipment에는 단일 eta datetime만 존재한다. Source finding context: 그 값에는 캐리어 API 예측과 운영팀 수기 조정이 혼합된다. Source finding context: 원천 예측과 운영상 선택 결과를 별도 개념으로 보존하지 않는다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+- issue-023: fix_before_release, follow_up
+  - rationale: Shipment–DeliveryLeg의 부분–전체 관계를 잘못 모델링한 근본 결함에서 파생된 구성 경로 공백이며, medium 판단에 합의됐다. Source finding context: logistics-fulfillment-ontology.yaml — Shipment/DeliveryLeg route structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:40-58 Source finding context: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로를 구성할 수 없다. Source finding context: 여러 Shipment와 여러 구간이 존재하면 `leg_seq`만으로 구간을 특정 화물에 묶을 수 없다. 그 결과 TMS가 한 화물의 구간 순서와 경로를 재구성할 구조적 경로가 없다. Source finding context: `DeliveryLeg.shipment_ref -> Shipment` 또는 `Shipment contains DeliveryLeg` 관계를 추가하고, `leg_seq`가 Shipment 내부에서 유일하도록 무결성 규칙을 둔다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-002 Source finding context: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델 Source finding context: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우 Source finding context: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다. Source finding context: 유형 상속(`is_a`)만 정의하고 Shipment 인스턴스와 DeliveryLeg 인스턴스의 구성 관계를 생략했다. Source finding context: 특정 Shipment를 구성하는 DeliveryLeg 목록과 순서를 판정할 수 없다. Source finding context: DeliveryLeg에는 `leg_seq`, `from_ref`, `to_ref`만 있고 상위 Shipment 참조가 없다. Source finding context: Shipment와 DeliveryLeg 사이에는 `is_a` 외에 인스턴스 포함 관계가 정의되지 않았다.
+  - derivation refs: `issue-ledger.yaml`, `problem-framing.yaml`
+
+### Consensus (6/6, core-axis mode)
+- issue-001 (high): 재고 값의 목적별 권위와 시간 계약이 모델에 연결되지 않은 상태에서 일중 할당이 전일 InventoryAggregate.available_qty를 사용하므로, 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: axiology
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 분할된 재고 권위와 전일 스냅샷 기반 할당 때문에 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다. Source finding context: InventoryRecord, InventoryAggregate 및 재고 할당 규칙 Source finding context: 대상: materialized-input.md:76-90,111-116. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: WMS/TMS/ERP 통합의 개념 기준 문서이며 권위·시간성·운영 위험을 검토). value_type=purpose; alignment_direction=misaligned. Source finding context: 분할된 재고 권위와 전일 스냅샷 기반 할당은 통합 기준 문서라는 목적에 정렬되지 않는다. Source finding context: 어느 수량이 어떤 목적에서 권위 있는지와 값의 기준시점이 모델에 없으므로, 이 문서를 따르는 시스템도 동일 시점의 가용재고를 일관되게 해석할 수 없다. 재고 부족, 중복 할당 또는 감사 불가능성을 감수하는 트레이드오프가 정당화되지 않았다. Source finding context: 실물·회계·가용 수량별 권위 시스템을 명시하고 각 값에 `as_of`, 출처, 갱신 시각을 추가한다. 할당에는 예약을 반영한 최신 가용수량과 허용 신선도 규칙을 사용하도록 계약화한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공 Source finding context: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때 Source finding context: 동일 온톨로지를 채택한 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다. Source finding context: 배치 조정 관행을 수용하면서 재고 값의 목적별 권위와 시간 계약을 모델링하지 않았다. Source finding context: 일중 할당이 매일 밤 저장되는 InventoryAggregate.available_qty를 읽는다. Source finding context: 이 값과 창고별 현재고에는 유효시점이 없고 WMS·ERP가 서로 다른 값을 보유한다. Source finding context: 재고 권위와 신선도 대신 야간 ERP 기준 조정만 규정되어 있다.
+  - affected purpose: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공
+  - failure condition: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때
+  - impact: 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다. Source finding context: 동일 온톨로지를 채택한 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다.
+  - root hypothesis: 배치 조정 관행을 수용하면서 재고 값의 목적별 권위와 시간 계약을 모델링하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-001`, `materialized-input.md:83-90`, `materialized-input.md:112`, `materialized-input.md:116`, `review-value-alignment-criteria.yaml:6-8`, `finding-ledger.yaml#finding-001`, `finding-001.cause-001`, `materialized-input.md:86-90`, `finding-001.cause-002`, `materialized-input.md:76-84`, `finding-001.cause-003`, `materialized-input.md:83`, `issue-stance-matrix.yaml#stances.issue-001.axiology`, `issue-stance-matrix.yaml#stances.issue-001.coverage`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-001`, `issue-stance-matrix.yaml#stances.issue-001.evolution`, `issue-stance-matrix.yaml#stances.issue-001.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-001.semantics`, `issue-stance-matrix.yaml#stances.issue-001.structure`, `issue-ledger.yaml#dep-001`, `rel-006`, `issue-ledger.yaml#dep-002`, `rel-007`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: 이 결함은 WMS·TMS·ERP 통합을 위한 재고 권위·시간성의 개념 기준이라는 목적을 직접 약화한다. 실물·회계·가용 수량의 권위와 기준시점이 불명확하면 동일 온톨로지를 채택한 구성요소도 서로 다른 재고 진실로 판단하여 재고 부족, 중복 할당, 감사 불가능성의 위험을 만든다.
+  - root cause: 출발점은 배치 조정 관행 자체가 아니라 재고 값의 목적별 권위와 시간 메타데이터를 모델 구조에 연결하지 않은 것이다. 이 부재 때문에 WMS와 ERP의 상이한 수량을 구분하고 최신성을 판단할 공통 계약이 없으며, 전일 집계값을 현재 가용량처럼 사용하는 문제가 가능해진다.
+  - causal path: 일중 할당은 매일 밤 저장된 InventoryAggregate.available_qty를 직접 읽는다. 그러나 이 값과 창고별 현재고에는 유효시점이 없고 WMS와 ERP가 서로 다른 값을 보유하며, 모델은 권위와 신선도 규칙 대신 야간 ERP 기준 조정만 규정한다. 따라서 전일 스냅샷 또는 불일치한 원천 값이 현재 가용재고로 해석되어 구성요소별 운영 판단이 갈라진다.
+  - action: 먼저 실물·회계·가용 수량별 권위 시스템을 구분하고 각 재고 값에 기준시점(as_of), 출처, 갱신 시각을 연결해야 한다. 그다음 할당 계약이 예약을 반영한 최신 가용수량만 소비하고 명시된 허용 신선도를 초과한 값은 사용하지 않도록 해야 한다. 권위·시간 계약을 먼저 확립해야 할당 규칙과 향후 WMS·3PL·실시간 원천 확장이 같은 의미를 유지할 수 있다.
+
+- issue-003 (high): Order·Shipment·TrackingEvent가 공통 생명주기와 연결 계약 없이 독립 enum으로 정의되어, 연동별 상태 해석이 달라지고 취소·부분충족·배송 실패·반품·종결 후 정정 같은 비정상 운영을 일관되게 표현할 수 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: logic
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: axiology, coverage
+  - remaining disagreement: 0/2 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology, coverage
+  - issue statement: 공통 상태 의미·전이·충돌 권위와 예외 생명주기가 없어 연동마다 상태 해석이 달라지고 비정상 운영을 일관되게 표현할 수 없다. Source finding context: Order.fulfillment_status, Shipment.status 및 TrackingEvent.event_type Source finding context: 대상: materialized-input.md:19-22,44-47,60-68,111-113. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 상태 모델 정합성과 운영 위험을 갖춘 통합 개념 기준). value_type=purpose; alignment_direction=misaligned. Source finding context: 상태 의미의 통합을 각 연동에 위임한 것은 공통 개념 기준이라는 목적을 역전시킨다. Source finding context: 온톨로지가 공통 상태 의미와 선후관계, 충돌 시 권위를 제공하지 않으므로 연동마다 다른 `delivered` 또는 예외 해석이 생길 수 있다. 통합 복잡성을 중앙 기준에서 제거하지 않고 소비자에게 분산한다. Source finding context: 각 상태의 canonical 의미와 전이 조건을 정의하고, 외부 이벤트→Shipment→Order 상태의 명시적 crosswalk, 권위, 우선순위 및 충돌 처리 규칙을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-003 Source finding context: OMS/TMS/캐리어 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: 캐리어 이벤트로 Shipment 또는 Order 상태를 갱신하거나 시스템 간 상태 충돌을 해결할 때 Source finding context: 각 연동이 별도 의미를 발명하게 되어 통합 전반의 상태 일관성과 고객·운영 판단을 신뢰할 수 없다. Source finding context: 상태 조정 책임을 ontology의 canonical 계약이 아니라 개별 연동에 배분했다. Source finding context: TrackingEvent.event_type와 Shipment.status의 매핑이 연동별 재량이다. Source finding context: Order, Shipment, TrackingEvent 상태는 각 소유 시스템이 독립 관리한다. Source finding context: 상태 간 canonical mapping, 전이 및 충돌 권위가 정의되지 않았다. Source finding context: Order and Shipment lifecycle coverage Source finding context: materialized-input.md → Order.fulfillment_status; Shipment.status; TrackingEvent.event_type Source finding context: 주문·화물 상태 모델이 취소, 부분충족, 실패, 반품 및 종결 후 정정 구간을 포함하지 않는다. Source finding context: 취소, 배송 실패, 반송, 재출하 같은 일반적인 비정상 운영을 기존 상태에 왜곡해 기록하거나 외부 시스템별 임의 상태로 남겨야 한다. Source finding context: Order와 Shipment 각각에 canceled, partially_fulfilled, failed_delivery, returned 등 필요한 종결·예외 상태와 허용 전이를 정의하고, delivered 이후 정정·재개·재출하 사건의 처리 규칙을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-005 Source finding context: 주문·화물·배송의 공통 상태 기준 제공 Source finding context: 정상 배송 외의 취소, 부분충족, 실패, 반품 또는 종결 후 정정이 발생할 때 Source finding context: 운영 사건을 공통 상태 모델로 표현할 수 없어 시스템별 상태가 분기되고 대사가 어려워진다. Source finding context: 생명주기가 정상 진행 경로 중심으로만 열거되고 예외·역방향·종결 후 전이가 모델링되지 않았다. Source finding context: TrackingEvent에는 exception이 있으나 Order와 Shipment 상태에는 대응 예외 상태가 없다. Source finding context: Order와 Shipment의 상태 열거가 정상 배송 완료까지의 단방향 구간만 포함한다.
+  - affected purpose: OMS/TMS/캐리어의 주문·화물·배송 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: OMS/TMS/캐리어 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: 주문·화물·배송의 공통 상태 기준 제공
+  - failure condition: 캐리어 이벤트로 상태를 갱신하거나 취소·부분충족·배송 실패·반품·종결 후 정정이 발생할 때 Source finding context: 캐리어 이벤트로 Shipment 또는 Order 상태를 갱신하거나 시스템 간 상태 충돌을 해결할 때 Source finding context: 정상 배송 외의 취소, 부분충족, 실패, 반품 또는 종결 후 정정이 발생할 때
+  - impact: 각 연동이 별도 상태 의미를 발명하게 되어 상태 일관성, 운영 대사 및 고객 판단을 신뢰할 수 없다. Source finding context: 각 연동이 별도 의미를 발명하게 되어 통합 전반의 상태 일관성과 고객·운영 판단을 신뢰할 수 없다. Source finding context: 운영 사건을 공통 상태 모델로 표현할 수 없어 시스템별 상태가 분기되고 대사가 어려워진다.
+  - root hypothesis: Order·Shipment·TrackingEvent 상태를 공통 생명주기 계약 없이 정상 경로 중심의 독립 enum으로 정의했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-003`, `materialized-input.md:19-22`, `materialized-input.md:44-47`, `materialized-input.md:60-68`, `materialized-input.md:113`, `review-value-alignment-criteria.yaml:6-8`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-005`, `materialized-input.md: Order.fulfillment_status values`, `materialized-input.md: Shipment.status values 및 delivered 최종 상태 note`, `materialized-input.md: TrackingEvent.event_type에 exception 존재`, `finding-ledger.yaml#finding-003`, `finding-ledger.yaml#finding-010`, `rel-018`, `finding-relation-graph.yaml#rel-018`, `finding-003.cause-001`, `materialized-input.md:63-66`, `finding-003.cause-002`, `finding-003.cause-003`, `finding-010.cause-001`, `materialized-input.md: TrackingEvent.event_type`, `materialized-input.md: Order 및 Shipment 상태값`, `finding-010.cause-002`, `materialized-input.md: Shipment.status values`, `issue-stance-matrix.yaml#stances.issue-003.axiology`, `issue-stance-matrix.yaml#stances.issue-003.coverage`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-003`, `issue-stance-matrix.yaml#stances.issue-003.evolution`, `issue-stance-matrix.yaml#stances.issue-003.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-003.semantics`, `issue-stance-matrix.yaml#stances.issue-003.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: axiology, coverage
+  - action candidates: fix_now
+  - materiality: 이 결함은 OMS·TMS·캐리어 상태를 공통 기준으로 연결하려는 목적을 직접 약화한다. 캐리어 이벤트로 상태를 갱신하거나 시스템 간 충돌을 조정할 때 각 연동이 의미와 예외 처리를 따로 정하게 되어 상태 일관성, 운영 대사, 고객 판단을 신뢰하기 어렵다.
+  - root cause: 문제의 출발점은 Order·Shipment·TrackingEvent 상태를 하나의 canonical 생명주기 및 연결 계약이 아닌 정상 경로 중심의 독립 enum으로 정의한 것이다. 이 구조에는 상태 의미, 허용 전이, 외부 이벤트 매핑, 판정 권위와 충돌 처리의 공통 기준이 들어갈 권위 지점이 없다.
+  - causal path: TrackingEvent.event_type에서 Shipment.status로의 매핑이 연동별 재량이고 세 객체의 상태가 독립 관리되므로, canonical 매핑·전이·충돌 권위가 부재한다. 동시에 Order와 Shipment의 상태 열거는 정상 완료까지의 단방향 흐름에 치우쳐 TrackingEvent의 exception에 대응하는 예외 상태와 종결 후 정정 경로를 제공하지 않는다. 그 결과 동일 사건이 시스템마다 다르게 해석되고 비정상 운영은 기존 상태에 왜곡되거나 시스템별 임의 상태로 분기된다. 심의는 구조 렌즈의 ‘연결 계약 부재’라는 한정을 공통 생명주기 계약 부재와 양립하는 것으로 받아들였고, 형식 공리 부족은 이 의미·구조 결함을 반박하지 않는다고 정리했다.
+  - action: 먼저 Order와 Shipment의 canonical 상태 의미와 정상·예외 생명주기를 정의하고, 취소·부분충족·배송 실패·반품 및 delivered 이후 정정·재개·재출하의 허용 전이를 명시해야 한다. 그다음 외부 TrackingEvent에서 Shipment, 다시 Order로 이어지는 crosswalk를 연결하고, 판정 권위·우선순위·충돌 처리 규칙을 같은 계약에 포함해야 한다. 의미와 전이를 먼저 확정해야 후속 매핑과 충돌 규칙이 안정된 기준을 참조할 수 있다.
+
+- issue-006 (high): 재고 예약·할당 거래가 독립 개념으로 모델링되지 않아 주문별 할당 수량과 생명주기를 표현할 수 없으며, 동일한 야간 재고 스냅샷을 여러 일중 주문이 반복 참조할 때 과다 할당 방지와 소비 이력 추적이 불가능하다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 재고 예약·할당의 수량과 생명주기를 표현할 개념이 없어 과다 할당 방지와 주문별 소비 추적이 불가능하다. Source finding context: Inventory allocation model Source finding context: materialized-input.md → InventoryAggregate.available_qty; integrity_rules[0] Source finding context: 재고 예약·할당의 수량과 생명주기를 표현하는 개념이 없다. Source finding context: 동시 주문과 부분 할당이 스냅샷 하나를 반복해서 참조할 수 있어 과다 할당을 방지하거나 어떤 주문이 가용재고를 소비했는지 재구성할 수 없다. 이는 주문→재고 할당을 포함한다는 선언 목적을 직접 약화한다. Source finding context: OrderLine과 InventoryRecord를 연결하는 InventoryReservation 또는 Allocation 엔터티를 추가하고 수량, 상태, 생성·만료·해제 시각 및 가용재고 반영 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001 Source finding context: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공 Source finding context: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때 Source finding context: 과다 할당 방지와 주문별 재고 소비 추적을 개념 모델로 보장할 수 없다. Source finding context: 온톨로지가 재고를 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 개념으로 포함하지 않았다. Source finding context: 일중 주문 할당이 야간 available_qty 스냅샷을 직접 읽는다. Source finding context: 주문별 예약·할당·해제를 나타내는 엔터티나 관계가 없다.
+  - affected purpose: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공
+  - failure condition: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때
+  - impact: 과다 할당 방지와 주문별 재고 소비 추적을 개념 모델로 보장할 수 없다.
+  - root hypothesis: 재고를 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 개념으로 포함하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001`, `materialized-input.md: InventoryAggregate.available_qty는 매일 밤 저장`, `materialized-input.md: integrity_rules[0]은 일중 주문도 available_qty를 조회한다고 명시`, `finding-ledger.yaml#finding-006`, `finding-006.cause-001`, `materialized-input.md: integrity_rules[0]`, `finding-006.cause-002`, `materialized-input.md: entities 및 relations 전체`, `materialized-input.md: InventoryAggregate 정의`, `issue-stance-matrix.yaml#stances.issue-006.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-006`, `issue-stance-matrix.yaml#stances.issue-006.coverage`, `issue-stance-matrix.yaml#stances.issue-006.evolution`, `issue-stance-matrix.yaml#stances.issue-006.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-006.semantics`, `issue-stance-matrix.yaml#stances.issue-006.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - materiality: 이는 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공이라는 선언 목적을 직접 약화한다. 가용재고가 주문별 예약·할당·해제와 연결되지 않으므로 시스템은 특정 주문이 얼마의 재고를 소비했는지 재구성하거나 복수 주문의 총할당량이 가용량을 넘지 않음을 보장할 수 없다.
+  - root cause: 문제의 출발점은 재고를 야간 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 엔터티나 관계로 포함하지 않은 것이다. 이 누락 때문에 OrderLine과 InventoryRecord 사이의 수량 있는 소비 관계와 그 상태 변화를 기록할 권위 있는 개념이 없다.
+  - causal path: 일중 주문이 매일 밤 저장된 available_qty를 직접 조회하지만, 주문별 예약·할당·해제를 나타내는 엔터티나 관계가 없다. 따라서 동시 주문과 부분 할당이 같은 스냅샷을 반복 소비해도 이를 차감·조정할 거래 상태가 없고, 결과적으로 과다 할당을 막거나 주문별 재고 소비를 추적할 수 없다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 수용했으며 남은 이견은 없다.
+  - action: OrderLine과 InventoryRecord를 연결하는 예약 또는 할당 엔터티를 먼저 도입하고, 할당 수량, 상태, 생성·만료·해제 시각을 정의해야 한다. 이어 각 상태 전이가 available_qty에 언제 반영되거나 복원되는지 규칙을 정하고, 동시 주문과 부분 할당에서도 유효 예약·할당 합계가 가용재고를 초과하지 않으며 주문별 소비 이력이 보존되도록 해야 한다.
+
+- issue-007 (high): 현재 모델은 Shipment가 어떤 Order를 충족하는지만 나타내고 주문행별 충족 수량은 기록하지 못하므로, 부분·분할 출하에서 잔여 주문량과 실제 출하량을 대사할 수 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 부분출하를 표현할 주문행-화물 수량 매핑 개념이 없어 잔여 주문량과 실제 출하량을 대사할 수 없다. Source finding context: OrderLine-to-Shipment fulfillment traceability Source finding context: materialized-input.md → OrderLine comment; relations.fulfills Source finding context: 부분출하를 표현할 주문행-화물 수량 매핑 개념이 없다. Source finding context: 분할 출하, 부분 충족, 재출하 상황에서 잔여 주문량과 실제 출하량을 대사할 수 없어 OMS·WMS·TMS 간 기준 모델 역할을 수행하지 못한다. Source finding context: FulfillmentLine 또는 ShipmentLine을 추가해 OrderLine, Shipment, fulfilled_qty와 단위를 연결하고 분할·취소·재출하 시의 수량 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002 Source finding context: 주문에서 출하·배송까지의 통합 추적 Source finding context: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때 Source finding context: 주문 잔량, 출하량, 배송 결과를 시스템 간에 대사할 수 없다. Source finding context: 충족 관계의 최소 단위가 Order로만 정의되고 수량을 가진 행 단위 연결 개념이 생략되었다. Source finding context: 부분출하 시 어느 주문행이 어느 Shipment로 나갔는지 추적할 수 없다. Source finding context: 유일한 fulfills 관계가 Shipment와 Order만 연결하고 OrderLine 매핑을 명시적으로 제외한다.
+  - affected purpose: 주문에서 출하·배송까지의 통합 추적
+  - failure condition: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때
+  - impact: 주문 잔량, 출하량과 배송 결과를 시스템 간에 대사할 수 없다. Source finding context: 주문 잔량, 출하량, 배송 결과를 시스템 간에 대사할 수 없다.
+  - root hypothesis: 충족 관계의 최소 단위를 Order로만 정의하고 수량을 가진 행 단위 연결 개념을 생략했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `materialized-input.md: OrderLine 주석이 Shipment 참조 부재를 명시`, `materialized-input.md: fulfills 관계는 Shipment→Order 단위만 제공`, `finding-ledger.yaml#finding-007`, `finding-007.cause-001`, `materialized-input.md: OrderLine 주석`, `finding-007.cause-002`, `materialized-input.md: relations.fulfills.note`, `issue-stance-matrix.yaml#stances.issue-007.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-007`, `issue-stance-matrix.yaml#stances.issue-007.coverage`, `issue-stance-matrix.yaml#stances.issue-007.evolution`, `issue-stance-matrix.yaml#stances.issue-007.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-007.semantics`, `issue-stance-matrix.yaml#stances.issue-007.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_now
+  - materiality: 한 OrderLine이 여러 Shipment로 나뉘거나 일부만 출하될 때 주문 잔량, 실제 출하량, 배송 결과를 OMS·WMS·TMS가 동일한 기준으로 연결할 수 없다. 따라서 선언된 목적인 주문부터 출하·배송까지의 통합 추적을 현재 지원 경로에서 직접 저해하는 high 수준의 완전성 결함이다.
+  - root cause: 충족 관계의 최소 단위를 Order로 두고 수량을 가진 OrderLine–Shipment 연결 개념을 생략한 것이 출발점이다. 이 모델링 결정 때문에 어느 주문행이 어느 화물로 얼마나 충족되었는지를 표현할 권위 있는 단위가 존재하지 않는다.
+  - causal path: 유일한 fulfills 관계가 Shipment와 Order만 연결하고 OrderLine 매핑을 명시적으로 제공하지 않으므로, 부분출하 시 주문행과 Shipment의 대응 및 충족 수량을 기록할 수 없다. 그 결과 분할·부분 충족과 재출하에서 행별 출하량과 잔량을 산출·대사할 근거가 사라져 관찰된 통합 추적 실패로 이어진다.
+  - action: FulfillmentLine 또는 ShipmentLine과 같은 행 단위 충족 개념을 추가해 OrderLine, Shipment, fulfilled_qty 및 수량 단위를 연결해야 한다. 이어 분할, 부분 충족, 취소, 재출하 시 수량의 증감·잔량·중복 방지 규칙을 정의해야 시스템 간 대사 기준이 완성된다. 이 조치는 현재 차단 요인이므로 대상 범위에서 즉시 닫아야 한다.
+
+- issue-009 (high): 재고와 ETA를 덮어쓰는 현재값으로만 표현한 모델은 과거 주문·할당·배송 판단의 재구성과 새 WMS·3PL·실시간 이력의 점진적 도입을 함께 막는 중대한 설계 문제다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: coverage, evolution
+  - remaining disagreement: 2/2 deliberation participants
+  - remaining disagreement lenses: coverage, evolution
+  - raised by lenses: coverage, evolution
+  - issue statement: 재고와 ETA의 현재값 모델은 과거 상태 재구성뿐 아니라 새 재고 원천과 실시간 이력의 점진적 도입도 지원하지 못한다. Source finding context: Inventory and ETA temporal history Source finding context: materialized-input.md → InventoryRecord.quantity_on_hand comment; InventoryAggregate.available_qty; Shipment.eta Source finding context: 변동 값의 기준시점·유효기간·변경 이력을 표현하는 시간 차원이 없다. Source finding context: 주문 접수나 할당 당시의 재고·ETA를 재구성할 수 없어 사후 대사, SLA 분석 및 변경 원인 확인이 불가능하다. Source finding context: 재고 스냅샷과 ETA 예측에 observed_at/as_of, valid_from/valid_to, recorded_at 및 버전 또는 이벤트 이력을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004 Source finding context: 시간에 따라 변하는 주문충족 정보를 시스템 간 일관되게 해석하는 기준 제공 Source finding context: 현재 값이 갱신된 뒤 과거 주문·할당·배송 판단을 재구성해야 할 때 Source finding context: 동일 값의 시점별 의미를 구별할 수 없어 감사와 운영 분석의 신뢰가 약화된다. Source finding context: 시점 의존 속성을 현재값 필드로만 모델링하고 시간 버전 또는 변경 이벤트 개념을 포함하지 않았다. Source finding context: 재고와 ETA가 갱신되지만 과거 시점 값을 식별하는 속성이 없다. Source finding context: 스냅샷·예측 값에 기준시점, 유효기간 또는 버전 모델이 정의되지 않았다. Source finding context: logistics-fulfillment-ontology.yaml — InventoryRecord/InventoryAggregate 시간·권위 모델 Source finding context: materialized-input.md:76-90, 111-116 Source finding context: 새 재고 원천이나 실시간 이력을 도입하면 기존 현재값 모델로는 데이터 연속성과 원천별 의미를 유지할 수 없다. Source finding context: 추가 WMS, 3PL, 예약 재고, 실시간 이벤트를 수용하려면 현재값 필드의 의미를 바꾸거나 별도 모델로 이관해야 한다. 원천과 시점이 보존되지 않아 과거 값의 재현, 새 계산 규칙의 병행, 단계적 마이그레이션이 불가능하다. Source finding context: 원천 시스템, 재고 의미(실물·회계·가용·예약), 관측 시각, 유효 시각, 단위와 버전을 가진 InventoryObservation 또는 InventoryLedger를 권위 기록으로 도입한다. InventoryRecord와 InventoryAggregate는 명시된 시점과 계산 규칙에서 생성되는 투영으로 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-004 Source finding context: WMS/ERP 재고 통합의 권위·시간 기준 및 새로운 재고 원천에 대한 확장성 Source finding context: 추가 창고 시스템, 3PL, 실시간 재고 이벤트 또는 새로운 가용재고 계산 규칙을 도입할 때 Source finding context: 기존 값의 의미와 과거 상태를 보존한 채 점진적으로 확장할 수 없고, 통합 소비자가 어느 시점의 어느 권위 값을 사용했는지 검증할 수 없다. Source finding context: 재고를 원천과 시간 차원을 가진 관측/원장으로 모델링하지 않고 덮어쓰는 현재값과 무시점 집계로 모델링했다. Source finding context: 새 재고 원천이나 실시간 이력을 추가하면 기존 quantity 필드만으로 값들을 구분할 수 없다. Source finding context: WMS와 ERP가 각자 값을 가지지만 야간에 ERP 기준으로 조정한다. Source finding context: InventoryRecord와 InventoryAggregate에 원천 및 유효 시점 계약이 없다.
+  - affected purpose: 시간에 따라 변하는 주문충족 정보와 WMS/ERP 재고의 권위·시간 기준 및 확장성 제공 Source finding context: 시간에 따라 변하는 주문충족 정보를 시스템 간 일관되게 해석하는 기준 제공 Source finding context: WMS/ERP 재고 통합의 권위·시간 기준 및 새로운 재고 원천에 대한 확장성
+  - failure condition: 현재 값 갱신 후 과거 판단을 재구성하거나 추가 WMS·3PL·실시간 이벤트·새 계산 규칙을 도입할 때 Source finding context: 현재 값이 갱신된 뒤 과거 주문·할당·배송 판단을 재구성해야 할 때 Source finding context: 추가 창고 시스템, 3PL, 실시간 재고 이벤트 또는 새로운 가용재고 계산 규칙을 도입할 때
+  - impact: 과거 상태와 원천별 의미를 보존할 수 없어 감사, 운영 분석, 단계적 마이그레이션과 통합 소비자의 검증 신뢰가 약화된다. Source finding context: 동일 값의 시점별 의미를 구별할 수 없어 감사와 운영 분석의 신뢰가 약화된다. Source finding context: 기존 값의 의미와 과거 상태를 보존한 채 점진적으로 확장할 수 없고, 통합 소비자가 어느 시점의 어느 권위 값을 사용했는지 검증할 수 없다.
+  - root hypothesis: 변동 값을 원천·시점·버전이 있는 관측 이력 대신 덮어쓰는 현재값으로 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004`, `materialized-input.md: InventoryRecord의 as_of 부재 주석`, `materialized-input.md: InventoryAggregate.available_qty note`, `materialized-input.md: Shipment.eta note`, `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-004`, `materialized-input.md:76-90`, `materialized-input.md:111-116`, `finding-ledger.yaml#finding-009`, `finding-ledger.yaml#finding-017`, `rel-008`, `finding-relation-graph.yaml#rel-008`, `finding-009.cause-001`, `materialized-input.md: InventoryRecord 주석`, `finding-009.cause-002`, `materialized-input.md: InventoryRecord, InventoryAggregate, Shipment 속성 정의`, `finding-017.cause-001`, `materialized-input.md:115-116`, `finding-017.cause-002`, `materialized-input.md:81-84`, `finding-017.cause-003`, `issue-stance-matrix.yaml#stances.issue-009.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-009`, `issue-stance-matrix.yaml#stances.issue-009.coverage`, `issue-stance-matrix.yaml#stances.issue-009.evolution`, `issue-stance-matrix.yaml#stances.issue-009.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-009.semantics`, `issue-stance-matrix.yaml#stances.issue-009.structure`, `직접 재구성 실패와 단계적 확장 실패를 종합해 high로 분류하는 심각도 기준`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage, evolution
+  - action candidates: fix_before_release, accept_risk
+  - materiality: 원천별 값과 시간에 따른 의미가 보존되지 않아 감사, 사후 대사, SLA 분석과 변경 원인 확인의 신뢰가 약화된다. 또한 기존 의미와 과거 상태를 유지하면서 새 원천이나 계산 규칙을 병행할 수 없어 WMS/ERP 통합의 권위·시간 기준 및 확장성이라는 목적을 훼손한다.
+  - root cause: 출발점은 변동 값을 원천·의미·관측 시각·유효 시각·기록 시각·버전이 있는 이력으로 모델링하지 않고 현재값으로 덮어쓴 것이다. 이 선택 때문에 이후 투영이나 소비 단계에서는 어느 원천의 값이 어느 시점에 유효했는지를 복원할 근거가 없다.
+  - causal path: InventoryRecord, InventoryAggregate와 Shipment의 변동 값에 기준시점·유효기간·버전 계약이 없으므로 갱신 전 재고와 ETA를 식별할 수 없다. 같은 구조에서 새 재고 원천이나 실시간 이벤트를 추가하면 기존 수량 필드로 원천별 의미를 구분할 수도 없다. 그 결과 과거 판단 재현, 통합 소비자의 권위 값 검증, 새 계산 규칙의 병행과 단계적 마이그레이션이 모두 어려워진다.
+  - action: 다음 단계 전에 원천 시스템, 재고 의미, 관측·유효·기록 시각과 버전을 갖는 InventoryObservation 또는 InventoryLedger 같은 이력 모델을 권위 기록으로 결정해야 한다. 재고 현재값과 집계, ETA는 명시된 기준시점과 계산 규칙에서 생성되는 투영으로 정의해 과거 재구성과 새 원천의 병행 도입을 가능하게 해야 한다. 아울러 직접 재구성 실패와 진화상 확장 실패를 합산하는 심각도 기준을 정해 fix-before-release와 위험 수용 중 하나를 확정해야 한다.
+  - unresolved disagreement: coverage와 evolution은 원인과 실패 범위에는 합의했지만, 직접 재구성 실패와 단계적 확장 실패를 종합해 심각도를 medium 또는 high로 판단할 기준이 경계 내에 없어 최종 심각도는 확정되지 않았다.
+
+- issue-012 (high): 버전형 StatusMapping 계약의 부재로 캐리어 상태의 canonical 정규화가 연동별 구현에 분산되어 현재 결과의 일관성과 변경 이후 과거 이벤트 해석의 연속성을 보장할 수 없다. 원인과 필요한 조치에는 합의했으며, 다음 단계 전에 닫아야 하는 material 이슈다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: logic
+  - resolution accepted by: 2/2 deliberation participants
+  - accepted lenses: coverage, evolution
+  - remaining disagreement: 2/2 deliberation participants
+  - remaining disagreement lenses: coverage, evolution
+  - raised by lenses: coverage, evolution
+  - issue statement: 캐리어 상태를 canonical 상태로 정규화하는 버전형 매핑 계약이 없어 현재 결과가 연동마다 달라지고 새 코드 도입 시 반복 수정과 과거 재해석이 발생한다. Source finding context: Carrier-to-canonical tracking status mapping Source finding context: materialized-input.md → TrackingEvent.event_type note; integrity_rules[1] Source finding context: 캐리어 상태 코드를 공통 Shipment 상태로 정규화하는 매핑 개념이 없다. Source finding context: 같은 캐리어 사건이 연동마다 다른 화물 상태를 만들 수 있어 온톨로지가 통합의 공통 상태 기준이 되지 못한다. Source finding context: CarrierStatusMapping 개념을 추가해 carrier_ref, external_code, canonical_event/status, effective period, mapping version과 unknown-code 처리 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-008 Source finding context: TMS와 캐리어 연동 사이의 공통 배송 상태 기준 제공 Source finding context: 캐리어별 코드가 Shipment.status로 변환되거나 새로운 코드가 유입될 때 Source finding context: 정규화 결과가 연동 구현마다 달라져 상태 대사와 자동화가 불안정해진다. Source finding context: 외부 상태 정규화를 온톨로지 개념이 아닌 개별 연동의 책임으로 남겼다. Source finding context: 캐리어 상태와 Shipment.status의 매핑을 각 연동이 처리한다. Source finding context: 공통 매핑 엔터티와 미매핑·버전 처리 규칙이 없다. Source finding context: logistics-fulfillment-ontology.yaml — Order/Shipment/TrackingEvent 상태 모델 Source finding context: materialized-input.md:19-22, 44-47, 60-68, 111-113 Source finding context: 새 캐리어 상태나 내부 상태가 추가되면 온톨로지 열거형과 개별 연동 매핑을 반복 수정해야 한다. Source finding context: 외부 캐리어 코드나 OMS/TMS 상태가 변경되면 공통 기준에서 흡수할 확장 계층이 없어 enum과 여러 연동을 동시에 고쳐야 한다. 서로 다른 시점의 매핑이 구분되지 않아 동일한 과거 이벤트가 새 규칙에서 다른 상태로 해석될 수도 있다. Source finding context: 원천 시스템·원천 코드·정규 상태·매핑 버전·유효 기간을 갖는 버전형 StatusMapping 개념을 두고, 원천 이벤트는 원래 코드 그대로 보존한다. 정의되지 않은 코드는 명시적인 unknown/unmapped 경로로 수용한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-002 Source finding context: OMS/TMS/캐리어 간 상태 통합 기준과 외부 상태 체계 변경에 대한 연속성 Source finding context: 캐리어가 상태 코드를 추가·변경하거나 내부 OMS/TMS 워크플로가 세분화될 때 Source finding context: 모든 연동이 개별 수정 대상이 되고 매핑 드리프트가 누적되며, 과거 이벤트의 재해석 결과가 안정적으로 유지되지 않는다. Source finding context: 상태 상호운용성을 버전 가능한 공통 매핑 개념으로 모델링하지 않고 닫힌 enum과 연동별 구현에 위임했다. Source finding context: 새 원천 상태를 수용하려면 닫힌 enum 또는 연동별 매핑을 변경해야 한다. Source finding context: 각 시스템이 상태를 독립 관리하고 캐리어 매핑은 각 연동이 알아서 수행한다. Source finding context: 원천 코드와 정규 상태 사이의 버전형 매핑 및 유효 시점 개념이 없다.
+  - affected purpose: OMS/TMS/캐리어 간 공통 배송 상태 기준과 외부 상태 체계 변경에 대한 연속성 Source finding context: TMS와 캐리어 연동 사이의 공통 배송 상태 기준 제공 Source finding context: OMS/TMS/캐리어 간 상태 통합 기준과 외부 상태 체계 변경에 대한 연속성
+  - failure condition: 캐리어별 코드를 Shipment 상태로 변환하거나 캐리어·내부 시스템이 상태 코드를 추가·변경할 때 Source finding context: 캐리어별 코드가 Shipment.status로 변환되거나 새로운 코드가 유입될 때 Source finding context: 캐리어가 상태 코드를 추가·변경하거나 내부 OMS/TMS 워크플로가 세분화될 때
+  - impact: 정규화 결과가 구현마다 달라지고 매핑 드리프트와 반복 수정이 누적되며 과거 이벤트 해석도 안정적으로 유지되지 않는다. Source finding context: 정규화 결과가 연동 구현마다 달라져 상태 대사와 자동화가 불안정해진다. Source finding context: 모든 연동이 개별 수정 대상이 되고 매핑 드리프트가 누적되며, 과거 이벤트의 재해석 결과가 안정적으로 유지되지 않는다.
+  - root hypothesis: 외부 상태 상호운용성을 버전 가능한 공통 매핑 레지스트리가 아니라 닫힌 enum과 연동별 코드로 구현했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-008`, `materialized-input.md: TrackingEvent.event_type note`, `materialized-input.md: integrity_rules[1]`, `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-002`, `materialized-input.md:19-22`, `materialized-input.md:44-47`, `materialized-input.md:60-68`, `materialized-input.md:111-113`, `finding-ledger.yaml#finding-013`, `finding-ledger.yaml#finding-015`, `rel-017`, `finding-relation-graph.yaml#rel-017`, `finding-013.cause-001`, `finding-013.cause-002`, `materialized-input.md: entities, relations, integrity_rules 전체`, `finding-015.cause-001`, `materialized-input.md:63-66`, `finding-015.cause-002`, `materialized-input.md:66`, `finding-015.cause-003`, `issue-stance-matrix.yaml#stances.issue-012.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-012`, `issue-stance-matrix.yaml#stances.issue-012.coverage`, `issue-stance-matrix.yaml#stances.issue-012.evolution`, `issue-stance-matrix.yaml#stances.issue-012.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-012.semantics`, `issue-stance-matrix.yaml#stances.issue-012.structure`, `현재 상호운용성 영향과 반복 수정·매핑 드리프트·과거 재해석의 누적 영향을 종합하는 심각도 기준`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage, evolution
+  - action candidates: fix_before_release, accept_risk
+  - materiality: 이 문제는 OMS·TMS·캐리어 사이에 공통 배송 상태 기준을 제공한다는 목적을 직접 약화한다. 같은 외부 사건이 연동이나 적용 시점에 따라 다른 Shipment 상태가 될 수 있어 상태 대사와 자동화가 불안정해지고, 코드 변경 때마다 반복 수정과 매핑 드리프트가 누적되며 과거 이벤트의 해석도 달라질 수 있다.
+  - root cause: 인과 사슬의 출발점은 외부 상태 상호운용성을 버전 가능한 공통 매핑 레지스트리로 모델링하지 않고 닫힌 enum과 연동별 코드에 맡긴 것이다. 이 구조에는 원천 시스템·원천 코드와 canonical 상태를 연결하는 단일 계약, 적용 버전과 유효 시점, 미매핑 코드 처리 기준이 없으므로 각 연동이 독립적으로 의미를 결정하게 된다.
+  - causal path: 공통 매핑 엔터티가 없으므로 캐리어 코드와 Shipment.status의 대응을 각 연동이 구현한다. 새 캐리어 코드나 내부 상태가 생기면 닫힌 enum 또는 여러 연동을 각각 수정해야 하고, 버전과 유효 기간이 없으면 어느 규칙이 사건 발생 시점에 유효했는지 재현할 수 없다. 그 결과 현재 정규화 결과의 불일치, 반복 수정, 매핑 드리프트, 과거 이벤트 재해석으로 이어진다.
+  - action: 다음 단계로 진행하기 전에 원천 시스템·원천 코드, canonical 이벤트·상태, 매핑 버전과 유효 기간을 권위 있게 관리하는 StatusMapping을 도입해야 한다. 먼저 원시 코드를 변경 없이 보존하고 unknown/unmapped 경로를 명시한 뒤, 모든 연동이 사건 시점에 유효한 매핑을 사용하도록 연결해야 현재 일관성과 과거 결과의 재현성을 함께 확보할 수 있다.
+  - unresolved disagreement: coverage와 evolution은 원인과 조치에는 합의했지만, 현재 상호운용성 공백과 장기적인 반복 수정·매핑 드리프트·과거 재해석의 누적 영향을 하나의 심각도로 가중하는 기준이 없어 medium과 high 중 어느 수준인지 경계 내에서 확정하지 못했다. 또한 실제 연동 구현에 별도 매핑 레지스트리가 존재하는지는 현재 증거 범위에서 확인되지 않았다.
+
+- issue-013 (high): 현재의 Shipment→Order 주문 단위 fulfills 관계만으로는 부분출하·분할충족을 표현할 수 없다. 따라서 부분출하 도입 전에 라인별 수량 할당 모델로 재구성해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: evolution
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: evolution
+  - issue statement: 부분 출하·분할 충족을 추가하려면 기존 주문 단위 fulfills 관계와 소비 로직을 재구성해야 한다. Source finding context: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment model Source finding context: materialized-input.md:25-31, 105-109 Source finding context: 부분 출하·분할 충족을 추가하려면 기존 주문 단위 fulfills 모델을 재구성해야 한다. Source finding context: 대상 자체가 부분 출하를 추적할 수 없다고 명시한다. 부분 출하, 백오더, 다중 창고 출하를 도입하면 단순한 새 유형 추가로 끝나지 않고 기존 관계의 의미와 소비 로직을 함께 변경해야 하며, 과거 주문의 라인별 충족 내역도 복원할 수 없다. Source finding context: OrderLine과 Shipment(필요하면 DeliveryLeg)를 잇는 FulfillmentAllocation 같은 연관 개념을 추가하고 할당 수량·단위·유효 시점·상태를 둔다. 기존 주문 단위 fulfills는 이 연관에서 계산되는 호환용 투영으로 유지한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성 Source finding context: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때 Source finding context: 통합 시스템들이 공통 관계를 재사용할 수 없고 기존 스키마와 소비 로직을 동시에 변경해야 하며, 과거 데이터의 의미 연속성도 확보할 수 없다. Source finding context: 충족을 수량을 가진 라인-출하 연관이 아니라 주문-출하 이진 관계로만 모델링했다. Source finding context: 부분 출하 시 어느 OrderLine이 어느 Shipment로 나갔는지 표현할 수 없다. Source finding context: 기존 fulfills 관계가 Shipment→Order의 주문 단위 관계로 고정되어 있다. Source finding context: 라인별 충족 수량을 담는 독립 연관 개념이 없다.
+  - affected purpose: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성
+  - failure condition: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때
+  - impact: 기존 스키마와 소비 로직을 동시에 변경해야 하고 과거 데이터의 의미 연속성도 확보할 수 없다. Source finding context: 통합 시스템들이 공통 관계를 재사용할 수 없고 기존 스키마와 소비 로직을 동시에 변경해야 하며, 과거 데이터의 의미 연속성도 확보할 수 없다.
+  - root hypothesis: 충족을 수량을 가진 라인-출하 연관이 아니라 주문-출하 이진 관계로만 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-001`, `materialized-input.md:25-31`, `materialized-input.md:105-109`, `finding-ledger.yaml#finding-014`, `finding-014.cause-001`, `finding-014.cause-002`, `finding-014.cause-003`, `issue-stance-matrix.yaml#stances.issue-013.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-013`, `issue-stance-matrix.yaml#stances.issue-013.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `issue-stance-matrix.yaml#stances.issue-013.evolution`, `issue-stance-matrix.yaml#stances.issue-013.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-013.semantics`, `issue-stance-matrix.yaml#stances.issue-013.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: evolution
+  - action candidates: fix_now
+  - materiality: 한 주문 라인이 여러 출하로 나뉘는 운영에서는 어느 OrderLine이 어느 Shipment에서 얼마만큼 충족됐는지 공통으로 표현할 수 없다. 이 때문에 WMS·TMS·ERP가 기존 관계를 재사용하지 못하고 스키마와 소비 로직을 함께 변경해야 하며, 과거 데이터와 새 모델 사이의 의미 연속성도 보장하기 어려워 주문→출하 통합 기준과 확장성을 중대하게 약화한다.
+  - root cause: 문제의 출발점은 충족을 수량을 가진 OrderLine–Shipment 연관으로 모델링하지 않고 Shipment→Order 이진 관계로만 고정한 것이다. 라인별 충족 수량을 담는 독립 개념이 없으므로 부분충족의 대상, 수량, 단위, 시점과 상태를 현재 구조에서 표현할 수 없다.
+  - causal path: 라인별 충족 수량을 담는 독립 연관이 없고 fulfills가 주문 단위 관계로 고정되어 있어, 부분출하 시 어느 주문 행이 어느 출하로 나갔는지 기록할 수 없다. 그 결과 부분출하·백오더·다중 창고 출하를 지원하려면 기존 관계의 의미와 이를 소비하는 로직을 동시에 재구성해야 한다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 일관되게 수용했으며 별도 숙의가 필요하지 않다고 결론냈다.
+  - action: OrderLine과 Shipment를 연결하는 FulfillmentAllocation을 추가하고 할당 수량·단위·유효 시점·상태를 그 연관의 속성으로 정의해야 한다. 먼저 이 연관을 충족 정보의 권위 있는 모델로 확립한 뒤, 기존 주문 단위 fulfills는 할당에서 계산되는 호환용 투영으로 유지해야 소비자 전환을 단계화하고 향후 충족 방식 확장을 수용할 수 있다.
+
+- issue-015 (high): DeliveryLeg는 Shipment의 하위유형이 아니라 특정 Shipment를 구성하는 독립 운송 구간이어야 한다. 현재 분류는 구간과 전체 화물의 식별·상태·주문 충족 의미를 충돌시키는 high 심각도의 현재 차단 이슈다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: logic
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: DeliveryLeg를 Shipment의 하위유형으로 분류해 경로 구간과 전체 화물의 식별·상태·충족 의미가 충돌한다. Source finding context: DeliveryLeg의 존재론적 유형과 Shipment 상속 Source finding context: materialized-input.md:40-58, 105-109 Source finding context: 배송 구간을 전체 화물 이동인 Shipment의 하위유형으로 분류해 부분-전체 관계를 종류-하위종류 관계로 오인한다. Source finding context: 경로 구간은 일반적으로 전체 Shipment를 구성하는 부분이다. 현재 모델에서는 각 구간이 독립적인 shipment_no, 전체 중량, 최종 배송 상태 및 Order 충족 주체로 해석될 수 있어 TMS 구간과 ERP/OMS 출하의 식별 의미가 충돌한다. Source finding context: DeliveryLeg를 독립 엔티티로 두고 `part_of` 또는 `shipment_ref`로 Shipment에 연결한다. 구간별 상태·ETA·운송사가 필요하면 구간 속성으로 명시하고 전체 Shipment 속성과 구분한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준 Source finding context: TMS의 다구간 운송 데이터를 Shipment/DeliveryLeg로 교환하거나 주문 충족 관계를 해석할 때 Source finding context: 하나의 출하와 그 운송 구간들이 동일 종류로 취급되어 식별, 상태 집계, 주문 충족 판정이 서로 다른 시스템에서 달라질 수 있다. Source finding context: 운송 구간과 전체 화물 이동 사이의 부분-전체 관계를 하위유형 관계로 모델링했다. Source finding context: DeliveryLeg는 화물 경로의 한 구간으로 정의된다. Source finding context: 그 구간이 전체 물리적 화물 이동으로 정의된 Shipment의 하위유형으로 선언된다. Source finding context: Shipment와 DeliveryLeg 사이의 의미적으로 필요한 부분-전체 관계가 하위유형 관계로 대체되었다.
+  - affected purpose: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준
+  - failure condition: TMS의 다구간 운송 데이터를 교환하거나 주문 충족 관계를 해석할 때 Source finding context: TMS의 다구간 운송 데이터를 Shipment/DeliveryLeg로 교환하거나 주문 충족 관계를 해석할 때
+  - impact: 하나의 출하와 그 운송 구간이 동일 종류로 취급되어 식별, 상태 집계와 주문 충족 판정이 시스템마다 달라질 수 있다. Source finding context: 하나의 출하와 그 운송 구간들이 동일 종류로 취급되어 식별, 상태 집계, 주문 충족 판정이 서로 다른 시스템에서 달라질 수 있다.
+  - root hypothesis: 운송 구간과 전체 화물 이동 사이의 부분-전체 관계를 하위유형 관계로 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-001`, `materialized-input.md:40-58`, `materialized-input.md:105-109`, `finding-ledger.yaml#finding-018`, `finding-018.cause-001`, `materialized-input.md:52-58`, `finding-018.cause-002`, `materialized-input.md:40-54`, `finding-018.cause-003`, `issue-stance-matrix.yaml#stances.issue-015.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-015`, `issue-stance-matrix.yaml#stances.issue-015.coverage`, `issue-stance-matrix.yaml#stances.issue-015.evolution`, `issue-stance-matrix.yaml#stances.issue-015.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-015.semantics`, `issue-stance-matrix.yaml#stances.issue-015.structure`, `issue-ledger.yaml#dep-004`, `rel-019`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - materiality: WMS·TMS·ERP가 다구간 운송을 교환하거나 주문 충족을 판정할 때 구간을 전체 출하와 같은 종류로 해석하면 shipment_no, 중량, 최종 배송 상태와 충족 책임의 범위가 모호해진다. 그 결과 시스템별 식별, 상태 집계와 충족 판정이 달라져 통합을 위한 공통 화물·배송 개념 기준을 약화시킨다.
+  - root cause: 문제의 시작점은 Shipment와 DeliveryLeg 사이에 필요한 부분–전체 관계를 종류–하위종류 관계로 대체한 것이다. 이 모델링 선택 때문에 DeliveryLeg가 전체 Shipment의 의미를 상속하며, 이후의 식별·속성 범위·집계 경계 충돌이 발생한다.
+  - causal path: DeliveryLeg는 화물 경로의 한 구간으로 정의되지만 전체 물리적 화물 이동인 Shipment의 하위유형으로 선언되어 있다. 따라서 구간이 독립 Shipment처럼 식별되고 전체 중량·최종 상태·Order 충족 의미를 가질 수 있게 되며, 다구간 TMS 데이터와 ERP/OMS 출하 해석이 충돌한다. 심의는 이 의미·구조 결함과 high 심각도를 수용했으며, 형식적 모순을 확정할 공리가 부족하다는 logic 관점의 한계는 해당 결론을 반박하지 않는 것으로 정리했다.
+  - action: 먼저 DeliveryLeg의 Shipment 하위유형 분류를 제거하고 독립 엔터티로 정의한 뒤, part_of 또는 shipment_ref로 각 구간을 해당 Shipment에 연결해야 한다. 이어 구간별 상태·ETA·운송사와 전체 Shipment의 식별자·중량·최종 상태·주문 충족 속성을 명확히 분리해야 한다. 관계와 속성 범위를 먼저 바로잡아야 이후 시스템 매핑과 상태 집계가 동일한 의미 경계를 따를 수 있다.
+
+- issue-017 (high): 물리적 보유량과 회계 장부량이 하나의 quantity_on_hand에 혼합되어 WMS와 ERP 중 어느 값이 목적별 진실인지 판정할 수 없는 현재의 high 심각도 문제이며, 대상 범위에서 반드시 해소해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: 서로 다른 물리·회계 재고 수량을 단일 속성에 합쳐 그 의미와 WMS·ERP 간 권위가 충돌한다. Source finding context: InventoryRecord.quantity_on_hand의 의미와 권위 Source finding context: materialized-input.md:76-84, 115-117 Source finding context: 물리 재고와 회계 재고라는 서로 다른 수량을 하나의 quantity_on_hand 속성으로 합치면서 권위도 WMS와 ERP 사이에서 충돌한다. Source finding context: 물리적 보유량과 회계 장부량은 불일치할 수 있는 별도 의미다. 하나의 속성으로 표현하면 사용자는 값이 실물 출고 가능량인지 장부 수량인지 구분할 수 없고, 야간 조정은 물리적 진실을 회계 값으로 덮는 것으로 해석될 수 있다. Source finding context: `physical_on_hand`와 `accounting_on_hand`를 분리하거나, 재고 관측값에 `quantity_kind`, `source_system`, `as_of`를 둔다. 각 사용 사례별 권위와 조정 결과의 의미를 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-003 Source finding context: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공 Source finding context: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때 Source finding context: 동일 필드가 상반된 진실 기준을 나타내어 할당, 재고조정, 감사에서 어느 값이 맞는지 판정할 수 없다. Source finding context: 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용했다. Source finding context: quantity_on_hand는 현재 보유 수량으로 단일 정의된다. Source finding context: WMS와 ERP가 같은 속성의 값을 각각 가지며 ERP 기준 야간 조정이 수행된다. Source finding context: WMS의 실물 기준과 ERP의 회계 기준이 서로 다른 진실로 별도 선언되어 있다.
+  - affected purpose: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공
+  - failure condition: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때
+  - impact: 동일 필드가 상반된 진실 기준을 나타내어 할당, 조정과 감사에서 어느 값이 맞는지 판정할 수 없다. Source finding context: 동일 필드가 상반된 진실 기준을 나타내어 할당, 재고조정, 감사에서 어느 값이 맞는지 판정할 수 없다.
+  - root hypothesis: 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-003`, `materialized-input.md:76-84`, `materialized-input.md:115-117`, `finding-ledger.yaml#finding-020`, `finding-020.cause-001`, `materialized-input.md:76-83`, `finding-020.cause-002`, `materialized-input.md:81-84`, `finding-020.cause-003`, `issue-stance-matrix.yaml#stances.issue-017.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-017`, `issue-stance-matrix.yaml#stances.issue-017.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007`, `issue-stance-matrix.yaml#stances.issue-017.evolution`, `issue-stance-matrix.yaml#stances.issue-017.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-017.semantics`, `issue-stance-matrix.yaml#stances.issue-017.structure`, `issue-ledger.yaml#dep-002`, `rel-007`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - materiality: 두 수량은 불일치할 수 있고 출고 할당과 회계 결산의 목적도 다르다. 단일 필드가 상반된 진실 기준을 나타내면 할당, 재고조정, 감사에서 올바른 값을 선택할 수 없어 ‘WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공’하려는 목적을 직접 약화한다.
+  - root cause: 출발점은 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용한 것이다. 이 개념 혼합 때문에 각 수량의 의미, 원천 시스템, 기준 시점과 사용 사례별 권위를 표현할 구조가 없다.
+  - causal path: quantity_on_hand가 단일한 현재 보유 수량으로 정의된 상태에서 WMS와 ERP가 같은 속성에 각자의 값을 보유하고 ERP 기준 야간 조정까지 수행한다. 동시에 WMS는 실물 기준, ERP는 회계 기준의 진실로 선언되어 있으므로 값이 불일치하면 동일 필드가 서로 다른 의미와 권위를 갖게 되고, 결과적으로 출고 가능량인지 장부 수량인지 판정할 수 없게 된다.
+  - action: 먼저 physical_on_hand와 accounting_on_hand를 분리하거나 재고 관측값에 quantity_kind, source_system, as_of를 도입해 서로 다른 관점을 명시해야 한다. 그다음 할당, 결산, 조정과 감사별 권위 시스템을 지정하고, 야간 조정이 물리 수량의 덮어쓰기가 아니라 관점 간 조정 결과로 해석되도록 의미를 정의해야 한다. 이 의미·권위 분리를 재고 선택 및 조정 로직보다 먼저 확정해야 downstream 동작이 올바른 값을 사용할 수 있다.
+
+- issue-018 (high): 야간 available_qty 스냅샷을 일중 현재 가용재고로 사용하는 구조는 유효 시점과 계산 산식이 없어 중복 할당 위험을 만들므로 즉시 수정해야 하는 high 심각도 이슈다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: 야간 available_qty 스냅샷을 일중 현재 가용재고로 사용하면서 유효 시점과 계산 산식을 정의하지 않았다. Source finding context: InventoryAggregate.available_qty의 시간성과 파생 의미 Source finding context: materialized-input.md:76-90, 111-112 Source finding context: 매일 밤 생성한 스냅샷을 일중에도 현재 가용 재고로 취급하면서 유효 시점과 가용량 산식을 정의하지 않았다. Source finding context: 가용 재고는 특정 시점과 예약 상태에 의존하는 파생 의미다. 시점 없는 전일 값을 현재 가용량으로 사용하면 이미 할당된 수량을 다시 가용하다고 해석할 수 있으며, 시스템마다 available의 계산 의미도 달라진다. Source finding context: `as_of`와 계산/갱신 시점을 추가하고, available_qty의 권위 시스템 및 산식(예: 물리 보유량에서 예약·차단 수량 등을 차감)을 명시한다. 일중 할당에는 갱신 가능한 권위 값을 사용한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-004 Source finding context: 재고 할당을 위한 일관된 가용 재고 기준 Source finding context: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때 Source finding context: 가용량의 시점과 계산 의미가 불명확해 중복 할당이나 시스템 간 가용 재고 불일치가 발생할 수 있다. Source finding context: 시간 의존적 파생값인 available_qty를 원천·산식·유효시점 없는 독립 스냅샷 필드로 모델링했다. Source finding context: 일중 재고 할당이 InventoryAggregate.available_qty를 기준으로 수행된다. Source finding context: available_qty는 매일 밤 저장되는 스냅샷일 뿐 유효 시점이 없다. Source finding context: 가용량을 구성하는 원천 수량과 산식이 모델에 정의되지 않았다.
+  - affected purpose: 재고 할당을 위한 일관된 가용 재고 기준
+  - failure condition: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때
+  - impact: 가용량의 시점과 계산 의미가 불명확해 중복 할당이나 시스템 간 가용 재고 불일치가 발생할 수 있다.
+  - root hypothesis: 시간 의존적 파생값인 available_qty를 원천·산식·유효시점 없는 독립 스냅샷 필드로 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-004`, `materialized-input.md:76-90`, `materialized-input.md:111-112`, `finding-ledger.yaml#finding-021`, `finding-021.cause-001`, `finding-021.cause-002`, `materialized-input.md:86-90`, `finding-021.cause-003`, `issue-stance-matrix.yaml#stances.issue-018.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-018`, `issue-stance-matrix.yaml#stances.issue-018.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004`, `issue-stance-matrix.yaml#stances.issue-018.evolution`, `issue-stance-matrix.yaml#stances.issue-018.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-018.semantics`, `issue-stance-matrix.yaml#stances.issue-018.structure`, `issue-ledger.yaml#dep-001`, `rel-006`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - materiality: 야간 스냅샷 이후 주문·예약·입출고·조정이 발생하면 저장값이 현재 상태를 반영하지 못한다. 그럼에도 일중 할당 기준으로 사용하면 이미 할당된 수량을 다시 가용하다고 판단하거나 시스템별로 서로 다른 가용량을 계산할 수 있어, 일관된 재고 할당 기준이라는 목적을 훼손한다.
+  - root cause: 문제의 출발점은 시간과 운영 상태에 의존하는 파생값인 available_qty를 원천 수량, 계산 산식, 권위 시스템, 유효 시점 없이 독립 스냅샷 필드로 모델링한 것이다. 이 때문에 값이 무엇을 뜻하고 언제까지 유효한지 판단할 권위가 없다.
+  - causal path: 일중 할당이 InventoryAggregate.available_qty를 직접 기준으로 삼지만, 해당 값은 매일 밤 저장될 뿐 as_of가 없고 구성 원천과 산식도 정의되지 않았다. 따라서 스냅샷 이후 상태 변화가 반영되지 않은 값을 현재 가용량으로 오인하게 되고, 중복 할당과 시스템 간 불일치로 이어진다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 일관되게 수용했으며 별도 숙의가 필요하지 않았다.
+  - action: available_qty의 권위 시스템과 물리 보유량·예약량·차단량 등 입력을 사용하는 계산 산식을 정의하고, as_of와 계산·갱신 시점을 모델에 추가해야 한다. 그다음 일중 할당 경로가 야간 스냅샷이 아니라 갱신 가능한 권위 값을 사용하도록 전환해야 하며, 권위와 갱신 규칙을 먼저 확정한 뒤 소비 경로를 바꿔야 의미 불일치가 재발하지 않는다.
+
+- issue-019 (high): 주문 전체의 단일 fulfillment_status와 Shipment→Order 관계만으로는 부분출하에서 shipped·delivered가 일부 완료인지 전량 완료인지 판정할 수 없습니다. 따라서 주문선별 충족 범위와 수량을 재구성할 수 없는 현재의 high 심각도 정확성 이슈를 목표 범위에서 반드시 수정해야 합니다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: none
+  - insufficient evidence lenses: logic
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: 주문 단위 상태와 Shipment→Order 관계만으로는 부분출하 시 shipped와 delivered의 완료 범위를 판정할 수 없다. Source finding context: Order.fulfillment_status와 fulfills 관계의 주문 충족 의미 Source finding context: materialized-input.md:14-31, 105-109 Source finding context: 주문 단위 상태와 Shipment→Order 관계만으로 부분출하 시 `shipped` 및 `delivered`의 의미를 단일하게 판정할 수 없다. Source finding context: 일부 주문 줄이나 일부 수량만 출하된 경우 `shipped`가 일부 출하인지 전량 출하인지, 한 Shipment가 주문 전체를 충족하는지 일부만 충족하는지 구분되지 않는다. 동일 상태명이 OMS, WMS, TMS에서 다른 사실을 뜻하게 된다. Source finding context: Shipment와 OrderLine 사이에 충족 수량을 가진 할당/출하명세 관계를 추가한다. 주문 상태는 line 수준 사실에서 도출하고 `partially_allocated`, `partially_shipped`, `partially_delivered` 등 전이 의미와 완료 조건을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-005 Source finding context: 주문에서 출하와 배송까지의 일관된 충족 상태 기준 Source finding context: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때 Source finding context: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하 및 고객 상태 표시 오류를 판별하기 어렵다. Source finding context: 충족 사실의 의미 단위가 OrderLine/수량이 아니라 Order 전체로만 모델링되었다. Source finding context: Order에는 주문 전체를 나타내는 단일 fulfillment_status가 있다. Source finding context: Shipment의 fulfills 관계도 Order 전체만 대상으로 한다. Source finding context: OrderLine별 충족 Shipment와 수량을 표현하는 의미 단위가 없다.
+  - affected purpose: 주문에서 출하와 배송까지의 일관된 충족 상태 기준
+  - failure condition: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때
+  - impact: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하와 고객 상태 표시 오류를 판별하기 어렵다. Source finding context: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하 및 고객 상태 표시 오류를 판별하기 어렵다.
+  - root hypothesis: 충족 사실의 의미 단위를 OrderLine과 수량이 아니라 Order 전체로만 모델링했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-005`, `materialized-input.md:14-31`, `materialized-input.md:105-109`, `finding-ledger.yaml#finding-022`, `finding-022.cause-001`, `materialized-input.md:14-23`, `finding-022.cause-002`, `finding-022.cause-003`, `materialized-input.md:25-31`, `materialized-input.md:109`, `issue-stance-matrix.yaml#stances.issue-019.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-019`, `issue-stance-matrix.yaml#stances.issue-019.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `issue-stance-matrix.yaml#stances.issue-019.evolution`, `issue-stance-matrix.yaml#stances.issue-019.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-019.semantics`, `issue-stance-matrix.yaml#stances.issue-019.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_now
+  - materiality: 주문이 여러 Shipment로 분할되거나 일부 주문선·수량만 처리되면 완료 여부와 출하별 충족 범위를 확인할 수 없어 과소·중복 출하를 판별하기 어렵고, 고객 상태 표시와 OMS·WMS·TMS의 운영 대사가 서로 다른 사실을 나타낼 수 있습니다. 이는 주문부터 출하·배송까지 일관된 충족 상태를 제공한다는 목적을 직접 훼손합니다.
+  - root cause: 인과 사슬의 시작점은 충족 사실의 의미 단위를 OrderLine과 수량이 아니라 Order 전체로만 모델링한 것입니다. 행·수량별 원천 사실이 없으므로 주문 상태를 정확히 도출하거나 부분 완료와 전량 완료를 구분할 근거 자체가 없습니다.
+  - causal path: Order에는 주문 전체의 단일 fulfillment_status만 있고 Shipment의 fulfills 관계도 Order 전체만 가리킵니다. 여기에 Shipment가 어느 OrderLine을 얼마만큼 충족했는지 표현하는 관계가 없으므로, 부분출하 시 shipped·delivered의 적용 범위와 주문선별 누적 충족량을 계산할 수 없고 결국 주문 완료 여부가 미결정 상태로 남습니다. 심의는 이 원인과 high 판단을 수용했으며, 논리 렌즈의 증거 부족은 특정 형식 논리 충돌을 입증할 수 없다는 범위로만 판단을 제한했습니다.
+  - action: 먼저 Shipment와 OrderLine 사이에 충족 수량을 기록하는 관계를 추가해 행·수량별 사실을 권위 있는 근거로 만들어야 합니다. 그다음 그 사실에서 주문 상태를 도출하고 partially_allocated, partially_shipped, partially_delivered 같은 부분 상태의 전이 의미와 shipped·delivered의 전량 완료 조건을 명시해야 합니다. 이 순서를 지켜야 상태 정의가 주문 전체의 모호한 값이 아니라 재구성 가능한 충족 사실에 의존합니다.
+
+- issue-022 (high): Shipment와 OrderLine을 충족 수량과 함께 연결하는 구조가 없어, 부분·분할 출하에서 주문행별 출하 추적 경로가 끊겨 있다. 이 문제는 현재 차단 요인이므로 대상 모델에서 반드시 수정해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: structure
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: structure
+  - issue statement: 주문행과 출하 간 수량 포함 연결이 없어 부분출하 추적 경로가 구조적으로 끊겨 있다. Source finding context: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:25-31,105-109 Source finding context: 주문행과 출하 간의 수량 포함 연결이 없어 부분출하 추적 경로가 끊겨 있다. Source finding context: 대상 자체가 부분출하 시 주문행과 Shipment의 대응을 추적할 수 없다고 명시한다. 따라서 한 주문이 여러 출하로 나뉘거나 한 행이 분할 출하되면 OMS 주문행과 WMS/TMS 화물을 정합하게 연결할 수 없다. Source finding context: `ShipmentLine` 같은 연결 엔터티를 추가해 `Shipment`, `OrderLine`, `fulfilled_qty`를 필수로 연결하고, 주문 단위 `fulfills`는 이 연결에서 유도되도록 한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-001 Source finding context: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적 Source finding context: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우 Source finding context: 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 통합 기준 문서의 핵심 추적성이 깨진다. Source finding context: 모델이 Shipment와 OrderLine을 수량과 함께 연결하는 구성 요소를 생략했다. Source finding context: 부분출하에서 각 Shipment가 충족한 주문행과 수량을 식별할 수 없다. Source finding context: 유일한 출하-주문 관계인 `fulfills`가 Shipment에서 Order 전체로만 연결된다. Source finding context: Shipment와 OrderLine 사이의 연결 엔터티 또는 관계와 충족 수량 속성이 존재하지 않는다.
+  - affected purpose: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적
+  - failure condition: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우
+  - impact: 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 핵심 추적성이 깨진다. Source finding context: 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 통합 기준 문서의 핵심 추적성이 깨진다.
+  - root hypothesis: Shipment와 OrderLine을 수량과 함께 연결하는 구성 요소를 생략했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-001`, `materialized-input.md:6-7`, `materialized-input.md:25-31`, `materialized-input.md:105-109`, `finding-ledger.yaml#finding-025`, `finding-025.cause-001`, `finding-025.cause-002`, `finding-025.cause-003`, `materialized-input.md:40-50`, `issue-stance-matrix.yaml#stances.issue-022.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-022`, `issue-stance-matrix.yaml#stances.issue-022.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `issue-stance-matrix.yaml#stances.issue-022.evolution`, `issue-stance-matrix.yaml#stances.issue-022.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-022.semantics`, `issue-stance-matrix.yaml#stances.issue-022.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_now
+  - materiality: 한 주문이나 주문행이 여러 Shipment로 나뉘면 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능하다. 따라서 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하려는 핵심 목적과 추적성이 직접 훼손된다.
+  - root cause: 출하와 주문 전체를 잇는 `fulfills`만 있고 Shipment와 OrderLine을 수량과 함께 연결하는 구성요소가 생략된 것이 인과 사슬의 시작점이다. 이 구조적 누락 때문에 행 단위 충족 사실을 표현할 권위 있는 경로 자체가 존재하지 않는다.
+  - causal path: Shipment–OrderLine 연결 엔터티 또는 관계와 충족 수량 속성이 없고, 기존 `fulfills`는 Shipment에서 Order 전체로만 이어진다. 그 결과 각 Shipment가 어느 주문행을 얼마나 충족했는지 식별할 수 없어 부분출하 대사와 잔량 판정이 불가능해진다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 일관되게 지지했으며, 추가 숙의나 범위 축소는 필요하지 않은 것으로 확정되었다.
+  - action: `ShipmentLine` 또는 동등한 연결 엔터티를 추가하고 각 인스턴스가 `Shipment`, `OrderLine`, `fulfilled_qty`를 필수로 참조하도록 해야 한다. 주문 단위 `fulfills`는 이 행 단위 연결에서 유도되도록 하여 행 단위 기록을 원천으로 삼아야 하며, 그래야 부분·분할 출하의 출하량 대사와 미충족 수량 계산이 일관되게 가능하다.
+
+- issue-024 (high): 주문행과 창고 재고 사이에 할당 인스턴스가 없어 주문→재고 할당 단계가 구조적으로 기록되지 않는다. 이는 선언된 핵심 흐름을 막는 high 심각도의 현재 결함이며 목표 범위에서 반드시 수정해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: structure
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: structure
+  - issue statement: 주문행과 창고 재고 사이의 할당 연결이 없어 선언된 주문→재고 할당 단계가 구조적으로 기록되지 않는다. Source finding context: logistics-fulfillment-ontology.yaml — inventory allocation structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:14-31,70-90,105-113 Source finding context: SKU가 같다는 사실은 특정 주문에 대한 재고 예약을 나타내지 않는다. 같은 SKU의 여러 주문이나 창고 재고가 존재하면 할당 결과를 주문행별로 식별·대사할 수 없고, 텍스트 무결성 규칙의 `available_qty` 확인도 영속적인 연결을 만들지 않는다. Source finding context: `InventoryAllocation` 같은 연결 엔터티를 추가해 `OrderLine`, `InventoryRecord` 또는 Warehouse, `allocated_qty`를 연결하고, 필요하면 할당 상태·생성 시각을 그 엔터티의 속성으로 둔다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-003 Source finding context: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적 Source finding context: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우 Source finding context: OMS 주문 수요와 WMS 창고 예약의 대응 관계를 검증할 수 없어 중복 할당, 미할당, 출하 전 재고 대사가 구조적으로 판정 불가능하다. Source finding context: 모델이 주문행과 창고 재고 사이의 할당 행위 및 할당 수량을 독립된 연결 구조로 표현하지 않았다. Source finding context: 특정 OrderLine에 예약된 창고와 수량을 온톨로지에서 식별할 수 없다. Source finding context: OrderLine, InventoryRecord, InventoryAggregate는 SKU를 공유하지만 특정 할당 인스턴스를 연결하는 참조가 없다. Source finding context: 명시된 관계는 Shipment에서 Order로 향하는 `fulfills`뿐이고, 재고 할당은 연결 구조 없이 텍스트 규칙으로만 언급된다.
+  - affected purpose: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적
+  - failure condition: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우
+  - impact: OMS 주문 수요와 WMS 창고 예약의 대응을 검증할 수 없어 중복·미할당과 출하 전 재고 대사를 판정할 수 없다. Source finding context: OMS 주문 수요와 WMS 창고 예약의 대응 관계를 검증할 수 없어 중복 할당, 미할당, 출하 전 재고 대사가 구조적으로 판정 불가능하다.
+  - root hypothesis: 주문행과 창고 재고 사이의 할당 행위 및 할당 수량을 독립된 연결 구조로 표현하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-003`, `materialized-input.md:6-7`, `materialized-input.md:14-31`, `materialized-input.md:70-90`, `materialized-input.md:105-113`, `finding-ledger.yaml#finding-027`, `finding-027.cause-001`, `finding-027.cause-002`, `materialized-input.md:25-29`, `materialized-input.md:76-90`, `finding-027.cause-003`, `issue-stance-matrix.yaml#stances.issue-024.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-024`, `issue-stance-matrix.yaml#stances.issue-024.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001`, `issue-stance-matrix.yaml#stances.issue-024.evolution`, `issue-stance-matrix.yaml#stances.issue-024.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-024.semantics`, `issue-stance-matrix.yaml#stances.issue-024.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_now
+  - materiality: 동일 SKU에 여러 주문행이나 여러 창고 재고가 존재하면 SKU 공유만으로 특정 주문행에 어느 재고의 얼마가 예약되었는지 식별할 수 없다. 그 결과 OMS 주문 수요와 WMS 예약을 대응시켜 중복 할당, 미할당, 출하 전 재고 대사를 판정할 수 없어 주문→재고 할당→출하→배송의 통합 개념 기준이라는 목적이 약화된다.
+  - root cause: 인과 사슬의 출발점은 주문행과 창고 재고 사이의 할당 행위와 수량을 독립된 연결 구조로 모델링하지 않은 것이다. 할당 자체가 권위 있는 인스턴스로 존재하지 않으므로 상태, 생성 시각, 부분 예약이나 재할당 같은 생명주기도 주문별로 기록할 기반이 없다.
+  - causal path: OrderLine, InventoryRecord, InventoryAggregate가 SKU를 공유해도 특정 OrderLine에 예약된 창고와 수량은 식별되지 않는다. 명시적 관계는 Shipment에서 Order로 향하는 fulfills뿐이며, available_qty를 확인하는 텍스트 규칙도 영속적인 할당 참조를 만들지 않는다. 따라서 특정 할당 결과를 주문행별로 식별·대사할 수 없고, 선언된 주문→재고 할당 단계가 구조적으로 누락된다. 적용 가능한 렌즈들은 이 원인과 high 심각도를 일관되게 지지했으며 별도 심의가 필요하지 않았다.
+  - action: InventoryAllocation 연결 엔터티를 추가해 각 OrderLine을 해당 InventoryRecord 또는 Warehouse 및 allocated_qty와 연결해야 한다. 할당 상태와 생성 시각도 이 엔터티에 정의하여 예약의 생명주기를 추적할 수 있게 해야 한다. 이 연결을 먼저 권위 있는 할당 기록으로 확립해야 이후 출하 연결과 재고 대사가 주문행별 할당을 일관되게 참조할 수 있다.
+
+- issue-004 (medium): 수량을 가진 OrderLine–Shipment 대응이 없어 부분출하 시 주문선별 충족 사실과 상태를 재구성할 수 없으며, 이는 목표 범위에서 즉시 보완해야 하는 현재 결손이다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 3/3 deliberation participants
+  - accepted lenses: axiology, semantics, structure
+  - remaining disagreement: 0/3 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 주문 단위 관계만으로는 부분출하 시 주문선별 충족 사실과 수량을 추적할 수 없다. Source finding context: OrderLine과 Shipment의 충족 관계 Source finding context: 대상: materialized-input.md:25-31,105-109. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 주문·화물·배송 정합성을 갖춘 통합 개념 기준). value_type=stakeholder; alignment_direction=misaligned. Source finding context: 주문 단위 관계만 두는 단순화는 부분출하 추적이라는 핵심 주문충족 목적을 희생한다. Source finding context: 부분출하, 분할배송, 부족수량 상황에서 OMS·WMS·TMS가 동일한 충족 사실을 교환하거나 고객 문의·운영 조사를 수행할 수 없다. 모델 단순화의 이익보다 추적성과 책임성 손실이 크지만 그 트레이드오프가 정당화되지 않았다. Source finding context: OrderLine과 Shipment를 연결하며 충족 수량을 담는 `FulfillmentAllocation` 또는 `ShipmentLine` 개념을 추가하고, Order 수준 `fulfills`는 그 합계에서 파생되도록 한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-004 Source finding context: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공 Source finding context: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때 Source finding context: 시스템 간 충족 사실을 재구성할 수 없어 운영 조사와 고객 응대의 실행 가능성이 약화된다. Source finding context: 관계를 주문 수준으로만 단순화하면서 수량을 가진 주문선-화물 대응 개념을 의도적으로 제외했다. Source finding context: 부분출하 시 어느 주문선이 어느 Shipment로 나갔는지 추적할 수 없다. Source finding context: 유일한 충족 관계가 Shipment→Order이며 OrderLine 매핑을 두지 않는다.
+  - affected purpose: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공
+  - failure condition: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때
+  - impact: 시스템 간 충족 사실을 재구성할 수 없어 운영 조사와 고객 응대의 실행 가능성이 약화된다.
+  - root hypothesis: 관계를 주문 수준으로만 단순화하면서 수량을 가진 주문선-화물 대응 개념을 제외했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-004`, `materialized-input.md:25-31`, `materialized-input.md:105-109`, `review-value-alignment-criteria.yaml:6-8`, `finding-ledger.yaml#finding-004`, `finding-004.cause-001`, `materialized-input.md:30-31`, `finding-004.cause-002`, `issue-stance-matrix.yaml#stances.issue-004.axiology`, `issue-stance-matrix.yaml#stances.issue-004.coverage`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-004`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002`, `issue-stance-matrix.yaml#stances.issue-004.evolution`, `issue-stance-matrix.yaml#stances.issue-004.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-004.semantics`, `issue-stance-matrix.yaml#stances.issue-004.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_now
+  - materiality: 한 주문선이 여러 Shipment로 나뉘거나 일부 수량만 출하되면 OMS·WMS·TMS가 동일한 충족 사실을 교환할 수 없다. 그 결과 운영 조사와 고객 응대가 약화되고, 주문부터 출하·배송까지 일관된 충족 추적 기준을 제공한다는 목적이 훼손된다.
+  - root cause: 문제의 시작점은 충족 관계를 Shipment→Order 수준으로만 단순화하고 수량을 가진 OrderLine–Shipment 대응 개념을 제외한 것이다. 이 구조에서는 주문선별 할당량이 원천적으로 표현되지 않으므로 하위 상태나 집계 로직만으로 정확한 부분출하 사실을 복원할 수 없다.
+  - causal path: OrderLine 매핑이 없으므로 각 Shipment가 어느 주문선의 몇 개를 충족했는지 기록할 수 없고, 이에 따라 부분출하·분할배송·부족수량 상황에서 fulfills와 shipped·delivered가 전체 주문인지 일부인지 판정할 수 없다. 숙의에서는 axiology·semantics·structure 렌즈가 이 원인과 영향에 수렴했고, 추적 결손이 핵심 상태 의미까지 불확정하게 한다는 점을 수용했다.
+  - action: OrderLine과 Shipment를 충족 수량과 함께 연결하는 FulfillmentAllocation 또는 ShipmentLine을 먼저 도입해야 한다. 이후 주문 수준 fulfills와 관련 출하·배송 상태를 해당 행 단위 수량의 합계에서 파생하도록 바꿔, 주문선별 사실을 단일 권위로 삼고 시스템 간 재구성과 조사가 가능하게 해야 한다.
+
+- issue-005 (medium): 캐리어 예측과 운영팀의 수기 판단을 단일 변경 가능 ETA에 혼합하면 최종 표시값의 출처, 신선도와 변경 책임을 검증할 수 없다. 적용 가능한 렌즈들은 이 원인과 medium 심각도 및 조치 방향을 일관되게 지지했다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: axiology
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: axiology
+  - issue statement: 단일 ETA 값에 캐리어 예측과 수기 판단이 혼합되어 출처, 신선도와 변경 책임을 검증할 수 없다. Source finding context: Shipment.eta의 권위와 이력 Source finding context: 대상: materialized-input.md:49,115-117. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 권위·시간성과 물류 운영 위험을 다루는 통합 개념 기준). value_type=tradeoff; alignment_direction=misaligned. Source finding context: 단일 ETA 값에 캐리어 예측과 수기 판단을 혼합하는 설계는 운영 재량을 보존하는 대신 출처와 시간 신뢰성을 잃는다. Source finding context: 소비자는 ETA가 관측된 캐리어 예측인지 수기 재정의인지 구분하거나 오래된 값을 탐지할 수 없다. 운영팀 재량을 최종 권위로 선택한 근거와 감사·복구 장치가 없어 통합 기준의 권위 및 시간성 약속을 약화한다. Source finding context: ETA 추정치를 출처, 산출·수신·수정 시각, 수정 주체와 함께 이력으로 보존하고, 캐리어 값과 운영 오버라이드를 구분한다. 최종 표시 ETA는 명시된 우선순위 규칙에서 파생한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-005 Source finding context: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공 Source finding context: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때 Source finding context: 표시값의 근거와 신선도를 검증할 수 없어 고객 약속과 운영 판단의 신뢰가 약화된다. Source finding context: 서로 다른 ETA 주장과 수기 오버라이드를 출처 있는 추정 이력으로 분리하지 않고 하나의 mutable 값으로 합쳤다. Source finding context: 최종 ETA가 운영팀 판단에 따라 수기로 조정된다. Source finding context: 캐리어 API 값과 수기 값이 같은 ETA 속성에 혼합된다. Source finding context: 출처, 기준시각, 오버라이드 이력 및 파생 우선순위가 정의되지 않았다.
+  - affected purpose: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공
+  - failure condition: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때
+  - impact: 표시값의 근거와 신선도를 검증할 수 없어 고객 약속과 운영 판단의 신뢰가 약화된다.
+  - root hypothesis: 서로 다른 ETA 주장과 수기 오버라이드를 출처 있는 추정 이력으로 분리하지 않고 하나의 mutable 값으로 합쳤다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-005`, `materialized-input.md:49`, `materialized-input.md:117`, `review-value-alignment-criteria.yaml:6-8`, `finding-ledger.yaml#finding-005`, `finding-005.cause-001`, `finding-005.cause-002`, `finding-005.cause-003`, `issue-stance-matrix.yaml#stances.issue-005.axiology`, `issue-stance-matrix.yaml#stances.issue-005.coverage`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-005`, `issue-stance-matrix.yaml#stances.issue-005.evolution`, `issue-stance-matrix.yaml#stances.issue-005.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-005.semantics`, `issue-stance-matrix.yaml#stances.issue-005.structure`, `issue-ledger.yaml#dep-003`, `rel-011`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: axiology
+  - action candidates: fix_before_release, follow_up
+  - materiality: 운영팀이 ETA를 수정하거나 여러 시스템이 이를 교환·표시할 때 값의 근거와 기준시각을 복원할 수 없어, 배송 예상시각의 권위와 시간성을 일관되게 해석하려는 목적이 약화된다. 그 결과 고객 약속과 운영 판단의 신뢰도도 낮아진다.
+  - root cause: 문제의 출발점은 출처와 의미가 다른 캐리어 예측 및 수기 오버라이드를 각각의 추정 이력으로 보존하지 않고 하나의 mutable 값으로 합친 것이다. 이 모델에서는 원본 주장과 변경 행위가 덮어써지므로 이후 단계에서 계보와 책임을 복구할 수 없다.
+  - causal path: 최종 ETA가 운영 판단에 따라 수기로 조정되고, 캐리어 API 값과 수기 값이 동일 속성에 저장된다. 여기에 출처, 기준시각, 오버라이드 이력과 파생 우선순위가 정의되지 않아 소비자는 표시값이 어느 주장에 근거하는지, 최신인지, 누가 변경했는지를 확인할 수 없게 된다.
+  - action: 먼저 각 ETA 추정치를 출처, 산출·수신·수정 시각, 수정 주체와 함께 불변 이력으로 보존하고 캐리어 예측과 운영 오버라이드를 구분해야 한다. 그다음 명시적인 우선순위 규칙으로 최종 표시 ETA를 파생해야 한다. 이력 및 책임 계약을 먼저 마련해야 표시 규칙이 검증·감사·복구 가능한 결과를 만들 수 있으며, 다음 단계 전에 이 결손을 해소해야 한다.
+
+- issue-010 (medium): 수동 ETA 변경과 WMS·ERP 재고 불일치 조정을 독립된 감사 사건으로 보존하지 않아 변경의 책임과 근거를 검증하거나 당시 상태를 재현할 수 없다. 이 문제는 다음 단계 전에 해소해야 한다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, semantics, structure, evolution
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 수동 ETA 변경과 재고 조정의 행위자·시각·사유·증거가 보존되지 않아 변경을 감사하거나 재현할 수 없다. Source finding context: Manual ETA and inventory reconciliation controls Source finding context: materialized-input.md → Shipment.eta note; InventoryRecord.quantity_on_hand note; notes[0:2] Source finding context: 수동 조정과 야간 재고 조정의 행위자·시각·근거를 보존하는 감사 증거 개념이 없다. Source finding context: 운영 판단이나 재고 차이 조정이 잘못되었을 때 책임과 근거를 추적하거나 변경을 재현할 수 없다. Source finding context: Adjustment/AuditEvent 개념을 추가해 대상 값, 이전·변경 값, actor 또는 process, occurred_at, reason, evidence/source 및 승인 정보를 기록한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006 Source finding context: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공 Source finding context: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때 Source finding context: 중요 운영값 변경의 근거와 책임을 검증할 수 없어 감사성과 장애 조사 신뢰가 약화된다. Source finding context: 변경 가능한 값만 정의하고 그 값을 변경하는 통제 행위를 독립된 감사 사건으로 모델링하지 않았다. Source finding context: ETA 수동 조정과 재고 배치 조정이 수행된다고 명시되어 있다. Source finding context: 조정의 행위자·시각·사유·증거를 담는 엔터티나 속성이 없다.
+  - affected purpose: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공
+  - failure condition: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때
+  - impact: 중요 운영값 변경의 근거와 책임을 검증할 수 없어 감사성과 장애 조사 신뢰가 약화된다.
+  - root hypothesis: 변경 가능한 값만 정의하고 그 값을 변경하는 통제 행위를 독립된 감사 사건으로 모델링하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006`, `materialized-input.md: Shipment.eta note`, `materialized-input.md: InventoryRecord.quantity_on_hand note`, `materialized-input.md: notes의 ETA 및 재고 조정 설명`, `finding-ledger.yaml#finding-011`, `finding-011.cause-001`, `materialized-input.md: notes[0:2]`, `finding-011.cause-002`, `materialized-input.md: entities 및 relations 전체`, `issue-stance-matrix.yaml#stances.issue-010.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-010`, `issue-stance-matrix.yaml#stances.issue-010.coverage`, `issue-stance-matrix.yaml#stances.issue-010.evolution`, `issue-stance-matrix.yaml#stances.issue-010.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-010.semantics`, `issue-stance-matrix.yaml#stances.issue-010.structure`, `issue-ledger.yaml#dep-003`, `rel-011`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - materiality: 중요 운영값이 변경될 때 행위자·시각·사유·증거가 남지 않으면 승인 적정성, 책임 소재, 장애 원인을 확인할 수 없다. 따라서 통합 기준 문서의 목적인 운영상 통제되는 변경의 추적 가능성이 직접 약화된다.
+  - root cause: 현재 모델은 ETA와 재고 수량처럼 변경 가능한 값만 정의하고, 그 값을 누가 왜 언제 어떤 근거로 변경했는지를 나타내는 통제 행위를 별도의 감사 사건으로 모델링하지 않았다. 이 구조적 누락이 후속 증거 부재의 출발점이다.
+  - causal path: 모델은 ETA 수동 조정과 야간 재고 조정이 수행됨을 전제하지만, 조정의 행위자·시각·사유·증거를 담는 엔터티나 속성이 없다. 그 결과 변경 전후 상태와 책임·승인 근거를 연결할 수 없어 조정을 감사하거나 재현할 수 없다. 심의에서는 이 원인과 medium 심각도를 수용하되, 적용 범위를 모든 변경값이 아니라 수동 조정 및 정책 변경처럼 이전 의미를 재현해야 하는 통제값으로 한정했다.
+  - action: 다음 단계 전에 수동 ETA 변경과 재고 불일치 조정 등 통제값 변경에 Adjustment 또는 AuditEvent를 도입해야 한다. 각 사건에는 대상 값, 변경 전·후 값, 행위자 또는 실행 프로세스, 발생 시각, 사유, 증거·원천 및 승인 정보를 기록하고 해당 운영값과 연결해야 변경 이력의 감사와 재현이 가능하다.
+
+- issue-011 (medium): 재고·ETA·배송 상태에 값별 권위 범위, 출처, 우선순위와 계보가 없어 다중 원본이 충돌할 때 신뢰할 값을 일관되게 선택할 수 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: coverage
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: coverage
+  - issue statement: 복수 시스템이 관리하는 재고·ETA·배송 상태에 값별 권위 범위, 출처, 우선순위와 계보가 없다. Source finding context: Cross-system source authority and provenance Source finding context: materialized-input.md → InventoryRecord.quantity_on_hand note; notes on inventory truth and ETA; integrity_rules[1] Source finding context: 복수 시스템이 관리하는 재고·ETA·배송 상태에 단일 권위와 값 출처를 지정하는 모델이 부족하다. Source finding context: 통합 소비자가 동일 명칭의 값 중 무엇을 어떤 목적과 시점에 신뢰해야 하는지 결정할 수 없고, 야간 조정이나 수동 판단이 원본 계보를 소실시킬 수 있다. Source finding context: SystemOfRecord/AuthorityScope와 ValueProvenance 개념을 추가하고 물리재고·회계재고·가용재고·표시 ETA·정규화 상태별 권위자, 우선순위, 원본 값 및 파생 규칙을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007 Source finding context: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공 Source finding context: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때 Source finding context: 소비자가 신뢰할 값과 그 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다. Source finding context: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않았다. Source finding context: 재고·ETA·상태가 복수 시스템 또는 행위자에 의해 병행 관리된다. Source finding context: 값별 권위 범위, 출처, 우선순위 또는 원본 계보 속성이 없다.
+  - affected purpose: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공
+  - failure condition: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때
+  - impact: 신뢰할 값과 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다. Source finding context: 소비자가 신뢰할 값과 그 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다.
+  - root hypothesis: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않았다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007`, `materialized-input.md: InventoryRecord.quantity_on_hand note`, `materialized-input.md: notes의 재고 진실 및 ETA 설명`, `materialized-input.md: integrity_rules[1]`, `finding-ledger.yaml#finding-012`, `finding-012.cause-001`, `materialized-input.md: notes`, `finding-012.cause-002`, `materialized-input.md: InventoryRecord, InventoryAggregate, Shipment, TrackingEvent 속성 정의`, `issue-stance-matrix.yaml#stances.issue-011.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-011`, `issue-stance-matrix.yaml#stances.issue-011.coverage`, `issue-stance-matrix.yaml#stances.issue-011.evolution`, `issue-stance-matrix.yaml#stances.issue-011.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-011.semantics`, `issue-stance-matrix.yaml#stances.issue-011.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: coverage
+  - action candidates: fix_before_release, follow_up
+  - materiality: 이는 WMS/TMS/ERP 통합 소비자가 동일한 값 이름에 대해 서로 다른 선택을 하게 만들어 통합 결과가 구현별로 달라지므로, 단일 개념 기준을 제공하려는 목적을 실질적으로 약화한다.
+  - root cause: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않은 것이 출발점이다. 이 구조적 결손 때문에 값의 목적별 권위자, 적용 범위, 우선순위와 유도 근거를 기계적으로 판별할 수 없다.
+  - causal path: 재고·ETA·상태가 여러 시스템이나 행위자에 의해 병행 관리되지만 값별 권위 범위, 출처, 우선순위와 원본 계보 속성이 없다. 따라서 값이 충돌하면 소비자는 어느 값을 어떤 목적과 시점에 신뢰할지 공통 규칙으로 결정하지 못하고, 조정이나 수동 판단 과정에서 원본 계보도 소실될 수 있다. 적용 가능한 렌즈들은 이 원인과 medium 심각도를 일관되게 지지했으며 별도 숙의는 필요하지 않았다.
+  - action: 다음 단계 전에 SystemOfRecord, AuthorityScope, ValueProvenance를 일급 개념으로 추가해야 한다. 물리재고·회계재고·가용재고·표시 ETA·정규화 상태 등 값 종류별로 권위자와 적용 범위, 충돌 시 우선순위, 원본 값, 파생 규칙을 명시하여 통합 소비자가 동일한 기준으로 값을 선택하고 계보를 보존하도록 해야 한다.
+
+- issue-021 (medium): 캐리어 예측 ETA와 운영팀 수기 조정 ETA가 Shipment의 단일 eta에 덮어써져, 최종 값의 출처와 기준시각을 복원할 수 없는 중간 심각도의 중요 이슈다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: semantics
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: semantics
+  - issue statement: 캐리어 예측과 운영팀 수기 판단을 하나의 eta에 혼합해 예측 출처와 기준시각의 의미를 잃는다. Source finding context: Shipment.eta의 값 의미와 출처 Source finding context: materialized-input.md:48-50, 115-117 Source finding context: 캐리어 예측값과 운영팀 수기 판단값을 하나의 eta에 혼합해 예측 출처와 기준시각의 의미를 잃는다. Source finding context: 캐리어가 계산한 예상 도착시각과 운영팀이 덮어쓴 표시값은 출처, 계산 시점, 신뢰도, 변경 책임이 다른 개념이다. 단일 값만으로는 시스템 간 어떤 ETA를 교환했는지 또는 예측 오차를 무엇과 비교해야 하는지 알 수 없다. Source finding context: 캐리어 ETA와 운영 조정 ETA를 별도 관측/예측값으로 보존하고 `source`, `calculated_at`, `effective_at`, `supersedes` 또는 선택 근거를 둔다. 최종 표시 ETA는 이 원천들로부터 도출되는 명시적 projection으로 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-007 Source finding context: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성 Source finding context: 캐리어 ETA가 갱신되거나 운영팀이 수기 조정한 뒤 시스템 간 ETA를 동기화하거나 예측 품질을 분석할 때 Source finding context: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사 및 예측 정확도 평가가 불가능해진다. Source finding context: 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓰기 방식으로 수용했다. Source finding context: Shipment에는 단일 eta datetime만 존재한다. Source finding context: 그 값에는 캐리어 API 예측과 운영팀 수기 조정이 혼합된다. Source finding context: 원천 예측과 운영상 선택 결과를 별도 개념으로 보존하지 않는다.
+  - affected purpose: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성
+  - failure condition: 캐리어 ETA 갱신이나 수기 조정 후 시스템 간 동기화 또는 예측 품질 분석을 수행할 때 Source finding context: 캐리어 ETA가 갱신되거나 운영팀이 수기 조정한 뒤 시스템 간 ETA를 동기화하거나 예측 품질을 분석할 때
+  - impact: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사와 예측 정확도 평가가 불가능해진다. Source finding context: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사 및 예측 정확도 평가가 불가능해진다.
+  - root hypothesis: 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓰기 방식으로 수용했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-007`, `materialized-input.md:48-50`, `materialized-input.md:115-117`, `finding-ledger.yaml#finding-024`, `finding-024.cause-001`, `finding-024.cause-002`, `finding-024.cause-003`, `issue-stance-matrix.yaml#stances.issue-021.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-021`, `issue-stance-matrix.yaml#stances.issue-021.coverage`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004`, `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006`, `issue-stance-matrix.yaml#stances.issue-021.evolution`, `issue-stance-matrix.yaml#stances.issue-021.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-021.semantics`, `issue-stance-matrix.yaml#stances.issue-021.structure`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: semantics
+  - action candidates: fix_before_release, follow_up
+  - materiality: 캐리어 ETA 갱신이나 운영팀 조정 후에는 시스템 간 어떤 ETA가 교환되었는지, 누가 어떤 근거로 값을 바꿨는지, 예측 오차를 어느 원천값과 비교해야 하는지 알 수 없다. 따라서 TMS·캐리어·운영 화면 간 ETA 의미의 일관성과 추적 가능성이 훼손되고, 충돌 처리·감사·예측 정확도 평가가 불가능해진다.
+  - root cause: 문제의 시작점은 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓴 모델 결손이다. 원천 예측과 운영상 선택 결과를 별도 개념으로 보존하지 않으므로 이후 단계에서 출처, 계산 시점, 변경 책임을 복원할 근거 자체가 남지 않는다.
+  - causal path: Shipment에 단일 eta datetime만 존재하고, 여기에 캐리어 API 예측과 운영팀 수기 조정이 함께 기록된다. 덮어쓰기 과정에서 원천 예측과 운영상 선택 결과가 분리 보존되지 않아 최종 ETA의 출처와 기준시각이 소실되며, 그 결과 동기화 충돌 해결, 변경 감사, 제공자별 예측 품질 비교가 막힌다. 적용 가능한 렌즈들은 이 원인과 medium 심각도를 일관되게 수용했으며 별도 숙의는 필요하지 않았다.
+  - action: 다음 단계 전에 캐리어 ETA와 운영 조정 ETA를 별도 관측값으로 먼저 보존하고 각 값에 source, calculated_at, effective_at, supersedes 및 선택 근거를 기록해야 한다. 그 후 최종 표시 ETA를 원천 관측값에서 도출되는 명시적 projection으로 정의해야 한다. 원천 이력 보존이 선행되어야 표시값을 재계산하고 선택 이유를 감사할 수 있다.
+
+- issue-023 (medium): DeliveryLeg가 소속 Shipment와 연결되지 않아 복수 화물·다구간 배송에서 화물별 경로와 구간 순서를 구성할 수 없다. 적용 가능한 렌즈들은 이 결함과 medium 심각도 판단을 일관되게 수용했으며, 남은 이견은 없다.
+  - issue stance agreement: 5/6
+  - agreed or narrowed lenses: axiology, coverage, evolution, semantics, structure
+  - issue stance disagreement: 0/6
+  - disagreeing stance lenses: none
+  - not applicable lenses: logic
+  - insufficient evidence lenses: none
+  - resolution accepted by: 1/1 deliberation participants
+  - accepted lenses: structure
+  - remaining disagreement: 0/1 deliberation participants
+  - remaining disagreement lenses: none
+  - raised by lenses: structure
+  - issue statement: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로와 구간 순서를 구성할 수 없다. Source finding context: logistics-fulfillment-ontology.yaml — Shipment/DeliveryLeg route structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:40-58 Source finding context: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로를 구성할 수 없다. Source finding context: 여러 Shipment와 여러 구간이 존재하면 `leg_seq`만으로 구간을 특정 화물에 묶을 수 없다. 그 결과 TMS가 한 화물의 구간 순서와 경로를 재구성할 구조적 경로가 없다. Source finding context: `DeliveryLeg.shipment_ref -> Shipment` 또는 `Shipment contains DeliveryLeg` 관계를 추가하고, `leg_seq`가 Shipment 내부에서 유일하도록 무결성 규칙을 둔다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-002 Source finding context: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델 Source finding context: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우 Source finding context: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다. Source finding context: 유형 상속(`is_a`)만 정의하고 Shipment 인스턴스와 DeliveryLeg 인스턴스의 구성 관계를 생략했다. Source finding context: 특정 Shipment를 구성하는 DeliveryLeg 목록과 순서를 판정할 수 없다. Source finding context: DeliveryLeg에는 `leg_seq`, `from_ref`, `to_ref`만 있고 상위 Shipment 참조가 없다. Source finding context: Shipment와 DeliveryLeg 사이에는 `is_a` 외에 인스턴스 포함 관계가 정의되지 않았다.
+  - affected purpose: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델
+  - failure condition: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우
+  - impact: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다.
+  - root hypothesis: 유형 상속만 정의하고 Shipment 인스턴스와 DeliveryLeg 인스턴스의 구성 관계를 생략했다.
+  - evidence: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-002`, `materialized-input.md:40-58`, `finding-ledger.yaml#finding-026`, `finding-026.cause-001`, `materialized-input.md:52-58`, `finding-026.cause-002`, `finding-026.cause-003`, `materialized-input.md:105-109`, `issue-stance-matrix.yaml#stances.issue-023.axiology`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml#issue-023`, `issue-stance-matrix.yaml#stances.issue-023.coverage`, `issue-stance-matrix.yaml#stances.issue-023.evolution`, `issue-stance-matrix.yaml#stances.issue-023.logic`, `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`, `issue-stance-matrix.yaml#stances.issue-023.semantics`, `issue-stance-matrix.yaml#stances.issue-023.structure`, `issue-ledger.yaml#dep-004`, `rel-019`, `.onto/review/20260716-b0f9e3b8/issue-ledger.yaml`, `.onto/review/20260716-b0f9e3b8/problem-framing.yaml`
+  - source lenses: structure
+  - action candidates: fix_before_release, follow_up
+  - materiality: 이 모델의 목적은 WMS/TMS/ERP가 화물과 배송 구간을 공통 구조로 교환·통합하도록 하는 것이다. 그러나 구간의 소속 화물을 판별할 수 없으면 둘 이상의 Shipment가 존재할 때 DeliveryLeg를 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다.
+  - root cause: Shipment와 DeliveryLeg 사이에 유형 상속만 정의하고 인스턴스 수준의 부분–전체 구성 관계를 생략한 것이 출발점이다. 이 누락 때문에 각 DeliveryLeg의 소속 Shipment와 leg_seq의 적용 범위가 구조적으로 정해지지 않는다.
+  - causal path: 구성 관계가 없으므로 DeliveryLeg의 leg_seq, from_ref, to_ref만으로는 상위 Shipment를 식별할 수 없다. 따라서 특정 Shipment를 구성하는 구간 목록을 만들거나 그 내부 순서를 판정할 수 없고, 결국 화물별 배송 경로를 재구성할 수 없게 된다.
+  - action: 다음 단계 전에 Shipment–DeliveryLeg의 권위 있는 구성 관계를 하나로 정의해야 한다. DeliveryLeg.shipment_ref 또는 Shipment contains DeliveryLeg 중 모델의 기존 방향성에 맞는 관계를 추가한 뒤, leg_seq가 해당 Shipment 내부에서 유일하도록 무결성 규칙을 둬야 한다. dep-004가 issue-015와의 공통 원인 가능성을 보존하므로 관련 관계 수정과 정합성을 맞춰 중복되거나 충돌하는 모델링을 피해야 한다.
+
+### Conditional Consensus
+- issue-001 (no-deliberation-needed): 재고 값의 목적별 권위와 시간 계약이 모델에 연결되지 않은 상태에서 일중 할당이 전일 InventoryAggregate.available_qty를 사용하므로, 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다.
+- issue-003 (no-deliberation-needed): Order·Shipment·TrackingEvent가 공통 생명주기와 연결 계약 없이 독립 enum으로 정의되어, 연동별 상태 해석이 달라지고 취소·부분충족·배송 실패·반품·종결 후 정정 같은 비정상 운영을 일관되게 표현할 수 없다.
+- issue-006 (no-deliberation-needed): 재고 예약·할당 거래가 독립 개념으로 모델링되지 않아 주문별 할당 수량과 생명주기를 표현할 수 없으며, 동일한 야간 재고 스냅샷을 여러 일중 주문이 반복 참조할 때 과다 할당 방지와 소비 이력 추적이 불가능하다.
+- issue-007 (no-deliberation-needed): 현재 모델은 Shipment가 어떤 Order를 충족하는지만 나타내고 주문행별 충족 수량은 기록하지 못하므로, 부분·분할 출하에서 잔여 주문량과 실제 출하량을 대사할 수 없다.
+- issue-009 (narrowed): 재고와 ETA를 덮어쓰는 현재값으로만 표현한 모델은 과거 주문·할당·배송 판단의 재구성과 새 WMS·3PL·실시간 이력의 점진적 도입을 함께 막는 중대한 설계 문제다.
+  - unresolved disagreement: coverage와 evolution은 원인과 실패 범위에는 합의했지만, 직접 재구성 실패와 단계적 확장 실패를 종합해 심각도를 medium 또는 high로 판단할 기준이 경계 내에 없어 최종 심각도는 확정되지 않았다.
+- issue-012 (narrowed): 버전형 StatusMapping 계약의 부재로 캐리어 상태의 canonical 정규화가 연동별 구현에 분산되어 현재 결과의 일관성과 변경 이후 과거 이벤트 해석의 연속성을 보장할 수 없다. 원인과 필요한 조치에는 합의했으며, 다음 단계 전에 닫아야 하는 material 이슈다.
+  - unresolved disagreement: coverage와 evolution은 원인과 조치에는 합의했지만, 현재 상호운용성 공백과 장기적인 반복 수정·매핑 드리프트·과거 재해석의 누적 영향을 하나의 심각도로 가중하는 기준이 없어 medium과 high 중 어느 수준인지 경계 내에서 확정하지 못했다. 또한 실제 연동 구현에 별도 매핑 레지스트리가 존재하는지는 현재 증거 범위에서 확인되지 않았다.
+- issue-013 (no-deliberation-needed): 현재의 Shipment→Order 주문 단위 fulfills 관계만으로는 부분출하·분할충족을 표현할 수 없다. 따라서 부분출하 도입 전에 라인별 수량 할당 모델로 재구성해야 한다.
+- issue-015 (no-deliberation-needed): DeliveryLeg는 Shipment의 하위유형이 아니라 특정 Shipment를 구성하는 독립 운송 구간이어야 한다. 현재 분류는 구간과 전체 화물의 식별·상태·주문 충족 의미를 충돌시키는 high 심각도의 현재 차단 이슈다.
+- issue-017 (no-deliberation-needed): 물리적 보유량과 회계 장부량이 하나의 quantity_on_hand에 혼합되어 WMS와 ERP 중 어느 값이 목적별 진실인지 판정할 수 없는 현재의 high 심각도 문제이며, 대상 범위에서 반드시 해소해야 한다.
+- issue-018 (no-deliberation-needed): 야간 available_qty 스냅샷을 일중 현재 가용재고로 사용하는 구조는 유효 시점과 계산 산식이 없어 중복 할당 위험을 만들므로 즉시 수정해야 하는 high 심각도 이슈다.
+- issue-019 (no-deliberation-needed): 주문 전체의 단일 fulfillment_status와 Shipment→Order 관계만으로는 부분출하에서 shipped·delivered가 일부 완료인지 전량 완료인지 판정할 수 없습니다. 따라서 주문선별 충족 범위와 수량을 재구성할 수 없는 현재의 high 심각도 정확성 이슈를 목표 범위에서 반드시 수정해야 합니다.
+- issue-022 (no-deliberation-needed): Shipment와 OrderLine을 충족 수량과 함께 연결하는 구조가 없어, 부분·분할 출하에서 주문행별 출하 추적 경로가 끊겨 있다. 이 문제는 현재 차단 요인이므로 대상 모델에서 반드시 수정해야 한다.
+- issue-024 (no-deliberation-needed): 주문행과 창고 재고 사이에 할당 인스턴스가 없어 주문→재고 할당 단계가 구조적으로 기록되지 않는다. 이는 선언된 핵심 흐름을 막는 high 심각도의 현재 결함이며 목표 범위에서 반드시 수정해야 한다.
+- issue-005 (no-deliberation-needed): 캐리어 예측과 운영팀의 수기 판단을 단일 변경 가능 ETA에 혼합하면 최종 표시값의 출처, 신선도와 변경 책임을 검증할 수 없다. 적용 가능한 렌즈들은 이 원인과 medium 심각도 및 조치 방향을 일관되게 지지했다.
+- issue-010 (no-deliberation-needed): 수동 ETA 변경과 WMS·ERP 재고 불일치 조정을 독립된 감사 사건으로 보존하지 않아 변경의 책임과 근거를 검증하거나 당시 상태를 재현할 수 없다. 이 문제는 다음 단계 전에 해소해야 한다.
+- issue-011 (no-deliberation-needed): 재고·ETA·배송 상태에 값별 권위 범위, 출처, 우선순위와 계보가 없어 다중 원본이 충돌할 때 신뢰할 값을 일관되게 선택할 수 없다.
+- issue-021 (no-deliberation-needed): 캐리어 예측 ETA와 운영팀 수기 조정 ETA가 Shipment의 단일 eta에 덮어써져, 최종 값의 출처와 기준시각을 복원할 수 없는 중간 심각도의 중요 이슈다.
+- issue-023 (no-deliberation-needed): DeliveryLeg가 소속 Shipment와 연결되지 않아 복수 화물·다구간 배송에서 화물별 경로와 구간 순서를 구성할 수 없다. 적용 가능한 렌즈들은 이 결함과 medium 심각도 판단을 일관되게 수용했으며, 남은 이견은 없다.
+
+### Disagreement
+- issue-009: coverage와 evolution은 원인과 실패 범위에는 합의했지만, 직접 재구성 실패와 단계적 확장 실패를 종합해 심각도를 medium 또는 high로 판단할 기준이 경계 내에 없어 최종 심각도는 확정되지 않았다.
+- issue-012: coverage와 evolution은 원인과 조치에는 합의했지만, 현재 상호운용성 공백과 장기적인 반복 수정·매핑 드리프트·과거 재해석의 누적 영향을 하나의 심각도로 가중하는 기준이 없어 medium과 high 중 어느 수준인지 경계 내에서 확정하지 못했다. 또한 실제 연동 구현에 별도 매핑 레지스트리가 존재하는지는 현재 증거 범위에서 확인되지 않았다.
+
+### Axiology-Proposed Additional Perspectives
+- issue-001 (high): 재고 값의 목적별 권위와 시간 계약이 모델에 연결되지 않은 상태에서 일중 할당이 전일 InventoryAggregate.available_qty를 사용하므로, 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다.
+- issue-003 (high): Order·Shipment·TrackingEvent가 공통 생명주기와 연결 계약 없이 독립 enum으로 정의되어, 연동별 상태 해석이 달라지고 취소·부분충족·배송 실패·반품·종결 후 정정 같은 비정상 운영을 일관되게 표현할 수 없다.
+- issue-004 (medium): 수량을 가진 OrderLine–Shipment 대응이 없어 부분출하 시 주문선별 충족 사실과 상태를 재구성할 수 없으며, 이는 목표 범위에서 즉시 보완해야 하는 현재 결손이다.
+- issue-005 (medium): 캐리어 예측과 운영팀의 수기 판단을 단일 변경 가능 ETA에 혼합하면 최종 표시값의 출처, 신선도와 변경 책임을 검증할 수 없다. 적용 가능한 렌즈들은 이 원인과 medium 심각도 및 조치 방향을 일관되게 지지했다.
+- issue-002 (medium): 단위 없는 중량·치수와 합산값은 시스템 간 비교 가능한 물리량 기준을 제공하지 못한다. Source finding context: Sku.weight, Sku.dims 및 Shipment.total_weight Source finding context: 대상: materialized-input.md:33-38,40-49. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 통합 개념 기준의 단위 정합성 검토). value_type=commitment; alignment_direction=misaligned. Source finding context: 소스별 단위 관례를 그대로 보존하는 설계는 시스템 간 비교 가능한 단위 기준을 제공하지 못한다. Source finding context: 같은 숫자와 문자열이 시스템마다 다른 물리량을 뜻할 수 있어 총중량, 운임, 용량 판단을 신뢰할 수 없다. 소스 편의성을 선택한 대가로 통합 문서의 정규화 목적을 훼손한다. Source finding context: 중량과 각 치수를 값·단위의 구조화된 수량으로 모델링하고 canonical 단위와 변환 규칙을 지정한다. `total_weight`에는 계산 단위와 구성값의 정규화 조건을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-002 Source finding context: WMS/TMS/ERP 간 단위가 일관된 상품·화물 개념 기준 제공 Source finding context: 서로 다른 계량 관례의 SKU가 동일 Shipment 계산 또는 시스템 간 교환에 포함될 때 Source finding context: 통합 문서가 값의 비교와 합산을 보장하지 못해 운영·비용 판단의 신뢰가 약화된다. Source finding context: 소스 시스템의 표현을 canonical 수량 모델로 정규화하지 않고 공통 속성에 직접 수용했다. Source finding context: Shipment.total_weight가 구성 OrderLine 중량의 합으로 저장된다. Source finding context: 합산 원천인 SKU 중량에는 단위 필드가 없고 kg 또는 lb가 혼재할 수 있다. Source finding context: 치수 역시 단위 없는 소스별 문자열로 정의되어 있다.
+
+### Purpose Alignment Verification
+- issue-001: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공
+- issue-003: OMS/TMS/캐리어의 주문·화물·배송 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: OMS/TMS/캐리어 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: 주문·화물·배송의 공통 상태 기준 제공
+- issue-006: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공
+- issue-007: 주문에서 출하·배송까지의 통합 추적
+- issue-009: 시간에 따라 변하는 주문충족 정보와 WMS/ERP 재고의 권위·시간 기준 및 확장성 제공 Source finding context: 시간에 따라 변하는 주문충족 정보를 시스템 간 일관되게 해석하는 기준 제공 Source finding context: WMS/ERP 재고 통합의 권위·시간 기준 및 새로운 재고 원천에 대한 확장성
+- issue-012: OMS/TMS/캐리어 간 공통 배송 상태 기준과 외부 상태 체계 변경에 대한 연속성 Source finding context: TMS와 캐리어 연동 사이의 공통 배송 상태 기준 제공 Source finding context: OMS/TMS/캐리어 간 상태 통합 기준과 외부 상태 체계 변경에 대한 연속성
+- issue-013: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성
+- issue-015: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준
+- issue-017: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공
+- issue-018: 재고 할당을 위한 일관된 가용 재고 기준
+- issue-019: 주문에서 출하와 배송까지의 일관된 충족 상태 기준
+- issue-022: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적
+- issue-024: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적
+- issue-004: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공
+- issue-005: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공
+- issue-010: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공
+- issue-011: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공
+- issue-021: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성
+- issue-023: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델
+
+### Boundary Notes
+- 실제 통합 시스템에 별도의 실시간 예약 또는 신선도 통제가 존재하는지는 허용된 증거 범위에서 확인할 수 없다.
+- 현재 각 개별 연동이 실제로 구현한 상태 매핑은 경계 내 증거로 확인되지 않았다.
+- 필수 예외 상태의 정확한 범위는 실제 운영 정책 확인이 필요하다.
+
+### Immediate Actions Required
+- issue-001 (high)
+  - issue: 재고 값의 목적별 권위와 시간 계약이 모델에 연결되지 않은 상태에서 일중 할당이 전일 InventoryAggregate.available_qty를 사용하므로, 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다.
+  - target: 분할된 재고 권위와 전일 스냅샷 기반 할당 때문에 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다. Source finding context: InventoryRecord, InventoryAggregate 및 재고 할당 규칙 Source finding context: 대상: materialized-input.md:76-90,111-116. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: WMS/TMS/ERP 통합의 개념 기준 문서이며 권위·시간성·운영 위험을 검토). value_type=purpose; alignment_direction=misaligned. Source finding context: 분할된 재고 권위와 전일 스냅샷 기반 할당은 통합 기준 문서라는 목적에 정렬되지 않는다. Source finding context: 어느 수량이 어떤 목적에서 권위 있는지와 값의 기준시점이 모델에 없으므로, 이 문서를 따르는 시스템도 동일 시점의 가용재고를 일관되게 해석할 수 없다. 재고 부족, 중복 할당 또는 감사 불가능성을 감수하는 트레이드오프가 정당화되지 않았다. Source finding context: 실물·회계·가용 수량별 권위 시스템을 명시하고 각 값에 `as_of`, 출처, 갱신 시각을 추가한다. 할당에는 예약을 반영한 최신 가용수량과 허용 신선도 규칙을 사용하도록 계약화한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공 Source finding context: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때 Source finding context: 동일 온톨로지를 채택한 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다. Source finding context: 배치 조정 관행을 수용하면서 재고 값의 목적별 권위와 시간 계약을 모델링하지 않았다. Source finding context: 일중 할당이 매일 밤 저장되는 InventoryAggregate.available_qty를 읽는다. Source finding context: 이 값과 창고별 현재고에는 유효시점이 없고 WMS·ERP가 서로 다른 값을 보유한다. Source finding context: 재고 권위와 신선도 대신 야간 ERP 기준 조정만 규정되어 있다.
+  - failure condition: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때
+  - candidates: fix_now
+  - rationale: 먼저 실물·회계·가용 수량별 권위 시스템을 구분하고 각 재고 값에 기준시점(as_of), 출처, 갱신 시각을 연결해야 한다. 그다음 할당 계약이 예약을 반영한 최신 가용수량만 소비하고 명시된 허용 신선도를 초과한 값은 사용하지 않도록 해야 한다. 권위·시간 계약을 먼저 확립해야 할당 규칙과 향후 WMS·3PL·실시간 원천 확장이 같은 의미를 유지할 수 있다.
+  - remediation: 먼저 실물·회계·가용 수량별 권위 시스템을 구분하고 각 재고 값에 기준시점(as_of), 출처, 갱신 시각을 연결해야 한다. 그다음 할당 계약이 예약을 반영한 최신 가용수량만 소비하고 명시된 허용 신선도를 초과한 값은 사용하지 않도록 해야 한다. 권위·시간 계약을 먼저 확립해야 할당 규칙과 향후 WMS·3PL·실시간 원천 확장이 같은 의미를 유지할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-003 (high)
+  - issue: Order·Shipment·TrackingEvent가 공통 생명주기와 연결 계약 없이 독립 enum으로 정의되어, 연동별 상태 해석이 달라지고 취소·부분충족·배송 실패·반품·종결 후 정정 같은 비정상 운영을 일관되게 표현할 수 없다.
+  - target: 공통 상태 의미·전이·충돌 권위와 예외 생명주기가 없어 연동마다 상태 해석이 달라지고 비정상 운영을 일관되게 표현할 수 없다. Source finding context: Order.fulfillment_status, Shipment.status 및 TrackingEvent.event_type Source finding context: 대상: materialized-input.md:19-22,44-47,60-68,111-113. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 상태 모델 정합성과 운영 위험을 갖춘 통합 개념 기준). value_type=purpose; alignment_direction=misaligned. Source finding context: 상태 의미의 통합을 각 연동에 위임한 것은 공통 개념 기준이라는 목적을 역전시킨다. Source finding context: 온톨로지가 공통 상태 의미와 선후관계, 충돌 시 권위를 제공하지 않으므로 연동마다 다른 `delivered` 또는 예외 해석이 생길 수 있다. 통합 복잡성을 중앙 기준에서 제거하지 않고 소비자에게 분산한다. Source finding context: 각 상태의 canonical 의미와 전이 조건을 정의하고, 외부 이벤트→Shipment→Order 상태의 명시적 crosswalk, 권위, 우선순위 및 충돌 처리 규칙을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-003 Source finding context: OMS/TMS/캐리어 상태를 일관되게 연결하는 통합 개념 기준 제공 Source finding context: 캐리어 이벤트로 Shipment 또는 Order 상태를 갱신하거나 시스템 간 상태 충돌을 해결할 때 Source finding context: 각 연동이 별도 의미를 발명하게 되어 통합 전반의 상태 일관성과 고객·운영 판단을 신뢰할 수 없다. Source finding context: 상태 조정 책임을 ontology의 canonical 계약이 아니라 개별 연동에 배분했다. Source finding context: TrackingEvent.event_type와 Shipment.status의 매핑이 연동별 재량이다. Source finding context: Order, Shipment, TrackingEvent 상태는 각 소유 시스템이 독립 관리한다. Source finding context: 상태 간 canonical mapping, 전이 및 충돌 권위가 정의되지 않았다. Source finding context: Order and Shipment lifecycle coverage Source finding context: materialized-input.md → Order.fulfillment_status; Shipment.status; TrackingEvent.event_type Source finding context: 주문·화물 상태 모델이 취소, 부분충족, 실패, 반품 및 종결 후 정정 구간을 포함하지 않는다. Source finding context: 취소, 배송 실패, 반송, 재출하 같은 일반적인 비정상 운영을 기존 상태에 왜곡해 기록하거나 외부 시스템별 임의 상태로 남겨야 한다. Source finding context: Order와 Shipment 각각에 canceled, partially_fulfilled, failed_delivery, returned 등 필요한 종결·예외 상태와 허용 전이를 정의하고, delivered 이후 정정·재개·재출하 사건의 처리 규칙을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-005 Source finding context: 주문·화물·배송의 공통 상태 기준 제공 Source finding context: 정상 배송 외의 취소, 부분충족, 실패, 반품 또는 종결 후 정정이 발생할 때 Source finding context: 운영 사건을 공통 상태 모델로 표현할 수 없어 시스템별 상태가 분기되고 대사가 어려워진다. Source finding context: 생명주기가 정상 진행 경로 중심으로만 열거되고 예외·역방향·종결 후 전이가 모델링되지 않았다. Source finding context: TrackingEvent에는 exception이 있으나 Order와 Shipment 상태에는 대응 예외 상태가 없다. Source finding context: Order와 Shipment의 상태 열거가 정상 배송 완료까지의 단방향 구간만 포함한다.
+  - failure condition: 캐리어 이벤트로 상태를 갱신하거나 취소·부분충족·배송 실패·반품·종결 후 정정이 발생할 때 Source finding context: 캐리어 이벤트로 Shipment 또는 Order 상태를 갱신하거나 시스템 간 상태 충돌을 해결할 때 Source finding context: 정상 배송 외의 취소, 부분충족, 실패, 반품 또는 종결 후 정정이 발생할 때
+  - candidates: fix_now
+  - rationale: 먼저 Order와 Shipment의 canonical 상태 의미와 정상·예외 생명주기를 정의하고, 취소·부분충족·배송 실패·반품 및 delivered 이후 정정·재개·재출하의 허용 전이를 명시해야 한다. 그다음 외부 TrackingEvent에서 Shipment, 다시 Order로 이어지는 crosswalk를 연결하고, 판정 권위·우선순위·충돌 처리 규칙을 같은 계약에 포함해야 한다. 의미와 전이를 먼저 확정해야 후속 매핑과 충돌 규칙이 안정된 기준을 참조할 수 있다.
+  - remediation: 먼저 Order와 Shipment의 canonical 상태 의미와 정상·예외 생명주기를 정의하고, 취소·부분충족·배송 실패·반품 및 delivered 이후 정정·재개·재출하의 허용 전이를 명시해야 한다. 그다음 외부 TrackingEvent에서 Shipment, 다시 Order로 이어지는 crosswalk를 연결하고, 판정 권위·우선순위·충돌 처리 규칙을 같은 계약에 포함해야 한다. 의미와 전이를 먼저 확정해야 후속 매핑과 충돌 규칙이 안정된 기준을 참조할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-006 (high)
+  - issue: 재고 예약·할당 거래가 독립 개념으로 모델링되지 않아 주문별 할당 수량과 생명주기를 표현할 수 없으며, 동일한 야간 재고 스냅샷을 여러 일중 주문이 반복 참조할 때 과다 할당 방지와 소비 이력 추적이 불가능하다.
+  - target: 재고 예약·할당의 수량과 생명주기를 표현할 개념이 없어 과다 할당 방지와 주문별 소비 추적이 불가능하다. Source finding context: Inventory allocation model Source finding context: materialized-input.md → InventoryAggregate.available_qty; integrity_rules[0] Source finding context: 재고 예약·할당의 수량과 생명주기를 표현하는 개념이 없다. Source finding context: 동시 주문과 부분 할당이 스냅샷 하나를 반복해서 참조할 수 있어 과다 할당을 방지하거나 어떤 주문이 가용재고를 소비했는지 재구성할 수 없다. 이는 주문→재고 할당을 포함한다는 선언 목적을 직접 약화한다. Source finding context: OrderLine과 InventoryRecord를 연결하는 InventoryReservation 또는 Allocation 엔터티를 추가하고 수량, 상태, 생성·만료·해제 시각 및 가용재고 반영 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001 Source finding context: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공 Source finding context: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때 Source finding context: 과다 할당 방지와 주문별 재고 소비 추적을 개념 모델로 보장할 수 없다. Source finding context: 온톨로지가 재고를 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 개념으로 포함하지 않았다. Source finding context: 일중 주문 할당이 야간 available_qty 스냅샷을 직접 읽는다. Source finding context: 주문별 예약·할당·해제를 나타내는 엔터티나 관계가 없다.
+  - failure condition: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때
+  - candidates: fix_now
+  - rationale: OrderLine과 InventoryRecord를 연결하는 예약 또는 할당 엔터티를 먼저 도입하고, 할당 수량, 상태, 생성·만료·해제 시각을 정의해야 한다. 이어 각 상태 전이가 available_qty에 언제 반영되거나 복원되는지 규칙을 정하고, 동시 주문과 부분 할당에서도 유효 예약·할당 합계가 가용재고를 초과하지 않으며 주문별 소비 이력이 보존되도록 해야 한다.
+  - remediation: OrderLine과 InventoryRecord를 연결하는 예약 또는 할당 엔터티를 먼저 도입하고, 할당 수량, 상태, 생성·만료·해제 시각을 정의해야 한다. 이어 각 상태 전이가 available_qty에 언제 반영되거나 복원되는지 규칙을 정하고, 동시 주문과 부분 할당에서도 유효 예약·할당 합계가 가용재고를 초과하지 않으며 주문별 소비 이력이 보존되도록 해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-007 (high)
+  - issue: 현재 모델은 Shipment가 어떤 Order를 충족하는지만 나타내고 주문행별 충족 수량은 기록하지 못하므로, 부분·분할 출하에서 잔여 주문량과 실제 출하량을 대사할 수 없다.
+  - target: 부분출하를 표현할 주문행-화물 수량 매핑 개념이 없어 잔여 주문량과 실제 출하량을 대사할 수 없다. Source finding context: OrderLine-to-Shipment fulfillment traceability Source finding context: materialized-input.md → OrderLine comment; relations.fulfills Source finding context: 부분출하를 표현할 주문행-화물 수량 매핑 개념이 없다. Source finding context: 분할 출하, 부분 충족, 재출하 상황에서 잔여 주문량과 실제 출하량을 대사할 수 없어 OMS·WMS·TMS 간 기준 모델 역할을 수행하지 못한다. Source finding context: FulfillmentLine 또는 ShipmentLine을 추가해 OrderLine, Shipment, fulfilled_qty와 단위를 연결하고 분할·취소·재출하 시의 수량 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002 Source finding context: 주문에서 출하·배송까지의 통합 추적 Source finding context: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때 Source finding context: 주문 잔량, 출하량, 배송 결과를 시스템 간에 대사할 수 없다. Source finding context: 충족 관계의 최소 단위가 Order로만 정의되고 수량을 가진 행 단위 연결 개념이 생략되었다. Source finding context: 부분출하 시 어느 주문행이 어느 Shipment로 나갔는지 추적할 수 없다. Source finding context: 유일한 fulfills 관계가 Shipment와 Order만 연결하고 OrderLine 매핑을 명시적으로 제외한다.
+  - failure condition: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때
+  - candidates: fix_now
+  - rationale: FulfillmentLine 또는 ShipmentLine과 같은 행 단위 충족 개념을 추가해 OrderLine, Shipment, fulfilled_qty 및 수량 단위를 연결해야 한다. 이어 분할, 부분 충족, 취소, 재출하 시 수량의 증감·잔량·중복 방지 규칙을 정의해야 시스템 간 대사 기준이 완성된다. 이 조치는 현재 차단 요인이므로 대상 범위에서 즉시 닫아야 한다.
+  - remediation: FulfillmentLine 또는 ShipmentLine과 같은 행 단위 충족 개념을 추가해 OrderLine, Shipment, fulfilled_qty 및 수량 단위를 연결해야 한다. 이어 분할, 부분 충족, 취소, 재출하 시 수량의 증감·잔량·중복 방지 규칙을 정의해야 시스템 간 대사 기준이 완성된다. 이 조치는 현재 차단 요인이므로 대상 범위에서 즉시 닫아야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-009 (high)
+  - issue: 재고와 ETA를 덮어쓰는 현재값으로만 표현한 모델은 과거 주문·할당·배송 판단의 재구성과 새 WMS·3PL·실시간 이력의 점진적 도입을 함께 막는 중대한 설계 문제다.
+  - target: 재고와 ETA의 현재값 모델은 과거 상태 재구성뿐 아니라 새 재고 원천과 실시간 이력의 점진적 도입도 지원하지 못한다. Source finding context: Inventory and ETA temporal history Source finding context: materialized-input.md → InventoryRecord.quantity_on_hand comment; InventoryAggregate.available_qty; Shipment.eta Source finding context: 변동 값의 기준시점·유효기간·변경 이력을 표현하는 시간 차원이 없다. Source finding context: 주문 접수나 할당 당시의 재고·ETA를 재구성할 수 없어 사후 대사, SLA 분석 및 변경 원인 확인이 불가능하다. Source finding context: 재고 스냅샷과 ETA 예측에 observed_at/as_of, valid_from/valid_to, recorded_at 및 버전 또는 이벤트 이력을 추가한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004 Source finding context: 시간에 따라 변하는 주문충족 정보를 시스템 간 일관되게 해석하는 기준 제공 Source finding context: 현재 값이 갱신된 뒤 과거 주문·할당·배송 판단을 재구성해야 할 때 Source finding context: 동일 값의 시점별 의미를 구별할 수 없어 감사와 운영 분석의 신뢰가 약화된다. Source finding context: 시점 의존 속성을 현재값 필드로만 모델링하고 시간 버전 또는 변경 이벤트 개념을 포함하지 않았다. Source finding context: 재고와 ETA가 갱신되지만 과거 시점 값을 식별하는 속성이 없다. Source finding context: 스냅샷·예측 값에 기준시점, 유효기간 또는 버전 모델이 정의되지 않았다. Source finding context: logistics-fulfillment-ontology.yaml — InventoryRecord/InventoryAggregate 시간·권위 모델 Source finding context: materialized-input.md:76-90, 111-116 Source finding context: 새 재고 원천이나 실시간 이력을 도입하면 기존 현재값 모델로는 데이터 연속성과 원천별 의미를 유지할 수 없다. Source finding context: 추가 WMS, 3PL, 예약 재고, 실시간 이벤트를 수용하려면 현재값 필드의 의미를 바꾸거나 별도 모델로 이관해야 한다. 원천과 시점이 보존되지 않아 과거 값의 재현, 새 계산 규칙의 병행, 단계적 마이그레이션이 불가능하다. Source finding context: 원천 시스템, 재고 의미(실물·회계·가용·예약), 관측 시각, 유효 시각, 단위와 버전을 가진 InventoryObservation 또는 InventoryLedger를 권위 기록으로 도입한다. InventoryRecord와 InventoryAggregate는 명시된 시점과 계산 규칙에서 생성되는 투영으로 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-004 Source finding context: WMS/ERP 재고 통합의 권위·시간 기준 및 새로운 재고 원천에 대한 확장성 Source finding context: 추가 창고 시스템, 3PL, 실시간 재고 이벤트 또는 새로운 가용재고 계산 규칙을 도입할 때 Source finding context: 기존 값의 의미와 과거 상태를 보존한 채 점진적으로 확장할 수 없고, 통합 소비자가 어느 시점의 어느 권위 값을 사용했는지 검증할 수 없다. Source finding context: 재고를 원천과 시간 차원을 가진 관측/원장으로 모델링하지 않고 덮어쓰는 현재값과 무시점 집계로 모델링했다. Source finding context: 새 재고 원천이나 실시간 이력을 추가하면 기존 quantity 필드만으로 값들을 구분할 수 없다. Source finding context: WMS와 ERP가 각자 값을 가지지만 야간에 ERP 기준으로 조정한다. Source finding context: InventoryRecord와 InventoryAggregate에 원천 및 유효 시점 계약이 없다.
+  - failure condition: 현재 값 갱신 후 과거 판단을 재구성하거나 추가 WMS·3PL·실시간 이벤트·새 계산 규칙을 도입할 때 Source finding context: 현재 값이 갱신된 뒤 과거 주문·할당·배송 판단을 재구성해야 할 때 Source finding context: 추가 창고 시스템, 3PL, 실시간 재고 이벤트 또는 새로운 가용재고 계산 규칙을 도입할 때
+  - candidates: fix_before_release, accept_risk
+  - rationale: 다음 단계 전에 원천 시스템, 재고 의미, 관측·유효·기록 시각과 버전을 갖는 InventoryObservation 또는 InventoryLedger 같은 이력 모델을 권위 기록으로 결정해야 한다. 재고 현재값과 집계, ETA는 명시된 기준시점과 계산 규칙에서 생성되는 투영으로 정의해 과거 재구성과 새 원천의 병행 도입을 가능하게 해야 한다. 아울러 직접 재구성 실패와 진화상 확장 실패를 합산하는 심각도 기준을 정해 fix-before-release와 위험 수용 중 하나를 확정해야 한다.
+  - remediation: 다음 단계 전에 원천 시스템, 재고 의미, 관측·유효·기록 시각과 버전을 갖는 InventoryObservation 또는 InventoryLedger 같은 이력 모델을 권위 기록으로 결정해야 한다. 재고 현재값과 집계, ETA는 명시된 기준시점과 계산 규칙에서 생성되는 투영으로 정의해 과거 재구성과 새 원천의 병행 도입을 가능하게 해야 한다. 아울러 직접 재구성 실패와 진화상 확장 실패를 합산하는 심각도 기준을 정해 fix-before-release와 위험 수용 중 하나를 확정해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-012 (high)
+  - issue: 버전형 StatusMapping 계약의 부재로 캐리어 상태의 canonical 정규화가 연동별 구현에 분산되어 현재 결과의 일관성과 변경 이후 과거 이벤트 해석의 연속성을 보장할 수 없다. 원인과 필요한 조치에는 합의했으며, 다음 단계 전에 닫아야 하는 material 이슈다.
+  - target: 캐리어 상태를 canonical 상태로 정규화하는 버전형 매핑 계약이 없어 현재 결과가 연동마다 달라지고 새 코드 도입 시 반복 수정과 과거 재해석이 발생한다. Source finding context: Carrier-to-canonical tracking status mapping Source finding context: materialized-input.md → TrackingEvent.event_type note; integrity_rules[1] Source finding context: 캐리어 상태 코드를 공통 Shipment 상태로 정규화하는 매핑 개념이 없다. Source finding context: 같은 캐리어 사건이 연동마다 다른 화물 상태를 만들 수 있어 온톨로지가 통합의 공통 상태 기준이 되지 못한다. Source finding context: CarrierStatusMapping 개념을 추가해 carrier_ref, external_code, canonical_event/status, effective period, mapping version과 unknown-code 처리 규칙을 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-008 Source finding context: TMS와 캐리어 연동 사이의 공통 배송 상태 기준 제공 Source finding context: 캐리어별 코드가 Shipment.status로 변환되거나 새로운 코드가 유입될 때 Source finding context: 정규화 결과가 연동 구현마다 달라져 상태 대사와 자동화가 불안정해진다. Source finding context: 외부 상태 정규화를 온톨로지 개념이 아닌 개별 연동의 책임으로 남겼다. Source finding context: 캐리어 상태와 Shipment.status의 매핑을 각 연동이 처리한다. Source finding context: 공통 매핑 엔터티와 미매핑·버전 처리 규칙이 없다. Source finding context: logistics-fulfillment-ontology.yaml — Order/Shipment/TrackingEvent 상태 모델 Source finding context: materialized-input.md:19-22, 44-47, 60-68, 111-113 Source finding context: 새 캐리어 상태나 내부 상태가 추가되면 온톨로지 열거형과 개별 연동 매핑을 반복 수정해야 한다. Source finding context: 외부 캐리어 코드나 OMS/TMS 상태가 변경되면 공통 기준에서 흡수할 확장 계층이 없어 enum과 여러 연동을 동시에 고쳐야 한다. 서로 다른 시점의 매핑이 구분되지 않아 동일한 과거 이벤트가 새 규칙에서 다른 상태로 해석될 수도 있다. Source finding context: 원천 시스템·원천 코드·정규 상태·매핑 버전·유효 기간을 갖는 버전형 StatusMapping 개념을 두고, 원천 이벤트는 원래 코드 그대로 보존한다. 정의되지 않은 코드는 명시적인 unknown/unmapped 경로로 수용한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-002 Source finding context: OMS/TMS/캐리어 간 상태 통합 기준과 외부 상태 체계 변경에 대한 연속성 Source finding context: 캐리어가 상태 코드를 추가·변경하거나 내부 OMS/TMS 워크플로가 세분화될 때 Source finding context: 모든 연동이 개별 수정 대상이 되고 매핑 드리프트가 누적되며, 과거 이벤트의 재해석 결과가 안정적으로 유지되지 않는다. Source finding context: 상태 상호운용성을 버전 가능한 공통 매핑 개념으로 모델링하지 않고 닫힌 enum과 연동별 구현에 위임했다. Source finding context: 새 원천 상태를 수용하려면 닫힌 enum 또는 연동별 매핑을 변경해야 한다. Source finding context: 각 시스템이 상태를 독립 관리하고 캐리어 매핑은 각 연동이 알아서 수행한다. Source finding context: 원천 코드와 정규 상태 사이의 버전형 매핑 및 유효 시점 개념이 없다.
+  - failure condition: 캐리어별 코드를 Shipment 상태로 변환하거나 캐리어·내부 시스템이 상태 코드를 추가·변경할 때 Source finding context: 캐리어별 코드가 Shipment.status로 변환되거나 새로운 코드가 유입될 때 Source finding context: 캐리어가 상태 코드를 추가·변경하거나 내부 OMS/TMS 워크플로가 세분화될 때
+  - candidates: fix_before_release, accept_risk
+  - rationale: 다음 단계로 진행하기 전에 원천 시스템·원천 코드, canonical 이벤트·상태, 매핑 버전과 유효 기간을 권위 있게 관리하는 StatusMapping을 도입해야 한다. 먼저 원시 코드를 변경 없이 보존하고 unknown/unmapped 경로를 명시한 뒤, 모든 연동이 사건 시점에 유효한 매핑을 사용하도록 연결해야 현재 일관성과 과거 결과의 재현성을 함께 확보할 수 있다.
+  - remediation: 다음 단계로 진행하기 전에 원천 시스템·원천 코드, canonical 이벤트·상태, 매핑 버전과 유효 기간을 권위 있게 관리하는 StatusMapping을 도입해야 한다. 먼저 원시 코드를 변경 없이 보존하고 unknown/unmapped 경로를 명시한 뒤, 모든 연동이 사건 시점에 유효한 매핑을 사용하도록 연결해야 현재 일관성과 과거 결과의 재현성을 함께 확보할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-013 (high)
+  - issue: 현재의 Shipment→Order 주문 단위 fulfills 관계만으로는 부분출하·분할충족을 표현할 수 없다. 따라서 부분출하 도입 전에 라인별 수량 할당 모델로 재구성해야 한다.
+  - target: 부분 출하·분할 충족을 추가하려면 기존 주문 단위 fulfills 관계와 소비 로직을 재구성해야 한다. Source finding context: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment model Source finding context: materialized-input.md:25-31, 105-109 Source finding context: 부분 출하·분할 충족을 추가하려면 기존 주문 단위 fulfills 모델을 재구성해야 한다. Source finding context: 대상 자체가 부분 출하를 추적할 수 없다고 명시한다. 부분 출하, 백오더, 다중 창고 출하를 도입하면 단순한 새 유형 추가로 끝나지 않고 기존 관계의 의미와 소비 로직을 함께 변경해야 하며, 과거 주문의 라인별 충족 내역도 복원할 수 없다. Source finding context: OrderLine과 Shipment(필요하면 DeliveryLeg)를 잇는 FulfillmentAllocation 같은 연관 개념을 추가하고 할당 수량·단위·유효 시점·상태를 둔다. 기존 주문 단위 fulfills는 이 연관에서 계산되는 호환용 투영으로 유지한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성 Source finding context: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때 Source finding context: 통합 시스템들이 공통 관계를 재사용할 수 없고 기존 스키마와 소비 로직을 동시에 변경해야 하며, 과거 데이터의 의미 연속성도 확보할 수 없다. Source finding context: 충족을 수량을 가진 라인-출하 연관이 아니라 주문-출하 이진 관계로만 모델링했다. Source finding context: 부분 출하 시 어느 OrderLine이 어느 Shipment로 나갔는지 표현할 수 없다. Source finding context: 기존 fulfills 관계가 Shipment→Order의 주문 단위 관계로 고정되어 있다. Source finding context: 라인별 충족 수량을 담는 독립 연관 개념이 없다.
+  - failure condition: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때
+  - candidates: fix_now
+  - rationale: OrderLine과 Shipment를 연결하는 FulfillmentAllocation을 추가하고 할당 수량·단위·유효 시점·상태를 그 연관의 속성으로 정의해야 한다. 먼저 이 연관을 충족 정보의 권위 있는 모델로 확립한 뒤, 기존 주문 단위 fulfills는 할당에서 계산되는 호환용 투영으로 유지해야 소비자 전환을 단계화하고 향후 충족 방식 확장을 수용할 수 있다.
+  - remediation: OrderLine과 Shipment를 연결하는 FulfillmentAllocation을 추가하고 할당 수량·단위·유효 시점·상태를 그 연관의 속성으로 정의해야 한다. 먼저 이 연관을 충족 정보의 권위 있는 모델로 확립한 뒤, 기존 주문 단위 fulfills는 할당에서 계산되는 호환용 투영으로 유지해야 소비자 전환을 단계화하고 향후 충족 방식 확장을 수용할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-015 (high)
+  - issue: DeliveryLeg는 Shipment의 하위유형이 아니라 특정 Shipment를 구성하는 독립 운송 구간이어야 한다. 현재 분류는 구간과 전체 화물의 식별·상태·주문 충족 의미를 충돌시키는 high 심각도의 현재 차단 이슈다.
+  - target: DeliveryLeg를 Shipment의 하위유형으로 분류해 경로 구간과 전체 화물의 식별·상태·충족 의미가 충돌한다. Source finding context: DeliveryLeg의 존재론적 유형과 Shipment 상속 Source finding context: materialized-input.md:40-58, 105-109 Source finding context: 배송 구간을 전체 화물 이동인 Shipment의 하위유형으로 분류해 부분-전체 관계를 종류-하위종류 관계로 오인한다. Source finding context: 경로 구간은 일반적으로 전체 Shipment를 구성하는 부분이다. 현재 모델에서는 각 구간이 독립적인 shipment_no, 전체 중량, 최종 배송 상태 및 Order 충족 주체로 해석될 수 있어 TMS 구간과 ERP/OMS 출하의 식별 의미가 충돌한다. Source finding context: DeliveryLeg를 독립 엔티티로 두고 `part_of` 또는 `shipment_ref`로 Shipment에 연결한다. 구간별 상태·ETA·운송사가 필요하면 구간 속성으로 명시하고 전체 Shipment 속성과 구분한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-001 Source finding context: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준 Source finding context: TMS의 다구간 운송 데이터를 Shipment/DeliveryLeg로 교환하거나 주문 충족 관계를 해석할 때 Source finding context: 하나의 출하와 그 운송 구간들이 동일 종류로 취급되어 식별, 상태 집계, 주문 충족 판정이 서로 다른 시스템에서 달라질 수 있다. Source finding context: 운송 구간과 전체 화물 이동 사이의 부분-전체 관계를 하위유형 관계로 모델링했다. Source finding context: DeliveryLeg는 화물 경로의 한 구간으로 정의된다. Source finding context: 그 구간이 전체 물리적 화물 이동으로 정의된 Shipment의 하위유형으로 선언된다. Source finding context: Shipment와 DeliveryLeg 사이의 의미적으로 필요한 부분-전체 관계가 하위유형 관계로 대체되었다.
+  - failure condition: TMS의 다구간 운송 데이터를 교환하거나 주문 충족 관계를 해석할 때 Source finding context: TMS의 다구간 운송 데이터를 Shipment/DeliveryLeg로 교환하거나 주문 충족 관계를 해석할 때
+  - candidates: fix_now
+  - rationale: 먼저 DeliveryLeg의 Shipment 하위유형 분류를 제거하고 독립 엔터티로 정의한 뒤, part_of 또는 shipment_ref로 각 구간을 해당 Shipment에 연결해야 한다. 이어 구간별 상태·ETA·운송사와 전체 Shipment의 식별자·중량·최종 상태·주문 충족 속성을 명확히 분리해야 한다. 관계와 속성 범위를 먼저 바로잡아야 이후 시스템 매핑과 상태 집계가 동일한 의미 경계를 따를 수 있다.
+  - remediation: 먼저 DeliveryLeg의 Shipment 하위유형 분류를 제거하고 독립 엔터티로 정의한 뒤, part_of 또는 shipment_ref로 각 구간을 해당 Shipment에 연결해야 한다. 이어 구간별 상태·ETA·운송사와 전체 Shipment의 식별자·중량·최종 상태·주문 충족 속성을 명확히 분리해야 한다. 관계와 속성 범위를 먼저 바로잡아야 이후 시스템 매핑과 상태 집계가 동일한 의미 경계를 따를 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-017 (high)
+  - issue: 물리적 보유량과 회계 장부량이 하나의 quantity_on_hand에 혼합되어 WMS와 ERP 중 어느 값이 목적별 진실인지 판정할 수 없는 현재의 high 심각도 문제이며, 대상 범위에서 반드시 해소해야 한다.
+  - target: 서로 다른 물리·회계 재고 수량을 단일 속성에 합쳐 그 의미와 WMS·ERP 간 권위가 충돌한다. Source finding context: InventoryRecord.quantity_on_hand의 의미와 권위 Source finding context: materialized-input.md:76-84, 115-117 Source finding context: 물리 재고와 회계 재고라는 서로 다른 수량을 하나의 quantity_on_hand 속성으로 합치면서 권위도 WMS와 ERP 사이에서 충돌한다. Source finding context: 물리적 보유량과 회계 장부량은 불일치할 수 있는 별도 의미다. 하나의 속성으로 표현하면 사용자는 값이 실물 출고 가능량인지 장부 수량인지 구분할 수 없고, 야간 조정은 물리적 진실을 회계 값으로 덮는 것으로 해석될 수 있다. Source finding context: `physical_on_hand`와 `accounting_on_hand`를 분리하거나, 재고 관측값에 `quantity_kind`, `source_system`, `as_of`를 둔다. 각 사용 사례별 권위와 조정 결과의 의미를 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-003 Source finding context: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공 Source finding context: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때 Source finding context: 동일 필드가 상반된 진실 기준을 나타내어 할당, 재고조정, 감사에서 어느 값이 맞는지 판정할 수 없다. Source finding context: 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용했다. Source finding context: quantity_on_hand는 현재 보유 수량으로 단일 정의된다. Source finding context: WMS와 ERP가 같은 속성의 값을 각각 가지며 ERP 기준 야간 조정이 수행된다. Source finding context: WMS의 실물 기준과 ERP의 회계 기준이 서로 다른 진실로 별도 선언되어 있다.
+  - failure condition: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때
+  - candidates: fix_now
+  - rationale: 먼저 physical_on_hand와 accounting_on_hand를 분리하거나 재고 관측값에 quantity_kind, source_system, as_of를 도입해 서로 다른 관점을 명시해야 한다. 그다음 할당, 결산, 조정과 감사별 권위 시스템을 지정하고, 야간 조정이 물리 수량의 덮어쓰기가 아니라 관점 간 조정 결과로 해석되도록 의미를 정의해야 한다. 이 의미·권위 분리를 재고 선택 및 조정 로직보다 먼저 확정해야 downstream 동작이 올바른 값을 사용할 수 있다.
+  - remediation: 먼저 physical_on_hand와 accounting_on_hand를 분리하거나 재고 관측값에 quantity_kind, source_system, as_of를 도입해 서로 다른 관점을 명시해야 한다. 그다음 할당, 결산, 조정과 감사별 권위 시스템을 지정하고, 야간 조정이 물리 수량의 덮어쓰기가 아니라 관점 간 조정 결과로 해석되도록 의미를 정의해야 한다. 이 의미·권위 분리를 재고 선택 및 조정 로직보다 먼저 확정해야 downstream 동작이 올바른 값을 사용할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-018 (high)
+  - issue: 야간 available_qty 스냅샷을 일중 현재 가용재고로 사용하는 구조는 유효 시점과 계산 산식이 없어 중복 할당 위험을 만들므로 즉시 수정해야 하는 high 심각도 이슈다.
+  - target: 야간 available_qty 스냅샷을 일중 현재 가용재고로 사용하면서 유효 시점과 계산 산식을 정의하지 않았다. Source finding context: InventoryAggregate.available_qty의 시간성과 파생 의미 Source finding context: materialized-input.md:76-90, 111-112 Source finding context: 매일 밤 생성한 스냅샷을 일중에도 현재 가용 재고로 취급하면서 유효 시점과 가용량 산식을 정의하지 않았다. Source finding context: 가용 재고는 특정 시점과 예약 상태에 의존하는 파생 의미다. 시점 없는 전일 값을 현재 가용량으로 사용하면 이미 할당된 수량을 다시 가용하다고 해석할 수 있으며, 시스템마다 available의 계산 의미도 달라진다. Source finding context: `as_of`와 계산/갱신 시점을 추가하고, available_qty의 권위 시스템 및 산식(예: 물리 보유량에서 예약·차단 수량 등을 차감)을 명시한다. 일중 할당에는 갱신 가능한 권위 값을 사용한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-004 Source finding context: 재고 할당을 위한 일관된 가용 재고 기준 Source finding context: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때 Source finding context: 가용량의 시점과 계산 의미가 불명확해 중복 할당이나 시스템 간 가용 재고 불일치가 발생할 수 있다. Source finding context: 시간 의존적 파생값인 available_qty를 원천·산식·유효시점 없는 독립 스냅샷 필드로 모델링했다. Source finding context: 일중 재고 할당이 InventoryAggregate.available_qty를 기준으로 수행된다. Source finding context: available_qty는 매일 밤 저장되는 스냅샷일 뿐 유효 시점이 없다. Source finding context: 가용량을 구성하는 원천 수량과 산식이 모델에 정의되지 않았다.
+  - failure condition: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때
+  - candidates: fix_now
+  - rationale: available_qty의 권위 시스템과 물리 보유량·예약량·차단량 등 입력을 사용하는 계산 산식을 정의하고, as_of와 계산·갱신 시점을 모델에 추가해야 한다. 그다음 일중 할당 경로가 야간 스냅샷이 아니라 갱신 가능한 권위 값을 사용하도록 전환해야 하며, 권위와 갱신 규칙을 먼저 확정한 뒤 소비 경로를 바꿔야 의미 불일치가 재발하지 않는다.
+  - remediation: available_qty의 권위 시스템과 물리 보유량·예약량·차단량 등 입력을 사용하는 계산 산식을 정의하고, as_of와 계산·갱신 시점을 모델에 추가해야 한다. 그다음 일중 할당 경로가 야간 스냅샷이 아니라 갱신 가능한 권위 값을 사용하도록 전환해야 하며, 권위와 갱신 규칙을 먼저 확정한 뒤 소비 경로를 바꿔야 의미 불일치가 재발하지 않는다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-019 (high)
+  - issue: 주문 전체의 단일 fulfillment_status와 Shipment→Order 관계만으로는 부분출하에서 shipped·delivered가 일부 완료인지 전량 완료인지 판정할 수 없습니다. 따라서 주문선별 충족 범위와 수량을 재구성할 수 없는 현재의 high 심각도 정확성 이슈를 목표 범위에서 반드시 수정해야 합니다.
+  - target: 주문 단위 상태와 Shipment→Order 관계만으로는 부분출하 시 shipped와 delivered의 완료 범위를 판정할 수 없다. Source finding context: Order.fulfillment_status와 fulfills 관계의 주문 충족 의미 Source finding context: materialized-input.md:14-31, 105-109 Source finding context: 주문 단위 상태와 Shipment→Order 관계만으로 부분출하 시 `shipped` 및 `delivered`의 의미를 단일하게 판정할 수 없다. Source finding context: 일부 주문 줄이나 일부 수량만 출하된 경우 `shipped`가 일부 출하인지 전량 출하인지, 한 Shipment가 주문 전체를 충족하는지 일부만 충족하는지 구분되지 않는다. 동일 상태명이 OMS, WMS, TMS에서 다른 사실을 뜻하게 된다. Source finding context: Shipment와 OrderLine 사이에 충족 수량을 가진 할당/출하명세 관계를 추가한다. 주문 상태는 line 수준 사실에서 도출하고 `partially_allocated`, `partially_shipped`, `partially_delivered` 등 전이 의미와 완료 조건을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-005 Source finding context: 주문에서 출하와 배송까지의 일관된 충족 상태 기준 Source finding context: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때 Source finding context: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하 및 고객 상태 표시 오류를 판별하기 어렵다. Source finding context: 충족 사실의 의미 단위가 OrderLine/수량이 아니라 Order 전체로만 모델링되었다. Source finding context: Order에는 주문 전체를 나타내는 단일 fulfillment_status가 있다. Source finding context: Shipment의 fulfills 관계도 Order 전체만 대상으로 한다. Source finding context: OrderLine별 충족 Shipment와 수량을 표현하는 의미 단위가 없다.
+  - failure condition: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때
+  - candidates: fix_now
+  - rationale: 먼저 Shipment와 OrderLine 사이에 충족 수량을 기록하는 관계를 추가해 행·수량별 사실을 권위 있는 근거로 만들어야 합니다. 그다음 그 사실에서 주문 상태를 도출하고 partially_allocated, partially_shipped, partially_delivered 같은 부분 상태의 전이 의미와 shipped·delivered의 전량 완료 조건을 명시해야 합니다. 이 순서를 지켜야 상태 정의가 주문 전체의 모호한 값이 아니라 재구성 가능한 충족 사실에 의존합니다.
+  - remediation: 먼저 Shipment와 OrderLine 사이에 충족 수량을 기록하는 관계를 추가해 행·수량별 사실을 권위 있는 근거로 만들어야 합니다. 그다음 그 사실에서 주문 상태를 도출하고 partially_allocated, partially_shipped, partially_delivered 같은 부분 상태의 전이 의미와 shipped·delivered의 전량 완료 조건을 명시해야 합니다. 이 순서를 지켜야 상태 정의가 주문 전체의 모호한 값이 아니라 재구성 가능한 충족 사실에 의존합니다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-022 (high)
+  - issue: Shipment와 OrderLine을 충족 수량과 함께 연결하는 구조가 없어, 부분·분할 출하에서 주문행별 출하 추적 경로가 끊겨 있다. 이 문제는 현재 차단 요인이므로 대상 모델에서 반드시 수정해야 한다.
+  - target: 주문행과 출하 간 수량 포함 연결이 없어 부분출하 추적 경로가 구조적으로 끊겨 있다. Source finding context: logistics-fulfillment-ontology.yaml — OrderLine/Shipment fulfillment structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:25-31,105-109 Source finding context: 주문행과 출하 간의 수량 포함 연결이 없어 부분출하 추적 경로가 끊겨 있다. Source finding context: 대상 자체가 부분출하 시 주문행과 Shipment의 대응을 추적할 수 없다고 명시한다. 따라서 한 주문이 여러 출하로 나뉘거나 한 행이 분할 출하되면 OMS 주문행과 WMS/TMS 화물을 정합하게 연결할 수 없다. Source finding context: `ShipmentLine` 같은 연결 엔터티를 추가해 `Shipment`, `OrderLine`, `fulfilled_qty`를 필수로 연결하고, 주문 단위 `fulfills`는 이 연결에서 유도되도록 한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-001 Source finding context: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적 Source finding context: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우 Source finding context: 시스템 간 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 통합 기준 문서의 핵심 추적성이 깨진다. Source finding context: 모델이 Shipment와 OrderLine을 수량과 함께 연결하는 구성 요소를 생략했다. Source finding context: 부분출하에서 각 Shipment가 충족한 주문행과 수량을 식별할 수 없다. Source finding context: 유일한 출하-주문 관계인 `fulfills`가 Shipment에서 Order 전체로만 연결된다. Source finding context: Shipment와 OrderLine 사이의 연결 엔터티 또는 관계와 충족 수량 속성이 존재하지 않는다.
+  - failure condition: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우
+  - candidates: fix_now
+  - rationale: `ShipmentLine` 또는 동등한 연결 엔터티를 추가하고 각 인스턴스가 `Shipment`, `OrderLine`, `fulfilled_qty`를 필수로 참조하도록 해야 한다. 주문 단위 `fulfills`는 이 행 단위 연결에서 유도되도록 하여 행 단위 기록을 원천으로 삼아야 하며, 그래야 부분·분할 출하의 출하량 대사와 미충족 수량 계산이 일관되게 가능하다.
+  - remediation: `ShipmentLine` 또는 동등한 연결 엔터티를 추가하고 각 인스턴스가 `Shipment`, `OrderLine`, `fulfilled_qty`를 필수로 참조하도록 해야 한다. 주문 단위 `fulfills`는 이 행 단위 연결에서 유도되도록 하여 행 단위 기록을 원천으로 삼아야 하며, 그래야 부분·분할 출하의 출하량 대사와 미충족 수량 계산이 일관되게 가능하다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-024 (high)
+  - issue: 주문행과 창고 재고 사이에 할당 인스턴스가 없어 주문→재고 할당 단계가 구조적으로 기록되지 않는다. 이는 선언된 핵심 흐름을 막는 high 심각도의 현재 결함이며 목표 범위에서 반드시 수정해야 한다.
+  - target: 주문행과 창고 재고 사이의 할당 연결이 없어 선언된 주문→재고 할당 단계가 구조적으로 기록되지 않는다. Source finding context: logistics-fulfillment-ontology.yaml — inventory allocation structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:14-31,70-90,105-113 Source finding context: SKU가 같다는 사실은 특정 주문에 대한 재고 예약을 나타내지 않는다. 같은 SKU의 여러 주문이나 창고 재고가 존재하면 할당 결과를 주문행별로 식별·대사할 수 없고, 텍스트 무결성 규칙의 `available_qty` 확인도 영속적인 연결을 만들지 않는다. Source finding context: `InventoryAllocation` 같은 연결 엔터티를 추가해 `OrderLine`, `InventoryRecord` 또는 Warehouse, `allocated_qty`를 연결하고, 필요하면 할당 상태·생성 시각을 그 엔터티의 속성으로 둔다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-003 Source finding context: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적 Source finding context: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우 Source finding context: OMS 주문 수요와 WMS 창고 예약의 대응 관계를 검증할 수 없어 중복 할당, 미할당, 출하 전 재고 대사가 구조적으로 판정 불가능하다. Source finding context: 모델이 주문행과 창고 재고 사이의 할당 행위 및 할당 수량을 독립된 연결 구조로 표현하지 않았다. Source finding context: 특정 OrderLine에 예약된 창고와 수량을 온톨로지에서 식별할 수 없다. Source finding context: OrderLine, InventoryRecord, InventoryAggregate는 SKU를 공유하지만 특정 할당 인스턴스를 연결하는 참조가 없다. Source finding context: 명시된 관계는 Shipment에서 Order로 향하는 `fulfills`뿐이고, 재고 할당은 연결 구조 없이 텍스트 규칙으로만 언급된다.
+  - failure condition: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우
+  - candidates: fix_now
+  - rationale: InventoryAllocation 연결 엔터티를 추가해 각 OrderLine을 해당 InventoryRecord 또는 Warehouse 및 allocated_qty와 연결해야 한다. 할당 상태와 생성 시각도 이 엔터티에 정의하여 예약의 생명주기를 추적할 수 있게 해야 한다. 이 연결을 먼저 권위 있는 할당 기록으로 확립해야 이후 출하 연결과 재고 대사가 주문행별 할당을 일관되게 참조할 수 있다.
+  - remediation: InventoryAllocation 연결 엔터티를 추가해 각 OrderLine을 해당 InventoryRecord 또는 Warehouse 및 allocated_qty와 연결해야 한다. 할당 상태와 생성 시각도 이 엔터티에 정의하여 예약의 생명주기를 추적할 수 있게 해야 한다. 이 연결을 먼저 권위 있는 할당 기록으로 확립해야 이후 출하 연결과 재고 대사가 주문행별 할당을 일관되게 참조할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-004 (medium)
+  - issue: 수량을 가진 OrderLine–Shipment 대응이 없어 부분출하 시 주문선별 충족 사실과 상태를 재구성할 수 없으며, 이는 목표 범위에서 즉시 보완해야 하는 현재 결손이다.
+  - target: 주문 단위 관계만으로는 부분출하 시 주문선별 충족 사실과 수량을 추적할 수 없다. Source finding context: OrderLine과 Shipment의 충족 관계 Source finding context: 대상: materialized-input.md:25-31,105-109. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 주문·화물·배송 정합성을 갖춘 통합 개념 기준). value_type=stakeholder; alignment_direction=misaligned. Source finding context: 주문 단위 관계만 두는 단순화는 부분출하 추적이라는 핵심 주문충족 목적을 희생한다. Source finding context: 부분출하, 분할배송, 부족수량 상황에서 OMS·WMS·TMS가 동일한 충족 사실을 교환하거나 고객 문의·운영 조사를 수행할 수 없다. 모델 단순화의 이익보다 추적성과 책임성 손실이 크지만 그 트레이드오프가 정당화되지 않았다. Source finding context: OrderLine과 Shipment를 연결하며 충족 수량을 담는 `FulfillmentAllocation` 또는 `ShipmentLine` 개념을 추가하고, Order 수준 `fulfills`는 그 합계에서 파생되도록 한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-004 Source finding context: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공 Source finding context: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때 Source finding context: 시스템 간 충족 사실을 재구성할 수 없어 운영 조사와 고객 응대의 실행 가능성이 약화된다. Source finding context: 관계를 주문 수준으로만 단순화하면서 수량을 가진 주문선-화물 대응 개념을 의도적으로 제외했다. Source finding context: 부분출하 시 어느 주문선이 어느 Shipment로 나갔는지 추적할 수 없다. Source finding context: 유일한 충족 관계가 Shipment→Order이며 OrderLine 매핑을 두지 않는다.
+  - failure condition: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때
+  - candidates: fix_now
+  - rationale: OrderLine과 Shipment를 충족 수량과 함께 연결하는 FulfillmentAllocation 또는 ShipmentLine을 먼저 도입해야 한다. 이후 주문 수준 fulfills와 관련 출하·배송 상태를 해당 행 단위 수량의 합계에서 파생하도록 바꿔, 주문선별 사실을 단일 권위로 삼고 시스템 간 재구성과 조사가 가능하게 해야 한다.
+  - remediation: OrderLine과 Shipment를 충족 수량과 함께 연결하는 FulfillmentAllocation 또는 ShipmentLine을 먼저 도입해야 한다. 이후 주문 수준 fulfills와 관련 출하·배송 상태를 해당 행 단위 수량의 합계에서 파생하도록 바꿔, 주문선별 사실을 단일 권위로 삼고 시스템 간 재구성과 조사가 가능하게 해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-005 (medium)
+  - issue: 캐리어 예측과 운영팀의 수기 판단을 단일 변경 가능 ETA에 혼합하면 최종 표시값의 출처, 신선도와 변경 책임을 검증할 수 없다. 적용 가능한 렌즈들은 이 원인과 medium 심각도 및 조치 방향을 일관되게 지지했다.
+  - target: 단일 ETA 값에 캐리어 예측과 수기 판단이 혼합되어 출처, 신선도와 변경 책임을 검증할 수 없다. Source finding context: Shipment.eta의 권위와 이력 Source finding context: 대상: materialized-input.md:49,115-117. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 권위·시간성과 물류 운영 위험을 다루는 통합 개념 기준). value_type=tradeoff; alignment_direction=misaligned. Source finding context: 단일 ETA 값에 캐리어 예측과 수기 판단을 혼합하는 설계는 운영 재량을 보존하는 대신 출처와 시간 신뢰성을 잃는다. Source finding context: 소비자는 ETA가 관측된 캐리어 예측인지 수기 재정의인지 구분하거나 오래된 값을 탐지할 수 없다. 운영팀 재량을 최종 권위로 선택한 근거와 감사·복구 장치가 없어 통합 기준의 권위 및 시간성 약속을 약화한다. Source finding context: ETA 추정치를 출처, 산출·수신·수정 시각, 수정 주체와 함께 이력으로 보존하고, 캐리어 값과 운영 오버라이드를 구분한다. 최종 표시 ETA는 명시된 우선순위 규칙에서 파생한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-005 Source finding context: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공 Source finding context: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때 Source finding context: 표시값의 근거와 신선도를 검증할 수 없어 고객 약속과 운영 판단의 신뢰가 약화된다. Source finding context: 서로 다른 ETA 주장과 수기 오버라이드를 출처 있는 추정 이력으로 분리하지 않고 하나의 mutable 값으로 합쳤다. Source finding context: 최종 ETA가 운영팀 판단에 따라 수기로 조정된다. Source finding context: 캐리어 API 값과 수기 값이 같은 ETA 속성에 혼합된다. Source finding context: 출처, 기준시각, 오버라이드 이력 및 파생 우선순위가 정의되지 않았다.
+  - failure condition: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때
+  - candidates: fix_before_release, follow_up
+  - rationale: 먼저 각 ETA 추정치를 출처, 산출·수신·수정 시각, 수정 주체와 함께 불변 이력으로 보존하고 캐리어 예측과 운영 오버라이드를 구분해야 한다. 그다음 명시적인 우선순위 규칙으로 최종 표시 ETA를 파생해야 한다. 이력 및 책임 계약을 먼저 마련해야 표시 규칙이 검증·감사·복구 가능한 결과를 만들 수 있으며, 다음 단계 전에 이 결손을 해소해야 한다.
+  - remediation: 먼저 각 ETA 추정치를 출처, 산출·수신·수정 시각, 수정 주체와 함께 불변 이력으로 보존하고 캐리어 예측과 운영 오버라이드를 구분해야 한다. 그다음 명시적인 우선순위 규칙으로 최종 표시 ETA를 파생해야 한다. 이력 및 책임 계약을 먼저 마련해야 표시 규칙이 검증·감사·복구 가능한 결과를 만들 수 있으며, 다음 단계 전에 이 결손을 해소해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-010 (medium)
+  - issue: 수동 ETA 변경과 WMS·ERP 재고 불일치 조정을 독립된 감사 사건으로 보존하지 않아 변경의 책임과 근거를 검증하거나 당시 상태를 재현할 수 없다. 이 문제는 다음 단계 전에 해소해야 한다.
+  - target: 수동 ETA 변경과 재고 조정의 행위자·시각·사유·증거가 보존되지 않아 변경을 감사하거나 재현할 수 없다. Source finding context: Manual ETA and inventory reconciliation controls Source finding context: materialized-input.md → Shipment.eta note; InventoryRecord.quantity_on_hand note; notes[0:2] Source finding context: 수동 조정과 야간 재고 조정의 행위자·시각·근거를 보존하는 감사 증거 개념이 없다. Source finding context: 운영 판단이나 재고 차이 조정이 잘못되었을 때 책임과 근거를 추적하거나 변경을 재현할 수 없다. Source finding context: Adjustment/AuditEvent 개념을 추가해 대상 값, 이전·변경 값, actor 또는 process, occurred_at, reason, evidence/source 및 승인 정보를 기록한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006 Source finding context: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공 Source finding context: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때 Source finding context: 중요 운영값 변경의 근거와 책임을 검증할 수 없어 감사성과 장애 조사 신뢰가 약화된다. Source finding context: 변경 가능한 값만 정의하고 그 값을 변경하는 통제 행위를 독립된 감사 사건으로 모델링하지 않았다. Source finding context: ETA 수동 조정과 재고 배치 조정이 수행된다고 명시되어 있다. Source finding context: 조정의 행위자·시각·사유·증거를 담는 엔터티나 속성이 없다.
+  - failure condition: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때
+  - candidates: fix_before_release, follow_up
+  - rationale: 다음 단계 전에 수동 ETA 변경과 재고 불일치 조정 등 통제값 변경에 Adjustment 또는 AuditEvent를 도입해야 한다. 각 사건에는 대상 값, 변경 전·후 값, 행위자 또는 실행 프로세스, 발생 시각, 사유, 증거·원천 및 승인 정보를 기록하고 해당 운영값과 연결해야 변경 이력의 감사와 재현이 가능하다.
+  - remediation: 다음 단계 전에 수동 ETA 변경과 재고 불일치 조정 등 통제값 변경에 Adjustment 또는 AuditEvent를 도입해야 한다. 각 사건에는 대상 값, 변경 전·후 값, 행위자 또는 실행 프로세스, 발생 시각, 사유, 증거·원천 및 승인 정보를 기록하고 해당 운영값과 연결해야 변경 이력의 감사와 재현이 가능하다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-011 (medium)
+  - issue: 재고·ETA·배송 상태에 값별 권위 범위, 출처, 우선순위와 계보가 없어 다중 원본이 충돌할 때 신뢰할 값을 일관되게 선택할 수 없다.
+  - target: 복수 시스템이 관리하는 재고·ETA·배송 상태에 값별 권위 범위, 출처, 우선순위와 계보가 없다. Source finding context: Cross-system source authority and provenance Source finding context: materialized-input.md → InventoryRecord.quantity_on_hand note; notes on inventory truth and ETA; integrity_rules[1] Source finding context: 복수 시스템이 관리하는 재고·ETA·배송 상태에 단일 권위와 값 출처를 지정하는 모델이 부족하다. Source finding context: 통합 소비자가 동일 명칭의 값 중 무엇을 어떤 목적과 시점에 신뢰해야 하는지 결정할 수 없고, 야간 조정이나 수동 판단이 원본 계보를 소실시킬 수 있다. Source finding context: SystemOfRecord/AuthorityScope와 ValueProvenance 개념을 추가하고 물리재고·회계재고·가용재고·표시 ETA·정규화 상태별 권위자, 우선순위, 원본 값 및 파생 규칙을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007 Source finding context: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공 Source finding context: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때 Source finding context: 소비자가 신뢰할 값과 그 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다. Source finding context: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않았다. Source finding context: 재고·ETA·상태가 복수 시스템 또는 행위자에 의해 병행 관리된다. Source finding context: 값별 권위 범위, 출처, 우선순위 또는 원본 계보 속성이 없다.
+  - failure condition: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때
+  - candidates: fix_before_release, follow_up
+  - rationale: 다음 단계 전에 SystemOfRecord, AuthorityScope, ValueProvenance를 일급 개념으로 추가해야 한다. 물리재고·회계재고·가용재고·표시 ETA·정규화 상태 등 값 종류별로 권위자와 적용 범위, 충돌 시 우선순위, 원본 값, 파생 규칙을 명시하여 통합 소비자가 동일한 기준으로 값을 선택하고 계보를 보존하도록 해야 한다.
+  - remediation: 다음 단계 전에 SystemOfRecord, AuthorityScope, ValueProvenance를 일급 개념으로 추가해야 한다. 물리재고·회계재고·가용재고·표시 ETA·정규화 상태 등 값 종류별로 권위자와 적용 범위, 충돌 시 우선순위, 원본 값, 파생 규칙을 명시하여 통합 소비자가 동일한 기준으로 값을 선택하고 계보를 보존하도록 해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-021 (medium)
+  - issue: 캐리어 예측 ETA와 운영팀 수기 조정 ETA가 Shipment의 단일 eta에 덮어써져, 최종 값의 출처와 기준시각을 복원할 수 없는 중간 심각도의 중요 이슈다.
+  - target: 캐리어 예측과 운영팀 수기 판단을 하나의 eta에 혼합해 예측 출처와 기준시각의 의미를 잃는다. Source finding context: Shipment.eta의 값 의미와 출처 Source finding context: materialized-input.md:48-50, 115-117 Source finding context: 캐리어 예측값과 운영팀 수기 판단값을 하나의 eta에 혼합해 예측 출처와 기준시각의 의미를 잃는다. Source finding context: 캐리어가 계산한 예상 도착시각과 운영팀이 덮어쓴 표시값은 출처, 계산 시점, 신뢰도, 변경 책임이 다른 개념이다. 단일 값만으로는 시스템 간 어떤 ETA를 교환했는지 또는 예측 오차를 무엇과 비교해야 하는지 알 수 없다. Source finding context: 캐리어 ETA와 운영 조정 ETA를 별도 관측/예측값으로 보존하고 `source`, `calculated_at`, `effective_at`, `supersedes` 또는 선택 근거를 둔다. 최종 표시 ETA는 이 원천들로부터 도출되는 명시적 projection으로 정의한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-007 Source finding context: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성 Source finding context: 캐리어 ETA가 갱신되거나 운영팀이 수기 조정한 뒤 시스템 간 ETA를 동기화하거나 예측 품질을 분석할 때 Source finding context: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사 및 예측 정확도 평가가 불가능해진다. Source finding context: 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓰기 방식으로 수용했다. Source finding context: Shipment에는 단일 eta datetime만 존재한다. Source finding context: 그 값에는 캐리어 API 예측과 운영팀 수기 조정이 혼합된다. Source finding context: 원천 예측과 운영상 선택 결과를 별도 개념으로 보존하지 않는다.
+  - failure condition: 캐리어 ETA 갱신이나 수기 조정 후 시스템 간 동기화 또는 예측 품질 분석을 수행할 때 Source finding context: 캐리어 ETA가 갱신되거나 운영팀이 수기 조정한 뒤 시스템 간 ETA를 동기화하거나 예측 품질을 분석할 때
+  - candidates: fix_before_release, follow_up
+  - rationale: 다음 단계 전에 캐리어 ETA와 운영 조정 ETA를 별도 관측값으로 먼저 보존하고 각 값에 source, calculated_at, effective_at, supersedes 및 선택 근거를 기록해야 한다. 그 후 최종 표시 ETA를 원천 관측값에서 도출되는 명시적 projection으로 정의해야 한다. 원천 이력 보존이 선행되어야 표시값을 재계산하고 선택 이유를 감사할 수 있다.
+  - remediation: 다음 단계 전에 캐리어 ETA와 운영 조정 ETA를 별도 관측값으로 먼저 보존하고 각 값에 source, calculated_at, effective_at, supersedes 및 선택 근거를 기록해야 한다. 그 후 최종 표시 ETA를 원천 관측값에서 도출되는 명시적 projection으로 정의해야 한다. 원천 이력 보존이 선행되어야 표시값을 재계산하고 선택 이유를 감사할 수 있다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+- issue-023 (medium)
+  - issue: DeliveryLeg가 소속 Shipment와 연결되지 않아 복수 화물·다구간 배송에서 화물별 경로와 구간 순서를 구성할 수 없다. 적용 가능한 렌즈들은 이 결함과 medium 심각도 판단을 일관되게 수용했으며, 남은 이견은 없다.
+  - target: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로와 구간 순서를 구성할 수 없다. Source finding context: logistics-fulfillment-ontology.yaml — Shipment/DeliveryLeg route structure Source finding context: .onto/review/20260716-b0f9e3b8/execution-preparation/materialized-input.md:40-58 Source finding context: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로를 구성할 수 없다. Source finding context: 여러 Shipment와 여러 구간이 존재하면 `leg_seq`만으로 구간을 특정 화물에 묶을 수 없다. 그 결과 TMS가 한 화물의 구간 순서와 경로를 재구성할 구조적 경로가 없다. Source finding context: `DeliveryLeg.shipment_ref -> Shipment` 또는 `Shipment contains DeliveryLeg` 관계를 추가하고, `leg_seq`가 Shipment 내부에서 유일하도록 무결성 규칙을 둔다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-002 Source finding context: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델 Source finding context: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우 Source finding context: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다. Source finding context: 유형 상속(`is_a`)만 정의하고 Shipment 인스턴스와 DeliveryLeg 인스턴스의 구성 관계를 생략했다. Source finding context: 특정 Shipment를 구성하는 DeliveryLeg 목록과 순서를 판정할 수 없다. Source finding context: DeliveryLeg에는 `leg_seq`, `from_ref`, `to_ref`만 있고 상위 Shipment 참조가 없다. Source finding context: Shipment와 DeliveryLeg 사이에는 `is_a` 외에 인스턴스 포함 관계가 정의되지 않았다.
+  - failure condition: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우
+  - candidates: fix_before_release, follow_up
+  - rationale: 다음 단계 전에 Shipment–DeliveryLeg의 권위 있는 구성 관계를 하나로 정의해야 한다. DeliveryLeg.shipment_ref 또는 Shipment contains DeliveryLeg 중 모델의 기존 방향성에 맞는 관계를 추가한 뒤, leg_seq가 해당 Shipment 내부에서 유일하도록 무결성 규칙을 둬야 한다. dep-004가 issue-015와의 공통 원인 가능성을 보존하므로 관련 관계 수정과 정합성을 맞춰 중복되거나 충돌하는 모델링을 피해야 한다.
+  - remediation: 다음 단계 전에 Shipment–DeliveryLeg의 권위 있는 구성 관계를 하나로 정의해야 한다. DeliveryLeg.shipment_ref 또는 Shipment contains DeliveryLeg 중 모델의 기존 방향성에 맞는 관계를 추가한 뒤, leg_seq가 해당 Shipment 내부에서 유일하도록 무결성 규칙을 둬야 한다. dep-004가 issue-015와의 공통 원인 가능성을 보존하므로 관련 관계 수정과 정합성을 맞춰 중복되거나 충돌하는 모델링을 피해야 한다.
+  - verification: verify the remediation against the failure condition with a focused check before closing
+
+### Recommendations
+- issue-016 (high): 단위 식별 없이 kg와 lb 등을 허용하고 합산 중량을 저장하므로 중량의 의미와 계산 결과가 확정되지 않는다. Source finding context: Sku.weight, Sku.dims 및 Shipment.total_weight의 단위 의미 Source finding context: materialized-input.md:33-38, 40-49 Source finding context: 동일 숫자 속성에 kg와 lb 등 서로 다른 단위를 허용하면서 단위 식별 없이 합산 중량을 저장하므로 중량 의미가 확정되지 않는다. Source finding context: 단위 없는 숫자는 시스템 간 동일한 물리량을 나타낸다고 보장할 수 없다. 서로 다른 단위의 값을 합산하면 total_weight라는 파생값도 의미적으로 무효가 되어 적재, 운임, 운송사 제한 판단에 잘못 사용될 수 있다. Source finding context: 중량과 각 치수를 값+단위로 모델링하고 통합 기준 단위 및 변환 규칙을 정한다. total_weight에는 계산 기준 단위, 구성 수량, 계산 시점 또는 원천 계측값을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-002 Source finding context: WMS/TMS/ERP 간 SKU 및 화물 물성의 일관된 교환과 출하 중량 계산 Source finding context: 단위 관례가 다른 창고나 소스 시스템의 SKU를 동일 Shipment에 포함하거나 시스템 간 전송할 때 Source finding context: 동일 숫자가 다른 물리량으로 해석되고 파생 중량 계산이 틀려 운영 및 비용 판단의 신뢰성이 훼손된다. Source finding context: 물리량의 값과 측정 단위를 분리하지 않고 숫자 또는 문자열 하나에 소스별 관례를 수용했다. Source finding context: Shipment.total_weight는 구성 OrderLine 중량의 합으로 저장된다. Source finding context: 합산 원천인 Sku.weight가 kg 또는 lb 중 어느 단위인지 표현하지 않는다. Source finding context: 물리량 속성에 명시적 단위와 정규화 규칙이 없다.
+- issue-002 (medium): 단위 없는 중량·치수와 합산값은 시스템 간 비교 가능한 물리량 기준을 제공하지 못한다. Source finding context: Sku.weight, Sku.dims 및 Shipment.total_weight Source finding context: 대상: materialized-input.md:33-38,40-49. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 통합 개념 기준의 단위 정합성 검토). value_type=commitment; alignment_direction=misaligned. Source finding context: 소스별 단위 관례를 그대로 보존하는 설계는 시스템 간 비교 가능한 단위 기준을 제공하지 못한다. Source finding context: 같은 숫자와 문자열이 시스템마다 다른 물리량을 뜻할 수 있어 총중량, 운임, 용량 판단을 신뢰할 수 없다. 소스 편의성을 선택한 대가로 통합 문서의 정규화 목적을 훼손한다. Source finding context: 중량과 각 치수를 값·단위의 구조화된 수량으로 모델링하고 canonical 단위와 변환 규칙을 지정한다. `total_weight`에는 계산 단위와 구성값의 정규화 조건을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-002 Source finding context: WMS/TMS/ERP 간 단위가 일관된 상품·화물 개념 기준 제공 Source finding context: 서로 다른 계량 관례의 SKU가 동일 Shipment 계산 또는 시스템 간 교환에 포함될 때 Source finding context: 통합 문서가 값의 비교와 합산을 보장하지 못해 운영·비용 판단의 신뢰가 약화된다. Source finding context: 소스 시스템의 표현을 canonical 수량 모델로 정규화하지 않고 공통 속성에 직접 수용했다. Source finding context: Shipment.total_weight가 구성 OrderLine 중량의 합으로 저장된다. Source finding context: 합산 원천인 SKU 중량에는 단위 필드가 없고 kg 또는 lb가 혼재할 수 있다. Source finding context: 치수 역시 단위 없는 소스별 문자열로 정의되어 있다.
+- issue-008 (medium): 수량·중량·치수 값에 단위와 변환 기준이 없어 시스템 간 비교·합산이 안전하지 않다. Source finding context: Quantities, weight, and dimensions Source finding context: materialized-input.md → Sku.weight, Sku.dims, OrderLine.qty, Shipment.total_weight Source finding context: 수량·중량·치수 값에 단위 개념과 변환 기준이 없다. Source finding context: 서로 다른 시스템의 값을 동일 의미로 비교·합산할 수 없고, total_weight 계산이나 운송 계획에서 단위 혼합 오류가 발생할 수 있다. Source finding context: Quantity/Measure와 UnitOfMeasure 개념을 도입하고 weight·length·dimension·order quantity의 표준 단위, 원본 단위, 변환 규칙을 명시한다. dims는 세 축의 수치와 단위로 구조화한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-003 Source finding context: WMS/TMS/ERP 사이의 정량 데이터 통합 기준 제공 Source finding context: kg와 lb 또는 서로 다른 길이 단위를 사용하는 소스 값을 교환·합산할 때 Source finding context: 중량 합계, 용적, 운임 및 수량 대사가 의미적으로 안전하지 않다. Source finding context: 측정값을 단위가 결합된 개념으로 모델링하지 않고 number 또는 string 원시값으로만 정의했다. Source finding context: 소스별로 다른 단위를 그대로 사용하는 값들이 존재한다. Source finding context: 해당 속성들과 합산 결과에 UnitOfMeasure 또는 변환 기준이 없다.
+- issue-014 (medium): 다른 단위 관례의 창고·국가·운송사를 추가하면 기존 중량·치수 값의 의미와 합산 결과가 충돌한다. Source finding context: logistics-fulfillment-ontology.yaml — Sku 측정값 모델 Source finding context: materialized-input.md:33-38, 40-49 Source finding context: 새 창고·국가·운송사를 추가하면 중량과 치수의 의미가 기존 데이터와 충돌한다. Source finding context: 다른 단위 관례를 쓰는 시스템이 추가되면 같은 값과 문자열이 서로 다른 물리량을 뜻한다. 단위 변환 규칙과 원천 단위가 없어 기존 데이터를 안정적으로 변환하거나 새 표준으로 이행할 수 없고, 합산 중량의 연속성도 깨진다. Source finding context: 중량과 각 치수를 value+unit 구조의 Measurement로 모델링하고 표준 단위 코드, 변환 규칙, 원천 값·원천 단위를 보존한다. dims 문자열은 길이 축별 구조로 분리하고 total_weight에는 계산 단위와 계산 버전을 기록한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-003 Source finding context: WMS/TMS/ERP 사이에서 재사용 가능한 SKU 및 화물 측정 기준 Source finding context: kg와 lb 또는 서로 다른 길이 단위를 사용하는 창고·운송사·지역을 통합할 때 Source finding context: 기존 값과 신규 값의 의미를 구분할 수 없어 운송 계산과 제한 검증이 신뢰할 수 없게 되고, 단위 표준화 시 전면 데이터 정제가 필요하다. Source finding context: 물리량을 단위와 분리된 숫자 또는 비정형 문자열로 모델링했다. Source finding context: 서로 다른 단위 관례의 시스템을 추가하면 동일 필드 값의 의미가 충돌한다. Source finding context: Shipment.total_weight가 단위 없는 SKU 중량의 합으로 저장된다. Source finding context: 측정값에 단위, 변환 기준, 원천 표현을 담는 구조가 없다.
+- issue-020 (medium): 캐리어 이벤트와 Shipment 상태의 의미 대응을 연동별로 결정해 동일 이벤트가 서로 다른 상태로 투영될 수 있다. Source finding context: Shipment.status와 TrackingEvent.event_type의 상태 의미 매핑 Source finding context: materialized-input.md:40-47, 60-68, 111-113 Source finding context: 캐리어별 이벤트와 자사 화물 상태의 의미 대응을 통합 기준에서 정의하지 않고 각 연동에 위임한다. Source finding context: 동일한 `delivered` 또는 이동 관련 이벤트가 캐리어·TMS·OMS에서 서로 다른 완료 조건이나 시점을 가질 수 있다. 매핑 권위를 연동별로 두면 같은 이벤트가 Shipment.status로 다르게 투영되어 통합 개념 기준 역할을 수행하지 못한다. Source finding context: 원시 `carrier_event_code`와 정규화된 이벤트 의미를 분리하고, 버전이 있는 canonical mapping 및 미매핑/예외 처리 규칙을 정의한다. Shipment 상태 전이의 판정 조건과 권위 시스템도 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-006 Source finding context: OMS/TMS/캐리어 상태의 의미적 정합성과 통합 상태 판정 Source finding context: 여러 캐리어 또는 연동 구현이 동일 원시 이벤트를 Shipment 상태로 변환할 때 Source finding context: 연동별 매핑 차이로 동일 배송이 서로 다른 상태로 표시되고 최종 배송 판정의 신뢰성이 낮아진다. Source finding context: 원시 제공자 상태와 canonical 상태 사이의 의미 매핑 및 그 권위를 온톨로지 밖의 개별 연동에 위임했다. Source finding context: TrackingEvent.event_type과 Shipment.status는 서로 다른 enum을 사용한다. Source finding context: 두 상태의 매핑은 각 연동이 개별 결정한다. Source finding context: OMS, TMS, 캐리어의 상태 모델이 독립적으로 관리되며 canonical 판정 규칙이 없다.
+
+### Unique Finding Tagging
+- issue-016 (high): 단위 식별 없이 kg와 lb 등을 허용하고 합산 중량을 저장하므로 중량의 의미와 계산 결과가 확정되지 않는다. Source finding context: Sku.weight, Sku.dims 및 Shipment.total_weight의 단위 의미 Source finding context: materialized-input.md:33-38, 40-49 Source finding context: 동일 숫자 속성에 kg와 lb 등 서로 다른 단위를 허용하면서 단위 식별 없이 합산 중량을 저장하므로 중량 의미가 확정되지 않는다. Source finding context: 단위 없는 숫자는 시스템 간 동일한 물리량을 나타낸다고 보장할 수 없다. 서로 다른 단위의 값을 합산하면 total_weight라는 파생값도 의미적으로 무효가 되어 적재, 운임, 운송사 제한 판단에 잘못 사용될 수 있다. Source finding context: 중량과 각 치수를 값+단위로 모델링하고 통합 기준 단위 및 변환 규칙을 정한다. total_weight에는 계산 기준 단위, 구성 수량, 계산 시점 또는 원천 계측값을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-002 Source finding context: WMS/TMS/ERP 간 SKU 및 화물 물성의 일관된 교환과 출하 중량 계산 Source finding context: 단위 관례가 다른 창고나 소스 시스템의 SKU를 동일 Shipment에 포함하거나 시스템 간 전송할 때 Source finding context: 동일 숫자가 다른 물리량으로 해석되고 파생 중량 계산이 틀려 운영 및 비용 판단의 신뢰성이 훼손된다. Source finding context: 물리량의 값과 측정 단위를 분리하지 않고 숫자 또는 문자열 하나에 소스별 관례를 수용했다. Source finding context: Shipment.total_weight는 구성 OrderLine 중량의 합으로 저장된다. Source finding context: 합산 원천인 Sku.weight가 kg 또는 lb 중 어느 단위인지 표현하지 않는다. Source finding context: 물리량 속성에 명시적 단위와 정규화 규칙이 없다.
+- issue-002 (medium): 단위 없는 중량·치수와 합산값은 시스템 간 비교 가능한 물리량 기준을 제공하지 못한다. Source finding context: Sku.weight, Sku.dims 및 Shipment.total_weight Source finding context: 대상: materialized-input.md:33-38,40-49. 가치 권위: review-value-alignment-criteria.yaml:6-8 (`user-request-intent`: 통합 개념 기준의 단위 정합성 검토). value_type=commitment; alignment_direction=misaligned. Source finding context: 소스별 단위 관례를 그대로 보존하는 설계는 시스템 간 비교 가능한 단위 기준을 제공하지 못한다. Source finding context: 같은 숫자와 문자열이 시스템마다 다른 물리량을 뜻할 수 있어 총중량, 운임, 용량 판단을 신뢰할 수 없다. 소스 편의성을 선택한 대가로 통합 문서의 정규화 목적을 훼손한다. Source finding context: 중량과 각 치수를 값·단위의 구조화된 수량으로 모델링하고 canonical 단위와 변환 규칙을 지정한다. `total_weight`에는 계산 단위와 구성값의 정규화 조건을 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-002 Source finding context: WMS/TMS/ERP 간 단위가 일관된 상품·화물 개념 기준 제공 Source finding context: 서로 다른 계량 관례의 SKU가 동일 Shipment 계산 또는 시스템 간 교환에 포함될 때 Source finding context: 통합 문서가 값의 비교와 합산을 보장하지 못해 운영·비용 판단의 신뢰가 약화된다. Source finding context: 소스 시스템의 표현을 canonical 수량 모델로 정규화하지 않고 공통 속성에 직접 수용했다. Source finding context: Shipment.total_weight가 구성 OrderLine 중량의 합으로 저장된다. Source finding context: 합산 원천인 SKU 중량에는 단위 필드가 없고 kg 또는 lb가 혼재할 수 있다. Source finding context: 치수 역시 단위 없는 소스별 문자열로 정의되어 있다.
+- issue-008 (medium): 수량·중량·치수 값에 단위와 변환 기준이 없어 시스템 간 비교·합산이 안전하지 않다. Source finding context: Quantities, weight, and dimensions Source finding context: materialized-input.md → Sku.weight, Sku.dims, OrderLine.qty, Shipment.total_weight Source finding context: 수량·중량·치수 값에 단위 개념과 변환 기준이 없다. Source finding context: 서로 다른 시스템의 값을 동일 의미로 비교·합산할 수 없고, total_weight 계산이나 운송 계획에서 단위 혼합 오류가 발생할 수 있다. Source finding context: Quantity/Measure와 UnitOfMeasure 개념을 도입하고 weight·length·dimension·order quantity의 표준 단위, 원본 단위, 변환 규칙을 명시한다. dims는 세 축의 수치와 단위로 구조화한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-003 Source finding context: WMS/TMS/ERP 사이의 정량 데이터 통합 기준 제공 Source finding context: kg와 lb 또는 서로 다른 길이 단위를 사용하는 소스 값을 교환·합산할 때 Source finding context: 중량 합계, 용적, 운임 및 수량 대사가 의미적으로 안전하지 않다. Source finding context: 측정값을 단위가 결합된 개념으로 모델링하지 않고 number 또는 string 원시값으로만 정의했다. Source finding context: 소스별로 다른 단위를 그대로 사용하는 값들이 존재한다. Source finding context: 해당 속성들과 합산 결과에 UnitOfMeasure 또는 변환 기준이 없다.
+- issue-014 (medium): 다른 단위 관례의 창고·국가·운송사를 추가하면 기존 중량·치수 값의 의미와 합산 결과가 충돌한다. Source finding context: logistics-fulfillment-ontology.yaml — Sku 측정값 모델 Source finding context: materialized-input.md:33-38, 40-49 Source finding context: 새 창고·국가·운송사를 추가하면 중량과 치수의 의미가 기존 데이터와 충돌한다. Source finding context: 다른 단위 관례를 쓰는 시스템이 추가되면 같은 값과 문자열이 서로 다른 물리량을 뜻한다. 단위 변환 규칙과 원천 단위가 없어 기존 데이터를 안정적으로 변환하거나 새 표준으로 이행할 수 없고, 합산 중량의 연속성도 깨진다. Source finding context: 중량과 각 치수를 value+unit 구조의 Measurement로 모델링하고 표준 단위 코드, 변환 규칙, 원천 값·원천 단위를 보존한다. dims 문자열은 길이 축별 구조로 분리하고 total_weight에는 계산 단위와 계산 버전을 기록한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-003 Source finding context: WMS/TMS/ERP 사이에서 재사용 가능한 SKU 및 화물 측정 기준 Source finding context: kg와 lb 또는 서로 다른 길이 단위를 사용하는 창고·운송사·지역을 통합할 때 Source finding context: 기존 값과 신규 값의 의미를 구분할 수 없어 운송 계산과 제한 검증이 신뢰할 수 없게 되고, 단위 표준화 시 전면 데이터 정제가 필요하다. Source finding context: 물리량을 단위와 분리된 숫자 또는 비정형 문자열로 모델링했다. Source finding context: 서로 다른 단위 관례의 시스템을 추가하면 동일 필드 값의 의미가 충돌한다. Source finding context: Shipment.total_weight가 단위 없는 SKU 중량의 합으로 저장된다. Source finding context: 측정값에 단위, 변환 기준, 원천 표현을 담는 구조가 없다.
+- issue-020 (medium): 캐리어 이벤트와 Shipment 상태의 의미 대응을 연동별로 결정해 동일 이벤트가 서로 다른 상태로 투영될 수 있다. Source finding context: Shipment.status와 TrackingEvent.event_type의 상태 의미 매핑 Source finding context: materialized-input.md:40-47, 60-68, 111-113 Source finding context: 캐리어별 이벤트와 자사 화물 상태의 의미 대응을 통합 기준에서 정의하지 않고 각 연동에 위임한다. Source finding context: 동일한 `delivered` 또는 이동 관련 이벤트가 캐리어·TMS·OMS에서 서로 다른 완료 조건이나 시점을 가질 수 있다. 매핑 권위를 연동별로 두면 같은 이벤트가 Shipment.status로 다르게 투영되어 통합 개념 기준 역할을 수행하지 못한다. Source finding context: 원시 `carrier_event_code`와 정규화된 이벤트 의미를 분리하고, 버전이 있는 canonical mapping 및 미매핑/예외 처리 규칙을 정의한다. Shipment 상태 전이의 판정 조건과 권위 시스템도 명시한다. Source finding context: .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-006 Source finding context: OMS/TMS/캐리어 상태의 의미적 정합성과 통합 상태 판정 Source finding context: 여러 캐리어 또는 연동 구현이 동일 원시 이벤트를 Shipment 상태로 변환할 때 Source finding context: 연동별 매핑 차이로 동일 배송이 서로 다른 상태로 표시되고 최종 배송 판정의 신뢰성이 낮아진다. Source finding context: 원시 제공자 상태와 canonical 상태 사이의 의미 매핑 및 그 권위를 온톨로지 밖의 개별 연동에 위임했다. Source finding context: TrackingEvent.event_type과 Shipment.status는 서로 다른 enum을 사용한다. Source finding context: 두 상태의 매핑은 각 연동이 개별 결정한다. Source finding context: OMS, TMS, 캐리어의 상태 모델이 독립적으로 관리되며 canonical 판정 규칙이 없다.
+
+### Individual Lens Findings
+- axiology: `.onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml`
+- coverage: `.onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml`
+- evolution: `.onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml`
+- logic: `.onto/review/20260716-b0f9e3b8/round1/logic.findings.yaml`
+- semantics: `.onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml`
+- structure: `.onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml`

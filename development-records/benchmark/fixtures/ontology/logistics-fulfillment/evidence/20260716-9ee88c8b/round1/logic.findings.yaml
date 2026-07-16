@@ -1,0 +1,76 @@
+schema_version: 1
+session_id: 20260716-9ee88c8b
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: logistics-fulfillment-ontology.yaml / DeliveryLeg is_a Shipment hierarchy
+    evidence_anchor: logistics-fulfillment-ontology.yaml:35-49
+    claim: DeliveryLeg is declared as a Shipment even though its own definition
+      allows segments that do not satisfy the Shipment definition.
+    what: "`Shipment` is defined as a physical cargo movement from warehouse to
+      customer, while `DeliveryLeg` is a route segment such as warehouse-to-hub
+      or hub-to-customer and is also declared `is_a: Shipment`. Under ordinary
+      subtype logic, every DeliveryLeg must satisfy the Shipment definition, but
+      the listed segment examples are not each warehouse-to-customer movements."
+    why: "The conflict is inter-claim: the superclass definition at lines 35-36
+      imposes a warehouse-to-customer movement shape, and the subclass
+      definition at lines 47-49 allows partial route segments. This makes at
+      least the example leg instances unsatisfiable as Shipment instances
+      without weakening either the Shipment definition or the subtype assertion.
+      For a WMS/TMS/ERP concept baseline, this also propagates Shipment-level
+      status, carrier, and fulfillment relations onto leg-level objects whose
+      lifecycle is not necessarily equivalent to an end-to-end shipment."
+    how_to_fix: Separate end-to-end `Shipment` from `DeliveryLeg` composition, for
+      example model `Shipment` has many `DeliveryLeg`s instead of `DeliveryLeg
+      is_a Shipment`; or broaden `Shipment` to a generic transport movement and
+      introduce a distinct end-to-end shipment concept for warehouse-to-customer
+      fulfillment.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Concept baseline for WMS/TMS/ERP integration across orders,
+        cargo, and delivery.
+      failure_condition: When a delivery route contains warehouse-to-hub or
+        hub-to-customer legs, those DeliveryLeg instances must both be Shipment
+        instances and not satisfy the stated Shipment definition.
+      impact: The ontology cannot consistently classify leg-level and shipment-level
+        records, weakening integration rules that rely on inherited Shipment
+        status, carrier, and fulfillment semantics.
+      evidence_refs:
+        - logistics-fulfillment-ontology.yaml:35-49
+        - logistics-fulfillment-ontology.yaml:100-104
+    causal_path:
+      root_cause_candidate: The model uses subtype inheritance for a part-of route
+        segment relationship.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: "`DeliveryLeg` is declared with `is_a: Shipment`."
+          relation_to_previous: null
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:47-49
+        - cause_id: logic-candidate-001.cause-002
+          claim: "`Shipment` is defined as an end-to-end warehouse-to-customer movement."
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:35-36
+        - cause_id: logic-candidate-001.cause-003
+          claim: "`DeliveryLeg` is defined as a route segment and explicitly includes
+            warehouse-to-hub and hub-to-customer examples, which are partial
+            movements rather than each being warehouse-to-customer movements."
+          relation_to_previous: causes
+          evidence_refs:
+            - logistics-fulfillment-ontology.yaml:47-53
+      unresolved_beyond_evidence: If the intended meaning of `Shipment` is any cargo
+        movement rather than end-to-end fulfillment movement, the superclass
+        definition needs to be rewritten; that semantic intent is outside the
+        explicit claims.
+domain_constraints_used: []
+domain_context_assumptions:
+  - "Domain-none mode was applied: only explicit claim-level satisfiability in
+    the materialized ontology was used, without external logistics rules."
+  - Subtype semantics were treated in the ordinary ontology sense that every
+    instance of a subtype must satisfy the supertype definition.
+validation:
+  unaddressable_candidates: []

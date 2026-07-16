@@ -1,0 +1,317 @@
+schema_version: 1
+session_id: 20260716-b0f9e3b8
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 재고 값의 목적별 권위와 시간 계약이 모델에 연결되지 않아 동일 시점의 가용재고를 일관되게 해석할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 재고 권위·시간성은 통합 기준의 핵심 계약이며, 부재 시 WMS와 ERP가 서로 다른 진실과 시점으로 운영 판단을 내린다.
+      high 판단에 이견이 없다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: 측정값을 단위와 변환 규칙이 있는 canonical 수량으로 정규화하지 않아 물리량의 비교·합산을 보장할 수 없다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 단위 계약의 결손과 조치 방향은 확인됐지만 실제 핵심 운영·비용 경로 실패가 입증되지 않아 medium과 high 사이의
+      심각도 이견이 남아 있다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 주문·화물·배송 상태를 공통 생명주기와 연결 계약 없이 독립 enum으로 정의해 정상·예외 상태를 일관되게 판정할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 공통 상태 의미·전이·충돌 권위의 부재는 연동별 해석 분기를 만들며 핵심 상태 통합을 직접 저해한다. 형식 공리 부족은 이
+      의미·구조 결함을 반박하지 않는다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-010
+  - issue_id: issue-004
+    problem_definition: 수량을 가진 주문선–화물 대응이 없어 부분출하의 충족 사실과 상태를 재구성할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 근본 구조 결손은 행 단위 수량 연결의 부재이며, 이 이슈는 그 결과로 나타나는 부분출하 추적 실패다. 숙의에서 high로 수렴했다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: 서로 다른 ETA 주장과 수기 오버라이드를 단일 변경 가능 값으로 합쳐 출처·신선도·변경 책임을 검증할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 단일 ETA 표현이라는 더 근본적인 관측·표시값 분리 결손이 검증성과 책임성 약화로 나타난 문제이며, 적용 가능한 렌즈가
+      medium에 합의했다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 재고를 잔액 스냅샷으로만 모델링해 주문별 예약·할당 수량과 생명주기를 표현할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 예약·할당 거래의 부재는 선언된 주문→재고 할당 경로를 끊고 동일 재고의 과다 할당 위험을 만든다. high 판단에 이견이 없다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 행 단위 충족 수량을 기록하지 못해 부분·분할 출하의 잔여 주문량과 실제 출하량을 대사할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 주문선–화물 수량 연결 누락에서 직접 파생된 대사 실패이며, 지원되는 부분출하 경로를 달성할 수 없어 high로 일관되게 평가됐다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: 정량 값을 단위 결합 Measurement로 구조화하지 않아 수량·중량·치수의 비교와 계산이 의미적으로 안전하지 않다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 측정 모델 결손은 확인됐으나 합산·운임·용적 계산이 실제 지원 경로인지와 실패 영향이 입증되지 않아 medium과 high
+      판단이 남아 있다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: 변동 값을 원천·시점·버전이 있는 이력 대신 덮어쓰는 현재값으로 모델링해 과거 재구성과 단계적 확장을 지원하지 못한다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 현재값 중심 모델이라는 원인과 실패 범위에는 합의했지만 직접 재구성 실패와 진화상 실패를 종합하는 심각도 기준이 없어
+      medium과 high가 확정되지 않았다.
+    related_surface_finding_ids:
+      - finding-009
+      - finding-017
+  - issue_id: issue-010
+    problem_definition: 수동 ETA 변경과 재고 조정을 독립 감사 사건으로 모델링하지 않아 행위자·시각·사유·증거를 보존할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 통제값 변경의 감사 사건 부재가 변경 재현과 책임 추적을 직접 약화하며, 적용 가능한 렌즈가 medium과 제한된 적용
+      범위에 합의했다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-011
+    problem_definition: 다중 원본의 값별 권위 범위와 계보를 일급 개념으로 모델링하지 않아 충돌 시 신뢰할 값을 일관되게 선택할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 재고·ETA·상태 충돌을 구현별로 다르게 해소하게 만드는 공통 권위 계약의 결손이며, medium 판단에 이견이 없다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: 외부 상태 상호운용성을 버전형 공통 매핑이 아닌 닫힌 enum과 연동별 코드에 맡겨 현재 정규화와 과거
+      해석의 연속성을 보장할 수 없다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 버전형 StatusMapping 부재와 조치에는 합의했지만 현재 상호운용성 영향과 장기 누적 영향을 단일 심각도로 평가하는
+      기준이 없어 이견이 남는다.
+    related_surface_finding_ids:
+      - finding-013
+      - finding-015
+  - issue_id: issue-013
+    problem_definition: 주문–출하 이진 관계에 의존해 부분출하·분할충족 도입 시 기존 관계와 소비 로직을 재구성해야 한다.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 행 단위 수량 관계 부재가 향후 파괴적 변경과 과거 의미 단절로 이어지는 진화상 결과이며, 예상 가능한 확장 경로를 막으므로
+      high로 합의됐다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-014
+    problem_definition: 단위와 분리된 측정 표현 때문에 다른 단위 관례를 도입할 때 기존 값의 의미와 계산 결과가 충돌한다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Measurement 부재에서 파생되는 확장 문제는 확인됐지만 현재 지원 경로의 실제 실패 증거가 없어 medium과
+      high 사이의 판단이 미결이다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-015
+    problem_definition: 운송 구간과 전체 화물의 부분–전체 관계를 하위유형 관계로 모델링해 식별·상태·충족 의미를 충돌시킨다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: DeliveryLeg를 Shipment의 종류로 분류한 모델링 오류는 다구간 운송의 의미와 집계 경계를 직접 왜곡한다. 형식
+      모순 증거 부족과 무관하게 high 의미·구조 결함으로 확인됐다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-016
+    problem_definition: 단위 없는 중량과 혼합 단위 total_weight 때문에 물리량의 의미와 계산 결과를 확정할 수 없다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 단위 결합 측정 모델 부재의 계산상 결과이며, 실제 적재·운임·제한 판단 경로에서의 실패 증거가 없어 medium과 high
+      이견이 남아 있다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-017
+    problem_definition: 물리 재고와 회계 재고를 하나의 quantity_on_hand에 수용해 목적별 의미와 권위를 구별할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 서로 다른 재고 관점을 한 속성에 합친 개념 혼합은 할당·조정·감사에서 권위 판정을 불가능하게 하며 high 판단에 이견이 없다.
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-018
+    problem_definition: 시간 의존적 available_qty를 산식·원천·유효시점 없는 야간 스냅샷으로 모델링해 일중 현재 가용량으로 신뢰할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 시점과 산식이 없는 파생값을 일중 할당에 사용하는 구조가 중복 할당 위험을 직접 만들며, 모든 적용 가능 렌즈가 high에 합의했다.
+    related_surface_finding_ids:
+      - finding-021
+  - issue_id: issue-019
+    problem_definition: 충족 사실을 주문 전체에만 결합해 부분출하에서 shipped·delivered의 완료 범위와 주문선별 수량을 판정할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 행·수량별 충족 관계 부재에서 파생되는 상태 판정 실패이며 고객 표시와 운영 대사의 핵심 정확성을 훼손한다. high 판단에
+      실질적 이견이 없다.
+    related_surface_finding_ids:
+      - finding-022
+  - issue_id: issue-020
+    problem_definition: 원시 캐리어 상태의 의미 매핑과 Shipment 상태 판정 권위를 개별 연동에 위임해 동일 이벤트가 서로 다르게 투영될 수 있다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 공통 버전형 상태 매핑 부재가 현재 의미 불일치로 나타난 문제다. 변경 빈도·수정 범위·운영 실패 증거가 없어 medium과
+      high 이견이 남는다.
+    related_surface_finding_ids:
+      - finding-023
+  - issue_id: issue-021
+    problem_definition: 출처가 다른 ETA 관측값과 최종 표시값을 단일 속성에 덮어써 출처와 기준시각을 복원할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 관측 이력과 표시 투영을 분리하지 않은 모델 결손이 ETA 충돌 처리·감사·정확도 평가 불능으로 나타나며 medium 판단에 합의됐다.
+    related_surface_finding_ids:
+      - finding-024
+  - issue_id: issue-022
+    problem_definition: Shipment와 OrderLine을 수량과 함께 연결하는 구성요소가 없어 부분출하 추적 경로가 구조적으로 존재하지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 행 단위 충족·대사·상태 문제들의 직접적인 구조 원인으로, 선언된 주문→출하 추적 경로를 끊는다. high 판단에 이견이 없다.
+    related_surface_finding_ids:
+      - finding-025
+  - issue_id: issue-023
+    problem_definition: DeliveryLeg 인스턴스를 소속 Shipment에 연결하지 않아 화물별 구간 그룹화와 순서를 구성할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Shipment–DeliveryLeg의 부분–전체 관계를 잘못 모델링한 근본 결함에서 파생된 구성 경로 공백이며,
+      medium 판단에 합의됐다.
+    related_surface_finding_ids:
+      - finding-026
+  - issue_id: issue-024
+    problem_definition: 주문행과 창고 재고 사이의 할당 행위·수량·상태를 독립 연결 구조로 표현하지 않아 주문→재고 할당 단계를 기록할 수 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 선언된 핵심 흐름의 할당 구간 자체가 구조적으로 누락되어 주문 수요와 창고 예약을 검증할 수 없다. 모든 적용 가능 렌즈가
+      high에 합의했다.
+    related_surface_finding_ids:
+      - finding-027

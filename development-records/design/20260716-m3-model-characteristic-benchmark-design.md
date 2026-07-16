@@ -311,8 +311,23 @@ statement로 baseline judge가 위치 없이 refute = 진성 false-미달, 위�
 falsifiable). scripts 게이트만 `exactOptionalPropertyTypes:false`(report 객체=optional-chained partial-data;
 src는 유지). 파생 bench 실결함 2건 수정. 런타임 불변·cert 54테스트 green.
 
-**남은 것**: P1 잔여(무비용) — review-pipeline-benchmark **RUN 경로 통합**(ontology-fixture 리뷰 생성)·
-`defect_spectrum` report 스키마·`--ontology-fixture` 분리·매칭 util 추출·CI/overlap. 대부분 **P2 전용**이라
-defer(standalone 하니스가 이미 authoritative baseline 제공). P2(owner spend) — 라이브 **모델** 비교(reps는
-관측 SD 유도; 위 결정론은 effort=low judge 특성이라 피채점 모델 바꾸면 재측정). 4번째 ontology fixture는
-cross-domain claim에 필수(§6, owner 결정 대기).
+**4번째 ontology fixture = 완료(PR #215 머지, main 0bcde37): `logistics-fulfillment`**(물류, 11엔티티·10결함,
+cross-domain 검정력 §6/H3). canary LSC-1은 P2 evidence에서 8/8 탐지로 검증·authoring.
+
+**P2 첫 실행 = 완료(PR #216, R=1 방향성): gpt-5.6-sol vs gpt-5.5, 4 fixture**. 각 arm 클린 eval settings로
+리뷰 생성(8회, salvaged 0)→Opus judge K=8 채점→`m3-compare` 방향성 비교. **결과**: recall_material은 4/4
+구분불가(양 모델 거의 전 결함 탐지), precision은 4/4 구분가능—gpt-5.5가 3개(credit·logistics·manuf)에서
+disjoint 우세(날조 material 이슈 적음), sol이 1개(clinical) 우세. wall-time은 5.5가 전 fixture 빠름
+(~692 vs ~1002s). **방법론 정직성 실증**: sol은 clinical·logistics INDETERMINATE(fresh 리뷰 material recall이
+full-recall cut을 run-to-run 진성 straddle), 5.5는 4/4 clean-dominant—이 verdict-kind 차이 자체가 구 small-K
+agreement가 못 잡던 모델 신호. canary 게이트 양 arm 통과. disclosure: `20260716-p2-comparison/README.md`
+(⚠ R=1=방향성, 확정 랭킹 아님; 리뷰생성 분산 미추정).
+
+**inter-model 비교 레이어 = 신규(`scripts/m3-compare.ts`, PR #216)**: §3-3의 CI/overlap을 실데이터 유입 시점에
+구현(speculative 회피). arm별 report를 fixture×metric으로 distinguishable(range disjoint) vs overlapping 판정,
+R<2면 directional 라벨, untrustworthy verdict(underpowered/instrument_broken)는 비교서 제외(§3-3 intra-model
+안정 전제). 8 falsifiable 테스트, check:ts-scripts 게이트.
+
+**남은 것**: **확정 랭킹**엔 R≥2 리뷰/셀 + intra-model 안정 선통과 필요(리뷰생성 분산 포함, §3-3) — R=1 방향성은
+precision 분리가 일관·명확하나 분산 미통제. P1 잔여(review-pipeline-benchmark RUN 통합 등)는 standalone
+하니스가 이미 전 흐름 제공해 **대부분 무의미/불필요**로 재평가됨(설계 §12 상단 P1 재구성).
