@@ -1,0 +1,146 @@
+schema_version: 1
+session_id: 20260716-db88504e
+planned_issues:
+  - issue_id: issue-008
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+    conflict_summary: Result와 Report의 상태 불일치를 동일 상태의 복제 권위 문제로 볼지, 서로 다른 수명주기를 가진 두
+      상태 권위 사이의 매핑 문제로 볼지 견해가 갈린다.
+    resolution_question: Result 상태와 Report 상태는 하나의 canonical 상태에서 파생되어야 하는가, 아니면 별도
+      권위로 유지하면서 시점화된 매핑과 동기화 실패 계약으로 연결해야 하는가?
+  - issue_id: issue-010
+    priority: 9
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - evolution
+      - coverage
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+    conflict_summary: 중복 표현을 하나의 공유 검체 유형으로 통합해야 한다는 입장과 원천 검체 유형·처리된 분석 재료를 별도 개념으로
+      유지해야 한다는 입장이 대립하며, 논리 렌즈는 현 경계의 증거로 두 경우를 판별할 수 없다고 본다.
+    resolution_question: 현재 표현들은 동일 의미 수준의 중복 권위인가, 아니면 원천 검체와 분석 재료라는 서로 다른 분류
+      수준인가; 이에 따라 단일 공유 개념과 분리된 버전형 개념 중 어느 모델이 타당한가?
+  - issue_id: issue-014
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+    conflict_summary: 구체적 Result와 수신자에 통보를 귀속하지 못하는 결함에는 모두 동의하지만, 구조 렌즈는 medium을
+      유지하고 coverage와 semantics 렌즈는 핵심 환자별 통보 경로 실패를 이유로 high로 상향한다.
+    resolution_question: 결과별 임계 통보 귀속 경로의 부재가 신뢰성과 추적성을 약화하는 medium 문제인가, 아니면 지원되는
+      핵심 임계 통보 경로를 달성할 수 없게 하는 high 문제인가?
+  - issue_id: issue-002
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+    conflict_summary: 임계 규칙과 결과별 통보 사건의 분리가 필요하다는 점에는 합의하지만, axiology 렌즈는 결함을
+      medium으로 낮추고 semantics를 포함한 통합 평가는 high를 유지한다.
+    resolution_question: 결과별 통보 사건과 증거 연결의 부재는 감사성과 신뢰를 약화하는 medium 문제인가, 아니면 지원되는
+      임계 결과 통보 목적을 달성할 수 없게 하는 high 문제인가?
+  - issue_id: issue-007
+    priority: 6
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+    conflict_summary: 버전형 임계 정책과 적용 버전 참조가 필요하다는 점에는 합의하지만, coverage 렌즈는 high를 유지하고
+      evolution 렌즈는 심각도를 낮춘다.
+    resolution_question: 과거 임계 판정 기준을 재현할 수 없는 결함은 지원되는 판정·통보 경로를 실패시키는 high 문제인가,
+      아니면 주로 장기 재현성과 감사성을 약화하는 medium 문제인가?
+  - issue_id: issue-004
+    priority: 5
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - semantics
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+    conflict_summary: coverage와 semantics 렌즈는 lifecycle 사건·계보 부재와 원천 검체·분석 재료 혼동을
+      하나의 축약된 Specimen 모델에서 비롯된 결합 원인으로 보지만, logic 렌즈는 두 결함이 반드시 하나의 원인인지 확정하지
+      않는다.
+    resolution_question: 검체 lifecycle 공백과 의미 수준 혼동을 하나의 근본 원인 및 통합 조치로 유지해야 하는가, 아니면
+      독립 원인과 별도 조치로 분리해야 하는가?
+  - issue_id: issue-003
+    priority: 4
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+    conflict_summary: Test–Assay 이중 등록의 직접적인 동일성 결함에는 동의하지만, evolution 렌즈는 주문·수행·결과
+      단위를 포괄하는 issue-009와 함께 처리해야 한다고 범위를 좁힌다.
+    resolution_question: issue-003을 카탈로그 이중 등록과 원자적 매핑에 관한 독립 이슈로 유지할 것인가, 아니면
+      issue-009의 주문–수행–결과 매핑 문제에 병합하거나 종속시킬 것인가?
+  - issue_id: issue-011
+    priority: 3
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+    conflict_summary: 고정 enum과 버전형 매핑 부재가 문제라는 점에는 합의하지만, semantics 렌즈는 Result와
+      Report 상태 자체를 중복 권위로 보는 전제를 거부하고 서로 다른 상태 체계의 별도 권위와 시점화된 대응을 요구한다.
+    resolution_question: Result와 Report 상태 어휘를 하나의 권위 체계와 파생 projection으로 정규화해야 하는가,
+      아니면 각각의 권위를 유지하고 버전형 매핑만 권위화해야 하는가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: logic 렌즈의 좁힘은 불변 버전·사건이 유일한 해법이 아니라고 한정할 뿐, 현재값 중심 복수 권위와 이력 부재라는 원인,
+      high 심각도 및 단일 권위·파생·이력 보존 필요성에는 모든 렌즈가 합의한다.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: evolution과 logic 렌즈는 각 렌즈가 확정할 수 있는 필수 차원을 한정했지만 typed observation 부재라는
+      원인, high 심각도 및 제안된 확장 방향을 부정하지 않아 통제된 숙의가 필요한 실질 충돌은 없다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 독립 불변 감사 사건의 필요성, 근본 원인 및 high 심각도에 일관되게 동의한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 주문·수행·결과 단위의 분리와 버전형 매핑 부재라는 원인, 제안 조치 및 high 심각도에 동의한다.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 Result와 Report 상태의 별도 수명주기, 명시적 매핑과 전이 우선순위 필요성 및 high 심각도에 동의한다.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: evolution 렌즈는 변경 이력에 초점을 좁혔지만 단일 priority 권위와 결정적 파생을 지지하며, 제안 조치가 이미 필요
+      시 변경 사건을 포함하므로 실질적인 조치 또는 원인 충돌이 없다.

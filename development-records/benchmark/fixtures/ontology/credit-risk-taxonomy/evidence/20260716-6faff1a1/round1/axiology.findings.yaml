@@ -1,0 +1,156 @@
+schema_version: 1
+session_id: 20260716-6faff1a1
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: credit-risk-ontology.yaml의 등급 분류 및 변환 권위
+    evidence_anchor: "가치 권위:
+      review-value-alignment-criteria.yaml:6-15(user-request-intent: 리스크 엔진과 보고
+      시스템이 공유할 개념 기준, 권위 관점 검토). 대상 증거:
+      materialized-input.md:20-22,31-34,48-56,92-98(세 등급 체계, 외부 위키 매핑, 보고팀 수동
+      조정, 소비 시스템별 변환)."
+    claim: 공유 개념 권위를 지향하면서 등급 변환과 최종 조정 권한을 소비 시스템에 분산해 선언된 목적과 어긋난다.
+    what: 동일 신용상태를 Borrower.internal_rating, RiskRating.grade, Exposure.risk_grade의
+      세 척도로 표현하면서 canonical 매핑을 온톨로지에 두지 않는다. 변환은 각 소비 시스템에 맡기고 보고팀에는 별도의 수동 조정
+      권한까지 부여한다.
+    why: 리스크 엔진과 보고 시스템이 서로 다른 매핑 버전이나 수동 판단을 적용하면 동일 차주·시점에 서로 다른 등급을 정당한 결과로 만들 수
+      있다. 그러면 이 문서는 공유 권위가 아니라 소비자별 해석의 목록이 되어 권위·분류 기준을 통일하려는 목적을 약화한다.
+    how_to_fix: 하나의 canonical 신용등급 개념과 권위 소스를 정하고 세 척도의 버전된 총함수 매핑, 적용 우선순위, 유효기간을 이
+      문서에 포함한다. 수동 조정은 원등급을 덮어쓰지 말고 별도 override 개념으로 모델링해 사유·주체·시각·만료와 원등급을
+      보존한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 및 분류 기준 제공
+      failure_condition: 두 소비자가 독립 매핑을 사용하거나 보고팀이 산출 등급을 수동 조정하는 경우
+      impact: 동일 위험상태에 대한 시스템별 등급 불일치가 허용되어 보고와 엔진 판단의 비교·감사·재현 신뢰가 손상된다.
+      evidence_refs:
+        - review-value-alignment-criteria.yaml:6-15
+        - materialized-input.md:20-22
+        - materialized-input.md:31-34
+        - materialized-input.md:48-56
+        - materialized-input.md:92-98
+    causal_path:
+      root_cause_candidate: 역사적으로 병존하는 등급 척도를 canonical 개념으로 통합하지 않고 의미 결정 권한을 각 소비 시스템에 남긴 설계
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 동일 신용상태가 세 등급 척도와 보고팀 수동 조정 결과로 표현될 수 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-22
+            - materialized-input.md:31-34
+            - materialized-input.md:48-56
+            - materialized-input.md:92-93
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 이 다중 결과는 매핑을 외부 위키와 각 소비 시스템에 위임한 정책의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:56
+            - materialized-input.md:97-98
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 위임 정책은 역사적 병존을 canonical 기준으로 통합하지 않은 설계에서 시작한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:97-98
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: credit-risk-ontology.yaml의 집계·한도소진·RiskAppetite 시간 기준
+    evidence_anchor: "가치 권위:
+      review-value-alignment-criteria.yaml:6-15(user-request-intent: 공유 개념 기준의
+      시간성·운영 위험 검토). 대상 증거: materialized-input.md:69-83,92-95(월말 집계와 일중 미반영,
+      aggregate 기반 위반 판단, 시스템별 당일 환율)."
+    claim: 동일 계산에 월말 집계와 시스템별 당일 환율을 혼합해 공유 시점 의미와 재현 가능한 준수 판단을 제공하지 못한다.
+    what: ExposureAggregate.total_amount는 월말 배치 값이며 일중 신규 여신을 누락하지만, 이 값이 한도 소진율과
+      RiskAppetite 위반 판단에 쓰인다. 다통화 환산도 공통 환율 스냅샷이 아니라 각 시스템의 당일 테이블에 맡겨진다.
+    why: 일중에는 실제 익스포저가 임계치를 넘었어도 저장된 월말 집계로 compliant가 될 수 있고, 엔진과 보고서가 서로 다른 당일 환율을
+      사용하면 같은 as-of 표기에서도 소진율이나 위반 여부가 달라질 수 있다. 시간성과 권위가 분리되어 공유 기준의 운영상 신뢰를
+      훼손한다.
+    how_to_fix: 모든 계산 입력에 동일한 valuation_as_of와 데이터 완전성 상태를 적용하고, 환율 출처·스냅샷 시각·통화를
+      canonical 정책으로 지정한다. RiskAppetite 판정은 동일 시점의 aggregate와 threshold만 허용하며,
+      일중 미반영 상태에서는 stale/unknown을 표현해 compliant로 단정하지 않도록 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 시간적으로 일관된 리스크·준수 기준
+      failure_condition: 월말 이후 신규 여신이 발생하거나 두 시스템이 서로 다른 당일 환율 스냅샷을 사용하는 경우
+      impact: 한도 소진율과 RiskAppetite 준수 상태가 실제 상태를 누락하거나 시스템별로 달라져 운영 의사결정과 보고 신뢰를 직접
+        약화한다.
+      evidence_refs:
+        - review-value-alignment-criteria.yaml:6-15
+        - materialized-input.md:69-83
+        - materialized-input.md:92-95
+    causal_path:
+      root_cause_candidate: 파생 판단 전체에 적용되는 canonical valuation 시점·신선도·환율 권위를 정의하지 않은 설계
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: 월말 집계가 일중 여신을 누락한 채 한도 소진율과 RiskAppetite 판정 입력으로 사용된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:92-94
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 판정 불일치와 지연은 집계 시점과 환율 시점을 하나의 계산 계약으로 묶지 않은 정책의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:75-76
+            - materialized-input.md:94
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 해당 정책은 canonical valuation 시점, 신선도 상태, 공통 환율 권위를 정의하지 않은 데서 시작한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:92-95
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-003
+    target: credit-risk-ontology.yaml의 default 범위 경계
+    evidence_anchor: "가치 권위:
+      review-value-alignment-criteria.yaml:6-15(user-request-intent: 여신 리스크 분류의
+      공유 개념 기준과 운영 위험). 대상 증거: materialized-input.md:6-8,97-99(공유 권위 문서 지향,
+      default는 별도 시스템이 다룬다는 이유로 범위 제외)."
+    claim: default를 외부 시스템 소유라는 이유만으로 공유 온톨로지에서도 완전히 제외한 경계는 목적상 필요한 상호운용 계약을 정당화 없이
+      포기한다.
+    what: default의 원천 데이터가 별도 시스템에 있다는 사실을 곧바로 개념 모델의 범위 제외로 연결하며, 최소한의 canonical
+      정의·식별 관계·상태 시점·소스 권위도 남기지 않는다.
+    why: 리스크 엔진이나 보고 시스템이 default 상태를 사용해야 하는 경우 각자 외부 시스템 의미를 해석해야 한다. 데이터 소유 경계와
+      공유 의미 경계를 동일시한 트레이드오프 때문에 전체 신용위험 분류의 공통 기준이 중요한 상태에서 끊길 수 있다.
+    how_to_fix: default 데이터의 소유권은 연체관리 시스템에 유지하되, 이 온톨로지에는 최소 공유 계약으로 canonical
+      DefaultStatus, 대상 차주/익스포저 관계, effective_at, source authority를 정의한다. 완전 제외를
+      유지한다면 두 소비자가 default를 전혀 필요로 하지 않는다는 범위 근거와 연계 계약을 명시한다.
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 여신 리스크 분류 경계
+      failure_condition: 어느 한 소비자가 default 상태를 위험 산출, 분류 또는 보고에 사용하는 경우
+      impact: 핵심 상태의 의미와 연결 규칙이 소비자별로 재정의되어 공유 기준의 범위 완결성과 상호운용 신뢰가 약화된다.
+      evidence_refs:
+        - review-value-alignment-criteria.yaml:6-15
+        - materialized-input.md:6-8
+        - materialized-input.md:97-99
+    causal_path:
+      root_cause_candidate: 외부 시스템의 데이터 소유 경계를 공유 온톨로지의 의미 경계와 동일시한 범위 결정
+      root_cause_step_id: axiology-candidate-003.cause-002
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: default 상태에 대한 canonical 개념이나 연결 계약이 대상에서 전부 제외되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:97-99
+        - cause_id: axiology-candidate-003.cause-002
+          claim: 이 공백은 default를 별도 시스템이 다룬다는 소유권 사실을 범위 제외 근거로 사용한 결정의 증상이다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:99
+      unresolved_beyond_evidence: 현재 허용된 자료에는 실제 리스크 엔진·보고 시스템이 default를 소비하는지에 대한 사용
+        사례가 없어 실패 조건의 발생 빈도와 최종 영향 크기는 확인할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - review-value-alignment-criteria.yaml의 authority_rank 1로 확정된
+    user-request-intent를 이번 axiology 판단의 가치 권위로 사용했다.
+  - "'리스크 엔진과 보고 시스템이 공유하는 개념 기준'은 동일한 업무 상태와 동일한 기준 시점에 대해 canonical
+    매핑·우선순위·출처를 통해 재현 가능한 의미를 제공해야 한다고 해석했다."
+  - default 경계 finding은 실제 소비 여부를 허용 경계 안에서 확인할 수 없으므로 조건부 운영 위험으로 한정했다.
+validation:
+  unaddressable_candidates: []

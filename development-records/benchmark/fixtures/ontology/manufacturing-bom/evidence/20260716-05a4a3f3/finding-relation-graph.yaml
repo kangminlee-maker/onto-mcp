@@ -1,0 +1,110 @@
+schema_version: 1
+session_id: 20260716-05a4a3f3
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: 스크랩률과 표준시간의 복사·수기·대사 경로를 권위 출처, 유효기간, 조정 이력을 가진 기준값 계약으로 바꾸면 두
+      finding의 불일치 및 감사 문제도 함께 해소되어야 한다.
+    shared_cause:
+      cause_claim: 병행 관리되는 제조 기준값에 권위 출처, 유효기간, 조정·대사 계약이 모델링되지 않았다.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-008.cause-002
+    rationale: finding-001은 스크랩률·표준시간·UOM을 포함한 공유 제조 값의 권위 부재를 지적하고, finding-008은 그중
+      스크랩률과 표준시간의 복수 장부·수기 조정 문제를 구체화한다. 두 causal path 모두 운영 값의 권위와 시간·감사 계약 부재를
+      직접 원인으로 제시한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-002
+    to_finding_id: finding-004
+    relation: symptom_of
+    root_hypothesis: 독립된 리비전 및 effectivity 모델을 도입해 생산 시점의 유효 Part·BOM·Routing을 단일하게
+      판정할 수 있게 하면 ECO 유효일과 Part.rev 배치 갱신 사이의 상충도 제거되어야 한다.
+    shared_cause: null
+    rationale: finding-002의 잘못된 현재 리비전 판단은 finding-004가 지적한 버전·유효기간 부재가 변경 경계에서 드러난
+      운영 증상이다. finding-004의 causal path는 ECO의 단일 effective_date, 지연되는 Part.rev,
+      BomLine·Routing 이력 부재를 직접 근거로 든다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-004
+    to_finding_id: finding-009
+    relation: duplicates
+    root_hypothesis: 두 finding을 하나의 BOM·Routing 버전/effectivity 결함으로 통합해도 각각의 실패 조건과
+      제안 조치가 손실 없이 보존되어야 한다.
+    shared_cause: null
+    rationale: 두 finding 모두 현재 Part에 직접 연결된 BOM·Routing에 리비전, 유효기간, 변경 근거가 없어 ECO 전후
+      구성을 재구성하거나 과거 생산을 재현할 수 없다고 판단한다. 하나는 coverage, 다른 하나는 evolution 관점이지만 결함과
+      해결 방향이 실질적으로 같다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-003
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: BOM을 비순환 제품구조로 한정하고 회수·재투입을 별도 물질흐름 관계로 분리하면 두 finding의 순환 계산
+      위험과 의미 왜곡이 동시에 사라져야 한다.
+    shared_cause: null
+    rationale: 두 finding은 동일한 자기참조 BomLine 예외를 대상으로 하며, 제품 구성 관계와 공정 환류 관계를 결합한 것이
+      순환 전개와 잘못된 소요량 해석을 유발한다고 본다. 가치·운영 위험 관점과 의미론 관점의 표현만 다르다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-007
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 수치와 단위를 결합한 확장 가능한 Quantity/UOM 권위 모델 및 유효한 변환 규칙을 도입하면 현재 계산
+      불일치와 향후 단위 확장 시 스키마 변경 문제가 모두 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-007은 단위 차원과 환산 마스터의 현재 누락을, finding-011은 닫힌 enum과 암묵적 문맥 때문에
+      새 단위·사업장을 수용하기 어려운 진화 문제를 지적한다. 둘 다 측정 단위를 독립된 참조·변환 개념으로 모델링하지 않은 결정에서
+      파생된다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-007
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: capacity와 BOM 수량을 차원·단위·측정 종류를 가진 값으로 재모델링하면 환산 불능과 처리량·가용시간
+      혼합이 함께 방지되어야 한다.
+    shared_cause:
+      cause_claim: 수량과 능력 값을 차원 및 측정 종류가 명시된 Quantity 개념으로 모델링하지 않았다.
+      from_cause_ref: finding-007.cause-002
+      to_cause_ref: finding-016.cause-002
+    rationale: finding-007의 cause는 qty_per의 단위 부재와 capacity의 가변 단위를 함께 지적하고,
+      finding-016의 cause는 그 capacity 필드가 처리량과 가용시간을 결합한다고 구체화한다. 공통 원인은 단위만이 아니라
+      측정값의 차원과 종류가 구조화되지 않은 것이다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-012
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: AlternatePart의 권위 의미를 방향성 대체로 단일화하고 대칭 호환을 별도 표현하며 shortcut도
+      방향을 보존하게 만들면 두 finding의 상충 해석이 모두 제거되어야 한다.
+    shared_cause: null
+    rationale: 두 finding 모두 AlternatePart의 대칭적 자연어 정의와 one_way/bidirectional
+      direction 모델이 양립하지 않는다는 동일 결함을 다룬다. finding-014가 방향 없는 alternate_of 투영의 추가
+      의미 손실까지 포함하지만 핵심 모순은 finding-012와 같다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-014
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: 방향 정보를 소유한 AlternatePart를 canonical relation graph에 명시적으로 연결하고
+      Part-to-Part alternate_of를 방향 보존 파생 투영으로 제한하면 의미 상충과 구조적 도달 불능이 함께 해소되어야
+      한다.
+    shared_cause: null
+    rationale: finding-014는 방향 없는 shortcut이 대체 관계의 의미를 손실한다고 지적하고, finding-018은 그
+      shortcut이 방향 정보를 가진 AlternatePart 엔티티를 우회하여 relation graph에서 권위 레코드에 도달할 수
+      없다고 지적한다. 둘 다 재ified association을 권위 연결 없이 평탄화한 모델링 결정과 일치한다.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-005
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-006
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-010
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-015
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

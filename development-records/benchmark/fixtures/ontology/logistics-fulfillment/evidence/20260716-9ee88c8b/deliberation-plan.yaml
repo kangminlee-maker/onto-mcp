@@ -1,0 +1,215 @@
+schema_version: 1
+session_id: 20260716-9ee88c8b
+planned_issues:
+  - issue_id: issue-002
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+    conflict_summary: Axiology and semantics support issue-002 as a material
+      canonical-unit problem, while coverage points to issue-005 as the better
+      coverage-supported unit issue and evolution narrows the root toward
+      broader measurement continuity. The deliberation must decide whether
+      issue-002 remains a distinct material issue or is absorbed into the
+      measurement-unit cluster represented by issue-005/issue-011.
+    resolution_question: Should issue-002 be retained as a distinct material
+      source-system convention/value-alignment issue, or merged/narrowed into
+      the broader canonical measurement-unit issue cluster?
+  - issue_id: issue-009
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - evolution
+      - logic
+      - axiology
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+    conflict_summary: Semantics supports issue-009 as a material semantic conflation
+      of DeliveryLeg and Shipment, while evolution narrows it to the broader
+      inheritance-versus-composition problem in issue-008 and logic narrows it
+      to the formal route-segment-as-shipment classification inconsistency. The
+      conflict is not over whether the problem exists, but whether issue-009 is
+      a standalone semantic issue or a scoped facet of issue-008/issue-015.
+    resolution_question: Should issue-009 remain a separate material semantic issue
+      about leg-level state versus whole-shipment fulfillment, or be
+      merged/narrowed under the DeliveryLeg inheritance/composition cluster?
+  - issue_id: issue-010
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - structure
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+      - issue-stance-matrix.yaml#stances.issue-010.axiology
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+    conflict_summary: Semantics supports issue-010 as a distinct
+      physical-versus-accounting inventory meaning collapse, while coverage
+      treats the stronger supported concern as the broader inventory authority
+      issue-001 and structure narrows the issue toward traceable
+      source/derivation paths. Deliberation must determine whether this is a
+      separate material semantic split or part of the broader inventory
+      authority/temporality cluster.
+    resolution_question: Should issue-010 be retained as a standalone material
+      inventory semantic-authority issue, or merged/narrowed into issue-001's
+      broader inventory authority and temporality root?
+  - issue_id: issue-011
+    priority: 5
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+    conflict_summary: Semantics supports issue-011 as a direct unit-meaning issue
+      for weight, dimensions, and totals, while coverage says the same
+      operational gap is already directly raised as issue-005. Evolution and
+      axiology support the substance, so the material conflict is whether the
+      semantic issue is independent or duplicate cluster scope.
+    resolution_question: Should issue-011 remain a separate material semantic
+      measurement-unit issue, or be consolidated into issue-005's canonical
+      measurement quantity issue?
+  - issue_id: issue-012
+    priority: 5
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - structure
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+    conflict_summary: Semantics supports issue-012 as a material available_qty
+      naming/time-basis issue, while coverage points to the broader inventory
+      temporality issue-001 and structure narrows the root to missing
+      traceability and snapshot metadata. Deliberation must resolve whether the
+      naming/currentness issue is distinct or should be included under the
+      broader inventory authority/temporality issue.
+    resolution_question: Should issue-012 be retained as a standalone material
+      stale-snapshot availability issue, or merged/narrowed into issue-001's
+      broader inventory authority, freshness, and allocation-time basis issue?
+  - issue_id: issue-015
+    priority: 5
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - structure
+      - coverage
+      - logic
+      - axiology
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-015.structure
+      - issue-stance-matrix.yaml#stances.issue-015.coverage
+      - issue-stance-matrix.yaml#stances.issue-015.logic
+      - issue-stance-matrix.yaml#stances.issue-015.axiology
+      - issue-stance-matrix.yaml#stances.issue-015.evolution
+      - issue-stance-matrix.yaml#stances.issue-015.semantics
+    conflict_summary: Structure frames issue-015 as a direct missing ordered
+      shipment-to-leg composition relation, while logic narrows the shared
+      diagnosis to incorrect DeliveryLeg inheritance and coverage has
+      insufficient direct evidence for the composition root. The material
+      question is whether the root should be missing composition itself, the
+      inheritance error from issue-008, or a combined DeliveryLeg route-modeling
+      issue.
+    resolution_question: Is issue-015's root a distinct missing ordered composition
+      relation, or should it be resolved as part of the broader DeliveryLeg
+      inheritance-versus-composition root from issue-008?
+  - issue_id: issue-016
+    priority: 4
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - axiology
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-016.structure
+      - issue-stance-matrix.yaml#stances.issue-016.coverage
+      - issue-stance-matrix.yaml#stances.issue-016.axiology
+      - issue-stance-matrix.yaml#stances.issue-016.evolution
+      - issue-stance-matrix.yaml#stances.issue-016.semantics
+    conflict_summary: Structure supports issue-016 as a direct missing
+      derivation/traceability issue for InventoryAggregate, while coverage says
+      its evidence supports the broader inventory temporal/allocation gap rather
+      than this standalone structural derivation root. The conflict is whether
+      traceability is a separate material issue or a structural facet of
+      issue-001.
+    resolution_question: Should issue-016 remain a standalone material structural
+      derivation issue for InventoryAggregate, or be merged/narrowed under
+      issue-001's broader inventory authority and allocation basis issue?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: All applicable lenses support the broad inventory authority and
+      temporality issue; structure only narrows its own contribution without
+      disputing the material root or severity.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Axiology, evolution, and semantics support the status-mapping/versioning
+      issue; coverage has insufficient direct evidence but does not create a
+      material disagreement about the supported root.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: All applicable lenses support the line-level fulfillment gap, with logic
+      only not applicable under its bounded evidence.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All applicable lenses support the canonical measurement quantity issue;
+      non-applicable logic and structure stances do not create a material
+      conflict.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: Applicable lenses support the audit/control evidence issue; structure
+      reports insufficient structure-specific evidence but does not dispute the
+      material issue.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All applicable lenses support the non-happy-path lifecycle coverage
+      issue, and no material conflict is present.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: Evolution, logic, semantics, structure, and axiology support the
+      DeliveryLeg inheritance/composition issue; coverage lacks direct evidence
+      but does not materially contest the root.
+  - issue_id: issue-013
+    reason_code: non_material_issue
+    reason: The issue is explicitly low severity and non-material; bounded evidence
+      does not establish a material standalone failure condition.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: All applicable lenses support the OrderLine-to-Shipment fulfillment edge
+      issue; coverage notes overlap with issue-004 but does not create a
+      material conflict requiring deliberation.

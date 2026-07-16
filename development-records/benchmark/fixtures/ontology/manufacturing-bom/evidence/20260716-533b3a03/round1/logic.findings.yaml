@@ -1,0 +1,70 @@
+schema_version: 1
+session_id: 20260716-533b3a03
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml / entities.AlternatePart
+    evidence_anchor: .onto/review/20260716-533b3a03/execution-preparation/materialized-input.md:37-45
+    claim: AlternatePart is defined as symmetric, while its direction attribute
+      permits and defaults to one_way.
+    what: The definition states that if B is an alternate for A, then A is also an
+      alternate for B, but the same entity defines a direction enum containing
+      one_way and notes that one_way is the default.
+    why: "These two claims cannot both govern the same AlternatePart instance
+      without an extra precedence rule: a one_way alternate is not symmetric,
+      while the definition makes symmetry necessary for all alternate
+      relationships. This creates an inter-claim satisfiability conflict inside
+      the model's substitution concept."
+    how_to_fix: "Choose one authority: either make AlternatePart inherently
+      bidirectional and remove direction/one_way, or redefine the entity as
+      directional by default and state that symmetry applies only when
+      direction=bidirectional."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES integration concept baseline for item substitution and
+        alternate-part behavior.
+      failure_condition: When an alternate part is modeled with direction=one_way, the
+        same ontology also requires the reverse alternate relationship to hold.
+      impact: Consumers cannot determine whether substitution is reversible, which
+        weakens integration trust for manufacturing execution, planning, and
+        change-control decisions that depend on valid substitute-part direction.
+      evidence_refs:
+        - .onto/review/20260716-533b3a03/execution-preparation/materialized-input.md:37-45
+    causal_path:
+      root_cause_candidate: "The ontology assigns two incompatible modalities to
+        alternate-part direction: necessary symmetry in the definition and
+        possible one-way direction in the attribute contract."
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: AlternatePart's definition makes the alternate relation symmetric for
+            every A/B pair.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-533b3a03/execution-preparation/materialized-input.md:37-38
+        - cause_id: logic-candidate-001.cause-002
+          claim: AlternatePart.direction permits one_way and notes that one_way is the
+            default.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-533b3a03/execution-preparation/materialized-input.md:42-45
+        - cause_id: logic-candidate-001.cause-003
+          claim: A default one_way alternate instance cannot satisfy the necessary
+            symmetric alternate definition unless an unstated precedence or
+            exception rule overrides one of the claims.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-533b3a03/execution-preparation/materialized-input.md:37-45
+      unresolved_beyond_evidence: No domain document was available; this finding is
+        limited to the explicit claim set and does not judge which substitution
+        semantics is operationally preferable.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so only explicit intra-claim and inter-claim
+    satisfiability conflicts in the provided target were evaluated.
+  - The embedded materialized input is the authoritative target; optional
+    context was not needed for this bounded logic finding.
+validation:
+  unaddressable_candidates: []

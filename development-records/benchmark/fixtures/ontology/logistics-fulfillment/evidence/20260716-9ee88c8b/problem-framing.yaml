@@ -1,0 +1,274 @@
+schema_version: 1
+session_id: 20260716-9ee88c8b
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Inventory availability lacks explicit authority, effective
+      time, source qualification, and allocation/reservation event semantics.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The projection shows strong cross-lens support and no remaining
+      disagreement. This is a root modeling defect because downstream
+      allocation, reconciliation, audit, and real-time extension all depend on
+      knowing which inventory value is authoritative and when it applies.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-005
+      - finding-009
+  - issue_id: issue-002
+    problem_definition: Source-system weight and dimension conventions are a
+      value-alignment facet of the broader canonical measurement-unit problem.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Deliberation narrowed this issue into the measurement-unit cluster
+      represented by issue-005/issue-011. It remains a real operational-risk
+      symptom of missing canonical units and conversion provenance rather than a
+      separate remediation root.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: Fulfillment and shipment state interpretation lacks a
+      canonical, versioned status model with native-status preservation, mapping
+      precedence, and authority.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The projection shows axiology, evolution, and semantics support. The
+      problem is root-level because independent status mappings can make current
+      and historical order, shipment, tracking, and displayed states
+      unreproducible.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-011
+  - issue_id: issue-004
+    problem_definition: Fulfillment cannot be represented at order-line quantity
+      grain for partial, split, substituted, backordered, or exception
+      shipments.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The missing OrderLine-to-fulfillment grain prevents the declared
+      baseline from tying physical movement and delivery evidence to commercial
+      obligations. Multiple lenses support the issue, and it directly blocks
+      common fulfillment scenarios.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: SKU and shipment measurements are stored without canonical
+      unit, source, conversion basis, or calculation-version semantics.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The projection treats this as the main canonical measurement quantity
+      issue. It is root-level because unitless physical quantities can silently
+      corrupt freight, routing, capacity, and historical interpretation when
+      warehouses, carriers, or source systems differ.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-010
+  - issue_id: issue-006
+    problem_definition: Manual ETA overrides and inventory reconciliation changes
+      lack first-class audit evidence for actor, time, basis, and prior/new
+      values.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is supported as an operational trust and coverage gap. It
+      is root-level for auditability because representing only mutable final
+      values loses the evidence needed to explain or challenge customer-facing
+      ETA and inventory-truth changes.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-007
+    problem_definition: Order and shipment lifecycle coverage omits common
+      non-happy-path and post-delivery outcomes.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The projection shows consistent support that cancellation, failure,
+      return, correction, and exception meanings are absent. This is a root
+      coverage issue because integrations otherwise overload happy-path or
+      external states for materially different outcomes.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-008
+    problem_definition: DeliveryLeg is modeled as a Shipment subtype, conflating
+      route-segment semantics with end-to-end shipment semantics.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The projection shows evolution, logic, semantics, structure, and
+      axiology support. The inheritance choice is a root classification error
+      because leg lifecycle, carrier, ETA, status, and fulfillment scope differ
+      from whole-shipment scope.
+    related_surface_finding_ids:
+      - finding-012
+      - finding-013
+  - issue_id: issue-009
+    problem_definition: DeliveryLeg-as-Shipment makes leg-level TMS state appear
+      equivalent to whole-shipment fulfillment state.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Deliberation narrowed this issue under the DeliveryLeg
+      inheritance/composition cluster. It preserves an important semantic
+      consequence, but the underlying root is already captured by issue-008 and
+      related composition work.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-010
+    problem_definition: quantity_on_hand collapses WMS physical on-hand stock and
+      ERP accounting/book inventory into one meaning.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The resolution keeps this as a narrower semantic-authority split
+      within issue-001. It is a concrete symptom of the broader inventory
+      authority and temporality defect rather than the primary root by itself.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-011
+    problem_definition: Weight, dimensions, and total_weight lack explicit unit
+      meaning, calculation time, and conversion rules.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Deliberation consolidated this into issue-005 while preserving its
+      semantic requirements. It is a symptom/facet of the canonical measurement
+      root because the same remediation cluster addresses unit meaning and
+      conversion history.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-012
+    problem_definition: available_qty is named and consumed as current availability
+      while representing a nightly snapshot used for intraday allocation.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The resolution preserves this as an available_qty-specific
+      currentness and stale-snapshot risk linked to issue-001. It is a concrete
+      symptom of missing inventory freshness, traceability, and live allocatable
+      authority.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-013
+    problem_definition: Carrier ETA, operations-adjusted ETA, and displayed ETA may
+      be semantically collapsed, but bounded evidence does not establish a
+      material standalone failure condition.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The projection explicitly classifies this as low severity and
+      non-material within the bounded evidence. It should be watched or
+      revisited only if tied to displayed-state authority, override audit, or
+      operational decision failures.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-014
+    problem_definition: OrderLine lacks a structural fulfillment edge to the
+      Shipment, DeliveryLeg, or allocation that fulfills it.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The structure lens directly supports the issue, but the projection
+      also notes overlap with issue-004. It is classified as the structural
+      expression of the same line-level fulfillment gap while still requiring
+      closure in the target because the missing edge blocks reconciliation.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-015
+    problem_definition: The ontology lacks an ordered composition relation from an
+      end-to-end Shipment or Route to its DeliveryLeg parts.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "Deliberation resolved this as distinct from issue-008: issue-008
+      covers wrong inheritance semantics, while issue-015 covers absent ordered
+      route composition and traceability for multi-leg reconstruction and
+      leg-localized tracking."
+    related_surface_finding_ids:
+      - finding-020
+  - issue_id: issue-016
+    problem_definition: InventoryAggregate used for allocation lacks derivation from
+      source InventoryRecord sets, authority, warehouse scope, snapshot
+      metadata, and calculation basis.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The projection narrows this as a structural traceability facet under
+      issue-001. It enables the broader inventory authority problem by making
+      allocation quantities unreadable as auditable derivations from source
+      records and metadata.
+    related_surface_finding_ids:
+      - finding-021

@@ -1,0 +1,141 @@
+schema_version: 1
+session_id: 20260716-05a4a3f3
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: BOM·라우팅·ECO의 변경 이력 모델
+    evidence_anchor: Part.rev/current_eco, Assembly.bom_lines,
+      Routing.part_ref/operations, ECO.effective_date 및 세 번째 integrity_rule
+    claim: 새 리비전이나 ECO 적용 시점이 생기면 기존 BOM·라우팅의 유효 버전을 보존할 수 없다.
+    what: BOM 라인과 라우팅이 Part에 직접 연결되고, 개별 구성과 공정에는 리비전·유효기간·변경 근거가 없다.
+      Part.current_eco도 최신 ECO 하나만 가리킨다.
+    why: ECO 적용 전후 구성을 동시에 표현할 수 없어 변경 시 기존 관계를 덮어쓰거나 별도 구조를 추가해야 한다. 특히 Part.rev가
+      주간 배치로 늦게 갱신되는 동안 effective_date 규칙과 실제 구조의 버전을 판별할 수 없으므로 PLM/MES 간 과거·현재
+      구성의 연속성이 끊긴다.
+    how_to_fix: PartRevision 같은 버전 권위 개념을 도입하고 BOM 및 Routing 버전을 해당 리비전에 연결한다. 각 버전에
+      valid_from/valid_to 또는 effectivity 조건과 originating_eco를 두고, current 값은 유효
+      버전에서 파생한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목·BOM·라우팅·변경관리의 연속된 기준을 제공하는 목적
+      failure_condition: 둘 이상의 리비전이 공존하거나 ECO effective_date 전후의 생산·이력 데이터를 함께 교환할 때
+      impact: 어느 BOM과 라우팅이 특정 생산분에 유효했는지 공통 모델로 결정할 수 없어 시스템별 덮어쓰기나 별도 해석이 필요하고, 변경 추적
+        및 과거 재현의 신뢰가 약화된다.
+      evidence_refs:
+        - Part.rev/current_eco
+        - Assembly.bom_lines 및 BomLine
+        - Routing.part_ref/operations
+        - ECO.effective_date
+        - integrity_rules[2]
+    causal_path:
+      root_cause_candidate: 변경 가능한 BOM·라우팅을 독립적인 유효 버전이 아니라 현재 Part에 직접 연결된 상태로 모델링했다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: ECO 적용 전후의 BOM·라우팅 구성을 동일 모델 안에서 구별하거나 과거 상태로 재현할 수 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - Assembly.bom_lines
+            - Routing.part_ref/operations
+            - ECO.effective_date
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 구성 관계에 리비전, 유효기간, 변경 근거가 없고 Part에는 단일 rev 및 current_eco만 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Part.rev/current_eco
+            - BomLine attributes
+            - Routing attributes
+        - cause_id: evolution-candidate-001.cause-003
+          claim: BOM·라우팅의 변경 상태가 버전 엔티티가 아니라 현재 Part 연결에 직접 귀속되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Assembly.bom_lines
+            - Routing.part_ref
+            - Part.current_eco
+      unresolved_beyond_evidence: 실제 PLM과 MES가 별도 버전 키를 제공하는지는 경계 내 자료로 확인할 수 없지만, 이
+        기준 문서 자체에는 이를 수용할 구조가 없다.
+  - candidate_id: evolution-candidate-002
+    target: Routing.operations의 공정 토폴로지
+    evidence_anchor: "Routing.operations: { type: ordered_list, of: ref, target:
+      Operation } 및 Routing 정의"
+    claim: 분기·병렬·합류·재작업 공정이 추가되면 기존 라우팅 구조를 변경해야 한다.
+    what: 라우팅이 Operation의 단일 선형 ordered_list로만 표현되어 공정 간 조건부 전이, 병렬 수행, 합류 또는 재작업
+      순환을 담을 확장 지점이 없다.
+    why: 새 공정 유형이 선형 순서로 환원되지 않으면 기존 속성의 의미를 바꾸거나 별도 예외 필드를 추가해야 한다. PLM과 MES가 서로 다른
+      공정 토폴로지를 사용할 경우 동일 라우팅을 손실 없이 교환하기 어렵다.
+    how_to_fix: RoutingStep과 StepTransition을 분리하고 transition에 순서, 조건, 분기·합류 및 재작업
+      의미를 표현한다. 현재 ordered_list는 단순 선형 라우팅을 위한 파생 뷰나 호환 표현으로 유지한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅 개념을 PLM/MES 통합 기준으로 제공하는 목적
+      failure_condition: 선형 순서가 아닌 신규 제조 흐름이나 MES의 분기·재작업 경로를 수용할 때
+      impact: 라우팅 확장마다 핵심 스키마 또는 기존 필드 의미를 변경해야 하며, 시스템 간 공정 정보가 축약되거나 별도 사양으로 분기된다.
+      evidence_refs:
+        - Routing 정의
+        - Routing.operations
+        - Routing-to-Operation has_ordered relation
+    causal_path:
+      root_cause_candidate: 공정 흐름을 확장 가능한 전이 그래프가 아니라 하나의 ordered_list로 고정했다.
+      root_cause_step_id: evolution-candidate-002.cause-002
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 비선형 공정을 추가하면 현 구조로 전이 관계를 표현할 수 없어 구조 수정이나 정보 손실이 발생한다.
+          relation_to_previous: null
+          evidence_refs:
+            - Routing.operations
+            - Routing-to-Operation has_ordered relation
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Routing이 공정 간 관계가 아닌 Operation 참조의 단일 ordered_list만 보유한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Routing attributes
+      unresolved_beyond_evidence: 현재 운영에 실제 비선형 라우팅이 존재하는지는 경계 내 자료로 확인할 수 없다.
+  - candidate_id: evolution-candidate-003
+    target: 측정 단위 및 용량 표현
+    evidence_anchor: Part.uom enum [ea, kg, m], WorkCenter.capacity_per_shift note, 마지막 notes 항목
+    claim: 새 단위·사업장 또는 외부 단위 체계를 추가할 때 열거형과 해석 규칙을 계속 수정해야 한다.
+    what: Part.uom은 세 값으로 닫혀 있고, WorkCenter.capacity_per_shift의 단위는 속성으로 표현되지 않은 채
+      작업장별로 달라진다. 품목별 환산계수 권위도 없다.
+    why: 새 측정 단위를 수용하려면 enum 스키마를 바꿔야 하며, 동일 숫자가 개수인지 시간인지 모델만으로 판별되지 않는다. PLM/MES가
+      단위 코드나 변환 규칙을 변경·확장하면 기존 데이터와 새 데이터의 비교 및 변환 연속성이 유지되지 않는다.
+    how_to_fix: UnitOfMeasure와 Quantity를 재사용 가능한 개념으로 만들고 값과 단위를 함께 저장한다. 단위 코드의
+      매핑·버전 및 품목별 conversion rule의 권위와 유효기간을 정의하며, 기존 ea/kg/m 값은 해당 단위 식별자에
+      매핑한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 간 품목 수량과 작업장 용량을 공통 의미로 교환하는 개념 기준 목적
+      failure_condition: 새 단위, 다른 사업장의 용량 기준, 또는 외부 시스템 단위 코드를 추가·변경할 때
+      impact: 스키마 변경과 현장별 수기 해석이 필요해지고, 기존 수량·용량 데이터와 확장 데이터의 비교 가능성과 통합 신뢰가 약화된다.
+      evidence_refs:
+        - Part.uom
+        - WorkCenter.capacity_per_shift
+        - notes의 uom 변환 항목
+    causal_path:
+      root_cause_candidate: 측정 단위를 확장 가능한 참조 개념으로 모델링하지 않고 닫힌 enum 또는 주석 속 암묵적 문맥으로 두었다.
+      root_cause_step_id: evolution-candidate-003.cause-002
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: 새 단위나 용량 기준을 도입하면 uom enum 수정 또는 작업장별 별도 해석이 필요하다.
+          relation_to_previous: null
+          evidence_refs:
+            - Part.uom
+            - WorkCenter.capacity_per_shift note
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 수치와 단위가 일관된 Quantity 구조로 결합되어 있지 않고 환산계수 마스터도 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - Part.uom
+            - WorkCenter.capacity_per_shift
+            - notes의 uom 변환 항목
+      unresolved_beyond_evidence: 외부 PLM/MES가 사용하는 구체적인 단위 표준과 코드 집합은 경계 내 자료로 확인할 수 없다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준은 변경 전후의 BOM·라우팅을 함께 식별하고 과거 생산 상태를 재현할 수 있어야 한다.
+  - 제조 라우팅은 향후 분기, 병렬, 합류 또는 재작업 흐름으로 확장될 수 있다.
+  - 통합 대상 시스템이나 사업장이 늘어나면 현재 열거되지 않은 측정 단위와 용량 기준이 유입될 수 있다.
+validation:
+  unaddressable_candidates: []

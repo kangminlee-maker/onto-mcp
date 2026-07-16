@@ -1,0 +1,124 @@
+schema_version: 1
+session_id: 20260716-ea9773ff
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml RiskAppetite entity and relations graph
+    evidence_anchor: credit-risk-ontology.yaml:73-85
+    claim: RiskAppetite is structurally disconnected from the aggregate it governs.
+    what: RiskAppetite defines threshold and compliance_status in terms of
+      ExposureAggregate, but the relations list has no edge to or from
+      RiskAppetite.
+    why: The definition says ExposureAggregate crossing RiskAppetite determines a
+      violation, while the only declared relations connect Borrower, Exposure,
+      Collateral, RiskRating, Limit, and ExposureAggregate. Without a relation,
+      shared consumers cannot traverse from an aggregate to the applicable
+      appetite threshold or compliance status.
+    how_to_fix: "Add an explicit relation such as `{ from: ExposureAggregate, to:
+      RiskAppetite, kind: measured_against }` or `{ from: RiskAppetite, to:
+      ExposureAggregate, kind: applies_to }`, plus any key/scope attributes
+      needed to select the applicable appetite."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology is intended as the shared concept authority for a
+        risk engine and reporting systems.
+      failure_condition: When a consumer needs to determine or report RiskAppetite
+        compliance from ExposureAggregate, the target has no declared structural
+        path connecting the two concepts.
+      impact: This weakens actionability and review trust because a central violation
+        concept is present but not reachable through the ontology's relation
+        graph.
+      evidence_refs:
+        - credit-risk-ontology.yaml:2-3
+        - credit-risk-ontology.yaml:73-85
+    causal_path:
+      root_cause_candidate: RiskAppetite was added as an entity with a
+        definition-level dependency on ExposureAggregate but without a
+        corresponding relation edge in the ontology graph.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite defines compliance by comparing ExposureAggregate to
+            RiskAppetite.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:73-78
+        - cause_id: structure-candidate-001.cause-002
+          claim: The relations list does not include RiskAppetite in any from/to position.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:80-85
+        - cause_id: structure-candidate-001.cause-003
+          claim: Therefore the compliance concept is disconnected from the aggregate it
+            depends on.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:73-85
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: credit-risk-ontology.yaml Limit utilization rule and relations graph
+    evidence_anchor: credit-risk-ontology.yaml:54-71,80-89
+    claim: The Limit utilization rule depends on ExposureAggregate and Limit, but
+      the relation graph does not connect those concepts.
+    what: The classification rule defines utilization as
+      `ExposureAggregate.total_amount / Limit.approved_amount`; however, Limit
+      and ExposureAggregate are only separately connected to Borrower and have
+      no declared relationship to each other.
+    why: A consumer following the ontology graph can see that both concepts refer to
+      Borrower, but cannot identify the intended structural dependency for
+      utilization or whether the ratio is borrower-level, product-level, or
+      another scoped join. This is a missing relation for a declared rule, not
+      merely a semantic preference.
+    how_to_fix: "Declare the utilization dependency explicitly, for example `{ from:
+      ExposureAggregate, to: Limit, kind: consumes }` or a named derived
+      concept/relationship for `limit_utilization`, with scope keys that align
+      aggregate and limit selection."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology is intended to give risk and reporting systems a
+        shared structural basis for classification and rule consumption.
+      failure_condition: When implementing or auditing the declared Limit utilization
+        rule, consumers must infer the ExposureAggregate-to-Limit join path from
+        parallel Borrower references rather than from an explicit relation.
+      impact: The missing structural edge makes a stated rule under-specified as a
+        graph contract and can lead consumers to implement divergent joins while
+        still appearing to follow the ontology.
+      evidence_refs:
+        - credit-risk-ontology.yaml:54-71
+        - credit-risk-ontology.yaml:80-89
+    causal_path:
+      root_cause_candidate: A classification rule introduced a cross-entity dependency
+        without adding the matching relation to the ontology graph.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: Limit and ExposureAggregate are separate entities with borrower_ref
+            attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:54-71
+        - cause_id: structure-candidate-002.cause-002
+          claim: The declared utilization formula combines ExposureAggregate.total_amount
+            with Limit.approved_amount.
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-89
+        - cause_id: structure-candidate-002.cause-003
+          claim: The relations list connects each concept to Borrower but does not connect
+            ExposureAggregate to Limit or define a utilization relation.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:80-85
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Domain is none, so no domain-specific structure_spec.md constraints were
+    used.
+  - The embedded structure role definition in the prompt packet was treated as
+    authoritative because the external role path was not readable from the
+    bounded workspace.
+validation:
+  unaddressable_candidates: []

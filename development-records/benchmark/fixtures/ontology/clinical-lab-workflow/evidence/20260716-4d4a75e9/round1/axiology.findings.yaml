@@ -1,0 +1,223 @@
+schema_version: 1
+session_id: 20260716-4d4a75e9
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: clinical-lab-ontology.yaml / Report.result_status correction handling
+    evidence_anchor: .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:69-83,121-123;
+      .onto/review/20260716-4d4a75e9/execution-preparation/review-value-alignment-criteria.yaml:5-11
+    claim: Clinician-trusted report status is allowed to lag corrected LIS results,
+      which misaligns the ontology with its purpose as an EMR/LIS concept
+      authority.
+    what: The ontology states that `Result.status` is recorded by LIS and duplicated
+      into `Report.result_status`, and that clinicians trust
+      `Report.result_status`; however, corrected results only require the report
+      to become amended via a nightly synchronization batch.
+    why: "The declared review value is suitability as the concept authority for
+      EMR/LIS integration, especially operational risk. A concept authority that
+      explicitly lets a clinician-facing authority value remain `finalized`
+      until a nightly batch after a result is corrected accepts a hidden
+      tradeoff against timely clinical truth propagation. That is not merely an
+      implementation detail: the target itself assigns trust to
+      `Report.result_status`, so the delayed propagation weakens the document's
+      purpose as an authority for integration behavior."
+    how_to_fix: Make the corrected/amended status a single authoritative state or
+      require event-driven/synchronous propagation from
+      `Result.status=corrected` to `Report.result_status=amended`. If delayed
+      processing is unavoidable, model an explicit interim state such as
+      `amendment_pending`, with timestamp, source result, and EMR-facing trust
+      rules.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use the ontology as the concept authority document for EMR/LIS
+        integration, with attention to operational risk.
+      failure_condition: A LIS result changes to `corrected` after report release but
+        before the nightly synchronization batch updates the report status.
+      impact: The EMR-facing status that clinicians are told to trust can remain
+        stale, so downstream integration can present corrected clinical
+        information as finalized during the lag window.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+        - review-value-alignment-criteria.yaml:5-11
+    causal_path:
+      root_cause_candidate: The model duplicates result status authority across LIS
+        `Result.status` and clinician-facing `Report.result_status`, then
+        permits asynchronous reconciliation for a trust-critical correction
+        path.
+      root_cause_step_id: axiology-candidate-001.cause-004
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: "`Report.result_status` is described as the authority value shown on the
+            report and trusted by clinicians."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:75-83
+        - cause_id: axiology-candidate-001.cause-002
+          claim: The same status meaning is also retained on `Result.status`, which is
+            recorded by LIS.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:69-72
+        - cause_id: axiology-candidate-001.cause-003
+          claim: When `Result.status` becomes corrected, `Report.result_status` must
+            become amended, but the synchronization batch runs only once
+            nightly.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: axiology-candidate-001.cause-004
+          claim: The requested purpose is to judge whether this ontology is suitable as an
+            EMR/LIS integration concept authority with operational-risk
+            awareness.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:5-11
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: clinical-lab-ontology.yaml / CriticalValue notification model
+    evidence_anchor: .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:100-106;
+      .onto/review/20260716-4d4a75e9/execution-preparation/review-value-alignment-criteria.yaml:5-11
+    claim: Critical-value notification is reduced to a boolean while the actual
+      recipient and time authority are external, weakening the ontology's
+      operational-risk purpose.
+    what: "`CriticalValue.notified` records only whether notification occurred,
+      while the note says notification time and recipient live in a separate
+      phone log ledger that is not modeled as an entity, relation, or authority
+      boundary in this ontology."
+    why: For an EMR/LIS integration concept authority, critical-value notification
+      is a stakeholder- and safety-critical workflow, not a peripheral
+      annotation. A boolean cannot represent who was notified, when, by whom, by
+      which channel, or whether acknowledgement closed the loop. By pushing the
+      meaningful notification evidence into an unmodeled ledger, the ontology
+      accepts an implicit tradeoff against traceability and integration clarity
+      without justifying it.
+    how_to_fix: Promote critical-value notification into an explicit concept such as
+      `CriticalValueNotification` with result/test reference, recipient,
+      notifier, notified_at, channel, acknowledgement status, and source
+      authority. Relate it to `CriticalValue`, `Result`, `Staff`, and the
+      EMR/LIS release workflow.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the concept authority for EMR/LIS
+        integration while identifying operational risks in entities, relations,
+        and states.
+      failure_condition: A critical value is reported or audited and the integration
+        needs to determine notification timing, recipient, acknowledgement, or
+        authoritative source from the ontology.
+      impact: The ontology cannot support the clinically important closed-loop
+        notification semantics it gestures at, so downstream systems may treat a
+        bare boolean as sufficient evidence of completed risk handling.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - review-value-alignment-criteria.yaml:5-11
+    causal_path:
+      root_cause_candidate: The model treats critical-value communication evidence as
+        external operational bookkeeping instead of a first-class integration
+        concept.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: "`CriticalValue` represents immediately notifiable dangerous result
+            ranges."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-101
+        - cause_id: axiology-candidate-002.cause-002
+          claim: "The only notification attribute is `notified: boolean`; time and
+            recipient are said to exist in a phone log ledger outside the
+            modeled ontology."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:102-106
+        - cause_id: axiology-candidate-002.cause-003
+          claim: The review purpose is suitability as an EMR/LIS integration authority
+            with operational-risk focus.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:5-11
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-003
+    target: clinical-lab-ontology.yaml / deferred local metric and catalog authorities
+    evidence_anchor: .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:46-60,126-128;
+      .onto/review/20260716-4d4a75e9/execution-preparation/review-value-alignment-criteria.yaml:5-11
+    claim: The ontology knowingly leaves catalog and TAT authority split across
+      local teams, creating purpose drift for a document intended to be the
+      integration concept authority.
+    what: The notes say new catalog items are registered in both `Test` and `Assay`
+      until later cleanup, and that turnaround time is calculated from
+      `collected_at` to `released_at` while a dashboard team maintains its own
+      formula.
+    why: The requested purpose is a concept authority for EMR/LIS integration.
+      Leaving dual catalog registration and a separate dashboard-owned TAT
+      formula as accepted current behavior privileges local operational
+      convenience over canonical concept authority. The problem is not that
+      future cleanup is planned; it is that the current authority document
+      records the split without a governing precedence rule, drift-detection
+      obligation, or ownership boundary.
+    how_to_fix: "Add explicit authority and precedence rules: define whether `Test`
+      or `Assay` owns orderable versus executable catalog identity, how dual
+      registration is reconciled, and which source owns TAT semantics. If the
+      dashboard formula remains separate, model it as a derived projection with
+      required conformance to the ontology's canonical TAT definition."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as a concept authority for EMR/LIS integration.
+      failure_condition: A new test/assay or TAT-consuming integration is implemented
+        while catalog identity or TAT semantics differ between the ontology and
+        local dashboard/catalog maintenance practices.
+      impact: Downstream consumers can implement conflicting meanings while still
+        appearing to follow the authority document, reducing trust in the
+        ontology as the integration source of truth.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:126-128
+        - review-value-alignment-criteria.yaml:5-11
+    causal_path:
+      root_cause_candidate: The ontology accepts unresolved local authority splits as
+        current practice without encoding precedence, ownership, or
+        reconciliation duties.
+      root_cause_step_id: axiology-candidate-003.cause-004
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: "`Test` is the orderable catalog unit, while `Assay` is the analyzer
+            execution unit with overlapping department and specimen-kind
+            semantics."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+        - cause_id: axiology-candidate-003.cause-002
+          claim: The notes require new items to be registered in both places until future
+            catalog cleanup.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:126-127
+        - cause_id: axiology-candidate-003.cause-003
+          claim: The notes define TAT from collection to release, but also say the
+            dashboard team maintains its own calculation formula.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:128
+        - cause_id: axiology-candidate-003.cause-004
+          claim: The document is being reviewed for suitability as an EMR/LIS integration
+            concept authority.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:5-11
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - No domain-specific rule document was used because `session_domain` is `none`
+    in the prompt packet and binding.
+  - The external role-definition file path could not be read from the bounded
+    workspace; the embedded role definition in the prompt packet was used as the
+    authority for the axiology lens role.
+  - Value authority was taken from the prompt-packet role definition and the
+    explicit review-value-alignment criterion, because the schema available for
+    this unit does not expose axiology-specific `value_authority_anchor` fields.
+validation:
+  unaddressable_candidates: []

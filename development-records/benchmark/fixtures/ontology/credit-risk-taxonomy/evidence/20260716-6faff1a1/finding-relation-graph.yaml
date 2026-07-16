@@ -1,0 +1,142 @@
+schema_version: 1
+session_id: 20260716-6faff1a1
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: 세 등급 필드가 governed canonical rating assessment로 통합되지 않고 변환·조정
+      권위가 소비자에게 위임된 것이 두 finding의 공통 결함이다.
+    shared_cause: null
+    rationale: 두 finding 모두 서로 다른 등급 척도, 소비자별 매핑, provenance 없는 수동 조정 때문에 동일 신용상태가
+      상충하는 등급으로 해석된다고 지적하며 제안 조치도 canonical·버전형 등급 평가와 override 이력으로 일치한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: 공유 온톨로지가 핵심 값과 변환에 대한 source-of-truth 및 precedence를 소유하지 않기 때문에
+      등급 권위 분산과 복수 값 권위 문제가 함께 발생한다.
+    shared_cause:
+      cause_claim: 핵심 값과 변환 자산을 canonical 권위로 통합하지 않고 소비 시스템별 해석과 병행 관리에 맡겼다.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-006.cause-003
+    rationale: finding-001은 등급 척도의 소비자별 위임을, finding-006은 등급·한도·환율 전반의 병행 권위와 우선순위
+      부재를 다룬다. 전자는 후자의 등급 영역 구체 사례이며 두 causal path가 같은 권위 모델 부재를 명시한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-014
+    to_finding_id: finding-009
+    relation: causes
+    root_hypothesis: 등급을 governed time-indexed assessment로 모델링하지 않으면 매핑이나 override
+      정책 변경 때 적용 버전을 식별할 수 없어 과거 결과의 연속성과 재현성이 깨진다.
+    shared_cause: null
+    rationale: finding-014의 canonical mapping·provenance·effective time 부재는
+      finding-009가 지적한 변경 시 소비자별 분기와 과거 결과 재현 실패의 직접 선행 조건이다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-020
+    to_finding_id: finding-014
+    relation: symptom_of
+    root_hypothesis: 등급 변환이 온톨로지 내부의 governed assessment와 mapping 개념으로 승격되지 않았기 때문에
+      canonical 관계 그래프에도 세 척도의 연결이 존재하지 않는다.
+    shared_cause: null
+    rationale: finding-020의 구조적 mapping path 누락은 finding-014의 더 넓은 의미·권위 결함이 그래프
+      구조에서 드러난 형태다. 두 finding 모두 외부 위키와 소비자별 변환 위임을 같은 증거로 든다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-003
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: 외부 시스템의 데이터 소유권을 공유 온톨로지의 의미 계약 범위와 동일시해 default·연체 상태의 최소 참조 계약까지 제외했다.
+    shared_cause: null
+    rationale: 두 finding은 모두 별도 시스템 소유라는 이유로 default 또는 연체·부실 상태를 완전히 제외한 동일 경계 결정을
+      지적하고, 외부 권위를 유지한 최소 공유 상태 계약을 같은 해결 방향으로 제시한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-004
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: 변경 가능한 리스크 값에 공통 유효기간, 관측 시점, 입력 스냅숏 및 계산·정책 버전 계약이 없다.
+    shared_cause: null
+    rationale: 두 finding 모두 등급·한도·익스포저·리스크 성향의 시간 및 버전 축 부재로 과거 기준일 결과를 복원하거나 시스템 간
+      대사할 수 없음을 지적한다. evolution finding이 버전 변경 시나리오를 더 명시하지만 결함과 영향은 실질적으로 동일하다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-012
+    to_finding_id: finding-002
+    relation: symptom_of
+    root_hypothesis: 집계와 파생 판단에 적용되는 canonical valuation 시점·컷오프·신선도 계약이 없어서 저장된 월말
+      합계가 현재의 완전합처럼 사용된다.
+    shared_cause: null
+    rationale: finding-012의 완전합 정의와 배치 사이 불완전성 간 모순은 finding-002가 지적한 월말 집계와 현재 시점
+      판단 혼합이 논리 규칙에서 드러난 구체적 증상이다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-002
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: 금액 집계에 통화, 환율 권위·버전, valuation time을 함께 고정하는 monetary
+      measurement context가 없어서 시간 불일치와 환산 의미 불일치가 함께 발생한다.
+    shared_cause:
+      cause_claim: 집계와 판정에 공통 적용할 환율 권위, valuation 시점 및 측정 맥락이 canonical 계약에 포함되지 않았다.
+      from_cause_ref: finding-002.cause-003
+      to_cause_ref: finding-015.cause-003
+    rationale: finding-002는 월말 집계와 시스템별 당일 환율의 시간·권위 불일치를, finding-015는 통화 없는 금액 합산과
+      소비자별 환율 선택을 지적한다. 두 causal path 모두 공통 환율 권위와 valuation context 부재를 명시한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-005
+    to_finding_id: finding-016
+    relation: same_root_candidate
+    root_hypothesis: 수동 또는 파생 값을 provenance와 원천 입력을 가진 일급 assessment/event로 모델링하지 않고
+      독립 결과 속성으로 저장한 것이 감사 공백과 LTV 불일치를 함께 만든다.
+    shared_cause: null
+    rationale: finding-005는 수동 입력·조정에 행위자·시각·근거가 없음을, finding-016은 수동 LTV에
+      공식·입력·평가시점 연결이 없음을 지적한다. 일급 provenance-bearing measurement 또는 adjustment
+      개념을 추가하면 두 결함이 함께 해소되는지 검증할 수 있다.
+    confidence: medium
+  - relation_id: rel-010
+    from_finding_id: finding-018
+    to_finding_id: finding-008
+    relation: enables
+    root_hypothesis: RiskAppetite 정책과 시점별 준수 평가를 한 엔터티에 결합하면 정책의 도입·변경·만료와 위반의
+      발생·해소를 서로 독립된 lifecycle로 표현할 수 없다.
+    shared_cause: null
+    rationale: finding-018의 정책 제약과 mutable 평가 결과 결합은 finding-008이 지적한 RiskAppetite
+      lifecycle 및 위반 해소 표현 부재를 가능하게 하는 구체적 모델링 원인이다. 다만 finding-008의 Limit 부분까지
+      전부 설명하지는 않는다.
+    confidence: medium
+  - relation_id: rel-011
+    from_finding_id: finding-018
+    to_finding_id: finding-019
+    relation: shared_cause_candidate
+    root_hypothesis: ComplianceAssessment가 별도 개념으로 모델링되지 않아 평가 결과의 시간 의미와
+      ExposureAggregate에 대한 구조적 연결이 동시에 누락됐다.
+    shared_cause:
+      cause_claim: RiskAppetite 준수 평가를 특정 ExposureAggregate 스냅숏과 평가 시점에 연결하는 일급
+        assessment 계약이 없다.
+      from_cause_ref: finding-018.cause-002
+      to_cause_ref: finding-019.cause-002
+    rationale: finding-018은 compliance_status가 aggregate snapshot과 평가 시점에 연결되지 않았다고
+      지적하고, finding-019는 같은 비교 의존성이 relations 그래프에서 누락됐다고 지적한다. 의미 결함과 구조 결함이
+      동일한 assessment 관계 부재를 가리킨다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-006
+    to_finding_id: finding-017
+    relation: same_root_candidate
+    root_hypothesis: Limit을 권위, 측정 종류, 시점이 명확한 governed measure로 모델링하지 않아 승인 한도와 가용
+      잔액이 병행 관리되면서 하나의 분모로 합쳐진다.
+    shared_cause: null
+    rationale: finding-006은 승인 시스템과 CRM 간 한도 권위·우선순위 부재를, finding-017은 승인 ceiling과
+      CRM available balance의 의미 혼합을 지적한다. 두 문제는 두 측정값을 분리하고 각 권위와 적용 규칙을 지정했을 때
+      함께 해소되는지로 공통 근원을 검증할 수 있다.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-011
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-013
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

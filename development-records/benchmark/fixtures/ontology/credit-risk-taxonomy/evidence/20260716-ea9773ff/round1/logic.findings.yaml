@@ -1,0 +1,77 @@
+schema_version: 1
+session_id: 20260716-ea9773ff
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml / entities.ExposureAggregate
+    evidence_anchor: credit-risk-ontology.yaml:64-71
+    claim: ExposureAggregate.total_amount is defined as both the sum of all
+      Exposure.amount and a month-end batch value that excludes intraday new
+      exposures until the next batch.
+    what: "The ontology makes an inter-claim temporal contradiction: the aggregate
+      is declared to cover all Exposure.amount, while the stored total_amount
+      explicitly may omit valid Exposure records created after the latest
+      month-end batch."
+    why: In any state after a new intraday exposure exists and before the next
+      batch, the declared definition requires inclusion of that Exposure.amount,
+      but the attribute note permits non-inclusion. Both claims cannot be true
+      for the same borrower, as_of date, and exposure set. This matters because
+      the artifact is intended as a shared authority for risk engines and
+      reporting systems; a utilization or appetite calculation using this
+      concept can be simultaneously 'correct' and 'incorrect' depending on which
+      claim is applied.
+    how_to_fix: Make the temporal boundary explicit. For example, define
+      ExposureAggregate as the sum of Exposure.amount as of a specific batch
+      cutoff/as_of timestamp, or split it into CurrentExposureAggregate and
+      MonthEndExposureAggregate so the universal 'all Exposure.amount' claim is
+      not attached to a lagged stored value.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared concept authority for risk engines and reporting
+        systems using exposure aggregates in risk and utilization calculations.
+      failure_condition: A borrower receives an intraday new exposure after the
+        month-end batch and before the next batch, while
+        ExposureAggregate.total_amount is used as the authoritative total
+        exposure.
+      impact: The same ontology permits two incompatible truth conditions for the
+        aggregate, weakening review trust and making downstream calculations
+        non-actionable without an extra unstated temporal convention.
+      evidence_refs:
+        - credit-risk-ontology.yaml:64-71
+        - credit-risk-ontology.yaml:89
+    causal_path:
+      root_cause_candidate: "The aggregate concept lacks a single temporal authority:
+        its definition uses an unqualified universal sum, while its attribute
+        note authorizes a lagged batch projection."
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: ExposureAggregate is defined as borrower-level total exposure and the sum
+            of all Exposure.amount.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:64-65
+        - cause_id: logic-candidate-001.cause-002
+          claim: ExposureAggregate.total_amount is stored by a month-end batch and
+            intraday new exposures are not reflected until the next batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:68-70
+        - cause_id: logic-candidate-001.cause-003
+          claim: Limit utilization is calculated from ExposureAggregate.total_amount, so
+            the contradiction affects a declared downstream rule inside the
+            target.
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:89
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so only self-contained formal consistency checks
+    over the declared claims were used.
+  - No domain-specific disjointness assumption, such as Collateral and Exposure
+    being necessarily disjoint types, was applied.
+validation:
+  unaddressable_candidates: []

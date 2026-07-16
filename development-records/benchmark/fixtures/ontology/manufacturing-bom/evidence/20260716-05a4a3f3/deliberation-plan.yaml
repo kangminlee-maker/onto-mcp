@@ -1,0 +1,76 @@
+schema_version: 1
+session_id: 20260716-05a4a3f3
+planned_issues:
+  - issue_id: issue-005
+    priority: 10
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+    conflict_summary: coverage는 PLM/MES 통합 목적상 ManufacturingOrder뿐 아니라
+      OperationExecution과 실제 투입·산출 기록까지 필수 범위로 보지만, semantics는 필수 범위를
+      ManufacturingOrder와 적용 리비전 연결로 한정하고 실행 기록의 상세 범위는 통합 경계 결정이라고 본다.
+    resolution_question: 선언된 PLM/MES 통합 목적을 충족하기 위한 필수 실행 추적 범위에 OperationExecution과
+      실제 투입·산출 기록까지 포함해야 하는가, 아니면 ManufacturingOrder와 적용 리비전 연결만을 필수로 하고 상세 실행
+      기록은 선택 범위로 둘 것인가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: structure의 한정은 구조 렌즈만으로 동기화·충돌 정책 전체를 단일 원인으로 확정할 수 없다는 증거 범위 제한이며,
+      권위·유효시점·변환 계약 부재라는 공통 원인과 조치에는 반대하지 않는다.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: structure가 원인을 버전·effectivity 연결 부재로 구체화한 것은 시점 기반 유효 리비전 권위 부재라는 다른 렌즈의
+      가설과 양립하며, 조치와 심각도에도 실질적 이견이 없다.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 제품구조 BOM과 공정 환류 관계의 분리, 비순환성 유지, high 심각도에 일치한다.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 독립된 revision과 effectivity 부재라는 원인, 제안 조치와 high 심각도에 일치한다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: semantics와 structure의 한정은 각 렌즈가 입증하는 개념·구조 범위를 명시한 것이며, 상태 전이 사건과 감사 증거의
+      필요성 또는 medium 심각도를 부정하지 않는다. 구체적 종결 상태 집합이 도메인 정책에 달린다는 점도 종결 상태를 모델링해야
+      한다는 주장과 양립한다.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: logic은 자신의 판단을 계산 유효성으로 한정했을 뿐 Quantity/UOM 권위 모델이나 진화성 결함을 반박하지 않으며, 모든
+      적용 렌즈가 원인·조치·high 심각도를 지지한다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: structure의 한정은 권위 레코드와 이력 경로 누락이라는 구조적 표현이며, 권위 출처·유효기간·대사 사건 부재라는 공통
+      가설과 양립한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 BOM·Routing 버전 권위와 effectivity 부재, high 심각도에 일치한다. issue-004와의
+      중복 가능성은 인정되지만 렌즈 간 입장 충돌은 아니다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 ordered_list의 표현력 한계와 단계·전이 분리 조치를 지지하며, logic의
+      not_applicable은 반대 입장이 아니다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: structure는 모순을 관계 형태의 불일치로 기술했을 뿐 보편적 대칭성과 one_way의 양립 불가 또는 direction
+      권위화 조치를 반박하지 않는다.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 제품구조와 공정 물질 환류의 의미 분리, 별도 관계 도입과 high 심각도에 일치한다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 AlternatePart를 권위 association으로 연결하고 shortcut을 방향 보존 투영으로 제한하는
+      원인과 조치에 일치한다.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 InspectionPlan과 InspectionOperation의 유형·생명주기 분리를 지지하며,
+      logic의 not_applicable은 충돌이 아니다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 capacity_kind와 단위 부재로 처리량과 가용시간이 혼합된다는 원인 및 구조화 조치에 일치한다.
+  - issue_id: issue-016
+    reason_code: non_material_issue
+    reason: severity가 low이고 material_issue가 false이며, 모든 렌즈가 중대한 운영 실패가 입증되지 않은 표면 명명
+      문제로 한정한다.

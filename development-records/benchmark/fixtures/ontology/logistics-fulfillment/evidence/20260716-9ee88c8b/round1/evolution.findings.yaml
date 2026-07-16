@@ -1,0 +1,257 @@
+schema_version: 1
+session_id: 20260716-9ee88c8b
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: InventoryRecord / InventoryAggregate 재고 시간성 모델
+    evidence_anchor: .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:76,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:81,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:86,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:90,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:112,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:116
+    claim: 일중/실시간 재고 확장 시 기존 재고 구조에 시간·출처·스냅샷 권위 필드 추가가 필요해 기존 데이터 연속성이 깨진다.
+    what: InventoryRecord는 현재 보유 수량만 두고, InventoryAggregate는 매일 밤 저장되는 SKU별 가용 수량만
+      둔다. 동시에 재고 할당 규칙은 일중 주문도 이 야간 스냅샷을 읽도록 고정하고, WMS와 ERP가 서로 다른 재고 진실을 가진다고
+      적는다. 따라서 온톨로지가 이후 실시간 WMS 이벤트, ERP 회계 조정, 채널별 예약/가용 재고를 수용하려면 기존 재고 엔티티와
+      할당 규칙 자체를 수정해야 한다.
+    why: 변경 내성 관점에서 문제는 단순히 현재 as_of가 없다는 표면 결함이 아니라, 일중 주문 처리라는 현재 사용 경로가 야간
+      InventoryAggregate.available_qty에 직접 결합되어 있다는 점이다. 새 재고 소스나 더 빠른 동기화 주기를
+      추가하면 같은 available_qty 숫자가 어느 시점·어느 권위·어느 계산 기준의 값인지 구분할 수 없으므로, 과거 주문의 당시
+      재고 판단과 신규 실시간 판단을 같은 구조 안에서 함께 유지하기 어렵다. WMS/TMS/ERP 통합의 개념 기준 문서로 쓰일 경우
+      재고 할당의 변경 이력이 추적되지 않아 운영상 과할당/미할당 원인 분석과 단계적 마이그레이션이 약해진다.
+    how_to_fix: InventoryQuantity를 시간·권위·목적이 있는 개념으로 분리하고, 최소한 source_system,
+      authority_basis, as_of/effective_at, snapshot_id 또는 calculation_version을
+      추가한다. InventoryAggregate.available_qty는 원천 수량이 아니라 특정 계산 시점의 파생 스냅샷으로
+      명시하고, 할당 규칙은 읽는 재고 뷰의 freshness/authority 요구를 참조하도록 바꾼다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 주문 접수, 재고 할당, 출하 판단의 권위와 시간성을 안정적으로 정의하는 목적.
+      failure_condition: 야간 배치 기반 집계에서 일중·실시간 재고 이벤트, 복수 WMS/ERP 출처, 예약 재고 또는 과거 시점 조회를 추가하는 경우.
+      impact: 기존 available_qty/quantity_on_hand 값이 어떤 권위와 시점의 값인지 보존하지 못해 기존 데이터와 신규
+        데이터의 의미가 갈라지고, 통합 규칙을 기존 구조 수정 없이 확장하기 어렵다.
+      evidence_refs:
+        - materialized-input.md:76
+        - materialized-input.md:81
+        - materialized-input.md:86
+        - materialized-input.md:90
+        - materialized-input.md:112
+        - materialized-input.md:116
+    causal_path:
+      root_cause_candidate: 재고 수량 개념이 현재 숫자 값과 야간 집계 결과에 고정되어 있고, 시간·출처·계산 버전이 개념 모델의
+        일급 속성으로 분리되어 있지 않다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: InventoryRecord.quantity_on_hand는 현재 보유 수량으로만 정의되고 WMS와 ERP가 각자 값을 가진다고
+            설명된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:76
+            - materialized-input.md:81
+            - materialized-input.md:83
+        - cause_id: evolution-candidate-001.cause-002
+          claim: InventoryAggregate.available_qty는 매일 밤 배치로 저장되는 스냅샷인데, 일중 주문 할당도 이 값을 읽도록
+            규칙이 고정되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:86
+            - materialized-input.md:90
+            - materialized-input.md:112
+        - cause_id: evolution-candidate-001.cause-003
+          claim: WMS 실물 기준과 ERP 회계 기준의 불일치는 야간 배치 조정으로만 설명되어, 새 재고 출처나 실시간 동기화 주기를 기존 의미와
+            병행할 확장 지점이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:116
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: Sku.weight, Sku.dims, Shipment.total_weight 단위 모델
+    evidence_anchor: .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:33,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:37,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:38,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:48
+    claim: 창고·운송사별 단위 확장 시 기존 중량/치수 값의 의미가 변환 불가능해져 출하 중량 데이터의 연속성이 끊긴다.
+    what: Sku.weight는 kg 또는 lb를 창고별 관례대로 쓰는 숫자이고, dims는 단위가 소스 시스템마다 다른 문자열이다.
+      Shipment.total_weight는 OrderLine 중량 합으로 저장되지만 어떤 단위 체계로 계산됐는지 기록하지 않는다.
+      새로운 창고, 국가권, 운송사 요율체계가 들어오면 기존 필드만으로는 단위가 다른 데이터를 안전하게 병합할 수 없다.
+    why: 변경 내성 관점에서 단위는 나중에 붙일 표시 정보가 아니라 수량의 의미를 구성하는 권위 정보다. 현재 구조는 단위가 값과 분리되어 있지
+      않아, lb 창고와 kg 창고를 동시에 운영하거나 운송사가 부피중량/실중량 규칙을 요구하는 변경이 오면 기존 숫자들을
+      해석·변환·검증할 기준이 없다. 특히 total_weight가 출하 확정 시 저장되는 파생값이므로, 단위 보존 없이 계산된 과거
+      shipment 데이터는 단위 표준화 이후에도 신뢰 가능한 비교 기준으로 유지되기 어렵다.
+    how_to_fix: 중량과 치수를 Quantity 값 객체로 모델링해 value, unit, measurement_system/source,
+      measured_at 또는 calculation_basis를 포함한다. Shipment.total_weight도 구성 SKU 중량의
+      단순 숫자 합이 아니라 단위 변환 규칙과 계산 버전을 가진 파생 측정값으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합에서 SKU, 출하, 운송 요율·제약 판단에 쓰이는 수량 단위의 공통 기준 제공.
+      failure_condition: kg/lb가 혼재된 창고, 다른 치수 단위를 쓰는 소스 시스템, 또는 단위 민감 운송사/요율 규칙을 추가하는 경우.
+      impact: 기존 숫자 필드의 단위 의미가 보존되지 않아 신규 단위 체계와 기존 출하 데이터를 같은 기준으로 변환하거나 감사하기 어렵다.
+      evidence_refs:
+        - materialized-input.md:37
+        - materialized-input.md:38
+        - materialized-input.md:48
+    causal_path:
+      root_cause_candidate: 측정값이 단위와 계산 기준을 포함한 독립 개념이 아니라 number/string 필드에 소스 관례로 저장된다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Sku.weight는 숫자이며 창고별 계량 관례인 kg 또는 lb를 그대로 쓴다고 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Sku.dims는 문자열이고 단위가 소스 시스템마다 다르다고 정의된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:38
+        - cause_id: evolution-candidate-002.cause-003
+          claim: Shipment.total_weight는 구성 OrderLine 중량의 합으로 저장되지만 단위 또는 계산 기준 필드가 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:48
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: TrackingEvent.event_type와 Shipment.status 상태 확장 모델
+    evidence_anchor: .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:44,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:46,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:63,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:65,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:66,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:113
+    claim: 새 운송사 상태 코드나 외부 표준 변경을 수용하려면 enum과 연동별 매핑을 반복 수정해야 하며 상태 의미의 연속성이 보장되지 않는다.
+    what: Shipment.status와 TrackingEvent.event_type이 고정 enum으로 정의되어 있고,
+      TrackingEvent.event_type은 캐리어별 상태 코드라고 하면서도 값 목록은 공통 enum처럼 제한된다. 자사
+      Shipment.status와의 매핑은 각 연동에서 알아서 한다고 되어 있어, 새로운 캐리어가 상태 코드를 추가하거나 기존 코드
+      의미를 바꿀 때 온톨로지 안에서 버전 있는 매핑을 유지할 곳이 없다.
+    why: 변경 내성의 핵심은 외부 표준이 바뀌어도 기존 이벤트와 규칙의 의미를 보존하는 것이다. 현재 모델은 carrier-native 상태,
+      canonical 상태, 매핑 버전, 적용 기간을 분리하지 않아 상태 변화가 발생하면 enum 확장과 개별 연동 로직 수정이 동시에
+      필요하다. 그 결과 과거 TrackingEvent가 당시 어떤 매핑 규칙으로 Shipment.status에 영향을 줬는지 재현하기
+      어렵고, WMS/TMS/ERP 간 상태 통합 규칙도 연동별 구현으로 흩어진다.
+    how_to_fix: TrackingEvent에는 carrier_code, native_status_code,
+      native_status_version을 보존하고, 별도 StatusMapping 개념으로 canonical
+      Shipment.status, mapping_version, effective_from/to, precedence를 모델링한다.
+      enum은 내부 canonical 상태로 한정하고 외부 코드는 데이터로 확장 가능하게 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: TMS/캐리어 상태와 OMS/ERP 상태를 통합할 때 외부 상태 변경에도 안정적인 기준과 이력 재현성을 제공하는 목적.
+      failure_condition: 새 운송사 도입, 캐리어 상태 코드 추가/변경, 예외·반품·부분배송 등 새로운 상태 범주가 추가되는 경우.
+      impact: 상태 enum 또는 각 연동 구현을 직접 바꿔야 하며, 과거 이벤트가 어떤 매핑 기준으로 해석됐는지 온톨로지 수준에서 유지되지
+        않는다.
+      evidence_refs:
+        - materialized-input.md:44
+        - materialized-input.md:46
+        - materialized-input.md:63
+        - materialized-input.md:65
+        - materialized-input.md:66
+        - materialized-input.md:113
+    causal_path:
+      root_cause_candidate: 외부 상태 코드와 내부 표준 상태의 매핑이 버전 있는 개념으로 모델링되지 않고 고정 enum 및 연동별 재량에 의존한다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Shipment.status는 created, picked, in_transit, delivered의 고정 enum으로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:44
+            - materialized-input.md:46
+        - cause_id: evolution-candidate-003.cause-002
+          claim: TrackingEvent.event_type도 고정 enum 값을 갖지만 캐리어별 상태 코드라고 설명된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:63
+            - materialized-input.md:65
+            - materialized-input.md:66
+        - cause_id: evolution-candidate-003.cause-003
+          claim: Order, Shipment, TrackingEvent 상태는 각 시스템이 독립 관리하고 매핑은 각 연동에서 처리하도록 되어 있어
+            공통 확장 지점이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:66
+            - materialized-input.md:113
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: Shipment와 DeliveryLeg 상속 구조
+    evidence_anchor: .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:40,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:41,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:48,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:52,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:54,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:105,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:106,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:107,
+      .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:108
+    claim: 다구간·환적·역물류 확장 시 배송 구간이 전체 화물의 속성과 주문 충족 관계를 상속해 경로 모델을 수정해야 한다.
+    what: Shipment는 창고에서 고객으로 가는 전체 물리 이동으로 정의되며 total_weight, eta, carrier_ref를
+      가진다. DeliveryLeg는 Shipment의 일종으로 선언되어 전체 화물 속성을 상속하지만, fulfills 관계도
+      Shipment에서 Order로 직접 연결된다. 이후 허브 환적, 복수 운송사, 반품, 구간별 ETA/상태를 추가하면 개별 leg와
+      전체 consignment를 구분하는 새 개념을 넣기 위해 기존 상속과 관계를 재설계해야 한다.
+    why: 변경 내성 관점에서 전체 Shipment와 구간 DeliveryLeg는 lifecycle, 상태, 운송사, ETA, 주문 충족 책임이
+      다르게 진화하는 축이다. 현재는 DeliveryLeg가 Shipment를 상속하므로 구간이 전체 shipment의 fulfills
+      관계와 total_weight 의미에 끌려 들어간다. 다구간 TMS 통합이 들어오면 구간별 carrier/status/ETA는
+      필요하지만 구간이 주문 전체를 충족한다고 볼 수 없는 경우가 생겨 기존 구조가 확장보다 재분류를 요구한다.
+    how_to_fix: Shipment를 전체 consignment/fulfillment movement로 두고 DeliveryLeg는 상속이
+      아니라 route component 관계로 연결한다. ShipmentRoute 또는 LegAssignment를 추가해 leg_seq,
+      from/to, carrier, leg_status, leg_eta를 구간 속성으로 분리하고, fulfills는 전체 Shipment
+      또는 별도 FulfillmentAllocation에만 두도록 범위를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: TMS 통합에서 전체 화물, 배송 구간, 주문 충족 관계를 확장 가능한 개념 기준으로 제공하는 목적.
+      failure_condition: 복수 구간, 복수 운송사, 허브 환적, 구간별 상태/ETA 또는 반품 경로를 추가하는 경우.
+      impact: 구간 엔티티가 전체 Shipment 의미를 상속해 신규 경로 유형을 기존 구조 수정 없이 추가하기 어렵고, 주문 충족 관계가 구간
+        단위로 잘못 확장될 위험이 있다.
+      evidence_refs:
+        - materialized-input.md:40
+        - materialized-input.md:41
+        - materialized-input.md:48
+        - materialized-input.md:52
+        - materialized-input.md:54
+        - materialized-input.md:105
+        - materialized-input.md:106
+        - materialized-input.md:107
+        - materialized-input.md:108
+    causal_path:
+      root_cause_candidate: 전체 화물 이동과 경로 구간이 상속 관계로 결합되어 각자의 독립적인 lifecycle과 관계 범위가 분리되지 않는다.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: Shipment는 창고에서 고객으로 가는 물리적 화물 이동으로 정의되고 DeliveryLeg도 Shipment의 일종이라고
+            설명된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:40
+            - materialized-input.md:41
+        - cause_id: evolution-candidate-004.cause-002
+          claim: "DeliveryLeg는 is_a: Shipment로 선언되어 전체 Shipment의 status, total_weight,
+            eta, carrier_ref 구조를 상속한다."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:44
+            - materialized-input.md:48
+            - materialized-input.md:49
+            - materialized-input.md:50
+            - materialized-input.md:52
+            - materialized-input.md:54
+        - cause_id: evolution-candidate-004.cause-003
+          claim: fulfills 관계는 Shipment에서 Order로 정의되어 DeliveryLeg가 Shipment 하위형인 한 구간에도 주문
+            충족 관계가 적용될 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:105
+            - materialized-input.md:106
+            - materialized-input.md:107
+            - materialized-input.md:108
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 도메인 문서 없이 실행했다.
+  - 역할 정의는 프롬프트 패킷에 포함된 evolution 렌즈 설명을 사용했다; 외부 role path는 현재 유효 파일시스템 루트 밖이므로
+    추가 확장 읽기를 하지 않았다.
+  - 검토는 물류·주문충족 온톨로지가 WMS/TMS/ERP 통합의 개념 기준 문서라는 대상 파일의 선언 목적을 기준으로 했다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,115 @@
+## /var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-ontology-eval-logistics-fulfillment-Rh9mNK/logistics-fulfillment-ontology.yaml
+
+# Logistics & Fulfillment Ontology (v1.0)
+# 주문 → 재고 할당 → 출하 → 배송의 개념 모델. WMS/TMS/ERP 통합의 개념 기준 문서.
+
+ontology: logistics-fulfillment
+version: "1.0"
+
+entities:
+
+  Order:
+    definition: "고객 주문 한 건."
+    attributes:
+      order_no: { type: string }
+      placed_at: { type: datetime }
+      fulfillment_status:
+        type: enum
+        values: [received, allocated, picking, shipped, delivered]
+        note: "주문 단위 진행 상태. 주문관리(OMS)가 관리한다."
+      lines: { type: list, of: ref, target: OrderLine }
+
+  OrderLine:
+    definition: "주문의 한 품목 줄."
+    attributes:
+      sku_ref: { type: ref, target: Sku }
+      qty: { type: number }
+      # 이 줄을 실제로 충족한 화물/구간으로의 참조가 없다 — 부분출하 시 어느 줄이
+      # 어느 Shipment로 나갔는지 온톨로지 안에서 추적할 수 없다.
+
+  Sku:
+    definition: "판매·보관 재고 단위."
+    attributes:
+      sku_code: { type: string }
+      weight: { type: number, note: "상품 중량. 창고별 계량 관례(kg 또는 lb)를 그대로 쓴다." }
+      dims: { type: string, note: "가로x세로x높이 문자열. 단위는 소스 시스템마다 다르다." }
+
+  Shipment:
+    definition: "창고에서 고객으로 가는 물리적 화물 이동. 배송 구간(DeliveryLeg)도 Shipment의 일종이다."
+    attributes:
+      shipment_no: { type: string }
+      status:
+        type: enum
+        values: [created, picked, in_transit, delivered]
+        note: "화물 상태. delivered가 최종 상태다."
+      total_weight: { type: number, note: "구성 OrderLine 중량의 합. 출하 확정 시점에 계산해 저장한다." }
+      eta: { type: datetime, note: "예상 도착 시각. 현장 운영팀이 상황을 보고 수기로 조정한다." }
+      carrier_ref: { type: ref, target: Carrier }
+
+  DeliveryLeg:
+    definition: "화물 경로의 한 구간(예: 창고→허브, 허브→고객)."
+    is_a: Shipment
+    attributes:
+      leg_seq: { type: number }
+      from_ref: { type: ref, target: Location }
+      to_ref: { type: ref, target: Location }
+
+  TrackingEvent:
+    definition: "캐리어가 보고하는 배송 추적 이벤트."
+    attributes:
+      event_type:
+        type: enum
+        values: [dispatched, arrived_hub, out_for_delivery, delivered, exception]
+        note: "캐리어별 상태 코드. 자사 Shipment.status와의 매핑은 각 연동에서 알아서 한다."
+      occurred_at: { type: datetime }
+      shipment_ref: { type: ref, target: Shipment }
+
+  Warehouse:
+    definition: "재고 보관·출고 거점."
+    attributes:
+      wh_code: { type: string }
+      location_ref: { type: ref, target: Location }
+
+  InventoryRecord:
+    definition: "특정 창고의 특정 SKU 재고 한 건."
+    attributes:
+      wh_ref: { type: ref, target: Warehouse }
+      sku_ref: { type: ref, target: Sku }
+      quantity_on_hand:
+        type: number
+        note: "현재 보유 수량. WMS와 ERP가 각자 값을 가지며 야간 배치로 ERP 기준에 맞춘다."
+      # 유효 시점(as_of) 개념이 없다 — '주문 접수 당시 재고가 얼마였나' 같은 시점 질의가 불가능하다.
+
+  InventoryAggregate:
+    definition: "SKU별 전사 가용 재고 집계."
+    attributes:
+      sku_ref: { type: ref, target: Sku }
+      available_qty: { type: number, note: "가용 수량. 매일 밤 배치로 스냅샷을 저장한다." }
+
+  Carrier:
+    definition: "운송사."
+    attributes:
+      carrier_code: { type: string }
+      name: { type: string }
+
+  Location:
+    definition: "지리적 위치/시설 좌표."
+    attributes:
+      loc_code: { type: string }
+      lat: { type: number }
+      lon: { type: number }
+
+relations:
+  - name: fulfills
+    from: Shipment
+    to: Order
+    note: "화물이 주문을 충족한다. 주문 단위 관계이며 OrderLine 단위 매핑은 두지 않는다."
+
+integrity_rules:
+  - "재고 할당은 InventoryAggregate.available_qty를 확인해 수행한다(일중 주문도 이 값을 읽는다)."
+  - "Order.fulfillment_status, Shipment.status, TrackingEvent.event_type는 각 시스템(OMS/TMS/캐리어)이 독립으로 관리한다."
+
+notes:
+  - "재고 진실: WMS가 창고 실물 기준, ERP가 회계 수량 기준. 불일치는 야간 배치가 조정한다."
+  - "ETA는 캐리어 API 값과 운영팀 수기 조정값이 섞인다. 최종 표시값은 운영팀 판단을 따른다."
+  - "국제/통관 배송은 이 온톨로지의 범위 밖으로 둔다."

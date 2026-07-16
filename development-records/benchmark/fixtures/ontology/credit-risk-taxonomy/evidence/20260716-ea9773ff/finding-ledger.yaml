@@ -1,0 +1,1184 @@
+schema_version: 1
+session_id: 20260716-ea9773ff
+findings:
+  - finding_id: finding-001
+    lens_id: axiology
+    source_ref: .onto/review/20260716-ea9773ff/round1/axiology.findings.yaml#axiology-candidate-001
+    target: credit-risk-ontology.yaml classification_rules / notes
+    evidence_anchor: classification_rules[0]; notes[0]; header purpose comment
+    claim: 보고서 수동 조정과 소비자별 등급 변환은 공유 개념 권위라는 목적에서 drift를 만든다.
+    lens_rationale_summary: 이 온톨로지는 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서를 지향한다. 그런데 등급의
+      도출·조정·변환 권위를 소비 시스템과 보고서 팀에 분산하면 같은 차주/익스포저가 엔진·보고서·소비 시스템별로 다른 리스크 의미를 갖게
+      된다. 이는 운영 유연성이라는 국소 최적화가 공유 기준이라는 핵심 목적을 약화하는 트레이드오프다.
+    proposed_action: 등급 체계의 canonical source와 변환 테이블을 온톨로지 안에 명시하고, 수동 조정은 별도
+      override 개념으로 분리해 사유, 적용 범위, 승인 권위, 원등급 보존, 유효기간을 모델링한다.
+    affected_purpose: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서로 사용되는 것.
+    failure_condition: RiskRating.grade, Exposure.risk_grade,
+      Borrower.internal_rating 간 변환 또는 보고 조정이 시스템별로 다르게 적용될 때.
+    impact: 동일 리스크 판단이 시스템별로 달라져 보고 수치와 엔진 판단의 비교·추적·감사가 약해진다.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/axiology.findings.yaml#axiology-candidate-001
+      - "header purpose comment: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향"
+      - "classification_rules[0]: 보고서 팀이 시장 상황에 따라 수동 조정 가능"
+      - "notes[0]: 변환은 각 소비 시스템이 수행"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서로 사용되는 것.
+      failure_condition: RiskRating.grade, Exposure.risk_grade,
+        Borrower.internal_rating 간 변환 또는 보고 조정이 시스템별로 다르게 적용될 때.
+      impact: 동일 리스크 판단이 시스템별로 달라져 보고 수치와 엔진 판단의 비교·추적·감사가 약해진다.
+      evidence_refs:
+        - "header purpose comment: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향"
+        - "classification_rules[0]: 보고서 팀이 시장 상황에 따라 수동 조정 가능"
+        - "notes[0]: 변환은 각 소비 시스템이 수행"
+    causal_path:
+      root_cause_candidate: 등급 의미와 변환/조정 권위가 온톨로지 내부의 단일 권위로 닫혀 있지 않다.
+      root_cause_step_id: finding-001.cause-003
+      steps:
+        - cause_id: finding-001.cause-001
+          claim: 대상은 공유 개념 권위 문서를 지향한다고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - header purpose comment
+        - cause_id: finding-001.cause-002
+          claim: 하지만 등급 변환은 각 소비 시스템이 수행하도록 되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[0]
+        - cause_id: finding-001.cause-003
+          claim: 보고서 팀은 엔진 산출 등급에서 도출되는 Exposure.risk_grade를 수동 조정할 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[0]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-002
+    lens_id: axiology
+    source_ref: .onto/review/20260716-ea9773ff/round1/axiology.findings.yaml#axiology-candidate-002
+    target: ExposureAggregate.total_amount and Limit utilization rule
+    evidence_anchor: ExposureAggregate.attributes.total_amount.note; classification_rules[1]
+    claim: 월말 배치 집계가 한도 소진율의 기준값이 되면서 리스크 통제 목적보다 보고 편의가 우선된다.
+    lens_rationale_summary: 한도 소진율은 여신 한도 관리의 운영 판단에 쓰이는 기준인데, 일중 신규 여신을 제외한 값을 공식
+      집계로 쓰면 한도 초과나 리스크 성향 위반을 늦게 인지할 수 있다. 시간성 비용이 명시적 통제 없이 수용되어 공유 리스크 기준의
+      목적을 훼손한다.
+    proposed_action: ExposureAggregate를 reporting_snapshot과
+      control_current_exposure처럼 목적별로 분리하거나, total_amount의 freshness SLA, 포함/제외
+      범위, 일중 보정 방식, 한도 소진율에 사용할 권위 값을 명시한다.
+    affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 리스크/한도 판단 기준 제공.
+    failure_condition: 일중 신규 여신이 발생했지만 월말 배치 전 한도 소진율이나 RiskAppetite 준수 상태가 계산될 때.
+    impact: 실제 익스포저보다 낮은 집계가 공식 계산에 사용되어 한도 관리와 보고 신뢰를 동시에 약화한다.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/axiology.findings.yaml#axiology-candidate-002
+      - "ExposureAggregate.total_amount.note: 월말 배치 저장, 일중 신규 여신 미반영"
+      - "classification_rules[1]: Limit 소진율 = ExposureAggregate.total_amount /
+        Limit.approved_amount"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 리스크/한도 판단 기준 제공.
+      failure_condition: 일중 신규 여신이 발생했지만 월말 배치 전 한도 소진율이나 RiskAppetite 준수 상태가 계산될 때.
+      impact: 실제 익스포저보다 낮은 집계가 공식 계산에 사용되어 한도 관리와 보고 신뢰를 동시에 약화한다.
+      evidence_refs:
+        - "ExposureAggregate.total_amount.note: 월말 배치 저장, 일중 신규 여신 미반영"
+        - "classification_rules[1]: Limit 소진율 = ExposureAggregate.total_amount /
+          Limit.approved_amount"
+    causal_path:
+      root_cause_candidate: 집계 값의 목적과 freshness 권위가 분리되지 않았다.
+      root_cause_step_id: finding-002.cause-003
+      steps:
+        - cause_id: finding-002.cause-001
+          claim: ExposureAggregate.total_amount는 모든 Exposure.amount의 합으로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - ExposureAggregate.definition
+        - cause_id: finding-002.cause-002
+          claim: 동일 필드는 월말 배치로 계산되어 일중 신규 여신을 다음 배치까지 반영하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - ExposureAggregate.total_amount.note
+        - cause_id: finding-002.cause-003
+          claim: 그 값이 Limit 소진율 계산에 사용된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[1]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-003
+    lens_id: axiology
+    source_ref: .onto/review/20260716-ea9773ff/round1/axiology.findings.yaml#axiology-candidate-003
+    target: classification_rules[1] currency conversion
+    evidence_anchor: classification_rules[1]; Limit.attributes.currency
+    claim: 통화 환산 권위를 각 시스템에 맡겨 한도 소진율의 공유 기준을 약화한다.
+    lens_rationale_summary: 한도 소진율은 공유 리스크/보고 기준이어야 하는데 환율 출처가 시스템별이면 동일 익스포저와 한도에서도
+      다른 소진율이 산출될 수 있다. 이는 시스템 자율성을 위해 canonical 계산 권위를 포기하는 숨은 트레이드오프다.
+    proposed_action: 환율 기준일, 환율 소스, 우선순위, 재계산 정책을 온톨로지의 canonical 계산 규칙으로 정하거나
+      ExchangeRateSource 같은 권위 개념을 추가한다.
+    affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 한도 소진율 계산 기준.
+    failure_condition: 리스크 엔진과 보고 시스템의 당일 환율 테이블 값이나 갱신 시각이 다를 때.
+    impact: 동일 포지션의 한도 소진율이 시스템별로 달라져 보고·통제 간 reconciliation 비용과 판단 불일치를 만든다.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/axiology.findings.yaml#axiology-candidate-003
+      - "classification_rules[1]: 통화가 다른 경우 각 시스템의 당일 환율 테이블 사용"
+      - Limit.currency attribute
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 한도 소진율 계산 기준.
+      failure_condition: 리스크 엔진과 보고 시스템의 당일 환율 테이블 값이나 갱신 시각이 다를 때.
+      impact: 동일 포지션의 한도 소진율이 시스템별로 달라져 보고·통제 간 reconciliation 비용과 판단 불일치를 만든다.
+      evidence_refs:
+        - "classification_rules[1]: 통화가 다른 경우 각 시스템의 당일 환율 테이블 사용"
+        - Limit.currency attribute
+    causal_path:
+      root_cause_candidate: 환율 변환의 계산 권위가 온톨로지에 닫혀 있지 않고 소비 시스템에 분산되어 있다.
+      root_cause_step_id: finding-003.cause-003
+      steps:
+        - cause_id: finding-003.cause-001
+          claim: Limit은 통화를 속성으로 갖는다.
+          relation_to_previous: null
+          evidence_refs:
+            - Limit.attributes.currency
+        - cause_id: finding-003.cause-002
+          claim: 통화가 다른 경우 환산은 각 시스템의 환율 테이블을 사용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[1]
+        - cause_id: finding-003.cause-003
+          claim: 따라서 한도 소진율 계산 결과가 시스템별 환율 상태에 의존한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[1]
+      unresolved_beyond_evidence: null
+  - finding_id: finding-004
+    lens_id: axiology
+    source_ref: .onto/review/20260716-ea9773ff/round1/axiology.findings.yaml#axiology-candidate-004
+    target: notes[1] default status boundary
+    evidence_anchor: notes[1]; ontology header purpose
+    claim: 연체/부실 상태를 경계 밖으로만 둔 것은 여신 리스크 공유 기준의 목적상 중요한 경계 약속을 불충분하게 만든다.
+    lens_rationale_summary: default 상태는 여신 리스크 분류와 보고에서 목적상 핵심적인 상태다. 별도 시스템 소관일 수는
+      있지만, 공유 개념 권위 문서라면 최소한 외부 권위, 참조 키, 반영 시점, 등급/보고와의 관계를 경계 계약으로 닫아야 한다. 단순
+      제외는 시스템 경계 편의가 리스크 의미의 완결성을 약화하는 선택이다.
+    proposed_action: DefaultStatus를 외부 권위 개념으로 참조하거나, out-of-scope라도 external
+      authority, 식별자, 갱신 시점, RiskRating/Exposure 보고 반영 규칙을 명시한 boundary
+      contract를 추가한다.
+    affected_purpose: 여신 리스크 관리 개념 모델이 리스크 엔진과 보고 시스템의 공유 기준이 되는 것.
+    failure_condition: 차주나 익스포저가 연체/부실 상태인데 이 온톨로지의 등급·익스포저·보고 산출물과 연결해 해석해야 할 때.
+    impact: 핵심 리스크 상태가 공유 모델에서 끊겨 리스크 엔진과 보고 시스템의 의미 정렬과 경계 책임 추적이 어려워진다.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/axiology.findings.yaml#axiology-candidate-004
+      - "notes[1]: 연체/부실(default) 상태는 별도 시스템에서 다루므로 범위 밖"
+      - "header purpose comment: 여신 리스크 관리 개념 모델 및 공유 권위 문서 지향"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 여신 리스크 관리 개념 모델이 리스크 엔진과 보고 시스템의 공유 기준이 되는 것.
+      failure_condition: 차주나 익스포저가 연체/부실 상태인데 이 온톨로지의 등급·익스포저·보고 산출물과 연결해 해석해야 할 때.
+      impact: 핵심 리스크 상태가 공유 모델에서 끊겨 리스크 엔진과 보고 시스템의 의미 정렬과 경계 책임 추적이 어려워진다.
+      evidence_refs:
+        - "notes[1]: 연체/부실(default) 상태는 별도 시스템에서 다루므로 범위 밖"
+        - "header purpose comment: 여신 리스크 관리 개념 모델 및 공유 권위 문서 지향"
+    causal_path:
+      root_cause_candidate: 목적상 핵심 외부 상태에 대한 boundary contract가 없다.
+      root_cause_step_id: finding-004.cause-003
+      steps:
+        - cause_id: finding-004.cause-001
+          claim: 온톨로지는 여신 리스크 관리의 개념 모델과 공유 권위 문서를 지향한다.
+          relation_to_previous: null
+          evidence_refs:
+            - header purpose comment
+        - cause_id: finding-004.cause-002
+          claim: 연체/부실(default) 상태는 별도 시스템에서 다룬다는 이유로 범위 밖이라고만 정의된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[1]
+        - cause_id: finding-004.cause-003
+          claim: 외부 상태와 내부 리스크 등급/익스포저/보고 개념의 연결 규칙이 대상 안에 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - notes[1]; entities and relations list
+      unresolved_beyond_evidence: 별도 연체관리 시스템에 실제 계약이 있을 수 있으나, 현재 bounded target에는 그 계약이 드러나지 않는다.
+  - finding_id: finding-005
+    lens_id: coverage
+    source_ref: .onto/review/20260716-ea9773ff/round1/coverage.findings.yaml#coverage-candidate-001
+    target: credit-risk-ontology.yaml / time-dependent risk and limit values
+    evidence_anchor: "Embedded Materialized Input: Borrower.internal_rating;
+      Exposure.risk_grade and ltv; RiskRating.grade and score;
+      Limit.approved_amount; RiskAppetite.threshold and compliance_status; only
+      ExposureAggregate.as_of and Collateral.appraised_at carry explicit dates"
+    claim: 시점 의존 값 대부분에 유효기간·이력 개념이 없어 과거 기준 리스크 상태를 재구성할 수 없다.
+    lens_rationale_summary: 문서 목적은 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서인데, 보고서는 특정 기준일의
+      등급·한도·담보인정비율·준수상태를 재현해야 한다. 대상 파일은 ExposureAggregate.total_amount에는 as_of를
+      두면서도 RiskRating, Exposure.risk_grade, Limit, RiskAppetite에는 동등한 시간 축을 두지
+      않아 기준일 보고값과 엔진 산출값의 재현 범위가 불균형하다.
+    proposed_action: 시점 의존 엔티티나 속성을 값 객체/이력 엔티티로 분리하고, 최소한 valid_from, valid_to 또는
+      as_of, source_event_ref, version/status를 추가한다. RiskRating,
+      ExposureRiskGrade, LimitApproval/LimitVersion, RiskAppetiteVersion처럼 기준일
+      재구성이 필요한 개념을 명시한다.
+    affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 여신 리스크 개념 권위 문서
+    failure_condition: 보고 시스템이 과거 기준일의 등급, 한도, LTV, 리스크 성향 준수상태를 재현하거나 엔진 산출값과 대사해야 하는 경우
+    impact: 현재 온톨로지는 일부 집계와 담보 평가 시점만 보존하므로 보고 기준일 값의 근거를 같은 개념 기준으로 닫을 수 없어 엔진/보고 간
+      신뢰와 감사 가능성이 약해진다.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/coverage.findings.yaml#coverage-candidate-001
+      - "Embedded Materialized Input: header purpose statement"
+      - "Embedded Materialized Input: ExposureAggregate.as_of"
+      - "Embedded Materialized Input: Collateral.appraised_at"
+      - "Embedded Materialized Input: RiskRating attributes lack temporal fields"
+      - "Embedded Materialized Input: Limit and RiskAppetite attributes lack
+        temporal fields"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 여신 리스크 개념 권위 문서
+      failure_condition: 보고 시스템이 과거 기준일의 등급, 한도, LTV, 리스크 성향 준수상태를 재현하거나 엔진 산출값과 대사해야 하는 경우
+      impact: 현재 온톨로지는 일부 집계와 담보 평가 시점만 보존하므로 보고 기준일 값의 근거를 같은 개념 기준으로 닫을 수 없어 엔진/보고 간
+        신뢰와 감사 가능성이 약해진다.
+      evidence_refs:
+        - "Embedded Materialized Input: header purpose statement"
+        - "Embedded Materialized Input: ExposureAggregate.as_of"
+        - "Embedded Materialized Input: Collateral.appraised_at"
+        - "Embedded Materialized Input: RiskRating attributes lack temporal
+          fields"
+        - "Embedded Materialized Input: Limit and RiskAppetite attributes lack
+          temporal fields"
+    causal_path:
+      root_cause_candidate: 시간성 적용 범위가 일부 산출물과 평가일에만 국소적으로 존재하고, 등급·한도·상태 값 전반의 공통 이력 개념으로 모델링되지 않았다.
+      root_cause_step_id: finding-005.cause-003
+      steps:
+        - cause_id: finding-005.cause-001
+          claim: 대상 온톨로지는 ExposureAggregate.as_of와 Collateral.appraised_at만 명시적 시점 속성을
+            제공한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: ExposureAggregate.as_of"
+            - "Embedded Materialized Input: Collateral.appraised_at"
+        - cause_id: finding-005.cause-002
+          claim: RiskRating.grade/score, Exposure.risk_grade/ltv, Limit.approved_amount,
+            RiskAppetite.threshold/compliance_status에는 유효기간이나 이력 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: RiskRating attributes"
+            - "Embedded Materialized Input: Exposure attributes"
+            - "Embedded Materialized Input: Limit attributes"
+            - "Embedded Materialized Input: RiskAppetite attributes"
+        - cause_id: finding-005.cause-003
+          claim: 따라서 기준일 집계가 있어도 그 기준일에 적용된 등급·한도·성향 기준을 온톨로지 내부 개념만으로 재구성할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: classification_rules for utilization
+              and appetite compliance"
+            - "Embedded Materialized Input: header purpose statement"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-006
+    lens_id: coverage
+    source_ref: .onto/review/20260716-ea9773ff/round1/coverage.findings.yaml#coverage-candidate-002
+    target: credit-risk-ontology.yaml / controlled manual and approval actions
+    evidence_anchor: "Embedded Materialized Input: classification_rules allow
+      reporting-team manual adjustment of Exposure.risk_grade; Exposure.ltv note
+      says underwriter enters it at review time; Limit.approved_amount note says
+      approval system records it"
+    claim: 수동 조정·입력·승인 행위에 행위자·시각·근거를 담는 감사 증거 개념이 없다.
+    lens_rationale_summary: 이 값들은 리스크 엔진 산출 또는 승인 권한을 사람이 변경하거나 확정하는 통제 지점이다. 공유 권위
+      문서가 값만 정의하고 통제 행위의 증거 범주를 빠뜨리면 보고서 시스템은 조정값을 볼 수 있어도 조정 주체와 근거를 같은 개념 기준으로
+      설명할 수 없다.
+    proposed_action: 수동 조정과 승인/입력 행위를 별도 이벤트 엔티티로 추가한다. 최소 속성은 target_ref, actor_ref
+      또는 actor_id, occurred_at, reason_code/free_text, source_system,
+      before_value, after_value, evidence_uri이며, 조정된 값은 해당 이벤트를 참조하게 한다.
+    affected_purpose: 리스크 엔진 산출값과 보고 시스템 사용값을 공유 기준으로 설명하는 권위 문서
+    failure_condition: 보고서 팀이 엔진 등급을 수동 조정하거나 심사역/승인 시스템이 핵심 리스크 입력값을 확정한 뒤 감사·대사·이의제기 대응이 필요한 경우
+    impact: 값의 변경 결과만 남고 행위 근거가 개념화되지 않아 엔진값과 보고값 차이를 통제된 조정으로 입증하기 어렵다.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/coverage.findings.yaml#coverage-candidate-002
+      - "Embedded Materialized Input: classification_rules manual adjustment of
+        Exposure.risk_grade"
+      - "Embedded Materialized Input: Exposure.ltv note"
+      - "Embedded Materialized Input: Limit.approved_amount note"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 리스크 엔진 산출값과 보고 시스템 사용값을 공유 기준으로 설명하는 권위 문서
+      failure_condition: 보고서 팀이 엔진 등급을 수동 조정하거나 심사역/승인 시스템이 핵심 리스크 입력값을 확정한 뒤
+        감사·대사·이의제기 대응이 필요한 경우
+      impact: 값의 변경 결과만 남고 행위 근거가 개념화되지 않아 엔진값과 보고값 차이를 통제된 조정으로 입증하기 어렵다.
+      evidence_refs:
+        - "Embedded Materialized Input: classification_rules manual adjustment
+          of Exposure.risk_grade"
+        - "Embedded Materialized Input: Exposure.ltv note"
+        - "Embedded Materialized Input: Limit.approved_amount note"
+    causal_path:
+      root_cause_candidate: 값 엔티티 중심으로 범위를 잡으면서 값을 생성·변경·승인하는 통제 행위 범주가 모델에 포함되지 않았다.
+      root_cause_step_id: finding-006.cause-003
+      steps:
+        - cause_id: finding-006.cause-001
+          claim: 대상 텍스트는 보고서 팀의 수동 조정, 심사역 입력, 승인 시스템 기록을 명시한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: classification_rules manual
+              adjustment"
+            - "Embedded Materialized Input: Exposure.ltv note"
+            - "Embedded Materialized Input: Limit.approved_amount note"
+        - cause_id: finding-006.cause-002
+          claim: entities 목록에는 해당 행위의 행위자·시각·근거·변경 전후 값을 담는 이벤트나 증거 엔티티가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: entities list"
+        - cause_id: finding-006.cause-003
+          claim: 그 결과 조정·승인된 값은 공유될 수 있지만, 통제 행위의 정당성과 감사 추적은 공유 개념 범위 밖에 남는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: header purpose statement"
+            - "Embedded Materialized Input: classification_rules manual
+              adjustment"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-007
+    lens_id: coverage
+    source_ref: .onto/review/20260716-ea9773ff/round1/coverage.findings.yaml#coverage-candidate-003
+    target: credit-risk-ontology.yaml / parallel authorities for ratings, limits,
+      and FX conversion
+    evidence_anchor: "Embedded Materialized Input: three rating scales coexist and
+      consumers perform conversion; RiskRating.grade mapping table is in
+      risk-team wiki; Limit.approved_amount is combined with branch CRM
+      available_limit; FX conversion uses each system's daily rate table"
+    claim: 복수 시스템에 병존하는 등급·한도·환율 값에 단일 원본 권위 개념이 없다.
+    lens_rationale_summary: 리스크 엔진과 보고 시스템이 공유할 개념 기준이라면 같은 차주/익스포저에 대해 등급 변환, 환율,
+      available limit가 서로 다를 때 어떤 값을 권위로 삼는지 닫혀 있어야 한다. 현재 범위는 병존 사실만 표현하고
+      authority/source-of-record 차원을 빠뜨려 시스템별 산출 차이를 정상화할 기준이 부족하다.
+    proposed_action: SourceOfRecord 또는 AuthorityPolicy 개념을 추가하고
+      rating_scale_mapping, fx_rate_table, available_limit, approved_amount별
+      canonical_source, precedence, effective_date, fallback,
+      reconciliation_rule을 명시한다. 외부 위키/CRM/시스템 테이블은 단순 참고가 아니라 권위와 버전을 가진 참조
+      대상으로 모델링한다.
+    affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서
+    failure_condition: 소비 시스템별 등급 변환, 환율 테이블, CRM 한도 값이 서로 달라 한도 소진율이나 보고 등급이 달라지는 경우
+    impact: 공유 온톨로지가 우선순위와 단일 원본을 정하지 않아 동일 개념의 시스템별 해석 차이를 해소하지 못한다.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/coverage.findings.yaml#coverage-candidate-003
+      - "Embedded Materialized Input: RiskRating.grade note references risk-team
+        wiki mapping"
+      - "Embedded Materialized Input: notes on three rating scales and consumer
+        conversion"
+      - "Embedded Materialized Input: Limit.approved_amount note mentions CRM
+        available_limit"
+      - "Embedded Materialized Input: classification_rules FX conversion uses
+        each system's daily rate table"
+    severity: high
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서
+      failure_condition: 소비 시스템별 등급 변환, 환율 테이블, CRM 한도 값이 서로 달라 한도 소진율이나 보고 등급이 달라지는 경우
+      impact: 공유 온톨로지가 우선순위와 단일 원본을 정하지 않아 동일 개념의 시스템별 해석 차이를 해소하지 못한다.
+      evidence_refs:
+        - "Embedded Materialized Input: RiskRating.grade note references
+          risk-team wiki mapping"
+        - "Embedded Materialized Input: notes on three rating scales and
+          consumer conversion"
+        - "Embedded Materialized Input: Limit.approved_amount note mentions CRM
+          available_limit"
+        - "Embedded Materialized Input: classification_rules FX conversion uses
+          each system's daily rate table"
+    causal_path:
+      root_cause_candidate: 병행 관리되는 값과 외부 참조를 source-of-record/precedence 개념으로 승격하지 않고 주석 수준에 남겼다.
+      root_cause_step_id: finding-007.cause-003
+      steps:
+        - cause_id: finding-007.cause-001
+          claim: 대상 텍스트는 등급 변환, CRM 한도, 환율 테이블이 여러 소비 시스템 또는 외부 장소에 흩어져 있음을 명시한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: notes on three rating scales"
+            - "Embedded Materialized Input: Limit.approved_amount note"
+            - "Embedded Materialized Input: classification_rules FX conversion"
+        - cause_id: finding-007.cause-002
+          claim: 온톨로지에는 SourceOfRecord, MappingAuthority, FXRateAuthority, precedence 같은
+            권위 지정 엔티티나 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: entities list"
+            - "Embedded Materialized Input: relations list"
+        - cause_id: finding-007.cause-003
+          claim: 따라서 시스템 간 값 충돌이 발생해도 공유 개념 기준이 어느 값을 채택할지 결정하지 못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: header purpose statement"
+            - "Embedded Materialized Input: notes on consumer conversion"
+      unresolved_beyond_evidence: null
+  - finding_id: finding-008
+    lens_id: coverage
+    source_ref: .onto/review/20260716-ea9773ff/round1/coverage.findings.yaml#coverage-candidate-004
+    target: credit-risk-ontology.yaml / delinquency and default status coverage
+    evidence_anchor: "Embedded Materialized Input: notes state delinquency/default
+      status is handled by a separate delinquency-management system and is out
+      of this ontology's scope"
+    claim: 연체·부실 상태 영역이 공유 리스크 분류 온톨로지에서 완전히 제외되어 상태 lifecycle 범위가 끊긴다.
+    lens_rationale_summary: 대상 자체가 여신 리스크 관리의 개념 모델이자 엔진/보고 공유 기준을 지향한다고 선언한다. 그런데
+      파일 안에서 명시적으로 언급된 연체/부실 상태를 외부 시스템으로만 돌리면, 리스크 보고가 가장 민감하게 다루는 상태 전환을 같은 분류
+      권위 안에서 참조할 수 없다.
+    proposed_action: 외부 시스템이 운영 권위를 유지하더라도 DelinquencyStatus 또는
+      CreditImpairmentStatus 같은 참조 엔티티를 온톨로지에 포함한다. 상태값, status_as_of,
+      source_system, lifecycle transition, reporting_bucket, relationship to
+      Exposure/Borrower를 최소 범위로 정의해 공유 분류 기준에는 포함되게 한다.
+    affected_purpose: 여신 리스크 관리 개념 모델과 리스크 엔진/보고 시스템의 공유 분류 기준
+    failure_condition: 보고서나 엔진이 익스포저의 연체·부실 여부를 등급, 한도, 리스크 성향 위반과 함께 분류·집계해야 하는 경우
+    impact: 연체/부실 상태가 별도 시스템에 있다는 사실만으로는 공유 온톨로지에서 상태 의미와 lifecycle을 참조할 수 없어 핵심 리스크
+      상태 범위가 단절된다.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/coverage.findings.yaml#coverage-candidate-004
+      - "Embedded Materialized Input: header purpose statement"
+      - "Embedded Materialized Input: notes excluding delinquency/default"
+      - "Embedded Materialized Input: entities list lacks delinquency/default
+        status"
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: 여신 리스크 관리 개념 모델과 리스크 엔진/보고 시스템의 공유 분류 기준
+      failure_condition: 보고서나 엔진이 익스포저의 연체·부실 여부를 등급, 한도, 리스크 성향 위반과 함께 분류·집계해야 하는 경우
+      impact: 연체/부실 상태가 별도 시스템에 있다는 사실만으로는 공유 온톨로지에서 상태 의미와 lifecycle을 참조할 수 없어 핵심 리스크
+        상태 범위가 단절된다.
+      evidence_refs:
+        - "Embedded Materialized Input: header purpose statement"
+        - "Embedded Materialized Input: notes excluding delinquency/default"
+        - "Embedded Materialized Input: entities list lacks delinquency/default
+          status"
+    causal_path:
+      root_cause_candidate: 운영 소유 시스템의 범위와 공유 개념 기준의 범위를 동일시해 외부 소유 상태를 참조 개념으로도 포함하지 않았다.
+      root_cause_step_id: finding-008.cause-003
+      steps:
+        - cause_id: finding-008.cause-001
+          claim: 대상은 연체/부실 상태를 별도 시스템에서 다룬다는 이유로 온톨로지 범위 밖이라고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: notes excluding delinquency/default"
+        - cause_id: finding-008.cause-002
+          claim: entities와 relations에는 Borrower 또는 Exposure의 연체·부실 상태나 상태 전환 개념이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: entities list"
+            - "Embedded Materialized Input: relations list"
+        - cause_id: finding-008.cause-003
+          claim: 따라서 공유 리스크 분류 기준은 익스포저 lifecycle의 부실화 이후 구간을 표현하지 못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: header purpose statement"
+            - "Embedded Materialized Input: notes excluding delinquency/default"
+      unresolved_beyond_evidence: 외부 연체관리 시스템의 상세 모델은 경계 밖이므로, 본 finding은 외부 시스템 내부
+        설계가 아니라 공유 온톨로지에서 참조 개념이 부재하다는 범위 내 주장이다.
+  - finding_id: finding-009
+    lens_id: evolution
+    source_ref: .onto/review/20260716-ea9773ff/round1/evolution.findings.yaml#evolution-candidate-001
+    target: credit-risk-ontology.yaml rating scale model
+    evidence_anchor: credit-risk-ontology.yaml:15-17, 26-29, 48-51, 87-93
+    claim: Rating scale evolution is not centralized, so future grade changes
+      require coordinated consumer rewrites and can break shared continuity.
+    lens_rationale_summary: For an ontology intended to be the shared concept
+      authority for risk engines and reporting systems, the extensible concept
+      should be the rating scale plus versioned mapping rule. Here the mapping
+      authority is outside the target and distributed to consumers. If the
+      engine adds a grade, reporting changes buckets, or historical mappings are
+      revised, continuity depends on every consumer updating its own conversion
+      logic consistently rather than on the ontology preserving versioned
+      scale/mapping semantics.
+    proposed_action: Promote rating scale and mapping into first-class ontology
+      concepts, with scale id, scale version/effective dates, source authority,
+      mapping table, and manual-override provenance. Keep consumer systems
+      reading the same canonical mapping rather than each implementing
+      conversion independently.
+    affected_purpose: The ontology's declared purpose as a shared concept authority
+      for the risk engine and reporting systems.
+    failure_condition: A new or revised rating scale, mapping, or manual override
+      policy is introduced after v1.1.
+    impact: Risk and reporting consumers can classify the same borrower or exposure
+      differently, and historical grade continuity cannot be reconstructed from
+      the ontology alone.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/evolution.findings.yaml#evolution-candidate-001
+      - credit-risk-ontology.yaml:2-3
+      - credit-risk-ontology.yaml:15-17
+      - credit-risk-ontology.yaml:26-29
+      - credit-risk-ontology.yaml:48-51
+      - credit-risk-ontology.yaml:87-93
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The ontology's declared purpose as a shared concept authority
+        for the risk engine and reporting systems.
+      failure_condition: A new or revised rating scale, mapping, or manual override
+        policy is introduced after v1.1.
+      impact: Risk and reporting consumers can classify the same borrower or exposure
+        differently, and historical grade continuity cannot be reconstructed
+        from the ontology alone.
+      evidence_refs:
+        - credit-risk-ontology.yaml:2-3
+        - credit-risk-ontology.yaml:15-17
+        - credit-risk-ontology.yaml:26-29
+        - credit-risk-ontology.yaml:48-51
+        - credit-risk-ontology.yaml:87-93
+    causal_path:
+      root_cause_candidate: The ontology models rating values as separate local
+        attributes/enums while delegating conversion authority to external or
+        per-consumer mechanisms.
+      root_cause_step_id: finding-009.cause-003
+      steps:
+        - cause_id: finding-009.cause-001
+          claim: "Three rating scales are represented separately in the target: borrower
+            internal rating, engine rating, and exposure/reporting grade."
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:15-17
+            - credit-risk-ontology.yaml:26-29
+            - credit-risk-ontology.yaml:48-51
+        - cause_id: finding-009.cause-002
+          claim: "The target says derivation and conversion are not fully governed inside
+            the ontology: manual reporting adjustment is allowed, mappings are
+            in a wiki, and each consumer performs conversion."
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-93
+        - cause_id: finding-009.cause-003
+          claim: Because conversion authority is distributed, adding or changing a rating
+            category requires synchronized changes outside the ontology and
+            weakens historical continuity.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:2-3
+            - credit-risk-ontology.yaml:87-93
+      unresolved_beyond_evidence: null
+  - finding_id: finding-010
+    lens_id: evolution
+    source_ref: .onto/review/20260716-ea9773ff/round1/evolution.findings.yaml#evolution-candidate-002
+    target: credit-risk-ontology.yaml closed classification enums
+    evidence_anchor: credit-risk-ontology.yaml:14, 25, 39
+    claim: Core classification axes are closed enums without extension/version
+      hooks, making new segments, products, or collateral types a core schema
+      change.
+    lens_rationale_summary: Credit risk taxonomies usually evolve as new borrower
+      segments, lending products, guarantees, or collateral classes appear.
+      Under the current shape, any new value is invalid until the central
+      ontology is edited and all downstream validators/report mappings are
+      changed. That makes ordinary business expansion a schema migration rather
+      than a controlled code-set extension.
+    proposed_action: "Replace or supplement fixed inline enums with governed
+      code-set concepts: canonical code, display label, parent category,
+      effective_from/effective_to, status, owner, and compatibility mapping.
+      Reserve inline enum lists only for truly closed states."
+    affected_purpose: The taxonomy's suitability as a shared classification basis
+      across risk engine and reporting systems.
+    failure_condition: A new borrower segment, product type, or collateral type must
+      be onboarded while existing consumers still rely on v1.1 validation and
+      reporting categories.
+    impact: New legitimate records can be rejected or inconsistently bucketed, and
+      the ontology must be structurally revised for routine classification
+      growth.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/evolution.findings.yaml#evolution-candidate-002
+      - credit-risk-ontology.yaml:14
+      - credit-risk-ontology.yaml:25
+      - credit-risk-ontology.yaml:39
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The taxonomy's suitability as a shared classification basis
+        across risk engine and reporting systems.
+      failure_condition: A new borrower segment, product type, or collateral type must
+        be onboarded while existing consumers still rely on v1.1 validation and
+        reporting categories.
+      impact: New legitimate records can be rejected or inconsistently bucketed, and
+        the ontology must be structurally revised for routine classification
+        growth.
+      evidence_refs:
+        - credit-risk-ontology.yaml:14
+        - credit-risk-ontology.yaml:25
+        - credit-risk-ontology.yaml:39
+    causal_path:
+      root_cause_candidate: The ontology encodes business classifications as closed
+        inline enums instead of governed extensible code sets.
+      root_cause_step_id: finding-010.cause-003
+      steps:
+        - cause_id: finding-010.cause-001
+          claim: Several domain classifications are represented as fixed enum arrays.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:14
+            - credit-risk-ontology.yaml:25
+            - credit-risk-ontology.yaml:39
+        - cause_id: finding-010.cause-002
+          claim: No adjacent metadata defines extension ownership, lifecycle, versioning,
+            aliases, or backward-compatible mappings for those enum values.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:14
+            - credit-risk-ontology.yaml:25
+            - credit-risk-ontology.yaml:39
+        - cause_id: finding-010.cause-003
+          claim: A future valid category therefore requires editing the core ontology and
+            coordinating downstream consumers rather than adding a governed
+            classification member.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:2-3
+            - credit-risk-ontology.yaml:14
+            - credit-risk-ontology.yaml:25
+            - credit-risk-ontology.yaml:39
+      unresolved_beyond_evidence: null
+  - finding_id: finding-011
+    lens_id: evolution
+    source_ref: .onto/review/20260716-ea9773ff/round1/evolution.findings.yaml#evolution-candidate-003
+    target: credit-risk-ontology.yaml time-dependent derivation rules
+    evidence_anchor: credit-risk-ontology.yaml:64-71, 87-90
+    claim: Time-sensitive calculations depend on batch timing and per-system tables
+      without versioned calculation context, weakening continuity when rules or
+      market data change.
+    lens_rationale_summary: Evolution pressure here comes from changing FX sources,
+      batch frequencies, reporting cutoffs, valuation policies, or revaluation
+      thresholds. The ontology records some timestamps, but not the versioned
+      calculation context needed to keep old outputs comparable after those
+      operational rules change. Risk engine and reporting systems can therefore
+      preserve the same field names while silently changing meaning over time.
+    proposed_action: "Add calculation-context concepts for aggregates and derived
+      metrics: as-of timestamp, batch/run id, FX source and rate date, rule
+      version, inclusion cutoff, and revaluation policy version. Make derived
+      fields reference the context used to produce them."
+    affected_purpose: Shared interpretation of risk calculations and reports over time.
+    failure_condition: FX tables, batch cadence, cutoff policy, collateral
+      revaluation threshold, or report timing changes after records have already
+      been produced.
+    impact: Historical and current values with the same ontology fields may no
+      longer be comparable, making risk trend reporting and engine/report
+      reconciliation unreliable.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/evolution.findings.yaml#evolution-candidate-003
+      - credit-risk-ontology.yaml:64-71
+      - credit-risk-ontology.yaml:87-90
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Shared interpretation of risk calculations and reports over time.
+      failure_condition: FX tables, batch cadence, cutoff policy, collateral
+        revaluation threshold, or report timing changes after records have
+        already been produced.
+      impact: Historical and current values with the same ontology fields may no
+        longer be comparable, making risk trend reporting and engine/report
+        reconciliation unreliable.
+      evidence_refs:
+        - credit-risk-ontology.yaml:64-71
+        - credit-risk-ontology.yaml:87-90
+    causal_path:
+      root_cause_candidate: The ontology stores or defines derived risk values without
+        carrying the full versioned operational context that produced them.
+      root_cause_step_id: finding-011.cause-003
+      steps:
+        - cause_id: finding-011.cause-001
+          claim: Exposure aggregates are stored from a month-end batch and explicitly omit
+            intraday loans until the next batch.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:64-71
+        - cause_id: finding-011.cause-002
+          claim: Utilization conversion is delegated to each system's daily FX table, and
+            collateral revaluation is expressed as an elapsed-time rule without
+            a policy version.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:89-90
+        - cause_id: finding-011.cause-003
+          claim: Because the source table, cutoff, and rule version are not modeled, later
+            operational changes can alter calculation meaning without a
+            traceable ontology-level continuity mechanism.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:64-71
+            - credit-risk-ontology.yaml:89-90
+      unresolved_beyond_evidence: null
+  - finding_id: finding-012
+    lens_id: logic
+    source_ref: .onto/review/20260716-ea9773ff/round1/logic.findings.yaml#logic-candidate-001
+    target: credit-risk-ontology.yaml / entities.ExposureAggregate
+    evidence_anchor: credit-risk-ontology.yaml:64-71
+    claim: ExposureAggregate.total_amount is defined as both the sum of all
+      Exposure.amount and a month-end batch value that excludes intraday new
+      exposures until the next batch.
+    lens_rationale_summary: In any state after a new intraday exposure exists and
+      before the next batch, the declared definition requires inclusion of that
+      Exposure.amount, but the attribute note permits non-inclusion. Both claims
+      cannot be true for the same borrower, as_of date, and exposure set. This
+      matters because the artifact is intended as a shared authority for risk
+      engines and reporting systems; a utilization or appetite calculation using
+      this concept can be simultaneously 'correct' and 'incorrect' depending on
+      which claim is applied.
+    proposed_action: Make the temporal boundary explicit. For example, define
+      ExposureAggregate as the sum of Exposure.amount as of a specific batch
+      cutoff/as_of timestamp, or split it into CurrentExposureAggregate and
+      MonthEndExposureAggregate so the universal 'all Exposure.amount' claim is
+      not attached to a lagged stored value.
+    affected_purpose: Shared concept authority for risk engines and reporting
+      systems using exposure aggregates in risk and utilization calculations.
+    failure_condition: A borrower receives an intraday new exposure after the
+      month-end batch and before the next batch, while
+      ExposureAggregate.total_amount is used as the authoritative total
+      exposure.
+    impact: The same ontology permits two incompatible truth conditions for the
+      aggregate, weakening review trust and making downstream calculations
+      non-actionable without an extra unstated temporal convention.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/logic.findings.yaml#logic-candidate-001
+      - credit-risk-ontology.yaml:64-71
+      - credit-risk-ontology.yaml:89
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: Shared concept authority for risk engines and reporting
+        systems using exposure aggregates in risk and utilization calculations.
+      failure_condition: A borrower receives an intraday new exposure after the
+        month-end batch and before the next batch, while
+        ExposureAggregate.total_amount is used as the authoritative total
+        exposure.
+      impact: The same ontology permits two incompatible truth conditions for the
+        aggregate, weakening review trust and making downstream calculations
+        non-actionable without an extra unstated temporal convention.
+      evidence_refs:
+        - credit-risk-ontology.yaml:64-71
+        - credit-risk-ontology.yaml:89
+    causal_path:
+      root_cause_candidate: "The aggregate concept lacks a single temporal authority:
+        its definition uses an unqualified universal sum, while its attribute
+        note authorizes a lagged batch projection."
+      root_cause_step_id: finding-012.cause-003
+      steps:
+        - cause_id: finding-012.cause-001
+          claim: ExposureAggregate is defined as borrower-level total exposure and the sum
+            of all Exposure.amount.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:64-65
+        - cause_id: finding-012.cause-002
+          claim: ExposureAggregate.total_amount is stored by a month-end batch and
+            intraday new exposures are not reflected until the next batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:68-70
+        - cause_id: finding-012.cause-003
+          claim: Limit utilization is calculated from ExposureAggregate.total_amount, so
+            the contradiction affects a declared downstream rule inside the
+            target.
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:89
+      unresolved_beyond_evidence: null
+  - finding_id: finding-013
+    lens_id: semantics
+    source_ref: .onto/review/20260716-ea9773ff/round1/semantics.findings.yaml#semantics-candidate-001
+    target: credit-risk-ontology.yaml entities.Collateral
+    evidence_anchor: materialized-input.md:39-46, materialized-input.md:87
+    claim: Collateral is modeled as an Exposure even though its definition gives it
+      the meaning of a pledged asset.
+    lens_rationale_summary: The target itself distinguishes `Exposure` as the
+      loan/credit position and `Collateral` as the securing asset, and the
+      relation `Exposure -> Collateral secured_by` already expresses their
+      association. Treating the securing asset as a subtype of the secured
+      exposure misstates the ontological type and can make inherited exposure
+      semantics apply to collateral records.
+    proposed_action: "Remove `Collateral.is_a: Exposure`; keep `Collateral` as a
+      separate entity and express the link only through a relation such as
+      `Exposure secured_by Collateral` or an explicit collateral reference/join
+      entity if needed."
+    affected_purpose: The ontology is intended as a shared concept authority for
+      risk engines and reporting systems.
+    failure_condition: Any consumer that interprets `is_a` as inheritance or subtype
+      membership will treat collateral assets as exposure instances.
+    impact: Risk and reporting consumers may apply exposure attributes, aggregation,
+      or classification assumptions to collateral assets, weakening trust in the
+      shared concept boundary between credit positions and pledged assets.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:24-37
+      - materialized-input.md:39-46
+      - materialized-input.md:85-88
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The ontology is intended as a shared concept authority for
+        risk engines and reporting systems.
+      failure_condition: Any consumer that interprets `is_a` as inheritance or subtype
+        membership will treat collateral assets as exposure instances.
+      impact: Risk and reporting consumers may apply exposure attributes, aggregation,
+        or classification assumptions to collateral assets, weakening trust in
+        the shared concept boundary between credit positions and pledged assets.
+      evidence_refs:
+        - materialized-input.md:24-37
+        - materialized-input.md:39-46
+        - materialized-input.md:85-88
+    causal_path:
+      root_cause_candidate: The ontology uses subtype inheritance for a semantic
+        association that is already represented as a securing relation.
+      root_cause_step_id: finding-013.cause-003
+      steps:
+        - cause_id: finding-013.cause-001
+          claim: "`Collateral` is declared with `is_a: Exposure`."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:39-42
+        - cause_id: finding-013.cause-002
+          claim: "`Collateral` is defined as an asset securing an exposure, while
+            `Exposure` is defined as the credit exposure itself."
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:24-25
+            - materialized-input.md:39-40
+        - cause_id: finding-013.cause-003
+          claim: The model also declares `Exposure secured_by Collateral`, showing the
+            intended meaning is association rather than subtype identity.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:85-88
+      unresolved_beyond_evidence: null
+  - finding_id: finding-014
+    lens_id: semantics
+    source_ref: .onto/review/20260716-ea9773ff/round1/semantics.findings.yaml#semantics-candidate-002
+    target: credit-risk-ontology.yaml Exposure.ltv
+    evidence_anchor: materialized-input.md:29, materialized-input.md:35-37,
+      materialized-input.md:45
+    claim: "`ltv` is named as a collateral ratio but modeled as an independent
+      manually entered input beside its source quantities."
+    lens_rationale_summary: "A ratio/percentage concept is semantically a derived
+      measure when its source quantities are present in the same concept model.
+      Modeling it as an independent input without defining its formula,
+      valuation basis, timestamp, or override semantics creates a
+      derived-value/input mismatch: the same exposure can have an amount,
+      collateral value, and LTV that do not agree."
+    proposed_action: Define `ltv` as a derived measure with explicit formula,
+      collateral selection rules, valuation date basis, and override policy; if
+      manual underwriting overrides must exist, name them separately, for
+      example `underwriter_ltv_override`, and preserve provenance.
+    affected_purpose: The ontology is meant to give risk engines and reports a
+      shared meaning for exposure, limit, and collateral concepts.
+    failure_condition: A consumer compares or recalculates LTV from
+      `Exposure.amount` and `Collateral.appraised_value`, while another consumer
+      trusts the manually entered `Exposure.ltv`.
+    impact: Risk classification and reporting can diverge on the same exposure
+      because the ratio name implies a derived concept but the model gives it
+      independent input authority.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:29
+      - materialized-input.md:35-37
+      - materialized-input.md:45
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The ontology is meant to give risk engines and reports a
+        shared meaning for exposure, limit, and collateral concepts.
+      failure_condition: A consumer compares or recalculates LTV from
+        `Exposure.amount` and `Collateral.appraised_value`, while another
+        consumer trusts the manually entered `Exposure.ltv`.
+      impact: Risk classification and reporting can diverge on the same exposure
+        because the ratio name implies a derived concept but the model gives it
+        independent input authority.
+      evidence_refs:
+        - materialized-input.md:29
+        - materialized-input.md:35-37
+        - materialized-input.md:45
+    causal_path:
+      root_cause_candidate: The ontology does not distinguish derived LTV from a
+        manually asserted underwriting value.
+      root_cause_step_id: finding-014.cause-003
+      steps:
+        - cause_id: finding-014.cause-001
+          claim: "`Exposure.ltv` is a number with a note saying it is manually entered by
+            an underwriter."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:35-37
+        - cause_id: finding-014.cause-002
+          claim: The same ontology includes `Exposure.amount` and
+            `Collateral.appraised_value`, which are source quantities for a
+            collateral ratio.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:29
+            - materialized-input.md:45
+        - cause_id: finding-014.cause-003
+          claim: No formula, valuation basis, or override semantics are declared for
+            reconciling the manually entered value with those source quantities.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:35-37
+            - materialized-input.md:39-46
+      unresolved_beyond_evidence: null
+  - finding_id: finding-015
+    lens_id: semantics
+    source_ref: .onto/review/20260716-ea9773ff/round1/semantics.findings.yaml#semantics-candidate-003
+    target: credit-risk-ontology.yaml rating concepts
+    evidence_anchor: materialized-input.md:20-22, materialized-input.md:31-34,
+      materialized-input.md:48-57, materialized-input.md:92-98
+    claim: Three credit-rating scales are presented as shared concepts without an
+      authoritative semantic mapping inside the ontology.
+    lens_rationale_summary: These names all denote credit/risk grade semantics, but
+      their scopes and transformations are not made authoritative in the shared
+      ontology. A risk engine and a reporting system can therefore use the same
+      ontology while assigning different meanings to equivalent grade levels or
+      treating a manual reporting adjustment as if it were the engine-derived
+      risk grade.
+    proposed_action: Add an explicit canonical rating concept or mapping table in
+      the ontology, including scope (`borrower` vs `exposure`), scale ownership,
+      effective dates, derivation rules, and override/provenance semantics for
+      report-side adjustments.
+    affected_purpose: The target says it is a concept authority shared by a risk
+      engine and reporting system.
+    failure_condition: The risk engine emits `RiskRating.grade`, reports consume or
+      adjust `Exposure.risk_grade`, and consumers rely on external or local
+      transformations rather than an ontology-owned mapping.
+    impact: The central risk-grade concept is not semantically stable across
+      systems, so classifications and reports can disagree while both appear
+      conformant to the ontology.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:6-8
+      - materialized-input.md:20-22
+      - materialized-input.md:31-34
+      - materialized-input.md:48-57
+      - materialized-input.md:92-98
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The target says it is a concept authority shared by a risk
+        engine and reporting system.
+      failure_condition: The risk engine emits `RiskRating.grade`, reports consume or
+        adjust `Exposure.risk_grade`, and consumers rely on external or local
+        transformations rather than an ontology-owned mapping.
+      impact: The central risk-grade concept is not semantically stable across
+        systems, so classifications and reports can disagree while both appear
+        conformant to the ontology.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:20-22
+        - materialized-input.md:31-34
+        - materialized-input.md:48-57
+        - materialized-input.md:92-98
+    causal_path:
+      root_cause_candidate: The ontology delegates rating-scale equivalence and
+        conversion semantics to external consumer-specific mappings.
+      root_cause_step_id: finding-015.cause-003
+      steps:
+        - cause_id: finding-015.cause-001
+          claim: "The ontology defines three rating-like fields with distinct scales:
+            1-10, R1-R5, and AAA-CCC."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-22
+            - materialized-input.md:31-34
+            - materialized-input.md:53-56
+        - cause_id: finding-015.cause-002
+          claim: The classification rule says `Exposure.risk_grade` is derived from
+            `RiskRating.grade` but can be manually adjusted by the reporting
+            team.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:92-93
+        - cause_id: finding-015.cause-003
+          claim: The note says the three scales coexist for historical reasons and
+            conversion is performed by each consuming system.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:97-98
+      unresolved_beyond_evidence: null
+  - finding_id: finding-016
+    lens_id: semantics
+    source_ref: .onto/review/20260716-ea9773ff/round1/semantics.findings.yaml#semantics-candidate-004
+    target: credit-risk-ontology.yaml RiskAppetite
+    evidence_anchor: materialized-input.md:78-83, materialized-input.md:94
+    claim: "`RiskAppetite` conflates appetite policy, numeric threshold, and
+      compliance result in one concept."
+    lens_rationale_summary: Risk appetite is a policy or constraint, while
+      compliance status is an assessment result at a point in time. Combining
+      them blurs whether `RiskAppetite` means the policy, its limit value, or
+      the current evaluated state, and the classification rule for limit
+      utilization separately depends on exposure aggregate and approved amount.
+    proposed_action: "Separate the policy/limit concept from the evaluation result:
+      for example, keep `RiskAppetite` with threshold, currency/scope/effective
+      period, and create `RiskAppetiteCompliance` with borrower or portfolio
+      scope, aggregate reference, evaluated value, status, and as-of time."
+    affected_purpose: The ontology is intended to coordinate risk-engine decisions
+      and reporting concepts for limits and appetite breaches.
+    failure_condition: A consumer treats `RiskAppetite.compliance_status` as an
+      intrinsic property of the appetite policy rather than a time-scoped result
+      of evaluating exposure against a threshold.
+    impact: Reports may present stale or scope-ambiguous breach states as policy
+      facts, and engines may lack a stable semantic distinction between limit
+      definition and compliance evaluation.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:78-83
+      - materialized-input.md:69-76
+      - materialized-input.md:92-95
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The ontology is intended to coordinate risk-engine decisions
+        and reporting concepts for limits and appetite breaches.
+      failure_condition: A consumer treats `RiskAppetite.compliance_status` as an
+        intrinsic property of the appetite policy rather than a time-scoped
+        result of evaluating exposure against a threshold.
+      impact: Reports may present stale or scope-ambiguous breach states as policy
+        facts, and engines may lack a stable semantic distinction between limit
+        definition and compliance evaluation.
+      evidence_refs:
+        - materialized-input.md:78-83
+        - materialized-input.md:69-76
+        - materialized-input.md:92-95
+    causal_path:
+      root_cause_candidate: The concept boundary between a risk appetite constraint
+        and its evaluated compliance state is not separated.
+      root_cause_step_id: finding-016.cause-003
+      steps:
+        - cause_id: finding-016.cause-001
+          claim: "`RiskAppetite` is defined as a limit and also contains
+            `compliance_status`."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:78-83
+        - cause_id: finding-016.cause-002
+          claim: The definition compares `ExposureAggregate` to `RiskAppetite` directly,
+            although the comparable numeric attribute is `threshold`.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:78-82
+        - cause_id: finding-016.cause-003
+          claim: "`ExposureAggregate` is explicitly time-scoped with `as_of`, but
+            `RiskAppetite.compliance_status` has no corresponding evaluation
+            time or scope."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:69-76
+            - materialized-input.md:78-83
+      unresolved_beyond_evidence: null
+  - finding_id: finding-017
+    lens_id: structure
+    source_ref: .onto/review/20260716-ea9773ff/round1/structure.findings.yaml#structure-candidate-001
+    target: credit-risk-ontology.yaml RiskAppetite entity and relations graph
+    evidence_anchor: credit-risk-ontology.yaml:73-85
+    claim: RiskAppetite is structurally disconnected from the aggregate it governs.
+    lens_rationale_summary: The definition says ExposureAggregate crossing
+      RiskAppetite determines a violation, while the only declared relations
+      connect Borrower, Exposure, Collateral, RiskRating, Limit, and
+      ExposureAggregate. Without a relation, shared consumers cannot traverse
+      from an aggregate to the applicable appetite threshold or compliance
+      status.
+    proposed_action: "Add an explicit relation such as `{ from: ExposureAggregate,
+      to: RiskAppetite, kind: measured_against }` or `{ from: RiskAppetite, to:
+      ExposureAggregate, kind: applies_to }`, plus any key/scope attributes
+      needed to select the applicable appetite."
+    affected_purpose: The ontology is intended as the shared concept authority for a
+      risk engine and reporting systems.
+    failure_condition: When a consumer needs to determine or report RiskAppetite
+      compliance from ExposureAggregate, the target has no declared structural
+      path connecting the two concepts.
+    impact: This weakens actionability and review trust because a central violation
+      concept is present but not reachable through the ontology's relation
+      graph.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/structure.findings.yaml#structure-candidate-001
+      - credit-risk-ontology.yaml:2-3
+      - credit-risk-ontology.yaml:73-85
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The ontology is intended as the shared concept authority for a
+        risk engine and reporting systems.
+      failure_condition: When a consumer needs to determine or report RiskAppetite
+        compliance from ExposureAggregate, the target has no declared structural
+        path connecting the two concepts.
+      impact: This weakens actionability and review trust because a central violation
+        concept is present but not reachable through the ontology's relation
+        graph.
+      evidence_refs:
+        - credit-risk-ontology.yaml:2-3
+        - credit-risk-ontology.yaml:73-85
+    causal_path:
+      root_cause_candidate: RiskAppetite was added as an entity with a
+        definition-level dependency on ExposureAggregate but without a
+        corresponding relation edge in the ontology graph.
+      root_cause_step_id: finding-017.cause-003
+      steps:
+        - cause_id: finding-017.cause-001
+          claim: RiskAppetite defines compliance by comparing ExposureAggregate to
+            RiskAppetite.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:73-78
+        - cause_id: finding-017.cause-002
+          claim: The relations list does not include RiskAppetite in any from/to position.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:80-85
+        - cause_id: finding-017.cause-003
+          claim: Therefore the compliance concept is disconnected from the aggregate it
+            depends on.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:73-85
+      unresolved_beyond_evidence: null
+  - finding_id: finding-018
+    lens_id: structure
+    source_ref: .onto/review/20260716-ea9773ff/round1/structure.findings.yaml#structure-candidate-002
+    target: credit-risk-ontology.yaml Limit utilization rule and relations graph
+    evidence_anchor: credit-risk-ontology.yaml:54-71,80-89
+    claim: The Limit utilization rule depends on ExposureAggregate and Limit, but
+      the relation graph does not connect those concepts.
+    lens_rationale_summary: A consumer following the ontology graph can see that
+      both concepts refer to Borrower, but cannot identify the intended
+      structural dependency for utilization or whether the ratio is
+      borrower-level, product-level, or another scoped join. This is a missing
+      relation for a declared rule, not merely a semantic preference.
+    proposed_action: "Declare the utilization dependency explicitly, for example `{
+      from: ExposureAggregate, to: Limit, kind: consumes }` or a named derived
+      concept/relationship for `limit_utilization`, with scope keys that align
+      aggregate and limit selection."
+    affected_purpose: The ontology is intended to give risk and reporting systems a
+      shared structural basis for classification and rule consumption.
+    failure_condition: When implementing or auditing the declared Limit utilization
+      rule, consumers must infer the ExposureAggregate-to-Limit join path from
+      parallel Borrower references rather than from an explicit relation.
+    impact: The missing structural edge makes a stated rule under-specified as a
+      graph contract and can lead consumers to implement divergent joins while
+      still appearing to follow the ontology.
+    evidence_refs:
+      - .onto/review/20260716-ea9773ff/round1/structure.findings.yaml#structure-candidate-002
+      - credit-risk-ontology.yaml:54-71
+      - credit-risk-ontology.yaml:80-89
+    severity: medium
+    domain_threshold_used: null
+    materiality_basis:
+      affected_purpose: The ontology is intended to give risk and reporting systems a
+        shared structural basis for classification and rule consumption.
+      failure_condition: When implementing or auditing the declared Limit utilization
+        rule, consumers must infer the ExposureAggregate-to-Limit join path from
+        parallel Borrower references rather than from an explicit relation.
+      impact: The missing structural edge makes a stated rule under-specified as a
+        graph contract and can lead consumers to implement divergent joins while
+        still appearing to follow the ontology.
+      evidence_refs:
+        - credit-risk-ontology.yaml:54-71
+        - credit-risk-ontology.yaml:80-89
+    causal_path:
+      root_cause_candidate: A classification rule introduced a cross-entity dependency
+        without adding the matching relation to the ontology graph.
+      root_cause_step_id: finding-018.cause-003
+      steps:
+        - cause_id: finding-018.cause-001
+          claim: Limit and ExposureAggregate are separate entities with borrower_ref
+            attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:54-71
+        - cause_id: finding-018.cause-002
+          claim: The declared utilization formula combines ExposureAggregate.total_amount
+            with Limit.approved_amount.
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-89
+        - cause_id: finding-018.cause-003
+          claim: The relations list connects each concept to Borrower but does not connect
+            ExposureAggregate to Limit or define a utilization relation.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:80-85
+      unresolved_beyond_evidence: null
+validation:
+  unaddressable_findings: []

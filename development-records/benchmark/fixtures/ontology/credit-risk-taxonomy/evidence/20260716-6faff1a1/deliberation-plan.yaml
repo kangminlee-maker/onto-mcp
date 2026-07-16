@@ -1,0 +1,136 @@
+schema_version: 1
+session_id: 20260716-6faff1a1
+planned_issues:
+  - issue_id: issue-003
+    priority: 10
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+    conflict_summary: coverage는 DefaultStatus 최소 참조 계약을 무조건 필요한 범위로 보고 심각도 상향을
+      주장하지만, 다른 렌즈들은 실제 소비 경로가 확인되지 않았으므로 결함과 조치를 조건부로 한정한다.
+    resolution_question: 경계 내 증거가 DefaultStatus의 실제 소비를 입증하는가, 아니면 이 이슈의 적용 범위와 심각도를 조건부로 유지해야 하는가?
+  - issue_id: issue-005
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - semantics
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+      - issue-stance-matrix.yaml#stances.issue-005.logic
+      - issue-stance-matrix.yaml#stances.issue-005.structure
+    conflict_summary: coverage는 수동 조정과 파생 측정값을 하나의 provenance 결함으로 묶지만, semantics와
+      logic은 행위자·생명주기·검증 기준이 다른 두 개념을 구분하고 각자의 지지 범위를 한정한다.
+    resolution_question: 수동 adjustment와 파생 measurement를 하나의 이슈와 공통 상위 모델로 유지할 것인가,
+      아니면 별도 하위 개념이나 이슈로 분리해야 하는가?
+  - issue_id: issue-007
+    priority: 9
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - coverage
+      - logic
+      - axiology
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+    conflict_summary: 대부분의 렌즈는 연체·부실 상태를 핵심 공유 계약으로 보고 high를 유지하지만, logic은 실제 분류·집계
+      사용이 확인되지 않았다는 이유로 조건부 범위와 심각도 하향을 주장한다.
+    resolution_question: 현재 증거만으로 연체·부실 상태의 소비 경로와 high 영향이 확정되는가, 아니면 사용 여부 확인 전까지
+      조건부·낮은 심각도로 제한해야 하는가?
+  - issue_id: issue-017
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - structure
+      - semantics
+      - coverage
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-017.structure
+      - issue-stance-matrix.yaml#stances.issue-017.semantics
+      - issue-stance-matrix.yaml#stances.issue-017.coverage
+      - issue-stance-matrix.yaml#stances.issue-017.logic
+    conflict_summary: structure는 RiskAppetite–ExposureAggregate 관계 누락을 근본 결함으로 보지만,
+      semantics는 일급 ComplianceAssessment 부재가 더 근본적이며 단순 edge 추가로는 평가 의미가 완성되지
+      않는다고 본다.
+    resolution_question: 근본 원인을 canonical 관계 edge 누락으로 확정할 것인가, ComplianceAssessment
+      부재로 대체할 것인가, 아니면 두 결함의 의존 순서를 명시할 것인가?
+  - issue_id: issue-018
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-018.structure
+      - issue-stance-matrix.yaml#stances.issue-018.coverage
+      - issue-stance-matrix.yaml#stances.issue-018.evolution
+    conflict_summary: structure는 독립적인 medium mapping-path 결함으로 보지만, coverage는
+      governed RatingAssessment 부재의 표면 증상으로 한정하고 evolution은 과거 연속성 실패를 직접 유발한다며
+      high로 상향한다.
+    resolution_question: 이 이슈를 독립적인 mapping 자산 결함으로 유지할지 상위 RatingAssessment 이슈에
+      종속시킬지, 그리고 그 결정에 따라 medium 또는 high 중 어느 심각도가 타당한가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: 모든 참여 렌즈가 근본 원인, high 심각도와 canonical 평가·버전 매핑·override 조치를 일관되게 지지한다.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: structure의 narrow는 계산 정확도가 아닌 공유 컨텍스트 연결에 렌즈 판단을 한정한 것이며, 공통 valuation
+      시점과 환율 스냅숏 누락이라는 이슈 결론에는 반대하지 않는다.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 공통 temporal/versioning 계약 부재와 high 심각도를 지지한다.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: semantics의 한정과 심각도 의견은 의미 근거 단독의 증명 범위를 설명한 것이며, 측정 종류 분리와 권위·우선순위 지정이라는
+      결론에는 합의한다.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: semantics의 한정은 위반을 정책 lifecycle과 분리해야 한다는 제안으로, 이미 제시된 별도 평가 사건 조치와 일치한다.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 등급 정책의 버전·유효기간·provenance 부재와 high 심각도를 지지한다.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 변경 가능한 리스크 개념의 공통 시간·버전 축 부재와 high 심각도를 지지한다.
+  - issue_id: issue-011
+    reason_code: no_material_conflict
+    reason: logic의 not_applicable은 렌즈 적용 범위에 관한 판단이며, 나머지 렌즈 사이에는 폐쇄형 enum의 진화성 결함과
+      조치에 대한 충돌이 없다.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: coverage와 structure는 관찰 범위를 표면 증상 및 구조적 연결로 한정하지만, 기준시점·컷오프 없는 완전합 정의가
+      근본 결함이라는 결론과 스냅숏 조치에는 합의한다.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: evolution의 narrow는 진화 렌즈의 적용 범위만 한정하며, 잘못된 subtype 상속 제거와 high 심각도에는 모든
+      렌즈가 동의한다.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 governed, time-indexed RatingAssessment 부재와 high 심각도를 지지한다.
+  - issue_id: issue-015
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 통화·환율·valuation 맥락 없는 합산의 결함과 high 심각도를 지지한다.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: 모든 렌즈가 정책 제약과 시점 의존 평가의 분리 및 특정 스냅숏 연결 필요성에 합의한다.

@@ -1,0 +1,202 @@
+schema_version: 1
+session_id: 20260716-533b3a03
+planned_issues:
+  - issue_id: issue-001
+    priority: 90
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: Most lenses support the broad shared-root issue for governed
+      source authority, unit/basis, precedence, and control evidence across
+      operational values, while evolution narrows its evidence to the WorkCenter
+      capacity extensibility case. The material question is whether the broad
+      cluster should remain one governed operational-value issue or be
+      split/narrowed around capacity and related surface issues.
+    resolution_question: Should issue-001 remain a broad shared-root issue covering
+      source authority, precedence, unit/basis, synchronization, and control
+      evidence across scrap_rate, UOM conversion, capacity, standard time/cost,
+      and ECO-related values, or should it be narrowed/split into more focused
+      issues such as capacity-only or value-specific gaps?
+  - issue_id: issue-002
+    priority: 100
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+    conflict_summary: Coverage, evolution, and logic support the high-severity
+      shared effectivity/history root across BOM, routing, operation,
+      inspection, and ECO timing. Axiology and semantics narrow their evidence
+      and lower severity, while structure reports insufficient lens-specific
+      evidence. This is material because the final issue severity and action
+      scope determine whether the ontology needs a shared production-definition
+      effectivity model or a narrower repair.
+    resolution_question: Is the evidence sufficient to keep issue-002 as a
+      high-severity shared effectivity/history failure across BOM, routing,
+      operation, inspection, and ECO timing, or should it be narrowed and
+      lowered to the directly evidenced ECO/Part revision authority and
+      InspectionPlan separation concerns?
+  - issue_id: issue-003
+    priority: 80
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+    conflict_summary: Axiology frames the Assembly self-child scrap reinput as
+      purpose drift that sacrifices BOM integrity for representation
+      convenience. Evolution replaces that root with an extensibility conflict
+      between product-structure BOM and process/material-flow concepts, while
+      coverage lacks lens-specific evidence and other lenses support the
+      structural/semantic concern. The disagreement affects the canonical root
+      and likely overlap with issue-004.
+    resolution_question: Should issue-003's root remain purpose drift from
+      representing process scrap reinput inside BOM composition, or should it be
+      replaced by the process/material-flow versus product-structure
+      extensibility conflict and potentially merged or scoped with issue-004?
+  - issue_id: issue-004
+    priority: 78
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - evolution
+      - axiology
+      - coverage
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: Evolution frames the recovery/reinput issue as a missing
+      process material-flow concept causing future rule exceptions. Axiology
+      replaces the root emphasis with purpose drift and BOM consumer trust loss,
+      while coverage has insufficient direct evidence. This materially overlaps
+      with issue-003 and requires deciding the canonical framing and cluster
+      boundaries.
+    resolution_question: Should issue-004 stand as the extensibility/root-cause
+      issue for missing MaterialFlow or Operation input/output modeling, or
+      should it be reframed as the same purpose-drift/BOM-integrity issue as
+      issue-003 and consolidated accordingly?
+  - issue_id: issue-005
+    priority: 65
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - axiology
+      - coverage
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.evolution
+      - issue-stance-matrix.yaml#stances.issue-005.axiology
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.logic
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+    conflict_summary: Evolution supports issue-005 as a standalone extensibility
+      failure caused by fixed UOM enums and field conversion practice. Axiology
+      and coverage narrow it into the broader operational value/source-authority
+      and governed quantity-basis gaps captured by issue-001. The material
+      conflict is whether UOM should remain a distinct issue or be folded into
+      the broader operational-value authority cluster.
+    resolution_question: Should issue-005 be retained as a standalone UOM
+      extensibility and conversion-master issue, or should it be treated as a
+      narrowed surface of issue-001's broader governed operational value and
+      quantity-basis authority problem?
+  - issue_id: issue-007
+    priority: 70
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - evolution
+      - axiology
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+    conflict_summary: Semantics and logic support issue-007 as a focused scrap_rate
+      authority and meaning conflict among BOM structure, process yield, and
+      external planning Excel. Coverage and evolution narrow it as an instance
+      of broader authority/audit/extensibility gaps, and axiology explicitly
+      treats it as a surface-specific manifestation of issue-001. The material
+      conflict is cluster scope rather than basic validity.
+    resolution_question: Should issue-007 remain a standalone semantic-authority
+      issue for BomLine.scrap_rate, or should it be folded into issue-001 as a
+      concrete instance of the broader governed
+      operational-value/source-authority gap?
+  - issue_id: issue-008
+    priority: 60
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - structure
+      - axiology
+      - evolution
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+    conflict_summary: Semantics and logic support the root as an internal meaning
+      conflict between symmetric interchangeability and one_way directional
+      approval in AlternatePart. Structure narrows the issue to the
+      relation-graph shortcut that bypasses the direction carrier, while other
+      lenses support the operational impact. The disagreement affects whether
+      the repair is a semantic concept split, a structural relation-authority
+      repair, or both.
+    resolution_question: Is issue-008 primarily a semantic split between
+      bidirectional interchangeability and directional substitution approval, or
+      should the root be narrowed to the structural bypass that loses
+      AlternatePart direction semantics in downstream relation graphs?
+skipped_issues:
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All applicable lenses support the shared root that AlternatePart
+      substitution behavior lacks a single authoritative representation, while
+      coverage is not applicable. There is no material disagreement requiring
+      deliberation.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All applicable lenses support the missing unit/basis semantics for
+      capacity_per_shift and keep medium severity, while structure is not
+      applicable. No runtime conflict signals or material stance conflict are
+      present.

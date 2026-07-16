@@ -1,0 +1,227 @@
+schema_version: 1
+session_id: 20260716-4d4a75e9
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: clinical-lab-ontology.yaml / Test and Assay catalog model
+    evidence_anchor: 'Embedded Materialized Input: `Test` has `test_code`,
+      `department`, and enum `requires_specimen_type`; `Assay` has separate
+      `assay_code`, `department`, and free-string `specimen_kind`; notes state
+      "현재 신규 항목은 두 곳 모두에 등록한다."'
+    claim: 신규 검사 항목 추가 시 `Test`와 `Assay`를 모두 수정해야 하므로 카탈로그 확장이 이중 등록에 의존한다.
+    what: 주문 가능한 검사(`Test`)와 분석기 수행 단위(`Assay`)가 별도 엔티티로 존재하지만 두 엔티티 사이의 관계나 단일 카탈로그
+      권위가 없다. 문서 자체가 신규 항목을 두 곳 모두에 등록한다고 선언한다.
+    why: EMR/LIS 통합의 개념 권위 문서라면 새 검사 항목, 장비별 수행 단위, 패널/반사검사 같은 카탈로그 변화가 누락 없이 확장되어야
+      한다. 현재 모델은 `Test`와 `Assay`의 연속성을 관계로 보존하지 않고 병렬 속성(`department`, 검체 종류)을
+      중복 보유하므로 새 항목 추가 또는 카탈로그 정비 때 기존 구조와 데이터를 함께 고쳐야 하며, 두 목록이 어긋나도 어떤 쪽이 권위인지
+      판단할 수 없다.
+    how_to_fix: "`Test`를 주문 카탈로그 권위로 둘지, 별도 `CatalogItem`/`Procedure` 같은 상위 개념을 둘지
+      정한 뒤 `Assay`가 그 권위를 참조하도록 관계를 추가한다. 검체 종류와 부서 같은 공유 속성은 한 권위 위치에서 파생되게 하고,
+      장비/방법/버전별 확장은 `Assay` 변형으로 추가되도록 모델링한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 카탈로그와 수행 단위의 변경을 안정적으로 수용하는 목적.
+      failure_condition: 신규 검사, 장비 수행 항목, 검체별 변형을 추가할 때 `Test`와 `Assay` 양쪽을 수동 등록하거나
+        기존 속성/관계를 재정비해야 하는 경우.
+      impact: 통합 설계에서 주문 코드와 수행 코드의 매핑 권위가 사라져 카탈로그 확장 때 데이터 불일치, 누락 등록, 기존 주문/결과 연결
+        단절 위험이 커진다.
+      evidence_refs:
+        - "Embedded Materialized Input: `Test` entity attributes"
+        - "Embedded Materialized Input: `Assay` entity attributes"
+        - 'Embedded Materialized Input: notes: "Test와 Assay는 카탈로그 정비 후 통합 여부를
+          재검토한다. 현재 신규 항목은 두 곳 모두에 등록한다."'
+    causal_path:
+      root_cause_candidate: 검사 카탈로그 권위와 수행 단위 권위가 분리되어 있으나 둘을 잇는 명시 관계나 버전/매핑 개념이 없다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: "`Test`와 `Assay`가 각각 코드, 표시명/이름, 부서, 검체 관련 속성을 별도로 가진다."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Test` entity attributes"
+            - "Embedded Materialized Input: `Assay` entity attributes"
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 문서의 현재 운영 규칙은 신규 항목을 두 곳 모두에 등록하게 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - 'Embedded Materialized Input: notes: "현재 신규 항목은 두 곳 모두에 등록한다."'
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 따라서 새 검사 항목이나 수행 변형 추가는 단일 확장 지점이 아니라 기존 두 구조의 동시 수정과 정합성 유지에 의존한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Test` entity attributes"
+            - "Embedded Materialized Input: `Assay` entity attributes"
+            - "Embedded Materialized Input: notes on dual registration"
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: clinical-lab-ontology.yaml / specimen type modeling
+    evidence_anchor: "Embedded Materialized Input: `Specimen.specimen_type` enum
+      values `[blood, urine, tissue, swab]`; `Test.requires_specimen_type`
+      repeats the same enum; `Assay.specimen_kind` is a free string with
+      examples `'WB', 'Serum', 'Urine-random'`."
+    claim: 검체 종류가 enum과 자유 문자열로 갈라져 새 검체 세부 유형이나 외부 LIS 표준 값을 추가할 때 연속성이 깨진다.
+    what: 동일한 검체 개념이 `Specimen`과 `Test`에서는 제한 enum으로, `Assay`에서는 자유 문자열로 표현된다. 혈청,
+      전혈, 랜덤뇨 같은 세분 검체는 `Assay.specimen_kind` 예시에만 있고
+      `Specimen.specimen_type`/`Test.requires_specimen_type` enum에는 수용되지 않는다.
+    why: 검체 분류는 장비, 검사 카탈로그, 결과 해석을 잇는 확장 축이다. 현재처럼 한쪽은 폐쇄 enum이고 다른 한쪽은 문자열이면 새 LIS
+      검체 코드나 세분 검체가 들어올 때 enum 확장과 문자열 매핑을 동시에 수행해야 하며, 과거 `blood` 같은 넓은 값과 신규
+      `Serum`/`WB` 같은 세부 값의 연속적 해석이 불명확해진다.
+    how_to_fix: 검체 종류를 별도 `SpecimenType`/`SpecimenKind` 권위 엔티티 또는 코드셋으로 승격하고, 넓은 분류와
+      세부 코드의 계층/alias/버전을 표현한다. `Specimen`, `Test`, `Assay`는 모두 같은 코드셋을 참조하게 하고
+      외부 LIS 코드 매핑을 별도 속성 또는 관계로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 검체 기반 주문 가능성, 분석 수행, 결과 추적을 확장 가능한 공통 개념으로 유지하는 목적.
+      failure_condition: 새 검체 세부 유형, 외부 LIS 검체 코드, 부서별 검체 명칭을 수용해야 하는 경우.
+      impact: 폐쇄 enum과 자유 문자열이 동시에 존재해 새 값을 넣을 때 기존 enum 수정이 필요하고, 기존 데이터와 신규 세분 코드
+        사이의 매핑 권위가 없어 통합 규칙의 지속성이 약해진다.
+      evidence_refs:
+        - "Embedded Materialized Input: `Specimen.specimen_type` enum"
+        - "Embedded Materialized Input: `Test.requires_specimen_type` enum"
+        - "Embedded Materialized Input: `Assay.specimen_kind` string note
+          examples"
+    causal_path:
+      root_cause_candidate: 검체 종류 개념이 단일 권위 코드셋 없이 여러 속성 타입으로 중복 표현된다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: "`Specimen`과 `Test`는 검체 종류를 `[blood, urine, tissue, swab]` 폐쇄 enum으로
+            제한한다."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Specimen.specimen_type`"
+            - "Embedded Materialized Input: `Test.requires_specimen_type`"
+        - cause_id: evolution-candidate-002.cause-002
+          claim: "`Assay`는 같은 검체 축을 자유 문자열로 기록하며 예시는 enum보다 세분화되어 있다."
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: `Assay.specimen_kind` note"
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 이 구조는 새 검체 코드 추가 시 enum 구조 변경과 문자열 매핑 규칙 추가를 요구하고, 기존 넓은 값과 신규 세부 값의 연속성을
+            모델 안에서 보존하지 못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Specimen.specimen_type` enum"
+            - "Embedded Materialized Input: `Assay.specimen_kind` examples"
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: clinical-lab-ontology.yaml / order priority and STAT extension model
+    evidence_anchor: 'Embedded Materialized Input: `Order.priority` enum values
+      `[routine, urgent, stat]`; `Order.is_stat` boolean note "priority와 함께 기록";
+      `StatOrder` is_a `Order` with `stat_reason`.'
+    claim: STAT 우선순위가 enum, boolean, subtype으로 중복되어 새 우선순위 정책 추가 시 기존 구조 수정과 해석 충돌이
+      발생한다.
+    what: STAT 여부가 `priority=stat`, `is_stat=true`, `StatOrder` 세 방식으로 표현된다. 새 우선순위
+      범주나 기관별 응급 정책을 추가할 때 어떤 표현을 확장해야 하는지, 세 표현이 어긋날 때 어느 값이 권위인지 정해져 있지 않다.
+    why: 우선순위 정책은 병원, 부서, 인터페이스 버전에 따라 바뀌기 쉬운 변경 축이다. 현재 모델은 단순 enum 확장만으로도 boolean
+      및 subtype 의미와 충돌할 수 있고, `stat_reason` 같은 STAT 전용 속성 때문에 새 긴급도 범주를 추가할 때 하위
+      타입을 계속 늘리거나 기존 `Order` 구조를 수정해야 한다.
+    how_to_fix: 우선순위를 단일 권위 개념으로 정하고 `is_stat`는 파생값으로 명시하거나 제거한다. STAT 전용 사유는
+      `priority_reason` 또는 `OrderPriority` 정책 객체의 속성으로 일반화해 새 우선순위 범주가 기존
+      `Order` 하위 타입 추가 없이 확장되도록 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문 우선순위와 응급 정책 변경을 EMR/LIS 통합 모델에서 일관되게 수용하는 목적.
+      failure_condition: 새 우선순위 범주, 기관별 STAT 사유 정책, 외부 EMR/LIS 우선순위 코드가 추가되는 경우.
+      impact: 동일 개념의 세 표현이 병렬로 확장되어야 해 권위 충돌과 기존 구조 수정이 필요해지고, 인터페이스 매핑 시 우선순위 의미가
+        불안정해진다.
+      evidence_refs:
+        - "Embedded Materialized Input: `Order.priority` enum"
+        - "Embedded Materialized Input: `Order.is_stat` note"
+        - "Embedded Materialized Input: `StatOrder is_a Order`"
+    causal_path:
+      root_cause_candidate: 우선순위/STAT 개념이 하나의 확장 가능한 정책 권위로 모델링되지 않고 enum, boolean, subtype에 분산되어 있다.
+      root_cause_step_id: evolution-candidate-003.cause-004
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: "`Order`는 `priority` enum에 `stat` 값을 포함한다."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Order.priority`"
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 같은 STAT 여부가 `Order.is_stat` boolean으로도 기록된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: `Order.is_stat`"
+        - cause_id: evolution-candidate-003.cause-003
+          claim: "`StatOrder` 하위 타입이 다시 STAT 주문을 별도 구조로 정의한다."
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: `StatOrder`"
+        - cause_id: evolution-candidate-003.cause-004
+          claim: 따라서 새 우선순위 정책은 단일 값 추가가 아니라 enum, boolean 파생 규칙, subtype 구조의 동시 변경 문제로
+            번진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Order.priority`"
+            - "Embedded Materialized Input: `Order.is_stat`"
+            - "Embedded Materialized Input: `StatOrder`"
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: clinical-lab-ontology.yaml / result and report status lifecycle
+    evidence_anchor: "Embedded Materialized Input: `Result.status` enum
+      `[preliminary, final, corrected]`; `Report.result_status` enum `[prelim,
+      finalized, amended]`; state rule says report becomes finalized at
+      `released_at`, and corrected results require amended status via nightly
+      batch."
+    claim: 결과 상태와 보고 상태가 별도 enum으로 중복되어 상태 체계 변경 시 기존 규칙의 연속성이 약해진다.
+    what: "`Result.status`와 `Report.result_status`가 같은 상태 축을 다른 값 이름으로 표현하며, 동기화 규칙은
+      문장으로만 존재한다. 새 상태(예: 취소, 보류, 부분 보고, 재검증)를 추가할 때 두 enum과 배치 규칙을 함께 수정해야 한다."
+    why: 임상검사 보고 상태는 외부 시스템 통합과 규제/운영 변경에 따라 확장될 가능성이 높다. 현재 구조는 상태 권위가 결과와 보고서에
+      분산되어 있고 야간 배치 지연을 상태 모델 안에서 버전/전이/동기화 이벤트로 표현하지 않기 때문에, 새 상태 추가 시 기존 결과와
+      보고서의 의미 매핑이 끊길 수 있다.
+    how_to_fix: 상태 권위를 분리해 `ResultStatus`와 `ReportStatus`의 명시 매핑 테이블 또는 상태 전이 모델을
+      둔다. 상태 값에는 코드, 표시명, 버전, 유효기간, 파생/동기화 규칙을 포함하고, 배치 동기화는 이벤트나 SLA 속성으로
+      모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 결과와 보고서 상태를 EMR/LIS 간에 장기적으로 일관되게 해석하고 확장하는 목적.
+      failure_condition: 새 결과 상태나 보고 상태, 외부 시스템 상태 코드, 동기화 방식 변경이 추가되는 경우.
+      impact: 두 enum과 문장형 규칙을 동시에 수정해야 하며 기존 데이터의 상태 의미가 새 상태 체계로 어떻게 이어지는지 명확하지 않아 통합
+        신뢰가 약해진다.
+      evidence_refs:
+        - "Embedded Materialized Input: `Result.status` enum and note"
+        - "Embedded Materialized Input: `Report.result_status` enum and note"
+        - "Embedded Materialized Input: state rule for corrected to amended via
+          nightly batch"
+    causal_path:
+      root_cause_candidate: 상태 권위와 상태 매핑이 명시 개념으로 분리되지 않고 중복 enum 및 자연어 동기화 규칙에 묶여 있다.
+      root_cause_step_id: evolution-candidate-004.cause-004
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: "`Result.status`는 preliminary/final/corrected 값을 가진다."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Result.status`"
+        - cause_id: evolution-candidate-004.cause-002
+          claim: "`Report.result_status`는 같은 축을 prelim/finalized/amended라는 별도 값으로 유지한다."
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: `Report.result_status`"
+        - cause_id: evolution-candidate-004.cause-003
+          claim: 상태 동기화는 야간 1회 배치라는 자연어 규칙에 의존한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: state rule for Report and corrected
+              Result"
+        - cause_id: evolution-candidate-004.cause-004
+          claim: 새 상태나 동기화 방식 추가 시 단일 상태 모델 확장이 아니라 두 enum과 배치 규칙의 동시 수정이 필요해진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Result.status`"
+            - "Embedded Materialized Input: `Report.result_status`"
+            - "Embedded Materialized Input: state rule for Report"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 검토는 제공된 materialized input의 단일 YAML 온톨로지 초안만을 권위 입력으로 삼았다.
+  - session_domain이 none이므로 별도 임상검사 도메인 문서나 외부 표준 문서를 사용하지 않았다.
+  - EMR/LIS 통합의 개념 권위 문서라는 선언된 목적상 카탈로그, 코드셋, 상태 값은 향후 기관/장비/외부 인터페이스 변화에 따라 확장될
+    수 있는 변경 축으로 보았다.
+validation:
+  unaddressable_candidates: []

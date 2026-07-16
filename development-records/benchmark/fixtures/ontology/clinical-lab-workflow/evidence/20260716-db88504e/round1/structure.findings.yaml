@@ -1,0 +1,92 @@
+schema_version: 1
+session_id: 20260716-db88504e
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml — Assay 연결 구조
+    evidence_anchor: materialized-input.md:54-60, 108-119, 126-127
+    claim: Assay가 주문·검체·결과 워크플로에 연결되지 않아 Test에서 실제 수행 단위로 이어지는 경로가 끊겨 있다.
+    what: Assay는 Department 참조만 가지며 Test, Specimen, Result 중 어느 것과도 수행 관계가 없다. 신규
+      항목을 Test와 Assay 양쪽에 등록한다는 주석도 두 항목 사이의 대응 관계를 정의하지 않는다.
+    why: Order는 Test를 주문하고 Result도 Test를 참조하지만, 분석기 수행 단위인 Assay를 그 경로에 결합할 수 없다.
+      따라서 EMR의 주문 항목과 LIS의 실제 분석·결과를 이 온톨로지만으로 추적하거나 검증할 수 없다.
+    how_to_fix: Test와 Assay 사이의 명시적 수행 매핑과 카디널리티를 정의하고, Result가 실제 수행된 Assay를 참조하도록
+      연결한다. 필요하면 Specimen과 Assay의 수행 관계도 함께 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Order부터 Report까지의 임상검사 파이프라인을 정의하고 EMR/LIS 연동의 개념 권위 문서로 사용하는 목적
+      failure_condition: EMR가 Test로 주문을 전달하고 LIS가 Assay 단위로 수행·결과를 기록하는 경우
+      impact: 두 시스템의 핵심 카탈로그 단위 사이에 권위 있는 연결이 없어 주문-수행-결과 추적과 매핑 검증을 문서 밖의 임의 규칙에 의존하게
+        된다.
+      evidence_refs:
+        - materialized-input.md:7-8
+        - materialized-input.md:20
+        - materialized-input.md:46-66
+        - materialized-input.md:108-119
+        - materialized-input.md:127
+    causal_path:
+      root_cause_candidate: 서로 구분된 주문 카탈로그 개념 Test와 수행 카탈로그 개념 Assay 사이의 정식 매핑 관계가 모델에 정의되지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay의 유일한 참조는 Department이며 워크플로 관계 목록에도 Assay가 등장하지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:54-60
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-002
+          claim: Test와 Assay를 양쪽에 등록하도록 요구하면서도 두 등록 항목을 결합하는 관계나 식별 규칙이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:127
+      unresolved_beyond_evidence: Test와 Assay의 정확한 카디널리티 및 복합검사 매핑 규칙은 현재 대상에 제시되지 않았다.
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml — CriticalValue 결과·통보 연결
+    evidence_anchor: materialized-input.md:62-73, 100-119
+    claim: CriticalValue가 구체적인 Result 또는 통보 수신자와 연결되지 않아 위험 결과 발생과 통보 완료를 구조적으로 귀속할
+      수 없다.
+    what: CriticalValue는 Test 참조와 임계 범위, 단일 notified 값만 가진다. 관계 목록에는 CriticalValue가
+      없고, 어느 Result가 임계 범위를 위반했는지 또는 그 결과의 통보가 누구에게 완료되었는지를 연결하는 관계도 없다.
+    why: 같은 Test에서 여러 Result가 발생할 수 있으므로 Test 수준의 임계 범위만으로는 notified 값이 어떤 결과 발생 건에
+      해당하는지 판별할 수 없다. 이 구조를 권위 모델로 사용하면 임상적으로 중요한 결과별 통보 추적이 끊긴다.
+    how_to_fix: 재사용되는 임계 범위 정의와 결과별 발생·통보 기록을 분리한다. Result를 임계 범위 또는
+      CriticalValueOccurrence에 연결하고, 발생별 통보 상태·시각·수신자를 가진 Notification 관계나 엔티티를
+      정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 임상검사 결과와 운영 상태를 EMR/LIS 통합의 권위 있는 개념 구조로 제공하는 목적
+      failure_condition: 동일 Test에 여러 Result가 존재하고 그중 일부에 대해 위험 결과 통보가 수행되는 경우
+      impact: 통보 완료 상태를 개별 결과에 귀속할 수 없어 시스템 간 임계 결과 확인 및 통보 추적 계약이 불완전해진다.
+      evidence_refs:
+        - materialized-input.md:62-73
+        - materialized-input.md:100-106
+        - materialized-input.md:108-119
+    causal_path:
+      root_cause_candidate: 재사용되는 임계값 정의와 결과별 임계 발생·통보 기록이 하나의 CriticalValue 구조에 결합되어
+        있으나 이를 Result에 연결하는 관계가 없다.
+      root_cause_step_id: structure-candidate-002.cause-002
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue에는 test_ref, 범위, notified만 있고 Result나 수신자에 대한 참조가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: structure-candidate-002.cause-002
+          claim: Test는 여러 Result를 가질 수 있지만 CriticalValue는 관계 목록에서 제외되어 결과별 통보 귀속 경로가 형성되지
+            않는다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:111
+            - materialized-input.md:108-119
+      unresolved_beyond_evidence: 통보 기록의 정확한 보유 시스템과 필요한 수신자·시각 카디널리티는 대상 문서 안에서 정의되지 않았다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 속성의 ref와 is_a도 구조적 연결로 인정했으며 relations 목록에 중복 선언되지 않았다는 이유만으로는 결함으로 보지 않았다.
+  - 대상 문서가 스스로 선언한 EMR/LIS 개념 권위 역할에는 주문 가능한 Test와 LIS 수행 단위 Assay 사이의 추적 가능한
+    연결이 필요하다고 판단했다.
+  - CriticalValue의 notified는 임계 범위 자체가 아니라 개별 위험 결과 발생에 대한 통보 완료를 나타내려는 값으로 해석했다.
+validation:
+  unaddressable_candidates: []

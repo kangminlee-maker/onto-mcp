@@ -1,0 +1,235 @@
+schema_version: 1
+session_id: 20260716-533b3a03
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: The ontology lacks a reusable source-authority and precedence
+      contract for operational values, so cross-system values are left as ad hoc
+      notes, copies, or manual reconciliations instead of governed integration
+      concepts.
+    shared_cause: null
+    rationale: finding-001 says PLM/MES baseline values such as scrap_rate,
+      capacity, cost, and UOM conversion are left to field, Excel, or manual
+      practices; finding-007 generalizes the same pattern as inconsistent single
+      source-of-authority coverage across copied, calculated, and reconciled
+      values.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-013
+    relation: shared_cause_candidate
+    root_hypothesis: A copied external planning value is modeled as if it were a
+      canonical ontology value, weakening both value authority and semantic
+      clarity for manufacturing calculations.
+    shared_cause:
+      cause_claim: BomLine.scrap_rate is an operational value copied from
+        production-planning Excel rather than modeled with clear source
+        authority, scope, and governing semantics.
+      from_cause_ref: finding-001.cause-001
+      to_cause_ref: finding-013.cause-003
+    rationale: finding-001 includes scrap_rate among core values delegated to
+      Excel/manual practices; finding-013 focuses on the same scrap_rate copy as
+      a semantic conflict between BOM structure, process scrap, and external
+      planning authority.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: The integration baseline treats production quantity semantics
+      as local attributes or field practice rather than canonical governed value
+      contracts.
+    shared_cause: null
+    rationale: finding-001 names UOM conversion and production quantities as values
+      left outside the integration model; finding-006 identifies the concrete
+      missing conversion master and quantity-basis concept behind that risk.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-001
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: The ontology represents operational planning capacities as bare
+      numbers without canonical unit/basis authority, forcing consumers to infer
+      meaning from local practice.
+    shared_cause: null
+    rationale: finding-001 includes capacity_per_shift among core values lacking
+      standardized unit/source treatment; finding-011 identifies the
+      extensibility failure caused by capacity_per_shift being a number whose
+      unit varies by work center.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: symptom_of
+    root_hypothesis: The ECO/Part revision inconsistency is a concrete symptom of
+      change effectivity being tied to Part current state and a single ECO
+      effective_date rather than modeled as an independent effectivity concept.
+    shared_cause: null
+    rationale: finding-002 describes the immediate production-risk window where
+      ECO.effective_date and weekly Part.rev sync disagree; finding-008 states
+      the broader root that effectivity is not independent across Part, BomLine,
+      Routing, or Operation targets.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: same_root_candidate
+    root_hypothesis: The ontology localizes time-dependent change semantics at
+      ECO/Part.rev instead of making effectivity/history a shared dimension of
+      production-definition elements.
+    shared_cause: null
+    rationale: finding-004 frames the missing BOM/routing effectivity and history as
+      a coverage gap; finding-008 frames the same modeling root as an evolution
+      risk for staged, overlapping, or partial changes.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-002
+    to_finding_id: finding-004
+    relation: same_root_candidate
+    root_hypothesis: Production change applicability cannot be reliably resolved
+      because revision/effectivity semantics do not propagate from ECO into the
+      production structure and routing state consumed by MES.
+    shared_cause: null
+    rationale: finding-002 shows conflicting production revision signals between ECO
+      effective_date and Part.rev; finding-004 shows the larger absence of
+      date-resolvable BOM/routing parameters needed to reconstruct which
+      configuration applied.
+    confidence: medium
+  - relation_id: rel-008
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: duplicates
+    root_hypothesis: Scrap reinput is modeled as a BOM self-reference exception,
+      mixing process/material-flow behavior into product-structure BOM and
+      weakening acyclicity.
+    shared_cause: null
+    rationale: "Both findings target the same evidence and mechanism: BomLine is a
+      product-structure relation, yet the acyclicity rule allows scrap reinput
+      as Assembly self-inclusion. finding-003 emphasizes value-purpose drift;
+      finding-009 emphasizes future extensibility, but the defect is the same
+      modeling choice."
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-005
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: The ontology omits a governed control/action layer for
+      cross-system values, so approvals, copies, reconciliations, and authority
+      precedence are only described as outcomes or notes.
+    shared_cause: null
+    rationale: finding-005 identifies missing audit evidence concepts for
+      approvals/manual adjustments; finding-007 identifies missing source
+      authority and precedence. Both arise because controlled cross-system
+      actions are not modeled as first-class integration concepts.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-005
+    to_finding_id: finding-013
+    relation: shared_cause_candidate
+    root_hypothesis: Manual or copied operational values lack the evidentiary/action
+      model needed to distinguish authoritative values from copied snapshots.
+    shared_cause:
+      cause_claim: scrap_rate is copied from production-planning Excel, but the
+        ontology lacks actor/time/source/before-after evidence and
+        source-authority semantics for that copy.
+      from_cause_ref: finding-005.cause-001
+      to_cause_ref: finding-013.cause-003
+    rationale: finding-005 treats copied scrap_rate as one of several unaudited
+      controlled actions; finding-013 treats the same copied value as a semantic
+      authority conflict for BomLine.scrap_rate.
+    confidence: medium
+  - relation_id: rel-011
+    from_finding_id: finding-006
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: UOM and conversion are not modeled as extensible governed
+      concepts; Part.uom is a fixed enum and item-specific conversion is left to
+      shop-floor practice.
+    shared_cause: null
+    rationale: "Both findings rely on the same evidence: Part.uom is limited to
+      ea/kg/m and notes say no item conversion-factor master exists. finding-006
+      emphasizes current coverage for calculations; finding-010 emphasizes
+      future extensibility, but they describe the same underlying issue."
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-006
+    to_finding_id: finding-007
+    relation: symptom_of
+    root_hypothesis: The missing UOM conversion master is one concrete symptom of
+      the broader absence of modeled source authority and precedence for
+      cross-system operational values.
+    shared_cause: null
+    rationale: finding-006 concerns one unmanaged operational value family, unit
+      conversions; finding-007 covers the broader source-authority gap for
+      values managed across PLM, MES, Excel, SOP, and cost systems.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-011
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: WorkCenter.capacity_per_shift is a single numeric field whose
+      unit or measurement basis varies by work center, mixing count-based and
+      time-based capacity semantics.
+    shared_cause: null
+    rationale: Both findings target WorkCenter.capacity_per_shift and the same note
+      that the unit differs by work center. finding-011 frames extensibility
+      impact; finding-016 frames semantic/calculation impact.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-012
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: AlternatePart simultaneously asserts symmetric substitution and
+      permits/defaults a one_way direction, making substitution reversibility
+      internally inconsistent.
+    shared_cause: null
+    rationale: finding-012 and finding-014 cite the same AlternatePart definition
+      and direction attribute conflict. One is a logic lens and the other a
+      semantics lens, but the accepted issue is the same contradiction.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-012
+    to_finding_id: finding-017
+    relation: same_root_candidate
+    root_hypothesis: Alternate-part substitution is split between an entity that
+      carries direction semantics and a Part-to-Part shortcut relation, leaving
+      no single authoritative structural representation of substitution
+      behavior.
+    shared_cause: null
+    rationale: finding-012 shows contradictory direction semantics inside
+      AlternatePart; finding-017 shows the explicit relation graph bypasses the
+      AlternatePart carrier entity. Both are explainable by the substitution
+      concept lacking a single authoritative structural/semantic contract.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-014
+    to_finding_id: finding-017
+    relation: enables
+    root_hypothesis: By representing alternate_of as a Part-to-Part shortcut without
+      connecting the AlternatePart carrier, the relation graph enables
+      downstream loss or misinterpretation of one_way versus bidirectional
+      substitution semantics.
+    shared_cause: null
+    rationale: finding-014's semantic risk depends on consumers interpreting
+      substitution direction consistently. finding-017 supplies a structural
+      mechanism by which consumers using the relation section can traverse
+      alternate_of without seeing AlternatePart.direction, making that semantic
+      ambiguity easier to materialize.
+    confidence: medium
+  - relation_id: rel-017
+    from_finding_id: finding-015
+    to_finding_id: finding-004
+    relation: same_root_candidate
+    root_hypothesis: Routing-adjacent production definitions are not separated into
+      independently versioned/effective concepts, so changes to inspection
+      criteria and operation/routing state can be conflated.
+    shared_cause: null
+    rationale: finding-015 says InspectionPlan is incorrectly typed as an Operation,
+      which can make inspection criteria changes look like routing operation
+      changes; finding-004 says routing, operation parameters, and
+      inspection-related production definitions lack effectivity/history needed
+      for date-specific reconstruction.
+    confidence: low
+singleton_findings: []

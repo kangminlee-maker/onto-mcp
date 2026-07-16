@@ -1,0 +1,52 @@
+schema_version: 1
+session_id: 20260716-6faff1a1
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml — ExposureAggregate 정의 및 total_amount 갱신 규칙
+    evidence_anchor: .onto/review/20260716-6faff1a1/execution-preparation/materialized-input.md:69-76
+    claim: ExposureAggregate.total_amount의 완전합 정의와 월중 미반영 허용 규칙은 일중 신규 여신이 존재하는 동안
+      동시에 만족될 수 없다.
+    what: ExposureAggregate는 모든 Exposure.amount의 합으로 정의되지만, total_amount는 월말 배치로
+      저장되어 일중 신규 여신을 다음 배치까지 제외한다고 명시됩니다.
+    why: 일중 신규 Exposure가 생성된 뒤 다음 배치 전까지 저장된 total_amount는 명시적으로 그 amount를 포함하지
+      않습니다. 따라서 같은 시점에 '모든 Exposure.amount의 합'이라는 필수 정의와 '신규 여신 미반영' 상태를 함께 만족할
+      수 없습니다. 이 시간 경로상의 inter-claim 모순 때문에 리스크 엔진과 보고 시스템이 동일 개념을 사용해도 서로 다른
+      총익스포저 판단을 정당화할 수 있습니다.
+    how_to_fix: ExposureAggregate를 명시적인 기준시점 스냅숏으로 재정의해 total_amount가 `as_of`와 컷오프
+      시점까지 포함된 Exposure.amount의 합이라고 규정하고, 배치 기준시각과 포함 규칙을 함께 명시하십시오. 실시간 총액을
+      의도한다면 대신 신규·정정·취소 사건마다 total_amount를 갱신하도록 계약을 변경해야 합니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 차주 단위 총익스포저 개념 권위
+      failure_condition: 월말 배치 후 일중 신규 Exposure가 생성되고 다음 배치가 실행되기 전
+      impact: 동일한 ExposureAggregate가 완전한 총액이면서 일부 익스포저를 제외한 값으로 동시에 규정되어 한도 소진율과
+        RiskAppetite 판단의 공통 기준에 대한 신뢰를 약화합니다.
+      evidence_refs:
+        - .onto/review/20260716-6faff1a1/execution-preparation/materialized-input.md:69-76
+        - .onto/review/20260716-6faff1a1/execution-preparation/materialized-input.md:92-94
+    causal_path:
+      root_cause_candidate: ExposureAggregate의 완전합 정의에 기준시점·컷오프 한정이 없는데 total_amount
+        저장 규칙은 배치 사이의 불완전성을 허용합니다.
+      root_cause_step_id: logic-candidate-001.cause-002
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 일중 신규 여신이 존재하면 저장된 total_amount는 모든 Exposure.amount를 포함하지 않습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-6faff1a1/execution-preparation/materialized-input.md:73-76
+        - cause_id: logic-candidate-001.cause-002
+          claim: 이 불완전 상태는 ExposureAggregate를 모든 Exposure.amount의 합으로 무조건 정의한 규칙과 충돌합니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260716-6faff1a1/execution-preparation/materialized-input.md:69-75
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - ExposureAggregate 정의의 '모든 Exposure.amount의 합'은 해당 엔터티의 total_amount에 대한 필수
+    조건으로 해석했습니다.
+  - 일중 신규 여신은 Exposure이며 amount 값을 갖는다는 대상 문서 자체의 모델을 적용했습니다.
+validation:
+  unaddressable_candidates: []

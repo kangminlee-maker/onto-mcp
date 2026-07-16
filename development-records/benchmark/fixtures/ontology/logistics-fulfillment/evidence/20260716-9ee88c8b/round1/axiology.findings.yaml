@@ -1,0 +1,194 @@
+schema_version: 1
+session_id: 20260716-9ee88c8b
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: logistics-fulfillment-ontology.yaml / InventoryRecord,
+      InventoryAggregate, inventory allocation rule, inventory truth note
+    evidence_anchor: .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:76-90,111-116;
+      .onto/review/20260716-9ee88c8b/execution-preparation/review-value-alignment-criteria.yaml:6-11
+    claim: 재고 권위와 시간성을 야간 ERP 정합 및 일별 스냅샷에 맞추는 결정이 WMS/TMS/ERP 통합 기준 문서라는 목적과 어긋난다.
+    what: InventoryRecord는 WMS와 ERP가 각자 quantity_on_hand 값을 가지며 야간 배치로 ERP 기준에 맞춘다고
+      하고, 유효 시점(as_of)이 없다고 명시한다. InventoryAggregate.available_qty도 매일 밤 스냅샷인데,
+      integrity rule은 일중 주문 재고 할당도 이 값을 읽도록 한다.
+    why: 가치 판단의 authority anchor는 review-value-alignment-criteria.yaml:6-11의 사용자 의도,
+      즉 이 온톨로지가 WMS/TMS/ERP 통합의 개념 기준 문서로 적절해야 하며 특히 권위와 시간성을 검토해야 한다는 기준이다. 대상은
+      여러 시스템의 재고 진실이 갈리는 지점을 통합 기준으로 닫지 않고, 운영상 빠르게 변하는 주문 할당을 야간 ERP 스냅샷으로
+      처리하도록 두어 목적상 중요한 재고 가용성 판단을 약화한다.
+    how_to_fix: 재고 개념에 system_of_record/source_authority, as_of/effective_at,
+      snapshot_generated_at, reservation/allocation 이벤트를 추가하고, 일중 할당은 현재 가용 재고나
+      명시된 reservation ledger를 권위로 삼도록 기준을 분리한다. ERP 회계 수량 정합은 별도 reconciliation
+      상태와 시점으로 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 주문·재고 개념의 권위와 시간성 정합성을 제공하는 목적.
+      failure_condition: 일중 주문, 부분 재고 변동, WMS/ERP 불일치 상황에서 allocation이 야간
+        InventoryAggregate.available_qty나 권위가 불명확한 quantity_on_hand를 기준으로 판단될 때.
+      impact: 통합 기준 문서가 어느 시스템의 어느 시점 재고를 믿어야 하는지 닫지 못해 과할당, 품절 오판, 사후 회계 정합과 물리 재고
+        운영의 혼선을 유발할 수 있다.
+      evidence_refs:
+        - materialized-input.md:81-84
+        - materialized-input.md:86-90
+        - materialized-input.md:111-116
+        - review-value-alignment-criteria.yaml:6-11
+    causal_path:
+      root_cause_candidate: 재고 권위와 시간성을 온톨로지의 필수 개념으로 닫지 않고 야간 ERP 정합 및 스냅샷 사용을 운영 규칙으로 수용한 설계 결정.
+      root_cause_step_id: axiology-candidate-001.cause-004
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: InventoryRecord.quantity_on_hand는 WMS와 ERP가 각자 값을 가지며 야간 배치로 ERP 기준에 맞춘다고
+            정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:81-83
+            - materialized-input.md:116
+        - cause_id: axiology-candidate-001.cause-002
+          claim: InventoryRecord에는 as_of가 없어 주문 접수 당시 재고 같은 시점 질의가 불가능하다고 대상 자체가 명시한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:84
+        - cause_id: axiology-candidate-001.cause-003
+          claim: InventoryAggregate.available_qty는 매일 밤 스냅샷인데, 일중 주문 재고 할당도 이 값을 읽도록 규칙화되어
+            있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:86-90
+            - materialized-input.md:111-112
+        - cause_id: axiology-candidate-001.cause-004
+          claim: 이 조합은 사용자가 요구한 권위·시간성 중심의 WMS/TMS/ERP 통합 기준 목적을 약화한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-11
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: logistics-fulfillment-ontology.yaml / Sku.weight, Sku.dims,
+      Shipment.total_weight
+    evidence_anchor: .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:33-49;
+      .onto/review/20260716-9ee88c8b/execution-preparation/review-value-alignment-criteria.yaml:6-11
+    claim: 중량과 치수 단위를 소스 시스템 관례에 맡기는 설계가 화물·배송 운영 위험을 줄이는 통합 기준 문서의 목적과 맞지 않는다.
+    what: Sku.weight는 창고별 계량 관례(kg 또는 lb)를 그대로 쓰고, dims는 문자열이며 단위가 소스 시스템마다 다르다. 동시에
+      Shipment.total_weight는 구성 OrderLine 중량의 합으로 저장된다.
+    why: 가치 판단의 authority anchor는 review-value-alignment-criteria.yaml:6-11의 사용자 의도,
+      특히 단위 정합성과 물류 운영 위험 검토 요청이다. 총중량, 운임, 적재, 라벨, carrier handoff에 쓰일 수 있는 값을
+      단위 없는 number/string으로 합산 가능하게 두면 통합 기준이 운영 위험을 예방하기보다 각 연동의 관례 차이를 그대로
+      전파한다.
+    how_to_fix: weight와 dims를 수치 값과 canonical unit으로 분리하고, 원천 단위와 변환 시점/방법을 보존한다.
+      Shipment.total_weight는 canonical unit 기반의 계산 결과와 계산 기준 시점을 함께 갖도록 하며, 단위
+      미확정 값은 출하 확정 계산에 사용할 수 없게 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 주문·화물·배송 단위 정합성과 물류 운영 위험을 다루는 목적.
+      failure_condition: 서로 다른 창고 또는 소스 시스템의 kg/lb, 치수 문자열이 Shipment.total_weight나 배송
+        연동 값으로 합산·전달될 때.
+      impact: 단위 불일치가 운임 산정, carrier 인계, 적재 계획, 배송 예외 처리의 오류로 이어질 수 있는데, 기준 문서가 이를 막는
+        공통 의미를 제공하지 못한다.
+      evidence_refs:
+        - materialized-input.md:37-38
+        - materialized-input.md:48-49
+        - review-value-alignment-criteria.yaml:6-11
+    causal_path:
+      root_cause_candidate: 물류 수량 단위를 canonical concept로 승격하지 않고 source-system
+        convention을 통합 기준 안에 그대로 허용한 설계 결정.
+      root_cause_step_id: axiology-candidate-002.cause-004
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: Sku.weight는 number지만 kg 또는 lb를 창고별 관례대로 쓴다고 되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37
+        - cause_id: axiology-candidate-002.cause-002
+          claim: Sku.dims는 문자열이고 단위가 소스 시스템마다 다르다고 되어 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:38
+        - cause_id: axiology-candidate-002.cause-003
+          claim: Shipment.total_weight는 구성 OrderLine 중량의 합으로 저장되므로 단위가 다른 원천 값이 합산 기준으로
+            들어갈 수 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:48
+        - cause_id: axiology-candidate-002.cause-004
+          claim: 이 설계는 사용자가 요청한 단위 정합성과 물류 운영 위험 중심의 적합성 기준을 약화한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-11
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-003
+    target: logistics-fulfillment-ontology.yaml / Order.fulfillment_status,
+      Shipment.status, TrackingEvent.event_type, status integration rule
+    evidence_anchor: .onto/review/20260716-9ee88c8b/execution-preparation/materialized-input.md:19-22,44-49,60-68,111-117;
+      .onto/review/20260716-9ee88c8b/execution-preparation/review-value-alignment-criteria.yaml:6-11
+    claim: 상태 모델의 매핑과 최종 표시 권위를 각 연동·운영 판단에 맡기는 결정은 통합 기준 문서의 상태·권위 정합 목적에서 drift를
+      만든다.
+    what: Order.fulfillment_status, Shipment.status, TrackingEvent.event_type는 각각
+      OMS/TMS/캐리어가 독립 관리한다고 되어 있고, TrackingEvent.event_type과 Shipment.status 매핑은
+      각 연동에서 알아서 한다. ETA도 carrier API 값과 운영팀 수기 조정값이 섞이며 최종 표시값은 운영팀 판단을 따른다.
+    why: 가치 판단의 authority anchor는 review-value-alignment-criteria.yaml:6-11의 사용자 의도,
+      즉 WMS/TMS/ERP 통합 기준 문서로서 상태 모델과 권위를 검토해야 한다는 기준이다. 대상은 상태 전이를 통합 의미로 정렬하지
+      않고 연동별 해석에 위임해, 동일 배송 사건이 주문 상태·화물 상태·추적 이벤트·ETA 표시에서 서로 다른 의미를 가질 수 있게
+      한다.
+    how_to_fix: canonical fulfillment/shipment state model을 두고 각 source
+      status/event의 mapping table, precedence, conflict resolution, freshness,
+      override authority를 명시한다. 운영팀 ETA override는 원천 carrier ETA와 별도 필드로 보존하고
+      표시값의 결정 규칙과 감사 속성을 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: WMS/TMS/ERP 통합의 개념 기준 문서로서 주문·화물·배송 상태 모델과 권위 정합성을 제공하는 목적.
+      failure_condition: 캐리어 이벤트, TMS shipment 상태, OMS 주문 상태, 운영팀 ETA 수정이 서로 다른 시점이나
+        의미를 가지며 통합 화면·후속 프로세스에서 함께 사용될 때.
+      impact: 연동별 상태 해석이 분산되면 배송 완료, 예외, 지연, 주문 완료 판단의 기준이 달라져 통합 문서가 운영 의사결정의 기준 역할을
+        하지 못한다.
+      evidence_refs:
+        - materialized-input.md:19-22
+        - materialized-input.md:44-49
+        - materialized-input.md:63-67
+        - materialized-input.md:111-117
+        - review-value-alignment-criteria.yaml:6-11
+    causal_path:
+      root_cause_candidate: 상태와 ETA의 canonical authority 및 precedence를 온톨로지에서 정의하지 않고
+        각 시스템·연동·운영 판단에 분산시킨 설계 결정.
+      root_cause_step_id: axiology-candidate-003.cause-005
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: Order.fulfillment_status는 OMS가 관리하고 Shipment.status는 별도 TMS 성격의 화물 상태로
+            정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:19-22
+            - materialized-input.md:44-47
+        - cause_id: axiology-candidate-003.cause-002
+          claim: TrackingEvent.event_type은 carrier별 상태 코드이며 자사 Shipment.status와의 매핑은 각
+            연동에서 알아서 한다고 되어 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:63-67
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 무결성 규칙은 Order, Shipment, TrackingEvent 상태를 각 시스템이 독립 관리한다고 명시한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:111-113
+        - cause_id: axiology-candidate-003.cause-004
+          claim: ETA는 carrier API와 운영팀 수기 조정값이 섞이고 최종 표시값이 운영팀 판단에 따른다고 되어 있어 표시 권위와 원천
+            권위가 분리되지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:49
+            - materialized-input.md:117
+        - cause_id: axiology-candidate-003.cause-005
+          claim: 이 조합은 사용자가 요청한 상태 모델·권위 정합성 기준에 대해 통합 기준 문서의 목적 부합성을 낮춘다.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-11
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 규칙 문서는 사용하지 않았다.
+  - 가치 판단의 authority는 review-value-alignment-criteria.yaml에 materialized된 사용자 요청
+    목적(통합 개념 기준 문서, 권위·시간성·단위·상태 모델 및 운영 위험 중심 검토)에 한정했다.
+  - 물류 운영 위험의 구체적 사업 임계값은 boundary 내 증거가 없으므로 심각도는 통합 기준 문서 목적 훼손 정도에 근거해 산정했다.
+validation:
+  unaddressable_candidates: []

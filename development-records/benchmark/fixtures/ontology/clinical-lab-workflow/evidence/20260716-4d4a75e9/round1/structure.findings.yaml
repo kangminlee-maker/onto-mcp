@@ -1,0 +1,201 @@
+schema_version: 1
+session_id: 20260716-4d4a75e9
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml / Patient connectivity
+    evidence_anchor: .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:15-20,31-35,108-119
+    claim: Patient is only present as an Order attribute target and is absent from
+      the explicit relations graph.
+    what: The ontology declares Patient as an entity and Order.patient_ref points to
+      Patient, but the relations list has no Patient edge such as Order
+      belongs_to Patient or Patient has_many Order.
+    why: The file says it is intended as the EMR/LIS integration concept authority
+      and defines the lab pipeline from Order to Report. If the explicit
+      relations graph is the structural contract, the patient dimension is not
+      traversable from the workflow relations even though orders are issued for
+      patients.
+    how_to_fix: Add explicit patient relations, for example Order -> Patient
+      belongs_to and Patient -> Order has_many, or document that attribute refs
+      are the authoritative relationship surface and keep relations consistent
+      with that rule.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Using the ontology as the concept authority for EMR/LIS
+        integration from Order through Report.
+      failure_condition: Consumers that rely on the relations section to derive
+        integration paths cannot connect lab orders, specimens, results, or
+        reports to Patient.
+      impact: This weakens trust in the model as an integration authority because a
+        core workflow participant is structurally outside the declared relation
+        graph.
+      evidence_refs:
+        - materialized-input.md:6-8
+        - materialized-input.md:15-20
+        - materialized-input.md:31-35
+        - materialized-input.md:108-119
+    causal_path:
+      root_cause_candidate: The ontology splits structural linkage between attribute
+        refs and the relations list without making Patient an explicit relation
+        participant.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Patient is declared as a standalone entity and Order.patient_ref targets
+            Patient.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:15-20
+            - materialized-input.md:31-35
+        - cause_id: structure-candidate-001.cause-002
+          claim: The explicit relations list enumerates workflow edges but contains no
+            edge whose from or to is Patient.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-003
+          claim: A relation-graph consumer therefore has no explicit Patient path in the
+            Order-to-Report workflow.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:6-8
+            - materialized-input.md:108-119
+      unresolved_beyond_evidence: The bounded evidence does not state whether
+        attribute refs are intended to be treated as graph edges by downstream
+        tooling.
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml / Assay connectivity
+    evidence_anchor: .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:46-60,108-119,126-127
+    claim: Assay is not connected to the orderable Test or result-production path.
+    what: Assay is defined as the analyzer-executed unit and the notes say new items
+      are registered in both Test and Assay, but the relations list has no
+      Test-Assay, Assay-Result, or Assay-Specimen edge.
+    why: Structurally, the model connects Test to Result and Specimen to Result, but
+      leaves the analyzer execution concept outside that path. That makes the
+      declared dual catalog maintenance rule hard to operationalize from the
+      ontology.
+    how_to_fix: Add the minimal execution mapping, such as Test -> Assay
+      maps_to/implemented_by and Assay -> Result produces, or explicitly
+      de-scope Assay from the authoritative workflow graph until catalog
+      consolidation is complete.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Using the ontology as an EMR/LIS concept authority where
+        orderable catalog items and analyzer-executed items must be integrated.
+      failure_condition: A consumer following the relations graph can connect Test to
+        Result but cannot determine which Assay implements the Test or produces
+        the Result.
+      impact: This creates a structural break between EMR-orderable tests and
+        LIS/analyzer execution units, reducing actionability for integration
+        design.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: Assay was introduced as a separate catalog concept but not
+        wired into the explicit relations graph.
+      root_cause_step_id: structure-candidate-002.cause-004
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: Test is the orderable catalog unit and Assay is the analyzer execution
+            unit.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+        - cause_id: structure-candidate-002.cause-002
+          claim: The notes require new items to be registered in both Test and Assay while
+            consolidation is pending.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:126-127
+        - cause_id: structure-candidate-002.cause-003
+          claim: The relations list connects Test, Specimen, Result, Report, Order,
+            Department, and Staff, but has no Assay edge.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-002.cause-004
+          claim: The analyzer execution concept is therefore structurally disconnected
+            from the result-production path.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:111-119
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: clinical-lab-ontology.yaml / CriticalValue connectivity
+    evidence_anchor: .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:62-73,100-106,108-119
+    claim: CriticalValue is not structurally connected to actual Result instances or
+      notification actors.
+    what: CriticalValue is declared as a dangerous result range and has notified
+      state, but the relations list has no edge from Result to CriticalValue and
+      no edge from CriticalValue to Staff, Report, or any notification record.
+    why: The entity is only anchored through test_ref to Test at the attribute
+      level. In the explicit relation graph, the critical-value concept cannot
+      be reached from a produced Result, so the workflow does not structurally
+      specify how a result becomes a critical value or how notification
+      completion ties back to the lab report path.
+    how_to_fix: Add explicit edges such as Result -> CriticalValue matches_threshold
+      or triggers, CriticalValue -> Staff notified_by/notified_to if those
+      actors are in scope, and link the notification state to the report/result
+      workflow; otherwise mark CriticalValue as a catalog-only threshold entity
+      and move notification state out of it.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Using the ontology as the operational concept authority for
+        lab result workflow and LIS reporting behavior.
+      failure_condition: A consumer using relations cannot traverse from a produced
+        Result to critical-value handling or notification status.
+      impact: This leaves a safety-relevant workflow concept structurally detached
+        from the result/report path that would need to drive operational
+        handling.
+      evidence_refs:
+        - materialized-input.md:62-73
+        - materialized-input.md:100-106
+        - materialized-input.md:108-119
+    causal_path:
+      root_cause_candidate: CriticalValue combines threshold and notification state
+        but is not represented in the explicit workflow relations.
+      root_cause_step_id: structure-candidate-003.cause-004
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: Result is the produced test result and includes status and verifier
+            fields.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:62-73
+        - cause_id: structure-candidate-003.cause-002
+          claim: CriticalValue represents immediately notifiable dangerous ranges and
+            includes notified state.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: structure-candidate-003.cause-003
+          claim: The relations list contains Result-to-Report, Result-to-Specimen, and
+            Specimen-to-Result edges, but no CriticalValue edge.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-003.cause-004
+          claim: CriticalValue handling is therefore not structurally connected to actual
+            Result workflow instances.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:62-73
+            - materialized-input.md:100-119
+      unresolved_beyond_evidence: The prompt boundary does not include downstream
+        integration tooling, so the finding is limited to the ontology's
+        declared structure.
+domain_constraints_used: []
+domain_context_assumptions:
+  - The explicit relations section is intended to be a canonical relationship
+    graph for consumers, while attribute refs are not sufficient substitutes
+    unless the ontology states that convention.
+  - The review is limited to structural completeness among already-declared
+    ontology elements, not to broader clinical-laboratory domain coverage.
+validation:
+  unaddressable_candidates: []

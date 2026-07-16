@@ -1,0 +1,182 @@
+schema_version: 1
+session_id: 20260716-533b3a03
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: The ontology lacks a reusable governed operational-value
+      contract for cross-system manufacturing values, including source
+      authority, precedence, unit and quantity basis, synchronization or
+      reconciliation responsibility, and control/action evidence.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The deliberation resolution preserves issue-001 as a broad shared
+      root supported by multiple lenses. It weakens the ontology's ability to
+      govern PLM/MES operational values such as scrap rate, UOM conversion,
+      capacity, standard time/cost, and ECO-related copied or reconciled values,
+      so it should be closed before the next integration-design stage rather
+      than left as later documentation.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-007
+      - finding-006
+      - finding-011
+      - finding-005
+  - issue_id: issue-002
+    problem_definition: Production change applicability cannot be reliably
+      reconstructed because effectivity/history is not modeled as a shared
+      production-definition dimension spanning Part, BomLine, Routing,
+      Operation, ECO, and inspection criteria.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The final resolution keeps this as a high-severity shared
+      effectivity/history failure while preserving narrower semantic and
+      structure-lens reservations. Because it can produce incompatible answers
+      about which production definition applied at a date, it blocks the
+      target's core purpose as a PLM/MES concept baseline.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-008
+      - finding-004
+      - finding-015
+  - issue_id: issue-003
+    problem_definition: Scrap reinput is represented as Assembly self-child BOM
+      composition, collapsing acyclic product-structure BOM with
+      process/material-flow circulation and weakening BOM integrity.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "The issue is a concrete observed modeling failure: a
+      process/material-flow phenomenon is placed in BOM composition. It is
+      classified as a symptom of the product-structure versus process-flow
+      boundary collapse, while issue-004 names the missing process-flow concept
+      that would address the root extensibility gap."
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: The ontology lacks a separate process material-flow concept,
+      so recovery, rework, byproduct recovery, and reinput flows are forced into
+      BOM self-reference and conflict with BOM acyclicity validation.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The deliberation resolution explicitly keeps issue-004 as the
+      extensibility/root-cause issue distinct from issue-003. Without a
+      MaterialFlow or Operation input/output concept, future circular-looking
+      manufacturing flows require further BOM rule exceptions, so the issue must
+      be closed in the target model.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-005
+    problem_definition: Units and conversion rules are fixed Part.uom enum values
+      and shop-floor conversion practice rather than governed UOM/conversion
+      reference data with item-specific, valid-time, quantity-basis semantics.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is retained as a standalone UOM extensibility and
+      conversion-master failure, linked to issue-001 but not folded into it. It
+      weakens quantity interpretation and future unit expansion, so it should be
+      resolved before downstream PLM/MES integration design depends on the
+      ontology.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-006
+    problem_definition: Alternate-part substitution behavior has no single
+      authoritative structural representation because direction semantics live
+      on AlternatePart while the Part-to-Part shortcut relation can bypass that
+      carrier entity.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Applicable lenses consistently support the issue with no deliberation
+      needed. The split representation can lose one-way versus bidirectional
+      substitution semantics in downstream mappings, so it is a direct
+      consistency problem in the target ontology.
+    related_surface_finding_ids:
+      - finding-012
+      - finding-017
+  - issue_id: issue-007
+    problem_definition: BomLine.scrap_rate has no settled semantic authority among
+      BOM structure, process scrap/yield, and an external production-planning
+      Excel copy.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The final resolution keeps issue-007 as a focused field-level
+      semantic-authority issue and a dependency of issue-001. It is not merely
+      missing metadata: the same scrap_rate field can be interpreted as BOM
+      structure, process yield, or an external planning reference, producing
+      inconsistent calculations."
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-008
+    problem_definition: AlternatePart mixes bidirectional interchangeability with
+      directional substitution approval, while the relation graph can further
+      propagate the ambiguity by bypassing the direction carrier.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "The issue is primarily a semantic concept-split problem: one concept
+      carries two incompatible meanings. Because unauthorized reverse
+      substitutions or blocked valid substitutions can affect manufacturing
+      execution and change-control decisions, the contradiction should be
+      corrected in the target."
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-009
+    problem_definition: WorkCenter capacity_per_shift lacks explicit measurement
+      dimension and unit semantics, allowing count-based and time-based
+      capacities to be mixed under one numeric attribute.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Applicable lenses consistently support this missing unit/basis
+      semantics issue. The attribute can represent different physical
+      quantities, which can make planning, comparison, bottleneck analysis, and
+      load calculations incorrect unless resolved before downstream operational
+      use.
+    related_surface_finding_ids:
+      - finding-016

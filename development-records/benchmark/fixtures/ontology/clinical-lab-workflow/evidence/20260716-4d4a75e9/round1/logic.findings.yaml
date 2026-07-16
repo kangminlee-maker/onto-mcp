@@ -1,0 +1,153 @@
+schema_version: 1
+session_id: 20260716-4d4a75e9
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml state_rules / Report.result_status consistency
+    evidence_anchor: .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:69,
+      .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:72,
+      .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:80,
+      .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:123
+    claim: Report.result_status must both maintain the same Result.status
+      information and be updated only by a nightly batch after correction,
+      creating a temporal satisfiability conflict.
+    what: Result.status is declared as LIS-recorded information also maintained in
+      Report.result_status, while the report rule says corrected results require
+      amended report status but the synchronization batch runs only once
+      nightly. For any correction occurring after the nightly batch and before
+      the next run, Result.status=corrected can coexist with a stale
+      Report.result_status, so the stated same-information/required-amended
+      condition is not continuously satisfiable.
+    why: "This is an inter-claim conflict on mixed modality: the attribute note
+      states a maintained equivalence, the state rule states an obligation when
+      corrected, and the same sentence also permits delayed synchronization. As
+      a concept authority document for EMR/LIS integration, this weakens
+      precedence and invalid-input behavior because consumers cannot tell
+      whether Report.result_status is an immediate authority value or an
+      eventually consistent projection."
+    how_to_fix: "Make the modality explicit: either define Report.result_status as
+      eventually consistent with a bounded stale interval and freshness
+      timestamp, or require synchronous update/transactional amendment when
+      Result.status changes to corrected. Also specify which value is
+      authoritative during the sync window."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as the concept authority document for EMR/LIS integration,
+        especially precedence and status interpretation.
+      failure_condition: A Result changes to corrected between nightly synchronization
+        runs while Report.result_status remains finalized or prelim.
+      impact: Downstream EMR/LIS consumers can simultaneously satisfy the batch rule
+        and violate the maintained-same-information/amended obligation, making
+        report status authority ambiguous for clinicians and integrations.
+      evidence_refs:
+        - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:72
+        - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:83
+        - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:123
+    causal_path:
+      root_cause_candidate: The model combines immediate status-equivalence language
+        with an explicitly delayed synchronization mechanism without defining
+        the consistency window.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: Report.result_status is described as carrying the same result-state
+            information clinicians trust.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:72
+            - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:83
+        - cause_id: logic-candidate-001.cause-002
+          claim: The correction rule requires Report.result_status to become amended when
+            Result.status becomes corrected.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:123
+        - cause_id: logic-candidate-001.cause-003
+          claim: The same rule states synchronization occurs only once nightly, enabling a
+            period where the required amended state is not yet present.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:123
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml Order completion rule
+    evidence_anchor: .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:23,
+      .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:69,
+      .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:71,
+      .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:122,
+      .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:123
+    claim: Order.completed is triggered by all Results being final, but later
+      corrected Results are explicitly allowed without a corresponding Order
+      state transition rule.
+    what: The ontology says an Order transitions to completed when all Results are
+      final. It also defines corrected as a Result.status value and states that
+      Result.status may change to corrected after report release. After such a
+      correction, an already completed Order can have a non-final Result, while
+      the model provides no reopen, amended, or correction-aware Order state to
+      restore consistency.
+    why: This is a temporal inter-claim conflict if completed is used as the current
+      completion predicate for the order. A completion judgment based on mutable
+      Result.status can be made true and later invalidated by an allowed
+      correction event, but the lifecycle has no state that represents that
+      invalidation. That makes the state model unsafe as an authority for
+      integration behavior that relies on completed meaning all results are
+      final.
+    how_to_fix: Define whether Order.completed is a historical transition event or a
+      maintained invariant. If it is maintained, add a
+      correction/reopened/amended state or transition on
+      Result.status=corrected. If it is historical, rename or document completed
+      as release-completed and add a separate current-result-finality predicate.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as an EMR/LIS integration authority for lifecycle and
+        state interpretation.
+      failure_condition: An Order reaches completed after all Results are final, then
+        a Result is later corrected as allowed by the report correction rule.
+      impact: Integrations can see Order.completed and a corrected/non-final Result at
+        the same time, undermining invalid-input handling and lifecycle
+        precedence for downstream consumers.
+      evidence_refs:
+        - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:23
+        - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:71
+        - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:122
+        - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:123
+    causal_path:
+      root_cause_candidate: The model defines order completion against a reversible
+        Result.status value but does not define how order lifecycle responds
+        when that value changes after completion.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: Order has a completed lifecycle state but no reopened, corrected, or
+            amended order state.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:23
+        - cause_id: logic-candidate-002.cause-002
+          claim: Order completion is triggered when all Results are final.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:122
+        - cause_id: logic-candidate-002.cause-003
+          claim: Result.status can later become corrected, so the all-final condition can
+            stop holding after completion.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:71
+            - .onto/review/20260716-4d4a75e9/execution-preparation/materialized-input.md:123
+      unresolved_beyond_evidence: The target does not explicitly state that completed
+        is terminal or invariant; the finding applies when completed is consumed
+        as the current order-finality predicate, which is the natural reading of
+        the state rule in this bounded artifact.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no clinical-domain-specific laboratory rules were
+    applied.
+  - The review treats declared YAML attribute notes and state_rules as
+    authoritative claims within the bounded target.
+  - No web research or external clinical/LIS standards were used.
+validation:
+  unaddressable_candidates: []

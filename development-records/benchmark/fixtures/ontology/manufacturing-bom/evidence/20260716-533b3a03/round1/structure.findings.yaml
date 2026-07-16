@@ -1,0 +1,81 @@
+schema_version: 1
+session_id: 20260716-533b3a03
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml / entities.AlternatePart and relations
+    evidence_anchor: materialized-input.md:37-45 defines AlternatePart with
+      primary_ref, alternate_ref, and direction; materialized-input.md:84-91
+      lists relations but includes only Part -> Part alternate_of with a note
+      that it is a shortcut through AlternatePart, and no relation from or to
+      AlternatePart itself.
+    claim: AlternatePart is structurally disconnected from the explicit relation
+      graph.
+    what: The ontology declares AlternatePart as the entity that carries
+      alternate-part endpoints and directionality, but the relation list never
+      connects AlternatePart to Part. Instead it exposes only a Part-to-Part
+      shortcut relation.
+    why: Within the explicit structural graph, every other operational entity is
+      connected by a relation path, while AlternatePart is not named in any
+      relation. Because AlternatePart is the only place where substitution
+      direction is represented, PLM/MES consumers that use the relation section
+      as the concept graph can traverse an alternate_of shortcut without a
+      structural path to the entity that carries one_way vs bidirectional
+      behavior.
+    how_to_fix: Add explicit relations such as AlternatePart -> Part primary_part
+      and AlternatePart -> Part alternate_part, and either remove the Part ->
+      Part shortcut or mark it as a derived projection of those two relations so
+      the carrier entity remains connected.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology is declared as a PLM/MES integration concept
+        baseline for parts, BOM, process, routing, and change concepts.
+      failure_condition: When an integration or validator treats the relations section
+        as the authoritative structural graph, alternate-part substitutions are
+        represented without a path to the AlternatePart entity that holds
+        directionality.
+      impact: This weakens review trust and actionability because a manufacturing
+        substitution concept can be present in entities but absent from the
+        navigable relation structure, making one-way versus bidirectional
+        substitution easy to lose in downstream mappings.
+      evidence_refs:
+        - materialized-input.md:6-7
+        - materialized-input.md:37-45
+        - materialized-input.md:84-91
+    causal_path:
+      root_cause_candidate: The relation section models alternate parts as a
+        Part-to-Part shortcut instead of connecting the declared AlternatePart
+        relationship entity.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: AlternatePart is declared as the structural carrier for primary_ref,
+            alternate_ref, and direction.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-45
+        - cause_id: structure-candidate-001.cause-002
+          claim: The explicit relations list does not include AlternatePart as either a
+            from or to endpoint.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:84-91
+        - cause_id: structure-candidate-001.cause-003
+          claim: The only alternate relation is a Part-to-Part shortcut noted as being
+            expressed through AlternatePart, leaving the carrier entity outside
+            the relation graph.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - The relations section is intended to serve as the explicit navigable concept
+    graph for PLM/MES integration mappings.
+  - Inheritance declarations such as is_a are treated as structural connections
+    for subtype entities; the finding is limited to the absence of explicit
+    relations for AlternatePart.
+validation:
+  unaddressable_candidates: []

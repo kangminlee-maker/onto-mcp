@@ -1,0 +1,197 @@
+schema_version: 1
+session_id: 20260716-4d4a75e9
+planned_issues:
+  - issue_id: issue-003
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - logic
+      - semantics
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+    conflict_summary: Most lenses keep TAT as a medium material authority/governance
+      issue, while logic narrows the defect to the absence of an explicit
+      authority boundary or derivation contract and lowers severity because no
+      canonical-dashboard claim is established.
+    resolution_question: Should TAT remain a medium material governed-metric
+      authority issue requiring modeled ownership/versioning/amendment
+      semantics, or should it be narrowed to a lower-severity
+      boundary/derivation-contract clarification unless the dashboard metric is
+      claimed as canonical?
+  - issue_id: issue-006
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+    conflict_summary: Coverage supports the Test-Assay mapping root but lowers
+      severity relative to the high merged issue, while evolution and semantics
+      keep high severity due to catalog drift, unresolved
+      orderable-versus-executable boundary, and effective-history risk.
+    resolution_question: Does the Test-Assay parallel-catalog defect warrant high
+      severity because it can propagate catalog divergence across
+      EMR/LIS/analyzer/dashboard consumers, or should it be classified as medium
+      from a coverage-only mapping-gap perspective?
+  - issue_id: issue-010
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - evolution
+      - coverage
+      - axiology
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.axiology
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+    conflict_summary: Semantics, axiology, logic, and structure keep high severity
+      for duplicated Result/Report status vocabularies, while evolution supports
+      the issue but lowers severity to medium on evolution-only evidence and
+      coverage has insufficient evidence.
+    resolution_question: Should duplicated Result.status and Report.result_status be
+      adjudicated as a high-severity current status-authority ambiguity, or as a
+      medium extensibility/mapping risk when judged from evolution evidence
+      alone?
+  - issue_id: issue-012
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - evolution
+      - axiology
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+    conflict_summary: Semantics, logic, structure, and axiology support the root as
+      overexpressed Specimen-produces-Result wording that conflicts with lineage
+      semantics, while evolution replaces that root with a broader missing
+      execution/result-production concept.
+    resolution_question: Is the primary root the misnamed/overstated
+      specimen-to-result production relation itself, or should this issue be
+      reframed as a symptom of the missing execution/result-production concept?
+  - issue_id: issue-014
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - semantics
+      - axiology
+      - evolution
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.logic
+    conflict_summary: Structure treats unwired Assay as a direct issue, coverage
+      treats it as a surface manifestation of the broader Test-Assay mapping gap
+      in issue-006, and semantics replaces the structural-disconnection root
+      with the unclear Test-Assay boundary root.
+    resolution_question: Should Assay's disconnection from Test/Result be retained
+      as a standalone structural issue, merged under the broader Test-Assay
+      mapping issue, or reframed around the semantic orderable-versus-executable
+      boundary?
+  - issue_id: issue-015
+    priority: 7
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - evolution
+      - axiology
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-015.structure
+      - issue-stance-matrix.yaml#stances.issue-015.coverage
+      - issue-stance-matrix.yaml#stances.issue-015.evolution
+      - issue-stance-matrix.yaml#stances.issue-015.axiology
+      - issue-stance-matrix.yaml#stances.issue-015.logic
+      - issue-stance-matrix.yaml#stances.issue-015.semantics
+    conflict_summary: Structure treats CriticalValue's missing Result/actor
+      relations as a direct structural issue, coverage replaces the root with
+      missing first-class critical notification event coverage, and evolution
+      narrows the issue to instability from independently changing threshold
+      catalogs, result-specific events, and notification actors.
+    resolution_question: Should CriticalValue's detachment from Result and
+      notification actors be planned as a standalone structural relation issue,
+      or folded into the broader threshold-versus-notification-event modeling
+      issue?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: Coverage reports insufficient evidence, but all substantive lenses
+      support the high-severity correction-window authority issue and accept the
+      duplicated status-authority root; no material deliberation conflict
+      remains.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: The lenses differ mainly in framing the critical-value boolean as
+      external bookkeeping versus event/type separation, but the materially
+      relevant action converges on a first-class notification/event concept with
+      actor, recipient, time, acknowledgement, and authority evidence.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: Evolution narrows the post-analysis specimen lifecycle issue to
+      lifecycle states or a governed extension point, which is compatible with
+      the coverage, axiology, and structure support rather than a material
+      conflict.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Structure narrows the concern to missing workflow edge patterns, but all
+      applicable lenses support separating threshold/range rules from
+      result-specific notification events; the root and remedy are materially
+      aligned.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: Coverage has insufficient evidence and logic narrows the issue to
+      missing equivalence/subsumption rules, but the applicable lenses agree
+      that specimen kind needs a governed shared code-set or mapping authority.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: Runtime projection marks no conflict signals; applicable lenses
+      consistently support the redundant STAT representation issue, while
+      coverage is not applicable.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Coverage has insufficient evidence and evolution/semantics narrow the
+      framing, but all substantive lenses support the order-completion
+      correction-transition gap and retain medium severity.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: Runtime projection marks no conflict signals; applicable lenses
+      consistently support the STAT invariant issue, while coverage is not
+      applicable.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: Coverage and evolution lack issue-specific evidence and logic narrows
+      the claim to a relations-surface authority contract, but structure and
+      axiology support the issue and the narrowed contract question is
+      compatible with the proposed action.

@@ -1,0 +1,233 @@
+schema_version: 1
+session_id: 20260716-ea9773ff
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: credit-risk-ontology.yaml / time-dependent risk and limit values
+    evidence_anchor: "Embedded Materialized Input: Borrower.internal_rating;
+      Exposure.risk_grade and ltv; RiskRating.grade and score;
+      Limit.approved_amount; RiskAppetite.threshold and compliance_status; only
+      ExposureAggregate.as_of and Collateral.appraised_at carry explicit dates"
+    claim: 시점 의존 값 대부분에 유효기간·이력 개념이 없어 과거 기준 리스크 상태를 재구성할 수 없다.
+    what: 등급, 점수, LTV, 승인한도, 리스크 성향 한도와 준수상태가 현재값처럼만 정의되어 있고
+      effective_from/effective_to, version, superseded_by, recalculated_at 같은
+      기간·이력 축이 없다. 일부 항목만 as_of/appraised_at을 가지므로 월말 총익스포저와 담보평가 시점은 표현되지만, 그
+      계산에 사용된 등급·한도·LTV·성향 기준의 과거값은 온톨로지 내부에서 닫히지 않는다.
+    why: 문서 목적은 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서인데, 보고서는 특정 기준일의 등급·한도·담보인정비율·준수상태를
+      재현해야 한다. 대상 파일은 ExposureAggregate.total_amount에는 as_of를 두면서도 RiskRating,
+      Exposure.risk_grade, Limit, RiskAppetite에는 동등한 시간 축을 두지 않아 기준일 보고값과 엔진
+      산출값의 재현 범위가 불균형하다.
+    how_to_fix: 시점 의존 엔티티나 속성을 값 객체/이력 엔티티로 분리하고, 최소한 valid_from, valid_to 또는 as_of,
+      source_event_ref, version/status를 추가한다. RiskRating, ExposureRiskGrade,
+      LimitApproval/LimitVersion, RiskAppetiteVersion처럼 기준일 재구성이 필요한 개념을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 여신 리스크 개념 권위 문서
+      failure_condition: 보고 시스템이 과거 기준일의 등급, 한도, LTV, 리스크 성향 준수상태를 재현하거나 엔진 산출값과 대사해야 하는 경우
+      impact: 현재 온톨로지는 일부 집계와 담보 평가 시점만 보존하므로 보고 기준일 값의 근거를 같은 개념 기준으로 닫을 수 없어 엔진/보고 간
+        신뢰와 감사 가능성이 약해진다.
+      evidence_refs:
+        - "Embedded Materialized Input: header purpose statement"
+        - "Embedded Materialized Input: ExposureAggregate.as_of"
+        - "Embedded Materialized Input: Collateral.appraised_at"
+        - "Embedded Materialized Input: RiskRating attributes lack temporal
+          fields"
+        - "Embedded Materialized Input: Limit and RiskAppetite attributes lack
+          temporal fields"
+    causal_path:
+      root_cause_candidate: 시간성 적용 범위가 일부 산출물과 평가일에만 국소적으로 존재하고, 등급·한도·상태 값 전반의 공통 이력 개념으로 모델링되지 않았다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: 대상 온톨로지는 ExposureAggregate.as_of와 Collateral.appraised_at만 명시적 시점 속성을
+            제공한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: ExposureAggregate.as_of"
+            - "Embedded Materialized Input: Collateral.appraised_at"
+        - cause_id: coverage-candidate-001.cause-002
+          claim: RiskRating.grade/score, Exposure.risk_grade/ltv, Limit.approved_amount,
+            RiskAppetite.threshold/compliance_status에는 유효기간이나 이력 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: RiskRating attributes"
+            - "Embedded Materialized Input: Exposure attributes"
+            - "Embedded Materialized Input: Limit attributes"
+            - "Embedded Materialized Input: RiskAppetite attributes"
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 따라서 기준일 집계가 있어도 그 기준일에 적용된 등급·한도·성향 기준을 온톨로지 내부 개념만으로 재구성할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: classification_rules for utilization
+              and appetite compliance"
+            - "Embedded Materialized Input: header purpose statement"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: credit-risk-ontology.yaml / controlled manual and approval actions
+    evidence_anchor: "Embedded Materialized Input: classification_rules allow
+      reporting-team manual adjustment of Exposure.risk_grade; Exposure.ltv note
+      says underwriter enters it at review time; Limit.approved_amount note says
+      approval system records it"
+    claim: 수동 조정·입력·승인 행위에 행위자·시각·근거를 담는 감사 증거 개념이 없다.
+    what: 온톨로지는 보고서 팀의 risk_grade 수동 조정, 심사역의 ltv 입력, 승인 시스템의 approved_amount 기록을
+      언급하지만, ManualAdjustment, ApprovalEvent, ReviewInputEvidence 같은 행위 개념이나
+      actor, occurred_at, reason, evidence_ref, before/after value 속성을 정의하지 않는다.
+    why: 이 값들은 리스크 엔진 산출 또는 승인 권한을 사람이 변경하거나 확정하는 통제 지점이다. 공유 권위 문서가 값만 정의하고 통제 행위의
+      증거 범주를 빠뜨리면 보고서 시스템은 조정값을 볼 수 있어도 조정 주체와 근거를 같은 개념 기준으로 설명할 수 없다.
+    how_to_fix: 수동 조정과 승인/입력 행위를 별도 이벤트 엔티티로 추가한다. 최소 속성은 target_ref, actor_ref 또는
+      actor_id, occurred_at, reason_code/free_text, source_system, before_value,
+      after_value, evidence_uri이며, 조정된 값은 해당 이벤트를 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진 산출값과 보고 시스템 사용값을 공유 기준으로 설명하는 권위 문서
+      failure_condition: 보고서 팀이 엔진 등급을 수동 조정하거나 심사역/승인 시스템이 핵심 리스크 입력값을 확정한 뒤
+        감사·대사·이의제기 대응이 필요한 경우
+      impact: 값의 변경 결과만 남고 행위 근거가 개념화되지 않아 엔진값과 보고값 차이를 통제된 조정으로 입증하기 어렵다.
+      evidence_refs:
+        - "Embedded Materialized Input: classification_rules manual adjustment
+          of Exposure.risk_grade"
+        - "Embedded Materialized Input: Exposure.ltv note"
+        - "Embedded Materialized Input: Limit.approved_amount note"
+    causal_path:
+      root_cause_candidate: 값 엔티티 중심으로 범위를 잡으면서 값을 생성·변경·승인하는 통제 행위 범주가 모델에 포함되지 않았다.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: 대상 텍스트는 보고서 팀의 수동 조정, 심사역 입력, 승인 시스템 기록을 명시한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: classification_rules manual
+              adjustment"
+            - "Embedded Materialized Input: Exposure.ltv note"
+            - "Embedded Materialized Input: Limit.approved_amount note"
+        - cause_id: coverage-candidate-002.cause-002
+          claim: entities 목록에는 해당 행위의 행위자·시각·근거·변경 전후 값을 담는 이벤트나 증거 엔티티가 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: entities list"
+        - cause_id: coverage-candidate-002.cause-003
+          claim: 그 결과 조정·승인된 값은 공유될 수 있지만, 통제 행위의 정당성과 감사 추적은 공유 개념 범위 밖에 남는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: header purpose statement"
+            - "Embedded Materialized Input: classification_rules manual
+              adjustment"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: credit-risk-ontology.yaml / parallel authorities for ratings, limits,
+      and FX conversion
+    evidence_anchor: "Embedded Materialized Input: three rating scales coexist and
+      consumers perform conversion; RiskRating.grade mapping table is in
+      risk-team wiki; Limit.approved_amount is combined with branch CRM
+      available_limit; FX conversion uses each system's daily rate table"
+    claim: 복수 시스템에 병존하는 등급·한도·환율 값에 단일 원본 권위 개념이 없다.
+    what: 문서는 세 개 등급 스케일의 변환을 각 소비 시스템에 맡기고, RiskRating 매핑 테이블은 외부 위키를 참조하며, 한도 소진율
+      계산의 환율은 각 시스템의 당일 환율 테이블을 사용한다고 한다. Limit도 승인 시스템 값과 영업점 CRM 값을 합산 관리한다고
+      설명하지만, 어느 원본이 표준인지 또는 충돌 시 우선순위가 무엇인지 정의하지 않는다.
+    why: 리스크 엔진과 보고 시스템이 공유할 개념 기준이라면 같은 차주/익스포저에 대해 등급 변환, 환율, available limit가 서로
+      다를 때 어떤 값을 권위로 삼는지 닫혀 있어야 한다. 현재 범위는 병존 사실만 표현하고
+      authority/source-of-record 차원을 빠뜨려 시스템별 산출 차이를 정상화할 기준이 부족하다.
+    how_to_fix: SourceOfRecord 또는 AuthorityPolicy 개념을 추가하고 rating_scale_mapping,
+      fx_rate_table, available_limit, approved_amount별 canonical_source,
+      precedence, effective_date, fallback, reconciliation_rule을 명시한다. 외부
+      위키/CRM/시스템 테이블은 단순 참고가 아니라 권위와 버전을 가진 참조 대상으로 모델링한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서
+      failure_condition: 소비 시스템별 등급 변환, 환율 테이블, CRM 한도 값이 서로 달라 한도 소진율이나 보고 등급이 달라지는 경우
+      impact: 공유 온톨로지가 우선순위와 단일 원본을 정하지 않아 동일 개념의 시스템별 해석 차이를 해소하지 못한다.
+      evidence_refs:
+        - "Embedded Materialized Input: RiskRating.grade note references
+          risk-team wiki mapping"
+        - "Embedded Materialized Input: notes on three rating scales and
+          consumer conversion"
+        - "Embedded Materialized Input: Limit.approved_amount note mentions CRM
+          available_limit"
+        - "Embedded Materialized Input: classification_rules FX conversion uses
+          each system's daily rate table"
+    causal_path:
+      root_cause_candidate: 병행 관리되는 값과 외부 참조를 source-of-record/precedence 개념으로 승격하지 않고 주석 수준에 남겼다.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: 대상 텍스트는 등급 변환, CRM 한도, 환율 테이블이 여러 소비 시스템 또는 외부 장소에 흩어져 있음을 명시한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: notes on three rating scales"
+            - "Embedded Materialized Input: Limit.approved_amount note"
+            - "Embedded Materialized Input: classification_rules FX conversion"
+        - cause_id: coverage-candidate-003.cause-002
+          claim: 온톨로지에는 SourceOfRecord, MappingAuthority, FXRateAuthority, precedence 같은
+            권위 지정 엔티티나 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: entities list"
+            - "Embedded Materialized Input: relations list"
+        - cause_id: coverage-candidate-003.cause-003
+          claim: 따라서 시스템 간 값 충돌이 발생해도 공유 개념 기준이 어느 값을 채택할지 결정하지 못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: header purpose statement"
+            - "Embedded Materialized Input: notes on consumer conversion"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: credit-risk-ontology.yaml / delinquency and default status coverage
+    evidence_anchor: "Embedded Materialized Input: notes state delinquency/default
+      status is handled by a separate delinquency-management system and is out
+      of this ontology's scope"
+    claim: 연체·부실 상태 영역이 공유 리스크 분류 온톨로지에서 완전히 제외되어 상태 lifecycle 범위가 끊긴다.
+    what: 온톨로지는 차주, 익스포저, 등급, 한도, 담보, 리스크 성향을 다루지만 연체/부실(default) 상태는 별도 시스템 범위라며
+      제외한다. 그 결과 정상 익스포저가 연체, 부실, 회복, 상각, 종료 등으로 이동하는 lifecycle 구간이나 해당 상태가
+      등급·한도·보고 분류에 주는 영향이 표현되지 않는다.
+    why: 대상 자체가 여신 리스크 관리의 개념 모델이자 엔진/보고 공유 기준을 지향한다고 선언한다. 그런데 파일 안에서 명시적으로 언급된
+      연체/부실 상태를 외부 시스템으로만 돌리면, 리스크 보고가 가장 민감하게 다루는 상태 전환을 같은 분류 권위 안에서 참조할 수 없다.
+    how_to_fix: 외부 시스템이 운영 권위를 유지하더라도 DelinquencyStatus 또는 CreditImpairmentStatus 같은
+      참조 엔티티를 온톨로지에 포함한다. 상태값, status_as_of, source_system, lifecycle
+      transition, reporting_bucket, relationship to Exposure/Borrower를 최소 범위로
+      정의해 공유 분류 기준에는 포함되게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 여신 리스크 관리 개념 모델과 리스크 엔진/보고 시스템의 공유 분류 기준
+      failure_condition: 보고서나 엔진이 익스포저의 연체·부실 여부를 등급, 한도, 리스크 성향 위반과 함께 분류·집계해야 하는 경우
+      impact: 연체/부실 상태가 별도 시스템에 있다는 사실만으로는 공유 온톨로지에서 상태 의미와 lifecycle을 참조할 수 없어 핵심 리스크
+        상태 범위가 단절된다.
+      evidence_refs:
+        - "Embedded Materialized Input: header purpose statement"
+        - "Embedded Materialized Input: notes excluding delinquency/default"
+        - "Embedded Materialized Input: entities list lacks delinquency/default
+          status"
+    causal_path:
+      root_cause_candidate: 운영 소유 시스템의 범위와 공유 개념 기준의 범위를 동일시해 외부 소유 상태를 참조 개념으로도 포함하지 않았다.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: 대상은 연체/부실 상태를 별도 시스템에서 다룬다는 이유로 온톨로지 범위 밖이라고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: notes excluding delinquency/default"
+        - cause_id: coverage-candidate-004.cause-002
+          claim: entities와 relations에는 Borrower 또는 Exposure의 연체·부실 상태나 상태 전환 개념이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "Embedded Materialized Input: entities list"
+            - "Embedded Materialized Input: relations list"
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 따라서 공유 리스크 분류 기준은 익스포저 lifecycle의 부실화 이후 구간을 표현하지 못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: header purpose statement"
+            - "Embedded Materialized Input: notes excluding delinquency/default"
+      unresolved_beyond_evidence: 외부 연체관리 시스템의 상세 모델은 경계 밖이므로, 본 finding은 외부 시스템 내부
+        설계가 아니라 공유 온톨로지에서 참조 개념이 부재하다는 범위 내 주장이다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서나 외부 표준은 사용하지 않았다.
+  - 여신 리스크 엔진과 보고 시스템의 공유 기준이라는 목적은 대상 파일 헤더 주석에 선언된 범위로만 해석했다.
+  - 연체/부실 상태의 중요성은 외부 업계 표준이 아니라 대상 파일이 해당 상태를 직접 언급하고 제외했다는 내부 증거에 근거했다.
+validation:
+  unaddressable_candidates: []
