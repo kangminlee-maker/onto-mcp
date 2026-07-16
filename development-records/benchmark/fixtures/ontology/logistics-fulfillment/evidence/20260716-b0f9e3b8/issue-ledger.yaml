@@ -1,0 +1,586 @@
+schema_version: 1
+session_id: 20260716-b0f9e3b8
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: 배치 조정 관행을 수용하면서 재고 값의 목적별 권위와 시간 계약을 모델링하지 않았다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 분할된 재고 권위와 전일 스냅샷 기반 할당 때문에 통합 구성요소가 동일 시점의 가용재고를 일관되게 해석할 수 없다.
+    proposed_action: 실물·회계·가용 수량별 권위 시스템과 기준시점·출처·갱신 시각을 명시하고, 예약을 반영한 최신 가용수량 및 신선도 규칙을 계약화한다.
+    affected_purpose: WMS/TMS/ERP 통합을 위한 재고 권위·시간성의 개념 기준 제공
+    failure_condition: 일중 주문이 전일 스냅샷을 읽거나 WMS와 ERP 수량이 불일치하는 동안 할당할 때
+    impact: 통합 구성요소가 서로 다른 재고 진실과 시점을 사용해 운영 판단의 신뢰성을 잃는다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:83-90
+      - materialized-input.md:112
+      - materialized-input.md:116
+      - review-value-alignment-criteria.yaml:6-8
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-002
+    root_cause_hypothesis: 소스 시스템의 측정 표현을 canonical 수량 모델로 정규화하지 않고 공통 속성에 직접 수용했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-002
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 단위 없는 중량·치수와 합산값은 시스템 간 비교 가능한 물리량 기준을 제공하지 못한다.
+    proposed_action: 중량과 치수를 값·단위의 구조화된 수량으로 모델링하고 canonical 단위, 변환 규칙 및
+      total_weight 계산 조건을 명시한다.
+    affected_purpose: WMS/TMS/ERP 간 단위가 일관된 상품·화물 개념 기준 제공
+    failure_condition: 서로 다른 계량 관례의 SKU가 동일 Shipment 계산 또는 시스템 간 교환에 포함될 때
+    impact: 값의 비교와 합산이 보장되지 않아 운영·비용 판단의 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:33-38
+      - materialized-input.md:48
+      - review-value-alignment-criteria.yaml:6-8
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-003
+    root_cause_hypothesis: Order·Shipment·TrackingEvent 상태를 공통 생명주기 계약 없이 정상 경로 중심의 독립 enum으로 정의했다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-003
+      - finding-010
+    relation_refs:
+      - rel-018
+    raised_by_lens_ids:
+      - axiology
+      - coverage
+    issue_statement: 공통 상태 의미·전이·충돌 권위와 예외 생명주기가 없어 연동마다 상태 해석이 달라지고 비정상 운영을 일관되게 표현할 수 없다.
+    proposed_action: Order와 Shipment의 canonical 상태 의미, 정상·예외 전이, 외부 이벤트 crosswalk,
+      판정 권위와 충돌 처리 규칙을 정의한다.
+    affected_purpose: OMS/TMS/캐리어의 주문·화물·배송 상태를 일관되게 연결하는 통합 개념 기준 제공
+    failure_condition: 캐리어 이벤트로 상태를 갱신하거나 취소·부분충족·배송 실패·반품·종결 후 정정이 발생할 때
+    impact: 각 연동이 별도 상태 의미를 발명하게 되어 상태 일관성, 운영 대사 및 고객 판단을 신뢰할 수 없다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-003
+      - materialized-input.md:19-22
+      - materialized-input.md:44-47
+      - materialized-input.md:60-68
+      - materialized-input.md:113
+      - review-value-alignment-criteria.yaml:6-8
+      - .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-005
+      - "materialized-input.md: Order.fulfillment_status values"
+      - "materialized-input.md: Shipment.status values 및 delivered 최종 상태 note"
+      - "materialized-input.md: TrackingEvent.event_type에 exception 존재"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-004
+    root_cause_hypothesis: 관계를 주문 수준으로만 단순화하면서 수량을 가진 주문선-화물 대응 개념을 제외했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 주문 단위 관계만으로는 부분출하 시 주문선별 충족 사실과 수량을 추적할 수 없다.
+    proposed_action: OrderLine과 Shipment를 충족 수량과 함께 연결하는 FulfillmentAllocation 또는
+      ShipmentLine을 도입하고 주문 수준 fulfills를 그 합계에서 파생한다.
+    affected_purpose: 주문에서 재고 할당·출하·배송까지 일관된 충족 추적 기준 제공
+    failure_condition: 한 주문선이 여러 화물로 분할되거나 한 화물이 일부 수량만 출하할 때
+    impact: 시스템 간 충족 사실을 재구성할 수 없어 운영 조사와 고객 응대의 실행 가능성이 약화된다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-004
+      - materialized-input.md:25-31
+      - materialized-input.md:105-109
+      - review-value-alignment-criteria.yaml:6-8
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: duplicates 및 symptom_of 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-005
+    root_cause_hypothesis: 서로 다른 ETA 주장과 수기 오버라이드를 출처 있는 추정 이력으로 분리하지 않고 하나의 mutable 값으로 합쳤다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 단일 ETA 값에 캐리어 예측과 수기 판단이 혼합되어 출처, 신선도와 변경 책임을 검증할 수 없다.
+    proposed_action: ETA 추정치를 출처·산출·수신·수정 시각과 수정 주체를 포함한 이력으로 보존하고 최종 표시 ETA를 명시적 우선순위에서 파생한다.
+    affected_purpose: 배송 예상시각의 권위와 시간성을 일관되게 해석하는 통합 기준 제공
+    failure_condition: 운영팀이 캐리어 ETA를 수정하거나 여러 시스템이 ETA를 교환·표시할 때
+    impact: 표시값의 근거와 신선도를 검증할 수 없어 고객 약속과 운영 판단의 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/axiology.findings.yaml#axiology-candidate-005
+      - materialized-input.md:49
+      - materialized-input.md:117
+      - review-value-alignment-criteria.yaml:6-8
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: duplicates 및 shared_cause_candidate 관계만 있고 same_root_candidate
+      관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-006
+    root_cause_hypothesis: 재고를 잔액 스냅샷으로만 모델링하고 예약·할당 거래를 독립 개념으로 포함하지 않았다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 재고 예약·할당의 수량과 생명주기를 표현할 개념이 없어 과다 할당 방지와 주문별 소비 추적이 불가능하다.
+    proposed_action: OrderLine과 InventoryRecord를 연결하는 예약 또는 할당 엔터티에 수량, 상태, 생성·만료·해제
+      시각과 가용재고 반영 규칙을 정의한다.
+    affected_purpose: 주문→재고 할당과 WMS/ERP 통합을 위한 개념 기준 제공
+    failure_condition: 복수의 일중 주문이 동일한 야간 available_qty를 기준으로 할당될 때
+    impact: 과다 할당 방지와 주문별 재고 소비 추적을 개념 모델로 보장할 수 없다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-001
+      - "materialized-input.md: InventoryAggregate.available_qty는 매일 밤 저장"
+      - "materialized-input.md: integrity_rules[0]은 일중 주문도 available_qty를 조회한다고
+        명시"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-007
+    root_cause_hypothesis: 충족 관계의 최소 단위를 Order로만 정의하고 수량을 가진 행 단위 연결 개념을 생략했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 부분출하를 표현할 주문행-화물 수량 매핑 개념이 없어 잔여 주문량과 실제 출하량을 대사할 수 없다.
+    proposed_action: FulfillmentLine 또는 ShipmentLine을 추가해 OrderLine, Shipment,
+      fulfilled_qty와 단위를 연결하고 분할·취소·재출하 수량 규칙을 정의한다.
+    affected_purpose: 주문에서 출하·배송까지의 통합 추적
+    failure_condition: 한 주문행이 여러 화물로 나뉘거나 한 화물이 주문 일부만 충족할 때
+    impact: 주문 잔량, 출하량과 배송 결과를 시스템 간에 대사할 수 없다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-002
+      - "materialized-input.md: OrderLine 주석이 Shipment 참조 부재를 명시"
+      - "materialized-input.md: fulfills 관계는 Shipment→Order 단위만 제공"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-008
+    root_cause_hypothesis: 측정값을 단위가 결합된 개념으로 모델링하지 않고 number 또는 string 원시값으로만 정의했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-008
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 수량·중량·치수 값에 단위와 변환 기준이 없어 시스템 간 비교·합산이 안전하지 않다.
+    proposed_action: Quantity/Measure와 UnitOfMeasure를 도입하고 표준·원본 단위, 변환 규칙 및 구조화된 치수 축을 명시한다.
+    affected_purpose: WMS/TMS/ERP 사이의 정량 데이터 통합 기준 제공
+    failure_condition: kg와 lb 또는 서로 다른 길이 단위를 사용하는 소스 값을 교환·합산할 때
+    impact: 중량 합계, 용적, 운임 및 수량 대사가 의미적으로 안전하지 않다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-003
+      - "materialized-input.md: Sku.weight note"
+      - "materialized-input.md: Sku.dims note"
+      - "materialized-input.md: Shipment.total_weight note"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-009
+    root_cause_hypothesis: 변동 값을 원천·시점·버전이 있는 관측 이력 대신 덮어쓰는 현재값으로 모델링했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-009
+      - finding-017
+    relation_refs:
+      - rel-008
+    raised_by_lens_ids:
+      - coverage
+      - evolution
+    issue_statement: 재고와 ETA의 현재값 모델은 과거 상태 재구성뿐 아니라 새 재고 원천과 실시간 이력의 점진적 도입도 지원하지 못한다.
+    proposed_action: 원천 시스템, 의미, 관측·유효·기록 시각과 버전을 가진 관측 또는 원장 모델을 권위 기록으로 두고 현재
+      재고·ETA를 명시적 투영으로 정의한다.
+    affected_purpose: 시간에 따라 변하는 주문충족 정보와 WMS/ERP 재고의 권위·시간 기준 및 확장성 제공
+    failure_condition: 현재 값 갱신 후 과거 판단을 재구성하거나 추가 WMS·3PL·실시간 이벤트·새 계산 규칙을 도입할 때
+    impact: 과거 상태와 원천별 의미를 보존할 수 없어 감사, 운영 분석, 단계적 마이그레이션과 통합 소비자의 검증 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-004
+      - "materialized-input.md: InventoryRecord의 as_of 부재 주석"
+      - "materialized-input.md: InventoryAggregate.available_qty note"
+      - "materialized-input.md: Shipment.eta note"
+      - .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-004
+      - materialized-input.md:76-90
+      - materialized-input.md:111-116
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-010
+    root_cause_hypothesis: 변경 가능한 값만 정의하고 그 값을 변경하는 통제 행위를 독립된 감사 사건으로 모델링하지 않았다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 수동 ETA 변경과 재고 조정의 행위자·시각·사유·증거가 보존되지 않아 변경을 감사하거나 재현할 수 없다.
+    proposed_action: Adjustment/AuditEvent에 대상 값, 이전·변경 값, 행위자 또는 프로세스, 발생 시각, 사유,
+      원천과 승인 정보를 기록한다.
+    affected_purpose: 통합 기준 문서에서 운영상 통제되는 변경의 추적 가능성 제공
+    failure_condition: ETA 수동 변경 또는 WMS·ERP 재고 불일치 조정이 수행될 때
+    impact: 중요 운영값 변경의 근거와 책임을 검증할 수 없어 감사성과 장애 조사 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-006
+      - "materialized-input.md: Shipment.eta note"
+      - "materialized-input.md: InventoryRecord.quantity_on_hand note"
+      - "materialized-input.md: notes의 ETA 및 재고 조정 설명"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: shared_cause_candidate 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-011
+    root_cause_hypothesis: 다중 원본을 서술형 메모로만 설명하고 권위 범위와 데이터 계보를 일급 개념으로 모델링하지 않았다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 복수 시스템이 관리하는 재고·ETA·배송 상태에 값별 권위 범위, 출처, 우선순위와 계보가 없다.
+    proposed_action: SystemOfRecord/AuthorityScope와 ValueProvenance를 추가하고 값 종류별 권위자,
+      우선순위, 원본 값과 파생 규칙을 명시한다.
+    affected_purpose: WMS/TMS/ERP 통합을 위한 단일 개념 기준 제공
+    failure_condition: 서로 다른 시스템의 재고, ETA 또는 상태 값이 충돌할 때
+    impact: 신뢰할 값과 적용 범위를 일관되게 선택할 수 없어 통합 결과가 구현별로 달라진다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-007
+      - "materialized-input.md: InventoryRecord.quantity_on_hand note"
+      - "materialized-input.md: notes의 재고 진실 및 ETA 설명"
+      - "materialized-input.md: integrity_rules[1]"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: symptom_of 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-012
+    root_cause_hypothesis: 외부 상태 상호운용성을 버전 가능한 공통 매핑 레지스트리가 아니라 닫힌 enum과 연동별 코드로 구현했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-013
+      - finding-015
+    relation_refs:
+      - rel-017
+    raised_by_lens_ids:
+      - coverage
+      - evolution
+    issue_statement: 캐리어 상태를 canonical 상태로 정규화하는 버전형 매핑 계약이 없어 현재 결과가 연동마다 달라지고 새 코드
+      도입 시 반복 수정과 과거 재해석이 발생한다.
+    proposed_action: 원천 시스템·코드, canonical 이벤트·상태, 매핑 버전과 유효 기간을 가진 StatusMapping을
+      도입하고 원시 코드 보존 및 unknown/unmapped 처리를 정의한다.
+    affected_purpose: OMS/TMS/캐리어 간 공통 배송 상태 기준과 외부 상태 체계 변경에 대한 연속성
+    failure_condition: 캐리어별 코드를 Shipment 상태로 변환하거나 캐리어·내부 시스템이 상태 코드를 추가·변경할 때
+    impact: 정규화 결과가 구현마다 달라지고 매핑 드리프트와 반복 수정이 누적되며 과거 이벤트 해석도 안정적으로 유지되지 않는다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/coverage.findings.yaml#coverage-candidate-008
+      - "materialized-input.md: TrackingEvent.event_type note"
+      - "materialized-input.md: integrity_rules[1]"
+      - .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-002
+      - materialized-input.md:19-22
+      - materialized-input.md:44-47
+      - materialized-input.md:60-68
+      - materialized-input.md:111-113
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-013
+    root_cause_hypothesis: 충족을 수량을 가진 라인-출하 연관이 아니라 주문-출하 이진 관계로만 모델링했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-014
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: 부분 출하·분할 충족을 추가하려면 기존 주문 단위 fulfills 관계와 소비 로직을 재구성해야 한다.
+    proposed_action: OrderLine과 Shipment를 잇는 수량·단위·유효 시점·상태를 가진
+      FulfillmentAllocation을 추가하고 주문 단위 fulfills를 호환용 투영으로 유지한다.
+    affected_purpose: WMS/TMS/ERP 통합을 위한 주문→출하 개념 기준과 향후 충족 방식 확장성
+    failure_condition: 한 주문 라인이 여러 출하로 나뉘거나 여러 라인이 부분적으로 충족되는 운영이 추가될 때
+    impact: 기존 스키마와 소비 로직을 동시에 변경해야 하고 과거 데이터의 의미 연속성도 확보할 수 없다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-001
+      - materialized-input.md:25-31
+      - materialized-input.md:105-109
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-014
+    root_cause_hypothesis: 물리량을 단위와 분리된 숫자 또는 비정형 문자열로 모델링했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-016
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: 다른 단위 관례의 창고·국가·운송사를 추가하면 기존 중량·치수 값의 의미와 합산 결과가 충돌한다.
+    proposed_action: 중량과 치수를 value+unit Measurement로 모델링하고 표준 단위, 변환 규칙, 원천 표현과
+      total_weight 계산 버전을 보존한다.
+    affected_purpose: WMS/TMS/ERP 사이에서 재사용 가능한 SKU 및 화물 측정 기준
+    failure_condition: kg와 lb 또는 서로 다른 길이 단위를 사용하는 창고·운송사·지역을 통합할 때
+    impact: 기존 값과 신규 값의 의미를 구분할 수 없어 운송 계산과 제한 검증이 신뢰할 수 없고 표준화 시 전면 정제가 필요하다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/evolution.findings.yaml#evolution-candidate-003
+      - materialized-input.md:33-38
+      - materialized-input.md:40-49
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-015
+    root_cause_hypothesis: 운송 구간과 전체 화물 이동 사이의 부분-전체 관계를 하위유형 관계로 모델링했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-018
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: DeliveryLeg를 Shipment의 하위유형으로 분류해 경로 구간과 전체 화물의 식별·상태·충족 의미가 충돌한다.
+    proposed_action: DeliveryLeg를 독립 엔터티로 두고 part_of 또는 shipment_ref로 Shipment에 연결하며
+      구간 속성과 전체 Shipment 속성을 구분한다.
+    affected_purpose: WMS/TMS/ERP 통합을 위한 화물·배송 개념 기준
+    failure_condition: TMS의 다구간 운송 데이터를 교환하거나 주문 충족 관계를 해석할 때
+    impact: 하나의 출하와 그 운송 구간이 동일 종류로 취급되어 식별, 상태 집계와 주문 충족 판정이 시스템마다 달라질 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:40-58
+      - materialized-input.md:105-109
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: shared_cause_candidate 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-016
+    root_cause_hypothesis: 물리량의 값과 측정 단위를 분리하지 않고 숫자 또는 문자열 하나에 소스별 관례를 수용했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-019
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 단위 식별 없이 kg와 lb 등을 허용하고 합산 중량을 저장하므로 중량의 의미와 계산 결과가 확정되지 않는다.
+    proposed_action: 중량과 치수를 값+단위로 모델링하고 통합 기준 단위와 변환 규칙을 정하며 total_weight의 계산 기준·구성
+      수량·시점을 명시한다.
+    affected_purpose: WMS/TMS/ERP 간 SKU 및 화물 물성의 일관된 교환과 출하 중량 계산
+    failure_condition: 단위 관례가 다른 창고나 소스 시스템의 SKU를 동일 Shipment에 포함하거나 전송할 때
+    impact: 동일 숫자가 다른 물리량으로 해석되고 파생 중량이 틀려 운영 및 비용 판단의 신뢰성이 훼손된다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:33-38
+      - materialized-input.md:40-49
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-017
+    root_cause_hypothesis: 물리 재고와 회계 재고를 별도 재고 관점으로 모델링하지 않고 하나의 quantity_on_hand 개념에 수용했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-020
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 서로 다른 물리·회계 재고 수량을 단일 속성에 합쳐 그 의미와 WMS·ERP 간 권위가 충돌한다.
+    proposed_action: physical_on_hand와 accounting_on_hand를 분리하거나 재고 관측값에
+      quantity_kind, source_system과 as_of를 두고 사용 사례별 권위를 명시한다.
+    affected_purpose: WMS와 ERP 재고 개념의 권위 및 의미를 통합 기준으로 제공
+    failure_condition: 양 시스템의 수량이 불일치하거나 출고 가능성과 회계 결산이 서로 다른 값을 요구할 때
+    impact: 동일 필드가 상반된 진실 기준을 나타내어 할당, 조정과 감사에서 어느 값이 맞는지 판정할 수 없다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:76-84
+      - materialized-input.md:115-117
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: shared_cause_candidate 및 symptom_of 관계만 있고 same_root_candidate
+      관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-018
+    root_cause_hypothesis: 시간 의존적 파생값인 available_qty를 원천·산식·유효시점 없는 독립 스냅샷 필드로 모델링했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-021
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 야간 available_qty 스냅샷을 일중 현재 가용재고로 사용하면서 유효 시점과 계산 산식을 정의하지 않았다.
+    proposed_action: as_of와 계산·갱신 시점을 추가하고 available_qty의 권위 시스템과 예약·차단 수량 등을 반영하는
+      산식을 명시하며 일중 갱신 가능한 값을 사용한다.
+    affected_purpose: 재고 할당을 위한 일관된 가용 재고 기준
+    failure_condition: 야간 스냅샷 이후 주문, 예약, 입출고 또는 조정이 발생한 상태에서 일중 주문을 할당할 때
+    impact: 가용량의 시점과 계산 의미가 불명확해 중복 할당이나 시스템 간 가용 재고 불일치가 발생할 수 있다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:76-90
+      - materialized-input.md:111-112
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: shared_cause_candidate 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-019
+    root_cause_hypothesis: 충족 사실의 의미 단위를 OrderLine과 수량이 아니라 Order 전체로만 모델링했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-022
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 주문 단위 상태와 Shipment→Order 관계만으로는 부분출하 시 shipped와 delivered의 완료 범위를 판정할 수 없다.
+    proposed_action: Shipment와 OrderLine 사이에 충족 수량 관계를 추가하고 주문 상태를 행 단위 사실에서 도출하며 부분
+      상태와 완료 조건을 명시한다.
+    affected_purpose: 주문에서 출하와 배송까지의 일관된 충족 상태 기준
+    failure_condition: 한 주문이 여러 Shipment로 나뉘거나 주문 줄 일부만 할당·출하·배송될 때
+    impact: 주문 완료 여부와 출하별 충족 범위를 재구성할 수 없어 과소·중복 출하와 고객 상태 표시 오류를 판별하기 어렵다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-005
+      - materialized-input.md:14-31
+      - materialized-input.md:105-109
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: symptom_of 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-020
+    root_cause_hypothesis: 원시 제공자 상태와 canonical 상태 사이의 의미 매핑 및 그 권위를 온톨로지 밖의 개별 연동에 위임했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-023
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 캐리어 이벤트와 Shipment 상태의 의미 대응을 연동별로 결정해 동일 이벤트가 서로 다른 상태로 투영될 수 있다.
+    proposed_action: 원시 carrier_event_code와 정규 이벤트를 분리하고 버전형 canonical mapping,
+      미매핑·예외 처리와 Shipment 상태 판정 권위를 정의한다.
+    affected_purpose: OMS/TMS/캐리어 상태의 의미적 정합성과 통합 상태 판정
+    failure_condition: 여러 캐리어 또는 연동 구현이 동일 원시 이벤트를 Shipment 상태로 변환할 때
+    impact: 동일 배송이 서로 다른 상태로 표시되어 최종 배송 판정의 신뢰성이 낮아진다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-006
+      - materialized-input.md:40-47
+      - materialized-input.md:60-68
+      - materialized-input.md:111-113
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-021
+    root_cause_hypothesis: 서로 다른 출처의 ETA 관측값과 최종 표시값을 구별하지 않고 단일 속성에 덮어쓰기 방식으로 수용했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-024
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: 캐리어 예측과 운영팀 수기 판단을 하나의 eta에 혼합해 예측 출처와 기준시각의 의미를 잃는다.
+    proposed_action: 캐리어 ETA와 운영 조정 ETA를 별도 관측값으로 보존하고 source, calculated_at,
+      effective_at, supersedes와 선택 근거를 두며 표시 ETA를 투영으로 정의한다.
+    affected_purpose: TMS·캐리어·운영 화면 간 ETA의 일관된 의미와 추적 가능성
+    failure_condition: 캐리어 ETA 갱신이나 수기 조정 후 시스템 간 동기화 또는 예측 품질 분석을 수행할 때
+    impact: 최종 값의 출처와 기준 시점을 복원할 수 없어 ETA 충돌 처리, 감사와 예측 정확도 평가가 불가능해진다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/semantics.findings.yaml#semantics-candidate-007
+      - materialized-input.md:48-50
+      - materialized-input.md:115-117
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-022
+    root_cause_hypothesis: Shipment와 OrderLine을 수량과 함께 연결하는 구성 요소를 생략했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-025
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: 주문행과 출하 간 수량 포함 연결이 없어 부분출하 추적 경로가 구조적으로 끊겨 있다.
+    proposed_action: ShipmentLine을 추가해 Shipment, OrderLine과 fulfilled_qty를 필수 연결하고
+      주문 단위 fulfills를 이 연결에서 유도한다.
+    affected_purpose: 주문→재고 할당→출하→배송을 WMS/TMS/ERP 통합의 개념 기준으로 제공하는 목적
+    failure_condition: 한 주문 또는 주문행이 둘 이상의 Shipment로 부분·분할 출하되는 경우
+    impact: 주문행별 출하 수량 대사와 미충족 수량 판정이 불가능해 핵심 추적성이 깨진다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-001
+      - materialized-input.md:6-7
+      - materialized-input.md:25-31
+      - materialized-input.md:105-109
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-023
+    root_cause_hypothesis: 유형 상속만 정의하고 Shipment 인스턴스와 DeliveryLeg 인스턴스의 구성 관계를 생략했다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-026
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: DeliveryLeg가 소속 Shipment에 연결되지 않아 화물별 배송 경로와 구간 순서를 구성할 수 없다.
+    proposed_action: DeliveryLeg.shipment_ref 또는 Shipment contains DeliveryLeg 관계를
+      추가하고 leg_seq가 Shipment 내부에서 유일하도록 정의한다.
+    affected_purpose: 화물과 배송 구간을 포함하는 WMS/TMS/ERP 공통 개념 모델
+    failure_condition: 둘 이상의 Shipment 또는 다구간 배송이 동시에 존재하는 경우
+    impact: 구간을 화물별로 그룹화하거나 순서화할 수 없어 TMS 경로 데이터와 Shipment를 신뢰성 있게 통합할 수 없다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-002
+      - materialized-input.md:40-58
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: shared_cause_candidate 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+  - issue_id: issue-024
+    root_cause_hypothesis: 주문행과 창고 재고 사이의 할당 행위 및 할당 수량을 독립된 연결 구조로 표현하지 않았다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-027
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: 주문행과 창고 재고 사이의 할당 연결이 없어 선언된 주문→재고 할당 단계가 구조적으로 기록되지 않는다.
+    proposed_action: InventoryAllocation을 추가해 OrderLine, InventoryRecord 또는
+      Warehouse, allocated_qty를 연결하고 할당 상태와 생성 시각을 정의한다.
+    affected_purpose: 주문→재고 할당→출하→배송 흐름을 통합 시스템의 개념 기준으로 제공하는 목적
+    failure_condition: 동일 SKU에 대해 여러 주문행 또는 여러 창고 재고 중 특정 수량을 할당하는 경우
+    impact: OMS 주문 수요와 WMS 창고 예약의 대응을 검증할 수 없어 중복·미할당과 출하 전 재고 대사를 판정할 수 없다.
+    evidence_refs:
+      - .onto/review/20260716-b0f9e3b8/round1/structure.findings.yaml#structure-candidate-003
+      - materialized-input.md:6-7
+      - materialized-input.md:14-31
+      - materialized-input.md:70-90
+      - materialized-input.md:105-113
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: duplicates 관계만 있고 same_root_candidate 관계가 없어 독립 이슈로 유지한다.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-018
+    relation_refs:
+      - rel-006
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (일중 재고 할당이 매일 밤 저장된 InventoryAggregate.available_qty를
+      직접 기준으로 삼는다.)."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-017
+    relation_refs:
+      - rel-007
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (WMS와 ERP가 서로 다른 재고 값을 보유하지만 이를 별도 재고 관점과 권위 범위로 분리하지
+      않는다.)."
+  - dependency_id: dep-003
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-005
+      - issue-010
+    relation_refs:
+      - rel-011
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (수동 조정값에 행위자·시각·사유·원천 및 변경 이력을 보존하는 계약이 없다.)."
+  - dependency_id: dep-004
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-015
+      - issue-023
+    relation_refs:
+      - rel-019
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Shipment와 DeliveryLeg 사이에 필요한 부분-전체 인스턴스 관계가 없고 is_a만
+      정의되어 있다.)."
+validation:
+  unclustered_finding_ids: []

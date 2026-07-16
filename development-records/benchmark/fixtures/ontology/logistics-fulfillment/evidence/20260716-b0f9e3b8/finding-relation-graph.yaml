@@ -1,0 +1,191 @@
+schema_version: 1
+session_id: 20260716-b0f9e3b8
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-004
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: 주문선과 Shipment 사이에 충족 수량을 가진 연결 개념이 없다는 동일 결함을 두 렌즈가 포착했다.
+    shared_cause: null
+    rationale: 두 finding 모두 주문 단위 fulfills만 존재해 부분출하의 주문선별 출하 수량을 대사할 수 없다고 판단하며 제안
+      조치도 수량을 가진 연결 엔터티 추가로 일치한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-007
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: 부분출하 확장성 문제는 현재 주문선-화물 수량 매핑이 생략된 동일 모델 결함에서 발생한다.
+    shared_cause: null
+    rationale: finding-007은 현재 기능 공백을, finding-014는 그 공백 때문에 향후 모델 재구성이 필요함을 기술하지만
+      대상 구조와 근거 구간, 권고 개념이 동일하다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-014
+    to_finding_id: finding-025
+    relation: duplicates
+    root_hypothesis: 주문-출하 이진 관계만 두고 ShipmentLine 또는 FulfillmentAllocation을 생략한 것이 두
+      finding의 공통 결함이다.
+    shared_cause: null
+    rationale: 두 finding 모두 OrderLine과 Shipment를 fulfilled_qty와 함께 연결하는 구조가 없음을 핵심
+      원인으로 식별한다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-022
+    to_finding_id: finding-004
+    relation: symptom_of
+    root_hypothesis: 주문선별 충족 수량을 모델링하면 부분출하 상황의 shipped·delivered 판정 모호성이 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-022의 주문 상태 의미 모호성은 finding-004가 지적한 주문선-화물 충족 관계 부재가 상태 도출
+      근거까지 제거한 의미적 증상이다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-006
+    to_finding_id: finding-027
+    relation: duplicates
+    root_hypothesis: OrderLine과 창고 재고를 할당 수량 및 생명주기와 함께 연결하는 독립 개념이 없다는 동일 결함이다.
+    shared_cause: null
+    rationale: 두 finding 모두 SKU 공유나 available_qty 조회만으로는 주문별 예약·할당을 표현할 수 없으며
+      InventoryAllocation 계열 엔터티가 필요하다고 결론낸다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-001
+    to_finding_id: finding-021
+    relation: shared_cause_candidate
+    root_hypothesis: 일중 할당이 시점과 산식이 없는 야간 available_qty를 현재 가용재고로 읽는 설계가 두 finding을 함께 발생시킨다.
+    shared_cause:
+      cause_claim: 일중 재고 할당이 매일 밤 저장된 InventoryAggregate.available_qty를 직접 기준으로 삼는다.
+      from_cause_ref: finding-001.cause-001
+      to_cause_ref: finding-021.cause-001
+    rationale: 양쪽 causal path가 동일한 일중 할당 입력을 지목하며, finding-001은 통합 권위·시간성 손실을,
+      finding-021은 가용량 의미와 중복 할당 위험을 강조한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-001
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: 목적이 다른 WMS 실물 재고와 ERP 회계 재고를 단일 수량 의미로 취급하고 목적별 권위를 선언하지 않은 것이
+      두 finding의 공통 원인이다.
+    shared_cause:
+      cause_claim: WMS와 ERP가 서로 다른 재고 값을 보유하지만 이를 별도 재고 관점과 권위 범위로 분리하지 않는다.
+      from_cause_ref: finding-001.cause-002
+      to_cause_ref: finding-020.cause-002
+    rationale: finding-001의 분할 권위 문제와 finding-020의 quantity_on_hand 의미 충돌은 모두 서로 다른
+      재고 진실을 하나의 권위 계약 없이 병합한 결과다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-017
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: 변동 값을 원천·시점·버전이 있는 관측 이력 대신 덮어쓰는 현재값으로 모델링한 것이 공통 뿌리다.
+    shared_cause: null
+    rationale: finding-017은 재고 원천 추가와 마이그레이션 연속성에, finding-009는 재고·ETA의 과거 재구성과 감사성에
+      초점을 두지만 둘 다 시간 버전 모델 부재를 원인으로 든다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-020
+    to_finding_id: finding-012
+    relation: symptom_of
+    root_hypothesis: 값별 출처와 AuthorityScope를 모델링하면 quantity_on_hand에 상반된 재고 진실이 혼합되는
+      문제가 구조적으로 식별되어야 한다.
+    shared_cause: null
+    rationale: finding-020은 finding-012의 포괄적인 다중 원본 권위·계보 부재가 InventoryRecord에서 구체화된 사례다.
+    confidence: medium
+  - relation_id: rel-010
+    from_finding_id: finding-005
+    to_finding_id: finding-024
+    relation: duplicates
+    root_hypothesis: 캐리어 예측과 운영 오버라이드를 단일 mutable eta에 합친 동일 설계 결함이다.
+    shared_cause: null
+    rationale: 두 finding은 동일 속성, 동일 근거 구간, 동일 실패 조건을 다루며 출처·기준시각·오버라이드 이력을 분리하라는 조치도 일치한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-005
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: 변경 가능한 운영값을 출처와 감사 사건 없이 덮어쓰는 설계가 ETA 신뢰성 및 변경 감사성 문제를 함께 만든다.
+    shared_cause:
+      cause_claim: 수동 조정값에 행위자·시각·사유·원천 및 변경 이력을 보존하는 계약이 없다.
+      from_cause_ref: finding-005.cause-003
+      to_cause_ref: finding-011.cause-002
+    rationale: finding-005는 ETA 선택 결과의 신뢰성을, finding-011은 ETA와 재고 조정 전반의 책임 추적성을
+      강조하지만 공통적으로 조정 행위를 일급 감사 사건으로 모델링하지 않은 점을 지목한다.
+    confidence: medium
+  - relation_id: rel-012
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: 측정값을 값과 단위가 결합된 canonical Quantity로 모델링하지 않은 동일 결함이다.
+    shared_cause: null
+    rationale: 두 finding 모두 Sku.weight·dims와 Shipment.total_weight에 단위 및 변환 기준이 없어
+      시스템 간 비교와 합산이 안전하지 않다고 판단한다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-008
+    to_finding_id: finding-019
+    relation: duplicates
+    root_hypothesis: 단위 없는 물리량과 그 합산값 때문에 중량 의미가 확정되지 않는 동일 결함이다.
+    shared_cause: null
+    rationale: coverage와 semantics 관점의 차이만 있을 뿐 대상 속성, kg/lb 혼합 실패 조건, 운영 영향과 권고가
+      실질적으로 같다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-016
+    to_finding_id: finding-019
+    relation: duplicates
+    root_hypothesis: 원천 단위와 변환 규칙이 없는 측정값 모델이 현재 의미 오류와 향후 지역·시스템 확장 실패를 동시에 설명한다.
+    shared_cause: null
+    rationale: finding-016은 진화 비용을, finding-019는 현재 의미적 무효성을 강조하지만 둘 다 단위 없는 Sku
+      측정값과 total_weight 합산을 동일 근거로 든다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-003
+    to_finding_id: finding-023
+    relation: duplicates
+    root_hypothesis: TrackingEvent와 Shipment 상태 사이의 canonical mapping 및 판정 권위를 각 연동에
+      위임한 동일 결함이다.
+    shared_cause: null
+    rationale: 두 finding 모두 연동별 상태 해석으로 동일 이벤트가 다른 Shipment 상태가 될 수 있음을 지적하며 공통
+      매핑·전이·권위 계약을 요구한다.
+    confidence: high
+  - relation_id: rel-016
+    from_finding_id: finding-013
+    to_finding_id: finding-023
+    relation: duplicates
+    root_hypothesis: 캐리어 원시 상태를 canonical Shipment 상태로 정규화하는 공통 매핑 개념이 없다는 동일 결함이다.
+    shared_cause: null
+    rationale: finding-013과 finding-023은 대상, 실패 조건, 영향과 제안된 버전형 매핑 및 미매핑 처리 규칙이
+      실질적으로 일치한다.
+    confidence: high
+  - relation_id: rel-017
+    from_finding_id: finding-015
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: 외부 상태 상호운용성을 버전 가능한 매핑 레지스트리가 아니라 닫힌 enum과 연동별 코드로 구현한 것이 공통 뿌리다.
+    shared_cause: null
+    rationale: finding-013은 현재 정규화 공백을, finding-015는 새 코드 도입 시 반복 수정과 과거 재해석 불안정을
+      다루므로 동일 원인의 현재 및 진화 결과로 볼 수 있다.
+    confidence: high
+  - relation_id: rel-018
+    from_finding_id: finding-003
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: Order·Shipment·TrackingEvent 상태를 공통 생명주기 계약 없이 정상 경로 중심의 독립
+      enum으로 정의한 것이 두 문제의 공통 뿌리다.
+    shared_cause: null
+    rationale: canonical 전이·충돌 규칙의 부재는 시스템 간 매핑을 연동별로 만들 뿐 아니라 exception을 Order와
+      Shipment 생명주기에 투영할 기준도 없게 한다.
+    confidence: medium
+  - relation_id: rel-019
+    from_finding_id: finding-018
+    to_finding_id: finding-026
+    relation: shared_cause_candidate
+    root_hypothesis: Shipment와 DeliveryLeg의 인스턴스 구성 관계를 is_a 상속으로 대체한 모델링 결정이 의미적 유형
+      오류와 경로 연결 단절을 함께 만든다.
+    shared_cause:
+      cause_claim: Shipment와 DeliveryLeg 사이에 필요한 부분-전체 인스턴스 관계가 없고 is_a만 정의되어 있다.
+      from_cause_ref: finding-018.cause-003
+      to_cause_ref: finding-026.cause-003
+    rationale: finding-018은 구간을 전체 화물의 하위종류로 오인한 의미 문제를, finding-026은 그 결과 특정
+      Shipment의 구간 목록과 순서를 구성할 수 없는 구조 문제를 포착한다.
+    confidence: high
+singleton_findings: []

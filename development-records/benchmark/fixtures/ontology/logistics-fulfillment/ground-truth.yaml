@@ -1,9 +1,9 @@
 # Ground truth — logistics-fulfillment fixture의 seeded 개념 결함 (채점 전용, 타깃 비포함)
 fixture: logistics-fulfillment
-# canary_defect_ids: 아직 두지 않는다. canary는 "전 run ZERO 탐지 ⇒ instrument_broken"의
-# 근거가 되므로, 이 fixture의 첫 evidence를 생성(spend)해 어느 defect가 안정적으로 탐지되는지
-# 확인한 뒤에 authoring한다(기존 3개는 baseline 캡처로 offline 검증됨). LSC-1(3-스케일 상태
-# enum_fragmentation)이 가장 명료한 후보다.
+# Instrument canary (design §11 item 3): LSC-1 (3-스케일 상태 enum_fragmentation) — 첫 evidence
+# (20260716-b0f9e3b8, gpt-5.6-sol@medium) judge K=8 채점에서 8/8 탐지로 검증됨(seeded 결함 중 최명료).
+# 전 run ZERO 탐지 ⇒ instrument_broken(붕괴/미참여 judge지 실제 miss 아님).
+canary_defect_ids: [LSC-1]
 seeded_defects:
   - id: LSC-1
     kind: enum_fragmentation

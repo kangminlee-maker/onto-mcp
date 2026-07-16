@@ -1,0 +1,159 @@
+schema_version: 1
+session_id: 20260716-b0f9e3b8
+planned_issues:
+  - issue_id: issue-009
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+    conflict_summary: coverage는 직접 확인된 감사·운영 분석 영향을 medium으로 보는 반면 evolution은 새 원천과
+      실시간 이력의 점진적 도입 실패까지 포함해 high를 유지한다.
+    resolution_question: 현재값 모델이 초래하는 직접적인 재구성 실패와 단계적 확장 실패를 함께 고려할 때 최종 심각도는 medium인가 high인가?
+  - issue_id: issue-012
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+    conflict_summary: coverage는 현재 상태 정규화 공백을 medium으로 평가하지만 evolution은 반복 수정, 매핑
+      드리프트와 과거 재해석 위험 때문에 high를 유지한다.
+    resolution_question: 버전형 상태 매핑 계약 부재의 현재 상호운용성 영향과 장기 변경 영향을 종합한 최종 심각도는 medium인가 high인가?
+  - issue_id: issue-016
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-016.semantics
+      - issue-stance-matrix.yaml#stances.issue-016.coverage
+    conflict_summary: semantics는 단위 없는 중량이 적재·운임·제한 판단에 직접 사용되는 점을 근거로 high를 유지하지만
+      coverage는 비교·합산 안전성 저하를 medium으로 본다.
+    resolution_question: 단위 없는 중량과 파생 total_weight의 운영·비용 영향은 지원 경로 실패에 해당하는 high인가,
+      신뢰성 약화에 해당하는 medium인가?
+  - issue_id: issue-004
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: axiology는 부분출하 추적성 약화를 medium으로 유지하지만 semantics와 structure는 수량
+      있는 주문선-화물 관계 부재가 핵심 상태 의미와 추적 경로를 끊으므로 high로 높여야 한다고 본다.
+    resolution_question: 주문선별 충족 수량을 표현하지 못하는 결함은 추적 신뢰성을 약화하는 medium인가, 지원되는 부분출하
+      경로를 달성할 수 없게 하는 high인가?
+  - issue_id: issue-020
+    priority: 6
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-020.semantics
+      - issue-stance-matrix.yaml#stances.issue-020.evolution
+    conflict_summary: semantics는 현재 연동별 상태 의미 불일치를 medium으로 유지하지만 evolution은 반복 수정과
+      과거 재해석까지 고려해 high로 높여야 한다고 본다.
+    resolution_question: 연동별 상태 매핑 위임의 현재 의미 불일치와 장기 변경 비용을 종합할 때 최종 심각도는 medium인가 high인가?
+  - issue_id: issue-002
+    priority: 5
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+    conflict_summary: axiology는 단위 없는 측정값이 판단 신뢰를 약화한다고 보아 medium을 유지하지만 semantics는
+      total_weight의 의미까지 무효화되어 high가 타당하다고 본다.
+    resolution_question: 단위와 변환 계약 부재는 비교·합산 신뢰성을 약화하는 medium인가, 핵심 운영·비용 판단 경로를 실패시키는 high인가?
+  - issue_id: issue-008
+    priority: 4
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+    conflict_summary: coverage는 정량 데이터 통합 범위의 불완전성을 medium으로 유지하지만 semantics는
+      합산·운임·용적 계산이 의미적으로 안전하지 않아 high로 높여야 한다고 본다.
+    resolution_question: Quantity/Measure와 단위 변환 기준 부재의 영향은 통합 완전성 약화인 medium인가, 지원
+      계산 경로의 실패인 high인가?
+  - issue_id: issue-014
+    priority: 3
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+    conflict_summary: evolution은 신규 단위 관례 도입 시 전면 정제가 필요한 위험을 medium으로 유지하지만
+      semantics는 기존 값도 이미 의미가 불확정하고 계산 연속성이 깨지므로 high를 요구한다.
+    resolution_question: 단위 관례 확장 시 발생하는 의미·계산 충돌은 진화 신뢰성을 약화하는 medium인가, 현재와 신규
+      데이터의 지원 경로를 실패시키는 high인가?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: structure의 원인 한정은 배치 관행 자체보다 권위·시간 메타데이터가 연결되지 않은 모델 결함에 초점을 맞춘 것으로, 다른
+      렌즈의 원인과 조치에 양립하는 정교화다.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: structure의 연결 계약 중심 한정은 공통 생명주기 계약 부재와 양립하며, logic의 증거 부족은 형식 모순 입증 범위에만
+      해당해 이슈의 의미·구조적 판단과 충돌하지 않는다.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 원인, medium 심각도와 조치 방향을 일관되게 지지한다.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 예약·할당 거래 누락이라는 원인과 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 행 단위 수량 매핑 부재와 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: evolution의 한정은 감사 사건을 수동 조정과 정책 변경 같은 통제값에 적용하자는 것으로, 이슈의 ETA·재고 조정 범위 및
+      제안 조치와 일치한다.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 값별 권위 범위와 계보 부재 및 medium 심각도를 일관되게 지지한다.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 주문-출하 이진 관계의 확장성 결함과 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: logic은 형식적 모순을 확정할 공리가 부족하다고 했을 뿐, 다른 렌즈가 확인한 부분-전체 의미 및 구조 결함이나 high
+      심각도에 반대하지 않는다.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 물리·회계 재고 관점 혼합과 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 available_qty의 시점·산식 부재와 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-019
+    reason_code: no_material_conflict
+    reason: logic의 증거 부족은 완료 조건 공리가 없어 형식 충돌을 증명할 수 없다는 범위 제한이며, 행·수량별 충족 의미 부재에 관한
+      다른 렌즈의 판단과 충돌하지 않는다.
+  - issue_id: issue-021
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 ETA 관측값과 표시값 혼합이라는 원인 및 medium 심각도를 일관되게 지지한다.
+  - issue_id: issue-022
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 ShipmentLine 부재로 인한 부분출하 경로 단절과 high 심각도를 일관되게 지지한다.
+  - issue_id: issue-023
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 Shipment와 DeliveryLeg 구성 관계 누락 및 medium 심각도를 일관되게 지지한다.
+  - issue_id: issue-024
+    reason_code: consistent_stances
+    reason: 적용 가능한 모든 렌즈가 주문행-재고 할당 연결 누락과 high 심각도를 일관되게 지지한다.
