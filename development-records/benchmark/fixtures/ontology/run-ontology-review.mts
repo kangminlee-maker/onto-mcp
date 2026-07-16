@@ -37,6 +37,11 @@ const FIXTURES: Record<string, { targetFile: string; intent: string }> = {
     intent:
       "이 BOM/공정 온톨로지가 PLM/MES 통합의 개념 기준 문서로 적절한지 검토해 달라. 품목·BOM·라우팅·변경관리 개념의 정합성과 제조 운영 위험을 중심으로.",
   },
+  "logistics-fulfillment": {
+    targetFile: "logistics-fulfillment-ontology.yaml",
+    intent:
+      "이 물류·주문충족 온톨로지가 WMS/TMS/ERP 통합의 개념 기준 문서로 적절한지 검토해 달라. 주문·재고·화물·배송 개념의 정합성(권위·시간성·단위·상태 모델)과 물류 운영 위험을 중심으로.",
+  },
 };
 
 /** 감사 가능성: 채점 근거가 되는 세션 아티팩트를 repo 증거 디렉토리로 영속화. */

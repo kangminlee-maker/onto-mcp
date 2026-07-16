@@ -1,0 +1,57 @@
+# Ground truth — logistics-fulfillment fixture의 seeded 개념 결함 (채점 전용, 타깃 비포함)
+fixture: logistics-fulfillment
+# canary_defect_ids: 아직 두지 않는다. canary는 "전 run ZERO 탐지 ⇒ instrument_broken"의
+# 근거가 되므로, 이 fixture의 첫 evidence를 생성(spend)해 어느 defect가 안정적으로 탐지되는지
+# 확인한 뒤에 authoring한다(기존 3개는 baseline 캡처로 offline 검증됨). LSC-1(3-스케일 상태
+# enum_fragmentation)이 가장 명료한 후보다.
+seeded_defects:
+  - id: LSC-1
+    kind: enum_fragmentation
+    where: "Order.fulfillment_status vs Shipment.status vs TrackingEvent.event_type"
+    description: "동일 개념(화물/주문 진행 상태)이 3개 독립 스케일로 병존하고, integrity_rules가 '각 시스템이 독립 관리'로 권위 부재를 명문화. 스케일 간 매핑은 각 연동에 위임(온톨로지 밖)."
+    severity_expectation: material
+  - id: LSC-2
+    kind: authority_conflict
+    where: "InventoryRecord.quantity_on_hand"
+    description: "재고 진실이 WMS(실물)와 ERP(회계) 양쪽에 존재하고 note가 '야간 배치로 ERP 기준에 맞춘다'로 이원화. 배치 사이 최대 하루 불일치 창이 열려 할당 판단이 틀릴 수 있음."
+    severity_expectation: material
+  - id: LSC-3
+    kind: temporal_semantics_gap
+    where: "InventoryRecord"
+    description: "재고에 유효 시점(as_of/valid_from) 개념이 없어 '주문 접수 당시 재고' 같은 시점 질의가 불가능. 과거 재고 상태 재구성 불능."
+    severity_expectation: material
+  - id: LSC-4
+    kind: derived_value_copy
+    where: "Shipment.total_weight"
+    description: "총 중량이 구성 OrderLine 중량의 파생 합인데 '출하 시점 계산해 저장'하는 독립 속성으로 승격 — 원천(라인 중량) 변경 시 불일치, 재계산 규칙 부재."
+    severity_expectation: material
+  - id: LSC-5
+    kind: unit_ambiguity
+    where: "Sku.weight / Sku.dims / 환산 규칙"
+    description: "중량·치수에 단위 속성이 없고(창고별 kg/lb 관례, dims는 소스별 단위) 환산 마스터가 없음 — 다창고 화물의 중량 합산·운임 계산의 단위 무결성 부재."
+    severity_expectation: material
+  - id: LSC-6
+    kind: wrong_generalization
+    where: "DeliveryLeg is_a Shipment"
+    description: "배송 구간은 화물의 하위 타입이 아님. is-a 오용으로 DeliveryLeg가 fulfills(Order)·total_weight·eta 등 화물 수준 속성을 무의미하게 상속하고, '한 화물이 여러 구간'이라는 관계가 상속으로 뭉개짐."
+    severity_expectation: material
+  - id: LSC-7
+    kind: lifecycle_gap
+    where: "Shipment.status"
+    description: "상태가 delivered에서 종료 — 반품/분실/파손/예외 상태가 없어 배송 후 처리(반품·클레임·재배송)의 개념 기준이 정의 불능. TrackingEvent.exception과도 대응 안 됨."
+    severity_expectation: material
+  - id: LSC-8
+    kind: staleness_by_design
+    where: "InventoryAggregate.available_qty"
+    description: "가용 재고가 야간 배치 스냅샷인데 integrity_rules가 '일중 주문도 이 값을 읽어 할당'하도록 규정 — 구조적으로 오래된 값으로 할당해 초과판매(oversell) 발생."
+    severity_expectation: material
+  - id: LSC-9
+    kind: governed_override_gap
+    where: "Shipment.eta 수기 조정"
+    description: "운영팀의 ETA 수기 조정에 사유·기록·승인 통제가 없음 — 캐리어 원천값과 조정값의 권위·lineage가 닫히지 않아 ETA 진실성이 훼손될 경로."
+    severity_expectation: medium_or_above
+  - id: LSC-10
+    kind: missing_relation
+    where: "OrderLine ↔ 충족 Shipment/DeliveryLeg (fulfills가 Order 단위)"
+    description: "충족 관계(fulfills)가 Shipment→Order 단위뿐이고 OrderLine 단위 매핑이 없어, 한 주문 줄이 여러 화물로 부분출하될 때 어느 줄이 어느 화물로 나갔는지 추적 불가."
+    severity_expectation: material
