@@ -31,6 +31,11 @@ interface ReportVerdict {
 interface ReportFixture {
   fixture: string;
   verdict: ReportVerdict;
+  /** Reviews pooled behind this cell (R). Present from m3-report/5; absent ⇒ 1. */
+  review_reps?: number;
+  /** Intra-model stability across the R reviews (§3-3): true/false, or null when
+   *  R<2 (unassessable). Absent on pre-m3-report/5 reports ⇒ treated as null. */
+  intra_model_stable?: boolean | null;
   recall_material: RunStats;
   recall_overall: RunStats;
   precision: RunStats;
@@ -39,9 +44,8 @@ interface ReportFixture {
 /** One reviewed-model arm: a label + the fixtures its m3 report scored. */
 export interface ArmReport {
   label: string;
-  /** Number of REVIEWS per (arm, fixture) behind this report (R). 1 ⇒ judge-only
-   *  spread; review variance unestimated. Caller supplies it (the report itself
-   *  does not record R). */
+  /** Fallback R when a report predates m3-report/5 (no per-fixture review_reps).
+   *  The per-fixture value wins when present. */
   review_reps: number;
   fixtures: ReportFixture[];
 }
@@ -97,7 +101,14 @@ function compareMetricAcrossArms(
   const included: ArmMetric[] = [];
   for (const { label, fixture } of cells) {
     if (!TRUSTWORTHY.has(fixture.verdict.kind)) {
-      excluded.push({ label, reason: `verdict ${fixture.verdict.kind} (not intra-model-stable, §3-3)` });
+      excluded.push({ label, reason: `verdict ${fixture.verdict.kind} (untrustworthy, §3-3)` });
+      continue;
+    }
+    // Intra-model stability gate (§3-3): with R≥2, a cell whose reviews disagree on
+    // band is NOT a stable measurement of that model — exclude it. R<2 (null) is
+    // unassessable and passes (the whole comparison is directional then).
+    if (fixture.intra_model_stable === false) {
+      excluded.push({ label, reason: `intra-model UNSTABLE across ${fixture.review_reps ?? "?"} reviews (§3-3)` });
       continue;
     }
     included.push({ label, stats: fixture[metric], band: fixture.verdict.band });
@@ -150,7 +161,10 @@ export function compareArms(arms: ArmReport[], metrics: readonly ComparisonMetri
     fixtures.push({ fixture, metrics: metrics.map((m) => compareMetricAcrossArms(m, cells)) });
   }
 
-  const reviewReps = Math.min(...arms.map((a) => a.review_reps));
+  // R is the min reviews across every compared cell (per-fixture review_reps wins;
+  // arm-level fallback for pre-m3-report/5 reports). Directional when any cell < 2.
+  const cellReps = arms.flatMap((a) => a.fixtures.map((f) => f.review_reps ?? a.review_reps));
+  const reviewReps = cellReps.length > 0 ? Math.min(...cellReps) : Math.min(...arms.map((a) => a.review_reps));
   return {
     schema_version: "m3-compare/1",
     arms: labels,
@@ -191,6 +205,8 @@ async function main(): Promise<void> {
   const fs = await import("node:fs/promises");
   const argv = process.argv.slice(2);
   // Usage: m3-compare.ts --arm <label>:<report.json> [--arm ...] [--reps N]
+  // m3-report/5 reports carry per-fixture review_reps + intra_model_stable (used
+  // directly); --reps is only the arm-level fallback for older reports.
   const arms: ArmReport[] = [];
   const reps = Number(readOpt(argv, "reps") ?? "1");
   for (let i = 0; i < argv.length; i += 1) {

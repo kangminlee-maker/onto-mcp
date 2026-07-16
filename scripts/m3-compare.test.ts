@@ -7,17 +7,20 @@ function st(mean: number, min = mean, max = mean): RunStats {
   return { n: 8, mean, min, max, stdev: 0 };
 }
 
-/** One fixture entry in an arm report. */
+/** One fixture entry in an arm report. `stable`/`reps` default to R=1 semantics. */
 function fx(
   fixture: string,
   kind: "dominant" | "indeterminate" | "underpowered" | "instrument_broken",
   band: DefectSpectrumBand | null,
   recallMaterial: RunStats,
   precision: RunStats,
+  opts: { reps?: number; stable?: boolean | null } = {},
 ) {
   return {
     fixture,
     verdict: { kind, band },
+    review_reps: opts.reps ?? 1,
+    intra_model_stable: opts.stable ?? null,
     recall_material: recallMaterial,
     recall_overall: recallMaterial,
     precision,
@@ -59,17 +62,40 @@ describe("compareArms", () => {
     expect(rec.ranked.map((r) => r.label)).toEqual(["sol"]);
   });
 
+  it("FALSIFIABLE: excludes an intra-model-UNSTABLE cell at R≥2 (§3-3 stability gate)", () => {
+    // Both dominant, but 5.5's clinical is intra-model UNSTABLE across its reviews →
+    // not a stable measurement → excluded → only sol remains → insufficient.
+    const sol = arm("sol", 2, [fx("clinical", "dominant", "below", st(0.857), st(0.917), { reps: 2, stable: true })]);
+    const g55 = arm("gpt-5.5", 2, [fx("clinical", "dominant", "below", st(0.857), st(0.742), { reps: 2, stable: false })]);
+    const prec = compareArms([sol, g55]).fixtures[0]!.metrics.find((m) => m.metric === "precision")!;
+    expect(prec.excluded).toEqual([{ label: "gpt-5.5", reason: expect.stringContaining("intra-model UNSTABLE") }]);
+    expect(prec.outcome).toBe("insufficient");
+    // Contrast: both stable → compared normally (sol higher precision, disjoint)
+    const g55stable = arm("gpt-5.5", 2, [fx("clinical", "dominant", "below", st(0.857), st(0.742), { reps: 2, stable: true })]);
+    const prec2 = compareArms([sol, g55stable]).fixtures[0]!.metrics.find((m) => m.metric === "precision")!;
+    expect(prec2.outcome).toBe("distinguishable");
+    expect(prec2.leader).toBe("sol");
+  });
+
+  it("derives R (and directional) from per-fixture review_reps in the report, not just the arm flag", () => {
+    const sol = arm("sol", 99 /* arm fallback ignored */, [fx("m", "dominant", "exceeds", st(1), st(0.96), { reps: 3, stable: true })]);
+    const g55 = arm("gpt-5.5", 99, [fx("m", "dominant", "meets", st(1), st(0.80), { reps: 2, stable: true })]);
+    const cmp = compareArms([sol, g55]);
+    expect(cmp.review_reps).toBe(2); // min per-cell reps (2), not the arm flag (99)
+    expect(cmp.directional).toBe(false); // both cells R>=2
+  });
+
   it("marks the comparison DIRECTIONAL when R < 2 (review variance unestimated)", () => {
-    const a = arm("sol", 1, [fx("logistics", "dominant", "exceeds", st(1.0), st(0.96))]);
+    const a = arm("sol", 1, [fx("logistics", "dominant", "exceeds", st(1.0), st(0.96))]); // per-cell reps=1
     const b = arm("gpt-5.5", 1, [fx("logistics", "dominant", "meets", st(1.0), st(0.80))]);
     const cmp = compareArms([a, b]);
     expect(cmp.review_reps).toBe(1);
     expect(cmp.directional).toBe(true);
-    // R>=2 on both arms → not directional
-    const a2 = arm("sol", 3, a.fixtures);
-    const b2 = arm("gpt-5.5", 2, b.fixtures);
+    // Per-cell reps>=2 on both → not directional (per-fixture review_reps drives it).
+    const a2 = arm("sol", 1, [fx("logistics", "dominant", "exceeds", st(1.0), st(0.96), { reps: 3, stable: true })]);
+    const b2 = arm("gpt-5.5", 1, [fx("logistics", "dominant", "meets", st(1.0), st(0.80), { reps: 2, stable: true })]);
     expect(compareArms([a2, b2]).directional).toBe(false); // min(3,2)=2
-    expect(compareArms([a2, b2]).review_reps).toBe(2); // min across arms
+    expect(compareArms([a2, b2]).review_reps).toBe(2); // min per-cell reps
   });
 
   it("compares only fixtures present in >=2 arms (a solo fixture is skipped)", () => {

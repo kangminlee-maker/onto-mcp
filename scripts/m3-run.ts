@@ -130,14 +130,29 @@ export interface RunStats {
 
 export interface FixtureStabilityResult {
   fixture: string;
+  /** First review's evidence session (back-compat display). See review_sessions
+   *  for the full set when R>1. */
   evidence_session: string;
+  /** The evidence sessions pooled into this cell — one per review (R). */
+  review_sessions: string[];
+  /** Number of REVIEWS pooled (R). The metric distributions below span review-
+   *  generation variance when R>1, not just the judge K-run spread (design §3-3). */
+  review_reps: number;
+  /** Total judge runs pooled (R × K). */
   judge_runs: number;
   /** Anthropic auth route the judge ran on (provenance — the routes are
    *  non-equivalent instruments). Undefined when replaying a pre-provenance capture. */
   judge_auth?: AttributionAuth;
-  /** Distribution-based band verdict (design §3-3). The band is ADVISORY; the
-   *  metric distributions below are the primary output. */
+  /** Distribution-based band verdict over the POOLED R×K runs (design §3-3). The
+   *  band is ADVISORY; the metric distributions below are the primary output. */
   verdict: BandVerdict;
+  /** Per-review verdict (each over its own K runs) — the falsifiable intra-model
+   *  stability evidence (§3-3). */
+  per_review_verdicts: BandVerdict[];
+  /** Intra-model stability (§3-3 precondition for an inter-model claim): true iff
+   *  every review yields a `dominant` verdict on the SAME band. null when R<2
+   *  (review variance is not assessable from a single review). */
+  intra_model_stable: boolean | null;
   recall_material: RunStats;
   recall_overall: RunStats;
   precision: RunStats;
@@ -241,9 +256,65 @@ export function classifyVerdict(
   return { kind: "indeterminate", band: null, noise_rate: null, band_frequencies: freq };
 }
 
+/** One reviewed evidence session's scored K runs. */
+export interface ReviewRuns {
+  session: string;
+  perRun: DefectSpectrumResult[];
+}
+
 /**
- * Aggregate K single-run scores into a metric distribution (primary) + a
- * distribution-based band verdict (advisory, design §3-3).
+ * Intra-model stability (§3-3): the R reviews of one model×fixture are stable iff
+ * each yields a `dominant` verdict AND they all agree on the band. null when R<2
+ * (a single review cannot expose review-generation variance).
+ */
+function assessIntraModelStability(perReviewVerdicts: BandVerdict[]): boolean | null {
+  if (perReviewVerdicts.length < 2) return null;
+  const bands = new Set<DefectSpectrumBand | "unstable">();
+  for (const v of perReviewVerdicts) {
+    if (v.kind !== "dominant" || v.band === null) return false; // an indeterminate/broken review is not stable
+    bands.add(v.band);
+  }
+  return bands.size === 1;
+}
+
+/**
+ * Aggregate R reviews (each K judge runs) into a metric distribution POOLED over
+ * all R×K runs (primary output — includes review-generation variance when R>1)
+ * plus a pooled distribution-based band verdict (advisory) and the per-review
+ * verdicts that establish intra-model stability (design §3-3).
+ */
+export function aggregateReviews(
+  fixture: string,
+  reviews: ReviewRuns[],
+  policy: VerdictPolicy,
+  auth?: AttributionAuth,
+  canaryDefectIds: readonly string[] = [],
+): FixtureStabilityResult {
+  if (reviews.length === 0) throw new Error("m3 aggregate: no reviews to aggregate");
+  const pooled = reviews.flatMap((r) => r.perRun);
+  if (pooled.length === 0) throw new Error("m3 aggregate: no judge runs to aggregate");
+  const perReviewVerdicts = reviews.map((r) => classifyVerdict(r.perRun, policy, canaryDefectIds));
+  return {
+    fixture,
+    evidence_session: reviews[0]!.session,
+    review_sessions: reviews.map((r) => r.session),
+    review_reps: reviews.length,
+    judge_runs: pooled.length,
+    ...(auth ? { judge_auth: auth } : {}),
+    verdict: classifyVerdict(pooled, policy, canaryDefectIds),
+    per_review_verdicts: perReviewVerdicts,
+    intra_model_stable: assessIntraModelStability(perReviewVerdicts),
+    recall_material: stats(pooled.map((r) => r.recall_material)),
+    recall_overall: stats(pooled.map((r) => r.recall_overall)),
+    precision: stats(pooled.map((r) => r.precision)),
+    per_run: pooled,
+  };
+}
+
+/**
+ * Single-review aggregate (R=1) — thin wrapper over aggregateReviews. The metric
+ * distribution is the judge K-run spread only; intra_model_stable is null (review
+ * variance unassessable from one review).
  */
 export function aggregate(
   fixture: string,
@@ -253,18 +324,7 @@ export function aggregate(
   auth?: AttributionAuth,
   canaryDefectIds: readonly string[] = [],
 ): FixtureStabilityResult {
-  if (perRun.length === 0) throw new Error("m3 aggregate: no judge runs to aggregate");
-  return {
-    fixture,
-    evidence_session: session,
-    judge_runs: perRun.length,
-    ...(auth ? { judge_auth: auth } : {}),
-    verdict: classifyVerdict(perRun, policy, canaryDefectIds),
-    recall_material: stats(perRun.map((r) => r.recall_material)),
-    recall_overall: stats(perRun.map((r) => r.recall_overall)),
-    precision: stats(perRun.map((r) => r.precision)),
-    per_run: perRun,
-  };
+  return aggregateReviews(fixture, [{ session, perRun }], policy, auth, canaryDefectIds);
 }
 
 function readOption(argv: string[], name: string): string | undefined {
@@ -376,17 +436,24 @@ function verdictLabel(v: BandVerdict): string {
 
 function reportLine(a: FixtureStabilityResult): string {
   const range = (s: RunStats) => `${s.min.toFixed(3)}–${s.max.toFixed(3)} (mean ${s.mean.toFixed(3)}, sd ${s.stdev.toFixed(3)})`;
+  const stability =
+    a.intra_model_stable === null
+      ? ""
+      : a.intra_model_stable
+        ? `  intra-model: STABLE across ${a.review_reps} reviews (${a.per_review_verdicts.map((v) => v.band).join("/")})`
+        : `  intra-model: UNSTABLE across ${a.review_reps} reviews (${a.per_review_verdicts.map((v) => v.band ?? v.kind).join("/")}) — not comparable (§3-3)`;
   return [
-    `[${a.fixture}]  (judge ×${a.judge_runs})`,
+    `[${a.fixture}]  (R=${a.review_reps} reviews × judge, ${a.judge_runs} pooled runs)`,
     `  material recall ${range(a.recall_material)} · overall ${range(a.recall_overall)}`,
     `  precision       ${range(a.precision)}`,
     `  verdict: ${verdictLabel(a.verdict)}`,
+    ...(stability ? [stability] : []),
   ].join("\n");
 }
 
 async function runFixtures(args: {
   fixtures: string[];
-  sessionPins: Map<string, string>;
+  sessionPins: Map<string, string[]>;
   auth: AttributionAuth;
   effort?: string;
   judgeRuns: number;
@@ -398,33 +465,43 @@ async function runFixtures(args: {
   await fs.mkdir(path.join(args.outDir, "capture"), { recursive: true });
   const outputs: FixtureStabilityResult[] = [];
   for (const fixture of args.fixtures) {
-    const session = args.sessionPins.get(fixture) ?? (await latestEvidenceSession(fixture));
-    const { seededDefects, issues, canaryDefectIds } = await loadFixtureInputs(fixture, session);
-    const sourceDigests = await computeSourceDigests(fixture, session);
-    console.log(`\n▶ ${fixture} (evidence ${session}) — ${issues.length} material issues, ${seededDefects.length} seeded defects${canaryDefectIds.length ? `, canary [${canaryDefectIds.join(",")}]` : ""} → judge ×${args.judgeRuns}`);
-    const runs: IssueAttribution[][] = [];
-    const perRun: DefectSpectrumResult[] = [];
-    for (let k = 0; k < args.judgeRuns; k += 1) {
-      const attributions = await judge({ issues, seededDefects });
-      runs.push(attributions);
-      const result = scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: M3_BAND_THRESHOLDS });
-      perRun.push(result);
-      console.log(`  run ${k + 1}: ${result.band}  material ${result.recall_material.toFixed(3)}  precision ${result.precision.toFixed(3)}  detected ${result.detected_defect_ids.length}/${result.seeded_total}`);
+    const sessions = args.sessionPins.get(fixture) ?? [await latestEvidenceSession(fixture)];
+    const reviews: ReviewRuns[] = [];
+    let canaryDefectIds: string[] = [];
+    for (const session of sessions) {
+      const loaded = await loadFixtureInputs(fixture, session);
+      const { seededDefects, issues } = loaded;
+      canaryDefectIds = loaded.canaryDefectIds;
+      const sourceDigests = await computeSourceDigests(fixture, session);
+      console.log(`\n▶ ${fixture} (evidence ${session}, review ${reviews.length + 1}/${sessions.length}) — ${issues.length} material issues, ${seededDefects.length} seeded defects${canaryDefectIds.length ? `, canary [${canaryDefectIds.join(",")}]` : ""} → judge ×${args.judgeRuns}`);
+      const runs: IssueAttribution[][] = [];
+      const perRun: DefectSpectrumResult[] = [];
+      for (let k = 0; k < args.judgeRuns; k += 1) {
+        const attributions = await judge({ issues, seededDefects });
+        runs.push(attributions);
+        const result = scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: M3_BAND_THRESHOLDS });
+        perRun.push(result);
+        console.log(`  run ${k + 1}: ${result.band}  material ${result.recall_material.toFixed(3)}  precision ${result.precision.toFixed(3)}  detected ${result.detected_defect_ids.length}/${result.seeded_total}`);
+      }
+      const capture: CaptureFile = {
+        schema_version: "m3-capture/4",
+        fixture,
+        evidence_session: session,
+        judge_model: JUDGE_MODEL_ID,
+        judge_auth: args.auth,
+        ...(args.effort ? { judge_effort: args.effort } : {}),
+        band_thresholds: M3_BAND_THRESHOLDS,
+        verdict_policy: VERDICT_POLICY,
+        source_digests: sourceDigests,
+        runs,
+      };
+      // One capture per (fixture, session). Single-session runs keep the bare
+      // `${fixture}.json` name (back-compat); R>1 disambiguates by session.
+      const captureName = sessions.length > 1 ? `${fixture}__${session}.json` : `${fixture}.json`;
+      await fs.writeFile(path.join(args.outDir, "capture", captureName), `${JSON.stringify(capture, null, 2)}\n`, "utf8");
+      reviews.push({ session, perRun });
     }
-    const capture: CaptureFile = {
-      schema_version: "m3-capture/4",
-      fixture,
-      evidence_session: session,
-      judge_model: JUDGE_MODEL_ID,
-      judge_auth: args.auth,
-      ...(args.effort ? { judge_effort: args.effort } : {}),
-      band_thresholds: M3_BAND_THRESHOLDS,
-      verdict_policy: VERDICT_POLICY,
-      source_digests: sourceDigests,
-      runs,
-    };
-    await fs.writeFile(path.join(args.outDir, "capture", `${fixture}.json`), `${JSON.stringify(capture, null, 2)}\n`, "utf8");
-    const agg = aggregate(fixture, session, perRun, VERDICT_POLICY, args.auth, canaryDefectIds);
+    const agg = aggregateReviews(fixture, reviews, VERDICT_POLICY, args.auth, canaryDefectIds);
     outputs.push(agg);
     console.log(reportLine(agg));
   }
@@ -433,7 +510,10 @@ async function runFixtures(args: {
 
 export async function replayRun(runDir: string): Promise<FixtureStabilityResult[]> {
   const captureDir = path.join(runDir, "capture");
-  const outputs: FixtureStabilityResult[] = [];
+  // Group captures by fixture (R>1 writes one capture per review) so a fixture's
+  // reviews pool into a single result, preserving capture-file (session) order.
+  const byFixture = new Map<string, { reviews: ReviewRuns[]; policy: VerdictPolicy; auth?: AttributionAuth; canary: string[] }>();
+  const fixtureOrder: string[] = [];
   for (const file of (await fs.readdir(captureDir)).filter((f) => f.endsWith(".json")).sort()) {
     const capture = JSON.parse(await fs.readFile(path.join(captureDir, file), "utf8")) as CaptureFile;
     await verifySourceDigests(capture);
@@ -441,17 +521,23 @@ export async function replayRun(runDir: string): Promise<FixtureStabilityResult[
     const perRun = capture.runs.map((attributions) =>
       scoreDefectSpectrum({ seededDefects, issues, attributions, thresholds: capture.band_thresholds }),
     );
-    // Pre-m3-capture/4 captures carry no verdict_policy → fall back to the current
-    // default (documented, like the source_digests warn-only fallback above).
-    // Canary ids are re-derived from ground-truth (source_digests pins its bytes).
-    const agg = aggregate(
-      capture.fixture,
-      capture.evidence_session,
-      perRun,
-      capture.verdict_policy ?? VERDICT_POLICY,
-      capture.judge_auth,
-      canaryDefectIds,
-    );
+    if (!byFixture.has(capture.fixture)) {
+      fixtureOrder.push(capture.fixture);
+      // Pre-m3-capture/4 captures carry no verdict_policy → fall back to the current
+      // default. Canary ids are re-derived from ground-truth (source_digests pins its bytes).
+      byFixture.set(capture.fixture, {
+        reviews: [],
+        policy: capture.verdict_policy ?? VERDICT_POLICY,
+        ...(capture.judge_auth ? { auth: capture.judge_auth } : {}),
+        canary: canaryDefectIds,
+      });
+    }
+    byFixture.get(capture.fixture)!.reviews.push({ session: capture.evidence_session, perRun });
+  }
+  const outputs: FixtureStabilityResult[] = [];
+  for (const fixture of fixtureOrder) {
+    const g = byFixture.get(fixture)!;
+    const agg = aggregateReviews(fixture, g.reviews, g.policy, g.auth, g.canary);
     outputs.push(agg);
     console.log(reportLine(agg));
   }
@@ -460,16 +546,20 @@ export async function replayRun(runDir: string): Promise<FixtureStabilityResult[
 
 function summaryReport(outputs: FixtureStabilityResult[], policy: VerdictPolicy) {
   return {
-    schema_version: "m3-report/4",
+    schema_version: "m3-report/5",
     judge_model: JUDGE_MODEL_ID,
     band_thresholds: M3_BAND_THRESHOLDS,
     verdict_policy: policy,
     fixtures: outputs.map((o) => ({
       fixture: o.fixture,
       evidence_session: o.evidence_session,
+      review_sessions: o.review_sessions,
+      review_reps: o.review_reps,
       judge_runs: o.judge_runs,
       judge_auth: o.judge_auth,
       verdict: o.verdict,
+      per_review_verdicts: o.per_review_verdicts,
+      intra_model_stable: o.intra_model_stable,
       recall_material: o.recall_material,
       recall_overall: o.recall_overall,
       precision: o.precision,
@@ -489,10 +579,12 @@ async function main(): Promise<void> {
     outputs = await replayRun(replayDir);
   } else {
     const fixtures = readMulti(argv, "fixture");
-    const sessionPins = new Map<string, string>();
+    // A fixture may be pinned to MULTIPLE sessions (R>1) — repeat
+    // `--session <fixture>:<sess>` per review; they pool (design §3-3).
+    const sessionPins = new Map<string, string[]>();
     for (const pin of readMulti(argv, "session")) {
       const [f, s] = pin.split(":");
-      if (f && s) sessionPins.set(f, s);
+      if (f && s) sessionPins.set(f, [...(sessionPins.get(f) ?? []), s]);
     }
     const authRaw = readOption(argv, "judge-auth") ?? "api_key";
     if (authRaw !== "api_key" && authRaw !== "oauth") {

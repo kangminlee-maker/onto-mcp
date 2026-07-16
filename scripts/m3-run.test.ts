@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   aggregate,
+  aggregateReviews,
   classifyVerdict,
   stats,
   replayRun,
@@ -235,6 +236,62 @@ describe("aggregate", () => {
     const b = aggregate("clinical-lab", "s1", band("meets", 10), POLICY);
     expect(b.judge_auth).toBeUndefined(); // omitted, not fabricated
   });
+
+  it("single review (R=1): review_reps=1, intra_model_stable=null (review variance unassessable)", () => {
+    const a = aggregate("credit-risk", "s1", band("exceeds", 10), POLICY);
+    expect(a.review_reps).toBe(1);
+    expect(a.review_sessions).toEqual(["s1"]);
+    expect(a.intra_model_stable).toBeNull(); // one review can't expose review variance
+    expect(a.per_review_verdicts).toHaveLength(1);
+  });
+});
+
+describe("aggregateReviews (R≥2 pooling + intra-model stability, design §3-3)", () => {
+  it("pools the metric distribution across R reviews (range spans review-generation variance)", () => {
+    // Review A: precision ~0.96 (exceeds); Review B: precision ~0.80 (meets). Pooled
+    // range must span both — the review variance R=1 could not have surfaced.
+    const rA = band("exceeds", 8, { precision: 0.96 });
+    const rB = band("meets", 8, { precision: 0.80 });
+    const a = aggregateReviews("logistics", [{ session: "sA", perRun: rA }, { session: "sB", perRun: rB }], POLICY);
+    expect(a.review_reps).toBe(2);
+    expect(a.review_sessions).toEqual(["sA", "sB"]);
+    expect(a.judge_runs).toBe(16); // R×K pooled
+    expect(a.precision.min).toBeCloseTo(0.80, 10);
+    expect(a.precision.max).toBeCloseTo(0.96, 10);
+    expect(a.precision.n).toBe(16);
+  });
+
+  it("intra_model_stable=true when every review is dominant on the SAME band", () => {
+    const a = aggregateReviews("credit", [
+      { session: "sA", perRun: band("exceeds", 8) },
+      { session: "sB", perRun: band("exceeds", 8) },
+    ], POLICY);
+    expect(a.intra_model_stable).toBe(true);
+    expect(a.per_review_verdicts.map((v) => v.band)).toEqual(["exceeds", "exceeds"]);
+  });
+
+  it("FALSIFIABLE: intra_model_stable=false when reviews land on DIFFERENT bands (§3-3 unstable)", () => {
+    const a = aggregateReviews("clinical", [
+      { session: "sA", perRun: band("exceeds", 8) },
+      { session: "sB", perRun: band("below", 8, { precision: 0.6, attributed: 7 }) },
+    ], POLICY);
+    expect(a.intra_model_stable).toBe(false); // exceeds vs below across reviews
+    expect(a.per_review_verdicts.map((v) => v.band)).toEqual(["exceeds", "below"]);
+  });
+
+  it("intra_model_stable=false when a review is itself indeterminate (not a clean dominant)", () => {
+    const a = aggregateReviews("manuf", [
+      { session: "sA", perRun: band("exceeds", 8) },
+      { session: "sB", perRun: [...band("below", 4), ...band("meets", 4)] }, // straddle → indeterminate
+    ], POLICY);
+    expect(a.per_review_verdicts[1]!.kind).toBe("indeterminate");
+    expect(a.intra_model_stable).toBe(false);
+  });
+
+  it("throws on no reviews and on reviews with no runs (no vacuous aggregate)", () => {
+    expect(() => aggregateReviews("x", [], POLICY)).toThrow(/no reviews/);
+    expect(() => aggregateReviews("x", [{ session: "s", perRun: [] }], POLICY)).toThrow(/no judge runs/);
+  });
 });
 
 describe("source-digest provenance (hermetic replay)", () => {
@@ -286,9 +343,11 @@ describe("replayRun (end-to-end, no spend)", () => {
       logSpy.mockRestore();
       warnSpy.mockRestore();
     }
-    expect(outputs).toHaveLength(3); // 3 fixture captures
+    expect(outputs).toHaveLength(3); // 3 fixture captures → 3 fixtures (one review each)
     for (const o of outputs) {
       expect(o.per_run).toHaveLength(3); // K=3 judge runs each
+      expect(o.review_reps).toBe(1); // one capture per fixture → R=1
+      expect(o.intra_model_stable).toBeNull(); // R<2 unassessable
       // K=3 < min_adequate_runs(8) — the refined methodology refuses a confident
       // band on the disclosed-untrustworthy baseline instead of the old false
       // "stable" (README Finding 3).
