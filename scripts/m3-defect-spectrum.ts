@@ -56,6 +56,14 @@ export interface SurfacedIssue {
   issue_statement: string;
   /** Derived from the MAX severity of the issue's surface_finding_ids. */
   severity: FindingSeverity;
+  /** Location signal — the distinct `target`s of this issue's surface findings.
+   *  The judge attributes an issue to a seeded defect only when the issue names
+   *  THAT defect's problem AT its location; withholding location systematically
+   *  under-attributes strong reviews as false "미달" (design §11 item 2). */
+  where: string[];
+  /** The issue-ledger row's `evidence_refs` (location-supporting provenance the
+   *  judge reads alongside `where`). */
+  evidence_refs: string[];
 }
 
 /** One issue's attribution, produced by the judge. `attributed_defect_ids` empty
@@ -119,6 +127,13 @@ function asString(value: unknown, what: string): string {
   return value;
 }
 
+function asStringArray(value: unknown, what: string): string[] {
+  if (!Array.isArray(value) || value.some((x) => typeof x !== "string")) {
+    throw new Error(`defect-spectrum: ${what} must be a string array`);
+  }
+  return value as string[];
+}
+
 function asSeverity(value: unknown, what: string): FindingSeverity {
   if (!SEVERITY_RANK.includes(value as FindingSeverity)) {
     throw new Error(`defect-spectrum: ${what} must be one of ${SEVERITY_RANK.join("/")}, got ${JSON.stringify(value)}`);
@@ -153,6 +168,31 @@ export function parseSeededDefects(raw: unknown): SeededDefect[] {
   });
 }
 
+/**
+ * Parse a fixture's optional `canary_defect_ids` — seeded defects so unambiguous
+ * that a genuinely-engaged, correctly-projected judge detects them on competent
+ * review evidence (design §11 item 3, fuller form). A canary detected in ZERO of
+ * the K runs indicts the INSTRUMENT (collapsed / mis-projected judge), not the
+ * review. Each id must name a real seeded defect (validated here); absent →
+ * empty (the check no-ops). Validated per pinned baseline evidence at authoring
+ * time — run canary-bearing fixtures with the session they were validated against.
+ */
+export function parseCanaryDefectIds(raw: unknown, seededDefects: readonly SeededDefect[]): string[] {
+  const root = asRecord(raw, "ground-truth");
+  if (root.canary_defect_ids === undefined) return [];
+  const ids = asStringArray(root.canary_defect_ids, "ground-truth.canary_defect_ids");
+  const known = new Set(seededDefects.map((d) => d.id));
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (!known.has(id)) {
+      throw new Error(`defect-spectrum: canary_defect_ids names unknown seeded defect '${id}'`);
+    }
+    if (seen.has(id)) throw new Error(`defect-spectrum: duplicate canary_defect_id '${id}'`);
+    seen.add(id);
+  }
+  return ids;
+}
+
 function moreSevere(a: FindingSeverity, b: FindingSeverity): FindingSeverity {
   return SEVERITY_RANK.indexOf(a) <= SEVERITY_RANK.indexOf(b) ? a : b;
 }
@@ -160,9 +200,10 @@ function moreSevere(a: FindingSeverity, b: FindingSeverity): FindingSeverity {
 /**
  * Parse the issue-ledger into scorable material issues, deriving each issue's
  * severity from the MAX severity of its `surface_finding_ids` (issues carry no
- * severity of their own). Non-material issues are dropped (the material-issue
- * predicate is severity ∈ {blocker,high,medium}). Requires the finding-ledger
- * for the severity lookup.
+ * severity of their own) and its location signal (`where`) from the distinct
+ * `target`s of those same findings (design §11 item 2). Non-material issues are
+ * dropped (the material-issue predicate is severity ∈ {blocker,high,medium}).
+ * Requires the finding-ledger for the severity + target lookup.
  */
 export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: unknown): SurfacedIssue[] {
   const issueLedger = asRecord(issueLedgerRaw, "issue-ledger");
@@ -173,6 +214,7 @@ export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: u
   if (!Array.isArray(findingRows)) throw new Error("defect-spectrum: finding-ledger.findings must be a list");
 
   const severityByFinding = new Map<string, FindingSeverity>();
+  const targetByFinding = new Map<string, string>();
   findingRows.forEach((row, i) => {
     const r = asRecord(row, `findings[${i}]`);
     const findingId = asString(r.finding_id, `findings[${i}].finding_id`);
@@ -180,6 +222,10 @@ export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: u
       throw new Error(`defect-spectrum: duplicate finding id '${findingId}' in finding-ledger`);
     }
     severityByFinding.set(findingId, asSeverity(r.severity, `findings[${i}].severity`));
+    // `target` is the finding's schema location — the projection's location
+    // signal. Required (fail loud): without it the judge cannot honor the
+    // "that problem AT that location" attribution rule (design §11 item 2).
+    targetByFinding.set(findingId, asString(r.target, `findings[${i}].target`));
   });
 
   const issues: SurfacedIssue[] = [];
@@ -212,10 +258,15 @@ export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: u
     }
     // Material-issue predicate: only material-band issues are scored.
     if (!isMaterialSeverity(severity)) return;
+    // Location signal: the distinct targets of this issue's (now all-resolvable)
+    // surface findings, insertion-order preserved.
+    const where = [...new Set(surfaceIds.map((fid) => targetByFinding.get(String(fid))!))];
     issues.push({
       issue_id: issueId,
       issue_statement: asString(r.issue_statement, `issues[${i}].issue_statement`),
       severity,
+      where,
+      evidence_refs: asStringArray(r.evidence_refs, `issues[${i}].evidence_refs`),
     });
   });
   return issues;

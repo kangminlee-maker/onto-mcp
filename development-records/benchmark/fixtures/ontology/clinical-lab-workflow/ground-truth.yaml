@@ -1,6 +1,11 @@
 # Ground truth — clinical-lab-workflow fixture에 의도적으로 심은 개념 결함.
 # 이 파일은 리뷰 타깃 프로젝트에 절대 포함하지 않는다 (채점 전용).
 fixture: clinical-lab-workflow
+# Instrument canary (design §11 item 3): CLW-1 (Test↔Assay duplicate_concept) is the
+# most unambiguous material defect — detected in every baseline judge run. Detected in
+# ZERO of the K runs ⇒ instrument_broken (collapsed/mis-projected judge, not a real miss).
+# Validated against the 20260611-f1a64fc4 baseline evidence.
+canary_defect_ids: [CLW-1]
 seeded_defects:
   - id: CLW-1
     kind: duplicate_concept
