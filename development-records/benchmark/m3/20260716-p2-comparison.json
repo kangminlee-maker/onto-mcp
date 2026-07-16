@@ -1,0 +1,271 @@
+{
+  "schema_version": "m3-compare/1",
+  "arms": [
+    "gpt-5.6-sol",
+    "gpt-5.5"
+  ],
+  "review_reps": 1,
+  "directional": true,
+  "fixtures": [
+    {
+      "fixture": "clinical-lab-workflow",
+      "metrics": [
+        {
+          "metric": "recall_material",
+          "ranked": [
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 8,
+                "min": 0.8571428571428571,
+                "max": 1,
+                "mean": 0.8928571428571428,
+                "stdev": 0.06185895741317421
+              },
+              "band": null
+            },
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 8,
+                "min": 0.8571428571428571,
+                "max": 0.8571428571428571,
+                "mean": 0.857142857142857,
+                "stdev": 1.1102230246251565e-16
+              },
+              "band": "below"
+            }
+          ],
+          "excluded": [],
+          "outcome": "overlapping",
+          "leader": null
+        },
+        {
+          "metric": "precision",
+          "ranked": [
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 8,
+                "min": 0.8571428571428571,
+                "max": 0.9285714285714286,
+                "mean": 0.8749999999999999,
+                "stdev": 0.03092947870658713
+              },
+              "band": null
+            },
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 8,
+                "min": 0.7333333333333333,
+                "max": 0.8,
+                "mean": 0.7416666666666667,
+                "stdev": 0.022047927592204954
+              },
+              "band": "below"
+            }
+          ],
+          "excluded": [],
+          "outcome": "distinguishable",
+          "leader": "gpt-5.6-sol"
+        }
+      ]
+    },
+    {
+      "fixture": "credit-risk-taxonomy",
+      "metrics": [
+        {
+          "metric": "recall_material",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 8,
+                "min": 1,
+                "max": 1,
+                "mean": 1,
+                "stdev": 0
+              },
+              "band": "exceeds"
+            },
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 8,
+                "min": 1,
+                "max": 1,
+                "mean": 1,
+                "stdev": 0
+              },
+              "band": "meets"
+            }
+          ],
+          "excluded": [],
+          "outcome": "overlapping",
+          "leader": null
+        },
+        {
+          "metric": "precision",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 8,
+                "min": 1,
+                "max": 1,
+                "mean": 1,
+                "stdev": 0
+              },
+              "band": "exceeds"
+            },
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 8,
+                "min": 0.8333333333333334,
+                "max": 0.8333333333333334,
+                "mean": 0.8333333333333333,
+                "stdev": 1.1102230246251565e-16
+              },
+              "band": "meets"
+            }
+          ],
+          "excluded": [],
+          "outcome": "distinguishable",
+          "leader": "gpt-5.5"
+        }
+      ]
+    },
+    {
+      "fixture": "logistics-fulfillment",
+      "metrics": [
+        {
+          "metric": "recall_material",
+          "ranked": [
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 8,
+                "min": 0.8888888888888888,
+                "max": 1,
+                "mean": 0.9444444444444444,
+                "stdev": 0.05555555555555558
+              },
+              "band": null
+            },
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 8,
+                "min": 0.8888888888888888,
+                "max": 0.8888888888888888,
+                "mean": 0.8888888888888891,
+                "stdev": 2.220446049250313e-16
+              },
+              "band": "below"
+            }
+          ],
+          "excluded": [],
+          "outcome": "overlapping",
+          "leader": null
+        },
+        {
+          "metric": "precision",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 8,
+                "min": 1,
+                "max": 1,
+                "mean": 1,
+                "stdev": 0
+              },
+              "band": "below"
+            },
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 8,
+                "min": 0.9583333333333334,
+                "max": 0.9583333333333334,
+                "mean": 0.9583333333333333,
+                "stdev": 1.1102230246251565e-16
+              },
+              "band": null
+            }
+          ],
+          "excluded": [],
+          "outcome": "distinguishable",
+          "leader": "gpt-5.5"
+        }
+      ]
+    },
+    {
+      "fixture": "manufacturing-bom",
+      "metrics": [
+        {
+          "metric": "recall_material",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 8,
+                "min": 1,
+                "max": 1,
+                "mean": 1,
+                "stdev": 0
+              },
+              "band": "exceeds"
+            },
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 8,
+                "min": 1,
+                "max": 1,
+                "mean": 1,
+                "stdev": 0
+              },
+              "band": "meets"
+            }
+          ],
+          "excluded": [],
+          "outcome": "overlapping",
+          "leader": null
+        },
+        {
+          "metric": "precision",
+          "ranked": [
+            {
+              "label": "gpt-5.5",
+              "stats": {
+                "n": 8,
+                "min": 1,
+                "max": 1,
+                "mean": 1,
+                "stdev": 0
+              },
+              "band": "exceeds"
+            },
+            {
+              "label": "gpt-5.6-sol",
+              "stats": {
+                "n": 8,
+                "min": 0.8,
+                "max": 0.8666666666666667,
+                "mean": 0.8500000000000001,
+                "stdev": 0.028867513459481284
+              },
+              "band": "meets"
+            }
+          ],
+          "excluded": [],
+          "outcome": "distinguishable",
+          "leader": "gpt-5.5"
+        }
+      ]
+    }
+  ]
+}

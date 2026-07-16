@@ -1,0 +1,157 @@
+{
+  "schema_version": "m3-report/4",
+  "judge_model": "claude-opus-4-8",
+  "band_thresholds": {
+    "meet_material_recall": 1,
+    "exceed_material_recall": 1,
+    "exceed_precision": 0.9,
+    "floor_precision": 0.8
+  },
+  "verdict_policy": {
+    "min_adequate_runs": 8,
+    "dominant_min_fraction": 0.85,
+    "significant_mode_fraction": 0.15
+  },
+  "fixtures": [
+    {
+      "fixture": "clinical-lab-workflow",
+      "evidence_session": "20260716-4d4a75e9",
+      "judge_runs": 8,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "below",
+        "noise_rate": 0,
+        "band_frequencies": {
+          "below": 8
+        }
+      },
+      "recall_material": {
+        "n": 8,
+        "min": 0.8571428571428571,
+        "max": 0.8571428571428571,
+        "mean": 0.857142857142857,
+        "stdev": 1.1102230246251565e-16
+      },
+      "recall_overall": {
+        "n": 8,
+        "min": 0.9,
+        "max": 0.9,
+        "mean": 0.9000000000000001,
+        "stdev": 1.1102230246251565e-16
+      },
+      "precision": {
+        "n": 8,
+        "min": 0.7333333333333333,
+        "max": 0.8,
+        "mean": 0.7416666666666667,
+        "stdev": 0.022047927592204954
+      }
+    },
+    {
+      "fixture": "credit-risk-taxonomy",
+      "evidence_session": "20260716-ea9773ff",
+      "judge_runs": 8,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "exceeds",
+        "noise_rate": 0,
+        "band_frequencies": {
+          "exceeds": 8
+        }
+      },
+      "recall_material": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      },
+      "recall_overall": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      },
+      "precision": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      }
+    },
+    {
+      "fixture": "logistics-fulfillment",
+      "evidence_session": "20260716-9ee88c8b",
+      "judge_runs": 8,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "below",
+        "noise_rate": 0,
+        "band_frequencies": {
+          "below": 8
+        }
+      },
+      "recall_material": {
+        "n": 8,
+        "min": 0.8888888888888888,
+        "max": 0.8888888888888888,
+        "mean": 0.8888888888888891,
+        "stdev": 2.220446049250313e-16
+      },
+      "recall_overall": {
+        "n": 8,
+        "min": 0.9,
+        "max": 0.9,
+        "mean": 0.9000000000000001,
+        "stdev": 1.1102230246251565e-16
+      },
+      "precision": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      }
+    },
+    {
+      "fixture": "manufacturing-bom",
+      "evidence_session": "20260716-533b3a03",
+      "judge_runs": 8,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "exceeds",
+        "noise_rate": 0,
+        "band_frequencies": {
+          "exceeds": 8
+        }
+      },
+      "recall_material": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      },
+      "recall_overall": {
+        "n": 8,
+        "min": 0.9,
+        "max": 0.9,
+        "mean": 0.9000000000000001,
+        "stdev": 1.1102230246251565e-16
+      },
+      "precision": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      }
+    }
+  ]
+}
