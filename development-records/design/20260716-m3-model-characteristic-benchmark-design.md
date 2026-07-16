@@ -305,5 +305,14 @@ attribution 변화가 모두 실 finding의 target/claim으로 추적됨 — 특
 statement로 baseline judge가 위치 없이 refute = 진성 false-미달, 위치가 교정). **정정(dated)**: P0 README의
 "clinical stably 미달·CLW-5 genuine miss"는 계기 버그 증상이었음 — 리뷰는 실제로 상회. 상세: refined-baseline README.
 
-**남은 것**: P1(무비용) — review-pipeline-benchmark 통합·`--ontology-fixture` 분리·cert 3면 회귀(§5).
-P2(owner spend) — 라이브 모델 비교(reps는 관측 SD 유도; 위 결정론은 effort=low 특성이라 다른 모델은 재측정).
+**P1(iii) cert 3면 회귀 = 완료(PR #213 머지, main d3000c7)**: cert run_controls 프로브의 `as never` →
+타입드(BenchmarkOptions/BenchmarkCase export), `as never`가 숨긴 실버그(`comparison_axis:"run-effort"`
+비유효 리터럴) 수정, cert 하니스 3파일을 check:ts-scripts에 추가 → **knob 회귀가 CI 컴파일 실패**(TS2561,
+falsifiable). scripts 게이트만 `exactOptionalPropertyTypes:false`(report 객체=optional-chained partial-data;
+src는 유지). 파생 bench 실결함 2건 수정. 런타임 불변·cert 54테스트 green.
+
+**남은 것**: P1 잔여(무비용) — review-pipeline-benchmark **RUN 경로 통합**(ontology-fixture 리뷰 생성)·
+`defect_spectrum` report 스키마·`--ontology-fixture` 분리·매칭 util 추출·CI/overlap. 대부분 **P2 전용**이라
+defer(standalone 하니스가 이미 authoritative baseline 제공). P2(owner spend) — 라이브 **모델** 비교(reps는
+관측 SD 유도; 위 결정론은 effort=low judge 특성이라 피채점 모델 바꾸면 재측정). 4번째 ontology fixture는
+cross-domain claim에 필수(§6, owner 결정 대기).

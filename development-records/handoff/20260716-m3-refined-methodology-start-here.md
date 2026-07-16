@@ -49,13 +49,15 @@ judge 완전 결정론이라 K=8이 point mass(clean dominant) — 다른 모델
 
 ## 이후 (P1/P2, 무비용/별도)
 
-- P1(무비용): `scripts/review-pipeline-benchmark.ts` 통합 + `--ontology-fixture` **분리** 경로(`--fixture`
-  enum 게이트=구조적 경계 보존) + cert **3면 호환** 회귀(settingsForCase 필드계약·`as never` 프로브
-  타입드화·양 플래그 alias, review-cert-run.mts:105/223/608). 설계 §5.
-- P2(owner spend): 라이브 모델 비교(reps는 관측 SD 유도, CI 겹치면 무판정).
+- **P1(iii) cert knob 계약 컴파일 체크 = 완료(PR #213 머지)**: `as never` 프로브 타입드화 + cert 하니스
+  3파일 check:ts-scripts 추가 → knob 회귀 CI 컴파일 실패(TS2561). 상세 설계 §12.
+- P1 잔여(무비용): `scripts/review-pipeline-benchmark.ts` **RUN 경로 통합**(ontology-fixture 리뷰 생성) +
+  `--ontology-fixture` **분리** 경로(`--fixture` enum 게이트=구조적 경계 보존) + `defect_spectrum` 스키마 +
+  매칭 util 추출 + CI/overlap. 대부분 P2 전용이라 defer. 설계 §5.
+- P2(owner spend): 라이브 **모델** 비교(reps는 관측 SD 유도, CI 겹치면 무판정).
 
 ## 참조
 - SSOT: `development-records/design/20260716-m3-model-characteristic-benchmark-design.md`
-  (§3-3 정정·§10 실증·§11 owner결정·**§12 정제 구현 기록**)
-- 머지: PR #211(main bc623d8). 이 세션 정제는 main follow-up.
-- disclosure(replay 전용): `development-records/benchmark/m3/20260716-baseline-evidence/`
+  (§3-3 정정·§10 실증·§11 owner결정·**§12 정제 구현 + P1(iii) 완료 기록**)
+- 머지: PR #211(bc623d8)·#212(331a986 정제방법론+baseline)·#213(d3000c7 P1-iii) 전부 main.
+- disclosure: `20260716-refined-baseline/`(authoritative) · `20260716-baseline-evidence/`(P0 특성, replay 전용)
