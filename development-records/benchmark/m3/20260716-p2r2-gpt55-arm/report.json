@@ -1,0 +1,260 @@
+{
+  "schema_version": "m3-report/5",
+  "judge_model": "claude-opus-4-8",
+  "band_thresholds": {
+    "meet_material_recall": 1,
+    "exceed_material_recall": 1,
+    "exceed_precision": 0.9,
+    "floor_precision": 0.8
+  },
+  "verdict_policy": {
+    "min_adequate_runs": 8,
+    "dominant_min_fraction": 0.85,
+    "significant_mode_fraction": 0.15
+  },
+  "fixtures": [
+    {
+      "fixture": "clinical-lab-workflow",
+      "evidence_session": "20260716-49a71a98",
+      "review_sessions": [
+        "20260716-49a71a98",
+        "20260716-4d4a75e9"
+      ],
+      "review_reps": 2,
+      "judge_runs": 16,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "below",
+        "noise_rate": 0.125,
+        "band_frequencies": {
+          "exceeds": 2,
+          "below": 14
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0.125,
+          "band_frequencies": {
+            "exceeds": 1,
+            "below": 7
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0.125,
+          "band_frequencies": {
+            "below": 7,
+            "exceeds": 1
+          }
+        }
+      ],
+      "intra_model_stable": true,
+      "recall_material": {
+        "n": 16,
+        "min": 0.8571428571428571,
+        "max": 1,
+        "mean": 0.8750000000000001,
+        "stdev": 0.047245559126153434
+      },
+      "recall_overall": {
+        "n": 16,
+        "min": 0.8,
+        "max": 1,
+        "mean": 0.9062500000000001,
+        "stdev": 0.04284784125250653
+      },
+      "precision": {
+        "n": 16,
+        "min": 0.7333333333333333,
+        "max": 0.9333333333333333,
+        "mean": 0.8124999999999998,
+        "stdev": 0.07534642216677138
+      }
+    },
+    {
+      "fixture": "credit-risk-taxonomy",
+      "evidence_session": "20260716-acee24d9",
+      "review_sessions": [
+        "20260716-acee24d9",
+        "20260716-ea9773ff"
+      ],
+      "review_reps": 2,
+      "judge_runs": 16,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "indeterminate",
+        "band": null,
+        "noise_rate": null,
+        "band_frequencies": {
+          "below": 6,
+          "exceeds": 10
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "indeterminate",
+          "band": null,
+          "noise_rate": null,
+          "band_frequencies": {
+            "below": 6,
+            "exceeds": 2
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "exceeds",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "exceeds": 8
+          }
+        }
+      ],
+      "intra_model_stable": false,
+      "recall_material": {
+        "n": 16,
+        "min": 0.75,
+        "max": 1,
+        "mean": 0.9375,
+        "stdev": 0.08838834764831845
+      },
+      "recall_overall": {
+        "n": 16,
+        "min": 0.8,
+        "max": 1,
+        "mean": 0.9375000000000001,
+        "stdev": 0.06959705453537525
+      },
+      "precision": {
+        "n": 16,
+        "min": 0.9090909090909091,
+        "max": 1,
+        "mean": 0.9431818181818181,
+        "stdev": 0.04401117438872066
+      }
+    },
+    {
+      "fixture": "logistics-fulfillment",
+      "evidence_session": "20260716-9ee88c8b",
+      "review_sessions": [
+        "20260716-9ee88c8b",
+        "20260716-e3fc23c8"
+      ],
+      "review_reps": 2,
+      "judge_runs": 16,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "below",
+        "noise_rate": 0,
+        "band_frequencies": {
+          "below": 16
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "below": 8
+          }
+        },
+        {
+          "kind": "dominant",
+          "band": "below",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "below": 8
+          }
+        }
+      ],
+      "intra_model_stable": true,
+      "recall_material": {
+        "n": 16,
+        "min": 0.8888888888888888,
+        "max": 0.8888888888888888,
+        "mean": 0.8888888888888892,
+        "stdev": 3.3306690738754696e-16
+      },
+      "recall_overall": {
+        "n": 16,
+        "min": 0.9,
+        "max": 0.9,
+        "mean": 0.9000000000000002,
+        "stdev": 2.220446049250313e-16
+      },
+      "precision": {
+        "n": 16,
+        "min": 0.9333333333333333,
+        "max": 1,
+        "mean": 0.9666666666666668,
+        "stdev": 0.033333333333333326
+      }
+    },
+    {
+      "fixture": "manufacturing-bom",
+      "evidence_session": "20260716-533b3a03",
+      "review_sessions": [
+        "20260716-533b3a03",
+        "20260716-e5e2a98b"
+      ],
+      "review_reps": 2,
+      "judge_runs": 16,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "indeterminate",
+        "band": null,
+        "noise_rate": null,
+        "band_frequencies": {
+          "exceeds": 10,
+          "below": 6
+        }
+      },
+      "per_review_verdicts": [
+        {
+          "kind": "dominant",
+          "band": "exceeds",
+          "noise_rate": 0,
+          "band_frequencies": {
+            "exceeds": 8
+          }
+        },
+        {
+          "kind": "indeterminate",
+          "band": null,
+          "noise_rate": null,
+          "band_frequencies": {
+            "below": 6,
+            "exceeds": 2
+          }
+        }
+      ],
+      "intra_model_stable": false,
+      "recall_material": {
+        "n": 16,
+        "min": 0.875,
+        "max": 1,
+        "mean": 0.953125,
+        "stdev": 0.06051536478449089
+      },
+      "recall_overall": {
+        "n": 16,
+        "min": 0.8,
+        "max": 1,
+        "mean": 0.9000000000000002,
+        "stdev": 0.061237243569579436
+      },
+      "precision": {
+        "n": 16,
+        "min": 0.7272727272727273,
+        "max": 1,
+        "mean": 0.9034090909090907,
+        "stdev": 0.10884797761743191
+      }
+    }
+  ]
+}
