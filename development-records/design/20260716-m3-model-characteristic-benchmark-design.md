@@ -264,3 +264,38 @@ auth/effort 파라미터화·route 배선 테스트), `judge_auth` + source-file
   **cert 3면 마이그레이션·--ontology-fixture 강제·단일 코어 모듈**(§3-3/§5).
 - **grounding**: "운영지표만"·"comparison_conclusion:null 자동결론금지" 2건 사실오류 → §1/§2 정정;
   앵커 4건 cosmetic 정정 → §7.
+
+## 12. 정제 방법론 구현 (2026-07-16, §3-3 정정 + §11 owner 결정 1·2·3 착지)
+
+§10/§11이 남긴 정제 이터레이션을 **오프라인 코드로 구현·검증**(무비용). 66 단위테스트(48→+18,
+경계 대조군 포함), `check:ts-scripts` green, replay 실증, 3렌즈 독립 적대적 교차검증(correctness 0·
+test-falsifiability 2갭 착지·design-fidelity 0). 라이브 judge 재실행만 owner-spend로 잔존.
+
+**착지한 것:**
+- **분포 기반 verdict(§3-3 fix 1~4)** — `m3-run.ts`의 `aggregate`가 small-K band-agreement 게이팅을
+  버리고 **metric 분포(mean·range·population stdev)를 1차 출력**, band는 advisory. verdict 4종
+  (`classifyVerdict`, config `VERDICT_POLICY`로 파라미터화·capture에 persist):
+  - `dominant` — 한 band가 `dominant_min_fraction`(0.85) 이상 지배 + 경쟁 band이 `significant_mode_fraction`
+    (0.15) 미만. `noise_rate`가 드문 off-band draw율 보고(0=clean). (credit-risk 상회 13/14 = dominant+~7%.)
+  - `indeterminate` — cut 양측이 각각 유의 빈도(진성 straddle). (manufacturing precision 0.8 floor 걸침.)
+  - `underpowered` — K < `min_adequate_runs`(8): 드문 노이즈와 진성 straddle 구분 불가(H3). band은 advisory만.
+    `DEFAULT_JUDGE_RUNS` 3→8. **replay 실증: 기존 K=3 baseline 3개 fixture 모두 underpowered로 정직 판정**
+    (구 코드의 거짓 stable 대신 — README Finding 3와 정합).
+  - `instrument_broken` — 전 run attributed_issues=0(engagement gate, owner 결정 3 최소판): 붕괴/미참여
+    judge의 균일 "미달"을 real verdict와 구분.
+- **judge projection 위치 신호(owner 결정 2, validity HIGH)** — `SurfacedIssue`에 `where`(finding.target
+  distinct)·`evidence_refs`(issue-ledger) 추가, `buildAttributionUserPrompt`+시스템 프롬프트가 실어나름.
+  `parseSurfacedIssues`가 target을 required로 파싱(fail-loud). 실 evidence 18/16/40 finding·전 이슈 확증.
+- **F6 severity 축 retire(owner 결정 1)** — 이미 commit a2e0d8e에서 제거 완료(死지표).
+
+**capture/report 스키마**: `m3-capture/4`·`m3-report/4`(verdict_policy persist). 구 capture(/2·/3)는 replay
+시 현 default policy fallback(source_digests warn-only와 동형). baseline dir report.json은 **미변경 보존**
+(README Finding 3이 구 방법론의 false-stable을 인용 — 역사적 disclosure).
+
+**owner-spend 잔존(별도 승인):**
+- **라이브 judge 재실행**(소량 spend, oauth): 위치-projection 수정된 instrument로 fresh baseline.
+  ⚠ §11 제약 유지 — 이 재실행 전까지 fresh run은 non-authoritative. `npx tsx scripts/m3-run.ts
+  --judge-auth oauth --judge-runs 8` (K=8 adequate).
+- **fuller authored-canary(owner 결정 3 완성형)**: 재실행과 동반. issue↔defect 정답쌍을 authoring해
+  위치-projection 편향(fix 5 유효성)을 fresh draw에서 검증 — engagement gate(최소판)는 이미 활성.
+- P1(무비용): review-pipeline-benchmark 통합·`--ontology-fixture` 분리·cert 3면 회귀(§5).

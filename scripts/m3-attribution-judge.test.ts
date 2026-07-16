@@ -22,8 +22,8 @@ const DEFECTS: SeededDefect[] = [
   { id: "D2", kind: "authority_conflict", where: "B", description: "d2", severity_expectation: "material" },
 ];
 const ISSUES: SurfacedIssue[] = [
-  { issue_id: "i1", issue_statement: "s1", severity: "high" },
-  { issue_id: "i2", issue_statement: "s2", severity: "medium" },
+  { issue_id: "i1", issue_statement: "s1", severity: "high", where: ["loc-A"], evidence_refs: ["m.md:1-2"] },
+  { issue_id: "i2", issue_statement: "s2", severity: "medium", where: ["loc-B"], evidence_refs: ["m.md:3-4"] },
 ];
 const THRESHOLDS: BandThresholds = { meet_material_recall: 1, exceed_material_recall: 1, exceed_precision: 0.9, floor_precision: 0.8 };
 
@@ -138,10 +138,18 @@ describe("anthropicJudgeDispatch (production route wiring)", () => {
 });
 
 describe("buildAttributionUserPrompt", () => {
-  it("projects defects (id/kind/where/description) and issues (id/statement/severity)", () => {
+  it("projects defects (id/kind/where/description) and issues (id/statement/severity/where/evidence_refs)", () => {
     const payload = JSON.parse(buildAttributionUserPrompt(ISSUES, DEFECTS));
     expect(payload.seeded_defects[0]).toEqual({ id: "D1", kind: "duplicate_concept", where: "A", description: "d1" });
-    expect(payload.surfaced_issues[0]).toEqual({ issue_id: "i1", issue_statement: "s1", severity: "high" });
+    // The location signal (where/evidence_refs) is carried so the judge can honor
+    // "that problem AT that location" (design §11 item 2) — not dropped.
+    expect(payload.surfaced_issues[0]).toEqual({
+      issue_id: "i1",
+      issue_statement: "s1",
+      severity: "high",
+      where: ["loc-A"],
+      evidence_refs: ["m.md:1-2"],
+    });
   });
 });
 

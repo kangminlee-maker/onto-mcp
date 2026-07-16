@@ -28,7 +28,7 @@ const THRESHOLDS: BandThresholds = {
 };
 
 function issue(id: string, severity: SurfacedIssue["severity"] = "high"): SurfacedIssue {
-  return { issue_id: id, issue_statement: `statement ${id}`, severity };
+  return { issue_id: id, issue_statement: `statement ${id}`, severity, where: [`loc-${id}`], evidence_refs: [`ref-${id}`] };
 }
 function attr(id: string, ...defectIds: string[]): IssueAttribution {
   return { issue_id: id, attributed_defect_ids: defectIds };
@@ -227,27 +227,68 @@ describe("parseSeededDefects", () => {
 describe("parseSurfacedIssues", () => {
   const findingLedger = {
     findings: [
-      { finding_id: "f1", severity: "high" },
-      { finding_id: "f2", severity: "medium" },
-      { finding_id: "f3", severity: "low" }, // non-material
-      { finding_id: "f4", severity: "blocker" },
+      { finding_id: "f1", severity: "high", target: "T1" },
+      { finding_id: "f2", severity: "medium", target: "T2" },
+      { finding_id: "f3", severity: "low", target: "T3" }, // non-material
+      { finding_id: "f4", severity: "blocker", target: "T4" },
     ],
   };
 
   it("derives issue severity from the MAX severity of its surface_finding_ids", () => {
     const issues = parseSurfacedIssues(
-      { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f2", "f1"] }] },
+      { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f2", "f1"], evidence_refs: ["e1"] }] },
       findingLedger,
     );
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe("high"); // max(medium, high) = high
   });
 
+  it("carries the location signal: distinct finding targets → where, issue evidence_refs preserved (design §11 item 2)", () => {
+    const issues = parseSurfacedIssues(
+      {
+        issues: [
+          // f2 and f1 have distinct targets T2/T1 → both in `where`, insertion order.
+          { issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f2", "f1"], evidence_refs: ["m.md:1-2", "crit:x"] },
+        ],
+      },
+      findingLedger,
+    );
+    expect(issues[0].where).toEqual(["T2", "T1"]);
+    expect(issues[0].evidence_refs).toEqual(["m.md:1-2", "crit:x"]);
+  });
+
+  it("dedups repeated finding targets in where (two findings, one shared target → one entry)", () => {
+    const shared = { findings: [{ finding_id: "g1", severity: "high", target: "SAME" }, { finding_id: "g2", severity: "medium", target: "SAME" }] };
+    const issues = parseSurfacedIssues(
+      { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["g1", "g2"], evidence_refs: [] }] },
+      shared,
+    );
+    expect(issues[0].where).toEqual(["SAME"]);
+  });
+
+  it("throws when a finding lacks a target (location signal is required)", () => {
+    expect(() =>
+      parseSurfacedIssues(
+        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["h1"], evidence_refs: [] }] },
+        { findings: [{ finding_id: "h1", severity: "high" }] }, // no target
+      ),
+    ).toThrow(/findings\[0\]\.target must be a non-empty string/);
+  });
+
+  it("throws when an issue's evidence_refs is not a string array", () => {
+    expect(() =>
+      parseSurfacedIssues(
+        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1"], evidence_refs: "not-a-list" }] },
+        findingLedger,
+      ),
+    ).toThrow(/evidence_refs must be a string array/);
+  });
+
   it("takes the running MAX regardless of finding order (descending: high then low → high)", () => {
     // Guards moreSevere accumulation: a `return latest` mutation would yield low
     // here (→ non-material → dropped), so the kept high issue kills it.
     const issues = parseSurfacedIssues(
-      { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1", "f3"] }] },
+      { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1", "f3"], evidence_refs: [] }] },
       findingLedger,
     );
     expect(issues).toHaveLength(1);
@@ -256,7 +297,7 @@ describe("parseSurfacedIssues", () => {
 
   it("keeps a medium-max issue (the material keep-side boundary)", () => {
     const issues = parseSurfacedIssues(
-      { issues: [{ issue_id: "iss-m", issue_statement: "s", surface_finding_ids: ["f2"] }] },
+      { issues: [{ issue_id: "iss-m", issue_statement: "s", surface_finding_ids: ["f2"], evidence_refs: [] }] },
       findingLedger,
     );
     expect(issues.map((i) => i.issue_id)).toEqual(["iss-m"]);
@@ -267,8 +308,8 @@ describe("parseSurfacedIssues", () => {
     const issues = parseSurfacedIssues(
       {
         issues: [
-          { issue_id: "iss-mat", issue_statement: "s", surface_finding_ids: ["f4"] }, // blocker
-          { issue_id: "iss-low", issue_statement: "s", surface_finding_ids: ["f3"] }, // low → dropped
+          { issue_id: "iss-mat", issue_statement: "s", surface_finding_ids: ["f4"], evidence_refs: [] }, // blocker
+          { issue_id: "iss-low", issue_statement: "s", surface_finding_ids: ["f3"], evidence_refs: [] }, // low → dropped
         ],
       },
       findingLedger,
@@ -279,7 +320,7 @@ describe("parseSurfacedIssues", () => {
 
   it("throws when an issue has no surface_finding_ids", () => {
     expect(() =>
-      parseSurfacedIssues({ issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: [] }] }, findingLedger),
+      parseSurfacedIssues({ issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: [], evidence_refs: [] }] }, findingLedger),
     ).toThrow(/no surface_finding_ids/);
   });
 
@@ -287,7 +328,7 @@ describe("parseSurfacedIssues", () => {
     // Fully dangling.
     expect(() =>
       parseSurfacedIssues(
-        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["nope"] }] },
+        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["nope"], evidence_refs: [] }] },
         findingLedger,
       ),
     ).toThrow(/surface finding 'nope' absent from the finding-ledger/);
@@ -295,7 +336,7 @@ describe("parseSurfacedIssues", () => {
     // was silently skipped, under-deriving severity and risking a dropped issue).
     expect(() =>
       parseSurfacedIssues(
-        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1", "gone"] }] },
+        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1", "gone"], evidence_refs: [] }] },
         findingLedger,
       ),
     ).toThrow(/surface finding 'gone' absent from the finding-ledger/);
@@ -304,8 +345,8 @@ describe("parseSurfacedIssues", () => {
   it("throws on a duplicate finding_id in the finding-ledger (symmetry with issue/seeded dup guards)", () => {
     expect(() =>
       parseSurfacedIssues(
-        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1"] }] },
-        { findings: [{ finding_id: "f1", severity: "high" }, { finding_id: "f1", severity: "low" }] },
+        { issues: [{ issue_id: "iss-1", issue_statement: "s", surface_finding_ids: ["f1"], evidence_refs: [] }] },
+        { findings: [{ finding_id: "f1", severity: "high", target: "T" }, { finding_id: "f1", severity: "low", target: "T" }] },
       ),
     ).toThrow(/duplicate finding id 'f1'/);
   });
@@ -325,5 +366,9 @@ describe("parseSurfacedIssues", () => {
     expect(issues.filter((i) => i.severity === "medium")).toHaveLength(8);
     expect(issues.every((i) => isMaterialSeverity(i.severity))).toBe(true);
     expect(new Set(issues.map((i) => i.issue_id)).size).toBe(issues.length); // unique
+    // Location signal populated from real evidence (design §11 item 2): every
+    // material issue carries ≥1 finding target and its issue-ledger evidence_refs.
+    expect(issues.every((i) => i.where.length > 0)).toBe(true);
+    expect(issues.every((i) => i.evidence_refs.length > 0)).toBe(true);
   });
 });

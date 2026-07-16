@@ -63,11 +63,11 @@ export function extractJsonObjectText(text: string): string {
 export const ATTRIBUTION_JUDGE_SYSTEM_PROMPT = [
   "You are an INDEPENDENT attribution judge for an ontology-review benchmark. You are given:",
   "  - seeded_defects: the ground-truth conceptual defects deliberately planted in a target artifact, each with an id, kind, where (the schema location), and description.",
-  "  - surfaced_issues: the material issues a review produced, each with an issue_id, issue_statement, and severity.",
+  "  - surfaced_issues: the material issues a review produced, each with an issue_id, issue_statement, severity, where (the schema location(s) the issue targets), and evidence_refs (supporting locations).",
   "For EACH surfaced issue, decide which seeded defect(s) — if any — the issue GENUINELY identifies.",
   "",
   "RULES:",
-  "  1. Refute by default. Attribute an issue to a seeded defect ONLY if the issue_statement actually describes THAT defect's problem at THAT location. When in doubt, do not attribute.",
+  "  1. Refute by default. Attribute an issue to a seeded defect ONLY if the issue_statement actually describes THAT defect's problem at THAT location — compare the issue's `where`/`evidence_refs` against the defect's `where`. When in doubt, do not attribute.",
   "  2. Conceptual match, never vocabulary match. Sharing a schema identifier or keyword with a defect's description is NOT attribution — the issue must describe the same underlying problem. (An issue that merely quotes the schema while making a different point attributes to nothing.)",
   "  3. An issue may identify MULTIPLE seeded defects (list every id it genuinely names) or NONE (empty list — this is an out-of-scope or fabricated issue).",
   "  4. Only use seeded defect ids from the provided list. Never invent an id.",
@@ -92,6 +92,8 @@ export function buildAttributionUserPrompt(
       issue_id: i.issue_id,
       issue_statement: i.issue_statement,
       severity: i.severity,
+      where: i.where,
+      evidence_refs: i.evidence_refs,
     })),
   });
 }

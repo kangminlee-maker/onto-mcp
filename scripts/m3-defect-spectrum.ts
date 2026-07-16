@@ -56,6 +56,14 @@ export interface SurfacedIssue {
   issue_statement: string;
   /** Derived from the MAX severity of the issue's surface_finding_ids. */
   severity: FindingSeverity;
+  /** Location signal — the distinct `target`s of this issue's surface findings.
+   *  The judge attributes an issue to a seeded defect only when the issue names
+   *  THAT defect's problem AT its location; withholding location systematically
+   *  under-attributes strong reviews as false "미달" (design §11 item 2). */
+  where: string[];
+  /** The issue-ledger row's `evidence_refs` (location-supporting provenance the
+   *  judge reads alongside `where`). */
+  evidence_refs: string[];
 }
 
 /** One issue's attribution, produced by the judge. `attributed_defect_ids` empty
@@ -119,6 +127,13 @@ function asString(value: unknown, what: string): string {
   return value;
 }
 
+function asStringArray(value: unknown, what: string): string[] {
+  if (!Array.isArray(value) || value.some((x) => typeof x !== "string")) {
+    throw new Error(`defect-spectrum: ${what} must be a string array`);
+  }
+  return value as string[];
+}
+
 function asSeverity(value: unknown, what: string): FindingSeverity {
   if (!SEVERITY_RANK.includes(value as FindingSeverity)) {
     throw new Error(`defect-spectrum: ${what} must be one of ${SEVERITY_RANK.join("/")}, got ${JSON.stringify(value)}`);
@@ -160,9 +175,10 @@ function moreSevere(a: FindingSeverity, b: FindingSeverity): FindingSeverity {
 /**
  * Parse the issue-ledger into scorable material issues, deriving each issue's
  * severity from the MAX severity of its `surface_finding_ids` (issues carry no
- * severity of their own). Non-material issues are dropped (the material-issue
- * predicate is severity ∈ {blocker,high,medium}). Requires the finding-ledger
- * for the severity lookup.
+ * severity of their own) and its location signal (`where`) from the distinct
+ * `target`s of those same findings (design §11 item 2). Non-material issues are
+ * dropped (the material-issue predicate is severity ∈ {blocker,high,medium}).
+ * Requires the finding-ledger for the severity + target lookup.
  */
 export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: unknown): SurfacedIssue[] {
   const issueLedger = asRecord(issueLedgerRaw, "issue-ledger");
@@ -173,6 +189,7 @@ export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: u
   if (!Array.isArray(findingRows)) throw new Error("defect-spectrum: finding-ledger.findings must be a list");
 
   const severityByFinding = new Map<string, FindingSeverity>();
+  const targetByFinding = new Map<string, string>();
   findingRows.forEach((row, i) => {
     const r = asRecord(row, `findings[${i}]`);
     const findingId = asString(r.finding_id, `findings[${i}].finding_id`);
@@ -180,6 +197,10 @@ export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: u
       throw new Error(`defect-spectrum: duplicate finding id '${findingId}' in finding-ledger`);
     }
     severityByFinding.set(findingId, asSeverity(r.severity, `findings[${i}].severity`));
+    // `target` is the finding's schema location — the projection's location
+    // signal. Required (fail loud): without it the judge cannot honor the
+    // "that problem AT that location" attribution rule (design §11 item 2).
+    targetByFinding.set(findingId, asString(r.target, `findings[${i}].target`));
   });
 
   const issues: SurfacedIssue[] = [];
@@ -212,10 +233,15 @@ export function parseSurfacedIssues(issueLedgerRaw: unknown, findingLedgerRaw: u
     }
     // Material-issue predicate: only material-band issues are scored.
     if (!isMaterialSeverity(severity)) return;
+    // Location signal: the distinct targets of this issue's (now all-resolvable)
+    // surface findings, insertion-order preserved.
+    const where = [...new Set(surfaceIds.map((fid) => targetByFinding.get(String(fid))!))];
     issues.push({
       issue_id: issueId,
       issue_statement: asString(r.issue_statement, `issues[${i}].issue_statement`),
       severity,
+      where,
+      evidence_refs: asStringArray(r.evidence_refs, `issues[${i}].evidence_refs`),
     });
   });
   return issues;
