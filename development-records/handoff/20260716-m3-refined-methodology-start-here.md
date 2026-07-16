@@ -63,6 +63,9 @@ K↑·분포화 재작업이 어차피 baseline **1회 재실행**을 요구하�
 6. **engagement/canary 대조 추가(validity MEDIUM)**: 붕괴/미참여 judge가 안정적 "미달"을 real
    verdict와 구분 불가. fixture별 canary(정답 issue↔defect 쌍을 ground-truth에 authoring) miss ⇒
    instrument-broken abort. 최소판: ≥1 진성 탐지 확실한 fixture에서 "미달" 신뢰 전 attributed_issues>0 게이트.
+   canary는 5의 **위치-projection 편향 탐지기**도 된다(위치 없이는 canary 쌍조차 귀속 실패) → **5·6을
+   같은 재실행에 함께** 넣는다. 주의: 1(K↑)은 variance만 줄이므로 5 없이 K↑만으로는 systematic 편향이
+   그대로 남는다(instrument 결함이지 표본 노이즈가 아님).
 
 ## 실행 방법 (judge = 소량 spend)
 
