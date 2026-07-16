@@ -130,8 +130,7 @@ additionally anchor severity judgment to the session's declared purpose — the
 confirmed `review-value-alignment-criteria.yaml` entries are projected into the
 issue-artifact Severity Contract block, and scope exclusion routes through the
 admission context fields (rule 2's predicate and the holistic definitions above
-are unchanged; severity is never demoted for scope reasons). On default-on
-promotion this note merges into the table prose.
+are unchanged; severity is never demoted for scope reasons).
 
 ---
 

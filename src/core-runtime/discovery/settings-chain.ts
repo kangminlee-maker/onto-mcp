@@ -1831,6 +1831,24 @@ export function assertSettingsModelsSupported(
   }
 }
 
+/**
+ * Sub-flag-level merge (project over user): the two ontological-anchoring
+ * flags are independently togglable by blast radius (design §2-2), so a
+ * project that sets one flag must not drop the user's other flag — a
+ * whole-object override would.
+ */
+function mergeOntologicalAnchoringSettings(
+  user: ReviewOntologicalAnchoringSettings | undefined,
+  project: ReviewOntologicalAnchoringSettings | undefined,
+): ReviewOntologicalAnchoringSettings {
+  const obligations = project?.obligations ?? user?.obligations;
+  const judgmentAnchor = project?.judgment_anchor ?? user?.judgment_anchor;
+  return {
+    ...(obligations !== undefined ? { obligations } : {}),
+    ...(judgmentAnchor !== undefined ? { judgment_anchor: judgmentAnchor } : {}),
+  };
+}
+
 function mergeSettings(
   user: OntoSettings,
   project: OntoSettings,
@@ -1881,9 +1899,10 @@ function mergeSettings(
           ...(projectExecution?.ontological_anchoring !== undefined ||
           userExecution?.ontological_anchoring !== undefined
             ? {
-                ontological_anchoring:
-                  projectExecution?.ontological_anchoring ??
+                ontological_anchoring: mergeOntologicalAnchoringSettings(
                   userExecution?.ontological_anchoring,
+                  projectExecution?.ontological_anchoring,
+                ),
               }
             : {}),
           teamlead: mergeReviewActorSettings(

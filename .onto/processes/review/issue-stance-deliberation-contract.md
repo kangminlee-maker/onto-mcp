@@ -506,8 +506,7 @@ correctness_or_blocking_execution (an execution or contract conflict that
 blocks the declared purpose) → action_or_severity →
 partial_overlap_or_cluster_scope` instead of the order above. The allowed
 `conflict_type` value set stays complete and unchanged (`evidence_gap` and
-`stance_conflict` remain valid outside the precedence). On default-on promotion
-the list above is replaced by the flag-on order.
+`stance_conflict` remain valid outside the precedence).
 
 Participant rule:
 

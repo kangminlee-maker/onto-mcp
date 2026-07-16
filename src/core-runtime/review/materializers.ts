@@ -903,14 +903,15 @@ export async function bootstrapInvocationBindingArtifacts(
   // sub-flag is explicitly enabled, mirroring the llm_override absent=off rule.
   const ontologicalAnchoringSettings =
     ontoConfig?.review?.execution?.ontological_anchoring;
+  const anchoringObligations =
+    ontologicalAnchoringSettings?.obligations?.enabled === true;
+  const anchoringJudgment =
+    ontologicalAnchoringSettings?.judgment_anchor?.enabled === true;
   const ontologicalAnchoringPlan =
-    ontologicalAnchoringSettings?.obligations?.enabled === true ||
-    ontologicalAnchoringSettings?.judgment_anchor?.enabled === true
+    anchoringObligations || anchoringJudgment
       ? {
-          obligations:
-            ontologicalAnchoringSettings?.obligations?.enabled === true,
-          judgment_anchor:
-            ontologicalAnchoringSettings?.judgment_anchor?.enabled === true,
+          obligations: anchoringObligations,
+          judgment_anchor: anchoringJudgment,
         }
       : undefined;
 

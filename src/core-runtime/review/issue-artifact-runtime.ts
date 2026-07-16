@@ -5,6 +5,8 @@ import type {
   ReviewFindingSeverity,
   ReviewIssueArtifactId,
   ReviewIssueArtifactPromptPacketSeat,
+  ReviewValueAlignmentCriteriaArtifact,
+  ReviewValueAlignmentCriterion,
 } from "./artifact-types.js";
 import {
   dumpYamlDocument,
@@ -2717,10 +2719,10 @@ export async function resolveProblemFramingProfileRef(args: {
  * the runtime — which owns deterministic projections — carries the confirmed
  * statements into the prompt instead of widening the read boundary.
  */
-export interface ConfirmedValueAlignmentCriterionProjection {
-  criterion_id: string;
-  statement: string;
-}
+export type ConfirmedValueAlignmentCriterionProjection = Pick<
+  ReviewValueAlignmentCriterion,
+  "criterion_id" | "statement"
+>;
 
 export function buildIssueArtifactPrompt(args: {
   artifactId: ReviewIssueArtifactId;
@@ -2757,28 +2759,28 @@ export function buildIssueArtifactPrompt(args: {
   const confirmedCriteria = args.ontologicalAnchoring?.confirmedCriteria ?? [];
   // design §3-(c) c-2: anchor lines are kind-neutral and additive — the
   // holistic ladder definitions above them stay authoritative (E-1/E-2); the
-  // criteria embed renders only when confirmed criteria exist (F8).
-  const severityAnchorSection = judgmentAnchor
+  // criteria embed renders only when confirmed criteria exist (F8). The two
+  // criteria-gated fragments share one predicate so they cannot drift apart.
+  const hasConfirmedCriteria = confirmedCriteria.length > 0;
+  const criteriaWeighLine = hasConfirmedCriteria
     ? `
-
-Declared-purpose anchor:
-- Severity measures how strongly the issue undermines trust in the reviewed result for its declared purpose; the holistic severity definitions above stay authoritative.
-- Anchor \`affected_purpose\` to a declared purpose source — the criterion, review goal, or declared contract the issue affects.${
-        confirmedCriteria.length > 0
-          ? `
 - Weigh the confirmed review value-alignment criteria below as explicit sources of the declared purpose when assigning severity.`
-          : ""
-      }
-- Scope exclusion is not a severity decision: a real defect outside the declared purpose keeps its honest severity and is disqualified through the admission context fields (\`judgment_state: outside_boundary\` or \`closure_obligation: out_of_scope\`) in problem framing.${
-        confirmedCriteria.length > 0
-          ? `
+    : "";
+  const criteriaListSection = hasConfirmedCriteria
+    ? `
 
 Confirmed value-alignment criteria:
 ${confirmedCriteria
   .map((criterion) => `- ${criterion.criterion_id}: ${criterion.statement}`)
   .join("\n")}`
-          : ""
-      }`
+    : "";
+  const severityAnchorSection = judgmentAnchor
+    ? `
+
+Declared-purpose anchor:
+- Severity measures how strongly the issue undermines trust in the reviewed result for its declared purpose; the holistic severity definitions above stay authoritative.
+- Anchor \`affected_purpose\` to a declared purpose source — the criterion, review goal, or declared contract the issue affects.${criteriaWeighLine}
+- Scope exclusion is not a severity decision: a real defect outside the declared purpose keeps its honest severity and is disqualified through the admission context fields (\`judgment_state: outside_boundary\` or \`closure_obligation: out_of_scope\`) in problem framing.${criteriaListSection}`
     : "";
   const commonHeader = `# Issue-Stance Artifact Prompt
 
@@ -3230,31 +3232,38 @@ classifications:
  * Deterministic projection of the session's CONFIRMED value-alignment criteria
  * for the judgment-anchor embed (design §3-(c) c-2, F8). Read-if-exists,
  * confirmed-only; a missing or empty artifact yields [] and the embed section
- * is omitted so the anchor never points at nothing.
+ * is omitted so the anchor never points at nothing. Field access narrows
+ * against ReviewValueAlignmentCriteriaArtifact (the writer's type) so a field
+ * rename fails the typecheck here instead of silently returning [].
  */
-async function loadConfirmedValueAlignmentCriteria(
+export async function loadConfirmedValueAlignmentCriteria(
   executionPlan: ReviewExecutionPlan,
 ): Promise<ConfirmedValueAlignmentCriterionProjection[]> {
   const criteriaPath = executionPlan.review_value_alignment_criteria_path;
   if (!criteriaPath || !(await fileExists(criteriaPath))) return [];
-  const artifact = await readYamlDocument<Record<string, unknown>>(criteriaPath);
+  const artifact = await readYamlDocument<
+    Partial<ReviewValueAlignmentCriteriaArtifact> | null | undefined
+  >(criteriaPath);
+  // YAML.parse of an empty or comment-only file yields null/undefined.
+  if (typeof artifact !== "object" || artifact === null) return [];
   const criteria = Array.isArray(artifact.criteria) ? artifact.criteria : [];
   const projections: ConfirmedValueAlignmentCriterionProjection[] = [];
   for (const candidate of criteria) {
     if (typeof candidate !== "object" || candidate === null) continue;
-    const record = candidate as Record<string, unknown>;
-    if (record.confirmation_status !== "confirmed") continue;
+    const criterion = candidate as Partial<ReviewValueAlignmentCriterion>;
+    if (criterion.confirmation_status !== "confirmed") continue;
     if (
-      typeof record.criterion_id !== "string" ||
-      typeof record.statement !== "string" ||
-      record.statement.trim().length === 0
+      typeof criterion.criterion_id !== "string" ||
+      typeof criterion.statement !== "string"
     ) {
       continue;
     }
-    projections.push({
-      criterion_id: record.criterion_id,
-      statement: record.statement.trim(),
-    });
+    // Statements are free prose (often multi-line YAML scalars); the embed
+    // renders one `- id: statement` bullet per criterion, so collapse internal
+    // whitespace to keep the bullet a single line.
+    const statement = criterion.statement.replace(/\s+/g, " ").trim();
+    if (statement.length === 0) continue;
+    projections.push({ criterion_id: criterion.criterion_id, statement });
   }
   return projections;
 }

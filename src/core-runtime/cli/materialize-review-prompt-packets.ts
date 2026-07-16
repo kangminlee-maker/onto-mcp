@@ -130,20 +130,25 @@ function materialKindReviewObligations(
 ): string[] {
   const ontologicalObligations = options?.ontologicalObligations === true;
   switch (profile.target_material_kind) {
-    case "code":
+    case "code": {
+      // Shared carrier clause: single source so the flag-off byte-identity
+      // guarantee cannot drift when the evidence-source wording is edited.
+      const codeCarrierClause =
+        "Treat declared types, exported API signatures, documented contracts, and observable runtime behavior as review evidence.";
       if (ontologicalObligations) {
         return [
-          "Treat declared types, exported API signatures, documented contracts, and observable runtime behavior as review evidence.",
+          codeCarrierClause,
           "Check whether the implementation satisfies the contracts it declares: surface visible type/contract mismatches as logical-integrity failures of the declared concept.",
           "Probe edge-case inputs, error/null/undefined paths, and caller-facing failure modes as evidence channels for whether the declared contracts hold — not as a free-standing operational bug hunt.",
           "Classify a visible contract violation as material when it defeats the declared review goal inside the bounded target.",
         ];
       }
       return [
-        "Treat declared types, exported API signatures, documented contracts, and observable runtime behavior as review evidence.",
+        codeCarrierClause,
         "Check visible type/runtime contract mismatches, edge-case input behavior, error/null/undefined paths, and caller-facing failure modes.",
         "Classify a visible correctness or runtime-contract failure as material when it can violate the declared review goal inside the bounded target.",
       ];
+    }
     case "spreadsheet": {
       // The obligation prose stays in lockstep with the per-ref disposition projected into
       // review_goal (the SSOT): a goal is named only when its specific structure was
@@ -195,18 +200,21 @@ function materialKindReviewObligations(
         "Treat declared purpose, audience, claims, evidence, structure, and unresolved ambiguity as review evidence.",
         "Check visible claim/evidence gaps, contradictory obligations, missing decision context, and reader-facing actionability failures.",
       ];
-    case "database":
+    case "database": {
+      const databaseCarrierClause =
+        "Treat schema, constraints, query behavior, relation cardinality, and data integrity assumptions as review evidence.";
       if (ontologicalObligations) {
         return [
-          "Treat schema, constraints, query behavior, relation cardinality, and data integrity assumptions as review evidence.",
+          databaseCarrierClause,
           "Check whether the schema and constraints uphold the data contract they declare: surface visible key/constraint mismatches as integrity failures of the declared model.",
           "Probe unsafe query assumptions, migration risks, and integrity failure paths as evidence channels for whether the declared data contract holds.",
         ];
       }
       return [
-        "Treat schema, constraints, query behavior, relation cardinality, and data integrity assumptions as review evidence.",
+        databaseCarrierClause,
         "Check visible key/constraint mismatches, unsafe query assumptions, migration risks, and integrity failures.",
       ];
+    }
     case "mixed":
       return [
         "Treat each target member according to its material kind and also check cross-artifact handoffs.",

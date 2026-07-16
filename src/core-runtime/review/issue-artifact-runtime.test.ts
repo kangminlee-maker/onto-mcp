@@ -12,6 +12,7 @@ import {
   buildIssueStanceInputProjection,
   issueStanceConsumerId,
   issueArtifactAllowedReadRefs,
+  loadConfirmedValueAlignmentCriteria,
   renderDeliberationPlanInputProjectionSection,
   renderFindingRelationInputProjectionSection,
   renderProblemFramingInputProjectionSection,
@@ -3050,5 +3051,79 @@ describe("buildIssueArtifactPrompt — ontological anchoring (design §3-(c)/(b)
     expect(on).toContain("instead of being demoted");
     const off = promptFor("problem-framing");
     expect(off).not.toContain("scope-disqualified through the admission context fields");
+  });
+});
+
+describe("loadConfirmedValueAlignmentCriteria — projection robustness", () => {
+  function planWithCriteriaPath(criteriaPath: string) {
+    return {
+      ...minimalExecutionPlan("/repo"),
+      review_value_alignment_criteria_path: criteriaPath,
+    };
+  }
+
+  function tempCriteriaFile(content: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "onto-criteria-"));
+    const filePath = path.join(dir, "review-value-alignment-criteria.yaml");
+    fs.writeFileSync(filePath, content, "utf8");
+    return filePath;
+  }
+
+  it("returns [] for an existing but empty or comment-only criteria file (no crash)", async () => {
+    // YAML.parse('') === null: the loader must not deref .criteria on it.
+    expect(
+      await loadConfirmedValueAlignmentCriteria(
+        planWithCriteriaPath(tempCriteriaFile("")),
+      ),
+    ).toEqual([]);
+    expect(
+      await loadConfirmedValueAlignmentCriteria(
+        planWithCriteriaPath(tempCriteriaFile("# no body\n")),
+      ),
+    ).toEqual([]);
+  });
+
+  it("returns [] for a missing file", async () => {
+    expect(
+      await loadConfirmedValueAlignmentCriteria(
+        planWithCriteriaPath("/repo/does/not/exist.yaml"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("collapses multi-line statements to one line and filters unconfirmed entries", async () => {
+    const criteriaPath = tempCriteriaFile(
+      [
+        'schema_version: "1"',
+        "session_id: s1",
+        "created_at: 2026-07-17T00:00:00+09:00",
+        "dispatch_state: allow_dispatch",
+        "criteria:",
+        "  - criterion_id: user-request-intent",
+        "    statement: >-",
+        "      line one",
+        "      line two",
+        "    confirmation_status: confirmed",
+        "  - criterion_id: pending-one",
+        "    statement: should be filtered",
+        "    confirmation_status: pending_confirmation",
+        "  - criterion_id: literal-block",
+        "    statement: |",
+        "      alpha",
+        "      beta",
+        "    confirmation_status: confirmed",
+      ].join("\n"),
+    );
+
+    const projections = await loadConfirmedValueAlignmentCriteria(
+      planWithCriteriaPath(criteriaPath),
+    );
+
+    // Every projected statement is single-line, so the `- id: statement`
+    // prompt bullet cannot be broken by embedded newlines.
+    expect(projections).toEqual([
+      { criterion_id: "user-request-intent", statement: "line one line two" },
+      { criterion_id: "literal-block", statement: "alpha beta" },
+    ]);
   });
 });
