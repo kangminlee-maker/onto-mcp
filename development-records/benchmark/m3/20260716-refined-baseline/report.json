@@ -1,0 +1,122 @@
+{
+  "schema_version": "m3-report/4",
+  "judge_model": "claude-opus-4-8",
+  "band_thresholds": {
+    "meet_material_recall": 1,
+    "exceed_material_recall": 1,
+    "exceed_precision": 0.9,
+    "floor_precision": 0.8
+  },
+  "verdict_policy": {
+    "min_adequate_runs": 8,
+    "dominant_min_fraction": 0.85,
+    "significant_mode_fraction": 0.15
+  },
+  "fixtures": [
+    {
+      "fixture": "clinical-lab-workflow",
+      "evidence_session": "20260611-f1a64fc4",
+      "judge_runs": 8,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "exceeds",
+        "noise_rate": 0,
+        "band_frequencies": {
+          "exceeds": 8
+        }
+      },
+      "recall_material": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      },
+      "recall_overall": {
+        "n": 8,
+        "min": 0.8,
+        "max": 0.8,
+        "mean": 0.7999999999999999,
+        "stdev": 1.1102230246251565e-16
+      },
+      "precision": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      }
+    },
+    {
+      "fixture": "credit-risk-taxonomy",
+      "evidence_session": "20260611-5161a370",
+      "judge_runs": 8,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "exceeds",
+        "noise_rate": 0,
+        "band_frequencies": {
+          "exceeds": 8
+        }
+      },
+      "recall_material": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      },
+      "recall_overall": {
+        "n": 8,
+        "min": 0.9,
+        "max": 0.9,
+        "mean": 0.9000000000000001,
+        "stdev": 1.1102230246251565e-16
+      },
+      "precision": {
+        "n": 8,
+        "min": 0.9090909090909091,
+        "max": 0.9090909090909091,
+        "mean": 0.9090909090909091,
+        "stdev": 0
+      }
+    },
+    {
+      "fixture": "manufacturing-bom",
+      "evidence_session": "20260611-ca3c674b",
+      "judge_runs": 8,
+      "judge_auth": "oauth",
+      "verdict": {
+        "kind": "dominant",
+        "band": "meets",
+        "noise_rate": 0,
+        "band_frequencies": {
+          "meets": 8
+        }
+      },
+      "recall_material": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      },
+      "recall_overall": {
+        "n": 8,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "stdev": 0
+      },
+      "precision": {
+        "n": 8,
+        "min": 0.8076923076923077,
+        "max": 0.8076923076923077,
+        "mean": 0.8076923076923076,
+        "stdev": 1.1102230246251565e-16
+      }
+    }
+  ]
+}

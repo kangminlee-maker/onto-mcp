@@ -292,10 +292,18 @@ test-falsifiability 2갭 착지·design-fidelity 0). 라이브 judge 재실행�
 시 현 default policy fallback(source_digests warn-only와 동형). baseline dir report.json은 **미변경 보존**
 (README Finding 3이 구 방법론의 false-stable을 인용 — 역사적 disclosure).
 
-**owner-spend 잔존(별도 승인):**
-- **라이브 judge 재실행**(소량 spend, oauth): 위치-projection 수정된 instrument로 fresh baseline.
-  ⚠ §11 제약 유지 — 이 재실행 전까지 fresh run은 non-authoritative. `npx tsx scripts/m3-run.ts
-  --judge-auth oauth --judge-runs 8` (K=8 adequate).
-- **fuller authored-canary(owner 결정 3 완성형)**: 재실행과 동반. issue↔defect 정답쌍을 authoring해
-  위치-projection 편향(fix 5 유효성)을 fresh draw에서 검증 — engagement gate(최소판)는 이미 활성.
-- P1(무비용): review-pipeline-benchmark 통합·`--ontology-fixture` 분리·cert 3면 회귀(§5).
+**fuller authored-canary(owner 결정 3 완성형) = 착지**: ground-truth `canary_defect_ids`(CLW-1·CRT-1·MBO-1,
+fixture별 최명료 material defect·baseline 전 run 탐지) → 전 run ZERO 탐지 시 instrument_broken. 오프라인
+검증(무비용): 3 canary 모두 replay PASS, CLW-5(진짜 baseline miss) 음성대조군은 instrument_broken 발화.
+
+**라이브 judge 재실행 = 완료(owner 승인, oauth, K=8, disclosure `20260716-refined-baseline/`)**: 위치-projection
+수정된 instrument로 첫 **authoritative** M3 측정. 세 fixture 모두 **clean dominant·sd 0**(effort=low+위치로
+완전 결정론): clinical **상회**(1.0/1.0, P0 "미달"에서 이동) · credit **상회**(1.0/0.909) · manufacturing
+**도달**(1.0/0.808, P0 straddle에서 이동). **fix 5 검증 성공(over-attribution 아님)**: 밴드를 이동시킨 4개
+attribution 변화가 모두 실 finding의 target/claim으로 추적됨 — 특히 clinical `issue-012→CLW-5`는 surface
+`finding-005` target="Specimen lifecycle"·claim이 CLW-5와 축자 일치(리뷰가 실제 탐지했으나 generic issue
+statement로 baseline judge가 위치 없이 refute = 진성 false-미달, 위치가 교정). **정정(dated)**: P0 README의
+"clinical stably 미달·CLW-5 genuine miss"는 계기 버그 증상이었음 — 리뷰는 실제로 상회. 상세: refined-baseline README.
+
+**남은 것**: P1(무비용) — review-pipeline-benchmark 통합·`--ontology-fixture` 분리·cert 3면 회귀(§5).
+P2(owner spend) — 라이브 모델 비교(reps는 관측 SD 유도; 위 결정론은 effort=low 특성이라 다른 모델은 재측정).

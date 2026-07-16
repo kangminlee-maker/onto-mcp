@@ -1,8 +1,16 @@
-# M3 정제 방법론 start-here (2026-07-16): 오프라인 코드 완료 → owner-spend 재실행만 잔존
+# M3 정제 방법론 start-here (2026-07-16): 코드+canary+라이브 재실행 완료 → P1/P2만 잔존
 
-정제 방법론(adequate-K + metric-distribution verdict + 위치 projection + engagement gate)을
-**오프라인 코드로 구현·검증 완료**. 남은 것은 라이브 judge 재실행(소량 spend, owner 승인)뿐이다.
-이 문서는 `/clear` 후 재개용.
+정제 방법론(adequate-K + metric-distribution verdict + 위치 projection + engagement/canary gate)을
+**구현·검증·라이브 재실행까지 완료**. authoritative baseline 확보(`20260716-refined-baseline/`).
+남은 것은 P1(무비용 통합)·P2(owner-spend 모델비교)뿐이다. 이 문서는 `/clear` 후 재개용.
+
+## 완료 요약 (라이브 재실행, 2026-07-16 owner 승인)
+
+fixed instrument(위치 projection+K=8+분포 verdict+canary)로 첫 authoritative M3 측정 — 세 fixture 모두
+**clean dominant·sd 0**: clinical **상회**(1.0/1.0) · credit **상회**(1.0/0.909) · manufacturing **도달**(1.0/0.808).
+**fix 5 검증 성공(over-attribution 아님)**: clinical `issue-012→CLW-5`가 surface `finding-005`
+target="Specimen lifecycle"과 축자 일치 = 진성 false-미달 교정. P0의 "clinical 미달"은 계기 버그 증상이었음.
+상세: `development-records/benchmark/m3/20260716-refined-baseline/README.md` + 설계 §12.
 
 ## 재개 시 상태 검증 (먼저 실행)
 
@@ -29,19 +37,15 @@ baseline dir에 직접 쓰지 말 것(또는 직후 `git checkout -- .../report.
 - **위치 projection**(설계 §11 결정2): `SurfacedIssue.where`(finding.target)·`evidence_refs`,
   `buildAttributionUserPrompt`+시스템프롬프트 실어나름, `parseSurfacedIssues` target required.
 - **engagement gate**(결정3 최소판): 전-run 무귀속 → instrument_broken(거짓 미달 차단).
-- 스키마 `m3-capture/4`·`m3-report/4`. 63 테스트(+15 falsifiable: 3 실증특성 매핑+경계 대조군).
+- 스키마 `m3-capture/4`·`m3-report/4`. 73 테스트(+경계 대조군·canary·음성대조군). canary(`canary_defect_ids`,
+  CLW-1/CRT-1/MBO-1) offline 검증 완료.
 
-## 다음 작업 (owner-spend, 별도 승인)
+## 완료됨 (owner-spend 라이브 재실행, 2026-07-16) — 위 "완료 요약" 참조
 
-1. **라이브 judge 재실행** — 위치-projection 수정된 instrument로 fresh authoritative baseline.
-   - 인증: `ANTHROPIC_API_KEY` 미설정 → oauth(`--judge-auth oauth`, 실 claude `~/.local/bin/claude` 구독).
-   - 실행: `npx tsx scripts/m3-run.ts --judge-auth oauth --judge-runs 8 --out <new-run-dir>`
-     (K=8 = adequacy floor; 새 dir로 — baseline 미오염). 소량 spend(judge만, 3 fixture × K).
-   - ⚠ 설계 §11 제약: **이 재실행 전까지 fresh run은 non-authoritative**(위치 수정이 귀속·수치 변경).
-     기록된 P0 baseline은 replay 전용 특성 disclosure.
-2. **fuller authored-canary**(결정3 완성형, 재실행과 동반): issue↔defect 정답쌍을 ground-truth에 authoring해
-   위치-projection 편향(fix 5 유효성)을 fresh draw에서 검증. baseline 캡처는 CLW-1/CRT-1/MBO-1을 전 run
-   탐지 → 안전 canary 후보(무비용 offline 검증 가능). engagement gate 최소판은 이미 활성.
+라이브 재실행·authored-canary 모두 착지. authoritative baseline = `20260716-refined-baseline/`.
+재실행 재현: `npx tsx scripts/m3-run.ts --judge-auth oauth --judge-runs 8` + 3× `--fixture …:… --session`
+핀(clinical 20260611-f1a64fc4·credit 20260611-5161a370·manufacturing 20260611-ca3c674b). effort=low에서
+judge 완전 결정론이라 K=8이 point mass(clean dominant) — 다른 모델(P2)은 SD 재측정 필요.
 
 ## 이후 (P1/P2, 무비용/별도)
 
