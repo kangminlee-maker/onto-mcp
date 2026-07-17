@@ -80,6 +80,7 @@ import {
   isSupportedModelRoute,
   loadSupportedModelRegistry,
   supportedModelMaxOutputTokens,
+  type SupportedModelGateOptions,
   type SupportedModelRegistry,
 } from "../core-runtime/discovery/supported-models.js";
 import {
@@ -551,6 +552,16 @@ export interface OntoReconstructCoreApi {
 
 export interface OntoReconstructCoreApiOptions {
   ontoHome?: string;
+  /**
+   * Bench-harness-only plumbing for the INV-MODEL-1 live gate (B7): an
+   * explicit exact-allowlist allowance a benchmark harness constructs (see
+   * `roleExpansionBenchGateOptions` in discovery/supported-models.ts) and
+   * hands to the gate at the live execution boundary. Product surfaces never
+   * set this — the MCP server constructs the api with no options, so the
+   * product posture is unchanged. Carried opaquely; this module never builds
+   * an allowance itself.
+   */
+  supportedModelGateOptions?: SupportedModelGateOptions;
 }
 
 async function directoryExists(directoryPath: string): Promise<boolean> {
@@ -1134,9 +1145,11 @@ export function createOntoReconstructCoreApi(
       // INV-MODEL-1: a live (paid) reconstruct run may only select models a
       // benchmark verified as supported (authority: supported-models.yaml). Mock
       // realization makes no real provider calls, so it is exempt — the gate is
-      // about real model spending, not settings shape.
+      // about real model spending, not settings shape. The optional gate
+      // options are bench-harness plumbing (B7 role-expansion allowance),
+      // forwarded opaquely; the MCP/product construction passes none.
       if (!mockRealizationEnabled) {
-        assertSettingsModelsSupported(settings);
+        assertSettingsModelsSupported(settings, options.supportedModelGateOptions);
       }
       // Mock realization needs no provider config: actor llm settings stay
       // required only for live direct_call execution, and the recorded route

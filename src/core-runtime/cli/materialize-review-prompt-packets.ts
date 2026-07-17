@@ -15,6 +15,7 @@ import type {
   ReviewContextSource,
   ReviewDomainBindingArtifact,
   ReviewDomainDocumentBinding,
+  ReviewEmbedBudgetWitness,
   ReviewExecutionPlan,
   ReviewLensPromptPacketSeat,
   ReviewSessionMetadata,
@@ -737,6 +738,37 @@ async function ensureValueAlignmentDispatchAllowed(args: {
   });
 }
 
+/**
+ * Resolve the packet stage's effective embed budget from the three precedence
+ * sources — explicit CLI override (the channel the settings knob arrives
+ * through) wins, then the plan's prepare-time window-proportional value, then
+ * DEFAULT — and record which branch supplied it. The returned witness is
+ * persisted into the review context manifest (adaptive-effort design §4-4,
+ * finding R2-4: the plan field alone cannot witness an override).
+ */
+export function resolveEffectiveEmbedBudget(
+  cliMaxEmbedLines: number | undefined,
+  planMaxEmbedLines: number | undefined,
+  defaultMaxEmbedLines: number,
+): ReviewEmbedBudgetWitness {
+  if (cliMaxEmbedLines !== undefined) {
+    return {
+      max_embed_lines_effective: cliMaxEmbedLines,
+      max_embed_lines_source: "cli",
+    };
+  }
+  if (planMaxEmbedLines !== undefined) {
+    return {
+      max_embed_lines_effective: planMaxEmbedLines,
+      max_embed_lines_source: "plan",
+    };
+  }
+  return {
+    max_embed_lines_effective: defaultMaxEmbedLines,
+    max_embed_lines_source: "default",
+  };
+}
+
 async function writePreManifestContextArtifacts(args: {
   projectRoot: string;
   sessionRoot: string;
@@ -751,6 +783,7 @@ async function writePreManifestContextArtifacts(args: {
   resolvedDomainDir: string | null;
   domainResolutionAttempts: string[];
   domainAllFiles: string[];
+  embedBudget: ReviewEmbedBudgetWitness;
 }): Promise<ReviewContextManifestArtifact> {
   const domainBindingPath =
     args.executionPlan.domain_binding_path ??
@@ -955,6 +988,7 @@ async function writePreManifestContextArtifacts(args: {
       "context_access_matrix_valid",
     ],
     failure_record_refs: [],
+    embed_budget: args.embedBudget,
   };
 
   await writeYamlDocument(reviewContextManifestPath, contextManifest);
@@ -1091,8 +1125,12 @@ export async function runMaterializeReviewPromptPacketsCli(
     executionPlan.max_embed_lines >= 1
       ? executionPlan.max_embed_lines
       : undefined;
-  const maxEmbedLines =
-    cliMaxEmbedLines ?? planMaxEmbedLines ?? DEFAULT_MAX_EMBED_LINES;
+  const embedBudget = resolveEffectiveEmbedBudget(
+    cliMaxEmbedLines,
+    planMaxEmbedLines,
+    DEFAULT_MAX_EMBED_LINES,
+  );
+  const maxEmbedLines = embedBudget.max_embed_lines_effective;
   const promptPacketsRoot =
     executionPlan.prompt_packets_root ?? path.join(sessionRoot, "prompt-packets");
   const materializedInputText = await readOptionalText(binding.materialized_input_path);
@@ -1181,6 +1219,7 @@ export async function runMaterializeReviewPromptPacketsCli(
     resolvedDomainDir,
     domainResolutionAttempts,
     domainAllFiles,
+    embedBudget,
   });
   const reviewContextManifestPath =
     executionPlan.review_context_manifest_path ??

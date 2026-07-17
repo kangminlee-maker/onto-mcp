@@ -222,10 +222,12 @@
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
         },
+        # deliberation_resolution effort는 owner 지시(2026-07-17)로 sweep winner(low)를
+        # override한 값입니다 — 근거는 settings-chain.test.ts의 OWNER_EFFORT_OVERRIDES 주석.
         "deliberation_resolution": {
           "llm": {
             "model": "gpt-5.6-sol",
-            "effort": "low"
+            "effort": "medium"
           },
           "timeout_ms": 240000,
           "max_retries": 2,
@@ -268,12 +270,15 @@
       # semantic_author를 openai + api_key direct API 경로로 명시 전환한 경우에만
       # actor의 llm sibling인 llm_runtime.openai_responses_output_headroom_tokens를
       # 양의 정수로 추가할 수 있습니다. 생략하면 기존 stage output ceiling을 그대로 씁니다.
+      # semantic_author/confirmation_provider = gpt-5.6-sol은 2026-07-17 role-확장
+      # evidence run으로 등록된 값입니다 (supported-models.yaml sol 엔트리의
+      # author/confirmation_provider roles + 인용 record 참조).
       "actors": {
         "semantic_author": {
           "llm": {
             "auth": "oauth",
             "provider": "openai",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium",
             "service_tier": "fast"
           }
@@ -282,7 +287,7 @@
           "llm": {
             "auth": "oauth",
             "provider": "openai",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "effort": "medium",
             "service_tier": "fast"
           }

@@ -5,6 +5,7 @@ import type {
 } from "../review/artifact-types.js";
 import {
   renderBoundaryPolicySection,
+  resolveEffectiveEmbedBudget,
   renderEmbeddedMaterializedInputSection,
   renderLensOutputSchemaGate,
   renderLensSidecarOutputContract,
@@ -354,5 +355,28 @@ describe("ontological anchoring — judgment_anchor in lens sidecar contract (de
     // §7-3c kind-neutrality: no code-domain vocabulary in the shared block.
     expect(on).not.toContain("edge-case");
     expect(on).not.toMatch(/separate tool/i);
+  });
+});
+
+describe("resolveEffectiveEmbedBudget — post-precedence witness (design §4-4, R2-4)", () => {
+  it("CLI override wins and is witnessed as source=cli (the settings-knob channel)", () => {
+    expect(resolveEffectiveEmbedBudget(120, 600, 300)).toEqual({
+      max_embed_lines_effective: 120,
+      max_embed_lines_source: "cli",
+    });
+  });
+
+  it("falls to the plan's prepare-time value when no CLI override", () => {
+    expect(resolveEffectiveEmbedBudget(undefined, 600, 300)).toEqual({
+      max_embed_lines_effective: 600,
+      max_embed_lines_source: "plan",
+    });
+  });
+
+  it("falls to DEFAULT when neither is present", () => {
+    expect(resolveEffectiveEmbedBudget(undefined, undefined, 300)).toEqual({
+      max_embed_lines_effective: 300,
+      max_embed_lines_source: "default",
+    });
   });
 });

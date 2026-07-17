@@ -590,6 +590,20 @@ export interface ReviewContextManifestPacketRef {
   forbidden_context_refs: string[];
 }
 
+/**
+ * Post-precedence embed-budget witness (adaptive-effort design §4-4, finding
+ * R2-4). The execution plan's `max_embed_lines` is the prepare-time value only
+ * — an explicit `--max-embed-lines` override (the channel the settings knob
+ * arrives through via review-invoke) never rewrites the plan, so this is the
+ * only structured record of the embed budget the packet stage ACTUALLY applied
+ * and which precedence branch supplied it. The effort benchmark asserts
+ * effective == intended before admitting a run.
+ */
+export interface ReviewEmbedBudgetWitness {
+  max_embed_lines_effective: number;
+  max_embed_lines_source: "cli" | "plan" | "default";
+}
+
 export interface ReviewContextManifestArtifact {
   schema_version: "1";
   producer: "onto-review-runtime";
@@ -608,6 +622,9 @@ export interface ReviewContextManifestArtifact {
   packet_refs: ReviewContextManifestPacketRef[];
   validation_results: string[];
   failure_record_refs: string[];
+  /** Applied embed budget + precedence source. Optional for manifests
+   * serialized before this field (pre-witness artifacts). */
+  embed_budget?: ReviewEmbedBudgetWitness;
 }
 
 export interface ReviewStructuredFailureRecord {
