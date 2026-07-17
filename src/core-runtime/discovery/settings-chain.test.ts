@@ -476,7 +476,9 @@ describe("resolveSettingsChain", () => {
         winner?: { status?: string; effort?: string };
       }>;
     };
-    const expectedPolicy = {
+    // The per-unit efforts the decision-grade sweep selected (cross-checked
+    // against the evidence file below — these must stay the sweep's winners).
+    const evidenceWinners = {
       deliberation_plan: "medium",
       deliberation_resolution: "low",
       deliberation_response: "medium",
@@ -488,6 +490,18 @@ describe("resolveSettingsChain", () => {
       problem_framing: "medium",
       synthesis_response: "medium",
     } as const;
+    // Owner-directed overrides layered on top of the evidence winners
+    // (INV-CFG-1 indirect-approval convention: the checked-in default may
+    // diverge from a sweep winner only when the owner directive is recorded
+    // here with its date). Any drift NOT listed here still fails this test.
+    // - deliberation_resolution low→medium: owner directive 2026-07-17
+    //   ("현재 설정을 default로 변경하자") — operational preference after the
+    //   M3/effort-bench sessions; the 20260610 sweep winner remains `low` and
+    //   is unchanged in the evidence cross-check above.
+    const OWNER_EFFORT_OVERRIDES = {
+      deliberation_resolution: "medium",
+    } as const;
+    const expectedPolicy = { ...evidenceWinners, ...OWNER_EFFORT_OVERRIDES };
 
     expect(evidence.status).toBe("decision-grade");
     expect(evidence.decision_gate?.comparison_conclusion_allowed).toBe(true);
@@ -498,7 +512,7 @@ describe("resolveSettingsChain", () => {
           selection.winner?.effort,
         ]),
       ),
-    ).toEqual(expectedPolicy);
+    ).toEqual(evidenceWinners);
     for (const selection of evidence.selections ?? []) {
       expect(selection.winner?.status).toBe("selected");
     }

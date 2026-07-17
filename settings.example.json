@@ -222,10 +222,12 @@
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
         },
+        # deliberation_resolution effort는 owner 지시(2026-07-17)로 sweep winner(low)를
+        # override한 값입니다 — 근거는 settings-chain.test.ts의 OWNER_EFFORT_OVERRIDES 주석.
         "deliberation_resolution": {
           "llm": {
             "model": "gpt-5.6-sol",
-            "effort": "low"
+            "effort": "medium"
           },
           "timeout_ms": 240000,
           "max_retries": 2,
